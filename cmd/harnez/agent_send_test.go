@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -224,17 +226,122 @@ func TestCodexAgentSendTargetResolution(t *testing.T) {
 		{name: "cati1"},
 		{id: "thread-uuid"},
 	} {
-		target, err := resolveAgentSendTarget(endpoints, identities, threads, tc.name, tc.id, "")
+		target, err := resolveAgentSendTarget(endpoints, identities, threads, nil, tc.name, tc.id, "")
 		if err != nil || target.Provider != "codex" || target.Endpoint.SessionID != "thread-uuid" {
 			t.Fatalf("target for name=%q id=%q = %#v, %v", tc.name, tc.id, target, err)
 		}
 	}
-	if names := liveAgentNames(endpoints, identities, threads, ""); strings.Join(names, ",") != "cati1,cati2" {
+	if names := liveAgentNames(endpoints, identities, threads, nil, ""); strings.Join(names, ",") != "cati1,cati2" {
 		t.Fatalf("live names = %#v", names)
 	}
-	_, err := resolveAgentSendTarget(endpoints, identities, threads, "missing", "", "")
+	_, err := resolveAgentSendTarget(endpoints, identities, threads, nil, "missing", "", "")
 	if err == nil || !strings.Contains(err.Error(), `"cati1" id=thread-uuid provider=codex`) || !strings.Contains(err.Error(), `"cati2" id=claude-id provider=claude`) {
 		t.Fatalf("candidate error omitted a provider: %v", err)
+	}
+}
+
+func TestAgyAgentSendTargetResolution(t *testing.T) {
+	endpoints := []channel.Endpoint{{SessionID: "claude-id", WorkingDir: "/work"}}
+	identities := []channelIdentity{{ID: "claude-id", ProviderID: "claude-id", Name: "shared"}}
+	threads := []channel.CodexThread{}
+	agy := []*subagent.Session{
+		{ID: "agy-id", ProviderSessionID: "agy-conversation", Name: "agy-worker", Provider: "agy", WorkingDir: "/work", ProviderPID: os.Getpid(), ControlSocket: "/tmp/agy.sock"},
+		{ID: "agy-shared", Name: "shared", Provider: "agy", WorkingDir: "/work", ProviderPID: os.Getpid(), ControlSocket: "/tmp/shared.sock"},
+	}
+	for _, tc := range []struct{ name, id, want string }{{name: "agy-worker", want: "agy-id"}, {id: "agy-id", want: "agy-id"}} {
+		target, err := resolveAgentSendTarget(endpoints, identities, threads, agy, tc.name, tc.id, "")
+		if err != nil || target.Provider != "agy" || target.Endpoint.SessionID != tc.want {
+			t.Fatalf("target = %#v, %v", target, err)
+		}
+	}
+	_, err := resolveAgentSendTarget(endpoints, identities, threads, agy, "shared", "", "")
+	if err == nil || !strings.Contains(err.Error(), "ambiguous") || !strings.Contains(err.Error(), "provider=agy") {
+		t.Fatalf("ambiguous AGY name error = %v", err)
+	}
+	if names := liveAgentNames(endpoints, identities, threads, agy, ""); strings.Join(names, ",") != "agy-worker,shared" {
+		t.Fatalf("live names = %#v", names)
+	}
+}
+
+func TestSendAgyMessageQueuesControlRequest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agy.sock")
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	got := make(chan subagent.ControlRequest, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		var request subagent.ControlRequest
+		_ = json.NewDecoder(conn).Decode(&request)
+		got <- request
+		_ = json.NewEncoder(conn).Encode(subagent.ControlResponse{MessageID: "msg-123"})
+	}()
+	var output bytes.Buffer
+	if err := sendAgyMessage(context.Background(), path, "framed body", &output); err != nil {
+		t.Fatal(err)
+	}
+	if request := <-got; request.Action != "enqueue" || request.Prompt != "framed body" {
+		t.Fatalf("request = %#v", request)
+	}
+	var result map[string]string
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result["status"] != "queued" || result["provider"] != "agy" || result["session_id"] != path || result["message_id"] != "msg-123" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestAgentSendAgyWaitAndUnsupervisedErrors(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex"))
+	t.Setenv(agentRoleEnv, "developer")
+	for _, tc := range []struct {
+		name, args, want string
+		live             bool
+	}{
+		{name: "wait", args: "--wait", want: "--wait is supported only for Claude sessions", live: true},
+		{name: "unsupervised", args: "", want: "not supervised; use harnez-agy --meter", live: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storeDir := t.TempDir()
+			store, err := subagent.NewSessionStore(storeDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			session := &subagent.Session{ID: "agy-test-id", Name: "agy-test", Provider: "agy", WorkingDir: "."}
+			if tc.live {
+				socket := filepath.Join(t.TempDir(), "agy.sock")
+				listener, err := net.Listen("unix", socket)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer listener.Close()
+				session.ControlSocket = socket
+				session.ProviderPID = os.Getpid()
+			}
+			if err := store.Save(session); err != nil {
+				t.Fatal(err)
+			}
+			cmd := newAgentCmd()
+			cmd.SetOut(io.Discard)
+			cmd.SetErr(io.Discard)
+			args := []string{"--store-dir", storeDir, "send", "--id", "agy-test-id", "message"}
+			if tc.args != "" {
+				args = append(args, tc.args)
+			}
+			cmd.SetArgs(args)
+			err = cmd.Execute()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }
 

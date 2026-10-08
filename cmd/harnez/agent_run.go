@@ -763,7 +763,11 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		sess.TokensSinceCompact = 0
 	}
 	if interactive {
-		if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "prompt", req.Prompt); err != nil {
+		action := "prompt"
+		if sess.Provider == "agy" {
+			action = "enqueue"
+		}
+		if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, action, req.Prompt); err != nil {
 			return err
 		}
 		sess.LastActiveAt = time.Now()

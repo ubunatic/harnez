@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/channel"
+	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -145,7 +147,54 @@ type agentSendTarget struct {
 	Endpoint channel.Endpoint
 }
 
-func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelIdentity, threads []channel.CodexThread, name, id, dir string) (agentSendTarget, error) {
+func supervisedAgySessions(storeDir string) []*subagent.Session {
+	store, err := subagent.OpenSessionStore(storeDir)
+	if err != nil {
+		return nil
+	}
+	sessions, err := store.List("", true)
+	if err != nil {
+		return nil
+	}
+	var active []*subagent.Session
+	for _, session := range sessions {
+		if session.Provider != "agy" || session.ControlSocket == "" || session.ProviderPID <= 0 {
+			continue
+		}
+		if !liveControlSocket(session.ControlSocket) {
+			continue
+		}
+		start := procs.ProcessStarttime(session.ProviderPID)
+		if start == 0 || (session.ProviderStarttime != 0 && start != session.ProviderStarttime) {
+			continue
+		}
+		active = append(active, session)
+	}
+	return active
+}
+
+func liveControlSocket(path string) bool {
+	conn, err := net.DialTimeout("unix", path, 100*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+func agyStoreSessions(storeDir string) []*subagent.Session {
+	store, err := subagent.OpenSessionStore(storeDir)
+	if err != nil {
+		return nil
+	}
+	sessions, err := store.List("", true)
+	if err != nil {
+		return nil
+	}
+	return sessions
+}
+
+func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelIdentity, threads []channel.CodexThread, agySessions []*subagent.Session, name, id, dir string) (agentSendTarget, error) {
 	wantDir := ""
 	if dir != "" {
 		var err error
@@ -196,12 +245,22 @@ func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelId
 			matches = append(matches, agentSendTarget{Provider: "codex", Endpoint: channel.Endpoint{SessionID: thread.ID, WorkingDir: thread.CWD}})
 		}
 	}
+	for _, session := range agySessions {
+		if session == nil || session.Provider != "agy" || session.ControlSocket == "" || session.ProviderPID <= 0 || !inDir(session.WorkingDir) {
+			continue
+		}
+		matched := (id != "" && id == session.ID) || (id != "" && id == session.ProviderID()) || (name != "" && name == session.Name)
+		candidates = append(candidates, fmt.Sprintf("%q id=%s provider=agy dir=%q", session.Name, session.ID, session.WorkingDir))
+		if matched {
+			matches = append(matches, agentSendTarget{Provider: "agy", Endpoint: channel.Endpoint{SessionID: session.ID, WorkingDir: session.WorkingDir}})
+		}
+	}
 	if len(matches) == 1 {
 		return matches[0], nil
 	}
 	sort.Strings(candidates)
 	if len(candidates) == 0 {
-		candidates = append(candidates, "(no live Claude or Codex sessions)")
+		candidates = append(candidates, "(no live Claude, Codex or supervised AGY sessions)")
 	}
 	reason := "unknown"
 	if len(matches) > 1 {
@@ -210,7 +269,7 @@ func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelId
 	return agentSendTarget{}, fmt.Errorf("%s agent send target %q; live candidates:\n  %s", reason, name+id, strings.Join(candidates, "\n  "))
 }
 
-func liveAgentNames(endpoints []channel.Endpoint, identities []channelIdentity, threads []channel.CodexThread, dir string) []string {
+func liveAgentNames(endpoints []channel.Endpoint, identities []channelIdentity, threads []channel.CodexThread, agySessions []*subagent.Session, dir string) []string {
 	seen := make(map[string]bool)
 	names := liveChannelNames(endpoints, identities, dir)
 	for _, name := range names {
@@ -222,6 +281,16 @@ func liveAgentNames(endpoints []channel.Endpoint, identities []channelIdentity, 
 		if thread.Name != "" && (dir == "" || haveDir == wantDir) && !seen[thread.Name] {
 			seen[thread.Name] = true
 			names = append(names, thread.Name)
+		}
+	}
+	for _, session := range agySessions {
+		if session == nil || session.Provider != "agy" || session.ControlSocket == "" || session.ProviderPID <= 0 {
+			continue
+		}
+		haveDir, _ := filepath.Abs(session.WorkingDir)
+		if session.Name != "" && (dir == "" || haveDir == wantDir) && !seen[session.Name] {
+			seen[session.Name] = true
+			names = append(names, session.Name)
 		}
 	}
 	sort.Strings(names)
@@ -266,6 +335,19 @@ func sendCodexMessage(ctx context.Context, executable, threadID, message string,
 	}{Status: "queued", Provider: "codex", SessionID: threadID})
 }
 
+func sendAgyMessage(ctx context.Context, sessionID, message string, out io.Writer) error {
+	response, err := subagent.SendControlRequest(ctx, sessionID, subagent.ControlRequest{Action: "enqueue", Prompt: message})
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(out).Encode(struct {
+		Status    string `json:"status"`
+		Provider  string `json:"provider"`
+		SessionID string `json:"session_id"`
+		MessageID string `json:"message_id"`
+	}{Status: "queued", Provider: "agy", SessionID: sessionID, MessageID: response.MessageID})
+}
+
 func channelSender(cfg channel.Config, identities []channelIdentity, id string) string {
 	var names []string
 	for _, identity := range identities {
@@ -292,9 +374,10 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 	var wait bool
 	var timeout time.Duration
 	cmd := &cobra.Command{
-		Use: "send (--name <session> | --id <session-id>) <message>", Short: "Send to a Claude channel or Codex session; optionally wait for a Claude receipt",
-		Long: "Send to a live Claude channel or Codex session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. Claude accepted means an MCP transport write; Codex queued means its local queue command accepted the message. Only Claude supports optional receipt confirmation, and it does not confirm task completion. Claude sessions are started manually by the user.",
+		Use: "send (--name <session> | --id <session-id>) <message>", Short: "Send to a live Claude, Codex, or supervised AGY session",
+		Long: "Send to a live Claude channel, Codex session, or supervised AGY session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. AGY messages queue until the supervised session is idle. Only Claude supports --wait for optional receipt confirmation, which does not confirm task completion. Non-supervised AGY sessions cannot receive messages through this command.",
 		Example: `  harnez agent send --name harnez-53ih "look at ticket 748 in harnez"
+  harnez agent send --name agy-worker "please review this"
   harnez agent send --id 86443124-b692-49e4-ae92-942b0177664f --wait "please confirm"`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -321,12 +404,14 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 			}
 			threads, _ := channel.DiscoverCodexThreads(cmd.Context(), "codex", time.Duration(cfg.IOTimeoutMS)*time.Millisecond, cfg.MaxRPCBytes)
 			identities := channelIdentities(cfg, *storeDir)
+			allAgySessions := agyStoreSessions(*storeDir)
+			agySessions := supervisedAgySessions(*storeDir)
 			dir := ""
 			if cmd.Flags().Changed("dir") {
 				dir = *workDir
 			}
 			if *name == "" && id == "" {
-				names := liveAgentNames(endpoints, identities, threads, dir)
+				names := liveAgentNames(endpoints, identities, threads, agySessions, dir)
 				if len(names) == 0 {
 					return fmt.Errorf("send requires --name <session> or --id <session-id>; no named live sessions (harnez channel list shows IDs)")
 				}
@@ -335,14 +420,26 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 			if *name != "" && id != "" {
 				return fmt.Errorf("send takes --name or --id, not both")
 			}
-			target, err := resolveAgentSendTarget(endpoints, identities, threads, *name, id, dir)
+			target, err := resolveAgentSendTarget(endpoints, identities, threads, agySessions, *name, id, dir)
 			if err != nil {
+				for _, session := range allAgySessions {
+					if session.Provider == "agy" && ((id != "" && (id == session.ID || id == session.ProviderID())) || (*name != "" && *name == session.Name)) {
+						return fmt.Errorf("AGY session %q is not supervised; use harnez-agy --meter for live delivery or harnez agent resume", session.Name)
+					}
+				}
 				return err
 			}
 			encoder := json.NewEncoder(cmd.OutOrStdout())
 			if target.Provider == "codex" {
 				content := codexMessageFrame(cfg, identities, threads, currentHostSession(), message)
 				return sendCodexMessage(cmd.Context(), "codex", target.Endpoint.SessionID, content, cmd.OutOrStdout())
+			}
+			if target.Provider == "agy" {
+				if wait {
+					return fmt.Errorf("--wait is supported only for Claude sessions")
+				}
+				content := codexMessageFrame(cfg, identities, threads, currentHostSession(), message)
+				return sendAgyMessage(cmd.Context(), target.Endpoint.SessionID, content, cmd.OutOrStdout())
 			}
 			content := channelSender(cfg, identities, currentHostSession()) + "\n\n" + message
 			accepted, err := channel.Send(cmd.Context(), cfg, target.Endpoint.SessionID, content)
@@ -370,10 +467,10 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 			return waitErr
 		},
 	}
-	cmd.Flags().StringVar(&id, "id", "", "Claude or Codex session ID")
+	cmd.Flags().StringVar(&id, "id", "", "Claude, Codex, or AGY session ID")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "message text (alternative to the positional message)")
 	cmd.Flags().StringVarP(&prompt, "prompt", "p", "", "message text (alternative to the positional message)")
-	cmd.Flags().BoolVar(&wait, "wait", false, "wait for optional recipient acknowledgement")
+	cmd.Flags().BoolVar(&wait, "wait", false, "wait for optional Claude receipt confirmation")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "positive receipt wait timeout (default from spec/channel.yaml)")
 	return cmd
 }

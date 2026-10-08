@@ -232,6 +232,12 @@ supervised AGY sessions as live; `isLiveChannelSession` accepts `agy`. `cmd/harn
 interactive AGY resume uses `enqueue` instead of `prompt`. Tests for target resolution, ambiguous
 names, and the not-supervised error message.
 
+**M4 progress (2026-10-09):** Implemented supervised AGY discovery for `agent send`, requiring a
+connectable control socket and a live provider PID (including start-time validation). Name/ID
+resolution, sender framing, enqueue response JSON, Claude-only `--wait`, and the non-supervised
+route hint are covered. `channel list` now includes live supervised AGY sessions in its default
+view and projections/JSON, and interactive AGY resume queues through `enqueue`.
+
 **M5 — End-to-end proof and docs.** In a real terminal: start `harnez-agy --meter`, run
 `harnez channel list` (session shown live), `harnez agent send --name <it> "reply ACK-758-E2E"`
 during a running turn and while idle; confirm delivery after the turn ends and the reply in the

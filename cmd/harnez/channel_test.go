@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -329,6 +332,41 @@ func TestChannelListShowsActiveProcessSessionsByDefault(t *testing.T) {
 	}
 	if strings.Contains(out, "codex-listed") || strings.Contains(out, "codex-old") {
 		t.Fatalf("default list included inactive threads: %s", out)
+	}
+}
+
+func TestChannelListShowsSupervisedAgyInAllViews(t *testing.T) {
+	socket := filepath.Join(t.TempDir(), "agy.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	agy := &subagent.Session{ID: "agy-live-id", ProviderSessionID: "agy-conversation", Name: "agy-worker", Provider: "agy", ProviderPID: os.Getpid(), ControlSocket: socket, WorkingDir: "/work/agy"}
+	listed := mergeChannelSessions(nil, func() ([]channel.CodexThread, error) { return nil, nil }, []*subagent.Session{agy}, "")
+	if len(listed) != 1 || listed[0].Provider != "agy" || listed[0].SessionID != "agy-live-id" || !isLiveChannelSession(listed[0]) {
+		t.Fatalf("AGY session not live: %#v", listed)
+	}
+	listed = filterLiveChannelSessions(listed)
+	if len(listed) != 1 {
+		t.Fatalf("default live filter dropped AGY session: %#v", listed)
+	}
+	var overview bytes.Buffer
+	if err := printChannelOverview(&overview, listed); err != nil || !strings.Contains(overview.String(), "agy\tagy-worker\tagy-live-id\tlive") {
+		t.Fatalf("overview = %q, err=%v", overview.String(), err)
+	}
+	for _, tc := range []struct{ flag, want string }{{"--names", "agy-worker\n"}, {"--ids", "agy-live-id\n"}} {
+		var projection bytes.Buffer
+		if err := printChannelProjection(&projection, listed, tc.flag == "--names"); err != nil || projection.String() != tc.want {
+			t.Fatalf("%s projection = %q, err=%v", tc.flag, projection.String(), err)
+		}
+	}
+	var raw bytes.Buffer
+	if err := json.NewEncoder(&raw).Encode(listed); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(raw.String(), "agy-live-id") || !strings.Contains(raw.String(), "agy-worker") || !strings.Contains(raw.String(), "agy") {
+		t.Fatalf("JSON omitted AGY session: %s", raw.String())
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/channel"
+	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -56,7 +57,7 @@ func newChannelCmd() *cobra.Command {
 		},
 	})
 	list := &cobra.Command{
-		Use: "list", Short: "List Claude channel endpoints and Codex sessions",
+		Use: "list", Short: "List Claude, Codex, and supervised AGY sessions",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runChannelList(cmd, args, channel.List, func(ctx context.Context, cfg channel.Config) ([]channel.CodexThread, error) {
@@ -66,7 +67,12 @@ func newChannelCmd() *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				return subagent.DiscoverActiveCodexSessions(home)
+				activeAgy := supervisedAgySessions(subagent.DefaultStoreDir())
+				activeCodex, err := subagent.DiscoverActiveCodexSessions(home)
+				if err != nil {
+					return activeAgy, err
+				}
+				return append(activeCodex, activeAgy...), nil
 			})
 		},
 	}
@@ -164,7 +170,7 @@ func filterLiveChannelSessions(listed []listedChannel) []listedChannel {
 
 func isLiveChannelSession(session listedChannel) bool {
 	return (session.Provider == "claude" && session.PID > 0 && session.URL != "") ||
-		(session.Provider == "codex" && session.Live)
+		((session.Provider == "codex" || session.Provider == "agy") && session.Live)
 }
 
 func printChannelProjection(out io.Writer, listed []listedChannel, names bool) error {
@@ -216,7 +222,26 @@ func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]chann
 		})
 	}
 	activeIDs := make(map[string]bool, len(active))
+	activeSessions := make(map[string]*subagent.Session, len(active))
 	for _, session := range active {
+		if session == nil {
+			continue
+		}
+		if session.Provider == "agy" {
+			if session.ControlSocket == "" || session.ProviderPID <= 0 {
+				continue
+			}
+			if !liveControlSocket(session.ControlSocket) {
+				continue
+			}
+			start := procs.ProcessStarttime(session.ProviderPID)
+			if start == 0 || (session.ProviderStarttime != 0 && start != session.ProviderStarttime) {
+				continue
+			}
+			activeSessions[session.ID] = session
+			activeIDs[session.ID] = true
+			continue
+		}
 		activeIDs[session.ProviderID()] = true
 	}
 	seen := make(map[string]bool)
@@ -232,6 +257,21 @@ func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]chann
 	}
 	// Active processes whose thread the app-server did not list (or that is missing because discovery failed) are still live.
 	for _, session := range active {
+		if session == nil {
+			continue
+		}
+		if session.Provider == "agy" {
+			if _, ok := activeSessions[session.ID]; !ok {
+				continue
+			}
+			id := session.ID
+			if id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			listed = append(listed, listedChannel{Provider: "agy", SessionID: id, Name: session.Name, WorkingDir: session.WorkingDir, Live: true})
+			continue
+		}
 		id := session.ProviderID()
 		if id == "" || seen[id] {
 			continue
