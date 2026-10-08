@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
-**Related**: issues/656-harnez-agent-send-opt-in-messaging-to-detached-agents-after-host-session-agent-tracking.md, issues/680-probe-codex-cross-task-messaging-for-agent-send.md, issues/740-claude-plugin-mvp-harnez-agent-send-delivers-via-claude-sendmessage-claude-to-claude.md
+**Related**: [AGY delivery route canary](../docs/studies/2026-10-08-agy-delivery-route-canary.md), issues/656-harnez-agent-send-opt-in-messaging-to-detached-agents-after-host-session-agent-tracking.md, issues/680-probe-codex-cross-task-messaging-for-agent-send.md, issues/740-claude-plugin-mvp-harnez-agent-send-delivers-via-claude-sendmessage-claude-to-claude.md
 
 ---
 
@@ -27,6 +27,11 @@ Checked against code on 2026-10-08:
 - Interactive sessions started by harnez record the AGY conversation ID
   (`watchInteractiveProviderID`, `internal/subagent/interactive.go:171`), so name → ID is
   resolvable for those. Sessions started outside harnez have no known mapping yet.
+- Canary result: **no live route; resume-only**. Print-mode `--conversation` appends to the same
+  history, but delivery into an open TUI was not established; the environment could not open a
+  TTY. Hook output rewrites tool arguments but did not inject a free-form message. See the
+  [AGY delivery route canary](../docs/studies/2026-10-08-agy-delivery-route-canary.md) for commands
+  and evidence.
 
 ## 3. Canary Plan
 Setup: two throwaway AGY sessions in a scratch dir: T1 interactive (`harnez agent start`
