@@ -39,4 +39,4 @@ Task run alone (`--task harnez-selftest --repeat 1`), one run per model, `HTO=0`
 
 PASS means `harnez agent selftest --step verify` printed `PASS: Background execution self-test passed`. That line is printed only when the saved state records hello, background, confirm and confirm-running in order.
 
-Open: the `harnez-selftest` entry in `internal/bench/tasks.yaml` is no longer in the working tree or in `HEAD`. The task was added and used for these runs, then the file was reverted, probably by another session. Not re-added yet. Decide whether to re-add it, then commit the task with this ticket.
+The `harnez-selftest` entry was missing from `internal/bench/tasks.yaml` after another session reverted the file. It was re-added on 2026-10-09 with the same definition used for these runs, and the bench tests pass.
