@@ -176,6 +176,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-08-bash-heredoc-appends-vs-native-edit-tools.md](studies/2026-10-08-bash-heredoc-appends-vs-native-edit-tools.md) | Decision framework, token economics, and ergonomics of bash here-doc (`cat << 'EOF' >> ...`) vs. native structured edit tools (`replace_file_content` / `write_to_file`). |
 | [studies/2026-10-08-claude-haiku-5-5-first-insights.md](studies/2026-10-08-claude-haiku-5-5-first-insights.md) | Claude Haiku 5.5: first insights |
 | [studies/2026-10-08-two-agent-lean-sprint-codex-send.md](studies/2026-10-08-two-agent-lean-sprint-codex-send.md) | Running Study: Two-Agent Lean Sprint (Luna:low Searcher & Luna:high Dev) |
+| [studies/2026-10-09-supervised-agy-prompt-queueing-and-cross-session-messaging.md](studies/2026-10-09-supervised-agy-prompt-queueing-and-cross-session-messaging.md) | Supervised AGY Prompt Queueing and Cross-Session Messaging Case Study |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
