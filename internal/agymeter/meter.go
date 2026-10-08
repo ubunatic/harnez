@@ -52,6 +52,12 @@ type Record struct {
 	Reset        string    `json:"resetTime,omitempty"`
 }
 
+// Observer receives model request and response boundaries from the meter.
+type Observer interface {
+	RequestStarted()
+	ResponseFinished(functionCall bool)
+}
+
 type Meter struct {
 	listener  net.Listener
 	server    *http.Server
@@ -63,6 +69,8 @@ type Meter struct {
 	sessionID string
 	promptID  string
 	lastQuota map[string]Record
+	observer  Observer
+	transport http.RoundTripper
 }
 
 // Run starts a private meter for the lifetime of the child command. Failure to
@@ -87,6 +95,12 @@ func RunWithEnvDir(ctx context.Context, home, command string, args, environ []st
 // startup to run. This lets callers that own a PTY preserve terminal
 // semantics while keeping the meter alive for the provider process lifetime.
 func RunWithEnvDirRunner(ctx context.Context, home, command string, args, environ []string, dir string, stderr io.Writer, run func([]string) error) error {
+	return RunWithEnvDirRunnerObserved(ctx, home, command, args, environ, dir, stderr, nil, run)
+}
+
+// RunWithEnvDirRunnerObserved is RunWithEnvDirRunner with callbacks for model
+// request and response boundaries. A nil observer disables notifications.
+func RunWithEnvDirRunnerObserved(ctx context.Context, home, command string, args, environ []string, dir string, stderr io.Writer, obs Observer, run func([]string) error) error {
 	env := append([]string(nil), environ...)
 	sessionID := envValue(env, "HARNEZ_SESSION_ID")
 	promptID, idErr := newPromptID()
@@ -99,6 +113,7 @@ func RunWithEnvDirRunner(ctx context.Context, home, command string, args, enviro
 		fmt.Fprintln(stderr, "harnez-agy: metering proxy unavailable; starting agy without metering")
 		return run(env)
 	}
+	m.observer = obs
 	defer m.Close()
 	bundle, err := m.Bundle()
 	if err != nil {
@@ -330,6 +345,9 @@ func (m *Meter) leaf(name string) (*tls.Certificate, error) {
 }
 func (m *Meter) forward(w http.ResponseWriter, r *http.Request) {
 	m.debugf("intercepted request method=%s", r.Method)
+	if m.observer != nil {
+		m.observer.RequestStarted()
+	}
 	body, _ := io.ReadAll(r.Body)
 	_ = r.Body.Close()
 	r.Body = io.NopCloser(bytes.NewReader(body))
@@ -347,7 +365,10 @@ func (m *Meter) forward(w http.ResponseWriter, r *http.Request) {
 	r.Host = host
 	proxy := httputil.NewSingleHostReverseProxy((urlValue{scheme: "https", host: host}).URL())
 	proxy.FlushInterval = -1
-	proxy.Transport = &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	proxy.Transport = m.transport
+	if proxy.Transport == nil {
+		proxy.Transport = &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	}
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		m.debugf("upstream response status=%d", resp.StatusCode)
 		resp.Body = newResponseObserver(resp.Body, m, r.URL.Path, resp.Header.Get("Content-Type"), resp.Header.Get("Content-Encoding"), model, session, conversation)
@@ -544,6 +565,10 @@ func (q *asyncChunks) Read(p []byte) (int, error) {
 }
 
 func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model, session, conversation string) {
+	functionCall := false
+	if m.observer != nil {
+		defer func() { m.observer.ResponseFinished(functionCall) }()
+	}
 	var src io.Reader = raw
 	if strings.EqualFold(strings.TrimSpace(encoding), "gzip") {
 		gz, err := gzip.NewReader(raw)
@@ -560,6 +585,7 @@ func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model,
 	var latest *Record
 	quotas := map[string]Record{}
 	consume := func(value any) {
+		functionCall = functionCall || hasFunctionCall(value)
 		if strings.Contains(path, "streamGenerateContent") {
 			walkUsage(value, func(u map[string]any) {
 				r := Record{Time: time.Now().UTC(), Kind: "usage", Session: session, Conversation: conversation, PromptID: m.promptID, Model: model, Prompt: num(u["promptTokenCount"]), Candidates: num(u["candidatesTokenCount"]), Thoughts: num(u["thoughtsTokenCount"]), Cached: num(u["cachedContentTokenCount"]), Total: num(u["totalTokenCount"])}
@@ -611,6 +637,32 @@ func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model,
 	for _, r := range quotas {
 		m.record(r)
 	}
+}
+
+func hasFunctionCall(v any) bool {
+	found := false
+	var walk func(any)
+	walk = func(value any) {
+		if found {
+			return
+		}
+		switch x := value.(type) {
+		case map[string]any:
+			if _, ok := x["functionCall"]; ok {
+				found = true
+				return
+			}
+			for _, child := range x {
+				walk(child)
+			}
+		case []any:
+			for _, child := range x {
+				walk(child)
+			}
+		}
+	}
+	walk(v)
+	return found
 }
 
 func walkUsage(v any, found func(map[string]any)) {

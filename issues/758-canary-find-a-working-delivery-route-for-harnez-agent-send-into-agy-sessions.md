@@ -189,6 +189,10 @@ with a `functionCall` scan (field names from P4). `internal/subagent/agyturn.go`
 `Idle()` with an injected clock. Meter tests: a fake upstream stream with and without a
 `functionCall` part fires the observer correctly; metering output unchanged.
 
+**M1 progress (2026-10-09):** Implemented the meter observer callbacks and SSE `functionCall`
+detection, plus a mutex-protected `TurnState` with an injected clock and idle-window checks. Added
+fake-upstream observer tests and idle-state tests. `make test-q1` and `make install` passed.
+
 **M2 — Inbox and deliver loop.** `internal/subagent/agyinbox.go` + tests (enqueue, restart reload,
 atomic files, `max_message_bytes`). `internal/subagent/interactive.go`: `serveControls` takes the
 inbox and turn state; add `enqueue`, `inbox`, `turn` actions; wrap the stdin copy to call
