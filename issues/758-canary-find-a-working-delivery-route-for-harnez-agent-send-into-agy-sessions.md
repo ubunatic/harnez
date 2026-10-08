@@ -193,6 +193,12 @@ with a `functionCall` scan (field names from P4). `internal/subagent/agyturn.go`
 detection, plus a mutex-protected `TurnState` with an injected clock and idle-window checks. Added
 fake-upstream observer tests and idle-state tests. `make test-q1` and `make install` passed.
 
+**M2 progress (2026-10-09):** Implemented a disk-backed FIFO AGY inbox with atomic JSON writes,
+queued-message recovery, configurable byte-limit constructor, delivery status persistence, and
+control-socket `enqueue`, `inbox`, and `turn` actions. The interactive PTY now tracks stdin input
+and runs an idle-gated bracketed-paste delivery loop. Unit coverage includes inbox restart/FIFO,
+message limits and marking, control actions, busy suppression, and bracketed-paste delivery.
+
 **M2 — Inbox and deliver loop.** `internal/subagent/agyinbox.go` + tests (enqueue, restart reload,
 atomic files, `max_message_bytes`). `internal/subagent/interactive.go`: `serveControls` takes the
 inbox and turn state; add `enqueue`, `inbox`, `turn` actions; wrap the stdin copy to call
