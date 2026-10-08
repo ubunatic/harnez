@@ -27,31 +27,23 @@ Checked against code on 2026-10-08:
 - Interactive sessions started by harnez record the AGY conversation ID
   (`watchInteractiveProviderID`, `internal/subagent/interactive.go:171`), so name → ID is
   resolvable for those. Sessions started outside harnez have no known mapping yet.
-- Canary result: **no live route; resume-only**. Print-mode `--conversation` appends to the same
-  history, but delivery into an open TUI was not established; the environment could not open a
-  TTY. Hook output rewrites tool arguments but did not inject a free-form message. See the
-  [AGY delivery route canary](../docs/studies/2026-10-08-agy-delivery-route-canary.md) for commands
-  and evidence.
+- Canary result (Phase 1): **No native live route in standalone agy; resume-only**. Print-mode `--conversation` appends to the same history, but standalone `agy` has no queue/inbox CLI command, and lifecycle hooks only permit tool argument rewriting rather than context/message injection. See the [AGY delivery route canary](../docs/studies/2026-10-08-agy-delivery-route-canary.md).
+- Architectural opportunity (Phase 2): **Supervised AGY execution via `harnez-agy` / `agy-meter-run`**.
+  - Users and Harnez launch AGY via the managed launcher `harnez-agy` (or `harnez-agy --meter`, `harnez agy-meter-run`, `harnez agent start -i`).
+  - Because `harnez` is the parent process / supervisor of `agy`, Harnez can maintain a local session FIFO queue / mailbox (e.g. `~/.harnez/sessions/<id>/inbox`).
+  - This provides a clean provider-analogue to `codex queue`: external callers use `harnez agent send` to append messages to the queue, while the `harnez-agy` supervisor manages prompt injection into the supervised AGY process.
 
-## 3. Canary Plan
-Setup: two throwaway AGY sessions in a scratch dir: T1 interactive (`harnez agent start`
-interactive, note its conversation ID from `harnez agent list`), T2 a detached worker. Each message
-is harmless and unique, e.g. `canary-758-<route>-<n>: reply "ack <n>"`, and names the sender.
+## 3. Canary & Prototype Plan
+Phase 1 (Done): Probed standalone AGY CLI capabilities, lifecycle hooks, and resume. Documented in `docs/studies/2026-10-08-agy-delivery-route-canary.md`.
 
-Per route, record in a table: command run, target state (running mid-turn, idle at prompt,
-detached), whether the message appears in the session, latency, whether the sender gets a receipt
-or reply, side effects (new conversation, forked history, lost turn), and access needed.
-
-| Route | Probe | Pass | Fail |
-|---|---|---|---|
-| R1 resume | `agy --conversation <T1 id> -p "<msg>"` while T1 TUI is idle, then while mid-turn; same on T2 via `harnez agent resume --name T2 "<msg>"` | T1's open TUI shows and answers the message without restart, and no second conversation is created | message lands only in a separate process or forks history; T1 TUI never sees it |
-| R2 hook injection | temporary PreToolUse/PostToolUse hook that reads a mailbox file and returns the message as hook output; trigger a tool call in T1 | T1's next turn acts on the message text | AGY ignores hook output other than `decision`, or the schema has no context field |
-| R3 native messaging | check `agy --help` and AGY docs for a send/queue/inbox command or tool (AGY analogue of `codex queue`) | a command delivers into the running T1 by conversation ID | no such command exists (record the help output as evidence) |
-| R4 other | anything found during R1–R3 (e.g. an MCP tool exposed to AGY that polls a harnez mailbox) | as R1 | as R1 |
-
-Also record: whether `agy` lists conversations non-interactively (needed for name → ID outside
-harnez), and whether the recipient can tell who sent the message.
-
-Done when: each route has a pass/fail row with evidence, a recommended route is named (or "no
-live route; resume-only"), and the result is written to `docs/studies/` and linked here. Revert any
-temporary hook. Do not implement AGY in `harnez agent send`; that is 656 M4.
+Phase 2 (Current Focus): **Supervised Queue Injection via `harnez-agy`**
+1. **R5 — Harnez Supervisor Queue (`harnez-agy`)**:
+   - Define mailbox / queue mechanism managed by `harnez-agy` (or `agymeter`).
+   - Probe injection methods from supervisor into the supervised session:
+     - Method A: Supervisor feeds queued prompt lines into child process stdin / interactive PTY when idle.
+     - Method B: In `--meter` mode, supervisor intercepts the API conversation stream on `daily-cloudcode-pa.googleapis.com` and appends prompt turns.
+     - Method C: Turn boundary injection when child process yields or requests next input.
+2. Verify discovery:
+   - Ensure `harnez-agy` registers its session ID / PID in a local registry so `harnez agent send` and `harnez channel list` can target it.
+3. Test delivery:
+   - Prove that `harnez agent send --name <agy-session> "..."` queues the message and the supervised session receives and processes it.
