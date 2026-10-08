@@ -1,6 +1,6 @@
 # 758 — Canary: find a working delivery route for harnez agent send into AGY sessions
 
-**Status**: Draft
+**Status**: Closed — Canary executed and study report committed: no live route; resume-only
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
