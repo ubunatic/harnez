@@ -2095,7 +2095,7 @@ func TestAgentStartStoresCanonicalWorkingDir(t *testing.T) {
 func TestAgentHaikuAliases(t *testing.T) {
 	for _, spec := range []string{"claude:haiku", "claude:haiku:latest"} {
 		m, err := subagent.ResolveModel(spec)
-		if err != nil || m.Provider != "claude" || m.Name != "haiku" || m.Tier != "low" {
+		if err != nil || m.Provider != "claude" || m.Name != "claude-haiku-5-5" || m.Tier != "low" {
 			t.Fatalf("%s resolved to %#v (%v)", spec, m, err)
 		}
 	}

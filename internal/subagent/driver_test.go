@@ -44,7 +44,7 @@ func TestCodexCheckResumable(t *testing.T) {
 }
 
 func TestResolveModel(t *testing.T) {
-	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "low"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "haiku", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "haiku", "low"}, {"agy:flash37:low", "agy", "gemini-3.7-flash", "low"}, {"agy:gemini-3.7-flash:low", "agy", "gemini-3.7-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
+	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "low"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "claude-haiku-5-5", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "claude-haiku-5-5", "low"}, {"agy:flash37:low", "agy", "gemini-3.7-flash", "low"}, {"agy:gemini-3.7-flash:low", "agy", "gemini-3.7-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
 		m, err := ResolveModel(tc.spec)
 		if err != nil {
 			t.Fatal(err)

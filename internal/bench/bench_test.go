@@ -238,7 +238,7 @@ func TestInvokeBuildsAgentCommands(t *testing.T) {
 	if _, err := Invoke(context.Background(), fake(claudeJSON), AgentClaude, "claude:haiku:low", t.TempDir(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	if name != "claude" || !contains(args, "--model", "haiku") || args[len(args)-1] != "hi" {
+	if name != "claude" || !contains(args, "--model", "claude-haiku-5-5") || args[len(args)-1] != "hi" {
 		t.Errorf("claude cmd = %s %v", name, args)
 	}
 	if _, err := Invoke(context.Background(), fake(codexJSONL), AgentCodex, "codex:luna:low", t.TempDir(), "hi"); err != nil {

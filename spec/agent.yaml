@@ -79,13 +79,13 @@ models:
     aliases: [haiku, haiku:low]
     preferred: true
     provider: claude
-    name: haiku
+    name: claude-haiku-5-5
     tier: low
-    roles: mechanical
+    roles: developer, reviewer, mechanical
     cost: 12
     eff: "-"
-    skills: Go~ TUI- SQL~
-    use: narrow edits with a machine-checkable test only
+    skills: Go~ TUI~ SQL~
+    use: Claude Haiku 5.5; default go-to for cheap, fast work; strong computer use and agent tasks; weaker than sol on terminal coding
   claude:sonnet:
     aliases: [sonnet, sonnet:low]
     preferred: true

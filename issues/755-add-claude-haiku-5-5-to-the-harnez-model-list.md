@@ -28,7 +28,15 @@ harnez lists Claude Haiku only as `claude:haiku`, which points at the Claude CLI
   - Independent SWE-bench and Terminal-Bench leaderboards had no 5.5 entries at the time of the search.
 - User reports (launch week, preliminary): praised for speed and cost. Asana reports over 30% latency drop on task completions (vendor-cited). Accuracy is mixed: one tester saw a wrong answer on a simple logic question, and a small informal comparison found it weaker than DeepSeek V4.1 Flash on judged results (four briefs, one run each). Sources: [Anthropic launch](https://www.anthropic.com/claude-haiku-5-5), [Handy AI](https://handyai.substack.com/p/model-drop-claude-haiku-55), [Decrypt](https://decrypt.co/380351/anthropic-launches-haiku-5-5-cheapest-fastest-claude-model).
 - Still missing: a reliability read on reasoning-heavy coding work in an agent loop. Check Reddit and developer-blog threads for newer hands-on reports.
-- Open question: keep the existing `claude:haiku` alias and add a new entry, or repoint it to `claude-haiku-5-5`. Repointing changes what existing users get from `haiku`.
+- Decided: `haiku` now means `claude-haiku-5-5`. `spec/agent.yaml` `claude:haiku` points at the full model ID, and the roles are developer, reviewer, mechanical.
+- Benchmark comparison (vendor and third-party, mostly at max effort; sol:med and luna:high were not separately reported):
+  - Terminal-Bench 4.0: Haiku 5.5 39.2%, GPT-6 Luna 16.4%, GPT-6.1 Sol 58.2% ± 3.1 pp (different agent setups, so not a like-for-like test).
+  - OSWorld 2.1 offline subset: Haiku 72.4%, Luna 48.9%.
+  - Knowledge work (GDPval-AA v2.1): Haiku 1,620, Luna 1,437. Haiku also leads Sol by 45 Elo on one knowledge benchmark.
+  - Gemini 3.7 Flash: no head-to-head numbers; not ranked.
+  - Artificial Analysis index: Haiku 43.4, Luna 38.1. Cost per finished task: Haiku about $0.21, Luna $0.068; Haiku writes more tokens.
+  - Sources: [VentureBeat](https://venturebeat.com/technology/anthropic-launches-claude-haiku-5-5-with-90-api-price-reduction-matching-gpt-6-luna), [Kingy AI](https://kingy.ai/blog/gpt-sol-luna-vs-claude-haiku-5-5/), [OrcaRouter](https://www.orcarouter.ai/blog/claude-haiku-5-5-vs-gpt-5-6-luna).
+- Still open: `internal/claude/apply.go:206` maps `haiku` to `claude-haiku-4-5-20251001` for the global Claude config. That is outside this change; decide separately.
 - Related: #445 plans rate cards for `haiku` (latest); the 5.5 price should feed that table once confirmed.
 
 ## 3. Implementation & Verification Plan
