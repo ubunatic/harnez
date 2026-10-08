@@ -265,6 +265,7 @@ func TestAgyAgentSendTargetResolution(t *testing.T) {
 
 func TestSendAgyMessageQueuesControlRequest(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "agy.sock")
+	sessionID := "agy-session-id"
 	listener, err := net.Listen("unix", path)
 	if err != nil {
 		t.Fatal(err)
@@ -283,7 +284,7 @@ func TestSendAgyMessageQueuesControlRequest(t *testing.T) {
 		_ = json.NewEncoder(conn).Encode(subagent.ControlResponse{MessageID: "msg-123"})
 	}()
 	var output bytes.Buffer
-	if err := sendAgyMessage(context.Background(), path, "framed body", &output); err != nil {
+	if err := sendAgyMessage(context.Background(), sessionID, path, "framed body", &output); err != nil {
 		t.Fatal(err)
 	}
 	if request := <-got; request.Action != "enqueue" || request.Prompt != "framed body" {
@@ -293,7 +294,7 @@ func TestSendAgyMessageQueuesControlRequest(t *testing.T) {
 	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result["status"] != "queued" || result["provider"] != "agy" || result["session_id"] != path || result["message_id"] != "msg-123" {
+	if result["status"] != "queued" || result["provider"] != "agy" || result["session_id"] != sessionID || result["message_id"] != "msg-123" {
 		t.Fatalf("result = %#v", result)
 	}
 }
@@ -324,7 +325,7 @@ func TestAgentSendAgyWaitAndUnsupervisedErrors(t *testing.T) {
 				}
 				defer listener.Close()
 				session.ControlSocket = socket
-				session.ProviderPID = os.Getpid()
+				session.ProcessPID = os.Getpid()
 			}
 			if err := store.Save(session); err != nil {
 				t.Fatal(err)

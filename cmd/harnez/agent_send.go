@@ -143,8 +143,9 @@ func resolveChannelTarget(endpoints []channel.Endpoint, identities []channelIden
 }
 
 type agentSendTarget struct {
-	Provider string
-	Endpoint channel.Endpoint
+	Provider      string
+	Endpoint      channel.Endpoint
+	ControlSocket string
 }
 
 func supervisedAgySessions(storeDir string) []*subagent.Session {
@@ -158,14 +159,23 @@ func supervisedAgySessions(storeDir string) []*subagent.Session {
 	}
 	var active []*subagent.Session
 	for _, session := range sessions {
-		if session.Provider != "agy" || session.ControlSocket == "" || session.ProviderPID <= 0 {
+		if session.Provider != "agy" || session.ControlSocket == "" {
+			continue
+		}
+		pid := session.ProcessPID
+		startTime := session.ProcessStarttime
+		if pid <= 0 {
+			pid = session.ProviderPID
+			startTime = session.ProviderStarttime
+		}
+		if pid <= 0 {
 			continue
 		}
 		if !liveControlSocket(session.ControlSocket) {
 			continue
 		}
-		start := procs.ProcessStarttime(session.ProviderPID)
-		if start == 0 || (session.ProviderStarttime != 0 && start != session.ProviderStarttime) {
+		start := procs.ProcessStarttime(pid)
+		if start == 0 || (startTime != 0 && start != startTime) {
 			continue
 		}
 		active = append(active, session)
@@ -246,13 +256,13 @@ func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelId
 		}
 	}
 	for _, session := range agySessions {
-		if session == nil || session.Provider != "agy" || session.ControlSocket == "" || session.ProviderPID <= 0 || !inDir(session.WorkingDir) {
+		if session == nil || session.Provider != "agy" || session.ControlSocket == "" || (session.ProcessPID <= 0 && session.ProviderPID <= 0) || !inDir(session.WorkingDir) {
 			continue
 		}
 		matched := (id != "" && id == session.ID) || (id != "" && id == session.ProviderID()) || (name != "" && name == session.Name)
 		candidates = append(candidates, fmt.Sprintf("%q id=%s provider=agy dir=%q", session.Name, session.ID, session.WorkingDir))
 		if matched {
-			matches = append(matches, agentSendTarget{Provider: "agy", Endpoint: channel.Endpoint{SessionID: session.ID, WorkingDir: session.WorkingDir}})
+			matches = append(matches, agentSendTarget{Provider: "agy", Endpoint: channel.Endpoint{SessionID: session.ID, WorkingDir: session.WorkingDir}, ControlSocket: session.ControlSocket})
 		}
 	}
 	if len(matches) == 1 {
@@ -284,7 +294,7 @@ func liveAgentNames(endpoints []channel.Endpoint, identities []channelIdentity, 
 		}
 	}
 	for _, session := range agySessions {
-		if session == nil || session.Provider != "agy" || session.ControlSocket == "" || session.ProviderPID <= 0 {
+		if session == nil || session.Provider != "agy" || session.ControlSocket == "" || (session.ProcessPID <= 0 && session.ProviderPID <= 0) {
 			continue
 		}
 		haveDir, _ := filepath.Abs(session.WorkingDir)
@@ -335,8 +345,8 @@ func sendCodexMessage(ctx context.Context, executable, threadID, message string,
 	}{Status: "queued", Provider: "codex", SessionID: threadID})
 }
 
-func sendAgyMessage(ctx context.Context, sessionID, message string, out io.Writer) error {
-	response, err := subagent.SendControlRequest(ctx, sessionID, subagent.ControlRequest{Action: "enqueue", Prompt: message})
+func sendAgyMessage(ctx context.Context, sessionID, socketPath, message string, out io.Writer) error {
+	response, err := subagent.SendControlRequest(ctx, socketPath, subagent.ControlRequest{Action: "enqueue", Prompt: message})
 	if err != nil {
 		return err
 	}
@@ -439,7 +449,7 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 					return fmt.Errorf("--wait is supported only for Claude sessions")
 				}
 				content := codexMessageFrame(cfg, identities, threads, currentHostSession(), message)
-				return sendAgyMessage(cmd.Context(), target.Endpoint.SessionID, content, cmd.OutOrStdout())
+				return sendAgyMessage(cmd.Context(), target.Endpoint.SessionID, target.ControlSocket, content, cmd.OutOrStdout())
 			}
 			content := channelSender(cfg, identities, currentHostSession()) + "\n\n" + message
 			accepted, err := channel.Send(cmd.Context(), cfg, target.Endpoint.SessionID, content)

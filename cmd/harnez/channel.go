@@ -228,14 +228,23 @@ func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]chann
 			continue
 		}
 		if session.Provider == "agy" {
-			if session.ControlSocket == "" || session.ProviderPID <= 0 {
+			if session.ControlSocket == "" {
+				continue
+			}
+			pid := session.ProcessPID
+			startTime := session.ProcessStarttime
+			if pid <= 0 {
+				pid = session.ProviderPID
+				startTime = session.ProviderStarttime
+			}
+			if pid <= 0 {
 				continue
 			}
 			if !liveControlSocket(session.ControlSocket) {
 				continue
 			}
-			start := procs.ProcessStarttime(session.ProviderPID)
-			if start == 0 || (session.ProviderStarttime != 0 && start != session.ProviderStarttime) {
+			start := procs.ProcessStarttime(pid)
+			if start == 0 || (startTime != 0 && start != startTime) {
 				continue
 			}
 			activeSessions[session.ID] = session

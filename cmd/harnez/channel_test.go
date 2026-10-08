@@ -342,7 +342,7 @@ func TestChannelListShowsSupervisedAgyInAllViews(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	agy := &subagent.Session{ID: "agy-live-id", ProviderSessionID: "agy-conversation", Name: "agy-worker", Provider: "agy", ProviderPID: os.Getpid(), ControlSocket: socket, WorkingDir: "/work/agy"}
+	agy := &subagent.Session{ID: "agy-live-id", ProviderSessionID: "agy-conversation", Name: "agy-worker", Provider: "agy", ProcessPID: os.Getpid(), ControlSocket: socket, WorkingDir: "/work/agy"}
 	listed := mergeChannelSessions(nil, func() ([]channel.CodexThread, error) { return nil, nil }, []*subagent.Session{agy}, "")
 	if len(listed) != 1 || listed[0].Provider != "agy" || listed[0].SessionID != "agy-live-id" || !isLiveChannelSession(listed[0]) {
 		t.Fatalf("AGY session not live: %#v", listed)
