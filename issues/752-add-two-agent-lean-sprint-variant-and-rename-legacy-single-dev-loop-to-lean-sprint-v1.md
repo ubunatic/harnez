@@ -1,6 +1,6 @@
 # 752 — Add two-agent lean-sprint variant and rename legacy single-dev loop to lean-sprint-v1
 
-**Status**: Open
+**Status**: Closed — Implemented two-agent lean-sprint variant and preserved legacy single-dev loop as lean-sprint-v1 in commit 6c85bda9
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Feature
