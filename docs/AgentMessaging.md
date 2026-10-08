@@ -15,8 +15,9 @@ without transcribing their work.
 | Sender → recipient | Route | Status |
 |---|---|---|
 | Claude → Claude | native `ListAgents` + `SendMessage` | proven; accepted / idle notice / reply |
-| CLI, Codex, AGY → Claude | `harnez agent send` → `harnez channel` MCP channel | proven (740, plugin route 747) |
-| any → Codex | Codex thread messaging | open (680) |
+| CLI, Codex, AGY → Claude | `harnez agent send` → `harnez channel` MCP channel | proven (740, plugin route 747); `accepted` / `received` |
+| CLI, Claude, AGY → Codex | `harnez agent send` → `codex queue` | proven (680, 25c6e837); `queued` |
+| CLI, Claude, Codex → AGY | `harnez agent send` → `harnez-agy` supervisor inbox queue (`\x1b[200~...\x1b[201~\r`) | proven (758, eb37d24b, 6a19c3ee); idle-gated, typing-guarded; `queued` |
 
 Not used: hooks (inject only on prompt/tool events, no idle wake-up), plain MCP (cannot push),
 SDK `--resume` (stopped sessions), Claude's private `cc-socks` sockets (undocumented).
@@ -74,6 +75,31 @@ The managed allowlist accepts this identity (743 section 5); packaging alone doe
 approval. Proven live (747): a session started with the args snippet registers, and
 `harnez agent send --name <name> --wait <message>` reports `received`. Restart the recipient
 after binary updates.
+
+## Supervised AGY Inbox Design (758)
+
+Standalone `agy` processes provide no external inbox or queue commands, and lifecycle hooks cannot
+inject free-form model context. Delivery into live AGY sessions is achieved through the **`harnez`
+supervisory harness**:
+
+- **Execution Context**: AGY sessions run supervised under `harnez agent start -i` or `harnez-agy --meter`.
+  `harnez` allocates a pseudo-terminal (PTY) and listens on a Unix control socket
+  (`~/.harnez/agents/<id>.sock`).
+- **Disk-Backed FIFO Inbox (`internal/subagent/agyinbox.go`)**: Each supervised session maintains a
+  durable disk queue (`<storeDir>/<id>-inbox`). Messages are written atomically via temporary files
+  and reloaded on supervisor restart.
+- **Turn & Typing Guards (`internal/subagent/agyturn.go`)**:
+  - Outbound model SSE streams are observed by `internal/agymeter` to detect in-flight requests and
+    tool execution (`functionCall`).
+  - Stdin input on the terminal master feeds a keystroke tracker enforcing a `typing_guard_ms` window.
+  - The delivery loop waits until `TurnState.Idle()` is true (0 in-flight requests, 0 open tools, quiet window elapsed, and no active user keystrokes).
+- **PTY Injection**: Queued prompts are injected into the PTY master as bracketed paste:
+  `\x1b[200~<framed-text>\x1b[201~\r`. The trailing carriage return (`\r`) submits the prompt in raw terminal mode.
+- **Status & Delivery**: `harnez agent send --name <supervised-agy> "..."` validates that the session
+  has an active control socket and running PID, writes to the queue via the socket's `enqueue` action,
+  and returns `{"status":"queued","provider":"agy","session_id":"...","message_id":"..."}`. `--wait` is rejected (unsupported for AGY).
+- **Session Discovery**: `harnez channel list` lists supervised AGY sessions as `live`. Unsupervised AGY
+  sessions fail `harnez agent send` with a clear message directing the user to `harnez-agy --meter` or `harnez agent resume`.
 
 Layout and install commands follow the [plugin docs](https://code.claude.com/docs/en/plugins)
 and [marketplace docs](https://code.claude.com/docs/en/plugin-marketplaces); tool naming follows

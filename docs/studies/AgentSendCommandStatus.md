@@ -20,9 +20,9 @@ This report documents the status, implementation details, test coverage, and roa
 
 ## Provider Support & Current Limitations
 
-- **Claude (`claude`)**: Fully implemented and verified. Sends to live, opted-in Claude channel sessions via plugin/channel bridge.
-- **Codex (`codex`)**: Proposed but not yet implemented. The proposed design uses exact-name lookup via `thread/list` followed by `codex queue` by UUID.
-- **Other Providers**: Not yet integrated into the messaging transport.
+- **Claude (`claude`)**: Fully implemented and verified. Sends to live, opted-in Claude channel sessions via plugin/channel bridge. Reports `accepted` and supports receipt confirmation with `--wait`.
+- **Codex (`codex`)**: Fully implemented and verified (issue 680, commit `25c6e837`). Enqueues via `codex queue --thread <id> --message <text>`. Reports `queued`. `--wait` is not supported.
+- **Antigravity (`agy`)**: Fully implemented and verified for supervised sessions (issue 758, commits `eb37d24b`, `6a19c3ee`). Enqueues into supervised `harnez-agy --meter` or `harnez agent start -i` sessions via Unix control socket `enqueue` action. Messages are delivered at turn boundaries when idle with typing protection via bracketed paste (`\x1b[200~...\x1b[201~\r`). Reports `queued`. `--wait` is not supported. Non-supervised sessions fail with a clear guidance message.
 
 ## Testing & Documentation
 
