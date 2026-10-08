@@ -113,7 +113,11 @@ func runChannelList(cmd *cobra.Command, _ []string, listEndpoints func(context.C
 		return err
 	}
 	threads, discoverErr := discover(cmd.Context(), cfg)
-	listed := mergeChannelSessions(endpoints, func() ([]channel.CodexThread, error) { return threads, discoverErr })
+	currentThreadID := os.Getenv("CODEX_THREAD_ID")
+	if currentThreadID == "" {
+		currentThreadID = os.Getenv("CODEX_SESSION_ID")
+	}
+	listed := mergeChannelSessions(endpoints, func() ([]channel.CodexThread, error) { return threads, discoverErr }, currentThreadID)
 	if !allSessions {
 		listed = filterLiveChannelSessions(listed)
 	}
@@ -136,16 +140,22 @@ type listedChannel struct {
 	PID        int    `json:"pid,omitempty"`
 	URL        string `json:"url,omitempty"`
 	WorkingDir string `json:"working_dir"`
+	Live       bool   `json:"-"`
 }
 
 func filterLiveChannelSessions(listed []listedChannel) []listedChannel {
 	live := make([]listedChannel, 0, len(listed))
 	for _, session := range listed {
-		if session.Provider == "claude" && session.PID > 0 && session.URL != "" {
+		if isLiveChannelSession(session) {
 			live = append(live, session)
 		}
 	}
 	return live
+}
+
+func isLiveChannelSession(session listedChannel) bool {
+	return (session.Provider == "claude" && session.PID > 0 && session.URL != "") ||
+		(session.Provider == "codex" && session.Live)
 }
 
 func printChannelProjection(out io.Writer, listed []listedChannel, names bool) error {
@@ -177,7 +187,7 @@ func printChannelOverview(out io.Writer, listed []listedChannel) error {
 			name = "-"
 		}
 		status := "inactive"
-		if session.Provider == "claude" && session.PID > 0 && session.URL != "" {
+		if isLiveChannelSession(session) {
 			status = "live"
 		}
 		if _, err := fmt.Fprintf(out, "%s\t%s\t%s\t%s\n", session.Provider, name, session.SessionID, status); err != nil {
@@ -188,7 +198,7 @@ func printChannelOverview(out io.Writer, listed []listedChannel) error {
 	return err
 }
 
-func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]channel.CodexThread, error)) []listedChannel {
+func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]channel.CodexThread, error), currentThreadID string) []listedChannel {
 	listed := make([]listedChannel, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		listed = append(listed, listedChannel{
@@ -201,6 +211,7 @@ func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]chann
 		for _, thread := range threads {
 			listed = append(listed, listedChannel{
 				Provider: "codex", SessionID: thread.ID, Name: thread.Name, WorkingDir: thread.CWD,
+				Live: thread.ID == currentThreadID && currentThreadID != "",
 			})
 		}
 	}

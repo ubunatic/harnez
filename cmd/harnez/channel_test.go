@@ -105,13 +105,16 @@ func TestMergeChannelSessionsAndCodexFailureFallback(t *testing.T) {
 			{ID: "thread-2", Name: "cati1", CWD: "/work/codex"},
 			{ID: "thread-1", Name: "", CWD: "/work/other"},
 		}, nil
-	})
+	}, "thread-2")
 	if len(listed) != 4 || listed[0].Provider != "claude" || listed[0].SessionID != "claude-1" || listed[1].SessionID != "claude-2" || listed[2].Provider != "codex" || listed[2].SessionID != "thread-1" || listed[3].Name != "cati1" {
 		t.Fatalf("merged sessions = %#v", listed)
 	}
+	if !listed[3].Live || listed[2].Live {
+		t.Fatalf("current Codex thread liveness = %#v", listed[2:])
+	}
 	listed = mergeChannelSessions(endpoints[:1], func() ([]channel.CodexThread, error) {
 		return nil, errors.New("codex app-server unavailable")
-	})
+	}, "thread-2")
 	if len(listed) != 1 || listed[0].Provider != "claude" || listed[0].SessionID != "claude-2" {
 		t.Fatalf("Codex failure lost Claude sessions: %#v", listed)
 	}
@@ -120,7 +123,7 @@ func TestMergeChannelSessionsAndCodexFailureFallback(t *testing.T) {
 func TestChannelListOverviewAndLiveFiltering(t *testing.T) {
 	listed := []listedChannel{
 		{Provider: "claude", SessionID: "claude-live", PID: 11, URL: "http://127.0.0.1:1", WorkingDir: "/work/claude"},
-		{Provider: "codex", SessionID: "codex-old", Name: "", WorkingDir: "/work/codex"},
+		{Provider: "codex", SessionID: "codex-old", Name: "", WorkingDir: "/work/codex", Live: true},
 		{Provider: "codex", SessionID: "codex-named", Name: "worker", WorkingDir: "/work/other"},
 	}
 
@@ -128,7 +131,7 @@ func TestChannelListOverviewAndLiveFiltering(t *testing.T) {
 	if err := printChannelOverview(&overview, listed); err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"PROVIDER\tNAME\tID\tSTATUS", "claude\t-\tclaude-live\tlive", "codex\tworker\tcodex-named\tinactive", `Use "harnez channel list --json" or "harnez channel inspect <id>" for full details`} {
+	for _, expected := range []string{"PROVIDER\tNAME\tID\tSTATUS", "claude\t-\tclaude-live\tlive", "codex\t-\tcodex-old\tlive", "codex\tworker\tcodex-named\tinactive", `Use "harnez channel list --json" or "harnez channel inspect <id>" for full details`} {
 		if !strings.Contains(overview.String(), expected) {
 			t.Fatalf("overview missing %q: %s", expected, overview.String())
 		}
@@ -150,7 +153,7 @@ func TestChannelListOverviewAndLiveFiltering(t *testing.T) {
 	}
 
 	live := filterLiveChannelSessions(listed)
-	if len(live) != 1 || live[0].SessionID != "claude-live" {
+	if len(live) != 2 || live[0].SessionID != "claude-live" || live[1].SessionID != "codex-old" {
 		t.Fatalf("live sessions = %#v", live)
 	}
 
@@ -170,17 +173,25 @@ func TestChannelListCommandFlags(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"overview_default_active_only", []string{"list"}, "claude\t-\tclaude-live\tlive\n"},
-		{"names_default_active_only", []string{"list", "--names"}, "claude-live\n"},
-		{"ids_default_active_only", []string{"list", "--ids"}, "claude-live\n"},
-		{"json_default_active_only", []string{"list", "--json"}, `"session_id":"claude-live"`},
+		{"overview_default_active_only", []string{"list"}, "codex\tcurrent-worker\tcodex-current\tlive"},
+		{"names_default_active_only", []string{"list", "--names"}, "current-worker\n"},
+		{"ids_default_active_only", []string{"list", "--ids"}, "codex-current\n"},
+		{"json_default_active_only", []string{"list", "--json"}, `"session_id":"codex-current"`},
 		{"all_overview", []string{"list", "--all"}, "codex\tworker\tcodex-named\tinactive"},
-		{"all_names", []string{"list", "--all", "--names"}, "worker\n"},
+		{"all_names", []string{"list", "--all", "--names"}, "current-worker\n"},
 		{"all_ids", []string{"list", "--all", "--ids"}, "codex-named\n"},
 		{"all_json", []string{"list", "--all", "--json"}, `"session_id":"codex-old"`},
+		{"session_id_fallback", []string{"list"}, "codex\tcurrent-worker\tcodex-current\tlive"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
+			t.Setenv("CODEX_THREAD_ID", "")
+			t.Setenv("CODEX_SESSION_ID", "")
+			if tc.name == "session_id_fallback" {
+				t.Setenv("CODEX_SESSION_ID", "codex-current")
+			} else {
+				t.Setenv("CODEX_THREAD_ID", "codex-current")
+			}
 			cmd := newChannelCmd()
 			var out bytes.Buffer
 			cmd.SetOut(&out)
@@ -196,7 +207,7 @@ func TestChannelListCommandFlags(t *testing.T) {
 						return []channel.Endpoint{{SessionID: "claude-live", PID: 11, URL: "http://127.0.0.1:1", WorkingDir: "/work/claude"}}, nil
 					},
 					func(context.Context, channel.Config) ([]channel.CodexThread, error) {
-						return []channel.CodexThread{{ID: "codex-old", CWD: "/work/codex"}, {ID: "codex-named", Name: "worker", CWD: "/work/other"}}, nil
+						return []channel.CodexThread{{ID: "codex-current", Name: "current-worker", CWD: "/work/codex"}, {ID: "codex-old", CWD: "/work/codex"}, {ID: "codex-named", Name: "worker", CWD: "/work/other"}}, nil
 					})
 			}
 			if err := cmd.Execute(); err != nil {
@@ -205,8 +216,12 @@ func TestChannelListCommandFlags(t *testing.T) {
 			if !strings.Contains(out.String(), tc.want) {
 				t.Fatalf("output missing %q: %s", tc.want, out.String())
 			}
-			if !strings.Contains(strings.Join(tc.args, " "), "--all") && strings.Contains(out.String(), "codex-old") {
-				t.Fatalf("default output included inactive session: %s", out.String())
+			if !strings.Contains(strings.Join(tc.args, " "), "--all") {
+				if strings.Contains(out.String(), "codex-old") || strings.Contains(out.String(), "codex-named") {
+					t.Fatalf("default output included inactive session: %s", out.String())
+				}
+			} else if !strings.Contains(out.String(), "codex-old") {
+				t.Fatalf("--all output omitted inactive session: %s", out.String())
 			}
 		})
 	}
