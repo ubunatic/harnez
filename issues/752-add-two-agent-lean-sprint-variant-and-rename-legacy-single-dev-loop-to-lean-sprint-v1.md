@@ -42,3 +42,8 @@ To preserve compatibility and allow side-by-side performance comparisons, the le
   - Update `lean-sprint` skill definitions and documentation to specify the two-agent division of labor (cheap searcher + inexpensive dev) and running study report requirement.
 - **M3: Verification**:
   - Verify that both `/lean-sprint` and `/lean-sprint-v1` are resolvable, pass validation checks, and have synchronized docs.
+
+## 4. Addendum: Prompt Files Over Verbatim Inline Prompts
+
+- **Problem observed**: Long inline prompts passed via `-p "..."` or positional shell arguments suffer from shell interpolation footguns (e.g., unescaped backticks being evaluated by host bash as subcommands).
+- **Rule & Guidance**: Dispatches and documentation should strongly emphasize using prompt files (`-f <file>` / task files) rather than long verbatim inline prompts when handing work to subagents or orchestrating complex turns.
