@@ -22,6 +22,9 @@ canonical form in output and spec; unit tests cover `medium`, `med`, and a near-
 `medum`) that is still rejected; or stop and report when blocked on a user decision (e.g. whether
 `lo`/`hi` aliases are wanted too) or a denied permission.
 
+**Decision (user, 2026-10-10):** also accept `lo` and `lower` for `low`, and `hi` and `higher`
+for `high`. Canonical forms stay `low`, `med`, `high`; test each alias.
+
 ## Notes
 
 - Check live code first. Tier strings are compared in `driver.go:181-187` and per provider
