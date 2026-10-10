@@ -36,3 +36,5 @@ In complex or nuanced tickets, moving directly from the cheap searcher's audit t
   - Update `config.yaml` to include `refined-sprint` bundled skill alias if desired or update `lean-sprint` description.
   - Run `go test ./...` in harnez to ensure tests (such as `agentspec_test.go`) pass.
   - Run `harnez apply` so the updated skills propagate to all agent skill directories.
+
+Follow-up: /refined-sprint alias removed by user decision; use /lean-sprint <ticket> with architect <tier>.

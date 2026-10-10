@@ -128,7 +128,6 @@ debloat:
     docup: user-invocable-only
     lean-sprint: user-invocable-only
     lean-sprint-v1: user-invocable-only
-    refined-sprint: user-invocable-only
     lean-sprinter: user-invocable-only
     mode: user-invocable-only
     pull: user-invocable-only
@@ -417,11 +416,6 @@ skills:
     file: docs/commands/sprint.md
 
   - name: lean-sprint
-    license: AGPL-3.0-or-later
-    description: "Execute a lean sprint with optional architect refinement (Searcher -> Architect -> Developer -> Review -> Study)"
-    file: docs/commands/lean-sprint.md
-
-  - name: refined-sprint
     license: AGPL-3.0-or-later
     description: "Execute a lean sprint with optional architect refinement (Searcher -> Architect -> Developer -> Review -> Study)"
     file: docs/commands/lean-sprint.md
