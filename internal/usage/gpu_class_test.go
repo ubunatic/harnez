@@ -21,8 +21,8 @@ func TestClassifyAMDGPU(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := classifyAMDGPU(tt.external, tt.apu); got != tt.wantClass {
-				t.Errorf("classifyAMDGPU = %v, want %v", got, tt.wantClass)
+			if got := classifyGPU(tt.external, tt.apu); got != tt.wantClass {
+				t.Errorf("classifyGPU = %v, want %v", got, tt.wantClass)
 			}
 		})
 	}
@@ -35,7 +35,7 @@ func TestAPUWithLargeCarveoutStaysIGPU(t *testing.T) {
 	dev := fakePCIDevice(t, root, "", "0000:07:00.0")
 	writeGPUMetrics(t, dev, 2)
 	writeSysfsUint(t, dev, "mem_info_vram_total", 8*1024*1024*1024)
-	if got := classifyAMDGPU(false, isAPUGPU(dev)); got != GPUClassIGPU {
+	if got := classifyGPU(false, isAPUGPU(dev)); got != GPUClassIGPU {
 		t.Errorf("8 GiB carve-out APU class = %v, want iGPU", got)
 	}
 }

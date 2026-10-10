@@ -19,10 +19,10 @@ const (
 	GPUClassEGPU
 )
 
-// classifyAMDGPU maps the sysfs facts of one AMD GPU to its class. An
-// external (removable PCI path) GPU is an eGPU; otherwise an APU's metrics
-// layout marks an iGPU, and everything else is a dGPU.
-func classifyAMDGPU(external, apu bool) GPUClass {
+// classifyGPU maps one GPU's facts to its class. An external (removable PCI
+// path) GPU is an eGPU; otherwise an APU's metrics layout marks an iGPU, and
+// everything else is a dGPU. NVIDIA GPUs pass apu=false.
+func classifyGPU(external, apu bool) GPUClass {
 	if external {
 		return GPUClassEGPU
 	}

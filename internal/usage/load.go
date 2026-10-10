@@ -613,27 +613,25 @@ func burstSeedGPUHistory(key, busyPath string) []float64 {
 	return hist
 }
 
-// CurrentGPUs probes for AMD GPUs and returns whatever readings are
-// available, reading directly from sysfs (kernel-cached counters, a plain
-// read() per file) — no subprocess/vendor-tool fallback of any kind. See
-// docs/studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md: this
-// project calls no vendor CLI/SDK for device telemetry (that policy
-// initially removed nvidia-smi but kept rocm-smi as a fallback; rocm-smi
-// was removed in the same pass shortly after, once it was clear the policy
-// should apply uniformly rather than only to NVIDIA). NVIDIA's proprietary
-// driver exposes nothing through procfs/sysfs at all, so there's no
-// kernel-standard path for it. Returns nil if nothing is present or
-// everything fails (e.g. no GPU, an NVIDIA-only system, or an AMD system
-// whose driver doesn't populate the expected sysfs attributes).
+// CurrentGPUs returns every readable GPU of the host: AMD first (read from
+// sysfs, kernel-cached counters), then NVIDIA (read via nvidia-smi, gated and
+// cached, see gpu_nvidia.go). The 2026-08-28 kernel-standard-only ADR is
+// superseded for NVIDIA by issue 765; AMD still has no vendor-tool path. A
+// GPU that cannot be read is left out, and nil means no readable GPU at all.
+// Issue 765 removed the earlier nvidia-smi reader for policy reasons and for
+// its cost: one call takes ~123ms, so it now runs at most once per the
+// spec's nvidia_smi_cache_ttl and only when NVIDIA hardware is present.
 func CurrentGPUs() []GPU {
 	return currentGPUs(true)
 }
 
 func currentGPUs(seed bool) []GPU {
-	if gpus, err := readAMDSysfsWithSeed(seed); err == nil {
-		return gpus
+	var gpus []GPU
+	if amd, err := readAMDSysfsWithSeed(seed); err == nil {
+		gpus = amd
 	}
-	return nil
+	// NVIDIA cards come after AMD; the probe is gated and cached in gpu_nvidia.go.
+	return append(gpus, currentNVIDIAGPUs()...)
 }
 
 // amdCodenameByDeviceID is a best-effort fallback table mapping a PCI
@@ -795,7 +793,7 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 			}
 		}
 
-		g.Class = classifyAMDGPU(isExternalGPU(deviceDir), isAPUGPU(deviceDir))
+		g.Class = classifyGPU(isExternalGPU(deviceDir), isAPUGPU(deviceDir))
 		gpus = append(gpus, g)
 	}
 	if len(gpus) == 0 {

@@ -44,7 +44,7 @@ func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatal(err)
 	}
-	if len(schema.Required) != 9 || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["statusline_busy_timeout"] == nil || schema.Properties["view_modes"] == nil {
+	if len(schema.Required) != 11 || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["statusline_busy_timeout"] == nil || schema.Properties["view_modes"] == nil {
 		t.Fatalf("usage schema does not define required agy_meter_max_age: %+v", schema)
 	}
 	if schema.Definitions["viewMode"].Properties["panels"].MinItems != 1 {
@@ -60,6 +60,8 @@ passive_dedupe_interval: 30s
 history_snapshot_interval: 15m
 export_host_key: export-host-key
 statusline_busy_timeout: 25ms
+nvidia_smi_timeout: 1s
+nvidia_smi_cache_ttl: 2s
 watch_loading_label: Collecting usage
 view_modes:
   default: normal

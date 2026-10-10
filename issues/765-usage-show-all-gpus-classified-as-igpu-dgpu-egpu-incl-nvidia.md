@@ -55,7 +55,11 @@ This unbans `nvidia-smi`: if an NVIDIA card is present, harnez uses it. Update t
   and the iGPU VRAM carve-out threshold (`apuVRAMCarveoutMaxMiB` = 2048 MiB). Both were written without
   a live eGPU or APU to check against. The eGPU is on remote host x600; the host checks live output there.
 - The threshold is a Go constant in M1; it moves to `spec/usage.yaml` in M2 per the Spec rule.
-- NVIDIA (nvidia-smi) is M2; this ticket stays open until the host closes it after review.
+- **M2 (nvidia-smi):** `internal/usage/gpu_nvidia.go`; gated on NVIDIA PCI hardware, one call per
+  `nvidia_smi_cache_ttl` (2s), `nvidia_smi_timeout` (1s), failures cached. Local machine has no NVIDIA
+  card, so the live NVIDIA row is UNVERIFIED here; the host checks it on the x600 (RTX 3060).
+- The x600 runs an older binary: upgrade it before its Load box shows the RTX row.
+- This ticket stays open until the host closes it after review.
 - **M1 delivered (5741bbf7, AMD multi-GPU):** tests green, but host live check of
   `harnez usage --minimal` found two regressions (below).
 
