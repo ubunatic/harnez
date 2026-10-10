@@ -56,3 +56,17 @@ This unbans `nvidia-smi`: if an NVIDIA card is present, harnez uses it. Update t
   a live eGPU or APU to check against. The eGPU is on remote host x600; the host checks live output there.
 - The threshold is a Go constant in M1; it moves to `spec/usage.yaml` in M2 per the Spec rule.
 - NVIDIA (nvidia-smi) is M2; this ticket stays open until the host closes it after review.
+- **M1 delivered (5741bbf7, AMD multi-GPU):** tests green, but host live check of
+  `harnez usage --minimal` found two regressions (below).
+
+### M2 Pre-Work / Required Refinements (do first)
+
+1. **iGPU misclassified.** Local Cezanne APU reports `gpu vram 3.3/8.0G`: its BIOS carve-out is
+   8 GiB, so the 2048 MiB threshold calls it a dGPU and drops the vram/gtt row. A VRAM-size
+   threshold is the wrong signal; drop it. Find a robust sysfs signal for "integrated" (e.g. check
+   what the local card exposes: PCIe link attrs, `boot_vga`, bus position, amdgpu attributes) and
+   verify it on this machine (Cezanne must be iGPU). Phoenix1 on x600 must also be iGPU.
+2. **Old remote fallback.** The x600 runs an older binary, so its Phoenix1 has no class and shows
+   `gpu vram 0.5/0.5G 95%` instead of vram/gtt. Make the zero value `GPUClassUnknown`, which keeps
+   the pre-765 rendering (vram/gtt row whenever GTT data is present).
+3. Add regression tests for both, then rerun the live check yourself and paste the Load box rows.
