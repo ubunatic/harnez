@@ -438,6 +438,10 @@ type GPU struct {
 	HaveGTT      bool
 	HaveTemp     bool
 
+	// Class is the internal iGPU/dGPU/eGPU kind. It selects the memory rows
+	// and is never shown (issue 765).
+	Class GPUClass
+
 	// UtilHistory is a short rolling window of recent UtilPercent samples,
 	// oldest first, populated by the AMD sysfs path (cheap enough to poll
 	// every redraw).
@@ -642,30 +646,30 @@ var amdCodenameByDeviceID = map[string]string{
 	"0x1638": "Cezanne", // Ryzen 5000 (Zen3) APU, e.g. Ryzen 7 5800U
 }
 
-// amdCodenameCache memoizes the local AMD GPU's codename for the process
-// lifetime: the lspci probe it may run is a subprocess, and the hardware
-// it's describing can't change mid-session.
+// amdCodenameByPCI memoizes each AMD GPU's codename by PCI address for the
+// process lifetime: the lspci probe it may run is a subprocess, and the
+// hardware it's describing can't change mid-session. Keyed per device so two
+// AMD GPUs never share one name (issue 765).
 var (
 	amdCodenameMu    sync.Mutex
-	amdCodenameValue string
-	amdCodenameKnown bool
+	amdCodenameByPCI = map[string]string{}
 )
 
 // amdGPUCodename resolves deviceDir's (a /sys/class/drm/cardN/device path)
-// AMD codename, preferring the live system (`lspci`'s device string, e.g.
-// "Cezanne") over the built-in fallback table, since the table is
-// necessarily incomplete.
+// AMD codename, preferring the live system (`lspci`'s device string for this
+// GPU's PCI address, e.g. "Cezanne") over the built-in fallback table, since
+// the table is necessarily incomplete.
 func amdGPUCodename(deviceDir string) string {
+	pci := pciAddressOf(deviceDir)
 	amdCodenameMu.Lock()
-	if amdCodenameKnown {
-		v := amdCodenameValue
+	if v, ok := amdCodenameByPCI[pci]; ok {
 		amdCodenameMu.Unlock()
 		return v
 	}
 	amdCodenameMu.Unlock()
 
 	name := ""
-	if lspciName, err := readAMDCodenameFromLspci(); err == nil && lspciName != "" {
+	if lspciName, err := readAMDCodenameFromLspci(pci); err == nil && lspciName != "" {
 		name = lspciName
 	} else if deviceID, err := os.ReadFile(filepath.Join(deviceDir, "device")); err == nil {
 		if v, ok := amdCodenameByDeviceID[strings.TrimSpace(string(deviceID))]; ok {
@@ -677,25 +681,42 @@ func amdGPUCodename(deviceDir string) string {
 	}
 
 	amdCodenameMu.Lock()
-	amdCodenameValue, amdCodenameKnown = name, true
+	amdCodenameByPCI[pci] = name
 	amdCodenameMu.Unlock()
 	return name
 }
 
-// readAMDCodenameFromLspci shells out to `lspci -d 1002: -mm` (machine-
-// readable, quoted fields) and extracts the device string's codename
-// (e.g. "Cezanne" from "Cezanne [Radeon Vega Series / ...]") for the first
-// VGA/3D/display-class AMD function. Called at most once per process via
-// amdGPUCodename's cache.
-func readAMDCodenameFromLspci() (string, error) {
-	out, err := exec.Command("lspci", "-d", "1002:", "-mm").Output()
+// pciAddressOf returns the PCI address of a sysfs GPU device directory (e.g.
+// "0000:c4:00.0"), the stable per-GPU key. Unlike the cardN name it does not
+// change when another GPU is attached. If the symlink can't be resolved, the
+// directory path itself is the key.
+func pciAddressOf(deviceDir string) string {
+	if resolved, err := filepath.EvalSymlinks(deviceDir); err == nil {
+		return filepath.Base(resolved)
+	}
+	return deviceDir
+}
+
+// readAMDCodenameFromLspci shells out to `lspci -D -d 1002: -mm` (machine-
+// readable, quoted fields, full PCI domain) and returns the codename of the
+// AMD device at pci. Called at most once per GPU via amdGPUCodename's cache.
+func readAMDCodenameFromLspci(pci string) (string, error) {
+	out, err := exec.Command("lspci", "-D", "-d", "1002:", "-mm").Output()
 	if err != nil {
 		return "", err
 	}
+	return parseLspciCodename(out, pci)
+}
+
+// parseLspciCodename extracts the device string's codename (e.g. "Cezanne"
+// from "Cezanne [Radeon Vega Series / ...]") for the VGA/3D/display-class
+// function whose slot equals pci. Other AMD functions in the output are
+// skipped, so each GPU gets its own name.
+func parseLspciCodename(out []byte, pci string) (string, error) {
 	for _, line := range strings.Split(string(out), "\n") {
 		// lspci -mm quotes each field: Slot "Class" "Vendor" "Device" ...
 		fields := strings.Split(line, `"`)
-		if len(fields) < 6 {
+		if len(fields) < 6 || strings.TrimSpace(fields[0]) != pci {
 			continue
 		}
 		class := fields[1]
@@ -710,7 +731,7 @@ func readAMDCodenameFromLspci() (string, error) {
 			return device, nil
 		}
 	}
-	return "", fmt.Errorf("no AMD VGA/3D/display device found in lspci output")
+	return "", fmt.Errorf("no AMD VGA/3D/display device %s found in lspci output", pci)
 }
 
 // readAMDSysfs reads AMD GPU utilization, VRAM/GTT, and temperature straight
@@ -741,21 +762,23 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 	var gpus []GPU
 	for _, busyPath := range matches {
 		deviceDir := filepath.Dir(busyPath)
-		cardName := filepath.Base(filepath.Dir(deviceDir))
+		// Histories are keyed by PCI address, not cardN, which can renumber
+		// when another GPU (e.g. an eGPU) is attached.
+		key := pciAddressOf(deviceDir)
 		g := GPU{Name: amdGPUCodename(deviceDir)}
 
-		if !seed || gpuHistorySeeded(cardName) {
+		if !seed || gpuHistorySeeded(key) {
 			v, err := readSysfsUint(busyPath)
 			if err != nil {
 				continue // not a real GPU device (or unreadable): skip rather than report zeros
 			}
 			g.UtilPercent = float64(v)
-			g.UtilHistory = appendGPUHistory(cardName, g.UtilPercent)
+			g.UtilHistory = appendGPUHistory(key, g.UtilPercent)
 		} else {
 			// First time seeing this card: burst-sample so its timeline
 			// starts already filled instead of growing one glyph per
 			// redraw (see historyBurstInterval).
-			hist := burstSeedGPUHistory(cardName, busyPath)
+			hist := burstSeedGPUHistory(key, busyPath)
 			if len(hist) == 0 {
 				continue
 			}
@@ -763,7 +786,7 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 			g.UtilPercent = hist[len(hist)-1]
 		}
 
-		readAMDGPUMemory(deviceDir, cardName, &g)
+		readAMDGPUMemory(deviceDir, key, &g)
 
 		if hwmonMatches, err := filepath.Glob(filepath.Join(deviceDir, "hwmon", "hwmon*", "temp1_input")); err == nil && len(hwmonMatches) > 0 {
 			if milliC, err := readSysfsUint(hwmonMatches[0]); err == nil {
@@ -772,6 +795,7 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 			}
 		}
 
+		g.Class = classifyAMDGPU(isExternalGPU(deviceDir), g.HaveVRAM, g.VRAMTotalMiB)
 		gpus = append(gpus, g)
 	}
 	if len(gpus) == 0 {
@@ -780,7 +804,9 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 	return gpus, nil
 }
 
-func readAMDGPUMemory(deviceDir, cardName string, g *GPU) {
+// readAMDGPUMemory fills g's VRAM/GTT fields. key is the GPU's history key
+// (its PCI address, see pciAddressOf).
+func readAMDGPUMemory(deviceDir, key string, g *GPU) {
 	vramUsed, errVRAMUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_used"))
 	vramTotal, errVRAMTotal := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_total"))
 	if errVRAMUsed == nil && errVRAMTotal == nil && vramTotal > 0 {
@@ -790,7 +816,7 @@ func readAMDGPUMemory(deviceDir, cardName string, g *GPU) {
 		g.MemTotalMiB += g.VRAMTotalMiB
 		g.HaveVRAM = true
 		vramPct := percent(g.VRAMUsedMiB, g.VRAMTotalMiB)
-		g.VRAMPercentHistory = appendVRAMHistory(cardName, vramPct)
+		g.VRAMPercentHistory = appendVRAMHistory(key, vramPct)
 	}
 
 	gttUsed, errGTTUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_gtt_used"))
@@ -802,7 +828,7 @@ func readAMDGPUMemory(deviceDir, cardName string, g *GPU) {
 		g.MemTotalMiB += g.GTTTotalMiB
 		g.HaveGTT = true
 		gttPct := percent(g.GTTUsedMiB, g.GTTTotalMiB)
-		g.GTTPercentHistory = appendGTTHistory(cardName, gttPct)
+		g.GTTPercentHistory = appendGTTHistory(key, gttPct)
 	}
 
 	if g.MemTotalMiB > 0 {

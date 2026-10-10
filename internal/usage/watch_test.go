@@ -92,6 +92,7 @@ func TestFormatMemoryLines(t *testing.T) {
 	}
 
 	gpu := formatGPUMemoryLines(GPU{
+		Class:        GPUClassIGPU,
 		MemUsedMiB:   6 * 1024,
 		MemTotalMiB:  20 * 1024,
 		MemPercent:   30,
@@ -122,6 +123,7 @@ func TestLoadBoxMemoryLineClipsToWidth(t *testing.T) {
 	b := wbox{
 		title: "\x1b[1m[L]\x1b[0m Load",
 		lines: formatGPUMemoryLines(GPU{
+			Class:        GPUClassIGPU,
 			MemUsedMiB:   6 * 1024,
 			MemTotalMiB:  20 * 1024,
 			MemPercent:   30,
@@ -144,6 +146,74 @@ func TestLoadBoxMemoryLineClipsToWidth(t *testing.T) {
 	rendered := renderWBox(b)
 	if got := stripANSI(rendered[1]); !strings.Contains(got, "gpu vram/gtt") {
 		t.Errorf("expected combined vram/gtt memory line, got %q", got)
+	}
+}
+
+func TestFormatGPUMemoryLinesDiscreteShowsVRAMOnly(t *testing.T) {
+	gpu := formatGPUMemoryLines(GPU{
+		Class:        GPUClassEGPU,
+		MemUsedMiB:   3 * 1024,
+		MemTotalMiB:  20 * 1024,
+		MemPercent:   15,
+		VRAMUsedMiB:  2 * 1024,
+		VRAMTotalMiB: 8 * 1024,
+		GTTUsedMiB:   1 * 1024,
+		GTTTotalMiB:  12 * 1024,
+		HaveMem:      true,
+		HaveVRAM:     true,
+		HaveGTT:      true,
+	})
+	if len(gpu) != 1 {
+		t.Fatalf("formatGPUMemoryLines returned %d lines, want 1: %v", len(gpu), gpu)
+	}
+	got := stripANSI(gpu[0])
+	if !strings.HasPrefix(got, "gpu vram ") {
+		t.Errorf("formatGPUMemoryLines[0] = %q, want prefix %q", got, "gpu vram ")
+	}
+	if strings.Contains(got, "gtt") {
+		t.Errorf("formatGPUMemoryLines[0] = %q, discrete GPU must not show GTT", got)
+	}
+	if !strings.Contains(got, "2.0/8.0G 25%") {
+		t.Errorf("formatGPUMemoryLines[0] = %q, want VRAM-only %q", got, "2.0/8.0G 25%")
+	}
+}
+
+func TestBuildLoadBoxLinesListsEveryGPUWithoutClassLabels(t *testing.T) {
+	snap := &LoadSnapshot{GPUs: []GPU{
+		{Name: "Phoenix1", Class: GPUClassIGPU, UtilPercent: 0, MemUsedMiB: 1024, MemTotalMiB: 35328, MemPercent: 4,
+			VRAMUsedMiB: 100, VRAMTotalMiB: 512, GTTUsedMiB: 1024, GTTTotalMiB: 34816, HaveMem: true, HaveVRAM: true, HaveGTT: true},
+		{Name: "Navi 33", Class: GPUClassDGPU, UtilPercent: 5, MemUsedMiB: 1200, MemTotalMiB: 12700, MemPercent: 9,
+			VRAMUsedMiB: 1200, VRAMTotalMiB: 12700, HaveMem: true, HaveVRAM: true},
+		{Name: "RTX 3060", Class: GPUClassEGPU, UtilPercent: 0, MemUsedMiB: 1200, MemTotalMiB: 12288, MemPercent: 10,
+			VRAMUsedMiB: 1200, VRAMTotalMiB: 12288, HaveMem: true, HaveVRAM: true},
+	}}
+
+	lines := buildLoadBoxLines("x600", snap)
+	var plain []string
+	for _, l := range lines {
+		plain = append(plain, stripANSI(l))
+	}
+	joined := strings.Join(plain, "\n")
+
+	loadRows := 0
+	for _, l := range plain {
+		if strings.HasPrefix(l, "gpu (") {
+			loadRows++
+		}
+	}
+	if loadRows != 3 {
+		t.Errorf("load rows = %d, want 3 gpu load rows:\n%s", loadRows, joined)
+	}
+	if got := strings.Count(joined, "gpu vram/gtt"); got != 1 {
+		t.Errorf("vram/gtt rows = %d, want 1 (iGPU only):\n%s", got, joined)
+	}
+	if got := strings.Count(joined, "gpu vram "); got != 2 {
+		t.Errorf("single vram rows = %d, want 2 (dGPU and eGPU):\n%s", got, joined)
+	}
+	for _, class := range []string{"iGPU", "dGPU", "eGPU"} {
+		if strings.Contains(joined, class) {
+			t.Errorf("class label %q must never be shown:\n%s", class, joined)
+		}
 	}
 }
 

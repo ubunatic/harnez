@@ -1078,10 +1078,7 @@ func buildLoadBoxLines(remoteHost string, snapshot *LoadSnapshot) []string {
 	if len(gpus) == 0 {
 		lines = append(lines, ansiDimGrey+"gpu n/a\x1b[0m")
 	} else {
-		for i, g := range gpus {
-			if i >= 2 {
-				break
-			}
+		for _, g := range gpus {
 			lines = append(lines, formatGPULine(g))
 			if g.HaveMem {
 				lines = append(lines, formatGPUMemoryLines(g)...)
@@ -1212,6 +1209,9 @@ func formatGPULine(g GPU) string {
 // whichever of HaveVRAM/HaveGTT is set), so they're used directly here for
 // the combined used/total and percentage rather than re-summing.
 func formatGPUMemoryLines(g GPU) []string {
+	if g.Class != GPUClassIGPU {
+		return formatDiscreteGPUMemoryLines(g)
+	}
 	label := padLoadLabel("gpu vram/gtt")
 
 	var chart string
@@ -1256,6 +1256,30 @@ func formatGPUMemoryLines(g GPU) []string {
 	}
 
 	line := fmt.Sprintf("%s %s %s/%sG %s", label, chart, formatGiB(g.MemUsedMiB), formatGiB(g.MemTotalMiB), watchLoadPercent(g.MemPercent))
+	return []string{line}
+}
+
+// formatDiscreteGPUMemoryLines renders a dGPU's or eGPU's memory as one
+// "gpu vram" row showing VRAM only (issue 765). GTT is system RAM the card
+// can borrow, not the card's own memory, so it is left out. Returns nothing
+// when the card reports no VRAM.
+func formatDiscreteGPUMemoryLines(g GPU) []string {
+	if !g.HaveVRAM {
+		return nil
+	}
+	label := padLoadLabel("gpu vram")
+	pct := percent(g.VRAMUsedMiB, g.VRAMTotalMiB)
+
+	var chart string
+	mode := mustIndicators().LoadCharts.VRAMMode()
+	if mode != LoadChartBar {
+		series := padHistory(g.VRAMPercentHistory, pct, rograph.MaxWidth*2)
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth, mode))
+	} else {
+		chart = rograph.RenderBar(pct, watchLoadBarOptions(pct))
+	}
+
+	line := fmt.Sprintf("%s %s %s/%sG %s", label, chart, formatGiB(g.VRAMUsedMiB), formatGiB(g.VRAMTotalMiB), watchLoadPercent(pct))
 	return []string{line}
 }
 

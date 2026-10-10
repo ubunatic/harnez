@@ -46,3 +46,13 @@ This unbans `nvidia-smi`: if an NVIDIA card is present, harnez uses it. Update t
   GTT; eGPU = PCI path behind a Thunderbolt/USB4 bridge (`/sys/bus/thunderbolt` or `removable`
   attribute); else dGPU.
 - Remote hosts get their GPU data via the same collector; check 090 for how remote metrics flow.
+
+## Progress
+
+- **M1 (AMD multi-GPU, classification, iGPU/dGPU rows):** implemented in `internal/usage/gpu_class.go`
+  and `load.go`/`watch.go`. Codename cache is per PCI address; histories are keyed by PCI address.
+- **UNVERIFIED ON HARDWARE:** the eGPU rule (PCI `removable` attribute on the GPU or a bridge above it)
+  and the iGPU VRAM carve-out threshold (`apuVRAMCarveoutMaxMiB` = 2048 MiB). Both were written without
+  a live eGPU or APU to check against. The eGPU is on remote host x600; the host checks live output there.
+- The threshold is a Go constant in M1; it moves to `spec/usage.yaml` in M2 per the Spec rule.
+- NVIDIA (nvidia-smi) is M2; this ticket stays open until the host closes it after review.
