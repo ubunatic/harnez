@@ -1,6 +1,6 @@
 # 659 — statusline takes 0.7-7s, AGY kills it
 
-**Status**: Closed — statusline no longer runs schema setup or migrations; the passive usage write runs after the line is flushed and is abandoned after 100 ms (3f71b5da). Host bench, 200 calls: idle p50 22 / p99 26 / max 27 ms; under go test ./... plus 4 CPU hogs on 12 cores p50 29 / p99 40 / max 42 ms (target p99 < 250, max < 500). The 50k-row reproduction test did not fail before the fix (left unloosened); fonts were already lazy, so M3 changed only the bench. Leftover: the 100 ms cap is hardcoded in internal/usage/passive.go, not in spec/
+**Status**: In Progress — AGY statusline kill recurred at 14:50:40 on 2026-10-10; investigate regression
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -75,3 +75,5 @@ Measure with a small script (keep it as `scripts/statusline-bench.sh`): 200 call
 - 2026-10-10: recurred, `statusline: command failed: signal: killed (stderr: ) (failure 1/30)`
   at 10:31:51 (`cli-20261010_102628.log`, line 290) while agent workers ran. Idle right after:
   0.13, 0.14, 0.23 s.
+- 2026-10-10: recurred again, `command failed: signal: killed (stderr: )` at 14:50:40
+  (`cli-20261010_145040.log`); user reports the AGY status line is missing again.
