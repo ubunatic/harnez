@@ -18,22 +18,32 @@ fi
 mkdir -p "$tmp_dir/home" "$tmp_dir/data"
 export HOME="$tmp_dir/home"
 export XDG_DATA_HOME="$tmp_dir/data"
-samples="$tmp_dir/samples"
-sorted="$tmp_dir/sorted"
-: > "$samples"
+measure() {
+  local label="$1"
+  shift
+  local samples="$tmp_dir/$label-samples"
+  local sorted="$tmp_dir/$label-sorted"
+  : > "$samples"
 
-for ((i = 0; i < run_count; i++))
-do
-  started=$(date +%s%N)
-  "$bin" statusline --agent agy < "$payload" >/dev/null
-  finished=$(date +%s%N)
-  printf '%s\n' "$(((finished - started) / 1000000))" >> "$samples"
-done
+  for ((i = 0; i < run_count; i++))
+  do
+    started=$(date +%s%N)
+    if test "$label" = statusline
+    then "$bin" "$@" < "$payload" >/dev/null
+    else "$bin" "$@" >/dev/null
+    fi
+    finished=$(date +%s%N)
+    printf '%s\n' "$(((finished - started) / 1000000))" >> "$samples"
+  done
 
-sort -n "$samples" > "$sorted"
-awk -v count="$run_count" '
-  NR == int((count + 1) / 2) { p50 = $1 }
-  NR == int(count * 0.99 + 0.999999) { p99 = $1 }
-  NR == count { max = $1 }
-  END { printf "calls=%d p50=%dms p99=%dms max=%dms\n", count, p50, p99, max }
-' "$sorted"
+  sort -n "$samples" > "$sorted"
+  awk -v label="$label" -v count="$run_count" '
+    NR == int((count + 1) / 2) { p50 = $1 }
+    NR == int(count * 0.99 + 0.999999) { p99 = $1 }
+    NR == count { max = $1 }
+    END { printf "%s calls=%d p50=%dms p99=%dms max=%dms\n", label, count, p50, p99, max }
+  ' "$sorted"
+}
+
+measure version --version
+measure statusline statusline --agent agy
