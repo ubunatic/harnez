@@ -1,6 +1,6 @@
 # 770 — integrate optional architect refinement step into lean-sprint
 
-**Status**: Open
+**Status**: Closed — Added optional architect refinement and refined-sprint alias; Go tests pass, changes are installed, and both skill files were verified.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
