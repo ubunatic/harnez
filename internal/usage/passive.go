@@ -45,7 +45,7 @@ func ObserveStatuslineAt(parent context.Context, provider string, payload []byte
 	if provider != "claude" && provider != "agy" {
 		return
 	}
-	dedupe, busy, err := PassivePolicy()
+	dedupe, busy, writeTimeout, err := PassivePolicy()
 	if err != nil {
 		return
 	}
@@ -54,8 +54,8 @@ func ObserveStatuslineAt(parent context.Context, provider string, payload []byte
 		return
 	}
 	budget := 4 * busy
-	if budget > 100*time.Millisecond {
-		budget = 100 * time.Millisecond
+	if budget > writeTimeout {
+		budget = writeTimeout
 	}
 	ctx, cancel := context.WithTimeout(parent, budget)
 	defer cancel()

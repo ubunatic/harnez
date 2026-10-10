@@ -9,6 +9,7 @@ history_snapshot_interval: 15m
 # Path relative to $XDG_DATA_HOME/harnez for HMAC key used to hash host labels in usage export (issue 735).
 export_host_key: export-host-key
 statusline_busy_timeout: 25ms
+statusline_write_timeout: 100ms
 # NVIDIA GPUs are read via nvidia-smi (issue 765). One call costs ~123ms, and
 # the Load box redraws every 100ms, so each reading is reused for the TTL and
 # a hung call is cut off at the timeout.

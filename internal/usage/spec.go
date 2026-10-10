@@ -15,17 +15,18 @@ import (
 const usageSpecPath = "spec/usage.yaml"
 
 type usageSpec struct {
-	WatchLoadingLabel     string             `yaml:"watch_loading_label"`
-	AGYMeterMaxAge        string             `yaml:"agy_meter_max_age"`
-	CollectorCadence      string             `yaml:"collector_cadence"`
-	CollectorTimeout      string             `yaml:"collector_timeout"`
-	PassiveDedupeInterval string             `yaml:"passive_dedupe_interval"`
-	StatuslineBusyTimeout string             `yaml:"statusline_busy_timeout"`
-	HistorySnapshotEvery  string             `yaml:"history_snapshot_interval"`
-	ExportHostKey         string             `yaml:"export_host_key"`
-	NVIDIASMITimeout      string             `yaml:"nvidia_smi_timeout"`
-	NVIDIASMICacheTTL     string             `yaml:"nvidia_smi_cache_ttl"`
-	ViewModes             usageViewModesSpec `yaml:"view_modes"`
+	WatchLoadingLabel      string             `yaml:"watch_loading_label"`
+	AGYMeterMaxAge         string             `yaml:"agy_meter_max_age"`
+	CollectorCadence       string             `yaml:"collector_cadence"`
+	CollectorTimeout       string             `yaml:"collector_timeout"`
+	PassiveDedupeInterval  string             `yaml:"passive_dedupe_interval"`
+	StatuslineBusyTimeout  string             `yaml:"statusline_busy_timeout"`
+	StatuslineWriteTimeout string             `yaml:"statusline_write_timeout"`
+	HistorySnapshotEvery   string             `yaml:"history_snapshot_interval"`
+	ExportHostKey          string             `yaml:"export_host_key"`
+	NVIDIASMITimeout       string             `yaml:"nvidia_smi_timeout"`
+	NVIDIASMICacheTTL      string             `yaml:"nvidia_smi_cache_ttl"`
+	ViewModes              usageViewModesSpec `yaml:"view_modes"`
 }
 
 type usageViewModesSpec struct {
@@ -55,6 +56,7 @@ var (
 	usageSpecTimeout      time.Duration
 	usageSpecDedupe       time.Duration
 	usageSpecBusyTimeout  time.Duration
+	usageSpecWriteTimeout time.Duration
 	usageSpecErr          error
 	usageSpecLoadingLabel string
 	usageSpecHistoryEvery time.Duration
@@ -101,11 +103,11 @@ func ExportHostKeyRelativePath() (string, error) {
 	return usageSpecHostKey, nil
 }
 
-// PassivePolicy returns the duplicate suppression interval and SQLite lock
-// wait intended for statusline and hook observations.
-func PassivePolicy() (time.Duration, time.Duration, error) {
+// PassivePolicy returns the duplicate suppression interval, SQLite lock wait,
+// and maximum statusline write time.
+func PassivePolicy() (time.Duration, time.Duration, time.Duration, error) {
 	_, _, _, _, _, err := usageDurations()
-	return usageSpecDedupe, usageSpecBusyTimeout, err
+	return usageSpecDedupe, usageSpecBusyTimeout, usageSpecWriteTimeout, err
 }
 
 func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duration, time.Duration, error) {
@@ -124,6 +126,7 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 			usageSpecViewModes = spec.ViewModes
 			usageSpecNVTimeout, _ = time.ParseDuration(spec.NVIDIASMITimeout)
 			usageSpecNVCacheTTL, _ = time.ParseDuration(spec.NVIDIASMICacheTTL)
+			usageSpecWriteTimeout, _ = time.ParseDuration(spec.StatuslineWriteTimeout)
 		}
 	})
 	return usageSpecAge, usageSpecCadence, usageSpecTimeout, usageSpecDedupe, usageSpecBusyTimeout, usageSpecErr
@@ -173,6 +176,9 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	busy, err := time.ParseDuration(spec.StatuslineBusyTimeout)
 	if err != nil || busy <= 0 || busy > time.Second {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: statusline_busy_timeout must be between 1ns and 1s", usageSpecPath)
+	}
+	if writeTimeout, err := time.ParseDuration(spec.StatuslineWriteTimeout); err != nil || writeTimeout <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: statusline_write_timeout must be a positive duration", usageSpecPath)
 	}
 	return age, cadence, timeout, dedupe, busy, nil
 }

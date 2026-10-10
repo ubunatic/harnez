@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez usage settings and view modes",
   "type": "object",
-  "required": ["agy_meter_max_age", "collector_cadence", "collector_timeout", "passive_dedupe_interval", "history_snapshot_interval", "statusline_busy_timeout", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl"],
+  "required": ["agy_meter_max_age", "collector_cadence", "collector_timeout", "passive_dedupe_interval", "history_snapshot_interval", "statusline_busy_timeout", "statusline_write_timeout", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl"],
   "properties": {
     "export_host_key": {
       "type": "string",
@@ -52,6 +52,10 @@
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
     },
     "statusline_busy_timeout": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
+    },
+    "statusline_write_timeout": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
     },
