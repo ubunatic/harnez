@@ -70,7 +70,7 @@ harnez agent resume "continue with M2"         # latest resumable session in thi
 harnez agent start -i --model claude:haiku --name chat
 harnez agent resume -i --name w
 harnez agent list [--children|--all-sessions|--failed]
-harnez agent status --name w
+harnez agent status --name w [--reply|--turn N|--all]
 harnez agent compact --name w
 harnez agent stop --name w
 harnez agent delete --name w
@@ -82,6 +82,9 @@ harnez agent models [--names]
 `--name` selects a session, `--model` selects a provider/model/tier, and `-d`
 selects the working-directory or attribution scope. A missing model uses the
 specification in `spec/agent.yaml`; bare aliases such as `luna` are accepted.
+For a saved turn reply, use `harnez agent status --name w --reply` for the latest,
+`--turn N` for one retained turn, or `--all` for retained reply history. JSON status
+includes the bounded `reply_history` array.
 Root prompt forms also provide `-p/--prompt`, repeatable `-f/--file`, `-c/--continue`,
 `--stream full|stats`, `--plan yes|no`, and `--json`. `--` sends following text
 literally. There are no legacy provider-first or positional-session forms.

@@ -25,12 +25,23 @@ without their final reply, and the reply could not be recovered:
 `~/.harnez/agents/<id>.json` has no reply field. A lost reply costs a re-ask turn or is gone.
 
 ## 2. Technical Specification / Findings
-- Check first on HEAD whether the record or telemetry DB already stores replies.
-- Unclear why the job output was truncated or empty (output-file buffering, `--stream full`
-  handling of a resume, or the provider's own output). Reproduce before fixing.
+### Findings
+- The session JSON already had `response` and `messages`; `start` saved them, but `resume`
+  updated turn/token metadata without copying its reply before saving. No reply history existed.
+- `--stream full` prints provider message events as they arrive and only a `[done]` marker at
+  finish. `--stream stats` prints the reply at the end (or a placeholder when already shown).
+  A missing event or lost output tail can therefore hide the reply; this inspection does not
+  establish which host/provider behavior caused the reported job output.
+- The requested redirected Claude/Codex reproduction was not run: this assigned developer is a
+  leaf worker and the repository role rules prohibit starting Harnez or background agents.
+  The host still needs to run that integration check before closing this ticket.
+- The one `make test-q1` run found only a round-trip timestamp assertion comparing `time.Time`
+  structs across JSON. The assertion was changed to compare instants with `Time.Equal`; it was
+  not rerun because the requested quota suite may run only once in this turn.
 
 ## 3. Implementation & Verification Plan
-- Persist the final reply of each turn (text, turn number, time) with the session.
-- `harnez agent status --name <s>` (or a `--reply` flag) prints the last reply; older turns on request.
-- Verify: run a start and a resume with a Claude and a Codex worker in Claude Code background
-  jobs; the reply must be recoverable even when the job output is cut.
+- Persist bounded per-turn reply history (text, turn number, timestamp) with the session.
+- `harnez agent status --name <s> --reply`, `--turn N`, and `--all` print retained replies;
+  JSON status includes `reply_history`.
+- Verify unit coverage and run redirected start/resume turns with Claude and Codex from the host;
+  confirm history survives even when job output is cut.
