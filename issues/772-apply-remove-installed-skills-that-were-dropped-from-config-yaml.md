@@ -1,6 +1,6 @@
 # 772 — apply: remove installed skills that were dropped from config.yaml
 
-**Status**: Open
+**Status**: Closed — apply removes dropped skills via .harnez-managed marker while preserving user skills
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
