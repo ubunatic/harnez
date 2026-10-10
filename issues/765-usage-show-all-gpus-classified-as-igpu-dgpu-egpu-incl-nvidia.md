@@ -32,8 +32,9 @@ subprocess vs. NVML vs. sysfs/hwmon, given the earlier removal of nvidia-smi) or
   `gpu vram/gtt` split bar.
 - `docs/data/harnez-usage-all-gpus.ansi`: x600 with iGPU (Phoenix1, `vram/gtt` row) plus RTX 3060
   eGPU: an extra `gpu (RTX 3060)` load+temp row and a `gpu vram` row (single bar, no GTT).
-- The mockups show no iGPU/dGPU/eGPU label; the class drives which memory row is shown. Ask the
-  user before adding a visible label.
+- **Decision (user, 2026-10-10):** no iGPU/dGPU/eGPU label anywhere in the UI. The class is
+  internal only and decides which memory row is shown. Each card shows only its short name
+  (e.g. `Phoenix1`, `RTX 3060`).
 
 ## Notes
 
