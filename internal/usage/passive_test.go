@@ -167,3 +167,91 @@ func TestPassiveObservationReturnsQuicklyWhenDatabaseLocked(t *testing.T) {
 	_ = tx.Rollback()
 	_ = blocker.Close()
 }
+
+func TestStatuslineObservationLargeStoreCompletesWithinBudget(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "large.sqlite")
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	observationStmt, err := tx.Prepare(`INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES('claude','claude-api',?,'fresh')`)
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		t.Fatal(err)
+	}
+	windowStmt, err := tx.Prepare(`INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction) VALUES(?,'claude','','five_hour','5-hour',0.5)`)
+	if err != nil {
+		observationStmt.Close()
+		tx.Rollback()
+		db.Close()
+		t.Fatal(err)
+	}
+	for i := 0; i < 50000; i++ {
+		observedAt := time.Unix(1_700_000_000+int64(i), 0).UTC().Format(time.RFC3339Nano)
+		result, err := observationStmt.Exec(observedAt)
+		if err != nil {
+			windowStmt.Close()
+			observationStmt.Close()
+			tx.Rollback()
+			db.Close()
+			t.Fatal(err)
+		}
+		observationID, err := result.LastInsertId()
+		if err != nil {
+			windowStmt.Close()
+			observationStmt.Close()
+			tx.Rollback()
+			db.Close()
+			t.Fatal(err)
+		}
+		if _, err := windowStmt.Exec(observationID); err != nil {
+			windowStmt.Close()
+			observationStmt.Close()
+			tx.Rollback()
+			db.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := windowStmt.Close(); err != nil {
+		tx.Rollback()
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := observationStmt.Close(); err != nil {
+		tx.Rollback()
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	started := time.Now()
+	ObserveStatuslineAt(ctx, "claude", []byte(`{"rate_limits":{"five_hour":{"used_percentage":12.5}}}`), dbPath)
+	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
+		t.Fatalf("statusline observation on 50k-row store took %s, want <=150ms", elapsed)
+	}
+}
