@@ -1,6 +1,6 @@
 # 765 — usage: show all GPUs classified as iGPU/dGPU/eGPU, incl. NVIDIA
 
-**Status**: Open
+**Status**: Closed — All GPUs listed per host: AMD via sysfs, NVIDIA via nvidia-smi (gated, 2s cache, 1s timeout, spec keys); iGPU keeps vram/gtt, dGPU/eGPU show vram; class internal only. Verified live: local Cezanne vram/gtt; x600 Phoenix1 vram/gtt + RTX 3060 vram, matching docs/data/harnez-usage-all-gpus.ansi. eGPU rule unverified on hardware (renders like dGPU).
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
