@@ -29,3 +29,8 @@ while a dev ran `make test-q1`. A statusline must render in well under 1s.
 /goal The statusline renders from cached/stored data only (no live fetch, no blocking DB
 lock), p95 < 300ms on this machine even under test load; find what blocks (DB lock after the
 657 migration, live quota fetch, process scans) and fix it, or stop and report when blocked.
+
+## Recurrence 2026-10-10
+Seen again in AGY: `statusline: command failed: signal: killed (stderr: ) (failure 1/30)` at
+10:31:51 (`~/.gemini/antigravity-cli/log/cli-20261010_102628.log`, line 290), while agent workers
+were running. An idle measurement right after gave 0.13s, 0.14s and 0.23s, so the timeout only hits under load.
