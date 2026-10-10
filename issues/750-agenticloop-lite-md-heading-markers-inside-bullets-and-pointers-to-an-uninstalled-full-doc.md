@@ -1,6 +1,6 @@
 # 750 — AgenticLoop.lite.md: heading markers inside bullets and pointers to an uninstalled full doc
 
-**Status**: Open
+**Status**: Closed — cleaned heading markers in AgenticLoop.lite.md, added variant commands in lite docs, and added structural gate test
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
