@@ -539,6 +539,7 @@ func TestFileSessionStore_Roundtrip(t *testing.T) {
 		CachedTokens:     500,
 		CreatedAt:        now,
 		LastActiveAt:     now,
+		ReplyHistory:     []ReplyRecord{{Turn: 3, At: now, Text: "saved reply"}},
 	}
 
 	if err := store.Save(original); err != nil {
@@ -550,6 +551,11 @@ func TestFileSessionStore_Roundtrip(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
+	replyHistoryMatches := len(retrieved.ReplyHistory) == 1
+	if replyHistoryMatches {
+		got, want := retrieved.ReplyHistory[0], original.ReplyHistory[0]
+		replyHistoryMatches = got.Turn == want.Turn && got.At.Equal(want.At) && got.Text == want.Text
+	}
 	if retrieved.ID != original.ID ||
 		retrieved.Name != original.Name ||
 		retrieved.Provider != original.Provider ||
@@ -562,8 +568,27 @@ func TestFileSessionStore_Roundtrip(t *testing.T) {
 		retrieved.Status != original.Status ||
 		retrieved.TokensCumulative != original.TokensCumulative ||
 		retrieved.TokensTurn != original.TokensTurn ||
-		retrieved.CachedTokens != original.CachedTokens {
+		retrieved.CachedTokens != original.CachedTokens ||
+		!replyHistoryMatches {
 		t.Fatal("Roundtrip failed: fields do not match")
+	}
+}
+
+func TestFileSessionStoreLoadsLegacySessionWithoutReplyHistory(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewSessionStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "legacy.json"), []byte(`{"id":"legacy","name":"worker"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Get("legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ReplyHistory != nil {
+		t.Fatalf("legacy ReplyHistory = %#v, want nil", got.ReplyHistory)
 	}
 }
 

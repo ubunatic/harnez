@@ -2,6 +2,7 @@
 # Agent model and role defaults are part of the application artifact.
 default_model: codex:luna:high
 role_classify_timeout_ms: 1500
+reply_history_limit: 20
 stop:
   grace_ms: 1000
   kill_wait_ms: 2000

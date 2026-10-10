@@ -28,6 +28,7 @@ type agentSpec struct {
 	Stop                  StopSpec                       `yaml:"stop"`
 	Selftest              SelftestSpec                   `yaml:"selftest"`
 	ExternalSessions      map[string]ExternalSessionSpec `yaml:"external_sessions"`
+	ReplyHistoryLimit     int                            `yaml:"reply_history_limit"`
 }
 
 // ExternalSessionSpec describes provider-owned local session metadata.
@@ -108,6 +109,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if spec.RoleClassifyTimeoutMS <= 0 {
 		return agentSpec{}, fmt.Errorf("agent spec: positive role_classify_timeout_ms required")
+	}
+	if spec.ReplyHistoryLimit <= 0 {
+		return agentSpec{}, fmt.Errorf("agent spec: positive reply_history_limit required")
 	}
 	models := make(map[string]modelAlias, len(spec.Models))
 	for key, entry := range spec.Models {
@@ -197,6 +201,15 @@ func loadAgentSpec() (agentSpec, error) {
 }
 
 var agentSpecOnce = sync.OnceValues(loadAgentSpec)
+
+// AgentReplyHistoryLimit returns the configured maximum number of saved replies.
+func AgentReplyHistoryLimit() (int, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return 0, err
+	}
+	return spec.ReplyHistoryLimit, nil
+}
 
 // ModelsLegend is the one-line key printed under `harnez agent models`.
 func ModelsLegend() (string, error) {

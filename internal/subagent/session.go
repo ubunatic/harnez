@@ -64,9 +64,10 @@ type Session struct {
 	StdoutLog               string           `json:"stdout_log,omitempty"`
 	StderrLog               string           `json:"stderr_log,omitempty"`
 	externalRolloutPath     string
-	ResumeFailures          int          `json:"resume_failures,omitempty"`
-	Turn                    int          `json:"turn,omitempty"`
-	TurnRecords             []TurnRecord `json:"turn_records,omitempty"`
+	ResumeFailures          int           `json:"resume_failures,omitempty"`
+	Turn                    int           `json:"turn,omitempty"`
+	TurnRecords             []TurnRecord  `json:"turn_records,omitempty"`
+	ReplyHistory            []ReplyRecord `json:"reply_history"`
 }
 
 // CodexQuarantine records the bounded failed probe after a quota interruption.
@@ -84,6 +85,13 @@ type TurnRecord struct {
 	OutputTokens      int    `json:"output_tokens"`
 	Rating            *int   `json:"rating,omitempty"`
 	RatingReason      string `json:"rating_reason,omitempty"`
+}
+
+// ReplyRecord stores the final reply produced during one agent turn.
+type ReplyRecord struct {
+	Turn int       `json:"turn"`
+	At   time.Time `json:"at"`
+	Text string    `json:"text"`
 }
 
 // ProviderID returns the provider-side identifier used for lifecycle commands.
