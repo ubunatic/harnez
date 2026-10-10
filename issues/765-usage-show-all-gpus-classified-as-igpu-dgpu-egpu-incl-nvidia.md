@@ -25,6 +25,9 @@ subprocess vs. NVML vs. sysfs/hwmon, given the earlier removal of nvidia-smi) or
 
 **Decision (user, 2026-10-10):** read NVIDIA GPUs via `nvidia-smi`. Read the comment near
 `load.go:617` first to learn why it was removed, and avoid that problem (e.g. cache, low poll rate).
+This unbans `nvidia-smi`: if an NVIDIA card is present, harnez uses it. Update the ban in
+`docs/studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md` (superseded for NVIDIA by 765),
+`docs/README.md` and the code comment, so no doc or comment still forbids it.
 
 ## Target look (user mockups)
 
