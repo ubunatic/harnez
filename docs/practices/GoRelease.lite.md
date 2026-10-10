@@ -3,7 +3,7 @@
 
 `harnez release` + `goreleaser` + `minisign` + Forgejo (`fj`). Language-agnostic: Go is the
 common case, but Python/Zig/Rust and compile-nothing projects release the same way. Full doc
-carries the rationale and worked examples.
+carries the rationale and worked examples: `harnez docs variant gorelease full`.
 
 ## 1. Prerequisites — in `$PATH`
 
