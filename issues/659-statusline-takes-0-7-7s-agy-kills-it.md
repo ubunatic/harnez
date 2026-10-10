@@ -1,6 +1,6 @@
 # 659 — statusline takes 0.7-7s, AGY kills it
 
-**Status**: Open
+**Status**: Closed — statusline no longer runs schema setup or migrations; the passive usage write runs after the line is flushed and is abandoned after 100 ms (3f71b5da). Host bench, 200 calls: idle p50 22 / p99 26 / max 27 ms; under go test ./... plus 4 CPU hogs on 12 cores p50 29 / p99 40 / max 42 ms (target p99 < 250, max < 500). The 50k-row reproduction test did not fail before the fix (left unloosened); fonts were already lazy, so M3 changed only the bench. Leftover: the 100 ms cap is hardcoded in internal/usage/passive.go, not in spec/
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
