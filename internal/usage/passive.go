@@ -49,24 +49,39 @@ func ObserveStatuslineAt(parent context.Context, provider string, payload []byte
 	if err != nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(parent, 4*busy)
-	defer cancel()
-	store, err := usagestore.OpenWithBusyTimeout(dbPath, busy)
-	if err != nil {
-		return
-	}
-	defer store.Close()
-	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
-		return
-	}
-	if err := store.MigrateStableWindowKeys(ctx); err != nil {
-		return
-	}
 	windows, err := passiveWindows(provider, payload, time.Now())
 	if err != nil || len(windows) == 0 {
 		return
 	}
-	_ = store.WritePassive(ctx, dedupe, windows)
+	budget := 4 * busy
+	if budget > 100*time.Millisecond {
+		budget = 100 * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(parent, budget)
+	defer cancel()
+	if ctx.Err() != nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if ctx.Err() != nil {
+			return
+		}
+		store, err := usagestore.OpenWithBusyTimeout(dbPath, busy)
+		if err != nil {
+			return
+		}
+		defer store.Close()
+		if ctx.Err() != nil {
+			return
+		}
+		_ = store.WritePassive(ctx, dedupe, windows)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }
 
 func passiveWindows(provider string, data []byte, received time.Time) ([]usagestore.Window, error) {

@@ -1,4 +1,7 @@
 {
+  "model": {
+    "id": "gemini-pro"
+  },
   "workspace": {
     "current_dir": "/tmp/harnez-statusline-bench",
     "project_dir": "/tmp/harnez-statusline-bench"
