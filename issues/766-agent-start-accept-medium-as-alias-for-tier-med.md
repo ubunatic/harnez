@@ -1,6 +1,6 @@
 # 766 — agent start: accept 'medium' as alias for tier 'med'
 
-**Status**: Open
+**Status**: Closed — Implemented all requested tier aliases with canonical output; TestResolveModelTierAliases and TestResolveModelRejectsUnknownTierAliases pass in go test ./internal/subagent/...; go vet ./... passed; make install succeeded
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
