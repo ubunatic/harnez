@@ -1,6 +1,6 @@
 # 659 — statusline takes 0.7-7s, AGY kills it
 
-**Status**: In Progress — AGY statusline kill recurred at 14:50:40 on 2026-10-10; investigate regression
+**Status**: Closed — statusline flushes output immediately and bounds passive writes safely under load
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
