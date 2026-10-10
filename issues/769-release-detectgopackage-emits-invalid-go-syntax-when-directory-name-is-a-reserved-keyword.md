@@ -1,6 +1,6 @@
 # 769 — release: detectGoPackage emits invalid Go syntax when directory name is a reserved keyword
 
-**Status**: Open
+**Status**: Closed — Validated fallback package names with go/token; keyword and invalid directory names now use package main, while gotool remains unchanged. Regression coverage is in TestDetectGoPackageFallbackValidatesDirectoryName; go test ./internal/release/... passes.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
