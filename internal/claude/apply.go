@@ -1102,6 +1102,34 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 	}
 	changes += removed
 
+	configuredSkills := make(map[string]struct{}, len(cfg.Skills))
+	for _, skill := range cfg.Skills {
+		configuredSkills[skill.Name] = struct{}{}
+	}
+	for _, skillsRoot := range skillTargets(cfg) {
+		entries, err := os.ReadDir(skillsRoot)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return fmt.Errorf("skills dir %s: %w", skillsRoot, err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			skillDir := filepath.Join(skillsRoot, entry.Name())
+			if _, keep := configuredSkills[entry.Name()]; keep || !isManagedSkill(skillDir) || isExternalSkill(skillDir) {
+				continue
+			}
+			if err := os.RemoveAll(skillDir); err != nil {
+				return fmt.Errorf("remove dropped skill %s: %w", skillDir, err)
+			}
+			fmt.Printf("  removed %s\n", skillDir)
+			changes++
+		}
+	}
+
 	type pStat struct{ label, detail string }
 	var pStats []pStat
 
@@ -1195,7 +1223,7 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 			if skillDisabled(skill, selection, disableRateFeedback) {
 				for _, skillsRoot := range targets {
 					skillDir := filepath.Join(skillsRoot, skill.Name)
-					if externalSkillClash(skillDir) {
+					if externalSkillClash(skillDir) || !isManagedSkill(skillDir) {
 						continue
 					}
 					path, err := safeSkillPath(skillDir, "SKILL.md")
@@ -1226,6 +1254,12 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 						}
 						_ = os.Remove(filepath.Dir(resourcePath))
 					}
+					markerPath := filepath.Join(skillDir, ManagedSkillMarker)
+					if err := os.Remove(markerPath); err == nil {
+						changes++
+					} else if !os.IsNotExist(err) {
+						return fmt.Errorf("skill %s marker [%s]: %w", skill.Name, markerPath, err)
+					}
 					_ = os.Remove(skillDir)
 				}
 				skillNames = append(skillNames, skill.Name+" (disabled)")
@@ -1250,12 +1284,25 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 				if externalSkillClash(skillDir) {
 					continue
 				}
+				if _, err := os.Lstat(skillDir); err == nil && !isManagedSkill(skillDir) {
+					continue // never overwrite a skill directory harnez does not own
+				} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("skill %s dir: %w", skill.Name, err)
+				}
 				path, err := safeSkillPath(skillDir, "SKILL.md")
 				if err != nil {
 					return err
 				}
 				if err := os.MkdirAll(skillDir, 0755); err != nil {
 					return fmt.Errorf("skill %s dir: %w", skill.Name, err)
+				}
+				markerPath := filepath.Join(skillDir, ManagedSkillMarker)
+				markerResult, err := writeFileIfChanged(markerPath, []byte("managed: config\nskill: "+skill.Name+"\n"))
+				if err != nil {
+					return fmt.Errorf("skill %s marker: %w", skill.Name, err)
+				}
+				if markerResult.changed {
+					changes++
 				}
 				oldContent, _ := os.ReadFile(path)
 				cr := applyResult{changed: string(oldContent) != content}
@@ -1539,15 +1586,38 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 		return false, fmt.Errorf("settings: %w", err)
 	}
 	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
+	configuredSkills := make(map[string]struct{}, len(cfg.Skills))
+	for _, skill := range cfg.Skills {
+		configuredSkills[skill.Name] = struct{}{}
+	}
+	for _, skillsRoot := range skillTargets(cfg) {
+		entries, err := os.ReadDir(skillsRoot)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return false, fmt.Errorf("skills dir %s: %w", skillsRoot, err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			skillDir := filepath.Join(skillsRoot, entry.Name())
+			if _, keep := configuredSkills[entry.Name()]; !keep && isManagedSkill(skillDir) && !isExternalSkill(skillDir) {
+				anyChanged = true
+			}
+		}
+	}
 
 	if len(cfg.Skills) > 0 {
 		for _, skill := range cfg.Skills {
 			if skillDisabled(skill, selection, disableRateFeedback) {
 				for _, skillsRoot := range skillTargets(cfg) {
-					if isExternalSkill(filepath.Join(skillsRoot, skill.Name)) {
+					skillDir := filepath.Join(skillsRoot, skill.Name)
+					if isExternalSkill(skillDir) || !isManagedSkill(skillDir) {
 						continue
 					}
-					path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
+					path := filepath.Join(skillDir, "SKILL.md")
 					if _, err := os.Stat(path); err == nil {
 						anyChanged = true
 					} else if !os.IsNotExist(err) {
@@ -1571,6 +1641,11 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 				skillDir := filepath.Join(skillsRoot, skill.Name)
 				if isExternalSkill(skillDir) {
 					continue
+				}
+				if _, err := os.Lstat(skillDir); err == nil && !isManagedSkill(skillDir) {
+					continue // an unmarked directory is user-owned
+				} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+					return false, fmt.Errorf("skill %s dir: %w", skill.Name, err)
 				}
 				path, err := safeSkillPath(skillDir, "SKILL.md")
 				if err != nil {
@@ -1745,39 +1820,26 @@ func CleanAll(target string, cfg *Config) error {
 			}
 		}
 	}
-	if len(cfg.Skills) > 0 {
-		for _, skill := range cfg.Skills {
-			for _, skillsRoot := range skillTargets(cfg) {
-				skillDir := filepath.Join(skillsRoot, skill.Name)
-				if isExternalSkill(skillDir) {
-					continue
-				}
-				path, err := safeSkillPath(skillDir, "SKILL.md")
-				if err != nil {
-					return err
-				}
-				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-					return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
-				}
-				resourceTargets, err := validateSkillResourceTargets(skill)
-				if err != nil {
-					return err
-				}
-				for _, resourceTarget := range resourceTargets {
-					resourcePath, err := safeSkillPath(skillDir, resourceTarget)
-					if err != nil {
-						return err
-					}
-					if err := os.Remove(resourcePath); err != nil && !os.IsNotExist(err) {
-						return fmt.Errorf("skill %s resource [%s]: %w", skill.Name, resourcePath, err)
-					}
-					_ = os.Remove(filepath.Dir(resourcePath))
-				}
-				// Best-effort: drop the now-empty per-skill directory. Ignore
-				// errors (e.g. directory holds other files) — never clean
-				// content harnez didn't write.
-				_ = os.Remove(skillDir)
+	for _, skillsRoot := range skillTargets(cfg) {
+		entries, err := os.ReadDir(skillsRoot)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
 			}
+			return fmt.Errorf("skills dir %s: %w", skillsRoot, err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			skillDir := filepath.Join(skillsRoot, entry.Name())
+			if !isManagedSkill(skillDir) || isExternalSkill(skillDir) {
+				continue
+			}
+			if err := os.RemoveAll(skillDir); err != nil {
+				return fmt.Errorf("remove managed skill %s: %w", skillDir, err)
+			}
+			fmt.Printf("  removed %s\n", skillDir)
 		}
 	}
 	if cfg.CodexHooksTarget != "" {
@@ -1843,6 +1905,14 @@ func OpenConfig(configPath string) (*Config, string, error) {
 	}
 	cfg, err := LoadConfig(configPath)
 	return cfg, configPath, err
+}
+
+// ManagedSkillMarker marks skills installed from config.yaml by apply.
+const ManagedSkillMarker = ".harnez-managed"
+
+func isManagedSkill(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, ManagedSkillMarker))
+	return err == nil
 }
 
 // externalSkillClash reports (and prints) whether dir holds an external skill
