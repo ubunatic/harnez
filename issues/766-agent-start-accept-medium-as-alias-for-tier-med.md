@@ -23,7 +23,7 @@ canonical form in output and spec; unit tests cover `medium`, `med`, and a near-
 `lo`/`hi` aliases are wanted too) or a denied permission.
 
 **Decision (user, 2026-10-10):** also accept `lo` and `lower` for `low`, and `hi` and `higher`
-for `high`. Canonical forms stay `low`, `med`, `high`; test each alias.
+for `high`; and the single letters `l`, `m`, `h`. Canonical forms stay `low`, `med`, `high`; test each alias.
 
 ## Notes
 
