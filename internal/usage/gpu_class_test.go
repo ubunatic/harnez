@@ -12,22 +12,60 @@ func TestClassifyAMDGPU(t *testing.T) {
 	tests := []struct {
 		name      string
 		external  bool
-		haveVRAM  bool
-		vramMiB   float64
+		apu       bool
 		wantClass GPUClass
 	}{
-		{"external wins over size", true, true, 16384, GPUClassEGPU},
-		{"small carve-out is an APU iGPU", false, true, 512, GPUClassIGPU},
-		{"carve-out at threshold is iGPU", false, true, apuVRAMCarveoutMaxMiB, GPUClassIGPU},
-		{"large VRAM is dGPU", false, true, 8192, GPUClassDGPU},
-		{"unknown VRAM is dGPU", false, false, 0, GPUClassDGPU},
+		{"external wins over APU metrics", true, true, GPUClassEGPU},
+		{"APU metrics mark an iGPU", false, true, GPUClassIGPU},
+		{"discrete metrics mark a dGPU", false, false, GPUClassDGPU},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := classifyAMDGPU(tt.external, tt.haveVRAM, tt.vramMiB); got != tt.wantClass {
+			if got := classifyAMDGPU(tt.external, tt.apu); got != tt.wantClass {
 				t.Errorf("classifyAMDGPU = %v, want %v", got, tt.wantClass)
 			}
 		})
+	}
+}
+
+// Regression (issue 765 pre-work): a large BIOS carve-out must not demote an
+// APU. The local Cezanne reports 8 GiB VRAM and is still an iGPU.
+func TestAPUWithLargeCarveoutStaysIGPU(t *testing.T) {
+	root := t.TempDir()
+	dev := fakePCIDevice(t, root, "", "0000:07:00.0")
+	writeGPUMetrics(t, dev, 2)
+	writeSysfsUint(t, dev, "mem_info_vram_total", 8*1024*1024*1024)
+	if got := classifyAMDGPU(false, isAPUGPU(dev)); got != GPUClassIGPU {
+		t.Errorf("8 GiB carve-out APU class = %v, want iGPU", got)
+	}
+}
+
+func TestIsAPUGPUReadsMetricsFormat(t *testing.T) {
+	root := t.TempDir()
+	apu := fakePCIDevice(t, root, "", "0000:07:00.0")
+	writeGPUMetrics(t, apu, 2)
+	dgpu := fakePCIDevice(t, root, "", "0000:08:00.0")
+	writeGPUMetrics(t, dgpu, 1)
+	missing := fakePCIDevice(t, root, "", "0000:09:00.0")
+
+	if !isAPUGPU(apu) {
+		t.Errorf("format 2 metrics not reported as APU")
+	}
+	if isAPUGPU(dgpu) {
+		t.Errorf("format 1 metrics reported as APU")
+	}
+	if isAPUGPU(missing) {
+		t.Errorf("missing gpu_metrics reported as APU")
+	}
+}
+
+// writeGPUMetrics writes a gpu_metrics header: structure_size 128 (u16 LE),
+// format_revision, content_revision 2.
+func writeGPUMetrics(t *testing.T, dir string, format byte) {
+	t.Helper()
+	header := []byte{128, 0, format, 2}
+	if err := os.WriteFile(filepath.Join(dir, "gpu_metrics"), header, 0o444); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -93,14 +131,14 @@ func TestParseLspciCodenameMatchesSlot(t *testing.T) {
 
 func TestReadAMDSysfsListsEveryGPUWithClassRows(t *testing.T) {
 	root := t.TempDir()
-	// An APU iGPU: 512 MiB carve-out, big GTT.
-	addFakeAMDGPU(t, root, 0, fakePCIDevice(t, root, "", "0000:fe:00.0"), 512, 100, 16384, 1024, 40)
+	// An APU iGPU: 512 MiB carve-out, big GTT, APU metrics layout.
+	addFakeAMDGPU(t, root, 0, fakePCIDevice(t, root, "", "0000:fe:00.0"), 2, 512, 100, 16384, 1024, 40)
 	// A discrete card behind a removable bridge: VRAM 8 GiB, eGPU.
 	bridge := fakePCIDevice(t, root, "0000:00:02.0", "0000:fd:00.0")
 	if err := os.WriteFile(filepath.Join(root, "pci0000:00", "0000:00:02.0", "removable"), []byte("removable\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	addFakeAMDGPU(t, root, 1, bridge, 8192, 2048, 12288, 512, 80)
+	addFakeAMDGPU(t, root, 1, bridge, 1, 8192, 2048, 12288, 512, 80)
 
 	gpus, err := readAMDSysfsFromGlobWithSeed(filepath.Join(root, "card*", "device", "gpu_busy_percent"), false)
 	if err != nil {
@@ -126,7 +164,8 @@ func TestReadAMDSysfsListsEveryGPUWithClassRows(t *testing.T) {
 
 // addFakeAMDGPU creates cardN/device as a symlink to a PCI device directory
 // and fills its amdgpu sysfs attributes (MiB values except busy percent).
-func addFakeAMDGPU(t *testing.T, root string, card int, pciDir string, vramTotalMiB, vramUsedMiB, gttTotalMiB, gttUsedMiB, busy uint64) {
+// metricsFormat is the gpu_metrics format_revision (2 = APU, 1 = discrete).
+func addFakeAMDGPU(t *testing.T, root string, card int, pciDir string, metricsFormat byte, vramTotalMiB, vramUsedMiB, gttTotalMiB, gttUsedMiB, busy uint64) {
 	t.Helper()
 	cardDir := filepath.Join(root, "card"+formatUint(uint64(card)))
 	if err := os.MkdirAll(cardDir, 0o755); err != nil {
@@ -136,6 +175,7 @@ func addFakeAMDGPU(t *testing.T, root string, card int, pciDir string, vramTotal
 		t.Fatal(err)
 	}
 	const mib = 1024 * 1024
+	writeGPUMetrics(t, pciDir, metricsFormat)
 	writeSysfsUint(t, pciDir, "gpu_busy_percent", busy)
 	writeSysfsUint(t, pciDir, "mem_info_vram_total", vramTotalMiB*mib)
 	writeSysfsUint(t, pciDir, "mem_info_vram_used", vramUsedMiB*mib)

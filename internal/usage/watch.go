@@ -1209,7 +1209,7 @@ func formatGPULine(g GPU) string {
 // whichever of HaveVRAM/HaveGTT is set), so they're used directly here for
 // the combined used/total and percentage rather than re-summing.
 func formatGPUMemoryLines(g GPU) []string {
-	if g.Class != GPUClassIGPU {
+	if g.Class == GPUClassDGPU || g.Class == GPUClassEGPU {
 		return formatDiscreteGPUMemoryLines(g)
 	}
 	label := padLoadLabel("gpu vram/gtt")

@@ -795,7 +795,7 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 			}
 		}
 
-		g.Class = classifyAMDGPU(isExternalGPU(deviceDir), g.HaveVRAM, g.VRAMTotalMiB)
+		g.Class = classifyAMDGPU(isExternalGPU(deviceDir), isAPUGPU(deviceDir))
 		gpus = append(gpus, g)
 	}
 	if len(gpus) == 0 {

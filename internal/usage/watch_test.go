@@ -178,6 +178,33 @@ func TestFormatGPUMemoryLinesDiscreteShowsVRAMOnly(t *testing.T) {
 	}
 }
 
+// Regression (issue 765 pre-work): a GPU from an older remote binary has no
+// class (zero value GPUClassUnknown) and must keep the pre-765 vram/gtt row.
+func TestFormatGPUMemoryLinesUnknownClassKeepsVRAMGTTSplit(t *testing.T) {
+	var zero GPU
+	if zero.Class != GPUClassUnknown {
+		t.Fatalf("zero GPU class = %v, want GPUClassUnknown", zero.Class)
+	}
+	gpu := formatGPUMemoryLines(GPU{
+		MemUsedMiB:   1.4 * 1024,
+		MemTotalMiB:  34.5 * 1024,
+		MemPercent:   4,
+		VRAMUsedMiB:  512,
+		VRAMTotalMiB: 512,
+		GTTUsedMiB:   0.9 * 1024,
+		GTTTotalMiB:  34 * 1024,
+		HaveMem:      true,
+		HaveVRAM:     true,
+		HaveGTT:      true,
+	})
+	if len(gpu) != 1 {
+		t.Fatalf("formatGPUMemoryLines returned %d lines, want 1: %v", len(gpu), gpu)
+	}
+	if got := stripANSI(gpu[0]); !strings.HasPrefix(got, "gpu vram/gtt") {
+		t.Errorf("unknown-class GPU rendered %q, want the vram/gtt row", got)
+	}
+}
+
 func TestBuildLoadBoxLinesListsEveryGPUWithoutClassLabels(t *testing.T) {
 	snap := &LoadSnapshot{GPUs: []GPU{
 		{Name: "Phoenix1", Class: GPUClassIGPU, UtilPercent: 0, MemUsedMiB: 1024, MemTotalMiB: 35328, MemPercent: 4,

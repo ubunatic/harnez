@@ -8,37 +8,44 @@ import (
 
 // GPUClass is the internal kind of a GPU (issue 765). It only decides which
 // memory rows the Load box draws; it is never printed. The zero value is
-// GPUClassDGPU, so a snapshot from an older remote binary without the field
-// renders as a discrete card.
+// GPUClassUnknown, so a snapshot from an older remote binary without the
+// field keeps the pre-765 rendering (vram/gtt row whenever GTT is present).
 type GPUClass int
 
 const (
-	GPUClassDGPU GPUClass = iota
+	GPUClassUnknown GPUClass = iota
+	GPUClassDGPU
 	GPUClassIGPU
 	GPUClassEGPU
 )
 
-// apuVRAMCarveoutMaxMiB is the largest VRAM reservation still treated as an
-// APU's integrated GPU. An APU reserves a small slice of system RAM as VRAM
-// and uses GTT for the rest; a discrete card reports several GiB of VRAM.
-//
-// UNVERIFIED ON HARDWARE: this is a heuristic, not checked against a real
-// APU yet. The host checks it on the remote x600 (issue 765).
-// TODO(765 M2): move to spec/usage.yaml with a schema entry; Go must not
-// keep this as a default.
-const apuVRAMCarveoutMaxMiB = 2048
-
 // classifyAMDGPU maps the sysfs facts of one AMD GPU to its class. An
-// external (removable PCI path) GPU is an eGPU; otherwise a small VRAM
-// carve-out marks an iGPU, and everything else is a dGPU.
-func classifyAMDGPU(external, haveVRAM bool, vramTotalMiB float64) GPUClass {
+// external (removable PCI path) GPU is an eGPU; otherwise an APU's metrics
+// layout marks an iGPU, and everything else is a dGPU.
+func classifyAMDGPU(external, apu bool) GPUClass {
 	if external {
 		return GPUClassEGPU
 	}
-	if haveVRAM && vramTotalMiB <= apuVRAMCarveoutMaxMiB {
+	if apu {
 		return GPUClassIGPU
 	}
 	return GPUClassDGPU
+}
+
+// isAPUGPU reports whether the amdgpu driver publishes APU-style metrics for
+// deviceDir. The kernel writes gpu_metrics with a 4-byte header
+// (structure_size u16, format_revision u8, content_revision u8); APUs use
+// format_revision 2 (gpu_metrics_v2_x) and discrete cards use format 1
+// (gpu_metrics_v1_x). Checked on the local Cezanne APU (format 2, content 2).
+//
+// UNVERIFIED ON HARDWARE for discrete cards: this machine has no dGPU to
+// confirm they report format 1. The host checks the remote x600 (issue 765).
+func isAPUGPU(deviceDir string) bool {
+	data, err := os.ReadFile(filepath.Join(deviceDir, "gpu_metrics"))
+	if err != nil || len(data) < 4 {
+		return false
+	}
+	return data[2] == 2
 }
 
 // isExternalGPU reports whether the PCI function at deviceDir, or a PCI
