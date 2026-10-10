@@ -1,6 +1,6 @@
 # Two-Agent Lean Fresh-Handoff Sprint
 
-Orchestrate a lean, milestone-driven sprint with a cheap read-only searcher followed by a focused developer, strict zero-coding review, and single-ticket pre-work batching.
+Orchestrate a lean, milestone-driven sprint with a cheap read-only searcher, optional read-only architect refinement, focused developer, strict zero-coding review, and single-ticket pre-work batching.
 
 Reference Practice: `@docs/AgenticLoop.md`
 
@@ -31,6 +31,8 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 
 - `/lean-sprint <ticket-numbers>` (e.g. `/lean-sprint 064` or `/lean-sprint 042, 043`)
 - `/lean-sprint "<scoped-task-or-bug-description>"`
+- `/lean-sprint <ticket> refined <tier>` (or `with architect`, `with sol:low`, `using opus:low`)
+- `/refined-sprint <ticket> <tier>` — alias invocation always requests architect refinement; a missing tier pauses for selection.
 - The legacy single-developer workflow is available as `/lean-sprint-v1 <ticket-or-task>`.
 
 ---
@@ -43,6 +45,12 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Start with the ticket and dispatch a read-only Searcher (`luna:low` / `luna-search`, `--role advisor`) for a bounded audit: verify the ticket premise, locate relevant files and exact line ranges, answer specific questions, or explore APIs/specs. Give a small question list and return format; do not ask it to implement, edit files, run mutating commands, or commit. Use a prompt file for longer questions.
 - Skip the Searcher when the ticket was just refined against live code in this sprint and already cites exact file:line causes; say so in the sprint report.
 - Use the Searcher sequentially before the Developer. The host reads its concise findings and decides what the Developer needs; the host does not repeat discovery by browsing the repository.
+
+### 1.5. Optional Architect Refinement
+- Run this step when the user explicitly requests refinement (including invoking `/refined-sprint`) or confirms the host's proactive suggestion. If refinement was not requested, suggest it when Searcher findings show complex architecture such as multi-system boundaries, API/schema redesign, or non-trivial component trade-offs.
+- The architect tier must be exactly one of `opus:low`, `flash38:low`, or `sol:low`. Normalize bare `opus`, `flash38`, or `sol` to the matching `:low` tier. If refinement is requested without a valid tier, stop immediately, list the three supported tiers, and ask the user to choose before starting any agents.
+- Dispatch the architect as `--role advisor` with read-only instructions. It returns a structured architecture, milestones (`M1`, `M2`, ...), boundary constraints, edge cases, and pre-work requirements; it does not implement, edit files, or run mutating commands.
+- The host records the architect's milestones, boundaries, edge cases, and pre-work in the target ticket before handing it to the Developer. The host remains subject to the Zero Coding invariant above.
 
 ### 2. Goal Handoff to Focused Developer
 - The Host Orchestrator dispatches one developer worker (`luna:high`, or `sol:low` when stronger judgment is needed) using `harnez agent start --role developer --name <worker> --model <model> -d <dir> -f <prompt-file>` (or the active dispatch method), run with `HTO=0` as one session-background job per the host table in `harnez agent start --help` (Claude Code: Bash with `run_in_background: true`). Use a prompt file for long or complex handoffs instead of a long inline shell argument. Report the job id and session name to the user; the job's exit is the only completion signal, so never promise a review without it. Prefer `luna` first; use `sol` when stronger judgment is needed; avoid `agy` models for developer work.
