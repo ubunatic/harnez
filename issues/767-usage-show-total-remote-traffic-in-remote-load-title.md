@@ -1,4 +1,4 @@
-# 767 — usage: show streamed bytes in Remote Load title as 'streaming <num>k|M'
+# 767 — usage: show total remote traffic in Remote Load title
 
 **Status**: Open
 **Priority**: P3 (Low)
