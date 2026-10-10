@@ -33,3 +33,8 @@ have uncommitted changes, so they can commit first.
 - Print one line per overlapping path to stderr: `warning: AGENTS.md has uncommitted changes; init will modify it (commit first to keep changes separate)`.
 - Test: temp git repo with a modified `AGENTS.md` → warning names it; clean repo → no
   warning; non-git dir → no warning, no error.
+
+## 4. Outcome
+Delivered in 0f9acecf (`warnDirtyInitFiles` in `internal/claude/init.go`), host-verified live.
+Known limitation: the quota-mode check moved before the writes, so a run that itself adds the
+quota section to AGENTS.md may not list `.harnez/rules/Quota.md` in the warning. Writes are unaffected.
