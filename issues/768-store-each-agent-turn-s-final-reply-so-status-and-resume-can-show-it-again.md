@@ -1,6 +1,6 @@
 # 768 — Store each agent turn's final reply so status and resume can show it again
 
-**Status**: Open
+**Status**: Closed — agent start and resume save each turn's reply (reply_history, last 20, spec/agent.yaml); agent status --reply/--turn N/--all and --json show them; verified live with claude:haiku:low and codex:luna:low start+resume redirected to files; the cut-off job output did not reproduce, saved history is the recovery path
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
