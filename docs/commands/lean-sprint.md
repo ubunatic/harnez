@@ -41,6 +41,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 
 ### 1. Bounded Discovery with the Cheap Searcher
 - Start with the ticket and dispatch a read-only Searcher (`luna:low` / `luna-search`, `--role advisor`) for a bounded audit: verify the ticket premise, locate relevant files and exact line ranges, answer specific questions, or explore APIs/specs. Give a small question list and return format; do not ask it to implement, edit files, run mutating commands, or commit. Use a prompt file for longer questions.
+- Skip the Searcher when the ticket was just refined against live code in this sprint and already cites exact file:line causes; say so in the sprint report.
 - Use the Searcher sequentially before the Developer. The host reads its concise findings and decides what the Developer needs; the host does not repeat discovery by browsing the repository.
 
 ### 2. Goal Handoff to Focused Developer
