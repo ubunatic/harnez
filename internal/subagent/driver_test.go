@@ -67,6 +67,47 @@ func TestResolveModelThreePartProviderSpec(t *testing.T) {
 	}
 }
 
+func TestResolveModelTierAliases(t *testing.T) {
+	tests := []struct {
+		alias, want string
+	}{
+		{"lo", "low"}, {"lower", "low"}, {"l", "low"},
+		{"medium", "med"}, {"m", "med"},
+		{"hi", "high"}, {"higher", "high"}, {"h", "high"},
+	}
+	for _, tc := range tests {
+		for _, spec := range []string{"codex:luna:" + tc.alias, "luna:" + tc.alias} {
+			t.Run(spec, func(t *testing.T) {
+				m, err := ResolveModel(spec)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if m.Provider != "codex" || m.Name != "gpt-6-luna" || m.Tier != tc.want {
+					t.Fatalf("ResolveModel(%q) = %#v, want tier %q with untouched model name", spec, m, tc.want)
+				}
+			})
+		}
+	}
+
+	m, err := ResolveModel("codex:gpt-6-luna:MEDIUM")
+	if err != nil || m.Provider != "codex" || m.Name != "gpt-6-luna" || m.Tier != "med" {
+		t.Fatalf("uppercase tier resolved to %#v, %v; want codex:gpt-6-luna:med", m, err)
+	}
+}
+
+func TestResolveModelRejectsUnknownTierAliases(t *testing.T) {
+	for _, alias := range []string{"mid", "medum", "hgh", "lw"} {
+		for _, spec := range []string{"codex:luna:" + alias, "luna:" + alias} {
+			t.Run(spec, func(t *testing.T) {
+				_, err := ResolveModel(spec)
+				if err == nil || !strings.Contains(err.Error(), "unknown model tier") || !strings.Contains(err.Error(), "codex:luna:low") {
+					t.Fatalf("ResolveModel(%q) error = %v, want canonical unknown-tier error", spec, err)
+				}
+			})
+		}
+	}
+}
+
 func TestCodexPassesReasoningEffort(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var got []string
