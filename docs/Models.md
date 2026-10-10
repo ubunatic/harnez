@@ -80,6 +80,9 @@ Findings:
   spec, only `low`/`med`/`high` count as a tier; anything else is a model name
   (`claude:haiku`). Bare `opus`/`sonnet` mean Claude, not agy. Aliases live in
   `spec/agent.yaml` only.
+- **Tier aliases (2026-10-10, issue 766):** the tier part also accepts `l`/`lo`/`lower`,
+  `m`/`medium` and `h`/`hi`/`higher`; `resolveModelIn` (`internal/subagent/driver.go`)
+  normalizes them once to `low`/`med`/`high`, which stay canonical in output and errors.
 - **Measured, luna:low as developer (2026-09-25, issue 540):** 3 rounds for a small resolver
   change. Each round committed code untested after a failed `make test-q1` (Quota-1 allows
   one run), and round 2 fixed two failures while breaking two others (two-part specs read
