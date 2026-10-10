@@ -35,9 +35,9 @@ without their final reply, and the reply could not be recovered:
 - The requested redirected Claude/Codex reproduction was not run: this assigned developer is a
   leaf worker and the repository role rules prohibit starting Harnez or background agents.
   The host still needs to run that integration check before closing this ticket.
-- The one `make test-q1` run found only a round-trip timestamp assertion comparing `time.Time`
-  structs across JSON. The assertion was changed to compare instants with `Time.Equal`; it was
-  not rerun because the requested quota suite may run only once in this turn.
+- The one `make test-q1` run found that the round-trip fixture lacked its reply record. The fixture
+  was corrected and its timestamp comparison uses `Time.Equal`; it was not rerun because the
+  requested quota suite may run only once in this turn.
 
 ## 3. Implementation & Verification Plan
 - Persist bounded per-turn reply history (text, turn number, timestamp) with the session.
