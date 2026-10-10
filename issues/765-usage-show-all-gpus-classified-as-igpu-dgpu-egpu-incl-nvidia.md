@@ -23,6 +23,9 @@ an NVIDIA eGPU on the x600 is shown with load and VRAM; covered by unit tests wi
 input; or stop and report when blocked on a user decision (e.g. NVIDIA data source: nvidia-smi
 subprocess vs. NVML vs. sysfs/hwmon, given the earlier removal of nvidia-smi) or a denied permission.
 
+**Decision (user, 2026-10-10):** read NVIDIA GPUs via `nvidia-smi`. Read the comment near
+`load.go:617` first to learn why it was removed, and avoid that problem (e.g. cache, low poll rate).
+
 ## Notes
 
 - Check live code first; the GPU code may have changed since filing.
