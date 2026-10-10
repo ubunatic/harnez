@@ -77,7 +77,14 @@ func TestStatuslineIngestionWritesClaudeQuotaObservation(t *testing.T) {
 	defer store.Close()
 	var source, key string
 	var fraction float64
-	err = store.QueryRow(context.Background(), `SELECT o.source,q.window_key,q.used_fraction FROM usage_observations o JOIN quota_windows q ON q.observation_id=o.id WHERE o.provider='claude' ORDER BY o.id DESC LIMIT 1`).Scan(&source, &key, &fraction)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		err = store.QueryRow(context.Background(), `SELECT o.source,q.window_key,q.used_fraction FROM usage_observations o JOIN quota_windows q ON q.observation_id=o.id WHERE o.provider='claude' ORDER BY o.id DESC LIMIT 1`).Scan(&source, &key, &fraction)
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,8 +179,8 @@ func TestPassiveObservationReturnsQuicklyWhenDatabaseLocked(t *testing.T) {
 	data, _ := json.Marshal(map[string]any{"rate_limits": map[string]any{"five_hour": map[string]any{"used_percentage": 12.5}}})
 	started := time.Now()
 	ObserveStatusline(context.Background(), "claude", data)
-	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
-		t.Fatalf("locked write took %s", elapsed)
+	if elapsed := time.Since(started); elapsed > 20*time.Millisecond {
+		t.Fatalf("locked statusline observation took %s, want <=20ms", elapsed)
 	}
 	_ = tx.Rollback()
 	_ = blocker.Close()
@@ -262,8 +269,8 @@ func TestStatuslineObservationLargeStoreCompletesWithinBudget(t *testing.T) {
 
 	started := time.Now()
 	ObserveStatuslineAt(ctx, "claude", []byte(`{"rate_limits":{"five_hour":{"used_percentage":12.5}}}`), dbPath)
-	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
-		t.Fatalf("statusline observation on 50k-row store took %s, want <=150ms", elapsed)
+	if elapsed := time.Since(started); elapsed > 20*time.Millisecond {
+		t.Fatalf("statusline observation on 50k-row store took %s, want <=20ms", elapsed)
 	}
 }
 
@@ -325,6 +332,15 @@ func TestStatuslineSkipsMigrationUntilUsageStoreCommand(t *testing.T) {
 	if migrated != 0 {
 		store.Close()
 		t.Fatalf("statusline migration marker count = %d, want 0", migrated)
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		var observations int
+		err := store.QueryRow(ctx, `SELECT count(*) FROM usage_observations WHERE source='statusline'`).Scan(&observations)
+		if err == nil && observations > 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)

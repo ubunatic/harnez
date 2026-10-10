@@ -447,12 +447,12 @@ func (s *Store) WritePassive(ctx context.Context, dedupeInterval time.Duration, 
 		if w.ObservedAt.IsZero() {
 			w.ObservedAt = time.Now()
 		}
-		var count int
-		err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=? AND q.pool=? AND q.window_key=? AND o.source=? AND q.used_fraction=? AND COALESCE(q.reset_at,'')=COALESCE(?, '') AND o.observed_at>=?`, w.Provider, w.Pool, w.Key, w.Source, w.UsedFraction, timeValue(w.ResetAt), w.ObservedAt.Add(-dedupeInterval).UTC().Format(time.RFC3339Nano)).Scan(&count)
-		if err != nil {
+		var found int
+		err := s.db.QueryRowContext(ctx, `SELECT 1 FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=? AND q.pool=? AND q.window_key=? AND o.source=? AND q.used_fraction=? AND COALESCE(q.reset_at,'')=COALESCE(?, '') AND o.observed_at>=? LIMIT 1`, w.Provider, w.Pool, w.Key, w.Source, w.UsedFraction, timeValue(w.ResetAt), w.ObservedAt.Add(-dedupeInterval).UTC().Format(time.RFC3339Nano)).Scan(&found)
+		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
-		if count == 0 {
+		if err == sql.ErrNoRows {
 			filtered = append(filtered, w)
 		}
 	}

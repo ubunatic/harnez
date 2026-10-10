@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
+	"ubunatic.com/harnez/internal/xdgpath"
 )
 
 type passivePayload struct {
@@ -32,8 +34,10 @@ type passivePayload struct {
 // ObserveStatusline accepts only quota values and reset timestamps from a
 // Claude or AGY statusline payload. It deliberately never stores the raw JSON.
 func ObserveStatusline(parent context.Context, provider string, payload []byte) {
-	dbPath, err := telemetry.DefaultDBPath()
-	if err != nil {
+	// Statusline is a read-only rendering path. Avoid DefaultDBPath here: it
+	// may migrate the legacy database or create storage as a side effect.
+	dbPath := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
+	if _, err := os.Stat(dbPath); err != nil {
 		return
 	}
 	ObserveStatuslineAt(parent, provider, payload, dbPath)
@@ -53,18 +57,19 @@ func ObserveStatuslineAt(parent context.Context, provider string, payload []byte
 	if err != nil || len(windows) == 0 {
 		return
 	}
+	if _, err := os.Stat(dbPath); err != nil {
+		return
+	}
 	budget := 4 * busy
 	if budget > writeTimeout {
 		budget = writeTimeout
 	}
-	ctx, cancel := context.WithTimeout(parent, budget)
-	defer cancel()
-	if ctx.Err() != nil {
+	if parent.Err() != nil {
 		return
 	}
-	done := make(chan struct{})
 	go func() {
-		defer close(done)
+		ctx, cancel := context.WithTimeout(parent, budget)
+		defer cancel()
 		if ctx.Err() != nil {
 			return
 		}
@@ -78,10 +83,6 @@ func ObserveStatuslineAt(parent context.Context, provider string, payload []byte
 		}
 		_ = store.WritePassive(ctx, dedupe, windows)
 	}()
-	select {
-	case <-done:
-	case <-ctx.Done():
-	}
 }
 
 func passiveWindows(provider string, data []byte, received time.Time) ([]usagestore.Window, error) {

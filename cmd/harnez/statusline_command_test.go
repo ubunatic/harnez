@@ -16,6 +16,27 @@ import (
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
+type statuslineFlushBuffer struct {
+	bytes.Buffer
+	flushed bool
+}
+
+func (b *statuslineFlushBuffer) Flush() error {
+	b.flushed = true
+	return nil
+}
+
+func TestWriteStatuslineFlushesRenderedLine(t *testing.T) {
+	var out statuslineFlushBuffer
+	writeStatusline(&out, "status")
+	if out.String() != "status\n" {
+		t.Fatalf("statusline output = %q, want %q", out.String(), "status\n")
+	}
+	if !out.flushed {
+		t.Fatal("statusline output was not flushed")
+	}
+}
+
 func TestAppliedHarnezCommandsResolveOnRoot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -193,8 +214,8 @@ func TestAGYStatuslineLockedStoreStillPrintsWithinBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("statusline with locked store returned error: %v", err)
 	}
-	if elapsed > 150*time.Millisecond {
-		t.Fatalf("statusline with locked store took %s, want <=150ms", elapsed)
+	if elapsed > 50*time.Millisecond {
+		t.Fatalf("statusline with locked store took %s, want <=50ms", elapsed)
 	}
 	if out.Len() == 0 {
 		t.Fatal("statusline printed no output before locked write")
