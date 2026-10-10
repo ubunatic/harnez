@@ -127,7 +127,13 @@ output. Keep these invariants; each broke once:
   logs to `~/.harnez/debug.log`; a hidden row looks exactly like missing data.
 - **Views never block on collection or the store.** `usage --watch` draws a loading frame at once
   and fills quotas asynchronously; before 660 a blocking read delayed the first frame 14-19s and
-  starved the `q` key. Statusline latency is open in 659.
+  starved the `q` key.
+- **Statuslines print first, then write with a hard cap, and never migrate.** AGY kills a slow
+  statusline command. Running schema setup and `MigrateStableWindowKeys` on every call collided
+  with test and agent DB writes, and calls took up to 7 s under load (659). Now the line is flushed
+  before the passive write, the write runs in a goroutine abandoned after 100 ms, and migrations
+  run only in other usage commands. `scripts/statusline-bench.sh` measures p50/p99/max (after the
+  fix: 29/40/42 ms under heavy load).
 - **Tests must not touch the real data path.** Store tests use an isolated DB; a test that wrote
   the live telemetry DB hung the suite for minutes (655).
 
