@@ -184,6 +184,162 @@ func TestRunInit_CustomTemplate(t *testing.T) {
 	}
 }
 
+func TestRunInit_WarnsForDirtyWriteSetFiles(t *testing.T) {
+	dir := initWarningGitRepo(t, false)
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte("# Existing instructions\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	initWarningCommit(t, dir)
+	if err := os.WriteFile(agentsPath, []byte("# Locally edited instructions\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := runInitCaptureStderr(t, dir, claude.LoadTestConfig(t), nil)
+	if !strings.Contains(stderr, "warning: AGENTS.md has uncommitted changes; init will modify it (commit first to keep changes separate)") {
+		t.Fatalf("stderr did not warn about AGENTS.md: %q", stderr)
+	}
+}
+
+func TestRunInit_WarnsOnceForSymlinkTarget(t *testing.T) {
+	dir := initWarningGitRepo(t, true)
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte("# Edited instructions\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := runInitCaptureStderr(t, dir, claude.LoadTestConfig(t), nil)
+	warning := "warning: AGENTS.md has uncommitted changes; init will modify it (commit first to keep changes separate)"
+	if strings.Count(stderr, warning) != 1 {
+		t.Fatalf("expected one warning for CLAUDE.md symlink target, got %q", stderr)
+	}
+}
+
+func TestRunInit_WarnsForUntrackedWriteSetFiles(t *testing.T) {
+	dir := initWarningGitRepo(t, false)
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# New instructions\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := runInitCaptureStderr(t, dir, claude.LoadTestConfig(t), nil)
+	if !strings.Contains(stderr, "warning: AGENTS.md has uncommitted changes;") {
+		t.Fatalf("stderr did not warn about untracked AGENTS.md: %q", stderr)
+	}
+}
+
+func TestRunInit_DoesNotWarnForCleanRepo(t *testing.T) {
+	dir := initWarningGitRepo(t, true)
+	stderr := runInitCaptureStderr(t, dir, claude.LoadTestConfig(t), nil)
+	if stderr != "" {
+		t.Fatalf("unexpected warning in clean repo: %q", stderr)
+	}
+}
+
+func TestRunInit_DoesNotWarnOutsideGit(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/outside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# Local instructions\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stderr := runInitCaptureStderr(t, dir, claude.LoadTestConfig(t), nil)
+	if stderr != "" {
+		t.Fatalf("unexpected warning outside git: %q", stderr)
+	}
+}
+
+func TestRunInit_DoesNotWarnForDirtyFileOutsideWriteSet(t *testing.T) {
+	dir := initWarningGitRepo(t, true)
+	if err := os.WriteFile(filepath.Join(dir, "unrelated.txt"), []byte("untracked\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stderr := runInitCaptureStderr(t, dir, claude.LoadTestConfig(t), nil)
+	if stderr != "" {
+		t.Fatalf("unexpected warning for unrelated file: %q", stderr)
+	}
+}
+
+func TestRunInit_WarnsForDirtyWriteSetInRepoSubdirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	subdir := filepath.Join(dir, "project")
+	if err := os.MkdirAll(subdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subdir, "go.mod"), []byte("module example.com/project\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subdir, "AGENTS.md"), []byte("# Existing instructions\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	initWarningCommit(t, dir)
+	if err := os.WriteFile(filepath.Join(subdir, "AGENTS.md"), []byte("# Edited instructions\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := runInitCaptureStderr(t, subdir, claude.LoadTestConfig(t), nil)
+	if !strings.Contains(stderr, "warning: project/AGENTS.md has uncommitted changes;") {
+		t.Fatalf("stderr did not name repo-root-relative subdirectory path: %q", stderr)
+	}
+}
+
+func initWarningGitRepo(t *testing.T, initialInit bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/warnings\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	if initialInit {
+		if err := claude.RunInit(dir, claude.LoadTestConfig(t), nil, "", true, false, false, false); err != nil {
+			t.Fatalf("initial RunInit: %v", err)
+		}
+		initWarningCommit(t, dir)
+	}
+	return dir
+}
+
+func initWarningCommit(t *testing.T, dir string) {
+	t.Helper()
+	if err := exec.Command("git", "-C", dir, "add", "-A").Run(); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	if err := exec.Command("git", "-C", dir, "-c", "user.name=Harnez Test", "-c", "user.email=harnez-test@example.invalid", "commit", "-qm", "initial").Run(); err != nil {
+		t.Fatalf("git commit: %v", err)
+	}
+}
+
+func runInitCaptureStderr(t *testing.T, dir string, cfg *claude.Config, docs []string) string {
+	t.Helper()
+	file, err := os.CreateTemp(t.TempDir(), "stderr-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := os.Stderr
+	os.Stderr = file
+	err = claude.RunInit(dir, cfg, docs, "", true, false, false, false)
+	os.Stderr = previous
+	if err != nil {
+		t.Fatalf("RunInit: %v", err)
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(file.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
 func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 	dir := t.TempDir()
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {

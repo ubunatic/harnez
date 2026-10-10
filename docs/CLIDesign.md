@@ -151,6 +151,7 @@ by-product: there is no `--project` flag anymore.
 harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [--force]
         │
         ├── validate target directory (refuses $HOME, root, or non-coding dirs without --force)
+        ├── warn on stderr when init will rewrite files with uncommitted changes
         ├── check for project drift (go.mod module vs. git origin vs. directory name)
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
