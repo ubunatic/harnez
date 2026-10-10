@@ -26,6 +26,15 @@ subprocess vs. NVML vs. sysfs/hwmon, given the earlier removal of nvidia-smi) or
 **Decision (user, 2026-10-10):** read NVIDIA GPUs via `nvidia-smi`. Read the comment near
 `load.go:617` first to learn why it was removed, and avoid that problem (e.g. cache, low poll rate).
 
+## Target look (user mockups)
+
+- `docs/data/harnez-usage-igpu-only.ansi`: today's view, one iGPU with `gpu (<name>)` load row and
+  `gpu vram/gtt` split bar.
+- `docs/data/harnez-usage-all-gpus.ansi`: x600 with iGPU (Phoenix1, `vram/gtt` row) plus RTX 3060
+  eGPU: an extra `gpu (RTX 3060)` load+temp row and a `gpu vram` row (single bar, no GTT).
+- The mockups show no iGPU/dGPU/eGPU label; the class drives which memory row is shown. Ask the
+  user before adding a visible label.
+
 ## Notes
 
 - Check live code first; the GPU code may have changed since filing.
