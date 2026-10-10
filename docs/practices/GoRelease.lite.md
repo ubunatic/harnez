@@ -154,6 +154,9 @@ harmless with no `go.work` active, catches this bug at `make check` time instead
 time. `check-fast` intentionally does NOT force it, so the inner loop can still test against an
 uncommitted sibling checkout.
 
+**Pitfall — `@latest` lags right after a release:** the Go proxy caches `@latest` for a while
+after a new tag. Right after a release, `go install <module>@vX.Y.Z` with the exact version.
+
 ## 5. Non-Go / scripted projects
 
 Nothing requires a compiler. Same checklist; only the version file and packaging differ.
