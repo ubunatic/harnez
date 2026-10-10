@@ -1,6 +1,6 @@
 # 751 — harnez init: warn when files it rewrites have uncommitted changes
 
-**Status**: Open
+**Status**: Closed — Implemented dirty-write warnings with repo-root path matching and symlink de-duplication. Tests: TestRunInit_WarnsForDirtyWriteSetFiles, TestRunInit_WarnsOnceForSymlinkTarget, TestRunInit_WarnsForUntrackedWriteSetFiles, TestRunInit_DoesNotWarnForCleanRepo, TestRunInit_DoesNotWarnOutsideGit, TestRunInit_DoesNotWarnForDirtyFileOutsideWriteSet, TestRunInit_WarnsForDirtyWriteSetInRepoSubdirectory. Verified go vet ./... and make install.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
