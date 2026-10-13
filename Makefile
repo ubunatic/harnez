@@ -73,6 +73,9 @@ lint: ⚙️  # check docs/commands/*.md files are all registered in config.yaml
 install-canary: ⚙️  # verify the latest Codeberg release installs and reports its version
 	bash scripts/install-canary.sh
 
+test-ubuntu: ⚙️  # run test suite inside an Ubuntu 24.04 container (Podman or Docker)
+	bash scripts/test-ubuntu.sh
+
 macos-ci: ⚙️  # trigger and watch macos-hello CI workflow on the GitHub mirror
 	bash scripts/macos-ci.sh
 
