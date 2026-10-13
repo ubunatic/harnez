@@ -1,0 +1,21 @@
+harnez tui — [Model: codex:luna] [Session: tui-design-001] [Status: ● ready]
+
+
+
+
+
+
+
+User: Please refactor statusline.go to reduce latency.
+
+Agent (codex:luna):
+I have inspected statusline.go and identified two blocking syscalls.
+Plan:
+ 1. Cache CWD path lookups.
+ 2. Run Git status checks asynchronously.
+
+[Tool: make test]
+PASS
+
+────────────────────────────────────────────────────────────────────────────────
+> Replace CWD call with cached getter in internal/statusline/cwd.go█

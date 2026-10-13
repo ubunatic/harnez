@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=schemas/tui.schema.json
+# Default layout, behavior, and keybindings for `harnez tui`.
+header:
+  show: true
+  format: "harnez tui — [Model: {{ .Model }}] [Session: {{ .SessionID }}] [Status: {{ .Status }}]"
+  status_indicators:
+    idle: "● ready"
+    busy: "◐ thinking"
+    error: "✖ error"
+
+chat:
+  min_height: 5
+  max_scroll_back: 1000
+  show_timestamps: true
+  user_prefix: "User:"
+  assistant_prefix: "Agent ({{ .Model }}):"
+  tool_prefix: "[Tool: {{ .Name }}]"
+
+input:
+  enter_send: true
+  ctrl_j_newline: true
+  editor_hotkey: "ctrl+g"
+  history_size: 100
+  min_lines: 3
+  max_lines: 10
+  prompt_symbol: "> "
+
+keybindings:
+  send_prompt: ["enter"]
+  newline: ["ctrl+j"]
+  quit: ["ctrl+c", "esc"]
+  scroll_up: ["pgup", "up"]
+  scroll_down: ["pgdn", "down"]
+  open_editor: ["ctrl+g"]
+  toggle_pty: ["ctrl+o"]
+
+theme:
+  border_style: "sharp"
+  header_color: "bold"
+  user_color: "chart-cool"
+  assistant_color: "chart-green"
+  tool_color: "dim-grey"
+  input_color: "bold"
