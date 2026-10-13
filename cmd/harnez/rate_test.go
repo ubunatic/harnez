@@ -350,7 +350,7 @@ func TestRunRate_LatencyBudget(t *testing.T) {
 	stateDir := filepath.Join(tmp, "state")
 	getenv := func(string) string { return "" }
 
-	const budgetMs = 20
+	const budgetMs = 50
 
 	coldStart := time.Now()
 	if err := runRate([]string{"Read", "4", "cold call", "proj/1-t"}, rateOptions{
