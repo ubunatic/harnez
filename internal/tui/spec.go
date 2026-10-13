@@ -30,9 +30,6 @@ type ChatSpec struct {
 
 // InputSpec describes multiline prompt box behavior.
 type InputSpec struct {
-	EnterSend    bool   `yaml:"enter_send"`
-	CtrlJNewline bool   `yaml:"ctrl_j_newline"`
-	EditorHotkey string `yaml:"editor_hotkey"`
 	HistorySize  int    `yaml:"history_size"`
 	MinLines     int    `yaml:"min_lines"`
 	MaxLines     int    `yaml:"max_lines"`

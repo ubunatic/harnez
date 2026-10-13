@@ -20,12 +20,6 @@ func TestEmbeddedTUISpecLoadsAndValidates(t *testing.T) {
 	if spec.Chat.MinHeight < 1 {
 		t.Errorf("got min_height=%d, want >= 1", spec.Chat.MinHeight)
 	}
-	if !spec.Input.EnterSend {
-		t.Error("expected input.enter_send to be true")
-	}
-	if !spec.Input.CtrlJNewline {
-		t.Error("expected input.ctrl_j_newline to be true")
-	}
 	if len(spec.Keybindings.SendPrompt) == 0 {
 		t.Error("expected keybindings.send_prompt to be non-empty")
 	}

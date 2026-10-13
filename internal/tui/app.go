@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"unicode"
 
 	"ubunatic.com/loom"
 )
@@ -19,36 +20,15 @@ type AppWidget struct {
 }
 
 // NewAppWidget instantiates a new Loom AppWidget for harnez tui.
+// spec must come from LoadSpec or ParseSpec; it is the only source of defaults.
 func NewAppWidget(spec *Spec, model, sessionID string, onSubmit func(prompt string)) *AppWidget {
-	if spec == nil {
-		var err error
-		spec, err = LoadSpec()
-		if err != nil {
-			spec = &Spec{
-				Header: HeaderSpec{Show: true, Format: "harnez tui — [Model: {{ .Model }}] [Session: {{ .SessionID }}] [Status: {{ .Status }}]"},
-				Chat:   ChatSpec{MinHeight: 5, MaxScrollBack: 1000, ShowTimestamps: true, UserPrefix: "User:", AssistantPrefix: "Agent ({{ .Model }}):", ToolPrefix: "[Tool: {{ .Name }}]"},
-				Input:  InputSpec{EnterSend: true, CtrlJNewline: true, EditorHotkey: "ctrl+g", HistorySize: 100, MinLines: 3, MaxLines: 8, PromptSymbol: "> "},
-				Theme:  ThemeSpec{BorderStyle: "sharp"},
-			}
-		}
-	}
-	if model == "" {
-		model = "codex:luna"
-	}
-	if sessionID == "" {
-		sessionID = "local-tui-session"
-	}
-
-	chat := NewChatThread(spec.Chat)
-	prompt := NewPromptBuffer(spec.Input.MinLines, spec.Input.MaxLines, spec.Input.PromptSymbol)
-
 	return &AppWidget{
 		Spec:      spec,
 		Model:     model,
 		SessionID: sessionID,
-		Status:    "ready",
-		Chat:      chat,
-		Prompt:    prompt,
+		Status:    "idle",
+		Chat:      NewChatThread(spec.Chat),
+		Prompt:    NewPromptBuffer(spec.Input.MinLines, spec.Input.MaxLines, spec.Input.HistorySize, spec.Input.PromptSymbol),
 		OnSubmit:  onSubmit,
 	}
 }
@@ -103,82 +83,94 @@ func (app *AppWidget) Draw(c *loom.Canvas, r loom.Rect) {
 
 // ConsumeKey handles key events according to keybindings in spec.
 func (app *AppWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
-	key := strings.ToLower(e.Key)
-
-	// Ctrl+C or Esc -> Quit
-	if e.Is("ctrl-c", "esc") || key == "ctrl-c" || key == "esc" {
+	kb := app.Spec.Keybindings
+	name := keyName(e)
+	switch {
+	case bound(name, kb.Quit):
 		app.QuitRequested = true
 		return loom.Quit()
-	}
-
-	// Ctrl+J -> Insert Newline in prompt
-	if e.Is("ctrl-j") || key == "ctrl-j" || e.Text == "\n" {
-		if app.Spec.Input.CtrlJNewline {
+	case bound(name, kb.Newline):
+		app.Prompt.InsertNewline()
+	case bound(name, kb.SendPrompt):
+		// Terminals send the same byte for Enter and Ctrl+J, so a trailing
+		// backslash is the portable way to continue a prompt on a new line.
+		if app.Prompt.TrimContinuation() {
 			app.Prompt.InsertNewline()
 			return loom.Handled()
 		}
-	}
-
-	// Enter -> Send prompt
-	if e.Is("enter") || key == "enter" || key == "return" {
-		if app.Spec.Input.EnterSend {
-			text := strings.TrimSpace(app.Prompt.Text())
-			if text != "" {
-				app.Prompt.AddHistory(text)
-				AddTurn(app.Chat, RoleUser, "", text)
-				if app.OnSubmit != nil {
-					app.OnSubmit(text)
-				}
-				app.Prompt.Clear()
-			}
-			return loom.Handled()
-		}
-	}
-
-	// Backspace -> Delete char or join lines
-	if e.Is("backspace") || key == "backspace" || key == "backspace2" {
-		app.Prompt.Backspace()
-		return loom.Handled()
-	}
-
-	// Left / Right / Up / Down navigation
-	if e.Is("left") || key == "left" {
-		app.Prompt.MoveLeft()
-		return loom.Handled()
-	}
-	if e.Is("right") || key == "right" {
-		app.Prompt.MoveRight()
-		return loom.Handled()
-	}
-	if e.Is("up") || key == "up" {
-		app.Prompt.MoveUp()
-		return loom.Handled()
-	}
-	if e.Is("down") || key == "down" {
-		app.Prompt.MoveDown()
-		return loom.Handled()
-	}
-
-	// Scroll Up / PageUp -> Scroll chat thread
-	if e.Is("pgup") || key == "pgup" {
+		app.submit()
+	case bound(name, kb.ScrollUp):
 		ScrollUp(app.Chat, 5)
-		return loom.Handled()
-	}
-	// Scroll Down / PageDown -> Scroll chat thread
-	if e.Is("pgdn") || key == "pgdn" {
+	case bound(name, kb.ScrollDown):
 		ScrollDown(app.Chat, 5)
-		return loom.Handled()
+	case name == "backspace":
+		app.Prompt.Backspace()
+	case name == "left":
+		app.Prompt.MoveLeft()
+	case name == "right":
+		app.Prompt.MoveRight()
+	case name == "up":
+		app.Prompt.MoveUp()
+	case name == "down":
+		app.Prompt.MoveDown()
+	case e.Key == "" && e.Text != "":
+		app.insertText(e.Text)
+	default:
+		return loom.Ignored()
 	}
+	return loom.Handled()
+}
 
-	// Text insertion
-	if e.Text != "" && len(e.Text) == 1 && e.Text[0] >= 32 {
-		for _, r := range e.Text {
+// ConsumePaste inserts bracketed-paste text, keeping its newlines.
+func (app *AppWidget) ConsumePaste(p loom.PasteEvent) loom.EventResult {
+	app.insertText(strings.ReplaceAll(p.Text, "\r\n", "\n"))
+	return loom.Handled()
+}
+
+func (app *AppWidget) submit() {
+	text := strings.TrimSpace(app.Prompt.Text())
+	if text == "" {
+		return
+	}
+	app.Prompt.AddHistory(text)
+	AddTurn(app.Chat, RoleUser, "", text)
+	app.Prompt.Clear()
+	if app.OnSubmit != nil {
+		app.OnSubmit(text)
+	}
+}
+
+func (app *AppWidget) insertText(s string) {
+	for _, r := range s {
+		switch {
+		case r == '\n' || r == '\r':
+			app.Prompt.InsertNewline()
+		case unicode.IsPrint(r):
 			app.Prompt.InsertChar(r)
 		}
-		return loom.Handled()
 	}
+}
 
-	return loom.Ignored()
+// keyName maps a loom key event to the spec's key vocabulary.
+func keyName(e loom.KeyEvent) string {
+	switch e.Key {
+	case "alt-\r", "alt-\n":
+		return "alt-enter"
+	}
+	return e.Key
+}
+
+// bound reports whether name matches a spec binding; "ctrl+j" and "ctrl-j" are equal.
+func bound(name string, keys []string) bool {
+	if name == "" {
+		return false
+	}
+	for _, k := range keys {
+		if strings.ReplaceAll(strings.ToLower(k), "+", "-") == name {
+			return true
+		}
+	}
+	return false
 }
 
 // ConsumeMouse handles mouse events.

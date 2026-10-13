@@ -34,11 +34,8 @@
     },
     "input": {
       "type": "object",
-      "required": ["enter_send", "ctrl_j_newline", "editor_hotkey", "history_size", "min_lines", "max_lines"],
+      "required": ["history_size", "min_lines", "max_lines"],
       "properties": {
-        "enter_send": { "type": "boolean" },
-        "ctrl_j_newline": { "type": "boolean" },
-        "editor_hotkey": { "type": "string" },
         "history_size": { "type": "integer", "minimum": 1 },
         "min_lines": { "type": "integer", "minimum": 1 },
         "max_lines": { "type": "integer", "minimum": 1 },

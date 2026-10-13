@@ -24,6 +24,7 @@
    - Multiline prompt entry located below chat thread.
    - `Enter` sends prompt to active agent/model.
    - `Ctrl+J` inserts a newline character into the prompt buffer.
+     Terminals send Ctrl+J and Enter as the same byte, so `Alt+Enter` and a trailing `\` + `Enter` also insert a newline.
    - Standard cursor movement, editing, and backspace handling.
 
 ### Tech Stack & Dependencies

@@ -8,7 +8,7 @@ import (
 )
 
 func TestPromptBufferEditingAndCtrlJNewline(t *testing.T) {
-	pb := NewPromptBuffer(3, 8, "> ")
+	pb := NewPromptBuffer(3, 8, 100, "> ")
 
 	// Type "hello"
 	for _, r := range "hello" {
@@ -50,7 +50,7 @@ func TestPromptBufferEditingAndCtrlJNewline(t *testing.T) {
 }
 
 func TestPromptBufferHistoryNavigation(t *testing.T) {
-	pb := NewPromptBuffer(1, 5, "> ")
+	pb := NewPromptBuffer(1, 5, 100, "> ")
 
 	pb.AddHistory("first prompt")
 	pb.AddHistory("second prompt")
@@ -185,5 +185,68 @@ func TestAppWidgetKeyEventsAndLoomRendering(t *testing.T) {
 	app.ConsumeKey(loom.KeyEvent{Key: "ctrl-c"})
 	if !app.QuitRequested {
 		t.Error("expected app.QuitRequested to be true after Ctrl+C")
+	}
+}
+
+// Real terminals deliver Enter and Ctrl+J as the same "enter" key, so the
+// newline paths that work in practice are a trailing backslash and Alt+Enter.
+func TestAppWidgetTerminalNewlinePaths(t *testing.T) {
+	spec, err := LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	app := NewAppWidget(spec, "m", "s", func(p string) { got = append(got, p) })
+	feed := func(raw string) { app.ConsumeKey(loom.DecodeKey([]byte(raw))) }
+
+	for _, r := range "äb\\" {
+		app.ConsumeKey(loom.KeyEvent{Text: string(r)})
+	}
+	feed("\r") // backslash + Enter -> newline, no submit
+	app.ConsumeKey(loom.KeyEvent{Text: "c"})
+	feed("\x1b\r") // Alt+Enter -> newline
+	app.ConsumeKey(loom.KeyEvent{Text: "d"})
+	if want := "äb\nc\nd"; app.Prompt.Text() != want || len(got) != 0 {
+		t.Fatalf("Text() = %q, submits = %v; want %q and no submit", app.Prompt.Text(), got, want)
+	}
+	feed("\r")
+	if len(got) != 1 || got[0] != "äb\nc\nd" {
+		t.Fatalf("submits = %q", got)
+	}
+
+	app.ConsumePaste(loom.PasteEvent{Text: "x\r\ny"})
+	if app.Prompt.Text() != "x\ny" {
+		t.Fatalf("paste Text() = %q, want x\\ny", app.Prompt.Text())
+	}
+
+	header := RenderCanvas(app, 80, 24)[0]
+	if !strings.Contains(header, "● ready") {
+		t.Errorf("header = %q, want idle status indicator", header)
+	}
+	if app.ConsumeKey(loom.DecodeKey([]byte("\x1b"))); !app.QuitRequested {
+		t.Error("esc should quit")
+	}
+}
+
+func TestPromptBufferWrapsAndKeepsCursorVisible(t *testing.T) {
+	pb := NewPromptBuffer(1, 2, 2, "> ")
+	for range 50 {
+		pb.InsertChar('x')
+	}
+	lines := pb.Lines(20)
+	if len(lines) != 2 || !strings.Contains(lines[1], "█") {
+		t.Fatalf("Lines() = %q, want 2 wrapped lines with cursor on the last", lines)
+	}
+	for _, l := range lines {
+		if n := len([]rune(l)); n > 20 {
+			t.Errorf("line %q is %d wide, want <= 20", l, n)
+		}
+	}
+
+	for _, h := range []string{"a", "b", "c"} {
+		pb.AddHistory(h)
+	}
+	if len(pb.history) != 2 || pb.history[0] != "b" {
+		t.Errorf("history = %q, want capped to [b c]", pb.history)
 	}
 }

@@ -1,8 +1,9 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/mattn/go-runewidth"
 )
 
 // PromptBuffer manages the multiline text input state, cursor position, and history.
@@ -13,13 +14,14 @@ type PromptBuffer struct {
 	history   []string
 	histIdx   int
 	draft     string
+	histSize  int
 	minLines  int
 	maxLines  int
 	symbol    string
 }
 
 // NewPromptBuffer creates a fresh PromptBuffer with specified bounds and prompt symbol.
-func NewPromptBuffer(minLines, maxLines int, symbol string) *PromptBuffer {
+func NewPromptBuffer(minLines, maxLines, histSize int, symbol string) *PromptBuffer {
 	if minLines < 1 {
 		minLines = 1
 	}
@@ -32,6 +34,7 @@ func NewPromptBuffer(minLines, maxLines int, symbol string) *PromptBuffer {
 	return &PromptBuffer{
 		lines:    []string{""},
 		histIdx:  -1,
+		histSize: histSize,
 		minLines: minLines,
 		maxLines: maxLines,
 		symbol:   symbol,
@@ -117,6 +120,18 @@ func (pb *PromptBuffer) Backspace() {
 	}
 }
 
+// TrimContinuation removes a backslash directly before the cursor at the end
+// of the last line and reports whether it did.
+func (pb *PromptBuffer) TrimContinuation() bool {
+	line := []rune(pb.lines[pb.cursorRow])
+	if pb.cursorRow != len(pb.lines)-1 || pb.cursorCol != len(line) || pb.cursorCol == 0 || line[pb.cursorCol-1] != '\\' {
+		return false
+	}
+	pb.lines[pb.cursorRow] = string(line[:pb.cursorCol-1])
+	pb.cursorCol--
+	return true
+}
+
 // MoveLeft moves cursor left one rune.
 func (pb *PromptBuffer) MoveLeft() {
 	if pb.cursorCol > 0 {
@@ -178,6 +193,9 @@ func (pb *PromptBuffer) AddHistory(text string) {
 		return
 	}
 	pb.history = append(pb.history, trimmed)
+	if pb.histSize > 0 && len(pb.history) > pb.histSize {
+		pb.history = pb.history[len(pb.history)-pb.histSize:]
+	}
 	pb.histIdx = -1
 }
 
@@ -214,38 +232,46 @@ func (pb *PromptBuffer) HistoryNext() bool {
 }
 
 // Lines returns the rendered prompt box lines formatted for display.
+// Long lines wrap at width; when the box exceeds maxLines it keeps the cursor row visible.
 func (pb *PromptBuffer) Lines(width int) []string {
 	if width < 10 {
 		width = 10
 	}
+	indent := strings.Repeat(" ", runewidth.StringWidth(pb.symbol))
 	var res []string
+	cursorLine := 0
 	for i, l := range pb.lines {
 		prefix := pb.symbol
 		if i > 0 {
-			prefix = strings.Repeat(" ", len(pb.symbol))
+			prefix = indent
 		}
-		renderedLine := fmt.Sprintf("%s%s", prefix, l)
+		runes := []rune(l)
 		if i == pb.cursorRow {
-			col := pb.cursorCol + len(prefix)
-			runes := []rune(renderedLine)
+			col := min(pb.cursorCol, len(runes))
 			if col < len(runes) {
-				renderedLine = string(runes[:col]) + "█" + string(runes[col+1:])
+				l = string(runes[:col]) + "█" + string(runes[col+1:])
 			} else {
-				renderedLine = string(runes) + "█"
+				l += "█"
 			}
 		}
-		res = append(res, renderedLine)
+		wrapped := wrapLine(prefix+l, width)
+		if i == pb.cursorRow {
+			cursorLine = len(res) + len(wrapped) - 1
+			for j, w := range wrapped {
+				if strings.Contains(w, "█") {
+					cursorLine = len(res) + j
+				}
+			}
+		}
+		res = append(res, wrapped...)
 	}
 
 	for len(res) < pb.minLines {
-		prefix := strings.Repeat(" ", len(pb.symbol))
-		if len(res) == 0 {
-			prefix = pb.symbol
-		}
-		res = append(res, prefix)
+		res = append(res, indent)
 	}
 	if len(res) > pb.maxLines {
-		res = res[len(res)-pb.maxLines:]
+		start := max(0, min(cursorLine-pb.maxLines+1, len(res)-pb.maxLines))
+		res = res[start : start+pb.maxLines]
 	}
 	return res
 }

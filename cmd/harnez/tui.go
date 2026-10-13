@@ -34,12 +34,11 @@ and multiline prompt box (Enter to send, Ctrl+J for newline).`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if o.model == "" {
-				m, err := subagent.DefaultModel()
-				if err == nil && m.Name != "" {
-					o.model = m.Provider + ":" + m.Name
-				} else {
-					o.model = "codex:luna"
+				m, err := subagent.DefaultModelSpec()
+				if err != nil {
+					return fmt.Errorf("resolve default model: %w", err)
 				}
+				o.model = m
 			}
 			if o.sessionID == "" {
 				o.sessionID = fmt.Sprintf("tui-%s", uuid.New().String()[:8])
@@ -66,36 +65,28 @@ and multiline prompt box (Enter to send, Ctrl+J for newline).`,
 func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error {
 	var app *tui.AppWidget
 	app = tui.NewAppWidget(spec, o.model, o.sessionID, func(prompt string) {
-		// Mock assistant response for initial interactive harness
+		// Echo until model forwarding lands (#739).
 		tui.AddTurn(app.Chat, tui.RoleAssistant, o.model, fmt.Sprintf("Received prompt: %s", prompt))
 	})
 
 	f, isFile := out.(*os.File)
 	isTTY := isFile && term.IsTerminal(int(f.Fd()))
-
 	if o.render || !isTTY {
-		cols, rows := o.cols, o.rows
-		if isFile && isTTY {
-			if c, r, err := term.GetSize(int(f.Fd())); err == nil && c > 0 && r > 0 {
-				cols, rows = c, r
-			}
-		}
-		lines := tui.RenderCanvas(app, cols, rows)
-		for _, l := range lines {
+		for _, l := range tui.RenderCanvas(app, o.cols, o.rows) {
 			fmt.Fprintln(out, l)
 		}
 		return nil
 	}
 
-	pane, err := loom.New(24)
+	rows := o.rows
+	if _, r, err := term.GetSize(int(f.Fd())); err == nil && r > 0 {
+		rows = r
+	}
+	pane, err := loom.New(rows)
 	if err != nil {
-		lines := tui.RenderCanvas(app, 80, 24)
-		for _, l := range lines {
-			fmt.Fprintln(out, l)
-		}
-		return nil
+		return fmt.Errorf("open terminal: %w", err)
 	}
 	defer pane.Close()
-
+	pane.MaxCols = 0 // chat uses the full terminal width, not loom's widget cap
 	return pane.Run(app)
 }

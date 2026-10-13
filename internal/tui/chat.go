@@ -114,6 +114,7 @@ func (ct *ChatThread) VisibleLines(width, height int) []string {
 	offset := ct.scrollOffset
 	if offset > maxOffset {
 		offset = maxOffset
+		ct.scrollOffset = offset
 	}
 
 	end := total - offset
