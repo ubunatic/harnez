@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=schemas/tui.schema.json
+# Default layout, behavior, and keybindings for `harnez tui`.
+header:
+  show: true
+  format: "harnez tui — [Model: {{ .Model }}] [Session: {{ .SessionID }}] [Status: {{ .Status }}]"
+  status_indicators:
+    idle: "● ready"
+    busy: "◐ thinking"
+    error: "✖ error"
+
+chat:
+  min_height: 5
+  max_scroll_back: 1000
+  show_timestamps: true
+  user_prefix: "User:"
+  assistant_prefix: "Agent ({{ .Model }}):"
+  tool_prefix: "[Tool: {{ .Name }}]"
+
+input:
+  history_size: 100
+  min_lines: 3
+  max_lines: 10
+  prompt_symbol: "> "
+
+# Key names follow loom ("ctrl+j" == "ctrl-j"). Most terminals send the same byte
+# for Enter and Ctrl+J, so newline also accepts Alt+Enter and a trailing "\" + Enter.
+keybindings:
+  send_prompt: ["enter"]
+  newline: ["ctrl+j", "alt+enter"]
+  quit: ["ctrl+c", "esc"]
+  scroll_up: ["pgup"]
+  scroll_down: ["pgdn"]
+  open_editor: ["ctrl+g"]
+  toggle_pty: ["ctrl+o"]
+
+theme:
+  border_style: "sharp"
+  header_color: "bold"
+  user_color: "chart-cool"
+  assistant_color: "chart-green"
+  tool_color: "dim-grey"
+  input_color: "bold"

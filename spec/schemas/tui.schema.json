@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ubunatic.com/harnez/spec/schemas/tui.schema.json",
+  "title": "harnez tui interactive harness layout and keybindings spec",
+  "type": "object",
+  "required": ["header", "chat", "input", "keybindings", "theme"],
+  "properties": {
+    "header": {
+      "type": "object",
+      "required": ["show", "format"],
+      "properties": {
+        "show": { "type": "boolean" },
+        "format": { "type": "string" },
+        "status_indicators": {
+          "type": "object",
+          "properties": { "idle": { "type": "string" }, "busy": { "type": "string" }, "error": { "type": "string" } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "chat": {
+      "type": "object",
+      "required": ["min_height", "max_scroll_back", "show_timestamps"],
+      "properties": {
+        "min_height": { "type": "integer", "minimum": 1 },
+        "max_scroll_back": { "type": "integer", "minimum": 10 },
+        "show_timestamps": { "type": "boolean" },
+        "user_prefix": { "type": "string" },
+        "assistant_prefix": { "type": "string" },
+        "tool_prefix": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "input": {
+      "type": "object",
+      "required": ["history_size", "min_lines", "max_lines"],
+      "properties": {
+        "history_size": { "type": "integer", "minimum": 1 },
+        "min_lines": { "type": "integer", "minimum": 1 },
+        "max_lines": { "type": "integer", "minimum": 1 },
+        "prompt_symbol": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "keybindings": {
+      "type": "object",
+      "required": ["send_prompt", "newline", "quit", "scroll_up", "scroll_down"],
+      "properties": {
+        "send_prompt": { "type": "array", "items": { "type": "string" } },
+        "newline": { "type": "array", "items": { "type": "string" } },
+        "quit": { "type": "array", "items": { "type": "string" } },
+        "scroll_up": { "type": "array", "items": { "type": "string" } },
+        "scroll_down": { "type": "array", "items": { "type": "string" } },
+        "open_editor": { "type": "array", "items": { "type": "string" } },
+        "toggle_pty": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "theme": {
+      "type": "object",
+      "required": ["border_style"],
+      "properties": {
+        "border_style": { "type": "string", "enum": ["sharp", "rounded", "single", "double", "none"] },
+        "header_color": { "type": "string" },
+        "user_color": { "type": "string" },
+        "assistant_color": { "type": "string" },
+        "tool_color": { "type": "string" },
+        "input_color": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
