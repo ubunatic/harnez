@@ -1,6 +1,6 @@
 # 751 — GitHub CI: build and test every PR on Linux
 
-**Status**: Draft
+**Status**: Resolved
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Infrastructure
