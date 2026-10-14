@@ -749,3 +749,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 748 | [748-cloud-session-bootstrap-install-harnez-and-test-tools-via-sessionstart-hook.md](748-cloud-session-bootstrap-install-harnez-and-test-tools-via-sessionstart-hook.md) | cloud session bootstrap: install harnez and test tools via SessionStart hook | Draft |
 | 749 | [749-make-test-ubuntu-cannot-pass-until-744-746-747-are-fixed-no-ci-guards-git-2-43.md](749-make-test-ubuntu-cannot-pass-until-744-746-747-are-fixed-no-ci-guards-git-2-43.md) | make test-ubuntu cannot pass until 744/746/747 are fixed; no CI guards git 2.43 | Draft |
 | 750 | [750-container-scripts-duplicate-detect-container-cmd.md](750-container-scripts-duplicate-detect-container-cmd.md) | container scripts duplicate detect_container_cmd | Draft |
+| 751 | [751-github-ci-build-and-test-every-pr-on-linux.md](751-github-ci-build-and-test-every-pr-on-linux.md) | GitHub CI: build and test every PR on Linux | Draft |
