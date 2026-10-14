@@ -1,21 +1,24 @@
-harnez tui — [Model: codex:luna] [Session: tui-design-001] [Status: ● ready]
-
-
-
-
-
-
-
-User: Please refactor statusline.go to reduce latency.
-
-Agent (codex:luna):
-I have inspected statusline.go and identified two blocking syscalls.
-Plan:
- 1. Cache CWD path lookups.
- 2. Run Git status checks asynchronously.
-
-[Tool: make test]
-PASS
-
-────────────────────────────────────────────────────────────────────────────────
-> Replace CWD call with cached getter in internal/statusline/cwd.go█
+[7m harnez tui  codex:luna:high  session tui-859d43ff  ctx 12%  ● ready            [0m
+[1;36m you                                                                            [0m
+   Why does TestAgentResume hang? Check internal/agent and suggest a fix.       
+                                                                                
+[1;32m assistant                                                                      [0m
+   Let me look at the foreground resume path first.                             
+   [2m┌─ tool: read ──────────────────────────────────────────────────────────────┐[0m
+   [2m│[0m harnez read -L 40-80 internal/agent/resume.go                             [2m│[0m
+   [2m│[0m ok  41 lines, 1.2 KB                                                      [2m│[0m
+   [2m└───────────────────────────────────────────────────────────────────────────┘[0m
+   The resume waits on the child pid but never reaps its process group,         
+   so the foreground wait blocks. Reap the group before waiting.                
+                                                                                
+[1;36m you                                                                            [0m
+   Sounds right. Draft the patch.                                               
+                                                                                
+[1;32m assistant                                                                      [0m
+   Drafting the change to resume.go now...                                      
+┌─ prompt ─────────────────────────────────────────────────────────────────────┐
+│ Also add a regression test for the process group,                            │
+│ then run the quota test.[7m [0m                                                    │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+[2m Enter send  Alt+Enter newline  \+Enter newline  Up/Down history  PgUp/PgDn     [0m

@@ -41,5 +41,5 @@
 - Done: `harnez tui` command, header, scrollable chat, multiline prompt, history,
   paste, spec-driven keys, `--render` mode, tests.
 - Newline: Alt+Enter and trailing `\` + Enter work; Ctrl+J/Shift+Enter wait on loom 307.
-- Open: `docs/data/tui-chat-design-001.ansi` checked with `loom eval`/`loom measure`/`loom check-box`;
-  bump loom v0.2.18 → current.
+- Done: `docs/data/tui-chat-design-001.ansi` (80x24) passes `loom eval`/`measure`/`check-box`; loom bumped v0.2.18 → v0.3.7.
+- Open: Ctrl+J/Shift+Enter newline (loom 307).
