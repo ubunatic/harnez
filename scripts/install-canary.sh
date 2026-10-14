@@ -12,7 +12,8 @@
 #   OWNER=ubunatic
 #   REPO=harnez
 #   ARCH=x86_64   # or aarch64
-#   IMAGE=debian:bookworm-slim
+#   IMAGE=ubuntu:24.04
+#   CONTAINER_CMD=podman   # or docker; auto-detected
 
 set -euo pipefail
 
