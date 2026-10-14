@@ -1,6 +1,6 @@
 # 737 — Research and Spec Harnez TUI Interactive Harness
 
-**Status**: In Progress — research completed, child implementation issues filing in progress (#738–#742)
+**Status**: In Progress — research done, children #738–#742 filed; #738 shell built, #739 next
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Agent Harness
@@ -36,7 +36,20 @@ This issue serves as the overarching Epic tracking the implementation of `harnez
   - Visible background task drawer for long-running builds, tests, or subagents.
   - Real-time command log inspection and multi-job cancellation.
 
-## 3. Implementation & Verification Plan
+## 3. Status (2026-10-14) and Loom Gaps
+- #738 shell runs (`cmd/harnez/tui.go`, `internal/tui/`); submit only echoes until #739.
+- harnez pins loom v0.2.18; loom is at 0.3.2 (no breaking rows in loom `docs/Upgrading.md`).
+- Loom gaps, fixed in loom, not worked around here:
+
+| Loom | Gap | Blocks |
+|---|---|---|
+| 305 | `Pane.Suspend/Resume` to hand the tty to a child | #740 Ctrl+G, #742 Ctrl+O |
+| 306 | `Pane.Post` to mutate widgets on the event loop | #739 streaming, #741 job logs |
+| 307 | Opt-in kitty keyboard protocol (Shift+Enter, Ctrl+J) | #738 newline key |
+
+- Order: loom 306 → bump loom → #739; loom 305 → #740, #742; #741 after 306.
+
+## 4. Implementation & Verification Plan
 
 - Complete research study in `docs/studies/2026-10-10-harnez-tui-interactive-harness-research.md`.
 - File modular child issues #738, #739, #740, #741, #742 using `harnez issues new`.

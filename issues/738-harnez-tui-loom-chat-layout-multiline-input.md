@@ -1,6 +1,6 @@
 # 738 — harnez tui Loom-based Chat Layout with Thread Display and Multiline Input Box
 
-**Status**: Draft
+**Status**: In Progress — shell, chat, prompt and spec keybindings done (e1fbce7); `.ansi` design and loom bump open
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Loom Integration
@@ -36,3 +36,10 @@
 - Wire `harnez tui` subcommand into Cobra CLI tree.
 - Create unit tests for prompt buffer manipulation, `Ctrl+J` newline insertion, and chat thread scrolling.
 - Create `.ansi` layout spec in `docs/data/tui-chat-design-001.ansi` and verify rendering with `loom eval` or visual test.
+
+## 4. Progress (2026-10-14)
+- Done: `harnez tui` command, header, scrollable chat, multiline prompt, history,
+  paste, spec-driven keys, `--render` mode, tests.
+- Newline: Alt+Enter and trailing `\` + Enter work; Ctrl+J/Shift+Enter wait on loom 307.
+- Open: `docs/data/tui-chat-design-001.ansi` checked with `loom eval`/`loom measure`/`loom check-box`;
+  bump loom v0.2.18 → current.
