@@ -721,7 +721,7 @@ func Clone(url, ref, dst string) (string, error) {
 		return "", err
 	}
 	if ref != "" {
-		if err := git(dst, "checkout", "--quiet", "--end-of-options", ref); err != nil {
+		if err := git(dst, "checkout", "--quiet", "--detach", ref, "--"); err != nil {
 			return "", err
 		}
 	}

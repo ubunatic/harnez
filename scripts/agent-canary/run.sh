@@ -20,36 +20,47 @@ model="${LMCODER_MODEL:-canary}"
 model_dir="${LMCODER_MODEL_DIR:-}"
 cache_dir="${LMCODER_CACHE_DIR:-}"
 
-if ! command -v podman >/dev/null 2>&1
-then printf '%s\n' "ERROR: podman is required" >&2
-     exit 1
-fi
-
-cleanup() {
-   podman pod rm -f "${pod}" >/dev/null 2>&1 || true
+detect_container_cmd() {
+   if test -n "${CONTAINER_CMD:-}"
+   then printf '%s' "${CONTAINER_CMD}"
+        return 0
+   fi
+   if command -v podman >/dev/null 2>&1
+   then printf 'podman'
+   elif command -v docker >/dev/null 2>&1
+   then printf 'docker'
+   else printf '%s\n' "ERROR: neither podman nor docker is installed" >&2
+        exit 1
+   fi
 }
 
-podman build -t "${app_image}" -f Containerfile.app .
-podman build -t "${lmcoder_image}" -f Containerfile.lmcoder .
+container_cmd=$(detect_container_cmd)
+
+cleanup() {
+   "$container_cmd" pod rm -f "${pod}" >/dev/null 2>&1 || true
+}
+
+"$container_cmd" build -t "${app_image}" -f Containerfile.app .
+"$container_cmd" build -t "${lmcoder_image}" -f Containerfile.lmcoder .
 
 cleanup
 trap cleanup EXIT
-podman pod create --name "${pod}" >/dev/null
+"$container_cmd" pod create --name "${pod}" >/dev/null
 
 lmcoder_args=(-d --pod "${pod}" --name "${pod}-lmcoder" -e "LMCODER_MODEL=${model}")
 if test -n "${cache_dir}"
 then mkdir -p "${cache_dir}"
      lmcoder_args+=(-v "${cache_dir}:/cache:z")
-else podman volume exists "${cache_volume}" || podman volume create "${cache_volume}" >/dev/null
+else "$container_cmd" volume exists "${cache_volume}" || "$container_cmd" volume create "${cache_volume}" >/dev/null
      lmcoder_args+=(-v "${cache_volume}:/cache")
 fi
 if test -n "${model_dir}"
 then lmcoder_args+=(-v "${model_dir}:/cache/models:ro,z")
 fi
-podman run "${lmcoder_args[@]}" "${lmcoder_image}" >/dev/null
+"$container_cmd" run "${lmcoder_args[@]}" "${lmcoder_image}" >/dev/null
 
-if ! podman run --rm --pod "${pod}" --cap-drop=all --security-opt no-new-privileges "${app_image}" smoke-test
+if ! "$container_cmd" run --rm --pod "${pod}" --cap-drop=all --security-opt no-new-privileges "${app_image}" smoke-test
 then printf '\n%s\n' "--- lmcoder log (last 30 lines)" >&2
-     podman logs --tail 30 "${pod}-lmcoder" >&2
+     "$container_cmd" logs --tail 30 "${pod}-lmcoder" >&2
      exit 1
 fi

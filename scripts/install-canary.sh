@@ -19,16 +19,23 @@ set -euo pipefail
 owner="${OWNER:-ubunatic}"
 repo="${REPO:-harnez}"
 arch="${ARCH:-x86_64}"
-image="${IMAGE:-debian:bookworm-slim}"
+image="${IMAGE:-ubuntu:24.04}"
 
-require_podman() {
-   if ! command -v podman >/dev/null 2>&1
-   then printf '%s\n' "ERROR: podman is required" >&2
+detect_container_cmd() {
+   if test -n "${CONTAINER_CMD:-}"
+   then printf '%s' "${CONTAINER_CMD}"
+        return 0
+   fi
+   if command -v podman >/dev/null 2>&1
+   then printf 'podman'
+   elif command -v docker >/dev/null 2>&1
+   then printf 'docker'
+   else printf '%s\n' "ERROR: neither podman nor docker is installed" >&2
         exit 1
    fi
 }
 
-require_podman
+container_cmd=$(detect_container_cmd)
 
 api_url="https://codeberg.org/api/v1/repos/${owner}/${repo}/releases/latest"
 tag=$(curl -fsSL "$api_url" | grep -o '"tag_name":"[^"]*"' | head -1 | cut -d'"' -f4)
@@ -60,7 +67,7 @@ esac
 EOF
 )
 
-podman run --rm \
+"$container_cmd" run --rm \
    --read-only=false \
    -e DEBIAN_FRONTEND=noninteractive \
    "$image" \

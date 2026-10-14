@@ -1,6 +1,6 @@
 # 745 — skillreg checkout fails on git 2.43: --end-of-options read as pathspec
 
-**Status**: Draft
+**Status**: Closed — resolved
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -22,3 +22,8 @@ git 2.43 `checkout` treats `--end-of-options` as a pathspec.
 - Reject refs starting with `-` before calling git, then use
   `git checkout --quiet --detach <ref> --` (works on all supported git versions).
 - Verify: the three tests pass on git 2.43 and on current git.
+
+## 4. Resolution
+- Replaced `--end-of-options` with `--detach <ref> --` in `internal/skillreg/skillreg.go`.
+- Added container test setup (`scripts/test-ubuntu.sh` and `make test-ubuntu`) to verify tests against Ubuntu 24.04 (git 2.43) using Podman or Docker.
+- Updated `scripts/install-canary.sh` and `scripts/agent-canary/run.sh` to auto-detect `CONTAINER_CMD` (`podman` or `docker`).
