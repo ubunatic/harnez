@@ -43,11 +43,11 @@ This issue serves as the overarching Epic tracking the implementation of `harnez
 
 | Loom | Gap | Blocks |
 |---|---|---|
-| 305 | `Pane.Suspend/Resume` to hand the tty to a child | #740 Ctrl+G, #742 Ctrl+O |
-| 306 | `Pane.Post` to mutate widgets on the event loop | #739 streaming, #741 job logs |
-| 307 | Opt-in kitty keyboard protocol (Shift+Enter, Ctrl+J) | #738 newline key |
+| 319 | `Pane.Suspend/Resume` to hand the tty to a child | #740 Ctrl+G, #742 Ctrl+O |
+| 320 | `Pane.Post` to mutate widgets on the event loop | #739 streaming, #741 job logs |
+| 321 | Opt-in kitty keyboard protocol (Shift+Enter, Ctrl+J) | #738 newline key |
 
-- Order: loom 306 → bump loom → #739; loom 305 → #740, #742; #741 after 306.
+- Order: loom 320 → bump loom → #739; loom 319 → #740, #742; #741 after 320.
 
 ## 4. Implementation & Verification Plan
 
