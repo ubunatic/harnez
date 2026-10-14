@@ -20,21 +20,16 @@ model="${LMCODER_MODEL:-canary}"
 model_dir="${LMCODER_MODEL_DIR:-}"
 cache_dir="${LMCODER_CACHE_DIR:-}"
 
-detect_container_cmd() {
-   if test -n "${CONTAINER_CMD:-}"
-   then printf '%s' "${CONTAINER_CMD}"
-        return 0
-   fi
-   if command -v podman >/dev/null 2>&1
-   then printf 'podman'
-   elif command -v docker >/dev/null 2>&1
-   then printf 'docker'
-   else printf '%s\n' "ERROR: neither podman nor docker is installed" >&2
-        exit 1
-   fi
-}
-
-container_cmd=$(detect_container_cmd)
+# Pods and `volume exists` are podman-only; docker cannot run this canary.
+container_cmd="${CONTAINER_CMD:-podman}"
+if test "$(basename "$container_cmd")" != podman
+then printf '%s\n' "ERROR: podman is required (pods are podman-only), got: $container_cmd" >&2
+     exit 1
+fi
+if ! command -v "$container_cmd" >/dev/null 2>&1
+then printf '%s\n' "ERROR: podman is required" >&2
+     exit 1
+fi
 
 cleanup() {
    "$container_cmd" pod rm -f "${pod}" >/dev/null 2>&1 || true

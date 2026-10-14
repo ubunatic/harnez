@@ -26,4 +26,7 @@ git 2.43 `checkout` treats `--end-of-options` as a pathspec.
 ## 4. Resolution
 - Replaced `--end-of-options` with `--detach <ref> --` in `internal/skillreg/skillreg.go`.
 - Added container test setup (`scripts/test-ubuntu.sh` and `make test-ubuntu`) to verify tests against Ubuntu 24.04 (git 2.43) using Podman or Docker.
-- Updated `scripts/install-canary.sh` and `scripts/agent-canary/run.sh` to auto-detect `CONTAINER_CMD` (`podman` or `docker`).
+- `scripts/install-canary.sh` auto-detects `CONTAINER_CMD` (podman or docker);
+  `scripts/agent-canary/run.sh` stays podman-only (pods).
+- Verified on git 2.43.0: `go test ./internal/skillreg/` passes. Full
+  `make test-ubuntu` still fails on unrelated tests, see #749.
