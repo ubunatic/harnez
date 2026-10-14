@@ -48,6 +48,9 @@ boundary or depends on the real environment.
   [LanguagePipeline.md](LanguagePipeline.md#lite-variants-and-root-copies).
 - **Static checks** — `make check` runs `go vet ./...` and `go test ./...`
   with `GOWORK=off`; `make lint` checks registered command documentation.
+- **GitHub Linux CI** — `.github/workflows/ci.yaml` runs on `ubuntu-24.04` for
+  every PR and push to `main`, executing `make build`, `make lint`, and `make check`
+  (guarding against git 2.43 regressions, issue 751).
 - **Smoke tests** — `make smoke` runs `scripts/smoke-test.sh`, which builds the
   binary and exercises apply, idempotency, drift repair, and selected live
   output behavior.
