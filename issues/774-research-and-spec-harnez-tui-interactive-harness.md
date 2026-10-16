@@ -1,6 +1,6 @@
 # 774 — Research and Spec Harnez TUI Interactive Harness
 
-**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 done (Ctrl+G, @/ pickers); #778 job manager v1 in; TUI polish: picker ranking, quoted paths, readline keys
+**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 done (Ctrl+G, @/ pickers); #778 job manager v1 in; #779 done (Ctrl+O native resume, ANSI chat); TUI polish: picker ranking, quoted paths, readline keys
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Agent Harness
@@ -40,12 +40,13 @@ This issue serves as the overarching Epic tracking the implementation of `harnez
 - #775 shell runs (`cmd/harnez/tui.go`, `internal/tui/`); #776 routes submits to the harness CLIs (2026-10-16).
 - #777: `@` file and `/` command pickers above the prompt (2026-10-16).
 - #778 v1: `!<cmd>` background jobs, Ctrl+B job panel with live log and cancel (2026-10-16).
+- #779: Ctrl+O resumes the backend session in the provider CLI; SGR-only ANSI in chat and job logs (2026-10-16).
 - harnez pins loom v0.3.9 (`Pane.Post`, `Pane.Suspend`, `Pane.KittyKeyboard`).
 - Loom gaps, fixed in loom, not worked around here:
 
 | Loom | Gap | Blocks |
 |---|---|---|
-| 319 | `Pane.Suspend/Resume` to hand the tty to a child | #777 Ctrl+G (done), #779 Ctrl+O |
+| 319 | `Pane.Suspend/Resume` to hand the tty to a child | #777 Ctrl+G (done), #779 Ctrl+O (done) |
 | 320 | `Pane.Post` to mutate widgets on the event loop | #776 streaming, #778 job logs |
 | 321 | Opt-in kitty keyboard protocol (Shift+Enter, Ctrl+J) | #775 newline key (done) |
 
