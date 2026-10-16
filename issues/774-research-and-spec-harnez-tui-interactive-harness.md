@@ -1,6 +1,6 @@
 # 774 — Research and Spec Harnez TUI Interactive Harness
 
-**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 Ctrl+G editor in; #778 job manager v1 in
+**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 done (Ctrl+G, @/ pickers); #778 job manager v1 in
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Agent Harness
@@ -38,6 +38,7 @@ This issue serves as the overarching Epic tracking the implementation of `harnez
 
 ## 3. Status (2026-10-14) and Loom Gaps
 - #775 shell runs (`cmd/harnez/tui.go`, `internal/tui/`); #776 routes submits to the harness CLIs (2026-10-16).
+- #777: `@` file and `/` command pickers above the prompt (2026-10-16).
 - #778 v1: `!<cmd>` background jobs, Ctrl+B job panel with live log and cancel (2026-10-16).
 - harnez pins loom v0.3.9 (`Pane.Post`, `Pane.Suspend`, `Pane.KittyKeyboard`).
 - Loom gaps, fixed in loom, not worked around here:

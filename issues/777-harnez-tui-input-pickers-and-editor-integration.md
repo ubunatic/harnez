@@ -1,6 +1,6 @@
 # 777 — harnez tui Interactive Input Pickers (@ files, / skills) and Ctrl+G Editor Integration
 
-**Status**: In Progress — Ctrl+G editor done; `@`/`/` pickers open
+**Status**: Closed — Ctrl+G editor and `@`/`/` pickers done
 **Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Interactive TUI / UX
@@ -38,4 +38,10 @@ When authoring prompts in an interactive coding agent, developers frequently nee
 - Done: Ctrl+G (`keybindings.open_editor`) runs `$VISUAL`/`$EDITOR`/`editor.fallbacks`
   under `Pane.Suspend` (`internal/tui/editor.go`); exit 0 loads the file, non-zero keeps
   the prompt with a note; temp file always removed. Posts during Suspend apply on resume.
-- Open: `@` file picker, `/`/`$` skill picker.
+- Done: inline pickers above the prompt at the trigger column (`internal/tui/picker.go`,
+  `pickersrc.go`; spec `picker.*`, `keybindings.picker_*`). `@` at word start: files from
+  `git ls-files --cached --others --exclude-standard` (walk fallback), built once per session
+  in a goroutine + Post, capped by `max_indexed_files`, ranked with `find.MatchClass`.
+  `/` at prompt start: built-ins (`/model`) + installed skills (`skillreg.ReadSkill` over
+  project `.claude/skills` and `SkillTargetsByAgent` dirs). Up/Down, Tab/Enter insert
+  `<trigger><name> `, Esc closes; Enter never sends while open. `$` trigger dropped (no use yet).
