@@ -46,7 +46,7 @@ func TestTUISchemaJSONValid(t *testing.T) {
 	if schema.Title == "" {
 		t.Error("expected title in tui.schema.json")
 	}
-	expectedRequired := []string{"header", "chat", "input", "keybindings", "theme"}
+	expectedRequired := []string{"header", "chat", "input", "terminal", "keybindings", "theme"}
 	for _, req := range expectedRequired {
 		found := false
 		for _, r := range schema.Required {
@@ -58,5 +58,23 @@ func TestTUISchemaJSONValid(t *testing.T) {
 		if !found {
 			t.Errorf("missing required property %q in schema.Required", req)
 		}
+	}
+}
+
+func TestTUISpecTerminalAndNewlineKeys(t *testing.T) {
+	spec, err := LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !spec.Terminal.KittyKeyboard {
+		t.Error("terminal.kitty_keyboard should default to true")
+	}
+	for _, k := range []string{"shift-enter", "ctrl-j", "alt-enter"} {
+		if !bound(k, spec.Keybindings.Newline) {
+			t.Errorf("newline keybindings %v lack %q", spec.Keybindings.Newline, k)
+		}
+	}
+	if bound("enter", spec.Keybindings.Newline) || !bound("enter", spec.Keybindings.SendPrompt) {
+		t.Error("enter must send, not insert a newline")
 	}
 }

@@ -31,7 +31,9 @@ func newTUICmd() *cobra.Command {
 		Long: `Interactive multi-model terminal chat interface for harnez.
 
 Built on ubunatic.com/loom, providing a header status line, scrollable chat thread,
-and multiline prompt box (Enter to send, Ctrl+J for newline).
+and multiline prompt box (Enter to send; Shift+Enter, Ctrl+J or Alt+Enter for a
+newline). Shift+Enter and Ctrl+J need a terminal with the kitty keyboard
+protocol; elsewhere they send, so use Alt+Enter or end the line with "\".
 
 Prompts run through the active model's harness CLI (claude, codex, agy, pi), so
 turns draw on the matching subscription; the next prompt resumes the same
@@ -95,6 +97,7 @@ func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error 
 	}
 	defer pane.Close()
 	pane.MaxCols = 0 // chat uses the full terminal width, not loom's widget cap
+	pane.KittyKeyboard = spec.Terminal.KittyKeyboard
 	dir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("working directory: %w", err)

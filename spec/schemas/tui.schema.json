@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/tui.schema.json",
   "title": "harnez tui interactive harness layout and keybindings spec",
   "type": "object",
-  "required": ["header", "chat", "input", "keybindings", "theme"],
+  "required": ["header", "chat", "input", "terminal", "keybindings", "theme"],
   "properties": {
     "header": {
       "type": "object",
@@ -41,6 +41,14 @@
         "min_lines": { "type": "integer", "minimum": 1 },
         "max_lines": { "type": "integer", "minimum": 1 },
         "prompt_symbol": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "terminal": {
+      "type": "object",
+      "required": ["kitty_keyboard"],
+      "properties": {
+        "kitty_keyboard": { "type": "boolean", "description": "Enable the kitty keyboard protocol (Shift+Enter, Ctrl+J as distinct keys)." }
       },
       "additionalProperties": false
     },

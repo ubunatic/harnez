@@ -1,6 +1,6 @@
 # 775 — harnez tui Loom-based Chat Layout with Thread Display and Multiline Input Box
 
-**Status**: In Progress — shell, chat, prompt and spec keybindings done (e1fbce7); `.ansi` design and loom bump open
+**Status**: Closed — Shift+Enter/Ctrl+J newline via kitty keyboard (loom v0.3.9)
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Loom Integration
@@ -23,8 +23,8 @@
 3. **Multiline Input Box**:
    - Multiline prompt entry located below chat thread.
    - `Enter` sends prompt to active agent/model.
-   - `Ctrl+J` inserts a newline character into the prompt buffer.
-     Terminals send Ctrl+J and Enter as the same byte, so `Alt+Enter` and a trailing `\` + `Enter` also insert a newline.
+   - `Shift+Enter` and `Ctrl+J` insert a newline (kitty keyboard protocol, `terminal.kitty_keyboard`).
+     Legacy terminals send both as Enter (send), so `Alt+Enter` and a trailing `\` + `Enter` also insert a newline.
    - Standard cursor movement, editing, and backspace handling.
 
 ### Tech Stack & Dependencies
@@ -40,6 +40,8 @@
 ## 4. Progress (2026-10-14)
 - Done: `harnez tui` command, header, scrollable chat, multiline prompt, history,
   paste, spec-driven keys, `--render` mode, tests.
-- Newline: Alt+Enter and trailing `\` + Enter work; Ctrl+J/Shift+Enter wait on loom 321.
 - Done: `docs/data/tui-chat-design-001.ansi` (80x24) passes `loom eval`/`measure`/`check-box`; loom bumped v0.2.18 → v0.3.7.
-- Open: Ctrl+J/Shift+Enter newline (loom 321).
+
+## 5. Done (2026-10-16)
+- loom v0.3.9; `terminal.kitty_keyboard: true` sets `Pane.KittyKeyboard`.
+- Newline: `shift+enter`, `ctrl+j`, `alt+enter`, trailing `\`; Enter and legacy Ctrl+J send.

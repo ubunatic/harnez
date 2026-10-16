@@ -23,11 +23,18 @@ input:
   max_lines: 10
   prompt_symbol: "> "
 
-# Key names follow loom ("ctrl+j" == "ctrl-j"). Most terminals send the same byte
-# for Enter and Ctrl+J, so newline also accepts Alt+Enter and a trailing "\" + Enter.
+# Terminal protocol options for the loom pane.
+terminal:
+  # Kitty keyboard protocol: Shift+Enter and Ctrl+J arrive as distinct keys.
+  # Terminals without support ignore it.
+  kitty_keyboard: true
+
+# Key names follow loom ("ctrl+j" == "ctrl-j"). Without the kitty keyboard
+# protocol, Ctrl+J and Shift+Enter arrive as Enter (send), so newline also
+# accepts Alt+Enter and a trailing "\" + Enter.
 keybindings:
   send_prompt: ["enter"]
-  newline: ["ctrl+j", "alt+enter"]
+  newline: ["shift+enter", "ctrl+j", "alt+enter"]
   quit: ["ctrl+c", "esc"]
   # While a turn runs, these keys cancel it instead of quitting.
   cancel_turn: ["esc", "ctrl+c"]

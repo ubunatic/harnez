@@ -1,6 +1,6 @@
 # 774 — Research and Spec Harnez TUI Interactive Harness
 
-**Status**: In Progress — research done, children #775–#779 filed; #775 shell built; #776 router and streaming in
+**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Agent Harness
@@ -38,14 +38,14 @@ This issue serves as the overarching Epic tracking the implementation of `harnez
 
 ## 3. Status (2026-10-14) and Loom Gaps
 - #775 shell runs (`cmd/harnez/tui.go`, `internal/tui/`); #776 routes submits to the harness CLIs (2026-10-16).
-- harnez pins loom v0.3.8 (`Pane.Post`, `Pane.Suspend`).
+- harnez pins loom v0.3.9 (`Pane.Post`, `Pane.Suspend`, `Pane.KittyKeyboard`).
 - Loom gaps, fixed in loom, not worked around here:
 
 | Loom | Gap | Blocks |
 |---|---|---|
 | 319 | `Pane.Suspend/Resume` to hand the tty to a child | #777 Ctrl+G, #779 Ctrl+O |
 | 320 | `Pane.Post` to mutate widgets on the event loop | #776 streaming, #778 job logs |
-| 321 | Opt-in kitty keyboard protocol (Shift+Enter, Ctrl+J) | #775 newline key |
+| 321 | Opt-in kitty keyboard protocol (Shift+Enter, Ctrl+J) | #775 newline key (done) |
 
 - Order: loom 320 → bump loom → #776; loom 319 → #777, #779; #778 after 320.
 

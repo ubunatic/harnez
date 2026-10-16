@@ -250,3 +250,46 @@ func TestPromptBufferWrapsAndKeepsCursorVisible(t *testing.T) {
 		t.Errorf("history = %q, want capped to [b c]", pb.history)
 	}
 }
+
+// TestAppWidgetKittyNewlineKeys covers #775: with the kitty keyboard protocol
+// Shift+Enter and Ctrl+J insert a newline; legacy Ctrl+J (LF) and Enter send.
+func TestAppWidgetKittyNewlineKeys(t *testing.T) {
+	spec, err := LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	app := NewAppWidget(spec, "m", "s", func(p string) { got = append(got, p) })
+	feed := func(raw string) { app.ConsumeKey(loom.DecodeKey([]byte(raw))) }
+	typ := func(s string) {
+		for _, r := range s {
+			app.ConsumeKey(loom.KeyEvent{Text: string(r)})
+		}
+	}
+
+	for _, tc := range []struct{ name, raw, key string }{
+		{"shift-enter", "\x1b[13;2u", "shift-enter"},
+		{"ctrl-j", "\x1b[106;5u", "ctrl-j"},
+		{"kitty alt-enter", "\x1b[13;3u", "alt-enter"},
+		{"legacy alt-enter", "\x1b\r", "alt-enter"},
+	} {
+		if k := keyName(loom.DecodeKey([]byte(tc.raw))); k != tc.key {
+			t.Fatalf("%s decodes to %q, want %q", tc.name, k, tc.key)
+		}
+		typ("a")
+		feed(tc.raw)
+		typ("b")
+		if app.Prompt.Text() != "a\nb" || len(got) != 0 {
+			t.Fatalf("%s: Text() = %q, submits = %v; want newline, no submit", tc.name, app.Prompt.Text(), got)
+		}
+		app.Prompt.Clear()
+	}
+
+	typ("x")
+	feed("\n") // legacy Ctrl+J arrives as Enter and sends
+	typ("y")
+	feed("\r")
+	if len(got) != 2 || got[0] != "x" || got[1] != "y" {
+		t.Fatalf("submits = %q, want [x y]", got)
+	}
+}

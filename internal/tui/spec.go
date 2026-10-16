@@ -37,6 +37,13 @@ type InputSpec struct {
 	PromptSymbol string `yaml:"prompt_symbol"`
 }
 
+// TerminalSpec describes terminal protocol options for the loom pane.
+type TerminalSpec struct {
+	// KittyKeyboard sets loom Pane.KittyKeyboard so Shift+Enter and Ctrl+J
+	// arrive as distinct keys on terminals that support the protocol.
+	KittyKeyboard bool `yaml:"kitty_keyboard"`
+}
+
 // KeybindingsSpec describes keyboard actions in harnez tui.
 type KeybindingsSpec struct {
 	SendPrompt []string `yaml:"send_prompt"`
@@ -64,6 +71,7 @@ type Spec struct {
 	Header      HeaderSpec      `yaml:"header"`
 	Chat        ChatSpec        `yaml:"chat"`
 	Input       InputSpec       `yaml:"input"`
+	Terminal    TerminalSpec    `yaml:"terminal"`
 	Keybindings KeybindingsSpec `yaml:"keybindings"`
 	Theme       ThemeSpec       `yaml:"theme"`
 }

@@ -80,5 +80,7 @@ modernc.org/token v1.1.0 h1:Xl7Ap9dKaEs5kLoOQeQmPWevfnk/DM5qcLcYlA8ys6Y=
 modernc.org/token v1.1.0/go.mod h1:UGzOrNV1mAFSEB63lOFHIpNRUVMvYTc6yu1SMY/XTDM=
 ubunatic.com/loom v0.3.8 h1:siEi5Co8lJiNDySk1XtR0AHC6UWUrZ0sSnGn0YqtfbI=
 ubunatic.com/loom v0.3.8/go.mod h1:yUDOCU6CfYjXV982wovuz/sizn5PuN7JVzimImQEIv8=
+ubunatic.com/loom v0.3.9 h1:F8+TE4p7uqmzBGNzrE/rc9VTEQX91ft4GHoSA5jMuA4=
+ubunatic.com/loom v0.3.9/go.mod h1:yUDOCU6CfYjXV982wovuz/sizn5PuN7JVzimImQEIv8=
 ubunatic.com/voxi v0.1.2 h1:rSx31jesJSGQL8MSHAHcc5rfLPhYZxNnQ3Z1UeOCKIM=
 ubunatic.com/voxi v0.1.2/go.mod h1:drL5byHT4b1z1tanhphG5x+4Up80OAEKn3TiYrdhE2w=
