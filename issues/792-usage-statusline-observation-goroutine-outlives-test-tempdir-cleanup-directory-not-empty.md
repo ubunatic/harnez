@@ -1,6 +1,6 @@
 # 792 — Usage statusline observation goroutine outlives test TempDir (cleanup: directory not empty)
 
-**Status**: Draft
+**Status**: Closed — Added usage.WaitObservations; tests join the background write before TempDir cleanup.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
