@@ -214,13 +214,13 @@ func TestSessionChunksShowInHeader(t *testing.T) {
 	}
 	typeLine(app, "a")
 	l.drainUntil(t, app)
-	if h := app.formatHeader(); !strings.HasSuffix(h, "[resumed]") {
+	if h := app.formatHeader(); !strings.Contains(h, "[resumed]") {
 		t.Fatalf("header after resumed turn = %q", h)
 	}
 	fresh = true
 	typeLine(app, "b")
 	l.drainUntil(t, app)
-	if h := app.formatHeader(); !strings.HasSuffix(h, "[new session]") {
+	if h := app.formatHeader(); !strings.Contains(h, "[new session]") {
 		t.Fatalf("header after fresh turn = %q", h)
 	}
 	frame := strings.Join(RenderCanvas(app, 120, 24), "\n")

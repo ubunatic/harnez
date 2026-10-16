@@ -303,7 +303,7 @@ func (app *AppWidget) formatHeader() string {
 	res = strings.ReplaceAll(res, "{{ .SessionID }}", app.SessionID)
 	res = strings.ReplaceAll(res, "{{ .Status }}", statusStr)
 	res = strings.ReplaceAll(res, "{{ .Backend }}", app.backendLabel())
-	return strings.TrimRight(res, " ")
+	return strings.Join(strings.Fields(res), " ") // an empty field leaves no double space
 }
 
 func (app *AppWidget) backendLabel() string {

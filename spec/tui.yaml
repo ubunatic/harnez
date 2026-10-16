@@ -2,7 +2,8 @@
 # Default layout, behavior, and keybindings for `harnez tui`.
 header:
   show: true
-  format: "harnez tui — [Model: {{ .Model }}] [Session: {{ .SessionID }}] [Status: {{ .Status }}] {{ .Backend }}"
+  # Status and backend first: narrow terminals clip the right edge.
+  format: "harnez tui {{ .Status }} {{ .Backend }} · {{ .Model }} · {{ .SessionID }}"
   status_indicators:
     idle: "● ready"
     busy: "◐ thinking"
