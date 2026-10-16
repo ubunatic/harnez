@@ -19,6 +19,7 @@ func NewJobManager(spec JobsSpec, dir string, post func(func())) *jobs.Manager {
 		Dir:         dir,
 		LogBytes:    spec.LogBufferBytes,
 		CancelGrace: time.Duration(spec.CancelGraceMS) * time.Millisecond,
+		MaxFinished: spec.MaxFinished,
 	}, post)
 }
 
@@ -61,7 +62,7 @@ func (app *AppWidget) startJob(command string) {
 		return
 	}
 	if app.jobs == nil {
-		AddTurn(app.Chat, RoleError, "", "background jobs need an interactive terminal")
+		AddTurn(app.Chat, RoleError, "", labels.Unavailable)
 		return
 	}
 	j, err := app.jobs.Start(command)
@@ -89,13 +90,16 @@ func (app *AppWidget) jobLabel(tmpl string, j *jobs.Job) string {
 	}
 	r := strings.NewReplacer(
 		"{{ .ID }}", strconv.Itoa(j.ID),
-		"{{ .Command }}", j.Command,
+		"{{ .Command }}", oneLine(j.Command),
 		"{{ .Status }}", j.Status.String(),
 		"{{ .Exit }}", exit,
 		"{{ .Duration }}", formatDuration(j.Duration(time.Now())),
 	)
 	return r.Replace(tmpl)
 }
+
+// oneLine flattens whitespace runs (newlines, tabs) to single spaces.
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
@@ -274,7 +278,7 @@ func (app *AppWidget) drawJobPanel(c *loom.Canvas, area loom.Rect) {
 // jobRow formats one list row padded to width display columns.
 func jobRow(j *jobs.Job, width int, now time.Time) string {
 	head := fmt.Sprintf("%3d  %-9s %7s  ", j.ID, j.Status, formatDuration(j.Duration(now)))
-	row := head + loom.TruncateText(j.Command, max(width-loom.StringWidth(head), 0), "…")
+	row := head + loom.TruncateText(oneLine(j.Command), max(width-loom.StringWidth(head), 0), "…")
 	row = loom.TruncateText(row, width, "…")
 	return row + strings.Repeat(" ", max(width-loom.StringWidth(row), 0))
 }

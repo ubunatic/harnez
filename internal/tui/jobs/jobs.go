@@ -49,6 +49,7 @@ type Options struct {
 	Dir         string        // working directory of every job
 	LogBytes    int           // ring buffer size per job
 	CancelGrace time.Duration // SIGTERM to SIGKILL delay; also bounds output drain
+	MaxFinished int           // ended jobs kept in the registry; older ones are pruned
 }
 
 // Job is one background command. Read its fields on the UI goroutine only.
@@ -63,6 +64,9 @@ type Job struct {
 	Err      error // start or wait error other than a plain exit status
 
 	out       *Ring
+	pending   *Ring // output read but not yet on the UI loop; guarded by mu
+	mu        sync.Mutex
+	posted    bool // a drain callback is queued; guarded by mu
 	cancelled bool
 	done      chan struct{} // closed when the process group is gone
 }
@@ -147,6 +151,7 @@ func (m *Manager) Start(command string) (*Job, error) {
 		Start:   m.now(),
 		Status:  Running,
 		out:     NewRing(m.opt.LogBytes),
+		pending: NewRing(m.opt.LogBytes),
 		done:    make(chan struct{}),
 	}
 	m.nextID++
@@ -161,13 +166,7 @@ func (m *Manager) Start(command string) (*Job, error) {
 		for {
 			n, err := r.Read(buf)
 			if n > 0 {
-				chunk := append([]byte(nil), buf[:n]...)
-				m.post(func() {
-					_, _ = j.out.Write(chunk)
-					if m.OnOutput != nil {
-						m.OnOutput(j)
-					}
-				})
+				m.queueOutput(j, buf[:n])
 			}
 			if err != nil {
 				return
@@ -202,6 +201,36 @@ func (m *Manager) Start(command string) (*Job, error) {
 	return j, nil
 }
 
+// queueOutput coalesces output read off the UI loop: it lands in the
+// bounded pending ring and at most one drain callback is queued per job, so
+// a fast producer cannot grow the Post queue while the loop is paused.
+func (m *Manager) queueOutput(j *Job, p []byte) {
+	j.mu.Lock()
+	_, _ = j.pending.Write(p)
+	queue := !j.posted
+	j.posted = true
+	j.mu.Unlock()
+	if queue {
+		m.post(func() { m.drainOutput(j) })
+	}
+}
+
+// drainOutput moves pending output into the job's ring on the UI loop.
+func (m *Manager) drainOutput(j *Job) {
+	j.mu.Lock()
+	data, dropped := j.pending.Bytes(), j.pending.Truncated()
+	j.pending.Reset()
+	j.posted = false
+	j.mu.Unlock()
+	if dropped {
+		j.out.dropped = true
+	}
+	_, _ = j.out.Write(data)
+	if m.OnOutput != nil {
+		m.OnOutput(j)
+	}
+}
+
 func (m *Manager) finish(j *Job, code int, err error, end time.Time) {
 	j.End, j.ExitCode, j.Err = end, code, err
 	switch {
@@ -215,6 +244,27 @@ func (m *Manager) finish(j *Job, code int, err error, end time.Time) {
 	if m.OnDone != nil {
 		m.OnDone(j)
 	}
+	m.prune()
+}
+
+// prune drops the oldest ended jobs beyond MaxFinished; running jobs stay.
+func (m *Manager) prune() {
+	ended := 0
+	for _, j := range m.jobs {
+		if j.Status != Running {
+			ended++
+		}
+	}
+	kept := m.jobs[:0]
+	for _, j := range m.jobs {
+		if j.Status != Running && ended > m.opt.MaxFinished {
+			ended--
+			continue
+		}
+		kept = append(kept, j)
+	}
+	clear(m.jobs[len(kept):])
+	m.jobs = kept
 }
 
 // Cancel stops a running job: SIGTERM to its process group, then SIGKILL

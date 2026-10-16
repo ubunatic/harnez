@@ -46,10 +46,13 @@ jobs:
   log_buffer_bytes: 262144
   # Cancel sends SIGTERM to the job's process group, then SIGKILL after this.
   cancel_grace_ms: 3000
+  # Ended jobs kept in the panel; older ones are dropped (running jobs stay).
+  max_finished: 50
   labels:
     started: "job {{ .ID }} started: {{ .Command }}"
     done: "job {{ .ID }} {{ .Status }} (exit {{ .Exit }}, {{ .Duration }}): {{ .Command }}"
     usage: "usage: !<shell command>"
+    unavailable: "background jobs need an interactive terminal"
     panel_title: "Jobs"
     log_title: "Job {{ .ID }} ({{ .Status }}): {{ .Command }}"
     panel_empty: "no jobs yet; start one with !<command>"

@@ -64,16 +64,17 @@
     },
     "jobs": {
       "type": "object",
-      "required": ["prefix", "shell", "log_buffer_bytes", "cancel_grace_ms", "labels"],
+      "required": ["prefix", "shell", "log_buffer_bytes", "cancel_grace_ms", "max_finished", "labels"],
       "properties": {
         "prefix": { "type": "string", "minLength": 1, "description": "Prompt prefix that runs the rest as a background shell job." },
         "shell": { "type": "string", "minLength": 1, "description": "Shell run as <shell> -c <command>." },
         "log_buffer_bytes": { "type": "integer", "minimum": 1, "description": "Ring buffer size of captured output per job." },
         "cancel_grace_ms": { "type": "integer", "minimum": 1, "description": "Delay between SIGTERM and SIGKILL to the job's process group." },
+        "max_finished": { "type": "integer", "minimum": 1, "description": "Ended jobs kept in the registry; older ones are pruned." },
         "labels": {
           "type": "object",
-          "required": ["started", "done", "usage", "panel_title", "log_title", "panel_empty", "panel_hint", "log_hint", "header_running"],
-          "properties": { "started": { "type": "string", "minLength": 1 }, "done": { "type": "string", "minLength": 1 }, "usage": { "type": "string", "minLength": 1 }, "panel_title": { "type": "string", "minLength": 1 }, "log_title": { "type": "string", "minLength": 1 }, "panel_empty": { "type": "string", "minLength": 1 }, "panel_hint": { "type": "string", "minLength": 1 }, "log_hint": { "type": "string", "minLength": 1 }, "header_running": { "type": "string", "minLength": 1 } },
+          "required": ["started", "done", "usage", "unavailable", "panel_title", "log_title", "panel_empty", "panel_hint", "log_hint", "header_running"],
+          "properties": { "started": { "type": "string", "minLength": 1 }, "done": { "type": "string", "minLength": 1 }, "usage": { "type": "string", "minLength": 1 }, "unavailable": { "type": "string", "minLength": 1 }, "panel_title": { "type": "string", "minLength": 1 }, "log_title": { "type": "string", "minLength": 1 }, "panel_empty": { "type": "string", "minLength": 1 }, "panel_hint": { "type": "string", "minLength": 1 }, "log_hint": { "type": "string", "minLength": 1 }, "header_running": { "type": "string", "minLength": 1 } },
           "additionalProperties": false
         }
       },

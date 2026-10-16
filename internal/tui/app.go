@@ -176,6 +176,9 @@ func (app *AppWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
 
 // ConsumePaste inserts bracketed-paste text, keeping its newlines.
 func (app *AppWidget) ConsumePaste(p loom.PasteEvent) loom.EventResult {
+	if app.panel.open {
+		return loom.Handled() // the prompt is hidden behind the modal panel
+	}
 	app.insertText(strings.ReplaceAll(p.Text, "\r\n", "\n"))
 	return loom.Handled()
 }

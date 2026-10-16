@@ -253,3 +253,33 @@ func TestJobUpdatesArePostOnly(t *testing.T) {
 		t.Fatalf("final log:\n%s", s)
 	}
 }
+
+func TestJobPanelBlocksPasteAndFlattensCommand(t *testing.T) {
+	app, l := newJobsApp(t)
+	app.Prompt.SetText("!echo a\n\techo   b")
+	app.ConsumeKey(loom.KeyEvent{Key: "enter"})
+	l.until(t, func() bool { return app.runningJobs() == 0 })
+	press(app, "ctrl-b")
+	app.ConsumePaste(loom.PasteEvent{Text: "pasted"})
+	if app.Prompt.Text() != "" {
+		t.Fatalf("paste reached the hidden prompt: %q", app.Prompt.Text())
+	}
+	if !strings.Contains(screen(app), "echo a echo b") {
+		t.Fatalf("command not flattened:\n%s", screen(app))
+	}
+	if got := lastTurn(app).Content; strings.ContainsAny(got, "\n\t") {
+		t.Fatalf("done note %q", got)
+	}
+}
+
+func TestJobsUnavailableUsesSpecLabel(t *testing.T) {
+	spec, err := LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := NewAppWidget(spec, "m", "s", nil)
+	typeLine(app, "!true")
+	if got := lastTurn(app); got.Role != RoleError || got.Content != spec.Jobs.Labels.Unavailable {
+		t.Fatalf("got %#v", got)
+	}
+}

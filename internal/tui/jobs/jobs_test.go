@@ -51,7 +51,7 @@ func (l *uiLoop) until(t *testing.T, cond func() bool) {
 func newTestManager(t *testing.T) (*Manager, *uiLoop) {
 	t.Helper()
 	l := &uiLoop{}
-	m := NewManager(Options{Shell: "sh", Dir: t.TempDir(), LogBytes: 4096, CancelGrace: 500 * time.Millisecond}, l.post)
+	m := NewManager(Options{Shell: "sh", Dir: t.TempDir(), LogBytes: 4096, CancelGrace: 500 * time.Millisecond, MaxFinished: 50}, l.post)
 	t.Cleanup(m.Shutdown)
 	return m, l
 }
@@ -132,6 +132,11 @@ func TestRingBound(t *testing.T) {
 	_, _ = r.Write(bytes.Repeat([]byte("x"), 25))
 	if string(r.Bytes()) != strings.Repeat("x", 10) {
 		t.Fatalf("big write %q", r.Bytes())
+	}
+	r = NewRing(1 << 20)
+	_, _ = r.Write([]byte("abc"))
+	if r.Cap() >= 1<<20 {
+		t.Fatalf("ring allocated %d bytes up front", r.Cap())
 	}
 	r = NewRing(64)
 	_, _ = r.Write([]byte("a\tb\x1b[31mred\x1b[0m\r\nprog 1\rprog 2\n"))
@@ -220,7 +225,7 @@ func TestLeaderExitReapsBackgroundChildren(t *testing.T) {
 
 func TestShutdownLeavesNoProcesses(t *testing.T) {
 	l := &uiLoop{}
-	m := NewManager(Options{Shell: "sh", Dir: t.TempDir(), LogBytes: 1024, CancelGrace: 300 * time.Millisecond}, l.post)
+	m := NewManager(Options{Shell: "sh", Dir: t.TempDir(), LogBytes: 1024, CancelGrace: 300 * time.Millisecond, MaxFinished: 50}, l.post)
 	var pids []int
 	for _, c := range []string{"sleep 30 & sleep 30", "trap '' TERM; sleep 30", "echo quick"} {
 		j, err := m.Start(c)
@@ -252,5 +257,69 @@ func TestStartErrorKeepsRegistryEmpty(t *testing.T) {
 	}
 	if len(m.Jobs()) != 0 {
 		t.Fatal("failed start registered a job")
+	}
+}
+
+func (l *uiLoop) queued() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.q)
+}
+
+// While the UI loop is paused (e.g. Pane.Suspend for Ctrl+G), a fast
+// producer must neither grow the Post queue nor buffer unbounded output.
+func TestFastProducerCoalescesPosts(t *testing.T) {
+	m, l := newTestManager(t)
+	j, err := m.Start("yes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(300 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if n := l.queued(); n > 1 {
+			t.Fatalf("%d callbacks queued for one job", n)
+		}
+		j.mu.Lock()
+		held, alloc := j.pending.Len(), j.pending.Cap()
+		j.mu.Unlock()
+		if held > 4096 || alloc > 4096 {
+			t.Fatalf("pending holds %d bytes in %d allocated", held, alloc)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if l.queued() != 1 {
+		t.Fatalf("queued %d, want the one drain callback", l.queued())
+	}
+	m.Cancel(j.ID)
+	<-j.done
+	l.until(t, func() bool { return j.Status != Running })
+	if j.Status != Cancelled || j.out.Len() > 4096 || !j.out.Truncated() {
+		t.Fatalf("status %v ring %d truncated %v", j.Status, j.out.Len(), j.out.Truncated())
+	}
+	if lines := j.Lines(); len(lines) == 0 || lines[0] != "y" {
+		t.Fatalf("lines %q", lines[:min(len(lines), 3)])
+	}
+}
+
+func TestPruneKeepsRunningAndNewestFinished(t *testing.T) {
+	l := &uiLoop{}
+	m := NewManager(Options{Shell: "sh", Dir: t.TempDir(), LogBytes: 64, CancelGrace: 300 * time.Millisecond, MaxFinished: 2}, l.post)
+	t.Cleanup(m.Shutdown)
+	long, err := m.Start("sleep 30")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4; i++ {
+		if _, err := m.Start("true"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	l.until(t, func() bool { return m.Running() == 1 && len(m.Jobs()) == 3 })
+	ids := []int{}
+	for _, j := range m.Jobs() {
+		ids = append(ids, j.ID)
+	}
+	if ids[0] != long.ID || m.Get(2) != nil || m.Get(3) != nil {
+		t.Fatalf("kept %v", ids)
 	}
 }

@@ -69,6 +69,7 @@ type JobLabelsSpec struct {
 	Started       string `yaml:"started"`
 	Done          string `yaml:"done"`
 	Usage         string `yaml:"usage"`
+	Unavailable   string `yaml:"unavailable"`
 	PanelTitle    string `yaml:"panel_title"`
 	LogTitle      string `yaml:"log_title"`
 	PanelEmpty    string `yaml:"panel_empty"`
@@ -83,6 +84,7 @@ type JobsSpec struct {
 	Shell          string        `yaml:"shell"`
 	LogBufferBytes int           `yaml:"log_buffer_bytes"`
 	CancelGraceMS  int           `yaml:"cancel_grace_ms"`
+	MaxFinished    int           `yaml:"max_finished"`
 	Labels         JobLabelsSpec `yaml:"labels"`
 }
 
@@ -131,8 +133,8 @@ func ParseSpec(data []byte) (*Spec, error) {
 	if s.Chat.CancelledLabel == "" {
 		return nil, fmt.Errorf("%s: chat cancelled_label must be set", specPath)
 	}
-	if s.Jobs.Prefix == "" || s.Jobs.Shell == "" || s.Jobs.LogBufferBytes < 1 || s.Jobs.CancelGraceMS < 1 {
-		return nil, fmt.Errorf("%s: jobs prefix, shell, log_buffer_bytes and cancel_grace_ms must be set", specPath)
+	if s.Jobs.Prefix == "" || s.Jobs.Shell == "" || s.Jobs.LogBufferBytes < 1 || s.Jobs.CancelGraceMS < 1 || s.Jobs.MaxFinished < 1 {
+		return nil, fmt.Errorf("%s: jobs prefix, shell, log_buffer_bytes, cancel_grace_ms and max_finished must be set", specPath)
 	}
 	if s.Input.MinLines < 1 || s.Input.MaxLines < s.Input.MinLines {
 		return nil, fmt.Errorf("%s: input min_lines and max_lines invalid", specPath)
