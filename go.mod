@@ -12,7 +12,7 @@ require (
 	golang.org/x/term v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.57.0
-	ubunatic.com/loom v0.3.9
+	ubunatic.com/loom v0.3.10
 	ubunatic.com/voxi v0.1.2
 )
 
