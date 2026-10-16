@@ -1,6 +1,6 @@
 # 774 — Research and Spec Harnez TUI Interactive Harness
 
-**Status**: In Progress — research done, children #775–#779 filed; #775 shell built, #776 next
+**Status**: In Progress — research done, children #775–#779 filed; #775 shell built; #776 router and streaming in
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Agent Harness
@@ -37,8 +37,8 @@ This issue serves as the overarching Epic tracking the implementation of `harnez
   - Real-time command log inspection and multi-job cancellation.
 
 ## 3. Status (2026-10-14) and Loom Gaps
-- #775 shell runs (`cmd/harnez/tui.go`, `internal/tui/`); submit only echoes until #776.
-- harnez pins loom v0.2.18; loom is at 0.3.2 (no breaking rows in loom `docs/Upgrading.md`).
+- #775 shell runs (`cmd/harnez/tui.go`, `internal/tui/`); #776 routes submits to the harness CLIs (2026-10-16).
+- harnez pins loom v0.3.8 (`Pane.Post`, `Pane.Suspend`).
 - Loom gaps, fixed in loom, not worked around here:
 
 | Loom | Gap | Blocks |

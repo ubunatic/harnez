@@ -1,6 +1,6 @@
 # 776 — harnez tui External Harness Forwarding and Subscription-Aware Model Router
 
-**Status**: Draft
+**Status**: In Progress — router, streaming, cancel, `/model` done; picker, claude/agy live streaming, direct API open
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Model Orchestration
@@ -33,3 +33,17 @@ End users subscribe to Pro plans (Claude Pro, Google AI Pro / Gemini Advanced, C
 - Implement model switcher modal overlay in Loom TUI.
 - Add unit tests verifying prompt routing per provider spec.
 - Test subscription quota retention when routing through `claude`, `agy`, and `codex`.
+
+## 4. Progress (2026-10-16)
+- Done: `internal/tui/router` runs turns through `subagent.DriverFor` (shared with `harnez agent`);
+  one backend session per provider model, resumed on the next prompt.
+- Streaming: codex streams messages and activity via `StreamingDriver`; claude, agy and pi are
+  batch drivers, so their messages arrive when the turn ends.
+- TUI: chunks reach the chat via `Pane.Post`; status busy/idle/error; Esc/Ctrl+C cancel a running
+  turn (`keybindings.cancel_turn`); errors render as `Error:` turns; `/model <spec>` validates
+  against `spec/agent.yaml`.
+- Cancel kills the provider process group for claude/pi (`providerOutput`), codex via `startProcess`.
+- Open: live claude stream-json chunks (a `ClaudeDriver.RunStream` would also change
+  `harnez agent start`); agy cancel signals only its leader (agymeter `runChild`); direct API
+  clients (`local`, `ollama`, `openrouter`) return a "not supported yet" error turn; picker overlay
+  and `Ctrl+M`; quota headroom indicators; real-CLI quota check.
