@@ -56,6 +56,34 @@ type KeybindingsSpec struct {
 	ScrollDown []string `yaml:"scroll_down"`
 	OpenEditor []string `yaml:"open_editor"`
 	TogglePTY  []string `yaml:"toggle_pty"`
+	ToggleJobs []string `yaml:"toggle_jobs"`
+	JobOpen    []string `yaml:"job_open"`
+	JobCancel  []string `yaml:"job_cancel"`
+	JobClose   []string `yaml:"job_close"`
+}
+
+// JobLabelsSpec holds the job manager's chat notes and panel texts.
+// Placeholders: {{ .ID }}, {{ .Command }}, {{ .Status }}, {{ .Exit }},
+// {{ .Duration }}, {{ .Running }}.
+type JobLabelsSpec struct {
+	Started       string `yaml:"started"`
+	Done          string `yaml:"done"`
+	Usage         string `yaml:"usage"`
+	PanelTitle    string `yaml:"panel_title"`
+	LogTitle      string `yaml:"log_title"`
+	PanelEmpty    string `yaml:"panel_empty"`
+	PanelHint     string `yaml:"panel_hint"`
+	LogHint       string `yaml:"log_hint"`
+	HeaderRunning string `yaml:"header_running"`
+}
+
+// JobsSpec configures background jobs started with the prompt prefix.
+type JobsSpec struct {
+	Prefix         string        `yaml:"prefix"`
+	Shell          string        `yaml:"shell"`
+	LogBufferBytes int           `yaml:"log_buffer_bytes"`
+	CancelGraceMS  int           `yaml:"cancel_grace_ms"`
+	Labels         JobLabelsSpec `yaml:"labels"`
 }
 
 // ThemeSpec describes styling for harnez tui.
@@ -75,6 +103,7 @@ type Spec struct {
 	Input       InputSpec       `yaml:"input"`
 	Terminal    TerminalSpec    `yaml:"terminal"`
 	Editor      EditorSpec      `yaml:"editor"`
+	Jobs        JobsSpec        `yaml:"jobs"`
 	Keybindings KeybindingsSpec `yaml:"keybindings"`
 	Theme       ThemeSpec       `yaml:"theme"`
 }
@@ -101,6 +130,9 @@ func ParseSpec(data []byte) (*Spec, error) {
 	}
 	if s.Chat.CancelledLabel == "" {
 		return nil, fmt.Errorf("%s: chat cancelled_label must be set", specPath)
+	}
+	if s.Jobs.Prefix == "" || s.Jobs.Shell == "" || s.Jobs.LogBufferBytes < 1 || s.Jobs.CancelGraceMS < 1 {
+		return nil, fmt.Errorf("%s: jobs prefix, shell, log_buffer_bytes and cancel_grace_ms must be set", specPath)
 	}
 	if s.Input.MinLines < 1 || s.Input.MaxLines < s.Input.MinLines {
 		return nil, fmt.Errorf("%s: input min_lines and max_lines invalid", specPath)

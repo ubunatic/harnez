@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/tui.schema.json",
   "title": "harnez tui interactive harness layout and keybindings spec",
   "type": "object",
-  "required": ["header", "chat", "input", "terminal", "editor", "keybindings", "theme"],
+  "required": ["header", "chat", "input", "terminal", "editor", "jobs", "keybindings", "theme"],
   "properties": {
     "header": {
       "type": "object",
@@ -62,6 +62,23 @@
       },
       "additionalProperties": false
     },
+    "jobs": {
+      "type": "object",
+      "required": ["prefix", "shell", "log_buffer_bytes", "cancel_grace_ms", "labels"],
+      "properties": {
+        "prefix": { "type": "string", "minLength": 1, "description": "Prompt prefix that runs the rest as a background shell job." },
+        "shell": { "type": "string", "minLength": 1, "description": "Shell run as <shell> -c <command>." },
+        "log_buffer_bytes": { "type": "integer", "minimum": 1, "description": "Ring buffer size of captured output per job." },
+        "cancel_grace_ms": { "type": "integer", "minimum": 1, "description": "Delay between SIGTERM and SIGKILL to the job's process group." },
+        "labels": {
+          "type": "object",
+          "required": ["started", "done", "usage", "panel_title", "log_title", "panel_empty", "panel_hint", "log_hint", "header_running"],
+          "properties": { "started": { "type": "string", "minLength": 1 }, "done": { "type": "string", "minLength": 1 }, "usage": { "type": "string", "minLength": 1 }, "panel_title": { "type": "string", "minLength": 1 }, "log_title": { "type": "string", "minLength": 1 }, "panel_empty": { "type": "string", "minLength": 1 }, "panel_hint": { "type": "string", "minLength": 1 }, "log_hint": { "type": "string", "minLength": 1 }, "header_running": { "type": "string", "minLength": 1 } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "keybindings": {
       "type": "object",
       "required": ["send_prompt", "newline", "quit", "scroll_up", "scroll_down"],
@@ -73,7 +90,11 @@
         "scroll_up": { "type": "array", "items": { "type": "string" } },
         "scroll_down": { "type": "array", "items": { "type": "string" } },
         "open_editor": { "type": "array", "items": { "type": "string" } },
-        "toggle_pty": { "type": "array", "items": { "type": "string" } }
+        "toggle_pty": { "type": "array", "items": { "type": "string" } },
+        "toggle_jobs": { "type": "array", "items": { "type": "string" } },
+        "job_open": { "type": "array", "items": { "type": "string" } },
+        "job_cancel": { "type": "array", "items": { "type": "string" } },
+        "job_close": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": false
     },

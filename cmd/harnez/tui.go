@@ -40,7 +40,13 @@ entry of spec/tui.yaml found on PATH.
 Prompts run through the active model's harness CLI (claude, codex, agy, pi), so
 turns draw on the matching subscription; the next prompt resumes the same
 backend session. Esc or Ctrl+C cancels a running turn. "/model <spec>" switches
-the active model (see harnez agent models).`,
+the active model (see harnez agent models).
+
+A prompt starting with "!" runs the rest as a background shell command (sh -c,
+in the working directory) instead of sending it to the model. Ctrl+B toggles
+the job panel: up/down select, Enter shows the live log, x cancels the job
+(SIGTERM to its process group, SIGKILL after jobs.cancel_grace_ms), Esc closes.
+Quitting cancels all running jobs.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if o.model == "" {
@@ -107,6 +113,7 @@ func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error 
 	rt := router.New(dir)
 	app.AttachRunner(rt.Turn, pane.Post, router.ResolveSpec)
 	app.AttachEditor(pane.Suspend, tui.NewEditor(spec.Editor))
+	app.AttachJobs(tui.NewJobManager(spec.Jobs, dir, pane.Post))
 	// A running provider turn must not outlive the TUI.
 	defer app.Shutdown()
 	return pane.Run(app)

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode"
 
+	"ubunatic.com/harnez/internal/tui/jobs"
 	"ubunatic.com/loom"
 )
 
@@ -24,6 +25,8 @@ type AppWidget struct {
 	turn    *turnState
 	suspend func(func() error) error
 	editor  *Editor
+	jobs    *jobs.Manager
+	panel   jobPanel
 }
 
 // AttachEditor enables the open_editor key: suspend hands the terminal to a
@@ -78,6 +81,7 @@ func (app *AppWidget) Draw(c *loom.Canvas, r loom.Rect) {
 		headerHeight = 1
 		headerText := app.formatHeader()
 		c.WriteANSI(r.X, r.Y, headerText)
+		app.drawJobCount(c, r)
 	}
 
 	promptLines := app.Prompt.Lines(r.W)
@@ -96,6 +100,9 @@ func (app *AppWidget) Draw(c *loom.Canvas, r loom.Rect) {
 			break
 		}
 		c.WriteANSI(r.X, chatY+i, line)
+	}
+	if app.panel.open {
+		app.drawJobPanel(c, loom.Rect{X: r.X, Y: chatY, W: r.W, H: chatHeight})
 	}
 
 	// Render Prompt Divider Line
@@ -119,7 +126,15 @@ func (app *AppWidget) Draw(c *loom.Canvas, r loom.Rect) {
 func (app *AppWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
 	kb := app.Spec.Keybindings
 	name := keyName(e)
+	if app.panel.open {
+		// The panel is modal; only quit and cancel-turn keys pass through.
+		if app.panelKey(e) || !bound(name, kb.Quit) && !bound(name, kb.CancelTurn) {
+			return loom.Handled()
+		}
+	}
 	switch {
+	case bound(name, kb.ToggleJobs):
+		app.toggleJobs()
 	case app.Busy() && bound(name, kb.CancelTurn):
 		app.CancelTurn()
 	case bound(name, kb.Quit):
@@ -168,6 +183,13 @@ func (app *AppWidget) ConsumePaste(p loom.PasteEvent) loom.EventResult {
 func (app *AppWidget) submit() {
 	text := strings.TrimSpace(app.Prompt.Text())
 	if text == "" {
+		return
+	}
+	if cmd, ok := parseJobPrompt(text, app.Spec.Jobs.Prefix); ok {
+		// Jobs run beside a busy turn; they never reach the model.
+		app.Prompt.AddHistory(text)
+		app.Prompt.Clear()
+		app.startJob(cmd)
 		return
 	}
 	if app.Busy() && !isCommand(text) {

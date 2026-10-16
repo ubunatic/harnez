@@ -35,12 +35,15 @@ func (app *AppWidget) CancelTurn() {
 	}
 }
 
-// Shutdown cancels a running turn and waits until its provider process and
-// goroutine are gone. Call it after the pane loop has stopped.
+// Shutdown cancels a running turn and all background jobs and waits until
+// their processes and goroutines are gone. Call it after the pane loop has stopped.
 func (app *AppWidget) Shutdown() {
 	if t := app.turn; t != nil {
 		t.cancel()
 		t.wg.Wait()
+	}
+	if app.jobs != nil {
+		app.jobs.Shutdown()
 	}
 }
 
