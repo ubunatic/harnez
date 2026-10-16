@@ -1,6 +1,6 @@
 # 774 — Research and Spec Harnez TUI Interactive Harness
 
-**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 done (Ctrl+G, @/ pickers); #778 job manager v1 in; #779 done (Ctrl+O native resume, ANSI chat); TUI polish: picker ranking, quoted paths, readline keys; model picker (Ctrl+T, bare /model)
+**Status**: Closed — done with follow-ups: agy live streaming (needs a streaming agy CLI mode); real-terminal checks (Shift+Enter in a kitty terminal, Ctrl+G with nvim, Ctrl+O into native codex/claude). Decisions: docs/HarnezTUI.md
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Agent Harness
