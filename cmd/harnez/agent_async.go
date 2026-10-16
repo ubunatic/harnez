@@ -195,6 +195,7 @@ func launchForegroundWorker(cmd *cobra.Command, store *subagent.FileSessionStore
 	sess.Status = "running"
 	sess.ProcessPID = worker.Process.Pid
 	sess.ProcessStarttime = procs.ProcessStarttime(sess.ProcessPID)
+	sess.WorkerPID, sess.WorkerStarttime = sess.ProcessPID, sess.ProcessStarttime
 	if err := store.Save(sess); err != nil {
 		_ = worker.Process.Kill()
 		_ = worker.Wait()
@@ -334,6 +335,7 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	go func() { _ = worker.Wait() }()
 	sess.ProcessPID = worker.Process.Pid
 	sess.ProcessStarttime = procs.ProcessStarttime(sess.ProcessPID)
+	sess.WorkerPID, sess.WorkerStarttime = sess.ProcessPID, sess.ProcessStarttime
 	if err := store.Save(sess); err != nil {
 		_ = worker.Process.Kill()
 		_ = worker.Wait()

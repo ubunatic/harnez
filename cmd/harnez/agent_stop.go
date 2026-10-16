@@ -18,6 +18,12 @@ func sessionRoots(x *subagent.Session) []procs.TreeRoot {
 	if x.ProviderPID > 0 {
 		roots = append(roots, procs.TreeRoot{PID: x.ProviderPID, Starttime: x.ProviderStarttime, Group: true})
 	}
+	// A detached worker stays a writer until it exits, even after it cleared
+	// ProcessPID and recorded its terminal status. Require a starttime so a
+	// recycled PID is never mistaken for it.
+	if x.WorkerPID > 0 && x.WorkerStarttime != 0 && x.WorkerPID != x.ProcessPID {
+		roots = append(roots, procs.TreeRoot{PID: x.WorkerPID, Starttime: x.WorkerStarttime})
+	}
 	// A PTY provider owns a session/group too.
 	if x.HarnessType == "interactive" {
 		roots[0].Group = true

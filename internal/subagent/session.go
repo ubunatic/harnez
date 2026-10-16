@@ -15,23 +15,28 @@ var ErrSessionNameInUse = errors.New("session name or ID is already in use")
 
 // Session represents an active subagent session with metadata and telemetry.
 type Session struct {
-	ID                   string `json:"id"`
-	ProviderSessionID    string `json:"provider_session_id,omitempty"`
-	Name                 string `json:"name"`
-	StartPrompt          string `json:"start_prompt,omitempty"`
-	Provider             string `json:"provider"`
-	ModelProvider        string `json:"model_provider,omitempty"`
-	Source               string `json:"source,omitempty"`
-	Model                string `json:"model"`
-	Tier                 string `json:"tier"`
-	WorkingDir           string `json:"working_dir"`
-	ParentSessionID      string `json:"parent_session_id,omitempty"`
-	LastHostSessionID    string `json:"last_host_session_id,omitempty"`
-	CallerPID            int    `json:"caller_pid"`
-	ProcessPID           int    `json:"process_pid,omitempty"`
-	ProcessStarttime     uint64 `json:"process_starttime,omitempty"`
-	ProviderPID          int    `json:"provider_pid,omitempty"`
-	ProviderStarttime    uint64 `json:"provider_starttime,omitempty"`
+	ID                string `json:"id"`
+	ProviderSessionID string `json:"provider_session_id,omitempty"`
+	Name              string `json:"name"`
+	StartPrompt       string `json:"start_prompt,omitempty"`
+	Provider          string `json:"provider"`
+	ModelProvider     string `json:"model_provider,omitempty"`
+	Source            string `json:"source,omitempty"`
+	Model             string `json:"model"`
+	Tier              string `json:"tier"`
+	WorkingDir        string `json:"working_dir"`
+	ParentSessionID   string `json:"parent_session_id,omitempty"`
+	LastHostSessionID string `json:"last_host_session_id,omitempty"`
+	CallerPID         int    `json:"caller_pid"`
+	ProcessPID        int    `json:"process_pid,omitempty"`
+	ProcessStarttime  uint64 `json:"process_starttime,omitempty"`
+	ProviderPID       int    `json:"provider_pid,omitempty"`
+	ProviderStarttime uint64 `json:"provider_starttime,omitempty"`
+	// WorkerPID/WorkerStarttime identify the last detached worker process.
+	// Unlike ProcessPID, the worker never clears them: it records its terminal
+	// status before it exits, so wait must keep watching this identity.
+	WorkerPID            int    `json:"worker_pid,omitempty"`
+	WorkerStarttime      uint64 `json:"worker_starttime,omitempty"`
 	ControlSocket        string `json:"control_socket,omitempty"`
 	HarnessType          string `json:"harness_type"`
 	Status               string `json:"status"`
