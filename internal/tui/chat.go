@@ -15,6 +15,7 @@ const (
 	RoleUser      TurnRole = "user"
 	RoleAssistant TurnRole = "assistant"
 	RoleTool      TurnRole = "tool"
+	RoleError     TurnRole = "error"
 )
 
 // Turn represents a single chat turn in the conversation history.
@@ -58,6 +59,21 @@ func AddTurn(ct *ChatThread, role TurnRole, name, content string) {
 		ct.turns = ct.turns[len(ct.turns)-ct.maxScrollBack:]
 	}
 	ct.scrollOffset = 0 // jump to bottom
+}
+
+// AppendLast appends text to the last turn when it has role and name, else
+// adds a new turn. Consecutive messages of one reply join with a blank line.
+func AppendLast(ct *ChatThread, role TurnRole, name, text string) {
+	if n := len(ct.turns); n > 0 && ct.turns[n-1].Role == role && ct.turns[n-1].Name == name {
+		t := &ct.turns[n-1]
+		if t.Content != "" {
+			t.Content += "\n\n"
+		}
+		t.Content += text
+		ct.scrollOffset = 0
+		return
+	}
+	AddTurn(ct, role, name, text)
 }
 
 // ScrollUp decreases scroll offset (moves view upwards into history).
@@ -156,6 +172,11 @@ func (ct *ChatThread) formatHeader(t Turn) string {
 			toolName = "exec"
 		}
 		prefix = strings.ReplaceAll(prefix, "{{ .Name }}", toolName)
+	case RoleError:
+		prefix = ct.spec.ErrorPrefix
+		if prefix == "" {
+			prefix = "Error:"
+		}
 	default:
 		prefix = string(t.Role) + ":"
 	}

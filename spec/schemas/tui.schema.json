@@ -28,7 +28,8 @@
         "show_timestamps": { "type": "boolean" },
         "user_prefix": { "type": "string" },
         "assistant_prefix": { "type": "string" },
-        "tool_prefix": { "type": "string" }
+        "tool_prefix": { "type": "string" },
+        "error_prefix": { "type": "string" }
       },
       "additionalProperties": false
     },
@@ -50,6 +51,7 @@
         "send_prompt": { "type": "array", "items": { "type": "string" } },
         "newline": { "type": "array", "items": { "type": "string" } },
         "quit": { "type": "array", "items": { "type": "string" } },
+        "cancel_turn": { "type": "array", "items": { "type": "string" } },
         "scroll_up": { "type": "array", "items": { "type": "string" } },
         "scroll_down": { "type": "array", "items": { "type": "string" } },
         "open_editor": { "type": "array", "items": { "type": "string" } },

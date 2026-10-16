@@ -17,6 +17,11 @@ type AppWidget struct {
 	Prompt        *PromptBuffer
 	OnSubmit      func(prompt string)
 	QuitRequested bool
+
+	run     TurnFunc
+	post    func(func())
+	resolve func(string) (string, error)
+	turn    *turnState
 }
 
 // NewAppWidget instantiates a new Loom AppWidget for harnez tui.
@@ -86,6 +91,8 @@ func (app *AppWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
 	kb := app.Spec.Keybindings
 	name := keyName(e)
 	switch {
+	case app.Busy() && bound(name, kb.CancelTurn):
+		app.CancelTurn()
 	case bound(name, kb.Quit):
 		app.QuitRequested = true
 		return loom.Quit()
@@ -133,10 +140,16 @@ func (app *AppWidget) submit() {
 		return
 	}
 	app.Prompt.AddHistory(text)
-	AddTurn(app.Chat, RoleUser, "", text)
 	app.Prompt.Clear()
+	if app.handleCommand(text) {
+		return
+	}
+	AddTurn(app.Chat, RoleUser, "", text)
 	if app.OnSubmit != nil {
 		app.OnSubmit(text)
+	}
+	if app.run != nil {
+		app.startTurn(text)
 	}
 }
 

@@ -26,6 +26,7 @@ type ChatSpec struct {
 	UserPrefix      string `yaml:"user_prefix"`
 	AssistantPrefix string `yaml:"assistant_prefix"`
 	ToolPrefix      string `yaml:"tool_prefix"`
+	ErrorPrefix     string `yaml:"error_prefix"`
 }
 
 // InputSpec describes multiline prompt box behavior.
@@ -41,6 +42,7 @@ type KeybindingsSpec struct {
 	SendPrompt []string `yaml:"send_prompt"`
 	Newline    []string `yaml:"newline"`
 	Quit       []string `yaml:"quit"`
+	CancelTurn []string `yaml:"cancel_turn"`
 	ScrollUp   []string `yaml:"scroll_up"`
 	ScrollDown []string `yaml:"scroll_down"`
 	OpenEditor []string `yaml:"open_editor"`

@@ -11,6 +11,7 @@ import (
 	"golang.org/x/term"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/tui"
+	"ubunatic.com/harnez/internal/tui/router"
 	"ubunatic.com/loom"
 )
 
@@ -30,7 +31,12 @@ func newTUICmd() *cobra.Command {
 		Long: `Interactive multi-model terminal chat interface for harnez.
 
 Built on ubunatic.com/loom, providing a header status line, scrollable chat thread,
-and multiline prompt box (Enter to send, Ctrl+J for newline).`,
+and multiline prompt box (Enter to send, Ctrl+J for newline).
+
+Prompts run through the active model's harness CLI (claude, codex, agy, pi), so
+turns draw on the matching subscription; the next prompt resumes the same
+backend session. Esc or Ctrl+C cancels a running turn. "/model <spec>" switches
+the active model (see harnez agent models).`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if o.model == "" {
@@ -40,6 +46,11 @@ and multiline prompt box (Enter to send, Ctrl+J for newline).`,
 				}
 				o.model = m
 			}
+			resolved, err := router.ResolveSpec(o.model)
+			if err != nil {
+				return fmt.Errorf("--model: %w", err)
+			}
+			o.model = resolved
 			if o.sessionID == "" {
 				o.sessionID = fmt.Sprintf("tui-%s", uuid.New().String()[:8])
 			}
@@ -63,11 +74,7 @@ and multiline prompt box (Enter to send, Ctrl+J for newline).`,
 }
 
 func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error {
-	var app *tui.AppWidget
-	app = tui.NewAppWidget(spec, o.model, o.sessionID, func(prompt string) {
-		// Echo until model forwarding lands (#776).
-		tui.AddTurn(app.Chat, tui.RoleAssistant, o.model, fmt.Sprintf("Received prompt: %s", prompt))
-	})
+	app := tui.NewAppWidget(spec, o.model, o.sessionID, nil)
 
 	f, isFile := out.(*os.File)
 	isTTY := isFile && term.IsTerminal(int(f.Fd()))
@@ -88,5 +95,13 @@ func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error 
 	}
 	defer pane.Close()
 	pane.MaxCols = 0 // chat uses the full terminal width, not loom's widget cap
+	dir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("working directory: %w", err)
+	}
+	rt := router.New(dir)
+	app.AttachRunner(rt.Turn, pane.Post, router.ResolveSpec)
+	// A running provider turn must not outlive the TUI.
+	defer app.Shutdown()
 	return pane.Run(app)
 }

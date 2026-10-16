@@ -15,6 +15,7 @@ chat:
   user_prefix: "User:"
   assistant_prefix: "Agent ({{ .Model }}):"
   tool_prefix: "[Tool: {{ .Name }}]"
+  error_prefix: "Error:"
 
 input:
   history_size: 100
@@ -28,6 +29,8 @@ keybindings:
   send_prompt: ["enter"]
   newline: ["ctrl+j", "alt+enter"]
   quit: ["ctrl+c", "esc"]
+  # While a turn runs, these keys cancel it instead of quitting.
+  cancel_turn: ["esc", "ctrl+c"]
   scroll_up: ["pgup"]
   scroll_down: ["pgdn"]
   open_editor: ["ctrl+g"]
