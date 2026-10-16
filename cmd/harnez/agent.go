@@ -53,6 +53,8 @@ type agentOutput struct {
 func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all, detach, allowExhaustedQuota bool
 	var failedOnly, includeDead, includeArchived bool
+	var statusReply, statusAllReplies bool
+	var statusTurn int
 	var listColorMode string
 	var workerID string
 	var storeDir, workDir, name, modelSpec, streamMode, roleSpec string
@@ -202,7 +204,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			case "/stop":
 				return stopSession(cmd, s, x)
 			default: // "/status"
-				return statusSession(cmd, x, jsonOut)
+				return statusSession(cmd, x, jsonOut, false, 0, false)
 			}
 		}
 		if name != "" {
@@ -555,6 +557,18 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	list.Flags().StringVar(&listColorMode, "color", "auto", "color output: auto, always, or never")
 
 	status := &cobra.Command{Use: "status", Short: "Show agent session status", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
+		if cmd.Flags().Changed("turn") && statusTurn <= 0 {
+			return fmt.Errorf("--turn must be a positive turn number")
+		}
+		if statusAllReplies && statusTurn != 0 {
+			return fmt.Errorf("--all and --turn cannot be used together")
+		}
+		if statusTurn > 0 || statusAllReplies {
+			statusReply = true
+		}
+		if name == "" && statusReply {
+			return fmt.Errorf("--reply, --turn, and --all require --name <session>")
+		}
 		s, e := store()
 		if e != nil {
 			return e
@@ -566,10 +580,13 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if e != nil {
 			return e
 		}
-		return statusSession(cmd, x, jsonOut)
+		return statusSession(cmd, x, jsonOut, statusReply, statusTurn, statusAllReplies)
 	}}
 	status.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	status.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	status.Flags().BoolVar(&statusReply, "reply", false, "show the latest saved reply")
+	status.Flags().IntVar(&statusTurn, "turn", 0, "show the saved reply for turn N")
+	status.Flags().BoolVar(&statusAllReplies, "all", false, "show all saved turn replies")
 	var waitTimeout time.Duration
 	wait := &cobra.Command{Use: "wait <session>", Short: "Wait for an agent session to finish", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := store()
@@ -903,7 +920,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	rate.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	withHostTrackingLine(start, store, parent, func() bool { return workerID != "" })
 	withHostTrackingLine(resume, store, parent, func() bool { return resumeWorkerID != "" })
-	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, newAgentSelftestCmd())
+	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, newAgentSelftestCmd(), newAgentSendCmd(&storeDir, &name, &workDir))
 	silenceUsage(root)
 	return root
 }

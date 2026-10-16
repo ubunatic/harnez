@@ -25,6 +25,7 @@ import (
 	"ubunatic.com/harnez/internal/guard"
 	"ubunatic.com/harnez/internal/readcard"
 	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -101,6 +102,7 @@ func newHookCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(newHookSoundCmd())
+	cmd.AddCommand(newSkillHookCmd())
 
 	return cmd
 }
@@ -123,6 +125,7 @@ func runAgyPostToolHook(in io.Reader, out io.Writer, opts agyPostHookOptions) er
 		fmt.Fprintf(os.Stderr, "harnez post-tool hook: decode payload: %v\n", err)
 		return nil
 	}
+	sendAgyTurnEvent("tool-end")
 
 	outputStr := payload.Output
 	if outputStr == "" && payload.TranscriptPath != "" {
@@ -248,6 +251,7 @@ func readEnforcementEnabledFor(explicit *bool) bool {
 }
 
 func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
+	sendAgyTurnEvent("tool-start")
 	raw, err := io.ReadAll(in)
 	if err != nil {
 		fmt.Fprintln(out, `{"decision":"allow"}`)
@@ -362,6 +366,32 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 			insertFn = defaultInsertExecRow
 		}
 		_ = insertFn(dbPath, tc) // best-effort insert
+
+		var refText string
+		if toolName == "run_command" {
+			refText = command
+		} else {
+			for _, p := range extractFilePaths(payload.ToolCall.Args) {
+				if s := telemetry.SkillFromFileRef(p); s != "" {
+					refText = p
+					break
+				}
+			}
+		}
+		if skill := telemetry.SkillFromFileRef(refText); skill != "" {
+			skillCall := telemetry.ToolCall{
+				CreatedAt:   time.Now().UTC(),
+				SessionID:   sessionID,
+				TicketID:    ticketID,
+				ProjectName: filepath.Base(wd),
+				WorkingDir:  wd,
+				AgentID:     "agy",
+				ToolName:    telemetry.SkillToolName,
+				CallType:    telemetry.CallTypeSkillInferred,
+				SkillName:   skill,
+			}
+			_ = insertFn(dbPath, skillCall)
+		}
 	}
 
 	if deny {
@@ -378,6 +408,30 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		}
 	}
 	return json.NewEncoder(out).Encode(response)
+}
+
+func sendAgyTurnEvent(event string) {
+	sendAgyTurnEventFromStore(event, agyControlStoreDir())
+}
+
+var agyControlStoreDir = subagent.DefaultStoreDir
+
+func sendAgyTurnEventFromStore(event, storeDir string) {
+	sessionID := strings.TrimSpace(os.Getenv("HARNEZ_SESSION_ID"))
+	if sessionID == "" {
+		return
+	}
+	store, err := subagent.OpenSessionStore(storeDir)
+	if err != nil {
+		return
+	}
+	session, err := store.Get(sessionID)
+	if err != nil || session.ControlSocket == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, _ = subagent.SendControlRequest(ctx, session.ControlSocket, subagent.ControlRequest{Action: "turn", Event: event})
 }
 
 // formatAgyExecRewrite routes one shell command through harnez exec while

@@ -31,6 +31,10 @@ type InteractiveOptions struct {
 	Stdout          io.Writer
 	Stderr          io.Writer
 	ControlSocket   string
+	Inbox           *Inbox
+	TurnState       *TurnState
+	QuietWindow     time.Duration
+	TypingGuard     time.Duration
 	Started         func(int) error
 	ProviderIDFound func(string) error
 }
@@ -135,9 +139,24 @@ func runInteractiveCommand(ctx context.Context, command string, args []string, o
 		return runInteractivePTY(ctx, command, args, opts, env, home)
 	}
 	if command == "agy" {
-		return agymeter.RunWithEnvDirRunner(ctx, home, command, args, environ, opts.Dir, opts.Stderr, runPTY)
+		return runSupervisedAgy(ctx, command, args, opts, environ, home, nil)
 	}
 	return runPTY(nil)
+}
+
+// RunSupervisedAgy runs an AGY process in the interactive PTY supervisor while
+// retaining the metering proxy and notifying observer about model boundaries.
+func RunSupervisedAgy(ctx context.Context, command string, args []string, opts InteractiveOptions, environ []string, home string, meterObserver agymeter.Observer) error {
+	if command == "" {
+		command = "agy"
+	}
+	return runSupervisedAgy(ctx, command, args, opts, environ, home, meterObserver)
+}
+
+func runSupervisedAgy(ctx context.Context, command string, args []string, opts InteractiveOptions, environ []string, home string, meterObserver agymeter.Observer) error {
+	return agymeter.RunWithEnvDirRunnerObserved(ctx, home, command, args, environ, opts.Dir, opts.Stderr, meterObserver, func(env []string) error {
+		return runInteractivePTY(ctx, command, args, opts, env, home)
+	})
 }
 
 func runInteractivePTY(ctx context.Context, command string, args []string, opts InteractiveOptions, environ []string, home string) error {
@@ -181,6 +200,11 @@ func runInteractivePTY(ctx context.Context, command string, args []string, opts 
 		stopWatch()
 		<-watchDone
 	}()
+	turnState := opts.TurnState
+	if turnState == nil && opts.Inbox != nil {
+		turnState = NewTurnState(nil)
+	}
+	terminalMu := &sync.Mutex{}
 	var restore func()
 	if input, ok := opts.Stdin.(*os.File); ok && term.IsTerminal(int(input.Fd())) {
 		if state, rawErr := term.MakeRaw(int(input.Fd())); rawErr == nil {
@@ -189,14 +213,33 @@ func runInteractivePTY(ctx context.Context, command string, args []string, opts 
 			_ = pty.InheritSize(input, ptmx)
 		}
 	}
-	go func() { _, _ = io.Copy(ptmx, opts.Stdin) }()
+	go func() {
+		reader := opts.Stdin
+		if turnState != nil {
+			reader = keystrokeReader{reader: opts.Stdin, state: turnState}
+		}
+		_, _ = io.Copy(ptmx, reader)
+	}()
 	var controls sync.WaitGroup
 	controls.Add(1)
 	go func() {
 		defer controls.Done()
-		serveControls(listener, ptmx, cmd.Process)
+		serveControls(listener, ptmx, cmd.Process, opts.Inbox, turnState, terminalMu)
 	}()
+	deliveryCtx, stopDelivery := context.WithCancel(ctx)
+	var deliveryDone chan struct{}
+	if opts.Inbox != nil && turnState != nil {
+		deliveryDone = make(chan struct{})
+		go func() {
+			defer close(deliveryDone)
+			deliverInbox(deliveryCtx, opts.Inbox, turnState, ptmx, terminalMu, opts.QuietWindow, opts.TypingGuard)
+		}()
+	}
 	_, _ = io.Copy(opts.Stdout, ptmx)
+	stopDelivery()
+	if deliveryDone != nil {
+		<-deliveryDone
+	}
 	_ = listener.Close()
 	controls.Wait()
 	if err := cmd.Wait(); err != nil {
@@ -236,13 +279,20 @@ func agyInteractiveLaunchEnv(environ []string, home string) ([]string, error) {
 	return AgyLaunchEnv(environ, home), nil
 }
 
-type controlRequest struct {
+// ControlRequest is one request sent over an interactive session control socket.
+type ControlRequest struct {
 	Action string `json:"action"`
 	Prompt string `json:"prompt,omitempty"`
+	Sender string `json:"sender,omitempty"`
+	Event  string `json:"event,omitempty"`
 }
 
-type controlResponse struct {
-	Error string `json:"error,omitempty"`
+// ControlResponse is the result returned by an interactive session broker.
+type ControlResponse struct {
+	Error     string         `json:"error,omitempty"`
+	MessageID string         `json:"message_id,omitempty"`
+	Queued    int            `json:"queued,omitempty"`
+	Messages  []InboxMessage `json:"messages,omitempty"`
 }
 
 func listenControl(path string) (net.Listener, error) {
@@ -264,23 +314,54 @@ func listenControl(path string) (net.Listener, error) {
 	return listener, nil
 }
 
-func serveControls(listener net.Listener, terminal io.Writer, process *os.Process) {
+func serveControls(listener net.Listener, terminal io.Writer, process *os.Process, inbox *Inbox, turnState *TurnState, terminalMu *sync.Mutex) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			return
 		}
-		var request controlRequest
+		var request ControlRequest
 		err = json.NewDecoder(bufio.NewReader(conn)).Decode(&request)
+		response := ControlResponse{}
 		if err == nil {
 			switch request.Action {
 			case "prompt":
 				if terminal != nil {
-					_, err = io.WriteString(terminal, request.Prompt+"\n")
+					err = writeTerminal(terminal, terminalMu, request.Prompt+"\n")
 				}
 			case "compact":
 				if terminal != nil {
-					_, err = io.WriteString(terminal, "/compact\n")
+					err = writeTerminal(terminal, terminalMu, "/compact\n")
+				}
+			case "enqueue":
+				if inbox == nil {
+					err = fmt.Errorf("interactive inbox is unavailable")
+					break
+				}
+				var msg *InboxMessage
+				msg, err = inbox.Enqueue(request.Sender, request.Prompt)
+				if err == nil {
+					response.MessageID = msg.ID
+					response.Queued = inbox.Depth()
+				}
+			case "inbox":
+				if inbox == nil {
+					err = fmt.Errorf("interactive inbox is unavailable")
+					break
+				}
+				response.Messages = inbox.Messages()
+			case "turn":
+				if turnState == nil {
+					err = fmt.Errorf("interactive turn state is unavailable")
+					break
+				}
+				switch request.Event {
+				case "tool-start":
+					turnState.ToolStarted()
+				case "tool-end":
+					turnState.ToolFinished()
+				default:
+					err = fmt.Errorf("unknown turn event %q", request.Event)
 				}
 			case "stop":
 				if process != nil {
@@ -290,7 +371,6 @@ func serveControls(listener net.Listener, terminal io.Writer, process *os.Proces
 				err = fmt.Errorf("unknown control action %q", request.Action)
 			}
 		}
-		response := controlResponse{}
 		if err != nil {
 			response.Error = err.Error()
 		}
@@ -301,6 +381,12 @@ func serveControls(listener net.Listener, terminal io.Writer, process *os.Proces
 
 // SendControl delivers an action to a live Harnez-owned interactive terminal.
 func SendControl(ctx context.Context, socket, action, prompt string) error {
+	_, err := SendControlRequest(ctx, socket, ControlRequest{Action: action, Prompt: prompt})
+	return err
+}
+
+// SendControlRequest sends a JSON request to a live interactive terminal.
+func SendControlRequest(ctx context.Context, socket string, request ControlRequest) (ControlResponse, error) {
 	var conn net.Conn
 	var err error
 	deadline := time.Now().Add(750 * time.Millisecond)
@@ -313,23 +399,76 @@ func SendControl(ctx context.Context, socket, action, prompt string) error {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return ControlResponse{}, ctx.Err()
 	}
 	if err != nil {
-		return fmt.Errorf("connect to interactive session: %w", err)
+		return ControlResponse{}, fmt.Errorf("connect to interactive session: %w", err)
 	}
 	defer conn.Close()
-	if err := json.NewEncoder(conn).Encode(controlRequest{Action: action, Prompt: prompt}); err != nil {
-		return fmt.Errorf("send interactive control: %w", err)
+	if err := json.NewEncoder(conn).Encode(request); err != nil {
+		return ControlResponse{}, fmt.Errorf("send interactive control: %w", err)
 	}
-	var response controlResponse
+	var response ControlResponse
 	if err := json.NewDecoder(conn).Decode(&response); err != nil {
-		return fmt.Errorf("read interactive control response: %w", err)
+		return ControlResponse{}, fmt.Errorf("read interactive control response: %w", err)
 	}
 	if response.Error != "" {
-		return fmt.Errorf("interactive control: %s", response.Error)
+		return response, fmt.Errorf("interactive control: %s", response.Error)
 	}
-	return nil
+	return response, nil
+}
+
+type keystrokeReader struct {
+	reader io.Reader
+	state  *TurnState
+}
+
+func (reader keystrokeReader) Read(data []byte) (int, error) {
+	n, err := reader.reader.Read(data)
+	if n > 0 {
+		reader.state.Keystroke()
+	}
+	return n, err
+}
+
+func writeTerminal(terminal io.Writer, mu *sync.Mutex, text string) error {
+	if mu != nil {
+		mu.Lock()
+		defer mu.Unlock()
+	}
+	_, err := io.WriteString(terminal, text)
+	return err
+}
+
+func deliverInbox(ctx context.Context, inbox *Inbox, state *TurnState, terminal io.Writer, terminalMu *sync.Mutex, quiet, typingGuard time.Duration) {
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-inbox.wake:
+		case <-ticker.C:
+		}
+		for {
+			if ctx.Err() != nil || !state.Idle(time.Now(), quiet, typingGuard) {
+				break
+			}
+			msg := inbox.Next()
+			if msg == nil {
+				break
+			}
+			if err := writeTerminal(terminal, terminalMu, "\x1b[200~"+msg.Text+"\x1b[201~\r"); err != nil {
+				if markErr := inbox.Mark(msg.ID, "failed", err.Error()); markErr != nil {
+					_ = inbox.Mark(msg.ID, "queued", markErr.Error())
+				}
+				continue
+			}
+			if err := inbox.Mark(msg.ID, "delivered", ""); err != nil {
+				continue
+			}
+		}
+	}
 }
 
 var _ InteractiveRunner = CLIInteractiveRunner{}

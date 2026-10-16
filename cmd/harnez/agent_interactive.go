@@ -108,7 +108,10 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 		taken[sessName] = true
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Interactive: %s (%s)\n", sess.Name, sess.ID)
-	opts := interactiveOptions(cmd, store, sess, d.storeDir, req.Prompt)
+	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, req.Prompt)
+	if err != nil {
+		return err
+	}
 	return launchInteractive(cmd, store, sess, func() error { return agentInteractiveRunner.Chat(cmd.Context(), opts) })
 }
 
@@ -172,12 +175,19 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 		return err
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Resumed Interactively: %s (%s)\n", sess.Name, sess.ID)
-	opts := interactiveOptions(cmd, store, sess, d.storeDir, req.Prompt)
+	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, req.Prompt)
+	if err != nil {
+		return err
+	}
 	return launchInteractive(cmd, store, sess, func() error { return agentInteractiveRunner.Attach(cmd.Context(), opts, sess.ProviderID()) })
 }
 
-func interactiveOptions(cmd *cobra.Command, store *subagent.FileSessionStore, sess *subagent.Session, storeDir, prompt string) subagent.InteractiveOptions {
-	return subagent.InteractiveOptions{Model: subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, Prompt: prompt, SessionID: sess.ID, Name: sess.Name, Dir: sess.WorkingDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: filepath.Join(storeDir, sess.ID+".sock"), Started: func(pid int) error {
+func interactiveOptions(cmd *cobra.Command, store *subagent.FileSessionStore, sess *subagent.Session, storeDir, prompt string) (subagent.InteractiveOptions, error) {
+	inbox, err := subagent.OpenInbox(filepath.Join(storeDir, sess.ID+"-inbox"))
+	if err != nil {
+		return subagent.InteractiveOptions{}, err
+	}
+	return subagent.InteractiveOptions{Model: subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, Prompt: prompt, SessionID: sess.ID, Name: sess.Name, Dir: sess.WorkingDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: filepath.Join(storeDir, sess.ID+".sock"), Inbox: inbox, TurnState: subagent.NewTurnState(nil), Started: func(pid int) error {
 		sess.ProcessPID = pid
 		sess.ProcessStarttime = procs.ProcessStarttime(pid)
 		return store.Save(sess)
@@ -191,7 +201,7 @@ func interactiveOptions(cmd *cobra.Command, store *subagent.FileSessionStore, se
 		}
 		current.ProviderSessionID = providerID
 		return store.Save(current)
-	}}
+	}}, nil
 }
 
 func launchInteractive(cmd *cobra.Command, store *subagent.FileSessionStore, sess *subagent.Session, launch func() error) error {

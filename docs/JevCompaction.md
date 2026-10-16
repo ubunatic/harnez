@@ -22,7 +22,10 @@ the transcript file has no effect on the live session.
 
 ## Claude plugin (issue 646)
 
-- Opt-in: `jev_compaction_enabled: true` in `config.yaml`, then `harnez apply`. Apply writes
+- Opt-in: `jev_compaction_enabled: true` in `config.yaml`, then `harnez apply`. Pitfall: apply
+  reads the `config.yaml` embedded in the binary, so a repo edit needs `make install` before
+  apply (developers only); release users must pass a full config copy with `-c` until issue 764
+  adds a user-level setting. Apply writes
   the embedded plugin (marketplace + cache under `~/.claude`), enables it and sets
   `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. Setting it back to `false` removes all of it; the
   `harnez-local` marketplace entry is removed only if it points at harnez's own directory.

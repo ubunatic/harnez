@@ -34,13 +34,7 @@ import (
 // permission_mode, model. Only the fields this handshake needs are
 // decoded; the rest pass through unread.
 //
-// tool_input.command is an assumption, not a confirmed field name: 199's
-// Q2 found Codex's PreToolUse schema is a near-exact mirror of Claude
-// Code's own (down to shared struct/field naming patterns in the
-// binary's strings), and Claude Code's own Bash tool_input carries the
-// command string under "command" — so this follows that naming rather
-// than agy's "args.CommandLine" shape. If a real Codex Bash tool_input
-// turns out to use a different field name, this is the one place to fix.
+// Codex's documented Bash hook input uses tool_input.command.
 type codexPreToolUseInput struct {
 	SessionID      string `json:"session_id"`
 	TranscriptPath string `json:"transcript_path"`
@@ -55,7 +49,8 @@ type codexPreToolUseInput struct {
 // ("allow"/"deny", "ask" unsupported per binary error strings) plus an
 // "updatedInput" field, valid only alongside permissionDecision:"allow".
 // Only the allow+rewrite shape is ever emitted here — this hook never
-// denies or asks, it only routes.
+// denies or asks, it only routes. No-op calls exit successfully without
+// output; a bare allow without updatedInput is not a supported rewrite.
 type codexPreToolUseOutput struct {
 	HookSpecificOutput codexHookSpecificOutput `json:"hookSpecificOutput"`
 }
@@ -212,7 +207,24 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 		callType = "hook:failure"
 	}
 	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode, OutputBytes: e.OutputBytes, ActualTokens: e.LastTotalTokens, InputTokens: e.LastInputTokens, CachedInputTokens: e.LastCachedInputTokens, OutputTokens: e.LastOutputTokens, ReasoningTokens: e.LastReasoningTokens, TotalTokens: e.TotalTokens}
-	return db.Insert(call)
+	if err := db.Insert(call); err != nil {
+		return err
+	}
+	if skill := telemetry.SkillFromFileRef(e.Command); skill != "" {
+		skillCall := telemetry.ToolCall{
+			CreatedAt:   time.Now().UTC(),
+			SessionID:   e.SessionID,
+			TicketID:    ticket,
+			ProjectName: filepath.Base(wd),
+			WorkingDir:  wd,
+			AgentID:     "codex",
+			ToolName:    telemetry.SkillToolName,
+			CallType:    telemetry.CallTypeSkillInferred,
+			SkillName:   skill,
+		}
+		_ = db.Insert(skillCall)
+	}
+	return nil
 }
 
 func insertTokenSnapshot(db *telemetry.DB, sessionID, source string, boundaryID *int64, event, transcript codex.Event) error {
@@ -265,8 +277,7 @@ func runCodexHooksHook(in io.Reader, out io.Writer) error {
 
 	command := payload.ToolInput.Command
 	if command == "" || alreadyRoutedThroughExec(command) {
-		_, err := fmt.Fprintln(out, `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`)
-		return err
+		return nil
 	}
 
 	resp := codexPreToolUseOutput{

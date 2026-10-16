@@ -21,3 +21,11 @@ The duplicate appeared in one init run on 2026-10-04. Each section begins with t
 ## 3. Implementation & Verification Plan
 
 Trace the generated rule to its source and remove the duplicate contribution. Add or update an init regression test that checks the generated Quota-1 section, then verify with the focused test and a fresh init output.
+
+## 4. Second reproduction (cati, 2026-10-07)
+`harnez init --quota-1 --variant lite` with harnez 0.1.24 in `~/projects/cati` produced
+`.harnez/rules/Quota.md` with an untitled-section copy first (`# Quota-1 Guardrails`, six
+rules incl. **Media & Demo Verification Gate**) and then `## Quota-1 Guardrails` with five
+rules (no media gate, no `Report Untested Edits`). So the two copies differ in a different
+way than in the Tilix run: the generator seems to merge a file-level template and an
+AGENTS.md-style section rather than duplicating one block.

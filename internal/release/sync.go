@@ -2,6 +2,7 @@ package release
 
 import (
 	"fmt"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -232,7 +233,7 @@ func detectGoPackage(dir string) string {
 	}
 	// Fallback to directory name or main
 	base := filepath.Base(dir)
-	if base == "." || base == "/" || base == "" {
+	if base == "." || base == "/" || base == "" || token.IsKeyword(base) || !token.IsIdentifier(base) {
 		return "main"
 	}
 	return base

@@ -5,6 +5,7 @@ package claude
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -94,5 +95,41 @@ func TestLiteDocStructuralGate(t *testing.T) {
 					c.name, len(missing), joinLines(missing))
 			}
 		})
+	}
+}
+
+func TestLiteDocPointersAndHeadingMarkers(t *testing.T) {
+	root := filepath.Join("..", "..", "docs")
+	fullDocMentionRE := regexp.MustCompile(`(?i)full doc`)
+	variantCommandRE := regexp.MustCompile(`harnez docs variant [a-z0-9-]+ full`)
+
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".lite.md") {
+			return nil
+		}
+
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		text := string(contents)
+		for lineNumber, line := range strings.Split(text, "\n") {
+			if strings.Contains(line, "**###") || strings.Contains(line, " ### ") {
+				t.Errorf("%s:%d: lite doc contains an inline heading marker: %s", path, lineNumber+1, strings.TrimSpace(line))
+			}
+		}
+
+		for _, paragraph := range strings.Split(text, "\n\n") {
+			if fullDocMentionRE.MatchString(paragraph) && !variantCommandRE.MatchString(paragraph) {
+				t.Errorf("%s: full doc mention lacks a `harnez docs variant <doc-id> full` command: %s", path, strings.TrimSpace(paragraph))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan lite docs: %v", err)
 	}
 }

@@ -170,7 +170,8 @@ func TestApply_FullMatchesPlainApply(t *testing.T) {
 	target2, cfg2 := setupComponentsHome(t)
 	mustApplyComponents(t, target2, cfg2, nil) // no selection = full
 	got, _ := os.ReadFile(filepath.Join(target2, "settings.json"))
-	if string(got) != string(want) {
+	// Marketplace paths depend on the target; compare after normalizing that root.
+	if strings.ReplaceAll(string(got), target2, target) != string(want) {
 		t.Errorf("unfiltered selected apply settings differ from plain apply:\n%s\nvs\n%s", got, want)
 	}
 }

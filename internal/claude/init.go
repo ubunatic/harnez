@@ -14,6 +14,7 @@ import (
 
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/fsutil"
+	"ubunatic.com/harnez/internal/gitstatus"
 	"ubunatic.com/harnez/internal/jsonc"
 	"ubunatic.com/harnez/internal/markdown"
 )
@@ -917,6 +918,103 @@ func ProjectedInitFiles(dir string, cfg *Config, docs []string) []string {
 	return files
 }
 
+func initWriteCandidates(dir string, cfg *Config, docs []string, quota1 bool) []string {
+	files := ProjectedInitFiles(dir, cfg, docs)
+	if cfg == nil {
+		if quota1 {
+			files = append(files, "Makefile")
+		}
+		return files
+	}
+	for _, name := range docs {
+		lang, ok := cfg.AgentsMD.Languages[name]
+		if !ok {
+			continue
+		}
+		makePath := "Makefile"
+		if lang.Template != "" {
+			makePath = filepath.Base(lang.Template)
+			files = append(files, makePath)
+		}
+		if lang.Targets != "" {
+			files = append(files, makePath)
+		}
+	}
+	if cfg.AgentsMD.Rules.Index != "" {
+		files = append(files, filepath.Join(".harnez", "rules", "Index.md"))
+		for _, rule := range cfg.AgentsMD.Rules.Files {
+			if rule.Quota && !quota1 {
+				continue
+			}
+			files = append(files, filepath.Join(".harnez", "rules", rule.Name))
+		}
+	}
+	if quota1 {
+		files = append(files, "AGENTS.md", "Makefile")
+	}
+	return files
+}
+
+func warnDirtyInitFiles(dir string, cfg *Config, docs []string, quota1 bool) {
+	rootOutput, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return
+	}
+	root, err := filepath.Abs(strings.TrimSpace(string(rootOutput)))
+	if err != nil {
+		return
+	}
+	status, err := gitstatus.Collect(root)
+	if err != nil {
+		return
+	}
+	dirty := append(status.StagedFiles, status.UnstagedFiles...)
+	dirty = append(dirty, status.UntrackedFiles...)
+	dirty = append(dirty, status.ConflictFiles...)
+	dirtyPaths := make(map[string]struct{}, len(dirty))
+	for _, path := range dirty {
+		absolute := filepath.Clean(filepath.Join(root, filepath.FromSlash(path)))
+		dirtyPaths[canonicalPath(absolute)] = struct{}{}
+	}
+
+	warnings := make(map[string]string)
+	for _, path := range initWriteCandidates(dir, cfg, docs, quota1) {
+		absolute := path
+		if !filepath.IsAbs(absolute) {
+			absolute = filepath.Join(dir, absolute)
+		}
+		absolute, err = filepath.Abs(absolute)
+		if err != nil {
+			continue
+		}
+		absolute = canonicalPath(absolute)
+		if _, ok := dirtyPaths[absolute]; !ok {
+			continue
+		}
+		relative, err := filepath.Rel(root, absolute)
+		if err != nil {
+			continue
+		}
+		relative = filepath.ToSlash(relative)
+		warnings[absolute] = relative
+	}
+	paths := make([]string, 0, len(warnings))
+	for _, path := range warnings {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		fmt.Fprintf(os.Stderr, "warning: %s has uncommitted changes; init will modify it (commit first to keep changes separate)\n", path)
+	}
+}
+
+func canonicalPath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return filepath.Clean(resolved)
+	}
+	return filepath.Clean(path)
+}
+
 // RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,
 // applies config-defined local sections, and sets up language docs and Makefile targets.
 func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
@@ -956,11 +1054,20 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			return err
 		}
 	}
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	quota1Active := len(quota1) > 0 && quota1[0]
+	if !quota1Active {
+		quota1Active = markdown.ContainsSection(agentsPath, quota1SectionName)
+	}
+	if !quota1Active {
+		_, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md"))
+		quota1Active = err == nil
+	}
+	warnDirtyInitFiles(dir, cfg, docs, quota1Active)
 	for _, w := range CheckProjectDrift(dir) {
 		fmt.Printf("  ⚠️  drift: %s\n", w)
 	}
 
-	agentsPath := filepath.Join(dir, "AGENTS.md")
 	claudePath := filepath.Join(dir, "CLAUDE.md")
 
 	if update {
@@ -1235,14 +1342,6 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		}
 	}
 
-	quota1Active := len(quota1) > 0 && quota1[0]
-	if !quota1Active {
-		quota1Active = markdown.ContainsSection(agentsPath, quota1SectionName)
-	}
-	if !quota1Active {
-		_, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md"))
-		quota1Active = err == nil
-	}
 	if cfg != nil {
 		ruleChanges, err := writeRules(dir, cfg.AgentsMD.Rules, quota1Active)
 		if err != nil {

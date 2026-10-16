@@ -225,6 +225,20 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 	clean := strings.ToLower(original)
 	if strings.Contains(clean, ":") {
 		parts := strings.Split(clean, ":")
+		if len(parts) == 3 {
+			parts[2] = normalizeTier(parts[2])
+		} else if len(parts) == 2 {
+			for _, candidate := range aliases {
+				if modelHasAlias(candidate, parts[0]) {
+					parts[1] = normalizeTier(parts[1])
+					if !isTier(parts[1]) {
+						return Model{}, fmt.Errorf("unknown model tier in requested spec %q; known specs: %s", spec, knownModelSpecs())
+					}
+					break
+				}
+			}
+		}
+		clean = strings.Join(parts, ":")
 		if len(parts) == 3 && isTier(parts[2]) {
 			m, err := resolveModelIn(aliases, parts[0]+":"+parts[1])
 			if err == nil {
@@ -318,6 +332,19 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 		m.Tier = parts[2]
 	}
 	return m, nil
+}
+
+func normalizeTier(tier string) string {
+	switch tier {
+	case "lo", "lower", "l":
+		return "low"
+	case "medium", "m":
+		return "med"
+	case "hi", "higher", "h":
+		return "high"
+	default:
+		return tier
+	}
 }
 
 // resolvePiModel permits Pi model IDs to be selected directly even when they

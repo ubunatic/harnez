@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creack/pty"
 	"ubunatic.com/harnez/internal/claude"
 )
 
@@ -131,7 +132,7 @@ func TestControlBrokerPromptCompactAndStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	var terminal bytes.Buffer
-	go serveControls(listener, &terminal, cmd.Process)
+	go serveControls(listener, &terminal, cmd.Process, nil, nil, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if err := SendControl(ctx, path, "prompt", "review this"); err != nil {
@@ -156,6 +157,66 @@ func TestControlBrokerPromptCompactAndStop(t *testing.T) {
 	}
 }
 
+func TestControlPromptWritesToPTYAndSplitsMultilineInput(t *testing.T) {
+	master, slave, err := pty.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer master.Close()
+	defer slave.Close()
+	path := filepath.Join(t.TempDir(), "control.sock")
+	listener, err := listenControl(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go serveControls(listener, master, nil, nil, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	const prompt = "first line\nsecond line\nthird line"
+	if err := SendControl(ctx, path, "prompt", prompt); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]byte, len(prompt)+1)
+	if _, err := io.ReadFull(slave, got); err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != prompt+"\n" {
+		t.Fatalf("PTY input = %q, want prompt bytes followed by Enter", got)
+	}
+}
+
+func TestControlPromptDoesNotUseBracketedPasteFraming(t *testing.T) {
+	master, slave, err := pty.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer master.Close()
+	defer slave.Close()
+	path := filepath.Join(t.TempDir(), "control.sock")
+	listener, err := listenControl(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go serveControls(listener, master, nil, nil, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	const prompt = "one\ntwo"
+	if err := SendControl(ctx, path, "prompt", prompt); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]byte, len(prompt)+1)
+	if _, err := io.ReadFull(slave, got); err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != prompt+"\n" {
+		t.Fatalf("PTY input = %q, want raw newline-delimited input without bracketed-paste markers", got)
+	}
+}
+
 func TestSendControlRejectsUnknownAction(t *testing.T) {
 	path := t.TempDir() + "/control.sock"
 	listener, err := listenControl(path)
@@ -163,8 +224,84 @@ func TestSendControlRejectsUnknownAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	go serveControls(listener, io.Discard, nil)
+	go serveControls(listener, io.Discard, nil, nil, nil, nil)
 	if err := SendControl(context.Background(), path, "unknown", ""); err == nil {
 		t.Fatal("expected unknown control action error")
+	}
+}
+
+func TestControlBrokerInboxAndTurnActions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "control.sock")
+	listener, err := listenControl(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	inbox, err := OpenInbox(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn := NewTurnState(nil)
+	go serveControls(listener, io.Discard, nil, inbox, turn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	queued, err := SendControlRequest(ctx, path, ControlRequest{Action: "enqueue", Sender: "sender-1", Prompt: "hello"})
+	if err != nil || queued.MessageID == "" || queued.Queued != 1 {
+		t.Fatalf("enqueue response = %#v, err=%v", queued, err)
+	}
+	listed, err := SendControlRequest(ctx, path, ControlRequest{Action: "inbox"})
+	if err != nil || len(listed.Messages) != 1 || listed.Messages[0].ID != queued.MessageID {
+		t.Fatalf("inbox response = %#v, err=%v", listed, err)
+	}
+	if _, err := SendControlRequest(ctx, path, ControlRequest{Action: "turn", Event: "tool-start"}); err != nil {
+		t.Fatal(err)
+	}
+	if turn.Idle(time.Now().Add(time.Hour), 0, 0) {
+		t.Fatal("tool-start did not mark turn busy")
+	}
+	if _, err := SendControlRequest(ctx, path, ControlRequest{Action: "turn", Event: "tool-end"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDeliverInboxWaitsForIdleAndWritesFIFOBracketedPaste(t *testing.T) {
+	inbox, err := OpenInbox(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inbox.Enqueue("sender", "one\ntwo"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inbox.Enqueue("sender", "second"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	turn := NewTurnState(func() time.Time { return now })
+	turn.ToolStarted()
+	var terminal bytes.Buffer
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		deliverInbox(ctx, inbox, turn, &terminal, nil, 0, 0)
+	}()
+	inbox.signal()
+	time.Sleep(30 * time.Millisecond)
+	if terminal.Len() != 0 {
+		t.Fatalf("busy turn wrote %q", terminal.String())
+	}
+	turn.ToolFinished()
+	deadline := time.Now().Add(time.Second)
+	for terminal.Len() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	want := "\x1b[200~one\ntwo\x1b[201~\r\x1b[200~second\x1b[201~\r"
+	if got := terminal.String(); got != want {
+		t.Fatalf("delivery = %q, want %q", got, want)
+	}
+	cancel()
+	<-done
+	if got := inbox.Depth(); got != 0 {
+		t.Fatalf("remaining inbox depth = %d", got)
 	}
 }

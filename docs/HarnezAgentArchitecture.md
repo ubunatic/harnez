@@ -70,7 +70,7 @@ harnez agent resume "continue with M2"         # latest resumable session in thi
 harnez agent start -i --model claude:haiku --name chat
 harnez agent resume -i --name w
 harnez agent list [--children|--all-sessions|--failed]
-harnez agent status --name w
+harnez agent status --name w [--reply|--turn N|--all]
 harnez agent compact --name w
 harnez agent stop --name w
 harnez agent delete --name w
@@ -82,6 +82,9 @@ harnez agent models [--names]
 `--name` selects a session, `--model` selects a provider/model/tier, and `-d`
 selects the working-directory or attribution scope. A missing model uses the
 specification in `spec/agent.yaml`; bare aliases such as `luna` are accepted.
+For a saved turn reply, use `harnez agent status --name w --reply` for the latest,
+`--turn N` for one retained turn, or `--all` for retained reply history. JSON status
+includes the bounded `reply_history` array.
 Root prompt forms also provide `-p/--prompt`, repeatable `-f/--file`, `-c/--continue`,
 `--stream full|stats`, `--plan yes|no`, and `--json`. `--` sends following text
 literally. There are no legacy provider-first or positional-session forms.
@@ -368,6 +371,9 @@ To provide clean lifecycle continuity across all harnesses:
    - Host orchestrators must NOT create timers or cron schedules.
    - Claude and agy hosts launch `harnez agent wait <name>` as a native background job/task and yield; the harness wakes them on completion.
    - Codex is the exception: it has no shell job that notifies on completion, so its wait is a blocking `write_stdin` session (native async exists only for `collaboration.spawn_agent` subagents).
+   - Make background work visible to the user: report the worker name/model and the host execution session ID when launched, explain where it can be inspected, and report completion or failure. A Harnez-managed Codex worker is not a native `collaboration.spawn_agent` child; use `harnez agent list` or `harnez agent status --name <name>` for user inspection, not as a host polling loop.
+   - Keep the host execution session ID distinct from the Harnez/provider session UUID. An early `exec_command` return with a session ID proves the process continues; it does not collect the result or arrange an automatic Codex shell completion notification.
+   - `harnez agent selftest --step hello` supplies the runtime progression instructions. On 2026-10-06, the self-test passed launch, active confirmation, completion collection and final verification using the same runner as the issue 737 researcher. The original research dispatch omitted timely completion collection and user-visible execution identity; launching correctly alone was insufficient.
 4. **Subprocess & Environment Isolation**:
    - Child worker invocations (`--worker-session`) strip `HARNEZ_AGENT_ROLE` from the worker environment to prevent colliding with leaf-role restrictions in `guardLeafRole`.
    - Detachment is automatically disabled in Go unit test environments (`flag.Lookup("test.v") != nil`) unless explicitly requested via `HARNEZ_TEST_FOREGROUND_DETACH=1`, safeguarding in-process mock drivers from unexpected subprocess execution.

@@ -1,24 +1,33 @@
-Use this skill when asked to reuse an advisor session across supported agent tools.
+Use this skill when the user explicitly asks to reuse or resume an earlier advisor session.
+There are no portable skill flags. Interpret reuse requests as prose and use the active tool's
+supported lifecycle commands.
 
-The interface is prose-first: interpret the request and state the plan before acting. Identify, when supplied, the target agent or harness, session ID, project or repository, advisor task, model, and desired effort. Do not invent missing values.
+Ordinary requests such as "ask for help", "get a review", "ask an agent", or "get a quick
+second opinion" use a fresh helper with a short prompt. Dispatch directly through the active
+subagent method; no advisor-session discovery, compaction, or sprint workflow is needed.
+Lean-sprint reviewers and advisors follow that same direct path.
 
-Reuse a session only through that harness's native resume, continue, or fork mechanism, and only when the agent family and version, model and effort where relevant, project identity, instruction and permission context, advisor role, task scope, and session validity all agree. A Harnez telemetry session ID is for correlation; it is not a provider resume ID. Never choose a provider session by recency or by matching a Harnez ID.
+- Use `reviewer` to inspect a diff or proposed change; use `advisor` for a question or read-only investigation.
+- Give the helper the question, relevant files or diff, and desired reply. Keep the prompt scoped;
+  do not load unrelated documents or restate the helper's base instructions.
+- Use native helpers when the active policy permits them. For a user-selected model, use
+  `HTO=0 harnez agent start --role <reviewer-or-advisor> --name <name> --model <requested-model> -p "<short prompt>"`
+  as a tracked session-background job. Honor the requested model exactly.
+- Read the result when the tracked job completes, report the useful answer or findings, and
+  clean up the helper using the active tool's lifecycle controls.
 
-Prefer advisors already working in this session, context, project, or feature. Treat unrelated or random advisor sessions as poor candidates unless the request explicitly identifies them.
+For explicit reuse requests:
 
-Advisor lifecycle is decided by the orchestrator. Track when an advisor was last used and whether its project, feature, role, model, instructions, and permissions still match. Reuse a recent matching advisor directly. If a matching advisor is stale, ask it to compact its context before resuming so later requests can use a smaller summary while retaining relevant memory. Start a fresh advisor when the scope is unrelated or compatibility is uncertain. Staleness is a signal for compaction, not an automatic rejection.
+1. Use the named session or an advisor already assigned to the current task. Do not search
+   transcript archives or select an unrelated session merely because it is recent.
+2. Confirm that project, task scope, role, model, instructions, and permissions still fit.
+   Harnez-managed sessions resume with
+   `HTO=0 harnez agent resume --name <name> "<short prompt>"` as a tracked session-background job;
+   native helpers use their supported continuation mechanism. A Harnez telemetry ID is not
+   a provider resume ID.
+3. If the session is unavailable or incompatible, explain briefly and use a fresh helper
+   when permitted by the request. Ask only when a missing choice matters to that request.
 
-After requesting compaction, confirm that the advisor returned a concise retained-context summary. Where token data is available, compare the next request's input and cached-input counts with the pre-compaction turn; do not claim savings from compaction without that evidence.
-
-If a critical value is missing, mismatched, unsupported, expired, or ambiguous, explain why and use a fresh advisor session when the request permits it. Low reasoning is the default only where the harness supports it; report when it cannot be honored.
-
-Current capability guidance:
-
-- Claude: use the installed CLI's native resume, continue, or fork behavior when exposed.
-- Codex: resume by the native session ID; local rollout metadata may provide input, cached-input, output, reasoning, and total token counts. The installed CLI's `exec`/`resume` subcommands take `-m/--model` but no dedicated effort/reasoning flag; set it via `-c model_reasoning_effort=<level>` instead, and verify the exact key against `codex exec --help` and `~/.codex/config.toml`, since both can change across versions. Resolve a named model alias (e.g. a user's own "fast"/"deep" shorthand) by checking that user's `~/.codex/config.toml` model tables — never assume a name maps to a fixed model ID.
-- AGY and Gemini: use the specific installed harness's continue or resume behavior when available. Do not assume AGY and Gemini have the same session interface.
-- Prime: report unsupported and use a fresh fallback while no Prime executable or session API is available; use native reuse once that capability exists.
-
-Label evidence as `measured`, `reported`, `estimated`, or `unknown`. Cached input is not the same as saved tokens or money: claim savings only when a comparable fresh control exists. Do not persist prompts, transcripts, credentials, session IDs, or arbitrary command output in the repository.
-
-There are no portable skill flags. Treat requests such as `/harnez-advisor reuse <plain request>` as prose and pass the interpreted intent to the native harness. A future `harnez advisor reuse --flags` command may provide a machine-readable interface; do not claim it exists yet.
+Compaction is optional for a long reused conversation when context pressure warrants it;
+it is not a prerequisite for asking a question. Do not claim token or cost savings without
+measurements. Do not store prompts, transcripts, credentials, or session IDs in the repository.

@@ -37,6 +37,31 @@ func TestParseSemverAndBump(t *testing.T) {
 	}
 }
 
+func TestDetectGoPackageFallbackValidatesDirectoryName(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{name: "goto", want: "main"},
+		{name: "my-app", want: "main"},
+		{name: "1tool", want: "main"},
+		{name: "gotool", want: "gotool"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), tc.name)
+			if err := os.Mkdir(dir, 0755); err != nil {
+				t.Fatal(err)
+			}
+
+			if got := detectGoPackage(dir); got != tc.want {
+				t.Errorf("detectGoPackage(%q) = %q, want %q", dir, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestVersionSpecLoadSave(t *testing.T) {
 	tmpDir := t.TempDir()
 	specPath := filepath.Join(tmpDir, "version.yaml")

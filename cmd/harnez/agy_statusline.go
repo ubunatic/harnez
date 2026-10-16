@@ -27,7 +27,7 @@ func newAGYStatuslineCmd() *cobra.Command {
 				return err
 			}
 			if line != "" {
-				fmt.Fprintln(cmd.OutOrStdout(), line)
+				writeStatusline(cmd.OutOrStdout(), line)
 			}
 			usage.ObserveStatusline(cmd.Context(), "agy", data)
 			return nil

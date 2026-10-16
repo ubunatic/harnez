@@ -175,7 +175,7 @@ func (o cliLogOptions) getenv(name string) string {
 // produces a row — is testable without a subprocess. The returned error is
 // root.Execute's, unchanged: recording never alters the command's outcome.
 func executeAndRecord(root *cobra.Command, argv []string, opts cliLogOptions) error {
-	rewritten := rewriteArgsForBareLimit(argv)
+	rewritten := rewriteArgsForBareLimit(rewritePluralCommands(root, argv))
 	root.SetArgs(rewritten)
 
 	start := time.Now()

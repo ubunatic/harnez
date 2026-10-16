@@ -81,6 +81,10 @@ decommissioned:
     - fresh-sprinter
     - harnez-sync
     - discovery
+    - grilling
+    - grill-with-docs
+    - domain-modeling
+    - to-spec
 
 # how `init` reconciles its own Makefile targets (e.g. `help`) into an
 # existing project Makefile — see docs/src/Make.md
@@ -123,6 +127,7 @@ debloat:
     commit: user-invocable-only
     docup: user-invocable-only
     lean-sprint: user-invocable-only
+    lean-sprint-v1: user-invocable-only
     lean-sprinter: user-invocable-only
     mode: user-invocable-only
     pull: user-invocable-only
@@ -267,6 +272,15 @@ hooks:
   - event: PreToolUse
     matcher: Write
     command: "harnez hook pre-edit"
+  # skill telemetry (issue 735)
+  - event: PostToolUse
+    matcher: Skill
+    command: "harnez hook skill"
+  - event: PostToolUseFailure
+    matcher: Skill
+    command: "harnez hook skill"
+  - event: UserPromptSubmit
+    command: "harnez hook skill"
 
 # thinking verbs (get rid of annoying word creations)
 verbs:
@@ -286,7 +300,7 @@ distill_autopipe:
 status_line: true
 
 # Opt in to the embedded Jev session compaction plugin on global `apply`.
-jev_compaction_enabled: true
+jev_compaction_enabled: false
 
 commands:
   - name: standup
@@ -328,11 +342,7 @@ agy_target: ~/.gemini/antigravity-cli
 # installs them explicit-only (Claude: /name only; Codex: implicit off;
 # Gemini/Prime: no copy). Never edit the vendored copies; to update, raise
 # commit and re-run vendor. Names must not clash with `skills:` below.
-bundled_skills:
-  - url: https://github.com/mattpocock/skills
-    commit: c55ee46073ed923f86ce59a5eb3b6d895095d1b7
-    dir: third_party/skills/mattpocock
-    skills: [grilling, grill-with-docs, domain-modeling, to-spec]
+bundled_skills: []
 
 skills:
   - name: docup
@@ -347,7 +357,7 @@ skills:
 
   - name: harnez-advisor
     license: AGPL-3.0-or-later
-    description: "Reuse compatible advisor sessions across supported agent tools using prose requests"
+    description: "Continue a specific earlier advisor session, only when the user explicitly requests session reuse or resumption"
     file: docs/commands/HarnezAdvisor.md
 
   - name: harnez-status
@@ -407,8 +417,13 @@ skills:
 
   - name: lean-sprint
     license: AGPL-3.0-or-later
-    description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
+    description: "Execute a lean sprint with optional architect refinement (Searcher -> Architect -> Developer -> Review -> Study)"
     file: docs/commands/lean-sprint.md
+
+  - name: lean-sprint-v1
+    license: AGPL-3.0-or-later
+    description: "Execute the legacy single-developer lean fresh-handoff sprint"
+    file: docs/commands/lean-sprint-v1.md
 
   - name: next
     license: AGPL-3.0-or-later
@@ -614,9 +629,13 @@ agents_md:
           Applies when this project has an `issues/` tracker. To search existing issues,
           compute the next ticket number, or allocate one, use `harnez find` / `harnez issues`
           instead of `ls issues/`, `find`, or raw grep:
-          - `harnez find -d <repo> issues -a status:open` — list active open issues (use `-I` for visual overview PNG card)
-          - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text (use `-I` for visual overview)
-          - `harnez issues show -d <repo> <n> -I` — render single issue as styled visual PNG card (inspect via `view_file`)
+          - `harnez find -d <repo> issues -a status:open` — list active open issues as text.
+          - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text.
+          - `harnez issues show -d <repo> <n>` — read a single issue as text.
+          - Use text for routine issue discovery and document reads. Render PNG cards with
+            `-I/--image` only when the user explicitly requests image output; do not add it
+            for an assumed token benefit. `harnez read --auto` always returns text.
+            Existing PNG documentation links may still be inspected as documentation.
           - `harnez find -d <repo> issues next` — report the next free ticket number (read-only)
           - `harnez issues new -d <repo> "<title>"` — run this right away; it reserves the number and creates the ticket skeleton.
           - Open the printed file and fill it in, keeping its schema; do not search for a template first.

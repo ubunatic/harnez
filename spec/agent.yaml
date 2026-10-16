@@ -2,6 +2,7 @@
 # Agent model and role defaults are part of the application artifact.
 default_model: codex:luna:high
 role_classify_timeout_ms: 1500
+reply_history_limit: 20
 stop:
   grace_ms: 1000
   kill_wait_ms: 2000
@@ -79,13 +80,14 @@ models:
     aliases: [haiku, haiku:low]
     preferred: true
     provider: claude
-    name: haiku
+    name: claude-haiku-5-5
     tier: low
-    roles: mechanical
-    cost: 12
+    roles: developer, reviewer, mechanical
+    cost: 4
+    cost_by_tier: {med: 4, high: 7}
     eff: "-"
-    skills: Go~ TUI- SQL~
-    use: narrow edits with a machine-checkable test only
+    skills: Go~ TUI~ SQL~
+    use: Claude Haiku 5.5; default go-to for cheap, fast work; strong computer use and agent tasks; weaker than sol on terminal coding
   claude:sonnet:
     aliases: [sonnet, sonnet:low]
     preferred: true

@@ -18,11 +18,14 @@ The selected executor reads the target repository's applicable instructions and
 issue-tracking guidance before acting, then runs the filing workflow end to end:
 
 ```bash
-harnez find -d <repo> issues "<search terms>" -I  # or inspect rendered PNG via view_file
+harnez find -d <repo> issues "<search terms>"
 harnez issues new -d <repo> "<title>"
 # Fill the returned ticket path using the repository's issue conventions.
 harnez issues open -d <repo> <n> --commit "docs(issues): file <n>, <summary>"
 ```
+
+Use text for routine issue discovery. Add `-I/--image` only when the user explicitly
+requests image output; an assumed token benefit is not a reason to render PNG cards.
 
 On the delegated path, keep the host responsive: report that filing was dispatched and don't block the main chat
 on the subagent's result, unless the user explicitly asked to wait or the very next step in
@@ -63,8 +66,9 @@ from severity, and drafting the ticket body:
 
 On the delegated path, use a compatible, healthy named filer if explicitly selected
 or already assigned to this workflow; otherwise create a fresh filer. Freshness is
-not a requirement for every ticket. Follow the available harnez-advisor lifecycle
-guidance for reuse without changing an advisor's role or permissions. Closed/parked
+not a requirement for every ticket. Load harnez-advisor guidance only when the user
+explicitly requests advisor reuse; ordinary delegation needs no advisor skill.
+Reuse must preserve the session's role and permissions. Closed/parked
 sessions remain candidates for supported native reuse; closure alone proves no failure.
 For Codex usage-limit interruptions, suspend productive dispatch and use bounded
 health checks. Quarantine a confirmed dead session, close/retire it using supported

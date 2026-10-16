@@ -1,4 +1,4 @@
-# 656 — harnez agent send: opt-in messaging to detached agents, after host session agent tracking
+# 656 — harnez agent send: opt-in messaging across providers to existing interactive and detached sessions
 
 **Status**: Open
 **Priority**: P2 (Medium) — start only after 630 (start/resume/wait backgrounding guides) is closed
@@ -14,6 +14,11 @@ Hosts can start agents but cannot talk to an agent that runs fully detached, and
 does not reliably know which agents it has started. 630 fixes how hosts run agents in the
 session background. This ticket designs a real eventing layer on top: `harnez agent send`.
 
+The target includes existing interactive sessions across providers, including sessions the
+sending host did not start. A concrete acceptance case is a Claude Code session sending a
+message to an existing Codex interactive session. Detached children are one supported case,
+not the scope boundary.
+
 ## 2. Scope, in order (each milestone gates the next)
 
 - **M1 Host session agent tracking.** Record, per host session, the number and names of all
@@ -23,6 +28,10 @@ session background. This ticket designs a real eventing layer on top: `harnez ag
   statusline (Claude, AGY, Codex where a statusline exists).
 - **M3 Delivery discovery (canary, per agent).** For Claude Code, Codex and AGY, find what
   **actually** works to deliver a message into a running or idle agent, not what docs claim:
+  - cover existing interactive sessions as well as detached workers, across providers and
+    outside the sender's child-agent tree; prove Claude Code → Codex delivery as an acceptance case;
+  - discover and resolve the recipient by stable provider/session ID or an unambiguous name;
+    document access requirements and running versus idle behavior;
   - piggyback on the agent's native messaging (e.g. Claude `SendMessage`, AGY/Codex equivalents);
   - hooks (inject the message as context on the next prompt/tool event);
   - just resume with another prompt (`harnez agent resume --name X "<msg>"`);
@@ -32,7 +41,9 @@ session background. This ticket designs a real eventing layer on top: `harnez ag
     determine how Harnez obtains and selects the target thread ID, and distinguish an accepted
     send from confirmed recipient receipt. Issue 680 tracks the canary and interface probe.
 - **M4 `harnez agent send --name <name> -m <msg>`.** Implement with the M3 winners per agent,
-  only after M1-M2 work. Delivery must be confirmed or reported as failed, never silent.
+  only after M1-M2 work. Support existing interactive and detached sessions across providers.
+  Distinguish accepted transport, confirmed receipt, and recipient response; report unsupported
+  or failed delivery explicitly. Acceptance alone must not be presented as confirmed receipt.
 
 ## 3. Constraints
 
@@ -100,6 +111,22 @@ of a pre-M1 agent works again; `list` is scoped and prints
 - Count = this host session's agents with status running (same source as the M1 line).
 
 /goal Hosts always know which agents they started, statuslines show the detached count, and
-`harnez agent send` delivers a message to a named detached agent through a per-agent method
-proven by canary; stop and report when blocked on a user decision (opt-in form) or a denied
-permission.
+`harnez agent send` delivers messages to existing interactive and detached sessions across
+providers, including Claude Code → Codex sessions outside the sender's child-agent tree,
+through methods proven by canary with confirmed recipient receipt; stop and report when
+blocked on unavailable session access, a user decision (opt-in form), or a denied permission.
+
+## 7. Rule: tickets carry the work, messages only nudge (user, 2026-10-07)
+
+Agents communicate main decisions and work requests through tickets (in any repository), not
+through messages alone; `harnez agent send` is the nudge ("look at ticket N in repo X"). This
+keeps a track record between agents without transcribing everything. Not M2 scope for 740; record
+it in the agent-send docs/skill (e.g. peer-assistant, AgenticLoop) when `send` ships.
+
+## 8. Progress (host, 2026-10-07)
+
+Claude recipients are done: channel server and `send` (740), allowlisted plugin route without the
+development warning (743), `harnez apply` ships the plugin (747), default session names and the
+`send --name|--id <message>` form, registry pruning (749), plural command words (748). Open: Codex
+route (680). §7's tickets-first rule is now in `docs/practices/AgenticLoop.md` (multi-session peer
+assistance, full and lite).

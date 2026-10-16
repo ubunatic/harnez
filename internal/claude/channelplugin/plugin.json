@@ -1,0 +1,5 @@
+{
+  "name": "harnez-channel",
+  "version": "{{VERSION}}",
+  "description": "Opt-in local Harnez messaging channel; requires harnez on PATH"
+}

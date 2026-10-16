@@ -3,7 +3,7 @@
 
 `harnez release` + `goreleaser` + `minisign` + Forgejo (`fj`). Language-agnostic: Go is the
 common case, but Python/Zig/Rust and compile-nothing projects release the same way. Full doc
-carries the rationale and worked examples.
+carries the rationale and worked examples: `harnez docs variant gorelease full`.
 
 ## 1. Prerequisites — in `$PATH`
 
@@ -153,6 +153,9 @@ Automatic drift catch: the `check` target (this project's `Makefile` and
 harmless with no `go.work` active, catches this bug at `make check` time instead of release
 time. `check-fast` intentionally does NOT force it, so the inner loop can still test against an
 uncommitted sibling checkout.
+
+**Pitfall — `@latest` lags right after a release:** the Go proxy caches `@latest` for a while
+after a new tag. Right after a release, `go install <module>@vX.Y.Z` with the exact version.
 
 ## 5. Non-Go / scripted projects
 

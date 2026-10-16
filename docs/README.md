@@ -9,6 +9,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | File | Topic & Consultation Trigger |
 |------|------------------------------|
 | [CLIDesign.md](CLIDesign.md) | apply vs init separation: scope, rationale, footgun avoided, design evolution (consult before modifying CLI command flags) |
+| [AgentMessaging.md](AgentMessaging.md) | How sessions message each other: tickets-first rule, routes per provider, Claude channel design and pitfalls |
 | [AgentStatusLines.md](AgentStatusLines.md) | Claude Code and Antigravity CLI status-line payload fields and the subset Harnez renders |
 | [CodexSettings.md](CodexSettings.md) | Codex config ownership, spec-driven debloat, status/revert, and isolation limits (consult before changing Codex settings management) |
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent; skill resources and spec-rendered skill bodies (consult when changing command pipelines or adding a skill) |
@@ -108,7 +109,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md](studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md) | `cmd/harnez/main.go`, `internal/usage/`, `Makefile`, issue tickets 048–051 |
 | [studies/2026-08-26-cross-repo-managed-docs-and-agentic-tooling-design.md](studies/2026-08-26-cross-repo-managed-docs-and-agentic-tooling-design.md) | Cross-Repo Managed Docs, Interactive Grounding, and Agent-First Tooling Design |
 | [studies/2026-08-28-fresh-sprint-rograph-three-ticket-token-study.md](studies/2026-08-28-fresh-sprint-rograph-three-ticket-token-study.md) | Empirical token/tool accounting for a single `/fresh-sprint` run executing three dependency-ordered tickets (078 → 079 → 080) via sequential subagent handoffs, plus a modeled counterfactual for running the same work in one continuous main-session context. |
-| [studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md](studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md) | `internal/usage/load.go` (Load box CPU/GPU collectors); applies to any future device-metrics collector |
+| [studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md](studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md) | `internal/usage/load.go` (Load box CPU/GPU collectors); applies to any future device-metrics collector; NVIDIA superseded by issue 765 (`nvidia-smi`) |
 | [studies/2026-08-28-load-box-cpu-gpu-kernel-metrics.md](studies/2026-08-28-load-box-cpu-gpu-kernel-metrics.md) | `internal/usage/load.go`, `internal/usage/watch.go` |
 | [studies/2026-08-28-usage-collector-daemon-architecture.md](studies/2026-08-28-usage-collector-daemon-architecture.md) | Usage-Collector Daemon Architecture, Omarchy Comparison, and Rejected Alternatives |
 | [studies/2026-08-29-a-day-of-fresh-sprints.md](studies/2026-08-29-a-day-of-fresh-sprints.md) | A Day of Fresh Sprints |
@@ -169,7 +170,15 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-03-multi-repo-agentic-workflows-and-guardrails.md](studies/2026-10-03-multi-repo-agentic-workflows-and-guardrails.md) | Exploration, empirical benchmarking, cross-repo API contracts, and iterative milestone execution across `neus`, `lmcoder`, and `harnez`. |
 | [studies/2026-10-04-agent-harness-at-scale-story.md](studies/2026-10-04-agent-harness-at-scale-story.md) | A portfolio review of Harnez's product, recent development, and agent workflow evidence. |
 | [studies/2026-10-05-artificial-analysis-cost-report.md](studies/2026-10-05-artificial-analysis-cost-report.md) | Artificial Analysis Cost Report |
+| [studies/2026-10-06-webpage-screenshot-inspection-telemetry-study.md](studies/2026-10-06-webpage-screenshot-inspection-telemetry-study.md) | Local telemetry evidence and attribution gaps for webpage screenshot inspection |
+| [studies/2026-10-07-claude-cross-session-sendmessage.md](studies/2026-10-07-claude-cross-session-sendmessage.md) | Claude Code cross-session SendMessage canary (656 M3) |
+| [studies/2026-10-08-agy-delivery-route-canary.md](studies/2026-10-08-agy-delivery-route-canary.md) | AGY Delivery Route Canary |
+| [studies/2026-10-08-bash-heredoc-appends-vs-native-edit-tools.md](studies/2026-10-08-bash-heredoc-appends-vs-native-edit-tools.md) | Decision framework, token economics, and ergonomics of bash here-doc (`cat << 'EOF' >> ...`) vs. native structured edit tools (`replace_file_content` / `write_to_file`). |
+| [studies/2026-10-08-claude-haiku-5-5-first-insights.md](studies/2026-10-08-claude-haiku-5-5-first-insights.md) | Claude Haiku 5.5: first insights |
+| [studies/2026-10-08-two-agent-lean-sprint-codex-send.md](studies/2026-10-08-two-agent-lean-sprint-codex-send.md) | Running Study: Two-Agent Lean Sprint (Luna:low Searcher & Luna:high Dev) |
+| [studies/2026-10-09-supervised-agy-prompt-queueing-and-cross-session-messaging.md](studies/2026-10-09-supervised-agy-prompt-queueing-and-cross-session-messaging.md) | Supervised AGY Prompt Queueing and Cross-Session Messaging Case Study |
 | [studies/2026-10-10-harnez-tui-interactive-harness-research.md](studies/2026-10-10-harnez-tui-interactive-harness-research.md) | `harnez tui` interactive chat interface design, harness forwarding, subscription routing, and TUI interaction patterns. |
+| [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
@@ -197,5 +206,6 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [feedback/2026-09-22-lean-sprint-496-488-497.md](feedback/2026-09-22-lean-sprint-496-488-497.md) | Retro: luna:low lean sprint (496, 488, 497): assertion-hidden bug, interface change needs a higher tier, quota cost measured |
 | [feedback/2026-10-02-usage-view-mode-parity.md](feedback/2026-10-02-usage-view-mode-parity.md) | Usage view-mode contract, one-shot/watch parity, short-terminal footer budgeting, and review-driven boundary tests (issue 678) |
 | [feedback/2026-10-06-lean-sprints-cost-matrix-terra-apply-env.md](feedback/2026-10-06-lean-sprints-cost-matrix-terra-apply-env.md) | Lean sprints 711/715/717: host chart-zoom checks caught two misreads, Codex apply_patch crash, out-of-scope `harnez init`, apply env idempotency |
+| [feedback/2026-10-06-helper-routing-skill-removal-and-codex-hooks.md](feedback/2026-10-06-helper-routing-skill-removal-and-codex-hooks.md) | Direct helper routing, removal of bundled skills and generated routes, Codex no-op hook contract, scoped verification, and proposed workflow improvements |
 
 **`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).

@@ -7,6 +7,21 @@ weight: 32
 
 Documents the multi-layered telemetry, usage tracking, and Git artifact evolution architecture in `harnez`.
 
+## Image-view attribution limits
+
+The [2026-10-06 screenshot study](studies/2026-10-06-webpage-screenshot-inspection-telemetry-study.md)
+found identifiable generic image-view events, but could not isolate webpage screenshots,
+capture frequency, image-view latency, or per-image token cost. Issue 737 remains open.
+Tool token columns in that sample repeated session/context snapshots; summing them across
+view events double-counts context. A recorded zero duration can mean missing measurement.
+
+Before making cost claims, establish whether a field is an event increment or a cumulative
+snapshot, check duplicate/replayed events, and separate capture from delivery to the model.
+Keyword matches in logs can be pasted instructions rather than executed captures. Document-card
+benchmarks do not establish the cost of repeated webpage inspection. Any further instrumentation
+should make attribution and unavailable measurements explicit; this research changed no schema
+or screenshot guidance.
+
 ---
 
 ## 1. System Overview & Sourcing Layers
@@ -165,7 +180,7 @@ Using Unicode Braille patterns (`\u2800`–`\u28FF`):
 
 ```json
 {
-  "format_version": 1,
+  "format_version": 2,
   "generated_at": "2026-10-06T12:00:00Z",
   "telemetry": { "generated_at": "...", "tool_calls": [ ... ] },
   "usage": { "generated_at": "...", "points": [ ... ] }
@@ -178,6 +193,12 @@ each `telemetry.tool_calls` row (`telemetry.ExportToolCall`) and each `usage.poi
 `cmd/harnez/usageexport.go`, not a spec value, because it describes the Go structs and must change
 in the same commit as they do (like `schemaVersion` for the database). Files written before
 version 1 have no `format_version`.
+
+Format version 2 (issue 735) changes the semantics of `usage.points[].hostname` from transient
+sequential labels (`host-1`, `host-2`, ...) to stable HMAC pseudonyms (`host-` + first 8 hex characters
+of HMAC-SHA256(canonical hostname, key)). The 32-byte secret key is stored with `0600` permissions at
+`$XDG_DATA_HOME/harnez/export-host-key` (`~/.local/share/harnez/export-host-key` by default, configured via
+`export_host_key` in `spec/usage.yaml`). Losing or deleting this key will change generated host labels once.
 
 Bump the version when a reader built for the old version would misread the new file:
 
@@ -192,6 +213,7 @@ are present (e.g. `note`); they do not change the format.
 `TestBuildUsageExport_Golden` (`cmd/harnez/usageexport_test.go`) pins the format against
 `cmd/harnez/testdata/usage-export.golden.json`. When it fails, decide on a bump first, then
 rewrite the file with `go test -run TestBuildUsageExport_Golden ./cmd/harnez -update`.
+
 
 ---
 
@@ -258,6 +280,21 @@ migrates it to the XDG telemetry database when needed, then renames the source
 to a timestamped `.bak-*` file so the old database remains recoverable. The
 zero-byte `$XDG_DATA_HOME/harnez/telemetry.db` decoy is removed on telemetry
 path resolution; a non-empty file is left intact and reported by `--where`.
+
+Before issue 735, the move to the XDG path only copied the legacy database when the new one did
+not exist yet; otherwise its rows stayed in the `.bak-*` file. The move now merges legacy
+`tool_calls` first, and `harnez stats merge-legacy [file...]` (default:
+`~/.harnez/tool_catalog.sqlite.bak-<time>`) recovers rows from older backups in one transaction. It
+saves a consistent copy of the live database (`telemetry.sqlite.before-merge-<time>`, via
+`VACUUM INTO`) before writing, skips rows whose `(created_at, session_id, agent_id, tool_name,
+call_type)` exists, and is safe to rerun. Named backups such as `bak-issue331-*` are not in the
+default set: they hold rows a cleanup deleted on purpose. Other tables in those backups
+(`cli_invocations`, compaction and token tables) are not merged.
+
+Usage-history snapshots (`usage.points` in the export) are recorded by live collection
+(`harnez usage`, `usage --watch`) at most every `history_snapshot_interval` (`spec/usage.yaml`)
+per host. From 2026-08-23 to issue 735 nothing recorded them except
+`harnez usage history record`, so stores of that period have a gap that cannot be refilled.
 
 Newest times come from `tool_calls.created_at` for the telemetry database and
 JSONL record timestamps when available. For other state files, the inventory

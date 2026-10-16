@@ -15,6 +15,12 @@ repositories. Code: `internal/skillreg`, `cmd/harnez/skill.go`. History: issue 6
 
 ## Bundled Skills
 
+The shipped registry currently has `bundled_skills: []`. All mattpocock-derived
+bundles were removed by commit `d77fb771` and [harnez.org issue 032](../../harnez.org/issues/032-remove-all-mattpocock-skills-from-the-website-and-harnez.md).
+Generic bundling and external installation remain supported; synthetic fixtures
+cover bundle resolution, name collisions, and licensed exports without requiring
+a real upstream bundle in the default configuration.
+
 Chosen third-party skills ship inside harnez. `config.yaml` `bundled_skills` lists url, pinned
 commit, vendor dir, and skill names; that list is the source of truth. `harnez skill vendor`
 (run in the harnez tree) copies them with the repo LICENSE into `third_party/skills/<dir>/`
@@ -31,6 +37,14 @@ removes bundled copies no longer listed. `harnez skill show` serves them to Gemi
 
 Never edit vendored copies; raise `commit` and re-run `vendor`. Apply leaves a same-named
 registry install or foreign dir alone and prints a note.
+
+When removing a bundle, remove its registration and vendored sources, add former
+names to decommissioning metadata, and check wrappers, callers, and installed
+`.harnez-external` markers. Leave foreign copies alone. If the vendor tree becomes
+empty, retain `third_party/skills/README.md` so `all:third_party/skills` still embeds.
+For the website, export from a clean committed build, update the SHA-256 pin, remove
+obsolete workflows and generated pages, and verify regeneration does not restore
+catalog, search, or sitemap links. Keep historical issue and study records.
 
 ## Explicit-Only by Default
 

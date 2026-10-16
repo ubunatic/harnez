@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -562,23 +561,60 @@ func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSumma
 		}
 		applyStoredWindows(&summary.Agents[i], readings, now)
 	}
+	// The snapshot is best-effort: a busy store must not hide the live view.
+	if err := recordHistorySnapshot(ctx, store, summary, now); err != nil {
+		appendUsageDebugLog("", fmt.Sprintf("usage history snapshot failed: %v", err))
+	}
 	return summary, nil
 }
 
-// A failed projection cannot establish which providers exist in the store.
-// Keep all supported providers visible rather than treating that uncertainty
-// as evidence that a provider (notably Codex) is absent.
-func compactProjectionFailure(homeDir string, summary UsageSummary, err error) UsageSummary {
+// recordHistorySnapshot keeps the usage history that `harnez usage export`
+// reads going: live collection records one snapshot per host at most every
+// history_snapshot_interval. Recording stopped in 2026-08 when `usage
+// --watch` no longer passed a history dir (issue 735).
+func recordHistorySnapshot(ctx context.Context, store *usagestore.Store, summary UsageSummary, now time.Time) error {
+	every, err := historySnapshotInterval()
+	if err != nil {
+		return err
+	}
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown-host"
+	}
+	last, ok, err := store.LatestUsageSummaryAt(ctx, host)
+	if err != nil {
+		return err
+	}
+	if ok && now.Sub(last) < every {
+		return nil
+	}
+	summary.Timestamp = now
+	payload, err := json.Marshal(summary)
+	if err != nil {
+		return err
+	}
+	return store.WriteUsageSummary(ctx, usagestore.UsageSummaryRecord{Hostname: host, ObservedAt: now, Payload: payload})
+}
+
+// appendUsageDebugLog appends one timestamped line to ~/.harnez/debug.log.
+func appendUsageDebugLog(homeDir, msg string) {
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
 	dir := filepath.Join(homeDir, ".harnez")
 	if os.MkdirAll(dir, 0o700) == nil {
 		if file, openErr := os.OpenFile(filepath.Join(dir, "debug.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); openErr == nil {
-			fmt.Fprintf(file, "[%s] usage compact projection failed: %v\n", time.Now().UTC().Format(time.RFC3339Nano), err)
+			fmt.Fprintf(file, "[%s] %s\n", time.Now().UTC().Format(time.RFC3339Nano), msg)
 			file.Close()
 		}
 	}
+}
+
+// A failed projection cannot establish which providers exist in the store.
+// Keep all supported providers visible rather than treating that uncertainty
+// as evidence that a provider (notably Codex) is absent.
+func compactProjectionFailure(homeDir string, summary UsageSummary, err error) UsageSummary {
+	appendUsageDebugLog(homeDir, fmt.Sprintf("usage compact projection failed: %v", err))
 	summary.Agents = append([]AgentUsage(nil), summary.Agents...)
 	for _, provider := range []struct{ id, name string }{
 		{"claude", "Claude Code"}, {"codex", "OpenAI Codex"}, {"agy", "Antigravity (AGY)"},
@@ -782,6 +818,9 @@ func importUsageSummaryHistory(s *usagestore.Store, ctx context.Context, homeDir
 	if err := s.Exec(ctx, `CREATE TABLE IF NOT EXISTS usage_store_migrations (name TEXT PRIMARY KEY, completed_at TEXT NOT NULL)`); err != nil {
 		return err
 	}
+	if _, err := s.DedupeUsageSummaries(ctx); err != nil {
+		return err
+	}
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
@@ -835,9 +874,7 @@ func importUsageSummaryHistory(s *usagestore.Store, ctx context.Context, homeDir
 			}
 			scanner := bufio.NewScanner(file)
 			scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-			lineNumber := 0
 			for scanner.Scan() {
-				lineNumber++
 				line := append([]byte(nil), scanner.Bytes()...)
 				var entry HistoryEntry
 				if json.Unmarshal(line, &entry) != nil || entry.Timestamp.IsZero() {
@@ -851,9 +888,7 @@ func importUsageSummaryHistory(s *usagestore.Store, ctx context.Context, homeDir
 					file.Close()
 					return err
 				}
-				lineHash := sha256.Sum256(line)
-				source := "legacy-history:" + hex.EncodeToString(lineHash[:]) + ":" + strconv.Itoa(lineNumber)
-				if err := s.WriteUsageSummary(ctx, usagestore.UsageSummaryRecord{Hostname: entry.Hostname, ObservedAt: entry.Timestamp, Payload: payload, RecordKey: source}); err != nil {
+				if err := s.WriteUsageSummary(ctx, usagestore.UsageSummaryRecord{Hostname: entry.Hostname, ObservedAt: entry.Timestamp, Payload: payload}); err != nil {
 					file.Close()
 					return err
 				}

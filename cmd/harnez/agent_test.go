@@ -34,7 +34,7 @@ func TestAgentCommandSurface(t *testing.T) {
 	if len(c.Commands()) == 0 {
 		t.Fatal("agent command has no children")
 	}
-	for _, name := range []string{"start", "models", "resume", "list", "status", "wait", "compact", "stop", "delete", "enable", "disable"} {
+	for _, name := range []string{"start", "models", "resume", "list", "status", "wait", "compact", "stop", "delete", "enable", "disable", "send"} {
 		found := false
 		for _, child := range c.Commands() {
 			if child.Name() == name {
@@ -1045,7 +1045,10 @@ func TestInteractiveProviderIDIsPersistedDuringRun(t *testing.T) {
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
-	opts := interactiveOptions(newAgentCmd(), store, sess, storeDir, "")
+	opts, err := interactiveOptions(newAgentCmd(), store, sess, storeDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := opts.ProviderIDFound("codex-thread"); err != nil {
 		t.Fatal(err)
 	}
@@ -1671,6 +1674,83 @@ func TestAgentStatusResumeDiagnostics(t *testing.T) {
 	}
 }
 
+func TestAgentStatusReplyHistory(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 10, 10, 12, 30, 0, 0, time.UTC)
+	sess := &subagent.Session{
+		ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed",
+		Response: "", Turn: 3,
+		ReplyHistory: []subagent.ReplyRecord{
+			{Turn: 1, At: at, Text: "ALPHA"},
+			{Turn: 2, At: at.Add(time.Minute), Text: "BETA"},
+			{Turn: 3, At: at.Add(2 * time.Minute), Text: ""},
+		},
+	}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		args []string
+		want []string
+		miss []string
+	}{
+		{args: []string{"--reply"}, want: []string{"Reply (turn 3", "(empty reply)"}, miss: []string{"ALPHA", "BETA"}},
+		{args: []string{"--turn", "1"}, want: []string{"Reply (turn 1", "ALPHA"}, miss: []string{"BETA"}},
+		{args: []string{"--all"}, want: []string{"Reply (turn 1", "ALPHA", "Reply (turn 2", "BETA", "Reply (turn 3", "(empty reply)"}},
+	} {
+		var out bytes.Buffer
+		cmd := newAgentCmd()
+		cmd.SetOut(&out)
+		cmd.SetArgs(append([]string{"status", "--name", "worker", "--store-dir", storeDir}, tc.args...))
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("status %v: %v", tc.args, err)
+		}
+		for _, want := range tc.want {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("status %v = %q, want %q", tc.args, out.String(), want)
+			}
+		}
+		for _, miss := range tc.miss {
+			if strings.Contains(out.String(), miss) {
+				t.Errorf("status %v = %q, must not contain %q", tc.args, out.String(), miss)
+			}
+		}
+	}
+
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"status", "--name", "worker", "--store-dir", storeDir, "--json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got subagent.Session
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.ReplyHistory) != 3 || got.ReplyHistory[1].Text != "BETA" || got.ReplyHistory[2].Text != "" {
+		t.Fatalf("JSON reply_history = %#v", got.ReplyHistory)
+	}
+}
+
+func TestRecordAgentReplyCapsHistoryAtSpecLimit(t *testing.T) {
+	sess := &subagent.Session{}
+	for turn := 1; turn <= 20; turn++ {
+		sess.ReplyHistory = append(sess.ReplyHistory, subagent.ReplyRecord{Turn: turn, Text: fmt.Sprint(turn)})
+	}
+	at := time.Date(2026, 10, 10, 13, 0, 0, 0, time.UTC)
+	if err := recordAgentReply(sess, 21, "21", nil, at); err != nil {
+		t.Fatal(err)
+	}
+	if len(sess.ReplyHistory) != 20 || sess.ReplyHistory[0].Turn != 2 || sess.ReplyHistory[19].Turn != 21 {
+		t.Fatalf("reply history turns = %#v", sess.ReplyHistory)
+	}
+}
+
 func TestAgentResumeMissingIdentifier(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetArgs([]string{"resume", "--name", "nope", "hi", "--store-dir", t.TempDir()})
@@ -2095,7 +2175,7 @@ func TestAgentStartStoresCanonicalWorkingDir(t *testing.T) {
 func TestAgentHaikuAliases(t *testing.T) {
 	for _, spec := range []string{"claude:haiku", "claude:haiku:latest"} {
 		m, err := subagent.ResolveModel(spec)
-		if err != nil || m.Provider != "claude" || m.Name != "haiku" || m.Tier != "low" {
+		if err != nil || m.Provider != "claude" || m.Name != "claude-haiku-5-5" || m.Tier != "low" {
 			t.Fatalf("%s resolved to %#v (%v)", spec, m, err)
 		}
 	}
@@ -2133,6 +2213,13 @@ func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
 	}
 	if e := errOut.String(); !strings.HasPrefix(e, "[session timeline]\n") || !strings.Contains(e, "host background job") || !strings.Contains(e, "Do NOT poll") || !strings.Contains(e, " done] ") {
 		t.Fatalf("stderr = %q, want timeline with wait notice", e)
+	}
+	saved, err := store.Get("sid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Response != "the reply text" || len(saved.ReplyHistory) != 1 || saved.ReplyHistory[0].Turn != 1 || saved.ReplyHistory[0].Text != "the reply text" || saved.ReplyHistory[0].At.IsZero() {
+		t.Fatalf("saved response/history = %q / %#v", saved.Response, saved.ReplyHistory)
 	}
 }
 

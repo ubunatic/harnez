@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"ubunatic.com/harnez/internal/skillreg"
 )
 
 // TestClaudeSkillsTargetRoundTrip exercises issue 130 item 7: harnez-authored
@@ -319,6 +321,10 @@ func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
 	// Verify all skills exist across all 5 targets
 	for _, target := range expectedTargets {
 		for _, skill := range cfg.Skills {
+			marker := filepath.Join(target, skill.Name, ManagedSkillMarker)
+			if _, err := os.Stat(marker); err != nil {
+				t.Errorf("target %s missing managed-skill marker for %s: %v", target, skill.Name, err)
+			}
 			skillMd := filepath.Join(target, skill.Name, "SKILL.md")
 			data, err := os.ReadFile(skillMd)
 			if err != nil {
@@ -343,6 +349,52 @@ func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
 	}
 	if changed {
 		t.Errorf("DiffAll reported changes immediately after ApplyAll")
+	}
+
+	droppedName := cfg.Skills[0].Name
+	for _, target := range expectedTargets {
+		droppedDir := filepath.Join(target, droppedName)
+		if err := os.WriteFile(filepath.Join(droppedDir, "local-data.txt"), []byte("remove with managed skill"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		userDir := filepath.Join(target, "user-authored")
+		if err := os.MkdirAll(userDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(userDir, "SKILL.md"), []byte("user skill"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		externalDir := filepath.Join(target, "registry-installed")
+		if err := os.MkdirAll(externalDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(externalDir, "SKILL.md"), []byte("external skill"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(externalDir, skillreg.MarkerFile), nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	remainingSkills := make([]Command, 0, len(cfg.Skills)-1)
+	for _, skill := range cfg.Skills {
+		if skill.Name != droppedName {
+			remainingSkills = append(remainingSkills, skill)
+		}
+	}
+	cfg.Skills = remainingSkills
+	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
+		t.Fatalf("ApplyAll after dropping %s failed: %v", droppedName, err)
+	}
+	for _, target := range expectedTargets {
+		for _, name := range []string{droppedName, "user-authored", "registry-installed"} {
+			_, err := os.Stat(filepath.Join(target, name))
+			if name == droppedName && (err == nil || !os.IsNotExist(err)) {
+				t.Errorf("dropped managed skill %s remains in %s, err=%v", name, target, err)
+			}
+			if name != droppedName && err != nil {
+				t.Errorf("foreign skill %s in %s was not preserved: %v", name, target, err)
+			}
+		}
 	}
 
 	// CleanAll removes all skills across all 5 targets

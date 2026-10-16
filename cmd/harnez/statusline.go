@@ -36,7 +36,7 @@ Codex uses its native TUI status items, configured separately by 'harnez apply'.
 					return err
 				}
 				if line != "" {
-					fmt.Fprintln(cmd.OutOrStdout(), line)
+					writeStatusline(cmd.OutOrStdout(), line)
 				}
 				usage.ObserveStatusline(cmd.Context(), "agy", data)
 				return nil
@@ -52,11 +52,18 @@ Codex uses its native TUI status items, configured separately by 'harnez apply'.
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), line)
+			writeStatusline(cmd.OutOrStdout(), line)
 			usage.ObserveStatusline(cmd.Context(), "claude", data)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&agent, "agent", "claude", "status payload provider: claude or agy")
 	return cmd
+}
+
+func writeStatusline(out io.Writer, line string) {
+	_, _ = fmt.Fprintln(out, line)
+	if flusher, ok := out.(interface{ Flush() error }); ok {
+		_ = flusher.Flush()
+	}
 }

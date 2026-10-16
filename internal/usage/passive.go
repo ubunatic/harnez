@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
+	"ubunatic.com/harnez/internal/xdgpath"
 )
 
 type passivePayload struct {
@@ -32,8 +34,10 @@ type passivePayload struct {
 // ObserveStatusline accepts only quota values and reset timestamps from a
 // Claude or AGY statusline payload. It deliberately never stores the raw JSON.
 func ObserveStatusline(parent context.Context, provider string, payload []byte) {
-	dbPath, err := telemetry.DefaultDBPath()
-	if err != nil {
+	// Statusline is a read-only rendering path. Avoid DefaultDBPath here: it
+	// may migrate the legacy database or create storage as a side effect.
+	dbPath := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
+	if _, err := os.Stat(dbPath); err != nil {
 		return
 	}
 	ObserveStatuslineAt(parent, provider, payload, dbPath)
@@ -45,28 +49,40 @@ func ObserveStatuslineAt(parent context.Context, provider string, payload []byte
 	if provider != "claude" && provider != "agy" {
 		return
 	}
-	dedupe, busy, err := PassivePolicy()
+	dedupe, busy, writeTimeout, err := PassivePolicy()
 	if err != nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(parent, 4*busy)
-	defer cancel()
-	store, err := usagestore.OpenWithBusyTimeout(dbPath, busy)
-	if err != nil {
-		return
-	}
-	defer store.Close()
-	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
-		return
-	}
-	if err := store.MigrateStableWindowKeys(ctx); err != nil {
 		return
 	}
 	windows, err := passiveWindows(provider, payload, time.Now())
 	if err != nil || len(windows) == 0 {
 		return
 	}
-	_ = store.WritePassive(ctx, dedupe, windows)
+	if _, err := os.Stat(dbPath); err != nil {
+		return
+	}
+	budget := 4 * busy
+	if budget > writeTimeout {
+		budget = writeTimeout
+	}
+	if parent.Err() != nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(parent, budget)
+		defer cancel()
+		if ctx.Err() != nil {
+			return
+		}
+		store, err := usagestore.OpenWithBusyTimeout(dbPath, busy)
+		if err != nil {
+			return
+		}
+		defer store.Close()
+		if ctx.Err() != nil {
+			return
+		}
+		_ = store.WritePassive(ctx, dedupe, windows)
+	}()
 }
 
 func passiveWindows(provider string, data []byte, received time.Time) ([]usagestore.Window, error) {

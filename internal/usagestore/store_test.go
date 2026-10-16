@@ -438,3 +438,61 @@ func TestWriteTurnTokenUsageStoresDimensionsAndQuality(t *testing.T) {
 		t.Fatalf("token row = input %d cached %d output %d qualities %q/%q", gotInput, gotCached, gotOutput, inputQuality, reasoningQuality)
 	}
 }
+
+// Issue 735: older importers keyed the same snapshot by source path or line
+// hash, so one history line became three rows. The cleanup keeps the oldest
+// copy, canonicalizes the keys, and later imports collide instead of adding.
+func TestDedupeUsageSummariesCollapsesSourceKeyedCopies(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "dedupe.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, q string) error { return s.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 9, 16, 19, 3, 41, 0, time.UTC)
+	other := at.Add(time.Minute)
+	for _, record := range []UsageSummaryRecord{
+		{Hostname: "x600", ObservedAt: at, Payload: []byte(`{"n":1}`), RecordKey: "legacy-history:/a/x600.jsonl:42"},
+		{Hostname: "x600", ObservedAt: at, Payload: []byte(`{"n":2}`), RecordKey: "legacy-history:/b/x600.jsonl:42"},
+		{Hostname: "x600", ObservedAt: at, Payload: []byte(`{"n":3}`), RecordKey: "legacy-history:3fe9:42"},
+		{Hostname: "x601", ObservedAt: at, Payload: []byte(`{"n":4}`), RecordKey: "legacy-history:3fea:42"},
+		{Hostname: "x600", ObservedAt: other, Payload: []byte(`{"n":5}`)},
+	} {
+		if err := s.WriteUsageSummary(ctx, record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deleted, err := s.DedupeUsageSummaries(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted != 2 {
+		t.Fatalf("deleted = %d, want 2", deleted)
+	}
+	if again, err := s.DedupeUsageSummaries(ctx); err != nil || again != 0 {
+		t.Fatalf("second dedupe = %d, %v; want 0, nil", again, err)
+	}
+	// A re-import with the default key must update, not add.
+	if err := s.WriteUsageSummary(ctx, UsageSummaryRecord{Hostname: "x600", ObservedAt: at, Payload: []byte(`{"n":1}`)}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.UsageSummaries(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("rows = %d, want 3: %+v", len(got), got)
+	}
+	for _, record := range got {
+		want := record.Hostname + ":" + record.ObservedAt.UTC().Format(time.RFC3339Nano)
+		if record.RecordKey != want {
+			t.Errorf("record key = %q, want %q", record.RecordKey, want)
+		}
+	}
+	if string(got[0].Payload) != `{"n":1}` {
+		t.Errorf("kept payload = %s, want the oldest copy", got[0].Payload)
+	}
+}

@@ -612,7 +612,11 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 			sess.StderrLog = current.StderrLog
 			sess.CallerPID = current.CallerPID
 			sess.CreatedAt = current.CreatedAt
+			sess.ReplyHistory = current.ReplyHistory
 		}
+	}
+	if err := recordAgentReply(sess, turn, r.Response, r.Messages, now); err != nil {
+		return err
 	}
 	if err := s.Save(sess); err != nil {
 		return err
@@ -763,7 +767,11 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		sess.TokensSinceCompact = 0
 	}
 	if interactive {
-		if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "prompt", req.Prompt); err != nil {
+		action := "prompt"
+		if sess.Provider == "agy" {
+			action = "enqueue"
+		}
+		if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, action, req.Prompt); err != nil {
 			return err
 		}
 		sess.LastActiveAt = time.Now()
@@ -905,6 +913,9 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	sess.LastActiveAt = time.Now()
 	sess.Status = "completed"
 	sess.Turn = turn
+	if err = recordAgentReply(sess, turn, r.Response, r.Messages, sess.LastActiveAt); err != nil {
+		return err
+	}
 	sess.TurnRecords = append(sess.TurnRecords, subagent.TurnRecord{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	before := <-beforeCapture
 	baselineCacheAt := turnQuotaBaseline(turnStarted, before)
@@ -936,6 +947,20 @@ func writeAgentOutput(cmd *cobra.Command, jsonOut bool, v agentOutput) error {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(v)
 	}
 	return printAgentMessages(cmd, v.Messages, v.Response)
+}
+
+func recordAgentReply(sess *subagent.Session, turn int, response string, messages []string, at time.Time) error {
+	limit, err := subagent.AgentReplyHistoryLimit()
+	if err != nil {
+		return err
+	}
+	sess.Response = response
+	sess.Messages = messages
+	sess.ReplyHistory = append(sess.ReplyHistory, subagent.ReplyRecord{Turn: turn, At: at, Text: response})
+	if len(sess.ReplyHistory) > limit {
+		sess.ReplyHistory = append([]subagent.ReplyRecord(nil), sess.ReplyHistory[len(sess.ReplyHistory)-limit:]...)
+	}
+	return nil
 }
 
 // knownSlashCommands are intercepted by the root form and never sent to the model.
@@ -974,7 +999,7 @@ func withAgyMeterSession(driver subagent.Driver, sessionID string) subagent.Driv
 	}
 }
 
-func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut bool) error {
+func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut, showReply bool, turn int, allReplies bool) error {
 	if jsonOut {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(x)
 	}
@@ -984,6 +1009,37 @@ func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut bool) error 
 	}
 	if x.LastError != "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "Last error: %s\nResume failures: %d\n", x.LastError, x.ResumeFailures)
+	}
+	if showReply {
+		var replies []subagent.ReplyRecord
+		switch {
+		case allReplies:
+			replies = x.ReplyHistory
+		case turn > 0:
+			for _, reply := range x.ReplyHistory {
+				if reply.Turn == turn {
+					replies = []subagent.ReplyRecord{reply}
+					break
+				}
+			}
+			if len(replies) == 0 {
+				return fmt.Errorf("reply for turn %d is not saved for session %q", turn, x.Name)
+			}
+		default:
+			if len(x.ReplyHistory) > 0 {
+				replies = x.ReplyHistory[len(x.ReplyHistory)-1:]
+			}
+		}
+		if len(replies) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "Reply: (no saved reply)")
+		}
+		for _, reply := range replies {
+			text := reply.Text
+			if text == "" {
+				text = "(empty reply)"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Reply (turn %d, %s):\n%s\n", reply.Turn, reply.At.Format(time.RFC3339), text)
+		}
 	}
 	return nil
 }
@@ -1088,14 +1144,14 @@ func setAgentEnv(role, name string) func() {
 }
 
 // guardLeafRole refuses mutating agent verbs when the caller is a leaf worker.
-// list, status and models stay available for diagnosis.
+// Diagnostic verbs and channel send do not spawn or control workers.
 func guardLeafRole(verb string) error {
 	role := os.Getenv(agentRoleEnv)
 	if !subagent.IsLeafRole(role) {
 		return nil
 	}
 	switch verb {
-	case "list", "status", "models", "help", "agent":
+	case "list", "status", "models", "help", "agent", "send":
 		return nil // the root form checks each start/resume/slash itself
 	}
 	return subagent.CheckSpawn(role, "developer")

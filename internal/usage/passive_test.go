@@ -57,16 +57,34 @@ func TestPassiveWindowsAcceptPartialAndAGYQuota(t *testing.T) {
 
 func TestStatuslineIngestionWritesClaudeQuotaObservation(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "claude-statusline.sqlite")
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := usagestore.EnsureSchema(context.Background(), func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
 	sample := []byte(`{"hook_event_name":"Status","session_id":"session-safe","workspace":{"current_dir":"/work"},"rate_limits":{"five_hour":{"used_percentage":29.125,"resets_at":"2026-10-01T00:00:00Z"},"seven_day":{"used_percentage":41.5}}}`)
 	ObserveStatuslineAt(context.Background(), "claude", sample, dbPath)
-	store, err := usagestore.Open(dbPath)
+	store, err = usagestore.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
 	var source, key string
 	var fraction float64
-	err = store.QueryRow(context.Background(), `SELECT o.source,q.window_key,q.used_fraction FROM usage_observations o JOIN quota_windows q ON q.observation_id=o.id WHERE o.provider='claude' ORDER BY o.id DESC LIMIT 1`).Scan(&source, &key, &fraction)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		err = store.QueryRow(context.Background(), `SELECT o.source,q.window_key,q.used_fraction FROM usage_observations o JOIN quota_windows q ON q.observation_id=o.id WHERE o.provider='claude' ORDER BY o.id DESC LIMIT 1`).Scan(&source, &key, &fraction)
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,9 +179,186 @@ func TestPassiveObservationReturnsQuicklyWhenDatabaseLocked(t *testing.T) {
 	data, _ := json.Marshal(map[string]any{"rate_limits": map[string]any{"five_hour": map[string]any{"used_percentage": 12.5}}})
 	started := time.Now()
 	ObserveStatusline(context.Background(), "claude", data)
-	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
-		t.Fatalf("locked write took %s", elapsed)
+	if elapsed := time.Since(started); elapsed > 20*time.Millisecond {
+		t.Fatalf("locked statusline observation took %s, want <=20ms", elapsed)
 	}
 	_ = tx.Rollback()
 	_ = blocker.Close()
+}
+
+func TestStatuslineObservationLargeStoreCompletesWithinBudget(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "large.sqlite")
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	observationStmt, err := tx.Prepare(`INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES('claude','claude-api',?,'fresh')`)
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		t.Fatal(err)
+	}
+	windowStmt, err := tx.Prepare(`INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction) VALUES(?,'claude','','five_hour','5-hour',0.5)`)
+	if err != nil {
+		observationStmt.Close()
+		tx.Rollback()
+		db.Close()
+		t.Fatal(err)
+	}
+	for i := 0; i < 50000; i++ {
+		observedAt := time.Unix(1_700_000_000+int64(i), 0).UTC().Format(time.RFC3339Nano)
+		result, err := observationStmt.Exec(observedAt)
+		if err != nil {
+			windowStmt.Close()
+			observationStmt.Close()
+			tx.Rollback()
+			db.Close()
+			t.Fatal(err)
+		}
+		observationID, err := result.LastInsertId()
+		if err != nil {
+			windowStmt.Close()
+			observationStmt.Close()
+			tx.Rollback()
+			db.Close()
+			t.Fatal(err)
+		}
+		if _, err := windowStmt.Exec(observationID); err != nil {
+			windowStmt.Close()
+			observationStmt.Close()
+			tx.Rollback()
+			db.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := windowStmt.Close(); err != nil {
+		tx.Rollback()
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := observationStmt.Close(); err != nil {
+		tx.Rollback()
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	started := time.Now()
+	ObserveStatuslineAt(ctx, "claude", []byte(`{"rate_limits":{"five_hour":{"used_percentage":12.5}}}`), dbPath)
+	if elapsed := time.Since(started); elapsed > 20*time.Millisecond {
+		t.Fatalf("statusline observation on 50k-row store took %s, want <=20ms", elapsed)
+	}
+}
+
+func TestStatuslineSkipsMigrationUntilUsageStoreCommand(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "old.sqlite")
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	observedAt := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339Nano)
+	if err := store.Exec(ctx, `INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES('claude','claude-api',?,'fresh')`, observedAt); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	var observationID int64
+	if err := store.QueryRow(ctx, `SELECT id FROM usage_observations WHERE observed_at=?`, observedAt).Scan(&observationID); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Exec(ctx, `INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction) VALUES(?,'claude','','five-hour','5-hour',0.5)`, observationID); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	ObserveStatuslineAt(ctx, "claude", []byte(`{"rate_limits":{"five_hour":{"used_percentage":12.5}}}`), dbPath)
+	store, err = usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var key string
+	if err := store.QueryRow(ctx, `SELECT window_key FROM quota_windows WHERE id=(SELECT min(id) FROM quota_windows WHERE observation_id=?)`, observationID).Scan(&key); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if key != "five-hour" {
+		store.Close()
+		t.Fatalf("statusline migrated old key to %q", key)
+	}
+	var migrationTable int
+	if err := store.QueryRow(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='usage_store_migrations'`).Scan(&migrationTable); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	var migrated int
+	if migrationTable > 0 {
+		if err := store.QueryRow(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='normalized-window-keys-v4'`).Scan(&migrated); err != nil {
+			store.Close()
+			t.Fatal(err)
+		}
+	}
+	if migrated != 0 {
+		store.Close()
+		t.Fatalf("statusline migration marker count = %d, want 0", migrated)
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		var observations int
+		err := store.QueryRow(ctx, `SELECT count(*) FROM usage_observations WHERE source='statusline'`).Scan(&observations)
+		if err == nil && observations > 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = StoreCompactSummaryAt(ctx, t.TempDir(), UsageSummary{Timestamp: time.Now().UTC()}, dbPath)
+	if err != nil {
+		t.Fatalf("usage store command migration: %v", err)
+	}
+	store, err = usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.QueryRow(ctx, `SELECT window_key FROM quota_windows WHERE observation_id=?`, observationID).Scan(&key); err != nil {
+		t.Fatal(err)
+	}
+	if want := usagestore.NormalizeWindowKey("claude", "", "5-hour"); key != want {
+		t.Fatalf("usage command migrated key to %q, want %q", key, want)
+	}
 }

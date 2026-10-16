@@ -58,7 +58,9 @@ type UsageSummaryRecord struct {
 	Hostname   string
 	ObservedAt time.Time
 	Payload    []byte
-	RecordKey  string
+	// RecordKey defaults to hostname:observed_at. Importers leave it empty so
+	// the same snapshot read from several sources stays one row (issue 735).
+	RecordKey string
 }
 
 // TurnQuotaDelta is a same-provider, same-pool, same-window comparison.
@@ -119,6 +121,59 @@ func (s *Store) WriteUsageSummary(ctx context.Context, record UsageSummaryRecord
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO usage_summary_observations(hostname,observed_at,summary_json,record_key) VALUES(?,?,?,?) ON CONFLICT(record_key) DO UPDATE SET hostname=excluded.hostname,observed_at=excluded.observed_at,summary_json=excluded.summary_json`, record.Hostname, record.ObservedAt.UTC().Format(time.RFC3339Nano), string(record.Payload), record.RecordKey)
 	return err
+}
+
+// LatestUsageSummaryAt returns the newest snapshot time recorded for
+// hostname; ok is false when there is none.
+func (s *Store) LatestUsageSummaryAt(ctx context.Context, hostname string) (at time.Time, ok bool, err error) {
+	var observed sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT max(observed_at) FROM usage_summary_observations WHERE hostname=?`, hostname).Scan(&observed); err != nil {
+		return time.Time{}, false, err
+	}
+	if !observed.Valid {
+		return time.Time{}, false, nil
+	}
+	at, err = time.Parse(time.RFC3339Nano, observed.String)
+	return at, err == nil, err
+}
+
+// DedupeUsageSummaries removes snapshot copies that older importers stored
+// under source-specific record keys (issue 735: the same legacy history line
+// imported from two directories and the archive became three rows). It keeps
+// the oldest row per (hostname, observed_at), rewrites every record_key to
+// that canonical pair, and records a migration marker so it runs once. It
+// returns the number of deleted rows.
+func (s *Store) DedupeUsageSummaries(ctx context.Context) (int64, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS usage_store_migrations (name TEXT PRIMARY KEY, completed_at TEXT NOT NULL)`); err != nil {
+		return 0, err
+	}
+	var done int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='usage-summary-dedupe-v1'`).Scan(&done); err != nil {
+		return 0, err
+	}
+	if done > 0 {
+		return 0, nil
+	}
+	result, err := tx.ExecContext(ctx, `DELETE FROM usage_summary_observations WHERE id NOT IN (SELECT min(id) FROM usage_summary_observations GROUP BY hostname,observed_at)`)
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE usage_summary_observations SET record_key=hostname||':'||observed_at WHERE record_key<>hostname||':'||observed_at`); err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('usage-summary-dedupe-v1',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		return 0, err
+	}
+	return deleted, tx.Commit()
 }
 
 // LatestProviderSnapshot returns normalized quota windows from the newest
@@ -392,12 +447,12 @@ func (s *Store) WritePassive(ctx context.Context, dedupeInterval time.Duration, 
 		if w.ObservedAt.IsZero() {
 			w.ObservedAt = time.Now()
 		}
-		var count int
-		err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=? AND q.pool=? AND q.window_key=? AND o.source=? AND q.used_fraction=? AND COALESCE(q.reset_at,'')=COALESCE(?, '') AND o.observed_at>=?`, w.Provider, w.Pool, w.Key, w.Source, w.UsedFraction, timeValue(w.ResetAt), w.ObservedAt.Add(-dedupeInterval).UTC().Format(time.RFC3339Nano)).Scan(&count)
-		if err != nil {
+		var found int
+		err := s.db.QueryRowContext(ctx, `SELECT 1 FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=? AND q.pool=? AND q.window_key=? AND o.source=? AND q.used_fraction=? AND COALESCE(q.reset_at,'')=COALESCE(?, '') AND o.observed_at>=? LIMIT 1`, w.Provider, w.Pool, w.Key, w.Source, w.UsedFraction, timeValue(w.ResetAt), w.ObservedAt.Add(-dedupeInterval).UTC().Format(time.RFC3339Nano)).Scan(&found)
+		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
-		if count == 0 {
+		if err == sql.ErrNoRows {
 			filtered = append(filtered, w)
 		}
 	}

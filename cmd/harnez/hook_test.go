@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -59,6 +62,73 @@ func TestRunAgyToolHook_AllowOutput(t *testing.T) {
 	}
 	if recorded.Note != "" {
 		t.Errorf("recorded.Note = %q, want empty", recorded.Note)
+	}
+}
+
+func TestAgyHooksSendTurnEventsWithoutChangingOutput(t *testing.T) {
+	storeDir := t.TempDir()
+	oldStoreDir := agyControlStoreDir
+	agyControlStoreDir = func() string { return storeDir }
+	defer func() { agyControlStoreDir = oldStoreDir }()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(storeDir, "session.sock")
+	session := &subagent.Session{ID: "hook-session", Name: "hook-session", ControlSocket: socket}
+	if err := store.Create(session); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	requests := make(chan subagent.ControlRequest, 2)
+	go func() {
+		for i := 0; i < 2; i++ {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			var req subagent.ControlRequest
+			_ = json.NewDecoder(conn).Decode(&req)
+			requests <- req
+			_ = json.NewEncoder(conn).Encode(subagent.ControlResponse{})
+			_ = conn.Close()
+		}
+	}()
+	t.Setenv("HARNEZ_SESSION_ID", session.ID)
+
+	var preOut bytes.Buffer
+	err = runAgyToolHook(strings.NewReader(`{"conversationId":"agy-conv","toolCall":{"name":"generate_image","args":{}}}`), &preOut, agyHookOptions{DBPath: ""})
+	if err != nil {
+		t.Fatalf("pre-tool hook: %v", err)
+	}
+	if got := strings.TrimSpace(preOut.String()); got != `{"decision":"allow"}` {
+		t.Fatalf("pre-tool output = %q", got)
+	}
+	var postOut bytes.Buffer
+	if err := runAgyPostToolHook(strings.NewReader(`{"conversationId":"agy-conv","output":"done"}`), &postOut, agyPostHookOptions{DBPath: filepath.Join(storeDir, "missing.db"), Update: func(string, string, int64, int64) error { return nil }}); err != nil {
+		t.Fatalf("post-tool hook: %v", err)
+	}
+	if got := strings.TrimSpace(postOut.String()); got != `{}` {
+		t.Fatalf("post-tool output = %q", got)
+	}
+	gotEvents := map[string]bool{}
+	for range 2 {
+		select {
+		case req := <-requests:
+			if req.Action != "turn" || (req.Event != "tool-start" && req.Event != "tool-end") {
+				t.Fatalf("turn request = %+v", req)
+			}
+			gotEvents[req.Event] = true
+		case <-time.After(time.Second):
+			t.Fatal("did not receive turn event")
+		}
+	}
+	if !gotEvents["tool-start"] || !gotEvents["tool-end"] {
+		t.Fatalf("received events = %v", gotEvents)
 	}
 }
 
@@ -887,5 +957,36 @@ func TestRunAgyToolHook_DisallowedToolRejected(t *testing.T) {
 				t.Errorf("recorded.Note = %q, want tool_policy:rejected", recorded.Note)
 			}
 		})
+	}
+}
+
+func TestRunAgyToolHook_SkillInferred(t *testing.T) {
+	t.Setenv("HARNEZ_AGY_METER_SESSION_ID", "")
+	in := bytes.NewBufferString(`{
+		"conversationId": "test-conv-123",
+		"toolCall": {
+			"name": "view_file",
+			"args": {"AbsolutePath": "/home/u/.gemini/skills/evergreen/SKILL.md"}
+		},
+		"stepIdx": 1
+	}`)
+	var out bytes.Buffer
+	var recorded []telemetry.ToolCall
+	opts := agyHookOptions{
+		DBPath: "/tmp/dummy.db",
+		Insert: func(_ string, call telemetry.ToolCall) error {
+			recorded = append(recorded, call)
+			return nil
+		},
+	}
+	if err := runAgyToolHook(in, &out, opts); err != nil {
+		t.Fatalf("runAgyToolHook: %v", err)
+	}
+	if len(recorded) != 2 {
+		t.Fatalf("recorded %d calls, want 2 (view_file + inferred skill)", len(recorded))
+	}
+	skillRow := recorded[1]
+	if skillRow.ToolName != "Skill" || skillRow.SkillName != "evergreen" || skillRow.CallType != "skill-inferred" || skillRow.AgentID != "agy" {
+		t.Fatalf("unexpected skill row: %+v", skillRow)
 	}
 }

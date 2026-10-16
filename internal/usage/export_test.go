@@ -59,8 +59,8 @@ func TestBuildUsageExport_ScrubsAccountAndHostname(t *testing.T) {
 	}
 
 	got := exp.Points[0]
-	if got.Hostname != "host-1" {
-		t.Errorf("Hostname = %q, want anonymized label %q", got.Hostname, "host-1")
+	if !strings.HasPrefix(got.Hostname, "host-") || len(got.Hostname) != len("host-")+8 {
+		t.Errorf("Hostname = %q, want HMAC anonymized label with prefix 'host-' and 8 hex chars", got.Hostname)
 	}
 	if got.Account == rawEmail {
 		t.Errorf("Account was not masked at all: %q", got.Account)
@@ -101,31 +101,44 @@ func TestBuildUsageExport_DropsSourcesAndDetails(t *testing.T) {
 	}
 }
 
-// TestBuildUsageExport_StableHostLabels asserts that the same real
-// hostname maps to the same anonymized label across multiple entries in
-// one export, and that a different real hostname gets a distinct label,
-// so per-machine trends stay distinguishable without leaking the real name.
+// TestBuildUsageExport_StableHostLabels asserts:
+// - Stable across two export invocations (with the same key)
+// - Case-insensitive hostnames result in the same label (e.g. "My-Host" vs "my-host")
+// - Distinct hostnames produce distinct labels (e.g. "t14" vs "t14s")
+// - Real hostname never appears in the output
 func TestBuildUsageExport_StableHostLabels(t *testing.T) {
-	entries := []HistoryEntry{
-		{Hostname: "alice-laptop", UsageSummary: UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude"}}}},
-		{Hostname: "bob-desktop", UsageSummary: UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude"}}}},
-		{Hostname: "alice-laptop", UsageSummary: UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude"}}}},
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+
+	entries1 := []HistoryEntry{
+		{Hostname: "t14", UsageSummary: UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude"}}}},
+		{Hostname: "t14s", UsageSummary: UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude"}}}},
+		{Hostname: "T14", UsageSummary: UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude"}}}},
 	}
-	exp := BuildUsageExport(entries, time.Now())
-	if len(exp.Points) != 3 {
-		t.Fatalf("expected 3 points, got %d", len(exp.Points))
+	exp1 := BuildUsageExport(entries1, time.Now())
+	if len(exp1.Points) != 3 {
+		t.Fatalf("expected 3 points, got %d", len(exp1.Points))
 	}
-	if exp.Points[0].Hostname != exp.Points[2].Hostname {
-		t.Errorf("same real hostname got different labels: %q vs %q", exp.Points[0].Hostname, exp.Points[2].Hostname)
+	if exp1.Points[0].Hostname != exp1.Points[2].Hostname {
+		t.Errorf("case-insensitive hostname mismatch: %q vs %q", exp1.Points[0].Hostname, exp1.Points[2].Hostname)
 	}
-	if exp.Points[0].Hostname == exp.Points[1].Hostname {
-		t.Errorf("different real hostnames got the same label: %q", exp.Points[0].Hostname)
+	if exp1.Points[0].Hostname == exp1.Points[1].Hostname {
+		t.Errorf("t14 and t14s got the same label: %q", exp1.Points[0].Hostname)
 	}
-	data, err := json.Marshal(exp)
+
+	// Second export invocation should produce identical host labels
+	entries2 := []HistoryEntry{
+		{Hostname: "t14", UsageSummary: UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude"}}}},
+	}
+	exp2 := BuildUsageExport(entries2, time.Now())
+	if exp2.Points[0].Hostname != exp1.Points[0].Hostname {
+		t.Errorf("export label not stable across calls: %q vs %q", exp2.Points[0].Hostname, exp1.Points[0].Hostname)
+	}
+
+	data, err := json.Marshal(exp1)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if strings.Contains(string(data), "alice-laptop") || strings.Contains(string(data), "bob-desktop") {
+	if strings.Contains(string(data), "t14") || strings.Contains(string(data), "t14s") {
 		t.Fatalf("raw hostname leaked into export JSON: %s", data)
 	}
 }
@@ -165,5 +178,16 @@ func TestExportHistory(t *testing.T) {
 	}
 	if strings.Contains(string(data), "Some.Real.Host") {
 		t.Fatalf("raw hostname leaked into export JSON: %s", data)
+	}
+}
+
+// An export without usage points writes "points": [], not null (issue 735).
+func TestBuildUsageExport_NoPointsIsEmptyArray(t *testing.T) {
+	data, err := json.Marshal(BuildUsageExport(nil, time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"points":[]`) {
+		t.Fatalf("export = %s, want \"points\":[]", data)
 	}
 }

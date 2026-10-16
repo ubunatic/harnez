@@ -293,7 +293,7 @@ func tableColumns(t *testing.T, db *DB, table string) map[string]bool {
 
 func TestOpenMigratesHistoricalTelemetrySchemas(t *testing.T) {
 	currentToolCalls := map[string]bool{}
-	for _, name := range []string{"id", "created_at", "session_id", "ticket_id", "project_name", "working_dir", "agent_id", "tool_name", "call_type", "score", "note", "exit_code", "duration_ms", "raw_bytes", "distilled_bytes", "output_bytes", "actual_tokens", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "potential_savings_tokens", "potential_savings_bytes"} {
+	for _, name := range []string{"id", "created_at", "session_id", "ticket_id", "project_name", "working_dir", "agent_id", "tool_name", "call_type", "score", "note", "exit_code", "duration_ms", "raw_bytes", "distilled_bytes", "output_bytes", "actual_tokens", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "potential_savings_tokens", "potential_savings_bytes", "skill_name"} {
 		currentToolCalls[name] = true
 	}
 	currentCompaction := map[string]bool{}
@@ -1078,4 +1078,27 @@ func itoa(n int) string { return strconv.Itoa(n) }
 func atoi(s string) int {
 	n, _ := strconv.Atoi(s)
 	return n
+}
+
+// Issue 735: a Skill row keeps its skill name through insert, query and
+// export; other rows export no skill field.
+func TestSkillNameRoundTripsToExport(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.Insert(ToolCall{SessionID: "s", AgentID: "claude", ToolName: "Skill", CallType: "hook:post", SkillName: "plugin-dev:hook-development"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Insert(ToolCall{SessionID: "s", AgentID: "claude", ToolName: "Bash", CallType: "shell"}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	skills := map[string]string{}
+	for _, call := range BuildExport(rows, time.Now()).ToolCalls {
+		skills[call.ToolName] = call.Skill
+	}
+	if skills["Skill"] != "plugin-dev:hook-development" || skills["Bash"] != "" {
+		t.Fatalf("exported skills = %v", skills)
+	}
 }

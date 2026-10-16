@@ -51,3 +51,21 @@ X", "reuse my advisor from earlier"); or stop and report when blocked on an owne
 denied permission.
 
 Check the live skill, `harnez agent` help and recent commits first; this ticket may be stale.
+
+## 4. Delivery & Verification
+
+- Owner clarification: lean sprints are the usual workflow; ordinary "ask for help", "get a
+  review", and "ask an agent" requests should dispatch one helper with a short prompt.
+- Narrowed skill discovery to explicit session reuse; replaced provider-specific archaeology
+  and mandatory compaction with current native/Harnez dispatch and continuation guidance.
+- Removed the issue skill's implicit routing into advisor lifecycle guidance. Refreshed both
+  installed skills for Codex, Claude, Gemini, Prime, and Pi.
+- Independent read-only review dry-ran quick second opinion, review, generic helper, and explicit
+  reuse prompts: all route as intended. Applied its narrower-description and tracked-resume suggestions.
+- Installed skill validation and scoped diff whitespace check passed; `make install` passed.
+- Full test suite not run: unrelated issue 735 code changes were present, and quota rules require
+  a clean tree first. Ticket remains open pending that verification. No live provider call was made.
+- Later scoped-checkout verification for harnez.org issue 032 passed the CLI, configuration,
+  and skill-registry packages, including skill installation checks. This is relevant evidence,
+  but does not replace the pending full-suite run. Evergreen routing guidance is now updated in
+  `docs/CommandsPipeline.md`; no real model-selection session was exercised.

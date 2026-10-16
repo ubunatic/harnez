@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "harnez-channel": {
+      "type": "stdio",
+      "command": "harnez",
+      "args": ["channel"]
+    }
+  }
+}

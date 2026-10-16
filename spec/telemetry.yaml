@@ -25,7 +25,9 @@ schema: |
   	reasoning_tokens INTEGER,
   	total_tokens INTEGER,
   	potential_savings_tokens INTEGER,
-  	potential_savings_bytes INTEGER
+  	potential_savings_bytes INTEGER,
+  	-- Issue 735: the skill a Skill row (tool_name 'Skill') ran; '' otherwise.
+  	skill_name TEXT NOT NULL DEFAULT ''
   );
   
   CREATE INDEX IF NOT EXISTS idx_tool_calls_session_id  ON tool_calls (session_id);
@@ -234,13 +236,13 @@ statements:
   insert_session_boundary: "INSERT INTO session_boundaries (created_at, session_id, boundary_type, compaction_event_id) VALUES (?, ?, ?, ?)"
   insert_token_snapshot: "INSERT INTO token_snapshots (created_at, session_id, source, boundary_id, input_tokens, cached_input_tokens, uncached_input_tokens, output_tokens, reasoning_tokens, total_tokens, last_input_tokens, last_cached_input_tokens, last_output_tokens, last_reasoning_tokens, last_total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   insert_tool_call: |
-    INSERT INTO tool_calls (created_at, session_id, ticket_id, project_name, working_dir, agent_id, tool_name, call_type, score, note, exit_code, duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, potential_savings_tokens, potential_savings_bytes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tool_calls (created_at, session_id, ticket_id, project_name, working_dir, agent_id, tool_name, call_type, score, note, exit_code, duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, potential_savings_tokens, potential_savings_bytes, skill_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   insert_cli_invocation: |
     INSERT INTO cli_invocations (created_at, session_id, agent_id, command, args, project_name, working_dir, ticket_id, exit_code, duration_ms, harnez_version)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   query: |
-    SELECT id, created_at, session_id, ticket_id, project_name, working_dir, agent_id, tool_name, call_type, score, note, exit_code, duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, potential_savings_tokens, potential_savings_bytes FROM tool_calls{{where}} ORDER BY created_at DESC
+    SELECT id, created_at, session_id, ticket_id, project_name, working_dir, agent_id, tool_name, call_type, score, note, exit_code, duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, potential_savings_tokens, potential_savings_bytes, skill_name FROM tool_calls{{where}} ORDER BY created_at DESC
   aggregate_grouped: |
     SELECT {{group_column}}, COUNT(*), AVG(score), COUNT(score), COUNT(CASE WHEN call_type != ? AND ((exit_code IS NOT NULL AND exit_code != 0) OR (score IS NOT NULL AND score <= 2)) THEN 1 END), COALESCE(SUM(raw_bytes), 0), COALESCE(SUM(distilled_bytes), 0), AVG(duration_ms), AVG(actual_tokens), COALESCE(SUM(potential_savings_tokens), 0), COALESCE(SUM(potential_savings_bytes), 0) FROM tool_calls{{where}} GROUP BY {{group_column}} ORDER BY COUNT(*) DESC, {{group_column}} ASC
   aggregate: |
@@ -256,6 +258,22 @@ statements:
     SELECT id, created_at, session_id, agent_id, command, args, project_name, working_dir, ticket_id, exit_code, duration_ms, harnez_version FROM cli_invocations{{where}} ORDER BY created_at DESC, id DESC
 # Count CLI invocations grouped by command.
   cli_invocation_counts: 'SELECT command, COUNT(*) FROM cli_invocations{{where}} GROUP BY command'
+# Issue 735: recover tool calls kept only in a legacy database. {{legacy}} is
+# the generated schema alias of one attached file (legacy_0, ...). {{columns}}
+# is the column list both tables share; a row counts as present when its
+# (created_at, session_id, agent_id, tool_name, call_type) already exists;
+# NOT EXISTS uses idx_tool_calls_created_at (a row-value NOT IN does not).
+  legacy_attach: 'ATTACH DATABASE ? AS {{legacy}}'
+  legacy_detach: 'DETACH DATABASE {{legacy}}'
+  legacy_tool_call_columns: "SELECT name FROM pragma_table_info('tool_calls', '{{legacy}}') WHERE name <> 'id' AND name IN (SELECT name FROM pragma_table_info('tool_calls', 'main'))"
+  legacy_tool_calls_missing: |
+    SELECT COUNT(*) FROM {{legacy}}.tool_calls l WHERE NOT EXISTS (SELECT 1 FROM main.tool_calls m WHERE m.created_at = l.created_at AND m.session_id = l.session_id AND m.agent_id = l.agent_id AND m.tool_name = l.tool_name AND m.call_type = l.call_type)
+  legacy_tool_calls_merge: |
+    INSERT INTO main.tool_calls ({{columns}}) SELECT {{columns}} FROM {{legacy}}.tool_calls l WHERE NOT EXISTS (SELECT 1 FROM main.tool_calls m WHERE m.created_at = l.created_at AND m.session_id = l.session_id AND m.agent_id = l.agent_id AND m.tool_name = l.tool_name AND m.call_type = l.call_type) ORDER BY l.created_at, l.id
+  tool_call_count: 'SELECT COUNT(*) FROM tool_calls'
+  tool_calls_columns: "SELECT name FROM pragma_table_info('tool_calls')"
+  tool_calls_add_skill_name: "ALTER TABLE tool_calls ADD COLUMN skill_name TEXT NOT NULL DEFAULT ''"
+  backup_into: 'VACUUM INTO ?'
   prune_cli_invocations: 'DELETE FROM cli_invocations WHERE id <= (SELECT MAX(id) - ? FROM cli_invocations)'
 predicates:
   tool_name: {sql: 'tool_name = ?'}

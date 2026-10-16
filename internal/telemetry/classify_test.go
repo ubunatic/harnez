@@ -434,3 +434,25 @@ func TestDefaultLocalClassifier_ClassifyBatch_ViaClassifyNotes(t *testing.T) {
 		t.Fatalf("ClassifyNotes() = %v, want [%q] (graceful fallback)", cats, CategoryOther)
 	}
 }
+
+// TestGetCachedCategoriesBeyondVariableLimit looks up more hashes than SQLite
+// binds in one statement; the full history needs that (issue 735).
+func TestGetCachedCategoriesBeyondVariableLimit(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	hashes := make([]string, 40000)
+	for i := range hashes {
+		hashes[i] = fmt.Sprintf("h%d", i)
+	}
+	last := hashes[len(hashes)-1]
+	if err := db.PutCachedCategories(ctx, map[string]ActivityCategory{"h0": CategoryDebug, last: CategoryTest}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.GetCachedCategories(ctx, hashes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got["h0"] != CategoryDebug || got[last] != CategoryTest {
+		t.Fatalf("got %v", got)
+	}
+}

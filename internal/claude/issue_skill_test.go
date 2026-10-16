@@ -35,6 +35,20 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		}
 		assertIssueTLDR(t, path, content)
 		assertIssueGoalExitClause(t, path, content)
+		for _, name := range []string{"issue", "review", "roadmap"} {
+			path := filepath.Join(skillsRoot, name, "SKILL.md")
+			content := readIssueInstall(t, path)
+			if !strings.Contains(content, "only when the user explicitly") || !strings.Contains(content, "requests image output") {
+				t.Errorf("%s must reserve PNG rendering for explicit user requests", path)
+			}
+			for _, line := range strings.Split(content, "\n") {
+				if strings.Contains(line, "`harnez") || strings.HasPrefix(line, "harnez ") {
+					if strings.Contains(line, " -I") || strings.Contains(line, " --image") {
+						t.Errorf("%s recommends routine image rendering: %s", path, line)
+					}
+				}
+			}
+		}
 	}
 
 	out, err := captureStdoutClaudeSkills(func() error {

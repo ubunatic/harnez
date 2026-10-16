@@ -152,6 +152,20 @@ func (d *DB) GetCachedCategories(ctx context.Context, hashes []string) (map[stri
 		return out, nil
 	}
 
+	for start := 0; start < len(hashes); start += cacheLookupBatch {
+		end := min(start+cacheLookupBatch, len(hashes))
+		if err := d.getCachedCategories(ctx, hashes[start:end], out); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// cacheLookupBatch keeps each lookup below SQLite's limit on bound
+// variables, which the full tool-call history exceeds (issue 735).
+const cacheLookupBatch = 500
+
+func (d *DB) getCachedCategories(ctx context.Context, hashes []string, out map[string]ActivityCategory) error {
 	placeholders := make([]string, len(hashes))
 	args := make([]any, len(hashes))
 	for i, h := range hashes {
@@ -164,14 +178,14 @@ func (d *DB) GetCachedCategories(ctx context.Context, hashes []string) (map[stri
 	)
 	rows, err := d.sql.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("telemetry: query note_category_cache: %w", err)
+		return fmt.Errorf("telemetry: query note_category_cache: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var hash, catStr string
 		if err := rows.Scan(&hash, &catStr); err != nil {
-			return nil, fmt.Errorf("telemetry: scan note_category_cache row: %w", err)
+			return fmt.Errorf("telemetry: scan note_category_cache row: %w", err)
 		}
 		cat := ActivityCategory(catStr)
 		if cat.IsValid() {
@@ -180,7 +194,7 @@ func (d *DB) GetCachedCategories(ctx context.Context, hashes []string) (map[stri
 			out[hash] = CategoryOther
 		}
 	}
-	return out, rows.Err()
+	return rows.Err()
 }
 
 // PutCachedCategories writes entries (raw_hash -> category) into

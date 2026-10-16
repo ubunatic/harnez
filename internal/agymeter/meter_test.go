@@ -135,6 +135,61 @@ func TestResponseObserverPassesSSEThroughAndKeepsLastUsage(t *testing.T) {
 	}
 }
 
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+type recordingObserver struct {
+	requests int
+	finished chan bool
+}
+
+func (o *recordingObserver) RequestStarted()                    { o.requests++ }
+func (o *recordingObserver) ResponseFinished(functionCall bool) { o.finished <- functionCall }
+
+func TestForwardNotifiesObserverForFunctionCallAndFinalResponse(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		payload      string
+		functionCall bool
+	}{
+		{name: "tool call", payload: `{"response":{"candidates":[{"content":{"parts":[{"functionCall":{"name":"search"}}]}}]}}`, functionCall: true},
+		{name: "final response", payload: `{"response":{"candidates":[{"content":{"parts":[{"text":"done"}]}}]}}`, functionCall: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			observer := &recordingObserver{finished: make(chan bool, 1)}
+			input := []byte("data: " + tc.payload + "\n\n")
+			m := &Meter{observer: observer, logPath: filepath.Join(t.TempDir(), "usage.jsonl")}
+			m.transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+					Body:       io.NopCloser(bytes.NewReader(input)),
+					Request:    r,
+				}, nil
+			})
+			req := httptest.NewRequest(http.MethodPost, "http://meter/v1internal:streamGenerateContent", strings.NewReader(`{"model":"test"}`))
+			recorder := httptest.NewRecorder()
+			m.forward(recorder, req)
+			if observer.requests != 1 {
+				t.Fatalf("RequestStarted count = %d, want 1", observer.requests)
+			}
+			if got := recorder.Body.Bytes(); !bytes.Equal(got, input) {
+				t.Fatalf("response bytes changed: %q", got)
+			}
+			select {
+			case got := <-observer.finished:
+				if got != tc.functionCall {
+					t.Fatalf("ResponseFinished(%t), want %t", got, tc.functionCall)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("ResponseFinished was not called")
+			}
+		})
+	}
+}
+
 func TestResponseObserverDecodesGzipQuotaJSON(t *testing.T) {
 	m, err := New(t.TempDir())
 	if err != nil {

@@ -93,6 +93,9 @@ func TestEmbeddedAgentSpecLoadsAndResolves(t *testing.T) {
 	if spec.ExternalSessions["codex"].Format != "jsonl" {
 		t.Fatalf("Codex external session spec = %#v", spec.ExternalSessions["codex"])
 	}
+	if spec.ReplyHistoryLimit != 20 {
+		t.Fatalf("reply history limit = %d, want 20", spec.ReplyHistoryLimit)
+	}
 }
 
 func TestExternalSessionSchemaDeclaresRuntimeFields(t *testing.T) {
@@ -199,7 +202,7 @@ func TestParseAgentSpecRejectsBadDefault(t *testing.T) {
 }
 
 func TestParseAgentSpecRequiresExternalSessionDiscovery(t *testing.T) {
-	data := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\ndefault_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
+	data := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ndefault_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
 	if _, err := parseAgentSpec([]byte(data)); err == nil || !strings.Contains(err.Error(), "external_sessions") {
 		t.Fatalf("parse without external_sessions = %v, want required provider error", err)
 	}
@@ -334,7 +337,7 @@ func TestResolveRoleDynamicStaticBeforeClassifierAndGracefulFallback(t *testing.
 }
 
 func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
-	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\n" + testExternalSessionSpecYAML
+	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\n" + testExternalSessionSpecYAML
 	for name, doc := range map[string]string{
 		"default role undefined": base + "default_role: nobody\nroles:\n  a: {description: fine, spawns: [], rules: x}\n",
 		"spawns undefined role":  base + "default_role: a\nroles:\n  a: {description: fine, spawns: [b], rules: x}\n",
@@ -356,7 +359,7 @@ func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 
 func TestParseAgentSpecDoesNotMutateModelAliases(t *testing.T) {
 	before := KnownModels()
-	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\nrole_classify_timeout_ms: 1500\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
+	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
 		t.Fatal(err)
 	}
 	after := KnownModels()

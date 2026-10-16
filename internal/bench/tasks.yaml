@@ -134,3 +134,15 @@ tasks:
     # A summary that covers most docs proves the skill; tolerate two misses.
     allow_missing: 2
     pattern: '\|\s*:?---'
+
+  - id: harnez-selftest
+    rule: "native agent background task execution flow and self-test command progression"
+    prompt: |
+      Run the harnez agent background self-test. Do the steps in order and do not skip or guess any.
+      1. Run `harnez agent selftest --step hello` and follow each instruction it prints.
+      2. Start `HTO=0 harnez agent selftest --step background` as a native background task or job.
+      3. Run `harnez agent selftest --step confirm` while the background task is running, then `harnez agent selftest --step confirm-running 1s`.
+      4. Wait for the background task to finish, then run `harnez agent selftest --step verify`.
+      Reply with the output line that verify prints.
+    pattern: 'PASS: Background execution self-test passed'
+    forbid_pattern: 'FAIL|was never'

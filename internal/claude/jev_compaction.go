@@ -21,7 +21,7 @@ const (
 	jevPluginID        = jevPluginName + "@" + jevMarketplaceName
 )
 
-//go:embed jevcompaction
+//go:embed jevcompaction channelplugin
 var jevPluginAssets embed.FS
 
 type jevCompactionSpec struct {
@@ -72,7 +72,7 @@ func renderJevHook(spec jevCompactionSpec) ([]byte, error) {
 	return []byte(content), nil
 }
 
-func applyJevCompactionPlugin(target string, enabled bool, preserveFunctionHookFlag ...bool) (applyResult, error) {
+func applyManagedLocalPlugins(target string, enabled bool, channelEnabled bool, preserveFunctionHookFlag ...bool) (applyResult, error) {
 	settingsPath := filepath.Join(target, "settings.json")
 	settings := jsonc.Read(settingsPath)
 	changed := false
@@ -105,13 +105,30 @@ func applyJevCompactionPlugin(target string, enabled bool, preserveFunctionHookF
 	installedPath := filepath.Join(target, "plugins", "installed_plugins.json")
 	installed := readJSONMap(installedPath)
 	marketplaceDir := filepath.Join(target, "plugins", "marketplaces", jevMarketplaceName)
-	cacheDir := filepath.Join(target, "plugins", "cache", jevMarketplaceName, jevPluginName, harnez.Version)
-	_, pluginEnabled := plugins[jevPluginID]
-	_, marketplaceManaged := known[jevMarketplaceName]
 	installedPlugins, _ := installed["plugins"].(map[string]any)
+	if installedPlugins == nil {
+		installedPlugins = map[string]any{}
+	}
+	_, pluginEnabled := plugins[jevPluginID]
 	_, installedPlugin := installedPlugins[jevPluginID]
-	pluginManaged := pluginEnabled || marketplaceManaged || installedPlugin || fileExists(filepath.Join(target, "plugins", "cache", jevMarketplaceName, jevPluginName))
+	pluginManaged := pluginEnabled || installedPlugin || fileExists(filepath.Join(target, "plugins", "cache", jevMarketplaceName, jevPluginName))
 
+	// Apply installs the channel independently of compaction; clean disables both.
+	type pluginFile struct {
+		path string
+		data []byte
+	}
+	managedPlugins := []struct {
+		name    string
+		enabled bool
+		files   []pluginFile
+	}{
+		{name: "harnez-channel", enabled: channelEnabled, files: []pluginFile{
+			{".claude-plugin/plugin.json", renderVersionAsset("channelplugin/plugin.json")},
+			{".mcp.json", mustAsset("channelplugin/mcp.json")},
+		}},
+		{name: jevPluginName, enabled: enabled},
+	}
 	if enabled {
 		spec, err := loadJevCompactionSpec(harnez.DefaultFS)
 		if err != nil {
@@ -121,106 +138,103 @@ func applyJevCompactionPlugin(target string, enabled bool, preserveFunctionHookF
 		if err != nil {
 			return applyResult{}, err
 		}
-		for _, item := range []struct {
-			path string
-			data []byte
-		}{
-			{filepath.Join(marketplaceDir, "marketplace.json"), mustAsset("jevcompaction/marketplace.json")},
-			{filepath.Join(marketplaceDir, "plugins", jevPluginName, ".claude-plugin", "plugin.json"), renderVersionAsset("jevcompaction/plugin.json")},
-			{filepath.Join(marketplaceDir, "plugins", jevPluginName, "hooks", "hooks.json"), mustAsset("jevcompaction/hooks.json")},
-			{filepath.Join(marketplaceDir, "plugins", jevPluginName, "hooks", "jev-compact.ts"), hook},
-			{filepath.Join(cacheDir, ".claude-plugin", "plugin.json"), renderVersionAsset("jevcompaction/plugin.json")},
-			{filepath.Join(cacheDir, "hooks", "hooks.json"), mustAsset("jevcompaction/hooks.json")},
-			{filepath.Join(cacheDir, "hooks", "jev-compact.ts"), hook},
-		} {
-			result, err := writeFileIfChanged(item.path, item.data)
-			if err != nil {
+		managedPlugins[1].files = []pluginFile{
+			{".claude-plugin/plugin.json", renderVersionAsset("jevcompaction/plugin.json")},
+			{"hooks/hooks.json", mustAsset("jevcompaction/hooks.json")},
+			{"hooks/jev-compact.ts", hook},
+		}
+		setMapKey(env, "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "1")
+	} else if pluginManaged && !(len(preserveFunctionHookFlag) > 0 && preserveFunctionHookFlag[0]) {
+		removeMapKey(env, "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS")
+	}
+	for _, plugin := range managedPlugins {
+		id := plugin.name + "@" + jevMarketplaceName
+		pluginDir := filepath.Join(marketplaceDir, "plugins", plugin.name)
+		cacheRoot := filepath.Join(target, "plugins", "cache", jevMarketplaceName, plugin.name)
+		cacheDir := filepath.Join(cacheRoot, harnez.Version)
+		if plugin.enabled {
+			for _, root := range []string{pluginDir, cacheDir} {
+				for _, file := range plugin.files {
+					result, err := writeFileIfChanged(filepath.Join(root, file.path), file.data)
+					if err != nil {
+						return applyResult{}, err
+					}
+					changed = changed || result.changed
+				}
+			}
+			setMapKey(plugins, id, true)
+			setMapKey(installedPlugins, id, []any{map[string]any{"scope": "user", "installPath": cacheDir, "version": harnez.Version}})
+		} else {
+			removeMapKey(plugins, id)
+			removeMapKey(installedPlugins, id)
+			for _, dir := range []string{pluginDir, cacheRoot} {
+				if fileExists(dir) {
+					changed = true
+				}
+				if err := os.RemoveAll(dir); err != nil {
+					return applyResult{}, err
+				}
+			}
+		}
+	}
+	if enabled || channelEnabled {
+		// Claude reads directory marketplaces only from .claude-plugin/marketplace.json.
+		result, err := writeFileIfChanged(filepath.Join(marketplaceDir, ".claude-plugin", "marketplace.json"), mustAsset("jevcompaction/marketplace.json"))
+		if err != nil {
+			return applyResult{}, err
+		}
+		changed = changed || result.changed
+		staleManifest := filepath.Join(marketplaceDir, "marketplace.json")
+		if fileExists(staleManifest) {
+			if err := os.Remove(staleManifest); err != nil {
 				return applyResult{}, err
 			}
-			changed = changed || result.changed
+			changed = true
 		}
-		setMapKey(plugins, jevPluginID, true)
-		settings["enabledPlugins"] = plugins
 		setMapKey(extraKnown, jevMarketplaceName, map[string]any{
 			"source": map[string]any{"source": "directory", "path": marketplaceDir},
 		})
-		settings["extraKnownMarketplaces"] = extraKnown
-		setMapKey(env, "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "1")
-		settings["env"] = env
-		known[jevMarketplaceName] = map[string]any{
+		setMapKey(known, jevMarketplaceName, map[string]any{
 			"installLocation": marketplaceDir,
 			"lastUpdated":     "1970-01-01T00:00:00.000Z",
 			"source":          map[string]any{"source": "directory", "path": marketplaceDir},
-		}
-		installed["version"] = 2
-		pluginEntries, _ := installed["plugins"].(map[string]any)
-		if pluginEntries == nil {
-			pluginEntries = map[string]any{}
-		}
-		entry := map[string]any{"scope": "user", "installPath": cacheDir, "version": harnez.Version}
-		setMapKey(pluginEntries, jevPluginID, []any{entry})
-		installed["plugins"] = pluginEntries
+		})
+		setMapKey(installed, "version", 2)
 	} else {
-		removeMapKey(plugins, jevPluginID)
-		if len(plugins) == 0 {
-			delete(settings, "enabledPlugins")
-		} else {
-			settings["enabledPlugins"] = plugins
-		}
 		if source, ok := extraKnown[jevMarketplaceName].(map[string]any); ok {
-			if sourceDetails, ok := source["source"].(map[string]any); ok && sourceDetails["path"] == marketplaceDir {
+			if details, ok := source["source"].(map[string]any); ok && details["path"] == marketplaceDir {
 				removeMapKey(extraKnown, jevMarketplaceName)
 			}
 		}
-		if len(extraKnown) == 0 {
-			delete(settings, "extraKnownMarketplaces")
-		} else {
-			settings["extraKnownMarketplaces"] = extraKnown
-		}
-		preserveFlag := len(preserveFunctionHookFlag) > 0 && preserveFunctionHookFlag[0]
-		if pluginManaged && !preserveFlag {
-			removeMapKey(env, "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS")
-		}
-		if len(env) == 0 {
-			delete(settings, "env")
-		} else {
-			settings["env"] = env
-		}
-		if marketplaceManaged {
+		if source, ok := known[jevMarketplaceName].(map[string]any); ok && source["installLocation"] == marketplaceDir {
 			removeMapKey(known, jevMarketplaceName)
-		}
-		pluginEntries := installedPlugins
-		removeMapKey(pluginEntries, jevPluginID)
-		if len(pluginEntries) == 0 {
-			delete(installed, "plugins")
-		} else {
-			installed["plugins"] = pluginEntries
-		}
-		for _, dir := range []string{
-			filepath.Join(marketplaceDir, "plugins", jevPluginName),
-			filepath.Join(target, "plugins", "cache", jevMarketplaceName, jevPluginName),
-		} {
-			if _, err := os.Stat(dir); err == nil {
-				changed = true
-			}
-			if err := os.RemoveAll(dir); err != nil {
-				return applyResult{}, err
-			}
-		}
-		if marketplaceManaged {
 			if err := os.RemoveAll(marketplaceDir); err != nil {
 				return applyResult{}, err
 			}
 		}
 	}
+	for key, value := range map[string]map[string]any{"enabledPlugins": plugins, "extraKnownMarketplaces": extraKnown} {
+		if len(value) == 0 {
+			delete(settings, key)
+		} else {
+			settings[key] = value
+		}
+	}
+	if len(env) == 0 {
+		delete(settings, "env")
+	} else {
+		settings["env"] = env
+	}
+	if len(installedPlugins) == 0 {
+		delete(installed, "plugins")
+	} else {
+		installed["plugins"] = installedPlugins
+	}
 	for _, item := range []struct {
 		path string
 		doc  map[string]any
 	}{{settingsPath, settings}, {knownPath, known}, {installedPath, installed}} {
-		if len(item.doc) == 0 && enabled {
-			continue
-		}
-		if len(item.doc) == 0 && !enabled {
+		if len(item.doc) == 0 {
 			if err := os.Remove(item.path); err != nil && !os.IsNotExist(err) {
 				return applyResult{}, err
 			}

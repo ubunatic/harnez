@@ -127,7 +127,14 @@ output. Keep these invariants; each broke once:
   logs to `~/.harnez/debug.log`; a hidden row looks exactly like missing data.
 - **Views never block on collection or the store.** `usage --watch` draws a loading frame at once
   and fills quotas asynchronously; before 660 a blocking read delayed the first frame 14-19s and
-  starved the `q` key. Statusline latency is open in 659.
+  starved the `q` key.
+- **Statuslines print first, then write with a hard cap, and never migrate.** AGY kills a slow
+  statusline command. Running schema setup and `MigrateStableWindowKeys` on every call collided
+  with test and agent DB writes, and calls took up to 7 s under load (659). Now the line is flushed
+  before the passive write, the write runs in a goroutine abandoned after the
+  `statusline_write_timeout` from `spec/usage.yaml` (100 ms), and migrations
+  run only in other usage commands. `scripts/statusline-bench.sh` measures p50/p99/max (after the
+  fix: 29/40/42 ms under heavy load).
 - **Tests must not touch the real data path.** Store tests use an isolated DB; a test that wrote
   the live telemetry DB hung the suite for minutes (655).
 
@@ -159,6 +166,22 @@ overflow hint is visible.
 Parity tests should exercise the no-flag default and each explicit mode, comparing one-shot and
 watch output at ordinary and constrained terminal heights. Include the minimum heights where
 footer reservation changes, since roomy-terminal tests will not expose clipping differences.
+
+## GPUs in the Load box (issue 765, 2026-10-10)
+
+- Every GPU of a host is listed: AMD via sysfs (`gpu_busy_percent`, `mem_info_*`), NVIDIA via
+  `nvidia-smi` (`internal/usage/gpu_nvidia.go`). `nvidia-smi` runs only when the kernel lists an
+  NVIDIA PCI device and the binary exists; results are cached and calls time out (both values in
+  `spec/usage.yaml`). Failure omits the card, never the box.
+- The class (iGPU, dGPU, eGPU) is internal only and picks the memory row: iGPU `gpu vram/gtt`,
+  others `gpu vram`. The UI shows only the card's short name (`Phoenix1`, `RTX 3060`).
+- Pitfall: do not detect an iGPU by VRAM size. The local Cezanne APU has an 8 GiB BIOS carve-out;
+  a 2 GiB threshold called it a dGPU. The working signal is the amdgpu `gpu_metrics` format
+  revision. The eGPU rule (PCI `removable` up the bridge chain) is unverified on hardware.
+- Pitfall: the Remote Load box shows what the remote's own harnez collects. A new collector only
+  appears after the remote binary is upgraded, and an old remote sends no class, so the zero value
+  (`unknown`) keeps the pre-765 `vram/gtt` rendering.
+- Histories are keyed by PCI address, since `cardN` numbers shift when an eGPU is attached.
 
 ## Related work
 

@@ -1,9 +1,6 @@
-# Lean Fresh-Handoff Sprint
+# Two-Agent Lean Fresh-Handoff Sprint
 
-- Preflight: grep the files/strings named by the ticket, use `harnez read` and `git log -S` on what it says exists, and
-  verify its premise still holds on HEAD. If already done or obsolete, close the ticket with the finding and dispatch no developer.
-
-Orchestrate a lean, milestone-driven developer handoff with strict zero-coding review loops and single-ticket pre-work batching.
+Orchestrate a lean, milestone-driven sprint with a cheap read-only searcher, optional read-only architect refinement, focused developer, strict zero-coding review, and single-ticket pre-work batching.
 
 Reference Practice: `@docs/AgenticLoop.md`
 
@@ -15,18 +12,14 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 
 ### Strict Invariants for the Host Orchestrator
 
-0. **One-Level Delegation**: start helpers only as `--role developer|reviewer|advisor`; they are leaf workers and never call `harnez agent`. Never start another orchestrator or hand the sprint to another agent.
+0. **One-Level Delegation**: start helpers only as `--role advisor|developer|reviewer`; they are leaf workers and never call `harnez agent`. Never start another orchestrator or hand the sprint to another agent.
 
 1. **Zero Coding**:
    - **The Host Orchestrator NEVER writes code, edits source files, or applies "quick fixes" directly.**
    - All code implementation, file editing, test creation, and bug fixing are strictly executed by the dispatched developer agent.
 2. **Diff-First Inspection (No Exploratory Code Digging)**:
-   - **The Host Orchestrator NEVER performs whole-file exploratory reading, multi-file browsing, or deep call-graph tracing.**
-   - Orchestrator inspection is strictly bounded to:
-     - The target ticket / issue description.
-     - The developer agent's **commit diff** (`git log -n 1 --stat`, `git diff HEAD~1`).
-     - Test execution outputs (`go test ./...`, `make test`).
-   - Deep codebase exploration is the worker's job; the host conserves context and token budget for high-signal evaluation.
+   - **The Host Orchestrator NEVER performs exploratory repository digging**: no broad grep, whole-file reading, API/spec research, or call-graph tracing.
+   - The host reads the task and bounded reports, then reviews the developer's **commit diff** (`git log -n 1 --stat`, `git diff HEAD~1`) and test output. Discovery belongs to the Searcher, except for the bounded Developer plan permitted by §1; implementation discovery belongs to the Developer.
 3. **Single-Ticket Communication (No Follow-Up Tickets)**:
    - **The single target issue ticket (`issues/XXX-....md`) is the sole medium of communication between the host and developer.**
    - Do **NOT** create secondary nuance refinement tickets (`#XXX-refinements`) or splinter follow-up tickets for lean sprints.
@@ -38,6 +31,8 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 
 - `/lean-sprint <ticket-numbers>` (e.g. `/lean-sprint 064` or `/lean-sprint 042, 043`)
 - `/lean-sprint "<scoped-task-or-bug-description>"`
+- `/lean-sprint <ticket> refined <tier>` (or `with architect`, `with sol:low`, `using opus:low`)
+- The legacy single-developer workflow is available as `/lean-sprint-v1 <ticket-or-task>`.
 
 ---
 
@@ -45,8 +40,20 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 
 For focused, milestone-based tasks, execute this fast-path, token-efficient loop:
 
-### 1. Goal Handoff to Low-Cost Developer
-- The Host Orchestrator dispatches a developer worker using `harnez agent start --role developer --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method), run with `HTO=0` as one session-background job per the host table in `harnez agent start --help` (Claude Code: Bash with `run_in_background: true`). Report the job id and session name to the user; the job's exit is the only completion signal, so never promise a review without it. Prefer `luna` first; use `sol` when stronger judgment is needed; avoid `agy` models for developer work.
+### 1. Bounded Discovery with the Cheap Searcher
+- Start with the ticket and dispatch a read-only Searcher (`luna:low` / `luna-search`, `--role advisor`) for a bounded audit: verify the ticket premise, locate relevant files and exact line ranges, answer specific questions, or explore APIs/specs. Give a small question list and return format; do not ask it to implement, edit files, run mutating commands, or commit. Use a prompt file for longer questions.
+- Skip the Searcher when the ticket was just refined against live code in this sprint and already cites exact file:line causes; say so in the sprint report.
+- Also skip the Searcher for a narrowly scoped ticket that identifies the exact file and function, documents the complete expected write set (including tests/docs), and leaves no unresolved premise, scope, or architecture questions. Require a plan-only first Developer turn that inspects live code, verifies the premise and current locations, and confirms the write set; file:line citations alone do not qualify. The host must review the concrete findings before granting writes and reconsider developer/model choice. If inspection reveals stale assumptions, missing files, or scope uncertainty, run the Searcher before implementation. Record the skip and findings in the sprint report.
+- When used, run the Searcher sequentially before the Developer. The host reads its concise findings and decides what the Developer needs; the host does not repeat discovery by browsing the repository.
+
+### 1.5. Optional Architect Refinement
+- Run this step when the user explicitly requests refinement or confirms the host's proactive suggestion. If refinement was not requested, suggest it when Searcher findings show complex architecture such as multi-system boundaries, API/schema redesign, or non-trivial component trade-offs.
+- The architect tier must be exactly one of `opus:low`, `flash38:low`, or `sol:low`. Normalize bare `opus`, `flash38`, or `sol` to the matching `:low` tier. If refinement is requested without a valid tier, stop immediately, list the three supported tiers, and ask the user to choose before starting any agents.
+- Dispatch the architect as `--role advisor` with read-only instructions. It returns a structured architecture, milestones (`M1`, `M2`, ...), boundary constraints, edge cases, and pre-work requirements; it does not implement, edit files, or run mutating commands.
+- The host records the architect's milestones, boundaries, edge cases, and pre-work in the target ticket before handing it to the Developer. The host remains subject to the Zero Coding invariant above.
+
+### 2. Goal Handoff to Focused Developer
+- The Host Orchestrator dispatches one developer worker (`luna:high`, or `sol:low` when stronger judgment is needed) using `harnez agent start --role developer --name <worker> --model <model> -d <dir> -f <prompt-file>` (or the active dispatch method), run with `HTO=0` as one session-background job per the host table in `harnez agent start --help` (Claude Code: Bash with `run_in_background: true`). Use a prompt file for long or complex handoffs instead of a long inline shell argument. Report the job id and session name to the user; the job's exit is the only completion signal, so never promise a review without it. Prefer `luna` first; use `sol` when stronger judgment is needed; avoid `agy` models for developer work.
 - An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
 - Provide these facts in every handoff (a required checklist, not a wording template; missing items caused most follow-up turns):
   - Ticket number and goal, with its acceptance criteria.
@@ -56,19 +63,19 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - Edge and negative cases to test (ambiguous input, near-miss values).
   - Test requirements (reproduction test first for bugs, unit tests for features).
   - The exact close command with a written reason: `harnez issues close N "<real outcome>"`; no placeholders.
-- **Plan First (read-only)**: Recommended: start the worker's initial prompt with a read-only planning step ("read-only: plan ..."; no edits until the host has seen the plan), then `resume` to grant write authority. Give no wording template for the prompt beyond the checklist above: agents have their own best practices, and the stored first prompts (telemetry DB) are how we observe and compare them. In one-shot mode a plan request alone is not enforced, so a plan-only first prompt is the reliable form. Codex workers often end the plan turn right after `CONFIRM:` without inspecting (seen twice on 2026-09-30): ask for "inspect now and reply with the concrete plan (files, schema, checks, commits) in this turn", and if the reply is only a plan-to-plan, resume once with that request.
+- **Plan First (read-only)**: Recommended: start the worker's initial prompt with a read-only planning step ("read-only: plan ..."; no edits until the host has seen the plan), then `resume` to grant write authority. Give no wording template for the prompt beyond the checklist above: agents have their own best practices, and the stored first prompts (telemetry DB) are how we observe and compare them. In one-shot mode a plan request alone is not enforced, so a plan-only first prompt is the reliable form. Codex workers often end the plan turn right after `CONFIRM:` without inspecting (seen twice on 2026-09-30): ask for "inspect now and reply with the concrete plan (files, schema, checks, commits) in this turn", and if the reply is only a plan-to-plan, resume once with that request. This step is mandatory when using §1's Developer-plan discovery exception.
 - **Trust the Base Framework**: Do not duplicate system prompts or micromanage formatting conventions.
 - **Reading Discipline**: Instruct the developer to use line-bounded reads (`harnez read -L <range>` / `-n`) for medium/large files (`harnez read -I` is paused until issue 543, a memory blow-up, is fixed).
 - **Stay Responsive**: Dispatching the worker must not block the chat; note the emitted Reconnect Banner and return control or proceed with review preparation.
 
-### 2. Autonomous Milestone Execution & Commit
+### 3. Autonomous Milestone Execution & Commit
 - The developer agent implements the milestone autonomously.
 - Follows Test-Driven Development (TDD) and executes repo-native verification (`go test ./...`, `make test`).
 - Under a one-run test budget (`make test-q1`), writes the full output to a file and greps it for `--- FAIL`; never pipes it into `tail`. A failure in an untouched test gets its own ticket instead of a loosened assertion.
 - Immediately commits the verified milestone at the boundary (`git commit -m "... (issue XXX MX)"`).
 - Reports completion back to the Host Orchestrator. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).
 
-### 3. Concise Milestone Review & In-Ticket Pre-Work Embedding
+### 4. Concise Milestone Review & In-Ticket Pre-Work Embedding
 - Upon developer milestone completion, the Host Orchestrator performs a rapid, diff-only inspection:
   - Check `git log -n 1 --stat`, `git diff HEAD~1`, and run verification tests.
   - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions directly against the diff.
@@ -93,12 +100,13 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - If adjustments, test hardenings, or nuances are required, the host documents them directly in the ticket under Milestone $N+1$ as **"Pre-Work / Required Refinements"**.
   - Commit the ticket update immediately.
 
-### 4. Milestone Advance or Completion
+### 5. Milestone Advance or Completion
 - The developer agent picks up the updated ticket for Milestone $N+1$ (resumed via `harnez agent resume --name <session_id> "<pre_work_and_milestone_prompt>"` or native subagent message), executes the embedded pre-work first, and then proceeds with Milestone $N+1$ implementation.
 - Repeat Steps 1–3 for each milestone.
 - Once the final milestone passes concise review and tests are 100% green, confirm completion.
 
-### 5. Teardown & Status Sync
+### 6. Teardown, Study Report & Status Sync
 - Terminate the developer subagent and every research or probe helper (`harnez agent delete --name <session_id>` or `manage_subagents kill`) and drain background jobs; `harnez agent list` should show none left.
 - Update ticket status in `issues/*.md` (e.g. `Status: Closed`) and refresh `issues/README.md` (`harnez index -d .`).
+- Maintain a running report in `docs/studies/` when present; otherwise, keep the same progress notes in the target issue as a fallback. Use a date-prefixed `two-agent-lean-sprint` filename and short task slug. The Host Orchestrator records the Searcher questions/findings, Developer milestones and commits, verification outcomes, and observed token/time efficiency as the sprint progresses; do not reconstruct it only at the end.
 - Output a brief, high-level summary of delivered milestones and verification status. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).

@@ -71,6 +71,13 @@ func DefaultDBPath() (string, error) {
 	}
 	if _, err := os.Stat(path); err == nil {
 		if _, err := os.Stat(legacy); err == nil {
+			// The new database may already exist (another process created it
+			// first); copy the legacy rows before renaming, or they are only
+			// kept in the backup (issue 735). On failure keep the legacy file
+			// so `harnez stats merge-legacy` can retry.
+			if err := mergeLegacyToolCalls(path, legacy); err != nil {
+				return path, nil
+			}
 			backup := legacy + ".bak-" + time.Now().UTC().Format("20060102T150405.000000000Z")
 			if err := os.Rename(legacy, backup); err != nil {
 				return "", fmt.Errorf("telemetry: preserve legacy database as %s: %w", backup, err)
@@ -78,6 +85,16 @@ func DefaultDBPath() (string, error) {
 		}
 	}
 	return path, nil
+}
+
+func mergeLegacyToolCalls(path, legacy string) error {
+	db, err := Open(path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	_, err = db.MergeLegacyToolCalls(context.Background(), []string{legacy})
+	return err
 }
 
 // openRetries and openRetryDelay bound the cold-start retry loop in Open.
@@ -270,6 +287,13 @@ func checkAndMigrateSchema(sqlDB schemaExecutor, path string, preexisting bool) 
 		if compactionEventsMigrated {
 			migrations = append(migrations, "compaction_events.model")
 		}
+		skillNameMigrated, err := migrateToolCallsSkillName(sqlDB)
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: migrate tool_calls.skill_name: %w", err)
+		}
+		if skillNameMigrated {
+			migrations = append(migrations, "tool_calls.skill_name")
+		}
 		// Version 5 is additive: schemaDDL creates compaction_events and
 		// session_boundaries for existing databases before this check.
 		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
@@ -287,6 +311,33 @@ func checkAndMigrateSchema(sqlDB schemaExecutor, path string, preexisting bool) 
 		}
 	}
 	return migrations, nil
+}
+
+// migrateToolCallsSkillName adds the version-10 skill_name column; older
+// rows keep ” (issue 735 records skill calls from then on, no backfill).
+func migrateToolCallsSkillName(sqlDB schemaExecutor) (bool, error) {
+	statements := mustTelemetrySQL().Statements
+	rows, err := sqlDB.Query(statements["tool_calls_columns"])
+	if err != nil {
+		return false, err
+	}
+	present := false
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return false, err
+		}
+		present = present || name == "skill_name"
+	}
+	if err := rows.Close(); err != nil {
+		return false, err
+	}
+	if present {
+		return false, nil
+	}
+	_, err = sqlDB.Exec(statements["tool_calls_add_skill_name"])
+	return err == nil, err
 }
 
 func migrateCompactionEvents(sqlDB schemaExecutor) (bool, error) {

@@ -1,8 +1,11 @@
 # ADR: Kernel-Standard-Only Device Metrics Sourcing
 
 **Date**: 2026-08-28
-**Scope**: `internal/usage/load.go` (Load box CPU/GPU collectors); applies to any future device-metrics collector
-**Status**: Accepted
+**Scope**: `internal/usage/load.go` (Load box CPU/GPU collectors); applies to any future device-metrics collector; NVIDIA superseded by issue 765 (`nvidia-smi`)
+**Status**: Accepted; **superseded for NVIDIA GPUs by issue 765** (2026-10-10): NVIDIA
+telemetry is read via `nvidia-smi`, gated on NVIDIA PCI hardware, cached, and timed out
+(`internal/usage/gpu_nvidia.go`, spec keys `nvidia_smi_timeout` / `nvidia_smi_cache_ttl`).
+The kernel-standard-only rule still holds for AMD and for every other device class.
 
 ---
 

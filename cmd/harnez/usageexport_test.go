@@ -158,6 +158,18 @@ func TestRunUsageExport_ToleratesMissingFixtureDirs(t *testing.T) {
 // TestBuildUsageExport_Golden ./cmd/harnez -update` to rewrite the file.
 func TestBuildUsageExport_Golden(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	keyPath := filepath.Join(dir, "harnez", "export-host-key")
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	fixedKey := make([]byte, 32)
+	for i := range fixedKey {
+		fixedKey[i] = byte(i + 1)
+	}
+	if err := os.WriteFile(keyPath, fixedKey, 0600); err != nil {
+		t.Fatalf("write fixed key: %v", err)
+	}
 	dbPath := filepath.Join(dir, "telemetry.sqlite")
 	outPath := filepath.Join(dir, "export.json")
 	score, exitCode := 4, 1
@@ -227,7 +239,7 @@ func TestBuildUsageExport_Golden(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Errorf("export differs from %s (run with -update after deciding on a version bump)\ngot:\n%s", golden, got)
 	}
-	if !bytes.HasPrefix(got, []byte("{\n  \"format_version\": 1,")) {
+	if !bytes.HasPrefix(got, []byte("{\n  \"format_version\": 2,")) {
 		t.Errorf("format_version must be the first top-level field, got:\n%s", got)
 	}
 }

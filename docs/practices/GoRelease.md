@@ -219,6 +219,12 @@ check` runs, instead of only at release time. The faster `check-fast` target int
 does *not* force it, so the inner dev loop can still test against an uncommitted local
 sibling checkout while co-developing.
 
+**Pitfall — `@latest` lags right after a release.** `go install <module>@latest` asks the Go
+module proxy (`proxy.golang.org`), which caches its `@latest` answer for a while after a new
+tag and keeps returning the previous version. Right after a release, install with the exact
+version (`go install <module>@vX.Y.Z`); that fetches the tag immediately. Seen with harnez
+v0.1.26 on 2026-10-10.
+
 ---
 
 ## 5. Non-Go / Scripted Projects

@@ -1,0 +1,23 @@
+{
+  "model": {
+    "id": "gemini-pro"
+  },
+  "workspace": {
+    "current_dir": "/tmp/harnez-statusline-bench",
+    "project_dir": "/tmp/harnez-statusline-bench"
+  },
+  "context_window": {
+    "current_usage": {
+      "input_tokens": 12000,
+      "cache_creation_input_tokens": 2000,
+      "cache_read_input_tokens": 3000
+    },
+    "context_window_size": 1000000
+  },
+  "quota": {
+    "gemini-weekly": {
+      "remaining_fraction": 0.75,
+      "reset_at": "2026-10-11T00:00:00Z"
+    }
+  }
+}

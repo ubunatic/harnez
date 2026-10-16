@@ -10,7 +10,7 @@ REEL main
   $ /usage desc="open usage/config view"
   P 3s desc="await config view"
   V contains="evergreen"
-  V contains="domain-modeling"
+  V contains="docup"
   K <esc> desc="close view"
   P 1s
   X desc="exit claude code"

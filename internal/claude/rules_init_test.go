@@ -42,6 +42,18 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 			t.Errorf("missing generated rule %s: %v", name, err)
 		}
 	}
+	tools, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Tools.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(tools), "only when the user explicitly requests image output") {
+		t.Error("generated Tools.md must reserve PNG rendering for explicit user requests")
+	}
+	for _, line := range strings.Split(string(tools), "\n") {
+		if strings.Contains(line, "`harnez") && (strings.Contains(line, " -I") || strings.Contains(line, " --image")) && strings.Contains(line, "issues") {
+			t.Errorf("generated Tools.md recommends routine issue images: %s", line)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md")); !os.IsNotExist(err) {
 		t.Errorf("Quota.md exists without Quota-1 opt-in: %v", err)
 	}

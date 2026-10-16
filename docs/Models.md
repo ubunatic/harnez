@@ -73,13 +73,16 @@ Findings:
   explicit model tier for Claude turns; `:med` maps to `medium`, and the default no-tier
   invocation remains unchanged.
 - **Claude aliases move:** `sonnet`/`opus`/`haiku` resolve to the newest model (Sonnet 5,
-  Opus 5.x, Haiku 4.5 today); the web evidence is partly for 4.6. Transcripts show
-  `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5`, `claude-haiku-4-5`.
+  Opus 5.x, Haiku 5.5 today); the web evidence is partly for 4.6. Transcripts show
+  `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5`, `claude-haiku-5-5`.
 - **Short aliases (2026-09-25, issue 540):** `--model` accepts `provider:name[:tier]`, a bare
   alias (`luna`, `opus`, `flash38`) or `alias:tier` (`luna:low`, `opus:med`). In a two-part
   spec, only `low`/`med`/`high` count as a tier; anything else is a model name
   (`claude:haiku`). Bare `opus`/`sonnet` mean Claude, not agy. Aliases live in
   `spec/agent.yaml` only.
+- **Tier aliases (2026-10-10, issue 766):** the tier part also accepts `l`/`lo`/`lower`,
+  `m`/`medium` and `h`/`hi`/`higher`; `resolveModelIn` (`internal/subagent/driver.go`)
+  normalizes them once to `low`/`med`/`high`, which stay canonical in output and errors.
 - **Measured, luna:low as developer (2026-09-25, issue 540):** 3 rounds for a small resolver
   change. Each round committed code untested after a failed `make test-q1` (Quota-1 allows
   one run), and round 2 fixed two failures while breaking two others (two-part specs read

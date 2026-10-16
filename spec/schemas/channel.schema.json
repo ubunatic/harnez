@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harnez local channel canary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "registry_dir",
+    "listen_address",
+    "server_name",
+    "plugin_name",
+    "marketplace_name",
+    "server_version",
+    "protocol_version",
+    "io_timeout_ms",
+    "max_message_bytes",
+    "max_rpc_bytes",
+    "canary_model",
+    "canary_message",
+    "instructions",
+    "claude_metadata_dir",
+    "claude_metadata_pattern",
+    "reply_tool_name",
+    "reply_tool_description",
+    "sender_format",
+    "terminal_sender",
+    "wait_timeout_ms",
+    "receipt_poll_ms",
+    "receipt_retention_ms",
+    "max_receipts",
+    "max_metadata_bytes"
+  ],
+  "properties": {
+    "plugin_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "marketplace_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "registry_dir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "listen_address": {
+      "type": "string",
+      "minLength": 1
+    },
+    "server_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "server_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "protocol_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "io_timeout_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_message_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_rpc_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "canary_model": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "canary_message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "instructions": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claude_metadata_dir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claude_metadata_pattern": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reply_tool_name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "reply_tool_description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sender_format": {
+      "type": "string",
+      "minLength": 1
+    },
+    "terminal_sender": {
+      "type": "string",
+      "minLength": 1
+    },
+    "wait_timeout_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "receipt_poll_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "receipt_retention_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_receipts": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_metadata_bytes": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

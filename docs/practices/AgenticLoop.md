@@ -96,6 +96,12 @@ dispatch rules as any other orchestration, track helper sessions you start,
 and clean them up when finished. A peer assistant coordinates and reports back;
 it does not create a second concurrent writer for shared files.
 
+Tickets carry the work; messages only nudge. Agents put decisions and work
+requests in a ticket (in whichever repository owns the work) and use a message
+such as `harnez agent send --name <session> "see ticket N in repo X"` only to
+point the recipient at it. The ticket keeps the track record between agents;
+the message transcript does not need to.
+
 ---
 
 ## 1. Core Philosophy & Invariants
@@ -272,46 +278,46 @@ Never trade away verification for speed when applying Invariant 7.
 
 ---
 
-## 3. The Lean Fresh-Handoff Pattern (`/lean-sprint`)
+## 3. The Two-Agent Lean Fresh-Handoff Pattern (`/lean-sprint`)
 
 ```
-   Host Orchestrator
+   Host Orchestrator (zero coding, no exploratory repo digging)
           |
-   (1) Clean Goal Handoff (problem, tickets, verification targets)
-          |
+   (1) Bounded read-only questions / audit
           v
-     [Fresh Dev Subagent]
+     [Cheap Searcher: luna:low / luna-search]
           |
-   (2) Autonomous Dev & Self-Verification (TDD, go test, make check)
-          |
+   (2) Findings with paths, line ranges, answers
           v
-   (3) Confidence-Gated Inline Review
-       ├── High Confidence / Passing Tests ──> Return directly to Host (Inline Diff Check)
-       └── High Ambiguity / Regressions    ──> Escalate to Independent Reviewer Subagent
+     [Focused Developer: luna:high / sol:low]
           |
+   (3) TDD, unit tests, verification, milestone commits
           v
-   (4) Fast Hygiene & Teardown (kill child agents, zero zombies, harnez rate --ok)
+   Host: diff-first review, test output, running study report
+          |
+   (4) Fast hygiene and status sync
 ```
 
-For focused, day-to-day tickets and milestone iterations, running the full 5-phase ceremony with separate advisor and reviewer subagents introduces unnecessary latency and token overhead. The **Lean Fresh-Handoff** pattern provides a lightweight, fast-path alternative:
+For focused, day-to-day tickets and milestone iterations, `/lean-sprint` uses two distinct worker roles to keep discovery cheap and implementation focused. The Host Orchestrator owns the ticket, sequencing, review, and reporting; it does not code or explore the repository. The legacy single-developer workflow remains available as `/lean-sprint-v1`.
 
-1. **Clean Goal Handoff (Host Zero-Coding & Diff-First)**:
-   - The Host Orchestrator dispatches a fresh low-cost/fast developer subagent with a single, clear objective: problem statement, target tickets/specs, and explicit verification criteria.
-   - **Strict Invariants for Host Orchestrator**:
-     - *Zero Coding*: The host NEVER writes code, edits source files, or applies direct "quick fixes". All coding and test implementation are executed by the worker.
-     - *Diff-First / No Exploratory Digging*: The host NEVER performs wide exploratory codebase reads or deep call-graph tracing. The host limits inspection strictly to the ticket statement, `git diff HEAD~1`, and test execution output.
-     - *Single-Ticket Medium (No Follow-Up Tickets)*: The single issue ticket is the sole communication medium. Never create separate refinement tickets (`#XXX-refinements`) for lean sprints.
-   - **Trust the Base Framework**: Avoid micromanaging standard workspace rules, tool descriptions, or language conventions already provided by the base system prompt.
-   - **Stay Responsive**: After dispatch, the Orchestrator returns control to the main chat or continues only with non-overlapping local work. Do not block on the dev subagent by default.
-   - **Fresh Tree Facts & Hands Off Foreign Files**: Any claim about the working tree in a handoff ("7 files uncommitted", "no other work") comes from a `git status` run right before the handoff, never from memory. Every handoff also says: never revert, discard or stage files outside the named set; report unexpected changes and leave them. (harnez 656: a stale "no other uncommitted work" led a replacement developer to `git checkout --` the user's own spec edits as presumed leftovers.)
-2. **Autonomous Milestone Execution & Self-Verification**:
-   - The dev subagent implements changes, validates them using repo-native verification commands (`go test ./...`, `make check`, canary probes), and commits each milestone at the boundary.
-3. **Concise Inline Review & In-Ticket Pre-Work Embedding**:
-   - The Host Orchestrator reviews the latest commit diff and test output concisely.
-   - If defects, ambient leaks, or nuances are discovered, the orchestrator does **not** fix them in place or dispatch isolated micro-tasks.
-   - Instead, the host documents them directly in the ticket under the upcoming milestone as **"Pre-Work / Required Refinements"**. The developer executes this pre-work as part of starting the next milestone.
-   - Escalate to a formal reviewer agent only if there is cross-subsystem blast radius, missing automated test coverage, or unexpected complexity.
-4. **Fast Hygiene & Status Sync**:
+1. **Host Orchestrator Guardrails**:
+   - *Zero Coding*: The host never edits source files, writes tests, or applies quick fixes.
+   - *No Exploratory Repo Digging*: The host does not browse files, grep broadly, trace call graphs, or explore APIs/specs. It asks the Searcher and relies on the bounded response.
+   - *Diff-First Review*: The host reviews the developer's commit diff, test output, and target ticket; it investigates further only when evidence identifies a specific gap.
+   - *Single-Ticket Medium*: Keep decisions and refinements in the target issue. Do not create secondary refinement tickets.
+2. **Cheap Searcher (`luna:low` / `luna-search`)**:
+   - Performs bounded read-only audits, answers targeted questions, and explores relevant APIs/specs.
+   - Returns concise findings with exact file paths and line ranges; no edits, tests that mutate state, or commits.
+   - Run search before implementation and pass only relevant findings into the developer handoff.
+3. **Focused Developer (`luna:high` / `sol:low`)**:
+   - Prefer `luna` first; use `sol` when stronger judgment is needed; avoid `agy` models for developer work.
+   - Implements milestones with TDD, adds unit tests, runs verification, and commits each completed milestone.
+   - Use prompt files for long or complex handoffs instead of shell-interpolated inline prompts.
+4. **Concise Inline Review & In-Ticket Pre-Work Embedding**:
+   - The Host Orchestrator checks the latest commit diff and test output, then records needed refinements in the ticket for the next milestone. It does not patch the code itself.
+   - Escalate to an independent reviewer only for cross-subsystem risk, missing test coverage, or unexpected complexity.
+5. **Running Study Report, Hygiene & Status Sync**:
+   - The host maintains a running report in `docs/studies/` when present; otherwise, keep the same progress notes in the target issue as a fallback. Use a date-prefixed `two-agent-lean-sprint` filename and short task slug, recording searcher questions/findings, developer milestones/commits, verification outcomes, and observed token/time efficiency.
    - Immediately terminate child subagents (`manage_subagents kill`) and clear background tasks.
    - Update ticket status in `issues/*.md` and refresh `issues/README.md`.
    - Record an `--ok` heartbeat (`harnez rate --ok "<note>" [<ticket_id>]`) to confirm clean sprint completion in telemetry.
@@ -353,14 +359,14 @@ The **Reverse Sprint** (`/reverse-sprint`) inverts the top-down orchestrator arc
 
 ### Workflow Selection Matrix
 
-| Dimension | Formal 5-Phase Loop (`/sprint`) | Lean Fresh-Handoff (`/lean-sprint`) | Reverse Sprint (`/reverse-sprint`) |
-|---|---|---|---|
-| **Scope** | Multi-ticket sprints, major features, broad refactors | Single focused ticket, localized milestone iterations | Routine coding, cost-sensitive implementation, focused features |
-| **Host Role** | Advisory planning, multi-subsystem coordination | Strict Zero-Coding: dispatch worker, review diff | Dev Lead: direct coding, testing, commits on low model |
-| **Model Strategy** | Frontier Host + Reusable Advisor + Lower Dev | Frontier/Med Host + Low Dev Subagent | Low Dev Lead + Low/Med Reviewer + Frontier Advisor (when stuck only) |
-| **Compaction Rule**| Post-ticket advisor/dev compaction | Ephemeral dev teardown | Frequent proactive auto-compact (every 100–150k tokens) |
-| **Advisor Role** | Mandatory Phase 1 architectural discovery | Optional on complex regressions | **On-demand only when stuck** with strictly bounded line-range context |
-| **Overhead** | Higher compute/tokens, maximum verification depth | Minimal compute/latency, rapid turnaround | Ultra-low compute/cost, maximum token savings |
+| Dimension | Formal 5-Phase Loop (`/sprint`) | Two-Agent Lean (`/lean-sprint`) | Legacy Lean (`/lean-sprint-v1`) | Reverse Sprint (`/reverse-sprint`) |
+|---|---|---|---|---|
+| **Scope** | Multi-ticket sprints, major features, broad refactors | Single focused ticket, bounded research then implementation | Baseline single-developer handoff | Routine coding, cost-sensitive implementation, focused features |
+| **Host Role** | Advisory planning, multi-subsystem coordination | Zero coding, no exploration, diff-first review, running study report | Legacy zero-coding handoff and inline review | Dev Lead: direct coding, testing, commits on low model |
+| **Model Strategy** | Frontier Host + Reusable Advisor + Lower Dev | Searcher `luna:low` + Developer `luna:high` or `sol:low` | Legacy single developer | Low Dev Lead + Low/Med Reviewer + Frontier Advisor (when stuck only) |
+| **Compaction Rule**| Post-ticket advisor/dev compaction | Teardown searcher after discovery and developer after sprint | Legacy single-developer teardown | Frequent proactive auto-compact (every 100–150k tokens) |
+| **Advisor Role** | Mandatory Phase 1 architectural discovery | Cheap Searcher performs bounded read-only discovery | No separate Searcher; Developer investigates | **On-demand only when stuck** with strictly bounded line-range context |
+| **Overhead** | Higher compute/tokens, maximum verification depth | Low-cost sequential discovery and implementation | Single worker, lower coordination overhead | Ultra-low compute/cost, maximum token savings |
 
 ---
 

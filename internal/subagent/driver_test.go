@@ -44,7 +44,7 @@ func TestCodexCheckResumable(t *testing.T) {
 }
 
 func TestResolveModel(t *testing.T) {
-	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "low"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "haiku", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "haiku", "low"}, {"agy:flash37:low", "agy", "gemini-3.7-flash", "low"}, {"agy:gemini-3.7-flash:low", "agy", "gemini-3.7-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
+	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "low"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "claude-haiku-5-5", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "claude-haiku-5-5", "low"}, {"agy:flash37:low", "agy", "gemini-3.7-flash", "low"}, {"agy:gemini-3.7-flash:low", "agy", "gemini-3.7-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
 		m, err := ResolveModel(tc.spec)
 		if err != nil {
 			t.Fatal(err)
@@ -64,6 +64,47 @@ func TestResolveModelThreePartProviderSpec(t *testing.T) {
 	m, err := ResolveModel("agy:flash37:low")
 	if err != nil || m.Provider != "agy" || m.Name != "gemini-3.7-flash" || m.Tier != "low" {
 		t.Fatalf("resolved model = %#v, %v", m, err)
+	}
+}
+
+func TestResolveModelTierAliases(t *testing.T) {
+	tests := []struct {
+		alias, want string
+	}{
+		{"lo", "low"}, {"lower", "low"}, {"l", "low"},
+		{"medium", "med"}, {"m", "med"},
+		{"hi", "high"}, {"higher", "high"}, {"h", "high"},
+	}
+	for _, tc := range tests {
+		for _, spec := range []string{"codex:luna:" + tc.alias, "luna:" + tc.alias} {
+			t.Run(spec, func(t *testing.T) {
+				m, err := ResolveModel(spec)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if m.Provider != "codex" || m.Name != "gpt-6-luna" || m.Tier != tc.want {
+					t.Fatalf("ResolveModel(%q) = %#v, want tier %q with untouched model name", spec, m, tc.want)
+				}
+			})
+		}
+	}
+
+	m, err := ResolveModel("codex:gpt-6-luna:MEDIUM")
+	if err != nil || m.Provider != "codex" || m.Name != "gpt-6-luna" || m.Tier != "med" {
+		t.Fatalf("uppercase tier resolved to %#v, %v; want codex:gpt-6-luna:med", m, err)
+	}
+}
+
+func TestResolveModelRejectsUnknownTierAliases(t *testing.T) {
+	for _, alias := range []string{"mid", "medum", "hgh", "lw"} {
+		for _, spec := range []string{"codex:luna:" + alias, "luna:" + alias} {
+			t.Run(spec, func(t *testing.T) {
+				_, err := ResolveModel(spec)
+				if err == nil || !strings.Contains(err.Error(), "unknown model tier") || !strings.Contains(err.Error(), "codex:luna:low") {
+					t.Fatalf("ResolveModel(%q) error = %v, want canonical unknown-tier error", spec, err)
+				}
+			})
+		}
 	}
 }
 

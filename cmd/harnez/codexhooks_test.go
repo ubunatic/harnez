@@ -261,15 +261,8 @@ func TestRunCodexHooksHook_SkipsAlreadyRouted(t *testing.T) {
 		t.Fatalf("runCodexHooksHook: %v", err)
 	}
 
-	var got codexPreToolUseOutput
-	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
-		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
-	}
-	if got.HookSpecificOutput.PermissionDecision != "allow" {
-		t.Errorf("PermissionDecision = %q, want allow", got.HookSpecificOutput.PermissionDecision)
-	}
-	if len(got.HookSpecificOutput.UpdatedInput) != 0 {
-		t.Errorf("expected no rewrite for already-routed command, got %v", got.HookSpecificOutput.UpdatedInput)
+	if out.Len() != 0 {
+		t.Errorf("already-routed command must pass through without hook output, got %q", out.String())
 	}
 }
 
@@ -279,8 +272,8 @@ func TestRunCodexHooksHook_SkipsEmptyCommand(t *testing.T) {
 	if err := runCodexHooksHook(in, &out); err != nil {
 		t.Fatalf("runCodexHooksHook: %v", err)
 	}
-	if got := out.String(); got != "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\"}}\n" {
-		t.Errorf("output = %q, want allow no-op envelope", got)
+	if out.Len() != 0 {
+		t.Errorf("empty command must pass through without hook output, got %q", out.String())
 	}
 }
 
@@ -312,14 +305,37 @@ func TestRunCodexHooksHook_SkipsGearCommand(t *testing.T) {
 		t.Fatalf("runCodexHooksHook: %v", err)
 	}
 
-	var got codexPreToolUseOutput
-	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
-		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
+	if out.Len() != 0 {
+		t.Errorf("gear command must pass through without hook output, got %q", out.String())
 	}
-	if got.HookSpecificOutput.PermissionDecision != "allow" {
-		t.Errorf("PermissionDecision = %q, want allow", got.HookSpecificOutput.PermissionDecision)
+}
+
+func TestRunCodexTelemetry_SkillInferred(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	payload := `{"hook_event_name":"PostToolUse","session_id":"codex-session","tool_use_id":"call-1","tool_name":"Bash","tool_input":{"command":"cat ~/.codex/skills/issue/SKILL.md"},"tool_output":"ok","success":true,"exit_code":0,"duration_ms":10}`
+	if err := runCodexTelemetryAt(bytes.NewBufferString(payload), dbPath); err != nil {
+		t.Fatalf("runCodexTelemetryAt: %v", err)
 	}
-	if len(got.HookSpecificOutput.UpdatedInput) != 0 {
-		t.Errorf("expected no rewrite for gear command, got %v", got.HookSpecificOutput.UpdatedInput)
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("telemetry.Open: %v", err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{SessionID: "codex-session"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2 (Bash + inferred skill)", len(rows))
+	}
+	var skillRow *telemetry.ToolCall
+	for i := range rows {
+		if rows[i].ToolName == "Skill" {
+			skillRow = &rows[i]
+			break
+		}
+	}
+	if skillRow == nil || skillRow.SkillName != "issue" || skillRow.CallType != "skill-inferred" || skillRow.AgentID != "codex" {
+		t.Fatalf("unexpected skill row: %+v", skillRow)
 	}
 }

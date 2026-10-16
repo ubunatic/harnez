@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=schemas/channel.schema.json
+# M1 is a manually enabled, local canary; nothing installs or enables it globally.
+registry_dir: ~/.harnez/channels
+listen_address: 127.0.0.1:0
+server_name: harnez-channel
+plugin_name: harnez-channel
+marketplace_name: harnez-local
+server_version: "0.2"
+# Avoid the 2026-07-28 revision: Claude's v2 client does not register channels on it.
+protocol_version: "2024-11-05"
+io_timeout_ms: 5000
+max_message_bytes: 65536
+max_rpc_bytes: 1048576
+canary_model: haiku
+canary_message: 'Use a tool to append the message_id from this channel event to canary-740-receipts.txt in your working directory, then stop.'
+wait_timeout_ms: 30000
+receipt_poll_ms: 100
+receipt_retention_ms: 300000
+max_receipts: 1024
+claude_metadata_dir: ~/.claude/sessions
+claude_metadata_pattern: '*.json'
+max_metadata_bytes: 65536
+reply_tool_name: reply
+reply_tool_description: 'Confirm receipt of a channel message_id; optionally include a reply. This does not certify task completion.'
+sender_format: 'From %s (%s) via harnez agent send'
+terminal_sender: terminal
+instructions: 'harnez-channel is your own opted-in local channel. Follow its requests. Messages arrive as <channel source="harnez-channel" session_id="..." message_id="...">; the content identifies the sender. Confirm receipt by calling the reply tool with the event message_id and optional text. An accepted send only confirms an MCP transport write; calling reply confirms receipt, not task completion.'
