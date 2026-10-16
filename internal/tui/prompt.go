@@ -65,6 +65,28 @@ func (pb *PromptBuffer) Clear() {
 	pb.draft = ""
 }
 
+// Cursor returns the cursor row and rune column.
+func (pb *PromptBuffer) Cursor() (row, col int) { return pb.cursorRow, pb.cursorCol }
+
+// Line returns buffer line row, or "" when out of range.
+func (pb *PromptBuffer) Line(row int) string {
+	if row < 0 || row >= len(pb.lines) {
+		return ""
+	}
+	return pb.lines[row]
+}
+
+// Replace swaps runes [from, to) of line row for s and puts the cursor after s.
+func (pb *PromptBuffer) Replace(row, from, to int, s string) {
+	line := []rune(pb.Line(row))
+	to = min(max(to, 0), len(line))
+	from = min(max(from, 0), to)
+	ins := []rune(s)
+	out := append(append(append([]rune{}, line[:from]...), ins...), line[to:]...)
+	pb.lines[row] = string(out)
+	pb.cursorRow, pb.cursorCol = row, from+len(ins)
+}
+
 // InsertChar inserts a rune at the current cursor position.
 func (pb *PromptBuffer) InsertChar(r rune) {
 	line := []rune(pb.lines[pb.cursorRow])

@@ -27,6 +27,8 @@ type AppWidget struct {
 	editor  *Editor
 	jobs    *jobs.Manager
 	panel   jobPanel
+	picker  picker
+	sources *pickerSources
 }
 
 // AttachEditor enables the open_editor key: suspend hands the terminal to a
@@ -103,6 +105,8 @@ func (app *AppWidget) Draw(c *loom.Canvas, r loom.Rect) {
 	}
 	if app.panel.open {
 		app.drawJobPanel(c, loom.Rect{X: r.X, Y: chatY, W: r.W, H: chatHeight})
+	} else if app.picker.isOpen() {
+		app.drawPicker(c, loom.Rect{X: r.X, Y: chatY, W: r.W, H: chatHeight})
 	}
 
 	// Render Prompt Divider Line
@@ -132,8 +136,23 @@ func (app *AppWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
 			return loom.Handled()
 		}
 	}
+	if app.picker.isOpen() && app.pickerKey(name) {
+		return loom.Handled()
+	}
+	res := app.promptKey(e, name)
+	if e.Key == "" && e.Text != "" {
+		app.maybeOpenPicker(e.Text)
+	}
+	app.syncPicker()
+	return res
+}
+
+// promptKey handles a key with no picker or panel taking it.
+func (app *AppWidget) promptKey(e loom.KeyEvent, name string) loom.EventResult {
+	kb := app.Spec.Keybindings
 	switch {
 	case bound(name, kb.ToggleJobs):
+		app.closePicker()
 		app.toggleJobs()
 	case app.Busy() && bound(name, kb.CancelTurn):
 		app.CancelTurn()
@@ -141,6 +160,7 @@ func (app *AppWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
 		app.QuitRequested = true
 		return loom.Quit()
 	case bound(name, kb.OpenEditor):
+		app.closePicker()
 		app.openEditor()
 	case bound(name, kb.Newline):
 		app.Prompt.InsertNewline()
@@ -180,6 +200,7 @@ func (app *AppWidget) ConsumePaste(p loom.PasteEvent) loom.EventResult {
 		return loom.Handled() // the prompt is hidden behind the modal panel
 	}
 	app.insertText(strings.ReplaceAll(p.Text, "\r\n", "\n"))
+	app.syncPicker()
 	return loom.Handled()
 }
 

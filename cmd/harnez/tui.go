@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/tui"
 	"ubunatic.com/harnez/internal/tui/router"
@@ -46,7 +48,12 @@ A prompt starting with "!" runs the rest as a background shell command (sh -c,
 in the working directory) instead of sending it to the model. Ctrl+B toggles
 the job panel: up/down select, Enter shows the live log, x cancels the job
 (SIGTERM to its process group, SIGKILL after jobs.cancel_grace_ms), Esc closes.
-Quitting cancels all running jobs.`,
+Quitting cancels all running jobs.
+
+"@" at the start of a word opens a file picker over the repository (git
+ls-files, honoring .gitignore); "/" as the first character opens a command
+picker with the TUI built-ins and installed skills. Type to filter, up/down
+select, Tab or Enter inserts, Esc closes.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if o.model == "" {
@@ -114,7 +121,22 @@ func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error 
 	app.AttachRunner(rt.Turn, pane.Post, router.ResolveSpec)
 	app.AttachEditor(pane.Suspend, tui.NewEditor(spec.Editor))
 	app.AttachJobs(tui.NewJobManager(spec.Jobs, dir, pane.Post))
+	app.AttachPickers(dir, tuiSkillDirs(dir), pane.Post)
 	// A running provider turn must not outlive the TUI.
 	defer app.Shutdown()
 	return pane.Run(app)
+}
+
+// tuiSkillDirs lists the skill dirs the / picker reads: the project's
+// .claude/skills, then the agent skill dirs harnez apply installs into.
+func tuiSkillDirs(dir string) []string {
+	dirs := []string{filepath.Join(dir, ".claude", "skills")}
+	cfg, _, err := claude.OpenConfig("")
+	if err != nil {
+		return dirs
+	}
+	for _, t := range claude.SkillTargetsByAgent(cfg) {
+		dirs = append(dirs, t.Dir)
+	}
+	return dirs
 }

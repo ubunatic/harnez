@@ -108,6 +108,14 @@ func alternativeClassAgainst(altNorm, fieldNorm string, classExact, classPrefix,
 	return classPrefix
 }
 
+// MatchClass scores a normalized query against one normalized field with the
+// same rules as Search: 1 substring, 2 every query token prefixes a field
+// token, 3 typo-tolerant token match, 0 (ClassNone) no match. Callers ranking
+// many fields (the tui file picker) normalize each field once.
+func MatchClass(queryNorm, fieldNorm string) int {
+	return alternativeClassAgainst(queryNorm, fieldNorm, 1, 2, 3)
+}
+
 // alternativeClass scores a normalized alternative against a normalized
 // title and body, returning the best (numerically lowest) of the six match
 // classes, or ClassNone if it matches neither field.

@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/tui.schema.json",
   "title": "harnez tui interactive harness layout and keybindings spec",
   "type": "object",
-  "required": ["header", "chat", "input", "terminal", "editor", "jobs", "keybindings", "theme"],
+  "required": ["header", "chat", "input", "terminal", "editor", "jobs", "picker", "keybindings", "theme"],
   "properties": {
     "header": {
       "type": "object",
@@ -80,6 +80,33 @@
       },
       "additionalProperties": false
     },
+    "picker": {
+      "type": "object",
+      "required": ["file_trigger", "command_trigger", "max_items", "max_width", "max_indexed_files", "builtins", "labels"],
+      "properties": {
+        "file_trigger": { "type": "string", "minLength": 1, "maxLength": 1, "description": "Opens the file picker at the start of a word." },
+        "command_trigger": { "type": "string", "minLength": 1, "maxLength": 1, "description": "Opens the command picker at the very start of the prompt." },
+        "max_items": { "type": "integer", "minimum": 1, "description": "Rows shown in a picker." },
+        "max_width": { "type": "integer", "minimum": 10, "description": "Picker box width cap in display columns." },
+        "max_indexed_files": { "type": "integer", "minimum": 1, "description": "File index cap per session." },
+        "builtins": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": { "name": { "type": "string", "minLength": 1 }, "description": { "type": "string" } },
+            "additionalProperties": false
+          }
+        },
+        "labels": {
+          "type": "object",
+          "required": ["files_title", "commands_title", "indexing", "no_matches"],
+          "properties": { "files_title": { "type": "string", "minLength": 1 }, "commands_title": { "type": "string", "minLength": 1 }, "indexing": { "type": "string", "minLength": 1 }, "no_matches": { "type": "string", "minLength": 1 } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "keybindings": {
       "type": "object",
       "required": ["send_prompt", "newline", "quit", "scroll_up", "scroll_down"],
@@ -95,7 +122,11 @@
         "toggle_jobs": { "type": "array", "items": { "type": "string" } },
         "job_open": { "type": "array", "items": { "type": "string" } },
         "job_cancel": { "type": "array", "items": { "type": "string" } },
-        "job_close": { "type": "array", "items": { "type": "string" } }
+        "job_close": { "type": "array", "items": { "type": "string" } },
+        "picker_select": { "type": "array", "items": { "type": "string" } },
+        "picker_close": { "type": "array", "items": { "type": "string" } },
+        "picker_up": { "type": "array", "items": { "type": "string" } },
+        "picker_down": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": false
     },

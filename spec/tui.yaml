@@ -60,6 +60,28 @@ jobs:
     log_hint: "↑/↓ pgup/pgdn scroll · end follow · x cancel · esc back"
     header_running: "[jobs: {{ .Running }} running]"
 
+# Inline completion pickers, drawn above the prompt at the caret. The file
+# trigger opens at the start of a word, the command trigger only at the very
+# start of the prompt. Selecting inserts "<trigger><name> ".
+picker:
+  file_trigger: "@"
+  command_trigger: "/"
+  max_items: 8
+  max_width: 72
+  # The file index (git ls-files incl. untracked, minus .gitignore) is built
+  # once per session on first use and stops after this many files.
+  max_indexed_files: 20000
+  # TUI commands handled before a prompt reaches the model; installed skills
+  # (SKILL.md under the agent skill dirs) follow them in the command picker.
+  builtins:
+    - name: "model"
+      description: "switch the active model: /model <provider:model[:tier]>"
+  labels:
+    files_title: "Files"
+    commands_title: "Commands"
+    indexing: "indexing…"
+    no_matches: "no matches"
+
 # Key names follow loom ("ctrl+j" == "ctrl-j"). Without the kitty keyboard
 # protocol, Ctrl+J and Shift+Enter arrive as Enter (send), so newline also
 # accepts Alt+Enter and a trailing "\" + Enter.
@@ -78,6 +100,11 @@ keybindings:
   job_open: ["enter"]
   job_cancel: ["x"]
   job_close: ["esc"]
+  # Pickers: while one is open these keys act on it (Enter selects, never sends).
+  picker_select: ["tab", "enter"]
+  picker_close: ["esc"]
+  picker_up: ["up", "ctrl+p"]
+  picker_down: ["down", "ctrl+n"]
 
 theme:
   border_style: "sharp"

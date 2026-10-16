@@ -45,6 +45,9 @@ func (app *AppWidget) Shutdown() {
 	if app.jobs != nil {
 		app.jobs.Shutdown()
 	}
+	if app.sources != nil {
+		app.sources.shutdown()
+	}
 }
 
 // isCommand reports whether text is a slash command handled by the TUI.

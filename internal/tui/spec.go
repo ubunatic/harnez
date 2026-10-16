@@ -60,6 +60,11 @@ type KeybindingsSpec struct {
 	JobOpen    []string `yaml:"job_open"`
 	JobCancel  []string `yaml:"job_cancel"`
 	JobClose   []string `yaml:"job_close"`
+	// Picker keys act on an open @/ picker before any other binding.
+	PickerSelect []string `yaml:"picker_select"`
+	PickerClose  []string `yaml:"picker_close"`
+	PickerUp     []string `yaml:"picker_up"`
+	PickerDown   []string `yaml:"picker_down"`
 }
 
 // JobLabelsSpec holds the job manager's chat notes and panel texts.
@@ -88,6 +93,31 @@ type JobsSpec struct {
 	Labels         JobLabelsSpec `yaml:"labels"`
 }
 
+// PickerCommand is a TUI built-in listed in the command picker.
+type PickerCommand struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+}
+
+// PickerLabelsSpec holds the picker titles and status rows.
+type PickerLabelsSpec struct {
+	FilesTitle    string `yaml:"files_title"`
+	CommandsTitle string `yaml:"commands_title"`
+	Indexing      string `yaml:"indexing"`
+	NoMatches     string `yaml:"no_matches"`
+}
+
+// PickerSpec configures the inline @ file and / command pickers.
+type PickerSpec struct {
+	FileTrigger     string           `yaml:"file_trigger"`
+	CommandTrigger  string           `yaml:"command_trigger"`
+	MaxItems        int              `yaml:"max_items"`
+	MaxWidth        int              `yaml:"max_width"`
+	MaxIndexedFiles int              `yaml:"max_indexed_files"`
+	Builtins        []PickerCommand  `yaml:"builtins"`
+	Labels          PickerLabelsSpec `yaml:"labels"`
+}
+
 // ThemeSpec describes styling for harnez tui.
 type ThemeSpec struct {
 	BorderStyle    string `yaml:"border_style"`
@@ -106,6 +136,7 @@ type Spec struct {
 	Terminal    TerminalSpec    `yaml:"terminal"`
 	Editor      EditorSpec      `yaml:"editor"`
 	Jobs        JobsSpec        `yaml:"jobs"`
+	Picker      PickerSpec      `yaml:"picker"`
 	Keybindings KeybindingsSpec `yaml:"keybindings"`
 	Theme       ThemeSpec       `yaml:"theme"`
 }
@@ -136,8 +167,31 @@ func ParseSpec(data []byte) (*Spec, error) {
 	if s.Jobs.Prefix == "" || s.Jobs.Shell == "" || s.Jobs.LogBufferBytes < 1 || s.Jobs.CancelGraceMS < 1 || s.Jobs.MaxFinished < 1 {
 		return nil, fmt.Errorf("%s: jobs prefix, shell, log_buffer_bytes, cancel_grace_ms and max_finished must be set", specPath)
 	}
+	if err := validatePicker(&s); err != nil {
+		return nil, err
+	}
 	if s.Input.MinLines < 1 || s.Input.MaxLines < s.Input.MinLines {
 		return nil, fmt.Errorf("%s: input min_lines and max_lines invalid", specPath)
 	}
 	return &s, nil
+}
+
+func validatePicker(s *Spec) error {
+	p := s.Picker
+	single := func(t string) bool { return len([]rune(t)) == 1 }
+	if !single(p.FileTrigger) || !single(p.CommandTrigger) {
+		return fmt.Errorf("%s: picker file_trigger and command_trigger must be one character", specPath)
+	}
+	if p.MaxItems < 1 || p.MaxWidth < 10 || p.MaxIndexedFiles < 1 {
+		return fmt.Errorf("%s: picker max_items >= 1, max_width >= 10 and max_indexed_files >= 1 required", specPath)
+	}
+	l := p.Labels
+	if l.FilesTitle == "" || l.CommandsTitle == "" || l.Indexing == "" || l.NoMatches == "" {
+		return fmt.Errorf("%s: picker labels must be set", specPath)
+	}
+	kb := s.Keybindings
+	if len(kb.PickerSelect) == 0 || len(kb.PickerClose) == 0 || len(kb.PickerUp) == 0 || len(kb.PickerDown) == 0 {
+		return fmt.Errorf("%s: picker_select, picker_close, picker_up and picker_down keybindings must be set", specPath)
+	}
+	return nil
 }
