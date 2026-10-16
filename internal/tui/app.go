@@ -5,15 +5,19 @@ import (
 	"unicode"
 
 	"ubunatic.com/harnez/internal/tui/jobs"
+	"ubunatic.com/harnez/internal/tui/router"
 	"ubunatic.com/loom"
 )
 
 // AppWidget implements loom.Widget for harnez tui interactive chat interface.
 type AppWidget struct {
-	Spec          *Spec
-	Model         string
-	SessionID     string
-	Status        string
+	Spec      *Spec
+	Model     string
+	SessionID string
+	Status    string
+	// Backend is the last turn's backend session state (router.SessionResumed
+	// or router.SessionNew); empty before the first turn.
+	Backend       string
 	Chat          *ChatThread
 	Prompt        *PromptBuffer
 	OnSubmit      func(prompt string)
@@ -284,7 +288,18 @@ func (app *AppWidget) formatHeader() string {
 	res = strings.ReplaceAll(res, "{{ .Model }}", app.Model)
 	res = strings.ReplaceAll(res, "{{ .SessionID }}", app.SessionID)
 	res = strings.ReplaceAll(res, "{{ .Status }}", statusStr)
-	return res
+	res = strings.ReplaceAll(res, "{{ .Backend }}", app.backendLabel())
+	return strings.TrimRight(res, " ")
+}
+
+func (app *AppWidget) backendLabel() string {
+	switch app.Backend {
+	case router.SessionResumed:
+		return app.Spec.Sessions.Labels.Resumed
+	case router.SessionNew:
+		return app.Spec.Sessions.Labels.New
+	}
+	return ""
 }
 
 // RenderCanvas renders a single frame of AppWidget into ANSI line strings for testing.

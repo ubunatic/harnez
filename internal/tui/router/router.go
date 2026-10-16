@@ -24,6 +24,15 @@ const (
 	ChunkText ChunkKind = "text"
 	// ChunkActivity describes a tool call or command the agent started.
 	ChunkActivity ChunkKind = "activity"
+	// ChunkSession says how the turn's backend session started: Text is
+	// SessionResumed or SessionNew. A failed resume follows up with SessionNew.
+	ChunkSession ChunkKind = "session"
+)
+
+// ChunkSession texts.
+const (
+	SessionResumed = "resumed"
+	SessionNew     = "new"
 )
 
 // Chunk is one piece of turn output, delivered in arrival order.
@@ -33,12 +42,16 @@ type Chunk struct {
 }
 
 // Router routes prompts to the driver of the active model and keeps one
-// backend session per provider model, so the next prompt resumes it.
+// backend session per provider model, so the next prompt resumes it natively
+// (the provider CLI's resume, no history replay).
 type Router struct {
 	// Dir is the working directory the provider CLIs run in.
 	Dir string
 	// Driver selects a driver for a model; nil means subagent.StreamDriverFor.
 	Driver func(subagent.Model, string) subagent.Driver
+	// Store persists the backend session ids across restarts; nil keeps
+	// them in memory only. Call Load after setting it.
+	Store *Store
 
 	mu       sync.Mutex
 	sessions map[string]string // provider:name -> provider session id
@@ -73,9 +86,27 @@ func (r *Router) Session(spec string) string {
 	return r.sessions[sessionKey(m)]
 }
 
+// Load fills the session map from Store, so the first turn of each model
+// resumes the backend session of an earlier run. Without a Store it is a no-op.
+func (r *Router) Load() error {
+	if r.Store == nil {
+		return nil
+	}
+	sessions, err := r.Store.Load()
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sessions = sessions
+	return nil
+}
+
 // Turn runs prompt on the model named by spec and calls emit for every chunk,
-// in order, from the calling goroutine. Cancelling ctx stops the provider
-// process tree. Turn must not run concurrently for the same model.
+// in order, from the calling goroutine. A ChunkSession chunk says whether the
+// turn resumes the stored backend session or starts a new one. Cancelling ctx
+// stops the provider process tree. Turn must not run concurrently for the
+// same model.
 func (r *Router) Turn(ctx context.Context, spec, prompt string, emit func(Chunk)) error {
 	m, err := subagent.ResolveModel(spec)
 	if err != nil {
@@ -92,57 +123,57 @@ func (r *Router) Turn(ctx context.Context, spec, prompt string, emit func(Chunk)
 	key := sessionKey(m)
 	id := r.Session(spec)
 	if id != "" {
-		err := r.turn(ctx, d, m, id, prompt, emit)
-		if err == nil || ctx.Err() != nil {
-			return err
-		}
-		// A stale or broken backend session must not fail every later prompt.
-		r.setSession(key, "")
-		emit(Chunk{Kind: ChunkActivity, Text: "could not resume session " + id + " (" + err.Error() + "); starting a new session"})
+		emit(Chunk{Kind: ChunkSession, Text: SessionResumed})
+	} else {
+		emit(Chunk{Kind: ChunkSession, Text: SessionNew})
 	}
-	return r.turn(ctx, d, m, "", prompt, emit)
-}
-
-// turn runs one driver call: a new session when id is empty, else a resume.
-// The backend session id is stored as soon as it is known, so a turn
-// cancelled after the provider reported it is still resumed next time.
-func (r *Router) turn(ctx context.Context, d subagent.Driver, m subagent.Model, id, prompt string, emit func(Chunk)) error {
-	key := sessionKey(m)
-	var res *subagent.TurnResult
-	var err error
-	if sd, ok := d.(subagent.StreamingDriver); ok {
-		fn := func(ev subagent.Event) {
+	var storeErr error
+	set := func(id string) {
+		if err := r.setSession(key, id); err != nil && storeErr == nil {
+			storeErr = err
+		}
+	}
+	t := subagent.ResumeTurn{
+		Driver: d,
+		ID:     id,
+		Opts:   subagent.RunOptions{Prompt: prompt, Model: m, Dir: r.Dir},
+		// The backend session id is stored as soon as it is known, so a turn
+		// cancelled after the provider reported it is still resumed next time.
+		Events: func(ev subagent.Event) {
 			switch ev.Kind {
 			case "session":
-				r.setSession(key, ev.Text)
+				set(ev.Text)
 			case "message":
 				emit(Chunk{Kind: ChunkText, Text: ev.Text})
 			case "activity":
 				emit(Chunk{Kind: ChunkActivity, Text: ev.Text})
 			}
+		},
+		// A stale or broken backend session must not fail every later prompt.
+		Retry: func(error) bool { return true },
+		OnFresh: func(note string) {
+			set("")
+			emit(Chunk{Kind: ChunkActivity, Text: note})
+			emit(Chunk{Kind: ChunkSession, Text: SessionNew})
+		},
+	}
+	if _, ok := d.(subagent.StreamingDriver); !ok {
+		t.Events = nil
+	}
+	res, _, err := t.Do(ctx)
+	if t.Events == nil && err == nil {
+		for _, msg := range res.Messages {
+			emit(Chunk{Kind: ChunkText, Text: msg})
 		}
-		if id == "" {
-			res, err = sd.RunStream(ctx, subagent.RunOptions{Prompt: prompt, Model: m, Dir: r.Dir}, fn)
-		} else {
-			res, err = sd.ResumeStream(ctx, id, prompt, m, fn)
-		}
-	} else {
-		if id == "" {
-			res, err = d.Run(ctx, subagent.RunOptions{Prompt: prompt, Model: m, Dir: r.Dir})
-		} else {
-			res, err = d.Resume(ctx, id, prompt, m)
-		}
-		if err == nil {
-			for _, msg := range res.Messages {
-				emit(Chunk{Kind: ChunkText, Text: msg})
-			}
-			if len(res.Messages) == 0 && res.Response != "" {
-				emit(Chunk{Kind: ChunkText, Text: res.Response})
-			}
+		if len(res.Messages) == 0 && res.Response != "" {
+			emit(Chunk{Kind: ChunkText, Text: res.Response})
 		}
 	}
 	if res != nil && res.SessionID != "" {
-		r.setSession(key, res.SessionID)
+		set(res.SessionID)
+	}
+	if storeErr != nil {
+		emit(Chunk{Kind: ChunkActivity, Text: "could not save backend session id: " + storeErr.Error()})
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -150,17 +181,26 @@ func (r *Router) turn(ctx context.Context, d subagent.Driver, m subagent.Model, 
 	return err
 }
 
-func (r *Router) setSession(key, id string) {
+// setSession updates the in-memory map and, with a Store, the session file.
+func (r *Router) setSession(key, id string) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.sessions == nil {
 		r.sessions = map[string]string{}
 	}
+	if r.sessions[key] == id {
+		r.mu.Unlock()
+		return nil
+	}
 	if id == "" {
 		delete(r.sessions, key)
-		return
+	} else {
+		r.sessions[key] = id
 	}
-	r.sessions[key] = id
+	r.mu.Unlock()
+	if r.Store == nil {
+		return nil
+	}
+	return r.Store.Set(key, id)
 }
 
 // sessionKey keeps one backend session per provider model; a tier change

@@ -37,7 +37,9 @@ End users subscribe to Pro plans (Claude Pro, Google AI Pro / Gemini Advanced, C
 ## 4. Progress (2026-10-16)
 - Done: `internal/tui/router` runs turns through `subagent.DriverFor` (shared with `harnez agent`);
   one backend session per provider model, resumed on the next prompt (kept after cancel; a failed
-  resume starts a new session with a note).
+  resume starts a new session with a note). Backend session ids persist per tui `--session` id
+  (`sessions.dir` of `spec/tui.yaml`), so a restart resumes them; header shows `[resumed]` /
+  `[new session]` (#791).
 - Streaming: codex streams messages and activity via `StreamingDriver`. The router picks
   `subagent.StreamDriverFor`, which wraps claude and pi in `ClaudeStreamDriver` /
   `PiStreamDriver`: same args and final `TurnResult`, plus live events from their JSONL

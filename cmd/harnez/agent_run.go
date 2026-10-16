@@ -724,12 +724,9 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		if err := preflightCodex(cmd.Context(), sess.Provider, baseDriver, d.preflight); err != nil {
 			return fmt.Errorf("agent resume %q preflight: %w", sess.Name, err)
 		}
+		// A provider session that is gone (ResumeChecker or a stale-session
+		// error) restarts fresh in resumeTurn below, like harnez tui.
 		driver = withAgyMeterSession(baseDriver, sess.ID)
-		if checker, ok := driver.(subagent.ResumeChecker); ok {
-			if resumable, reason := checker.CheckResumable(sess.ProviderID()); !resumable {
-				return fmt.Errorf("session %q cannot be resumed: %s; start a new session with: harnez agent start --name <new-name> ...", sess.Name, reason)
-			}
-		}
 	}
 	tl := newTimeline(cmd)
 	compacted, compactNote := false, ""
@@ -782,9 +779,14 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	}
 	var ts *turnStream
 	var r *subagent.TurnResult
-	sd, streaming := driver.(subagent.StreamingDriver)
+	_, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
 	turn := sess.Turn + 1
+	model := subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}
+	// resumeTurn resumes the provider session natively (no history replay);
+	// a stale one starts a new session with the same prompt (issue 791).
+	resumeTurn := subagent.ResumeTurn{Driver: driver, ID: sess.ProviderID(), Opts: subagent.RunOptions{Prompt: req.Prompt, Model: model, Dir: sess.WorkingDir}}
+	resumed := true
 	if req.SessionID == "" && d.storeDir != "" {
 		if timeout := foregroundDetachTimeout(cmd); timeout > 0 {
 			previous := *sess
@@ -836,14 +838,17 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		watchdog := &subagent.TokenWatchdog{Threshold: threshold}
 		watchdogCrossed := false
 		observedTokens := 0
-		r, err = sd.ResumeStream(watchCtx, sess.ProviderID(), withProtocol(req.Prompt, req.PlanFirst, role), subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, func(ev subagent.Event) {
+		resumeTurn.Opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role)
+		resumeTurn.OnFresh = func(note string) { ts.printf("[%s]\n", note) }
+		resumeTurn.Events = func(ev subagent.Event) {
 			if tokens, crossed := watchdog.Observe(ev); crossed {
 				watchdogCrossed = true
 				observedTokens = tokens
 				cancelWatch()
 			}
 			ts.onEvent(ev)
-		})
+		}
+		r, resumed, err = resumeTurn.Do(watchCtx)
 		if err != nil {
 			ts.abort()
 			if watchdogCrossed {
@@ -862,7 +867,11 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 			tl.log("compact", "%s", compactNote)
 		}
 		tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
-		r, err = driver.Resume(cmd.Context(), sess.ProviderID(), req.Prompt, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
+		resumeTurn.OnFresh = func(note string) { tl.log("resume", "%s", note) }
+		r, resumed, err = resumeTurn.Do(cmd.Context())
+	}
+	if !resumed && r != nil && r.SessionID != "" {
+		sess.ProviderSessionID = r.SessionID
 	}
 	if err != nil {
 		before := <-beforeCapture

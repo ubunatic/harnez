@@ -195,3 +195,41 @@ func TestModelCommand(t *testing.T) {
 		t.Fatalf("header = %q", app.formatHeader())
 	}
 }
+
+// The header says whether the last turn resumed its backend session or
+// started a new one; session markers never reach the chat.
+func TestSessionChunksShowInHeader(t *testing.T) {
+	fresh := false
+	app, l := newRunnerApp(t, func(_ context.Context, _, _ string, emit func(router.Chunk)) error {
+		emit(router.Chunk{Kind: router.ChunkSession, Text: router.SessionResumed})
+		if fresh {
+			emit(router.Chunk{Kind: router.ChunkActivity, Text: "could not resume session x; starting a new session"})
+			emit(router.Chunk{Kind: router.ChunkSession, Text: router.SessionNew})
+		}
+		emit(router.Chunk{Kind: router.ChunkText, Text: "ok"})
+		return nil
+	})
+	if h := app.formatHeader(); strings.Contains(h, "[resumed]") || strings.Contains(h, "[new session]") || strings.HasSuffix(h, " ") {
+		t.Fatalf("header before first turn = %q", h)
+	}
+	typeLine(app, "a")
+	l.drainUntil(t, app)
+	if h := app.formatHeader(); !strings.HasSuffix(h, "[resumed]") {
+		t.Fatalf("header after resumed turn = %q", h)
+	}
+	fresh = true
+	typeLine(app, "b")
+	l.drainUntil(t, app)
+	if h := app.formatHeader(); !strings.HasSuffix(h, "[new session]") {
+		t.Fatalf("header after fresh turn = %q", h)
+	}
+	frame := strings.Join(RenderCanvas(app, 120, 24), "\n")
+	if !strings.Contains(frame, "[new session]") {
+		t.Fatalf("frame lacks backend label:\n%s", frame)
+	}
+	for _, tr := range app.Chat.Turns() {
+		if tr.Content == router.SessionResumed || tr.Content == router.SessionNew {
+			t.Fatalf("session marker rendered as chat turn %#v", tr)
+		}
+	}
+}

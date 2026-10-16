@@ -101,6 +101,8 @@ func (app *AppWidget) startTurn(prompt string) {
 
 func (app *AppWidget) applyChunk(model string, c router.Chunk) {
 	switch c.Kind {
+	case router.ChunkSession:
+		app.Backend = c.Text
 	case router.ChunkActivity:
 		AddTurn(app.Chat, RoleTool, "exec", c.Text)
 	default:

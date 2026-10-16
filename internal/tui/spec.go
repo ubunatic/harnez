@@ -128,11 +128,25 @@ type ThemeSpec struct {
 	InputColor     string `yaml:"input_color"`
 }
 
+// SessionLabelsSpec names the backend session state shown in the header.
+type SessionLabelsSpec struct {
+	Resumed string `yaml:"resumed"`
+	New     string `yaml:"new"`
+}
+
+// SessionsSpec configures the per-tui-session store of backend session ids.
+type SessionsSpec struct {
+	// Dir holds one <tui session id>.json per tui session; "~/" is expanded.
+	Dir    string            `yaml:"dir"`
+	Labels SessionLabelsSpec `yaml:"labels"`
+}
+
 // Spec is the top-level shape of spec/tui.yaml.
 type Spec struct {
 	Header      HeaderSpec      `yaml:"header"`
 	Chat        ChatSpec        `yaml:"chat"`
 	Input       InputSpec       `yaml:"input"`
+	Sessions    SessionsSpec    `yaml:"sessions"`
 	Terminal    TerminalSpec    `yaml:"terminal"`
 	Editor      EditorSpec      `yaml:"editor"`
 	Jobs        JobsSpec        `yaml:"jobs"`
@@ -166,6 +180,9 @@ func ParseSpec(data []byte) (*Spec, error) {
 	}
 	if s.Jobs.Prefix == "" || s.Jobs.Shell == "" || s.Jobs.LogBufferBytes < 1 || s.Jobs.CancelGraceMS < 1 || s.Jobs.MaxFinished < 1 {
 		return nil, fmt.Errorf("%s: jobs prefix, shell, log_buffer_bytes, cancel_grace_ms and max_finished must be set", specPath)
+	}
+	if s.Sessions.Dir == "" || s.Sessions.Labels.Resumed == "" || s.Sessions.Labels.New == "" {
+		return nil, fmt.Errorf("%s: sessions dir and labels must be set", specPath)
 	}
 	if err := validatePicker(&s); err != nil {
 		return nil, err

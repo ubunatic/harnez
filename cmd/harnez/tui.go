@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/tui"
 	"ubunatic.com/harnez/internal/tui/router"
@@ -41,7 +42,10 @@ entry of spec/tui.yaml found on PATH.
 
 Prompts run through the active model's harness CLI (claude, codex, agy, pi), so
 turns draw on the matching subscription; the next prompt resumes the same
-backend session. Esc or Ctrl+C cancels a running turn. "/model <spec>" switches
+backend session natively. Backend session ids are saved per --session id
+(sessions.dir of spec/tui.yaml), so "harnez tui --session X" resumes them after
+a restart; a session the provider no longer knows starts fresh with a note. The
+header shows [resumed] or [new session] for the last turn. Esc or Ctrl+C cancels a running turn. "/model <spec>" switches
 the active model (see harnez agent models).
 
 A prompt starting with "!" runs the rest as a background shell command (sh -c,
@@ -118,6 +122,16 @@ func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error 
 		return fmt.Errorf("working directory: %w", err)
 	}
 	rt := router.New(dir)
+	// Persist backend session ids so --session X resumes them after a restart;
+	// without the store the session still works, in memory only.
+	if st, err := router.NewStore(fsutil.ExpandHome(spec.Sessions.Dir), o.sessionID); err != nil {
+		tui.AddTurn(app.Chat, tui.RoleError, "", err.Error()+"; backend sessions are not saved")
+	} else {
+		rt.Store = st
+		if err := rt.Load(); err != nil {
+			tui.AddTurn(app.Chat, tui.RoleError, "", err.Error()+"; starting new backend sessions")
+		}
+	}
 	app.AttachRunner(rt.Turn, pane.Post, router.ResolveSpec)
 	app.AttachEditor(pane.Suspend, tui.NewEditor(spec.Editor))
 	app.AttachJobs(tui.NewJobManager(spec.Jobs, dir, pane.Post))

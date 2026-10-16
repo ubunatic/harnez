@@ -1549,22 +1549,59 @@ func TestAgentListResumeColumnStates(t *testing.T) {
 	}
 }
 
-func TestAgentTerminalResumeRefusal(t *testing.T) {
-	old := agentDriver
-	d := &resumeOutcomeDriver{terminal: true}
-	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
-	defer func() { agentDriver = old }()
+// A provider session that is gone starts a fresh provider session with the
+// same prompt instead of failing every later resume (issue 791): the store
+// then holds the new provider id and the note goes to stderr.
+func TestAgentResumeStaleSessionStartsFresh(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		driver      *resumeOutcomeDriver
+		wantResumes int
+		wantNote    string
+	}{
+		{"terminal", &resumeOutcomeDriver{terminal: true}, 0, "session sid cannot be resumed (session record is terminal); starting a new session"},
+		{"stale error", &resumeOutcomeDriver{err: errors.New("claude resume: No conversation found with session ID: sid")}, 1, "could not resume session sid (claude resume: No conversation found with session ID: sid); starting a new session"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := agentDriver
+			agentDriver = func(subagent.Model, string) subagent.Driver { return tc.driver }
+			defer func() { agentDriver = old }()
+			storeDir := t.TempDir()
+			store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
+			var stdout, stderr bytes.Buffer
+			cmd := newAgentCmd()
+			cmd.SetOut(&stdout)
+			cmd.SetErr(&stderr)
+			cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("resume: %v (stderr %s)", err, stderr.String())
+			}
+			sess, _ := store.Get("sid")
+			if tc.driver.resumes != tc.wantResumes || tc.driver.prompt != "hi" {
+				t.Fatalf("resumes=%d fresh prompt=%q", tc.driver.resumes, tc.driver.prompt)
+			}
+			if sess.ProviderSessionID != "recorded" || sess.ResumeFailures != 0 || sess.LastError != "" || sess.Status != "completed" {
+				t.Fatalf("session after fresh start = %#v", sess)
+			}
+			if !strings.Contains(stderr.String(), tc.wantNote) {
+				t.Fatalf("stderr lacks note %q:\n%s", tc.wantNote, stderr.String())
+			}
+		})
+	}
+}
+
+// Errors that are not a stale session keep failing the resume, with no
+// fresh provider session and the failure recorded.
+func TestAgentResumeOtherErrorsDoNotStartFresh(t *testing.T) {
+	d := &resumeOutcomeDriver{err: errors.New("usage limit reached")}
 	storeDir := t.TempDir()
 	store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
-	cmd := newAgentCmd()
-	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
-	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "cannot be resumed") || !strings.Contains(err.Error(), "harnez agent start --name") {
+	if _, err := runWithStore(t, d, storeDir, "resume", "--name", "worker", "hi"); err == nil || !strings.Contains(err.Error(), "usage limit reached") {
 		t.Fatalf("error = %v", err)
 	}
 	sess, _ := store.Get("sid")
-	if d.resumes != 0 || sess.ResumeFailures != 0 {
-		t.Fatalf("terminal attempt changed state: resumes=%d session=%#v", d.resumes, sess)
+	if d.prompt != "" || d.resumes != 1 || sess.ResumeFailures != 1 || sess.ProviderSessionID != "" {
+		t.Fatalf("fresh prompt=%q resumes=%d session=%#v", d.prompt, d.resumes, sess)
 	}
 }
 

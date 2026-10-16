@@ -1,6 +1,6 @@
 # 791 — Read harnez rules once per session and resume backend sessions natively
 
-**Status**: In Progress
+**Status**: Done — header, tui store, shared stale recovery; real-CLI check open
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature / Agent Instructions

@@ -2,7 +2,7 @@
 # Default layout, behavior, and keybindings for `harnez tui`.
 header:
   show: true
-  format: "harnez tui — [Model: {{ .Model }}] [Session: {{ .SessionID }}] [Status: {{ .Status }}]"
+  format: "harnez tui — [Model: {{ .Model }}] [Session: {{ .SessionID }}] [Status: {{ .Status }}] {{ .Backend }}"
   status_indicators:
     idle: "● ready"
     busy: "◐ thinking"
@@ -24,6 +24,16 @@ input:
   min_lines: 3
   max_lines: 10
   prompt_symbol: "> "
+
+# Backend (provider CLI) session ids per tui session, so `harnez tui --session X`
+# resumes the claude/codex/agy/pi sessions natively after a restart.
+sessions:
+  # One <tui session id>.json per tui session; "~/" is the home directory.
+  dir: "~/.harnez/tui/sessions"
+  # {{ .Backend }} in header.format after a turn: resumed vs new backend session.
+  labels:
+    resumed: "[resumed]"
+    new: "[new session]"
 
 # Terminal protocol options for the loom pane.
 terminal:

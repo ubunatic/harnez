@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/tui.schema.json",
   "title": "harnez tui interactive harness layout and keybindings spec",
   "type": "object",
-  "required": ["header", "chat", "input", "terminal", "editor", "jobs", "picker", "keybindings", "theme"],
+  "required": ["header", "chat", "input", "sessions", "terminal", "editor", "jobs", "picker", "keybindings", "theme"],
   "properties": {
     "header": {
       "type": "object",
@@ -42,6 +42,21 @@
         "min_lines": { "type": "integer", "minimum": 1 },
         "max_lines": { "type": "integer", "minimum": 1 },
         "prompt_symbol": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "sessions": {
+      "type": "object",
+      "description": "Backend session ids per tui session, resumed after a restart.",
+      "required": ["dir", "labels"],
+      "properties": {
+        "dir": { "type": "string", "minLength": 1, "description": "Directory of <tui session id>.json files; ~/ is the home directory." },
+        "labels": {
+          "type": "object",
+          "required": ["resumed", "new"],
+          "properties": { "resumed": { "type": "string", "minLength": 1 }, "new": { "type": "string", "minLength": 1 } },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },

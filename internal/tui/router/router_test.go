@@ -57,7 +57,19 @@ func (d streamDriver) ResumeStream(_ context.Context, id, _ string, _ subagent.M
 	return &subagent.TurnResult{SessionID: id}, nil
 }
 
+// collect returns a turn's output chunks without its ChunkSession markers.
 func collect(t *testing.T, r *Router, spec, prompt string) []Chunk {
+	t.Helper()
+	var got []Chunk
+	for _, c := range collectAll(t, r, spec, prompt) {
+		if c.Kind != ChunkSession {
+			got = append(got, c)
+		}
+	}
+	return got
+}
+
+func collectAll(t *testing.T, r *Router, spec, prompt string) []Chunk {
 	t.Helper()
 	var got []Chunk
 	if err := r.Turn(context.Background(), spec, prompt, func(c Chunk) { got = append(got, c) }); err != nil {
