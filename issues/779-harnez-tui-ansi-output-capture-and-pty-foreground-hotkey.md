@@ -37,9 +37,13 @@ foreground; the design changed from a `creack/pty` bridge to a native resume.
   agy gets `subagent.InteractiveEnv`). Busy turn, no session, unsupported → notes
   (`native.labels` in spec/tui.yaml). On return: note "returned from <provider>", header and
   stored session id unchanged (a forked native id is not picked up).
+  agy runs without the metering supervisor and `HARNEZ_SESSION_ID` of `agent resume -i`.
+  Stored ids outside `[A-Za-z0-9._:-]` (or with a leading `-`) are dropped with a note
+  before any argv (Ctrl+O and turn resume).
 - ANSI (`internal/tui/ansi.go`): chat content keeps SGR only; CSI cursor/erase/modes, OSC
   (title, 8, 52), DCS/APC/PM/SOS, other ESC and C1 controls, CR and C0 are dropped; an
-  unterminated string drops to end of line. Wrapping uses loom display width and clusters;
+  unterminated string drops to end of line. A control after ZWJ ends the grapheme cluster, so it is filtered too
+  (loom v0.3.9 has the same ZWJ bug; harnez does not rely on loom's filter). Wrapping uses loom display width and clusters;
   styled lines end with a reset and the next line reopens the style. Tabs expand to 8 columns.
   Job logs keep SGR too (`jobs.Ring`) and pass the same sanitizer.
 - Tests: `internal/tui/{native,ansi}_test.go`, `internal/tui/router/native_test.go`; PTY
