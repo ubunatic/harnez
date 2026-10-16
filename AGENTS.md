@@ -115,7 +115,7 @@ See `@docs/AgenticLoop.md` Invariant 10 (Media & Demo Verification Gate).
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
 - Solo/hobby repo — single default branch, no PR workflow.
-- codeberg.org is primary; github.com (if present) is a synced mirror only.
+- codeberg.org and github.com are both dev remotes; Codeberg is canonical for releases (see Remotes in docs/Git.md).
 <!-- harnez:end Repo Setup -->
 
 <!-- harnez:begin Language Conventions -->
