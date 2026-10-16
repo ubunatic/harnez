@@ -30,12 +30,10 @@ Epic: issue 774. Library: `ubunatic.com/loom`.
 | Chat and job logs keep only SGR; all other escapes/controls are dropped | model and tool output is untrusted (screen clear, OSC 52 clipboard) | 779 |
 | Cancelled turns show a neutral note, not an error | cancel is user intent | 776 |
 | Header leads with status and `[resumed]`/`[new session]` | 80-column terminals clip the right edge | 791 |
-| Model picker opens on Ctrl+T or Alt+M (`open_models`) and on a bare `/model` | Ctrl+M is CR (= Enter); Ctrl+T has no readline action here and no other binding; Alt+M needs Meta-as-Escape, so it is the fallback; `TestKeybindingsDoNotConflict` checks all spec bindings | 776 |
-| Model picker is the `pickModel` kind of the inline picker (same state, ranking, `picker_*` keys); its query is typed in the overlay | no third overlay framework | 776 |
-| Tiers are list rows (`codex:luna:low/med/high`, from `KnownModelEntries`), grouped by provider; no tier toggle | filtering "luna high" reaches any tier; one widget path | 776 |
-| A pick calls `setModel`, the path of `/model <spec>` | one validation and note | 776 |
-| Switching during a running turn is allowed; the turn keeps its model, the note says the switch applies to the next turn | no reason to block; cancel stays explicit | 776 |
-| Session marker `↻` means the provider model has a stored backend session; it shows on every tier | sessions are keyed by provider:model, a tier change resumes the same session | 776, 791 |
+| Model picker opens on Ctrl+T, Alt+M or a bare `/model` | Ctrl+M is Enter; Alt+M is the fallback | 776 |
+| Model picker reuses the inline picker (`pickModel`); tiers are rows; a pick calls `setModel` like `/model <spec>` | one overlay framework, one switch path | 776 |
+| Switching mid-turn is allowed and applies to the next turn | the running turn keeps its model | 776 |
+| Session marker `↻` shows on every tier of a model | sessions are keyed by provider model, not tier | 791 |
 
 ## Open
 

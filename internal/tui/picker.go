@@ -26,6 +26,7 @@ type picker struct {
 	query    string
 	matches  []pickItem
 	sel      int
+	sessions map[string]bool // model picker: specs with a stored backend session, read once on open
 }
 
 func (p *picker) isOpen() bool { return p.kind != pickNone }

@@ -35,7 +35,12 @@ func (app *AppWidget) modelItems() []pickItem {
 }
 
 func (app *AppWidget) openModelPicker() {
-	app.picker = picker{kind: pickModel}
+	app.picker = picker{kind: pickModel, sessions: map[string]bool{}}
+	if app.sessionOf != nil {
+		for _, it := range app.modelItems() {
+			app.picker.sessions[it.Name] = app.sessionOf(it.Name) != ""
+		}
+	}
 	app.refilter()
 	if i := slices.IndexFunc(app.picker.matches, func(it pickItem) bool { return it.Name == app.Model }); i >= 0 {
 		app.picker.sel = i
@@ -118,7 +123,7 @@ func (app *AppWidget) modelRow(it pickItem, specW int) string {
 		}
 		return strings.Repeat(" ", loom.StringWidth(m))
 	}
-	hasSession := app.sessionOf != nil && app.sessionOf(it.Name) != ""
+	hasSession := app.picker.sessions[it.Name]
 	row := "  " + mark(it.Name == app.Model, mp.ActiveMarker) + " " + mark(hasSession, mp.SessionMarker) + " " + padTo(it.Name, specW)
 	if it.Desc != "" {
 		row += "  " + it.Desc
