@@ -1,6 +1,6 @@
 # 776 — harnez tui External Harness Forwarding and Subscription-Aware Model Router
 
-**Status**: In Progress — router, streaming, cancel, `/model` done; picker, claude/agy live streaming, direct API open
+**Status**: In Progress — router, streaming (codex/claude/pi), cancel, `/model` done; picker, agy streaming, direct API open
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Model Orchestration
@@ -38,13 +38,19 @@ End users subscribe to Pro plans (Claude Pro, Google AI Pro / Gemini Advanced, C
 - Done: `internal/tui/router` runs turns through `subagent.DriverFor` (shared with `harnez agent`);
   one backend session per provider model, resumed on the next prompt (kept after cancel; a failed
   resume starts a new session with a note).
-- Streaming: codex streams messages and activity via `StreamingDriver`; claude, agy and pi are
-  batch drivers, so their messages arrive when the turn ends.
+- Streaming: codex streams messages and activity via `StreamingDriver`. The router picks
+  `subagent.StreamDriverFor`, which wraps claude and pi in `ClaudeStreamDriver` /
+  `PiStreamDriver`: same args and final `TurnResult`, plus live events from their JSONL
+  (claude stream-json: init/result `session_id` -> session, main-thread text -> message,
+  `tool_use` -> activity, usage -> tokens; subagent traffic and malformed lines skipped;
+  pi `--mode json`: session, completed assistant messages). `harnez agent` keeps
+  `DriverFor`, whose claude/pi drivers stay batch. agy has no streaming mode in the driver
+  (`--output-format json` is one object), so its messages arrive when the turn ends.
 - TUI: chunks reach the chat via `Pane.Post`; status busy/idle/error; Esc/Ctrl+C cancel a running
   turn (`keybindings.cancel_turn`); errors render as `Error:` turns; `/model <spec>` validates
   against `spec/agent.yaml`.
 - Cancel kills the provider process group for claude/pi (`providerOutput`), codex via `startProcess`.
-- Open: live claude stream-json chunks (a `ClaudeDriver.RunStream` would also change
-  `harnez agent start`); agy cancel signals only its leader (agymeter `runChild`); direct API
+- Open: real-CLI check of claude/pi live streaming; text deltas
+  (`--include-partial-messages`) not used, chunks are whole messages; agy cancel signals only its leader (agymeter `runChild`); direct API
   clients (`local`, `ollama`, `openrouter`) return a "not supported yet" error turn; picker overlay
   and `Ctrl+M`; quota headroom indicators; real-CLI quota check.
