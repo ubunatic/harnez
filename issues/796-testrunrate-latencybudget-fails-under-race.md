@@ -1,6 +1,6 @@
 # 796 — TestRunRate_LatencyBudget fails under -race
 
-**Status**: Draft
+**Status**: Closed — raceEnabled const in cmd/harnez; latency budget x4 under -race
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
