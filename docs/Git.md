@@ -42,4 +42,13 @@ Only if explicitly asked:
 - push to the mirror to keep it in sync
 - pull from mirror contributor branches to integrate contributions
 
+### Cloud agents on the mirror
+Cloud agents (Claude Code web, Jules, Codex) clone the mirror. Keep their branches
+fast-forwardable onto Codeberg `main`:
+- At start and before the final push, merge Codeberg `main`:
+  `git fetch https://codeberg.org/<username>/<reponame> main && git merge FETCH_HEAD`.
+- Reserve ticket numbers after that fetch; on a clash, renumber yours.
+- Never merge PRs into the mirror's `main`; it forks the mirror from Codeberg.
+- Maintainer integrates: `git fetch github <branch> && git merge --ff-only FETCH_HEAD && git push codeberg main`.
+
 <!-- harnez:stop -->
