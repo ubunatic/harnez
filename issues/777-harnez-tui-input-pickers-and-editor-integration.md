@@ -1,10 +1,10 @@
-# 740 — harnez tui Interactive Input Pickers (@ files, / skills) and Ctrl+G Editor Integration
+# 777 — harnez tui Interactive Input Pickers (@ files, / skills) and Ctrl+G Editor Integration
 
 **Status**: Draft
 **Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Interactive TUI / UX
-**Related**: #737, #738, #620
+**Related**: #774, #775, #620
 
 ---
 

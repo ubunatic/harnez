@@ -1,10 +1,10 @@
-# 739 — harnez tui External Harness Forwarding and Subscription-Aware Model Router
+# 776 — harnez tui External Harness Forwarding and Subscription-Aware Model Router
 
 **Status**: Draft
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Model Orchestration
-**Related**: #737, #738, #501, #603
+**Related**: #774, #775, #501, #603
 
 ---
 

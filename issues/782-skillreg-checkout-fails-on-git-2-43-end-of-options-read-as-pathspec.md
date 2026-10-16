@@ -1,10 +1,10 @@
-# 745 — skillreg checkout fails on git 2.43: --end-of-options read as pathspec
+# 782 — skillreg checkout fails on git 2.43: --end-of-options read as pathspec
 
 **Status**: Closed — resolved
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
-**Related**: #743
+**Related**: #780
 
 ---
 
@@ -29,4 +29,4 @@ git 2.43 `checkout` treats `--end-of-options` as a pathspec.
 - `scripts/install-canary.sh` auto-detects `CONTAINER_CMD` (podman or docker);
   `scripts/agent-canary/run.sh` stays podman-only (pods).
 - Verified on git 2.43.0: `go test ./internal/skillreg/` passes. Full
-  `make test-ubuntu` still fails on unrelated tests, see #749.
+  `make test-ubuntu` still fails on unrelated tests, see #786.

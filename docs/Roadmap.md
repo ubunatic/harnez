@@ -142,12 +142,12 @@ Full interactive Loom-based chat interface (`ubunatic.com/loom`), combining mult
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 737 — Epic: `harnez tui` research & architecture spec | M — research completed in `docs/studies/2026-10-10-harnez-tui-interactive-harness-research.md` | **Now** |
-| 738 — Loom chat layout with multiline input box | L — Loom view, thread display, status header, multiline input (`Ctrl+J` newline) | **Next** (high) |
-| 739 — External harness forwarding & subscription router | M — forward `claude`, `agy`, `codex` to preserve Pro subscriptions; direct Go API for OpenAI/local | **Next** (with 738) |
-| 740 — Input pickers (`@` files, `/` skills) & `Ctrl+G` `$EDITOR` | M — fuzzy file picker overlay, skill picker, suspend to `$EDITOR` on `Ctrl+G` | **Next** (after 738) |
-| 741 — Background job manager | M — background task drawer, live output stream inspector, job cancellation | **Next** (after 738) |
-| 742 — ANSI stream capture & external PTY foreground (`Ctrl+O`) | M — rich ANSI stream wrapping, `Ctrl+O` hotkey to bring underlying PTY session to foreground | **Next** (after 739) |
+| 774 — Epic: `harnez tui` research & architecture spec | M — research completed in `docs/studies/2026-10-10-harnez-tui-interactive-harness-research.md` | **Now** |
+| 775 — Loom chat layout with multiline input box | L — Loom view, thread display, status header, multiline input (`Ctrl+J` newline) | **Next** (high) |
+| 776 — External harness forwarding & subscription router | M — forward `claude`, `agy`, `codex` to preserve Pro subscriptions; direct Go API for OpenAI/local | **Next** (with 775) |
+| 777 — Input pickers (`@` files, `/` skills) & `Ctrl+G` `$EDITOR` | M — fuzzy file picker overlay, skill picker, suspend to `$EDITOR` on `Ctrl+G` | **Next** (after 775) |
+| 778 — Background job manager | M — background task drawer, live output stream inspector, job cancellation | **Next** (after 775) |
+| 779 — ANSI stream capture & external PTY foreground (`Ctrl+O`) | M — rich ANSI stream wrapping, `Ctrl+O` hotkey to bring underlying PTY session to foreground | **Next** (after 776) |
 
 ## 2. Usage data vs usage views (560, 607) — rewritten this pass
 

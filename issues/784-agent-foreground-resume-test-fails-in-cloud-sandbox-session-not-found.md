@@ -1,10 +1,10 @@
-# 747 — agent foreground resume test fails in cloud sandbox: session not found
+# 784 — agent foreground resume test fails in cloud sandbox: session not found
 
 **Status**: Draft
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug / Tests
-**Related**: #743
+**Related**: #780
 
 ---
 

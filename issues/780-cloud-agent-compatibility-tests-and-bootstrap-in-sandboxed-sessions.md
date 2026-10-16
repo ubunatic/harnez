@@ -1,10 +1,10 @@
-# 743 — Cloud agent compatibility: tests and bootstrap in sandboxed sessions
+# 780 — Cloud agent compatibility: tests and bootstrap in sandboxed sessions
 
 **Status**: Draft
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Tooling / Cloud Agents
-**Related**: #744, #745, #746, #747, #748
+**Related**: #781, #782, #783, #784, #785
 
 ---
 
@@ -20,11 +20,11 @@ Observed on 2026-10-13: git 2.43.0, Go 1.26, PID 1 `process_api`, no `minisign`.
 
 | Ticket | Package | Cause |
 |--------|---------|-------|
-| #744 | `internal/release` | `minisign` required on PATH even in dry-run tests |
-| #745 | `internal/skillreg` | `git checkout --end-of-options` unsupported by git 2.43 |
-| #746 | `cmd/harnez`, `internal/sound` | process-group kill probe sees surviving pid |
-| #747 | `cmd/harnez` | agent foreground resume: session not found |
-| #748 | bootstrap | no SessionStart hook installs `harnez` |
+| #781 | `internal/release` | `minisign` required on PATH even in dry-run tests |
+| #782 | `internal/skillreg` | `git checkout --end-of-options` unsupported by git 2.43 |
+| #783 | `cmd/harnez`, `internal/sound` | process-group kill probe sees surviving pid |
+| #784 | `cmd/harnez` | agent foreground resume: session not found |
+| #785 | bootstrap | no SessionStart hook installs `harnez` |
 
 ## 3. Implementation & Verification Plan
 - Fix each sub-ticket without skipping tests: tests must not depend on host tools or

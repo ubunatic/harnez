@@ -65,7 +65,7 @@ and multiline prompt box (Enter to send, Ctrl+J for newline).`,
 func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error {
 	var app *tui.AppWidget
 	app = tui.NewAppWidget(spec, o.model, o.sessionID, func(prompt string) {
-		// Echo until model forwarding lands (#739).
+		// Echo until model forwarding lands (#776).
 		tui.AddTurn(app.Chat, tui.RoleAssistant, o.model, fmt.Sprintf("Received prompt: %s", prompt))
 	})
 

@@ -1,10 +1,10 @@
-# 750 — container scripts duplicate detect_container_cmd
+# 787 — container scripts duplicate detect_container_cmd
 
 **Status**: Draft
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
-**Related**: #745
+**Related**: #782
 
 ---
 

@@ -1,10 +1,10 @@
-# 738 — harnez tui Loom-based Chat Layout with Thread Display and Multiline Input Box
+# 775 — harnez tui Loom-based Chat Layout with Thread Display and Multiline Input Box
 
 **Status**: In Progress — shell, chat, prompt and spec keybindings done (e1fbce7); `.ansi` design and loom bump open
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Loom Integration
-**Related**: #737, #607
+**Related**: #774, #607
 
 ---
 

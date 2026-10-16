@@ -1,10 +1,10 @@
-# 742 — harnez tui ANSI Output Stream Capture and External PTY Foreground Hotkey (Ctrl+O)
+# 779 — harnez tui ANSI Output Stream Capture and External PTY Foreground Hotkey (Ctrl+O)
 
 **Status**: Draft
 **Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Interactive TUI / Stream Capture & Terminal Control
-**Related**: #737, #738, #739, #559
+**Related**: #774, #775, #776, #559
 
 ---
 

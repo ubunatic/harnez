@@ -1,10 +1,10 @@
-# 744 — release tests require minisign on PATH
+# 781 — release tests require minisign on PATH
 
 **Status**: Draft
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug / Tests
-**Related**: #743
+**Related**: #780
 
 ---
 

@@ -1,10 +1,10 @@
-# 741 — harnez tui Background Job Manager
+# 778 — harnez tui Background Job Manager
 
 **Status**: Draft
 **Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Interactive TUI / Background Execution
-**Related**: #737, #738, #049, #533
+**Related**: #774, #775, #049, #533
 
 ---
 

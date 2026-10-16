@@ -1,10 +1,10 @@
-# 746 — process-group kill tests fail in containers without a reaping init
+# 783 — process-group kill tests fail in containers without a reaping init
 
 **Status**: Draft
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug / Tests
-**Related**: #743
+**Related**: #780
 
 ---
 

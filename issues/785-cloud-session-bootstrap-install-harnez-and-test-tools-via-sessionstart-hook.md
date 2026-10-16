@@ -1,10 +1,10 @@
-# 748 — cloud session bootstrap: install harnez and test tools via SessionStart hook
+# 785 — cloud session bootstrap: install harnez and test tools via SessionStart hook
 
 **Status**: Draft
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Tooling / Cloud Agents
-**Related**: #743
+**Related**: #780
 
 ---
 
@@ -17,7 +17,7 @@ and `make test-q1`, but a fresh cloud session has no `harnez` on PATH and no
 - Claude Code on the web runs `.claude/settings.json` SessionStart hooks; the repo has
   no `.claude/` dir. Other cloud agents (Jules, Codex) use their own setup scripts.
 - Needed: `go install ./cmd/harnez`, `$(go env GOPATH)/bin` on PATH, and optional test
-  tools (`minisign`) once #744 no longer needs them.
+  tools (`minisign`) once #781 no longer needs them.
 
 ## 3. Implementation & Verification Plan
 - Add `scripts/cloud-setup.sh` (idempotent, Bash rules in `docs/Bash.md`) and call it from
