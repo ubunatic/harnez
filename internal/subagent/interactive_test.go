@@ -292,11 +292,12 @@ func TestDeliverInboxWaitsForIdleAndWritesFIFOBracketedPaste(t *testing.T) {
 		t.Fatalf("busy turn wrote %q", terminal.String())
 	}
 	turn.ToolFinished()
-	deadline := time.Now().Add(time.Second)
-	for terminal.Len() == 0 && time.Now().Before(deadline) {
+	want := "\x1b[200~one\ntwo\x1b[201~\r\x1b[200~second\x1b[201~\r"
+	// Wait for both messages: they are written one after the other.
+	deadline := time.Now().Add(2 * time.Second)
+	for terminal.Len() < len(want) && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	want := "\x1b[200~one\ntwo\x1b[201~\r\x1b[200~second\x1b[201~\r"
 	if got := terminal.String(); got != want {
 		t.Fatalf("delivery = %q, want %q", got, want)
 	}
