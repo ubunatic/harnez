@@ -1,6 +1,6 @@
 # 778 — harnez tui Background Job Manager
 
-**Status**: Draft
+**Status**: In Progress — v1 in (2026-10-16): `!` jobs, Ctrl+B panel, live log, cancel
 **Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Interactive TUI / Background Execution
@@ -28,3 +28,14 @@ In interactive coding workflows, developers frequently launch long-running backg
 - Connect job events to Loom TUI reactive model updates.
 - Unit test job spawning, output buffer streaming, process tree cancellation, and state transitions.
 - Verify that cancelling a background task cleanly terminates all child processes.
+
+## 4. Status (2026-10-16): v1
+
+- `internal/tui/jobs`: registry, one process group per job (`subagent.IsolateProcess`),
+  stdout+stderr in a bounded ring (`jobs.log_buffer_bytes`); cancel = SIGTERM to the
+  group, SIGKILL after `jobs.cancel_grace_ms`; leader exit reaps leftover group members;
+  `Shutdown` (on tui exit) cancels all and waits. State changes reach the UI only via `Pane.Post`.
+- `!<cmd>` prompt runs `sh -c <cmd>` in the tui dir (never the model); chat notes on start/end.
+- Ctrl+B (`keybindings.toggle_jobs`) panel: up/down, Enter live log (follows tail; pgup/end),
+  `x` cancel, Esc back/close. Header shows `[jobs: N running]`. Labels in `spec/tui.yaml`.
+- Open: numeric hotkeys `[1..N]`, multi-select cancel, PID column, subagent jobs.
