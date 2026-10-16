@@ -44,5 +44,6 @@ Cloud agents (Claude Code web, Jules, Codex) usually work on GitHub branches.
 - At start and before the final push, merge Codeberg `main`:
   `git fetch https://codeberg.org/<username>/<reponame> main && git merge FETCH_HEAD`.
 - Reserve ticket numbers after that fetch; on a clash, renumber yours.
-- Integrate by fast-forward, then push `main` (and tags) to both remotes:
-  `git merge --ff-only <branch> && git push codeberg main && git push github main`.
+- Integrate by fast-forward, then push `main` (and tags) to both remotes
+  (`<cb>`/`<gh>` = your remote names, e.g. `origin`/`github`):
+  `git merge --ff-only <branch> && git push <cb> main && git push <gh> main`.
