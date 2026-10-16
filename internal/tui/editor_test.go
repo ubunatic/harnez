@@ -180,7 +180,8 @@ func TestAppCtrlGEditor(t *testing.T) {
 	if app.Prompt.Text() != "line1\nline2!" {
 		t.Fatalf("prompt = %q after failed editor, want kept", app.Prompt.Text())
 	}
-	if out := strings.Join(RenderCanvas(app, 80, 24), "\n"); !strings.Contains(out, "prompt kept") {
+	// Wide render: the note embeds the random temp editor path and wraps at 80 cols.
+	if out := strings.Join(RenderCanvas(app, 400, 24), "\n"); !strings.Contains(out, "prompt kept") {
 		t.Error("missing status note after failed editor")
 	}
 }
