@@ -36,6 +36,10 @@ func TestIsStaleSession(t *testing.T) {
 	if !IsStaleSession("claude", staleClaude("abc")) {
 		t.Error("claude stderr 'No conversation found' must be stale")
 	}
+	codexStale := &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "Error: thread/resume: thread/resume failed: no rollout found for thread id abc (code -32600)"}
+	if !IsStaleSession("codex", fmt.Errorf("codex resume: %w", codexStale)) {
+		t.Error("codex stderr 'no rollout found for thread id' must be stale")
+	}
 	for name, tc := range map[string]struct {
 		provider string
 		err      error
@@ -46,7 +50,8 @@ func TestIsStaleSession(t *testing.T) {
 		"mid-line stderr":     {"claude", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "warn: No conversation found with session ID: x"}},
 		"quota":               {"claude", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "usage limit reached"}},
 		"unverified provider": {"pi", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "No conversation found with session ID: x"}},
-		"codex":               {"codex", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "session not found"}},
+		"codex other":         {"codex", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "session not found"}},
+		"codex quota":         {"codex", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "Error: usage limit reached"}},
 	} {
 		if IsStaleSession(tc.provider, tc.err) {
 			t.Errorf("%s: IsStaleSession = true", name)

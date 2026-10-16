@@ -16,6 +16,7 @@ selftest:
 # restarts fresh, its resume errors stay errors (issue 791).
 stale_session_errors:
   claude: ["No conversation found with session ID"]
+  codex: ["Error: thread/resume: thread/resume failed: no rollout found for thread id"]
 
 # External session discovery reads Codex CLI rollout metadata only. Rollout files
 # are JSONL; only the first session_meta record is needed for identity and cwd.

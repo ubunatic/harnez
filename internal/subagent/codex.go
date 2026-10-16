@@ -447,7 +447,7 @@ func startProcess(ctx context.Context, name string, args ...string) (io.Reader, 
 			_ = KillGroup(c.Process.Pid, syscall.SIGKILL)
 		}
 		if msg := strings.TrimSpace(stderr.String()); err != nil && msg != "" {
-			return fmt.Errorf("%w: %s", err, lastLines(msg, 3))
+			return &ProviderExitError{Err: err, Stderr: msg}
 		}
 		return err
 	}, nil

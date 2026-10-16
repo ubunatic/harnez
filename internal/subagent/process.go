@@ -84,6 +84,9 @@ func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte,
 	if err := cmd.Wait(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitErr.Stderr = stderr.Bytes()
+			if msg := strings.TrimSpace(stderr.String()); msg != "" {
+				return b, &ProviderExitError{Err: err, Stderr: msg}
+			}
 		}
 		return b, err
 	}
@@ -104,11 +107,7 @@ func runProviderCLI(ctx context.Context, name, dir string, override func(context
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
-	b, err := providerLines(ctx, cmd, fn)
-	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-		return b, &ProviderExitError{Err: err, Stderr: strings.TrimSpace(string(exitErr.Stderr))}
-	}
-	return b, err
+	return providerLines(ctx, cmd, fn)
 }
 
 // ProviderExitError is a provider CLI's non-zero exit with its trimmed
@@ -119,7 +118,7 @@ type ProviderExitError struct {
 	Stderr string
 }
 
-func (e *ProviderExitError) Error() string { return e.Err.Error() + ": " + e.Stderr }
+func (e *ProviderExitError) Error() string { return e.Err.Error() + ": " + lastLines(e.Stderr, 3) }
 func (e *ProviderExitError) Unwrap() error { return e.Err }
 
 // readLines collects all of rd and calls fn for every line, including a
