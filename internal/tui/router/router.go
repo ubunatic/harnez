@@ -2,8 +2,9 @@
 //
 // Subscription-bound providers (claude, codex, agy, pi) go through their CLI
 // driver so a turn draws on the user's plan quota. Drivers that implement
-// subagent.StreamingDriver (codex) report messages and activity while the
-// turn runs; batch drivers report the turn's messages when it completes.
+// subagent.StreamingDriver (codex, claude, pi via subagent.StreamDriverFor)
+// report messages and activity while the turn runs; batch drivers (agy)
+// report the turn's messages when it completes.
 // Providers without a driver get a clear "not supported yet" error.
 package router
 
@@ -36,7 +37,7 @@ type Chunk struct {
 type Router struct {
 	// Dir is the working directory the provider CLIs run in.
 	Dir string
-	// Driver selects a driver for a model; nil means subagent.DriverFor.
+	// Driver selects a driver for a model; nil means subagent.StreamDriverFor.
 	Driver func(subagent.Model, string) subagent.Driver
 
 	mu       sync.Mutex
@@ -82,7 +83,7 @@ func (r *Router) Turn(ctx context.Context, spec, prompt string, emit func(Chunk)
 	}
 	pick := r.Driver
 	if pick == nil {
-		pick = subagent.DriverFor
+		pick = subagent.StreamDriverFor
 	}
 	d := pick(m, r.Dir)
 	if _, ok := d.(subagent.UnsupportedDriver); ok {

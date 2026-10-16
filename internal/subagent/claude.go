@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,12 +17,22 @@ type ClaudeDriver struct {
 }
 
 func (d ClaudeDriver) command(ctx context.Context, args ...string) ([]byte, error) {
+	return d.commandLines(ctx, nil, args...)
+}
+
+// commandLines runs claude and passes each stdout line to fn as it arrives;
+// a nil fn is the batch path. A Command override replays its output lines.
+func (d ClaudeDriver) commandLines(ctx context.Context, fn func([]byte), args ...string) ([]byte, error) {
 	if d.Command != nil {
-		return d.Command(ctx, "claude", args...)
+		b, err := d.Command(ctx, "claude", args...)
+		if fn != nil {
+			_, _ = readLines(bytes.NewReader(b), fn)
+		}
+		return b, err
 	}
 	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = d.Dir
-	b, err := providerOutput(ctx, cmd)
+	b, err := providerLines(ctx, cmd, fn)
 	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
 		return b, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
 	}
@@ -29,9 +40,7 @@ func (d ClaudeDriver) command(ctx context.Context, args ...string) ([]byte, erro
 }
 func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 	start := time.Now()
-	args := append([]string{"-p", "--dangerously-skip-permissions"}, claudeModelArgs(o.Model)...)
-	args = append(args, "--output-format", "stream-json", "--verbose", o.Prompt)
-	b, err := d.command(ctx, args...)
+	b, err := d.command(ctx, claudeRunArgs(o.Model, o.Prompt)...)
 	if err != nil {
 		return nil, fmt.Errorf("claude: %w", err)
 	}
@@ -43,13 +52,23 @@ func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error
 	return r, nil
 }
 func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
-	args := append([]string{"-p", "--resume", id, "--dangerously-skip-permissions"}, claudeModelArgs(model)...)
-	args = append(args, "--output-format", "stream-json", "--verbose", prompt)
-	b, err := d.command(ctx, args...)
+	b, err := d.command(ctx, claudeResumeArgs(id, prompt, model)...)
 	if err != nil {
 		return nil, fmt.Errorf("claude resume: %w", err)
 	}
 	return parseClaude(b)
+}
+
+// claudeRunArgs and claudeResumeArgs are shared by the batch and streaming
+// paths: both read --output-format stream-json lines.
+func claudeRunArgs(model Model, prompt string) []string {
+	args := append([]string{"-p", "--dangerously-skip-permissions"}, claudeModelArgs(model)...)
+	return append(args, "--output-format", "stream-json", "--verbose", prompt)
+}
+
+func claudeResumeArgs(id, prompt string, model Model) []string {
+	args := append([]string{"-p", "--resume", id, "--dangerously-skip-permissions"}, claudeModelArgs(model)...)
+	return append(args, "--output-format", "stream-json", "--verbose", prompt)
 }
 
 // claudeModelArgs omits empty values: claude rejects `--model ""` with a 400
@@ -177,3 +196,140 @@ func parseClaude(data []byte) (*TurnResult, error) {
 }
 
 var _ Driver = ClaudeDriver{}
+
+// ClaudeStreamDriver is ClaudeDriver plus live events for harnez tui. It is a
+// separate type so batch callers (harnez agent start/resume) that type-assert
+// StreamingDriver keep ClaudeDriver's batch behaviour.
+type ClaudeStreamDriver struct{ ClaudeDriver }
+
+// RunStream runs a new claude turn and reports events while it runs. The
+// arguments and the final result are those of Run.
+func (d ClaudeStreamDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
+	start := time.Now()
+	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeRunArgs(o.Model, o.Prompt)...)
+	if err != nil {
+		return nil, fmt.Errorf("claude: %w", err)
+	}
+	r, err := parseClaude(b)
+	if err != nil {
+		return nil, err
+	}
+	r.DurationMS = time.Since(start).Milliseconds()
+	return r, nil
+}
+
+// ResumeStream resumes a claude session and reports events while it runs.
+func (d ClaudeStreamDriver) ResumeStream(ctx context.Context, id, prompt string, model Model, fn EventFunc) (*TurnResult, error) {
+	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeResumeArgs(id, prompt, model)...)
+	if err != nil {
+		return nil, fmt.Errorf("claude resume: %w", err)
+	}
+	return parseClaude(b)
+}
+
+var _ StreamingDriver = ClaudeStreamDriver{}
+
+func claudeLineFunc(fn EventFunc) func([]byte) {
+	if fn == nil {
+		return nil
+	}
+	s := &claudeStreamer{}
+	return func(line []byte) {
+		for _, ev := range s.feed(line) {
+			fn(ev)
+		}
+	}
+}
+
+// claudeStreamer maps stream-json lines to live events: the session id
+// (init or result), main-thread assistant text and tool_use blocks, local
+// command output, and context size. Malformed lines are skipped; the final
+// TurnResult still comes from parseClaude over the whole output.
+type claudeStreamer struct {
+	session string
+	texts   int
+}
+
+func (s *claudeStreamer) feed(line []byte) []Event {
+	var e claudeEvent
+	if json.Unmarshal(line, &e) != nil {
+		return nil
+	}
+	var evs []Event
+	if e.SessionID != "" && e.SessionID != s.session {
+		s.session = e.SessionID
+		evs = append(evs, Event{Kind: "session", Text: e.SessionID})
+	}
+	switch e.Type {
+	case "assistant":
+		if e.Parent != nil {
+			break // subagent (Task) traffic stays out of the main transcript
+		}
+		var blocks []struct {
+			Type  string                     `json:"type"`
+			Text  string                     `json:"text"`
+			Name  string                     `json:"name"`
+			Input map[string]json.RawMessage `json:"input"`
+		}
+		_ = json.Unmarshal(e.Message.Content, &blocks)
+		for _, b := range blocks {
+			switch {
+			case b.Type == "text" && strings.TrimSpace(b.Text) != "":
+				s.texts++
+				evs = append(evs, Event{Kind: "message", Text: b.Text})
+			case b.Type == "tool_use" && b.Name != "":
+				evs = append(evs, Event{Kind: "activity", Text: claudeToolActivity(b.Name, b.Input)})
+			}
+		}
+		if u := e.Message.Usage; u != nil && u.Input+u.CacheRead+u.CacheCreate > 0 {
+			evs = append(evs, Event{Kind: "tokens", ContextTokens: u.Input + u.CacheRead + u.CacheCreate})
+		}
+	case "user":
+		var text string
+		if json.Unmarshal(e.Message.Content, &text) == nil {
+			if _, rest, ok := strings.Cut(text, "<local-command-stdout>"); ok {
+				out, _, _ := strings.Cut(rest, "</local-command-stdout>")
+				if out = strings.TrimSpace(out); out != "" {
+					s.texts++
+					evs = append(evs, Event{Kind: "message", Text: out})
+				}
+			}
+		}
+	case "result":
+		// Normally the result repeats the last assistant text; report it only
+		// when the turn produced no text so far.
+		if s.texts == 0 && !e.IsError && strings.TrimSpace(e.Result) != "" {
+			s.texts++
+			evs = append(evs, Event{Kind: "message", Text: e.Result})
+		}
+	}
+	if len(evs) == 0 {
+		evs = append(evs, Event{Kind: "other"})
+	}
+	evs[0].Bytes = len(line)
+	return evs
+}
+
+// claudeToolActivity describes a tool call in one line, e.g. "running ls".
+func claudeToolActivity(name string, input map[string]json.RawMessage) string {
+	if name == "Bash" {
+		if cmd := claudeInputString(input, "command"); cmd != "" {
+			return "running " + cmd
+		}
+	}
+	for _, key := range []string{"file_path", "path", "pattern", "url", "query", "description"} {
+		if v := claudeInputString(input, key); v != "" {
+			return name + " " + v
+		}
+	}
+	return name
+}
+
+func claudeInputString(input map[string]json.RawMessage, key string) string {
+	var v string
+	if json.Unmarshal(input[key], &v) != nil {
+		return ""
+	}
+	v, _, _ = strings.Cut(strings.TrimSpace(v), "\n")
+	return v
+}

@@ -22,12 +22,22 @@ type PiDriver struct {
 }
 
 func (d PiDriver) command(ctx context.Context, args ...string) ([]byte, error) {
+	return d.commandLines(ctx, nil, args...)
+}
+
+// commandLines runs pi and passes each stdout line to fn as it arrives; a
+// nil fn is the batch path. A Command override replays its output lines.
+func (d PiDriver) commandLines(ctx context.Context, fn func([]byte), args ...string) ([]byte, error) {
 	if d.Command != nil {
-		return d.Command(ctx, "pi", args...)
+		b, err := d.Command(ctx, "pi", args...)
+		if fn != nil {
+			_, _ = readLines(bytes.NewReader(b), fn)
+		}
+		return b, err
 	}
 	cmd := exec.CommandContext(ctx, "pi", args...)
 	cmd.Dir = d.Dir
-	b, err := providerOutput(ctx, cmd)
+	b, err := providerLines(ctx, cmd, fn)
 	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
 		return b, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
 	}
@@ -54,6 +64,65 @@ func (d PiDriver) Resume(ctx context.Context, id, prompt string, model Model) (*
 		return nil, fmt.Errorf("pi resume: %w", err)
 	}
 	return parsePi(b)
+}
+
+// PiStreamDriver is PiDriver plus live events from pi's --mode json JSONL
+// (session header, completed assistant messages) for harnez tui. Like
+// ClaudeStreamDriver it is separate so batch callers keep PiDriver.
+type PiStreamDriver struct{ PiDriver }
+
+func (d PiStreamDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
+	start := time.Now()
+	b, err := d.commandLines(ctx, piLineFunc(fn), piRunArgs(o.Model, o.Prompt)...)
+	if err != nil {
+		return nil, fmt.Errorf("pi: %w", err)
+	}
+	r, err := parsePi(b)
+	if err != nil {
+		return nil, err
+	}
+	r.DurationMS = time.Since(start).Milliseconds()
+	return r, nil
+}
+
+func (d PiStreamDriver) ResumeStream(ctx context.Context, id, prompt string, model Model, fn EventFunc) (*TurnResult, error) {
+	b, err := d.commandLines(ctx, piLineFunc(fn), piResumeArgs(id, prompt, model)...)
+	if err != nil {
+		return nil, fmt.Errorf("pi resume: %w", err)
+	}
+	return parsePi(b)
+}
+
+var _ StreamingDriver = PiStreamDriver{}
+
+func piLineFunc(fn EventFunc) func([]byte) {
+	if fn == nil {
+		return nil
+	}
+	return func(line []byte) {
+		var e piEvent
+		if json.Unmarshal(line, &e) != nil {
+			return
+		}
+		ev := Event{Kind: "other", Bytes: len(line)}
+		switch {
+		case e.Type == "session" && e.ID != "":
+			ev.Kind, ev.Text = "session", e.ID
+		case e.Type == "message_end" && e.Message.Role == "assistant":
+			var blocks []piTextBlock
+			_ = json.Unmarshal(e.Message.Content, &blocks)
+			var text strings.Builder
+			for _, b := range blocks {
+				if b.Type == "text" {
+					text.WriteString(b.Text)
+				}
+			}
+			if text.Len() > 0 {
+				ev.Kind, ev.Text = "message", text.String()
+			}
+		}
+		fn(ev)
+	}
 }
 
 func piRunArgs(model Model, prompt string) []string {

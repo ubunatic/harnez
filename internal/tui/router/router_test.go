@@ -271,3 +271,60 @@ func alive(pid int) bool {
 	_, rest, _ := strings.Cut(string(b), ") ")
 	return !strings.HasPrefix(rest, "Z")
 }
+
+// Claude turns stream through subagent.StreamDriverFor: chunks arrive in
+// order from stream-json lines, a malformed line is skipped, and the next
+// prompt resumes the captured session.
+func TestTurnStreamsFakeClaudeCLIAndResumes(t *testing.T) {
+	dir := fakeCLI(t, "claude", `echo "$@" >> "$(dirname "$0")/args"
+echo '{"type":"system","subtype":"init","session_id":"cs-1"}'
+echo 'warning: not json'
+echo '{"type":"assistant" broken}'
+echo '{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"text","text":"alpha"}]}}'
+echo '{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"go test"}}]}}'
+echo '{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"text","text":"beta"}]}}'
+echo '{"type":"result","subtype":"success","session_id":"cs-1","result":"beta","usage":{"input_tokens":1,"output_tokens":1}}'
+`)
+	r := New(t.TempDir())
+	got := collect(t, r, "claude:sonnet", "p1")
+	if s := strings.Join(texts(got), "|"); s != "alpha|running go test|beta" {
+		t.Fatalf("chunks = %q", s)
+	}
+	if r.Session("claude:sonnet") != "cs-1" {
+		t.Fatalf("session = %q", r.Session("claude:sonnet"))
+	}
+	collect(t, r, "claude:sonnet", "p2")
+	b, err := os.ReadFile(filepath.Join(dir, "args"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 || !strings.HasPrefix(lines[1], "-p --resume cs-1 ") {
+		t.Fatalf("claude args:\n%s", b)
+	}
+}
+
+// A claude turn cancelled after its init event keeps the session for the
+// next prompt.
+func TestTurnCancelMidClaudeStreamKeepsSession(t *testing.T) {
+	fakeCLI(t, "claude", `echo '{"type":"system","subtype":"init","session_id":"cs-2"}'
+sleep 300 &
+wait
+`)
+	r := New(t.TempDir())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		for r.Session("claude:sonnet") == "" {
+			time.Sleep(5 * time.Millisecond)
+		}
+		cancel()
+	}()
+	err := r.Turn(ctx, "claude:sonnet", "hi", func(Chunk) {})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Turn err = %v, want context.Canceled", err)
+	}
+	if r.Session("claude:sonnet") != "cs-2" {
+		t.Fatalf("session after cancel = %q, want cs-2", r.Session("claude:sonnet"))
+	}
+}

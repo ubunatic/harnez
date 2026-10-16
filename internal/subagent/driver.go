@@ -37,6 +37,20 @@ func DriverFor(m Model, dir string) Driver {
 	}
 }
 
+// StreamDriverFor is DriverFor for interactive callers (harnez tui): claude
+// and pi get drivers that also implement StreamingDriver. Batch callers keep
+// DriverFor, whose claude and pi drivers do not stream.
+func StreamDriverFor(m Model, dir string) Driver {
+	switch d := DriverFor(m, dir).(type) {
+	case ClaudeDriver:
+		return ClaudeStreamDriver{d}
+	case PiDriver:
+		return PiStreamDriver{d}
+	default:
+		return d
+	}
+}
+
 // UnsupportedDriver reports a provider capability error without misrouting it.
 type UnsupportedDriver struct{ Provider string }
 

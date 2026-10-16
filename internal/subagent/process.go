@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"io"
@@ -41,6 +42,13 @@ func isolateProcess(cmd *exec.Cmd) {
 }
 
 func providerOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
+	return providerLines(ctx, cmd, nil)
+}
+
+// providerLines runs cmd like providerOutput and also passes each stdout line
+// (without its newline) to fn as it arrives. The returned bytes are the full
+// stdout either way; a nil fn reads it in one go.
+func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte, error) {
 	isolateProcess(cmd)
 	if cmd.Cancel != nil {
 		// Cancel the whole provider tree, not just its leader: a surviving
@@ -63,7 +71,13 @@ func providerOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
 		_ = cmd.Wait()
 		return nil, err
 	}
-	b, readErr := io.ReadAll(rd)
+	var b []byte
+	var readErr error
+	if fn == nil {
+		b, readErr = io.ReadAll(rd)
+	} else {
+		b, readErr = readLines(rd, fn)
+	}
 	if err := cmd.Wait(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitErr.Stderr = stderr.Bytes()
@@ -71,4 +85,24 @@ func providerOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
 		return b, err
 	}
 	return b, readErr
+}
+
+// readLines collects all of rd and calls fn for every line, including a
+// final line without a newline.
+func readLines(rd io.Reader, fn func([]byte)) ([]byte, error) {
+	var all []byte
+	br := bufio.NewReaderSize(rd, 64*1024)
+	for {
+		line, err := br.ReadBytes('\n')
+		all = append(all, line...)
+		if trimmed := bytes.TrimRight(line, "\r\n"); len(trimmed) > 0 {
+			fn(trimmed)
+		}
+		if err == io.EOF {
+			return all, nil
+		}
+		if err != nil {
+			return all, err
+		}
+	}
 }
