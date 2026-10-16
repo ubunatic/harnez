@@ -20,6 +20,23 @@ type ResumeChecker interface {
 	CheckResumable(providerID string) (ok bool, reason string)
 }
 
+// DriverFor returns the batch driver for m's provider, pinned to dir.
+// Providers without a driver get an UnsupportedDriver.
+func DriverFor(m Model, dir string) Driver {
+	switch m.Provider {
+	case "claude":
+		return ClaudeDriver{Dir: dir}
+	case "codex":
+		return CodexDriver{}
+	case "agy":
+		return AgyDriver{Dir: dir}
+	case "pi":
+		return PiDriver{Dir: dir}
+	default:
+		return UnsupportedDriver{Provider: m.Provider}
+	}
+}
+
 // UnsupportedDriver reports a provider capability error without misrouting it.
 type UnsupportedDriver struct{ Provider string }
 

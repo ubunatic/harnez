@@ -6,6 +6,7 @@ import (
 	"io"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"ubunatic.com/harnez/internal/procs"
 )
@@ -41,6 +42,12 @@ func isolateProcess(cmd *exec.Cmd) {
 
 func providerOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
 	isolateProcess(cmd)
+	if cmd.Cancel != nil {
+		// Cancel the whole provider tree, not just its leader: a surviving
+		// grandchild keeps stdout open and blocks the read below.
+		cmd.Cancel = func() error { return KillGroup(cmd.Process.Pid, syscall.SIGKILL) }
+		cmd.WaitDelay = 5 * time.Second
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	// Observe immediately after Start, before consuming provider output.

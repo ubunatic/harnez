@@ -21,20 +21,7 @@ import (
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
-var agentDriver = func(m subagent.Model, dir string) subagent.Driver {
-	switch m.Provider {
-	case "claude":
-		return subagent.ClaudeDriver{Dir: dir}
-	case "codex":
-		return subagent.CodexDriver{}
-	case "agy":
-		return subagent.AgyDriver{Dir: dir}
-	case "pi":
-		return subagent.PiDriver{Dir: dir}
-	default:
-		return subagent.UnsupportedDriver{Provider: m.Provider}
-	}
-}
+var agentDriver = subagent.DriverFor
 
 func agentUsageDBPath() string {
 	path, _ := telemetry.DefaultDBPath()
