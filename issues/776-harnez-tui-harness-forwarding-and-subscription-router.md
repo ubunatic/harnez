@@ -36,7 +36,8 @@ End users subscribe to Pro plans (Claude Pro, Google AI Pro / Gemini Advanced, C
 
 ## 4. Progress (2026-10-16)
 - Done: `internal/tui/router` runs turns through `subagent.DriverFor` (shared with `harnez agent`);
-  one backend session per provider model, resumed on the next prompt.
+  one backend session per provider model, resumed on the next prompt (kept after cancel; a failed
+  resume starts a new session with a note).
 - Streaming: codex streams messages and activity via `StreamingDriver`; claude, agy and pi are
   batch drivers, so their messages arrive when the turn ends.
 - TUI: chunks reach the chat via `Pane.Post`; status busy/idle/error; Esc/Ctrl+C cancel a running
