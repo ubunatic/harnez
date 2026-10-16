@@ -140,7 +140,7 @@ func TestRingBound(t *testing.T) {
 	}
 	r = NewRing(64)
 	_, _ = r.Write([]byte("a\tb\x1b[31mred\x1b[0m\r\nprog 1\rprog 2\n"))
-	if got := strings.Join(r.Lines(), "|"); got != "a    bred|prog 2" {
+	if got := strings.Join(r.Lines(), "|"); got != "a    b\x1b[31mred\x1b[0m|prog 2" {
 		t.Fatalf("lines %q", got)
 	}
 }

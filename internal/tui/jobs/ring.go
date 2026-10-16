@@ -85,10 +85,21 @@ func (r *Ring) Bytes() []byte {
 	return append(out, r.buf[:end-len(r.buf)]...)
 }
 
-var escSeq = regexp.MustCompile(`\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)|.)`)
+var (
+	escSeq = regexp.MustCompile(`\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)|.)`)
+	sgrSeq = regexp.MustCompile(`^\x1b\[[0-9;]*m$`)
+)
 
-// Lines returns the held output as display-safe lines: escape sequences and
-// control characters are removed, tabs become spaces and a partial first
+// keepSGR drops every escape sequence except SGR colors and attributes.
+func keepSGR(seq string) string {
+	if sgrSeq.MatchString(seq) {
+		return seq
+	}
+	return ""
+}
+
+// Lines returns the held output as display-safe lines: escape sequences
+// other than SGR and control characters are removed, tabs become spaces and a partial first
 // line left by truncation is dropped.
 // The result is cached until the next write; callers must not modify it.
 func (r *Ring) Lines() []string {
@@ -105,7 +116,7 @@ func (r *Ring) lines0() []string {
 			s = s[i+1:]
 		}
 	}
-	s = escSeq.ReplaceAllString(s, "")
+	s = escSeq.ReplaceAllStringFunc(s, keepSGR)
 	s = strings.TrimSuffix(s, "\n")
 	if s == "" {
 		return []string{}
@@ -126,6 +137,8 @@ func clean(l string) string {
 		switch {
 		case c == '\t':
 			b.WriteString("    ")
+		case c == 0x1b: // only kept SGR sequences are left
+			b.WriteRune(c)
 		case c < 0x20 || c == 0x7f:
 		default:
 			b.WriteRune(c)

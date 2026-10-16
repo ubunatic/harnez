@@ -55,7 +55,7 @@ type KeybindingsSpec struct {
 	ScrollUp   []string `yaml:"scroll_up"`
 	ScrollDown []string `yaml:"scroll_down"`
 	OpenEditor []string `yaml:"open_editor"`
-	TogglePTY  []string `yaml:"toggle_pty"`
+	OpenNative []string `yaml:"open_native"`
 	ToggleJobs []string `yaml:"toggle_jobs"`
 	JobOpen    []string `yaml:"job_open"`
 	JobCancel  []string `yaml:"job_cancel"`
@@ -73,6 +73,20 @@ type KeybindingsSpec struct {
 	PickerClose  []string `yaml:"picker_close"`
 	PickerUp     []string `yaml:"picker_up"`
 	PickerDown   []string `yaml:"picker_down"`
+}
+
+// NativeLabelsSpec holds the open_native chat notes; placeholder {{ .Provider }}.
+type NativeLabelsSpec struct {
+	Returned    string `yaml:"returned"`
+	Unsupported string `yaml:"unsupported"`
+	NoSession   string `yaml:"no_session"`
+	Busy        string `yaml:"busy"`
+	Unavailable string `yaml:"unavailable"`
+}
+
+// NativeSpec configures the open_native key (the provider's own CLI).
+type NativeSpec struct {
+	Labels NativeLabelsSpec `yaml:"labels"`
 }
 
 // JobLabelsSpec holds the job manager's chat notes and panel texts.
@@ -165,6 +179,7 @@ type Spec struct {
 	Sessions    SessionsSpec    `yaml:"sessions"`
 	Terminal    TerminalSpec    `yaml:"terminal"`
 	Editor      EditorSpec      `yaml:"editor"`
+	Native      NativeSpec      `yaml:"native"`
 	Jobs        JobsSpec        `yaml:"jobs"`
 	Picker      PickerSpec      `yaml:"picker"`
 	Keybindings KeybindingsSpec `yaml:"keybindings"`
@@ -199,6 +214,9 @@ func ParseSpec(data []byte) (*Spec, error) {
 	}
 	if s.Sessions.Dir == "" || s.Sessions.MaxAgeDays < 1 || s.Sessions.Labels.Resumed == "" || s.Sessions.Labels.New == "" {
 		return nil, fmt.Errorf("%s: sessions dir, max_age_days and labels must be set", specPath)
+	}
+	if nl := s.Native.Labels; nl.Returned == "" || nl.Unsupported == "" || nl.NoSession == "" || nl.Busy == "" || nl.Unavailable == "" {
+		return nil, fmt.Errorf("%s: native labels must be set", specPath)
 	}
 	if err := validatePicker(&s); err != nil {
 		return nil, err

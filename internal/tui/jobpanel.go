@@ -289,7 +289,7 @@ func (app *AppWidget) drawJobLog(c *loom.Canvas, body loom.Rect, j *jobs.Job) {
 		p.log = loom.NewView(nil)
 	}
 	if p.dirty {
-		p.log.Lines = j.Lines()
+		p.log.Lines = sanitizeLines(j.Lines())
 		p.dirty = false
 	}
 	p.logH = body.H

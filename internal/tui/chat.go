@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/mattn/go-runewidth"
 )
 
 // TurnRole identifies turn message origin.
@@ -107,11 +105,7 @@ func (ct *ChatThread) FormattedLines(width int) []string {
 		if header != "" {
 			out = append(out, header)
 		}
-		lines := strings.Split(t.Content, "\n")
-		for _, line := range lines {
-			wrapped := wrapLine(line, width)
-			out = append(out, wrapped...)
-		}
+		out = append(out, wrapANSI(t.Content, width)...)
 		out = append(out, "") // blank separator
 	}
 	return out
@@ -186,35 +180,4 @@ func (ct *ChatThread) formatHeader(t Turn) string {
 		return fmt.Sprintf("%s (%s)", prefix, t.Timestamp.Format("15:04:05"))
 	}
 	return prefix
-}
-
-func wrapLine(s string, width int) []string {
-	if width <= 0 {
-		return []string{s}
-	}
-	if runewidth.StringWidth(s) <= width {
-		return []string{s}
-	}
-
-	var lines []string
-	var current strings.Builder
-	currentWidth := 0
-
-	for _, r := range s {
-		rw := runewidth.RuneWidth(r)
-		if currentWidth+rw > width {
-			lines = append(lines, current.String())
-			current.Reset()
-			currentWidth = 0
-		}
-		current.WriteRune(r)
-		currentWidth += rw
-	}
-	if current.Len() > 0 {
-		lines = append(lines, current.String())
-	}
-	if len(lines) == 0 {
-		return []string{""}
-	}
-	return lines
 }

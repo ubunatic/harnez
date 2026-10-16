@@ -50,6 +50,19 @@ editor:
   fallbacks: ["nvim", "vim", "nano", "vi"]
   temp_pattern: "harnez-prompt-*.md"
 
+# open_native key: hands the terminal to the provider's own interactive CLI,
+# resuming the backend session of the active model (claude --resume, codex
+# resume, agy --conversation; the argv of `harnez agent resume -i`). The tui
+# returns when that CLI exits and keeps its stored backend session id.
+# Placeholder: {{ .Provider }}.
+native:
+  labels:
+    returned: "returned from {{ .Provider }}"
+    unsupported: "native session not supported for {{ .Provider }}"
+    no_session: "no {{ .Provider }} session yet; send a prompt first"
+    busy: "a turn is running; wait or press Esc to cancel it first"
+    unavailable: "native session needs an interactive terminal"
+
 # Background jobs: a prompt starting with prefix runs the rest as
 # `<shell> -c <command>` in the tui working directory, in its own process group.
 jobs:
@@ -117,7 +130,8 @@ keybindings:
   scroll_up: ["pgup"]
   scroll_down: ["pgdn"]
   open_editor: ["ctrl+g"]
-  toggle_pty: ["ctrl+o"]
+  # Open the active model's backend session in the provider's own CLI.
+  open_native: ["ctrl+o"]
   # Job panel: toggle anywhere; open/cancel/close act inside the panel.
   toggle_jobs: ["ctrl+b"]
   job_open: ["enter"]

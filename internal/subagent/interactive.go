@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -64,6 +65,34 @@ func (CLIInteractiveRunner) Attach(ctx context.Context, opts InteractiveOptions,
 	return runInteractiveCommand(ctx, command, args, opts)
 }
 
+// ErrInteractiveUnsupported marks a provider without an interactive CLI session.
+var ErrInteractiveUnsupported = errors.New("interactive chat is not supported")
+
+// InteractiveArgv returns the argv (argv[0] is the provider CLI) of the
+// interactive session `harnez agent resume -i` runs for m in dir: it resumes
+// providerID, or starts a new session when providerID is empty. Unsupported
+// providers return an error wrapping ErrInteractiveUnsupported.
+func InteractiveArgv(m Model, dir, providerID string) ([]string, error) {
+	command, args, err := interactiveCommand(InteractiveOptions{Model: m, Dir: dir}, providerID)
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{command}, args...), nil
+}
+
+// InteractiveEnv returns the environment an interactive run of command needs;
+// nil means the process environment. agy gets its bash shim and launch env.
+func InteractiveEnv(command string) ([]string, error) {
+	if command != "agy" {
+		return nil, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("%s: resolve home directory: %w", command, err)
+	}
+	return agyInteractiveLaunchEnv(os.Environ(), home)
+}
+
 func interactiveCommand(opts InteractiveOptions, providerID string) (string, []string, error) {
 	var command string
 	var args []string
@@ -111,7 +140,7 @@ func interactiveCommand(opts InteractiveOptions, providerID string) (string, []s
 			args = append(args, "--effort", agyEffort(opts.Model.Tier))
 		}
 	default:
-		return "", nil, fmt.Errorf("interactive chat is not supported for provider %q", opts.Model.Provider)
+		return "", nil, fmt.Errorf("%w for provider %q", ErrInteractiveUnsupported, opts.Model.Provider)
 	}
 	return command, args, nil
 }

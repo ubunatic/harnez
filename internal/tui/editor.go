@@ -79,7 +79,7 @@ func (e *Editor) Edit(text string) (string, error) {
 	}
 	run := e.Run
 	if run == nil {
-		run = runAttached
+		run = func(argv []string) error { return runOnTTY(argv, "", nil) }
 	}
 	if err := run(append(argv[:len(argv):len(argv)], path)); err != nil {
 		var exit *exec.ExitError
@@ -95,10 +95,12 @@ func (e *Editor) Edit(text string) (string, error) {
 	return strings.TrimRight(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n"), nil
 }
 
-// runAttached runs argv on the controlling terminal, which loom also uses, so
-// the editor reads the keyboard even when stdin is a pipe.
-func runAttached(argv []string) error {
+// runOnTTY runs argv in dir ("" is the current one) with env (nil is the
+// process environment) on the controlling terminal, which loom also uses, so
+// the child (editor, provider CLI) reads the keyboard even when stdin is a pipe.
+func runOnTTY(argv []string, dir string, env []string) error {
 	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Dir, cmd.Env = dir, env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
 		defer tty.Close()

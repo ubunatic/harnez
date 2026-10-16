@@ -29,10 +29,13 @@ type AppWidget struct {
 	turn    *turnState
 	suspend func(func() error) error
 	editor  *Editor
-	jobs    *jobs.Manager
-	panel   jobPanel
-	picker  picker
-	sources *pickerSources
+	// nativeLookup and nativeRun serve the open_native key (native.go).
+	nativeLookup NativeLookup
+	nativeRun    NativeRun
+	jobs         *jobs.Manager
+	panel        jobPanel
+	picker       picker
+	sources      *pickerSources
 }
 
 // AttachEditor enables the open_editor key: suspend hands the terminal to a
@@ -166,6 +169,9 @@ func (app *AppWidget) promptKey(e loom.KeyEvent, name string) loom.EventResult {
 	case bound(name, kb.OpenEditor):
 		app.closePicker()
 		app.openEditor()
+	case bound(name, kb.OpenNative):
+		app.closePicker()
+		app.openNative()
 	case bound(name, kb.Newline):
 		app.Prompt.InsertNewline()
 	case bound(name, kb.SendPrompt):

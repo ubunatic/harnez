@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/tui.schema.json",
   "title": "harnez tui interactive harness layout and keybindings spec",
   "type": "object",
-  "required": ["header", "chat", "input", "sessions", "terminal", "editor", "jobs", "picker", "keybindings", "theme"],
+  "required": ["header", "chat", "input", "sessions", "terminal", "editor", "native", "jobs", "picker", "keybindings", "theme"],
   "properties": {
     "header": {
       "type": "object",
@@ -78,6 +78,21 @@
       },
       "additionalProperties": false
     },
+    "native": {
+      "type": "object",
+      "description": "open_native key: the provider's own interactive CLI on the active backend session.",
+      "required": ["labels"],
+      "properties": {
+        "labels": {
+          "type": "object",
+          "description": "Chat notes; placeholder {{ .Provider }}.",
+          "required": ["returned", "unsupported", "no_session", "busy", "unavailable"],
+          "properties": { "returned": { "type": "string", "minLength": 1 }, "unsupported": { "type": "string", "minLength": 1 }, "no_session": { "type": "string", "minLength": 1 }, "busy": { "type": "string", "minLength": 1 }, "unavailable": { "type": "string", "minLength": 1 } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "jobs": {
       "type": "object",
       "required": ["prefix", "shell", "log_buffer_bytes", "cancel_grace_ms", "max_finished", "labels"],
@@ -135,7 +150,7 @@
         "scroll_up": { "type": "array", "items": { "type": "string" } },
         "scroll_down": { "type": "array", "items": { "type": "string" } },
         "open_editor": { "type": "array", "items": { "type": "string" } },
-        "toggle_pty": { "type": "array", "items": { "type": "string" } },
+        "open_native": { "type": "array", "items": { "type": "string" } },
         "toggle_jobs": { "type": "array", "items": { "type": "string" } },
         "job_open": { "type": "array", "items": { "type": "string" } },
         "job_cancel": { "type": "array", "items": { "type": "string" } },

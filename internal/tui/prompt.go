@@ -370,3 +370,35 @@ func (pb *PromptBuffer) Lines(width int) []string {
 	}
 	return res
 }
+
+// wrapLine wraps plain prompt text to width display columns.
+func wrapLine(s string, width int) []string {
+	if width <= 0 {
+		return []string{s}
+	}
+	if runewidth.StringWidth(s) <= width {
+		return []string{s}
+	}
+
+	var lines []string
+	var current strings.Builder
+	currentWidth := 0
+
+	for _, r := range s {
+		rw := runewidth.RuneWidth(r)
+		if currentWidth+rw > width {
+			lines = append(lines, current.String())
+			current.Reset()
+			currentWidth = 0
+		}
+		current.WriteRune(r)
+		currentWidth += rw
+	}
+	if current.Len() > 0 {
+		lines = append(lines, current.String())
+	}
+	if len(lines) == 0 {
+		return []string{""}
+	}
+	return lines
+}

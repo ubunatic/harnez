@@ -390,7 +390,7 @@ func TestReadlineKeysDoNotStealBindings(t *testing.T) {
 	}
 	others := map[string][]string{
 		"send_prompt": kb.SendPrompt, "newline": kb.Newline, "quit": kb.Quit, "cancel_turn": kb.CancelTurn,
-		"scroll_up": kb.ScrollUp, "scroll_down": kb.ScrollDown, "open_editor": kb.OpenEditor, "toggle_pty": kb.TogglePTY,
+		"scroll_up": kb.ScrollUp, "scroll_down": kb.ScrollDown, "open_editor": kb.OpenEditor, "open_native": kb.OpenNative,
 		"toggle_jobs": kb.ToggleJobs, "picker_select": kb.PickerSelect, "picker_close": kb.PickerClose,
 		"picker_up": kb.PickerUp, "picker_down": kb.PickerDown,
 	}

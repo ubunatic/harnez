@@ -39,7 +39,9 @@ and multiline prompt box (Enter to send; Shift+Enter, Ctrl+J or Alt+Enter for a
 newline). Shift+Enter and Ctrl+J need a terminal with the kitty keyboard
 protocol; elsewhere they send, so use Alt+Enter or end the line with "\".
 Ctrl+G edits the prompt in $VISUAL, $EDITOR or the first editor.fallbacks
-entry of spec/tui.yaml found on PATH.
+entry of spec/tui.yaml found on PATH. Ctrl+O opens the active model's backend
+session in the provider's own CLI (claude --resume, codex resume, agy
+--conversation); the tui returns when it exits.
 
 Prompts run through the active model's harness CLI (claude, codex, agy, pi), so
 turns draw on the matching subscription; the next prompt resumes the same
@@ -141,6 +143,7 @@ func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error 
 	}
 	app.AttachRunner(rt.Turn, pane.Post, router.ResolveSpec)
 	app.AttachEditor(pane.Suspend, tui.NewEditor(spec.Editor))
+	app.AttachNative(pane.Suspend, rt.Native, nil)
 	app.AttachJobs(tui.NewJobManager(spec.Jobs, dir, pane.Post))
 	app.AttachPickers(dir, tuiSkillDirs(dir), pane.Post)
 	// A running provider turn must not outlive the TUI.
