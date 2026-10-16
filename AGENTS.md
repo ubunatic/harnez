@@ -68,6 +68,7 @@ tracker synchronization).
 ## Development & Review Workflow
 
 Run from project root.
+- Before review, check `docs/ReviewLearnings.md` (recurring review findings).
 
 - Follow the 5-phase sprint workflow (`@docs/AgenticLoop.md` / `/sprint`):
   1. Parallel Advisory Discovery (read-only audits)
