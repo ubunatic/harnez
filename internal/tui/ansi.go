@@ -217,7 +217,9 @@ func clusterEnd(rs []rune, i int) int {
 		next := rs[j]
 		if next == 0x200D {
 			j++
-			if j < n {
+			// Only a printable rune joins after ZWJ: a control (ESC, C1,
+			// newline, ...) ends the cluster so the filter still sees it.
+			if j < n && !unicode.IsControl(rs[j]) {
 				j++
 			}
 			continue

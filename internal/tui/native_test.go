@@ -134,3 +134,16 @@ func TestOpenNativeDisallowedWhileBusy(t *testing.T) {
 		t.Errorf("after the turn: runs = %q; want one resume of c-id", *runs)
 	}
 }
+
+func TestOpenNativeDropsInvalidSessionID(t *testing.T) {
+	app, rt, runs := nativeApp(t, "claude:sonnet:low", "-x")
+	ctrlO(app)
+	ts := app.Chat.Turns()
+	if len(*runs) != 0 || len(ts) != 2 || ts[0].Content != "dropped an invalid stored claude session id" ||
+		ts[1].Content != "no claude session yet; send a prompt first" {
+		t.Errorf("runs %q, turns %+v", *runs, ts)
+	}
+	if id := rt.Session("claude:sonnet:low"); id != "" {
+		t.Errorf("invalid id kept: %q", id)
+	}
+}

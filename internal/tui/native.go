@@ -50,6 +50,9 @@ func (app *AppWidget) openNative() {
 		AddTurn(app.Chat, RoleNote, "", note(labels.Unsupported))
 		return
 	case errors.Is(err, router.ErrNoSession):
+		if errors.Is(err, router.ErrInvalidSession) {
+			AddTurn(app.Chat, RoleNote, "", note(labels.InvalidSession))
+		}
 		AddTurn(app.Chat, RoleNote, "", note(labels.NoSession))
 		return
 	case err != nil:
@@ -68,7 +71,9 @@ func (app *AppWidget) openNative() {
 }
 
 // runNative runs nc on the controlling terminal with the provider's
-// interactive environment (the agy launch env; others inherit).
+// interactive environment (the agy launch env; others inherit). Unlike
+// `harnez agent resume -i`, agy runs here without the metering supervisor and
+// HARNEZ_SESSION_ID, so time spent in the native CLI is not metered.
 func runNative(nc router.NativeCommand) error {
 	env, err := subagent.InteractiveEnv(nc.Argv[0])
 	if err != nil {

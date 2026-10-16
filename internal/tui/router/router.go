@@ -10,7 +10,9 @@ package router
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"sync"
 
 	"ubunatic.com/harnez/internal/subagent"
@@ -81,9 +83,31 @@ func (r *Router) Session(spec string) string {
 	if err != nil {
 		return ""
 	}
+	id, _ := r.session(sessionKey(m))
+	return id
+}
+
+// ErrInvalidSession marks a stored backend session id that was dropped
+// because it is unsafe to pass as a CLI argument.
+var ErrInvalidSession = errors.New("dropped invalid stored backend session id")
+
+var validSessionID = regexp.MustCompile(`^[A-Za-z0-9._:][A-Za-z0-9._:-]{0,255}$`)
+
+// session returns the stored id of key. An id outside the conservative
+// charset (empty, leading '-', whitespace or control characters) would reach
+// a provider argv, so it is removed from the map and the store and reported
+// through dropped (with any store error).
+func (r *Router) session(key string) (id string, dropped error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.sessions[sessionKey(m)]
+	id = r.sessions[key]
+	r.mu.Unlock()
+	if id == "" || validSessionID.MatchString(id) {
+		return id, nil
+	}
+	if err := r.setSession(key, ""); err != nil {
+		return "", fmt.Errorf("%w: %v", ErrInvalidSession, err)
+	}
+	return "", ErrInvalidSession
 }
 
 // Load fills the session map from Store, so the first turn of each model
@@ -122,7 +146,10 @@ func (r *Router) Turn(ctx context.Context, spec, prompt string, emit func(Chunk)
 		return fmt.Errorf("provider %q is not supported by harnez tui yet: no driver (direct API clients are planned)", m.Provider)
 	}
 	key := sessionKey(m)
-	id := r.Session(spec)
+	id, dropped := r.session(key)
+	if dropped != nil {
+		emit(Chunk{Kind: ChunkActivity, Text: dropped.Error()})
+	}
 	if id != "" {
 		emit(Chunk{Kind: ChunkSession, Text: SessionResumed})
 	} else {

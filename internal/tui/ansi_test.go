@@ -153,3 +153,20 @@ func TestSanitizeLinesForJobLog(t *testing.T) {
 		t.Error("sanitizeLines(nil) != nil")
 	}
 }
+
+func TestWrapANSIControlAfterZWJIsFiltered(t *testing.T) {
+	for _, ctl := range []string{"\x1b[2J", "\x1b]52;c;QUFB\x07", "\r", "\x07", "\u009b2J", "\x7f", "\x00"} {
+		got := strings.Join(wrapANSI("a\u200d"+ctl+"b", 80), "|")
+		if got != "a\u200db" {
+			t.Errorf("ZWJ+%q = %q; want %q", ctl, got, "a\u200db")
+		}
+	}
+	if got := wrapANSI("a\u200d\nb", 80); strings.Join(got, "|") != "a\u200d|b" {
+		t.Errorf("ZWJ+newline = %q", got)
+	}
+	family := "\U0001F468\u200d\U0001F469\u200d\U0001F467"
+	toks := ansiTokens(family + "x")
+	if len(toks) != 2 || toks[0].text != family || toks[0].w != loom.StringWidth(family) {
+		t.Errorf("ZWJ emoji tokens = %+v", toks)
+	}
+}

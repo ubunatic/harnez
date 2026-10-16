@@ -54,6 +54,8 @@ editor:
 # resuming the backend session of the active model (claude --resume, codex
 # resume, agy --conversation; the argv of `harnez agent resume -i`). The tui
 # returns when that CLI exits and keeps its stored backend session id.
+# agy runs without the metering supervisor and HARNEZ_SESSION_ID that
+# `harnez agent resume -i` adds, so that native time is not metered.
 # Placeholder: {{ .Provider }}.
 native:
   labels:
@@ -62,6 +64,8 @@ native:
     no_session: "no {{ .Provider }} session yet; send a prompt first"
     busy: "a turn is running; wait or press Esc to cancel it first"
     unavailable: "native session needs an interactive terminal"
+    # A stored id with unsafe characters is dropped before it reaches argv.
+    invalid_session: "dropped an invalid stored {{ .Provider }} session id"
 
 # Background jobs: a prompt starting with prefix runs the rest as
 # `<shell> -c <command>` in the tui working directory, in its own process group.

@@ -82,6 +82,8 @@ type NativeLabelsSpec struct {
 	NoSession   string `yaml:"no_session"`
 	Busy        string `yaml:"busy"`
 	Unavailable string `yaml:"unavailable"`
+	// InvalidSession notes a stored id dropped as unsafe for argv.
+	InvalidSession string `yaml:"invalid_session"`
 }
 
 // NativeSpec configures the open_native key (the provider's own CLI).
@@ -215,7 +217,7 @@ func ParseSpec(data []byte) (*Spec, error) {
 	if s.Sessions.Dir == "" || s.Sessions.MaxAgeDays < 1 || s.Sessions.Labels.Resumed == "" || s.Sessions.Labels.New == "" {
 		return nil, fmt.Errorf("%s: sessions dir, max_age_days and labels must be set", specPath)
 	}
-	if nl := s.Native.Labels; nl.Returned == "" || nl.Unsupported == "" || nl.NoSession == "" || nl.Busy == "" || nl.Unavailable == "" {
+	if nl := s.Native.Labels; nl.Returned == "" || nl.Unsupported == "" || nl.NoSession == "" || nl.Busy == "" || nl.Unavailable == "" || nl.InvalidSession == "" {
 		return nil, fmt.Errorf("%s: native labels must be set", specPath)
 	}
 	if err := validatePicker(&s); err != nil {

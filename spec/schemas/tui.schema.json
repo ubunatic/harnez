@@ -86,8 +86,8 @@
         "labels": {
           "type": "object",
           "description": "Chat notes; placeholder {{ .Provider }}.",
-          "required": ["returned", "unsupported", "no_session", "busy", "unavailable"],
-          "properties": { "returned": { "type": "string", "minLength": 1 }, "unsupported": { "type": "string", "minLength": 1 }, "no_session": { "type": "string", "minLength": 1 }, "busy": { "type": "string", "minLength": 1 }, "unavailable": { "type": "string", "minLength": 1 } },
+          "required": ["returned", "unsupported", "no_session", "busy", "unavailable", "invalid_session"],
+          "properties": { "returned": { "type": "string", "minLength": 1 }, "unsupported": { "type": "string", "minLength": 1 }, "no_session": { "type": "string", "minLength": 1 }, "busy": { "type": "string", "minLength": 1 }, "unavailable": { "type": "string", "minLength": 1 }, "invalid_session": { "type": "string", "minLength": 1 } },
           "additionalProperties": false
         }
       },
