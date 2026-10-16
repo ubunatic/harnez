@@ -57,6 +57,8 @@ type KeybindingsSpec struct {
 	OpenEditor []string `yaml:"open_editor"`
 	OpenNative []string `yaml:"open_native"`
 	ToggleJobs []string `yaml:"toggle_jobs"`
+	// OpenModels opens the model picker overlay.
+	OpenModels []string `yaml:"open_models"`
 	JobOpen    []string `yaml:"job_open"`
 	JobCancel  []string `yaml:"job_cancel"`
 	JobClose   []string `yaml:"job_close"`
@@ -148,6 +150,23 @@ type PickerSpec struct {
 	Labels          PickerLabelsSpec `yaml:"labels"`
 }
 
+// ModelPickerLabelsSpec holds the model picker's chat notes; placeholder {{ .Model }}.
+type ModelPickerLabelsSpec struct {
+	Switched     string `yaml:"switched"`
+	SwitchedBusy string `yaml:"switched_busy"`
+	NoMatches    string `yaml:"no_matches"`
+}
+
+// ModelPickerSpec configures the model picker overlay.
+type ModelPickerSpec struct {
+	Title         string                `yaml:"title"`
+	Hint          string                `yaml:"hint"`
+	ActiveMarker  string                `yaml:"active_marker"`
+	SessionMarker string                `yaml:"session_marker"`
+	MaxWidth      int                   `yaml:"max_width"`
+	Labels        ModelPickerLabelsSpec `yaml:"labels"`
+}
+
 // ThemeSpec describes styling for harnez tui.
 type ThemeSpec struct {
 	BorderStyle    string `yaml:"border_style"`
@@ -184,6 +203,7 @@ type Spec struct {
 	Native      NativeSpec      `yaml:"native"`
 	Jobs        JobsSpec        `yaml:"jobs"`
 	Picker      PickerSpec      `yaml:"picker"`
+	ModelPicker ModelPickerSpec `yaml:"model_picker"`
 	Keybindings KeybindingsSpec `yaml:"keybindings"`
 	Theme       ThemeSpec       `yaml:"theme"`
 }
@@ -219,6 +239,10 @@ func ParseSpec(data []byte) (*Spec, error) {
 	}
 	if nl := s.Native.Labels; nl.Returned == "" || nl.Unsupported == "" || nl.NoSession == "" || nl.Busy == "" || nl.Unavailable == "" || nl.InvalidSession == "" {
 		return nil, fmt.Errorf("%s: native labels must be set", specPath)
+	}
+	if mp := s.ModelPicker; mp.Title == "" || mp.Hint == "" || mp.ActiveMarker == "" || mp.SessionMarker == "" || mp.MaxWidth < 20 ||
+		mp.Labels.Switched == "" || mp.Labels.SwitchedBusy == "" || mp.Labels.NoMatches == "" || len(s.Keybindings.OpenModels) == 0 {
+		return nil, fmt.Errorf("%s: model_picker title, hint, markers, max_width >= 20, labels and keybindings.open_models must be set", specPath)
 	}
 	if err := validatePicker(&s); err != nil {
 		return nil, err

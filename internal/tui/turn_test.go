@@ -178,7 +178,7 @@ func TestModelCommand(t *testing.T) {
 		t.Fatalf("Model = %q busy=%v", app.Model, app.Busy())
 	}
 	typeLine(app, "/model nosuch:thing")
-	typeLine(app, "/model")
+	typeLine(app, "/model a b")
 	if app.Model != "codex:luna:high" {
 		t.Fatalf("invalid /model changed model to %q", app.Model)
 	}

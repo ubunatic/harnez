@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/tui.schema.json",
   "title": "harnez tui interactive harness layout and keybindings spec",
   "type": "object",
-  "required": ["header", "chat", "input", "sessions", "terminal", "editor", "native", "jobs", "picker", "keybindings", "theme"],
+  "required": ["header", "chat", "input", "sessions", "terminal", "editor", "native", "jobs", "picker", "model_picker", "keybindings", "theme"],
   "properties": {
     "header": {
       "type": "object",
@@ -139,6 +139,24 @@
       },
       "additionalProperties": false
     },
+    "model_picker": {
+      "type": "object",
+      "required": ["title", "hint", "active_marker", "session_marker", "max_width", "labels"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "hint": { "type": "string", "minLength": 1, "description": "Dim last row of the overlay." },
+        "active_marker": { "type": "string", "minLength": 1, "description": "Marks the active model's row." },
+        "session_marker": { "type": "string", "minLength": 1, "description": "Marks a model with a stored backend session in this tui session." },
+        "max_width": { "type": "integer", "minimum": 20, "description": "Overlay width cap in display columns." },
+        "labels": {
+          "type": "object",
+          "required": ["switched", "switched_busy", "no_matches"],
+          "properties": { "switched": { "type": "string", "minLength": 1, "description": "Chat note after a switch; {{ .Model }} is the new spec." }, "switched_busy": { "type": "string", "minLength": 1, "description": "Chat note after a switch while a turn runs." }, "no_matches": { "type": "string", "minLength": 1 } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "keybindings": {
       "type": "object",
       "required": ["send_prompt", "newline", "quit", "scroll_up", "scroll_down"],
@@ -152,6 +170,7 @@
         "open_editor": { "type": "array", "items": { "type": "string" } },
         "open_native": { "type": "array", "items": { "type": "string" } },
         "toggle_jobs": { "type": "array", "items": { "type": "string" } },
+        "open_models": { "type": "array", "items": { "type": "string" }, "description": "Open the model picker overlay." },
         "job_open": { "type": "array", "items": { "type": "string" } },
         "job_cancel": { "type": "array", "items": { "type": "string" } },
         "job_close": { "type": "array", "items": { "type": "string" } },

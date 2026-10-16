@@ -83,23 +83,17 @@ func (app *AppWidget) handleCommand(text string) bool {
 	return true
 }
 
-// switchModel handles /model <spec>; b.Usage is the spec's usage text.
+// switchModel handles /model [spec]: no argument opens the model picker,
+// a spec switches through setModel; b.Usage is the spec's usage text.
 func (app *AppWidget) switchModel(b PickerCommand, fields []string) {
-	if len(fields) != 2 {
+	switch len(fields) {
+	case 1:
+		app.openModelPicker()
+	case 2:
+		app.setModel(fields[1])
+	default:
 		AddTurn(app.Chat, RoleError, "", "usage: "+b.Usage+" (current: "+app.Model+")")
-		return
 	}
-	spec := fields[1]
-	if app.resolve != nil {
-		resolved, err := app.resolve(spec)
-		if err != nil {
-			AddTurn(app.Chat, RoleError, "", err.Error())
-			return
-		}
-		spec = resolved
-	}
-	app.Model = spec
-	AddTurn(app.Chat, RoleTool, "model", "active model: "+spec)
 }
 
 // startTurn runs prompt on the active model; output arrives through post.

@@ -112,8 +112,8 @@ picker:
   # (SKILL.md under the agent skill dirs) follow them in the command picker.
   builtins:
     - name: "model"
-      description: "switch the active model: /model <provider:model[:tier]>"
-      usage: "/model <provider:model[:tier]>"
+      description: "switch the active model; no argument opens the model picker"
+      usage: "/model [provider:model[:tier]]"
   labels:
     files_title: "Files"
     commands_title: "Commands"
@@ -121,6 +121,23 @@ picker:
     no_matches: "no matches"
     # Shown instead of no_matches when the directory walk failed.
     read_error: "cannot read files: {{ .Error }}"
+
+# Model picker overlay (open_models key or a bare /model): every model of
+# spec/agent.yaml, grouped by provider, one row per tier (codex:luna:low,
+# codex:luna:med, ...). Selecting runs the same switch as "/model <spec>". A
+# switch while a turn runs applies to the next turn. Placeholder: {{ .Model }}.
+model_picker:
+  title: "Models"
+  hint: "● active · ↻ has session · type to filter · enter select · esc close"
+  # Row markers: the active model, and a model whose provider model already has
+  # a backend session in this tui session (all tiers share one session).
+  active_marker: "●"
+  session_marker: "↻"
+  max_width: 96
+  labels:
+    switched: "active model: {{ .Model }}"
+    switched_busy: "active model: {{ .Model }} (applies to the next turn)"
+    no_matches: "no matching models"
 
 # Key names follow loom ("ctrl+j" == "ctrl-j"). Without the kitty keyboard
 # protocol, Ctrl+J and Shift+Enter arrive as Enter (send), so newline also
@@ -138,6 +155,9 @@ keybindings:
   open_native: ["ctrl+o"]
   # Job panel: toggle anywhere; open/cancel/close act inside the panel.
   toggle_jobs: ["ctrl+b"]
+  # Model picker. Ctrl+M is Enter (CR) in terminals; Ctrl+T is free here
+  # (no transpose-chars binding) and Alt+M needs Meta sent as Escape.
+  open_models: ["ctrl+t", "alt+m"]
   job_open: ["enter"]
   job_cancel: ["x"]
   job_close: ["esc"]

@@ -15,6 +15,7 @@ const (
 	pickNone pickKind = iota
 	pickFile
 	pickCommand
+	pickModel // model overlay (modelpicker.go); its query is not prompt text
 )
 
 // picker is the inline completion popover. It edits the prompt directly:
@@ -76,7 +77,7 @@ func (app *AppWidget) maybeOpenPicker(typed string) {
 // cursor move to another line).
 func (app *AppWidget) syncPicker() {
 	p := &app.picker
-	if !p.isOpen() {
+	if !p.isOpen() || p.kind == pickModel {
 		return
 	}
 	row, col := app.Prompt.Cursor()
@@ -99,7 +100,7 @@ func (app *AppWidget) syncPicker() {
 // pickerLoading reports whether the open picker still waits for its source.
 func (app *AppWidget) pickerLoading() bool {
 	s := app.sources
-	if s == nil {
+	if s == nil || app.picker.kind == pickModel {
 		return false
 	}
 	if app.picker.kind == pickFile {
@@ -118,6 +119,11 @@ func (app *AppWidget) pickerNote() string {
 
 func (app *AppWidget) refilter() {
 	p := &app.picker
+	if p.kind == pickModel {
+		p.matches = filterModels(app.modelItems(), p.query)
+		p.sel = min(max(p.sel, 0), max(len(p.matches)-1, 0))
+		return
+	}
 	var items []pickItem
 	if p.kind == pickFile {
 		if app.sources != nil {
@@ -249,10 +255,18 @@ func (app *AppWidget) pickerKey(name string) bool {
 	case bound(name, kb.PickerSelect):
 		// Enter never sends while a picker is open; with nothing to pick it
 		// just closes the picker and keeps the text.
-		if p.sel < len(p.matches) {
-			app.insertPick(p.matches[p.sel].Name)
+		kind, sel := p.kind, p.sel
+		var name string
+		if sel < len(p.matches) {
+			name = p.matches[sel].Name
+		}
+		if kind != pickModel && name != "" {
+			app.insertPick(name)
 		}
 		app.closePicker()
+		if kind == pickModel && name != "" {
+			app.setModel(name)
+		}
 	default:
 		return false
 	}
@@ -294,6 +308,10 @@ func quoteName(name string) string {
 // border at the trigger column. area is the chat region it may cover.
 func (app *AppWidget) drawPicker(c *loom.Canvas, area loom.Rect) {
 	p := &app.picker
+	if p.kind == pickModel {
+		app.drawModelPicker(c, area)
+		return
+	}
 	ps := app.Spec.Picker
 	title := ps.Labels.FilesTitle
 	if p.kind == pickCommand {

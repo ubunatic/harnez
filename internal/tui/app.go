@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode"
 
+	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/tui/jobs"
 	"ubunatic.com/harnez/internal/tui/router"
 	"ubunatic.com/loom"
@@ -36,6 +37,10 @@ type AppWidget struct {
 	panel        jobPanel
 	picker       picker
 	sources      *pickerSources
+	// models lists the model picker's entries; nil reads spec/agent.yaml.
+	models func() []subagent.ModelEntry
+	// sessionOf returns a model's stored backend session id (router.Router.Session).
+	sessionOf func(spec string) string
 }
 
 // AttachEditor enables the open_editor key: suspend hands the terminal to a
@@ -146,6 +151,12 @@ func (app *AppWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
 	if app.picker.isOpen() && app.pickerKey(name) {
 		return loom.Handled()
 	}
+	if app.picker.kind == pickModel {
+		if app.modelKey(e, name) {
+			return loom.Handled()
+		}
+		return app.promptKey(e, name)
+	}
 	res := app.promptKey(e, name)
 	if e.Key == "" && e.Text != "" {
 		app.maybeOpenPicker(e.Text)
@@ -172,6 +183,9 @@ func (app *AppWidget) promptKey(e loom.KeyEvent, name string) loom.EventResult {
 	case bound(name, kb.OpenNative):
 		app.closePicker()
 		app.openNative()
+	case bound(name, kb.OpenModels):
+		app.closePicker()
+		app.openModelPicker()
 	case bound(name, kb.Newline):
 		app.Prompt.InsertNewline()
 	case bound(name, kb.SendPrompt):
@@ -222,6 +236,10 @@ func (app *AppWidget) promptKey(e loom.KeyEvent, name string) loom.EventResult {
 func (app *AppWidget) ConsumePaste(p loom.PasteEvent) loom.EventResult {
 	if app.panel.open {
 		return loom.Handled() // the prompt is hidden behind the modal panel
+	}
+	if app.picker.kind == pickModel {
+		app.setModelQuery(app.picker.query + oneLine(p.Text))
+		return loom.Handled()
 	}
 	app.insertText(strings.ReplaceAll(p.Text, "\r\n", "\n"))
 	app.syncPicker()

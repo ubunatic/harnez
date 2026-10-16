@@ -49,7 +49,11 @@ backend session natively. Backend session ids are saved per --session id
 (sessions.dir of spec/tui.yaml), so "harnez tui --session X" resumes them after
 a restart; a session the provider no longer knows starts fresh with a note. The
 header shows [resumed] or [new session] for the last turn. Esc or Ctrl+C cancels a running turn. "/model <spec>" switches
-the active model (see harnez agent models).
+the active model (see harnez agent models). Ctrl+T (or Alt+M) or a bare "/model"
+opens the model picker: models of spec/agent.yaml by provider, one row per tier,
+● marks the active model and ↻ one with a backend session in this tui session.
+Type to filter, up/down select, Enter switches, Esc closes; a switch during a
+running turn applies to the next turn.
 
 A prompt starting with "!" runs the rest as a background shell command (sh -c,
 in the working directory) instead of sending it to the model. Ctrl+B toggles
@@ -144,6 +148,7 @@ func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error 
 	app.AttachRunner(rt.Turn, pane.Post, router.ResolveSpec)
 	app.AttachEditor(pane.Suspend, tui.NewEditor(spec.Editor))
 	app.AttachNative(pane.Suspend, rt.Native, nil)
+	app.AttachSessions(rt.Session)
 	app.AttachJobs(tui.NewJobManager(spec.Jobs, dir, pane.Post))
 	app.AttachPickers(dir, tuiSkillDirs(dir), pane.Post)
 	// A running provider turn must not outlive the TUI.
