@@ -39,7 +39,9 @@ func observeProcess(ctx context.Context, cmd *exec.Cmd) error {
 	return observer(cmd.Process.Pid, start)
 }
 
-func isolateProcess(cmd *exec.Cmd) {
+// IsolateProcess starts cmd in its own process group, so KillGroup(pid)
+// reaches the whole tree.
+func IsolateProcess(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
@@ -51,7 +53,7 @@ func providerOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
 // (without its newline) to fn as it arrives. The returned bytes are the full
 // stdout either way; a nil fn reads it in one go.
 func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte, error) {
-	isolateProcess(cmd)
+	IsolateProcess(cmd)
 	if cmd.Cancel != nil {
 		// Cancel the whole provider tree, not just its leader: a surviving
 		// grandchild keeps stdout open and blocks the read below.

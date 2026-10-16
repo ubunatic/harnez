@@ -174,7 +174,7 @@ func piCompactArgs(id string) []string {
 func (d PiDriver) runPiCompactRPC(ctx context.Context, input, id string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "pi", piCompactArgs(id)...)
 	cmd.Dir = d.Dir
-	isolateProcess(cmd)
+	IsolateProcess(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
