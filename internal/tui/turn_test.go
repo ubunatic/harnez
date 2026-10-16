@@ -76,27 +76,77 @@ func TestPostedChunksRenderInChat(t *testing.T) {
 	}
 }
 
-func TestEscCancelsRunningTurnWithoutQuitting(t *testing.T) {
+func TestCancelKeysStopRunningTurnWithoutQuitting(t *testing.T) {
+	for _, key := range []string{"esc", "ctrl-c"} {
+		t.Run(key, func(t *testing.T) {
+			started := make(chan struct{})
+			app, l := newRunnerApp(t, func(ctx context.Context, _, _ string, _ func(router.Chunk)) error {
+				close(started)
+				<-ctx.Done()
+				return ctx.Err()
+			})
+			typeLine(app, "long task")
+			<-started
+			app.ConsumeKey(loom.KeyEvent{Key: key})
+			if app.QuitRequested {
+				t.Fatalf("%s quit during a running turn", key)
+			}
+			l.drainUntil(t, app)
+			turns := app.Chat.Turns()
+			last := turns[len(turns)-1]
+			if last.Role != RoleError || last.Content != "turn cancelled" || app.Status != "idle" {
+				t.Fatalf("last turn = %#v, status %q", last, app.Status)
+			}
+			app.ConsumeKey(loom.KeyEvent{Key: key})
+			if !app.QuitRequested {
+				t.Fatalf("%s when idle should quit", key)
+			}
+		})
+	}
+}
+
+func TestBusySubmitKeepsPrompt(t *testing.T) {
 	started := make(chan struct{})
 	app, l := newRunnerApp(t, func(ctx context.Context, _, _ string, _ func(router.Chunk)) error {
 		close(started)
 		<-ctx.Done()
 		return ctx.Err()
 	})
-	typeLine(app, "long task")
+	typeLine(app, "first")
 	<-started
-	if r := app.ConsumeKey(loom.KeyEvent{Key: "esc"}); app.QuitRequested {
-		t.Fatalf("Esc quit during a running turn (%v)", r)
+	typeLine(app, "second")
+	if got := app.Prompt.Text(); got != "second" {
+		t.Fatalf("prompt = %q, want it kept", got)
 	}
+	for _, tr := range app.Chat.Turns() {
+		if tr.Role == RoleUser && tr.Content == "second" {
+			t.Fatal("busy submit added a user turn")
+		}
+	}
+	app.CancelTurn()
 	l.drainUntil(t, app)
-	turns := app.Chat.Turns()
-	last := turns[len(turns)-1]
-	if last.Role != RoleError || last.Content != "turn cancelled" || app.Status != "idle" {
-		t.Fatalf("last turn = %#v, status %q", last, app.Status)
+}
+
+func TestShutdownStopsRunningTurn(t *testing.T) {
+	started := make(chan struct{})
+	stopped := false
+	app, _ := newRunnerApp(t, func(ctx context.Context, _, _ string, _ func(router.Chunk)) error {
+		close(started)
+		<-ctx.Done()
+		stopped = true
+		return ctx.Err()
+	})
+	typeLine(app, "work")
+	<-started
+	done := make(chan struct{})
+	go func() { app.Shutdown(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Shutdown did not return")
 	}
-	app.ConsumeKey(loom.KeyEvent{Key: "esc"})
-	if !app.QuitRequested {
-		t.Fatal("Esc when idle should quit")
+	if !stopped {
+		t.Fatal("Shutdown returned before the turn stopped")
 	}
 }
 

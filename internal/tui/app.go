@@ -139,6 +139,11 @@ func (app *AppWidget) submit() {
 	if text == "" {
 		return
 	}
+	if app.Busy() && !isCommand(text) {
+		// Nothing is sent while a turn runs; keep the prompt for later.
+		AddTurn(app.Chat, RoleError, "", "a turn is still running; press Esc to cancel it")
+		return
+	}
 	app.Prompt.AddHistory(text)
 	app.Prompt.Clear()
 	if app.handleCommand(text) {

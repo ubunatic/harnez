@@ -89,14 +89,31 @@ func (r *Router) Turn(ctx context.Context, spec, prompt string, emit func(Chunk)
 		return fmt.Errorf("provider %q is not supported by harnez tui yet: no driver (direct API clients are planned)", m.Provider)
 	}
 	key := sessionKey(m)
-	r.mu.Lock()
-	id := r.sessions[key]
-	r.mu.Unlock()
+	id := r.Session(spec)
+	if id != "" {
+		err := r.turn(ctx, d, m, id, prompt, emit)
+		if err == nil || ctx.Err() != nil {
+			return err
+		}
+		// A stale or broken backend session must not fail every later prompt.
+		r.setSession(key, "")
+		emit(Chunk{Kind: ChunkActivity, Text: "could not resume session " + id + " (" + err.Error() + "); starting a new session"})
+	}
+	return r.turn(ctx, d, m, "", prompt, emit)
+}
 
+// turn runs one driver call: a new session when id is empty, else a resume.
+// The backend session id is stored as soon as it is known, so a turn
+// cancelled after the provider reported it is still resumed next time.
+func (r *Router) turn(ctx context.Context, d subagent.Driver, m subagent.Model, id, prompt string, emit func(Chunk)) error {
+	key := sessionKey(m)
 	var res *subagent.TurnResult
+	var err error
 	if sd, ok := d.(subagent.StreamingDriver); ok {
 		fn := func(ev subagent.Event) {
 			switch ev.Kind {
+			case "session":
+				r.setSession(key, ev.Text)
 			case "message":
 				emit(Chunk{Kind: ChunkText, Text: ev.Text})
 			case "activity":
@@ -123,21 +140,26 @@ func (r *Router) Turn(ctx context.Context, spec, prompt string, emit func(Chunk)
 			}
 		}
 	}
+	if res != nil && res.SessionID != "" {
+		r.setSession(key, res.SessionID)
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if err != nil {
-		return err
+	return err
+}
+
+func (r *Router) setSession(key, id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.sessions == nil {
+		r.sessions = map[string]string{}
 	}
-	if res.SessionID != "" {
-		r.mu.Lock()
-		if r.sessions == nil {
-			r.sessions = map[string]string{}
-		}
-		r.sessions[key] = res.SessionID
-		r.mu.Unlock()
+	if id == "" {
+		delete(r.sessions, key)
+		return
 	}
-	return nil
+	r.sessions[key] = id
 }
 
 // sessionKey keeps one backend session per provider model; a tier change

@@ -44,12 +44,18 @@ func (app *AppWidget) Shutdown() {
 	}
 }
 
+// isCommand reports whether text is a slash command handled by the TUI.
+func isCommand(text string) bool {
+	f := strings.Fields(text)
+	return len(f) > 0 && f[0] == "/model"
+}
+
 // handleCommand runs a slash command and reports whether text was one.
 func (app *AppWidget) handleCommand(text string) bool {
-	fields := strings.Fields(text)
-	if len(fields) == 0 || fields[0] != "/model" {
+	if !isCommand(text) {
 		return false
 	}
+	fields := strings.Fields(text)
 	if len(fields) != 2 {
 		AddTurn(app.Chat, RoleError, "", "usage: /model <provider:model[:tier]> (current: "+app.Model+")")
 		return true
@@ -70,10 +76,6 @@ func (app *AppWidget) handleCommand(text string) bool {
 
 // startTurn runs prompt on the active model; output arrives through post.
 func (app *AppWidget) startTurn(prompt string) {
-	if app.turn != nil {
-		AddTurn(app.Chat, RoleError, "", "a turn is still running; press Esc to cancel it")
-		return
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t := &turnState{cancel: cancel}
 	app.turn = t

@@ -174,9 +174,6 @@ func (ct *ChatThread) formatHeader(t Turn) string {
 		prefix = strings.ReplaceAll(prefix, "{{ .Name }}", toolName)
 	case RoleError:
 		prefix = ct.spec.ErrorPrefix
-		if prefix == "" {
-			prefix = "Error:"
-		}
 	default:
 		prefix = string(t.Role) + ":"
 	}

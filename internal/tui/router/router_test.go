@@ -17,7 +17,8 @@ import (
 // batchDriver is a fake non-streaming driver that records its calls.
 type batchDriver struct {
 	subagent.UnsupportedDriver
-	calls *[]string
+	calls     *[]string
+	resumeErr error
 }
 
 func (d batchDriver) Run(_ context.Context, o subagent.RunOptions) (*subagent.TurnResult, error) {
@@ -27,6 +28,9 @@ func (d batchDriver) Run(_ context.Context, o subagent.RunOptions) (*subagent.Tu
 
 func (d batchDriver) Resume(_ context.Context, id, prompt string, m subagent.Model) (*subagent.TurnResult, error) {
 	*d.calls = append(*d.calls, "resume "+id+" "+prompt)
+	if d.resumeErr != nil {
+		return nil, d.resumeErr
+	}
 	return &subagent.TurnResult{SessionID: id, Messages: []string{"again"}}, nil
 }
 
@@ -99,6 +103,54 @@ func TestTurnRoutesPerProviderAndResumes(t *testing.T) {
 	}
 	if id := r.Session("codex:luna"); id != "t1" {
 		t.Fatalf("Session(codex:luna) = %q", id)
+	}
+}
+
+func TestTurnFallsBackToNewSessionWhenResumeFails(t *testing.T) {
+	var calls []string
+	r := &Router{Driver: func(subagent.Model, string) subagent.Driver {
+		return batchDriver{calls: &calls, resumeErr: errors.New("no such session")}
+	}}
+	collect(t, r, "claude:sonnet", "a")
+	got := collect(t, r, "claude:sonnet", "b")
+	if len(got) != 3 || got[0].Kind != ChunkActivity || !strings.Contains(got[0].Text, "starting a new session") {
+		t.Fatalf("chunks = %#v", got)
+	}
+	want := "run claude a|resume s-claude b|run claude b"
+	if s := strings.Join(calls, "|"); s != want {
+		t.Fatalf("calls = %q, want %q", s, want)
+	}
+	if id := r.Session("claude:sonnet"); id != "s-claude" {
+		t.Fatalf("Session = %q after fallback", id)
+	}
+}
+
+// cancelStream reports its session, then blocks until the turn is cancelled.
+type cancelStream struct{ streamDriver }
+
+func (cancelStream) RunStream(ctx context.Context, _ subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+	fn(subagent.Event{Kind: "session", Text: "th-cancel"})
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestTurnKeepsSessionAfterCancel(t *testing.T) {
+	r := &Router{Driver: func(subagent.Model, string) subagent.Driver { return cancelStream{} }}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Turn(ctx, "codex:luna", "p", func(Chunk) {}) }()
+	for deadline := time.Now().Add(5 * time.Second); r.Session("codex:luna") == ""; {
+		if time.Now().After(deadline) {
+			t.Fatal("session never reported")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v", err)
+	}
+	if id := r.Session("codex:luna"); id != "th-cancel" {
+		t.Fatalf("Session after cancel = %q, want th-cancel", id)
 	}
 }
 
@@ -206,11 +258,15 @@ wait
 	}
 }
 
-// alive reports whether pid runs; a zombie awaiting its reaper counts as dead.
+// alive reports whether pid runs; a zombie awaiting its reaper counts as
+// dead where /proc shows process states.
 func alive(pid int) bool {
+	if syscall.Kill(pid, 0) != nil {
+		return false
+	}
 	b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
 	if err != nil {
-		return false
+		return true
 	}
 	_, rest, _ := strings.Cut(string(b), ") ")
 	return !strings.HasPrefix(rest, "Z")
