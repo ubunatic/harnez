@@ -30,8 +30,14 @@ Epic: issue 774. Library: `ubunatic.com/loom`.
 | Chat and job logs keep only SGR; all other escapes/controls are dropped | model and tool output is untrusted (screen clear, OSC 52 clipboard) | 779 |
 | Cancelled turns show a neutral note, not an error | cancel is user intent | 776 |
 | Header leads with status and `[resumed]`/`[new session]` | 80-column terminals clip the right edge | 791 |
+| Model picker opens on Ctrl+T or Alt+M (`open_models`) and on a bare `/model` | Ctrl+M is CR (= Enter); Ctrl+T has no readline action here and no other binding; Alt+M needs Meta-as-Escape, so it is the fallback; `TestKeybindingsDoNotConflict` checks all spec bindings | 776 |
+| Model picker is the `pickModel` kind of the inline picker (same state, ranking, `picker_*` keys); its query is typed in the overlay | no third overlay framework | 776 |
+| Tiers are list rows (`codex:luna:low/med/high`, from `KnownModelEntries`), grouped by provider; no tier toggle | filtering "luna high" reaches any tier; one widget path | 776 |
+| A pick calls `setModel`, the path of `/model <spec>` | one validation and note | 776 |
+| Switching during a running turn is allowed; the turn keeps its model, the note says the switch applies to the next turn | no reason to block; cancel stays explicit | 776 |
+| Session marker `↻` means the provider model has a stored backend session; it shows on every tier | sessions are keyed by provider:model, a tier change resumes the same session | 776, 791 |
 
 ## Open
 
-- agy live streaming (needs a streaming agy CLI mode); model picker overlay.
+- agy live streaming (needs a streaming agy CLI mode).
 - Ctrl+O into agy runs without the usage-metering supervisor.

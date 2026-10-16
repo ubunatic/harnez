@@ -1,6 +1,6 @@
 # 776 — harnez tui External Harness Forwarding and Subscription-Aware Model Router
 
-**Status**: In Progress — router, streaming (codex/claude/pi), cancel, `/model` done; picker, agy streaming, direct API open
+**Status**: In Progress — router, streaming (codex/claude/pi), cancel, `/model`, model picker done; agy streaming, direct API, quota indicators open
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Model Orchestration
@@ -54,5 +54,8 @@ End users subscribe to Pro plans (Claude Pro, Google AI Pro / Gemini Advanced, C
 - Cancel kills the provider process group for claude/pi (`providerOutput`), codex via `startProcess`.
 - Open: real-CLI check of claude/pi live streaming; text deltas
   (`--include-partial-messages`) not used, chunks are whole messages; agy cancel signals only its leader (agymeter `runChild`); direct API
-  clients (`local`, `ollama`, `openrouter`) return a "not supported yet" error turn; picker overlay
-  and `Ctrl+M`; quota headroom indicators; real-CLI quota check.
+  clients (`local`, `ollama`, `openrouter`) return a "not supported yet" error turn; quota headroom
+  indicators; real-CLI quota check.
+- Model picker: Ctrl+T / Alt+M or bare `/model` (Ctrl+M is Enter in terminals); spec/agent.yaml
+  models by provider, one row per tier, active and stored-session markers, type-to-filter; Enter
+  switches via the `/model` path, also mid-turn (applies to the next turn). Decisions: docs/HarnezTUI.md.

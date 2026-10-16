@@ -1,6 +1,6 @@
 # 774 — Research and Spec Harnez TUI Interactive Harness
 
-**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 done (Ctrl+G, @/ pickers); #778 job manager v1 in; #779 done (Ctrl+O native resume, ANSI chat); TUI polish: picker ranking, quoted paths, readline keys
+**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 done (Ctrl+G, @/ pickers); #778 job manager v1 in; #779 done (Ctrl+O native resume, ANSI chat); TUI polish: picker ranking, quoted paths, readline keys; model picker (Ctrl+T, bare /model)
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Agent Harness
@@ -43,6 +43,7 @@ This issue serves as the overarching Epic tracking the implementation of `harnez
 - #777: `@` file and `/` command pickers above the prompt (2026-10-16).
 - #778 v1: `!<cmd>` background jobs, Ctrl+B job panel with live log and cancel (2026-10-16).
 - #779: Ctrl+O resumes the backend session in the provider CLI; SGR-only ANSI in chat and job logs (2026-10-16).
+- #776: model picker overlay, Ctrl+T / Alt+M or bare `/model` (2026-10-16).
 - harnez pins loom v0.3.9 (`Pane.Post`, `Pane.Suspend`, `Pane.KittyKeyboard`).
 - Loom gaps, fixed in loom, not worked around here:
 
