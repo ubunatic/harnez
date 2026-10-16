@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,39 @@ type agentOutput struct {
 	Response     string   `json:"response,omitempty"`
 	Messages     []string `json:"messages,omitempty"`
 	ReconnectCmd string   `json:"reconnect_cmd,omitempty"`
+	// Resumed is false (and set) only when a resume found its provider
+	// session gone and started a new one; PreviousSessionID and Note say which and why.
+	Resumed           *bool  `json:"resumed,omitempty"`
+	PreviousSessionID string `json:"previous_session_id,omitempty"`
+	Note              string `json:"note,omitempty"`
+}
+
+// MarshalJSON keeps the session's own JSON (its MarshalJSON is promoted and
+// would hide the fields above) and appends the fresh-session fields when set.
+func (o agentOutput) MarshalJSON() ([]byte, error) {
+	var base []byte
+	var err error
+	if o.Session != nil {
+		base, err = o.Session.MarshalJSON()
+	} else {
+		base, err = json.Marshal(struct{}{})
+	}
+	if err != nil || o.Resumed == nil {
+		return base, err
+	}
+	extra, err := json.Marshal(struct {
+		Resumed           *bool  `json:"resumed"`
+		PreviousSessionID string `json:"previous_session_id,omitempty"`
+		Note              string `json:"note,omitempty"`
+	}{o.Resumed, o.PreviousSessionID, o.Note})
+	if err != nil {
+		return nil, err
+	}
+	base = bytes.TrimRight(base, " \n")
+	if len(base) > 2 {
+		return append(append(base[:len(base)-1], ','), extra[1:]...), nil
+	}
+	return extra, nil
 }
 
 func newAgentCmd() *cobra.Command {

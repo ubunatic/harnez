@@ -23,19 +23,21 @@
 - tui store: one JSON file per tui session id under `sessions.dir` of `spec/tui.yaml`
   (`~/.harnez/tui/sessions/<id>.json`), map `provider:model` -> backend session id. Updates take
   an flock on `<id>.json.lock`, re-read, merge and atomically rename, so two tui processes never
-  clobber each other (different ids: different files; same id: merged under the lock).
+  clobber each other. A corrupt file moves to `<id>.json.corrupt-<unix>` with one note; files
+  of other tui sessions unused for `sessions.max_age_days` (30) are pruned on tui start.
 - Shared resume: `subagent.ResumeTurn` resumes natively (`Resume`/`ResumeStream` with the
-  provider id, no history replay); on a stale id (`ResumeChecker` says not resumable, or the
-  retry policy accepts the error) it runs a fresh session and reports a note.
-  The router retries on any resume error (kept from 776); `harnez agent resume` retries only on
-  `subagent.IsStaleSession` errors (missing conversation/rollout/session) so quota and auth
-  errors keep their bookkeeping.
+  provider id, no history replay). Only `subagent.IsStaleSession` starts a fresh session with a
+  note: it matches the provider CLI's own stderr (`ProviderExitError`, never model output) by
+  line prefix against `stale_session_errors` of `spec/agent.yaml`. Only verified lines are
+  listed (claude "No conversation found with session ID"); other providers are never stale,
+  so their resume errors stay errors and the stored id is kept (tui and agent resume alike).
+- `harnez agent resume` keeps refusing when `CheckResumable` says no (codex rollout lookup may
+  use another CODEX_HOME). A fresh start is noted on stderr and in `--json`
+  (`"resumed": false`, `previous_session_id`, `note`).
 - Header shows `[resumed]` / `[new session]` after a turn (`sessions.labels`).
 
 ## 3. Implementation & Verification Plan
-- Tests: header renders once-per-session wording and replaces the pre-791 header; store
-  roundtrip (write, new router, resumes stored id); stale id -> fresh session + note, store
-  updated; concurrent writers on one id keep all keys; agent resume stale recovery.
-- Open: real-CLI check of the stale-error markers per provider (claude "No conversation found"
-  is known; codex/pi/agy wording unverified, codex is covered by `CheckResumable`).
-- Open: no pruning of old tui session files yet.
+- Tests: header wording; store roundtrip across restart; stale id -> fresh + note, store
+  updated; quota error keeps the stored id; concurrent writers keep all keys; corrupt backup;
+  prune; agent resume stale recovery incl. `--json`, terminal refusal, non-stale errors.
+- Open: real-CLI check of claude's stale line; add codex/pi/agy lines to the spec once verified.

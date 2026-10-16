@@ -29,6 +29,7 @@ type agentSpec struct {
 	Selftest              SelftestSpec                   `yaml:"selftest"`
 	ExternalSessions      map[string]ExternalSessionSpec `yaml:"external_sessions"`
 	ReplyHistoryLimit     int                            `yaml:"reply_history_limit"`
+	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
 }
 
 // ExternalSessionSpec describes provider-owned local session metadata.

@@ -87,19 +87,20 @@ func (r *Router) Session(spec string) string {
 }
 
 // Load fills the session map from Store, so the first turn of each model
-// resumes the backend session of an earlier run. Without a Store it is a no-op.
-func (r *Router) Load() error {
+// resumes the backend session of an earlier run. A non-empty warning says a
+// corrupt store was set aside. Without a Store it is a no-op.
+func (r *Router) Load() (warning string, err error) {
 	if r.Store == nil {
-		return nil
+		return "", nil
 	}
-	sessions, err := r.Store.Load()
+	sessions, warning, err := r.Store.Load()
 	if err != nil {
-		return err
+		return "", err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.sessions = sessions
-	return nil
+	return warning, nil
 }
 
 // Turn runs prompt on the model named by spec and calls emit for every chunk,
@@ -149,8 +150,8 @@ func (r *Router) Turn(ctx context.Context, spec, prompt string, emit func(Chunk)
 				emit(Chunk{Kind: ChunkActivity, Text: ev.Text})
 			}
 		},
-		// A stale or broken backend session must not fail every later prompt.
-		Retry: func(error) bool { return true },
+		// Only a verified stale session (subagent.IsStaleSession) starts
+		// fresh; any other resume error is shown and the stored id is kept.
 		OnFresh: func(note string) {
 			set("")
 			emit(Chunk{Kind: ChunkActivity, Text: note})

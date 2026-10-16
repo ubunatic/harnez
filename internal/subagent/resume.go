@@ -2,31 +2,35 @@ package subagent
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
 
-// staleSessionMarkers are lower-case fragments of provider CLI errors for a
-// session id the provider no longer knows (deleted, expired, other machine).
-var staleSessionMarkers = []string{
-	"no conversation found",   // claude -p --resume <unknown id>
-	"conversation not found",  // agy --conversation
-	"session not found",       // pi, generic
-	"no rollout found",        // codex exec resume
-	"thread not found",        // codex app-server wording
-	"session file is missing", // CodexDriver.CheckResumable
-}
-
 // IsStaleSession reports whether err says the provider session to resume is
-// gone, so a fresh session is the only way forward. Quota, auth and runtime
-// errors are not stale.
-func IsStaleSession(err error) bool {
-	if err == nil {
+// gone, so a fresh session is the only way forward. It matches only the
+// provider CLI's own stderr (ProviderExitError), never model output, against
+// the verified line prefixes in stale_session_errors of spec/agent.yaml. A
+// provider without entries is never stale: false negatives keep the stored
+// session, false positives would drop it.
+func IsStaleSession(provider string, err error) bool {
+	var exit *ProviderExitError
+	if !errors.As(err, &exit) {
 		return false
 	}
-	msg := strings.ToLower(err.Error())
-	for _, m := range staleSessionMarkers {
-		if strings.Contains(msg, m) {
-			return true
+	spec, specErr := agentSpecOnce()
+	if specErr != nil {
+		return false
+	}
+	return matchStaleStderr(spec.StaleSessionErrors[provider], exit.Stderr)
+}
+
+func matchStaleStderr(prefixes []string, stderr string) bool {
+	for _, line := range strings.Split(stderr, "\n") {
+		line = strings.TrimSpace(line)
+		for _, p := range prefixes {
+			if p != "" && strings.HasPrefix(line, p) {
+				return true
+			}
 		}
 	}
 	return false
@@ -35,7 +39,7 @@ func IsStaleSession(err error) bool {
 // ResumeTurn runs one provider turn shared by harnez tui and harnez agent
 // resume: a native resume of ID (no history replay) when ID is set, else a new
 // session. A resume that fails on a stale session starts a new session with
-// the same options instead of failing every later prompt.
+// the same options; any other error is returned and the caller keeps ID.
 type ResumeTurn struct {
 	Driver Driver
 	// ID is the provider session to resume; empty starts a new session.
@@ -44,11 +48,8 @@ type ResumeTurn struct {
 	// Events receives live events of a StreamingDriver; nil uses the batch
 	// Run/Resume calls even when the driver streams.
 	Events func(Event)
-	// Retry reports whether a resume error starts a new session; nil means
-	// IsStaleSession. A cancelled context never retries.
-	Retry func(error) bool
 	// OnFresh is called with a short note before the new session starts
-	// after a failed or impossible resume.
+	// after a stale resume.
 	OnFresh func(note string)
 }
 
@@ -56,25 +57,12 @@ type ResumeTurn struct {
 // session; false means a new session (check TurnResult.SessionID).
 func (t ResumeTurn) Do(ctx context.Context) (res *TurnResult, resumed bool, err error) {
 	if t.ID != "" {
-		note := ""
-		if c, ok := t.Driver.(ResumeChecker); ok {
-			if ok, reason := c.CheckResumable(t.ID); !ok {
-				note = "session " + t.ID + " cannot be resumed (" + reason + "); starting a new session"
-			}
-		}
-		if note == "" {
-			res, err = t.call(ctx, t.ID)
-			retry := t.Retry
-			if retry == nil {
-				retry = IsStaleSession
-			}
-			if err == nil || ctx.Err() != nil || !retry(err) {
-				return res, true, err
-			}
-			note = "could not resume session " + t.ID + " (" + firstErrLine(err) + "); starting a new session"
+		res, err = t.call(ctx, t.ID)
+		if err == nil || ctx.Err() != nil || !IsStaleSession(t.Opts.Model.Provider, err) {
+			return res, true, err
 		}
 		if t.OnFresh != nil {
-			t.OnFresh(note)
+			t.OnFresh("could not resume session " + t.ID + " (" + firstErrLine(err) + "); starting a new session")
 		}
 	}
 	res, err = t.call(ctx, "")

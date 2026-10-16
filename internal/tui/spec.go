@@ -137,8 +137,10 @@ type SessionLabelsSpec struct {
 // SessionsSpec configures the per-tui-session store of backend session ids.
 type SessionsSpec struct {
 	// Dir holds one <tui session id>.json per tui session; "~/" is expanded.
-	Dir    string            `yaml:"dir"`
-	Labels SessionLabelsSpec `yaml:"labels"`
+	Dir string `yaml:"dir"`
+	// MaxAgeDays prunes other tui sessions' store files unused this long.
+	MaxAgeDays int               `yaml:"max_age_days"`
+	Labels     SessionLabelsSpec `yaml:"labels"`
 }
 
 // Spec is the top-level shape of spec/tui.yaml.
@@ -181,8 +183,8 @@ func ParseSpec(data []byte) (*Spec, error) {
 	if s.Jobs.Prefix == "" || s.Jobs.Shell == "" || s.Jobs.LogBufferBytes < 1 || s.Jobs.CancelGraceMS < 1 || s.Jobs.MaxFinished < 1 {
 		return nil, fmt.Errorf("%s: jobs prefix, shell, log_buffer_bytes, cancel_grace_ms and max_finished must be set", specPath)
 	}
-	if s.Sessions.Dir == "" || s.Sessions.Labels.Resumed == "" || s.Sessions.Labels.New == "" {
-		return nil, fmt.Errorf("%s: sessions dir and labels must be set", specPath)
+	if s.Sessions.Dir == "" || s.Sessions.MaxAgeDays < 1 || s.Sessions.Labels.Resumed == "" || s.Sessions.Labels.New == "" {
+		return nil, fmt.Errorf("%s: sessions dir, max_age_days and labels must be set", specPath)
 	}
 	if err := validatePicker(&s); err != nil {
 		return nil, err

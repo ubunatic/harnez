@@ -121,7 +121,7 @@ func TestTurnRoutesPerProviderAndResumes(t *testing.T) {
 func TestTurnFallsBackToNewSessionWhenResumeFails(t *testing.T) {
 	var calls []string
 	r := &Router{Driver: func(subagent.Model, string) subagent.Driver {
-		return batchDriver{calls: &calls, resumeErr: errors.New("no such session")}
+		return batchDriver{calls: &calls, resumeErr: staleClaude("s-claude")}
 	}}
 	collect(t, r, "claude:sonnet", "a")
 	got := collect(t, r, "claude:sonnet", "b")

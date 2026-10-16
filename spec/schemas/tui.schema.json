@@ -48,9 +48,10 @@
     "sessions": {
       "type": "object",
       "description": "Backend session ids per tui session, resumed after a restart.",
-      "required": ["dir", "labels"],
+      "required": ["dir", "max_age_days", "labels"],
       "properties": {
         "dir": { "type": "string", "minLength": 1, "description": "Directory of <tui session id>.json files; ~/ is the home directory." },
+        "max_age_days": { "type": "integer", "minimum": 1, "description": "Store files of other tui sessions unused this long are deleted on tui start." },
         "labels": {
           "type": "object",
           "required": ["resumed", "new"],

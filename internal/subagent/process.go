@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -107,10 +106,21 @@ func runProviderCLI(ctx context.Context, name, dir string, override func(context
 	cmd.Dir = dir
 	b, err := providerLines(ctx, cmd, fn)
 	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-		return b, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+		return b, &ProviderExitError{Err: err, Stderr: strings.TrimSpace(string(exitErr.Stderr))}
 	}
 	return b, err
 }
+
+// ProviderExitError is a provider CLI's non-zero exit with its trimmed
+// stderr, kept apart from model output so IsStaleSession matches only what
+// the CLI itself reported.
+type ProviderExitError struct {
+	Err    error
+	Stderr string
+}
+
+func (e *ProviderExitError) Error() string { return e.Err.Error() + ": " + e.Stderr }
+func (e *ProviderExitError) Unwrap() error { return e.Err }
 
 // readLines collects all of rd and calls fn for every line, including a
 // final line without a newline.

@@ -1549,42 +1549,75 @@ func TestAgentListResumeColumnStates(t *testing.T) {
 	}
 }
 
-// A provider session that is gone starts a fresh provider session with the
-// same prompt instead of failing every later resume (issue 791): the store
-// then holds the new provider id and the note goes to stderr.
+func TestAgentTerminalResumeRefusal(t *testing.T) {
+	old := agentDriver
+	d := &resumeOutcomeDriver{terminal: true}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
+	cmd := newAgentCmd()
+	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "cannot be resumed") || !strings.Contains(err.Error(), "harnez agent start --name") {
+		t.Fatalf("error = %v", err)
+	}
+	sess, _ := store.Get("sid")
+	if d.resumes != 0 || sess.ResumeFailures != 0 || d.prompt != "" {
+		t.Fatalf("terminal attempt changed state: resumes=%d fresh prompt=%q session=%#v", d.resumes, d.prompt, sess)
+	}
+}
+
+// A verified stale provider session (claude "No conversation found") starts
+// a fresh provider session with the same prompt (issue 791): the store holds
+// the new id, the note goes to stderr and the --json result says so.
 func TestAgentResumeStaleSessionStartsFresh(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		driver      *resumeOutcomeDriver
-		wantResumes int
-		wantNote    string
-	}{
-		{"terminal", &resumeOutcomeDriver{terminal: true}, 0, "session sid cannot be resumed (session record is terminal); starting a new session"},
-		{"stale error", &resumeOutcomeDriver{err: errors.New("claude resume: No conversation found with session ID: sid")}, 1, "could not resume session sid (claude resume: No conversation found with session ID: sid); starting a new session"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
+	stale := fmt.Errorf("claude resume: %w", &subagent.ProviderExitError{Err: errors.New("exit status 1"), Stderr: "No conversation found with session ID: sid"})
+	wantNote := "could not resume session sid (claude resume: exit status 1: No conversation found with session ID: sid); starting a new session"
+	for _, jsonOut := range []bool{false, true} {
+		t.Run(fmt.Sprintf("json=%v", jsonOut), func(t *testing.T) {
+			d := &resumeOutcomeDriver{err: stale}
 			old := agentDriver
-			agentDriver = func(subagent.Model, string) subagent.Driver { return tc.driver }
+			agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 			defer func() { agentDriver = old }()
 			storeDir := t.TempDir()
-			store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
+			store := saveResumeSession(t, storeDir, "sid", "worker", "claude")
 			var stdout, stderr bytes.Buffer
 			cmd := newAgentCmd()
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
-			cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
+			args := []string{"resume", "--name", "worker", "hi", "--store-dir", storeDir}
+			if jsonOut {
+				args = append(args, "--json")
+			}
+			cmd.SetArgs(args)
 			if err := cmd.Execute(); err != nil {
 				t.Fatalf("resume: %v (stderr %s)", err, stderr.String())
 			}
 			sess, _ := store.Get("sid")
-			if tc.driver.resumes != tc.wantResumes || tc.driver.prompt != "hi" {
-				t.Fatalf("resumes=%d fresh prompt=%q", tc.driver.resumes, tc.driver.prompt)
+			if d.resumes != 1 || d.prompt != "hi" {
+				t.Fatalf("resumes=%d fresh prompt=%q", d.resumes, d.prompt)
 			}
 			if sess.ProviderSessionID != "recorded" || sess.ResumeFailures != 0 || sess.LastError != "" || sess.Status != "completed" {
 				t.Fatalf("session after fresh start = %#v", sess)
 			}
-			if !strings.Contains(stderr.String(), tc.wantNote) {
-				t.Fatalf("stderr lacks note %q:\n%s", tc.wantNote, stderr.String())
+			if !strings.Contains(stderr.String(), wantNote) {
+				t.Fatalf("stderr lacks note %q:\n%s", wantNote, stderr.String())
+			}
+			if !jsonOut {
+				return
+			}
+			var got struct {
+				Resumed           *bool  `json:"resumed"`
+				PreviousSessionID string `json:"previous_session_id"`
+				Note              string `json:"note"`
+				ProviderSessionID string `json:"provider_session_id"`
+			}
+			if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+				t.Fatalf("json: %v\n%s", err, stdout.String())
+			}
+			if got.Resumed == nil || *got.Resumed || got.PreviousSessionID != "sid" || got.Note != wantNote || got.ProviderSessionID != "recorded" {
+				t.Fatalf("json result = %+v", got)
 			}
 		})
 	}

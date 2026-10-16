@@ -30,6 +30,8 @@ input:
 sessions:
   # One <tui session id>.json per tui session; "~/" is the home directory.
   dir: "~/.harnez/tui/sessions"
+  # Store files of other tui sessions unused this long are deleted on tui start.
+  max_age_days: 30
   # {{ .Backend }} in header.format after a turn: resumed vs new backend session.
   labels:
     resumed: "[resumed]"

@@ -5,6 +5,11 @@
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
+    "stale_session_errors": {
+      "type": "object",
+      "description": "Per provider: verified CLI stderr line prefixes that mean the resumed session is gone.",
+      "additionalProperties": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+    },
     "stop": {
       "type": "object",
       "required": ["grace_ms", "kill_wait_ms", "poll_ms"],

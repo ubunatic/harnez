@@ -3,6 +3,7 @@ package subagent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -11,7 +12,6 @@ type resumeFake struct {
 	UnsupportedDriver
 	calls     *[]string
 	resumeErr error
-	resumable bool
 }
 
 func (d resumeFake) Run(_ context.Context, o RunOptions) (*TurnResult, error) {
@@ -27,32 +27,36 @@ func (d resumeFake) Resume(_ context.Context, id, prompt string, _ Model) (*Turn
 	return &TurnResult{SessionID: id}, nil
 }
 
-type checkedFake struct{ resumeFake }
-
-func (d checkedFake) CheckResumable(string) (bool, string) {
-	return d.resumable, "Codex session file is missing"
+// staleClaude is the verified claude CLI error for an unknown --resume id.
+func staleClaude(id string) error {
+	return fmt.Errorf("claude resume: %w", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "No conversation found with session ID: " + id})
 }
 
 func TestIsStaleSession(t *testing.T) {
-	for _, msg := range []string{
-		"claude resume: exit status 1: No conversation found with session ID: abc",
-		"codex resume: thread/resume failed: no rollout found for thread id abc",
-		"pi resume: Session not found: abc",
-	} {
-		if !IsStaleSession(errors.New(msg)) {
-			t.Errorf("IsStaleSession(%q) = false", msg)
-		}
+	if !IsStaleSession("claude", staleClaude("abc")) {
+		t.Error("claude stderr 'No conversation found' must be stale")
 	}
-	for _, err := range []error{nil, errors.New("usage limit reached"), errors.New("401 unauthorized"), context.Canceled} {
-		if IsStaleSession(err) {
-			t.Errorf("IsStaleSession(%v) = true", err)
+	for name, tc := range map[string]struct {
+		provider string
+		err      error
+	}{
+		"nil":                 {"claude", nil},
+		"plain error":         {"claude", errors.New("No conversation found with session ID: abc")},
+		"model output":        {"claude", errors.New("claude: result: the agent said No conversation found with session ID: x")},
+		"mid-line stderr":     {"claude", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "warn: No conversation found with session ID: x"}},
+		"quota":               {"claude", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "usage limit reached"}},
+		"unverified provider": {"pi", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "No conversation found with session ID: x"}},
+		"codex":               {"codex", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "session not found"}},
+	} {
+		if IsStaleSession(tc.provider, tc.err) {
+			t.Errorf("%s: IsStaleSession = true", name)
 		}
 	}
 }
 
 func TestResumeTurnResumesNatively(t *testing.T) {
 	var calls []string
-	res, resumed, err := ResumeTurn{Driver: resumeFake{calls: &calls}, ID: "s1", Opts: RunOptions{Prompt: "p"}}.Do(context.Background())
+	res, resumed, err := ResumeTurn{Driver: resumeFake{calls: &calls}, ID: "s1", Opts: RunOptions{Prompt: "p", Model: Model{Provider: "claude"}}}.Do(context.Background())
 	if err != nil || !resumed || res.SessionID != "s1" {
 		t.Fatalf("Do = %v, %v, %v", res, resumed, err)
 	}
@@ -65,9 +69,9 @@ func TestResumeTurnStaleStartsFresh(t *testing.T) {
 	var calls []string
 	var note string
 	res, resumed, err := ResumeTurn{
-		Driver:  resumeFake{calls: &calls, resumeErr: errors.New("No conversation found with session ID: s1")},
+		Driver:  resumeFake{calls: &calls, resumeErr: staleClaude("s1")},
 		ID:      "s1",
-		Opts:    RunOptions{Prompt: "p"},
+		Opts:    RunOptions{Prompt: "p", Model: Model{Provider: "claude"}},
 		OnFresh: func(n string) { note = n },
 	}.Do(context.Background())
 	if err != nil || resumed || res.SessionID != "fresh" {
@@ -81,30 +85,20 @@ func TestResumeTurnStaleStartsFresh(t *testing.T) {
 	}
 }
 
-// Non-stale errors (quota, auth) keep failing so callers keep their bookkeeping.
-func TestResumeTurnDefaultRetryKeepsOtherErrors(t *testing.T) {
-	var calls []string
-	_, resumed, err := ResumeTurn{Driver: resumeFake{calls: &calls, resumeErr: errors.New("usage limit reached")}, ID: "s1"}.Do(context.Background())
-	if err == nil || !resumed {
-		t.Fatalf("Do err = %v, resumed = %v", err, resumed)
-	}
-	if len(calls) != 1 {
-		t.Fatalf("calls = %v", calls)
-	}
-}
-
-// A ResumeChecker that knows the session is gone skips the doomed resume.
-func TestResumeTurnCheckerSkipsResume(t *testing.T) {
-	var calls []string
-	var note string
-	_, resumed, err := ResumeTurn{Driver: checkedFake{resumeFake{calls: &calls}}, ID: "s1", Opts: RunOptions{Prompt: "p"}, OnFresh: func(n string) { note = n }}.Do(context.Background())
-	if err != nil || resumed {
-		t.Fatalf("Do err = %v, resumed = %v", err, resumed)
-	}
-	if s := strings.Join(calls, "|"); s != "run p" {
-		t.Fatalf("calls = %q", s)
-	}
-	if !strings.Contains(note, "Codex session file is missing") {
-		t.Fatalf("note = %q", note)
+// Non-stale errors (quota, auth, unverified providers) keep failing so
+// callers keep the session and their bookkeeping.
+func TestResumeTurnNonStaleErrorsFail(t *testing.T) {
+	for _, tc := range []struct {
+		provider string
+		err      error
+	}{
+		{"claude", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "usage limit reached"}},
+		{"codex", &ProviderExitError{Err: errors.New("exit status 1"), Stderr: "No conversation found with session ID: s1"}},
+	} {
+		var calls []string
+		_, resumed, err := ResumeTurn{Driver: resumeFake{calls: &calls, resumeErr: tc.err}, ID: "s1", Opts: RunOptions{Model: Model{Provider: tc.provider}}}.Do(context.Background())
+		if err == nil || !resumed || len(calls) != 1 {
+			t.Fatalf("%s: err=%v resumed=%v calls=%v", tc.provider, err, resumed, calls)
+		}
 	}
 }

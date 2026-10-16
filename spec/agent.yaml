@@ -10,6 +10,13 @@ stop:
 selftest:
   background_duration_ms: 30000
 
+# Provider CLI stderr lines (line prefixes) that mean the session to resume is
+# gone; harnez tui and agent resume then start a fresh session with a note.
+# Only CLI-verified lines belong here: a provider without entries never
+# restarts fresh, its resume errors stay errors (issue 791).
+stale_session_errors:
+  claude: ["No conversation found with session ID"]
+
 # External session discovery reads Codex CLI rollout metadata only. Rollout files
 # are JSONL; only the first session_meta record is needed for identity and cwd.
 external_sessions:

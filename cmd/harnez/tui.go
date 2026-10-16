@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -124,12 +125,18 @@ func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error 
 	rt := router.New(dir)
 	// Persist backend session ids so --session X resumes them after a restart;
 	// without the store the session still works, in memory only.
-	if st, err := router.NewStore(fsutil.ExpandHome(spec.Sessions.Dir), o.sessionID); err != nil {
+	storeDir := fsutil.ExpandHome(spec.Sessions.Dir)
+	if _, err := router.Prune(storeDir, time.Duration(spec.Sessions.MaxAgeDays)*24*time.Hour, o.sessionID); err != nil {
+		tui.AddTurn(app.Chat, tui.RoleNote, "", err.Error())
+	}
+	if st, err := router.NewStore(storeDir, o.sessionID); err != nil {
 		tui.AddTurn(app.Chat, tui.RoleError, "", err.Error()+"; backend sessions are not saved")
 	} else {
 		rt.Store = st
-		if err := rt.Load(); err != nil {
+		if warning, err := rt.Load(); err != nil {
 			tui.AddTurn(app.Chat, tui.RoleError, "", err.Error()+"; starting new backend sessions")
+		} else if warning != "" {
+			tui.AddTurn(app.Chat, tui.RoleNote, "", warning)
 		}
 	}
 	app.AttachRunner(rt.Turn, pane.Post, router.ResolveSpec)
