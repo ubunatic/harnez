@@ -46,7 +46,7 @@ func TestTUISchemaJSONValid(t *testing.T) {
 	if schema.Title == "" {
 		t.Error("expected title in tui.schema.json")
 	}
-	expectedRequired := []string{"header", "chat", "input", "terminal", "keybindings", "theme"}
+	expectedRequired := []string{"header", "chat", "input", "terminal", "keybindings", "editor", "theme"}
 	for _, req := range expectedRequired {
 		found := false
 		for _, r := range schema.Required {
