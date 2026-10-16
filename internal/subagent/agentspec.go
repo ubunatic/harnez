@@ -186,11 +186,15 @@ func loadModelGuides() (map[string]ModelGuide, error) {
 
 var modelGuidesOnce = sync.OnceValues(loadModelGuides)
 
-func ensureModelAliases() error {
+// modelAliasesInit assigns modelAliases once, so concurrent resolvers (the
+// tui event loop and its turn goroutines) never race on the global.
+var modelAliasesInit = sync.OnceValue(func() error {
 	var err error
 	modelAliases, err = modelAliasesOnce()
 	return err
-}
+})
+
+func ensureModelAliases() error { return modelAliasesInit() }
 
 func loadAgentSpec() (agentSpec, error) {
 	data, err := fs.ReadFile(harnez.DefaultFS, agentSpecPath)
