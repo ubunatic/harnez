@@ -98,13 +98,14 @@
     },
     "picker": {
       "type": "object",
-      "required": ["file_trigger", "command_trigger", "max_items", "max_width", "max_indexed_files", "builtins", "labels"],
+      "required": ["file_trigger", "command_trigger", "max_items", "max_width", "max_indexed_files", "skip_dirs", "builtins", "labels"],
       "properties": {
         "file_trigger": { "type": "string", "minLength": 1, "maxLength": 1, "description": "Opens the file picker at the start of a word." },
         "command_trigger": { "type": "string", "minLength": 1, "maxLength": 1, "description": "Opens the command picker at the very start of the prompt." },
         "max_items": { "type": "integer", "minimum": 1, "description": "Rows shown in a picker." },
         "max_width": { "type": "integer", "minimum": 10, "description": "Picker box width cap in display columns." },
         "max_indexed_files": { "type": "integer", "minimum": 1, "description": "File index cap per session." },
+        "skip_dirs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Directory names the non-git file walk skips at any depth (heavy trees such as node_modules)." },
         "builtins": {
           "type": "array",
           "items": {
@@ -116,8 +117,8 @@
         },
         "labels": {
           "type": "object",
-          "required": ["files_title", "commands_title", "indexing", "no_matches"],
-          "properties": { "files_title": { "type": "string", "minLength": 1 }, "commands_title": { "type": "string", "minLength": 1 }, "indexing": { "type": "string", "minLength": 1 }, "no_matches": { "type": "string", "minLength": 1 } },
+          "required": ["files_title", "commands_title", "indexing", "no_matches", "read_error"],
+          "properties": { "files_title": { "type": "string", "minLength": 1 }, "commands_title": { "type": "string", "minLength": 1 }, "indexing": { "type": "string", "minLength": 1 }, "no_matches": { "type": "string", "minLength": 1 }, "read_error": { "type": "string", "minLength": 1, "description": "Replaces no_matches when the file walk failed; {{ .Error }} is the error." } },
           "additionalProperties": false
         }
       },

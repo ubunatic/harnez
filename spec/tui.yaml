@@ -74,7 +74,10 @@ jobs:
 
 # Inline completion pickers, drawn above the prompt at the caret. The file
 # trigger opens at the start of a word, the command trigger only at the very
-# start of the prompt. Selecting inserts "<trigger><name> ".
+# start of the prompt. Selecting replaces the token under the caret (up to the
+# next whitespace) with "<trigger><name> ". A file name with whitespace is
+# inserted as @"my file.go": Claude Code reads that form and other agents take
+# it as one quoted path.
 picker:
   file_trigger: "@"
   command_trigger: "/"
@@ -83,6 +86,9 @@ picker:
   # The file index (git ls-files incl. untracked, minus .gitignore) is built
   # once per session on first use and stops after this many files.
   max_indexed_files: 20000
+  # Outside a git work tree the file index walks the directory tree and skips
+  # hidden directories plus any directory with one of these names, at any depth.
+  skip_dirs: ["node_modules", "vendor", "target", "dist", "build", "__pycache__", "venv"]
   # TUI commands handled before a prompt reaches the model; installed skills
   # (SKILL.md under the agent skill dirs) follow them in the command picker.
   builtins:
@@ -93,6 +99,8 @@ picker:
     commands_title: "Commands"
     indexing: "indexing…"
     no_matches: "no matches"
+    # Shown instead of no_matches when the directory walk failed.
+    read_error: "cannot read files: {{ .Error }}"
 
 # Key names follow loom ("ctrl+j" == "ctrl-j"). Without the kitty keyboard
 # protocol, Ctrl+J and Shift+Enter arrive as Enter (send), so newline also

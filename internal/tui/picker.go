@@ -108,6 +108,14 @@ func (app *AppWidget) pickerLoading() bool {
 	return s.skills.state != lazyReady
 }
 
+// pickerNote is the read error of the open picker's source, if any.
+func (app *AppWidget) pickerNote() string {
+	if s := app.sources; s != nil && app.picker.kind == pickFile {
+		return s.files.note
+	}
+	return ""
+}
+
 func (app *AppWidget) refilter() {
 	p := &app.picker
 	var items []pickItem
@@ -141,8 +149,9 @@ func (app *AppWidget) commandItems() []pickItem {
 }
 
 // rankItems filters items by query with find's match classes and returns
-// at most limit, best first: name class, then a hit in the basename (files)
-// or description (commands, as a weaker class), then shorter, then A-Z.
+// at most limit, best first: name class, then a hit at a word start of the
+// name above a mid-word hit, then a hit in the basename (files) or
+// description (commands, as a weaker class), then shorter, then A-Z.
 // An empty query keeps the source order.
 func rankItems(items []pickItem, query string, limit int) []pickItem {
 	q := find.Normalize(query)
@@ -152,6 +161,7 @@ func rankItems(items []pickItem, query string, limit int) []pickItem {
 	type ranked struct {
 		it          pickItem
 		class, base int
+		mid         bool // query hits only mid-word in the name
 	}
 	var hits []ranked
 	for _, it := range items {
@@ -167,12 +177,15 @@ func rankItems(items []pickItem, query string, limit int) []pickItem {
 		if b == find.ClassNone {
 			b = 4
 		}
-		hits = append(hits, ranked{it, c, b})
+		hits = append(hits, ranked{it, c, b, !wordStartHit(it.Name, q)})
 	}
 	sort.SliceStable(hits, func(i, j int) bool {
 		a, b := hits[i], hits[j]
 		if a.class != b.class {
 			return a.class < b.class
+		}
+		if a.mid != b.mid {
+			return !a.mid // a word-start hit beats a mid-word one
 		}
 		if a.base != b.base {
 			return a.base < b.base
@@ -187,6 +200,39 @@ func rankItems(items []pickItem, query string, limit int) []pickItem {
 		out = append(out, h.it)
 	}
 	return out
+}
+
+// wordStartHit reports whether the normalized query q begins at a word start
+// of name: its start, after one of "/_-. ", or at a lower-to-upper boundary
+// (fooBar). A query with several tokens is compared with spaces dropped.
+func wordStartHit(name, q string) bool {
+	qr := []rune(strings.ReplaceAll(q, " ", ""))
+	if len(qr) == 0 {
+		return false
+	}
+	nr := []rune(name)
+	for i := range nr {
+		if i > 0 {
+			prev, cur := nr[i-1], nr[i]
+			if !strings.ContainsRune("/_-. ", prev) && !(unicode.IsLower(prev) && unicode.IsUpper(cur)) {
+				continue
+			}
+		}
+		if len(nr)-i < len(qr) {
+			break
+		}
+		ok := true
+		for j, r := range qr {
+			if unicode.ToLower(nr[i+j]) != r {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
 }
 
 // pickerKey handles a key while a picker is open and reports whether it was used.
@@ -204,14 +250,44 @@ func (app *AppWidget) pickerKey(name string) bool {
 		// Enter never sends while a picker is open; with nothing to pick it
 		// just closes the picker and keeps the text.
 		if p.sel < len(p.matches) {
-			_, col := app.Prompt.Cursor()
-			app.Prompt.Replace(p.row, p.col, col, app.trigger(p.kind)+p.matches[p.sel].Name+" ")
+			app.insertPick(p.matches[p.sel].Name)
 		}
 		app.closePicker()
 	default:
 		return false
 	}
 	return true
+}
+
+// insertPick replaces the whole token under the caret, from the trigger to the
+// next whitespace (a mid-word pick @fo|o.go swaps the tail too), with the
+// trigger and name followed by one space.
+func (app *AppWidget) insertPick(name string) {
+	p := &app.picker
+	line := []rune(app.Prompt.Line(p.row))
+	_, col := app.Prompt.Cursor()
+	end := col
+	for end < len(line) && !unicode.IsSpace(line[end]) {
+		end++
+	}
+	text := app.trigger(p.kind) + quoteName(name)
+	if end < len(line) && line[end] == ' ' {
+		// Reuse the space that follows instead of doubling it.
+		app.Prompt.Replace(p.row, p.col, end, text)
+		app.Prompt.MoveRight()
+		return
+	}
+	app.Prompt.Replace(p.row, p.col, end, text+" ")
+}
+
+// quoteName wraps names with whitespace in double quotes: @"my file.go".
+// This is the form Claude Code reads for @-mentions with spaces and the
+// shell-like one other agents (codex) take as a single path argument.
+func quoteName(name string) string {
+	if strings.IndexFunc(name, unicode.IsSpace) < 0 {
+		return name
+	}
+	return `"` + name + `"`
 }
 
 // drawPicker paints the open picker above the prompt divider, its left
@@ -235,6 +311,8 @@ func (app *AppWidget) drawPicker(c *loom.Canvas, area loom.Rect) {
 	switch {
 	case app.pickerLoading():
 		status = ps.Labels.Indexing
+	case len(rows) == 0 && app.pickerNote() != "":
+		status = strings.ReplaceAll(ps.Labels.ReadError, "{{ .Error }}", app.pickerNote())
 	case len(rows) == 0:
 		status = ps.Labels.NoMatches
 	}

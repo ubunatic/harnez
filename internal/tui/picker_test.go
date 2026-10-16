@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -282,12 +283,19 @@ func gitRepo(t *testing.T) string {
 }
 
 func TestListRepoFilesHonorsGitignore(t *testing.T) {
+	list := func(dir string, limit int) []string {
+		files, err := listRepoFiles(t.Context(), dir, limit, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return files
+	}
 	dir := gitRepo(t)
-	got := strings.Join(listRepoFiles(t.Context(), dir, 100), ",")
+	got := strings.Join(list(dir, 100), ",")
 	if want := ".gitignore,a.go,new.txt,sub/b.go"; got != want {
 		t.Fatalf("files = %q, want %q", got, want)
 	}
-	if n := len(listRepoFiles(t.Context(), dir, 2)); n != 2 {
+	if n := len(list(dir, 2)); n != 2 {
 		t.Fatalf("cap 2 gave %d files", n)
 	}
 	plain := t.TempDir()
@@ -295,7 +303,7 @@ func TestListRepoFilesHonorsGitignore(t *testing.T) {
 		_ = os.MkdirAll(filepath.Dir(filepath.Join(plain, f)), 0o755)
 		_ = os.WriteFile(filepath.Join(plain, f), nil, 0o644)
 	}
-	if got := strings.Join(listRepoFiles(t.Context(), plain, 100), ","); got != "x.txt" {
+	if got := strings.Join(list(plain, 100), ","); got != "x.txt" {
 		t.Fatalf("walk fallback = %q, want x.txt", got)
 	}
 }
@@ -369,4 +377,161 @@ func stripANSI(s string) string {
 		b.WriteByte(s[i])
 	}
 	return b.String()
+}
+
+func TestRankWordStartAboveMidWord(t *testing.T) {
+	items := fileItems([]string{"scripts/lint.sh", "internal/tui/app.go", "docs/PrintJob.md", "src/my_int.go", "src/splint.go"})
+	var got []string
+	for _, it := range rankItems(items, "int", 10) {
+		got = append(got, it.Name)
+	}
+	// Word-start hits first (basename hit breaks the tie), then mid-word ones.
+	want := "src/my_int.go,internal/tui/app.go,src/splint.go,scripts/lint.sh,docs/PrintJob.md"
+	if strings.Join(got, ",") != want {
+		t.Fatalf("int = %v, want %s", got, want)
+	}
+	for _, tc := range []struct {
+		name, q string
+		want    bool
+	}{
+		{"a/internal", "int", true}, {"a_int", "int", true}, {"a-int", "int", true}, {"a.int", "int", true},
+		{"fooInt", "int", true}, {"lint", "int", false}, {"FOOint", "int", false}, {"a/in", "int", false},
+	} {
+		if wordStartHit(tc.name, tc.q) != tc.want {
+			t.Errorf("wordStartHit(%q, %q) = %v, want %v", tc.name, tc.q, !tc.want, tc.want)
+		}
+	}
+}
+
+func TestMidWordPickReplacesWholeToken(t *testing.T) {
+	app, _, _ := newPickerApp(t, []string{"foo.go", "bar.go"})
+	typeText(app, "see @foo.go now")
+	// Caret after "@fo", inside the token.
+	for range len("o.go now") {
+		app.Prompt.MoveLeft()
+	}
+	app.closePicker()
+	app.picker = picker{kind: pickFile, row: 0, col: 4}
+	app.syncPicker()
+	if app.picker.query != "fo" {
+		t.Fatalf("query %q, caret not inside token", app.picker.query)
+	}
+	app.ConsumeKey(loom.KeyEvent{Key: "tab"})
+	if got, want := app.Prompt.Text(), "see @foo.go now"; got != want {
+		t.Fatalf("text %q, want %q (tail replaced, no doubled space)", got, want)
+	}
+	if _, col := app.Prompt.Cursor(); col != len("see @foo.go ") {
+		t.Fatalf("caret col %d, want after the space", col)
+	}
+	typeText(app, "x")
+	if got := app.Prompt.Text(); got != "see @foo.go xnow" {
+		t.Fatalf("typing after pick: %q", got)
+	}
+
+	app, _, _ = newPickerApp(t, []string{"bar.go"})
+	typeText(app, "@bxx.go")
+	for range len("xx.go") {
+		app.Prompt.MoveLeft()
+	}
+	app.picker = picker{kind: pickFile, row: 0, col: 0}
+	app.syncPicker()
+	app.ConsumeKey(loom.KeyEvent{Key: "tab"})
+	if got := app.Prompt.Text(); got != "@bar.go " {
+		t.Fatalf("token at end of line: %q, want %q", got, "@bar.go ")
+	}
+}
+
+func TestPickPathWithSpacesIsQuoted(t *testing.T) {
+	app, _, _ := newPickerApp(t, []string{"my file.go", "plain.go"})
+	typeText(app, "@my")
+	app.ConsumeKey(loom.KeyEvent{Key: "tab"})
+	if got, want := app.Prompt.Text(), `@"my file.go" `; got != want {
+		t.Fatalf("text %q, want %q", got, want)
+	}
+	app, _, _ = newPickerApp(t, []string{"my file.go", "plain.go"})
+	typeText(app, "@pl")
+	app.ConsumeKey(loom.KeyEvent{Key: "tab"})
+	if got := app.Prompt.Text(); got != "@plain.go " {
+		t.Fatalf("unquoted: %q", got)
+	}
+}
+
+func TestWalkSkipsHeavyDirsAndReportsErrors(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"a.go", "node_modules/x/y.js", "src/node_modules/z.js", "src/b.go"} {
+		_ = os.MkdirAll(filepath.Dir(filepath.Join(dir, f)), 0o755)
+		_ = os.WriteFile(filepath.Join(dir, f), nil, 0o644)
+	}
+	spec, err := LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spec.Picker.SkipDirs) == 0 {
+		t.Fatal("spec picker.skip_dirs is empty")
+	}
+	files, err := listRepoFiles(t.Context(), dir, 100, spec.Picker.SkipDirs)
+	if err != nil || strings.Join(files, ",") != "a.go,src/b.go" {
+		t.Fatalf("files %v err %v, want a.go,src/b.go", files, err)
+	}
+
+	// A missing directory is a read error, not "no matches".
+	missing := filepath.Join(dir, "gone")
+	if _, err := listRepoFiles(t.Context(), missing, 10, nil); err == nil {
+		t.Fatal("missing dir: want a read error")
+	}
+	app := NewAppWidget(spec, "m", "s", nil)
+	l := &asyncLoop{}
+	app.AttachPickers(missing, nil, l.post)
+	t.Cleanup(app.Shutdown)
+	typeText(app, "@")
+	l.until(t, func() bool { return !app.pickerLoading() })
+	scr := screen(app)
+	if strings.Contains(scr, spec.Picker.Labels.NoMatches) || !strings.Contains(scr, "cannot read files") {
+		t.Fatalf("want the read error note, got:\n%s", scr)
+	}
+}
+
+func TestEscClosesOnlyPickerDuringRunningTurn(t *testing.T) {
+	started := make(chan struct{})
+	app, l := newRunnerApp(t, func(ctx context.Context, _, _ string, _ func(router.Chunk)) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	app.AttachPickers(t.TempDir(), nil, l.post)
+	t.Cleanup(app.Shutdown)
+	app.sources.files = lazyList{state: lazyReady, items: fileItems(repoFiles)}
+	typeLine(app, "long task")
+	<-started
+	typeText(app, "@ap")
+	if !app.picker.isOpen() || !app.Busy() {
+		t.Fatalf("picker open %v busy %v", app.picker.isOpen(), app.Busy())
+	}
+	app.ConsumeKey(loom.KeyEvent{Key: "esc"})
+	if app.picker.isOpen() || !app.Busy() || app.QuitRequested {
+		t.Fatalf("Esc: picker open %v, busy %v, quit %v; want closed picker, turn still running", app.picker.isOpen(), app.Busy(), app.QuitRequested)
+	}
+	app.ConsumeKey(loom.KeyEvent{Key: "esc"})
+	l.drainUntil(t, app)
+	if app.Busy() {
+		t.Fatal("second Esc should cancel the turn")
+	}
+}
+
+func TestTabSelectsPickerItemWhileBusy(t *testing.T) {
+	app, _, _ := newPickerApp(t, repoFiles)
+	typeText(app, "@tui/ap")
+	if r := app.ConsumeKey(loom.KeyEvent{Key: "tab"}); r != loom.Handled() {
+		t.Fatal("Tab with the picker open must be handled")
+	}
+	if got := app.Prompt.Text(); got != "@internal/tui/app.go " {
+		t.Fatalf("Tab text %q", got)
+	}
+	if app.picker.isOpen() {
+		t.Fatal("picker still open after Tab")
+	}
+	// With no picker open Tab is left to the container (focus move).
+	if r := app.ConsumeKey(loom.KeyEvent{Key: "tab"}); r == loom.Handled() {
+		t.Fatal("Tab with no picker must not be consumed")
+	}
 }

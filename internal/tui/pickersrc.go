@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ const (
 type lazyList struct {
 	state int
 	items []pickItem
+	note  string // read error shown instead of "no matches"
 }
 
 // pickerSources feeds the pickers. Loads run in goroutines; their results
@@ -48,6 +50,7 @@ type pickerSources struct {
 	dir       string
 	skillDirs []string
 	maxFiles  int
+	skipDirs  []string
 	post      func(func())
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -63,12 +66,13 @@ func (app *AppWidget) AttachPickers(dir string, skillDirs []string, post func(fu
 	ctx, cancel := context.WithCancel(context.Background())
 	app.sources = &pickerSources{
 		dir: dir, skillDirs: skillDirs, maxFiles: app.Spec.Picker.MaxIndexedFiles,
-		post: post, ctx: ctx, cancel: cancel,
+		skipDirs: app.Spec.Picker.SkipDirs,
+		post:     post, ctx: ctx, cancel: cancel,
 	}
 }
 
 // ensure starts loading l once; done runs on the UI loop after the items land.
-func (s *pickerSources) ensure(l *lazyList, load func(context.Context) []pickItem, done func()) {
+func (s *pickerSources) ensure(l *lazyList, load func(context.Context) ([]pickItem, string), done func()) {
 	if l.state != lazyIdle {
 		return
 	}
@@ -76,9 +80,9 @@ func (s *pickerSources) ensure(l *lazyList, load func(context.Context) []pickIte
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		items := load(s.ctx)
+		items, note := load(s.ctx)
 		s.post(func() {
-			l.items, l.state = items, lazyReady
+			l.items, l.note, l.state = items, note, lazyReady
 			done()
 		})
 	}()
@@ -90,8 +94,13 @@ func (s *pickerSources) shutdown() {
 	s.wg.Wait()
 }
 
-func (s *pickerSources) loadFiles(ctx context.Context) []pickItem {
-	return fileItems(listRepoFiles(ctx, s.dir, s.maxFiles))
+func (s *pickerSources) loadFiles(ctx context.Context) ([]pickItem, string) {
+	files, err := listRepoFiles(ctx, s.dir, s.maxFiles, s.skipDirs)
+	note := ""
+	if err != nil {
+		note = err.Error()
+	}
+	return fileItems(files), note
 }
 
 // fileItems wraps slash paths as picker items ranked by path and basename.
@@ -103,14 +112,15 @@ func fileItems(paths []string) []pickItem {
 	return items
 }
 
-func (s *pickerSources) loadSkills(context.Context) []pickItem {
-	return listSkills(s.skillDirs)
+func (s *pickerSources) loadSkills(context.Context) ([]pickItem, string) {
+	return listSkills(s.skillDirs), ""
 }
 
 // listRepoFiles lists up to limit repository files relative to dir, tracked
 // and untracked, honoring .gitignore (git ls-files). Outside a git work tree
-// it walks dir, skipping hidden directories.
-func listRepoFiles(ctx context.Context, dir string, limit int) []string {
+// it walks dir, skipping hidden directories and those named in skipDirs. The
+// error is the first read error of a walk; the files found are still returned.
+func listRepoFiles(ctx context.Context, dir string, limit int, skipDirs []string) ([]string, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
@@ -119,7 +129,7 @@ func listRepoFiles(ctx context.Context, dir string, limit int) []string {
 		err = cmd.Start()
 	}
 	if err != nil {
-		return walkFiles(ctx, dir, limit)
+		return walkFiles(ctx, dir, limit, skipDirs)
 	}
 	seen := map[string]bool{}
 	var files []string
@@ -136,10 +146,10 @@ func listRepoFiles(ctx context.Context, dir string, limit int) []string {
 		cancel() // the cap cut the listing short; stop git
 	}
 	if err := cmd.Wait(); err != nil && len(files) == 0 && ctx.Err() == nil {
-		return walkFiles(ctx, dir, limit)
+		return walkFiles(ctx, dir, limit, skipDirs)
 	}
 	sort.Strings(files) // git lists untracked files apart from tracked ones
-	return files
+	return files, nil
 }
 
 func splitNUL(data []byte, atEOF bool) (int, []byte, error) {
@@ -152,14 +162,24 @@ func splitNUL(data []byte, atEOF bool) (int, []byte, error) {
 	return 0, nil, nil
 }
 
-func walkFiles(ctx context.Context, dir string, limit int) []string {
+func walkFiles(ctx context.Context, dir string, limit int, skipDirs []string) ([]string, error) {
 	var files []string
+	var first error
 	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || ctx.Err() != nil {
+		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if err != nil {
+			if first == nil {
+				first = err
+			}
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if d.IsDir() {
-			if p != dir && strings.HasPrefix(d.Name(), ".") {
+			if p != dir && (strings.HasPrefix(d.Name(), ".") || slices.Contains(skipDirs, d.Name())) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -172,7 +192,7 @@ func walkFiles(ctx context.Context, dir string, limit int) []string {
 		}
 		return nil
 	})
-	return files
+	return files, first
 }
 
 // listSkills reads <dir>/<name>/SKILL.md in each dir; the first dir that

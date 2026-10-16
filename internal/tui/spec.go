@@ -105,6 +105,9 @@ type PickerLabelsSpec struct {
 	CommandsTitle string `yaml:"commands_title"`
 	Indexing      string `yaml:"indexing"`
 	NoMatches     string `yaml:"no_matches"`
+	// ReadError replaces NoMatches when the file index hit a read error;
+	// placeholder: {{ .Error }}.
+	ReadError string `yaml:"read_error"`
 }
 
 // PickerSpec configures the inline @ file and / command pickers.
@@ -114,6 +117,7 @@ type PickerSpec struct {
 	MaxItems        int              `yaml:"max_items"`
 	MaxWidth        int              `yaml:"max_width"`
 	MaxIndexedFiles int              `yaml:"max_indexed_files"`
+	SkipDirs        []string         `yaml:"skip_dirs"`
 	Builtins        []PickerCommand  `yaml:"builtins"`
 	Labels          PickerLabelsSpec `yaml:"labels"`
 }
@@ -205,7 +209,7 @@ func validatePicker(s *Spec) error {
 		return fmt.Errorf("%s: picker max_items >= 1, max_width >= 10 and max_indexed_files >= 1 required", specPath)
 	}
 	l := p.Labels
-	if l.FilesTitle == "" || l.CommandsTitle == "" || l.Indexing == "" || l.NoMatches == "" {
+	if l.FilesTitle == "" || l.CommandsTitle == "" || l.Indexing == "" || l.NoMatches == "" || l.ReadError == "" {
 		return fmt.Errorf("%s: picker labels must be set", specPath)
 	}
 	kb := s.Keybindings
