@@ -133,8 +133,14 @@ func TestWatchPTYLifecycle(t *testing.T) {
 			if err := cmd.Wait(); err != nil {
 				t.Fatalf("watch helper: %v\n%s", err, transcript.String())
 			}
-			if !quitAt.IsZero() && time.Since(quitAt) >= time.Second {
-				t.Errorf("quit took %s, want <1s", time.Since(quitAt))
+			// The Go race runtime sleeps ~1s at process exit (GORACE
+			// atexit_sleep_ms), so race builds get a 4x budget.
+			quitBudget := time.Second
+			if raceEnabled {
+				quitBudget *= 4
+			}
+			if !quitAt.IsZero() && time.Since(quitAt) >= quitBudget {
+				t.Errorf("quit took %s, want <%s", time.Since(quitAt), quitBudget)
 			}
 			s := transcript.String()
 			for _, marker := range []string{"\x1b[?1049h", "\x1b[0m\x1b[?25h\x1b[?1049l", "TERMINAL_RESTORED"} {
