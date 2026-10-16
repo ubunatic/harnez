@@ -350,7 +350,12 @@ func TestRunRate_LatencyBudget(t *testing.T) {
 	stateDir := filepath.Join(tmp, "state")
 	getenv := func(string) string { return "" }
 
-	const budgetMs = 50
+	// Race instrumentation slows SQLite and file I/O several-fold, so race
+	// builds get a 4x budget; the sub-50ms target applies to normal builds.
+	budgetMs := 50
+	if raceEnabled {
+		budgetMs *= 4
+	}
 
 	coldStart := time.Now()
 	if err := runRate([]string{"Read", "4", "cold call", "proj/1-t"}, rateOptions{
@@ -359,7 +364,7 @@ func TestRunRate_LatencyBudget(t *testing.T) {
 		t.Fatalf("cold runRate() error = %v", err)
 	}
 	coldMs := float64(time.Since(coldStart)) / float64(time.Millisecond)
-	if coldMs > budgetMs {
+	if coldMs > float64(budgetMs) {
 		t.Errorf("cold end-to-end runRate took %.2fms, want sub-%dms", coldMs, budgetMs)
 	}
 	t.Logf("cold end-to-end runRate: %.2fms", coldMs)
@@ -377,7 +382,7 @@ func TestRunRate_LatencyBudget(t *testing.T) {
 		if ms > maxWarmMs {
 			maxWarmMs = ms
 		}
-		if ms > budgetMs {
+		if ms > float64(budgetMs) {
 			t.Errorf("warm runRate() %d took %.2fms, want sub-%dms", i, ms, budgetMs)
 		}
 	}
