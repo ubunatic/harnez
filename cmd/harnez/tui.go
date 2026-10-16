@@ -34,6 +34,8 @@ Built on ubunatic.com/loom, providing a header status line, scrollable chat thre
 and multiline prompt box (Enter to send; Shift+Enter, Ctrl+J or Alt+Enter for a
 newline). Shift+Enter and Ctrl+J need a terminal with the kitty keyboard
 protocol; elsewhere they send, so use Alt+Enter or end the line with "\".
+Ctrl+G edits the prompt in $VISUAL, $EDITOR or the first editor.fallbacks
+entry of spec/tui.yaml found on PATH.
 
 Prompts run through the active model's harness CLI (claude, codex, agy, pi), so
 turns draw on the matching subscription; the next prompt resumes the same
@@ -104,6 +106,7 @@ func runTUI(_ context.Context, out io.Writer, spec *tui.Spec, o *tuiOpts) error 
 	}
 	rt := router.New(dir)
 	app.AttachRunner(rt.Turn, pane.Post, router.ResolveSpec)
+	app.AttachEditor(pane.Suspend, tui.NewEditor(spec.Editor))
 	// A running provider turn must not outlive the TUI.
 	defer app.Shutdown()
 	return pane.Run(app)

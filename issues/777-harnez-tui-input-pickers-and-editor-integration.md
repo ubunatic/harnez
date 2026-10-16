@@ -1,6 +1,6 @@
 # 777 — harnez tui Interactive Input Pickers (@ files, / skills) and Ctrl+G Editor Integration
 
-**Status**: Draft
+**Status**: In Progress — Ctrl+G editor done; `@`/`/` pickers open
 **Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Interactive TUI / UX
@@ -33,3 +33,9 @@ When authoring prompts in an interactive coding agent, developers frequently nee
 - Implement Loom popover widget for `@` and `/` inline completions.
 - Implement `$EDITOR` process spawn helper in `internal/tui/editor.go` with terminal suspension/restoration.
 - Add unit tests for trigger parsing (`@`, `/`, `$`), buffer insertion, and editor file roundtrip.
+
+## 4. Progress (2026-10-16)
+- Done: Ctrl+G (`keybindings.open_editor`) runs `$VISUAL`/`$EDITOR`/`editor.fallbacks`
+  under `Pane.Suspend` (`internal/tui/editor.go`); exit 0 loads the file, non-zero keeps
+  the prompt with a note; temp file always removed. Posts during Suspend apply on resume.
+- Open: `@` file picker, `/`/`$` skill picker.

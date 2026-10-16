@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/tui.schema.json",
   "title": "harnez tui interactive harness layout and keybindings spec",
   "type": "object",
-  "required": ["header", "chat", "input", "terminal", "keybindings", "theme"],
+  "required": ["header", "chat", "input", "terminal", "editor", "keybindings", "theme"],
   "properties": {
     "header": {
       "type": "object",
@@ -49,6 +49,15 @@
       "required": ["kitty_keyboard"],
       "properties": {
         "kitty_keyboard": { "type": "boolean", "description": "Enable the kitty keyboard protocol (Shift+Enter, Ctrl+J as distinct keys)." }
+      },
+      "additionalProperties": false
+    },
+    "editor": {
+      "type": "object",
+      "required": ["fallbacks", "temp_pattern"],
+      "properties": {
+        "fallbacks": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Editors tried on PATH when $VISUAL and $EDITOR are unset." },
+        "temp_pattern": { "type": "string", "minLength": 1, "description": "os.CreateTemp pattern for the prompt file." }
       },
       "additionalProperties": false
     },

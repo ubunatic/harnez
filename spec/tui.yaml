@@ -29,6 +29,12 @@ terminal:
   # Terminals without support ignore it.
   kitty_keyboard: true
 
+# External prompt editor (open_editor key): $VISUAL, then $EDITOR, then the
+# first fallback found on PATH.
+editor:
+  fallbacks: ["nvim", "vim", "nano", "vi"]
+  temp_pattern: "harnez-prompt-*.md"
+
 # Key names follow loom ("ctrl+j" == "ctrl-j"). Without the kitty keyboard
 # protocol, Ctrl+J and Shift+Enter arrive as Enter (send), so newline also
 # accepts Alt+Enter and a trailing "\" + Enter.

@@ -1,6 +1,6 @@
 # 774 — Research and Spec Harnez TUI Interactive Harness
 
-**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in
+**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 Ctrl+G editor in
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Agent Harness
@@ -43,7 +43,7 @@ This issue serves as the overarching Epic tracking the implementation of `harnez
 
 | Loom | Gap | Blocks |
 |---|---|---|
-| 319 | `Pane.Suspend/Resume` to hand the tty to a child | #777 Ctrl+G, #779 Ctrl+O |
+| 319 | `Pane.Suspend/Resume` to hand the tty to a child | #777 Ctrl+G (done), #779 Ctrl+O |
 | 320 | `Pane.Post` to mutate widgets on the event loop | #776 streaming, #778 job logs |
 | 321 | Opt-in kitty keyboard protocol (Shift+Enter, Ctrl+J) | #775 newline key (done) |
 

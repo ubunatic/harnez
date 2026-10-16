@@ -74,6 +74,12 @@ func TestTUISpecTerminalAndNewlineKeys(t *testing.T) {
 			t.Errorf("newline keybindings %v lack %q", spec.Keybindings.Newline, k)
 		}
 	}
+	if !bound("ctrl-g", spec.Keybindings.OpenEditor) {
+		t.Error("open_editor should bind ctrl+g")
+	}
+	if len(spec.Editor.Fallbacks) == 0 || spec.Editor.TempPattern == "" {
+		t.Errorf("editor spec incomplete: %+v", spec.Editor)
+	}
 	if bound("enter", spec.Keybindings.Newline) || !bound("enter", spec.Keybindings.SendPrompt) {
 		t.Error("enter must send, not insert a newline")
 	}

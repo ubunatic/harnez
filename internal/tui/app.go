@@ -22,6 +22,35 @@ type AppWidget struct {
 	post    func(func())
 	resolve func(string) (string, error)
 	turn    *turnState
+	suspend func(func() error) error
+	editor  *Editor
+}
+
+// AttachEditor enables the open_editor key: suspend hands the terminal to a
+// child (loom Pane.Suspend) while ed edits the prompt.
+func (app *AppWidget) AttachEditor(suspend func(func() error) error, ed *Editor) {
+	app.suspend, app.editor = suspend, ed
+}
+
+// openEditor replaces the prompt with the external editor's result; on
+// failure the prompt is kept and a short note goes to the chat. Post
+// callbacks of a running turn queue up during Suspend and apply on resume.
+func (app *AppWidget) openEditor() {
+	if app.suspend == nil || app.editor == nil {
+		AddTurn(app.Chat, RoleError, "", "external editor needs an interactive terminal")
+		return
+	}
+	var text string
+	err := app.suspend(func() error {
+		var err error
+		text, err = app.editor.Edit(app.Prompt.Text())
+		return err
+	})
+	if err != nil {
+		AddTurn(app.Chat, RoleError, "", "editor: "+err.Error()+"; prompt kept")
+		return
+	}
+	app.Prompt.SetText(text)
 }
 
 // NewAppWidget instantiates a new Loom AppWidget for harnez tui.
@@ -96,6 +125,8 @@ func (app *AppWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
 	case bound(name, kb.Quit):
 		app.QuitRequested = true
 		return loom.Quit()
+	case bound(name, kb.OpenEditor):
+		app.openEditor()
 	case bound(name, kb.Newline):
 		app.Prompt.InsertNewline()
 	case bound(name, kb.SendPrompt):

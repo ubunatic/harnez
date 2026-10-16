@@ -72,6 +72,7 @@ type Spec struct {
 	Chat        ChatSpec        `yaml:"chat"`
 	Input       InputSpec       `yaml:"input"`
 	Terminal    TerminalSpec    `yaml:"terminal"`
+	Editor      EditorSpec      `yaml:"editor"`
 	Keybindings KeybindingsSpec `yaml:"keybindings"`
 	Theme       ThemeSpec       `yaml:"theme"`
 }
