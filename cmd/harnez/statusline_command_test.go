@@ -13,6 +13,7 @@ import (
 
 	_ "modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/usage"
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
@@ -227,6 +228,7 @@ func TestAGYStatuslineLockedStoreStillPrintsWithinBudget(t *testing.T) {
 
 func TestAGYStatuslineUsesPayloadInsteadOfStoredQuota(t *testing.T) {
 	root := t.TempDir()
+	t.Cleanup(usage.WaitObservations) // join background statusline write before TempDir removal
 	dataHome := filepath.Join(root, "data")
 	t.Setenv("HOME", filepath.Join(root, "home"))
 	t.Setenv("XDG_DATA_HOME", dataHome)

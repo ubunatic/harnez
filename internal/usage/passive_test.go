@@ -57,6 +57,7 @@ func TestPassiveWindowsAcceptPartialAndAGYQuota(t *testing.T) {
 
 func TestStatuslineIngestionWritesClaudeQuotaObservation(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "claude-statusline.sqlite")
+	t.Cleanup(WaitObservations)
 	store, err := usagestore.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
@@ -156,6 +157,7 @@ func TestPassiveWriteDeduplicatesAndBestReadingUsesPrecedence(t *testing.T) {
 
 func TestPassiveObservationReturnsQuicklyWhenDatabaseLocked(t *testing.T) {
 	dataHome := t.TempDir()
+	t.Cleanup(WaitObservations) // runs before TempDir removal (LIFO)
 	if err := os.MkdirAll(filepath.Join(dataHome, "harnez"), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -188,6 +190,7 @@ func TestPassiveObservationReturnsQuicklyWhenDatabaseLocked(t *testing.T) {
 
 func TestStatuslineObservationLargeStoreCompletesWithinBudget(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "large.sqlite")
+	t.Cleanup(WaitObservations) // runs before TempDir removal (LIFO)
 	store, err := usagestore.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
@@ -276,6 +279,7 @@ func TestStatuslineObservationLargeStoreCompletesWithinBudget(t *testing.T) {
 
 func TestStatuslineSkipsMigrationUntilUsageStoreCommand(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "old.sqlite")
+	t.Cleanup(WaitObservations)
 	store, err := usagestore.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)

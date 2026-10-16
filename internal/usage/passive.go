@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"ubunatic.com/harnez/internal/usagestore"
@@ -30,6 +31,15 @@ type passivePayload struct {
 		ResetsAt          string   `json:"resets_at"`
 	} `json:"quota"`
 }
+
+// observations tracks in-flight background statusline writes so callers (tests,
+// shutdown paths) can join them before removing the database directory.
+var observations sync.WaitGroup
+
+// WaitObservations blocks until all background statusline writes started by
+// ObserveStatusline/ObserveStatuslineAt have finished and closed their store.
+// Each write is bounded by its own budget, so this returns promptly.
+func WaitObservations() { observations.Wait() }
 
 // ObserveStatusline accepts only quota values and reset timestamps from a
 // Claude or AGY statusline payload. It deliberately never stores the raw JSON.
@@ -67,7 +77,9 @@ func ObserveStatuslineAt(parent context.Context, provider string, payload []byte
 	if parent.Err() != nil {
 		return
 	}
+	observations.Add(1)
 	go func() {
+		defer observations.Done()
 		ctx, cancel := context.WithTimeout(parent, budget)
 		defer cancel()
 		if ctx.Err() != nil {
