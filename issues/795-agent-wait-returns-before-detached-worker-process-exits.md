@@ -1,6 +1,6 @@
 # 795 — agent wait returns before detached worker process exits
 
-**Status**: Draft
+**Status**: Closed — detached worker identity (WorkerPID/Starttime) kept as a writer root until the process exits
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
