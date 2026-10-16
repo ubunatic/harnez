@@ -1,6 +1,6 @@
 # 789 — TestDeliverInboxWaitsForIdleAndWritesFIFOBracketedPaste races on a shared bytes.Buffer under -race
 
-**Status**: Open
+**Status**: Closed — Test-only race: terminal buffer in the test is now mutex-guarded (lockedBuffer); production code is not racy.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug / Tests
