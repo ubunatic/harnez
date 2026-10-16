@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -85,6 +87,27 @@ func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte,
 		return b, err
 	}
 	return b, readErr
+}
+
+// runProviderCLI runs the provider CLI name in dir and passes each stdout
+// line to fn as it arrives; a nil fn is the batch path. A command override
+// replaces the process and its output lines are replayed to fn. A non-zero
+// exit carries the trimmed stderr in the error.
+func runProviderCLI(ctx context.Context, name, dir string, override func(context.Context, string, ...string) ([]byte, error), fn func([]byte), args []string) ([]byte, error) {
+	if override != nil {
+		b, err := override(ctx, name, args...)
+		if fn != nil {
+			_, _ = readLines(bytes.NewReader(b), fn)
+		}
+		return b, err
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
+	b, err := providerLines(ctx, cmd, fn)
+	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+		return b, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+	}
+	return b, err
 }
 
 // readLines collects all of rd and calls fn for every line, including a

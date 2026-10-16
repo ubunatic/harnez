@@ -31,6 +31,12 @@ const fakeClaudeResult = `{"type":"result","subtype":"success","is_error":false,
 // $FAKE_ARGS, prints stream, waits for $FAKE_GATE (when set), then prints tail.
 func installFakeClaude(t *testing.T, stream, tail string) (argsFile string) {
 	t.Helper()
+	return installFakeCLI(t, "claude", stream, tail)
+}
+
+// installFakeCLI is installFakeClaude for any provider binary name.
+func installFakeCLI(t *testing.T, name, stream, tail string) (argsFile string) {
+	t.Helper()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "stream.jsonl"), []byte(stream), 0o644); err != nil {
 		t.Fatal(err)
@@ -43,7 +49,7 @@ func installFakeClaude(t *testing.T, stream, tail string) (argsFile string) {
 		"cat \"" + filepath.Join(dir, "stream.jsonl") + "\"\n" +
 		"if test -n \"$FAKE_GATE\"\nthen\n  while ! test -e \"$FAKE_GATE\"\n  do\n    sleep 0.01\n  done\nfi\n" +
 		". \"" + filepath.Join(dir, "tail.sh") + "\"\n"
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -203,20 +209,50 @@ func processAlive(pid int) bool {
 }
 
 func TestPiStreamDriverEmitsSessionAndMessages(t *testing.T) {
-	out := `{"type":"session","id":"pi-1"}
+	head := `{"type":"session","id":"pi-1"}
 {"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"first"}],"stopReason":"toolUse"}}
-{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"final"}],"stopReason":"stop"}}
+`
+	tail := `{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"final"}],"stopReason":"stop"}}
 {"type":"agent_settled"}
 `
-	d := StreamDriverFor(Model{Provider: "pi", Name: "default", Tier: "low"}, t.TempDir()).(PiStreamDriver)
-	d.Command = func(context.Context, string, ...string) ([]byte, error) { return []byte(out), nil }
+	installFakeCLI(t, "pi", head, "printf '%s' '"+tail+"'\n")
+	gate := filepath.Join(t.TempDir(), "gate")
+	t.Setenv("FAKE_GATE", gate)
+	d := StreamDriverFor(Model{Provider: "pi", Name: "default", Tier: "low"}, t.TempDir())
+	if _, ok := d.(PiStreamDriver); !ok {
+		t.Fatalf("StreamDriverFor(pi) = %T", d)
+	}
 	var got []string
-	r, err := d.RunStream(context.Background(), RunOptions{Prompt: "p"}, func(ev Event) { got = append(got, ev.Kind+":"+ev.Text) })
+	r, err := d.(StreamingDriver).RunStream(context.Background(), RunOptions{Prompt: "p"}, func(ev Event) {
+		got = append(got, ev.Kind+":"+ev.Text)
+		if ev.Kind == "message" && ev.Text == "first" {
+			// The script is still blocked on the gate: this event is live.
+			if err := os.WriteFile(gate, nil, 0o644); err != nil {
+				t.Error(err)
+			}
+		}
+	})
 	if err != nil || r.SessionID != "pi-1" || r.Response != "final" {
 		t.Fatalf("RunStream = %+v, %v", r, err)
 	}
 	want := []string{"session:pi-1", "message:first", "message:final", "other:"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("events = %q, want %q", got, want)
+	}
+}
+
+func TestReadLinesDeliversOversizedLineIntact(t *testing.T) {
+	big := `{"type":"user","content":"` + strings.Repeat("x", 200*1024) + `"}`
+	in := `{"type":"a"}` + "\n" + big + "\n" + `{"type":"b"}`
+	var got []string
+	all, err := readLines(strings.NewReader(in), func(l []byte) { got = append(got, string(l)) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0] != `{"type":"a"}` || got[1] != big || got[2] != `{"type":"b"}` {
+		t.Fatalf("got %d lines, big intact = %v", len(got), len(got) > 1 && got[1] == big)
+	}
+	if string(all) != in {
+		t.Fatalf("collected %d bytes, want %d", len(all), len(in))
 	}
 }

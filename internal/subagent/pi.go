@@ -25,23 +25,8 @@ func (d PiDriver) command(ctx context.Context, args ...string) ([]byte, error) {
 	return d.commandLines(ctx, nil, args...)
 }
 
-// commandLines runs pi and passes each stdout line to fn as it arrives; a
-// nil fn is the batch path. A Command override replays its output lines.
 func (d PiDriver) commandLines(ctx context.Context, fn func([]byte), args ...string) ([]byte, error) {
-	if d.Command != nil {
-		b, err := d.Command(ctx, "pi", args...)
-		if fn != nil {
-			_, _ = readLines(bytes.NewReader(b), fn)
-		}
-		return b, err
-	}
-	cmd := exec.CommandContext(ctx, "pi", args...)
-	cmd.Dir = d.Dir
-	b, err := providerLines(ctx, cmd, fn)
-	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-		return b, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
-	}
-	return b, err
+	return runProviderCLI(ctx, "pi", d.Dir, d.Command, fn, args)
 }
 
 func (d PiDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {

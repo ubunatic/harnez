@@ -1,11 +1,9 @@
 package subagent
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -20,24 +18,10 @@ func (d ClaudeDriver) command(ctx context.Context, args ...string) ([]byte, erro
 	return d.commandLines(ctx, nil, args...)
 }
 
-// commandLines runs claude and passes each stdout line to fn as it arrives;
-// a nil fn is the batch path. A Command override replays its output lines.
 func (d ClaudeDriver) commandLines(ctx context.Context, fn func([]byte), args ...string) ([]byte, error) {
-	if d.Command != nil {
-		b, err := d.Command(ctx, "claude", args...)
-		if fn != nil {
-			_, _ = readLines(bytes.NewReader(b), fn)
-		}
-		return b, err
-	}
-	cmd := exec.CommandContext(ctx, "claude", args...)
-	cmd.Dir = d.Dir
-	b, err := providerLines(ctx, cmd, fn)
-	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-		return b, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
-	}
-	return b, err
+	return runProviderCLI(ctx, "claude", d.Dir, d.Command, fn, args)
 }
+
 func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 	start := time.Now()
 	b, err := d.command(ctx, claudeRunArgs(o.Model, o.Prompt)...)
