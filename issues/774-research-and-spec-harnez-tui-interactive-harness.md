@@ -6,6 +6,8 @@
 **Category**: Interactive TUI / Agent Harness
 **Related**: #439, #607, #620
 
+**Decisions**: [docs/HarnezTUI.md](../docs/HarnezTUI.md)
+
 ---
 
 ## 1. Problem & Motivation
