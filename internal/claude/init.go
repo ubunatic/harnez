@@ -497,7 +497,7 @@ func backfillRulesHeader(path, header string) (bool, error) {
 // isRulesHeaderLine reports whether line is a harnez-generated rules header,
 // current or older wording.
 func isRulesHeaderLine(line string) bool {
-	return strings.HasPrefix(line, "**Before any work, read") &&
+	return (strings.HasPrefix(line, "**Before any work, read") || strings.HasPrefix(line, "**Once per session, ")) &&
 		strings.HasSuffix(line, "**") &&
 		strings.Contains(line, ".harnez/rules/")
 }

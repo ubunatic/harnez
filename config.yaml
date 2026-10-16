@@ -574,7 +574,7 @@ agents_md:
     # Language Conventions section is generated dynamically from -l flags
     sections: []
   rules:
-    header: "**Before any work, read all Harnez rules in one call: `harnez read .harnez/rules/Tools.md .harnez/rules/Issues.md .harnez/rules/Quota.md .harnez/rules/Subagents.md .harnez/rules/Output.md .harnez/rules/Local.md`. This follows Index.md order; Local.md overrides the other rules.**"
+    header: "**Once per session, before your first task, read all Harnez rules in one call: `harnez read .harnez/rules/Tools.md .harnez/rules/Issues.md .harnez/rules/Quota.md .harnez/rules/Subagents.md .harnez/rules/Output.md .harnez/rules/Local.md`. Skip this if you already read them in this session. This follows Index.md order; Local.md overrides the other rules.**"
     index: |
       # Harnez Rules
 

@@ -37,6 +37,15 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 	if !strings.Contains(cfg.AgentsMD.Rules.Header, wantRead) || !strings.Contains(string(agents), wantRead) {
 		t.Fatalf("generated instruction must read Index-listed rules then Local.md in one call; got header %q", cfg.AgentsMD.Rules.Header)
 	}
+	// Resumed agent turns must not re-read the rules every prompt (issue 791).
+	for _, want := range []string{"**Once per session, before your first task, read", "Skip this if you already read them in this session."} {
+		if !strings.Contains(string(agents), want) {
+			t.Fatalf("rules header must ask for one read per session (%q); got header %q", want, cfg.AgentsMD.Rules.Header)
+		}
+	}
+	if strings.Contains(string(agents), "Before any work") {
+		t.Fatalf("rules header still asks for a read before any work; got header %q", cfg.AgentsMD.Rules.Header)
+	}
 	for _, name := range []string{"Index.md", "Tools.md", "Issues.md", "Subagents.md", "Output.md"} {
 		if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", name)); err != nil {
 			t.Errorf("missing generated rule %s: %v", name, err)
@@ -120,11 +129,20 @@ func TestRunInit_MigratesLocalOverlaysWithSingleHeaderGap(t *testing.T) {
 // An older generated rules header (issue 567 era) must be replaced, not kept
 // below the current one (issue 671).
 func TestRunInit_ReplacesOutdatedRulesHeader(t *testing.T) {
+	for _, old := range []string{
+		"**Before any work, read `.harnez/rules/Index.md` if it exists, then `.harnez/rules/Local.md`; they are part of this file. Local.md overrides both.**",
+		// Pre-791 wording, read before every turn.
+		"**Before any work, read all Harnez rules in one call: `harnez read .harnez/rules/Tools.md .harnez/rules/Local.md`. This follows Index.md order; Local.md overrides the other rules.**",
+	} {
+		t.Run(old[:40], func(t *testing.T) { testReplacesOutdatedRulesHeader(t, old) })
+	}
+}
+
+func testReplacesOutdatedRulesHeader(t *testing.T, old string) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/oldheader\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	old := "**Before any work, read `.harnez/rules/Index.md` if it exists, then `.harnez/rules/Local.md`; they are part of this file. Local.md overrides both.**"
 	agentsPath := filepath.Join(dir, "AGENTS.md")
 	if err := os.WriteFile(agentsPath, []byte(old+"\n\nAdhere to the following conventions.\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -140,7 +158,7 @@ func TestRunInit_ReplacesOutdatedRulesHeader(t *testing.T) {
 	if !strings.HasPrefix(string(got), cfg.AgentsMD.Rules.Header+"\n\nAdhere to the following conventions.\n") {
 		t.Fatalf("outdated rules header not replaced; got:\n%s", got)
 	}
-	if strings.Contains(string(got), "if it exists, then") {
+	if strings.Contains(string(got), old) {
 		t.Fatalf("outdated rules header still present; got:\n%s", got)
 	}
 }
