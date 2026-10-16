@@ -97,6 +97,8 @@ type JobsSpec struct {
 type PickerCommand struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
+	// Usage is the invocation form shown in the usage error, e.g. "/model <spec>".
+	Usage string `yaml:"usage"`
 }
 
 // PickerLabelsSpec holds the picker titles and status rows.
@@ -207,6 +209,11 @@ func validatePicker(s *Spec) error {
 	}
 	if p.MaxItems < 1 || p.MaxWidth < 10 || p.MaxIndexedFiles < 1 {
 		return fmt.Errorf("%s: picker max_items >= 1, max_width >= 10 and max_indexed_files >= 1 required", specPath)
+	}
+	for _, b := range p.Builtins {
+		if b.Name == "" || b.Usage == "" {
+			return fmt.Errorf("%s: picker builtins need name and usage", specPath)
+		}
 	}
 	l := p.Labels
 	if l.FilesTitle == "" || l.CommandsTitle == "" || l.Indexing == "" || l.NoMatches == "" || l.ReadError == "" {

@@ -220,7 +220,7 @@ func (app *AppWidget) submit() {
 		app.startJob(cmd)
 		return
 	}
-	if app.Busy() && !isCommand(text) {
+	if app.Busy() && !app.isCommand(text) {
 		// Nothing is sent while a turn runs; keep the prompt for later.
 		AddTurn(app.Chat, RoleError, "", "a turn is still running; press Esc to cancel it")
 		return

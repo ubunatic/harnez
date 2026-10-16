@@ -89,11 +89,13 @@ picker:
   # Outside a git work tree the file index walks the directory tree and skips
   # hidden directories plus any directory with one of these names, at any depth.
   skip_dirs: ["node_modules", "vendor", "target", "dist", "build", "__pycache__", "venv"]
-  # TUI commands handled before a prompt reaches the model; installed skills
+  # TUI commands handled before a prompt reaches the model (this list is the only
+  # place command names live; code only binds a handler to each name); installed skills
   # (SKILL.md under the agent skill dirs) follow them in the command picker.
   builtins:
     - name: "model"
       description: "switch the active model: /model <provider:model[:tier]>"
+      usage: "/model <provider:model[:tier]>"
   labels:
     files_title: "Files"
     commands_title: "Commands"

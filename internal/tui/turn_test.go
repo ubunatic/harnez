@@ -233,3 +233,22 @@ func TestSessionChunksShowInHeader(t *testing.T) {
 		}
 	}
 }
+
+// The built-in command list lives in the spec only: a spec builtin is a
+// command, an unlisted /name is plain prompt text.
+func TestIsCommandDerivedFromSpec(t *testing.T) {
+	app, _ := newRunnerApp(t, nil)
+	for text, want := range map[string]bool{"/model x": true, "/model": true, "  /model  a b": true, "/models": false, "/other": false, "model": false, "": false} {
+		if got := app.isCommand(text); got != want {
+			t.Errorf("isCommand(%q) = %v, want %v", text, got, want)
+		}
+	}
+	app.Spec.Picker.Builtins = append(app.Spec.Picker.Builtins, PickerCommand{Name: "other", Usage: "/other"})
+	if !app.isCommand("/other") {
+		t.Error("a builtin added to the spec must count as a command")
+	}
+	app.Spec.Picker.Builtins = nil
+	if app.isCommand("/model x") {
+		t.Error("with no spec builtins nothing is a command")
+	}
+}

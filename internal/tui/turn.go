@@ -50,34 +50,56 @@ func (app *AppWidget) Shutdown() {
 	}
 }
 
-// isCommand reports whether text is a slash command handled by the TUI.
-func isCommand(text string) bool {
+// builtin returns the spec'd TUI built-in that text invokes ("/model x"), if any.
+func (app *AppWidget) builtin(text string) (PickerCommand, bool) {
 	f := strings.Fields(text)
-	return len(f) > 0 && f[0] == "/model"
+	if len(f) == 0 {
+		return PickerCommand{}, false
+	}
+	for _, b := range app.Spec.Picker.Builtins {
+		if f[0] == app.Spec.Picker.CommandTrigger+b.Name {
+			return b, true
+		}
+	}
+	return PickerCommand{}, false
+}
+
+// isCommand reports whether text is a slash command handled by the TUI.
+func (app *AppWidget) isCommand(text string) bool {
+	_, ok := app.builtin(text)
+	return ok
 }
 
 // handleCommand runs a slash command and reports whether text was one.
 func (app *AppWidget) handleCommand(text string) bool {
-	if !isCommand(text) {
+	b, ok := app.builtin(text)
+	if !ok {
 		return false
 	}
-	fields := strings.Fields(text)
+	switch b.Name {
+	case "model":
+		app.switchModel(b, strings.Fields(text))
+	}
+	return true
+}
+
+// switchModel handles /model <spec>; b.Usage is the spec's usage text.
+func (app *AppWidget) switchModel(b PickerCommand, fields []string) {
 	if len(fields) != 2 {
-		AddTurn(app.Chat, RoleError, "", "usage: /model <provider:model[:tier]> (current: "+app.Model+")")
-		return true
+		AddTurn(app.Chat, RoleError, "", "usage: "+b.Usage+" (current: "+app.Model+")")
+		return
 	}
 	spec := fields[1]
 	if app.resolve != nil {
 		resolved, err := app.resolve(spec)
 		if err != nil {
 			AddTurn(app.Chat, RoleError, "", err.Error())
-			return true
+			return
 		}
 		spec = resolved
 	}
 	app.Model = spec
 	AddTurn(app.Chat, RoleTool, "model", "active model: "+spec)
-	return true
 }
 
 // startTurn runs prompt on the active model; output arrives through post.
