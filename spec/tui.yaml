@@ -16,6 +16,8 @@ chat:
   assistant_prefix: "Agent ({{ .Model }}):"
   tool_prefix: "[Tool: {{ .Name }}]"
   error_prefix: "Error:"
+  # Neutral note (no error prefix) shown when a running turn is cancelled.
+  cancelled_label: "Cancelled"
 
 input:
   history_size: 100

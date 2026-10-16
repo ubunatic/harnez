@@ -16,6 +16,8 @@ const (
 	RoleAssistant TurnRole = "assistant"
 	RoleTool      TurnRole = "tool"
 	RoleError     TurnRole = "error"
+	// RoleNote is a neutral one-line status note rendered without a header.
+	RoleNote TurnRole = "note"
 )
 
 // Turn represents a single chat turn in the conversation history.
@@ -174,6 +176,8 @@ func (ct *ChatThread) formatHeader(t Turn) string {
 		prefix = strings.ReplaceAll(prefix, "{{ .Name }}", toolName)
 	case RoleError:
 		prefix = ct.spec.ErrorPrefix
+	case RoleNote:
+		return ""
 	default:
 		prefix = string(t.Role) + ":"
 	}

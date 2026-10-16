@@ -108,7 +108,7 @@ func (app *AppWidget) finishTurn(t *turnState, err error) {
 	}
 	switch {
 	case errors.Is(err, context.Canceled):
-		AddTurn(app.Chat, RoleError, "", "turn cancelled")
+		AddTurn(app.Chat, RoleNote, "", app.Spec.Chat.CancelledLabel)
 		app.Status = "idle"
 	case err != nil:
 		AddTurn(app.Chat, RoleError, "", err.Error())

@@ -21,7 +21,7 @@
     },
     "chat": {
       "type": "object",
-      "required": ["min_height", "max_scroll_back", "show_timestamps"],
+      "required": ["min_height", "max_scroll_back", "show_timestamps", "cancelled_label"],
       "properties": {
         "min_height": { "type": "integer", "minimum": 1 },
         "max_scroll_back": { "type": "integer", "minimum": 10 },
@@ -29,7 +29,8 @@
         "user_prefix": { "type": "string" },
         "assistant_prefix": { "type": "string" },
         "tool_prefix": { "type": "string" },
-        "error_prefix": { "type": "string" }
+        "error_prefix": { "type": "string" },
+        "cancelled_label": { "type": "string", "minLength": 1, "description": "Neutral note shown when a running turn is cancelled." }
       },
       "additionalProperties": false
     },

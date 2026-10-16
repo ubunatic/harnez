@@ -27,6 +27,8 @@ type ChatSpec struct {
 	AssistantPrefix string `yaml:"assistant_prefix"`
 	ToolPrefix      string `yaml:"tool_prefix"`
 	ErrorPrefix     string `yaml:"error_prefix"`
+	// CancelledLabel is the neutral note shown when a turn is cancelled.
+	CancelledLabel string `yaml:"cancelled_label"`
 }
 
 // InputSpec describes multiline prompt box behavior.
@@ -96,6 +98,9 @@ func ParseSpec(data []byte) (*Spec, error) {
 	}
 	if s.Chat.MinHeight < 1 {
 		return nil, fmt.Errorf("%s: chat min_height must be >= 1", specPath)
+	}
+	if s.Chat.CancelledLabel == "" {
+		return nil, fmt.Errorf("%s: chat cancelled_label must be set", specPath)
 	}
 	if s.Input.MinLines < 1 || s.Input.MaxLines < s.Input.MinLines {
 		return nil, fmt.Errorf("%s: input min_lines and max_lines invalid", specPath)

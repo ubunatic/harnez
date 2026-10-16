@@ -94,8 +94,13 @@ func TestCancelKeysStopRunningTurnWithoutQuitting(t *testing.T) {
 			l.drainUntil(t, app)
 			turns := app.Chat.Turns()
 			last := turns[len(turns)-1]
-			if last.Role != RoleError || last.Content != "turn cancelled" || app.Status != "idle" {
+			if last.Role != RoleNote || last.Content != app.Spec.Chat.CancelledLabel || app.Status != "idle" {
 				t.Fatalf("last turn = %#v, status %q", last, app.Status)
+			}
+			for _, l := range RenderCanvas(app, 60, 20) {
+				if strings.Contains(l, app.Spec.Chat.ErrorPrefix) {
+					t.Fatalf("cancel rendered under the error prefix: %q", l)
+				}
 			}
 			app.ConsumeKey(loom.KeyEvent{Key: key})
 			if !app.QuitRequested {
