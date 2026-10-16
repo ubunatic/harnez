@@ -37,7 +37,7 @@ func hostAccessResume(t *testing.T, parent, lastHost, host, workerEnv string) (*
 			return usage.ProviderQuotaAvailability{State: "available"}
 		},
 	}
-	return store, runResume(newAgentCmd(), deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull})
+	return store, runResume(t.Context(), newAgentCmd(), deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull})
 }
 
 func TestHostResumesLegacyAgentWithEmptyParent(t *testing.T) {

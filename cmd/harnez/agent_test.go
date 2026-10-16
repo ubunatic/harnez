@@ -335,12 +335,12 @@ func TestForegroundStartAndResumeDetachIntoWaitableWorkers(t *testing.T) {
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
 			if verb == "start" {
-				err = runStart(cmd, deps, startRequest{Name: name, Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
+				err = runStart(t.Context(), cmd, deps, startRequest{Name: name, Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
 			} else {
 				if err := store.Save(&subagent.Session{ID: "resume-id", Name: name, Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: t.TempDir(), Status: "completed", ContextTokens: 10}); err != nil {
 					t.Fatal(err)
 				}
-				err = runResume(cmd, deps, resumeRequest{Name: name, Prompt: "continue", StreamMode: streamFull})
+				err = runResume(t.Context(), cmd, deps, resumeRequest{Name: name, Prompt: "continue", StreamMode: streamFull})
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -1658,13 +1658,13 @@ func TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession(t *testing.T) {
 	}
 	cmd := newAgentCmd()
 	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
-	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull}); err == nil {
+	if err := runResume(t.Context(), cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull}); err == nil {
 		t.Fatal("expected exhausted quota failure")
 	}
 	availability = usage.ProviderQuotaAvailability{State: "available"}
 	cmd = newAgentCmd()
 	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
-	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull}); err == nil {
+	if err := runResume(t.Context(), cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull}); err == nil {
 		t.Fatal("expected quarantine failure")
 	}
 	sess, _ := store.Get("sid")
@@ -1676,7 +1676,7 @@ func TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession(t *testing.T) {
 	}
 	cmd = newAgentCmd()
 	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
-	err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull})
+	err := runResume(t.Context(), cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull})
 	if err == nil || !strings.Contains(err.Error(), "harnez agent start") || d.resumes != 2 {
 		t.Fatalf("repeat resume err=%v resumes=%d", err, d.resumes)
 	}
@@ -1703,7 +1703,7 @@ func TestCodexTransientRateLimitDoesNotQuarantine(t *testing.T) {
 	}
 	for range 2 {
 		cmd := newAgentCmd()
-		if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull}); err == nil {
+		if err := runResume(t.Context(), cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull}); err == nil {
 			t.Fatal("expected rate-limit failure")
 		}
 	}
@@ -2637,7 +2637,7 @@ func TestRunResumeBlocksPromptWhenCompactionIsUnverified(t *testing.T) {
 					return s.Find(id)
 				},
 			}
-			err = runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "must not be sent", StreamMode: streamStats, JSON: true})
+			err = runResume(t.Context(), cmd, deps, resumeRequest{Name: "worker", Prompt: "must not be sent", StreamMode: streamStats, JSON: true})
 			if interactive {
 				want := `session "worker" has 200 context tokens, over the limit 100 (setting agent.compact_threshold_tokens in ~/.harnez/config.yaml); an active interactive session cannot be compacted and verified from outside; next step: resume it non-interactively, or start a fresh session with harnez agent start`
 				if err == nil || err.Error() != want {
@@ -3086,7 +3086,7 @@ func TestAgentStartFailureKeepsSessionAndResumeSelector(t *testing.T) {
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}
-	err = runStart(cmd, deps, startRequest{Name: "crashed", Prompt: "do work", StoredPrompt: "do work", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
+	err = runStart(t.Context(), cmd, deps, startRequest{Name: "crashed", Prompt: "do work", StoredPrompt: "do work", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
 	if err == nil || !strings.Contains(err.Error(), "temporary provider failure") {
 		t.Fatalf("start error = %v, want provider failure", err)
 	}
@@ -3224,7 +3224,7 @@ func TestRunStartWithoutCobraFlags(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}, startRequest{Prompt: "direct", StoredPrompt: "direct", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull})
+	err = runStart(t.Context(), cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}, startRequest{Prompt: "direct", StoredPrompt: "direct", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3268,7 +3268,7 @@ func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture, dbPath: dbPath}, startRequest{Prompt: "p", StoredPrompt: "p", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull, JSON: true})
+	err = runStart(t.Context(), cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture, dbPath: dbPath}, startRequest{Prompt: "p", StoredPrompt: "p", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull, JSON: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3385,7 +3385,7 @@ func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
 			cmd.SetErr(&stderr)
 			deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}
 			if mode == "start" {
-				err = runStart(cmd, deps, startRequest{Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna", Dir: repoDir, StreamMode: streamFull, JSON: true})
+				err = runStart(t.Context(), cmd, deps, startRequest{Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna", Dir: repoDir, StreamMode: streamFull, JSON: true})
 			} else {
 				if err := store.Save(&subagent.Session{ID: "resume-id", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: repoDir, Status: "completed", ContextTokens: 100}); err != nil {
 					t.Fatal(err)
@@ -3402,7 +3402,7 @@ func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
 					}
 					return nil, fmt.Errorf("session %q not found", name)
 				}
-				err = runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", StreamMode: streamFull, JSON: true})
+				err = runResume(t.Context(), cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", StreamMode: streamFull, JSON: true})
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -3442,7 +3442,7 @@ func TestRunResumeRecordsFreshQuotaPairAndAdvancesTurn(t *testing.T) {
 	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture, dbPath: dbPath, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
 		return s.Find(id)
 	}}
-	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", JSON: true, StreamMode: streamFull}); err != nil {
+	if err := runResume(t.Context(), cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", JSON: true, StreamMode: streamFull}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(calls, []bool{false, false}) {
@@ -3492,7 +3492,7 @@ func TestRunResumeWithoutCobraFlags(t *testing.T) {
 	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
 		return resolveSession(s, id, "")
 	}}
-	if err := runResume(cmd, deps, resumeRequest{Prompt: "continue", Name: "direct", Dir: ".", StreamMode: streamFull}); err != nil {
+	if err := runResume(t.Context(), cmd, deps, resumeRequest{Prompt: "continue", Name: "direct", Dir: ".", StreamMode: streamFull}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "resolved=name") {
@@ -3521,7 +3521,7 @@ func TestRunResumeRejectsSessionWithRemovedModel(t *testing.T) {
 	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
 		return s.Find(id)
 	}}
-	err = runResume(&cobra.Command{}, deps, resumeRequest{Name: "retired", Prompt: "continue", StreamMode: streamFull})
+	err = runResume(t.Context(), &cobra.Command{}, deps, resumeRequest{Name: "retired", Prompt: "continue", StreamMode: streamFull})
 	if err == nil || !strings.Contains(err.Error(), "uses unavailable model") || !strings.Contains(err.Error(), "known specs") {
 		t.Fatalf("resume error = %v, want clear unavailable-model error", err)
 	}
@@ -3547,7 +3547,7 @@ func TestRunResumeAcceptsCurrentCodexModels(t *testing.T) {
 			deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, dbPath: filepath.Join(t.TempDir(), "telemetry.sqlite"), find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
 				return s.Find(id)
 			}}
-			if err := runResume(&cobra.Command{}, deps, resumeRequest{Name: "current", Prompt: "continue", StreamMode: streamFull}); err != nil {
+			if err := runResume(t.Context(), &cobra.Command{}, deps, resumeRequest{Name: "current", Prompt: "continue", StreamMode: streamFull}); err != nil {
 				t.Fatal(err)
 			}
 			if driver.resumes != 1 {
@@ -3581,7 +3581,7 @@ func TestRunResumePassesStoredAgyModelAndTier(t *testing.T) {
 	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
 		return s.Find(id)
 	}}
-	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", StreamMode: streamFull}); err != nil {
+	if err := runResume(t.Context(), cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", StreamMode: streamFull}); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"--conversation", "agy-session", "--add-dir", workDir, "--model", "flash37", "--effort", "medium", "--output-format", "json", "-p", "continue"}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -28,9 +29,11 @@ func sessionWriters(x *subagent.Session) ([]procs.ProcInfo, error) {
 	return procs.TreeMembers(sessionRoots(x), make(map[int]procs.ProcInfo), nil)
 }
 
-func observeSessionProcess(cmd *cobra.Command, store *subagent.FileSessionStore, id string, local *subagent.Session) func() {
-	original := agentCommandContext(cmd)
-	cmd.SetContext(subagent.WithProcessObserver(original, func(pid int, start uint64) error {
+// observeSessionProcess returns ctx carrying a process observer that records the
+// provider PID on session id. It derives a new context instead of calling
+// cmd.SetContext, which would race goroutines reading cmd.Context().
+func observeSessionProcess(ctx context.Context, store *subagent.FileSessionStore, id string, local *subagent.Session) context.Context {
+	return subagent.WithProcessObserver(ctx, func(pid int, start uint64) error {
 		current, err := store.Get(id)
 		if err != nil {
 			return err
@@ -40,8 +43,7 @@ func observeSessionProcess(cmd *cobra.Command, store *subagent.FileSessionStore,
 			local.ProviderPID, local.ProviderStarttime = pid, start
 		}
 		return store.Save(current)
-	}))
-	return func() { cmd.SetContext(original) }
+	})
 }
 
 func stopSession(cmd *cobra.Command, store *subagent.FileSessionStore, x *subagent.Session) error {

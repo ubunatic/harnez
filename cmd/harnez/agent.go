@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -234,14 +235,14 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				return e
 			}
 			if _, findErr := find(cmd, s, name); findErr == nil {
-				return withAgentTimeout(cmd, agentTimeout, func() error {
-					return runResume(cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+				return withAgentTimeout(cmd, agentTimeout, func(ctx context.Context) error {
+					return runResume(ctx, cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
 				})
 			} else if !strings.Contains(findErr.Error(), "not found") {
 				return findErr
 			}
-			return withAgentTimeout(cmd, agentTimeout, func() error {
-				return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
+			return withAgentTimeout(cmd, agentTimeout, func(ctx context.Context) error {
+				return runStart(ctx, cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
 			})
 		}
 		if rootContinue {
@@ -255,13 +256,13 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			}
 			candidates := attributable(xs, workDir, parent())
 			if len(candidates) > 0 {
-				return withAgentTimeout(cmd, agentTimeout, func() error {
-					return runResume(cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: true, JSON: jsonOut, PlanFirst: planFirst})
+				return withAgentTimeout(cmd, agentTimeout, func(ctx context.Context) error {
+					return runResume(ctx, cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: true, JSON: jsonOut, PlanFirst: planFirst})
 				})
 			}
 		}
-		return withAgentTimeout(cmd, agentTimeout, func() error {
-			return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
+		return withAgentTimeout(cmd, agentTimeout, func(ctx context.Context) error {
+			return runStart(ctx, cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
 		})
 	}
 	var startFiles []string
@@ -313,8 +314,8 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if detach {
 			return launchDetachedWithPreflight(cmd, req, storeDir, parent(), subagent.CheckCodexAuth)
 		}
-		return withAgentTimeout(cmd, agentTimeout, func() error {
-			return runStart(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir, dbPath: agentUsageDBPath()}, req)
+		return withAgentTimeout(cmd, agentTimeout, func(ctx context.Context) error {
+			return runStart(ctx, cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir, dbPath: agentUsageDBPath()}, req)
 		})
 	}}
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
@@ -439,8 +440,8 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if resumeWorkerID != "" {
 			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: true, PlanFirst: planFirst}, storeDir)
 		}
-		return withAgentTimeout(cmd, agentTimeout, func() error {
-			return runResume(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir, dbPath: agentUsageDBPath()}, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, Selector: selector, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
+		return withAgentTimeout(cmd, agentTimeout, func(ctx context.Context) error {
+			return runResume(ctx, cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir, dbPath: agentUsageDBPath()}, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, Selector: selector, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
 		})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)

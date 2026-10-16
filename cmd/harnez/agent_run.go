@@ -127,16 +127,17 @@ func agentCommandContext(cmd *cobra.Command) context.Context {
 	return cmd.Context()
 }
 
-func withAgentTimeout(cmd *cobra.Command, timeout time.Duration, run func() error) error {
+// withAgentTimeout hands run the command context, bounded by --timeout when
+// set. It never mutates cmd's context: goroutines started by run may still
+// read their ctx after run returns, and cmd.SetContext would race them.
+func withAgentTimeout(cmd *cobra.Command, timeout time.Duration, run func(context.Context) error) error {
+	ctx := agentCommandContext(cmd)
 	if timeout <= 0 || cmd == nil || (!cmd.Flags().Changed("timeout") && !cmd.InheritedFlags().Changed("timeout")) {
-		return run()
+		return run(ctx)
 	}
-	original := cmd.Context()
-	ctx, cancel := context.WithTimeout(agentCommandContext(cmd), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd.SetContext(ctx)
-	defer cmd.SetContext(original)
-	return run()
+	return run(ctx)
 }
 
 func turnQuotaBaseline(turnStarted time.Time, before usage.TurnQuotaReading) time.Time {
@@ -377,7 +378,9 @@ func findResumeSelector(sessions []*subagent.Session, selector string) (*subagen
 }
 
 // runStart starts a new session, streams or prints the turn and saves the session.
-func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
+// runStart runs one start turn under ctx. ctx is passed explicitly rather than
+// stored on cmd so goroutines started here never race a cmd.SetContext.
+func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startRequest) error {
 	quotaTurnStarted := time.Now().Add(-time.Hour)
 	spec := req.ModelSpec
 	if spec == "" {
@@ -435,7 +438,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		return fmt.Errorf("resolve working directory: %w", err)
 	}
 	baseDriver := agentDriver(m, canonicalWorkDir)
-	if err := preflightCodex(cmd.Context(), m.Provider, baseDriver, d.preflight); err != nil {
+	if err := preflightCodex(ctx, m.Provider, baseDriver, d.preflight); err != nil {
 		return fmt.Errorf("agent start %q preflight: %w", spec, err)
 	}
 	tl := newTimeline(cmd)
@@ -482,7 +485,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		}
 		id = reserved.ID
 	}
-	defer observeSessionProcess(cmd, s, id, nil)()
+	ctx = observeSessionProcess(ctx, s, id, nil)
 	driver := withAgyMeterSession(baseDriver, id)
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
@@ -490,7 +493,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	turnStarted := time.Now().UTC()
 	beforeCapture := make(chan usage.TurnQuotaReading, 1)
 	go func() {
-		beforeCapture <- captureTurnQuota(cmd.Context(), d.quota, m.Provider, false, time.Time{})
+		beforeCapture <- captureTurnQuota(ctx, d.quota, m.Provider, false, time.Time{})
 	}()
 	var ts *turnStream
 	var r *subagent.TurnResult
@@ -500,7 +503,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, req.PlanFirst
 		opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role)
 		ts.watch()
-		watchCtx, cancelWatch := context.WithCancel(agentCommandContext(cmd))
+		watchCtx, cancelWatch := context.WithCancel(ctx)
 		defer cancelWatch()
 		threshold, thresholdErr := subagent.CompactThreshold(m)
 		watchdog := &subagent.TokenWatchdog{Threshold: threshold}
@@ -565,7 +568,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		}
 	} else {
 		tl.announceTurn("start", m.Provider+":"+m.Name, sessName)
-		r, err = driver.Run(cmd.Context(), opts)
+		r, err = driver.Run(ctx, opts)
 	}
 	if err != nil {
 		before := <-beforeCapture
@@ -642,7 +645,8 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 }
 
 // runResume runs one more turn on an existing session.
-func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
+// runResume runs one resume turn under ctx; see runStart for why ctx is explicit.
+func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	quotaTurnStarted := time.Now().Add(-time.Hour)
 
 	sessionName := req.Name
@@ -695,7 +699,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if sess.CodexQuarantine != nil {
 		return fmt.Errorf("session %q is quarantined: %s; start a fresh session with harnez agent start --name", sess.Name, sess.CodexQuarantine.Reason)
 	}
-	defer observeSessionProcess(cmd, s, sess.ID, sess)()
+	ctx = observeSessionProcess(ctx, s, sess.ID, sess)
 	if sess.Provider == "codex" && sess.CodexQuotaResumePending && d.availability != nil && d.availability(sess.Provider, sess.Model).State == "exhausted" {
 		return fmt.Errorf("session %q is waiting for Codex quota recovery; resume once quota is available", sess.Name)
 	}
@@ -721,7 +725,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	var driver subagent.Driver
 	if !interactive {
 		baseDriver := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir)
-		if err := preflightCodex(cmd.Context(), sess.Provider, baseDriver, d.preflight); err != nil {
+		if err := preflightCodex(ctx, sess.Provider, baseDriver, d.preflight); err != nil {
 			return fmt.Errorf("agent resume %q preflight: %w", sess.Name, err)
 		}
 		driver = withAgyMeterSession(baseDriver, sess.ID)
@@ -745,12 +749,12 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	}
 	compactFn := func() (*subagent.TurnResult, error) {
 		if interactive {
-			if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "compact", ""); err != nil {
+			if err := subagent.SendControl(ctx, sess.ControlSocket, "compact", ""); err != nil {
 				return nil, err
 			}
 			return nil, nil // interactive output has no verified completion/token signal
 		}
-		return driver.Compact(cmd.Context(), sess.ProviderID())
+		return driver.Compact(ctx, sess.ProviderID())
 	}
 	// Noninteractive Codex exec applies configured automatic compaction during
 	// resume; its updated context count is read from the rollout afterward.
@@ -773,7 +777,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		if sess.Provider == "agy" {
 			action = "enqueue"
 		}
-		if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, action, req.Prompt); err != nil {
+		if err := subagent.SendControl(ctx, sess.ControlSocket, action, req.Prompt); err != nil {
 			return err
 		}
 		sess.LastActiveAt = time.Now()
@@ -829,7 +833,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	turnStarted := time.Now().UTC()
 	beforeCapture := make(chan usage.TurnQuotaReading, 1)
 	go func() {
-		beforeCapture <- captureTurnQuota(cmd.Context(), d.quota, sess.Provider, false, time.Time{})
+		beforeCapture <- captureTurnQuota(ctx, d.quota, sess.Provider, false, time.Time{})
 	}()
 	if streaming {
 		ts = newTurnStream(cmd, req.StreamMode, compacted)
@@ -839,7 +843,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		}
 		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, req.PlanFirst
 		ts.watch()
-		watchCtx, cancelWatch := context.WithCancel(agentCommandContext(cmd))
+		watchCtx, cancelWatch := context.WithCancel(ctx)
 		defer cancelWatch()
 		watchdog := &subagent.TokenWatchdog{Threshold: threshold}
 		watchdogCrossed := false
@@ -874,7 +878,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		}
 		tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
 		resumeTurn.OnFresh = func(note string) { freshNote = note; tl.log("resume", "%s", note) }
-		r, resumed, err = resumeTurn.Do(cmd.Context())
+		r, resumed, err = resumeTurn.Do(ctx)
 	}
 	if !resumed && r != nil && r.SessionID != "" {
 		sess.ProviderSessionID = r.SessionID

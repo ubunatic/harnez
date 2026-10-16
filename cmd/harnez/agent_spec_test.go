@@ -221,7 +221,7 @@ func TestAgentStartRejectsKnownExhaustedQuotaAndNamesOverrideAndAlternatives(t *
 	}
 	cmd := newAgentCmd()
 	cmd.SetArgs([]string{"start", "--model", "agy:flash38", "task"})
-	err := runStart(cmd, agentDeps{
+	err := runStart(t.Context(), cmd, agentDeps{
 		store:        func() (*subagent.FileSessionStore, error) { storeCalled = true; return nil, nil },
 		availability: availability,
 	}, startRequest{Prompt: "task", ModelSpec: "agy:flash38", Dir: ".", StreamMode: streamFull})
