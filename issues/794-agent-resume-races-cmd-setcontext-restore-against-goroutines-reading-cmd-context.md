@@ -1,6 +1,6 @@
 # 794 — agent resume races cmd.SetContext restore against goroutines reading cmd.Context
 
-**Status**: Draft
+**Status**: Closed — context passed explicitly (withAgentTimeout -> runStart/runResume ctx); no cmd.SetContext in agent run paths
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
