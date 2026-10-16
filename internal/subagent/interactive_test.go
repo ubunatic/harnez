@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -278,7 +279,7 @@ func TestDeliverInboxWaitsForIdleAndWritesFIFOBracketedPaste(t *testing.T) {
 	now := time.Now()
 	turn := NewTurnState(func() time.Time { return now })
 	turn.ToolStarted()
-	var terminal bytes.Buffer
+	var terminal lockedBuffer
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -304,4 +305,28 @@ func TestDeliverInboxWaitsForIdleAndWritesFIFOBracketedPaste(t *testing.T) {
 	if got := inbox.Depth(); got != 0 {
 		t.Fatalf("remaining inbox depth = %d", got)
 	}
+}
+
+// lockedBuffer is a bytes.Buffer safe for a writer goroutine and a reading test.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Len()
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
