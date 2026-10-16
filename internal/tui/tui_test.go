@@ -293,3 +293,123 @@ func TestAppWidgetKittyNewlineKeys(t *testing.T) {
 		t.Fatalf("submits = %q, want [x y]", got)
 	}
 }
+
+func TestReadlineKeys(t *testing.T) {
+	type step struct {
+		keys     []string
+		text     string
+		row, col int
+	}
+	cases := []struct {
+		name  string
+		start string // typed into the prompt; the cursor ends after it
+		steps []step
+	}{
+		{"home-end", "hello world", []step{
+			{[]string{"ctrl-a"}, "hello world", 0, 0},
+			{[]string{"ctrl-e"}, "hello world", 0, 11},
+			{[]string{"home"}, "hello world", 0, 0},
+			{[]string{"end"}, "hello world", 0, 11},
+		}},
+		{"kill-line", "hello world", []step{
+			{[]string{"left", "left", "left", "left", "left", "ctrl-k"}, "hello ", 0, 6},
+			{[]string{"left", "ctrl-u"}, " ", 0, 0},
+		}},
+		{"delete-word", "see internal/tui/app.go", []step{
+			{[]string{"ctrl-w"}, "see internal/tui/app.", 0, 21},
+			{[]string{"ctrl-w"}, "see internal/tui/", 0, 17},
+			{[]string{"ctrl-w", "ctrl-w"}, "see ", 0, 4},
+			{[]string{"ctrl-w"}, "", 0, 0},
+			{[]string{"ctrl-w"}, "", 0, 0},
+		}},
+		{"word-moves", "ab  cd_e fg", []step{
+			{[]string{"alt-b"}, "ab  cd_e fg", 0, 9},
+			{[]string{"alt-b"}, "ab  cd_e fg", 0, 4},
+			{[]string{"alt-b", "alt-b"}, "ab  cd_e fg", 0, 0},
+			{[]string{"alt-f"}, "ab  cd_e fg", 0, 2},
+			{[]string{"alt-f", "alt-f", "alt-f", "alt-f"}, "ab  cd_e fg", 0, 11},
+			{[]string{"ctrl-left"}, "ab  cd_e fg", 0, 9},
+			{[]string{"ctrl-right"}, "ab  cd_e fg", 0, 11},
+		}},
+	}
+	for _, tc := range cases {
+		app, _, _ := newPickerApp(t, nil)
+		typeText(app, tc.start)
+		for i, st := range tc.steps {
+			for _, k := range st.keys {
+				if r := app.ConsumeKey(loom.KeyEvent{Key: k}); r != loom.Handled() {
+					t.Fatalf("%s step %d: %s not handled", tc.name, i, k)
+				}
+			}
+			row, col := app.Prompt.Cursor()
+			if app.Prompt.Text() != st.text || row != st.row || col != st.col {
+				t.Fatalf("%s step %d %v: text %q at %d,%d; want %q at %d,%d", tc.name, i, st.keys, app.Prompt.Text(), row, col, st.text, st.row, st.col)
+			}
+		}
+	}
+}
+
+// In a multi-line prompt every readline key stays on the current line.
+func TestReadlineKeysActOnCurrentLine(t *testing.T) {
+	app, _, _ := newPickerApp(t, nil)
+	typeText(app, "one two")
+	app.ConsumeKey(loom.KeyEvent{Key: "ctrl-j"})
+	typeText(app, "three four")
+	app.ConsumeKey(loom.KeyEvent{Key: "ctrl-j"})
+	typeText(app, "five six")
+	app.ConsumeKey(loom.KeyEvent{Key: "up"})
+	app.ConsumeKey(loom.KeyEvent{Key: "ctrl-a"})
+	app.ConsumeKey(loom.KeyEvent{Key: "ctrl-w"}) // line start: nothing to delete, no line merge
+	if got := app.Prompt.Text(); got != "one two\nthree four\nfive six" {
+		t.Fatalf("ctrl-w at line start changed text: %q", got)
+	}
+	app.ConsumeKey(loom.KeyEvent{Key: "alt-f"})
+	app.ConsumeKey(loom.KeyEvent{Key: "ctrl-k"})
+	app.ConsumeKey(loom.KeyEvent{Key: "alt-b"}) // back to the first word start
+	app.ConsumeKey(loom.KeyEvent{Key: "ctrl-e"})
+	app.ConsumeKey(loom.KeyEvent{Key: "ctrl-u"})
+	if got, row := app.Prompt.Text(), func() int { r, _ := app.Prompt.Cursor(); return r }(); got != "one two\n\nfive six" || row != 1 {
+		t.Fatalf("text %q row %d; want the middle line emptied only", got, row)
+	}
+	app.ConsumeKey(loom.KeyEvent{Key: "ctrl-e"})
+	if _, col := app.Prompt.Cursor(); col != 0 {
+		t.Fatalf("ctrl-e on empty line: col %d", col)
+	}
+}
+
+// Readline keys must not collide with any other spec binding.
+func TestReadlineKeysDoNotStealBindings(t *testing.T) {
+	spec, err := LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kb := spec.Keybindings
+	readline := map[string][]string{
+		"line_start": kb.LineStart, "line_end": kb.LineEnd, "delete_to_start": kb.DeleteToStart,
+		"delete_to_end": kb.DeleteToEnd, "delete_word": kb.DeleteWord, "word_left": kb.WordLeft, "word_right": kb.WordRight,
+	}
+	others := map[string][]string{
+		"send_prompt": kb.SendPrompt, "newline": kb.Newline, "quit": kb.Quit, "cancel_turn": kb.CancelTurn,
+		"scroll_up": kb.ScrollUp, "scroll_down": kb.ScrollDown, "open_editor": kb.OpenEditor, "toggle_pty": kb.TogglePTY,
+		"toggle_jobs": kb.ToggleJobs, "picker_select": kb.PickerSelect, "picker_close": kb.PickerClose,
+		"picker_up": kb.PickerUp, "picker_down": kb.PickerDown,
+	}
+	seen := map[string]string{}
+	for name, keys := range readline {
+		if len(keys) == 0 {
+			t.Errorf("%s has no keys", name)
+		}
+		for _, k := range keys {
+			n := strings.ReplaceAll(strings.ToLower(k), "+", "-")
+			if prev, ok := seen[n]; ok {
+				t.Errorf("%s and %s both bind %q", prev, name, k)
+			}
+			seen[n] = name
+			for on, ok := range others {
+				if bound(n, ok) {
+					t.Errorf("%s binds %q, already used by %s", name, k, on)
+				}
+			}
+		}
+	}
+}

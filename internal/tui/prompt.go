@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"unicode"
 
 	"github.com/mattn/go-runewidth"
 )
@@ -140,6 +141,78 @@ func (pb *PromptBuffer) Backspace() {
 		pb.cursorRow--
 		pb.cursorCol = newCol
 	}
+}
+
+// Home moves the cursor to the start of the current line.
+func (pb *PromptBuffer) Home() { pb.cursorCol = 0 }
+
+// End moves the cursor to the end of the current line.
+func (pb *PromptBuffer) End() { pb.cursorCol = len([]rune(pb.lines[pb.cursorRow])) }
+
+// DeleteToStart deletes from the start of the current line up to the cursor.
+func (pb *PromptBuffer) DeleteToStart() {
+	line := []rune(pb.lines[pb.cursorRow])
+	col := min(pb.cursorCol, len(line))
+	pb.lines[pb.cursorRow] = string(line[col:])
+	pb.cursorCol = 0
+}
+
+// DeleteToEnd deletes from the cursor to the end of the current line.
+func (pb *PromptBuffer) DeleteToEnd() {
+	line := []rune(pb.lines[pb.cursorRow])
+	col := min(pb.cursorCol, len(line))
+	pb.lines[pb.cursorRow] = string(line[:col])
+	pb.cursorCol = col
+}
+
+// isWordRune is the word alphabet of the word moves: letters, digits and "_".
+// Everything else, "/" and "." included, separates words, so a path deletes
+// one segment at a time.
+func isWordRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r)
+}
+
+// wordLeft is the column of the start of the word at or before col in line.
+func wordLeft(line []rune, col int) int {
+	col = min(col, len(line))
+	for col > 0 && !isWordRune(line[col-1]) {
+		col--
+	}
+	for col > 0 && isWordRune(line[col-1]) {
+		col--
+	}
+	return col
+}
+
+// wordRight is the column of the end of the word at or after col in line.
+func wordRight(line []rune, col int) int {
+	for col < len(line) && !isWordRune(line[col]) {
+		col++
+	}
+	for col < len(line) && isWordRune(line[col]) {
+		col++
+	}
+	return col
+}
+
+// WordLeft moves the cursor to the start of the previous word on the line.
+func (pb *PromptBuffer) WordLeft() {
+	pb.cursorCol = wordLeft([]rune(pb.lines[pb.cursorRow]), pb.cursorCol)
+}
+
+// WordRight moves the cursor to the end of the next word on the line.
+func (pb *PromptBuffer) WordRight() {
+	pb.cursorCol = wordRight([]rune(pb.lines[pb.cursorRow]), min(pb.cursorCol, len([]rune(pb.lines[pb.cursorRow]))))
+}
+
+// DeleteWordBack deletes the word before the cursor (and the separators
+// between it and the cursor) on the current line.
+func (pb *PromptBuffer) DeleteWordBack() {
+	line := []rune(pb.lines[pb.cursorRow])
+	col := min(pb.cursorCol, len(line))
+	from := wordLeft(line, col)
+	pb.lines[pb.cursorRow] = string(append(line[:from:from], line[col:]...))
+	pb.cursorCol = from
 }
 
 // TrimContinuation removes a backslash directly before the cursor at the end

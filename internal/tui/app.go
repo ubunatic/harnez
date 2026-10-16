@@ -180,6 +180,20 @@ func (app *AppWidget) promptKey(e loom.KeyEvent, name string) loom.EventResult {
 		ScrollUp(app.Chat, 5)
 	case bound(name, kb.ScrollDown):
 		ScrollDown(app.Chat, 5)
+	case bound(name, kb.LineStart):
+		app.Prompt.Home()
+	case bound(name, kb.LineEnd):
+		app.Prompt.End()
+	case bound(name, kb.DeleteToStart):
+		app.Prompt.DeleteToStart()
+	case bound(name, kb.DeleteToEnd):
+		app.Prompt.DeleteToEnd()
+	case bound(name, kb.DeleteWord):
+		app.Prompt.DeleteWordBack()
+	case bound(name, kb.WordLeft):
+		app.Prompt.WordLeft()
+	case bound(name, kb.WordRight):
+		app.Prompt.WordRight()
 	case name == "backspace":
 		app.Prompt.Backspace()
 	case name == "left":

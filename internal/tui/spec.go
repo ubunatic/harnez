@@ -60,6 +60,14 @@ type KeybindingsSpec struct {
 	JobOpen    []string `yaml:"job_open"`
 	JobCancel  []string `yaml:"job_cancel"`
 	JobClose   []string `yaml:"job_close"`
+	// Readline-style prompt editing; all act on the current line.
+	LineStart     []string `yaml:"line_start"`
+	LineEnd       []string `yaml:"line_end"`
+	DeleteToStart []string `yaml:"delete_to_start"`
+	DeleteToEnd   []string `yaml:"delete_to_end"`
+	DeleteWord    []string `yaml:"delete_word"`
+	WordLeft      []string `yaml:"word_left"`
+	WordRight     []string `yaml:"word_right"`
 	// Picker keys act on an open @/ picker before any other binding.
 	PickerSelect []string `yaml:"picker_select"`
 	PickerClose  []string `yaml:"picker_close"`

@@ -122,6 +122,16 @@ keybindings:
   job_open: ["enter"]
   job_cancel: ["x"]
   job_close: ["esc"]
+  # Readline-style prompt editing, on the current line of a multi-line prompt.
+  # A word is letters, digits and "_"; "/" and "." separate words. Alt+B/F
+  # arrive as alt-b/alt-f (terminals must send Meta as Escape).
+  line_start: ["ctrl+a", "home"]
+  line_end: ["ctrl+e", "end"]
+  delete_to_start: ["ctrl+u"]
+  delete_to_end: ["ctrl+k"]
+  delete_word: ["ctrl+w"]
+  word_left: ["alt+b", "ctrl+left"]
+  word_right: ["alt+f", "ctrl+right"]
   # Pickers: while one is open these keys act on it (Enter selects, never sends).
   picker_select: ["tab", "enter"]
   picker_close: ["esc"]

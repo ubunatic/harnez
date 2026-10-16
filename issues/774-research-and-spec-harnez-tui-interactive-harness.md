@@ -1,6 +1,6 @@
 # 774 — Research and Spec Harnez TUI Interactive Harness
 
-**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 done (Ctrl+G, @/ pickers); #778 job manager v1 in
+**Status**: In Progress — research done, children #775–#779 filed; #775 done; #776 router and streaming in; #777 done (Ctrl+G, @/ pickers); #778 job manager v1 in; TUI polish: picker ranking, quoted paths, readline keys
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Agent Harness
