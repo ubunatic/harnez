@@ -49,8 +49,14 @@ boundary or depends on the real environment.
 - **Static checks** — `make check` runs `go vet ./...` and `go test ./...`
   with `GOWORK=off`; `make lint` checks registered command documentation.
 - **GitHub Linux CI** — `.github/workflows/ci.yaml` runs on `ubuntu-24.04` for
-  every PR and push to `main`, executing `make build`, `make lint`, and `make check`
-  (guarding against git 2.43 regressions, issue 788).
+  every PR and push to `main` (LFS checkout), executing `go build ./...`,
+  `make build`, `make lint`, `make check` and `go test -race ./...`
+  (guarding against git 2.43 regressions, issues 788, 786).
+- **Container tests** — `make container-test` runs `make check` offline
+  (`--network none`, `--init`) as a non-root user in `Containerfile.test`
+  (Ubuntu 24.04, git 2.43, the same as the CI runner), with podman if installed,
+  else docker (`ENGINE=`). Only the `TEST_OUT` log dir (default
+  `/tmp/harnez-container-test`) is mounted from the host. `make test-ubuntu` is an alias.
 - **Smoke tests** — `make smoke` runs `scripts/smoke-test.sh`, which builds the
   binary and exercises apply, idempotency, drift repair, and selected live
   output behavior.
@@ -59,9 +65,7 @@ boundary or depends on the real environment.
   Use `make smoke-container` to run Pi and Codex against a local model in one
   podman pod (issue 723); set `LMCODER_CACHE_DIR` to download models to a
   scratch disk. Use `make install-canary` to verify the latest release
-  installation. `make test-ubuntu` runs `go test ./...` in an Ubuntu 24.04
-  container (git 2.43, podman or docker). Use the
-  focused canaries when a fake cannot establish that the real mechanism works.
+  installation. Use the focused canaries when a fake cannot establish that the real mechanism works.
   The canary guidance is in [other/Canary.md](other/Canary.md).
 - **Manual or visual verification** — TUI, terminal, media, and desktop
   integration changes may need a real installed binary (`make install`) and a
@@ -85,6 +89,7 @@ Common entry points:
 make test-q1     # run test suite under Quota-1 guardrail enforcement
 make check       # vet plus the complete Go suite
 make smoke       # build plus live smoke checks
+make container-test  # make check offline in Containerfile.test (podman or docker)
 make macos-ci    # trigger + quietly watch real macOS CI on the GitHub mirror
 make install     # install the current binary to ~/go/bin
 ```

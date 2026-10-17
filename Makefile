@@ -11,6 +11,11 @@ LANGS    := golang bash make git
 PREFIX   ?= /usr/local
 HOST     ?= um760
 HOST_DIR ?= projects/harnez
+ENGINE   ?= $(shell command -v podman || command -v docker)
+TEST_IMG ?= harnez-test
+TEST_OUT ?= /tmp/harnez-container-test
+# rootless podman: map the caller's UID onto the image's tester user.
+USERNS   := $(if $(findstring podman,$(ENGINE)),--userns=keep-id)
 
 help: 🤖  # show this help
 	@grep -E '^[a-zA-Z_-]+:.*[⚙🤖].*#+' $(MAKEFILE_LIST) | \
@@ -73,8 +78,16 @@ lint: ⚙️  # check docs/commands/*.md files are all registered in config.yaml
 install-canary: ⚙️  # verify the latest Codeberg release installs and reports its version
 	bash scripts/install-canary.sh
 
-test-ubuntu: ⚙️  # run test suite inside an Ubuntu 24.04 container (Podman or Docker)
-	bash scripts/test-ubuntu.sh
+container-test: ⚙️  # run make check offline in Containerfile.test (ENGINE=podman|docker; log in TEST_OUT)
+	@test -n "$(ENGINE)" || (echo "❌ neither podman nor docker is installed" && exit 1)
+	$(ENGINE) build -f Containerfile.test -t $(TEST_IMG) \
+	   --build-arg GO_VERSION=$$(awk '$$1 == "go" { print $$2; exit }' go.mod) \
+	   --build-arg TEST_UID=$$(id -u) .
+	mkdir -p $(TEST_OUT)
+	$(ENGINE) run --rm --init --network none $(USERNS) -v $(TEST_OUT):/out:Z $(TEST_IMG) \
+	   bash -o pipefail -c 'make check 2>&1 | tee /out/test.log'
+
+test-ubuntu: ⚙️ container-test  # alias for container-test (Ubuntu 24.04, git 2.43)
 
 macos-ci: ⚙️  # trigger and watch macos-hello CI workflow on the GitHub mirror
 	bash scripts/macos-ci.sh

@@ -1,0 +1,54 @@
+# Containerfile.test — run the CI checks (make check) in a clean Ubuntu 24.04.
+#
+# Build context is the repository root; run it with `make container-test`.
+# Ubuntu 24.04 matches the GitHub runner (git 2.43, issue 782/786). The test
+# run is offline (--network none): module downloads happen at build time.
+# Layer order follows docs/Containerfile.md: static first, dynamic last.
+FROM ubuntu:24.04
+
+ARG GO_VERSION
+# Host UID, so files the tests write to the /out mount belong to the caller.
+ARG TEST_UID=1000
+ENV DEBIAN_FRONTEND=noninteractive \
+    GOTOOLCHAIN=local \
+    GOWORK=off \
+    PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# gcc for go test -race; minisign for internal/release; python3 for the
+# agent stop process-tree fixture; git-lfs per docs/Containerfile.md.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      gcc \
+      git \
+      git-lfs \
+      libc6-dev \
+      make \
+      minisign \
+      procps \
+      python3 \
+    && git lfs install --system \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN test -n "$GO_VERSION" \
+    && case "$(uname -m)" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; *) exit 1 ;; esac \
+    && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${arch}.tar.gz" | tar -C /usr/local -xz
+
+# Tests run as a normal user: root bypasses file permission checks. Absolute
+# Go caches survive tests that point HOME at a temp dir.
+RUN userdel --remove ubuntu \
+    && useradd --create-home --uid "$TEST_UID" tester
+USER tester
+WORKDIR /home/tester/src
+ENV GOMODCACHE=/home/tester/go/pkg/mod \
+    GOCACHE=/home/tester/.cache/go-build
+
+COPY --chown=tester go.mod go.sum ./
+RUN go mod download
+
+# .dockerignore drops .git; tests that locate the worktree need a repository.
+COPY --chown=tester . .
+RUN git init -q \
+    && git add -A \
+    && git -c user.name=tester -c user.email=tester@example.invalid commit -qm "container-test snapshot"
+CMD ["make", "check"]

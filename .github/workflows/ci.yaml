@@ -15,14 +15,23 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
+    env:
+      GOWORK: "off"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      # LFS: internal/bench validates the saved sessions in docs/data.
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache: true
       - run: bash scripts/install-dev-deps.sh
       - run: git --version
+      - run: go build ./...
       - run: make build
       - run: make lint
+      # make check: gofmt, go vet and go test, as in make container-test.
       - run: make check
+      - run: go test -race ./...
