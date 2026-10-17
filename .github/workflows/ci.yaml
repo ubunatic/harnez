@@ -117,7 +117,6 @@ jobs:
             printf '### CI wall time: %dm%02ds\n\n' $((wall / 60)) $((wall % 60))
             printf '| job | result |\n|---|---|\n| lint | %s |\n| unit | %s |\n| race | %s |\n' "$LINT" "$UNIT" "$RACE"
           } >> "$GITHUB_STEP_SUMMARY"
-          if test "$LINT$UNIT$RACE" != successsuccesssuccess
-          then
-            exit 1
-          fi
+          # Summaries do not show in gh run view; this notice annotation does.
+          # No exit status: a failed job is already red on its own.
+          printf '::notice title=CI wall time %dm%02ds::lint=%s unit=%s race=%s\n' $((wall / 60)) $((wall % 60)) "$LINT" "$UNIT" "$RACE"
