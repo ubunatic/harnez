@@ -3,6 +3,10 @@
 default_model: codex:luna:high
 role_classify_timeout_ms: 1500
 reply_history_limit: 20
+# Context tokens (last call's full input) above which harnez agent compacts a
+# session before the next prompt; ~/.harnez/config.yaml agent.compact_threshold_tokens
+# and agent.compact_thresholds override it.
+compact_threshold_tokens: 200000
 stop:
   grace_ms: 1000
   kill_wait_ms: 2000

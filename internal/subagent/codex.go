@@ -125,7 +125,7 @@ func codexRunArgs(model Model, prompt string) []string {
 func codexCompactThreshold(model Model) int {
 	n, err := CompactThreshold(model)
 	if err != nil || n <= 0 {
-		return DefaultCompactThresholdTokens
+		n, _ = DefaultCompactThreshold()
 	}
 	return n
 }

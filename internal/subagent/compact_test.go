@@ -12,8 +12,8 @@ func TestCompactThresholdDefaultGlobalAndOverride(t *testing.T) {
 	t.Setenv("HOME", home)
 	m := Model{Provider: "codex", Name: "gpt", Tier: "high"}
 	got, err := CompactThreshold(m)
-	if err != nil || got != DefaultCompactThresholdTokens {
-		t.Fatalf("default threshold = %d, %v", got, err)
+	if err != nil || got != 200000 {
+		t.Fatalf("default threshold = %d, %v; want spec/agent.yaml compact_threshold_tokens", got, err)
 	}
 	config := "agent:\n  compact_threshold_tokens: 250000\n  compact_thresholds:\n    codex:gpt:high: 175000\n"
 	if err := os.MkdirAll(filepath.Join(home, ".harnez"), 0700); err != nil {

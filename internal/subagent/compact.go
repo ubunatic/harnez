@@ -9,7 +9,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const DefaultCompactThresholdTokens = 200000
+// DefaultCompactThreshold returns compact_threshold_tokens from the embedded
+// agent spec, used when ~/.harnez/config.yaml sets no threshold.
+func DefaultCompactThreshold() (int, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return 0, err
+	}
+	return spec.CompactThreshold, nil
+}
 
 type compactConfig struct {
 	Agent struct {
@@ -19,15 +27,15 @@ type compactConfig struct {
 }
 
 // CompactThreshold reads the global agent threshold, with an optional exact
-// provider:model[:tier] override. Missing configuration uses the safe default.
+// provider:model[:tier] override. Missing configuration uses the spec default.
 func CompactThreshold(model Model) (int, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return DefaultCompactThresholdTokens, nil
+		return DefaultCompactThreshold()
 	}
 	b, err := os.ReadFile(filepath.Join(home, ".harnez", "config.yaml"))
 	if os.IsNotExist(err) {
-		return DefaultCompactThresholdTokens, nil
+		return DefaultCompactThreshold()
 	}
 	if err != nil {
 		return 0, fmt.Errorf("read agent compact config: %w", err)
@@ -38,7 +46,9 @@ func CompactThreshold(model Model) (int, error) {
 	}
 	threshold := cfg.Agent.CompactThresholdTokens
 	if threshold == 0 {
-		threshold = DefaultCompactThresholdTokens
+		if threshold, err = DefaultCompactThreshold(); err != nil {
+			return 0, err
+		}
 	}
 	for _, key := range []string{model.Spec(), model.Provider + ":" + model.Name, model.Provider} {
 		if n, ok := cfg.Agent.CompactThresholds[key]; ok {

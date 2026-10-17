@@ -1,10 +1,11 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "default_role", "models", "roles", "stop", "external_sessions"],
+  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "default_role", "models", "roles", "stop", "external_sessions"],
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
+    "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
     "stale_session_errors": {
       "type": "object",
       "description": "Per provider: verified CLI stderr line prefixes that mean the resumed session is gone.",

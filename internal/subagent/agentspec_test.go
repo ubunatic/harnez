@@ -202,7 +202,7 @@ func TestParseAgentSpecRejectsBadDefault(t *testing.T) {
 }
 
 func TestParseAgentSpecRequiresExternalSessionDiscovery(t *testing.T) {
-	data := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ndefault_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
+	data := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\ndefault_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
 	if _, err := parseAgentSpec([]byte(data)); err == nil || !strings.Contains(err.Error(), "external_sessions") {
 		t.Fatalf("parse without external_sessions = %v, want required provider error", err)
 	}
@@ -337,7 +337,7 @@ func TestResolveRoleDynamicStaticBeforeClassifierAndGracefulFallback(t *testing.
 }
 
 func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
-	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\n" + testExternalSessionSpecYAML
+	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\n" + testExternalSessionSpecYAML
 	for name, doc := range map[string]string{
 		"default role undefined": base + "default_role: nobody\nroles:\n  a: {description: fine, spawns: [], rules: x}\n",
 		"spawns undefined role":  base + "default_role: a\nroles:\n  a: {description: fine, spawns: [b], rules: x}\n",
@@ -355,11 +355,15 @@ func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 	if _, err := parseAgentSpec([]byte(base + "default_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
 		t.Fatal(err)
 	}
+	noThreshold := strings.Replace(base, "compact_threshold_tokens: 200000\n", "", 1)
+	if _, err := parseAgentSpec([]byte(noThreshold + "default_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err == nil || !strings.Contains(err.Error(), "compact_threshold_tokens") {
+		t.Fatalf("missing compact_threshold_tokens: err = %v", err)
+	}
 }
 
 func TestParseAgentSpecDoesNotMutateModelAliases(t *testing.T) {
 	before := KnownModels()
-	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
+	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
 		t.Fatal(err)
 	}
 	after := KnownModels()

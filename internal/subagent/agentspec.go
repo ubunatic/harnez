@@ -29,6 +29,7 @@ type agentSpec struct {
 	Selftest              SelftestSpec                   `yaml:"selftest"`
 	ExternalSessions      map[string]ExternalSessionSpec `yaml:"external_sessions"`
 	ReplyHistoryLimit     int                            `yaml:"reply_history_limit"`
+	CompactThreshold      int                            `yaml:"compact_threshold_tokens"`
 	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
 }
 
@@ -113,6 +114,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if spec.ReplyHistoryLimit <= 0 {
 		return agentSpec{}, fmt.Errorf("agent spec: positive reply_history_limit required")
+	}
+	if spec.CompactThreshold <= 0 {
+		return agentSpec{}, fmt.Errorf("agent spec: positive compact_threshold_tokens required")
 	}
 	models := make(map[string]modelAlias, len(spec.Models))
 	for key, entry := range spec.Models {
