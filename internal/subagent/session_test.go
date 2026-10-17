@@ -631,6 +631,9 @@ func TestOpenSessionStoreDoesNotCreateDirectory(t *testing.T) {
 // A reader polling a session while its worker saves must never see a
 // truncated file (agent wait reported "session not found").
 func TestFileSessionStoreSaveIsAtomicForReaders(t *testing.T) {
+	if testing.Short() {
+		t.Skip("full test tier: 2000-read concurrent stress test")
+	}
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"syscall"
 	"time"
 )
@@ -27,20 +28,18 @@ type TreeOptions struct {
 
 func liveProcess(p ProcInfo) bool { return p.State != "Z" && p.State != "X" }
 
-// ProcessStarttime reads the kernel identity of an existing process.
+// ProcessStarttime reads the kernel identity of an existing process, or 0
+// when the process does not exist or /proc is unavailable.
 func ProcessStarttime(pid int) uint64 {
-	all, _ := (LinuxProcReader{}).List()
-	for _, p := range all {
-		if p.PID == pid {
-			return p.Starttime
-		}
-	}
-	return 0
+	return LinuxProcReader{}.Starttime(pid)
 }
 
 // TreeMembers finds live descendants and members of explicitly owned groups.
 // Previously discovered identities remain tracked even after reparenting.
 func TreeMembers(roots []TreeRoot, known map[int]ProcInfo, reader ProcReader) ([]ProcInfo, error) {
+	if len(known) == 0 && !slices.ContainsFunc(roots, func(r TreeRoot) bool { return r.PID > 1 }) {
+		return nil, nil // nothing to track: skip the full process scan
+	}
 	realReader := reader == nil
 	if reader == nil {
 		reader = LinuxProcReader{}

@@ -43,6 +43,13 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("failed to set temp XDG_RUNTIME_DIR: %v", err))
 	}
 
+	// Without an agent session env var, resolve.Session falls back to a
+	// PPID lock, so every in-process command would run the session-tip hook
+	// against the telemetry DB. Tip-hook tests set their own options.
+	sessionTipSessionOptions = func() resolve.SessionOptions {
+		return resolve.SessionOptions{DisableFallback: true}
+	}
+
 	code := m.Run()
 
 	os.RemoveAll(tmpHome)

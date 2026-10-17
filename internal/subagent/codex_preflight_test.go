@@ -48,10 +48,15 @@ func TestCodexPreflightAuthRejectionIsActionableAndNotCached(t *testing.T) {
 
 func TestCodexPreflightTimeoutIsActionableAndNotCached(t *testing.T) {
 	calls := 0
+	// The probe checks it got the preflight deadline and reports it expired,
+	// so the test does not wait out the real timeout.
 	p := NewCodexPreflight(func(ctx context.Context) error {
 		calls++
-		<-ctx.Done()
-		return ctx.Err()
+		deadline, ok := ctx.Deadline()
+		if left := time.Until(deadline); !ok || left <= 0 || left > codexPreflightTimeout {
+			t.Errorf("probe deadline in %s (set=%v), want within %s", left, ok, codexPreflightTimeout)
+		}
+		return context.DeadlineExceeded
 	})
 	p.now = func() time.Time { return time.Now().Add(-codexPreflightTimeout) }
 	err := p.Check(context.Background())

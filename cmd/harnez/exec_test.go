@@ -941,6 +941,7 @@ func TestExecCmd_GearAliasAndFlags(t *testing.T) {
 }
 
 func TestGearMulticallExecution(t *testing.T) {
+	skipShort(t, "builds and runs the harnez binary")
 	// Build a real test binary of harnez to test os.Args[0] multicall symlink dispatch
 	binDir := t.TempDir()
 	binPath := filepath.Join(binDir, "harnez")
@@ -1357,6 +1358,7 @@ func TestRunExecWrapper_Quota1SignalAllowsRetry(t *testing.T) {
 }
 
 func TestRunExecWrapperContinuesStoppedQuotaRunWithoutConsumingQuota(t *testing.T) {
+	skipShort(t, "stops a real process group")
 	repoDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(repoDir, "test.go"), []byte("package test\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -1453,6 +1455,7 @@ func TestRunExecWrapper_Quota1SuccessDoesNotCreateLogDirectory(t *testing.T) {
 }
 
 func TestRunExecWrapperTracksAndRemovesProcessRecord(t *testing.T) {
+	skipShort(t, "tracks a real subprocess for 300ms")
 	opts := testExecOptions(t)
 	result := make(chan struct {
 		code int
@@ -1697,6 +1700,7 @@ func TestHeadTailBuffer_PreservesHeadAndTail(t *testing.T) {
 }
 
 func TestRunExecWrapper_DistillPreservesEarlyFailure(t *testing.T) {
+	skipShort(t, "distills a real subprocess")
 	opts := testExecOptions(t)
 	opts.Distill = "gotest"
 	opts.InsertTimeout = 2 * time.Second
@@ -1719,6 +1723,7 @@ func TestRunExecWrapper_DistillPreservesEarlyFailure(t *testing.T) {
 }
 
 func TestRunExecWrapper_Quota1StreamsFullLogToFile(t *testing.T) {
+	skipShort(t, "streams a real subprocess under quota-1")
 	dir := t.TempDir()
 	opts := testExecOptions(t)
 	opts.Quota1 = true

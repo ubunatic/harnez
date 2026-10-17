@@ -45,6 +45,7 @@ func TestStopFakeProviderWrapper(t *testing.T) {
 }
 
 func TestStopProviderTreeAndWrapper(t *testing.T) {
+	skipShort(t, "stops a real provider process tree")
 	if _, err := os.Stat("/proc/self/stat"); err != nil {
 		t.Skip("Linux process identity fixture")
 	}

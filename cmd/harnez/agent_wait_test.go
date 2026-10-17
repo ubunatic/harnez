@@ -39,8 +39,11 @@ func TestAgentWaitTimeoutAndCompletion(t *testing.T) {
 	if !strings.Contains(out.String(), `"status":"running"`) {
 		t.Fatalf("timeout output = %s", out.String())
 	}
+	// A finished worker clears ProcessPID with its terminal status; keeping
+	// the live test process as writer would make wait run to its timeout.
 	sess.Status = "completed"
 	sess.Response = "finished"
+	sess.ProcessPID = 0
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
@@ -200,6 +203,7 @@ func TestAgentDetachedSpawnAndWait(t *testing.T) {
 }
 
 func TestForegroundStartAndResumeDetachIntoWaitableWorkers(t *testing.T) {
+	skipShort(t, "detaches real worker subprocesses")
 	t.Setenv(foregroundDetachTestOverrideEnv, "1")
 	t.Setenv(execTimeoutEffectiveEnv, "100ms")
 	t.Setenv(execTimeoutExplicitEnv, "0")

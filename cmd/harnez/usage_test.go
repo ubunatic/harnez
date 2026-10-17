@@ -217,6 +217,7 @@ func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
 }
 
 func TestUsageCmd_LoomFlagExecution(t *testing.T) {
+	skipShort(t, "first usage render burst-samples CPU load for ~2s")
 	root := newRootCmd()
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
@@ -233,6 +234,7 @@ func TestUsageCmd_LoomFlagExecution(t *testing.T) {
 }
 
 func TestUsageCmd_MinimalFlagExecution(t *testing.T) {
+	skipShort(t, "first usage render burst-samples CPU load for ~2s")
 	root := newRootCmd()
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)

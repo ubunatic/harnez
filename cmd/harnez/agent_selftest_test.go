@@ -97,6 +97,7 @@ func TestAgentSelftestNoArgsNonTTY(t *testing.T) {
 }
 
 func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
+	skipShort(t, "runs a 1s background selftest step")
 	t.Setenv("HTO", "0")
 	tempDir := t.TempDir()
 	sessionID := "test-session-123"

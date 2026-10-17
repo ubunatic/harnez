@@ -73,6 +73,24 @@ func (r LinuxProcReader) List() ([]ProcInfo, error) {
 	return processes, nil
 }
 
+// Starttime reads one process's kernel start time from <root>/<pid>/stat
+// without scanning every process; 0 means unknown.
+func (r LinuxProcReader) Starttime(pid int) uint64 {
+	root := r.Root
+	if root == "" {
+		root = "/proc"
+	}
+	stat, err := os.ReadFile(filepath.Join(root, strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return 0
+	}
+	info, ok := parseStat(pid, string(stat))
+	if !ok {
+		return 0
+	}
+	return info.Starttime
+}
+
 func parseStat(pid int, stat string) (ProcInfo, bool) {
 	end := strings.LastIndex(stat, ")")
 	if end < 0 || end+1 >= len(stat) {

@@ -52,6 +52,30 @@ func TestLinuxProcReaderParsesStatAndUID(t *testing.T) {
 	if len(processes) != 1 || processes[0] != (ProcInfo{PID: 321, PPID: 1, PGID: 321, UID: 1001, UIDKnown: true, State: "T", Starttime: 987654}) {
 		t.Fatalf("processes = %+v; want parsed stopped process", processes)
 	}
+	reader := LinuxProcReader{Root: root}
+	if got := reader.Starttime(321); got != 987654 {
+		t.Fatalf("Starttime(321) = %d, want 987654", got)
+	}
+	if got := reader.Starttime(999); got != 0 {
+		t.Fatalf("Starttime of a missing pid = %d, want 0", got)
+	}
+}
+
+func TestProcessStarttimeMatchesFullScan(t *testing.T) {
+	pid := os.Getpid()
+	all, err := (LinuxProcReader{}).List()
+	if err != nil {
+		t.Skipf("no /proc: %v", err)
+	}
+	var want uint64
+	for _, p := range all {
+		if p.PID == pid {
+			want = p.Starttime
+		}
+	}
+	if got := ProcessStarttime(pid); got == 0 || got != want {
+		t.Fatalf("ProcessStarttime(self) = %d, full scan = %d", got, want)
+	}
 }
 
 func TestCleanProcsDryRunAndInjectedSignals(t *testing.T) {
@@ -266,4 +290,19 @@ func TestWriteRecordIsJSON(t *testing.T) {
 	if filepath.Base(path) != strconv.Itoa(got.PGID)+".json" {
 		t.Fatalf("record path = %q, pgid=%d", path, got.PGID)
 	}
+}
+
+func TestTreeMembersWithoutRootsSkipsScan(t *testing.T) {
+	reader := &countingProcReader{}
+	members, err := TreeMembers([]TreeRoot{{PID: 0}, {PID: 1}}, map[int]ProcInfo{}, reader)
+	if err != nil || members != nil || reader.calls != 0 {
+		t.Fatalf("TreeMembers without roots = (%v, %v), want (nil, nil) without scanning", members, err)
+	}
+}
+
+type countingProcReader struct{ calls int }
+
+func (r *countingProcReader) List() ([]ProcInfo, error) {
+	r.calls++
+	return nil, nil
 }
