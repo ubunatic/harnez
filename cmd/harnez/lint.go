@@ -12,9 +12,10 @@ import (
 )
 
 type lintOptions struct {
-	Lang  string
-	Check string // "" = report only; otherwise the lowest failing severity
-	JSON  bool
+	Lang    string
+	Check   string // "" = report only; otherwise the lowest failing severity
+	JSON    bool
+	Verbose bool
 }
 
 func newLintCmd() *cobra.Command {
@@ -36,7 +37,11 @@ be overridden explicitly with --lang. In directory mode, --lang selects only
 files of that language.
 
 Without --check, lint reports and exits 0. --check fails on errors;
---check=warning also fails on warnings.`,
+--check=warning also fails on warnings.
+
+Errors are always listed. When linting directories (or the whole repo),
+warnings are summarised by rule and by the files with the most warnings;
+--verbose lists every warning. --json always includes every finding.`,
 		Example: `  harnez lint                      # all tracked files
   harnez lint --check scripts docs # gate on errors below two dirs
   harnez lint --check=warning --lang go`,
@@ -51,6 +56,7 @@ Without --check, lint reports and exits 0. --check fails on errors;
 	cmd.Flags().StringVar(&opts.Check, "check", "", "exit non-zero on findings at or above this level (error, warning)")
 	cmd.Flags().Lookup("check").NoOptDefVal = string(lint.SeverityError)
 	cmd.Flags().BoolVar(&opts.JSON, "json", false, "output findings as JSON")
+	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "list every warning instead of a summary in directory mode")
 
 	return cmd
 }
@@ -126,6 +132,10 @@ func runLint(out, errOut io.Writer, args []string, opts lintOptions) error {
 		return err
 	}
 
+	spec, err := lint.LoadSpec()
+	if err != nil {
+		return err
+	}
 	linter, err := lint.DefaultLinter()
 	if err != nil {
 		return err
@@ -146,7 +156,8 @@ func runLint(out, errOut io.Writer, args []string, opts lintOptions) error {
 		}
 		fmt.Fprintln(out, string(data))
 	} else {
-		writeLintReport(out, allFindings, len(targets))
+		listWarnings := opts.Verbose || !lintsDirs(args)
+		writeLintReport(out, allFindings, len(targets), listWarnings, spec.Report.TopFiles)
 	}
 
 	if failLevel == "" {
@@ -164,8 +175,26 @@ func runLint(out, errOut io.Writer, args []string, opts lintOptions) error {
 	return nil
 }
 
-func writeLintReport(out io.Writer, findings []lint.Finding, checked int) {
+// lintsDirs reports whether args select directory mode (no args or any dir).
+func lintsDirs(args []string) bool {
+	for _, arg := range args {
+		if info, err := os.Stat(arg); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return len(args) == 0
+}
+
+// writeLintReport lists findings and summarises them by rule. Errors are
+// always listed; warnings are listed only when listWarnings is set, otherwise
+// the files with the most warnings are shown.
+func writeLintReport(out io.Writer, findings []lint.Finding, checked int, listWarnings bool, topFiles int) {
+	var warnings []lint.Finding
 	for _, f := range findings {
+		if f.Severity == lint.SeverityWarning && !listWarnings {
+			warnings = append(warnings, f)
+			continue
+		}
 		fmt.Fprintln(out, lint.FormatFindingUnix(f))
 	}
 	if len(findings) == 0 {
@@ -179,5 +208,14 @@ func writeLintReport(out io.Writer, findings []lint.Finding, checked int) {
 	fmt.Fprintf(out, "\nFound %d lint issue(s) across %d of %d file(s).\n", len(findings), len(fileCount), checked)
 	for _, rc := range lint.SummarizeByRule(findings) {
 		fmt.Fprintf(out, "  %5d  %-22s %s\n", rc.Count, rc.RuleID, rc.Severity)
+	}
+	if len(warnings) == 0 {
+		return
+	}
+	byFile := lint.TopFiles(warnings, len(warnings))
+	shown := byFile[:min(topFiles, len(byFile))]
+	fmt.Fprintf(out, "\nMost warnings (top %d of %d file(s); --verbose lists all):\n", len(shown), len(byFile))
+	for _, fc := range shown {
+		fmt.Fprintf(out, "  %5d  %s\n", fc.Count, fc.File)
 	}
 }

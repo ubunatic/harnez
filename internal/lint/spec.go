@@ -26,9 +26,15 @@ type HotspotSpec struct {
 	Top int `yaml:"top"`
 }
 
+// ReportSpec shapes the text report of `harnez lint`.
+type ReportSpec struct {
+	TopFiles int `yaml:"top_files"`
+}
+
 // Spec is the top-level shape of spec/lint.yaml.
 type Spec struct {
 	Go       GoLimits    `yaml:"go"`
+	Report   ReportSpec  `yaml:"report"`
 	Hotspots HotspotSpec `yaml:"hotspots"`
 }
 
@@ -55,6 +61,7 @@ func ParseSpec(data []byte) (*Spec, error) {
 		"go.func_lines":      s.Go.FuncLines,
 		"go.params":          s.Go.Params,
 		"go.imports":         s.Go.Imports,
+		"report.top_files":   s.Report.TopFiles,
 		"hotspots.top":       s.Hotspots.Top,
 	} {
 		if v < 1 {

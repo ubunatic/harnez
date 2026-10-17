@@ -14,6 +14,9 @@ go:
   params: 6
   # Imports per file (go-import-fanout).
   imports: 25
+report:
+  # Files listed in the warning summary of `harnez lint` (most warnings first).
+  top_files: 10
 hotspots:
   # Rows per table in `harnez assess --hotspots`.
   top: 10

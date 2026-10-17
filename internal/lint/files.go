@@ -94,3 +94,32 @@ func sortRuleCounts(c []RuleCount) {
 		return c[i].RuleID < c[j].RuleID
 	})
 }
+
+// FileCount is the number of findings in one file.
+type FileCount struct {
+	File  string
+	Count int
+}
+
+// TopFiles counts findings per file and returns the n files with the most,
+// ties broken by path.
+func TopFiles(findings []Finding, n int) []FileCount {
+	idx := map[string]int{}
+	var out []FileCount
+	for _, f := range findings {
+		i, ok := idx[f.File]
+		if !ok {
+			i = len(out)
+			idx[f.File] = i
+			out = append(out, FileCount{File: f.File})
+		}
+		out[i].Count++
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].File < out[j].File
+	})
+	return out[:min(n, len(out))]
+}

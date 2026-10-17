@@ -119,7 +119,11 @@ func TestEmbeddedLintSpec(t *testing.T) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range append(schema.Properties["go"].Required, schema.Properties["hotspots"].Required...) {
+	var required []string
+	for _, section := range []string{"go", "report", "hotspots"} {
+		required = append(required, schema.Properties[section].Required...)
+	}
+	for _, key := range required {
 		if _, err := ParseSpec([]byte(strings.ReplaceAll(mustSpec(t), key+":", "x_"+key+":"))); err == nil {
 			t.Errorf("renaming required key %q must fail strict decoding", key)
 		}

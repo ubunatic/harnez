@@ -49,6 +49,7 @@ Non-Go repos keep the same target names and map them to their toolchain.
 ## Quality Gates
 
 - `harnez lint --check` fails on errors; `--check=warning` also fails on
-  warnings such as Go size limits (`spec/lint.yaml` in harnez).
+  warnings such as Go size limits (`spec/lint.yaml` in harnez). Repo-wide runs
+  list every error but only summarise warnings; `--verbose` lists them all.
 - Keep files and functions under the warning limits when you touch them; split
   files by concern with move-only commits that keep the suite green.

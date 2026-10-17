@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/lint.schema.json",
   "title": "harnez lint code-quality thresholds",
   "type": "object",
-  "required": ["go", "hotspots"],
+  "required": ["go", "report", "hotspots"],
   "additionalProperties": false,
   "properties": {
     "go": {
@@ -16,6 +16,14 @@
         "func_lines": { "type": "integer", "minimum": 1 },
         "params": { "type": "integer", "minimum": 1 },
         "imports": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "report": {
+      "type": "object",
+      "required": ["top_files"],
+      "additionalProperties": false,
+      "properties": {
+        "top_files": { "type": "integer", "minimum": 1 }
       }
     },
     "hotspots": {

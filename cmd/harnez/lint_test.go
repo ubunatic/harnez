@@ -175,7 +175,7 @@ func TestLintTrackedFilesMode(t *testing.T) {
 		t.Fatalf("report-only run must exit 0, got %v", err)
 	}
 	out := stdout.String()
-	for _, want := range []string{"sub/err.sh:3:", "sub/warn.sh:", "across 2 of 3 file(s)", "bash-no-bracket", "bash-strict-mode"} {
+	for _, want := range []string{"sub/err.sh:3:", "  sub/warn.sh", "across 2 of 3 file(s)", "bash-no-bracket", "bash-strict-mode"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
@@ -226,5 +226,68 @@ func TestLintDirLangFilter(t *testing.T) {
 	}
 	if got := stdout.String(); !strings.Contains(got, "0 file(s) checked") {
 		t.Fatalf("--lang markdown over a repo without markdown should check 0 files, got:\n%s", got)
+	}
+}
+
+func TestLintWarningSummaryAndVerbose(t *testing.T) {
+	t.Chdir(writeLintRepo(t))
+
+	var summary bytes.Buffer
+	if err := runLint(&summary, &summary, nil, lintOptions{Lang: "auto"}); err != nil {
+		t.Fatal(err)
+	}
+	out := summary.String()
+	if !strings.Contains(out, "sub/err.sh:3:") {
+		t.Errorf("errors must always be listed:\n%s", out)
+	}
+	if strings.Contains(out, "sub/warn.sh:2:") {
+		t.Errorf("directory mode must not list warnings without --verbose:\n%s", out)
+	}
+	for _, want := range []string{"bash-strict-mode", "Most warnings (top 1 of 1 file(s); --verbose lists all):", "      1  sub/warn.sh"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("summary missing %q:\n%s", want, out)
+		}
+	}
+
+	var verbose bytes.Buffer
+	if err := runLint(&verbose, &verbose, nil, lintOptions{Lang: "auto", Verbose: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(verbose.String(), "sub/warn.sh:") || strings.Contains(verbose.String(), "Most warnings") {
+		t.Errorf("--verbose must list every warning and skip the file summary:\n%s", verbose.String())
+	}
+
+	// Explicit files list their warnings without --verbose.
+	var explicit bytes.Buffer
+	if err := runLint(&explicit, &explicit, []string{"sub/warn.sh"}, lintOptions{Lang: "auto"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(explicit.String(), "sub/warn.sh:") {
+		t.Errorf("explicit file args must list warnings:\n%s", explicit.String())
+	}
+
+	var js bytes.Buffer
+	if err := runLint(&js, &js, nil, lintOptions{Lang: "auto", JSON: true}); err != nil {
+		t.Fatal(err)
+	}
+	var findings []lint.Finding
+	if err := json.Unmarshal(js.Bytes(), &findings); err != nil {
+		t.Fatal(err)
+	}
+	warned := false
+	for _, f := range findings {
+		warned = warned || f.Severity == lint.SeverityWarning
+	}
+	if !warned {
+		t.Errorf("--json must include warnings: %+v", findings)
+	}
+}
+
+func TestTopFiles(t *testing.T) {
+	findings := []lint.Finding{{File: "b"}, {File: "a"}, {File: "b"}, {File: "c"}, {File: "a"}}
+	got := lint.TopFiles(findings, 2)
+	want := []lint.FileCount{{File: "a", Count: 2}, {File: "b", Count: 2}}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("TopFiles = %+v, want %+v", got, want)
 	}
 }
