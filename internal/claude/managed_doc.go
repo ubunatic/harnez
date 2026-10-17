@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"ubunatic.com/harnez/internal/markdown"
 )
@@ -45,6 +46,18 @@ func prepareManagedDoc(dst string, bundled []byte) ([]byte, string, error) {
 		}
 	}
 	return withDocStopMarker(bundled), "", nil
+}
+
+// warnStaleEmbeddedDoc warns when dir holds the doc's copyable source (the
+// harnez checkout itself) and it differs from the bundled copy: the binary
+// predates the edit, so init would refresh to the old text (issue 790).
+func warnStaleEmbeddedDoc(dir, source string, bundled []byte) bool {
+	onDisk, err := os.ReadFile(filepath.Join(dir, source))
+	if err != nil || bytes.Equal(onDisk, bundled) {
+		return false
+	}
+	fmt.Fprintf(os.Stderr, "warning: %s differs from the doc bundled in this harnez binary; run make install, then rerun init\n", source)
+	return true
 }
 
 func withDocStopMarker(bundled []byte) []byte {

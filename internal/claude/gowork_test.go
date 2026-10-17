@@ -190,3 +190,36 @@ func TestFindGoModules_IgnoresDotDirsAndTestData(t *testing.T) {
 		t.Fatalf("unexpected module args: %v", args)
 	}
 }
+
+// TestGoWorkspaceSkipsSymlinkForMissingUses guards issue 790: a managed
+// go.work.example naming an absent sibling repo must not become a go.work
+// that breaks every go command in a fresh clone.
+func TestGoWorkspaceSkipsSymlinkForMissingUses(t *testing.T) {
+	t.Setenv("GOWORK", "")
+	parent := t.TempDir()
+	target := filepath.Join(parent, "target")
+	writeGoModule(t, target, "example.com/target")
+	example := managedWorkspaceMarker + "\ngo 1.23\n\nuse (\n\t.\n\t../sibling // co-dev\n)\nuse ./also-missing\n"
+	if err := os.WriteFile(filepath.Join(target, "go.work.example"), []byte(example), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := missingWorkspaceUses(target, filepath.Join(target, "go.work.example")); strings.Join(got, ",") != "../sibling,./also-missing" {
+		t.Fatalf("missing uses = %q", got)
+	}
+	if _, err := reconcileGoWorkspace(target, false); err != nil {
+		t.Fatal(err)
+	}
+	assertNotExists(t, filepath.Join(target, "go.work"))
+
+	for _, d := range []string{filepath.Join(parent, "sibling"), filepath.Join(target, "also-missing")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := reconcileGoWorkspace(target, false); err != nil {
+		t.Fatal(err)
+	}
+	if link, err := os.Readlink(filepath.Join(target, "go.work")); err != nil || link != "go.work.example" {
+		t.Fatalf("go.work link = %q, %v; want go.work.example once uses exist", link, err)
+	}
+}

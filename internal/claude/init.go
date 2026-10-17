@@ -1290,6 +1290,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			if err != nil {
 				return fmt.Errorf("language %s: read source: %w", name, err)
 			}
+			warnStaleEmbeddedDoc(dir, lang.SourceFor(docVariants[name]), data)
 			localDoc := localPath(dir, lang.Local)
 			cr, err := writeManagedDoc(localDoc, data)
 			if err != nil {

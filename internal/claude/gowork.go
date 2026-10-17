@@ -203,6 +203,12 @@ func reconcileGoWorkspace(dir string, optIn bool) (bool, error) {
 
 	// Case 4: Ensure symlink
 	if !hasWork {
+		if missing := missingWorkspaceUses(dir, examplePath); len(missing) > 0 {
+			// A fresh clone without sibling repos would get a go.work that breaks
+			// every go command; leave go.work absent until the siblings exist.
+			fmt.Printf("  go.work skipped: go.work.example uses missing %s\n", strings.Join(missing, ", "))
+			return changed, nil
+		}
 		if err := os.Symlink("go.work.example", workPath); err != nil {
 			return false, fmt.Errorf("symlink %s: %w", workPath, err)
 		}
@@ -227,6 +233,44 @@ func reconcileGoWorkspace(dir string, optIn bool) (bool, error) {
 	}
 
 	return changed, nil
+}
+
+// missingWorkspaceUses returns the use directives of the go.work file at path
+// whose directories do not exist relative to dir.
+func missingWorkspaceUses(dir, path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var missing []string
+	inBlock := false
+	for _, line := range strings.Split(string(data), "\n") {
+		line, _, _ = strings.Cut(line, "//")
+		line = strings.TrimSpace(line)
+		use := ""
+		switch {
+		case inBlock && line == ")":
+			inBlock = false
+		case inBlock:
+			use = line
+		case line == "use (":
+			inBlock = true
+		case strings.HasPrefix(line, "use "):
+			use = strings.TrimSpace(strings.TrimPrefix(line, "use "))
+		}
+		use = strings.Trim(use, `"`)
+		if use == "" {
+			continue
+		}
+		full := use
+		if !filepath.IsAbs(full) {
+			full = filepath.Join(dir, full)
+		}
+		if fi, err := os.Stat(full); err != nil || !fi.IsDir() {
+			missing = append(missing, use)
+		}
+	}
+	return missing
 }
 
 func findGoModules(root string) ([]string, []string, error) {

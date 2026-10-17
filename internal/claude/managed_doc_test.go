@@ -109,3 +109,26 @@ func TestInitSpecMarkerlessLocalSectionBothVariants(t *testing.T) {
 		})
 	}
 }
+
+func TestWarnStaleEmbeddedDoc(t *testing.T) {
+	dir := t.TempDir()
+	if warnStaleEmbeddedDoc(dir, "docs/lang/Git.md", []byte("bundled\n")) {
+		t.Fatal("warned without an on-disk source")
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "docs", "lang"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(dir, "docs", "lang", "Git.md")
+	if err := os.WriteFile(src, []byte("bundled\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if warnStaleEmbeddedDoc(dir, "docs/lang/Git.md", []byte("bundled\n")) {
+		t.Fatal("warned for a matching source")
+	}
+	if err := os.WriteFile(src, []byte("edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !warnStaleEmbeddedDoc(dir, "docs/lang/Git.md", []byte("bundled\n")) {
+		t.Fatal("no warning for a source newer than the binary")
+	}
+}
