@@ -1,0 +1,74 @@
+name: flake
+
+# Nightly flake hunt: runs the race suite several times and opens (or
+# comments on) one "Flaky test: <pkg> <Test>" issue per test that both passed
+# and failed. Tests that fail every run are real failures; ci reports them.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      count:
+        description: go test -count
+        default: "5"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  GOWORK: "off"
+
+jobs:
+  flake:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-race-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: go-race-${{ hashFiles('go.sum') }}-
+      - run: bash scripts/install-dev-deps.sh
+      - name: go test -race -count
+        env:
+          COUNT: ${{ inputs.count || '5' }}
+        run: go test -race -count="$COUNT" -json ./... > flake.json 2>&1 || true
+      - name: summary
+        run: go run .github/gotest-report.go -title "flake hunt (-race -count=${{ inputs.count || '5' }})" -flaky flaky.txt flake.json
+      - name: file issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if ! test -s flaky.txt
+          then
+            echo "no flaky tests"
+            exit 0
+          fi
+          gh label create flaky --color B60205 --description "Passes and fails on the same commit" --force
+          while IFS= read -r test_id
+          do
+            title="Flaky test: $test_id"
+            body="\`$test_id\` passed and failed in $RUN_URL (commit $GITHUB_SHA). Details are in that run's summary."
+            number=$(gh issue list --state open --label flaky --limit 200 --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+            if test -n "$number"
+            then
+              gh issue comment "$number" --body "$body"
+            else
+              gh issue create --title "$title" --label flaky --body "$body"
+            fi
+          done < flaky.txt

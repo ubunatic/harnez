@@ -14,12 +14,47 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GOWORK: "off"
+
+# lint, unit and race run in parallel; report adds the wall time. Raw logs
+# need admin rights to download, so each job writes failures, test time and
+# the slowest packages to its summary and annotations (gh run view shows them).
+# Each job keeps its own module and build cache (race builds differ), saved
+# per commit and restored from the newest for the same go.sum.
 jobs:
-  ci:
+  lint:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      GOWORK: "off"
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-lint-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: go-lint-${{ hashFiles('go.sum') }}-
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if test -n "$unformatted"
+          then
+            printf '::error title=gofmt::unformatted files\n%s\n' "$unformatted"
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go build ./...
+      - run: make build
+      - run: make lint
+
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       # LFS: internal/bench validates the saved sessions in docs/data.
       - uses: actions/checkout@v7
@@ -28,25 +63,70 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-unit-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: go-unit-${{ hashFiles('go.sum') }}-
       - run: bash scripts/install-dev-deps.sh
-      - run: git --version
-      - run: go build ./...
-      - run: make build
-      - run: make lint
-      # make check: gofmt, go vet and go test, as in make container-test.
-      # Raw logs need admin rights to download, so test output goes to JSON
-      # and failures are summarised into the step summary and annotations
-      # (readable with gh run view).
-      - name: make check
-        id: check
-        run: make check TESTFLAGS=-json > check.json 2>&1
-      - name: summarise make check failures
-        if: failure() && steps.check.outcome == 'failure'
-        run: go run ./scripts/gotest-summary check.json
+      - name: go test -short
+        id: test
+        run: go test -short -json ./... > unit.json 2>&1
+      - name: summary
+        if: always() && steps.test.outcome != 'skipped'
+        run: go run .github/gotest-report.go -title "unit (go test -short)" unit.json
+
+  race:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-race-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: go-race-${{ hashFiles('go.sum') }}-
+      - run: bash scripts/install-dev-deps.sh
       - name: go test -race
-        id: race
+        id: test
         run: go test -race -json ./... > race.json 2>&1
-      - name: summarise race failures
-        if: failure() && steps.race.outcome == 'failure'
-        run: go run ./scripts/gotest-summary race.json
+      - name: summary
+        if: always() && steps.test.outcome != 'skipped'
+        run: go run .github/gotest-report.go -title "race (go test -race)" race.json
+
+  report:
+    needs: [ lint, unit, race ]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    steps:
+      - name: wall time
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LINT: ${{ needs.lint.result }}
+          UNIT: ${{ needs.unit.result }}
+          RACE: ${{ needs.race.result }}
+        run: |
+          started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .run_started_at)
+          wall=$(( $(date +%s) - $(date -d "$started" +%s) ))
+          {
+            printf '### CI wall time: %dm%02ds\n\n' $((wall / 60)) $((wall % 60))
+            printf '| job | result |\n|---|---|\n| lint | %s |\n| unit | %s |\n| race | %s |\n' "$LINT" "$UNIT" "$RACE"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if test "$LINT$UNIT$RACE" != successsuccesssuccess
+          then
+            exit 1
+          fi
