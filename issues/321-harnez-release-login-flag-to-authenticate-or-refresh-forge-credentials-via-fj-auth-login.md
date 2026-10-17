@@ -49,3 +49,10 @@ Currently, users must know how to invoke `fj auth login` directly in their shell
 - [ ] Running `harnez release --login` executes `fj auth login` with interactive stdin/stdout/stderr attached.
 - [ ] Standalone `harnez release --login` exits 0 after authentication without running build or publishing.
 - [ ] Documentation updated across `docs/GoRelease.md` and `README.md`.
+
+## Observed 2026-10-17 (v0.1.30)
+`harnez release` failed at publish with `fj release publish failed: api error:
+unable to parse refresh token`; commit and tag were already on Codeberg.
+Recovery: `fj auth login` inside the repo (from a non-repo dir it fails with
+"no repo info specified"), then `harnez release --continue`. Release should
+detect this error and print exactly that recovery hint.
