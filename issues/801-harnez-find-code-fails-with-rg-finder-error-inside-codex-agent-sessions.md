@@ -1,6 +1,6 @@
 # harnez find code fails with rg finder error inside codex agent sessions
 
-Status: Open
+Status: Closed — rg exit 1=ok, exit 2 w/ output=partial, errors show argv/exit/stderr; repro in /tmp (79dda195)
 
 ## Problem
 During the 2026-10-17 /respect audit, the codex sol:med subagent reported
