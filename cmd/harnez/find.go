@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -63,6 +64,7 @@ Entities:
            narrow lifecycle state.
   code     searches source files through configured finders (neus first,
            with rg as the code fallback when neus is unavailable).
+           Outside a Git worktree, an explicit -d/--dir is required.
   docs     searches documentation through configured finders, with built-in
            fuzzy text matching as a fallback.
 
@@ -140,6 +142,8 @@ sum of all group classes, then ticket number, then path. This never
 silently relaxes an AND query to OR on zero results.
 
 Output formatting:
+  code/docs: exit 2 if a finder fails and no results are available;
+             partial results keep exit 0 with diagnostics on stderr.
   Default: in interactive terminal / TTY sessions or with -I/--image,
            renders a bounded visual overview card (using internal/readcard)
            or compact bounded summaries.
@@ -151,6 +155,12 @@ Output formatting:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if limitFlag <= 0 {
 				return fmt.Errorf("find: --limit must be greater than zero")
+			}
+			if args[0] == "code" && !cmd.Flags().Changed("dir") {
+				out, err := exec.CommandContext(cmd.Context(), "git", "-C", dir, "rev-parse", "--is-inside-work-tree").Output()
+				if err != nil || strings.TrimSpace(string(out)) != "true" {
+					return fmt.Errorf("find code: outside a Git worktree; use -d/--dir <directory> to select the search scope")
+				}
 			}
 			opts := findRunOptions{
 				Dir:            dir,
@@ -166,10 +176,10 @@ Output formatting:
 				K:              kFlag,
 				JSONL:          jsonlFlag,
 			}
-			return runFindWithOptions(cmd.OutOrStdout(), cmd.ErrOrStderr(), args, opts)
+			return silenceIfExitCode(cmd, runFindWithOptions(cmd.OutOrStdout(), cmd.ErrOrStderr(), args, opts))
 		},
 	}
-	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
+	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "search directory (required for code outside a Git worktree)")
 	cmd.Flags().BoolVar(&nextFlag, "next", false, "report the next free issue number")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output in JSON format")
 	cmd.Flags().BoolVarP(&rawFlag, "raw", "r", false, "output raw TSV text directly to stdout")
@@ -320,6 +330,14 @@ func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) e
 		resp, err := finder.Search(context.Background(), opts.Dir, entity, query, opts.Via, opts.K, errW)
 		if err != nil {
 			return err
+		}
+		if len(resp.Results) == 0 {
+			for _, status := range resp.Finders {
+				if status.Status != "ok" && status.Status != "partial" {
+					// Search already wrote the finder diagnostics to stderr.
+					return &exitCodeError{Code: 2}
+				}
+			}
 		}
 		if opts.JSON || opts.JSONL {
 			enc := json.NewEncoder(w)
