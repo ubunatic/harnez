@@ -16,5 +16,7 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   (`WaitObservations`). Issue 792.
 - **Timing budgets under `-race`**: scale with a `raceEnabled` build-tag const; prove concurrency
   with a barrier, not wall clock. Issues 793, 796.
+- **Files read while written**: `os.WriteFile` truncates first; a polling reader sees an empty file.
+  Write a temp file and rename (`FileSessionStore.Save`, CI run 39011231816).
 - **Verify before pushing**: never chain `test && push` in one command when the test output
   decides the push; read the result first.
