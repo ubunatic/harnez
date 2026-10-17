@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func writeExecutable(t *testing.T, dir, name, body string) string {
@@ -68,8 +67,14 @@ func TestSearchMergesDeduplicatesAndUsesArgumentSafeFakeFinders(t *testing.T) {
 	}
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", bin)
-	first := writeExecutable(t, bin, "first", `/bin/sleep 0.2; printf '%s' '[{"path":"shared.go","line":4,"title":"shared","snippet":"first","score":0.01,"kind":"code"},{"path":"first.go","line":2,"title":"first","snippet":"one","kind":"code"}]'`)
-	second := writeExecutable(t, bin, "second", `/bin/sleep 0.2; printf '%s\n' '{"path":"shared.go","line":4,"title":"shared","snippet":"second","score":0.99,"kind":"code"}' '{"path":"second.go","line":7,"title":"second","snippet":"two","kind":"code"}'`)
+	// Each finder marks itself and waits for the other (a barrier): run one
+	// after the other, the first gives up after ~1.5s and fails.
+	rendezvous := func(self, peer string) string {
+		self, peer = filepath.Join(base, self), filepath.Join(base, peer)
+		return `: > '` + self + `'; i=0; while ! test -e '` + peer + `'; do i=$((i+1)); if test $i -gt 150; then exit 1; fi; /bin/sleep 0.01; done; `
+	}
+	first := writeExecutable(t, bin, "first", rendezvous("first.ready", "second.ready")+`printf '%s' '[{"path":"shared.go","line":4,"title":"shared","snippet":"first","score":0.01,"kind":"code"},{"path":"first.go","line":2,"title":"first","snippet":"one","kind":"code"}]'`)
+	second := writeExecutable(t, bin, "second", rendezvous("second.ready", "first.ready")+`printf '%s\n' '{"path":"shared.go","line":4,"title":"shared","snippet":"second","score":0.99,"kind":"code"}' '{"path":"second.go","line":7,"title":"second","snippet":"two","kind":"code"}'`)
 	cfg := `finders:
   - name: first
     scope: code
@@ -83,16 +88,12 @@ func TestSearchMergesDeduplicatesAndUsesArgumentSafeFakeFinders(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "config.yaml"), []byte(cfg), 0600); err != nil {
 		t.Fatal(err)
 	}
-	started := time.Now()
 	got, err := Search(context.Background(), root, "code", "quoted ; $(false)", "", 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if time.Since(started) > 450*time.Millisecond {
-		t.Fatal("finders did not execute concurrently")
-	}
 	if len(got.Results) != 3 {
-		t.Fatalf("results=%+v", got.Results)
+		t.Fatalf("finders did not run concurrently or failed: results=%+v finders=%+v", got.Results, got.Finders)
 	}
 	if got.Results[0].Path != "shared.go" || got.Results[0].Score < 0.03 {
 		t.Fatalf("dedup/rank=%+v", got.Results)

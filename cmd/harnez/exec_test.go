@@ -285,7 +285,7 @@ func TestRunExecWrapper_TelemetryWriteNeverBlocksCommand(t *testing.T) {
 	slowStarted := make(chan struct{}, 1)
 	opts.Insert = func(dbPath string, call telemetry.ToolCall) error {
 		slowStarted <- struct{}{}
-		time.Sleep(2 * time.Second) // deliberately far past InsertTimeout and past the test's own deadline
+		time.Sleep(10 * time.Second) // deliberately far past InsertTimeout and past the test's own deadline
 		return errors.New("should never be observed by the wrapper")
 	}
 
@@ -301,11 +301,11 @@ func TestRunExecWrapper_TelemetryWriteNeverBlocksCommand(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 	// Bound generously above InsertTimeout to absorb scheduler jitter, but
-	// nowhere near the injected writer's 2s sleep: this is the assertion
+	// nowhere near the injected writer's 10s sleep: this is the assertion
 	// that a hung/slow telemetry write cannot delay the wrapped command's
 	// own exit beyond the configured bound.
-	if elapsed > 500*time.Millisecond {
-		t.Errorf("runExecWrapper() took %v, want well under the 2s slow-writer delay (bounded by InsertTimeout=%v)", elapsed, opts.InsertTimeout)
+	if limit := 500 * time.Millisecond * raceFactor; elapsed > limit {
+		t.Errorf("runExecWrapper() took %v, want under %v, far below the 10s slow-writer delay (bounded by InsertTimeout=%v)", elapsed, limit, opts.InsertTimeout)
 	}
 
 	select {
@@ -327,7 +327,7 @@ func TestRunExecWrapper_TimeoutKillsAndRecordsDistinctTelemetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runExecWrapper: %v", err)
 	}
-	if time.Since(start) > time.Second {
+	if time.Since(start) > time.Second*raceFactor {
 		t.Fatalf("timeout took too long: %v", time.Since(start))
 	}
 	if code == 0 {
@@ -355,11 +355,11 @@ func TestRunExecWrapper_ExplicitTimeoutOverridesConfiguredValue(t *testing.T) {
 	opts.Timeout = 50 * time.Millisecond
 	var out, errOut bytes.Buffer
 	start := time.Now()
-	_, err := runExecWrapper([]string{"sleep", "1"}, opts, strings.NewReader(""), &out, &errOut)
+	_, err := runExecWrapper([]string{"sleep", "5"}, opts, strings.NewReader(""), &out, &errOut)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if time.Since(start) > 500*time.Millisecond {
+	if time.Since(start) > 500*time.Millisecond*raceFactor {
 		t.Fatalf("explicit timeout was not applied: %v", time.Since(start))
 	}
 }
@@ -374,22 +374,22 @@ func TestRunExecWrapper_RepoSettingAndFlagPrecedence(t *testing.T) {
 	opts.ConfigPath = config
 	var out, errOut bytes.Buffer
 	start := time.Now()
-	_, err := runExecWrapper([]string{"sleep", "1"}, opts, strings.NewReader(""), &out, &errOut)
+	_, err := runExecWrapper([]string{"sleep", "5"}, opts, strings.NewReader(""), &out, &errOut)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if time.Since(start) > 500*time.Millisecond {
+	if time.Since(start) > 500*time.Millisecond*raceFactor {
 		t.Fatalf("repo timeout was not applied: %v", time.Since(start))
 	}
 	opts.Timeout = 200 * time.Millisecond
 	out.Reset()
 	errOut.Reset()
 	start = time.Now()
-	_, err = runExecWrapper([]string{"sleep", "1"}, opts, strings.NewReader(""), &out, &errOut)
+	_, err = runExecWrapper([]string{"sleep", "5"}, opts, strings.NewReader(""), &out, &errOut)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if elapsed := time.Since(start); elapsed < 150*time.Millisecond || elapsed > 700*time.Millisecond {
+	if elapsed := time.Since(start); elapsed < 150*time.Millisecond || elapsed > 700*time.Millisecond*raceFactor {
 		t.Fatalf("flag did not override repo timeout: %v", elapsed)
 	}
 }
@@ -1371,7 +1371,7 @@ func TestRunExecWrapperContinuesStoppedQuotaRunWithoutConsumingQuota(t *testing.
 	if err != nil || code != stoppedGroupExitCode {
 		t.Fatalf("stopped quota run = (%d, %v), want interrupted exit %d; stderr=%q", code, err, stoppedGroupExitCode, stderr.String())
 	}
-	if time.Since(started) > 3*time.Second {
+	if time.Since(started) > 3*time.Second*raceFactor {
 		t.Fatalf("stopped quota run took %s; want prompt completion", time.Since(started))
 	}
 	if !strings.Contains(stderr.String(), "stopped process group detected") || !strings.Contains(stderr.String(), "quota-1 run marked incomplete") {

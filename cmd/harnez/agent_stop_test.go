@@ -158,7 +158,7 @@ while True:
 			if err := cmd.Execute(); err != nil {
 				t.Fatal(err)
 			}
-			if time.Since(began) > 4*time.Second {
+			if time.Since(began) > 4*time.Second*raceFactor {
 				t.Fatal("shutdown exceeded bounded grace + kill confirmation")
 			}
 			if !strings.Contains(out.String(), "stopped: fixture, no process left, safe to resume/delete") || !strings.Contains(out.String(), "few seconds to report exit") {

@@ -257,12 +257,8 @@ func TestTier1_LatencyBudget(t *testing.T) {
 	elapsed := time.Since(start)
 	perCall := elapsed / time.Duration(iterations)
 
-	// Under 1ms budget (in fact under 50µs); race instrumentation slows
-	// regexp matching several-fold, so race builds get 4x.
-	budget := time.Millisecond
-	if raceEnabled {
-		budget *= 4
-	}
+	// Under 1ms budget (in fact under 50µs).
+	budget := time.Millisecond * raceFactor
 	if perCall > budget {
 		t.Errorf("ClassifyTier1 latency per call = %v, want < %v", perCall, budget)
 	}

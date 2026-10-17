@@ -41,11 +41,7 @@ func TestInsertLatencyBudget(t *testing.T) {
 	defer db.Close()
 
 	const n = 100
-	// Race instrumentation slows SQLite several-fold; race builds get 4x.
-	budgetMs := 20
-	if raceEnabled {
-		budgetMs *= 4
-	}
+	budgetMs := 20 * raceFactor
 	for i := 0; i < n; i++ {
 		call := sampleCall("latency-session", "Bash", 4, 0)
 		start := time.Now()

@@ -350,12 +350,8 @@ func TestRunRate_LatencyBudget(t *testing.T) {
 	stateDir := filepath.Join(tmp, "state")
 	getenv := func(string) string { return "" }
 
-	// Race instrumentation slows SQLite and file I/O several-fold, so race
-	// builds get a 4x budget; the sub-50ms target applies to normal builds.
-	budgetMs := 50
-	if raceEnabled {
-		budgetMs *= 4
-	}
+	// The sub-50ms target applies to normal builds; race builds scale it.
+	budgetMs := 50 * raceFactor
 
 	coldStart := time.Now()
 	if err := runRate([]string{"Read", "4", "cold call", "proj/1-t"}, rateOptions{

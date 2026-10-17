@@ -17,7 +17,7 @@ func TestHookSound_DefaultReturnsQuicklyWithSlowFakePlayer(t *testing.T) {
 	logFile := filepath.Join(tempDir, "detached.log")
 	fakeScript := filepath.Join(tempDir, "fake-harnez")
 
-	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" > %q\nsleep 2\n", logFile)
+	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" > %q\nsleep 10\n", logFile)
 	if err := os.WriteFile(fakeScript, []byte(script), 0755); err != nil {
 		t.Fatalf("failed to write fake executable: %v", err)
 	}
@@ -34,8 +34,8 @@ func TestHookSound_DefaultReturnsQuicklyWithSlowFakePlayer(t *testing.T) {
 		t.Fatalf("runHookSound default mode failed: %v", err)
 	}
 
-	if elapsed > 500*time.Millisecond {
-		t.Errorf("runHookSound took %v, want < 500ms (fast return with detached slow player)", elapsed)
+	if limit := 500 * time.Millisecond * raceFactor; elapsed > limit {
+		t.Errorf("runHookSound took %v, want < %v (fast return with detached slow player)", elapsed, limit)
 	}
 
 	// Verify detached process executed in background and logged its arguments
@@ -65,7 +65,7 @@ func TestHookSound_CobraCommandDefaultMode(t *testing.T) {
 	logFile := filepath.Join(tempDir, "cobra_detached.log")
 	fakeScript := filepath.Join(tempDir, "fake-harnez-cmd")
 
-	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" > %q\nsleep 2\n", logFile)
+	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" > %q\nsleep 10\n", logFile)
 	if err := os.WriteFile(fakeScript, []byte(script), 0755); err != nil {
 		t.Fatalf("failed to write fake executable: %v", err)
 	}
@@ -86,8 +86,8 @@ func TestHookSound_CobraCommandDefaultMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cmd.Execute() failed: %v", err)
 	}
-	if elapsed > 500*time.Millisecond {
-		t.Errorf("cmd.Execute() took %v, want < 500ms", elapsed)
+	if limit := 500 * time.Millisecond * raceFactor; elapsed > limit {
+		t.Errorf("cmd.Execute() took %v, want < %v", elapsed, limit)
 	}
 }
 

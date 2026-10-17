@@ -312,8 +312,8 @@ func TestFallbackChainTimeoutStopsImmediately(t *testing.T) {
 	if !errors.Is(err, ErrTimeout) {
 		t.Errorf("err = %v, want ErrTimeout", err)
 	}
-	if elapsed > 1*time.Second {
-		t.Errorf("elapsed = %v, want quick timeout (< 1s)", elapsed)
+	if limit := time.Second * raceFactor; elapsed > limit {
+		t.Errorf("elapsed = %v, want quick timeout (< %v)", elapsed, limit)
 	}
 
 	if _, err := os.Stat(unreachableMarker); !os.IsNotExist(err) {

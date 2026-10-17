@@ -215,8 +215,8 @@ func TestAGYStatuslineLockedStoreStillPrintsWithinBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("statusline with locked store returned error: %v", err)
 	}
-	if elapsed > 50*time.Millisecond {
-		t.Fatalf("statusline with locked store took %s, want <=50ms", elapsed)
+	if limit := 50 * time.Millisecond * raceFactor; elapsed > limit {
+		t.Fatalf("statusline with locked store took %s, want <=%s", elapsed, limit)
 	}
 	if out.Len() == 0 {
 		t.Fatal("statusline printed no output before locked write")

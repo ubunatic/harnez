@@ -453,7 +453,7 @@ func TestUpdateIssuesReadme_LockContentionFailsFastNotHang(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected UpdateIssuesReadme to fail while the lock is held by another process")
 	}
-	if elapsed > 2*time.Second {
+	if elapsed > 2*time.Second*raceFactor {
 		t.Errorf("UpdateIssuesReadme took %s to fail -- expected a bounded retry, not a long/indefinite block", elapsed)
 	}
 

@@ -181,8 +181,8 @@ func TestPassiveObservationReturnsQuicklyWhenDatabaseLocked(t *testing.T) {
 	data, _ := json.Marshal(map[string]any{"rate_limits": map[string]any{"five_hour": map[string]any{"used_percentage": 12.5}}})
 	started := time.Now()
 	ObserveStatusline(context.Background(), "claude", data)
-	if elapsed := time.Since(started); elapsed > 20*time.Millisecond {
-		t.Fatalf("locked statusline observation took %s, want <=20ms", elapsed)
+	if elapsed, limit := time.Since(started), 20*time.Millisecond*raceFactor; elapsed > limit {
+		t.Fatalf("locked statusline observation took %s, want <=%s", elapsed, limit)
 	}
 	_ = tx.Rollback()
 	_ = blocker.Close()
@@ -272,8 +272,8 @@ func TestStatuslineObservationLargeStoreCompletesWithinBudget(t *testing.T) {
 
 	started := time.Now()
 	ObserveStatuslineAt(ctx, "claude", []byte(`{"rate_limits":{"five_hour":{"used_percentage":12.5}}}`), dbPath)
-	if elapsed := time.Since(started); elapsed > 20*time.Millisecond {
-		t.Fatalf("statusline observation on 50k-row store took %s, want <=20ms", elapsed)
+	if elapsed, limit := time.Since(started), 20*time.Millisecond*raceFactor; elapsed > limit {
+		t.Fatalf("statusline observation on 50k-row store took %s, want <=%s", elapsed, limit)
 	}
 }
 
