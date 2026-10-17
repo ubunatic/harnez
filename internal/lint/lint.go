@@ -111,8 +111,13 @@ func NewLinter(rules ...Rule) *Linter {
 	return &Linter{rules: rules}
 }
 
-// DefaultLinter creates a Linter with all built-in rules registered.
-func DefaultLinter() *Linter {
+// DefaultLinter creates a Linter with all built-in rules registered, using the
+// thresholds from the embedded spec/lint.yaml.
+func DefaultLinter() (*Linter, error) {
+	spec, err := LoadSpec()
+	if err != nil {
+		return nil, err
+	}
 	return NewLinter(
 		NewBashNoBracketRule(),
 		NewBashNoSemicolonRule(),
@@ -120,7 +125,8 @@ func DefaultLinter() *Linter {
 		NewBashSourceOverDotRule(),
 		NewBashStrictModeRule(),
 		NewMarkerIntegrityRule(),
-	)
+		NewGoQualityRule(spec.Go),
+	), nil
 }
 
 // Rules returns registered rules.

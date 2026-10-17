@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ubunatic.com/harnez/spec/schemas/lint.schema.json",
+  "title": "harnez lint code-quality thresholds",
+  "type": "object",
+  "required": ["go", "hotspots"],
+  "additionalProperties": false,
+  "properties": {
+    "go": {
+      "type": "object",
+      "required": ["file_lines", "test_file_lines", "func_lines", "params", "imports"],
+      "additionalProperties": false,
+      "properties": {
+        "file_lines": { "type": "integer", "minimum": 1 },
+        "test_file_lines": { "type": "integer", "minimum": 1 },
+        "func_lines": { "type": "integer", "minimum": 1 },
+        "params": { "type": "integer", "minimum": 1 },
+        "imports": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "hotspots": {
+      "type": "object",
+      "required": ["top"],
+      "additionalProperties": false,
+      "properties": {
+        "top": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

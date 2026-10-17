@@ -257,7 +257,8 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 | `revert` | `-c` `-t` `--managed` `--debloat` | Remove managed blocks or restore pre-debloat settings |
 | `clean [procs] [q1]` | `-d` `--kill` `--json` | Inspect or remove stale process groups and release verified incomplete quota state |
 | `status` | `-c` `-t` `--debloat` | Print config summary and applied state |
-| `assess [path]` | `--json` | Fast code/doc metrics, token estimation, and repo feasibility report |
+| `assess [path]` | `--json` `--hotspots` | Fast code/doc metrics, token estimation, repo feasibility report; `--hotspots` lists refactoring targets |
+| `lint [file\|dir]…` | `--check[=warning]` `--lang` `--json` | Lint tracked Bash, Go, Makefile, and Markdown files against harnez rules (Go size limits in `spec/lint.yaml`) |
 | `mode [level]` | `--status` `--clear` | Switch ConciseMode terseness level and sync the local overlay |
 | `distill` | `[hook|read]` | Distill verbose command output for agent context conservation |
 | `release` | `--bump` `--continue` `--dry-run` `-s` | Version, build, sign, and publish a release |

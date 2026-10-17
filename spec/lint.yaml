@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=schemas/lint.schema.json
+#
+# Code-quality thresholds for `harnez lint` Go rules and `harnez assess --hotspots`
+# (issue 806). Findings above a threshold are warnings: `harnez lint --check`
+# ignores them, `harnez lint --check=warning` fails on them.
+go:
+  # Lines per non-test .go file (go-file-length).
+  file_lines: 800
+  # Lines per _test.go file; table-driven tests run longer (go-file-length).
+  test_file_lines: 1500
+  # Lines per function or method, signature to closing brace (go-func-length).
+  func_lines: 100
+  # Parameters per function or method (go-params).
+  params: 6
+  # Imports per file (go-import-fanout).
+  imports: 25
+hotspots:
+  # Rows per table in `harnez assess --hotspots`.
+  top: 10

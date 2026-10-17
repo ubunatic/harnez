@@ -1037,6 +1037,7 @@ func newRootCmd() *cobra.Command {
 	var assessTokens bool
 	var assessHistory bool
 	var assessRAMP bool
+	var assessHotspots bool
 	assessCmd := &cobra.Command{
 		Use:   "assess [path]",
 		Short: "Fast code/doc metrics, token estimation, and repository feasibility report",
@@ -1045,6 +1046,23 @@ func newRootCmd() *cobra.Command {
 			targetPath := "."
 			if len(args) > 0 {
 				targetPath = args[0]
+			}
+
+			if assessHotspots {
+				rep, err := assess.AssessHotspots(targetPath)
+				if err != nil {
+					return fmt.Errorf("assess --hotspots %s: %w", targetPath, err)
+				}
+				if assessJSON {
+					data, err := json.MarshalIndent(rep, "", "  ")
+					if err != nil {
+						return fmt.Errorf("render json: %w", err)
+					}
+					fmt.Println(string(data))
+					return nil
+				}
+				fmt.Print(assess.RenderHotspotsText(rep))
+				return nil
 			}
 
 			if assessRAMP {
@@ -1118,6 +1136,7 @@ func newRootCmd() *cobra.Command {
 	assessCmd.Flags().BoolVar(&assessTokens, "tokens", false, "display project-level lifetime AI token attribution and cost of change")
 	assessCmd.Flags().BoolVar(&assessHistory, "history", false, "display multi-track repository evolution history")
 	assessCmd.Flags().BoolVar(&assessRAMP, "ramp", false, "display RAMP repository AI maturity profile and evidence inventory")
+	assessCmd.Flags().BoolVar(&assessHotspots, "hotspots", false, "list largest Go files and functions, import fan-out, and untested packages (git-tracked files)")
 
 	root.AddCommand(newChannelCmd(), newComposeCmd())
 	root.AddCommand(apply, diff, scanDocs, status, revert, newCleanCmd(), usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newCodexTelemetryCmd(), newHookCmd(), newStatuslineCmd(), newAGYStatuslineCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd(), newAgentCmd(), newMCPCmd(), newBenchCmd(), newSkillCmd(), newSkillsCmd(), newDecideCmd(), newGuardCmd(), newCompactCmd(), newTUICmd(), newManCmd(root))

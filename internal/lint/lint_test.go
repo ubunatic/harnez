@@ -266,7 +266,10 @@ func TestFormatFindingUnix(t *testing.T) {
 }
 
 func TestDefaultLinterIntegration(t *testing.T) {
-	dl := DefaultLinter()
+	dl, err := DefaultLinter()
+	if err != nil {
+		t.Fatal(err)
+	}
 	content := `#!/usr/bin/env bash
 if [ -f "$file" ]; then
 then

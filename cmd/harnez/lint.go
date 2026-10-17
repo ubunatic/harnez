@@ -126,7 +126,10 @@ func runLint(out, errOut io.Writer, args []string, opts lintOptions) error {
 		return err
 	}
 
-	linter := lint.DefaultLinter()
+	linter, err := lint.DefaultLinter()
+	if err != nil {
+		return err
+	}
 	allFindings := []lint.Finding{}
 	for _, t := range targets {
 		findings, err := linter.LintFile(t.path, t.lang)
