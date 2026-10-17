@@ -1,6 +1,6 @@
 # 804 — Race-proof wall-clock budgets in tests
 
-**Status**: In Progress
+**Status**: Closed — raceFactor-scaled latency budgets, lengthened slow dependencies, finder barrier (e5d0cbc0); GitHub CI green on branch (run 39018973299)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
