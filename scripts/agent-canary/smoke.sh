@@ -3,6 +3,7 @@
 # Codex against the lmcoder model server in the same pod. Every check must
 # pass; a check that cannot run counts as a failure.
 
+# harnez-lint:ignore bash-strict-mode -- no -e: every check runs and failures are counted
 set -uo pipefail
 
 base_url="${HARNEZ_AGENT_CANARY_BASE_URL:-http://127.0.0.1:8734/v1}"

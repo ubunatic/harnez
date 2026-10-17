@@ -223,6 +223,20 @@ Content
 		t.Fatalf("expected marker-unopened finding, got %+v", findings)
 	}
 
+	// Prose, inline-code, and fenced-block mentions are documentation, not markers.
+	mentionsMD := "# Title\nUpdate `<!-- harnez:begin Concise Mode -->` in AGENTS.md.\n" +
+		"```markdown\n<!-- harnez:begin Local Overlays -->\n```\n" +
+		"~~~\n<!-- harnez:end Other -->\n~~~\n"
+	if findings := linter.LintBytes("test.md", []byte(mentionsMD), LangMarkdown); len(findings) != 0 {
+		t.Fatalf("expected 0 findings for marker mentions, got %+v", findings)
+	}
+
+	indentedMD := "# Title\n  <!-- harnez:begin A -->\n"
+	findings = linter.LintBytes("test.md", []byte(indentedMD), LangMarkdown)
+	if len(findings) != 1 || findings[0].RuleID != "marker-unclosed" || findings[0].Col != 3 {
+		t.Fatalf("expected marker-unclosed at col 3, got %+v", findings)
+	}
+
 	// Makefile markers
 	goodMK := `# harnez:begin Section One
 all:
@@ -277,5 +291,15 @@ fi
 	}
 	if !strings.Contains(ruleList, "bash-source-over-dot") {
 		t.Errorf("missing bash-source-over-dot in %s", ruleList)
+	}
+}
+
+func TestSuppressDirective(t *testing.T) {
+	linter := NewLinter(NewBashStrictModeRule(), NewBashNoSemicolonRule())
+	src := "#!/usr/bin/env bash\n# harnez-lint:ignore bash-strict-mode -- collects failures itself\nset -uo pipefail\n" +
+		"if test -n \"$a\"; then echo; fi # harnez-lint:ignore other-rule\n"
+	findings := linter.LintBytes("s.sh", []byte(src), LangBash)
+	if len(findings) != 1 || findings[0].RuleID != "bash-no-semicolon" || findings[0].Line != 4 {
+		t.Fatalf("want only the unsuppressed bash-no-semicolon on line 4, got %+v", findings)
 	}
 }

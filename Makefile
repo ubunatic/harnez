@@ -73,20 +73,23 @@ revert-managed: ⚙️ build  # remove managed blocks from the Claude Code confi
 status: ⚙️ build  # show config summary and applied state
 	./$(BINARY) status -c $(CONFIG) -t $(TARGET)
 
-lint: ⚙️  # check docs/commands/*.md files are all registered in config.yaml
+lint: ⚙️ build  # gofmt, go vet, harnez lint --check on tracked files, docs/commands registration
+	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
+	GOWORK=off go vet ./...
+	./$(BINARY) lint --check
 	bash scripts/lint.sh
 
 install-canary: ⚙️  # verify the latest Codeberg release installs and reports its version
 	bash scripts/install-canary.sh
 
-container-test: ⚙️  # run make check offline in Containerfile.test (ENGINE=podman|docker; log in TEST_OUT)
+container-test: ⚙️  # run make lint check offline in Containerfile.test (ENGINE=podman|docker; log in TEST_OUT)
 	@test -n "$(ENGINE)" || (echo "❌ neither podman nor docker is installed" && exit 1)
 	$(ENGINE) build -f Containerfile.test -t $(TEST_IMG) \
 	   --build-arg GO_VERSION=$$(awk '$$1 == "go" { print $$2; exit }' go.mod) \
 	   --build-arg TEST_UID=$$(id -u) .
 	mkdir -p $(TEST_OUT)
 	$(ENGINE) run --rm --init --network none $(USERNS) -v $(TEST_OUT):/out:Z $(TEST_IMG) \
-	   bash -o pipefail -c 'make check 2>&1 | tee /out/test.log'
+	   bash -o pipefail -c 'make lint check 2>&1 | tee /out/test.log'
 
 test-ubuntu: ⚙️ container-test  # alias for container-test (Ubuntu 24.04, git 2.43)
 
@@ -101,13 +104,20 @@ check: ⚙️  # run static analysis and tests (GOWORK=off: catch go.mod pin dri
 check-fast: ⚙️  # fast local feedback loop
 	go test ./...
 
+test-short: ⚙️  # fast unit tier: go test -short (skips PTY/media/integration tests)
+	GOWORK=off go test -short $(TESTFLAGS) ./...
+
+test-pkg: ⚙️  # one package with -race, uncached: make test-pkg PKG=./internal/lint/...
+	@test -n "$(PKG)" || (echo "❌ usage: make test-pkg PKG=./path/..." && exit 1)
+	GOWORK=off go test -race -count=1 $(TESTFLAGS) $(PKG)
+
 smoke: ⚙️ build  # live smoke: apply/diff/repair + usage bar-alignment against real binary
 	bash scripts/smoke-test.sh
 
 smoke-container: ⚙️  # build both agent images and run the in-pod Pi/Codex smoke test (LMCODER_MODEL_DIR=reuse host models, LMCODER_CACHE_DIR=download to a host dir)
 	bash scripts/agent-canary/run.sh
 
-test: ⚙️ check  # alias for check
+test: ⚙️ check  # full tier: alias for check (gofmt, vet, all tests)
 
 test-dot8: ⚙️  # run tests with dot8 build tag
 	GOWORK=off go test -tags dot8 ./...

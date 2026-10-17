@@ -34,154 +34,83 @@ type openMarker struct {
 }
 
 var (
-	// Markdown HTML comment markers
-	reMDBegin = regexp.MustCompile(`<!--\s*harnez:begin\s*(.*?)\s*-->`)
-	reMDEnd   = regexp.MustCompile(`<!--\s*harnez:end\s*(.*?)\s*-->`)
+	// Markdown HTML comment markers. Only a marker that starts its line counts:
+	// prose and inline code that mention a marker are not markers.
+	reMDBegin = regexp.MustCompile(`^\s*<!--\s*harnez:begin\s*(.*?)\s*-->`)
+	reMDEnd   = regexp.MustCompile(`^\s*<!--\s*harnez:end\s*(.*?)\s*-->`)
 
 	// Makefile comment markers
 	reMKBegin = regexp.MustCompile(`^#\s*harnez:begin\s*(.*?)\s*$`)
 	reMKEnd   = regexp.MustCompile(`^#\s*harnez:end\s*(.*?)\s*$`)
 )
 
+// matchMarker reports whether line holds a begin or end marker, and its name and column.
+func matchMarker(line string) (begin bool, name string, col int, ok bool) {
+	for _, m := range []struct {
+		re    *regexp.Regexp
+		begin bool
+	}{{reMDBegin, true}, {reMDEnd, false}, {reMKBegin, true}, {reMKEnd, false}} {
+		if loc := m.re.FindStringSubmatchIndex(line); loc != nil {
+			col := len(line) - len(strings.TrimLeft(line, " \t")) + 1
+			return m.begin, strings.TrimSpace(line[loc[2]:loc[3]]), col, true
+		}
+	}
+	return false, "", 0, false
+}
+
+// isFence reports whether line opens or closes a fenced Markdown code block.
+func isFence(line string) bool {
+	t := strings.TrimSpace(line)
+	return strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~")
+}
+
 func (r *MarkerIntegrityRule) Check(file string, content []byte) []Finding {
 	var findings []Finding
+	add := func(line, col int, rule, msg string) {
+		findings = append(findings, Finding{File: file, Line: line, Col: col, RuleID: rule, Severity: SeverityError, Message: msg})
+	}
+	markdown := DetectLanguage(file, content) != LangMake
 	scanner := bufio.NewScanner(bytes.NewReader(content))
 	lineNum := 0
+	inFence := false
 	var stack []openMarker
 
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
-
-		// Match Markdown begin
-		if loc := reMDBegin.FindStringSubmatchIndex(line); loc != nil {
-			name := strings.TrimSpace(line[loc[2]:loc[3]])
-			col := loc[0] + 1
+		if markdown && isFence(line) {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		begin, name, col, ok := matchMarker(line)
+		switch {
+		case !ok:
+		case begin:
 			if name == "" {
-				findings = append(findings, Finding{
-					File:     file,
-					Line:     lineNum,
-					Col:      col,
-					RuleID:   "marker-invalid",
-					Severity: SeverityError,
-					Message:  "empty section name in harnez:begin marker",
-				})
+				add(lineNum, col, "marker-invalid", "empty section name in harnez:begin marker")
 			}
 			if len(stack) > 0 {
 				top := stack[len(stack)-1]
-				findings = append(findings, Finding{
-					File:     file,
-					Line:     lineNum,
-					Col:      col,
-					RuleID:   "marker-nested",
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("nested marker '%s' inside unclosed section '%s' from line %d", name, top.name, top.line),
-				})
+				add(lineNum, col, "marker-nested", fmt.Sprintf("nested marker '%s' inside unclosed section '%s' from line %d", name, top.name, top.line))
 			}
 			stack = append(stack, openMarker{name: name, line: lineNum, col: col})
-			continue
-		}
-
-		// Match Markdown end
-		if loc := reMDEnd.FindStringSubmatchIndex(line); loc != nil {
-			name := strings.TrimSpace(line[loc[2]:loc[3]])
-			col := loc[0] + 1
-			if len(stack) == 0 {
-				findings = append(findings, Finding{
-					File:     file,
-					Line:     lineNum,
-					Col:      col,
-					RuleID:   "marker-unopened",
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("found harnez:end '%s' with no preceding harnez:begin", name),
-				})
-			} else {
-				top := stack[len(stack)-1]
-				stack = stack[:len(stack)-1]
-				if top.name != name {
-					findings = append(findings, Finding{
-						File:     file,
-						Line:     lineNum,
-						Col:      col,
-						RuleID:   "marker-mismatch",
-						Severity: SeverityError,
-						Message:  fmt.Sprintf("mismatched marker: harnez:begin '%s' (line %d) closed by harnez:end '%s'", top.name, top.line, name),
-					})
-				}
+		case len(stack) == 0:
+			add(lineNum, col, "marker-unopened", fmt.Sprintf("found harnez:end '%s' with no preceding harnez:begin", name))
+		default:
+			top := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if top.name != name {
+				add(lineNum, col, "marker-mismatch", fmt.Sprintf("mismatched marker: harnez:begin '%s' (line %d) closed by harnez:end '%s'", top.name, top.line, name))
 			}
-			continue
-		}
-
-		// Match Makefile begin
-		if loc := reMKBegin.FindStringSubmatchIndex(line); loc != nil {
-			name := strings.TrimSpace(line[loc[2]:loc[3]])
-			col := loc[0] + 1
-			if name == "" {
-				findings = append(findings, Finding{
-					File:     file,
-					Line:     lineNum,
-					Col:      col,
-					RuleID:   "marker-invalid",
-					Severity: SeverityError,
-					Message:  "empty section name in harnez:begin marker",
-				})
-			}
-			if len(stack) > 0 {
-				top := stack[len(stack)-1]
-				findings = append(findings, Finding{
-					File:     file,
-					Line:     lineNum,
-					Col:      col,
-					RuleID:   "marker-nested",
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("nested marker '%s' inside unclosed section '%s' from line %d", name, top.name, top.line),
-				})
-			}
-			stack = append(stack, openMarker{name: name, line: lineNum, col: col})
-			continue
-		}
-
-		// Match Makefile end
-		if loc := reMKEnd.FindStringSubmatchIndex(line); loc != nil {
-			name := strings.TrimSpace(line[loc[2]:loc[3]])
-			col := loc[0] + 1
-			if len(stack) == 0 {
-				findings = append(findings, Finding{
-					File:     file,
-					Line:     lineNum,
-					Col:      col,
-					RuleID:   "marker-unopened",
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("found harnez:end '%s' with no preceding harnez:begin", name),
-				})
-			} else {
-				top := stack[len(stack)-1]
-				stack = stack[:len(stack)-1]
-				if top.name != name {
-					findings = append(findings, Finding{
-						File:     file,
-						Line:     lineNum,
-						Col:      col,
-						RuleID:   "marker-mismatch",
-						Severity: SeverityError,
-						Message:  fmt.Sprintf("mismatched marker: harnez:begin '%s' (line %d) closed by harnez:end '%s'", top.name, top.line, name),
-					})
-				}
-			}
-			continue
 		}
 	}
 
 	// Any unclosed markers left on stack at EOF
 	for _, unclosed := range stack {
-		findings = append(findings, Finding{
-			File:     file,
-			Line:     unclosed.line,
-			Col:      unclosed.col,
-			RuleID:   "marker-unclosed",
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("unclosed marker: harnez:begin '%s' opened at line %d was never closed", unclosed.name, unclosed.line),
-		})
+		add(unclosed.line, unclosed.col, "marker-unclosed", fmt.Sprintf("unclosed marker: harnez:begin '%s' opened at line %d was never closed", unclosed.name, unclosed.line))
 	}
 
 	return findings

@@ -10,9 +10,8 @@ tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 
 if ! command -v "$bin" >/dev/null 2>&1 && ! test -x "$bin"
-then
-  printf 'ERROR: harnez binary not found: %s\n' "$bin" >&2
-  exit 1
+then printf 'ERROR: harnez binary not found: %s\n' "$bin" >&2
+     exit 1
 fi
 
 mkdir -p "$tmp_dir/home" "$tmp_dir/data"
@@ -26,14 +25,13 @@ measure() {
   : > "$samples"
 
   for ((i = 0; i < run_count; i++))
-  do
-    started=$(date +%s%N)
-    if test "$label" = statusline
-    then "$bin" "$@" < "$payload" >/dev/null
-    else "$bin" "$@" >/dev/null
-    fi
-    finished=$(date +%s%N)
-    printf '%s\n' "$(((finished - started) / 1000000))" >> "$samples"
+  do started=$(date +%s%N)
+     if test "$label" = statusline
+     then "$bin" "$@" < "$payload" >/dev/null
+     else "$bin" "$@" >/dev/null
+     fi
+     finished=$(date +%s%N)
+     printf '%s\n' "$(((finished - started) / 1000000))" >> "$samples"
   done
 
   sort -n "$samples" > "$sorted"

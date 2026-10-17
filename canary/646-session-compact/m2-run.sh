@@ -53,10 +53,9 @@ then printf 'FAIL: session.compact hook did not settle; see %s\n' "$debug_file" 
      exit 1
 fi
 if ! rg -Fq 'harnez compaction applied:' "$debug_file"
-then
-  fallback=$(rg -F 'harnez compaction fallback:' "$debug_file" | tail -1 || true)
-  printf 'FAIL: no Harnez replacement was applied. Fallback: %s\n' "${fallback:-none reported}" >&2
-  exit 1
+then fallback=$(rg -F 'harnez compaction fallback:' "$debug_file" | tail -1 || true)
+     printf 'FAIL: no Harnez replacement was applied. Fallback: %s\n' "${fallback:-none reported}" >&2
+     exit 1
 fi
 
 python3 - "$session_id" <<'PY'

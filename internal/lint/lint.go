@@ -150,6 +150,8 @@ func (l *Linter) LintBytes(path string, content []byte, lang Language) []Finding
 		}
 	}
 
+	findings = dropSuppressed(findings, content)
+
 	// Sort findings deterministically by Line, then Col, then RuleID
 	sort.Slice(findings, func(i, j int) bool {
 		if findings[i].Line != findings[j].Line {
@@ -179,4 +181,42 @@ func ruleApplies(rule Rule, lang Language) bool {
 // FormatFindingUnix formats a finding in GCC/Unix format: `file:line:col: message [rule_id]`.
 func FormatFindingUnix(f Finding) string {
 	return fmt.Sprintf("%s:%d:%d: %s [%s]", f.File, f.Line, f.Col, f.Message, f.RuleID)
+}
+
+// suppressDirective marks a justified exception, on the finding's line or the
+// line above: `# harnez-lint:ignore bash-strict-mode -- reason`.
+const suppressDirective = "harnez-lint:ignore"
+
+// dropSuppressed removes findings whose rule is named by a suppress directive
+// on the same line or the line directly above.
+func dropSuppressed(findings []Finding, content []byte) []Finding {
+	if len(findings) == 0 || !bytes.Contains(content, []byte(suppressDirective)) {
+		return findings
+	}
+	lines := strings.Split(string(content), "\n")
+	suppressed := func(line int, rule string) bool {
+		for _, n := range []int{line, line - 1} {
+			if n < 1 || n > len(lines) {
+				continue
+			}
+			_, rest, ok := strings.Cut(lines[n-1], suppressDirective)
+			if !ok {
+				continue
+			}
+			rules, _, _ := strings.Cut(rest, "--")
+			for _, r := range strings.FieldsFunc(rules, func(c rune) bool { return c == ',' || c == ' ' || c == '\t' }) {
+				if r == rule {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	kept := findings[:0]
+	for _, f := range findings {
+		if !suppressed(f.Line, f.RuleID) {
+			kept = append(kept, f)
+		}
+	}
+	return kept
 }

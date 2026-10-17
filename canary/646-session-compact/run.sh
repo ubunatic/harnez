@@ -7,15 +7,12 @@ server_pid=
 cleanup() {
   status=$?
   if test -n "$server_pid"
-  then
-    kill "$server_pid" 2>/dev/null || true
-    wait "$server_pid" 2>/dev/null || true
+  then kill "$server_pid" 2>/dev/null || true
+       wait "$server_pid" 2>/dev/null || true
   fi
   if test "$status" -eq 0
-  then
-    rm -rf "$run_dir"
-  else
-    printf 'Probe artifacts retained: %s\n' "$run_dir" >&2
+  then rm -rf "$run_dir"
+  else printf 'Probe artifacts retained: %s\n' "$run_dir" >&2
   fi
   return "$status"
 }
@@ -25,16 +22,14 @@ python3 -m http.server 18764 --bind 127.0.0.1 --directory "$run_dir" >"$run_dir/
 server_pid=$!
 
 for route in a child
-do
-  probe_dir="$run_dir/probe-$route"
-  mkdir -p "$probe_dir/hooks" "$probe_dir/.claude-plugin"
-  cp "$plugin_dir/.claude-plugin/plugin.json" "$probe_dir/.claude-plugin/plugin.json"
-  cp "$plugin_dir/hooks/hooks.json" "$probe_dir/hooks/hooks.json"
-  cp "$plugin_dir/hooks/probe.ts" "$probe_dir/hooks/probe.ts"
-  if test "$route" = child
-  then
-    cp "$plugin_dir/hooks/probe-child.ts" "$probe_dir/hooks/probe.ts"
-  fi
+do probe_dir="$run_dir/probe-$route"
+   mkdir -p "$probe_dir/hooks" "$probe_dir/.claude-plugin"
+   cp "$plugin_dir/.claude-plugin/plugin.json" "$probe_dir/.claude-plugin/plugin.json"
+   cp "$plugin_dir/hooks/hooks.json" "$probe_dir/hooks/hooks.json"
+   cp "$plugin_dir/hooks/probe.ts" "$probe_dir/hooks/probe.ts"
+   if test "$route" = child
+   then cp "$plugin_dir/hooks/probe-child.ts" "$probe_dir/hooks/probe.ts"
+   fi
 done
 
 run_probe() {
@@ -63,14 +58,12 @@ PY
 
   printf '%s debug log: %s\n' "$label" "$debug_file"
   if ! rg -Fq 'session.compact settled' "$debug_file"
-  then
-    printf 'FAIL: %s debug log does not show the compact hook settling.\n' "$label" >&2
-    exit 1
+  then printf 'FAIL: %s debug log does not show the compact hook settling.\n' "$label" >&2
+       exit 1
   fi
   if ! rg -Fq "session.compact bridge $report_name" "$debug_file"
-  then
-    printf 'FAIL: %s route report is absent from the debug log.\n' "$label" >&2
-    exit 1
+  then printf 'FAIL: %s route report is absent from the debug log.\n' "$label" >&2
+       exit 1
   fi
   rg -F "session.compact bridge $report_name" "$debug_file"
 }
