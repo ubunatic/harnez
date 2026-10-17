@@ -1,6 +1,6 @@
 # 812 — Split newRootCmd and newAgentCmd into per-subcommand constructors with a help golden test
 
-**Status**: Open
+**Status**: Closed — resolved in ec1939ee (newRootCmd 920 -> ~25 lines) and 3b042188 (newAgentCmd 876 -> 202 lines); help golden d9c1af2b unchanged for 118 commands
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor
