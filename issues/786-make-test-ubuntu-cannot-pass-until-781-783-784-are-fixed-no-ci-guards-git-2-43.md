@@ -1,6 +1,6 @@
 # 786 — make test-ubuntu cannot pass until 781/783/784 are fixed; no CI guards git 2.43
 
-**Status**: In Progress — round 2: CI + container-test
+**Status**: Closed — make container-test green (podman), CI lfs+race+v7 actions (875becb8)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
