@@ -1,6 +1,6 @@
 # 811 — test-short tier: go test -short ./cmd/harnez under 10s
 
-**Status**: Open
+**Status**: Closed — resolved in 3d1626f4; go test -short ./cmd/harnez 53.6s -> 8.3s, internal/subagent 10.8s -> 0.3s, full suite green
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Testing
