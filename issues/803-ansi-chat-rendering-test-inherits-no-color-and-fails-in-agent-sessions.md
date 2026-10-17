@@ -1,6 +1,6 @@
 # 803 — ANSI chat rendering test inherits NO_COLOR and fails in agent sessions
 
-**Status**: Closed — Color rendering assertion now selects its profile; full make test-q1 passes with NO_COLOR=1 (commit 9d4-placeholder)
+**Status**: Closed — Color rendering assertion now selects its profile; full make test-q1 passes with NO_COLOR=1 (commit ef3794bb)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
