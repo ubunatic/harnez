@@ -1095,12 +1095,12 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 	if err := validateDocNames(cfg, docs); err != nil {
 		return err
 	}
-	changes := 0
+	r := &applyReport{}
 	removed, err := removeDecommissionedArtifacts(target, cfg)
 	if err != nil {
 		return err
 	}
-	changes += removed
+	r.changes += removed
 
 	configuredSkills := make(map[string]struct{}, len(cfg.Skills))
 	for _, skill := range cfg.Skills {
@@ -1126,16 +1126,7 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 				return fmt.Errorf("remove dropped skill %s: %w", skillDir, err)
 			}
 			fmt.Printf("  removed %s\n", skillDir)
-			changes++
-		}
-	}
-
-	type pStat struct{ label, detail string }
-	var pStats []pStat
-
-	addStat := func(label, detail string) {
-		if detail != "" {
-			pStats = append(pStats, pStat{label, detail})
+			r.changes++
 		}
 	}
 
@@ -1146,13 +1137,13 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		return fmt.Errorf("settings: %w", err)
 	}
 	if sr.changed {
-		changes++
+		r.changes++
 	} else {
 		existing := jsonc.Read(settingsPath)
 		if p, _ := existing["permissions"].(map[string]any); p != nil {
 			allow := jsonc.ToStrings(p["allow"])
 			deny := jsonc.ToStrings(p["deny"])
-			addStat("permissions", fmt.Sprintf("%d allow, %d deny", len(allow), len(deny)))
+			r.addStat("permissions", fmt.Sprintf("%d allow, %d deny", len(allow), len(deny)))
 		}
 		var keys []string
 		for _, k := range managedSettingsKeys {
@@ -1165,7 +1156,7 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 				}
 			}
 		}
-		addStat("settings", strings.Join(keys, ", "))
+		r.addStat("settings", strings.Join(keys, ", "))
 	}
 	printResult("wrote", settingsPath, sr)
 	jevResult, err := applyManagedLocalPlugins(target, cfg.JevCompactionEnabled, true, cfg.Env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] != "")
@@ -1173,298 +1164,34 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		return fmt.Errorf("managed local plugins: %w", err)
 	}
 	if jevResult.changed {
-		changes++
+		r.changes++
 	}
 	printResult("managed", filepath.Join(target, "plugins", "marketplaces", jevMarketplaceName), jevResult)
 
 	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
 
-	// issue 491 M6: with cfg unfiltered, the "skills" component itself (as
-	// opposed to a skill's own `requires:`) only gates installing new
-	// content — skip semantics, matching a disabled skill's own requires
-	// check below, which still actively removes it regardless of this gate.
-	if len(cfg.Commands) > 0 && selection.HasComponent("skills") {
-		cmdDirs := commandTargets(target, cfg)
-		for _, cmdDir := range cmdDirs {
-			if err := os.MkdirAll(cmdDir, 0755); err != nil {
-				return fmt.Errorf("commands dir %s: %w", cmdDir, err)
-			}
-		}
-		var cmdNames []string
-		for _, cmd := range cfg.Commands {
-			content, err := genCommandContent(cmd, cfg.FS)
-			if err != nil {
-				return err
-			}
-			for _, cmdDir := range cmdDirs {
-				path := filepath.Join(cmdDir, cmd.Name+".md")
-				cr, err := writeFileIfChanged(path, []byte(content))
-				if err != nil {
-					return fmt.Errorf("command %s: %w", cmd.Name, err)
-				}
-				if cr.changed {
-					changes++
-				}
-				printResult("wrote", path, cr)
-			}
-			cmdNames = append(cmdNames, cmd.Name)
-		}
-		addStat("commands", strings.Join(cmdNames, ", "))
+	if err := applyCommands(r, cfg, selection, target); err != nil {
+		return err
 	}
 
-	if len(cfg.Skills) > 0 {
-		targets := skillTargets(cfg)
-		var skillNames []string
-		for _, skill := range cfg.Skills {
-			// issue 142/491: a skill that is rate_feedback-gated and disabled,
-			// or whose `requires:` component isn't selected, is actively
-			// removed (not merely skipped) — same rationale as the
-			// section-clean branch above.
-			if skillDisabled(skill, selection, disableRateFeedback) {
-				for _, skillsRoot := range targets {
-					skillDir := filepath.Join(skillsRoot, skill.Name)
-					if externalSkillClash(skillDir) || !isManagedSkill(skillDir) {
-						continue
-					}
-					path, err := safeSkillPath(skillDir, "SKILL.md")
-					if err != nil {
-						return err
-					}
-					if _, err := os.Stat(path); err == nil {
-						if err := os.Remove(path); err != nil {
-							return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
-						}
-						changes++
-						fmt.Printf("  removed %s\n", path)
-						_ = os.Remove(skillDir) // best-effort: drop now-empty dir
-					} else if !os.IsNotExist(err) {
-						return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
-					}
-					resourceTargets, err := validateSkillResourceTargets(skill)
-					if err != nil {
-						return err
-					}
-					for _, resourceTarget := range resourceTargets {
-						resourcePath, err := safeSkillPath(skillDir, resourceTarget)
-						if err != nil {
-							return err
-						}
-						if err := os.Remove(resourcePath); err != nil && !os.IsNotExist(err) {
-							return fmt.Errorf("skill %s resource [%s]: %w", skill.Name, resourcePath, err)
-						}
-						_ = os.Remove(filepath.Dir(resourcePath))
-					}
-					markerPath := filepath.Join(skillDir, ManagedSkillMarker)
-					if err := os.Remove(markerPath); err == nil {
-						changes++
-					} else if !os.IsNotExist(err) {
-						return fmt.Errorf("skill %s marker [%s]: %w", skill.Name, markerPath, err)
-					}
-					_ = os.Remove(skillDir)
-				}
-				skillNames = append(skillNames, skill.Name+" (disabled)")
-				continue
-			}
-			if !selection.HasComponent("skills") {
-				// skip semantics: skills component off, but this skill's own
-				// requires: (if any) are met, so an existing install is left
-				// untouched rather than updated or removed.
-				continue
-			}
-			content, err := genSkillContent(skill, cfg.FS)
-			if err != nil {
-				return err
-			}
-			resources, err := genSkillResources(skill, cfg.FS)
-			if err != nil {
-				return err
-			}
-			for _, skillsRoot := range targets {
-				skillDir := filepath.Join(skillsRoot, skill.Name)
-				if externalSkillClash(skillDir) {
-					continue
-				}
-				if _, err := os.Lstat(skillDir); err == nil && !isManagedSkill(skillDir) {
-					continue // never overwrite a skill directory harnez does not own
-				} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-					return fmt.Errorf("skill %s dir: %w", skill.Name, err)
-				}
-				path, err := safeSkillPath(skillDir, "SKILL.md")
-				if err != nil {
-					return err
-				}
-				if err := os.MkdirAll(skillDir, 0755); err != nil {
-					return fmt.Errorf("skill %s dir: %w", skill.Name, err)
-				}
-				markerPath := filepath.Join(skillDir, ManagedSkillMarker)
-				markerResult, err := writeFileIfChanged(markerPath, []byte("managed: config\nskill: "+skill.Name+"\n"))
-				if err != nil {
-					return fmt.Errorf("skill %s marker: %w", skill.Name, err)
-				}
-				if markerResult.changed {
-					changes++
-				}
-				oldContent, _ := os.ReadFile(path)
-				cr := applyResult{changed: string(oldContent) != content}
-				if cr.changed {
-					if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-						return fmt.Errorf("skill %s: %w", skill.Name, err)
-					}
-					changes++
-				}
-				printResult("wrote", path, cr)
-				for _, resource := range resources {
-					resourcePath, err := safeSkillPath(skillDir, resource.target)
-					if err != nil {
-						return err
-					}
-					if err := os.MkdirAll(filepath.Dir(resourcePath), 0755); err != nil {
-						return fmt.Errorf("skill %s resource dir: %w", skill.Name, err)
-					}
-					rr, err := writeFileIfChanged(resourcePath, resource.data)
-					if err != nil {
-						return fmt.Errorf("skill %s resource: %w", skill.Name, err)
-					}
-					if rr.changed {
-						changes++
-					}
-					printResult("wrote", resourcePath, rr)
-				}
-			}
-			skillNames = append(skillNames, skill.Name)
-		}
-		if selection.HasComponent("skills") {
-			n, bundled, err := syncBundledSkills(cfg)
-			if err != nil {
-				return err
-			}
-			changes += n
-			for _, b := range bundled {
-				skillNames = append(skillNames, b+" (bundled)")
-			}
-		}
-		addStat("skills", strings.Join(skillNames, ", "))
+	if err := applySkills(r, cfg, selection, disableRateFeedback); err != nil {
+		return err
 	}
 
-	// Codex's own native hooks.json-equivalent (config.toml's [hooks.<name>]
-	// tables) is a distinct config format from Claude's settings.json, so it
-	// isn't folded into buildSettingsDoc/applySettingsJSON above — it gets
-	// its own merge (internal/codex.Apply, preserving unrelated hooks/keys
-	// the same way applySettingsJSON preserves unmanaged settings keys). See
-	// issues/199 (research) and issues/200 (this wiring, originally a
-	// standalone `harnez codex-hooks apply` command, folded into `apply`
-	// per user direction rather than staying a separate command).
-	// issue 491 M5: Codex/AGY hooks are installed only under the telemetry
-	// component; without it they're actively removed (ownership-aware,
-	// 02c9a0b), not merely skipped, so a selected apply that drops telemetry
-	// leaves no dangling harnez-owned hook behind.
-	if cfg.CodexHooksTarget != "" {
-		hooksPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
-		if selection.HasComponent("telemetry") {
-			changed, err := codex.Apply(hooksPath)
-			if err != nil {
-				return fmt.Errorf("codex hooks: %w", err)
-			}
-			if changed {
-				changes++
-				fmt.Printf("  wrote %s\n", hooksPath)
-				fmt.Println("  note: Codex will prompt for hook-trust review before this hook becomes active (see its /hooks panel).")
-			}
-			addStat("codex hooks", codex.Summary(hooksPath))
-		} else {
-			changed, err := codex.Remove(hooksPath)
-			if err != nil {
-				return fmt.Errorf("codex hooks: %w", err)
-			}
-			if changed {
-				changes++
-				fmt.Printf("  removed %s\n", hooksPath)
-			}
-		}
+	if err := applyCodexHooks(r, cfg, selection); err != nil {
+		return err
 	}
 
-	// Antigravity native tool observation hook (issue 373):
-	// Install/update wildcard PreToolUse hook in ~/.gemini/config/hooks.json if ~/.gemini exists.
-	if cfg.AgyHooksTarget != "" {
-		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
-		agentHome := filepath.Dir(filepath.Dir(hooksPath))
-		if _, err := os.Stat(agentHome); err == nil {
-			if selection.HasComponent("telemetry") {
-				changed, err := agy.Apply(hooksPath)
-				if err != nil {
-					return fmt.Errorf("agy hooks: %w", err)
-				}
-				if changed {
-					changes++
-					fmt.Printf("  wrote %s\n", hooksPath)
-				}
-				addStat("agy hooks", agy.Summary(hooksPath))
-			} else {
-				changed, err := agy.Remove(hooksPath)
-				if err != nil {
-					return fmt.Errorf("agy hooks: %w", err)
-				}
-				if changed {
-					changes++
-					fmt.Printf("  removed %s\n", hooksPath)
-				}
-			}
-		}
+	if err := applyAgyHooks(r, cfg, selection); err != nil {
+		return err
 	}
 
-	// issue 491 M6: like Codex/AGY hooks above, distill adapters are only
-	// installed under the telemetry component; without it they're actively
-	// removed, since cfg is unfiltered here (selection decides, not Filter).
-	if adapters := distillAdapters(cfg); len(adapters) > 0 {
-		if selection.HasComponent("telemetry") {
-			for _, adapter := range adapters {
-				ar, err := writeFileIfChanged(adapter.path, []byte(adapter.content))
-				if err != nil {
-					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
-				}
-				if ar.changed {
-					changes++
-				}
-				printResult("wrote", adapter.path, ar)
-			}
-			addStat("distill", distillAdapterSummary(cfg))
-		} else {
-			for _, adapter := range adapters {
-				if err := os.Remove(adapter.path); err == nil {
-					changes++
-					fmt.Printf("  removed %s\n", adapter.path)
-				} else if !os.IsNotExist(err) {
-					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
-				}
-			}
-		}
+	if err := applyDistillAdapters(r, cfg, selection); err != nil {
+		return err
 	}
 
-	docNames := docs
-	configDocs := cfg.Docs
-	if !selection.HasComponent("docs") {
-		docNames = nil
-		configDocs = nil
-	}
-	globalDocs := mergeDocs(configDocs, docNames)
-	for _, name := range globalDocs {
-		lang, ok := cfg.AgentsMD.Languages[name]
-		if !ok {
-			return fmt.Errorf("unknown doc: %s", name)
-		}
-		for _, dst := range docTargets(target, lang, cfg) {
-			fr, err := installDoc(cfg.FS, lang.SourceFor(docVariant), dst, forceDocs)
-			if err != nil {
-				return fmt.Errorf("language %s: install %s: %w", name, dst, err)
-			}
-			if fr.changed {
-				changes++
-				fmt.Printf("  installed %s\n", dst)
-			} else {
-				state := langDocState(cfg.FS, lang.SourceFor(docVariant), dst)
-				addStat(name, fsutil.ContractHome(dst)+" ["+state+"]")
-			}
-		}
+	if err := applyGlobalDocs(r, cfg, docVariant, docs, forceDocs, selection, target); err != nil {
+		return err
 	}
 
 	if home, err := os.UserHomeDir(); err == nil {
@@ -1473,10 +1200,10 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 			return err
 		}
 		if changed {
-			changes++
+			r.changes++
 			fmt.Printf("  wrote %s\n", shimPath)
 		} else {
-			addStat("bash shim", fsutil.ContractHome(shimPath))
+			r.addStat("bash shim", fsutil.ContractHome(shimPath))
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
@@ -1485,10 +1212,10 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 			return err
 		}
 		if changed {
-			changes++
+			r.changes++
 			fmt.Printf("  wrote %s\n", launcherPath)
 		} else {
-			addStat("harnez-agy launcher", fsutil.ContractHome(launcherPath))
+			r.addStat("harnez-agy launcher", fsutil.ContractHome(launcherPath))
 		}
 	}
 
@@ -1500,14 +1227,14 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 			return fmt.Errorf("gear symlink %s: %w", link, err)
 		}
 		if lr.changed {
-			changes++
+			r.changes++
 			fmt.Printf("  symlink %s → %s\n", link, gearExe)
 		} else {
 			gearStats = append(gearStats, fsutil.ContractHome(link))
 		}
 	}
 	if len(gearStats) > 0 {
-		addStat("⚙ symlink", strings.Join(gearStats, ", "))
+		r.addStat("⚙ symlink", strings.Join(gearStats, ", "))
 	}
 
 	if envPath := HarnezEnvPath(); envPath != "" {
@@ -1516,10 +1243,10 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 			return fmt.Errorf("harnez env %s: %w", envPath, err)
 		}
 		if changed {
-			changes++
+			r.changes++
 			fmt.Printf("  wrote %s\n", envPath)
 		} else {
-			addStat("env script", fsutil.ContractHome(envPath))
+			r.addStat("env script", fsutil.ContractHome(envPath))
 		}
 	}
 
@@ -1530,14 +1257,14 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 				return fmt.Errorf("shell rc %s: %w", rcPath, err)
 			}
 			if changed {
-				changes++
+				r.changes++
 				if existed {
 					fmt.Printf("  updated %s [env]\n", rcPath)
 				} else {
 					fmt.Printf("  wrote %s [env]\n", rcPath)
 				}
 			} else {
-				addStat("shell rc", fsutil.ContractHome(rcPath))
+				r.addStat("shell rc", fsutil.ContractHome(rcPath))
 			}
 		}
 	}
@@ -1548,7 +1275,7 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 			return fmt.Errorf("systemd unit: %w", err)
 		}
 		if ur.changed {
-			changes++
+			r.changes++
 		}
 		printResult("wrote", unitPath, ur)
 		if ur.changed {
@@ -1556,14 +1283,14 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		}
 	}
 
-	if changes == 0 {
+	if r.changes == 0 {
 		fmt.Println("No changes.")
-	} else if changes == 1 {
+	} else if r.changes == 1 {
 		fmt.Println("1 change.")
 	} else {
-		fmt.Printf("%d changes.\n", changes)
+		fmt.Printf("%d changes.\n", r.changes)
 	}
-	for _, s := range pStats {
+	for _, s := range r.stats {
 		fmt.Printf("  %-14s %s\n", s.label+":", s.detail)
 	}
 	return nil
