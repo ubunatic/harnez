@@ -1,6 +1,6 @@
 # 806 — Spec-driven Go quality rules in harnez lint and assess hotspot report
 
-**Status**: Open
+**Status**: Closed — resolved in f9502234; harnez lint --lang go reports 171 warnings, assess --hotspots on harnez, full suite green
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Tooling
