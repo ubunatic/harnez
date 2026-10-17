@@ -41,7 +41,11 @@ func TestInsertLatencyBudget(t *testing.T) {
 	defer db.Close()
 
 	const n = 100
-	const budgetMs = 20
+	// Race instrumentation slows SQLite several-fold; race builds get 4x.
+	budgetMs := 20
+	if raceEnabled {
+		budgetMs *= 4
+	}
 	for i := 0; i < n; i++ {
 		call := sampleCall("latency-session", "Bash", 4, 0)
 		start := time.Now()
@@ -49,7 +53,7 @@ func TestInsertLatencyBudget(t *testing.T) {
 			t.Fatalf("Insert %d: %v", i, err)
 		}
 		elapsedMs := float64(time.Since(start)) / float64(time.Millisecond)
-		if elapsedMs > budgetMs {
+		if elapsedMs > float64(budgetMs) {
 			t.Errorf("insert %d took %.2fms, want sub-%dms", i, elapsedMs, budgetMs)
 		}
 	}
