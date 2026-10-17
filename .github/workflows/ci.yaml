@@ -4,6 +4,8 @@ on:
   push:
     branches: [ main ]
   pull_request:
+  # Lets cloud agents run CI on their branch without a PR.
+  workflow_dispatch:
 
 permissions:
   contents: read
