@@ -2422,6 +2422,13 @@ func TestCodexOverThresholdResumeUsesProviderAutoCompact(t *testing.T) {
 	}
 }
 
+// elapsedField matches the elapsed time in stream labels ("[reply: 1s]").
+var elapsedField = regexp.MustCompile(`\[([a-z ]+): [0-9hms]+([],])`)
+
+// zeroElapsed sets stream label times to 0s: a slow -race runner can cross a
+// second, and these tests check labels and order, not timing.
+func zeroElapsed(s string) string { return elapsedField.ReplaceAllString(s, "[$1: 0s$2") }
+
 type streamDriver struct{ recordingAgentDriver }
 
 func (*streamDriver) emit(fn subagent.EventFunc) *subagent.TurnResult {
@@ -2452,7 +2459,7 @@ func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	got := out.String()
+	got := zeroElapsed(out.String())
 	order := []string{"[session info: id=thread-1 agent=codex:gpt-6-luna action=start resolved=new]", "name=w", "reconnect: harnez agent resume thread-1", "[wait:", "[message: 0s]\non it", "[heartbeat: 0s, ~", "last: running sleep]", "[message: 0s]\nall done", "[done: 2 messages, last message is the reply"}
 	pos := 0
 	for _, want := range order {
@@ -2484,7 +2491,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	got := out.String()
+	got := zeroElapsed(out.String())
 	if !strings.HasPrefix(got, "[session info: id=sid agent=claude:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: verified /compact at 250.0k context tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
 		t.Fatalf("stdout:\n%s", got)
 	}
@@ -2512,7 +2519,7 @@ func TestAgentStartStatsModeShowsOnlyHeartbeatsAndReply(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	got := out.String()
+	got := zeroElapsed(out.String())
 	if strings.Contains(got, "on it") || strings.Contains(got, "[message:") {
 		t.Fatalf("intermediate message leaked in stats mode:\n%s", got)
 	}
@@ -2718,7 +2725,7 @@ func tool(text string) subagent.Event { return subagent.Event{Kind: "activity", 
 
 func TestConfirmationAndPlanShowInStatsMode(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will count files")}, {0, tool("running ls")}, {0, msg("PLAN: ls then sort")}, {0, msg("interim chatter")}, {0, msg("9 files")}}}
-	got := runScripted(t, d, "start", "--model", "codex:luna", "orig task", "--name", "w", "--stream", "stats")
+	got := zeroElapsed(runScripted(t, d, "start", "--model", "codex:luna", "orig task", "--name", "w", "--stream", "stats"))
 	for _, want := range []string{"[confirmation: 0s]\nwill count files\n", "[plan: 0s]\nls then sort\n", "[reply: 0s]\n9 files\n"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
@@ -2771,7 +2778,7 @@ func TestPromptGetsProtocolButStoredPromptStaysOriginal(t *testing.T) {
 
 func TestPlanFirstAddsGateAndPrompt(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will plan")}, {0, msg("PLAN: 1) read 2) count")}}}
-	got := runScripted(t, d, "start", "--model", "codex:luna", "count files", "--name", "w", "--plan", "yes")
+	got := zeroElapsed(runScripted(t, d, "start", "--model", "codex:luna", "count files", "--name", "w", "--plan", "yes"))
 	if !strings.Contains(d.prompt, "plan-first turn") || !strings.HasSuffix(d.prompt, "\n\ncount files") {
 		t.Fatalf("driver prompt = %q", d.prompt)
 	}
@@ -3789,7 +3796,7 @@ func TestAgentRootSlashRejectsContinueWithName(t *testing.T) {
 
 func TestStatsModeDoesNotRepeatAnAlreadyShownFinalMessage(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will do it")}}} // the only message is also the reply
-	got := runScripted(t, d, "start", "--model", "luna", "task", "--name", "w", "--stream", "stats")
+	got := zeroElapsed(runScripted(t, d, "start", "--model", "luna", "task", "--name", "w", "--stream", "stats"))
 	if strings.Count(got, "will do it") != 1 || strings.Contains(got, "CONFIRM:") {
 		t.Fatalf("final message repeated or raw tag shown:\n%s", got)
 	}
@@ -4195,5 +4202,13 @@ func TestHTOZeroDisablesForegroundDetach(t *testing.T) {
 	hint := waitHint("w")
 	if strings.Contains(hint, "harnez agent wait") || !strings.Contains(hint, "does not detach") {
 		t.Fatalf("wait hint with HTO=0 = %q, want no separate wait job", hint)
+	}
+}
+
+func TestZeroElapsed(t *testing.T) {
+	in := "[heartbeat: 1s, ~70 tokens]\n[reply: 1m5s]\nall done\n[session info: id=sid]\n[done: 2 messages]"
+	want := "[heartbeat: 0s, ~70 tokens]\n[reply: 0s]\nall done\n[session info: id=sid]\n[done: 2 messages]"
+	if got := zeroElapsed(in); got != want {
+		t.Fatalf("zeroElapsed = %q, want %q", got, want)
 	}
 }
