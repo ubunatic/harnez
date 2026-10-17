@@ -1,6 +1,6 @@
 # 808 — Managed docs/practices/Testing.md: short/pkg/full/container/CI test tiers
 
-**Status**: Open
+**Status**: Closed — resolved in 07969a21 as docs/practices/TestTiers.md (docs/Testing.md is harnez's own doc); make test-short/test-pkg added in 3e0746e0; make container-test green
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Documentation
