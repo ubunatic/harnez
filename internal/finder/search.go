@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -309,8 +310,9 @@ func run(parent context.Context, root string, d Definition, q string, k int) ([]
 		return nil, status
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	var output cappedBuffer
+	var output, errOut cappedBuffer
 	cmd.Stdout = &output
+	cmd.Stderr = &errOut
 	e := cmd.Run()
 	out := output.Bytes()
 	if output.truncated {
@@ -347,8 +349,16 @@ func run(parent context.Context, root string, d Definition, q string, k int) ([]
 		} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			status.Status = "timeout"
 			status.Error = "deadline exceeded"
+		} else if d.builtin && d.Name == "rg" && errors.As(e, &ee) && ee.ExitCode() == 1 {
+			// rg exits 1 when nothing matched.
+			status.Status = "ok"
+		} else if d.builtin && d.Name == "rg" && errors.As(e, &ee) && ee.ExitCode() == 2 && len(out) > 0 {
+			// rg exits 2 when some paths were unreadable but still prints the
+			// matches it found; keep them and report the skipped paths.
+			status.Status = "partial"
+			status.Error = commandError(argv, e, errOut.String())
 		} else {
-			status.Error = e.Error()
+			status.Error = commandError(argv, e, errOut.String())
 			return nil, status
 		}
 	}
@@ -362,6 +372,28 @@ func run(parent context.Context, root string, d Definition, q string, k int) ([]
 		return nil, status
 	}
 	return rs, status
+}
+
+// commandError names the failing invocation, its exit status and the first
+// stderr lines so callers (often agents) can report or reproduce it.
+func commandError(argv []string, e error, stderr string) string {
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		quoted[i] = a
+		if a == "" || strings.ContainsAny(a, " \t\n'\"\\$") {
+			quoted[i] = strconv.Quote(a)
+		}
+	}
+	msg := fmt.Sprintf("%s: %v", strings.Join(quoted, " "), e)
+	lines := strings.Split(strings.TrimSpace(stderr), "\n")
+	if lines[0] == "" {
+		return msg
+	}
+	const keep = 3
+	if len(lines) > keep {
+		lines = append(lines[:keep], fmt.Sprintf("(+%d more stderr lines)", len(lines)-keep))
+	}
+	return msg + ": " + strings.Join(lines, "; ")
 }
 func expand(t []string, q, root string, k int) []string {
 	o := make([]string, len(t))

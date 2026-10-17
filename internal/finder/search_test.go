@@ -314,3 +314,36 @@ func TestParseJSONLAndRelativePaths(t *testing.T) {
 		t.Fatalf("path not normalized: %+v", got)
 	}
 }
+
+// TestRGExitCodes guards issue 801: rg exit 1 means no matches, exit 2 with
+// output means some paths were unreadable (sandboxes, /tmp), and every error
+// names the invocation, exit status and stderr.
+func TestRGExitCodes(t *testing.T) {
+	tests := []struct {
+		name, script, status string
+		results              int
+		errParts             []string
+	}{
+		{"no matches", `exit 1`, "ok", 0, nil},
+		{"unreadable paths keep matches", `printf '%s\n' 'src/a.go:6:match'; echo 'rg: /x/private: Permission denied (os error 13)' >&2; exit 2`, "partial", 1, []string{"rg --line-number", "exit status 2", "Permission denied"}},
+		{"hard error", `echo 'rg: bad flag' >&2; exit 2`, "error", 0, []string{"rg --line-number", `"needle q"`, "exit status 2", "rg: bad flag"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bin, root, _ := fakeToolPath(t)
+			writeExecutable(t, bin, "rg", tc.script)
+			got, err := Search(context.Background(), root, "code", "needle q", "", 5, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Finders) != 1 || got.Finders[0].Status != tc.status || len(got.Results) != tc.results {
+				t.Fatalf("finders=%+v results=%+v", got.Finders, got.Results)
+			}
+			for _, part := range tc.errParts {
+				if !strings.Contains(got.Finders[0].Error, part) {
+					t.Fatalf("error %q lacks %q", got.Finders[0].Error, part)
+				}
+			}
+		})
+	}
+}
