@@ -1,6 +1,6 @@
 # 797 — respect spec: usage cache freshness policy
 
-**Status**: Open
+**Status**: Closed — Embedded usage spec and schema own cadence, cache multiplier, and display age; read-only accessors keep availability tied to cache age; host and offline container checks pass (commit f9f15b34)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Spec
