@@ -14,6 +14,7 @@ HOST_DIR ?= projects/harnez
 ENGINE   ?= $(shell command -v podman || command -v docker)
 TEST_IMG ?= harnez-test
 TEST_OUT ?= /tmp/harnez-container-test
+TESTFLAGS ?=
 # rootless podman: map the caller's UID onto the image's tester user.
 USERNS   := $(if $(findstring podman,$(ENGINE)),--userns=keep-id)
 
@@ -95,7 +96,7 @@ macos-ci: ⚙️  # trigger and watch macos-hello CI workflow on the GitHub mirr
 check: ⚙️  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
 	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
-	GOWORK=off go test ./...
+	GOWORK=off go test $(TESTFLAGS) ./...
 
 check-fast: ⚙️  # fast local feedback loop
 	go test ./...

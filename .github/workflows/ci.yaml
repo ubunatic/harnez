@@ -33,5 +33,18 @@ jobs:
       - run: make build
       - run: make lint
       # make check: gofmt, go vet and go test, as in make container-test.
-      - run: make check
-      - run: go test -race ./...
+      # Raw logs need admin rights to download, so test output goes to JSON
+      # and failures are summarised into the step summary and annotations
+      # (readable with gh run view).
+      - name: make check
+        id: check
+        run: make check TESTFLAGS=-json > check.json 2>&1
+      - name: summarise make check failures
+        if: failure() && steps.check.outcome == 'failure'
+        run: go run ./scripts/gotest-summary check.json
+      - name: go test -race
+        id: race
+        run: go test -race -json ./... > race.json 2>&1
+      - name: summarise race failures
+        if: failure() && steps.race.outcome == 'failure'
+        run: go run ./scripts/gotest-summary race.json

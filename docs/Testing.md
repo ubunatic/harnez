@@ -51,7 +51,10 @@ boundary or depends on the real environment.
 - **GitHub Linux CI** — `.github/workflows/ci.yaml` runs on `ubuntu-24.04` for
   every PR and push to `main` (LFS checkout), executing `go build ./...`,
   `make build`, `make lint`, `make check` and `go test -race ./...`
-  (guarding against git 2.43 regressions, issues 788, 786).
+  (guarding against git 2.43 regressions, issues 788, 786). Test output is
+  `go test -json`; on failure `scripts/gotest-summary` writes the failing tests
+  and their output tail to the step summary and as `::error` annotations, which
+  `gh run view <id>` shows without the admin rights that log downloads need.
 - **Container tests** — `make container-test` runs `make check` offline
   (`--network none`, `--init`) as a non-root user in `Containerfile.test`
   (Ubuntu 24.04, git 2.43, the same as the CI runner), with podman if installed,
