@@ -1,6 +1,6 @@
 # 790 — harnez init --docs creates stray go.work symlink and skips managed doc refresh
 
-**Status**: Open
+**Status**: Closed — go.work skipped when uses missing; stale-binary doc warning (3696b8e5)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
