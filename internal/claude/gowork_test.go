@@ -223,3 +223,32 @@ func TestGoWorkspaceSkipsSymlinkForMissingUses(t *testing.T) {
 		t.Fatalf("go.work link = %q, %v; want go.work.example once uses exist", link, err)
 	}
 }
+
+func TestMissingWorkspaceUsesSyntax(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "have"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct{ name, work, want string }{
+		{"single", "use ./x\n", "./x"},
+		{"tab", "use\t./x\n", "./x"},
+		{"quoted", "use \"./x\"\n", "./x"},
+		{"block", "use (\n\t./have\n\t./x\n)\n", "./x"},
+		{"block extra spaces", "use  (\n  ./x  // note\n )\n", "./x"},
+		{"block no space", "use(\n./x\n)\n", "./x"},
+		{"one-line block", "use ( ./x ./have ../y )\n", "./x,../y"},
+		{"commented out", "// use ./x\ngo 1.23\n", ""},
+		{"all present", "go 1.23\nuse (\n\t.\n\t./have\n)\n", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(dir, "go.work.example")
+			if err := os.WriteFile(path, []byte(tc.work), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(missingWorkspaceUses(dir, path), ","); got != tc.want {
+				t.Fatalf("missing = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

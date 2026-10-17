@@ -243,31 +243,35 @@ func missingWorkspaceUses(dir, path string) []string {
 		return nil
 	}
 	var missing []string
-	inBlock := false
-	for _, line := range strings.Split(string(data), "\n") {
-		line, _, _ = strings.Cut(line, "//")
-		line = strings.TrimSpace(line)
-		use := ""
-		switch {
-		case inBlock && line == ")":
-			inBlock = false
-		case inBlock:
-			use = line
-		case line == "use (":
-			inBlock = true
-		case strings.HasPrefix(line, "use "):
-			use = strings.TrimSpace(strings.TrimPrefix(line, "use "))
-		}
+	check := func(use string) {
 		use = strings.Trim(use, `"`)
-		if use == "" {
-			continue
-		}
 		full := use
 		if !filepath.IsAbs(full) {
 			full = filepath.Join(dir, full)
 		}
 		if fi, err := os.Stat(full); err != nil || !fi.IsDir() {
 			missing = append(missing, use)
+		}
+	}
+	parens := strings.NewReplacer("(", " ( ", ")", " ) ")
+	inBlock := false
+	for _, line := range strings.Split(string(data), "\n") {
+		line, _, _ = strings.Cut(line, "//")
+		afterUse := false
+		for _, tok := range strings.Fields(parens.Replace(line)) {
+			switch {
+			case inBlock && tok == ")":
+				inBlock = false
+			case inBlock:
+				check(tok)
+			case tok == "use" && !afterUse:
+				afterUse = true
+			case afterUse && tok == "(":
+				inBlock = true
+			case afterUse:
+				check(tok)
+				afterUse = false
+			}
 		}
 	}
 	return missing
