@@ -851,6 +851,14 @@ agents_md:
       local: ./docs/PrototypingFeatures.md
       default: false
       depends_on: [canary]
+    test-tiers:
+      name: "Test Tiers"
+      ref: "@docs/TestTiers.md"
+      hint: "make lint / test-pkg / test-short / test / container-test; no sleeps, raceFactor budgets, PTY tests in the full tier"
+      source: docs/practices/TestTiers.md
+      target: ~/.claude/docs/TestTiers.md
+      local: ./docs/TestTiers.md
+      default: true
     issue-tracking:
       name: "Issue Tracking Practices"
       ref: "@docs/IssueTracking.md"

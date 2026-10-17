@@ -90,6 +90,9 @@ func TestAgyInteractiveLaunchEnvironmentInstallsShimAndSetsPath(t *testing.T) {
 }
 
 func TestInteractiveAgyUsesMeterEnvironmentThroughPTY(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real PTY: full test tier")
+	}
 	home := t.TempDir()
 	bin := filepath.Join(home, "bin")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
@@ -159,6 +162,9 @@ func TestControlBrokerPromptCompactAndStop(t *testing.T) {
 }
 
 func TestControlPromptWritesToPTYAndSplitsMultilineInput(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real PTY: full test tier")
+	}
 	master, slave, err := pty.Open()
 	if err != nil {
 		t.Fatal(err)
@@ -189,6 +195,9 @@ func TestControlPromptWritesToPTYAndSplitsMultilineInput(t *testing.T) {
 }
 
 func TestControlPromptDoesNotUseBracketedPasteFraming(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real PTY: full test tier")
+	}
 	master, slave, err := pty.Open()
 	if err != nil {
 		t.Fatal(err)

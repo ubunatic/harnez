@@ -34,6 +34,9 @@ func TestTUICmdRender(t *testing.T) {
 }
 
 func TestTUICmdRealTerminalPTY(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real PTY: full test tier")
+	}
 	master, slave, err := pty.Open()
 	if err != nil {
 		t.Fatalf("pty.Open error: %v", err)

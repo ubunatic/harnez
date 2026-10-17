@@ -157,6 +157,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   harnez find code/docs, finder configuration, partial results, and rg fallback
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
+- Test Tiers @docs/TestTiers.md,
+  make lint / test-pkg / test-short / test / container-test; no sleeps, raceFactor budgets, PTY tests in the full tier
 - Website Building Rules @docs/Website.md,
   no GitHub assumptions/octocats, match sibling website/ dirs or ask, honest/proven claims only,
   Why section required, relative links (subpage-hosted), static/no-CDN, opt-in JS demos only

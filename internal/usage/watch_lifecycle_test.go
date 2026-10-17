@@ -22,6 +22,9 @@ import (
 // blocked until cancellation. Checking escape sequences alone misses raw-mode
 // leaks, so the child also compares the complete before/after termios state.
 func TestWatchPTYLifecycle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real PTY: full test tier")
+	}
 	if _, err := exec.LookPath("script"); err != nil {
 		t.Skip("util-linux script is required for PTY integration")
 	}

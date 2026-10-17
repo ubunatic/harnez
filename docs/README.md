@@ -48,7 +48,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [ExternalSkills.md](ExternalSkills.md) | Third-party skills: registry installs, bundled (vendored) skills, explicit-only mode, updates with moved/gone detection | Read before touching `harnez skill`, `bundled_skills`, or onboarding a skills repo (issue 636) |
 | [Decide.md](Decide.md) | `harnez decide`: typed decisions (noul, choice, score) via Jev; backends from `spec/decide.yaml`; adding local models | Read before touching `internal/decide`, `spec/decide.yaml`, or hooks that call a decision model (issues 633-635) |
 | [Bench.md](Bench.md) | Optional `harnez bench` harness: specced agent tasks under lite/full docs and PNG cards, own DB | Read when benchmarking doc delivery across agents |
-| [Testing.md](Testing.md) | Test layers and verification entry points for package, integration, static, smoke, canary, and live checks |
+| [Testing.md](Testing.md) | Test layers and verification entry points for package, integration, static, smoke, canary, and live checks (harnez-specific; generic tiers in [TestTiers.md](TestTiers.md)) |
 
 
 Copyable docs (installed to Claude and Prime Agent global dirs on `apply`, copied to projects via `--docs`) live in subdirs.
@@ -78,6 +78,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [practices/Search.md](practices/Search.md) | Search Practice: Harnez code/docs finders, safe configuration, result status, and `rg` fallback | Summary active in AGENTS.md. Read before broad shell searches |
 | [practices/ConciseMode.md](practices/ConciseMode.md) | ConciseMode: 3 graded output-terseness tiers (Lite, Standard, Ultra) for slow/local-inference pairing | Opt-in (`init --docs concise-mode`). Read when tuning agent verbosity for low-TPS hardware |
 | [practices/GoRelease.md](practices/GoRelease.md) | Release Pipeline (language-agnostic): `harnez release`, `version.yaml`, GoReleaser v2, non-interactive minisign (-W), Forgejo `has_releases` | Copyable doc (`init --docs gorelease`). Read when setting up or troubleshooting release automation, Go or not |
+| [practices/TestTiers.md](practices/TestTiers.md) | Test Tiers: shared `make lint` / `test-pkg` / `test-short` / `test` / `container-test` / CI vocabulary, no-sleep timing rules, PTY tests in the full tier | Summary active in AGENTS.md. Read before choosing which tests to run or adding Makefile test targets |
 | [practices/DeploymentTransparency.md](practices/DeploymentTransparency.md) | Deployment Transparency: 3-state grounding rule (Local / Deployed Artifact / Active Daemon state) for remote deployment pairing | Copyable doc. Read before declaring remote deployment/scheduling status, or when pairing on live infra provisioning |
 
 **`docs/other/`** — practice docs (no category yet)

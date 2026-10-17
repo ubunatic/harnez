@@ -2,7 +2,9 @@
 
 Harnez uses several complementary verification layers. Start with the smallest
 layer that exercises the change, then broaden checks when the change crosses a
-boundary or depends on the real environment.
+boundary or depends on the real environment. The shared Makefile tiers
+(`make lint`, `test-pkg`, `test-short`, `test`, `container-test`) are defined in
+[TestTiers.md](TestTiers.md); this doc covers harnez-specific layers.
 
 - **Package tests** — Go unit and component tests live beside the code in
   `*_test.go` files. Run `go test ./...` for the full suite or
