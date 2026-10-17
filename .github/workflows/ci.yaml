@@ -39,17 +39,8 @@ jobs:
             ~/.cache/go-build
           key: go-lint-${{ hashFiles('go.sum') }}-${{ github.sha }}
           restore-keys: go-lint-${{ hashFiles('go.sum') }}-
-      - name: gofmt
-        run: |
-          unformatted=$(gofmt -l .)
-          if test -n "$unformatted"
-          then
-            printf '::error title=gofmt::unformatted files\n%s\n' "$unformatted"
-            exit 1
-          fi
-      - run: go vet ./...
       - run: go build ./...
-      - run: make build
+      # gofmt, go vet, harnez lint --check, docs/commands registration
       - run: make lint
 
   unit:
@@ -72,12 +63,12 @@ jobs:
           key: go-unit-${{ hashFiles('go.sum') }}-${{ github.sha }}
           restore-keys: go-unit-${{ hashFiles('go.sum') }}-
       - run: bash scripts/install-dev-deps.sh
-      - name: go test -short
+      - name: make test-short
         id: test
-        run: go test -short -json ./... > unit.json 2>&1
+        run: make test-short TESTFLAGS=-json > unit.json 2>&1
       - name: summary
         if: always() && steps.test.outcome != 'skipped'
-        run: go run .github/gotest-report.go -title "unit (go test -short)" unit.json
+        run: go run .github/gotest-report.go -title "unit (make test-short)" unit.json
 
   race:
     runs-on: ubuntu-24.04

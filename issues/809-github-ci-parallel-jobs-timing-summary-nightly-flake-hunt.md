@@ -10,8 +10,8 @@ Scope: .github/ only.
   the slowest 10 packages to the job summary; `::error` annotations; `-flaky`
   lists tests that passed and failed across `-count` runs. Replaces
   `scripts/gotest-summary` (removal left to the local dev agent).
-- `ci.yaml`: parallel jobs `lint` (gofmt, vet, build, make lint), `unit`
-  (`go test -short`; switch to `make test-short` once it exists) and `race`;
+- `ci.yaml`: parallel jobs `lint` (`go build`, `make lint`), `unit`
+  (`make test-short`) and `race`;
   `report` writes the CI wall time and job results. Each job caches modules and
   its build cache under its own key (race builds differ), saved per commit.
 - `flake.yaml`: nightly and `workflow_dispatch` (`count`, default 5) run of
