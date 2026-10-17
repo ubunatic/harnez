@@ -1,6 +1,6 @@
 # harnez find exits 0 when a finder fails and searches whole cwd outside a repo
 
-Status: Open
+Status: Closed — Finder failures without results exit 2; partial matches retain diagnostics and success; non-repo code search requires -d; regression suite and CLI canaries pass (commit 2ebc90e4)
 
 ## Problem
 Follow-up from 801 (dev-harnez review, 2026-10-17):
