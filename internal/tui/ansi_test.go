@@ -109,6 +109,8 @@ func TestWrapANSIWideChars(t *testing.T) {
 }
 
 func TestChatRendersANSIToolOutput(t *testing.T) {
+	// This test asserts color preservation, regardless of the caller's NO_COLOR.
+	t.Setenv("LOOMCOLOR", "256")
 	spec, err := LoadSpec()
 	if err != nil {
 		t.Fatal(err)
