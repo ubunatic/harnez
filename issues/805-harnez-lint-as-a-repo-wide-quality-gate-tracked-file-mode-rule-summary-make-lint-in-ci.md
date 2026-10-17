@@ -1,6 +1,6 @@
 # 805 — harnez lint as a repo-wide quality gate: tracked-file mode, rule summary, make lint in CI
 
-**Status**: Open
+**Status**: Closed — resolved in 3e0746e0; make lint green (1703 tracked files, 0 findings), full suite green
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Tooling
