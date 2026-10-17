@@ -1,6 +1,6 @@
 # 798 — respect spec: agent compaction threshold
 
-**Status**: Open
+**Status**: Closed — spec/agent.yaml compact_threshold_tokens + schema, constant removed (f49bb0df)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Spec
