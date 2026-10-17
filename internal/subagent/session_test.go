@@ -627,3 +627,43 @@ func TestOpenSessionStoreDoesNotCreateDirectory(t *testing.T) {
 		t.Fatalf("store directory exists after read-only open: %v", err)
 	}
 }
+
+// A reader polling a session while its worker saves must never see a
+// truncated file (agent wait reported "session not found").
+func TestFileSessionStoreSaveIsAtomicForReaders(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &Session{ID: "atomic", Name: "atomic", Status: "running", Response: string(make([]byte, 64<<10))}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	writeErr := make(chan error, 1)
+	go func() {
+		defer close(writeErr)
+		for i := 0; ; i++ {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			sess.Status = []string{"running", "completed"}[i%2]
+			if err := store.Save(sess); err != nil {
+				writeErr <- err
+				return
+			}
+		}
+	}()
+	for range 2000 {
+		if _, err := store.Get("atomic"); err != nil {
+			close(done)
+			t.Fatalf("Get during Save: %v", err)
+		}
+	}
+	close(done)
+	if err := <-writeErr; err != nil {
+		t.Fatal(err)
+	}
+}

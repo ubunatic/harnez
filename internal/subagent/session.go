@@ -208,7 +208,22 @@ func (s *FileSessionStore) Save(sess *Session) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal session: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	// Write and rename so concurrent readers (agent wait) never see a truncated file.
+	tmp, err := os.CreateTemp(s.dir, sess.ID+".json.tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to write session file: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return fmt.Errorf("failed to write session file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return fmt.Errorf("failed to write session file: %w", err)
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		_ = os.Remove(tmp.Name())
 		return fmt.Errorf("failed to write session file: %w", err)
 	}
 	return nil
