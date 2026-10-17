@@ -53,8 +53,8 @@ func TestCachedAGYAvailabilityKeepsExhaustionUntilReset(t *testing.T) {
 			}
 		})
 	}
-	if AgentQuotaAvailabilityMaxAge != 2*DefaultCollectorInterval {
-		t.Fatalf("availability max age = %s, want twice collector cadence (%s)", AgentQuotaAvailabilityMaxAge, 2*DefaultCollectorInterval)
+	if AgentQuotaAvailabilityMaxAge() != DefaultCacheStaleness() {
+		t.Fatalf("availability max age = %s, want cache staleness (%s)", AgentQuotaAvailabilityMaxAge(), DefaultCacheStaleness())
 	}
 }
 
@@ -254,7 +254,7 @@ func TestStateDirXDGResolution(t *testing.T) {
 // this test ages a cache file directly instead of sleeping.
 func TestCacheOrLivePreservesQuotaOnLossyRecollect(t *testing.T) {
 	dir := t.TempDir()
-	fetchedAt := time.Now().Add(-2 * DefaultCacheStaleness) // stale for live-recollect, but well within DefaultDisplayStaleness
+	fetchedAt := time.Now().Add(-2 * DefaultCacheStaleness()) // stale for live-recollect, but well within DefaultDisplayStaleness()
 	richCached := AgentUsage{
 		AgentID:       "agy",
 		Installed:     true,
@@ -276,7 +276,7 @@ func TestCacheOrLivePreservesQuotaOnLossyRecollect(t *testing.T) {
 		return AgentUsage{AgentID: "agy", Installed: true, Authenticated: true}
 	}
 
-	got := cacheOrLive(dir, "agy", DefaultCacheStaleness, lossyLive)
+	got := cacheOrLive(dir, "agy", DefaultCacheStaleness(), lossyLive)
 
 	if got.Session == nil || got.Session.UsedPercent != 42 {
 		t.Errorf("expected the last known Session quota to be preserved, got %+v", got.Session)
@@ -284,8 +284,8 @@ func TestCacheOrLivePreservesQuotaOnLossyRecollect(t *testing.T) {
 	if !got.LastRefreshed.Equal(fetchedAt) {
 		t.Errorf("LastRefreshed = %v, want the cached snapshot's FetchedAt %v", got.LastRefreshed, fetchedAt)
 	}
-	if got.IsStale(DefaultDisplayStaleness) {
-		t.Error("2x DefaultCacheStaleness old should not be stale by the 7-day display threshold")
+	if got.IsStale(DefaultDisplayStaleness()) {
+		t.Error("2x DefaultCacheStaleness() old should not be stale by the 7-day display threshold")
 	}
 
 	// A live recollect that actually finds richer/equal data (the process IS
@@ -293,7 +293,7 @@ func TestCacheOrLivePreservesQuotaOnLossyRecollect(t *testing.T) {
 	richerLive := func() AgentUsage {
 		return AgentUsage{AgentID: "agy", Installed: true, Authenticated: true, Session: &QuotaWindow{Name: "5h", UsedPercent: 7}}
 	}
-	got2 := cacheOrLive(dir, "agy", DefaultCacheStaleness, richerLive)
+	got2 := cacheOrLive(dir, "agy", DefaultCacheStaleness(), richerLive)
 	if got2.Session == nil || got2.Session.UsedPercent != 7 {
 		t.Errorf("expected a live recollect with real quota data to win over the cache, got %+v", got2.Session)
 	}
@@ -371,11 +371,11 @@ func TestAgentUsageIsStale(t *testing.T) {
 		maxAge time.Duration
 		want   bool
 	}{
-		{"zero LastRefreshed", AgentUsage{}, DefaultDisplayStaleness, false},
-		{"just refreshed", AgentUsage{LastRefreshed: time.Now()}, DefaultDisplayStaleness, false},
-		{"31 minutes old, well within 7d", AgentUsage{LastRefreshed: time.Now().Add(-31 * time.Minute)}, DefaultDisplayStaleness, false},
-		{"6 days old", AgentUsage{LastRefreshed: time.Now().Add(-6 * 24 * time.Hour)}, DefaultDisplayStaleness, false},
-		{"8 days old", AgentUsage{LastRefreshed: time.Now().Add(-8 * 24 * time.Hour)}, DefaultDisplayStaleness, true},
+		{"zero LastRefreshed", AgentUsage{}, DefaultDisplayStaleness(), false},
+		{"just refreshed", AgentUsage{LastRefreshed: time.Now()}, DefaultDisplayStaleness(), false},
+		{"31 minutes old, well within 7d", AgentUsage{LastRefreshed: time.Now().Add(-31 * time.Minute)}, DefaultDisplayStaleness(), false},
+		{"6 days old", AgentUsage{LastRefreshed: time.Now().Add(-6 * 24 * time.Hour)}, DefaultDisplayStaleness(), false},
+		{"8 days old", AgentUsage{LastRefreshed: time.Now().Add(-8 * 24 * time.Hour)}, DefaultDisplayStaleness(), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -489,7 +489,7 @@ func TestCollectAllCacheFirst(t *testing.T) {
 		}
 		// Backdate the snapshot file's content past the staleness window by
 		// writing it directly (bypassing WriteAgentSnapshot's time.Now()).
-		stale := AgentSnapshot{FetchedAt: time.Now().Add(-2 * DefaultCacheStaleness), Usage: cached}
+		stale := AgentSnapshot{FetchedAt: time.Now().Add(-2 * DefaultCacheStaleness()), Usage: cached}
 		data, err := json.MarshalIndent(stale, "", "  ")
 		if err != nil {
 			t.Fatalf("marshal stale snapshot: %v", err)

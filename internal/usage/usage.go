@@ -182,7 +182,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 		// HasUsageData() check alone can't distinguish "genuinely abandoned"
 		// from "just refreshed a while ago," since it only looks at whether
 		// any field is populated at all, not how old that data is.
-		if agent.IsStale(DefaultDisplayStaleness) {
+		if agent.IsStale(DefaultDisplayStaleness()) {
 			continue
 		}
 		shown++

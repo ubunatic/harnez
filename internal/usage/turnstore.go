@@ -206,7 +206,7 @@ func legacyBoundary(event legacyTurnQuotaEvent, importKey string) usagestore.Tur
 		source = "turn-capture"
 	}
 	freshness := "fresh"
-	if reading.Error != "" || !reading.HasCache || reading.CacheAgeMS > int64(DefaultCacheStaleness/time.Millisecond) {
+	if reading.Error != "" || !reading.HasCache || reading.CacheAgeMS > int64(DefaultCacheStaleness()/time.Millisecond) {
 		freshness = "stale"
 	}
 	windows := append([]usagestore.Window(nil), reading.StoreWindows...)

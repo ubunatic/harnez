@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -15,18 +16,20 @@ import (
 const usageSpecPath = "spec/usage.yaml"
 
 type usageSpec struct {
-	WatchLoadingLabel      string             `yaml:"watch_loading_label"`
-	AGYMeterMaxAge         string             `yaml:"agy_meter_max_age"`
-	CollectorCadence       string             `yaml:"collector_cadence"`
-	CollectorTimeout       string             `yaml:"collector_timeout"`
-	PassiveDedupeInterval  string             `yaml:"passive_dedupe_interval"`
-	StatuslineBusyTimeout  string             `yaml:"statusline_busy_timeout"`
-	StatuslineWriteTimeout string             `yaml:"statusline_write_timeout"`
-	HistorySnapshotEvery   string             `yaml:"history_snapshot_interval"`
-	ExportHostKey          string             `yaml:"export_host_key"`
-	NVIDIASMITimeout       string             `yaml:"nvidia_smi_timeout"`
-	NVIDIASMICacheTTL      string             `yaml:"nvidia_smi_cache_ttl"`
-	ViewModes              usageViewModesSpec `yaml:"view_modes"`
+	WatchLoadingLabel        string             `yaml:"watch_loading_label"`
+	AGYMeterMaxAge           string             `yaml:"agy_meter_max_age"`
+	CollectorCadence         string             `yaml:"collector_cadence"`
+	CacheStalenessMultiplier yaml.Node          `yaml:"cache_staleness_multiplier"`
+	DisplayStaleness         string             `yaml:"display_staleness"`
+	CollectorTimeout         string             `yaml:"collector_timeout"`
+	PassiveDedupeInterval    string             `yaml:"passive_dedupe_interval"`
+	StatuslineBusyTimeout    string             `yaml:"statusline_busy_timeout"`
+	StatuslineWriteTimeout   string             `yaml:"statusline_write_timeout"`
+	HistorySnapshotEvery     string             `yaml:"history_snapshot_interval"`
+	ExportHostKey            string             `yaml:"export_host_key"`
+	NVIDIASMITimeout         string             `yaml:"nvidia_smi_timeout"`
+	NVIDIASMICacheTTL        string             `yaml:"nvidia_smi_cache_ttl"`
+	ViewModes                usageViewModesSpec `yaml:"view_modes"`
 }
 
 type usageViewModesSpec struct {
@@ -64,7 +67,37 @@ var (
 	usageSpecViewModes    usageViewModesSpec
 	usageSpecNVTimeout    time.Duration
 	usageSpecNVCacheTTL   time.Duration
+	usageSpecCachePolicy  cacheFreshnessPolicy
 )
+
+type cacheFreshnessPolicy struct {
+	cadence, cacheStaleness, displayStaleness time.Duration
+}
+
+func (s usageSpec) cachePolicy() (cacheFreshnessPolicy, error) {
+	cadence, err := time.ParseDuration(s.CollectorCadence)
+	if err != nil || cadence <= 0 {
+		return cacheFreshnessPolicy{}, fmt.Errorf("%s: collector_cadence must be a positive duration", usageSpecPath)
+	}
+	var multiplier int64
+	if s.CacheStalenessMultiplier.Tag != "!!int" || s.CacheStalenessMultiplier.Decode(&multiplier) != nil || multiplier <= 0 || multiplier > math.MaxInt64/int64(cadence) {
+		return cacheFreshnessPolicy{}, fmt.Errorf("%s: cache_staleness_multiplier must be positive and fit within a duration", usageSpecPath)
+	}
+	display, err := time.ParseDuration(s.DisplayStaleness)
+	if err != nil || display <= 0 {
+		return cacheFreshnessPolicy{}, fmt.Errorf("%s: display_staleness must be a positive duration", usageSpecPath)
+	}
+	return cacheFreshnessPolicy{cadence, cadence * time.Duration(multiplier), display}, nil
+}
+
+// Embedded specs are application code: invalid policy is a build defect,
+// never a reason to silently substitute different freshness thresholds.
+func mustCacheFreshnessPolicy() cacheFreshnessPolicy {
+	if _, _, _, _, _, err := usageDurations(); err != nil {
+		panic(err)
+	}
+	return usageSpecCachePolicy
+}
 
 func agyMeterMaxAge() (time.Duration, error) {
 	age, _, _, _, _, err := usageDurations()
@@ -118,8 +151,12 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 			return
 		}
 		usageSpecAge, usageSpecCadence, usageSpecTimeout, usageSpecDedupe, usageSpecBusyTimeout, usageSpecErr = parseUsageSpec(data)
+		if usageSpecErr != nil {
+			return
+		}
 		var spec usageSpec
 		if err := yaml.Unmarshal(data, &spec); err == nil {
+			usageSpecCachePolicy, _ = spec.cachePolicy() // Validated by parseUsageSpec.
 			usageSpecLoadingLabel = spec.WatchLoadingLabel
 			usageSpecHistoryEvery, _ = time.ParseDuration(spec.HistorySnapshotEvery)
 			usageSpecHostKey = spec.ExportHostKey
@@ -149,9 +186,9 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	if err != nil || age <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: agy_meter_max_age must be a positive duration", usageSpecPath)
 	}
-	cadence, err := time.ParseDuration(spec.CollectorCadence)
-	if err != nil || cadence <= 0 {
-		return 0, 0, 0, 0, 0, fmt.Errorf("%s: collector_cadence must be a positive duration", usageSpecPath)
+	cachePolicy, err := spec.cachePolicy()
+	if err != nil {
+		return 0, 0, 0, 0, 0, err
 	}
 	timeout, err := time.ParseDuration(spec.CollectorTimeout)
 	if err != nil || timeout <= 0 {
@@ -180,7 +217,7 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	if writeTimeout, err := time.ParseDuration(spec.StatuslineWriteTimeout); err != nil || writeTimeout <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: statusline_write_timeout must be a positive duration", usageSpecPath)
 	}
-	return age, cadence, timeout, dedupe, busy, nil
+	return age, cachePolicy.cadence, timeout, dedupe, busy, nil
 }
 
 func (s usageViewModesSpec) validate() error {

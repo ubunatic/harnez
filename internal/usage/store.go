@@ -674,7 +674,7 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 				w.DurationLeft = 0
 			}
 		}
-		if r.Freshness == "stale" || now.Sub(r.ObservedAt) > DefaultCacheStaleness {
+		if r.Freshness == "stale" || now.Sub(r.ObservedAt) > DefaultCacheStaleness() {
 			w.Name = staleName(w.Name)
 		}
 		if w.ExpiredAt(now) {
@@ -914,7 +914,7 @@ func importAgent(s *usagestore.Store, ctx context.Context, provider, source stri
 	freshness := "stale"
 	if source == "collect-all" || source == "registry" {
 		freshness = "fresh"
-		if agent.IsValueStale() || time.Since(at) > DefaultCacheStaleness {
+		if agent.IsValueStale() || time.Since(at) > DefaultCacheStaleness() {
 			freshness = "stale"
 		}
 	}

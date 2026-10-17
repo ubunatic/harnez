@@ -265,7 +265,7 @@ func newUsageRegistry(homeDir string, client *http.Client, live bool) (*Registry
 			if !live {
 				if snapshot, err := readAgentSnapshotContext(ctx, stateDir, provider); err == nil && snapshot != nil {
 					cached = snapshot
-					if snapshot.IsFresh(DefaultCacheStaleness) {
+					if snapshot.IsFresh(DefaultCacheStaleness()) {
 						u := snapshot.Usage
 						u.LastRefreshed = snapshot.FetchedAt
 						u.Sources = append(u.Sources, fmt.Sprintf("%s (cached)", snapshotPath(stateDir, provider)))

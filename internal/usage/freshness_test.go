@@ -26,19 +26,19 @@ func TestFreshnessFraction(t *testing.T) {
 		},
 		{
 			name:          "halfway through the interval",
-			lastRefreshed: now.Add(-DefaultCollectorInterval / 2),
+			lastRefreshed: now.Add(-DefaultCollectorInterval() / 2),
 			wantMin:       0.49,
 			wantMax:       0.51,
 		},
 		{
 			name:          "right at the interval boundary: empty gauge",
-			lastRefreshed: now.Add(-DefaultCollectorInterval),
+			lastRefreshed: now.Add(-DefaultCollectorInterval()),
 			wantMin:       0,
 			wantMax:       0,
 		},
 		{
 			name:          "overdue: elapsed well past the interval clamps to empty, not negative",
-			lastRefreshed: now.Add(-2 * DefaultCollectorInterval),
+			lastRefreshed: now.Add(-2 * DefaultCollectorInterval()),
 			wantMin:       0,
 			wantMax:       0,
 		},
@@ -111,7 +111,7 @@ func TestFreshnessOverlayLabel(t *testing.T) {
 	})
 
 	t.Run("overdue agent drains to the empty braille glyph", func(t *testing.T) {
-		got := freshnessOverlayLabel("Weekly", now.Add(-2*DefaultCollectorInterval), now)
+		got := freshnessOverlayLabel("Weekly", now.Add(-2*DefaultCollectorInterval()), now)
 		want := timeoutSnakeGlyph(0) + " Wee…"
 		if got != want {
 			t.Errorf("freshnessOverlayLabel() = %q, want %q", got, want)

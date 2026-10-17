@@ -628,7 +628,7 @@ func newRootCmd() *cobra.Command {
 			return usage.RunCollector(ctx, "", client, collectorInterval, cmd.OutOrStdout(), collectorOffline)
 		},
 	}
-	collectorCmd.Flags().DurationVar(&collectorInterval, "interval", usage.DefaultCollectorInterval,
+	collectorCmd.Flags().DurationVar(&collectorInterval, "interval", usage.DefaultCollectorInterval(),
 		"snapshot collection interval")
 	collectorCmd.Flags().BoolVar(&collectorOnce, "once", false, "collect and write snapshots once, then exit (no timer loop)")
 	collectorCmd.Flags().BoolVar(&collectorOffline, "offline", false, "disable live network queries and use local caches only")

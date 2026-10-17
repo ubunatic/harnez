@@ -179,7 +179,7 @@ func (a AgentUsage) IsValueStale() bool {
 			}
 		}
 	}
-	return a.IsStale(DefaultCacheStaleness)
+	return a.IsStale(DefaultCacheStaleness())
 }
 
 // HasUsageData reports whether a collector actually found real local or

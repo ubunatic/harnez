@@ -476,7 +476,7 @@ func TestFillFromHistoryIfNoQuotaWindowsUsesStaleHistoricalQuota(t *testing.T) {
 	if !got.LastRefreshed.Equal(sixDaysAgo) {
 		t.Errorf("LastRefreshed = %v, want the historical entry's own timestamp %v (so staleness stays honest)", got.LastRefreshed, sixDaysAgo)
 	}
-	if got.IsStale(DefaultDisplayStaleness) {
+	if got.IsStale(DefaultDisplayStaleness()) {
 		t.Error("6 days old should still be within the 7-day display-hide window (issue 101)")
 	}
 

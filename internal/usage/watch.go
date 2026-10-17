@@ -1821,7 +1821,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		// 7+ day stale agents auto-hide (issue 101), same gate as RenderText:
 		// HasUsageData() alone can't tell "genuinely abandoned" apart from
 		// "just refreshed a while ago."
-		if agent.HasUsageData() && !agent.IsStale(DefaultDisplayStaleness) {
+		if agent.HasUsageData() && !agent.IsStale(DefaultDisplayStaleness()) {
 			discovered = append(discovered, agent)
 		}
 	}

@@ -14,7 +14,7 @@ import "time"
 // This is issue 131's pure elapsed/remaining -> fraction mapping, kept
 // separate from freshnessGauge so it's testable without any rendering.
 func freshnessFraction(lastRefreshed, now time.Time) float64 {
-	return freshnessFractionForInterval(lastRefreshed, now, DefaultCollectorInterval)
+	return freshnessFractionForInterval(lastRefreshed, now, DefaultCollectorInterval())
 }
 
 // freshnessFractionForInterval is freshnessFraction for a particular refresh
@@ -60,7 +60,7 @@ func freshnessGauge(fraction float64) string {
 // Labels with 3 or fewer runes are replaced in full, since there is nothing
 // left to keep.
 func freshnessOverlayLabel(label string, lastRefreshed, now time.Time) string {
-	return freshnessOverlayLabelForInterval(label, lastRefreshed, now, DefaultCollectorInterval)
+	return freshnessOverlayLabelForInterval(label, lastRefreshed, now, DefaultCollectorInterval())
 }
 
 // freshnessOverlayLabelForInterval renders the watch debug gauge against the

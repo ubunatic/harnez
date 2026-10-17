@@ -44,7 +44,7 @@ func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatal(err)
 	}
-	if len(schema.Required) != 12 || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["statusline_busy_timeout"] == nil || schema.Properties["statusline_write_timeout"] == nil || schema.Properties["view_modes"] == nil {
+	if len(schema.Required) != 14 || schema.Properties["cache_staleness_multiplier"] == nil || schema.Properties["display_staleness"] == nil || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["statusline_busy_timeout"] == nil || schema.Properties["statusline_write_timeout"] == nil || schema.Properties["view_modes"] == nil {
 		t.Fatalf("usage schema does not define required agy_meter_max_age: %+v", schema)
 	}
 	if schema.Definitions["viewMode"].Properties["panels"].MinItems != 1 {
@@ -65,6 +65,8 @@ func TestPassivePolicyLoadsStatuslineWriteTimeout(t *testing.T) {
 func TestParseUsageSpecRejectsInvalidAge(t *testing.T) {
 	valid := `agy_meter_max_age: 1h
 collector_cadence: 15m
+cache_staleness_multiplier: 2
+display_staleness: 168h
 collector_timeout: 2m
 passive_dedupe_interval: 30s
 history_snapshot_interval: 15m
@@ -100,6 +102,16 @@ view_modes:
 		{name: "empty export host key", data: strings.Replace(valid, "export_host_key: export-host-key", "export_host_key: ''", 1)},
 		{name: "zero history snapshot interval", data: strings.Replace(valid, "history_snapshot_interval: 15m", "history_snapshot_interval: 0s", 1)},
 		{name: "zero cadence", data: strings.Replace(valid, "collector_cadence: 15m", "collector_cadence: 0s", 1)},
+		{name: "missing cadence", data: strings.Replace(valid, "collector_cadence: 15m\n", "", 1)},
+		{name: "missing multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 2\n", "", 1)},
+		{name: "zero multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 2", "cache_staleness_multiplier: 0", 1)},
+		{name: "negative multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 2", "cache_staleness_multiplier: -1", 1)},
+		{name: "fractional multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 2", "cache_staleness_multiplier: 1.5", 1)},
+		{name: "overflowing cache age", data: strings.Replace(valid, "cache_staleness_multiplier: 2", "cache_staleness_multiplier: 9223372036854775807", 1)},
+		{name: "missing display age", data: strings.Replace(valid, "display_staleness: 168h\n", "", 1)},
+		{name: "zero display age", data: strings.Replace(valid, "display_staleness: 168h", "display_staleness: 0s", 1)},
+		{name: "negative display age", data: strings.Replace(valid, "display_staleness: 168h", "display_staleness: -1h", 1)},
+		{name: "invalid display age", data: strings.Replace(valid, "display_staleness: 168h", "display_staleness: nope", 1)},
 		{name: "invalid statusline write timeout", data: strings.Replace(valid, "statusline_write_timeout: 100ms", "statusline_write_timeout: nope", 1)},
 		{name: "missing statusline write timeout", data: strings.Replace(valid, "statusline_write_timeout: 100ms\n", "", 1)},
 		{name: "missing mode field", data: strings.Replace(valid, "      token_details: true\n", "", 1)},

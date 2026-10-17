@@ -25,16 +25,15 @@ const stateAppDir = "harnez"
 
 var stateAgentsUsageSubdir = filepath.Join("agents", "usage")
 
-// DefaultCollectorInterval is the default tick cadence for `harnez
-// agent-collector`, matching Omarchy 4.0's Quickshell "Agents" widget
-// (issue 082's stated prior art).
-const DefaultCollectorInterval = 900 * time.Second
+// DefaultCollectorInterval returns the collector cadence from the embedded spec.
+func DefaultCollectorInterval() time.Duration {
+	return mustCacheFreshnessPolicy().cadence
+}
 
 // DefaultCacheStaleness is how old a cached snapshot may be before
 // CollectAll attempts a live recollect for that agent instead of serving the
-// cache as-is. Twice the default collector interval gives slack for one
-// missed tick (a slow network fetch, a momentarily unreachable RPC) without
-// immediately reverting every reader to live collection.
+// cache as-is. The spec's cache_staleness_multiplier provides slack for
+// missed collector ticks without immediately reverting readers to live collection.
 //
 // This threshold governs *when a live recollect is attempted only* — it is
 // deliberately not the threshold for when a display stops trusting/showing
@@ -42,11 +41,15 @@ const DefaultCollectorInterval = 900 * time.Second
 // the two meant a live process outage (e.g. AGY not currently running)
 // could blank out real quota numbers that were only 31 minutes old (issue
 // 101).
-const DefaultCacheStaleness = 2 * DefaultCollectorInterval
+func DefaultCacheStaleness() time.Duration {
+	return mustCacheFreshnessPolicy().cacheStaleness
+}
 
 // AgentQuotaAvailabilityMaxAge is the maximum age at which a collector
 // snapshot can confirm that an agent provider is exhausted.
-const AgentQuotaAvailabilityMaxAge = DefaultCacheStaleness
+func AgentQuotaAvailabilityMaxAge() time.Duration {
+	return DefaultCacheStaleness()
+}
 
 // ProviderQuotaAvailability summarizes cached quota evidence for one model.
 type ProviderQuotaAvailability struct {
@@ -123,7 +126,7 @@ func ProviderQuotaAvailabilityFromStore(ctx context.Context, dbPath, provider, m
 		state.State = "exhausted"
 		return state
 	}
-	if state.Age > AgentQuotaAvailabilityMaxAge {
+	if state.Age > AgentQuotaAvailabilityMaxAge() {
 		state.State = "stale"
 		return state
 	}
@@ -142,7 +145,9 @@ func ProviderQuotaAvailabilityFromStore(ctx context.Context, dbPath, provider, m
 // updated" annotation — until it crosses this much longer window, since a
 // merely-not-running agent process is not the same as an abandoned/
 // uninstalled one (issue 101).
-const DefaultDisplayStaleness = 7 * 24 * time.Hour
+func DefaultDisplayStaleness() time.Duration {
+	return mustCacheFreshnessPolicy().displayStaleness
+}
 
 // AgentSnapshot is the on-disk shape of <state-dir>/<agent-id>.json: one
 // file per agent, so a reader can check freshness and availability
