@@ -393,7 +393,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 			// Live fetch failed: fall back to the disk cache regardless of
 			// its age, labeled stale (issue 032's " (stale)" convention).
 			// This subsumes issue 032's in-memory-only fallback for Claude:
-			// that mechanism (applyStaleQuota in watch.go) still runs
+			// that mechanism (applyStaleQuota in watch_usage_box.go) still runs
 			// afterward in RunWatch, but only fills windows still nil, so it
 			// stays a harmless backstop for Claude (e.g. cache file missing)
 			// and remains the active mechanism for AGY/Codex, which issue

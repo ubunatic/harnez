@@ -11,7 +11,7 @@ import (
 )
 
 // actionsSpecPath is the embedded location of the hotkey registry (issue
-// 132). watch.go's key dispatch and title/hint rendering read the
+// 132). watch_keys.go's key dispatch and title/hint rendering read the
 // key->action->symbol mapping from here rather than a hardcoded Go
 // switch-to-symbol table — see docs/Spec.md.
 const actionsSpecPath = "spec/actions.yaml"
