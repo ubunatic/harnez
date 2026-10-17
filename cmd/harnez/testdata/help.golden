@@ -1,0 +1,2710 @@
+=== harnez 
+Manage Claude Code, Prime Agent, and other agent harnesses from a YAML definition
+
+Usage:
+  harnez [command]
+
+Available Commands:
+  agent           Manage subagent sessions
+  agent-collector Run the background usage-collector daemon (see systemd/harnez-agent-collector.service)
+  agy-statusline  Render or manage the Antigravity CLI context and quota status line
+  apply           Apply config.yaml to global Claude Code and agent harness directories
+  assess          Fast code/doc metrics, token estimation, and repository feasibility report
+  channel         Serve the opt-in local Claude MCP channel canary
+  clean           Remove stale process records and release verified quota-1 state
+  compact         Verbatim transcript compaction powered by decision models (Jev)
+  compact-check   Assess whether a /compact likely dropped information (manual, opt-in)
+  completion      Generate the autocompletion script for the specified shell
+  compose         Print a ready-to-use snippet from the embedded spec
+  decide          Ask a decision model (Jev) typed questions: noul, choice, score
+  diff            Show what apply would change in managed blocks
+  distill         Strip low-signal noise (passing tests, ANSI, repeats) from command output
+  dochistory      Analyze Git document and multi-track repository evolution history
+  docs            Project-scoped operations on already-installed copyable docs
+  exec            Run a command, proxy its stdio unbuffered, and record shell-call telemetry
+  feedback        Record and review agent-observed harnez bugs and instruction gaps
+  find            Query repository-data entities with a short fuzzy-text/filter grammar
+  guard           Rule enforcer and safety guardrail commands
+  help            Help about any command
+  index           Regenerate issues/README.md and docs/README.md's studies table from source files
+  init            Set up a project directory with AGENTS.md, language docs, and Makefile targets
+  issues          Change a ticket's Status line, resync issues/README.md, and commit -- in one call
+  lint            Check files against harnez repository rules and conventions
+  log             Show harnez's own CLI invocation history, newest first (git log for harnez)
+  man             Generate, print, or install roff man pages
+  mcp             Serve Harnez agent tools over MCP stdio
+  mode            Switch ConciseMode terseness level and synchronize .harnez/rules/Local.md
+  rate            Record a 1-5 quality rating for an internal tool call, or a lean --ok heartbeat
+  read            Read bounded text or explicitly requested visual PNG cards
+  release         Language-agnostic version bump, build, minisign, and forge publish pipeline
+  repo-history    Multi-track Git history evolution sparks across code, tests, docs, skills, and issues
+  repo-status     Brief, quiet-by-default summary of git working-tree state
+  revert          Revert managed configuration or one-off changes
+  scan-docs       Scan immediate child agent projects for managed-docs drift
+  skill           Install, search, and explore external agent skills from git repositories
+  skills          Inspect and export Harnez's built-in skill catalogue
+  stats           Report call frequency, average score, failure rate, and byte savings from tool_calls telemetry
+  status          Show config summary and applied state
+  statusline      Render context and usage data for Claude Code or Antigravity CLI
+  subagent        Stage provider-aware subagent context and optionally run a launcher
+  tui             Interactive Loom-based terminal chat interface for harnez
+  usage           Show unified token, session, and quota status across AI coding agents
+
+Flags:
+  -h, --help      help for harnez
+  -v, --version   version for harnez
+
+Use "harnez [command] --help" for more information about a command.
+
+=== harnez agent
+Manage subagent sessions across supported providers.
+
+Short forms:
+  harnez agent -p "summarise the open tickets"
+  harnez agent "update the changelog"
+  harnez agent --name docs -d ~/projects/x "update the changelog"
+  harnez agent -c -p "continue"
+  harnez agent start --name w --model luna -f task.md -- "extra instructions"
+  harnez agent start -i --model claude:haiku --name chat
+  harnez agent resume --name w "next step"
+  harnez agent resume -i --name w
+  harnez agent --name w -p "/compact"
+  harnez agent --model luna:low --role advisor -p "how does X work?"
+
+Models: run "harnez agent models" for the known names. --model takes
+provider:name[:tier], a short alias (luna, opus) or alias:tier (luna:low).
+The model default comes from spec/agent.yaml. Agents run with -d <dir> as their
+working directory (default: cwd); resume reuses the session's directory.
+Sessions are chosen by --name, attribution in -d, or -c. Use -- to send text
+literally. Slash commands are /compact, /stop, and /status. Automatic compaction uses
+agent.compact_threshold_tokens from ~/.harnez/config.yaml (default from
+spec/agent.yaml compact_threshold_tokens).
+agent.compact_thresholds may override provider:model[:tier] thresholds.
+
+Usage:
+  harnez agent [flags]
+  harnez agent [command]
+
+Available Commands:
+  compact     Compact an agent session
+  delete      Delete an agent session
+  disable     Set subagent dispatch policy to native
+  enable      Set subagent dispatch policy to harnez
+  list        List agent sessions
+  models      List known agent models with roles and when to use them
+  rate        Rate the latest turn of an agent session
+  resume      Resume an existing agent session
+  selftest    Run agent background task execution self-test
+  send        Send to a live Claude, Codex, or supervised AGY session
+  start       Start a new agent session
+  status      Show agent session status
+  stop        Stop an agent session
+  wait        Wait for an agent session to finish
+
+Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -c, --continue                resume the most recently active attributable session
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+  -f, --file strings            prompt file (repeatable; - reads stdin)
+  -h, --help                    help for agent
+      --json                    JSON output
+      --model string            provider:model[:tier]
+      --name string             session name
+      --plan string             planning gate: yes or no (default "no")
+  -p, --prompt string           prompt text
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --stream string           live output: full (all messages) or stats (heartbeats and final reply only) (default "full")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+Use "harnez agent [command] --help" for more information about a command.
+
+=== harnez agent compact
+Compact an agent session
+
+Usage:
+  harnez agent compact [flags]
+
+Flags:
+  -h, --help   help for compact
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent delete
+Delete an agent session
+
+Usage:
+  harnez agent delete [flags]
+
+Aliases:
+  delete, rm
+
+Flags:
+      --all             delete all manageable sessions
+      --all-completed   delete all completed sessions
+      --force           delete unrated sessions without warning
+  -h, --help            help for delete
+      --retry-failed    retry unresolved provider deletions
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent disable
+Set subagent dispatch policy to native
+
+Usage:
+  harnez agent disable [flags]
+
+Flags:
+  -h, --help      help for disable
+      --persist   accepted for compatibility; policy stays in .harnez/rules/Local.md
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent enable
+Set subagent dispatch policy to harnez
+
+Usage:
+  harnez agent enable [flags]
+
+Flags:
+  -h, --help      help for enable
+      --persist   accepted for compatibility; policy stays in .harnez/rules/Local.md
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent list
+List agent sessions
+
+Usage:
+  harnez agent list [flags]
+
+Flags:
+      --all-sessions   list all sessions
+      --archived       include deleted archived sessions
+      --children       list child sessions
+      --color string   color output: auto, always, or never (default "auto")
+      --dead           include inactive and completed sessions
+      --failed         list unresolved provider deletions
+  -h, --help           help for list
+      --json           JSON output
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent models
+List known agent models with roles and when to use them
+
+Usage:
+  harnez agent models [flags]
+
+Flags:
+  -h, --help    help for models
+      --json    JSON output
+      --names   print only the model specs, one per line
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent rate
+Rate the latest turn of an agent session
+
+Usage:
+  harnez agent rate <1-5> <reason> [flags]
+
+Flags:
+  -h, --help   help for rate
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent resume
+Resume an existing agent session.
+
+Run workers in your session background, not the machine background.
+Session background: a job owned by your chat session; it shows in your task
+list and its exit wakes you. Machine background (shell &, nohup, setsid):
+invisible to you, so you could only find out by polling. No external event
+system will notify you; your own background tool is the only signal.
+
+One call per worker, with HTO=0 so the turn never detaches after 60s:
+  Claude Code  Bash tool, run_in_background: true, command
+               "HTO=0 harnez agent start ...". Its exit sends you a
+               task-notification. Claude Code stops background jobs after
+               30 minutes: size each worker turn to finish before that.
+  AGY          run_command with "HTO=0 harnez agent start ..." and a small
+               WaitMsBeforeAsync (e.g. 500); you are notified on completion.
+  Codex        exec_command with "HTO=0 harnez agent start ..."; then call
+               write_stdin on the returned session_id with chars "" until
+               it reports an exit code.
+
+Then tell the user the job id and the session name. Claude Code and AGY: end
+your turn or do other work until notified. Codex: keep calling write_stdin
+until the exit code. Never check status or logs in a loop while the job runs.
+Use "harnez agent wait <session>" only to recover a lost job.
+
+Usage:
+  harnez agent resume [session] [prompt...] [flags]
+
+Examples:
+  harnez agent resume --name w "next step"
+  harnez agent resume <id> "next step"
+  harnez agent resume -i --name w
+
+Flags:
+  -c, --continue                resume the most recently active attributable session
+  -f, --file strings            prompt file (repeatable; - reads stdin)
+  -h, --help                    help for resume
+  -i, --interactive             resume in the provider's interactive terminal
+      --json                    JSON output
+      --plan string             planning gate: yes or no (default "no")
+  -p, --prompt string           prompt text
+      --stream string           live output: full (all messages) or stats (heartbeats and final reply only) (default "full")
+      --worker-session string   internal detached worker session ID
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent selftest
+Run agent background task execution self-test.
+Run with --step hello to begin.
+
+=== harnez agent send
+Send to a live Claude channel, Codex session, or supervised AGY session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. AGY messages queue until the supervised session is idle. Only Claude supports --wait for optional receipt confirmation, which does not confirm task completion. Non-supervised AGY sessions cannot receive messages through this command.
+
+Usage:
+  harnez agent send (--name <session> | --id <session-id>) <message> [flags]
+
+Examples:
+  harnez agent send --name harnez-53ih "look at ticket 748 in harnez"
+  harnez agent send --name agy-worker "please review this"
+  harnez agent send --id 86443124-b692-49e4-ae92-942b0177664f --wait "please confirm"
+
+Flags:
+  -h, --help               help for send
+      --id string          Claude, Codex, or AGY session ID
+  -m, --message string     message text (alternative to the positional message)
+  -p, --prompt string      message text (alternative to the positional message)
+      --timeout duration   positive receipt wait timeout (default from spec/channel.yaml)
+      --wait               wait for optional Claude receipt confirmation
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+
+=== harnez agent start
+Start a new agent session. A leading role or alias may be positional; add a session name before the prompt when needed.
+
+Run workers in your session background, not the machine background.
+Session background: a job owned by your chat session; it shows in your task
+list and its exit wakes you. Machine background (shell &, nohup, setsid):
+invisible to you, so you could only find out by polling. No external event
+system will notify you; your own background tool is the only signal.
+
+One call per worker, with HTO=0 so the turn never detaches after 60s:
+  Claude Code  Bash tool, run_in_background: true, command
+               "HTO=0 harnez agent start ...". Its exit sends you a
+               task-notification. Claude Code stops background jobs after
+               30 minutes: size each worker turn to finish before that.
+  AGY          run_command with "HTO=0 harnez agent start ..." and a small
+               WaitMsBeforeAsync (e.g. 500); you are notified on completion.
+  Codex        exec_command with "HTO=0 harnez agent start ..."; then call
+               write_stdin on the returned session_id with chars "" until
+               it reports an exit code.
+
+Then tell the user the job id and the session name. Claude Code and AGY: end
+your turn or do other work until notified. Codex: keep calling write_stdin
+until the exit code. Never check status or logs in a loop while the job runs.
+Use "harnez agent wait <session>" only to recover a lost job.
+
+Usage:
+  harnez agent start [role] [name] [prompt...] [flags]
+
+Examples:
+  harnez agent start --name w --model luna -f task.md -- "extra instructions"
+  harnez agent start explorer "audit SQLite queries"
+  harnez agent start coder my-worker "implement ticket 041"
+  harnez agent start -i --model claude:haiku --name chat
+
+Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -f, --file strings            prompt file (repeatable; - reads stdin)
+  -h, --help                    help for start
+  -i, --interactive             launch the provider's interactive terminal
+      --json                    JSON output
+      --plan string             planning gate: yes or no (default "no")
+  -p, --prompt string           prompt text
+      --stream string           live output: full (all messages) or stats (heartbeats and final reply only) (default "full")
+      --worker-session string   internal detached worker session ID
+
+Global Flags:
+  -d, --dir string         agent working directory (all providers) and session scope (default ".")
+      --model string       provider:model[:tier]
+      --name string        session name
+      --role string        agent role for a new session (default from spec/agent.yaml); roles:
+                             advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                             developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                             orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                             reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string   session store directory (default "$HOME/.harnez/agents")
+      --timeout duration   maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent status
+Show agent session status
+
+Usage:
+  harnez agent status [flags]
+
+Flags:
+      --all        show all saved turn replies
+  -h, --help       help for status
+      --json       JSON output
+      --reply      show the latest saved reply
+      --turn int   show the saved reply for turn N
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent stop
+Stop an agent session
+
+Usage:
+  harnez agent stop [flags]
+
+Flags:
+      --all        stop all manageable sessions
+      --children   stop child sessions
+  -h, --help       help for stop
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent wait
+Wait for an agent session to finish
+
+Usage:
+  harnez agent wait <session> [flags]
+
+Flags:
+  -h, --help               help for wait
+      --json               JSON output
+      --timeout duration   maximum wait duration (0 waits indefinitely)
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: auditor, explorer, planner, scout): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+
+=== harnez agent-collector
+Runs the Claude/Codex/AGY usage collectors on a timer and atomically writes one JSON
+snapshot per agent to the shared harnez state directory (see `harnez usage --json` for the
+schema of each snapshot's "usage" field). `harnez usage` and the --watch TUI read this
+cache first, falling back to a live collect if it's missing or stale. Intended to run as
+a systemd --user service; install the unit with `harnez apply` (see docs/CLIDesign.md).
+
+Usage:
+  harnez agent-collector [flags]
+
+Flags:
+  -h, --help                help for agent-collector
+      --interval duration   snapshot collection interval (default 15m0s)
+      --offline             disable live network queries and use local caches only
+      --once                collect and write snapshots once, then exit (no timer loop)
+
+=== harnez agy-meter-run
+Run an AGY process with its private usage meter
+
+Usage:
+  harnez agy-meter-run -- command [args...] [flags]
+
+Flags:
+  -h, --help   help for agy-meter-run
+
+=== harnez agy-statusline
+Render or manage the Antigravity CLI context and quota status line
+
+Usage:
+  harnez agy-statusline [flags]
+  harnez agy-statusline [command]
+
+Available Commands:
+  apply       Install the Harnez status line in Antigravity CLI settings
+  remove      Remove Harnez's Antigravity CLI status line
+  status      Check Harnez's Antigravity CLI status-line configuration
+
+Flags:
+  -h, --help   help for agy-statusline
+
+Use "harnez agy-statusline [command] --help" for more information about a command.
+
+=== harnez agy-statusline apply
+Install the Harnez status line in Antigravity CLI settings
+
+Usage:
+  harnez agy-statusline apply [flags]
+
+Flags:
+  -h, --help   help for apply
+
+=== harnez agy-statusline remove
+Remove Harnez's Antigravity CLI status line
+
+Usage:
+  harnez agy-statusline remove [flags]
+
+Aliases:
+  remove, clean
+
+Flags:
+  -h, --help   help for remove
+
+=== harnez agy-statusline status
+Check Harnez's Antigravity CLI status-line configuration
+
+Usage:
+  harnez agy-statusline status [flags]
+
+Flags:
+  -h, --help   help for status
+
+=== harnez apply
+Apply config.yaml to global Claude Code and agent harness directories
+
+Usage:
+  harnez apply [flags]
+
+Flags:
+      --agy-target string                      Antigravity config directory (default: agy_target from config.yaml)
+      --clean-docs                             remove unmanaged global docs from ~/.claude/docs/ and ~/.prime/agent/docs/
+      --codex-target string                    Codex config.toml path (default: codex_hooks_target from config.yaml)
+      --components strings                     component(s) to install, comma-separated or repeated (e.g. docs-only,telemetry)
+  -c, --config string                          path to config YAML file (default: embedded)
+      --debloat                                apply the minimal Claude, Codex, and Antigravity context-saving preset from config.yaml
+      --debloat-cron                           also deny CronCreate/CronDelete/CronList
+      --debloat-disable-artifact               set disableArtifact: true
+      --debloat-disable-bundled-skills         disable bundled skills without requiring a debloat preset
+      --debloat-disable-claude-ai-connectors   set disableClaudeAiConnectors: true
+      --debloat-disable-remote-control         set disableRemoteControl: true
+      --debloat-disable-workflows              set disableWorkflows: true
+      --debloat-notebook-edit                  also deny NotebookEdit
+      --debloat-preset string                  debloat preset: "minimal" (default) or "aggressive"; both disable bundled skills
+  -d, --docs strings                           doc(s) to install globally, comma-separated or repeated (e.g. golang,canary,all)
+      --force-docs                             overwrite existing docs with bundled versions
+  -h, --help                                   help for apply
+      --no-docs                                do not install global docs, removing any previously installed global docs
+      --remove-docs                            remove all global docs from ~/.claude/docs/ and ~/.prime/agent/docs/
+  -s, --shell                                  inject harnez environment source into ~/.bashrc and ~/.zshrc
+      --systemd                                install the harnez-agent-collector systemd --user unit to ~/.config/systemd/user (issue 082)
+  -t, --target string                          Claude config directory (default: ~/.claude)
+      --variant string                         doc variant to install: lite or full (docs without a lite variant fall back to full) (default "full")
+
+=== harnez assess
+Fast code/doc metrics, token estimation, and repository feasibility report
+
+Usage:
+  harnez assess [path] [flags]
+
+Flags:
+  -h, --help       help for assess
+      --history    display multi-track repository evolution history
+      --hotspots   list largest Go files and functions, import fan-out, and untested packages (git-tracked files)
+      --json       output report in JSON format
+      --ramp       display RAMP repository AI maturity profile and evidence inventory
+      --tokens     display project-level lifetime AI token attribution and cost of change
+
+=== harnez bench
+Send small specced tasks to agent CLIs under a documentation condition
+(lite/full docs, with or without PNG cards) and record scored results in a bench
+database (~/.harnez/bench/bench.sqlite) that is separate from telemetry.
+
+The feature is opt-in: run 'harnez bench --setup' once, then use 'bench run',
+'bench tasks' and 'bench results'. Real runs spend agent tokens; defaults use the
+cheap models haiku (claude) and gpt-6-luna (codex).
+
+Usage:
+  harnez bench [flags]
+  harnez bench [command]
+
+Available Commands:
+  results     Summarize recorded bench runs per condition
+  run         Run bench tasks against one agent under one doc condition
+  tasks       List the specced bench tasks
+
+Flags:
+  -h, --help    help for bench
+      --setup   create the bench database and enable the bench commands
+
+Use "harnez bench [command] --help" for more information about a command.
+
+=== harnez bench results
+Summarize recorded bench runs per condition
+
+Usage:
+  harnez bench results [flags]
+
+Flags:
+  -h, --help         help for results
+      --recent int   also list the newest N runs
+
+=== harnez bench run
+Run bench tasks against one agent under one doc condition
+
+Usage:
+  harnez bench run [flags]
+
+Flags:
+      --agent string    deprecated provider selector (use --model) (default "claude")
+      --card string     with --read auto: card flags the agent is told to add to harnez read, e.g. --card=--style=compact
+      --cards           deliver docs as PNG context cards instead of Markdown
+      --docs string     doc variant: full or lite (default "lite")
+  -h, --help            help for run
+      --model string    comma-separated provider:model:tier specs from 'harnez agent models'
+      --multi int[=5]   with --read: split the fixture into N files by first letter (26/N letters each); bare --multi means 5, use --multi=N otherwise
+      --order string    comma-separated read task order variants: batch, sequential
+  -q, --quiet           suppress preamble and progress on stderr
+      --read string     comma-separated fixture read modes: native, text, auto, card
+      --repeat int      runs per task (default 1)
+      --repo string     repository root holding the docs (default ".")
+      --task strings    task IDs to run (default: all)
+      --yaml            with --read: deliver the fixture as one YAML file instead of Markdown
+
+=== harnez bench tasks
+List the specced bench tasks
+
+Usage:
+  harnez bench tasks [flags]
+
+Flags:
+  -h, --help   help for tasks
+
+=== harnez channel
+Serve the opt-in local Claude MCP channel. The user starts Claude manually. At first project startup, accept 'New MCP server found in this project' with 'Use this MCP server'; until approval the server stays pending and no endpoint registers. After installing an updated binary, restart the MCP server (or the Claude session) to load the reply tool.
+
+Usage:
+  harnez channel [flags]
+  harnez channel [command]
+
+Available Commands:
+  list        List Claude, Codex, and supervised AGY sessions
+  send        Send a canary message; accepted does not confirm Claude receipt
+  setup       Print local plugin installation, MCP JSON and manual Claude launch commands
+
+Flags:
+  -h, --help            help for channel
+      --listen string   numeric loopback bind address (default from spec/channel.yaml)
+
+Use "harnez channel [command] --help" for more information about a command.
+
+=== harnez channel list
+List Claude, Codex, and supervised AGY sessions
+
+Usage:
+  harnez channel list [flags]
+
+Flags:
+      --all     show inactive and stale sessions too
+  -h, --help    help for list
+      --ids     print session IDs only
+      --json    print full session details as JSON
+      --names   print session names only (falls back to IDs)
+
+=== harnez channel send
+Send a canary message; accepted does not confirm Claude receipt
+
+Usage:
+  harnez channel send <session-id> [flags]
+
+Flags:
+  -h, --help             help for send
+  -m, --message string   message text (default: spec canary asks Claude to record its message ID)
+
+=== harnez channel setup
+Print local plugin installation, MCP JSON and manual Claude launch commands
+
+Usage:
+  harnez channel setup [flags]
+
+Flags:
+  -h, --help   help for setup
+
+=== harnez clean
+Remove stale process records and release verified quota-1 state
+
+Usage:
+  harnez clean [procs] [q1] [flags]
+
+Flags:
+  -d, --dir string   directory used to locate Quota-1 state (default ".")
+  -h, --help         help for clean
+      --json         write cleanup results as JSON
+      --kill         act on eligible process groups and remove verified state
+
+=== harnez codex-hook
+codex-hook implements Codex's PreToolUse command-handler contract for
+the "Bash" matcher (see issue 199's Findings). It reads the PreToolUse
+JSON payload from stdin and, for a non-empty command not already routed
+through 'harnez exec', emits a permissionDecision:"allow" envelope whose
+updatedInput.command points at:
+
+  harnez exec --tool <tool_name> -- bash -c '<original command>'
+
+This is the handshake stage only: it never spawns the command or writes
+telemetry itself (see docs/HookRewritePattern.md, the same split used by
+'harnez exec hook' for Claude Code and 'harnez agy-hooks hook' for agy).
+'harnez apply' installs the config.toml entry that invokes this command;
+there is no separate 'codex-hooks apply/status' command group.
+
+Usage:
+  harnez codex-hook [flags]
+
+Flags:
+  -h, --help   help for codex-hook
+
+=== harnez codex-telemetry
+Usage:
+  harnez codex-telemetry [flags]
+
+Flags:
+  -h, --help   help for codex-telemetry
+
+=== harnez compact
+Fast, verbatim agent transcript compaction powered by decision models.
+
+Evaluates historical tool calls and prunes or truncates obsolete outputs while
+preserving conversation messages and recent context verbatim.
+
+Usage:
+  harnez compact [transcript.jsonl] [flags]
+
+Flags:
+      --backend string        backend from spec/decide.yaml (default: jev)
+      --format string         output format: jsonl, summary, or json (default "jsonl")
+  -h, --help                  help for compact
+  -i, --in-place              overwrite the input transcript file in-place
+      --max-state-bytes int   maximum byte size for decision request context state (default 102400)
+      --model string          model name sent to backend
+  -o, --output string         output file (defaults to stdout)
+      --pin-recent int        number of recent entries to pin verbatim (default 5)
+      --threshold float       decision confidence threshold (0.0 - 1.0) (default 0.5)
+  -t, --transcript string     input transcript file (- for stdin)
+      --truncate-length int   maximum character length for truncated outputs (default 200)
+
+=== harnez compact-check
+compact-check compares a pre-compact transcript snapshot against the
+post-compact summary and flags identifiers (file paths, dotted/snake_case
+names, etc.) that were mentioned repeatedly before and vanished entirely
+after — a cheap, no-LLM-call signal that something load-bearing may have
+been lost.
+
+This is a manual command, not automatic watching: Claude Code has a
+PreCompact hook but no PostCompact hook, so harnez has no host-native
+signal to observe the post-compact result on its own. Save the transcript
+before compacting (or point --before at a saved copy) and the summary
+after, then run:
+
+  harnez compact-check before.txt after.txt
+
+Usage:
+  harnez compact-check <before-file> <after-file> [flags]
+
+Flags:
+  -h, --help   help for compact-check
+
+=== harnez compose
+Print a snippet without a banner. With no name, list available snippets.
+Run harnez apply first to install and enable the managed channel plugin.
+Channel snippets use the same spec/channel.yaml instructions as channel setup.
+The args snippet is shell-quoted; evaluate it to preserve the prompt as one argument.
+It also names the session <working-dir-basename>-<4 random chars> (claude -n), so
+harnez agent send --name can reach it; a later -n in your own arguments overrides it.
+
+Usage:
+  harnez compose [what] [flags]
+
+Examples:
+  claude --channels plugin:harnez-channel@harnez-local --append-system-prompt "$(harnez compose claude-channels-prompt)"
+  alias claude-channels='claude --channels plugin:harnez-channel@harnez-local --append-system-prompt "$(harnez compose claude-channels-prompt)"'
+  claude_channels() {
+    eval "command claude $(harnez compose claude-channels-args) \"\$@\""
+  }
+
+Flags:
+  -h, --help   help for compose
+
+=== harnez decide
+Ask a decision model typed questions about a state.
+
+A request is a state plus named questions, from a spec file (-f, YAML or JSON,
+"-" for stdin) or from one quick question (--noul, --choice or --score).
+The state comes from --state (JSON or text), --state-file, the arguments,
+or stdin, in that order; any of these replaces a state in the -f file, and
+stdin is not read when the file has one.
+
+Exit codes: 0 ok, 1 --threshold not met, 2 error.
+
+Backends are defined in spec/decide.yaml; the default is Jev, which needs
+$TYPESAFE_API_KEY.
+
+Usage:
+  harnez decide [state text...] [flags]
+
+Examples:
+  harnez decide --noul "Does this need human confirmation?" \
+    --option "true: destructive or rewrites remote history" --option "false: safe" \
+    --state '{"command": "git push --force"}' --threshold 0.5
+
+  harnez decide --choice "Classify the risk" --option "safe: read-only" \
+    --option "danger: deletes data" --pick q "rm -rf build"
+
+  harnez decide --score "How severe?" --level cosmetic --level degraded --level blocker \
+    --state-file issue.md
+
+  harnez decide -f review-gate.yaml --format json
+
+Flags:
+      --backend string       backend from spec/decide.yaml (default: its default_backend)
+      --choice string        quick choice question; one --option name: description per choice
+  -f, --file string          request spec file (YAML or JSON, - for stdin)
+      --format string        output: table, json, quiet (default "table")
+  -h, --help                 help for decide
+      --id string            question id for --noul/--choice/--score (default "q")
+      --level stringArray    score level description (repeatable)
+      --model string         model name sent to the backend
+      --noul string          quick yes/no question; --option true: ..., false: ...
+      --option stringArray   criterion "name: description" (repeatable)
+      --pick string          print only this question's answer (as JSON with --format json)
+      --score string         quick score question; one --level per rubric level, lowest first
+      --state string         state as JSON, or plain text
+      --state-file string    read the state as text from a file
+      --threshold float      exit 1 unless the answer's level is >= this (noul/choice probability, score level)
+
+=== harnez diff
+Show what apply would change in managed blocks
+
+Usage:
+  harnez diff [flags]
+
+Flags:
+      --capture-docs         write configured project-doc drift to an inbox Markdown report
+      --components strings   component(s) to inspect, comma-separated or repeated (e.g. docs-only,telemetry)
+  -c, --config string        path to config YAML file (default: embedded)
+  -e, --exit-code            exit with status 1 if drift/changes are found
+  -h, --help                 help for diff
+      --out string           output path for --capture-docs (default: issues/inbox/managed-docs-drift-<timestamp>.md)
+  -t, --target string        Claude config directory (default: ~/.claude)
+
+=== harnez distill
+distill filters routine command output down to the signal an agent needs.
+
+Streaming mode reads stdin:
+  go test ./... | harnez distill
+
+Wrapper mode runs a command, distills its combined output, and exits with
+the wrapped command's exit code:
+  harnez distill -- go test ./...
+  harnez distill -- git status
+
+Usage:
+  harnez distill [-- command args...] [flags]
+  harnez distill [command]
+
+Available Commands:
+  hook        PreToolUse hook: auto-pipe noisy Bash commands through distill
+  read        Bound authorized native read text or prepare attachable PNG output (JSON stdin)
+
+Flags:
+  -h, --help            help for distill
+      --max-bytes int   hard byte cap on output; truncates head+tail with a note when exceeded (0 disables) (default 200000)
+      --max-lines int   truncate output beyond this many lines (0 disables) (default 300)
+      --mode string     filter mode: auto, gotest, git, raw (default "auto")
+      --no-dedup        skip collapsing repeated lines
+
+Use "harnez distill [command] --help" for more information about a command.
+
+=== harnez distill hook
+hook implements a Claude Code PreToolUse hook for the Bash matcher.
+
+It is a no-op unless HARNEZ_DISTILL_AUTOPIPE is set to "1" or "true": harnez apply
+can install this hook globally without it changing anything until a user
+opts in. When enabled, it rewrites known-noisy commands (go test/build/vet,
+cargo test/build, pytest, npm test, make test/build/check, git status/diff/log)
+to pipe their combined output through 'harnez distill', preserving the
+original command's exit code via 'set -o pipefail'.
+
+Usage:
+  harnez distill hook [flags]
+
+Flags:
+  -h, --help   help for hook
+
+=== harnez distill read
+Bound authorized native read text or prepare attachable PNG output (JSON stdin)
+
+Usage:
+  harnez distill read [flags]
+
+Flags:
+  -h, --help   help for read
+
+=== harnez dochistory
+dochistory analyzes Git history, tracking token evolution,
+metrics, multi-track categories (code, tests, docs, skills, issues), and distributions across commits.
+
+Invocations:
+  harnez dochistory                    # Analyze default managed documentation (docs/ and AGENTS.md)
+  harnez dochistory --tracks           # Multi-track repository evolution sparks (code, tests, docs, skills, issues)
+  harnez dochistory --tracks --diff    # Expanded additions and removals breakdown table
+  harnez dochistory docs/lang/Go.md    # Single-file timeline and token sparkline
+  harnez dochistory docs/ issues       # Multi-directory / glob stacked category breakdown
+  harnez dochistory --json             # Machine-readable JSON output
+
+Usage:
+  harnez dochistory [files...] [flags]
+
+Aliases:
+  dochistory, doc-history, repo-history
+
+Flags:
+      --color        enable ANSI color output (default true)
+      --diff         show additions and removals breakdown in multi-track history
+  -d, --dir string   repository root directory (default: current directory or git root)
+  -h, --help         help for dochistory
+      --json         output history in JSON format
+      --no-color     disable ANSI color output
+      --tracks       analyze multi-track repository evolution (code, tests, docs, skills, issues)
+
+=== harnez docs
+Project-scoped operations on already-installed copyable docs
+
+Usage:
+  harnez docs [command]
+
+Available Commands:
+  cards       Build and validate visual PNG documentation cheatsheet cards
+  variant     Swap an already-installed doc's content between its lite and full source
+
+Flags:
+  -h, --help   help for docs
+
+Use "harnez docs [command] --help" for more information about a command.
+
+=== harnez docs cards
+cards compiles repository markdown documentation into token-bounded visual PNG
+cheatsheet cards (using internal/readcard layout engine) and validates existing card
+images against ViT bounds and font resolution rules.
+
+Usage:
+  harnez docs cards [command]
+
+Available Commands:
+  build       Compile markdown documentation into bounded visual PNG cards
+  check       Validate card image files against max bounds (<=1568px) and font ladder rules
+
+Flags:
+  -h, --help   help for cards
+
+Use "harnez docs cards [command] --help" for more information about a command.
+
+=== harnez docs cards build
+build compiles markdown docs into bounded visual PNG cards.
+
+Supports built-in bundles (e.g. --bundle=dev-3in1 bundling Bash.md, Make.md, Git.md),
+individual doc compilation, or building all standard doc cards into docs/vision/ or .harnez/cards/.
+
+Usage:
+  harnez docs cards build [flags]
+
+Flags:
+  -b, --bundle string   named card bundle to build (e.g. dev-3in1)
+  -c, --config string   path to config YAML file (default: embedded)
+  -d, --dir string      project root directory (default: current directory) (default ".")
+      --font string     font family: pixel, retro, 5x8, 3x5, micro, 6x12, standard, 8x16, 7x13 (default: pixel) (default "pixel")
+      --font-size int   font size in pixels (default: 11) (default 11)
+  -h, --help            help for build
+      --max-dim int     maximum dimension bounds (default: 1568) (default 1568)
+  -o, --out string      output directory or file path for generated card PNGs (default: ./docs/vision/)
+      --theme string    color theme (dark or light) (default "dark")
+
+=== harnez docs cards check
+check inspects PNG card files to guarantee they satisfy:
+1. Longest edge <= 1568px (avoiding server-side downsampling cliffs in Claude and OpenAI).
+2. Minimum font resolution (>= 9.5px font ladder rule) for 100% OCR reliability.
+
+Usage:
+  harnez docs cards check <files...> [flags]
+
+Flags:
+  -h, --help          help for check
+      --max-dim int   maximum allowed dimension in pixels (default: 1568) (default 1568)
+
+=== harnez docs variant
+variant re-installs a single already project-installed doc, swapping which
+source variant (source vs. lite_source, see issue 357) supplies its managed
+content. It preserves any harnez:stop-delimited local customization and
+touches nothing else — no other doc, no Makefile, no AGENTS.md section.
+
+This is the fast path for "I already have this doc installed, just swap its
+content." To select a variant for docs installed for the first time, use
+'harnez init --variant lite|full' or 'harnez apply --variant lite|full'.
+
+Usage:
+  harnez docs variant <name> <lite|full> [flags]
+
+Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+  -d, --dir string      project directory containing the installed doc (default: current directory) (default ".")
+  -h, --help            help for variant
+
+=== harnez exec
+exec wraps an arbitrary command: it spawns <command...> as a subprocess,
+proxies its stdin/stdout/stderr to the caller with no added buffering
+latency, preserves and re-exits with the child's exact exit code
+(including signal-terminated cases), and writes one call_type='shell'
+tool_calls row recording duration_ms, raw_bytes, distilled_bytes (when
+distillation is active), and synthetic quality score (1-5).
+
+  harnez exec --tool git -- git status
+  harnez exec --tool npm --ticket harnez/118-harnez-exec-shell-interceptor -- npm test
+  harnez exec --tool Bash --distill -- go test ./...
+  ⚙ echo "hello from gear"
+  ⚙ --tool test -- true
+
+The telemetry write is best-effort and bounded: it never delays the
+wrapped command's own execution, and gives up waiting on a slow/hung DB
+write after a short bound rather than hanging the caller.
+
+Timeout precedence is an explicit HARNEZ_TIMEOUT=<duration|0> or HTO=<duration|0> prefix, then
+the Bash tool's native timeout/background intent, then repo config
+exec.timeout, then the built-in 60s default. HTO=0 disables the limit;
+for example, HTO=10m make build. HARNEZ_TIMEOUT remains supported.
+
+See 'harnez exec hook' for the separate PreToolUse rewrite stage that
+points an agent's Bash tool calls at this command.
+
+Usage:
+  harnez exec [--tool <tool_name>] [--ticket <ticket_id>] [--distill[=<mode>]] [--expect-failure] [--quota-1] -- <command...> [flags]
+  harnez exec [command]
+
+Aliases:
+  exec, ⚙, ⚙️
+
+Available Commands:
+  hook        PreToolUse hook: rewrite Bash commands to route through 'harnez exec'
+
+Flags:
+      --distill string[="auto"]   distillation filter mode (auto, gotest, git, raw)
+      --expect-failure            record telemetry row with call_type=shell-expected
+  -h, --help                      help for exec
+      --quota-1                   enforce Quota-1 single-test boundary (require code edits between runs)
+      --ticket string             ticket_id override (default: resolve.Ticket())
+      --timeout duration          maximum command runtime (default: HTO/HARNEZ_TIMEOUT, tool intent, repo config, then 60s)
+      --tool string               tool identifier the wrapped command belongs to, e.g. git, npm, Bash (default: inferred from command or Bash)
+
+Use "harnez exec [command] --help" for more information about a command.
+
+=== harnez exec hook
+hook implements a Claude Code PreToolUse hook for the Bash matcher.
+
+It reads the tool-call JSON payload from stdin and, for Bash commands not
+already routed through 'harnez exec', emits a rewrite envelope pointing
+the command at:
+
+  harnez exec --tool <tool_name> -- <original command>
+
+This is the endpoint issues/119's apply-managed hook entries invoke; the
+hook itself never spawns the command or writes telemetry — see
+docs/HookRewritePattern.md for why the rewrite and execution stages are
+kept as separate commands. Installing this hook into a user's Claude Code
+settings is issues/119's job, out of this command's scope.
+
+Usage:
+  harnez exec hook [flags]
+
+Flags:
+  -h, --help   help for hook
+
+=== harnez feedback
+feedback gives an agent a single low-friction command to call the moment it
+notices something worth tracking — a genuine harnez bug, a broken or
+contradictory instruction, a clear gap in its own guidance — without either
+losing the observation when the session ends or stopping to hand-author a
+full issues/NNN-*.md ticket on the spot.
+
+Entries are appended to a per-project JSONL log under ~/.harnez/feedback/
+(never lost, never blocking); `harnez feedback list` surfaces unreviewed
+entries so the log doesn't silently pile up forgotten. Pass --file-ticket at
+log time, or run `harnez feedback promote <id>` later, to turn an entry
+into a proper tracked issues/NNN-*.md ticket.
+
+Usage:
+  harnez feedback [command]
+
+Available Commands:
+  issue       Append one feedback entry describing an observed bug or bad instruction
+  list        List this project's unreviewed feedback entries
+  promote     Turn a logged feedback entry into a full issues/NNN-*.md ticket
+
+Flags:
+  -h, --help   help for feedback
+
+Use "harnez feedback [command] --help" for more information about a command.
+
+=== harnez feedback issue
+issue appends a single free-text feedback entry to this project's
+~/.harnez/feedback/ log — a single command, no multi-field form, so it stays
+genuinely low-effort to call mid-task.
+
+  harnez feedback issue "<description>" [--severity bug|instruction] [--file-ticket]
+
+Pass --file-ticket to immediately promote the entry into a tracked
+issues/NNN-*.md ticket (docs/IssueTracking.md's metadata schema) instead of
+leaving it only in the log.
+
+Usage:
+  harnez feedback issue "<description>" [flags]
+
+Flags:
+  -d, --dir string        repo root this feedback concerns (also the issues/ root for --file-ticket) (default ".")
+      --file-ticket       immediately promote this entry to a full issues/NNN-*.md ticket
+  -h, --help              help for issue
+      --severity string   free-form category, e.g. "bug" or "instruction" (default: unset)
+
+=== harnez feedback list
+list prints this project's feedback log so it doesn't silently pile up
+unreviewed the way an ignored mechanism does (see issue 181's motivation).
+By default only "new" (not yet promoted) entries are shown; pass --all to
+include already-promoted entries too.
+
+Output is deterministic, tab-separated, one entry per line, no header:
+
+  ID<TAB>TIME<TAB>STATUS<TAB>SEVERITY<TAB>DESCRIPTION
+
+Usage:
+  harnez feedback list [flags]
+
+Flags:
+      --all          also include already-promoted entries
+  -d, --dir string   repo root whose feedback log to list (default ".")
+  -h, --help         help for list
+
+=== harnez feedback promote
+promote looks up a previously logged feedback entry by its id (see
+`harnez feedback list`) and writes it out as a proper issues/NNN-*.md ticket
+using docs/IssueTracking.md's metadata schema, reusing the same ticket
+numbering `harnez find`/`harnez index` already use. It does not run
+`harnez index` itself — run that afterward to add the new ticket to
+issues/README.md.
+
+If the id isn't found in -d's own log, promote falls back to searching every
+project's log under ~/.harnez/feedback/ — an entry logged from project A
+about project B can still be promoted straight into B's issues/ (issue 203)
+without manually locating and reading the raw JSONL.
+
+Usage:
+  harnez feedback promote <id> [flags]
+
+Flags:
+  -d, --dir string   repo root containing issues/ and the feedback log to promote from (default ".")
+  -h, --help         help for promote
+
+=== harnez find
+find searches a repository-data entity with a short query language that
+mixes Google/Gmail-style fuzzy text discovery with compact filters, instead
+of a formal Boolean/regex grammar.
+
+Entities:
+  issues   searches issues/*.md and issues/archive/*.md (excludes
+           issues/README.md and every other file/directory). Both active and
+           archived tickets are in scope by default; use a status filter to
+           narrow lifecycle state.
+  code     searches source files through configured finders (neus first,
+           with rg as the code fallback when neus is unavailable).
+           Outside a Git worktree, an explicit -d/--dir is required.
+  docs     searches documentation through configured finders, with built-in
+           fuzzy text matching as a fallback.
+
+Subcommands / Allocation:
+  harnez find issues last [--json]
+           List the newest issues (the same deterministic ticket-number order
+           as an unfiltered listing). The default limit is 10.
+
+  harnez find issues open|blocked|closed|draft [query...]
+           Shorthand for the matching status filter, optionally combined with
+           ordinary fuzzy text terms.
+
+  harnez find issues next [--json]
+           Compute and report the next free ticket number (max+1, formatted
+           with 3+ digits). Read-only: it does not create or reserve
+           anything. To atomically reserve that number and create a Draft
+           placeholder ticket file, use 'harnez issues new [title]' instead
+           (cmd/harnez/issues.go) -- find never mutates.
+
+  harnez find issues history [--project <name>] [--json]
+           Render the open/closed/draft/unknown ticket-count snapshot
+           history 'harnez index' records into the telemetry DB on each run
+           (issue 228), oldest first. --project narrows to one project_name
+           (the same identity 'harnez stats --project' filters on, issue
+           227); omitted shows every project's snapshots. Non-JSON output is
+           a formatted table: PROJECT, CREATED_AT, OPEN, CLOSED, DRAFT,
+           UNKNOWN.
+
+Query grammar:
+  whitespace         AND: 'vram gtt' requires both terms.
+  a|b                OR within one compact term: 'vram|gtt' means either.
+                     Precedence is fixed: filters and AND bind outside OR,
+                     so 'status:open vram|gtt' means
+                     'status:open AND (vram OR gtt)'.
+  status:VALUE       filter (alias 'is:VALUE'), ANDed with other terms.
+                     Accepted values: open, in-progress, blocked, closed,
+                     draft. 'open'/'is:open' match every unresolved issue
+                     whose leading raw status is Open, In Progress, or
+                     Blocked; 'in-progress'/'blocked' narrow to just that
+                     raw lifecycle stage; 'closed'/'draft' match their
+                     canonical category. Matching ignores case and
+                     explanatory status suffixes (e.g. "Blocked — waiting
+                     for upstream").
+
+An unquoted '|' is a shell pipeline operator, so an OR query needs shell
+quoting:
+
+  harnez find issues status:open vram gtt
+  harnez find issues "status:open vram|gtt"
+
+Not supported (usage error, not a guessed interpretation): parentheses,
+literal quote characters, negation, an empty filter, unknown fields, an
+unsupported status value, or a standalone/leading/trailing/doubled '|'.
+Regex-looking punctuation in ordinary text is normalized away, never
+executed.
+
+Matching: the H1 title (its leading ticket number stripped) and the ticket
+body (everything after the first metadata-closing horizontal rule) are
+searched; the metadata header itself is not. Both the searchable text and
+every query alternative are normalized by Unicode-lowercasing, replacing
+Markdown syntax/non-letter/non-number characters with spaces, and
+collapsing whitespace -- so punctuation-separated identifiers like
+"time-gauge" become adjacent searchable tokens. A bare alternative matches a
+field when its full normalized text is a substring of that field, or when
+every one of its normalized tokens matches a field token by prefix or
+bounded typo distance (Damerau-Levenshtein, transpositions counted as one
+edit): terms of 4 characters or fewer get no typo tolerance, 5-8 characters
+allow 1 edit, 9+ characters allow 2 edits -- this protects short
+identifiers like "gtt"/"vram" from noisy fuzzy expansion.
+
+Ranking: matches are classed, best to worst -- (1) exact title substring,
+(2) title token-prefix, (3) title fuzzy, (4) exact body substring, (5) body
+token-prefix, (6) body fuzzy -- and ranked by worst group class, then the
+sum of all group classes, then ticket number, then path. This never
+silently relaxes an AND query to OR on zero results.
+
+Output formatting:
+  code/docs: exit 2 if a finder fails and no results are available;
+             partial results keep exit 0 with diagnostics on stderr.
+  Default: in interactive terminal / TTY sessions or with -I/--image,
+           renders a bounded visual overview card (using internal/readcard)
+           or compact bounded summaries.
+  --raw / --text: outputs deterministic TSV lines (one per result).
+  --json: outputs structured JSON.
+  In non-TTY pipes/scripts without -I, automatically defaults to TSV text.
+
+Usage:
+  harnez find <entity> [options] <query...> [flags]
+
+Flags:
+  -a, --all              show all matching issue results
+  -k, --count int        maximum code/docs results (default 10)
+  -d, --dir string       search directory (required for code outside a Git worktree) (default ".")
+  -h, --help             help for find
+  -I, --image            render results as a visual PNG overview card
+      --json             output in JSON format
+      --jsonl            output JSON Lines (code/docs only)
+  -n, --limit int        limit issue results (default: newest 10 for listings) (default 10)
+      --next             report the next free issue number
+      --project string   with 'history': filter to one project_name
+  -r, --raw              output raw TSV text directly to stdout
+  -t, --text             output raw TSV text directly to stdout (alias for --raw)
+      --via string       use only the named code/docs finder
+
+=== harnez guard
+Inspect and verify decide-based rule enforcement and safety guardrails.
+
+Use 'harnez guard status' to inspect current configuration and backend availability.
+Use 'harnez guard check <file>' to dry-run rule checks on a file.
+
+Usage:
+  harnez guard [command]
+
+Available Commands:
+  check       Dry-run rule enforcement check on a file
+  status      Display decide guardrail status, backend, and key configuration
+
+Flags:
+  -h, --help   help for guard
+
+Use "harnez guard [command] --help" for more information about a command.
+
+=== harnez guard check
+Dry-run rule enforcement check on a file
+
+Usage:
+  harnez guard check <file> [flags]
+
+Flags:
+      --content string        proposed file content string
+      --content-file string   file containing proposed content
+      --format string         output format: table or json (default "table")
+  -h, --help                  help for check
+  -d, --repo string           repository root containing rules
+      --threshold float       confidence threshold (default: 0.85)
+
+=== harnez guard status
+Display decide guardrail status, backend, and key configuration
+
+Usage:
+  harnez guard status [flags]
+
+Flags:
+  -h, --help   help for status
+      --json   output status as JSON
+
+=== harnez hook
+Agent lifecycle hook handlers
+
+Usage:
+  harnez hook [command]
+
+Available Commands:
+  claude-instructions Print Claude-only Harnez instruction reminders
+  post-tool           Antigravity PostToolUse telemetry hook
+
+Flags:
+  -h, --help   help for hook
+
+Use "harnez hook [command] --help" for more information about a command.
+
+=== harnez hook agy
+agy accepts Antigravity's PreToolUse JSON payload on stdin,
+records tool invocations into ~/.harnez/tool_catalog.sqlite under agent_id='agy',
+and outputs {"decision":"allow"} to stdout.
+
+Usage:
+  harnez hook agy [flags]
+
+Aliases:
+  agy, agy-tool
+
+Flags:
+  -h, --help   help for agy
+
+=== harnez hook claude-instructions
+Print Claude-only Harnez instruction reminders
+
+Usage:
+  harnez hook claude-instructions [flags]
+
+Flags:
+  -h, --help   help for claude-instructions
+
+=== harnez hook post-tool
+Antigravity PostToolUse telemetry hook
+
+Usage:
+  harnez hook post-tool [flags]
+
+Aliases:
+  post-tool, agy-post
+
+Flags:
+  -h, --help   help for post-tool
+
+=== harnez hook pre-edit
+PreToolUse file edit rule enforcer hook
+
+Usage:
+  harnez hook pre-edit [flags]
+
+Flags:
+      --content string    proposed edit content
+      --file string       explicit file path to check
+  -h, --help              help for pre-edit
+      --threshold float   confidence threshold (default: 0.85)
+
+=== harnez hook pre-exec
+PreToolUse terminal command guardrail hook
+
+Usage:
+  harnez hook pre-exec [flags]
+
+Flags:
+      --command string    command to check
+      --cwd string        working directory
+  -h, --help              help for pre-exec
+      --threshold float   confidence threshold (default: 0.85)
+
+=== harnez hook read
+read accepts Claude Code's PreToolUse JSON payload on stdin for View and ReadMultipleFiles,
+intercepts unconstrained or large (>=100 lines) file reads, and returns a permissionDecision of deny
+with guidance to use 'harnez read'. Small files (<100 lines) and bounded slices (<100 lines) are allowed.
+
+Usage:
+  harnez hook read [flags]
+
+Flags:
+  -h, --help   help for read
+
+=== harnez hook skill
+skill reads a Claude Code PostToolUse or PostToolUseFailure payload for the Skill tool,
+or a UserPromptSubmit payload, and records one tool_calls row with tool_name Skill and the skill
+name (issue 735). A typed /name counts only when an installed skill or command has that name.
+It prints nothing, so it never adds to the prompt, and it never fails the agent's turn.
+
+Usage:
+  harnez hook skill [flags]
+
+Flags:
+  -h, --help   help for skill
+
+=== harnez hook sound
+Play notification sound
+
+Usage:
+  harnez hook sound [flags]
+
+Flags:
+  -h, --help   help for sound
+      --sync   play synchronously in the foreground
+
+=== harnez index
+index regenerates two hand-maintained index tables from the files that are
+their actual source of truth, so they stop drifting:
+
+  issues/README.md   <- issues/*.md + issues/archive/*.md metadata
+  docs/README.md      <- docs/studies/*.md (docs/studies/ table only)
+
+It is idempotent: run against unchanged sources, it reports no changes.
+Pass --check to fail (exit 1) instead of writing, for CI/pre-commit use --
+mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
+diff of the drift, so the output is self-contained enough for an agent
+running the command directly in-session to see exactly what changed and
+fix the offending ticket(s) without a separate diff step.
+
+Each run that isn't --check also appends a dated open/closed/draft/unknown
+ticket count snapshot for this repo to the shared telemetry DB (issue 228),
+deduped against the project's most recently recorded snapshot so repeated
+no-op runs don't grow the history unboundedly. Snapshot-write failures are
+logged (DEBUG=1) and otherwise swallowed -- they never fail this command.
+View recorded snapshots with 'harnez find issues history'.
+
+Usage:
+  harnez index [flags]
+
+Flags:
+      --check        report drift without writing; exit 1 if regeneration would change a file
+  -d, --dir string   repo root containing issues/ and docs/ (default ".")
+  -h, --help         help for index
+
+=== harnez init
+Set up a project directory with AGENTS.md, language docs, and Makefile targets
+
+Usage:
+  harnez init [flags]
+
+Flags:
+      --all                treat --dir as a workspace directory and non-interactively init every eligible child (has AGENTS.md/CLAUDE.md); refuses $HOME (see issue 068)
+  -c, --config string      path to config YAML file (default: embedded)
+  -d, --dir string         project directory to initialise (default: current directory) (default ".")
+      --docs strings       docs to set up in the project, comma-separated or repeated (e.g. golang,canary)
+  -f, --force              allow initializing home directory, root, or non-coding directory
+      --gowork             set up or migrate Go workspace (go.work.example + untracked local go.work symlink)
+  -h, --help               help for init
+      --issues-git         enable issue-index Git integration (use --issues-git=false to remove it)
+      --json               output RAMP report in JSON format
+      --quota-1            scaffold Quota-1 single-test guardrails in AGENTS.md and Makefile
+      --ramp               report RAMP maturity profile and projected init changes (offline, read-only)
+      --ramp-report        alias for --ramp
+      --replace            delete existing AGENTS.md and recreate from template before init
+  -m, --repo-mode string   repo git setup to note in AGENTS.md (solo, fork, team)
+      --summary            run claude -p to generate a project summary and add it to AGENTS.md
+      --update             re-fetch and refresh the project summary (implies --summary)
+      --variant string     doc variant to install: lite or full (default: keep each existing doc variant, else full)
+  -y, --yes                assume yes when reconciling Makefile targets (no prompt)
+
+=== harnez issues
+issues collapses today's four-step ticket-status-change dance (hand-edit the
+'**Status**:' line, run 'harnez index', 'git add' the changed files, 'git
+commit') into one call: it rewrites the ticket's Status line, regenerates
+issues/README.md in-process (the same logic 'harnez index' uses), and
+commits both files by default.
+
+Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
+
+  open [reason]    Status: Open, or "Open — <reason>"
+  start [reason]   Status: In Progress, or "In Progress — <reason>"
+  block <reason>   Status: "Blocked — <reason>" (reason required)
+  close [reason]   Status: Closed (bare), or "Closed — <reason>"
+  done [reason]    Status: Closed (bare), or "Closed — <reason>" (alias for close)
+  draft [reason]   Status: Draft, or "Draft — <reason>"
+
+Status verbs accept one or more ticket numbers. Leading all-digit arguments
+are targets; the first non-number argument starts the reason. A numeric-only
+reason is therefore ambiguous: include text in the reason (for example,
+'"123 tickets"'). Batch targets are all validated before any file is changed,
+then the README is regenerated and the batch is committed once.
+  new [title]      Atomically reserve the next free issue number and create
+                    a Draft placeholder file (issues/<NNN>-<title-slug>.md,
+                    or issues/<NNN>-reserved.md with no title), using
+                    O_CREATE|O_EXCL so concurrent callers never collide. Non-
+                    JSON output is "<NUMBER>\t<PATH>" -- write the ticket's
+                    real content directly to that printed path instead of
+                    re-deriving the slug from the title by hand (a
+                    hand-derived slug can diverge and leave an orphaned
+                    placeholder behind, see issue 202). Unlike every other
+                    verb, 'new' takes no ticket number (there isn't one yet)
+                    and never commits.
+  show <number>    Inspect a ticket. In interactive terminal / TTY or with
+                    -I/--image, renders a bounded visual card (using
+                    internal/readcard). Supports --raw/--text and --json.
+  mv <old> [new]   Renumber a ticket to [new] (default: next free number
+                    from scanning issuesDir). Renames the file keeping the
+                    same slug, rewrites the '# <new> — <title>' header line,
+                    resyncs issues/README.md, and commits both files by default.
+                    Guarded by O_CREATE|O_EXCL so concurrent claims or existing
+                    tickets are never overwritten.
+  rebase [upstream] Replay local commits onto upstream, deriving local ticket
+                    ownership from history and deterministically repairing any
+                    number collisions in an explicit final commit. --dry-run
+                    prints the plan without changing Git state.
+  lint              Read-only validation for duplicate numbers, conflicting
+                    filename/H1 numbers, and generated-index drift.
+  list [filter]     Read-only: list tickets matching [filter] (default:
+                    "is:open"), a thin wrapper over 'harnez find issues' --
+                    not a status-mutation verb, and does not accept
+                    --check/--dry-run/--commit/--no-commit. Supports the
+                    same -n/--limit/--all flags as 'find', plus the bare
+                    git-log-style '-N' shorthand (e.g. 'issues list -3').
+
+'close' with no reason writes bare "Closed", never an auto-fabricated
+"Closed — resolved" -- both are common in the corpus and this command does
+not guess which the caller means. It also never guesses a commit sha for a
+"resolved in <sha>" reason (that sha does not exist until this command's own
+commit is made) -- supply it explicitly, or correct it in a small follow-up
+call.
+
+Idempotency: re-running a verb that would produce the exact same Status
+line text already on disk is a no-op -- exit 0, no file/README/commit
+changes. Changing the reason text on an already-matching status (e.g.
+correcting a placeholder commit sha) is a real, non-idempotent action and
+proceeds normally.
+
+--check (alias --dry-run) reports what would change without writing or
+committing, and exits 1 if there is drift from the requested state (mirrors
+'harnez index --check').
+
+A nonexistent or ambiguous ticket number is a caller-bug error (non-zero
+exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
+valid, exit-0 answer.
+
+Usage:
+  harnez issues <verb> <ticket-number...> [reason...] [flags]
+
+Flags:
+  -a, --all             with 'list': show all matching results
+      --cached          validate the staged Git snapshot (issues lint only)
+      --check           report what would change without writing or committing; exit 1 on drift
+      --commit string   override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
+  -d, --dir string      repo root containing issues/ (default ".")
+      --dry-run         alias for --check
+  -h, --help            help for issues
+  -I, --image           render visual PNG card context
+      --json            output a single JSON object instead of a text line
+  -n, --limit int       with 'list': limit results (default: newest 10) (default 10)
+  -l, --list            list open issues (alias for the list verb)
+      --no-commit       rewrite the ticket file and README but do not git add/commit
+  -r, --raw             output raw text directly to stdout
+  -t, --text            output raw text directly to stdout (alias for --raw)
+
+=== harnez lint
+lint verifies source files, scripts, and documentation against harnez
+standards and invariants (e.g. Bash 3-line conditionals and source-over-dot,
+Markdown and Makefile marker integrity).
+
+With no arguments, lint checks every git-tracked file it recognises; a
+directory argument checks the tracked files below it. Explicit files are
+linted even when untracked.
+
+Language is automatically inferred from file extensions or shebangs, or can
+be overridden explicitly with --lang. In directory mode, --lang selects only
+files of that language.
+
+Without --check, lint reports and exits 0. --check fails on errors;
+--check=warning also fails on warnings.
+
+Errors are always listed. When linting directories (or the whole repo),
+warnings are summarised by rule and by the files with the most warnings;
+--verbose lists every warning. --json always includes every finding.
+
+Usage:
+  harnez lint [flags] [file|dir]...
+
+Examples:
+  harnez lint                      # all tracked files
+  harnez lint --check scripts docs # gate on errors below two dirs
+  harnez lint --check=warning --lang go
+
+Flags:
+      --check string[="error"]   exit non-zero on findings at or above this level (error, warning)
+  -h, --help                     help for lint
+      --json                     output findings as JSON
+      --lang string              language override (auto, bash, go, make, markdown) (default "auto")
+  -v, --verbose                  list every warning instead of a summary in directory mode
+
+=== harnez load-stream
+Stream local CPU/GPU load samples as NDJSON (internal: driven remotely by usage --watch, issue 110)
+
+Usage:
+  harnez load-stream [flags]
+
+Flags:
+  -h, --help   help for load-stream
+
+=== harnez log
+log lists what harnez itself has run — which subcommand, when, in which
+project, by whom, and whether it succeeded — newest first, in the shape of
+'git log':
+
+  harnez log            # last 20 invocations in the current project
+  harnez log -5         # last 5, exactly like 'git log -5'
+  harnez log --failed   # only invocations that exited non-zero
+  harnez log --human    # only invocations a person typed at a terminal
+
+Rows come from the cli_invocations telemetry table, written automatically
+around every harnez run (issue 326). With no arguments, output is scoped to
+the project inferred from the current directory and falls back to all
+projects when the current directory is not one harnez has recorded.
+
+This command answers exactly one question: what did harnez run, and when.
+It deliberately takes no subcommands, because the neighbouring questions
+already have their own commands and must not be duplicated here:
+
+  harnez stats                # aggregates over tool_calls: failure rates,
+                              # scores, distillation byte savings
+  harnez find issues history  # how open/closed ticket counts have moved
+  harnez dochistory           # how managed docs have evolved
+  git log -- docs/ issues/    # what actually changed in the repo's docs and
+                              # tickets (they live in the git tree by design)
+
+--agent accepts either a bare id ('claude') or the stored form
+('agent:claude'). --human and --agent are mutually exclusive. --all uncaps
+the result and drops the current-directory project scoping; an explicit
+--project still applies.
+
+Usage:
+  harnez log [-N | -n <limit>] [--project <name>] [--command <name>] [--failed] [--json] [flags]
+
+Flags:
+      --agent string     filter to one agent (e.g. claude, or the stored agent:claude)
+      --all              show every recorded invocation across all projects (uncapped)
+      --auto             filter to the current session, resolved from the environment (like harnez stats --auto)
+      --command string   filter to one subcommand (the full path, e.g. 'index' or 'issues new')
+      --dir string       directory whose project name scopes the default view (default: cwd)
+      --failed           only invocations that exited non-zero
+  -h, --help             help for log
+      --human            filter to invocations attributed to a human at a terminal
+      --json             output the rows as JSON instead of a formatted table
+  -n, --limit int        maximum number of invocations to show (also: bare -N, like git log -5) (default 20)
+      --project string   filter to one project_name
+      --session string   filter to one session_id
+      --since duration   only invocations newer than this duration ago (e.g. 2h, 48h)
+
+=== harnez man
+Generate, print, or install roff man pages
+
+Usage:
+  harnez man [flags]
+
+Flags:
+      --dir string   custom target directory for man pages (implies --install)
+  -h, --help         help for man
+      --install      install man pages into the standard man directory
+
+=== harnez mcp
+Serve Harnez agent tools over MCP stdio
+
+Usage:
+  harnez mcp [flags]
+
+Flags:
+  -h, --help   help for mcp
+
+=== harnez mode
+mode dynamically switches the operational terseness level for the active session
+and updates the managed 'Concise Mode' section in ./.harnez/rules/Local.md.
+
+Tiers:
+  lite (1)        Level 1: Concise Lite (Professional Terse, no pleasantries)
+  std (2)         Level 2: Concise Standard (Telegraphic fragments, zero filler)
+  ultra (3)       Level 3: Concise Ultra (Diffs/status only, zero narrative)
+  vision (4)      Vision Mode: Multimodal visual cheatsheet context (@docs/vision/*.png)
+  off (0, reset)  Disable ConciseMode / reset local overlay
+
+Flags:
+  -e, --ephemeral, --no-file  Emit stdout directive only; do not write any file to disk
+	      --persist, --main       Accepted for compatibility; Local.md remains the target
+	-f, --file                  Target instructions file (default: ./.harnez/rules/Local.md)
+  -q, --quiet                 Suppress in-flight LLM directive on stdout (file update only)
+      --dry-run               Show directive and changes without writing to disk
+
+Usage:
+  harnez mode [tier] [flags]
+  harnez mode [command]
+
+Aliases:
+  mode, concise
+
+Available Commands:
+  autonomous-read Allow native reads and observe their opportunity cost
+  enforce-read    Enable native large-read enforcement
+  lite            Switch to Concise Lite (Level 1)
+  off             Disable ConciseMode / remove overlay directive
+  std             Switch to Concise Standard (Level 2)
+  ultra           Switch to Concise Ultra (Level 3)
+  vision          Switch to Vision Mode (Multimodal visual cards)
+
+Flags:
+      --dry-run       display directive and planned file changes without modifying disk
+  -e, --ephemeral     emit stdout directive only; do not write any file to disk
+  -f, --file string   target instructions file (default: ./.harnez/rules/Local.md)
+  -h, --help          help for mode
+      --main          alias for --persist
+      --no-file       alias for --ephemeral
+      --persist       accepted for compatibility; still write to ./.harnez/rules/Local.md
+  -q, --quiet         suppress stdout directive (file sync only)
+
+Use "harnez mode [command] --help" for more information about a command.
+
+=== harnez mode autonomous-read
+Allow native reads and observe their opportunity cost
+
+Usage:
+  harnez mode autonomous-read [flags]
+
+Flags:
+  -h, --help   help for autonomous-read
+
+Global Flags:
+      --dry-run       display directive and planned file changes without modifying disk
+  -e, --ephemeral     emit stdout directive only; do not write any file to disk
+  -f, --file string   target instructions file (default: ./.harnez/rules/Local.md)
+      --main          alias for --persist
+      --no-file       alias for --ephemeral
+      --persist       accepted for compatibility; still write to ./.harnez/rules/Local.md
+  -q, --quiet         suppress stdout directive (file sync only)
+
+=== harnez mode enforce-read
+Enable native large-read enforcement
+
+Usage:
+  harnez mode enforce-read [flags]
+
+Flags:
+  -h, --help   help for enforce-read
+
+Global Flags:
+      --dry-run       display directive and planned file changes without modifying disk
+  -e, --ephemeral     emit stdout directive only; do not write any file to disk
+  -f, --file string   target instructions file (default: ./.harnez/rules/Local.md)
+      --main          alias for --persist
+      --no-file       alias for --ephemeral
+      --persist       accepted for compatibility; still write to ./.harnez/rules/Local.md
+  -q, --quiet         suppress stdout directive (file sync only)
+
+=== harnez mode lite
+Switch to Concise Lite (Level 1)
+
+Usage:
+  harnez mode lite [flags]
+
+Aliases:
+  lite, 1, level1
+
+Flags:
+  -h, --help   help for lite
+
+Global Flags:
+      --dry-run       display directive and planned file changes without modifying disk
+  -e, --ephemeral     emit stdout directive only; do not write any file to disk
+  -f, --file string   target instructions file (default: ./.harnez/rules/Local.md)
+      --main          alias for --persist
+      --no-file       alias for --ephemeral
+      --persist       accepted for compatibility; still write to ./.harnez/rules/Local.md
+  -q, --quiet         suppress stdout directive (file sync only)
+
+=== harnez mode off
+Disable ConciseMode / remove overlay directive
+
+Usage:
+  harnez mode off [flags]
+
+Aliases:
+  off, reset, default, 0
+
+Flags:
+  -h, --help   help for off
+
+Global Flags:
+      --dry-run       display directive and planned file changes without modifying disk
+  -e, --ephemeral     emit stdout directive only; do not write any file to disk
+  -f, --file string   target instructions file (default: ./.harnez/rules/Local.md)
+      --main          alias for --persist
+      --no-file       alias for --ephemeral
+      --persist       accepted for compatibility; still write to ./.harnez/rules/Local.md
+  -q, --quiet         suppress stdout directive (file sync only)
+
+=== harnez mode std
+Switch to Concise Standard (Level 2)
+
+Usage:
+  harnez mode std [flags]
+
+Aliases:
+  std, standard, 2, level2
+
+Flags:
+  -h, --help   help for std
+
+Global Flags:
+      --dry-run       display directive and planned file changes without modifying disk
+  -e, --ephemeral     emit stdout directive only; do not write any file to disk
+  -f, --file string   target instructions file (default: ./.harnez/rules/Local.md)
+      --main          alias for --persist
+      --no-file       alias for --ephemeral
+      --persist       accepted for compatibility; still write to ./.harnez/rules/Local.md
+  -q, --quiet         suppress stdout directive (file sync only)
+
+=== harnez mode ultra
+Switch to Concise Ultra (Level 3)
+
+Usage:
+  harnez mode ultra [flags]
+
+Aliases:
+  ultra, 3, level3
+
+Flags:
+  -h, --help   help for ultra
+
+Global Flags:
+      --dry-run       display directive and planned file changes without modifying disk
+  -e, --ephemeral     emit stdout directive only; do not write any file to disk
+  -f, --file string   target instructions file (default: ./.harnez/rules/Local.md)
+      --main          alias for --persist
+      --no-file       alias for --ephemeral
+      --persist       accepted for compatibility; still write to ./.harnez/rules/Local.md
+  -q, --quiet         suppress stdout directive (file sync only)
+
+=== harnez mode vision
+Switch to Vision Mode (Multimodal visual cards)
+
+Usage:
+  harnez mode vision [flags]
+
+Aliases:
+  vision, 4, level4, v, vis
+
+Flags:
+  -h, --help   help for vision
+
+Global Flags:
+      --dry-run       display directive and planned file changes without modifying disk
+  -e, --ephemeral     emit stdout directive only; do not write any file to disk
+  -f, --file string   target instructions file (default: ./.harnez/rules/Local.md)
+      --main          alias for --persist
+      --no-file       alias for --ephemeral
+      --persist       accepted for compatibility; still write to ./.harnez/rules/Local.md
+  -q, --quiet         suppress stdout directive (file sync only)
+
+=== harnez rate
+rate writes a single tool_calls row (call_type=internal, exit_code=NULL)
+recording how well an internal tool call (file read, edit, semantic scan,
+web search, ...) served the agent's purpose. Designed to fire immediately
+after every such tool call without MCP/JSON-RPC schema overhead:
+
+  harnez rate <tool_name> <score> "<description>" [<ticket_id>]
+
+  tool_name    free-form tool identifier, e.g. "Read" or "semantic-scan"
+  score        integer 1-5
+  description  one-line quoted summary
+  ticket_id    optional "<project_folder>/<ticket_name>"; when omitted it
+               is resolved from the current git branch (or the session's
+               most recently used ticket) instead of being written as NULL
+
+Sub-20ms end-to-end target: this fires many times per agent turn.
+
+--ok records a distinct, lighter-weight heartbeat instead of a per-tool
+rating (call_type=heartbeat, score=NULL, exit_code=NULL) — issue 179's
+answer to "silence is ambiguous": confirm a stretch of tool calls was fine
+without inventing a fake per-tool score for it. No tool_name/score
+required:
+
+  harnez rate --ok ["<note>"] [<ticket_id>] [--since <n>]
+
+  note       optional one-line note (defaults to "ok")
+  ticket_id  optional, same resolution as the default form
+  --since n  optional: how many tool calls this heartbeat covers (recorded
+             in the note for human reference only; not a queryable column)
+
+Usage:
+  harnez rate <tool_name> <score> "<description>" [<ticket_id>] [flags]
+
+Flags:
+      --agent string     agent identifier override (default: $HARNEZ_AGENT or auto-detect)
+  -h, --help             help for rate
+      --ok               record a lean heartbeat confirming recent tool calls were fine, instead of a per-tool rating
+      --session string   session_id override (default: resolve.Session())
+      --since int        with --ok: number of tool calls this heartbeat covers (descriptive only)
+
+=== harnez read
+Read files or stdin as text, or PNG context cards with -I.
+--auto is retained as a text-only compatibility flag; it never selects images.
+Use -I explicitly to render PNG context cards.
+Explicit -I forces images; --text and --raw cannot be combined with -I.
+Images pack up to three columns, pruning unused columns and cropping to content.
+
+--line-numbers=all|off|N controls the gutter cadence and preserves source anchors.
+--compress=ws|ast safely compacts Go and JSON. Shell uses conservative lexical
+compaction in both modes; complex expansions and heredocs remain verbatim.
+Compression requires complete valid Go/JSON input; source files are never changed.
+
+Examples:
+  harnez read -n -L 10:50 internal/lint/lint.go
+  harnez read -I --line-numbers=10 --compress=ws internal/lint/lint.go
+  harnez read --head=100 internal/lint/lint.go
+  harnez read -I --columns=2 --json source.go
+
+Usage:
+  harnez read [flags] [files...]
+
+Flags:
+      --auto                  compatibility flag; always use text
+      --chrome string         card decoration: full, slim or none (title moves into the meta box)
+  -c, --columns int           maximum columns (1-4; unused columns pruned) (default 3)
+      --compress string       safe source compression: off, ws, ast (default "off")
+      --font string           font: pixel, retro, 5x8, 3x5, micro, 6x12, standard, 8x16, 7x13 (default "pixel")
+      --font-size int         font size in pixels (default 11)
+      --frame string          sections (diff hunks, headings, Go funcs): off, sep (lines) or box
+      --gutter string         line numbers: normal, tight (micro font) or sup (micro font, top-aligned)
+      --head int              read only the first N lines
+  -h, --help                  help for read
+  -I, --image                 force styled PNG output
+      --json                  structured JSON metadata
+      --line-numbers string   gutter: all, off, none, or positive cadence N (default "all")
+  -L, --lines string          source line range, e.g. 10:50
+      --max-dim int           maximum image dimension in pixels (default 1568)
+      --meta string           info box in free top-right space: off or box (red dotted)
+  -n, --number                force text output with line numbers (unless -I)
+  -o, --out string            output PNG file or existing directory
+      --raw                   force text without line numbers
+      --stats                 alias for --tokens
+      --style string          card style preset: default, compact (slim, tight, sep, box) or max (none, sup, box, box) (default "default")
+      --tail int              read only the last N lines
+      --text                  force text output
+      --theme string          color theme: dark, light (default "dark")
+      --tokens                show token estimates
+      --wrap string           line wrapping: soft, truncate (default "soft")
+
+=== harnez release
+Automates the full project release lifecycle:
+  1. Reads or initializes the single source of truth version.yaml spec.
+  2. Bumps semver (patch, minor, major, or explicit version) or resumes (--continue).
+  3. Propagates version to language files (version.go, __version__.py, build.zig.zon, etc.).
+  4. Runs GoReleaser or custom build command to produce dist/ artifacts.
+  5. Cryptographically signs SHA256SUMS with minisign (non-interactive).
+  6. Verifies/enables Forgejo/Codeberg repository 'has_releases' unit via API.
+  7. Tags and pushes git branch and tags to remote origin.
+  8. Publishes release and attaches artifacts to Codeberg/Forgejo via fj.
+
+The build step runs with GOWORK=off by default, so an enclosing go.work
+file (e.g. sibling modules checked out for local co-development) never
+substitutes untagged local sources for a pinned go.mod/go.sum dependency.
+Pass --allow-workspace to opt back in when that's genuinely intended.
+
+Usage:
+  harnez release [flags]
+
+Flags:
+      --allow-workspace     honor an enclosing go.work file during the build step (default: GOWORK=off, so the release always builds against pinned, tagged go.mod/go.sum deps, not untagged local workspace sources)
+      --build-cmd string    custom build command (defaults to goreleaser or make dist)
+  -b, --bump string         version bump type ('patch', 'minor', 'major', or explicit semver 'x.y.z') (default "patch")
+      --continue            resume a previous release safely without bumping or re-tagging
+  -d, --dir string          target project directory (default ".")
+  -n, --dry-run             simulate execution without modifying files, git, or remote forge
+      --force               re-release the current code as a new version even if nothing changed since the previous tag
+  -h, --help                help for release
+  -s, --sign-key string     path to secret minisign key (defaults to ~/.minisign/<project>.key)
+      --skip-build          skip artifact compilation/packaging
+      --skip-publish        skip publishing artifacts to forge via fj
+      --skip-push           skip pushing git commit and tags to remote
+      --skip-sign           skip minisign cryptographic signing
+      --tag-prefix string   override git tag prefix (defaults to tag_prefix in version.yaml or 'v')
+
+=== harnez repo-history
+dochistory analyzes Git history, tracking token evolution,
+metrics, multi-track categories (code, tests, docs, skills, issues), and distributions across commits.
+
+Invocations:
+  harnez dochistory                    # Analyze default managed documentation (docs/ and AGENTS.md)
+  harnez dochistory --tracks           # Multi-track repository evolution sparks (code, tests, docs, skills, issues)
+  harnez dochistory --tracks --diff    # Expanded additions and removals breakdown table
+  harnez dochistory docs/lang/Go.md    # Single-file timeline and token sparkline
+  harnez dochistory docs/ issues       # Multi-directory / glob stacked category breakdown
+  harnez dochistory --json             # Machine-readable JSON output
+
+Usage:
+  harnez dochistory [files...] [flags]
+
+Aliases:
+  dochistory, doc-history, repo-history
+
+Flags:
+      --color        enable ANSI color output (default true)
+      --diff         show additions and removals breakdown in multi-track history
+  -d, --dir string   repository root directory (default: current directory or git root)
+  -h, --help         help for dochistory
+      --json         output history in JSON format
+      --no-color     disable ANSI color output
+      --tracks       analyze multi-track repository evolution (code, tests, docs, skills, issues)
+
+=== harnez repo-status
+repo-status summarizes git working-tree state using
+'git status --porcelain=v2 --branch' (machine-parseable, not scraped
+human-readable text).
+
+Quiet path (default): the tree is clean -- nothing staged, unstaged, or
+untracked, no conflicts, HEAD not detached, and not behind the upstream --
+prints one short line, e.g. "clean, up to date" or "clean, 3 ahead of
+origin/main". Being ahead of the upstream alone does NOT trigger the
+verbose path: unpushed local commits are the expected normal state in a
+solo/no-PR-workflow repo, not something worth narrating on every check.
+
+Verbose path: any staged/unstaged/untracked file, merge conflict, detached
+HEAD, or being behind the upstream by any amount (including a full
+ahead-and-behind divergence) prints a short structured summary -- counts
+by category, branch divergence, and the affected file/conflict paths --
+instead of the full raw 'git status' dump.
+
+Usage:
+  harnez repo-status [flags]
+
+Flags:
+  -d, --dir string   git repo directory to inspect (default ".")
+  -h, --help         help for repo-status
+
+=== harnez revert
+Revert managed configuration or one-off changes
+
+Usage:
+  harnez revert [flags]
+
+Flags:
+      --agy-target string     Antigravity config directory (default: agy_target from config.yaml)
+      --codex-target string   Codex config.toml path (default: codex_hooks_target from config.yaml)
+  -c, --config string         path to config YAML file (default: embedded)
+      --debloat               restore Claude, Codex, and Antigravity settings to their pre-debloat state
+  -h, --help                  help for revert
+      --managed               remove managed configuration blocks and keys
+  -t, --target string         Claude config directory (default: ~/.claude)
+
+=== harnez scan-docs
+Scan immediate child agent projects for managed-docs drift
+
+Usage:
+  harnez scan-docs <dir> [flags]
+
+Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+  -h, --help            help for scan-docs
+
+=== harnez skill
+Manage external skills: SKILL.md directories from third-party git repositories.
+
+install clones the repository into ~/.harnez/skills/src (or $HARNEZ_SKILLS_HOME),
+pins the commit, and copies only the skill directory into the agent skill
+directories that 'harnez apply' uses. Plugin hooks, MCP servers, commands, and
+agents are never installed; explore lists them. Nothing from the repository is
+executed.
+
+Skills are explicit-only by default: agents use one only when you name it.
+Claude Code gets the skill as a /command that never triggers on its own,
+Codex gets it with implicit invocation disabled, and other agents get no copy
+(they load it via 'harnez skill show'). Pass --auto to install a plain copy
+that every agent may trigger on its own.
+
+Usage:
+  harnez skill [command]
+
+Available Commands:
+  explore     Show a repository's skills, scripts, required keys, and plugin extras without running anything
+  install     Install one skill from a git repository into all agent skill directories
+  list        List installed external skills
+  remove      Remove an external skill from all agent skill directories
+  search      Search installed external skills and their sibling skills in cached repositories
+  show        Print an installed external skill's SKILL.md (for agents without native skills)
+  update      Update external skills from their source (all when no name is given)
+  vendor      Copy the config's bundled_skills from upstream into the harnez source tree
+
+Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+  -h, --help            help for skill
+
+Use "harnez skill [command] --help" for more information about a command.
+
+=== harnez skill explore
+Show a repository's skills, scripts, required keys, and plugin extras without running anything
+
+Usage:
+  harnez skill explore <name|git-url[@ref]> [flags]
+
+Flags:
+  -h, --help   help for explore
+
+Global Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+
+=== harnez skill install
+Install one skill from a git repository into all agent skill directories
+
+Usage:
+  harnez skill install <git-url>[@ref] [flags]
+
+Flags:
+      --as string      install under this name, e.g. mattp-grilling, when the upstream name is taken
+      --auto           let agents trigger the skill on their own (default: only when named)
+  -h, --help           help for install
+      --path string    skill directory inside the repository
+      --skill string   skill name, when the repository has several
+
+Global Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+
+=== harnez skill list
+List installed external skills
+
+Usage:
+  harnez skill list [flags]
+
+Flags:
+  -h, --help   help for list
+
+Global Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+
+=== harnez skill remove
+Remove an external skill from all agent skill directories
+
+Usage:
+  harnez skill remove <name> [flags]
+
+Flags:
+  -h, --help   help for remove
+
+Global Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+
+=== harnez skill search
+Search installed external skills and their sibling skills in cached repositories
+
+Usage:
+  harnez skill search <terms...> [flags]
+
+Flags:
+  -h, --help   help for search
+
+Global Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+
+=== harnez skill show
+Print an installed external skill's SKILL.md (for agents without native skills)
+
+Usage:
+  harnez skill show <name> [flags]
+
+Flags:
+  -h, --help   help for show
+
+Global Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+
+=== harnez skill update
+Update external skills from their source repository.
+
+Each skill is compared with its installed commit first: the report shows the
+diff summary, a skill that moved to another path (followed), a skill that
+is gone upstream (kept at its old commit, with rename hints from the repo's
+docs), and skills the repository added since. --dry-run only reports.
+A pinned ref (install url@ref) stays pinned unless --latest is given.
+
+Usage:
+  harnez skill update [name...] [flags]
+
+Flags:
+      --diff      print the full diff, not only the summary
+  -n, --dry-run   report what would change without installing
+  -h, --help      help for update
+      --latest    drop a pinned ref and follow the default branch
+
+Global Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+
+=== harnez skill vendor
+Copy the skills listed under bundled_skills in config.yaml from their
+repository at the given commit into each entry's dir, with the repository's
+LICENSE. Run it in the harnez source tree (or pass -c path/to/config.yaml),
+then rebuild: the binary embeds the copies and 'harnez apply' installs them.
+
+To update, raise the commit in config.yaml and run vendor again; it reports
+changed skills, skills gone upstream (kept, with rename hints), and upstream
+skills that are not bundled.
+
+Usage:
+  harnez skill vendor [flags]
+
+Flags:
+  -h, --help   help for vendor
+
+Global Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+
+=== harnez skills
+Inspect and export Harnez's built-in skill catalogue
+
+Usage:
+  harnez skills [command]
+
+Available Commands:
+  export      Export public skills for static site generation
+
+Flags:
+  -h, --help   help for skills
+
+Use "harnez skills [command] --help" for more information about a command.
+
+=== harnez skills export
+Export public skills for static site generation
+
+Usage:
+  harnez skills export [flags]
+
+Flags:
+      --format string   export format (sitegen-v1)
+  -h, --help            help for export
+
+=== harnez stats
+stats renders an analytical report over the tool_calls telemetry table
+(internal/telemetry, issue 116, populated by 'harnez rate' and 'harnez exec'):
+
+  - Call frequency, average score, and failure rate broken down per tool,
+    per agent, and per project.
+  - A global distillation byte-savings ratio (1 - distilled/raw bytes),
+    computed only over rows where distillation actually ran
+    (distilled_bytes IS NOT NULL).
+
+  harnez stats
+  harnez stats --tool Read --agent claude
+  harnez stats --ticket harnez/120-harnez-stats-analytical-reporting --json
+  harnez stats --project harnez
+  harnez stats --auto
+  harnez stats --agents --days 7 [--json]
+
+--auto resolves session_id from the current environment (internal/resolve,
+same resolution harnez rate/harnez exec use) and filters to just this
+session's calls, instead of the all-time/all-session default.
+
+--project filters to one project_name (issue 227) — the stable project
+identity stored per tool_calls row, matching the by-project breakdown in
+the report.
+
+Filters combine with AND when more than one is given. Default output is a
+formatted terminal table; --json emits the same numbers unformatted for
+scripting (e.g. average score as a float, not a "2 decimal places" string).
+
+Usage:
+  harnez stats [--where] [--quality] [--json] [--strict] [--session <id> --calls] [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--project <name>] [--auto] [flags]
+  harnez stats [command]
+
+Available Commands:
+  merge-legacy Merge tool calls from legacy telemetry databases into the live database
+
+Flags:
+      --agent string     filter to one agent_id
+      --agents           report recent agent sessions, tokens, quota drain, and per-model totals
+      --all              with --agents, show every session instead of the newest 20
+      --auto             filter to the current session, resolved from the environment (like harnez rate/exec)
+      --calls            list provider model requests and merged tool calls for --session
+      --days int         with --agents, include sessions active in the last N days (default 7)
+  -h, --help             help for stats
+      --json             output the report as JSON instead of a formatted table
+      --overhead         also report the harnez rate feedback overhead (issue 142): call count/bytes from telemetry plus an ESTIMATED token cost, clearly labeled as an estimate, not provider-reported
+      --project string   filter to one project_name
+      --quality          run read-only telemetry data-quality checks
+      --session string   filter to one agent session ID
+      --strict           with --quality, exit nonzero when any check warns
+      --ticket string    filter to one ticket_id
+      --tool string      filter to one tool_name
+      --where            list harnez data stores, paths, sizes, newest records, owners, and purposes
+
+Use "harnez stats [command] --help" for more information about a command.
+
+=== harnez stats merge-legacy
+merge-legacy copies tool_calls rows that the live database does not have yet
+from legacy telemetry files, all in one transaction. The default files are the
+backups the XDG move left (~/.harnez/tool_catalog.sqlite.bak-<time>); named
+backups such as bak-issue331-* hold rows deleted on purpose and are only
+merged when passed explicitly.
+A row is already present when its created_at, session_id, agent_id, tool_name
+and call_type match. Before writing, it saves a consistent copy of the live
+database next to it (telemetry.sqlite.before-merge-<time>). Running it again
+adds nothing.
+
+  harnez stats merge-legacy
+  harnez stats merge-legacy ~/.harnez/tool_catalog.sqlite.bak-20260927T095508.028672123Z
+
+Usage:
+  harnez stats merge-legacy [legacy.sqlite...] [flags]
+
+Flags:
+      --db string   override the telemetry database path (default: $XDG_DATA_HOME/harnez/telemetry.sqlite)
+  -h, --help        help for merge-legacy
+
+=== harnez status
+Show config summary and applied state
+
+Usage:
+  harnez status [flags]
+
+Flags:
+      --agy-target string     Antigravity config directory (default: agy_target from config.yaml)
+      --codex-target string   Codex config.toml path (default: codex_hooks_target from config.yaml)
+      --components strings    component(s) to inspect, comma-separated or repeated (e.g. docs-only,telemetry)
+  -c, --config string         path to config YAML file (default: embedded)
+      --debloat               show debloat-managed deny entries and toggles instead of full status (issue 316)
+  -h, --help                  help for status
+  -t, --target string         Claude config directory (default: ~/.claude)
+
+=== harnez statusline
+statusline reads Claude Code or Antigravity CLI statusLine JSON payloads from stdin.
+For Claude Code it prints the current directory, context usage, cache-read
+percentage, and rate-limit usage. With --agent agy it prints context usage,
+cache-read percentage, and quota buckets.
+
+The command is installed for Claude Code and Antigravity CLI by 'harnez apply'
+when the 'usage' component and 'status_line' config.yaml key are enabled.
+Codex uses its native TUI status items, configured separately by 'harnez apply'.
+
+Usage:
+  harnez statusline [flags]
+
+Flags:
+      --agent string   status payload provider: claude or agy (default "claude")
+  -h, --help           help for statusline
+
+=== harnez subagent
+Stage a prompt and optional STYLE_GUIDE.png in --dir. Without a launcher,
+print JSON metadata. With -- launcher args..., send the prompt on stdin and set
+HARNEZ_STYLE_GUIDE to the staged image path. The launcher must support stdin prompts;
+it or its agent must open/attach the PNG. This command does not itself attach images.
+--doc-mode=auto uses vision for Claude/Codex and concise text for Gemini/local/unknown.
+Explicit full, lite, or vision modes override provider selection.
+
+Usage:
+  harnez subagent [flags] [-- launcher args...]
+
+Flags:
+      --card string         explicit style guide PNG
+  -d, --dir string          staging and launcher working directory (default ".")
+      --doc-mode string     documentation mode: auto, vision, lite, full (default "auto")
+  -h, --help                help for subagent
+      --lite-rules string   concise rules file for lite mode
+      --provider string     target profile: claude, codex, gemini, local
+      --task string         task prompt
+
+=== harnez tui
+Interactive multi-model terminal chat interface for harnez.
+
+Built on ubunatic.com/loom, providing a header status line, scrollable chat thread,
+and multiline prompt box (Enter to send; Shift+Enter, Ctrl+J or Alt+Enter for a
+newline). Shift+Enter and Ctrl+J need a terminal with the kitty keyboard
+protocol; elsewhere they send, so use Alt+Enter or end the line with "\".
+Ctrl+G edits the prompt in $VISUAL, $EDITOR or the first editor.fallbacks
+entry of spec/tui.yaml found on PATH. Ctrl+O opens the active model's backend
+session in the provider's own CLI (claude --resume, codex resume, agy
+--conversation); the tui returns when it exits.
+
+Prompts run through the active model's harness CLI (claude, codex, agy, pi), so
+turns draw on the matching subscription; the next prompt resumes the same
+backend session natively. Backend session ids are saved per --session id
+(sessions.dir of spec/tui.yaml), so "harnez tui --session X" resumes them after
+a restart; a session the provider no longer knows starts fresh with a note. The
+header shows [resumed] or [new session] for the last turn. Esc or Ctrl+C cancels a running turn. "/model <spec>" switches
+the active model (see harnez agent models). Ctrl+T (or Alt+M) or a bare "/model"
+opens the model picker: models of spec/agent.yaml by provider, one row per tier,
+● marks the active model and ↻ one with a backend session in this tui session.
+Type to filter, up/down select, Enter switches, Esc closes; a switch during a
+running turn applies to the next turn.
+
+A prompt starting with "!" runs the rest as a background shell command (sh -c,
+in the working directory) instead of sending it to the model. Ctrl+B toggles
+the job panel: up/down select, Enter shows the live log, x cancels the job
+(SIGTERM to its process group, SIGKILL after jobs.cancel_grace_ms), Esc closes.
+Quitting cancels all running jobs.
+
+"@" at the start of a word opens a file picker over the repository (git
+ls-files, honoring .gitignore); "/" as the first character opens a command
+picker with the TUI built-ins and installed skills. Type to filter, up/down
+select, Tab or Enter inserts, Esc closes.
+
+Usage:
+  harnez tui [flags]
+
+Flags:
+      --cols int         column width for --render mode (default 80)
+  -h, --help             help for tui
+  -m, --model string     active model for tui chat session (e.g. codex:luna, claude:sonnet)
+      --render           render single TUI frame to stdout and exit (for non-interactive scripts/tests)
+      --rows int         row height for --render mode (default 24)
+  -s, --session string   session identifier for tui chat thread
+
+=== harnez usage
+Show unified token, session, and quota status across AI coding agents
+
+Usage:
+  harnez usage [flags]
+  harnez usage [command]
+
+Aliases:
+  usage, quota, tokens
+
+Available Commands:
+  archive     Copy legacy usage files into a checksummed archive
+  export      Export sanitized telemetry and token-usage history as JSON for external visualization
+  history     Inspect and manage recorded usage history and timelines
+
+Flags:
+      --agent string        filter to a specific agent (claude, agy, codex)
+      --compact             show the compact all-usage and load panels
+      --cwd string          alias for --project
+  -h, --help                help for usage
+      --host string         query usage from a remote host via SSH
+      --interval duration   refresh interval for --watch (minimum 30s, to avoid hammering live quota APIs) (default 1m0s)
+      --json                output usage in JSON format
+      --loom                start usage monitor as loom app (compact view)
+      --mic                 show the microphone level/recording panel in --watch (hidden if no audio interface is found)
+      --minimal             show compact panels without title/status bars or hidden-panel and overflow hints
+      --normal              show the usage table (the default view)
+      --offline             disable live network queries and use local caches only
+  -p, --proc                show running agent processes panel in the default view / --watch
+      --processes           show running agent processes panel in the default view / --watch
+      --project string      attribute lifetime tokens and cost-of-change to a repository directory
+  -r, --raw                 print the detailed per-field usage report instead of the selected view
+      --shared              use the shared local usage controller
+      --splash              render startup splash screen while initial collection is in flight (--watch only)
+  -w, --watch               live-refresh the selected view in place with a tokens/min trend
+
+Use "harnez usage [command] --help" for more information about a command.
+
+=== harnez usage archive
+Copy legacy usage files into a checksummed archive
+
+Usage:
+  harnez usage archive [command]
+
+Available Commands:
+  create      Copy known legacy usage files and write their manifest
+  import      Validate and import a legacy usage archive into the telemetry store
+
+Flags:
+  -h, --help   help for archive
+
+Global Flags:
+      --shared   use the shared local usage controller
+
+Use "harnez usage archive [command] --help" for more information about a command.
+
+=== harnez usage archive create
+Copy known legacy usage files and write their manifest
+
+Usage:
+  harnez usage archive create [flags]
+
+Flags:
+  -h, --help   help for create
+
+Global Flags:
+      --shared   use the shared local usage controller
+
+=== harnez usage archive import
+Validate and import a legacy usage archive into the telemetry store
+
+Usage:
+  harnez usage archive import <archive-directory> [flags]
+
+Flags:
+  -h, --help   help for import
+
+Global Flags:
+      --shared   use the shared local usage controller
+
+=== harnez usage export
+export writes a single scrubbed JSON file combining:
+
+  - Tool-call telemetry from internal/telemetry ($XDG_DATA_HOME/harnez/telemetry.sqlite):
+    call frequency, scores, exit codes, durations, byte savings, and
+    taxonomic activity_category.
+  - Token/session usage history from internal/usage
+    ($XDG_DATA_HOME/harnez/usage-history/*.jsonl): per-agent token totals and
+    quota-window percentages over time.
+
+Privacy: absolute filesystem paths (working directories, ticket IDs,
+project names) are always reduced to their final path component only;
+account/email fields are always masked via the same MaskAccount helper
+used elsewhere in harnez; hostnames are always anonymized to opaque
+per-export-run labels. activity_category is always safe and present.
+--privacy controls what happens to free-text fields (tool-call notes,
+usage Sources/Details):
+
+  public          (default) drop free text entirely.
+  agent-sanitized keep tool-call notes, rewritten via the claude CLI into
+                  high-level, non-identifying summaries (content-hash
+                  cached — a given note is only ever sent once).
+  internal        keep free text, with obvious sensitive substrings
+                  (home paths, emails, API-key-shaped tokens) redacted
+                  in place.
+  raw             keep every field completely unscrubbed. Local/private
+                  use only.
+
+Taxonomic Classification:
+  --classify      opt-in batch classification of unmatched tool notes
+                  using local model (lmcoder/claude) into canonical
+                  activity categories.
+
+This is a JSON-only export (issue 204's first pass) — SQLite export is not
+yet implemented.
+
+  harnez usage export --out=telemetry.json
+  harnez usage export --out=telemetry.json --privacy=agent-sanitized
+  harnez usage export --out=telemetry.json --classify
+
+Usage:
+  harnez usage export --out=<file> [flags]
+
+Flags:
+      --classify             opt-in batch classification of notes using local model runner (issue 212)
+      --db string            override the telemetry database path (default: $XDG_DATA_HOME/harnez/telemetry.sqlite)
+  -h, --help                 help for export
+      --history-dir string   override the usage-history directory (default: $XDG_DATA_HOME/harnez/usage-history)
+      --out string           output file path for the sanitized JSON export (required)
+      --privacy string       privacy level: public|agent-sanitized|internal|raw (default "public")
+
+Global Flags:
+      --shared   use the shared local usage controller
+
+=== harnez usage history
+Inspect and manage recorded usage history and timelines
+
+Usage:
+  harnez usage history [flags]
+  harnez usage history [command]
+
+Aliases:
+  history, timeline
+
+Available Commands:
+  fetch       Fetch remote usage history files from an SSH host into local history dir
+  record      Collect and record a usage snapshot to the local machine history log
+  stats       Display aggregate statistics across recorded usage history
+  timeline    Display snapshot and quota history across all recorded machine logs
+
+Flags:
+  -h, --help   help for history
+      --json   output history in JSON format
+
+Global Flags:
+      --shared   use the shared local usage controller
+
+Use "harnez usage history [command] --help" for more information about a command.
+
+=== harnez usage history fetch
+Fetch remote usage history files from an SSH host into local history dir
+
+Usage:
+  harnez usage history fetch <host> [flags]
+
+Flags:
+  -h, --help   help for fetch
+
+Global Flags:
+      --json     output history in JSON format
+      --shared   use the shared local usage controller
+
+=== harnez usage history record
+Collect and record a usage snapshot to the local machine history log
+
+Usage:
+  harnez usage history record [flags]
+
+Aliases:
+  record, append
+
+Flags:
+  -h, --help   help for record
+
+Global Flags:
+      --json     output history in JSON format
+      --shared   use the shared local usage controller
+
+=== harnez usage history stats
+Display aggregate statistics across recorded usage history
+
+Usage:
+  harnez usage history stats [flags]
+
+Flags:
+  -h, --help   help for stats
+
+Global Flags:
+      --json     output history in JSON format
+      --shared   use the shared local usage controller
+
+=== harnez usage history timeline
+Display snapshot and quota history across all recorded machine logs
+
+Usage:
+  harnez usage history timeline [flags]
+
+Flags:
+  -h, --help   help for timeline
+
+Global Flags:
+      --json     output history in JSON format
+      --shared   use the shared local usage controller
+
