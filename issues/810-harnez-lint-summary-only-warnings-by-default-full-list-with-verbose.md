@@ -1,6 +1,6 @@
 # 810 — harnez lint: summary-only warnings by default, full list with --verbose
 
-**Status**: Open
+**Status**: Closed — resolved in 7c1960bb; make lint output is now 14 summary lines instead of 171 warnings
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Tooling
