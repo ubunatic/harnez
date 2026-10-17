@@ -1,6 +1,6 @@
 # 170 — Modularize `cmd/harnez/main.go` Command Definitions
 
-**Status**: Open
+**Status**: Closed — superseded by 812: main.go commands split into *_cmd.go constructors in ec1939ee (main.go 1146 -> 253 lines)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Code Quality / Refactor
