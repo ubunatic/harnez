@@ -1,6 +1,6 @@
 # harnez agent start -d does not set the agent working directory
 
-Status: Open
+Status: Closed — codex driver now runs in -d dir; cross-provider cwd test (f88a38be)
 
 ## Problem
 `harnez agent start --name respect-harnez --model sol:med -d /home/uwe/projects/harnez -f task.md`
