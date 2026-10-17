@@ -798,3 +798,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 797 | [797-respect-spec-usage-cache-freshness-policy.md](797-respect-spec-usage-cache-freshness-policy.md) | respect spec: usage cache freshness policy | Open |
 | 798 | [798-respect-spec-agent-compaction-threshold.md](798-respect-spec-agent-compaction-threshold.md) | respect spec: agent compaction threshold | Open |
 | 799 | [799-respect-spec-ramp-assessment-rules-and-labels.md](799-respect-spec-ramp-assessment-rules-and-labels.md) | respect spec: RAMP assessment rules and labels | Open |
+| 800 | [800-harnez-agent-start-d-does-not-set-the-agent-working-directory.md](800-harnez-agent-start-d-does-not-set-the-agent-working-directory.md) | harnez agent start -d does not set the agent working directory | Open |
+| 801 | [801-harnez-find-code-fails-with-rg-finder-error-inside-codex-agent-sessions.md](801-harnez-find-code-fails-with-rg-finder-error-inside-codex-agent-sessions.md) | harnez find code fails with rg finder error inside codex agent sessions | Open |
