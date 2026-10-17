@@ -1,6 +1,6 @@
 # 807 — Split cmd/harnez/agent_test.go and internal/usage/watch.go by concern
 
-**Status**: Open
+**Status**: Closed — resolved in d600dad9 (agent_test.go → 12 files) and 7920fc29 (watch.go → 9 files); move-only verified by sorted-decl diff, full suite and make container-test green
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor
