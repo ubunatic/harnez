@@ -96,6 +96,9 @@ func TestEmbeddedAgentSpecLoadsAndResolves(t *testing.T) {
 	if spec.ReplyHistoryLimit != 20 {
 		t.Fatalf("reply history limit = %d, want 20", spec.ReplyHistoryLimit)
 	}
+	if spec.CompactThreshold != 200000 {
+		t.Fatalf("compact threshold = %d, want spec/agent.yaml compact_threshold_tokens 200000", spec.CompactThreshold)
+	}
 }
 
 func TestExternalSessionSchemaDeclaresRuntimeFields(t *testing.T) {

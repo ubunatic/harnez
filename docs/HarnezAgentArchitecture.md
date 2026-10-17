@@ -97,7 +97,8 @@ several times the real context (issue 673, Claude 441k stored vs 45k real; 644 a
 main-thread assistant event with non-zero usage, or `compact_boundary.post_tokens`);
 when no per-call figure exists the size is unknown (negative) and compaction is skipped. Automatic compaction reads
 `agent.compact_threshold_tokens` from the global
-`~/.harnez/config.yaml` (default `200000`). Optional
+`~/.harnez/config.yaml`; without it the default is `compact_threshold_tokens`
+in the embedded `spec/agent.yaml` (200000). Optional
 `agent.compact_thresholds` entries override the value by provider,
 `provider:model`, or `provider:model:tier`. Harnez waits for compaction
 completion and requires an acknowledgement and a lower reported input-token
