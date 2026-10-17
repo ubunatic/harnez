@@ -107,13 +107,14 @@ Short forms:
 
 Models: run "harnez agent models" for the known names. --model takes
 provider:name[:tier], a short alias (luna, opus) or alias:tier (luna:low).
-The model default comes from spec/agent.yaml. Sessions are chosen by --name,
-attribution in -d, or -c. Use -- to send text literally. Slash commands are
-/compact, /stop, and /status. Automatic compaction uses
+The model default comes from spec/agent.yaml. Agents run with -d <dir> as their
+working directory (default: cwd); resume reuses the session's directory.
+Sessions are chosen by --name, attribution in -d, or -c. Use -- to send text
+literally. Slash commands are /compact, /stop, and /status. Automatic compaction uses
 agent.compact_threshold_tokens from ~/.harnez/config.yaml (default 200000).
 agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	root.PersistentFlags().StringVar(&storeDir, "store-dir", subagent.DefaultStoreDir(), "session store directory")
-	root.PersistentFlags().StringVarP(&workDir, "dir", "d", ".", "working directory or session scope")
+	root.PersistentFlags().StringVarP(&workDir, "dir", "d", ".", "agent working directory (all providers) and session scope")
 	root.PersistentFlags().StringVar(&name, "name", "", "session name")
 	root.PersistentFlags().StringVar(&modelSpec, "model", "", "provider:model[:tier]")
 	root.PersistentFlags().BoolVar(&allowExhaustedQuota, "allow-exhausted-quota", false, "start even when cached provider quota is exhausted")

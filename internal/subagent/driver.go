@@ -27,7 +27,7 @@ func DriverFor(m Model, dir string) Driver {
 	case "claude":
 		return ClaudeDriver{Dir: dir}
 	case "codex":
-		return CodexDriver{}
+		return CodexDriver{Dir: dir}
 	case "agy":
 		return AgyDriver{Dir: dir}
 	case "pi":

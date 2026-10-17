@@ -19,6 +19,8 @@ import (
 
 // CodexDriver runs codex in non-interactive JSONL mode.
 type CodexDriver struct {
+	// Dir is the working directory of every codex process; empty inherits the caller's.
+	Dir     string
 	Command func(context.Context, string, ...string) ([]byte, error)
 	// Start launches a process; nil uses os/exec. Used for streaming turns and Delete.
 	Start func(context.Context, string, ...string) (io.Reader, func() error, error)
@@ -90,6 +92,7 @@ func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error
 		return d.Command(ctx, "codex", args...)
 	}
 	c := exec.CommandContext(ctx, "codex", args...)
+	c.Dir = d.Dir
 	return providerOutput(ctx, c)
 }
 func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
@@ -279,7 +282,7 @@ func (d CodexDriver) Delete(ctx context.Context, id string) error {
 	}
 	start := d.Start
 	if start == nil {
-		start = startProcess
+		start = startProcessIn(d.Dir)
 	}
 	rd, wait, err := start(ctx, "codex", "delete", "--force", id)
 	if err != nil {
@@ -407,7 +410,7 @@ func parseCodex(data []byte) (*TurnResult, error) {
 func (d CodexDriver) stream(ctx context.Context, fn EventFunc, args ...string) (*TurnResult, error) {
 	start := d.Start
 	if start == nil {
-		start = startProcess
+		start = startProcessIn(d.Dir)
 	}
 	rd, wait, err := start(ctx, "codex", args...)
 	if err != nil {
@@ -420,8 +423,16 @@ func (d CodexDriver) stream(ctx context.Context, fn EventFunc, args ...string) (
 	return r, perr
 }
 
-func startProcess(ctx context.Context, name string, args ...string) (io.Reader, func() error, error) {
+// startProcessIn returns a process starter whose children run in dir.
+func startProcessIn(dir string) func(context.Context, string, ...string) (io.Reader, func() error, error) {
+	return func(ctx context.Context, name string, args ...string) (io.Reader, func() error, error) {
+		return startProcess(ctx, dir, name, args...)
+	}
+}
+
+func startProcess(ctx context.Context, dir, name string, args ...string) (io.Reader, func() error, error) {
 	c := exec.CommandContext(ctx, name, args...)
+	c.Dir = dir
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Cancel = func() error {
 		return KillGroup(c.Process.Pid, syscall.SIGINT)

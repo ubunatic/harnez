@@ -608,3 +608,59 @@ func TestCodexCompactDoesNotSendPrompt(t *testing.T) {
 		t.Fatalf("error = %v, want unsupported manual compact", err)
 	}
 }
+
+// TestDriverForRunsProviderInDir guards issue 800: every provider CLI that
+// DriverFor returns must run with the session's working directory, not the
+// caller's cwd. agy is covered by TestAgyRunInstallsBashShimAndSetsLaunchEnvironment.
+func TestDriverForRunsProviderInDir(t *testing.T) {
+	bin := t.TempDir()
+	capture := filepath.Join(t.TempDir(), "pwd.txt")
+	script := "#!/bin/sh\npwd >> \"$PWD_CAPTURE\"\n"
+	for _, name := range []string{"claude", "codex", "pi"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PWD_CAPTURE", capture)
+	t.Setenv("CODEX_HOME", t.TempDir())
+	work, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	type turn func(Driver, Model) error
+	run := func(d Driver, m Model) error {
+		_, err := d.Run(ctx, RunOptions{Prompt: "ping", Model: m, Dir: work})
+		return err
+	}
+	resume := func(d Driver, m Model) error { _, err := d.Resume(ctx, "id", "ping", m); return err }
+	stream := func(d Driver, m Model) error {
+		_, err := d.(StreamingDriver).RunStream(ctx, RunOptions{Prompt: "ping", Model: m, Dir: work}, nil)
+		return err
+	}
+	cases := []struct {
+		name  string
+		model Model
+		turn  turn
+	}{
+		{"claude run", Model{Provider: "claude", Name: "haiku"}, run},
+		{"codex run", Model{Provider: "codex", Name: "gpt"}, run},
+		{"codex resume", Model{Provider: "codex", Name: "gpt"}, resume},
+		{"codex stream", Model{Provider: "codex", Name: "gpt"}, stream},
+		{"pi run", Model{Provider: "pi", Name: "local"}, run},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_ = os.Remove(capture)
+			_ = c.turn(DriverFor(c.model, work), c.model) // fake CLIs print no parsable output
+			got, err := os.ReadFile(capture)
+			if err != nil {
+				t.Fatalf("provider CLI did not run: %v", err)
+			}
+			if strings.TrimSpace(string(got)) != work {
+				t.Fatalf("provider cwd = %q, want %q", strings.TrimSpace(string(got)), work)
+			}
+		})
+	}
+}
