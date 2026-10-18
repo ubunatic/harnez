@@ -811,7 +811,8 @@ func removeDecommissionedArtifacts(target string, cfg *Config) (int, error) {
 		}
 		for _, root := range skillTargets(cfg) {
 			artifact := filepath.Join(root, name)
-			if externalSkillClash(artifact) {
+			// Former bundles also carry the external marker, but apply owns them.
+			if !skillreg.IsBundled(artifact) && externalSkillClash(artifact) {
 				continue
 			}
 			if _, err := os.Stat(artifact); os.IsNotExist(err) {

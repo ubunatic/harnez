@@ -7,9 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"ubunatic.com/harnez/internal/skillreg"
 )
 
 func TestRemoveDecommissionedArtifacts(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	target := t.TempDir()
 	skillsRoot := t.TempDir()
 	cfg := &Config{
@@ -55,6 +59,79 @@ func TestRemoveDecommissionedArtifacts(t *testing.T) {
 	}
 	if _, err := os.Stat(keep); err != nil {
 		t.Errorf("current skill was removed: %v", err)
+	}
+}
+
+func TestRemoveDecommissionedSkillOwnership(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		marker string
+		keep   bool
+	}{
+		{name: "bundled", marker: "bundled: true\nurl: https://example.com/skills\n"},
+		{name: "registry", marker: "url: https://example.com/skills\n", keep: true},
+		{name: "registry-not-bundled", marker: "bundled: false\nurl: https://example.com/skills\n", keep: true},
+		{name: "unmarked"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("PI_CODING_AGENT_DIR", "")
+			cfg := &Config{
+				SkillsTarget:       "~/.gemini/skills",
+				CodexSkillsTarget:  "~/.codex/skills",
+				ClaudeSkillsTarget: "~/.claude/skills",
+				PrimeAgentTarget:   "~/.prime/agent",
+				PiAgentTarget:      "~/.pi/agent",
+				Decommissioned:     DecommissionedConfig{Skills: []string{"domain-modeling"}},
+			}
+			// Enumerate roots independently so missing cleanup targets fail the test.
+			roots := []string{".claude/skills", ".codex/skills", ".gemini/skills", ".prime/agent/skills", ".pi/agent/skills"}
+			for _, root := range roots {
+				dir := filepath.Join(home, root, "domain-modeling")
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("obsolete"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if tc.marker != "" {
+					if err := os.WriteFile(filepath.Join(dir, skillreg.MarkerFile), []byte(tc.marker), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			changed, err := removeDecommissionedArtifacts(filepath.Join(home, ".claude"), cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantChanged := len(roots)
+			if tc.keep {
+				wantChanged = 0
+			}
+			if changed != wantChanged {
+				t.Errorf("changed = %d, want %d", changed, wantChanged)
+			}
+			for _, root := range roots {
+				t.Run(root, func(t *testing.T) {
+					dir := filepath.Join(home, root, "domain-modeling")
+					if !tc.keep {
+						if _, err := os.Stat(dir); !os.IsNotExist(err) {
+							t.Errorf("decommissioned directory remains: %v", err)
+						}
+						return
+					}
+					for name, want := range map[string]string{"SKILL.md": "obsolete", skillreg.MarkerFile: tc.marker} {
+						if data, err := os.ReadFile(filepath.Join(dir, name)); err != nil || string(data) != want {
+							t.Errorf("registry file %s changed: content=%q, err=%v", name, data, err)
+						}
+					}
+				})
+			}
+			if changed, err := removeDecommissionedArtifacts(filepath.Join(home, ".claude"), cfg); err != nil || changed != 0 {
+				t.Errorf("second cleanup = (%d, %v), want (0, nil)", changed, err)
+			}
+		})
 	}
 }
 
