@@ -1074,7 +1074,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		withSummary = true
 	}
 
-	changes := 0
+	ir := &initReport{}
 
 	if replace {
 		if err := os.Remove(agentsPath); err != nil && !os.IsNotExist(err) {
@@ -1088,20 +1088,20 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 				return fmt.Errorf("migrate %s → %s: %w", claudePath, agentsPath, err)
 			}
 			fmt.Printf("  migrated %s → %s\n", claudePath, agentsPath)
-			changes++
+			ir.changes++
 		} else {
 			if err := os.WriteFile(agentsPath, []byte(initialAgentsMD(cfg)), 0o644); err != nil {
 				return fmt.Errorf("write %s: %w", agentsPath, err)
 			}
 			fmt.Printf("  created %s\n", agentsPath)
-			changes++
+			ir.changes++
 		}
 	} else {
 		if migrated, err := migrateLegacyMarkers(agentsPath); err != nil {
 			return fmt.Errorf("migrate markers %s: %w", agentsPath, err)
 		} else if migrated {
 			fmt.Printf("  upgraded markers %s\n", agentsPath)
-			changes++
+			ir.changes++
 		} else {
 			fmt.Printf("  exists  %s (unchanged)\n", agentsPath)
 		}
@@ -1111,7 +1111,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			return fmt.Errorf("backfill rules header %s: %w", agentsPath, err)
 		} else if backfilled {
 			fmt.Printf("  updated rules header %s\n", agentsPath)
-			changes++
+			ir.changes++
 		}
 	}
 	agentBlocksSafe := true
@@ -1127,7 +1127,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 	}
 	if symlinkChanged {
 		fmt.Printf("  symlink %s → %s\n", claudePath, agentsPath)
-		changes++
+		ir.changes++
 	} else {
 		fmt.Printf("  exists  %s (unchanged)\n", claudePath)
 	}
@@ -1137,7 +1137,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		return fmt.Errorf("ignore .harnez/rules/Local.md: %w", err)
 	} else if ignored {
 		fmt.Printf("  ignored .harnez/rules/Local.md in .git/info/exclude\n")
-		changes++
+		ir.changes++
 	}
 	if fileExists(filepath.Join(dir, "issues")) {
 		// Lock files left by the README sync and `harnez issues new` (issue 672).
@@ -1148,7 +1148,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			}
 			if ignored {
 				fmt.Printf("  ignored %s in .git/info/exclude\n", lock)
-				changes++
+				ir.changes++
 			}
 		}
 	}
@@ -1162,7 +1162,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		if err != nil {
 			return err
 		}
-		changes += gitChanges
+		ir.changes += gitChanges
 	}
 
 	workspaceChanged, err := reconcileGoWorkspace(dir, gowork)
@@ -1170,7 +1170,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		return err
 	}
 	if workspaceChanged {
-		changes++
+		ir.changes++
 	}
 
 	if cfg != nil {
@@ -1222,124 +1222,12 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			}
 		}
 
-		// Apply config-defined local AGENTS.md sections (e.g. Language Conventions).
-		if l := cfg.AgentsMD.Local; l.Target != "" && agentBlocksSafe {
-			sections := append([]MDSection(nil), l.Sections...)
-			if len(docs) > 0 {
-				sections = append(sections, MDSection{
-					Name:    "Language Conventions",
-					Content: buildLangConventions(orderDocNames(cfg, docs), cfg),
-				})
-			}
-			if repoMode != "" {
-				mode, ok := cfg.AgentsMD.RepoModes[repoMode]
-				if !ok {
-					return fmt.Errorf("unknown repo mode %q", repoMode)
-				}
-				sections = append(sections, MDSection{
-					Name:    "Repo Setup",
-					Content: mode.Content,
-				})
-			}
-			keepSections := make([]string, 0, len(sections)+5)
-			// Preserve template, backfill, and opt-in blocks managed by init
-			// outside the config-defined section list. These are sticky across
-			// plain init runs because absence of a flag is not removal intent.
-			keepSections = append(keepSections,
-				"Local Overlays", "Project Summary", "Language Conventions",
-				"Repo Setup", quota1SectionName,
-			)
-			for _, s := range sections {
-				keepSections = append(keepSections, s.Name)
-			}
-			pruned, err := markdown.PruneSections(agentsPath, keepSections)
-			if err != nil {
-				return fmt.Errorf("agents_md.local prune: %w", err)
-			}
-			if pruned {
-				changes++
-			}
-			lr := applyResult{}
-			var presentNames []string
-			for _, s := range sections {
-				r, err := applySectionMD(agentsPath, s.Name, s.Content)
-				if err != nil {
-					return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
-				}
-				if r.changed {
-					lr.changed = true
-					lr.notes = append(lr.notes, r.notes...)
-				} else {
-					presentNames = append(presentNames, s.Name)
-				}
-			}
-			if lr.changed {
-				changes++
-			}
-			printResult("wrote", agentsPath, lr)
-			_ = presentNames
+		if err := initLocalSections(ir, cfg, docs, repoMode, agentsPath, agentBlocksSafe); err != nil {
+			return err
 		}
 
-		// Copy language docs locally and inject Makefile targets.
-		for _, name := range docs {
-			lang, ok := cfg.AgentsMD.Languages[name]
-			if !ok || lang.Local == "" {
-				continue
-			}
-			data, err := fs.ReadFile(cfg.FS, lang.SourceFor(docVariants[name]))
-			if err != nil {
-				return fmt.Errorf("language %s: read source: %w", name, err)
-			}
-			warnStaleEmbeddedDoc(os.Stderr, dir, lang.SourceFor(docVariants[name]), data)
-			localDoc := localPath(dir, lang.Local)
-			cr, err := writeManagedDoc(localDoc, data)
-			if err != nil {
-				return fmt.Errorf("language %s: copy: %w", name, err)
-			}
-			if cr.changed {
-				changes++
-				fmt.Printf("  copied %s → %s\n", lang.SourceFor(docVariants[name]), localDoc)
-			}
-
-			justScaffolded := false
-			if lang.Template != "" {
-				dest := localPath(dir, filepath.Base(lang.Template))
-				if _, err := os.Stat(dest); os.IsNotExist(err) {
-					data, err := fs.ReadFile(cfg.FS, lang.Template)
-					if err != nil {
-						return fmt.Errorf("language %s: read template: %w", name, err)
-					}
-					if err := os.WriteFile(dest, data, 0644); err != nil {
-						return fmt.Errorf("language %s: scaffold template: %w", name, err)
-					}
-					changes++
-					justScaffolded = true
-					fmt.Printf("  scaffolded %s\n", dest)
-				}
-			}
-
-			if lang.Targets != "" && !justScaffolded {
-				dest := localPath(dir, filepath.Base(lang.Template))
-				if lang.Template == "" {
-					dest = localPath(dir, "Makefile")
-				}
-				if _, err := os.Stat(dest); err == nil {
-					data, err := fs.ReadFile(cfg.FS, lang.Targets)
-					if err != nil {
-						return fmt.Errorf("language %s: read targets: %w", name, err)
-					}
-					tr, err := ReconcileMakeTargets(dest, string(data), cfg.Make, assumeYes, nil)
-					if err != nil {
-						return fmt.Errorf("language %s: reconcile targets: %w", name, err)
-					}
-					if tr {
-						changes++
-						fmt.Printf("  reconciled %s\n", dest)
-					} else {
-						fmt.Printf("  exists  %s (targets unchanged)\n", dest)
-					}
-				}
-			}
+		if err := initCopyDocs(ir, assumeYes, cfg, dir, docs, docVariants); err != nil {
+			return err
 		}
 	}
 
@@ -1348,7 +1236,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		if err != nil {
 			return fmt.Errorf("write .harnez/rules: %w", err)
 		}
-		changes += ruleChanges
+		ir.changes += ruleChanges
 		if ignored, err := rulesAreGitIgnored(dir); err != nil {
 			return fmt.Errorf("check generated rules ignore status: %w", err)
 		} else if ignored {
@@ -1364,7 +1252,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			return fmt.Errorf("agents_md [%s]: %w", quota1SectionName, err)
 		}
 		if r.changed {
-			changes++
+			ir.changes++
 		}
 		printResult("wrote", agentsPath, r)
 
@@ -1375,7 +1263,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			if err := os.WriteFile(makePath, []byte(initialMake), 0644); err != nil {
 				return fmt.Errorf("scaffold %s: %w", makePath, err)
 			}
-			changes++
+			ir.changes++
 			fmt.Printf("  scaffolded %s (test-q1)\n", makePath)
 		} else if err == nil {
 			var makeCfg MakeConfig
@@ -1387,7 +1275,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 				return fmt.Errorf("reconcile test-q1 in %s: %w", makePath, err)
 			}
 			if tr {
-				changes++
+				ir.changes++
 				fmt.Printf("  reconciled %s (test-q1)\n", makePath)
 			} else {
 				fmt.Printf("  exists  %s (test-q1 unchanged)\n", makePath)
@@ -1395,52 +1283,27 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		}
 	}
 
-	if withSummary {
-		fmt.Println("  running claude -p to summarise project...")
-		draft, err := fetchSummary(dir)
-		if err != nil {
-			return err
-		}
-		draft = sanitizeContent(stripMetaCommentary(draft))
-		if _, _, err := markdown.Apply(agentsPath, summarySection, draft); err != nil {
-			return fmt.Errorf("summary section (draft): %w", err)
-		}
-
-		fmt.Println("  running claude -p to review and refine summary...")
-		refined, err := reviewSummary(dir, draft)
-		if err != nil {
-			return err
-		}
-		refined = sanitizeContent(stripMetaCommentary(refined))
-		summaryChanged, _, err := markdown.Apply(agentsPath, summarySection, refined)
-		if err != nil {
-			return fmt.Errorf("summary section (refined): %w", err)
-		}
-		if summaryChanged {
-			fmt.Printf("  wrote   %s [%s]\n", agentsPath, summarySection)
-			changes++
-		} else {
-			fmt.Printf("  exists  %s [%s] (unchanged)\n", agentsPath, summarySection)
-		}
+	if err := initProjectSummary(ir, dir, withSummary, agentsPath); err != nil {
+		return err
 	}
 	migrated, err := migrateInitRules(dir, agentsPath)
 	if err != nil {
 		return err
 	}
-	changes += migrated
+	ir.changes += migrated
 	if cfg != nil {
 		if normalized, err := normalizeRulesHeaderGap(agentsPath, cfg.AgentsMD.Rules.Header); err != nil {
 			return fmt.Errorf("normalize rules header spacing %s: %w", agentsPath, err)
 		} else if normalized {
 			fmt.Printf("  normalized rules header spacing %s\n", agentsPath)
-			changes++
+			ir.changes++
 		}
 	}
 
-	if changes == 0 {
+	if ir.changes == 0 {
 		fmt.Println("No changes.")
 	} else {
-		fmt.Printf("%d change(s).\n", changes)
+		fmt.Printf("%d change(s).\n", ir.changes)
 	}
 	return nil
 }
