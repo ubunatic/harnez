@@ -1,6 +1,6 @@
 # 823 — agent: use agy /compact (agy 1.3.5+) instead of skipping agy compaction
 
-**Status**: Open
+**Status**: Blocked — Developer leaf-role guard rejects live harnez agent compact; host must verify saved flash38:low canary before closure
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
