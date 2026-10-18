@@ -1,6 +1,6 @@
 # GitHub CI: parallel jobs, timing summary, nightly flake hunt
 
-Status: In Progress — owned by the Claude cloud agent (ccr branch)
+Status: Closed — parallel lint/unit/race jobs, gotest-report summaries, nightly flake workflow; green on main (run 39149787911)
 
 Scope: .github/ only.
 
