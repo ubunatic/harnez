@@ -78,3 +78,36 @@ compaction disabled and `ContextTokens=-1`.
 Interactive `SendControl("compact")`: **untested live** to keep quota bounded
 after the ~50s initial turn and ~63s summary call. Code inspection shows that it
 writes `/compact\n` to the PTY; this is not evidence that agy executes it.
+
+## Delivery
+
+- Code: `88d34efe`; docs and retained canary: `66ab3864`; initial evidence:
+  `f9e314be`. Existing native on-demand implementation needed no behavior change.
+  Updated the stale 644 comment and driver documentation; regression tests now
+  assert the full native invocation, empty success with unknown context, both
+  CLI entry points, provider-ID routing, and provider-error propagation.
+- `make lint`: PASS (existing warnings only).
+- `go test ./internal/subagent/ ./cmd/harnez/`: PASS (4.728s / 33.171s).
+- `make test-short`: PASS, including all packages; no 824 retry needed.
+- `make install`: PASS, binary and man pages installed. `git diff --check`: PASS.
+- Dedicated local review confirmed native argv and existing assertions are
+  preserved; automatic thresholds remain disabled. No helpers were started.
+
+Final live harnez check: registered the same throwaway provider conversation in
+`/tmp/harnez-823-32z1ebu_/registry/canary-823.json`, with provider `agy`, model
+`gemini-3.8-flash`, tier `low`, batch/completed status, context `-1`, and working
+directory `/tmp/harnez-823-32z1ebu_`. Attempted:
+
+```sh
+harnez agent compact --store-dir /tmp/harnez-823-32z1ebu_/registry --name canary-823 -d /tmp/harnez-823-32z1ebu_
+# exit 1; stdout empty
+# Error: agent role "developer" is a leaf worker: it must not start, resume or manage agents; do the work yourself and report back; the host runs live harnez agent checks after your commit
+```
+
+The guard rejected this before launching agy; summary steps remain `[(4, 23)]`
+and total steps remain 5. Raw commands, stdout/stderr, and SQLite snapshots are
+retained in the scratch directory. **Pending host verification:** rerun the exact
+harnez command above as host and inspect a newly saved summary, then close 823.
+No role override or further live runs attempted. Issue remains blocked rather
+than closed because the required end-to-end live verification cannot run from
+this developer session.
