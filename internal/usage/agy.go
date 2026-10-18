@@ -538,17 +538,6 @@ func addAGYMeterSource(usage, meter AgentUsage) AgentUsage {
 	return usage
 }
 
-var agyMeterQuotaBuckets = []struct {
-	bucket string
-	group  string
-	window string
-}{
-	{"gemini-weekly", "Gemini Models", "Weekly Limit Remaining"},
-	{"gemini-5h", "Gemini Models", "Five Hour Limit Remaining"},
-	{"3p-weekly", "Claude and GPT models", "Weekly Limit Remaining"},
-	{"3p-5h", "Claude and GPT models", "Five Hour Limit Remaining"},
-}
-
 func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (AgentUsage, bool) {
 	// Preserve expired windows as stale evidence for fallback renderers, but
 	// only treat the meter as sufficient when every window is still active.
@@ -574,6 +563,10 @@ func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (
 // distinguish stale evidence from a missing meter cache.
 func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, includeExpired bool) (AgentUsage, bool) {
 	if homeDir == "" {
+		return usage, false
+	}
+	quota, err := agyQuotaSettings()
+	if err != nil {
 		return usage, false
 	}
 	path := filepath.Join(homeDir, ".harnez", "agymeter", "usage.jsonl")
@@ -631,11 +624,11 @@ func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, include
 		}
 		groups[idx].Windows = append(groups[idx].Windows, window)
 	}
-	known := make(map[string]bool, len(agyMeterQuotaBuckets))
-	for _, spec := range agyMeterQuotaBuckets {
-		known[spec.bucket] = true
-		if row, ok := latestByBucket[spec.bucket]; ok {
-			appendBucket(row, spec.group, spec.window)
+	known := make(map[string]bool, len(quota.MeterBuckets))
+	for _, spec := range quota.MeterBuckets {
+		known[spec.Bucket] = true
+		if row, ok := latestByBucket[spec.Bucket]; ok {
+			appendBucket(row, spec.Group, spec.Window)
 		}
 	}
 	unknown := make([]string, 0)

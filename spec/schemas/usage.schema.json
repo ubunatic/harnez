@@ -2,8 +2,37 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez usage settings and view modes",
   "type": "object",
-  "required": ["agy_meter_max_age", "collector_cadence", "cache_staleness_multiplier", "display_staleness", "collector_timeout", "passive_dedupe_interval", "history_snapshot_interval", "statusline_busy_timeout", "statusline_write_timeout", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl"],
+  "required": ["agy_quota", "agy_meter_max_age", "collector_cadence", "cache_staleness_multiplier", "display_staleness", "collector_timeout", "passive_dedupe_interval", "history_snapshot_interval", "statusline_busy_timeout", "statusline_write_timeout", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl"],
   "properties": {
+    "agy_quota": {
+      "type": "object",
+      "required": ["default_pool", "model_pools", "meter_buckets"],
+      "additionalProperties": false,
+      "properties": {
+        "default_pool": { "type": "string", "minLength": 1 },
+        "model_pools": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "required": ["contains", "pool"], "additionalProperties": false,
+            "properties": {
+              "contains": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+              "pool": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "meter_buckets": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "required": ["bucket", "group", "window"], "additionalProperties": false,
+            "properties": {
+              "bucket": { "type": "string", "minLength": 1 },
+              "group": { "type": "string", "minLength": 1 },
+              "window": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
     "export_host_key": {
       "type": "string",
       "minLength": 1

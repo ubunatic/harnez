@@ -89,10 +89,20 @@ func ProviderQuotaAvailabilityFromStore(ctx context.Context, dbPath, provider, m
 	}
 	wantPool := ""
 	if provider == "agy" {
-		wantPool = "Gemini Models"
+		quota, err := agyQuotaSettings()
+		if err != nil {
+			return state
+		}
+		wantPool = quota.DefaultPool
 		lowerModel := strings.ToLower(model)
-		if !strings.Contains(lowerModel, "gemini") && !strings.Contains(lowerModel, "flash") && !strings.Contains(lowerModel, "pro") {
-			wantPool = "Claude and GPT models"
+	modelPool:
+		for _, rule := range quota.ModelPools {
+			for _, match := range rule.Contains {
+				if strings.Contains(lowerModel, match) {
+					wantPool = rule.Pool
+					break modelPool
+				}
+			}
 		}
 	}
 	seen := false

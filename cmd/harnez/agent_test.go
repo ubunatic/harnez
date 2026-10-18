@@ -167,6 +167,11 @@ func TestAgentModelsListsKnownSpecs(t *testing.T) {
 	if !strings.Contains(out.String(), "codex:luna:low") || !strings.Contains(out.String(), "agy:flash37:low") {
 		t.Fatalf("known models output = %q", out.String())
 	}
+	for _, tier := range []string{"low", "med", "high"} {
+		if !strings.Contains(out.String(), "agy:argon:"+tier) {
+			t.Errorf("Argon %s missing from model listing: %s", tier, out.String())
+		}
+	}
 }
 
 func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {

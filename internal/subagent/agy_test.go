@@ -171,6 +171,32 @@ func TestAgyEffortMapping(t *testing.T) {
 	}
 }
 
+func TestArgonAliasesAndEffort(t *testing.T) {
+	for _, tc := range []struct{ spec, tier, effort string }{
+		{"argon", "low", "low"}, {"argon:low", "low", "low"},
+		{"agy:argon:med", "med", "medium"}, {"agy:argon:high", "high", "high"},
+	} {
+		model, err := ResolveModel(tc.spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if model.Provider != "agy" || model.Name != "gemini-4-argon" || model.Tier != tc.tier {
+			t.Fatalf("%s parsed as %+v", tc.spec, model)
+		}
+		var args []string
+		d := AgyDriver{Dir: t.TempDir(), Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
+			args = gotArgs
+			return []byte(`{"status":"SUCCESS","response":"ok"}`), nil
+		}}
+		if _, err := d.Run(context.Background(), RunOptions{Prompt: "p", Model: model}); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(args[2:6], []string{"--model", "gemini-4-argon", "--effort", tc.effort}) {
+			t.Fatalf("%s args = %#v", tc.spec, args)
+		}
+	}
+}
+
 func TestAgyResumeArgs(t *testing.T) {
 	var args []string
 	d := AgyDriver{Dir: "/work/dir", Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {

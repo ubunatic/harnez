@@ -1,5 +1,19 @@
 # yaml-language-server: $schema=schemas/usage.schema.json
 agy_meter_max_age: 1h
+agy_quota:
+  default_pool: Claude and GPT models
+  # First matching model rule wins; Argon has its own weekly pool.
+  model_pools:
+    - contains: [argon]
+      pool: Gemini 4 Argon
+    - contains: [gemini, flash, pro]
+      pool: Gemini Models
+  meter_buckets:
+    - {bucket: gemini-weekly, group: Gemini Models, window: Weekly Limit Remaining}
+    - {bucket: gemini-5h, group: Gemini Models, window: Five Hour Limit Remaining}
+    - {bucket: gemini-argon-wtu-weekly, group: Gemini 4 Argon, window: Gemini 4 Argon Weekly Limit}
+    - {bucket: 3p-weekly, group: Claude and GPT models, window: Weekly Limit Remaining}
+    - {bucket: 3p-5h, group: Claude and GPT models, window: Five Hour Limit Remaining}
 collector_cadence: 15m
 # Recollect after this many collector ticks; availability uses the same age.
 cache_staleness_multiplier: 2

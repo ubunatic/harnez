@@ -144,6 +144,16 @@ models:
     skills: Go~ TUI~ SQL~
     use: current Gemini Flash; planned default as 3.7 is phased out
     use_med: current Gemini Flash; planned default as 3.7 is phased out
+  agy:argon:
+    aliases: [argon, argon:low]
+    provider: agy
+    name: gemini-4-argon
+    tier: low
+    roles: advisor, reviewer
+    cost: 24
+    eff: "?"
+    skills: Go? TUI? SQL?
+    use: premium Gemini 4 Argon; scarce weekly quota, measured at low effort only
   agy:sonnet:
     provider: agy
     name: claude-sonnet-5-5

@@ -5,6 +5,25 @@ and prints with `harnez agent models`. This doc keeps the evidence behind it. Ro
 practice: `docs/practices/ModelRoles.md`; measured sprint eval: `ModelAdvisoryEval.md`.
 To refresh it, follow [ModelResearch.md](ModelResearch.md).
 
+## 2026-10-18 Gemini 4 Argon quota measurement (issue 822)
+
+`agy models` exposes `gemini-4-argon-low`, `gemini-4-argon-medium`, and
+`gemini-4-argon-high`. Harnez uses the base name `gemini-4-argon` with the
+existing AGY effort flag; `agy:argon` / `argon` defaults to low effort.
+Argon uses its own seven-day `Gemini 4 Argon` pool, with no five-hour window;
+Flash continues to use `Gemini Models`.
+
+The [issue 822 measurement](../issues/822-assess-gemini-4-argon-argon-low-quota-cost-and-add-agy-argon-model-and-quota-pool-support.md)
+recorded seven low-effort calls using 28,350 new tokens (113,259 including cache
+reads), consuming 0.48% of the weekly pool: 1.693% per 100k new tokens.
+A second checkpoint at 149,719 new tokens showed 97% remaining (integer-rounded),
+consistent with the first checkpoint's rate. Flash's same-account weekly history
+used about 0.292% per 100k new tokens, making Argon low roughly 5.8 times as
+expensive by this measure. Anchoring Flash at COST 4 gives Argon COST 24.
+This is a small observational sample; medium/high effort costs are unmeasured
+and inherit 24 as an estimate. Reserve Argon for advisor/reviewer work because
+its weekly quota is scarce; no capability benchmark was performed here.
+
 ## 2026-10-05 effort-tier cost matrix (issue 711)
 
 The listing's COST column gives estimated relative cost by effort tier, with

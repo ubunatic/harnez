@@ -16,6 +16,7 @@ import (
 const usageSpecPath = "spec/usage.yaml"
 
 type usageSpec struct {
+	AGYQuota                 agyQuotaSpec       `yaml:"agy_quota"`
 	WatchLoadingLabel        string             `yaml:"watch_loading_label"`
 	AGYMeterMaxAge           string             `yaml:"agy_meter_max_age"`
 	CollectorCadence         string             `yaml:"collector_cadence"`
@@ -30,6 +31,34 @@ type usageSpec struct {
 	NVIDIASMITimeout         string             `yaml:"nvidia_smi_timeout"`
 	NVIDIASMICacheTTL        string             `yaml:"nvidia_smi_cache_ttl"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
+}
+
+type agyQuotaSpec struct {
+	DefaultPool string `yaml:"default_pool"`
+	ModelPools  []struct {
+		Contains []string `yaml:"contains"`
+		Pool     string   `yaml:"pool"`
+	} `yaml:"model_pools"`
+	MeterBuckets []struct {
+		Bucket string `yaml:"bucket"`
+		Group  string `yaml:"group"`
+		Window string `yaml:"window"`
+	} `yaml:"meter_buckets"`
+}
+
+func agyQuotaSettings() (agyQuotaSpec, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
+	if err != nil {
+		return agyQuotaSpec{}, err
+	}
+	var spec usageSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return agyQuotaSpec{}, err
+	}
+	if spec.AGYQuota.DefaultPool == "" || len(spec.AGYQuota.ModelPools) == 0 || len(spec.AGYQuota.MeterBuckets) == 0 {
+		return agyQuotaSpec{}, fmt.Errorf("%s: agy_quota settings are required", usageSpecPath)
+	}
+	return spec.AGYQuota, nil
 }
 
 type usageViewModesSpec struct {

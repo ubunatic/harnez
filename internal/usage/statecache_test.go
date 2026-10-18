@@ -11,6 +11,51 @@ import (
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
+func TestAGYAvailabilitySelectsModelPool(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	reset := now.Add(24 * time.Hour)
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteCurrent(ctx, now, []usagestore.Window{
+		{Provider: "agy", Pool: "Gemini Models", Key: "weekly", Freshness: "fresh", UsedFraction: 1, ResetAt: &reset, ObservedAt: now},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := ProviderQuotaAvailabilityFromStore(ctx, dbPath, "agy", "gemini-4-argon", now); got.State != "unknown" || got.Exhausted {
+		t.Fatalf("missing Argon pool must not fall back to exhausted Flash: %+v", got)
+	}
+	for _, argonUsed := range []float64{0.25, 1} {
+		if err := store.WriteCurrent(ctx, now, []usagestore.Window{
+			{Provider: "agy", Pool: "Gemini 4 Argon", Key: "weekly", Name: "Gemini 4 Argon Weekly Limit", Freshness: "fresh", UsedFraction: argonUsed, ResetAt: &reset, ObservedAt: now},
+			{Provider: "agy", Pool: "Gemini Models", Key: "weekly", Name: "Weekly Limit Remaining", Freshness: "fresh", UsedFraction: 1.25 - argonUsed, ResetAt: &reset, ObservedAt: now},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		for _, model := range []string{"gemini-4-argon", "gemini-4-argon-low", "argon", "AGY:ARGON:HIGH", "gemini-3.8-flash", "flash38"} {
+			wantExhausted := argonUsed == 1
+			if model == "gemini-3.8-flash" || model == "flash38" {
+				wantExhausted = !wantExhausted
+			}
+			got := ProviderQuotaAvailabilityFromStore(ctx, dbPath, "agy", model, now)
+			wantState := "available"
+			if wantExhausted {
+				wantState = "exhausted"
+			}
+			if got.Exhausted != wantExhausted || got.State != wantState {
+				t.Errorf("%s with Argon used=%g: got %+v, want %s", model, argonUsed, got, wantState)
+			}
+		}
+	}
+}
+
 func TestCachedAGYAvailabilityKeepsExhaustionUntilReset(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	for _, tc := range []struct {

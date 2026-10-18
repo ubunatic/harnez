@@ -38,6 +38,28 @@ func writeTestAGYMeterRows(t *testing.T, home string, rows []agymeter.Record) {
 	}
 }
 
+func TestAGYMeterNormalizesArgonWeeklyBucket(t *testing.T) {
+	home := t.TempDir()
+	now := time.Now().UTC().Truncate(time.Second)
+	reset := now.Add(7 * 24 * time.Hour)
+	writeTestAGYMeterRows(t, home, []agymeter.Record{
+		{Time: now, Kind: "quota", Bucket: "gemini-argon-wtu-weekly", Remaining: floatPtr(0.75), Reset: reset.Format(time.RFC3339)},
+		{Time: now, Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.9), Reset: reset.Format(time.RFC3339)},
+	})
+	got, ok := applyAGYMeterQuota(AgentUsage{}, home, now, false)
+	if !ok || len(got.ModelGroups) != 2 {
+		t.Fatalf("meter groups = %+v, ok=%t", got.ModelGroups, ok)
+	}
+	argon := got.ModelGroups[1]
+	if got.ModelGroups[0].Name != "Gemini Models" || argon.Name != "Gemini 4 Argon" || len(argon.Windows) != 1 {
+		t.Fatalf("unexpected pool grouping: %+v", got.ModelGroups)
+	}
+	w := argon.Windows[0]
+	if w.Name != "Gemini 4 Argon Weekly Limit" || w.Source != "agy-meter" || w.UsedPercent != 25 || w.RemainingPercent != 75 || w.ResetAt == nil || !w.ResetAt.Equal(reset) {
+		t.Fatalf("Argon weekly window = %+v", w)
+	}
+}
+
 func TestCollectAGYPrefersRecentMeterQuotaToUsageCommand(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
