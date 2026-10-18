@@ -1,6 +1,6 @@
 # 823 — agent: use agy /compact (agy 1.3.5+) instead of skipping agy compaction
 
-**Status**: Blocked — Developer leaf-role guard rejects live harnez agent compact; host must verify saved flash38:low canary before closure
+**Status**: Closed — Print-mode agy /compact verified live; harnez agent compact saves a new summary (host check); auto threshold stays off until agy exposes context size
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -111,3 +111,9 @@ harnez command above as host and inspect a newly saved summary, then close 823.
 No role override or further live runs attempted. Issue remains blocked rather
 than closed because the required end-to-end live verification cannot run from
 this developer session.
+
+Host verification (2026-10-18): reran the exact `harnez agent compact` command above as host.
+Exit 0 after ~9s, no stdout. The conversation database grew from 5 to 8 steps with a second
+completed `step_type=23` `<summary>` step (idx 7). On-demand agy compaction via harnez works
+end to end. Follow-up nit: the command prints nothing on success; it could report
+"compacted (context size unknown)".
