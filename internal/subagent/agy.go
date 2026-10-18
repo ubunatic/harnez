@@ -145,6 +145,9 @@ func (d AgyDriver) Resume(ctx context.Context, id, prompt string, model Model) (
 	return parseAgy(b)
 }
 
+// Compact invokes agy's native slash command (1.3.5+), inheriting the saved
+// conversation's model and effort. agy 1.4.2 returns an empty successful response
+// and unchanged usage; neither acknowledges a measurable context drop (issue 823).
 func (d AgyDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
 	return d.Resume(ctx, id, "/compact", Model{})
 }

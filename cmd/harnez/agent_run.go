@@ -758,10 +758,10 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	}
 	// Noninteractive Codex exec applies configured automatic compaction during
 	// resume; its updated context count is read from the rollout afterward.
-	// agy auto-compacts and has no /compact command; its usage totals every
-	// model call of a turn, so the threshold check misfires (issue 644).
-	// TODO(644): compact agy session data on disk via jev once a canary
-	// shows it works for agy and helps.
+	// agy supports on-demand /compact in print mode (issue 823), but exposes
+	// no reliable current-context size: usage totals model calls, and /compact
+	// returns unchanged usage with an empty response (issue 644). Keep automatic
+	// threshold compaction disabled until a reliable context count is available.
 	if contextTokens >= 0 && ((sess.Provider != "codex" && sess.Provider != "agy") || interactive) {
 		compacted, err = subagent.EnsureContextUnderThreshold(contextTokens, threshold, compactFn)
 		if err != nil {

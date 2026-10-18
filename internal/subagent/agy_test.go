@@ -265,18 +265,18 @@ func TestAgyCompactUsesResumeWithSlashCompact(t *testing.T) {
 	var args []string
 	d := AgyDriver{Dir: "/d", Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
 		args = gotArgs
-		return []byte(`{"status":"SUCCESS","response":"ok"}`), nil
+		return []byte(`{"conversation_id":"abc","status":"SUCCESS","response":"","usage":{"input_tokens":11794,"output_tokens":1,"total_tokens":11795}}`), nil
 	}}
-	if _, err := d.Compact(context.Background(), "abc"); err != nil {
+	r, err := d.Compact(context.Background(), "abc")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if args[len(args)-1] != "/compact" {
-		t.Fatalf("args = %#v, want last element /compact", args)
+	want := []string{"--conversation", "abc", "--add-dir", "/d", "--output-format", "json", "-p", "/compact"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("args = %#v, want %#v (inherit saved model and effort)", args, want)
 	}
-	for _, a := range args {
-		if a == "--model" {
-			t.Fatalf("args = %#v, --model must be omitted for an empty Model", args)
-		}
+	if r.SessionID != "abc" || r.Response != "" || r.ContextTokens != -1 || r.InputTokens != 11794 {
+		t.Fatalf("compact result = %+v, want empty success with unknown context and preserved usage", r)
 	}
 }
 
