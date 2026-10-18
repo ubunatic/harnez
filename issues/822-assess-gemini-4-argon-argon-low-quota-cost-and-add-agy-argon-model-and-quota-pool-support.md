@@ -1,6 +1,6 @@
 # 822 — Assess Gemini 4 Argon (argon:low) quota cost and add agy:argon model and quota-pool support
 
-**Status**: Open
+**Status**: Closed — Added Argon model, dedicated weekly quota normalization and routing; regression tests and requested checks pass
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -60,3 +60,11 @@ From `~/.harnez/agymeter/usage.jsonl` over the active `Gemini Models` weekly win
 4. **Verify**:
    - Add unit tests in `internal/usage` and `cmd/harnez` covering `gemini-4-argon` pool selection and `gemini-argon-wtu-weekly` bucket normalization.
    - Run `make test-q1` and `harnez agent models`.
+
+## Delivery
+
+- Implemented in `87ab6048`: `agy:argon` follows existing base-model/effort conventions, defaults to low, and lists COST 24 for advisor/reviewer work. Documented the existing quota measurement and unmeasured higher-effort estimates in `docs/Models.md`.
+- Moved AGY bucket mappings and ordered model-pool rules into `spec/usage.yaml` with JSON Schema validation; Argon normalizes to its dedicated weekly pool while Flash retains `Gemini Models`.
+- Regression coverage checks conflicting pool balances, missing Argon data, weekly bucket normalization, aliases, effort arguments, and CLI model listing. Existing help output required no golden update.
+- Verified `agy models`, `make lint`, `go test ./internal/usage/ ./internal/subagent/ ./cmd/harnez/`, `make test-short`, `make install`, and `harnez agent models | grep -i argon`. Final checks passed. Initial schema-count and test-fixture failures were corrected; an unrelated Codex resume TempDir cleanup failure did not recur.
+- No Argon session was started; provider launch tests use an injected command stub. No push performed.
