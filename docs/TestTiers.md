@@ -54,4 +54,15 @@ Non-Go repos keep the same target names and map them to their toolchain.
 - Keep files and functions under the warning limits when you touch them; split
   files by concern with move-only commits that keep the suite green.
 
-<!-- harnez:stop -->
+## Containers and CI
+
+- `make container-test` mounts the source read-only: a test that writes into
+  the checkout (fixtures, golden files) fails there. Write to `t.TempDir()`;
+  regenerate fixtures only behind an explicit `-update` flag.
+- Tests needing a TTY, audio, GPU or network skip when the repo's container
+  flag is set (e.g. `LOOM_CONTAINER_TEST=1`) and list themselves in the CI ticket.
+- CI runs `-race` on 2-CPU runners: any wall-clock budget not scaled by
+  `raceFactor` fails there first. Fix the budget or prove the property with a
+  barrier, never retry.
+- CI reports failing tests as annotations, which `gh run view` shows without log
+  download rights; keep that step when changing workflows.

@@ -18,5 +18,13 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   with a barrier, not wall clock. Issues 793, 796.
 - **Files read while written**: `os.WriteFile` truncates first; a polling reader sees an empty file.
   Write a temp file and rename (`FileSessionStore.Save`, CI run 39011231816).
+- **Tests that write tracked files**: a fixture generator in a test rewrites `testdata/` (cati 101).
+  Tests read fixtures only; regenerate behind `-update`. A read-only container mount catches it.
+- **Package-level test hooks**: a test swapping a package var while an earlier test's goroutine
+  still reads it is a data race (cati mediabrowse). Inject hooks per instance; join background
+  work in `t.Cleanup`.
+- **PTY output after exit**: `Wait` must drain the PTY to EOF, not return on child exit (loom 329).
+- **Unverified worker claims**: reproduce a worker's stated blocker before accepting a change
+  built on it (voxi go.mod revert e4fe669).
 - **Verify before pushing**: never chain `test && push` in one command when the test output
   decides the push; read the result first.

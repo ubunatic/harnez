@@ -16,3 +16,9 @@ Extract cohesive units (files and helper functions) with unit tests; no behaviou
 
 ## 3. Implementation & Verification Plan
 `go test ./internal/claude` green, new unit tests for extracted helpers; hotspot numbers before/after.
+
+## Handoff 2026-10-17
+q-harnez (opus) stopped mid-turn when the Claude session limit was reached. Committed:
+`7ddebdf8` (ApplyAllVariant phases). Uncommitted WIP left in the tree: `internal/claude/init.go`
+(phase extraction) plus new `init_phases.go` and `init_phases_test.go`, untested. Next worker:
+run `go test ./internal/claude`, finish or drop the init extraction, commit.

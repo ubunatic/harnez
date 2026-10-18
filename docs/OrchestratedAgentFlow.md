@@ -88,6 +88,15 @@ code and the environment in all three tickets. Check:
 | Worker reports a hook "measured at µs" (735) | it timed the Go function in-process, not the hook process the agent starts | ask for the end-to-end time of the installed hook command, or check the row appears live |
 | Parity or count claims in a worker report look clean but are not (002 M2) | the worker summarized only the matching parts | host reruns the check itself and reads the DIFF lines |
 | Live-testing a batch of agy models felt slow and left stray state | one `--conversation` resume took 118s; leftover named sessions persist after the run | use empty scratch dirs with no `AGENTS.md`, one tiny prompt plus one resume per model, unique session names, `harnez agent delete` afterward (ticket 500) |
+| Backgrounded `harnez agent resume … &` dies after 60s, its codex child keeps running untracked | the shell's `&` job sits inside `harnez exec`'s 60s default timeout | start agents with the harness's own background mechanism (e.g. Claude Code `run_in_background`), never `&`; to track an orphan, wait on its PID in a background loop |
+| `agent start -d X` worker asks "which repository?" (800) | codex driver ignored `-d` for the working directory | fixed in 800; until every provider is verified, also `cd X` before starting |
+| Two writers allocate the same ticket number (local 805 vs cloud 805) | each reads `issues/` from its own snapshot; a cloud agent works from GitHub, not the local tree | the host reserves numbers for remote agents with `harnez issues new` on main, pushes, and hands out the number |
+| Cloud agent's branch no longer fast-forwards | the host pushed local workers' commits to main meanwhile | cherry-pick the branch's own commits (check `git diff --name-only <merge-base>`) and ask the agent to reset its branch to main |
+| Two agents fixed the same ticket (loom 329) | a remote agent picked a ticket the host had already dispatched locally | remote agents name the ticket before starting; the host keeps one owner per ticket and merges the better fix plus the other's regression test |
+| Worker states a false fact as a blocker (voxi: "`go 1.26.5` breaks `go install`") | unverified model claim | reproduce the claim before accepting the change; revert with the evidence in the commit message |
+| Worker cannot run podman ("namespace cloning denied") | the quota-1 sandbox blocks rootless podman | the host runs `make container-test` itself before closing the CI ticket |
+| `harnez agent send` cannot reach a running worker | send supports live Claude/Codex/AGY TUI sessions, not exec-mode turns | queue the follow-up as the worker's next round prompt |
+| `gh run view --log-failed` returns HTTP 403 | the local `gh` token lacks admin rights for log download | CI writes failures as annotations (shown by `gh run view`); or use the cloud agent's GitHub MCP `get_job_logs` |
 
 ## 5. Finding out what agents ran
 
@@ -99,3 +108,28 @@ code and the environment in all three tickets. Check:
   subcommands of workers (ticket 487).
 - A read-only advisor (`--role advisor`, `luna:med`) can do the extraction; give it exact
   sources and forbid raw dumps, then verify its key claim against the rollouts yourself.
+
+## 6. Multi-repo PM sprint with a cloud agent (2026-10-17)
+
+Shape used for harnez, loom, cati and voxi in one session:
+
+- **Host = product manager.** Decides scope per repo, starts one `harnez agent` developer per
+  repo (parallel across repos, never two writers in one repo), reviews each result, reruns
+  the tests and `make container-test` itself, then pushes to both remotes (Codeberg origin,
+  GitHub) so `main` stays equal.
+- **Rounds, not marathons.** Each developer gets a 3-4 item task file; the next round is a
+  `resume` with the review findings, so the worker keeps its context. Queue follow-ups in a
+  round file while the worker runs.
+- **Cloud agent = GitHub resource.** A Claude cloud session with GitHub MCP reads job logs,
+  watches CI (saving the host's `gh` rate limit), and pushes fixes to a `ccr-*` branch that
+  the host reviews and fast-forwards or cherry-picks. It owns `.github/` only, names a ticket
+  before starting, and gets ticket numbers from the host. Messages to it are one-way from
+  the host; its reports arrive as cross-session messages.
+- **Quota routing.** Check `harnez usage` before each round. Heavy refactors on `opus`, routine
+  work on `codex:sol`, coverage and lint sweeps on `agy:flash38`. When the Claude window runs
+  low, Claude workers die with `claude resume: exit status 1` mid-turn (see §4): commit or
+  park their WIP.
+
+What paid off: read-only container mounts exposed tests that rewrote tracked fixtures; the
+GitHub race job on 2 CPUs exposed unscaled timing budgets one per run until a sweep fixed all
+of them (804); annotations made failures readable without log access.
