@@ -80,6 +80,8 @@ unless the user names it (e.g. `/scroll-craft`, "use scroll-craft") or picks it 
   to prevent `harnez exec`'s ambient 60-second default execution timeout from killing the task.
 - When launching asynchronous background tasks, stop calling tools immediately and rely entirely
   on reactive completion notifications. Do NOT poll status or run `sleep` commands.
+- Never `pkill -f`/`pgrep -f` with a pattern that can match your own shell command line (it
+  kills the tool call itself). Match exact argv fields via `ps -eo pid,args` or kill recorded PIDs.
 
 ## Agentic Loop Invariants
 Where `@docs/AgenticLoop.md` is present in this project, follow it rather than

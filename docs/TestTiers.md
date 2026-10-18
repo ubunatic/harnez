@@ -66,3 +66,5 @@ Non-Go repos keep the same target names and map them to their toolchain.
   barrier, never retry.
 - CI reports failing tests as annotations, which `gh run view` shows without log
   download rights; keep that step when changing workflows.
+
+<!-- harnez:stop -->

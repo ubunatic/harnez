@@ -45,6 +45,10 @@ Sources: issues 532, 533, 537, 538, 541, 543.
   with `sh -c 'sh -c "kill -STOP \$\$"'`, not only `sh -c 'kill -STOP $$'`.
 - **`exec` itself can be killed.** Then no result is written. quota-1 treats "no `finished`" as possibly still
   running and blocks. Recovery is `clean procs q1`, not an automatic retry.
+- **`pkill -f`/`pgrep -f` match their own shell.** The pattern also appears in the invoking shell's command
+  line, so `pkill -f "gh run watch"` killed the agent's own Bash tool call (exit 144, twice on 2026-10-17). Match
+  exactly: `ps -eo pid,args | awk '$2=="gh" && $3=="run"' `, or kill PIDs you recorded; never `-f` with a pattern
+  that can occur in your own command.
 - **Memory:** `harnez read -I` on multiple files reached 2.1 GB in 3s and caused 15–16 GB OOM kills (543).
   Its recommendation is paused until that is fixed.
 
