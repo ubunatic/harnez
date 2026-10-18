@@ -730,13 +730,17 @@ func TestAgentResumeStatusIsRunningDuringTurn(t *testing.T) {
 		_, err := runWithStore(t, driver, storeDir, "resume", "--name", "worker", "prompt")
 		resumeDone <- err
 	}()
+	waitResume := sync.OnceValue(func() error { return <-resumeDone })
+	defer func() {
+		release()
+		_ = waitResume()
+	}()
 	select {
 	case <-driver.started:
 	case <-time.After(2 * time.Second):
 		release()
 		t.Fatal("provider turn did not start")
 	}
-	defer release()
 
 	var out bytes.Buffer
 	status := newAgentCmd()
@@ -763,7 +767,7 @@ func TestAgentResumeStatusIsRunningDuringTurn(t *testing.T) {
 		t.Errorf("second resume error = %v, want active-turn refusal", secondErr)
 	}
 	release()
-	if err := <-resumeDone; err != nil {
+	if err := waitResume(); err != nil {
 		t.Fatal(err)
 	}
 	finished, err := store.Get("sid")

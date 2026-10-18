@@ -491,10 +491,8 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	streaming = streaming && !req.JSON
 	turn := 1
 	turnStarted := time.Now().UTC()
-	beforeCapture := make(chan usage.TurnQuotaReading, 1)
-	go func() {
-		beforeCapture <- captureTurnQuota(ctx, d.quota, m.Provider, false, time.Time{})
-	}()
+	beforeCapture, stopCapture := startTurnQuotaCapture(ctx, d.quota, m.Provider)
+	defer stopCapture()
 	var ts *turnStream
 	var r *subagent.TurnResult
 	observedSessionID := ""
@@ -831,10 +829,8 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		}
 	}
 	turnStarted := time.Now().UTC()
-	beforeCapture := make(chan usage.TurnQuotaReading, 1)
-	go func() {
-		beforeCapture <- captureTurnQuota(ctx, d.quota, sess.Provider, false, time.Time{})
-	}()
+	beforeCapture, stopCapture := startTurnQuotaCapture(ctx, d.quota, sess.Provider)
+	defer stopCapture()
 	if streaming {
 		ts = newTurnStream(cmd, req.StreamMode, compacted)
 		ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume", resolved)
