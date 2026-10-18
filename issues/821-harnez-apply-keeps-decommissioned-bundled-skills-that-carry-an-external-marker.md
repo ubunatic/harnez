@@ -1,6 +1,6 @@
 # 821 — harnez apply keeps decommissioned bundled skills that carry an external marker
 
-**Status**: Open
+**Status**: Closed — Decommissioning removes harnez-owned bundled and unmarked skills across all five apply roots while preserving user registry installs; verified by regression tests and required checks.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -35,3 +35,22 @@ them.
   It has no marker, so `skillTargets` may not cover every agent root.
 - Add a test: a decommissioned name with a `bundled: true` marker is removed, and one with
   a user registry marker is kept.
+
+## 3. Delivery
+
+- Implementation: `1da39d7d` reuses `skillreg.IsBundled` during decommissioning;
+  former bundles are removed while user registry installs remain protected.
+- Root audit: `skillTargets` already covers Claude, Codex, Gemini, Prime and Pi,
+  including Pi's environment override. Native skill writes use that helper, and
+  bundled writes use the matching `SkillTargetsByAgent` roots. OpenCode receives
+  a distill plugin, not skills; there is no missing apply skill root to add.
+  Tests confirm unmarked copies are removed from all five configured roots.
+  The historical leftovers cannot be attributed to a missing root in current code;
+  the older binary/configuration that left them was not available for verification.
+- Temp-home regression tests cover bundled, registry, explicitly non-bundled and
+  unmarked copies in each root, preserved registry contents and cleanup idempotency.
+  Before the fix, bundled removal failed in all five roots (0 removed, expected 5).
+- Verification: `make lint`, `go test ./internal/claude/ ./internal/skillreg/ ./cmd/harnez/`,
+  `make test-short` and `make install` passed. The first short-suite run hit an
+  unrelated `TestCodexOverThresholdResumeUsesProviderAutoCompact` TempDir cleanup
+  failure (`directory not empty`); the complete short suite passed on rerun.
