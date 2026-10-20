@@ -19,9 +19,9 @@ on every prompt or render and must stay fast. With one writer, the collector, lo
 - The current direct writers include the statusline passive observation path (`internal/usage/passive.go`,
   `WriteCurrent` in `internal/usagestore/store.go`). Find any other hook-side writers in the plan.
 - The collector already decides what to keep (passive dedupe interval in `spec/usage.yaml`).
-- Uncertain: the hand-off channel. Candidates: a spool directory of small files the collector drains,
-  a local socket, or the harnez daemon if one runs. It must not block or lose data silently when no
-  collector runs. Decide in the plan, and check what the collector supports today.
+- Decided (user, 2026-10-20): observers send updates to the running collector service, on its fixed
+  per-host port from 829. Still to decide in the plan: when no collector answers, does the observer
+  start one (as `usage` does) or drop the update? Either way it must not block.
 
 ## 3. Implementation & Verification Plan
 - Plan first: list every observer that writes, and choose the hand-off with its no-collector behaviour.

@@ -21,9 +21,11 @@ and hides who owns the data. One writer, the data collector, keeps locking simpl
   `MigrateStableWindowKeys`, `importCompatibility`, `importAgent`, and the history snapshot.
 - Open the store read-only (e.g. `mode=ro` / `query_only`) in the `usage` path, so any leftover write
   fails loudly in tests.
-- Uncertain: when `usage` collects fresh provider data itself (no collector running), how does that data
-  reach the store? Options: hand it to the collector (see 830), or show it unstored. Decide in the plan.
-- Uncertain: who runs schema setup and migrations on a fresh install before the first collector run.
+- Decided (user, 2026-10-20): when no collector is running, `harnez usage` starts one. Only one
+  collector per host is allowed; it holds a fixed local port, so a second start detects the running
+  one and exits. `usage` never collects or writes itself. Put the port in `spec/`.
+- Follows from that: the collector runs schema setup and migrations at startup, so a fresh install
+  is handled by the collector that `usage` starts.
 
 ## 3. Implementation & Verification Plan
 - Plan first: list every write reachable from `harnez usage` and where each one moves.
