@@ -1,6 +1,6 @@
 # Container tests from worker sandboxes: make make container-test work (or route it) via harnez init/apply
 
-Status: Open
+Status: Closed — Delivered shared container-test Make target in 801420da; requested checks pass; fake-engine execution remains host-only because Quota-1 blocks it.
 Priority: P2
 Category: Feature
 
@@ -45,3 +45,16 @@ disabled, only one scrubbing proxies.
 - Clear diagnostic when run inside the quota-1 sandbox: "container tests need the host; ask the host".
 - Tests: fake-engine argv/env, paths with spaces, idempotent init, conflict with an existing target,
   failure propagation. Docs: docs/Containerfile.md (+ copies).
+
+## Delivery
+
+- Implemented only the shared fragment milestone in `801420da`: `harnez init` reconciles a
+  managed `container-test` target into existing Makefiles, retaining customized project targets.
+  The target supports Podman/Docker selection, copied or read-only mounted source, output mounts,
+  optional SELinux labels, project check overrides, proxy scrubbing, failure propagation, and a
+  quota-1 host guidance diagnostic. No broker or sandbox changes.
+- Added tests for init idempotency/custom target preservation and fake-engine arguments, paths,
+  proxy environment, failure status, and quota guidance. Fake-engine execution is skipped when
+  the current worker sandbox blocks it; the quota diagnostic was exercised in this environment.
+- Passed: `make lint`, `go test ./internal/claude`, `make test-short`, `make install`.
+- Synchronized `docs/other/Containerfile.md` to the managed `docs/Containerfile.md` copy.
