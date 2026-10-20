@@ -50,7 +50,7 @@ func TestApplyRemovesResourceBearingSkillWithUnmetRequires(t *testing.T) {
 
 	target := t.TempDir()
 	full := Set{Docs: true, Skills: true, Telemetry: true, Agents: true, Usage: true}
-	if err := ApplyAllVariant(target, cfg, full, nil, false, false, "", false); err != nil {
+	if err := ApplyAllVariant(target, cfg, ApplyOptions{Selection: full}); err != nil {
 		t.Fatalf("apply with telemetry selected: %v", err)
 	}
 	if _, err := os.Stat(skillMD); err != nil {
@@ -63,7 +63,7 @@ func TestApplyRemovesResourceBearingSkillWithUnmetRequires(t *testing.T) {
 	}
 
 	withoutTelemetry := Set{Docs: true, Skills: true, Agents: true, Usage: true}
-	if err := ApplyAllVariant(target, cfg, withoutTelemetry, nil, false, false, "", false); err != nil {
+	if err := ApplyAllVariant(target, cfg, ApplyOptions{Selection: withoutTelemetry}); err != nil {
 		t.Fatalf("apply without telemetry: %v", err)
 	}
 	if _, err := os.Stat(skillMD); !os.IsNotExist(err) {
@@ -101,7 +101,7 @@ func TestCodexAgyAppliedByTelemetrySelection(t *testing.T) {
 
 	target := t.TempDir()
 	withTelemetry := Set{Docs: true, Skills: true, Telemetry: true, Agents: true, Usage: true}
-	if err := ApplyAllVariant(target, cfg, withTelemetry, nil, false, false, "", false); err != nil {
+	if err := ApplyAllVariant(target, cfg, ApplyOptions{Selection: withTelemetry}); err != nil {
 		t.Fatalf("apply with telemetry selected: %v", err)
 	}
 	if _, err := os.Stat(cfg.CodexHooksTarget); err != nil {
@@ -118,7 +118,7 @@ func TestCodexAgyAppliedByTelemetrySelection(t *testing.T) {
 		t.Errorf("expected DiffAll to report drift: codex hooks still installed without telemetry selected")
 	}
 
-	if err := ApplyAllVariant(target, cfg, withoutTelemetry, nil, false, false, "", false); err != nil {
+	if err := ApplyAllVariant(target, cfg, ApplyOptions{Selection: withoutTelemetry}); err != nil {
 		t.Fatalf("apply without telemetry: %v", err)
 	}
 	if _, err := os.Stat(cfg.CodexHooksTarget); !os.IsNotExist(err) {

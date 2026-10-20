@@ -73,7 +73,11 @@ func newApplyCmd() *cobra.Command {
 					return err
 				}
 			}
-			if err := claude.ApplyAllVariant(t, cfg, set, applyDocs, forceDocs, applySystemd, applyVariant, applyShell); err != nil {
+			applyOpts := claude.ApplyOptions{
+				Selection: set, Docs: applyDocs, ForceDocs: forceDocs,
+				InstallSystemd: applySystemd, InstallShell: applyShell, DocVariant: applyVariant,
+			}
+			if err := claude.ApplyAllVariant(t, cfg, applyOpts); err != nil {
 				return err
 			}
 			if cfg.AgyTarget != "" && set.Has(claude.Usage) {

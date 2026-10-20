@@ -155,7 +155,7 @@ func mustApplyComponents(t *testing.T, target string, cfg *Config, docs []string
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ApplyAllVariant(target, cfg, set, docs, false, false, "", false); err != nil {
+	if err := ApplyAllVariant(target, cfg, ApplyOptions{Selection: set, Docs: docs}); err != nil {
 		t.Fatalf("ApplyAllVariant(%v): %v", names, err)
 	}
 }

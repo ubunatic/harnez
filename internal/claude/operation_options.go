@@ -1,0 +1,29 @@
+package claude
+
+// ApplyOptions selects components and optional installations for a global apply.
+// A nil Selection means all components; an omitted DocVariant uses full sources.
+type ApplyOptions struct {
+	Selection      Set
+	Docs           []string
+	ForceDocs      bool
+	InstallSystemd bool
+	InstallShell   bool
+	DocVariant     string
+}
+
+// InitOptions selects project initialization behavior. IssuesGit is tri-state:
+// nil preserves the integration, true installs it, and false removes it.
+// An omitted Variant preserves each installed doc's variant.
+type InitOptions struct {
+	Docs        []string
+	RepoMode    string
+	AssumeYes   bool
+	WithSummary bool
+	Update      bool
+	Replace     bool
+	IssuesGit   *bool
+	GoWork      bool
+	Force       bool
+	Variant     string
+	Quota1      bool
+}

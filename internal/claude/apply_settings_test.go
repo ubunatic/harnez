@@ -188,7 +188,7 @@ func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 		StatusLine: true,
 	}
 	docsOnly := Set{Docs: true, Skills: true}
-	if err := ApplyAllVariant(target, cfg, docsOnly, nil, false, false, "", false); err != nil {
+	if err := ApplyAllVariant(target, cfg, ApplyOptions{Selection: docsOnly}); err != nil {
 		t.Fatalf("selected apply: %v", err)
 	}
 
@@ -221,7 +221,7 @@ func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 	if err := os.WriteFile(settingsPath, []byte(`{"statusLine":{"type":"command","command":"harnez statusline"}}`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := ApplyAllVariant(target, cfg, docsOnly, nil, false, false, "", false); err != nil {
+	if err := ApplyAllVariant(target, cfg, ApplyOptions{Selection: docsOnly}); err != nil {
 		t.Fatalf("selected apply with Harnez status line: %v", err)
 	}
 	if _, ok := jsonc.Read(settingsPath)["statusLine"]; ok {

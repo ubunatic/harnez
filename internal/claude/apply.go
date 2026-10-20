@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
@@ -62,346 +60,6 @@ func cleanSectionMD(path, section string) error {
 		fmt.Printf("  cleaned %s\n", path)
 	}
 	return nil
-}
-
-// mergePermissions unions the allow/deny arrays of existing and incoming.
-func mergePermissions(existing, incoming map[string]any) map[string]any {
-	result := make(map[string]any, len(existing))
-	for k, v := range existing {
-		result[k] = v
-	}
-	for _, field := range []string{"allow", "deny"} {
-		result[field] = jsonc.UnionStrings(jsonc.ToStrings(existing[field]), jsonc.ToStrings(incoming[field]))
-	}
-	return result
-}
-
-// applyMerge merges doc into a copy of existing. The permissions.allow and
-// permissions.deny arrays are union-merged; all other top-level keys replace.
-// A nil value removes only managed, Harnez-owned settings.
-func applyMerge(existing, doc map[string]any) map[string]any {
-	out := make(map[string]any, len(existing)+len(doc))
-	for k, v := range existing {
-		out[k] = v
-	}
-	for k, v := range doc {
-		if v == nil {
-			if !isManagedSettingsKey(k) {
-				continue
-			}
-			switch k {
-			case "hooks":
-				keptHooks, valid := removeHarnezHooks(out[k])
-				if !valid {
-					continue
-				}
-				if len(keptHooks) == 0 {
-					delete(out, k)
-				} else {
-					out[k] = keptHooks
-				}
-			case "statusLine":
-				if statusLine, ok := out[k].(map[string]any); ok {
-					if command, _ := statusLine["command"].(string); isHarnezCommand(command) {
-						delete(out, k)
-					}
-				}
-			}
-			continue
-		}
-		if k == "permissions" {
-			if ep, ok := out[k].(map[string]any); ok {
-				if ip, ok := v.(map[string]any); ok {
-					out[k] = mergePermissions(ep, ip)
-					continue
-				}
-			}
-		}
-		if k == "env" {
-			if existingEnv, ok := out[k].(map[string]any); ok {
-				if configuredEnv, ok := v.(map[string]string); ok {
-					mergedEnv := make(map[string]any, len(existingEnv)+len(configuredEnv))
-					for envKey, envValue := range existingEnv {
-						mergedEnv[envKey] = envValue
-					}
-					for envKey, envValue := range configuredEnv {
-						mergedEnv[envKey] = envValue
-					}
-					out[k] = mergedEnv
-					continue
-				}
-			}
-		}
-		out[k] = v
-	}
-	return out
-}
-
-func isManagedSettingsKey(key string) bool {
-	return slices.Contains(managedSettingsKeys, key)
-}
-
-func isHarnezCommand(command string) bool {
-	command = strings.TrimSpace(command)
-	return command == "harnez" || strings.HasPrefix(command, "harnez ")
-}
-
-func removeHarnezHooks(value any) (map[string]any, bool) {
-	hooks, ok := value.(map[string]any)
-	if !ok {
-		return nil, false
-	}
-	keptHooks := make(map[string]any, len(hooks))
-	for event, rawEntries := range hooks {
-		entries, ok := rawEntries.([]any)
-		if !ok {
-			return nil, false
-		}
-		kept := make([]any, 0, len(entries))
-		for _, entry := range entries {
-			entryMap, ok := entry.(map[string]any)
-			if !ok {
-				kept = append(kept, entry)
-				continue
-			}
-			rawHooks, ok := entryMap["hooks"].([]any)
-			if !ok {
-				kept = append(kept, entry)
-				continue
-			}
-			entryCopy := make(map[string]any, len(entryMap))
-			for key, value := range entryMap {
-				entryCopy[key] = value
-			}
-			keptCommands := make([]any, 0, len(rawHooks))
-			for _, rawHook := range rawHooks {
-				hook, ok := rawHook.(map[string]any)
-				command, commandOK := hook["command"].(string)
-				if ok && commandOK && isHarnezCommand(command) {
-					continue
-				}
-				keptCommands = append(keptCommands, rawHook)
-			}
-			if len(keptCommands) > 0 {
-				entryCopy["hooks"] = keptCommands
-				kept = append(kept, entryCopy)
-			}
-		}
-		if len(kept) > 0 {
-			keptHooks[event] = kept
-		}
-	}
-	return keptHooks, true
-}
-
-// managedSettingsKeys are the top-level keys harnez writes to settings.json.
-var managedSettingsKeys = []string{
-	"model", "effortLevel", "permissions", "hooks", "env", "spinnerVerbs", "statusLine",
-}
-
-// Model alias mappings.
-var modelAliases = map[string]string{
-	"sonnet": "claude-sonnet-4-6",
-	"opus":   "claude-opus-4-7",
-	"haiku":  "claude-haiku-5-5",
-}
-
-func resolveModel(s string) string {
-	if full, ok := modelAliases[strings.ToLower(s)]; ok {
-		return full
-	}
-	return s
-}
-
-// buildSettingsDoc creates the settings JSON document from the YAML config.
-func buildSettingsDoc(cfg *Config, selection Set) map[string]any {
-	// Use map[string]any throughout so json.Marshal always sorts keys alphabetically,
-	// matching what json.Unmarshal produces on read-back (round-trip stable).
-	eventMap := map[string][]map[string]any{}
-	for _, h := range cfg.Hooks {
-		if !selection.HasComponent("telemetry") && isHarnezCommand(h.Command) {
-			continue
-		}
-		m := map[string]any{
-			"hooks": []map[string]any{{"command": h.Command, "type": "command"}},
-		}
-		if h.Matcher != "" {
-			m["matcher"] = h.Matcher
-		}
-		eventMap[h.Event] = append(eventMap[h.Event], m)
-	}
-
-	doc := map[string]any{}
-	if cfg.Model != "" {
-		doc["model"] = resolveModel(cfg.Model)
-	}
-	if cfg.Effort != "" {
-		doc["effortLevel"] = cfg.Effort
-	}
-	if len(cfg.Permissions.Allow) > 0 || len(cfg.Permissions.Deny) > 0 {
-		allow := cfg.Permissions.Allow
-		if allow == nil {
-			allow = []string{}
-		}
-		deny := cfg.Permissions.Deny
-		if deny == nil {
-			deny = []string{}
-		}
-		doc["permissions"] = map[string]any{"allow": allow, "deny": deny}
-	}
-	if len(eventMap) > 0 {
-		doc["hooks"] = eventMap
-	} else if !selection.HasComponent("telemetry") {
-		doc["hooks"] = nil
-	}
-	if len(cfg.Env) > 0 {
-		doc["env"] = cfg.Env
-	}
-	if len(cfg.Verbs) > 0 {
-		doc["spinnerVerbs"] = map[string]any{"mode": "replace", "verbs": cfg.Verbs}
-	}
-	if cfg.StatusLine && selection.HasComponent("usage") {
-		// cwd-only MVP; Claude Code renders this on its own row above the
-		// built-in footer badges, it cannot share that row (see issue 095).
-		doc["statusLine"] = map[string]any{
-			"type":    "command",
-			"command": "harnez statusline",
-		}
-	} else if !cfg.StatusLine || !selection.HasComponent("usage") {
-		doc["statusLine"] = nil
-	}
-	return doc
-}
-
-// settingsStats returns human-readable change notes comparing existing → merged
-// for the managed keys (permissions arrays counted, other keys flagged as changed/added).
-func settingsStats(existing, merged map[string]any) []string {
-	var notes []string
-
-	// permissions: report per-array delta
-	ep, _ := existing["permissions"].(map[string]any)
-	mp, _ := merged["permissions"].(map[string]any)
-	if mp != nil {
-		for _, field := range []string{"allow", "deny"} {
-			oldN := len(jsonc.ToStrings(ep[field]))
-			newN := len(jsonc.ToStrings(mp[field]))
-			if newN != oldN {
-				notes = append(notes, fmt.Sprintf("permissions.%s: %+d entries (%d → %d)", field, newN-oldN, oldN, newN))
-			}
-		}
-	}
-
-	// other managed keys
-	for _, k := range managedSettingsKeys {
-		if k == "permissions" {
-			continue
-		}
-		if !bytes.Equal(jsonc.MarshalPretty(existing[k]), jsonc.MarshalPretty(merged[k])) {
-			if existing[k] == nil {
-				notes = append(notes, k+": added")
-			} else {
-				notes = append(notes, k+": changed")
-			}
-		}
-	}
-	return notes
-}
-
-func applySettingsJSON(path string, doc map[string]any) (applyResult, error) {
-	existing := jsonc.Read(path)
-	merged := applyMerge(existing, doc)
-	data := append(jsonc.MarshalPretty(merged), '\n')
-	if err := jsonc.Validate(data); err != nil {
-		return applyResult{}, fmt.Errorf("%s: %w", path, err)
-	}
-
-	oldData, _ := os.ReadFile(path)
-	if bytes.Equal(oldData, data) {
-		return applyResult{changed: false}, nil
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return applyResult{}, err
-	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return applyResult{}, err
-	}
-	return applyResult{changed: true, notes: settingsStats(existing, merged)}, nil
-}
-
-func diffSettingsJSON(path string, doc map[string]any) (bool, error) {
-	existing := jsonc.Read(path)
-	merged := applyMerge(existing, doc)
-
-	currentManaged := map[string]any{}
-	for k := range doc {
-		if v, ok := existing[k]; ok {
-			currentManaged[k] = v
-		}
-	}
-	newManaged := map[string]any{}
-	for k := range doc {
-		if v, ok := merged[k]; ok {
-			newManaged[k] = v
-		}
-	}
-
-	oldData := jsonc.MarshalPretty(currentManaged)
-	newData := jsonc.MarshalPretty(newManaged)
-	if bytes.Equal(oldData, newData) {
-		return false, nil
-	}
-
-	writeTemp := func(data []byte) (string, error) {
-		f, err := os.CreateTemp("", "harnez-diff-*")
-		if err != nil {
-			return "", err
-		}
-		_, err = f.Write(data)
-		f.Close()
-		return f.Name(), err
-	}
-
-	oldFile, err := writeTemp(oldData)
-	if err != nil {
-		return false, err
-	}
-	defer os.Remove(oldFile)
-
-	newFile, err := writeTemp(newData)
-	if err != nil {
-		return false, err
-	}
-	defer os.Remove(newFile)
-
-	label := fmt.Sprintf("%s [settings]", path)
-	cmd := exec.Command("diff", "-u", "--label", label, "--label", label, oldFile, newFile)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return true, nil
-		}
-		return false, fmt.Errorf("diff %s: %w", label, err)
-	}
-	return true, nil
-}
-
-func cleanSettingsJSON(path string) error {
-	existing := jsonc.Read(path)
-	if len(existing) == 0 {
-		return nil
-	}
-	for _, k := range managedSettingsKeys {
-		delete(existing, k)
-	}
-	if len(existing) == 0 {
-		fmt.Printf("  removed %s\n", path)
-		return os.Remove(path)
-	}
-	fmt.Printf("  cleaned %s\n", path)
-	return os.WriteFile(path, append(jsonc.MarshalPretty(existing), '\n'), 0644)
 }
 
 func ensureSymlink(linkPath, target string) (applyResult, error) {
@@ -782,54 +440,6 @@ func commandTargets(target string, cfg *Config) []string {
 	return targets
 }
 
-func decommissionedName(name string) error {
-	if name == "" || filepath.Base(name) != name || name == "." || name == ".." {
-		return fmt.Errorf("invalid decommissioned artifact name %q", name)
-	}
-	return nil
-}
-
-func removeDecommissionedArtifacts(target string, cfg *Config) (int, error) {
-	changes := 0
-	for _, name := range cfg.Decommissioned.Commands {
-		if err := decommissionedName(name); err != nil {
-			return changes, err
-		}
-		for _, root := range commandTargets(target, cfg) {
-			artifact := filepath.Join(root, name+".md")
-			if err := os.Remove(artifact); err == nil {
-				changes++
-				fmt.Printf("  removed %s\n", artifact)
-			} else if !os.IsNotExist(err) {
-				return changes, fmt.Errorf("remove decommissioned command %s: %w", artifact, err)
-			}
-		}
-	}
-	for _, name := range cfg.Decommissioned.Skills {
-		if err := decommissionedName(name); err != nil {
-			return changes, err
-		}
-		for _, root := range skillTargets(cfg) {
-			artifact := filepath.Join(root, name)
-			// Former bundles also carry the external marker, but apply owns them.
-			if !skillreg.IsBundled(artifact) && externalSkillClash(artifact) {
-				continue
-			}
-			if _, err := os.Stat(artifact); os.IsNotExist(err) {
-				continue
-			} else if err != nil {
-				return changes, fmt.Errorf("inspect decommissioned skill %s: %w", artifact, err)
-			}
-			if err := os.RemoveAll(artifact); err != nil {
-				return changes, fmt.Errorf("remove decommissioned skill %s: %w", artifact, err)
-			}
-			changes++
-			fmt.Printf("  removed %s\n", artifact)
-		}
-	}
-	return changes, nil
-}
-
 func gearExecutable() string {
 	if exe, err := os.Executable(); err == nil && exe != "" {
 		return exe
@@ -1080,18 +690,16 @@ func mergeDocs(fromConfig, fromFlag []string) []string {
 // ApplyAll installs the managed configuration into target, always using the
 // full doc source. See ApplyAllVariant to select a lite_source variant.
 func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, installShell ...bool) error {
-	return ApplyAllVariant(target, cfg, nil, docs, forceDocs, installSystemd, "", installShell...)
+	return ApplyAllVariant(target, cfg, ApplyOptions{Docs: docs, ForceDocs: forceDocs, InstallSystemd: installSystemd, InstallShell: len(installShell) > 0 && installShell[0]})
 }
 
-// ApplyAllVariant is ApplyAll with an explicit doc variant ("" or "lite")
-// selecting which source (Language.SourceFor) is installed for docs that
-// declare a lite_source. selection is the resolved component set for this
-// apply operation (nil = full, issue 491 M6); cfg is passed unfiltered —
-// selection narrows what gets installed and drives the active-removal
-// branches (Codex/AGY hooks, distill adapters, skills with unmet requires)
-// entirely inside this package now.
-func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, forceDocs bool, installSystemd bool, docVariant string, installShell ...bool) error {
-	shellOpt := len(installShell) > 0 && installShell[0]
+// ApplyAllVariant installs the selected global components and doc variant.
+// cfg remains unfiltered: opts.Selection controls both installation and active
+// removal of hooks, adapters and skills with unmet requirements.
+func ApplyAllVariant(target string, cfg *Config, opts ApplyOptions) error {
+	selection, docs := opts.Selection, opts.Docs
+	forceDocs, installSystemd, docVariant := opts.ForceDocs, opts.InstallSystemd, opts.DocVariant
+	shellOpt := opts.InstallShell
 	docs = expandDocNames(cfg, docs)
 	if err := validateDocNames(cfg, docs); err != nil {
 		return err
@@ -1103,63 +711,15 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 	}
 	r.changes += removed
 
-	configuredSkills := make(map[string]struct{}, len(cfg.Skills))
-	for _, skill := range cfg.Skills {
-		configuredSkills[skill.Name] = struct{}{}
-	}
-	for _, skillsRoot := range skillTargets(cfg) {
-		entries, err := os.ReadDir(skillsRoot)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return fmt.Errorf("skills dir %s: %w", skillsRoot, err)
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			skillDir := filepath.Join(skillsRoot, entry.Name())
-			if _, keep := configuredSkills[entry.Name()]; keep || !isManagedSkill(skillDir) || isExternalSkill(skillDir) {
-				continue
-			}
-			if err := os.RemoveAll(skillDir); err != nil {
-				return fmt.Errorf("remove dropped skill %s: %w", skillDir, err)
-			}
-			fmt.Printf("  removed %s\n", skillDir)
-			r.changes++
-		}
-	}
-
-	settingsPath := filepath.Join(target, "settings.json")
-	settingsDoc := buildSettingsDoc(cfg, selection)
-	sr, err := applySettingsJSON(settingsPath, settingsDoc)
+	removed, err = removeDroppedSkills(cfg)
 	if err != nil {
-		return fmt.Errorf("settings: %w", err)
+		return err
 	}
-	if sr.changed {
-		r.changes++
-	} else {
-		existing := jsonc.Read(settingsPath)
-		if p, _ := existing["permissions"].(map[string]any); p != nil {
-			allow := jsonc.ToStrings(p["allow"])
-			deny := jsonc.ToStrings(p["deny"])
-			r.addStat("permissions", fmt.Sprintf("%d allow, %d deny", len(allow), len(deny)))
-		}
-		var keys []string
-		for _, k := range managedSettingsKeys {
-			if k == "permissions" {
-				continue
-			}
-			if _, inDoc := settingsDoc[k]; inDoc {
-				if _, inFile := existing[k]; inFile {
-					keys = append(keys, k)
-				}
-			}
-		}
-		r.addStat("settings", strings.Join(keys, ", "))
+	r.changes += removed
+
+	if err := applySettings(r, target, cfg, selection); err != nil {
+		return err
 	}
-	printResult("wrote", settingsPath, sr)
 	jevResult, err := applyManagedLocalPlugins(target, cfg.JevCompactionEnabled, true, cfg.Env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] != "")
 	if err != nil {
 		return fmt.Errorf("managed local plugins: %w", err)
@@ -1195,79 +755,8 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		return err
 	}
 
-	if home, err := os.UserHomeDir(); err == nil {
-		shimPath, changed, err := EnsureBashShim(home)
-		if err != nil {
-			return err
-		}
-		if changed {
-			r.changes++
-			fmt.Printf("  wrote %s\n", shimPath)
-		} else {
-			r.addStat("bash shim", fsutil.ContractHome(shimPath))
-		}
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		launcherPath, changed, err := EnsureHarnezAgyLauncher(home)
-		if err != nil {
-			return err
-		}
-		if changed {
-			r.changes++
-			fmt.Printf("  wrote %s\n", launcherPath)
-		} else {
-			r.addStat("harnez-agy launcher", fsutil.ContractHome(launcherPath))
-		}
-	}
-
-	gearExe := gearExecutable()
-	var gearStats []string
-	for _, link := range GearSymlinkTargets(target, cfg) {
-		lr, err := ensureSymlink(link, gearExe)
-		if err != nil {
-			return fmt.Errorf("gear symlink %s: %w", link, err)
-		}
-		if lr.changed {
-			r.changes++
-			fmt.Printf("  symlink %s → %s\n", link, gearExe)
-		} else {
-			gearStats = append(gearStats, fsutil.ContractHome(link))
-		}
-	}
-	if len(gearStats) > 0 {
-		r.addStat("⚙ symlink", strings.Join(gearStats, ", "))
-	}
-
-	if envPath := HarnezEnvPath(); envPath != "" {
-		changed, err := fsutil.WriteIfChanged(envPath, []byte(HarnezEnvContent))
-		if err != nil {
-			return fmt.Errorf("harnez env %s: %w", envPath, err)
-		}
-		if changed {
-			r.changes++
-			fmt.Printf("  wrote %s\n", envPath)
-		} else {
-			r.addStat("env script", fsutil.ContractHome(envPath))
-		}
-	}
-
-	if shellOpt {
-		for _, rcPath := range ShellRCPaths() {
-			changed, existed, err := markdown.ApplyMK(rcPath, "env", HarnezShellRCSnippet)
-			if err != nil {
-				return fmt.Errorf("shell rc %s: %w", rcPath, err)
-			}
-			if changed {
-				r.changes++
-				if existed {
-					fmt.Printf("  updated %s [env]\n", rcPath)
-				} else {
-					fmt.Printf("  wrote %s [env]\n", rcPath)
-				}
-			} else {
-				r.addStat("shell rc", fsutil.ContractHome(rcPath))
-			}
-		}
+	if err := applyShellIntegration(r, target, cfg, shellOpt); err != nil {
+		return err
 	}
 
 	if installSystemd {
@@ -1313,102 +802,8 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 	if err := report(diffSettingsJSON(filepath.Join(target, "settings.json"), buildSettingsDoc(cfg, selection))); err != nil {
 		return false, fmt.Errorf("settings: %w", err)
 	}
-	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
-	configuredSkills := make(map[string]struct{}, len(cfg.Skills))
-	for _, skill := range cfg.Skills {
-		configuredSkills[skill.Name] = struct{}{}
-	}
-	for _, skillsRoot := range skillTargets(cfg) {
-		entries, err := os.ReadDir(skillsRoot)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return false, fmt.Errorf("skills dir %s: %w", skillsRoot, err)
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			skillDir := filepath.Join(skillsRoot, entry.Name())
-			if _, keep := configuredSkills[entry.Name()]; !keep && isManagedSkill(skillDir) && !isExternalSkill(skillDir) {
-				anyChanged = true
-			}
-		}
-	}
-
-	if len(cfg.Skills) > 0 {
-		for _, skill := range cfg.Skills {
-			if skillDisabled(skill, selection, disableRateFeedback) {
-				for _, skillsRoot := range skillTargets(cfg) {
-					skillDir := filepath.Join(skillsRoot, skill.Name)
-					if isExternalSkill(skillDir) || !isManagedSkill(skillDir) {
-						continue
-					}
-					path := filepath.Join(skillDir, "SKILL.md")
-					if _, err := os.Stat(path); err == nil {
-						anyChanged = true
-					} else if !os.IsNotExist(err) {
-						return false, fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
-					}
-				}
-				continue
-			}
-			if !selection.HasComponent("skills") {
-				continue // skip semantics: not managed, so never drifted
-			}
-			content, err := genSkillContent(skill, cfg.FS)
-			if err != nil {
-				return false, err
-			}
-			resources, err := genSkillResources(skill, cfg.FS)
-			if err != nil {
-				return false, err
-			}
-			for _, skillsRoot := range skillTargets(cfg) {
-				skillDir := filepath.Join(skillsRoot, skill.Name)
-				if isExternalSkill(skillDir) {
-					continue
-				}
-				if _, err := os.Lstat(skillDir); err == nil && !isManagedSkill(skillDir) {
-					continue // an unmarked directory is user-owned
-				} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-					return false, fmt.Errorf("skill %s dir: %w", skill.Name, err)
-				}
-				path, err := safeSkillPath(skillDir, "SKILL.md")
-				if err != nil {
-					return false, err
-				}
-				existing, readErr := os.ReadFile(path)
-				if readErr != nil {
-					if os.IsNotExist(readErr) {
-						anyChanged = true
-						continue
-					}
-					return false, fmt.Errorf("skill %s [%s]: %w", skill.Name, path, readErr)
-				}
-				if string(existing) != content {
-					anyChanged = true
-				}
-				for _, resource := range resources {
-					resourcePath, err := safeSkillPath(skillDir, resource.target)
-					if err != nil {
-						return false, err
-					}
-					existing, readErr := os.ReadFile(resourcePath)
-					if readErr != nil {
-						if os.IsNotExist(readErr) {
-							anyChanged = true
-							continue
-						}
-						return false, fmt.Errorf("skill %s resource [%s]: %w", skill.Name, resourcePath, readErr)
-					}
-					if !bytes.Equal(existing, resource.data) {
-						anyChanged = true
-					}
-				}
-			}
-		}
+	if err := report(diffSkills(cfg, selection)); err != nil {
+		return false, err
 	}
 	// issue 491 M5: check Codex/AGY under the resolved selection directly
 	// rather than skipping them because a filtered config blanked their
