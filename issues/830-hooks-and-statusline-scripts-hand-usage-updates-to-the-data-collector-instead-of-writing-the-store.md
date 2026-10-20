@@ -43,10 +43,17 @@ on every prompt or render and must stay fast. With one writer, the collector, lo
   the collector serves `POST` for passive usage windows and applies the existing dedupe. A client helper
   sends with a short spec timeout and drops the update when no server answers (never starts one).
 - **M2 — statusline on the endpoint:** statusline uses the helper; remove its direct DB open/write and
-  the obsolete spec keys (yaml, schema, loader, tests); update the usage architecture doc.
+  the obsolete spec keys (yaml, schema, loader, tests). Document the client-server architecture in
+  `docs/UsageCollection.md` (and `docs/HarnezComponents.md`): `harnez server` is the single writer;
+  `usage` reads read-only and auto-starts the server; observers POST and drop on failure (usage) or
+  spool (telemetry, M3); one server per host on the spec port; systemd service per 831.
 - **M3 — telemetry hooks on the server:** `rate`, `hook post-tool`/`hook agy` and `codex-telemetry` send
-  their records to a server telemetry route instead of writing the DB; when no server answers they drop
-  the record. Afterwards only `harnez server` writes `telemetry.sqlite` (add a test or check that greps
+  their records to a server telemetry route instead of writing the DB. Decided (host, delegated by the
+  user, 2026-10-20): when no server answers, telemetry records are **not dropped** but appended to a
+  bounded local spool (one small file per record under the harnez state dir; size cap and path in spec),
+  which the server drains into the DB at startup and on each tick. Reason: these records are history, so
+  a drop leaves a permanent gap, while a dropped usage reading is replaced by the next one. Passive usage
+  windows (M1/M2) keep the drop rule. Spool writes are plain file creates, never a DB lock. Afterwards only `harnez server` writes `telemetry.sqlite` (add a test or check that greps
   for write calls outside the server packages).
 
 ## 4. Implementation & Verification Plan

@@ -19,8 +19,9 @@ dashboard to a stray arrow key is bad UX.
   (`internal/usage/watch_keys.go`), and on the main dashboard byte 27 (Esc) quits (`dispatchSplashKey`'s
   comment at `watch_keys.go:180-188` says `dispatchWatchKey` owns that), so the first byte of the
   sequence quits before `[A` is read.
-- Decided (user): only `q` and Ctrl-C quit. Esc no longer quits; check whether `Q` should stay
-  (the user named only `q`) and whether Esc should still close an open overlay.
+- Decided (user): only `q` and Ctrl-C quit; Esc no longer quits.
+- Decided (host, delegated by the user, 2026-10-20): `Q` also quits (same key with Caps Lock), and a
+  lone Esc still closes an open overlay (controls/help) but does nothing on the main view.
 - Key bindings come from `spec/actions.yaml`; update it and any help/controls text that lists Esc.
 
 ## 3. Implementation & Verification Plan
