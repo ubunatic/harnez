@@ -1,6 +1,6 @@
 # 828 — harnez usage reports 'database is locked' instead of waiting for or recovering from the store lock
 
-**Status**: Open
+**Status**: Closed — Confirmed compact usage performed repeat DDL, the key migration transaction, compat checks, and observation/history writes; current-schema checks now skip completed migrations and short-timeout busy writes are logged while projection continues. Added held-lock and no-lock regressions plus a compact busy fallback and spec key. make install passed. The Quota-1 suite passed internal/usage but failed the key-migration repair test; the repair fast path was corrected afterward but not rerun under the single-run quota.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
