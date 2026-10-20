@@ -1,6 +1,6 @@
 # 833 — usage -w exits on arrow keys; only q and Ctrl-C may quit
 
-**Status**: Open
+**Status**: Closed — only q, Q and Ctrl-C quit usage -w; escape sequences are parsed as one key
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
