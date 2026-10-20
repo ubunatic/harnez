@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -976,20 +978,9 @@ func TestGearMulticallExecution(t *testing.T) {
 		t.Fatalf("create symlink failed: %v", err)
 	}
 
-	// This test runs the real compiled binary, which now (issue 326) writes
-	// a cli_invocations row on every invocation via main()'s
-	// executeAndRecord, on top of the pre-existing tool_calls/sessionstate
-	// writes `exec` itself performs. Both telemetry.DefaultDBPath and
-	// resolve.DefaultStateDir resolve purely from os.UserHomeDir() -- there
-	// never was a HARNEZ_DB_PATH/HARNEZ_STATE_DIR override in production
-	// code, so the env vars of those names set below were silently inert
-	// and every subprocess invocation was actually writing into the
-	// *developer's real* ~/.harnez/tool_catalog.sqlite (indistinguishable
-	// from genuine usage: cwd is this package directory, so project_name
-	// recorded as plain "harnez"). t.Setenv("HOME", ...) redirects
-	// os.UserHomeDir() for the whole test -- the only override point that
-	// actually exists -- matching the isolation pattern
-	// internal/claude/bash_shim_test.go already uses.
+	// Isolate the real multicall subprocesses under a fake home. Their
+	// telemetry is spooled while no server is running, then drained through
+	// the server-owned writer below.
 	fakeHome := filepath.Join(binDir, "home")
 	if err := os.MkdirAll(fakeHome, 0o755); err != nil {
 		t.Fatalf("create fake home: %v", err)
@@ -1034,10 +1025,16 @@ func TestGearMulticallExecution(t *testing.T) {
 		t.Errorf("exit code = %d, want 3", exitErr.ExitCode())
 	}
 
-	// Verify telemetry row, under the isolated fakeHome this test actually
-	// controls (there is no env-var override to point at a different path).
+	config, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
 	dbPath := filepath.Join(fakeHome, ".local", "share", "harnez", "telemetry.sqlite")
-	db, dbErr := telemetry.Open(dbPath)
+	service := &telemetryCollectorService{config: config, path: dbPath, interval: time.Hour}
+	if err := service.drainSpool(context.Background()); err != nil {
+		t.Fatalf("drain telemetry spool: %v", err)
+	}
+	db, dbErr := telemetry.OpenReadOnly(dbPath)
 	if dbErr != nil {
 		t.Fatalf("open isolated telemetry db %s: %v", dbPath, dbErr)
 	}

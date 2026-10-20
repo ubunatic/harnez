@@ -46,6 +46,7 @@ import (
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -1146,22 +1147,12 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 			DistilledBytes: call.DistilledBytes,
 		}
 
-		dbPath := opts.DBPath
-		if dbPath == "" {
-			p, err := telemetry.DefaultDBPath()
-			if err != nil {
-				debugLog("exec wrapper: DefaultDBPath failed, dropping telemetry row: %v", err)
-				return
-			}
-			dbPath = p
-		}
-
 		insert := opts.Insert
 		if insert == nil {
 			insert = defaultInsertExecRow
 		}
-		if err := insert(dbPath, tc); err != nil {
-			debugLog("exec wrapper: insert failed at %s: %v", dbPath, err)
+		if err := insert(opts.DBPath, tc); err != nil {
+			debugLog("exec wrapper: insert failed: %v", err)
 		} else {
 			debugLog("exec wrapper: inserted row tool=%q session=%q ticket=%q", tc.ToolName, tc.SessionID, tc.TicketID)
 		}
@@ -1174,17 +1165,16 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 	}
 }
 
-// defaultInsertExecRow opens the telemetry DB at dbPath and writes one
-// row. Split out from recordExecTelemetry so tests can inject a
-// slow/failing writer via execOptions.Insert without touching the user's
-// real DB.
+// defaultInsertExecRow hands one row to the server, spooling it when the
+// server is unavailable.
 func defaultInsertExecRow(dbPath string, call telemetry.ToolCall) error {
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		return fmt.Errorf("exec: open telemetry db: %w", err)
+	if dbPath != "" {
+		return server.InsertToolCallAt(dbPath, call)
 	}
-	defer db.Close()
-	return db.Insert(call)
+	if result := sendTelemetryRecord("tool_call", call); result == server.UpdateDropped {
+		return fmt.Errorf("exec: telemetry server unavailable and spool write failed")
+	}
+	return nil
 }
 
 // newExecHookCmd implements `harnez exec hook`, the PreToolUse handshake

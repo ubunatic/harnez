@@ -97,7 +97,7 @@ func classifyInvoker(getenv func(string) string, sessionID string, isTTY func() 
 // here. Returns nil when the DB can't be read; callers fall back to the
 // JSON state file's own counts.
 func sessionCallCounts(dbPath, sessionID string) map[string]int {
-	db, err := telemetry.Open(dbPath)
+	db, err := telemetry.OpenReadOnly(dbPath)
 	if err != nil {
 		return nil
 	}

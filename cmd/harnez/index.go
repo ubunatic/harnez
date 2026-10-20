@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -150,39 +151,26 @@ func recordIssueSnapshot(issuesDir, dbPath string) {
 		return
 	}
 
-	if dbPath == "" {
-		p, err := telemetry.DefaultDBPath()
-		if err != nil {
-			debugLog("index: DefaultDBPath failed, dropping issue snapshot: %v", err)
-			return
-		}
-		dbPath = p
-	}
-
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		debugLog("index: open telemetry db failed, dropping issue snapshot: %v", err)
-		return
-	}
-	defer db.Close()
-
 	project := projectNameForDir(issuesDir)
-	inserted, err := db.InsertIssueSnapshot(telemetry.IssueStatusSnapshot{
+	row := telemetry.IssueStatusSnapshot{
 		ProjectName:  project,
 		OpenCount:    open,
 		ClosedCount:  closed,
 		DraftCount:   draft,
 		UnknownCount: unknown,
-	})
-	if err != nil {
-		debugLog("index: insert issue snapshot failed: %v", err)
+	}
+	if dbPath != "" { // explicit test override
+		inserted, err := server.InsertIssueSnapshot(dbPath, row)
+		if err != nil {
+			debugLog("index: insert issue snapshot failed: %v", err)
+			return
+		}
+		debugLog("index: test snapshot inserted=%t", inserted)
 		return
 	}
-	if inserted {
-		debugLog("index: recorded issue snapshot project=%q open=%d closed=%d draft=%d unknown=%d",
-			project, open, closed, draft, unknown)
-	} else {
-		debugLog("index: skipped issue snapshot for project=%q (unchanged since last recorded snapshot)", project)
+	result := sendTelemetryRecord("issue_snapshot", row)
+	if result == server.UpdateDropped {
+		debugLog("index: telemetry snapshot could not reach server or spool")
 	}
 }
 

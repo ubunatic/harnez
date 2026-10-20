@@ -8,12 +8,15 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -43,6 +46,8 @@ func captureApplyStdout(t *testing.T, fn func()) string {
 func TestEnsureTelemetrySchemaNoOpBeforeApply(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, "runtime"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
 
 	path := filepath.Join(home, ".local", "share", "harnez", "telemetry.sqlite")
 	db, err := telemetry.Open(path)
@@ -165,6 +170,24 @@ func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
 
 	// The apply session-tip hook must not open this legacy DB before apply
 	// migrates it, or the hook would observe the stale schema first.
+	config, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverSocket, err := config.Socket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", serverSocket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &telemetryCollectorService{config: config, path: path}
+	mux := http.NewServeMux()
+	service.RegisterRoutes(mux)
+	go func() { _ = http.Serve(listener, mux) }()
+	t.Cleanup(func() { _ = listener.Close() })
+
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"apply", "-t", filepath.Join(home, ".claude")})
 	output := captureApplyStdout(t, func() {

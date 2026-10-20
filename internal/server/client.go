@@ -3,6 +3,8 @@ package server
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -31,6 +33,31 @@ func PostTelemetry(ctx context.Context, socket, path string, payload []byte, tim
 		return UpdateDropped
 	}
 	return UpdateSpooled
+}
+
+// PostTelemetryCommand waits for a server-owned operation that must return
+// its result to the caller, such as an explicit legacy database merge.
+func PostTelemetryCommand(ctx context.Context, socket, path string, payload []byte, timeout time.Duration) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://unix"+path, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := UnixHTTPClient(socket, timeout).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("telemetry command returned %s: %s", resp.Status, body)
+	}
+	return body, nil
 }
 
 func PostUpdate(ctx context.Context, socket, path string, payload []byte, timeout time.Duration) UpdateResult {

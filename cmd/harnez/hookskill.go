@@ -92,12 +92,6 @@ func runClaudeSkillHook(in io.Reader, opts skillHookOptions) {
 		SkillName:   name,
 	}
 	dbPath := opts.DBPath
-	if dbPath == "" {
-		dbPath, _ = telemetry.DefaultDBPath()
-	}
-	if dbPath == "" {
-		return
-	}
 	insert := opts.Insert
 	if insert == nil {
 		insert = defaultInsertExecRow

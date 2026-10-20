@@ -209,7 +209,7 @@ func runStats(w io.Writer, opts statsOptions) error {
 		return nil
 	}
 
-	db, err := telemetry.Open(dbPath)
+	db, err := telemetry.OpenReadOnly(dbPath)
 	if err != nil {
 		return fmt.Errorf("stats: open telemetry db: %w", err)
 	}

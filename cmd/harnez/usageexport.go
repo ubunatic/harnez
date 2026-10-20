@@ -149,12 +149,6 @@ func buildUsageExport(ctx context.Context, dbPath, historyDir string, level priv
 		}
 		dbPath = p
 	}
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		return usageExportEnvelope{}, fmt.Errorf("open telemetry db: %w", err)
-	}
-	defer db.Close()
-
 	var sanitizer privacy.NoteSanitizer
 	if level == privacy.LevelAgentSanitized {
 		sanitizer = privacy.NewClaudeCLISanitizer()
@@ -165,9 +159,19 @@ func buildUsageExport(ctx context.Context, dbPath, historyDir string, level priv
 		classifier = &telemetry.DefaultLocalClassifier{}
 	}
 
-	telExport, err := telemetry.ExportAllWithClassifier(ctx, db, now, level, sanitizer, classifier)
-	if err != nil {
-		return usageExportEnvelope{}, fmt.Errorf("export telemetry: %w", err)
+	var telExport telemetry.Export
+	if _, statErr := os.Stat(dbPath); os.IsNotExist(statErr) {
+		telExport = telemetry.BuildExportLevel(nil, now, level, nil)
+	} else {
+		db, err := telemetry.OpenReadOnly(dbPath)
+		if err != nil {
+			return usageExportEnvelope{}, fmt.Errorf("open telemetry db: %w", err)
+		}
+		telExport, err = telemetry.ExportAllWithClassifier(ctx, db, now, level, sanitizer, classifier)
+		_ = db.Close()
+		if err != nil {
+			return usageExportEnvelope{}, fmt.Errorf("export telemetry: %w", err)
+		}
 	}
 
 	if historyDir == "" {

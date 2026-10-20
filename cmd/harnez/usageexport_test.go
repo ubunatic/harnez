@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"os"
@@ -148,6 +149,24 @@ func TestRunUsageExport_ToleratesMissingFixtureDirs(t *testing.T) {
 	// An export without rows must still carry the version (issue 720).
 	if envelope["format_version"] != float64(usageExportFormatVersion) {
 		t.Errorf("expected format_version %d in empty export, got %v", usageExportFormatVersion, envelope["format_version"])
+	}
+}
+
+func TestBuildUsageExportMissingTelemetryTableIsEmpty(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "empty.sqlite")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := buildUsageExport(context.Background(), dbPath, t.TempDir(), privacy.LevelPublic, false, time.Now())
+	if err != nil {
+		t.Fatalf("buildUsageExport with missing telemetry tables: %v", err)
+	}
+	if len(envelope.Telemetry.ToolCalls) != 0 {
+		t.Fatalf("telemetry export has %d rows, want empty", len(envelope.Telemetry.ToolCalls))
 	}
 }
 

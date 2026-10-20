@@ -79,6 +79,28 @@ func seedStatsFixture(t *testing.T, dbPath string) {
 func intPtr(v int) *int       { return &v }
 func int64Ptr(v int64) *int64 { return &v }
 
+func TestRunStatsMissingTelemetryIsEmpty(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "missing.sqlite")
+	var table bytes.Buffer
+	if err := runStats(&table, statsOptions{DBPath: dbPath}); err != nil {
+		t.Fatalf("runStats with missing telemetry: %v", err)
+	}
+	if !strings.Contains(table.String(), "no data:") {
+		t.Fatalf("missing telemetry table output = %q, want no-data message", table.String())
+	}
+	var report statsReport
+	var jsonOutput bytes.Buffer
+	if err := runStats(&jsonOutput, statsOptions{DBPath: dbPath, JSON: true}); err != nil {
+		t.Fatalf("runStats JSON with missing telemetry: %v", err)
+	}
+	if err := json.Unmarshal(jsonOutput.Bytes(), &report); err != nil {
+		t.Fatalf("decode empty stats JSON: %v", err)
+	}
+	if !report.Empty {
+		t.Fatalf("empty stats report = %+v, want Empty", report)
+	}
+}
+
 func TestRunStatsTable_MatchesHandComputedFixture(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
 	seedStatsFixture(t, dbPath)

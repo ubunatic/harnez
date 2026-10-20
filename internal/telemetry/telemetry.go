@@ -183,6 +183,9 @@ func Open(path string) (*DB, error) {
 // write-capable pragmas. It is used by analytical checks that must not create
 // or modify a live store.
 func OpenReadOnly(path string) (*DB, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return openEmptyReadOnlyDB()
+	}
 	sqlDB, err := sql.Open("sqlite", path+"?mode=ro")
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: open read-only %s: %w", path, err)
@@ -191,7 +194,48 @@ func OpenReadOnly(path string) (*DB, error) {
 		sqlDB.Close()
 		return nil, fmt.Errorf("telemetry: open read-only %s: %w", path, err)
 	}
-	return &DB{sql: sqlDB}, nil
+	db := &DB{sql: sqlDB}
+	for _, table := range []string{"tool_calls", "cli_invocations", "issue_status_snapshots", "compaction_events", "session_boundaries", "token_snapshots", "compaction_economics"} {
+		present, err := tableExists(sqlDB, table)
+		if err != nil {
+			sqlDB.Close()
+			return nil, fmt.Errorf("telemetry: inspect read-only schema %s: %w", path, err)
+		}
+		if !present {
+			sqlDB.Close()
+			return openEmptyReadOnlyDB()
+		}
+	}
+	return db, nil
+}
+
+// openEmptyReadOnlyDB provides the current empty telemetry shape in memory
+// when an analytical reader has no database yet. It never creates or writes
+// a telemetry.sqlite file.
+func openEmptyReadOnlyDB() (*DB, error) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: open empty read-only database: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+	if _, err := sqlDB.Exec(schemaDDL); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("telemetry: initialize empty read-only schema: %w", err)
+	}
+	if err := usagestore.EnsureSchema(context.Background(), func(_ context.Context, statement string) error {
+		_, err := sqlDB.Exec(statement)
+		return err
+	}); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("telemetry: initialize empty usage schema: %w", err)
+	}
+	migrations, err := checkAndMigrateSchema(sqlDB, ":memory:", false)
+	if err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("telemetry: initialize empty read-only schema: %w", err)
+	}
+	return &DB{sql: sqlDB, migrations: migrations}, nil
 }
 
 type schemaExecutor interface {

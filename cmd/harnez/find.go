@@ -236,7 +236,7 @@ func runFindHistory(w io.Writer, opts findHistoryOptions) error {
 		dbPath = p
 	}
 
-	db, err := telemetry.Open(dbPath)
+	db, err := telemetry.OpenReadOnly(dbPath)
 	if err != nil {
 		return fmt.Errorf("find issues history: open telemetry db: %w", err)
 	}

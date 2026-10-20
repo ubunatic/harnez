@@ -1404,7 +1404,7 @@ Use "harnez hook [command] --help" for more information about a command.
 
 === harnez hook agy
 agy accepts Antigravity's PreToolUse JSON payload on stdin,
-records tool invocations into ~/.harnez/tool_catalog.sqlite under agent_id='agy',
+submits tool invocations to the local server under agent_id='agy',
 and outputs {"decision":"allow"} to stdout.
 
 Usage:

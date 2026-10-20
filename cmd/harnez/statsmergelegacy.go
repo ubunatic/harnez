@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -73,44 +75,37 @@ func legacyDatabaseFiles(matches []string) []string {
 }
 
 func runStatsMergeLegacy(ctx context.Context, out io.Writer, dbPath string, sources []string, now time.Time) error {
-	db, err := telemetry.Open(dbPath)
+	config, err := server.LoadConfig()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	before, err := db.ToolCallCount(ctx)
+	socket, err := config.Socket()
 	if err != nil {
 		return err
 	}
-	var missing int64
-	for _, source := range sources {
-		n, err := db.LegacyToolCallsMissing(ctx, source)
-		if err != nil {
-			return err
-		}
-		missing += n
-	}
-	fmt.Fprintf(out, "tool calls before: %d\n", before)
-	if missing == 0 {
-		fmt.Fprintf(out, "nothing to merge from %d file(s)\n", len(sources))
-		return nil
-	}
-	backup := dbPath + ".before-merge-" + now.UTC().Format("20060102T150405Z")
-	if err := db.BackupInto(ctx, backup); err != nil {
-		return fmt.Errorf("back up %s: %w", dbPath, err)
-	}
-	fmt.Fprintf(out, "backup: %s\n", backup)
-	results, err := db.MergeLegacyToolCalls(ctx, sources)
+	payload, err := json.Marshal(struct {
+		DBPath  string    `json:"db_path"`
+		Sources []string  `json:"sources"`
+		Now     time.Time `json:"now"`
+	}{DBPath: dbPath, Sources: sources, Now: now})
 	if err != nil {
 		return err
 	}
-	for _, result := range results {
-		fmt.Fprintf(out, "added %d from %s\n", result.Added, result.Source)
-	}
-	after, err := db.ToolCallCount(ctx)
+	body, err := server.PostTelemetryCommand(ctx, socket, config.TelemetryPath, mustTelemetryRecord("merge_legacy", payload), config.HTTPClientTimeout)
 	if err != nil {
+		return fmt.Errorf("stats merge-legacy: server request: %w", err)
+	}
+	var response struct {
+		Output string `json:"output"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "tool calls after: %d\n", after)
-	return nil
+	_, err = io.WriteString(out, response.Output)
+	return err
+}
+
+func mustTelemetryRecord(kind string, payload json.RawMessage) []byte {
+	body, _ := json.Marshal(server.TelemetryRecord{Kind: kind, Payload: payload})
+	return body
 }

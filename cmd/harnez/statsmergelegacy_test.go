@@ -1,13 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -34,21 +34,21 @@ func TestStatsMergeLegacyBacksUpAndReportsCounts(t *testing.T) {
 		db.Close()
 	}
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
-	var out bytes.Buffer
-	if err := runStatsMergeLegacy(context.Background(), &out, live, []string{legacy}, now); err != nil {
+	output, err := server.MergeLegacyToolCalls(context.Background(), live, []string{legacy}, now)
+	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"tool calls before: 1", "backup: " + live + ".before-merge-20261006T120000Z", "added 1 from " + legacy, "tool calls after: 2"} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("output %q missing %q", out.String(), want)
+		if !strings.Contains(output, want) {
+			t.Errorf("output %q missing %q", output, want)
 		}
 	}
-	out.Reset()
-	if err := runStatsMergeLegacy(context.Background(), &out, live, []string{legacy}, now.Add(time.Hour)); err != nil {
+	output, err = server.MergeLegacyToolCalls(context.Background(), live, []string{legacy}, now.Add(time.Hour))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "nothing to merge") || strings.Contains(out.String(), "backup:") {
-		t.Errorf("second run output = %q", out.String())
+	if !strings.Contains(output, "nothing to merge") || strings.Contains(output, "backup:") {
+		t.Errorf("second run output = %q", output)
 	}
 }
 

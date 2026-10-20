@@ -146,6 +146,64 @@ func TestTelemetrySpoolDrainsPreThenPostTool(t *testing.T) {
 	}
 }
 
+func TestTelemetryMaintenanceRecordsAndMergeRoute(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "telemetry.sqlite")
+	if _, _, err := server.EnsureTelemetrySchema(dbPath); err != nil {
+		t.Fatal(err)
+	}
+	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: "maintenance-legacy", AgentID: "claude", ToolName: "legacy", CallType: "shell"}
+	legacyPath := filepath.Join(dir, "legacy.sqlite")
+	legacy, err := telemetry.Open(legacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Insert(call); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(struct {
+		DBPath  string    `json:"db_path"`
+		Sources []string  `json:"sources"`
+		Now     time.Time `json:"now"`
+	}{DBPath: dbPath, Sources: []string{legacyPath}, Now: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := processTelemetryRecordResult(context.Background(), server.TelemetryRecord{Kind: "merge_legacy", Payload: payload}, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response struct {
+		Output string `json:"output"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(response.Output, "tool calls before: 0") || !strings.Contains(response.Output, "tool calls after: 1") {
+		t.Fatalf("merge response = %q", response.Output)
+	}
+	for _, record := range []server.TelemetryRecord{
+		{Kind: "cli_invocation", Payload: mustJSON(t, telemetry.CLIInvocation{SessionID: "maintenance-cli", Command: "test"})},
+		{Kind: "issue_snapshot", Payload: mustJSON(t, telemetry.IssueStatusSnapshot{ProjectName: "maintenance", OpenCount: 1})},
+	} {
+		if _, err := processTelemetryRecordResult(context.Background(), record, dbPath); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func mustJSON(t *testing.T, value any) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
 func TestTelemetryOfflineSpoolDoesNotAcquireStoreWriteLock(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "telemetry.sqlite")

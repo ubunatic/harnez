@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/telemetry"
 )
 
 type telemetryCollectorService struct {
@@ -35,8 +36,14 @@ func (s *telemetryCollectorService) handleRecord(w http.ResponseWriter, r *http.
 		http.Error(w, "invalid telemetry record", http.StatusBadRequest)
 		return
 	}
-	if err := processTelemetryRecord(record, s.path); err != nil {
+	body, err := processTelemetryRecordResult(r.Context(), record, s.path)
+	if err != nil {
 		http.Error(w, "telemetry write failed", http.StatusServiceUnavailable)
+		return
+	}
+	if body != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -75,15 +82,64 @@ func (s *telemetryCollectorService) drainSpool(ctx context.Context) error {
 }
 
 func processTelemetryRecord(record server.TelemetryRecord, dbPath string) error {
+	_, err := processTelemetryRecordResult(context.Background(), record, dbPath)
+	return err
+}
+
+func processTelemetryRecordResult(ctx context.Context, record server.TelemetryRecord, dbPath string) ([]byte, error) {
 	switch record.Kind {
 	case "tool_call":
-		return server.InsertToolCallPayload(dbPath, record.Payload)
+		return nil, server.InsertToolCallPayload(dbPath, record.Payload)
 	case "agy_post_tool":
-		return server.ProcessAgyPostTool(dbPath, record.Payload)
+		return nil, server.ProcessAgyPostTool(dbPath, record.Payload)
 	case "codex":
-		return server.ProcessCodexTelemetry(dbPath, record.Payload)
+		return nil, server.ProcessCodexTelemetry(dbPath, record.Payload)
+	case "cli_invocation":
+		var row telemetry.CLIInvocation
+		if err := json.Unmarshal(record.Payload, &row); err != nil {
+			return nil, err
+		}
+		return nil, server.InsertCLIInvocation(dbPath, row)
+	case "issue_snapshot":
+		var row telemetry.IssueStatusSnapshot
+		if err := json.Unmarshal(record.Payload, &row); err != nil {
+			return nil, err
+		}
+		_, err := server.InsertIssueSnapshot(dbPath, row)
+		return nil, err
+	case "ensure_schema":
+		version, migrations, err := server.EnsureTelemetrySchema(dbPath)
+		if err != nil {
+			return nil, err
+		}
+		if len(migrations) == 0 {
+			return nil, nil
+		}
+		return json.Marshal(struct {
+			Version    int      `json:"version"`
+			Migrations []string `json:"migrations"`
+		}{version, migrations})
+	case "merge_legacy":
+		var request struct {
+			DBPath  string    `json:"db_path"`
+			Sources []string  `json:"sources"`
+			Now     time.Time `json:"now"`
+		}
+		if err := json.Unmarshal(record.Payload, &request); err != nil {
+			return nil, err
+		}
+		if request.DBPath != "" {
+			dbPath = request.DBPath
+		}
+		output, err := server.MergeLegacyToolCalls(ctx, dbPath, request.Sources, request.Now)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(struct {
+			Output string `json:"output"`
+		}{Output: output})
 	default:
-		return errors.New("unknown telemetry record kind")
+		return nil, errors.New("unknown telemetry record kind")
 	}
 }
 

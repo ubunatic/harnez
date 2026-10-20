@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +13,7 @@ import (
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/sessionstate"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
@@ -84,7 +87,7 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 	unratedFailures := 0
 	if !feedbackDisabled && cmd.Name() != "apply" {
 		if dbPath, err := telemetry.DefaultDBPath(); err == nil {
-			if db, err := telemetry.Open(dbPath); err == nil {
+			if db, err := telemetry.OpenReadOnly(dbPath); err == nil {
 				if n, err := db.UnratedFailureCount(telemetry.Filter{SessionID: sessionID}); err == nil {
 					unratedFailures = int(n)
 				}
@@ -226,28 +229,42 @@ func newRootCmd() *cobra.Command {
 	return root
 }
 
-// ensureTelemetrySchema opens and closes the shared telemetry store so apply
-// performs pending additive migrations before installing hooks that write to it.
+// ensureTelemetrySchema asks the server to apply pending additive migrations.
 func ensureTelemetrySchema() error {
-	path, err := telemetry.DefaultDBPath()
+	config, err := server.LoadConfig()
 	if err != nil {
 		return err
 	}
-	db, err := telemetry.Open(path)
+	socket, err := config.Socket()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	if err := db.ValidateSchema(); err != nil {
-		return err
-	}
-	version, err := db.SchemaVersion()
+	request, err := json.Marshal(server.TelemetryRecord{Kind: "ensure_schema", Payload: json.RawMessage(`{}`)})
 	if err != nil {
 		return err
 	}
-	migrations := db.Migrations()
-	if len(migrations) > 0 {
-		fmt.Printf("  telemetry schema: v%d (migrations: %s)\n", version, strings.Join(migrations, ", "))
+	body, err := server.PostTelemetryCommand(context.Background(), socket, config.TelemetryPath, request, config.HTTPClientTimeout)
+	if err == nil {
+		var report struct {
+			Version    int      `json:"version"`
+			Migrations []string `json:"migrations"`
+		}
+		if len(body) != 0 {
+			if err := json.Unmarshal(body, &report); err != nil {
+				return err
+			}
+		}
+		if len(report.Migrations) > 0 {
+			fmt.Printf("  telemetry schema: v%d (migrations: %s)\n", report.Version, strings.Join(report.Migrations, ", "))
+		}
+		return nil
+	}
+	spoolDir, spoolErr := config.TelemetrySpoolDir()
+	if spoolErr != nil {
+		return spoolErr
+	}
+	if server.AppendTelemetrySpool(spoolDir, request, config.TelemetrySpoolMaxBytes) != nil {
+		return fmt.Errorf("telemetry schema: server unavailable and spool write failed: %w", err)
 	}
 	return nil
 }

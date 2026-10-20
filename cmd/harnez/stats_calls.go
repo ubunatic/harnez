@@ -61,7 +61,7 @@ func runStatsCalls(w io.Writer, opts statsOptions) error {
 			return err
 		}
 	}
-	db, err := telemetry.Open(dbPath)
+	db, err := telemetry.OpenReadOnly(dbPath)
 	if err != nil {
 		return fmt.Errorf("stats --calls: open telemetry: %w", err)
 	}

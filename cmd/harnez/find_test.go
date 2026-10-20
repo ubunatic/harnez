@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,31 @@ import (
 
 	"ubunatic.com/harnez/internal/telemetry"
 )
+
+func TestRunFindHistoryMissingTableIsEmpty(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "empty.sqlite")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var table bytes.Buffer
+	if err := runFindHistory(&table, findHistoryOptions{DBPath: dbPath}); err != nil {
+		t.Fatalf("runFindHistory with missing table: %v", err)
+	}
+	if !strings.Contains(table.String(), "no data:") {
+		t.Fatalf("missing snapshot table output = %q, want no-data message", table.String())
+	}
+	var jsonOutput bytes.Buffer
+	if err := runFindHistory(&jsonOutput, findHistoryOptions{DBPath: dbPath, JSON: true}); err != nil {
+		t.Fatalf("runFindHistory JSON with missing table: %v", err)
+	}
+	if strings.TrimSpace(jsonOutput.String()) != "[]" {
+		t.Fatalf("missing snapshot table JSON = %q, want []", jsonOutput.String())
+	}
+}
 
 // findFixtureDir writes a small temporary tracker fixture (issue 158's
 // verification plan requires an on-disk fixture, not just an in-memory

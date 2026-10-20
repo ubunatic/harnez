@@ -138,7 +138,7 @@ func runLog(w io.Writer, opts logOptions) error {
 		}
 		dbPath = p
 	}
-	db, err := telemetry.Open(dbPath)
+	db, err := telemetry.OpenReadOnly(dbPath)
 	if err != nil {
 		return fmt.Errorf("log: open telemetry db: %w", err)
 	}

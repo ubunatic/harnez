@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -203,20 +204,6 @@ func recordCLIInvocation(root *cobra.Command, argv, rewritten []string, elapsed 
 		return
 	}
 
-	dbPath := opts.DBPath
-	if dbPath == "" {
-		p, err := telemetry.DefaultDBPath()
-		if err != nil {
-			return
-		}
-		dbPath = p
-	}
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		return
-	}
-	defer db.Close()
-
 	exitCode := exitCodeFromRunError(runErr)
 	wd, err := os.Getwd()
 	if err != nil {
@@ -224,7 +211,7 @@ func recordCLIInvocation(root *cobra.Command, argv, rewritten []string, elapsed 
 	}
 	ticketID, _ := resolve.Ticket(resolve.TicketOptions{SessionID: sessionID, StateDir: opts.StateDir})
 
-	_ = db.InsertCLIInvocation(telemetry.CLIInvocation{
+	row := telemetry.CLIInvocation{
 		SessionID:     sessionID,
 		AgentID:       classifyInvoker(opts.Getenv, sessionID, opts.IsTTY),
 		Command:       resolveCommandPath(root, rewritten),
@@ -235,7 +222,12 @@ func recordCLIInvocation(root *cobra.Command, argv, rewritten []string, elapsed 
 		ExitCode:      &exitCode,
 		DurationMs:    elapsed.Milliseconds(),
 		HarnezVersion: harnez.Version,
-	})
+	}
+	if opts.DBPath != "" { // explicit test override
+		_ = server.InsertCLIInvocation(opts.DBPath, row)
+		return
+	}
+	_ = sendTelemetryRecord("cli_invocation", row)
 }
 
 // resolveCommandPath recovers the full cobra path of the command argv
