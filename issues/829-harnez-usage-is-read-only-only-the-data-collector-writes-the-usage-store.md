@@ -24,6 +24,9 @@ and hides who owns the data. One writer, the data collector, keeps locking simpl
 - Decided (user, 2026-10-20): when no collector is running, `harnez usage` starts one. Only one
   collector per host is allowed; it holds a fixed local port, so a second start detects the running
   one and exits. `usage` never collects or writes itself. Put the port in `spec/`.
+- Decided (user, 2026-10-20): the collector becomes the first service of a new `harnez server`
+  process (client-server architecture; `usage`, hooks and statusline are clients). 829 builds the
+  server skeleton with the collector service; 830 adds the update endpoint; 831 installs the server.
 - Follows from that: the collector runs schema setup and migrations at startup, so a fresh install
   is handled by the collector that `usage` starts.
 
