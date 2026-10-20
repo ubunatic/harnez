@@ -133,14 +133,14 @@ func TestRunInitEmojigShapeCopiesHardDependencyWithoutCapabilityBoilerplate(t *t
 			"deployment-transparency": {Source: "deploy.md", Local: "./docs/DeploymentTransparency.md", Capabilities: []string{"remote-deployment"}},
 		}},
 	}
-	if err := RunInit(dir, cfg, []string{"agentic-loop"}, "", true, false, false, false); err != nil {
+	if err := RunInitWithVariant(dir, cfg, InitOptions{Docs: []string{"agentic-loop"}, AssumeYes: true}); err != nil {
 		t.Fatal(err)
 	}
 	first, err := os.ReadFile(filepath.Join(dir, "docs", "AgenticLoop.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := RunInit(dir, cfg, []string{"agentic-loop"}, "", true, false, false, false); err != nil {
+	if err := RunInitWithVariant(dir, cfg, InitOptions{Docs: []string{"agentic-loop"}, AssumeYes: true}); err != nil {
 		t.Fatalf("idempotent rerun: %v", err)
 	}
 	second, err := os.ReadFile(filepath.Join(dir, "docs", "AgenticLoop.md"))
@@ -208,7 +208,7 @@ func TestRunInitEmbeddedEmojigShapeHasNoUnavailableProjectMaterial(t *testing.T)
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# emojig\n\nNo daemon or remote host.\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := RunInit(dir, cfg, []string{"agentic-loop"}, "", true, false, false, false); err != nil {
+	if err := RunInitWithVariant(dir, cfg, InitOptions{Docs: []string{"agentic-loop"}, AssumeYes: true}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "docs", "IssueTracking.md")); err != nil {

@@ -98,7 +98,7 @@ func TestInitSpecMarkerlessLocalSectionBothVariants(t *testing.T) {
 			}
 			cfg := &Config{FS: fstest.MapFS{"spec.md": &fstest.MapFile{Data: []byte("# New spec\n")}},
 				AgentsMD: AgentsMD{Languages: map[string]Language{"spec": {Source: "spec.md", Local: "./docs/Spec.md"}}}}
-			err := RunInitWithVariant(dir, cfg, []string{"spec"}, "", true, false, false, false, nil, false, false, variant)
+			err := RunInitWithVariant(dir, cfg, InitOptions{Docs: []string{"spec"}, AssumeYes: true, Variant: variant})
 			if err == nil || !strings.Contains(err.Error(), "appended local section") {
 				t.Fatalf("expected init to gate local section, got %v", err)
 			}

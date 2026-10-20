@@ -255,7 +255,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if err := exec.Command("git", "-C", projDir, "init", "-q").Run(); err != nil {
 		t.Fatalf("git init: %v", err)
 	}
-	err = claude.RunInit(projDir, nil, nil, "", false, false, false, false)
+	err = claude.RunInitWithVariant(projDir, nil, claude.InitOptions{})
 	if err != nil {
 		t.Fatalf("RunInit failed: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestBatchProjectInitialization_HeterogeneousWorkspace(t *testing.T) {
 
 	// 1. Run Init across all projects
 	for _, p := range projects {
-		if err := claude.RunInit(p, cfg, nil, "", true, false, false, false); err != nil {
+		if err := claude.RunInitWithVariant(p, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 			t.Fatalf("RunInit on %s failed: %v", filepath.Base(p), err)
 		}
 	}
@@ -381,7 +381,7 @@ func TestBatchProjectInitialization_HeterogeneousWorkspace(t *testing.T) {
 
 	// Idempotency: second batch run should succeed cleanly
 	for _, p := range projects {
-		if err := claude.RunInit(p, cfg, nil, "", true, false, false, false); err != nil {
+		if err := claude.RunInitWithVariant(p, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 			t.Fatalf("Second RunInit on %s failed: %v", filepath.Base(p), err)
 		}
 	}

@@ -23,7 +23,7 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := claude.LoadTestConfig(t)
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatal(err)
 	}
 	agents, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
@@ -78,7 +78,7 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 		t.Fatalf("Local.md missing from git exclude:\n%s", exclude)
 	}
 	first := string(agents)
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatal(err)
 	}
 	second, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
@@ -103,7 +103,7 @@ func TestRunInit_MigratesLocalOverlaysWithSingleHeaderGap(t *testing.T) {
 	cfg := claude.LoadTestConfig(t)
 	run := func() {
 		t.Helper()
-		if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -148,7 +148,7 @@ func testReplacesOutdatedRulesHeader(t *testing.T, old string) {
 		t.Fatal(err)
 	}
 	cfg := claude.LoadTestConfig(t)
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(agentsPath)
@@ -175,7 +175,7 @@ func TestRunInit_KeepsUserBoldFirstLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := claude.LoadTestConfig(t)
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(agentsPath)
@@ -213,7 +213,7 @@ func TestRunInit_MigratesManagedBlocksLosslessly(t *testing.T) {
 	cfg := claude.LoadTestConfig(t)
 	run := func() {
 		t.Helper()
-		if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -295,7 +295,7 @@ func TestRunInit_LeavesMalformedNestedMarkersUntouched(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := claude.LoadTestConfig(t)
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
@@ -313,7 +313,7 @@ func TestRunInit_GeneratesRulesOutsideGit(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := claude.LoadTestConfig(t)
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Index.md")); err != nil {

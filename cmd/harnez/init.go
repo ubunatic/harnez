@@ -46,10 +46,16 @@ func newInitCmd() *cobra.Command {
 			if cmd.Flags().Changed("issues-git") {
 				issuesGit = &initIssuesGit
 			}
-			if initAll {
-				return claude.RunInitAllWithVariant(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace, issuesGit, initGoWork, initVariant, initQuota1)
+			opts := claude.InitOptions{
+				Docs: initDocs, RepoMode: initRepoMode, AssumeYes: initYes,
+				WithSummary: initSummary, Update: initUpdate, Replace: initReplace,
+				IssuesGit: issuesGit, GoWork: initGoWork, Force: initForce,
+				Variant: initVariant, Quota1: initQuota1,
 			}
-			return claude.RunInitWithVariant(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace, issuesGit, initGoWork, initForce, initVariant, initQuota1)
+			if initAll {
+				return claude.RunInitAllWithVariant(initDir, cfg, opts)
+			}
+			return claude.RunInitWithVariant(initDir, cfg, opts)
 		},
 	}
 	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")

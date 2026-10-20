@@ -1015,33 +1015,11 @@ func canonicalPath(path string) string {
 	return filepath.Clean(path)
 }
 
-// RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,
-// applies config-defined local sections, and sets up language docs and Makefile targets.
-func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
-	return RunInitWithForce(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, nil, false, false)
-}
-
-// RunInitWithIssuesGit runs project initialization and, when issuesGit is
-// non-nil, explicitly enables or disables the issue tracker Git integration.
-// A nil value leaves that integration untouched.
-func RunInitWithIssuesGit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool) error {
-	return RunInitWithForce(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, issuesGit, false, false)
-}
-
-// RunInitWithGoWork runs project initialization and supports explicit --gowork management.
-func RunInitWithGoWork(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool) error {
-	return RunInitWithForce(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, issuesGit, gowork, false)
-}
-
-// RunInitWithForce runs project initialization with explicit --gowork and --force support.
-func RunInitWithForce(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool, force bool) error {
-	return RunInitWithVariant(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, issuesGit, gowork, force, "")
-}
-
-// RunInitWithVariant is RunInitWithForce with an explicit doc variant
-// ("" or "lite") selecting which source (Language.SourceFor) is copied for
-// docs that declare a lite_source, and an optional quota1 flag.
-func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool, force bool, variant string, quota1 ...bool) error {
+// RunInitWithVariant initializes one project using explicit operation options.
+func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
+	docs, repoMode := opts.Docs, opts.RepoMode
+	assumeYes, withSummary, update, replace := opts.AssumeYes, opts.WithSummary, opts.Update, opts.Replace
+	issuesGit, gowork, force, variant := opts.IssuesGit, opts.GoWork, opts.Force, opts.Variant
 	if err := ValidateInitTarget(dir, force); err != nil {
 		return err
 	}
@@ -1055,7 +1033,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		}
 	}
 	agentsPath := filepath.Join(dir, "AGENTS.md")
-	quota1Active := len(quota1) > 0 && quota1[0]
+	quota1Active := opts.Quota1
 	if !quota1Active {
 		quota1Active = markdown.ContainsSection(agentsPath, quota1SectionName)
 	}
@@ -1068,101 +1046,17 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		fmt.Printf("  ⚠️  drift: %s\n", w)
 	}
 
-	claudePath := filepath.Join(dir, "CLAUDE.md")
-
 	if update {
 		withSummary = true
 	}
-
 	ir := &initReport{}
-
-	if replace {
-		if err := os.Remove(agentsPath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove %s: %w", agentsPath, err)
-		}
-	}
-
-	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
-		if fi, err := os.Lstat(claudePath); err == nil && fi.Mode().IsRegular() {
-			if err := os.Rename(claudePath, agentsPath); err != nil {
-				return fmt.Errorf("migrate %s → %s: %w", claudePath, agentsPath, err)
-			}
-			fmt.Printf("  migrated %s → %s\n", claudePath, agentsPath)
-			ir.changes++
-		} else {
-			if err := os.WriteFile(agentsPath, []byte(initialAgentsMD(cfg)), 0o644); err != nil {
-				return fmt.Errorf("write %s: %w", agentsPath, err)
-			}
-			fmt.Printf("  created %s\n", agentsPath)
-			ir.changes++
-		}
-	} else {
-		if migrated, err := migrateLegacyMarkers(agentsPath); err != nil {
-			return fmt.Errorf("migrate markers %s: %w", agentsPath, err)
-		} else if migrated {
-			fmt.Printf("  upgraded markers %s\n", agentsPath)
-			ir.changes++
-		} else {
-			fmt.Printf("  exists  %s (unchanged)\n", agentsPath)
-		}
-	}
-	if cfg != nil {
-		if backfilled, err := backfillRulesHeader(agentsPath, cfg.AgentsMD.Rules.Header); err != nil {
-			return fmt.Errorf("backfill rules header %s: %w", agentsPath, err)
-		} else if backfilled {
-			fmt.Printf("  updated rules header %s\n", agentsPath)
-			ir.changes++
-		}
-	}
-	agentBlocksSafe := true
-	if data, err := os.ReadFile(agentsPath); err != nil {
-		return fmt.Errorf("read %s for managed block migration: %w", agentsPath, err)
-	} else if _, malformed := parseManagedBlocks(string(data), migratableAgentBlocks); malformed {
-		agentBlocksSafe = false
-	}
-
-	symlinkChanged, err := fsutil.EnsureSymlink(claudePath, agentsPath)
+	agentBlocksSafe, err := initAgentFile(ir, dir, cfg, replace)
 	if err != nil {
-		return fmt.Errorf("symlink %s: %w", claudePath, err)
-	}
-	if symlinkChanged {
-		fmt.Printf("  symlink %s → %s\n", claudePath, agentsPath)
-		ir.changes++
-	} else {
-		fmt.Printf("  exists  %s (unchanged)\n", claudePath)
+		return err
 	}
 
-	_, _ = fsutil.EnsureGitExclude(dir, "AGENTS.local.md")
-	if ignored, err := fsutil.EnsureGitExclude(dir, ".harnez/rules/Local.md"); err != nil {
-		return fmt.Errorf("ignore .harnez/rules/Local.md: %w", err)
-	} else if ignored {
-		fmt.Printf("  ignored .harnez/rules/Local.md in .git/info/exclude\n")
-		ir.changes++
-	}
-	if fileExists(filepath.Join(dir, "issues")) {
-		// Lock files left by the README sync and `harnez issues new` (issue 672).
-		for _, lock := range []string{"/issues/README.md.lock", "/issues/.reserve.lock"} {
-			ignored, err := fsutil.EnsureGitExclude(dir, lock)
-			if err != nil {
-				return fmt.Errorf("ignore %s: %w", lock, err)
-			}
-			if ignored {
-				fmt.Printf("  ignored %s in .git/info/exclude\n", lock)
-				ir.changes++
-			}
-		}
-	}
-	if issuesGit != nil {
-		var gitChanges int
-		if *issuesGit {
-			gitChanges, err = installIssuesGitIntegration(dir)
-		} else {
-			gitChanges, err = removeIssuesGitIntegration(dir)
-		}
-		if err != nil {
-			return err
-		}
-		ir.changes += gitChanges
+	if err := initGitIntegration(ir, dir, issuesGit); err != nil {
+		return err
 	}
 
 	workspaceChanged, err := reconcileGoWorkspace(dir, gowork)
@@ -1180,46 +1074,9 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		if err != nil {
 			return err
 		}
-		// Resolve an omitted variant independently for each destination. Explicit
-		// "lite" or "full" values always override the existing copy.
-		docVariants := make(map[string]string, len(docs))
-		for _, name := range docs {
-			lang, ok := cfg.AgentsMD.Languages[name]
-			if !ok || lang.Local == "" {
-				continue
-			}
-			resolved := variant
-			if resolved == "" {
-				data, err := os.ReadFile(localPath(dir, lang.Local))
-				if err == nil {
-					resolved = markdown.ParseVariantMarker(string(data))
-				}
-				if resolved == "lite" {
-					if lang.LiteSource == "" {
-						fmt.Printf("  ⚠️  %s has lite marker but no lite source; using default source\n", name)
-						resolved = ""
-					} else if _, err := fs.Stat(cfg.FS, lang.LiteSource); err != nil {
-						fmt.Printf("  ⚠️  %s has lite marker but no lite source; using default source\n", name)
-						resolved = ""
-					}
-				}
-			}
-			docVariants[name] = resolved
-		}
-		// Check every selected doc before copying any of them. A markerless
-		// local edit must never be lost halfway through a multi-doc init.
-		for _, name := range docs {
-			lang, ok := cfg.AgentsMD.Languages[name]
-			if !ok || lang.Local == "" {
-				continue
-			}
-			data, err := fs.ReadFile(cfg.FS, lang.SourceFor(docVariants[name]))
-			if err != nil {
-				return fmt.Errorf("language %s: read source: %w", name, err)
-			}
-			if _, _, err := prepareManagedDoc(localPath(dir, lang.Local), data); err != nil {
-				return fmt.Errorf("language %s: copy: %w", name, err)
-			}
+		docVariants, err := initDocPreflight(cfg, dir, docs, variant)
+		if err != nil {
+			return err
 		}
 
 		if err := initLocalSections(ir, cfg, docs, repoMode, agentsPath, agentBlocksSafe); err != nil {
@@ -1243,43 +1100,9 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			fmt.Printf("  ⚠️  .harnez/rules is ignored by Git; generated rule files may not be tracked\n")
 		}
 	}
-	if len(quota1) > 0 && quota1[0] && agentBlocksSafe {
-		if cfg == nil || cfg.AgentsMD.Rules.QuotaSection == "" {
-			return fmt.Errorf("quota-1 rules are not configured")
-		}
-		r, err := applySectionMD(agentsPath, quota1SectionName, cfg.AgentsMD.Rules.QuotaSection)
-		if err != nil {
-			return fmt.Errorf("agents_md [%s]: %w", quota1SectionName, err)
-		}
-		if r.changed {
-			ir.changes++
-		}
-		printResult("wrote", agentsPath, r)
-
-		makePath := localPath(dir, "Makefile")
-		targetSnippet := "test-q1: 🤖  # run tests under Quota-1 enforcement\n\tharnez exec --quota-1 -- $(MAKE) test\n"
-		if _, err := os.Stat(makePath); os.IsNotExist(err) {
-			initialMake := fmt.Sprintf(".PHONY: ⚙️ 🤖\n⚙️:\n🤖:\n\n%s", targetSnippet)
-			if err := os.WriteFile(makePath, []byte(initialMake), 0644); err != nil {
-				return fmt.Errorf("scaffold %s: %w", makePath, err)
-			}
-			ir.changes++
-			fmt.Printf("  scaffolded %s (test-q1)\n", makePath)
-		} else if err == nil {
-			var makeCfg MakeConfig
-			if cfg != nil {
-				makeCfg = cfg.Make
-			}
-			tr, err := ReconcileMakeTargets(makePath, targetSnippet, makeCfg, assumeYes, nil)
-			if err != nil {
-				return fmt.Errorf("reconcile test-q1 in %s: %w", makePath, err)
-			}
-			if tr {
-				ir.changes++
-				fmt.Printf("  reconciled %s (test-q1)\n", makePath)
-			} else {
-				fmt.Printf("  exists  %s (test-q1 unchanged)\n", makePath)
-			}
+	if opts.Quota1 && agentBlocksSafe {
+		if err := initQuotaRules(ir, cfg, dir, agentsPath, assumeYes); err != nil {
+			return err
 		}
 	}
 
@@ -1543,28 +1366,13 @@ func containsExactLine(content, want string) bool {
 	return false
 }
 
-// RunInitAll discovers eligible child project directories under parentDir
+// RunInitAllWithVariant discovers eligible child project directories under parentDir
 // (directories containing AGENTS.md or CLAUDE.md — the same eligibility rule
-// ScanDocs uses) and runs RunInit non-interactively against each one in turn.
+// ScanDocs uses) and runs RunInitWithVariant non-interactively against each one in turn.
 // It refuses to operate directly on the user's home directory so a bare
 // `harnez init --all ..` from a project one level under $HOME can never treat
 // $HOME itself as a project container (see issue 068).
-func RunInitAll(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool) error {
-	return RunInitAllWithIssuesGit(parentDir, cfg, docs, repoMode, withSummary, update, replace, nil)
-}
-
-func RunInitAllWithIssuesGit(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool) error {
-	return RunInitAllWithGoWork(parentDir, cfg, docs, repoMode, withSummary, update, replace, issuesGit, false)
-}
-
-func RunInitAllWithGoWork(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool, gowork bool) error {
-	return RunInitAllWithVariant(parentDir, cfg, docs, repoMode, withSummary, update, replace, issuesGit, gowork, "")
-}
-
-// RunInitAllWithVariant is RunInitAllWithGoWork with an explicit doc variant
-// ("" or "lite") selecting which source (Language.SourceFor) is copied for
-// docs that declare a lite_source, threaded into each child's RunInitWithVariant call.
-func RunInitAllWithVariant(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool, gowork bool, variant string, quota1 ...bool) error {
+func RunInitAllWithVariant(parentDir string, cfg *Config, opts InitOptions) error {
 	if parentDir == "" {
 		return fmt.Errorf("parent directory is empty")
 	}
@@ -1595,11 +1403,13 @@ func RunInitAllWithVariant(parentDir string, cfg *Config, docs []string, repoMod
 		fmt.Printf("No eligible project directories found under %s\n", abs)
 		return nil
 	}
-	quota1Active := len(quota1) > 0 && quota1[0]
+	childOpts := opts
+	childOpts.AssumeYes = true
+	childOpts.Force = false
 	var errs []string
 	for _, child := range children {
 		fmt.Printf("== %s ==\n", filepath.Base(child))
-		if err := RunInitWithVariant(child, cfg, docs, repoMode, true, withSummary, update, replace, issuesGit, gowork, false, variant, quota1Active); err != nil {
+		if err := RunInitWithVariant(child, cfg, childOpts); err != nil {
 			fmt.Printf("  error: %v\n", err)
 			errs = append(errs, fmt.Sprintf("%s: %v", child, err))
 			continue

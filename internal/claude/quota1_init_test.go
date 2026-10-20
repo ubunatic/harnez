@@ -26,7 +26,7 @@ func TestRunInitWithVariant_Quota1_Scaffolding(t *testing.T) {
 	cfg := claude.LoadTestConfig(t)
 
 	// 2. Run RunInitWithVariant with quota-1 = true
-	err := claude.RunInitWithVariant(dir, cfg, []string{"golang"}, "", true, false, false, false, nil, false, false, "", true)
+	err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{Docs: []string{"golang"}, AssumeYes: true, Quota1: true})
 	if err != nil {
 		t.Fatalf("RunInitWithVariant failed: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestRunInitWithVariant_Quota1_Scaffolding(t *testing.T) {
 	}
 
 	// 5. Idempotency: run again, should succeed without corrupting or duplicating
-	err = claude.RunInitWithVariant(dir, cfg, []string{"golang"}, "", true, false, false, false, nil, false, false, "", true)
+	err = claude.RunInitWithVariant(dir, cfg, claude.InitOptions{Docs: []string{"golang"}, AssumeYes: true, Quota1: true})
 	if err != nil {
 		t.Fatalf("second RunInitWithVariant failed: %v", err)
 	}
@@ -103,7 +103,7 @@ test:
 
 	cfg := claude.LoadTestConfig(t)
 
-	err := claude.RunInitWithVariant(dir, cfg, nil, "", true, false, false, false, nil, false, false, "", true)
+	err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true, Quota1: true})
 	if err != nil {
 		t.Fatalf("RunInitWithVariant failed: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestRunInitWithVariant_LiteQuota1_ContentGuidance(t *testing.T) {
 
 	cfg := claude.LoadTestConfig(t)
 
-	if err := claude.RunInitWithVariant(dir, cfg, []string{"agentic-loop", "issue-tracking", "spec"}, "", true, false, false, false, nil, false, false, "lite", true); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{Docs: []string{"agentic-loop", "issue-tracking", "spec"}, AssumeYes: true, Variant: "lite", Quota1: true}); err != nil {
 		t.Fatalf("RunInitWithVariant failed: %v", err)
 	}
 

@@ -45,7 +45,7 @@ func TestRunInit_LegacyMarkerMigrationAndProsePreservation(t *testing.T) {
 	cfg := claude.LoadTestConfig(t)
 
 	// 2. Run RunInit
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
 	}
 
@@ -111,7 +111,7 @@ func TestRunInit_NonMakefileProjectSafety(t *testing.T) {
 
 	cfg := claude.LoadTestConfig(t)
 
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
 	}
 
@@ -144,7 +144,7 @@ It is completely managed manually by the administrator.
 
 	cfg := claude.LoadTestConfig(t)
 
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestRunInit_CustomTemplate(t *testing.T) {
 
 	cfg := claude.LoadTestConfig(t)
 
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
 	}
 
@@ -296,7 +296,7 @@ func initWarningGitRepo(t *testing.T, initialInit bool) string {
 		t.Fatalf("git init: %v", err)
 	}
 	if initialInit {
-		if err := claude.RunInit(dir, claude.LoadTestConfig(t), nil, "", true, false, false, false); err != nil {
+		if err := claude.RunInitWithVariant(dir, claude.LoadTestConfig(t), claude.InitOptions{AssumeYes: true}); err != nil {
 			t.Fatalf("initial RunInit: %v", err)
 		}
 		initWarningCommit(t, dir)
@@ -322,7 +322,7 @@ func runInitCaptureStderr(t *testing.T, dir string, cfg *claude.Config, docs []s
 	}
 	previous := os.Stderr
 	os.Stderr = file
-	err = claude.RunInit(dir, cfg, docs, "", true, false, false, false)
+	err = claude.RunInitWithVariant(dir, cfg, claude.InitOptions{Docs: docs, AssumeYes: true})
 	os.Stderr = previous
 	if err != nil {
 		t.Fatalf("RunInit: %v", err)
@@ -364,7 +364,7 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := claude.RunInit(dir, nil, nil, "", false, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{}); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "issues", "README.md.lock"), nil, 0o600); err != nil {
@@ -386,7 +386,7 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 		t.Errorf("project .gitignore changed:\ngot:\n%s\nwant:\n%s", gotGitignore, gitignore)
 	}
 
-	if err := claude.RunInit(dir, nil, nil, "", false, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{}); err != nil {
 		t.Fatalf("RunInit second run failed: %v", err)
 	}
 	exclude, err := os.ReadFile(excludePath)
@@ -438,7 +438,7 @@ func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := claude.RunInitWithIssuesGit(dir, nil, nil, "", false, false, false, false, nil); err != nil {
+	if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{}); err != nil {
 		t.Fatalf("plain RunInit failed: %v", err)
 	}
 	attributes, _ := os.ReadFile(filepath.Join(dir, ".gitattributes"))
@@ -455,7 +455,7 @@ func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
 
 	enabled := true
 	for range 2 {
-		if err := claude.RunInitWithIssuesGit(dir, nil, nil, "", false, false, false, false, &enabled); err != nil {
+		if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{IssuesGit: &enabled}); err != nil {
 			t.Fatalf("enable issues Git integration: %v", err)
 		}
 	}
@@ -472,13 +472,13 @@ func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
 		t.Fatalf("enable did not install one managed hook block: %q", hook)
 	}
 	disabled := false
-	if err := claude.RunInitWithIssuesGit(dir, nil, nil, "", false, false, false, false, &disabled); err != nil {
+	if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{IssuesGit: &disabled}); err != nil {
 		t.Fatalf("disable issues Git integration: %v", err)
 	}
 	if err := os.RemoveAll(filepath.Join(dir, "issues")); err != nil {
 		t.Fatal(err)
 	}
-	if err := claude.RunInitWithIssuesGit(dir, nil, nil, "", false, false, false, false, &disabled); err != nil {
+	if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{IssuesGit: &disabled}); err != nil {
 		t.Fatalf("repeat disable without issues directory: %v", err)
 	}
 	attributes, _ = os.ReadFile(filepath.Join(dir, ".gitattributes"))
@@ -519,7 +519,7 @@ func TestRunInitAll_InitializesOnlyEligibleChildren(t *testing.T) {
 
 	cfg := claude.LoadTestConfig(t)
 
-	if err := claude.RunInitAll(workspace, cfg, nil, "", false, false, false); err != nil {
+	if err := claude.RunInitAllWithVariant(workspace, cfg, claude.InitOptions{}); err != nil {
 		t.Fatalf("RunInitAll failed: %v", err)
 	}
 
@@ -542,7 +542,7 @@ func TestRunInitAll_RefusesHomeDirectory(t *testing.T) {
 	if err != nil {
 		t.Skipf("cannot resolve home directory: %v", err)
 	}
-	err = claude.RunInitAll(home, cfg, nil, "", false, false, false)
+	err = claude.RunInitAllWithVariant(home, cfg, claude.InitOptions{})
 	if err == nil {
 		t.Fatal("expected RunInitAll to refuse the home directory, got nil error")
 	}
@@ -557,7 +557,7 @@ func TestRunInitAll_NoEligibleChildrenIsNotAnError(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := claude.LoadTestConfig(t)
-	if err := claude.RunInitAll(workspace, cfg, nil, "", false, false, false); err != nil {
+	if err := claude.RunInitAllWithVariant(workspace, cfg, claude.InitOptions{}); err != nil {
 		t.Fatalf("expected no error scanning a workspace with no eligible children, got: %v", err)
 	}
 }
@@ -630,7 +630,7 @@ LEGACY-MANAGED-SENTINEL
 
 	cfg := claude.LoadTestConfig(t)
 
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("first RunInit failed: %v", err)
 	}
 	first, err := os.ReadFile(agentsPath)
@@ -658,7 +658,7 @@ LEGACY-MANAGED-SENTINEL
 	}
 
 	out, err := captureStdout(func() error {
-		return claude.RunInit(dir, cfg, nil, "", true, false, false, false)
+		return claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true})
 	})
 	if err != nil {
 		t.Fatalf("second RunInit failed: %v", err)
@@ -699,7 +699,7 @@ stale config
 		t.Fatal(err)
 	}
 	cfg := claude.LoadTestConfig(t)
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
 	}
 	data, err := os.ReadFile(agentsPath)
@@ -750,7 +750,7 @@ func TestRunInit_BackfillsLocalOverlaysSection(t *testing.T) {
 	}
 
 	cfg := claude.LoadTestConfig(t)
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("first RunInit failed: %v", err)
 	}
 	first, err := os.ReadFile(agentsPath)
@@ -765,7 +765,7 @@ func TestRunInit_BackfillsLocalOverlaysSection(t *testing.T) {
 		t.Errorf("expected existing content to survive, got:\n%s", content)
 	}
 
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("second RunInit failed: %v", err)
 	}
 	second, err := os.ReadFile(agentsPath)
@@ -789,7 +789,7 @@ func TestRunInit_PreservesOptInDocOnPlainReinit(t *testing.T) {
 
 	cfg := claude.LoadTestConfig(t)
 
-	if err := claude.RunInit(dir, cfg, []string{"prototyping-features"}, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{Docs: []string{"prototyping-features"}, AssumeYes: true}); err != nil {
 		t.Fatalf("first RunInit (explicit opt-in) failed: %v", err)
 	}
 	agentsPath := filepath.Join(dir, "AGENTS.md")
@@ -801,7 +801,7 @@ func TestRunInit_PreservesOptInDocOnPlainReinit(t *testing.T) {
 		t.Fatalf("expected opt-in doc ref present after explicit --docs run, got:\n%s", first)
 	}
 
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("second RunInit (plain re-init, no --docs) failed: %v", err)
 	}
 	second, err := os.ReadFile(agentsPath)
@@ -821,7 +821,7 @@ func TestRunInit_NewOptInDocsAreOrderedOnFirstWrite(t *testing.T) {
 	cfg := claude.LoadTestConfig(t)
 	// Simulate a repo gaining optional docs in a different order from config.yaml.
 	docs := []string{"spec", "markdown", "make"}
-	if err := claude.RunInit(dir, cfg, docs, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{Docs: docs, AssumeYes: true}); err != nil {
 		t.Fatalf("first RunInit failed: %v", err)
 	}
 	path := filepath.Join(dir, "AGENTS.md")
@@ -829,7 +829,7 @@ func TestRunInit_NewOptInDocsAreOrderedOnFirstWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 		t.Fatalf("second RunInit failed: %v", err)
 	}
 	second, err := os.ReadFile(path)
@@ -847,7 +847,7 @@ func TestRunInit_RefusesHomeDirectoryWithoutForce(t *testing.T) {
 	if err != nil {
 		t.Skipf("cannot resolve home directory: %v", err)
 	}
-	err = claude.RunInit(home, cfg, nil, "", false, false, false, false)
+	err = claude.RunInitWithVariant(home, cfg, claude.InitOptions{})
 	if err == nil {
 		t.Fatal("expected RunInit to refuse home directory without force, got nil error")
 	}
@@ -860,7 +860,7 @@ func TestRunInit_RefusesNonCodingDirectoryWithoutForce(t *testing.T) {
 	dir := t.TempDir()
 	cfg := claude.LoadTestConfig(t)
 
-	err := claude.RunInit(dir, cfg, nil, "", false, false, false, false)
+	err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{})
 	if err == nil {
 		t.Fatal("expected RunInit to refuse empty non-coding directory without force, got nil error")
 	}
@@ -873,7 +873,7 @@ func TestRunInit_AllowsNonCodingDirectoryWithForce(t *testing.T) {
 	dir := t.TempDir()
 	cfg := claude.LoadTestConfig(t)
 
-	err := claude.RunInitWithForce(dir, cfg, nil, "", true, false, false, false, nil, false, true)
+	err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true, Force: true})
 	if err != nil {
 		t.Fatalf("expected RunInitWithForce to succeed with force=true, got: %v", err)
 	}
@@ -933,7 +933,7 @@ func TestRunInit_AllowsCodingRepositories(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			tc.setup(dir)
-			if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+			if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
 				t.Fatalf("expected RunInit to succeed for %s, got: %v", tc.name, err)
 			}
 			if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err != nil {

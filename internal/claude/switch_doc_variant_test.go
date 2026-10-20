@@ -31,7 +31,7 @@ func TestRunInitWithVariantLiteFallsBackSilentlyForDocsWithoutLiteSource(t *test
 			"agentic-loop": {Source: "loop-full.md", LiteSource: "loop-lite.md", Local: "./docs/AgenticLoop.md"},
 		}},
 	}
-	err := RunInitWithVariant(dir, cfg, []string{"golang", "agentic-loop"}, "", true, false, false, false, nil, false, false, "lite")
+	err := RunInitWithVariant(dir, cfg, InitOptions{Docs: []string{"golang", "agentic-loop"}, AssumeYes: true, Variant: "lite"})
 	if err != nil {
 		t.Fatalf("--variant lite errored for a doc without lite_source: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestRunInitDetectsExistingDocVariant(t *testing.T) {
 			cfg := &Config{FS: files, AgentsMD: AgentsMD{Languages: map[string]Language{
 				"agentic-loop": {Source: "loop-full.md", LiteSource: tt.liteSource, Local: "docs/AgenticLoop.md"},
 			}}}
-			if err := RunInitWithVariant(dir, cfg, []string{"agentic-loop"}, "", true, false, false, false, nil, false, false, tt.variant); err != nil {
+			if err := RunInitWithVariant(dir, cfg, InitOptions{Docs: []string{"agentic-loop"}, AssumeYes: true, Variant: tt.variant}); err != nil {
 				t.Fatal(err)
 			}
 			got, err := os.ReadFile(local)

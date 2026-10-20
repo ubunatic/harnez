@@ -132,7 +132,7 @@ func TestInit_RefusesGlobalAgentRoots(t *testing.T) {
 		if err := ValidateInitTarget(gDir, true); err == nil {
 			t.Errorf("expected ValidateInitTarget(%s, force=true) to fail", gDir)
 		}
-		if err := RunInit(gDir, cfg, nil, "", true, false, false, false); err == nil {
+		if err := RunInitWithVariant(gDir, cfg, InitOptions{AssumeYes: true}); err == nil {
 			t.Errorf("expected RunInit(%s) to fail", gDir)
 		}
 		// Confirm AGENTS.md / CLAUDE.md was NOT created
