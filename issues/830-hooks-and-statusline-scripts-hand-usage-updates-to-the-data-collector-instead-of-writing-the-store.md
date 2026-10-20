@@ -20,8 +20,8 @@ on every prompt or render and must stay fast. With one writer, the collector, lo
   `WriteCurrent` in `internal/usagestore/store.go`). Find any other hook-side writers in the plan.
 - The collector already decides what to keep (passive dedupe interval in `spec/usage.yaml`).
 - Decided (user, 2026-10-20): observers send updates to the running collector service, on its fixed
-  per-host port from 829. Still to decide in the plan: when no collector answers, does the observer
-  start one (as `usage` does) or drop the update? Either way it must not block.
+  per-host port from 829. When no collector answers, the observer drops the update (decided by the
+  user, 2026-10-20); it never starts a collector and never blocks.
 
 ## 3. Implementation & Verification Plan
 - Plan first: list every observer that writes, and choose the hand-off with its no-collector behaviour.
