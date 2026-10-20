@@ -1,6 +1,6 @@
 # 831 — Install the usage data collector as a systemd user service
 
-**Status**: Open
+**Status**: Closed — harnez server install/uninstall/status manage the systemd user unit (tested with a fake systemctl; status reports the socket owner vs MainPID live). Not enabled on this host: the user decides; run 'harnez server install' to enable.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
