@@ -46,6 +46,12 @@ and hides who owns the data. One writer, the data collector, keeps locking simpl
   import, observations, history snapshots, JSON snapshots). A minimal status endpoint (health + version)
   so clients can detect it. `agent-collector` becomes an alias that runs the server (keep callers working;
   update the 082 unit template to run `harnez server`).
+- **M1 delivered (server skeleton) in 91c91ab4.** Host check: `GET /status` answers
+  `{"health":"ok","server":"harnez",...}` on 127.0.0.1:18729; a second `harnez server` prints
+  "already running" and exits 0; `make test-q1` green.
+- **M2 Pre-Work / Required Refinements:** the server's startup log still says `harnez agent-collector:`;
+  name the server and its service instead. `duration()` panics on a bad spec value in both
+  `cmd/harnez/server_cmd.go` and `internal/server`; validate durations once in `server.LoadConfig`.
 - **M2 — read-only usage client with auto-start:** compact and `--watch` read the store read-only and
   never fetch live; if no server answers, start `harnez server` detached, then read. Test against a
   read-only (chmod) DB. Remove the 828 best-effort write paths that no longer apply.
