@@ -42,6 +42,10 @@ on every prompt or render and must stay fast. With one writer, the collector, lo
 - **M1 — update endpoint:** Pre-Work above (local time) first. Services can register routes;
   the collector serves `POST` for passive usage windows and applies the existing dedupe. A client helper
   sends with a short spec timeout and drops the update when no server answers (never starts one).
+- **M1 delivered (update endpoint) in 0cee90eb.** Host check: header shows `21:50:06 CEST`; killing the
+  server and running `harnez usage` auto-started a new one; malformed and empty POSTs return 400.
+- **M2 Pre-Work:** `PassiveUpdateServer.RegisterRoutes` silently skips the route when `usageDurations()`
+  fails; load the spec once at server start and fail the start with the error instead.
 - **M2 — statusline on the endpoint:** statusline uses the helper; remove its direct DB open/write and
   the obsolete spec keys (yaml, schema, loader, tests). Document the client-server architecture in
   `docs/UsageCollection.md` (and `docs/HarnezComponents.md`): `harnez server` is the single writer;
