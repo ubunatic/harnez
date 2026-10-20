@@ -166,3 +166,18 @@ runtime error instead of a build-time signal, which is harder to diagnose. See
       build-context noise.
 - [ ] Related independent package-install groups kept in separate `RUN` layers; only
       always-together steps (e.g. `apt-get update && install && cleanup`) are combined.
+
+## Shared `container-test` target
+
+`harnez init` adds a managed `container-test` target to an existing Makefile. It detects
+Podman first and Docker second, removes HTTP(S), ALL and NO proxy variables in both cases
+before build and run, writes output to `.container-test-output`, and returns the engine's
+failure status. A substantially customized target remains project-owned.
+
+The default contract expects the Containerfile to copy the project into `/src` and the
+project's `make test` target to run its checks there. Override `CONTAINER_FILE`,
+`CONTAINER_IMAGE`, `CONTAINER_OUTPUT`, or `CONTAINER_TEST_CMD` in the project Makefile as
+needed. Set `CONTAINER_SOURCE_MODE=mount` when the image contains its dependencies but
+should use the current checkout mounted read-only at `/src`. `CONTAINER_OUTPUT_LABEL` and
+`CONTAINER_SOURCE_LABEL` may add an engine-specific volume suffix such as `,Z` on SELinux
+hosts. If the engine fails inside a quota-1 sandbox, run the container check on the host.

@@ -1086,6 +1086,9 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 		if err := initCopyDocs(ir, assumeYes, cfg, dir, docs, docVariants); err != nil {
 			return err
 		}
+		if err := initContainerTestTarget(ir, assumeYes, cfg, dir); err != nil {
+			return err
+		}
 	}
 
 	if cfg != nil {

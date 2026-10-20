@@ -142,6 +142,29 @@ func initCopyDocs(ir *initReport, assumeYes bool, cfg *Config, dir string, docs 
 	return nil
 }
 
+// initContainerTestTarget reconciles Harnez's shared container-test target
+// into an existing Makefile. Customized project targets remain user-owned.
+func initContainerTestTarget(ir *initReport, assumeYes bool, cfg *Config, dir string) error {
+	makefile := localPath(dir, "Makefile")
+	if _, err := os.Stat(makefile); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("stat Makefile: %w", err)
+	}
+	data, err := fs.ReadFile(cfg.FS, "docs/templates/ContainerTest.mk")
+	if err != nil {
+		return fmt.Errorf("read container-test target: %w", err)
+	}
+	changed, err := ReconcileMakeTargets(makefile, string(data), cfg.Make, assumeYes, nil)
+	if err != nil {
+		return fmt.Errorf("reconcile container-test target: %w", err)
+	}
+	if changed {
+		ir.changes++
+	}
+	return nil
+}
+
 // initProjectSummary drafts the AGENTS.md project summary with claude -p (--summary).
 func initProjectSummary(ir *initReport, dir string, withSummary bool, agentsPath string) error {
 	if withSummary {

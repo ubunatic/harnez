@@ -2,6 +2,7 @@ package claude
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -119,5 +120,114 @@ func TestInitCopyDocsTemplateAndManagedTail(t *testing.T) {
 	got, err := os.ReadFile(path)
 	if err != nil || string(got) != string(data)+local {
 		t.Fatalf("local tail changed: %q, %v", got, err)
+	}
+}
+
+func TestInitContainerTestTarget(t *testing.T) {
+	dir := t.TempDir()
+	makefile := filepath.Join(dir, "Makefile")
+	if err := os.WriteFile(makefile, []byte(".PHONY: ⚙️ 🤖\n\n_prim := \\033[36m\n_rst := \\033[0m\n\nhelp: 🤖  # help\n\t@true\n\ncontainer-test: ⚙️  # project check\n\t@echo project\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &Config{FS: fstest.MapFS{
+		"docs/templates/ContainerTest.mk": {Data: []byte("container-test: ⚙️  # run container checks\n\t@env -u HTTP_PROXY -u http_proxy -u HTTPS_PROXY -u https_proxy -u ALL_PROXY -u all_proxy -u NO_PROXY -u no_proxy $(CONTAINER_ENGINE) run $(CONTAINER_TEST_CMD)\n\t@echo CONTAINER_SOURCE_MOUNT ALL_PROXY all_proxy NO_PROXY no_proxy\n")},
+	}}
+	first := &initReport{}
+	if err := initContainerTestTarget(first, true, cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(makefile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "container-test: ⚙️  # project check") || strings.Contains(string(data), "env -u") {
+		t.Fatalf("custom target was overwritten: %s", data)
+	}
+	if err := os.WriteFile(makefile, []byte(".PHONY: ⚙️ 🤖\n\n_prim := \\033[36m\n_rst := \\033[0m\n\nhelp: 🤖  # help\n\t@true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	second := &initReport{}
+	if err := initContainerTestTarget(second, true, cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"container-test: ⚙️", "CONTAINER_SOURCE_MOUNT", "CONTAINER_TEST_CMD", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"}
+	for _, token := range want {
+		if !strings.Contains(string(mustRead(t, makefile)), token) {
+			t.Errorf("generated Makefile missing %q", token)
+		}
+	}
+	third := &initReport{}
+	if err := initContainerTestTarget(third, true, cfg, dir); err != nil || third.changes != 0 {
+		t.Fatalf("repeat init changes=%d err=%v", third.changes, err)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func TestContainerTestTargetScrubsProxyAndPropagatesFailure(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "project with spaces")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	makefile := filepath.Join(dir, "Makefile")
+	if err := os.WriteFile(makefile, []byte(".PHONY: ⚙️ 🤖\n\n_prim := \\033[36m\n_rst := \\033[0m\n\nhelp: 🤖  # help\n\t@true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &Config{FS: fstest.MapFS{"docs/templates/ContainerTest.mk": {Data: mustRead(t, filepath.Join("..", "..", "docs", "templates", "ContainerTest.mk"))}}}
+	if err := initContainerTestTarget(&initReport{}, true, cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	engine := filepath.Join(t.TempDir(), "fake engine")
+	capture := filepath.Join(t.TempDir(), "engine args")
+	script := "#!/bin/sh\nprintf 'arg=%s\\n' \"$@\" >> \"$CAPTURE\"\nprintf 'proxy=%s\\n' \"${HTTP_PROXY-unset}:${HTTPS_PROXY-unset}:${ALL_PROXY-unset}:${NO_PROXY-unset}:${http_proxy-unset}:${https_proxy-unset}:${all_proxy-unset}:${no_proxy-unset}\" >> \"$CAPTURE\"\nif test \"$1\" = run && test \"${FAIL_RUN:-0}\" = 1; then exit 23; fi\n"
+	if err := os.WriteFile(engine, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "container output")
+	cleanEnv := func() []string {
+		var env []string
+		for _, entry := range os.Environ() {
+			if !strings.HasPrefix(entry, "HARNEZ_QUOTA_1=") {
+				env = append(env, entry)
+			}
+		}
+		return env
+	}
+	run := func(fail bool) ([]byte, error) {
+		cmd := exec.Command("make", "container-test", "CONTAINER_ENGINE="+engine, "CONTAINER_OUTPUT="+output, "CONTAINER_SOURCE_MODE=mount", "CONTAINER_TEST_CMD=make check")
+		cmd.Dir = dir
+		cmd.Env = append(cleanEnv(), "HARNEZ_QUOTA_1=0", "CAPTURE="+capture, "HTTP_PROXY=http://proxy.invalid", "HTTPS_PROXY=http://proxy.invalid", "ALL_PROXY=http://proxy.invalid", "NO_PROXY=example.invalid", "http_proxy=http://proxy.invalid", "https_proxy=http://proxy.invalid", "all_proxy=http://proxy.invalid", "no_proxy=example.invalid")
+		if fail {
+			cmd.Env = append(cmd.Env, "FAIL_RUN=1")
+		}
+		return cmd.CombinedOutput()
+	}
+	blocked := exec.Command("make", "container-test", "CONTAINER_ENGINE="+engine, "CONTAINER_OUTPUT="+output)
+	blocked.Dir = dir
+	blocked.Env = append(cleanEnv(), "CAPTURE="+capture, "HARNEZ_QUOTA_1=1")
+	if output, err := blocked.CombinedOutput(); err == nil || !strings.Contains(string(output), "container tests need the host; ask the host") {
+		t.Fatalf("quota diagnostic err=%v output=%q", err, output)
+	}
+	if output, err := run(false); err != nil {
+		if strings.Contains(string(output), "container tests need the host; ask the host") {
+			t.Skip("fake-engine invocation is correctly blocked inside the worker sandbox")
+		}
+		t.Fatalf("make container-test: %v\n%s", err, output)
+	}
+	data := string(mustRead(t, capture))
+	for _, want := range []string{"arg=build", "arg=run", "arg=--file", "arg=Containerfile", "arg=--volume", output + ":/out:rw", dir + ":/src:ro", "proxy=unset:unset:unset:unset:unset:unset:unset:unset"} {
+		if !strings.Contains(data, want) {
+			t.Errorf("fake engine capture missing %q: %s", want, data)
+		}
+	}
+	if _, err := run(true); err == nil {
+		t.Fatal("container engine failure was swallowed")
 	}
 }
