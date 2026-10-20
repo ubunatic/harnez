@@ -2,10 +2,23 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/usage"
 )
+
+// warnModelQuota reuses the cached model-availability reader. It never probes
+// the provider or waits for the concurrent before-turn capture.
+func warnModelQuota(cmd *cobra.Command, availability func(string, string) usage.ProviderQuotaAvailability, provider, model string, now time.Time) {
+	if availability == nil {
+		availability = providerAvailability
+	}
+	if line := usage.QuotaNotice(provider, availability(provider, model), now); line != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), line)
+	}
+}
 
 // startTurnQuotaCapture overlaps the before-turn reading with the provider turn.
 // The caller must defer stop, including on paths that never consume the reading:

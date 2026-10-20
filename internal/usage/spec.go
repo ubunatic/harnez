@@ -22,6 +22,8 @@ type usageSpec struct {
 	CollectorCadence         string             `yaml:"collector_cadence"`
 	CacheStalenessMultiplier yaml.Node          `yaml:"cache_staleness_multiplier"`
 	DisplayStaleness         string             `yaml:"display_staleness"`
+	AgentQuotaWarnPercent    float64            `yaml:"agent_quota_warn_percent"`
+	AgentQuotaMaxReadingAge  string             `yaml:"agent_quota_max_reading_age"`
 	CollectorTimeout         string             `yaml:"collector_timeout"`
 	PassiveDedupeInterval    string             `yaml:"passive_dedupe_interval"`
 	StatuslineBusyTimeout    string             `yaml:"statusline_busy_timeout"`
@@ -217,6 +219,9 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	}
 	cachePolicy, err := spec.cachePolicy()
 	if err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+	if _, _, err := spec.quotaNoticePolicy(); err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
 	timeout, err := time.ParseDuration(spec.CollectorTimeout)

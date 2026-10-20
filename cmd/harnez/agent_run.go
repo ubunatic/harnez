@@ -491,6 +491,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	streaming = streaming && !req.JSON
 	turn := 1
 	turnStarted := time.Now().UTC()
+	warnModelQuota(cmd, d.availability, m.Provider, m.Name, turnStarted.Local())
 	beforeCapture, stopCapture := startTurnQuotaCapture(ctx, d.quota, m.Provider)
 	defer stopCapture()
 	var ts *turnStream
@@ -829,6 +830,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		}
 	}
 	turnStarted := time.Now().UTC()
+	warnModelQuota(cmd, d.availability, sess.Provider, sess.Model, turnStarted.Local())
 	beforeCapture, stopCapture := startTurnQuotaCapture(ctx, d.quota, sess.Provider)
 	defer stopCapture()
 	if streaming {

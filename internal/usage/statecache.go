@@ -57,6 +57,7 @@ type ProviderQuotaAvailability struct {
 	Age       time.Duration
 	Exhausted bool
 	ResetIn   time.Duration
+	Windows   []usagestore.Window // Model-filtered evidence, with original reading timestamps.
 }
 
 // CachedProviderQuotaAvailability reports available, exhausted, stale, or
@@ -115,6 +116,7 @@ func ProviderQuotaAvailabilityFromStore(ctx context.Context, dbPath, provider, m
 		if !seen || window.ObservedAt.After(latestAt) {
 			latestAt = window.ObservedAt
 		}
+		state.Windows = append(state.Windows, window)
 		seen = true
 		freshSeen = freshSeen || window.Freshness == "fresh"
 		if window.UsedFraction >= 1 && window.ResetAt != nil && window.ResetAt.After(now) {

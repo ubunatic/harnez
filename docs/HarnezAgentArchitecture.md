@@ -109,6 +109,32 @@ not the status, is the proof. Compaction must never pass empty `--model`/`--effo
 flags (issue 673: every Claude `/compact` failed with a 400 for that reason). Active interactive sessions with no
 completion and token signal are blocked from sending an over-threshold prompt.
 
+### Quota notices before start and resume
+
+Start and resume reuse the cached model-availability reader in `internal/usage`
+before invoking the provider driver. No extra provider probe or wait for the
+concurrent turn-boundary capture is added. Missing readings and cache errors are
+silent. Notices are informational and never refuse a turn; the existing
+exhausted-quota refusal and `--allow-exhausted-quota` override are separate.
+
+`spec/usage.yaml` owns `agent_quota_warn_percent` (80%, inclusive) and
+`agent_quota_max_reading_age` (2m, inclusive). Each window is evaluated against its
+own stored `ObservedAt` and freshness marker, never the newest sibling window or
+the time the cache was read. Missing or future timestamps cannot produce a warning.
+AGY uses the selected model's existing pool mapping (Gemini, Argon, or Claude/GPT).
+Token counters are excluded.
+
+All qualifying windows (including both 5h and weekly) are joined with `; ` into
+one stderr line. Fresh readings below the threshold are silent; stale readings
+say `unknown` regardless of their last percentage. Every displayed window carries
+its reading time and age; reset time is included when known. Times use the local
+timezone. This also keeps `--json` stdout valid:
+
+```text
+quota: claude 5h 86% (read 10:41:07, 40s ago, resets 11:52)
+quota: claude 5h unknown, last reading 23m old (read 10:18:47)
+```
+
 ### 2.11 MCP server for Codex
 
 `harnez mcp` serves the agent lifecycle tools over newline-delimited JSON-RPC
