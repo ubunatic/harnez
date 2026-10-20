@@ -26,6 +26,19 @@ retaining compatible snapshots and archives until their consumers have moved.
   the store API only. They do not directly call providers, parse provider files, or interpret cache
   files. An explicit refresh asks the registry to collect, then reads the same API.
 
+## Current client-server boundary (issues 829-831)
+
+`harnez server` is the one process that writes `telemetry.sqlite`. It owns the usage collector,
+schema setup, migrations, passive deduplication, and persistence. A single server runs per host on
+the loopback address and port from `spec/server.yaml`; the systemd unit installed by issue 831
+starts that same command. `harnez usage` reads the store read-only and starts the server when it is
+not already running.
+
+Statuslines and other passive usage observers POST normalized windows to the server's local HTTP
+endpoint. They never open the store or start the server. A missing or failing server drops a usage
+update; the next statusline observation can replace it. Telemetry records use the same client and
+route pattern in M3, with the bounded local spool preserving records when no server answers.
+
 ## Status quo inventory
 
 | Path | Writer; cadence | Readers / duplication |
@@ -38,7 +51,7 @@ retaining compatible snapshots and archives until their consumers have moved.
 | `$XDG_DATA_HOME/harnez/usage-history/quota-history.jsonl` and host history JSONL | Collector/cache refresh; append-only, throttled 15 minutes. | timeline/history/stats/export. Rounded integer percentages lose statusline precision. |
 | `~/.harnez/agents/quota-readings.jsonl` | Harnez agent start/resume records before/after turn readings. | `stats --agents`; duplicates provider-cache reads and cannot retain richer source evidence. |
 | Client usage files | Providers write Claude `stats-cache.json`, Codex rollout JSONL, AGY logs/conversation data. | provider collectors and project usage. These are sources, not Harnez stores. |
-| Statuslines | Claude and Codex statusline commands render client/live information on refresh; statusline input can supply fractional limit percentages. | Presently display-only; its useful readings are lost rather than being a passive source. |
+| Statuslines | Claude and AGY statusline commands render client information and POST fractional quota windows on refresh. | Server deduplicates and stores windows; statuslines drop an update when the server is unavailable. |
 | `$XDG_DATA_HOME/harnez/telemetry.sqlite` (legacy `~/.harnez/tool_catalog.sqlite`) | Hooks, `harnez exec`, telemetry adapters; per event. | `stats`, export, session analytics. It stores tool calls, provider token snapshots, session boundaries and economics, but quota/history readers bypass it. |
 | Remote load stream/snapshots | watch-side stream/remote fetch. | watch only; separate from quota collection and should join the registry as a non-provider collector. |
 
@@ -128,13 +141,9 @@ output. Keep these invariants; each broke once:
 - **Views never block on collection or the store.** `usage --watch` draws a loading frame at once
   and fills quotas asynchronously; before 660 a blocking read delayed the first frame 14-19s and
   starved the `q` key.
-- **Statuslines print first, then write with a hard cap, and never migrate.** AGY kills a slow
-  statusline command. Running schema setup and `MigrateStableWindowKeys` on every call collided
-  with test and agent DB writes, and calls took up to 7 s under load (659). Now the line is flushed
-  before the passive write, the write runs in a goroutine abandoned after the
-  `statusline_write_timeout` from `spec/usage.yaml` (100 ms), and migrations
-  run only in other usage commands. `scripts/statusline-bench.sh` measures p50/p99/max (after the
-  fix: 29/40/42 ms under heavy load).
+- **Statuslines print before handing off passive windows.** They POST to the running server with
+  `update_timeout` from `spec/server.yaml`, do not open SQLite, and drop a failed update. The server
+  owns migrations and deduplication.
 - **Tests must not touch the real data path.** Store tests use an isolated DB; a test that wrote
   the live telemetry DB hung the suite for minutes (655).
 

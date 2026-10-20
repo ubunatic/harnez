@@ -111,7 +111,11 @@ func TestPassivePostIsNotBlockedByStalledFetch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint := PassiveUpdateServer{Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}
+	path, err := PassiveUpdatePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := PassiveUpdateServer{Path: path, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}
 	mux := http.NewServeMux()
 	endpoint.RegisterRoutes(mux)
 	window := usagestore.Window{Provider: "claude", Key: "weekly", Name: "7-day", Source: "statusline", Freshness: "fresh", UsedFraction: .25, ObservedAt: time.Now()}
@@ -151,7 +155,11 @@ func TestPassiveUpdateRejectsMalformedAndOversizedBodies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint := PassiveUpdateServer{Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: 8}
+	path, err := PassiveUpdatePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := PassiveUpdateServer{Path: path, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: 8}
 	mux := http.NewServeMux()
 	endpoint.RegisterRoutes(mux)
 	for _, tc := range []struct {

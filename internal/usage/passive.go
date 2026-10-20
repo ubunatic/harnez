@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usagestore"
-	"ubunatic.com/harnez/internal/xdgpath"
 )
 
 type passivePayload struct {
@@ -32,69 +29,35 @@ type passivePayload struct {
 	} `json:"quota"`
 }
 
-// observations tracks in-flight background statusline writes so callers (tests,
-// shutdown paths) can join them before removing the database directory.
-var observations sync.WaitGroup
-
-// WaitObservations blocks until all background statusline writes started by
-// ObserveStatusline/ObserveStatuslineAt have finished and closed their store.
-// Each write is bounded by its own budget, so this returns promptly.
-func WaitObservations() { observations.Wait() }
-
-// ObserveStatusline accepts only quota values and reset timestamps from a
-// Claude or AGY statusline payload. It deliberately never stores the raw JSON.
+// ObserveStatusline accepts quota values and reset timestamps from a statusline
+// payload and sends normalized windows to the running collector.
 func ObserveStatusline(parent context.Context, provider string, payload []byte) {
-	// Statusline is a read-only rendering path. Avoid DefaultDBPath here: it
-	// may migrate the legacy database or create storage as a side effect.
-	dbPath := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
-	if _, err := os.Stat(dbPath); err != nil {
-		return
-	}
-	ObserveStatuslineAt(parent, provider, payload, dbPath)
-}
-
-// ObserveStatuslineAt is the testable form of ObserveStatusline with an
-// explicit telemetry database path.
-func ObserveStatuslineAt(parent context.Context, provider string, payload []byte, dbPath string) {
-	if provider != "claude" && provider != "agy" {
-		return
-	}
-	dedupe, busy, writeTimeout, err := PassivePolicy()
+	cfg, err := server.LoadConfig()
 	if err != nil {
 		return
 	}
+	path, err := PassiveUpdatePath()
+	if err != nil {
+		return
+	}
+	_ = ObserveStatuslineTo(parent, provider, payload, cfg.Address(), path, cfg.UpdateTimeout)
+}
+
+func ObserveStatuslineTo(parent context.Context, provider string, payload []byte, address, path string, timeout time.Duration) server.UpdateResult {
+	if provider != "claude" && provider != "agy" {
+		return server.UpdateDropped
+	}
 	windows, err := passiveWindows(provider, payload, time.Now())
 	if err != nil || len(windows) == 0 {
-		return
+		return server.UpdateDropped
 	}
-	if _, err := os.Stat(dbPath); err != nil {
-		return
+	body, err := json.Marshal(struct {
+		Windows []usagestore.Window `json:"windows"`
+	}{windows})
+	if err != nil {
+		return server.UpdateDropped
 	}
-	budget := 4 * busy
-	if budget > writeTimeout {
-		budget = writeTimeout
-	}
-	if parent.Err() != nil {
-		return
-	}
-	observations.Add(1)
-	go func() {
-		defer observations.Done()
-		ctx, cancel := context.WithTimeout(parent, budget)
-		defer cancel()
-		if ctx.Err() != nil {
-			return
-		}
-		store, err := usagestore.OpenWithBusyTimeout(dbPath, busy)
-		if err != nil {
-			return
-		}
-		defer store.Close()
-		if ctx.Err() != nil {
-			return
-		}
-		_ = store.WritePassive(ctx, dedupe, windows)
-	}()
+	return server.PostUpdate(parent, address, path, body, timeout)
 }
 
 func passiveWindows(provider string, data []byte, received time.Time) ([]usagestore.Window, error) {

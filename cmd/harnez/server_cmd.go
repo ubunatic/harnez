@@ -55,6 +55,10 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 	if err != nil {
 		return err
 	}
+	passivePath, err := usage.PassiveUpdatePath()
+	if err != nil {
+		return err
+	}
 	if interval <= 0 {
 		interval = usage.DefaultCollectorInterval()
 	}
@@ -63,6 +67,6 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 		client = &http.Client{Timeout: cfg.HTTPClientTimeout}
 	}
 	requests := make(chan usage.PassiveRequest)
-	collector := &usageCollectorService{interval: interval, client: client, offline: offline, requests: requests, updateServer: usage.PassiveUpdateServer{Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}}
+	collector := &usageCollectorService{interval: interval, client: client, offline: offline, requests: requests, updateServer: usage.PassiveUpdateServer{Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}}
 	return (server.Server{Config: cfg, Version: harnez.Version, Services: []server.Service{collector}}).Run(ctx)
 }

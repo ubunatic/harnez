@@ -134,7 +134,7 @@ func runStoreWriter(ctx context.Context, homeDir, dbPath, stateDir string, out i
 		case <-ctx.Done():
 			return nil
 		case request := <-requests:
-			dedupe, _, _, err := PassivePolicy()
+			dedupe, err := PassiveDedupeInterval()
 			if err == nil {
 				err = persistPassive(ctx, dbPath, dedupe, request.Windows)
 			}

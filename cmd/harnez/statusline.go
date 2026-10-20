@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,10 @@ import (
 )
 
 func newStatuslineCmd() *cobra.Command {
+	return newStatuslineCmdWithObserver(usage.ObserveStatusline)
+}
+
+func newStatuslineCmdWithObserver(observe func(context.Context, string, []byte)) *cobra.Command {
 	var agent string
 	cmd := &cobra.Command{
 		Use:   "statusline",
@@ -38,7 +43,7 @@ Codex uses its native TUI status items, configured separately by 'harnez apply'.
 				if line != "" {
 					writeStatusline(cmd.OutOrStdout(), line)
 				}
-				usage.ObserveStatusline(cmd.Context(), "agy", data)
+				observe(cmd.Context(), "agy", data)
 				return nil
 			}
 			if agent != "claude" {
@@ -53,7 +58,7 @@ Codex uses its native TUI status items, configured separately by 'harnez apply'.
 				return err
 			}
 			writeStatusline(cmd.OutOrStdout(), line)
-			usage.ObserveStatusline(cmd.Context(), "claude", data)
+			observe(cmd.Context(), "claude", data)
 			return nil
 		},
 	}

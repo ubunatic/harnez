@@ -5,6 +5,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,8 +15,8 @@ import (
 
 	_ "modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
-	"ubunatic.com/harnez/internal/usagestore"
 )
 
 type statuslineFlushBuffer struct {
@@ -119,7 +121,7 @@ func TestAGYStatuslinePrintsWhenStoreUnavailable(t *testing.T) {
 	t.Setenv("HOME", filepath.Join(root, "home"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "missing-data"))
 	var out, stderr bytes.Buffer
-	cmd := newStatuslineCmd()
+	cmd := newStatuslineCmdWithObserver(func(context.Context, string, []byte) {})
 	cmd.SetArgs([]string{"--agent", "agy"})
 	cmd.SetIn(strings.NewReader(`{"context_window":{"current_usage":{"input_tokens":12000}}}`))
 	cmd.SetOut(&out)
@@ -150,7 +152,7 @@ func TestAGYStatuslineEmptyOrMalformedPayloadDoesNotAccessStore(t *testing.T) {
 			t.Setenv("HOME", filepath.Join(root, "home"))
 			t.Setenv("XDG_DATA_HOME", dataHome)
 			var out bytes.Buffer
-			cmd := newStatuslineCmd()
+			cmd := newStatuslineCmdWithObserver(func(context.Context, string, []byte) {})
 			cmd.SetArgs([]string{"--agent", "agy"})
 			cmd.SetIn(strings.NewReader(tc.payload))
 			cmd.SetOut(&out)
@@ -197,61 +199,67 @@ func TestAGYStatuslineLockedStoreStillPrintsWithinBudget(t *testing.T) {
 		blocker.Close()
 		t.Fatal(err)
 	}
-	defer func() {
-		_ = tx.Rollback()
-		_ = blocker.Close()
-	}()
+	defer tx.Rollback()
+	defer blocker.Close()
 	t.Setenv("HOME", filepath.Join(root, "home"))
 	t.Setenv("XDG_DATA_HOME", dataHome)
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		http.Error(w, "collector busy", http.StatusServiceUnavailable)
+	}))
+	defer collector.Close()
+	address := strings.TrimPrefix(collector.URL, "http://")
+	path, err := usage.PassiveUpdatePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result server.UpdateResult
+	observe := func(ctx context.Context, provider string, data []byte) {
+		result = usage.ObserveStatuslineTo(ctx, provider, data, address, path, cfg.UpdateTimeout)
+	}
 	var out, stderr bytes.Buffer
-	cmd := newStatuslineCmd()
+	cmd := newStatuslineCmdWithObserver(observe)
 	cmd.SetArgs([]string{"--agent", "agy"})
-	cmd.SetIn(strings.NewReader(`{"context_window":{"current_usage":{"input_tokens":12000}}}`))
+	cmd.SetIn(strings.NewReader(`{"context_window":{"current_usage":{"input_tokens":12000}},"quota":{"gemini-weekly":{"remaining_fraction":0.75}}}`))
 	cmd.SetOut(&out)
 	cmd.SetErr(&stderr)
-	started := time.Now()
+	startTime := time.Now()
 	err = cmd.Execute()
-	elapsed := time.Since(started)
+	elapsed := time.Since(startTime)
 	if err != nil {
 		t.Fatalf("statusline with locked store returned error: %v", err)
 	}
-	if limit := 50 * time.Millisecond * raceFactor; elapsed > limit {
+	if limit := cfg.UpdateTimeout * raceFactor; elapsed > limit {
 		t.Fatalf("statusline with locked store took %s, want <=%s", elapsed, limit)
+	}
+	select {
+	case <-started:
+	default:
+		t.Fatal("statusline did not POST passive windows")
+	}
+	if result != server.UpdateDropped {
+		t.Fatalf("update result = %q, want dropped", result)
 	}
 	if out.Len() == 0 {
 		t.Fatal("statusline printed no output before locked write")
 	}
 	if stderr.Len() != 0 {
-		t.Fatalf("statusline wrote lock error to stderr: %q", stderr.String())
+		t.Fatalf("statusline wrote an error to stderr: %q", stderr.String())
+	}
+	var count int
+	if err := tx.QueryRow(`SELECT count(*) FROM lock_probe`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("locked database changed: count=%d err=%v", count, err)
 	}
 }
 
 func TestAGYStatuslineUsesPayloadInsteadOfStoredQuota(t *testing.T) {
-	root := t.TempDir()
-	t.Cleanup(usage.WaitObservations) // join background statusline write before TempDir removal
-	dataHome := filepath.Join(root, "data")
-	t.Setenv("HOME", filepath.Join(root, "home"))
-	t.Setenv("XDG_DATA_HOME", dataHome)
-	dbPath := filepath.Join(dataHome, "harnez", "telemetry.sqlite")
-	store, err := usagestore.Open(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
-		store.Close()
-		t.Fatal(err)
-	}
-	now := time.Now().UTC()
-	if err := store.WriteCurrent(ctx, now, []usagestore.Window{{Provider: "agy", Pool: "Gemini Models", Key: "weekly", Name: "weekly", Source: "agy-api", Freshness: "stale", UsedFraction: .99, ObservedAt: now}}); err != nil {
-		store.Close()
-		t.Fatal(err)
-	}
-	if err := store.Close(); err != nil {
-		t.Fatal(err)
-	}
 	var out bytes.Buffer
-	cmd := newStatuslineCmd()
+	cmd := newStatuslineCmdWithObserver(func(context.Context, string, []byte) {})
 	cmd.SetArgs([]string{"--agent", "agy"})
 	cmd.SetIn(strings.NewReader(`{"model":{"id":"gemini-pro"},"context_window":{"current_usage":{"input_tokens":12000}},"quota":{"gemini-weekly":{"remaining_fraction":0.75}}}`))
 	cmd.SetOut(&out)

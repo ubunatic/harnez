@@ -30,8 +30,6 @@ passive_update_path: /usage/passive
 history_snapshot_interval: 15m
 # Path relative to $XDG_DATA_HOME/harnez for HMAC key used to hash host labels in usage export (issue 735).
 export_host_key: export-host-key
-statusline_busy_timeout: 25ms
-statusline_write_timeout: 100ms
 # Compact projection does not wait long to persist freshly collected readings.
 usage_store_busy_timeout: 25ms
 # NVIDIA GPUs are read via nvidia-smi (issue 765). One call costs ~123ms, and

@@ -12,17 +12,14 @@ import (
 )
 
 type PassiveUpdateServer struct {
+	Path         string
 	Requests     chan<- PassiveRequest
 	Timeout      time.Duration
 	MaxBodyBytes int64
 }
 
 func (s PassiveUpdateServer) RegisterRoutes(mux *http.ServeMux) {
-	_, _, _, _, _, err := usageDurations()
-	if err != nil {
-		return
-	}
-	mux.HandleFunc("POST "+usageSpecPassivePath, s.handlePassive)
+	mux.HandleFunc("POST "+s.Path, s.handlePassive)
 }
 
 func (s PassiveUpdateServer) handlePassive(w http.ResponseWriter, r *http.Request) {
