@@ -1,7 +1,7 @@
 # 825 — Epic: harnez serve, durable any-client agent server
 
 **Status**: Open
-**Priority**: P2 (Medium)
+**Priority**: P4 (Backlog) — deferred 2026-10-20: finish other open work first
 **Category**: Feature
 **Related**: 776, 476, 587, 611, 293, 463, 646
 
