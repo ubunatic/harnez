@@ -1,6 +1,6 @@
 # harnez apply: roll out managed global instruction sections into ~/.claude/CLAUDE.md and agent globals
 
-Status: Closed — Shipped config-driven global sections with legacy feedback migration, byte-preserving reconciliation, diff/revert support and temp-home coverage; required checks passed in d0f21665
+Status: Open — M2 pre-work: do not delete existing global blocks
 Priority: P2
 Category: Feature
 
@@ -48,3 +48,20 @@ Rendered Process hygiene section (inside its begin/end markers):
   Match exact argv fields via `ps -eo pid,args`, or kill recorded PIDs.
 - Set `HTO=0` for long-running commands, tests, or waits run as background tasks/jobs.
 ```
+
+## M2 Pre-Work / Required Refinements (host real-home diff 2026-10-20)
+
+`harnez diff` against the real home (not applied) shows 818 would DELETE three existing
+harnez-marked blocks from ~/.claude/CLAUDE.md: `Instructions Hierarchy`, `Issue Tracker Discovery`,
+`Agent-Filed Feedback`. They were written by older harnez before #415 stopped managing global root
+docs, and the user relies on them. It also rewrites the Tool Feedback Protocol text (shortened).
+
+1. Never remove a `harnez:begin <id>` block just because <id> is absent from `global_sections`.
+   Remove only ids harnez knows it owns under this mechanism: ids listed in config
+   (`global_sections` or an explicit `retired_global_sections:` list), never unknown ids. Unknown
+   harnez-marked blocks are left byte-identical. Regression test with the three real block ids.
+2. Do not change existing section text as part of this ticket: the Tool Feedback Protocol content in
+   config must render exactly as it does today (keep the current wording; byte-compare a test against
+   the pre-818 rendering). Only the new Process hygiene section is added.
+3. Expected real-home diff after the fix: only the added Process hygiene block per target, nothing
+   removed. Do not run apply on the real home; the host runs `harnez diff` then apply.
