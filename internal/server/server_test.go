@@ -137,6 +137,34 @@ func TestNewerBuildTakesOverAndOldServerExitsSuccessfully(t *testing.T) {
 	}
 }
 
+func TestNewerBuildHandsOverToSystemdInsteadOfTakingSocket(t *testing.T) {
+	cfg := testConfig(t)
+	socket, _ := cfg.Socket()
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- (Server{Config: cfg, Version: "1.0.0", BuildIdentity: "a", Services: []Service{waitingService{started}}}).Run(ctx)
+	}()
+	<-started
+	gotPID := 0
+	var output bytes.Buffer
+	handOver := func(_ context.Context, oldPID int) (bool, error) { gotPID = oldPID; return true, nil }
+	if err := (Server{Config: cfg, Version: "1.1.0", BuildIdentity: "a", Output: &output, HandOver: handOver}).Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if gotPID != os.Getpid() || !strings.Contains(output.String(), "restarted systemd service (was v1.0.0)") {
+		t.Fatalf("hand-over PID %d, output %q", gotPID, output.String())
+	}
+	if status := requestStatus(t, socket); status.Version != "1.0.0" {
+		t.Fatalf("socket was taken: running version %q", status.Version)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestOlderBuildReturnsAlreadyRunning(t *testing.T) {
 	cfg := testConfig(t)
 	socket, _ := cfg.Socket()

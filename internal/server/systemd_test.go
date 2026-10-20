@@ -92,6 +92,60 @@ func TestSystemdUninstallAndStatusUseFakeSystemctl(t *testing.T) {
 	}
 }
 
+func TestSystemdHandOverRestartsOnlyWhenUnitOwnsOldServer(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name      string
+		installed bool
+		oldPID    int
+		want      bool
+	}{
+		{"unit owns old server", true, 1234, true},
+		{"other process owns socket", true, 5678, false},
+		{"unit not installed", false, 1234, false},
+		{"unknown old PID", true, 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			unitDir := t.TempDir()
+			if tc.installed {
+				if err := os.WriteFile(filepath.Join(unitDir, cfg.SystemdUnitName), []byte("old"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var calls []string
+			service := SystemdService{
+				Config: cfg, UnitDir: unitDir, Executable: "/new/harnez", GOOS: "linux",
+				LookPath: func(string) (string, error) { return "/fake/systemctl", nil },
+				Run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+					calls = append(calls, strings.Join(args, " "))
+					if strings.Contains(strings.Join(args, " "), "MainPID") {
+						return []byte("1234\n"), nil
+					}
+					return nil, nil
+				},
+			}
+			handled, err := service.HandOver(context.Background(), tc.oldPID)
+			if err != nil || handled != tc.want {
+				t.Fatalf("HandOver() = %t, %v; want %t", handled, err, tc.want)
+			}
+			restarted := calls[len(calls)-1] == "--user restart "+cfg.SystemdUnitName
+			if restarted != tc.want {
+				t.Fatalf("restart = %t, calls %q", restarted, calls)
+			}
+			if !tc.want {
+				return
+			}
+			unit, err := os.ReadFile(filepath.Join(unitDir, cfg.SystemdUnitName))
+			if err != nil || !strings.Contains(string(unit), "ExecStart=/new/harnez server") {
+				t.Fatalf("unit not rewritten to new executable: %q, %v", unit, err)
+			}
+		})
+	}
+}
+
 func TestSystemdUnavailableDoesNotWriteAndSupportsNonLinux(t *testing.T) {
 	cfg, err := LoadConfig()
 	if err != nil {

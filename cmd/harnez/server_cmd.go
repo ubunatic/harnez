@@ -192,5 +192,5 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 	requests := make(chan usage.PassiveRequest)
 	collector := &usageCollectorService{interval: interval, client: client, offline: offline, requests: requests, updateServer: usage.PassiveUpdateServer{Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}}
 	telemetryService := &telemetryCollectorService{config: cfg, path: dbPath, interval: interval}
-	return (server.Server{Config: cfg, Version: harnez.Version, BuildIdentity: serverBuildIdentity, Services: []server.Service{collector, telemetryService}}).Run(ctx)
+	return (server.Server{Config: cfg, Version: harnez.Version, BuildIdentity: serverBuildIdentity, Services: []server.Service{collector, telemetryService}, HandOver: server.NewSystemdService(cfg).HandOver}).Run(ctx)
 }

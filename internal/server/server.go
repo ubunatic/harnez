@@ -25,6 +25,9 @@ type Server struct {
 	BuildIdentity string
 	Services      []Service
 	Output        io.Writer
+	// HandOver restarts the systemd unit when it owns the old server; handled
+	// means the unit now runs this build and Run must not take the socket.
+	HandOver func(ctx context.Context, oldPID int) (handled bool, err error)
 }
 
 type statusInfo struct {
@@ -148,6 +151,20 @@ func (s Server) claimExisting(ctx context.Context, socket, identity string) erro
 		}
 		fmt.Fprintf(out, "already running (v%s)\n", status.Version)
 		return errAlreadyRunning
+	}
+	if s.HandOver != nil {
+		handled, err := s.HandOver(ctx, status.PID)
+		if err != nil {
+			return err
+		}
+		if handled {
+			out := s.Output
+			if out == nil {
+				out = os.Stdout
+			}
+			fmt.Fprintf(out, "restarted systemd service (was v%s)\n", status.Version)
+			return errAlreadyRunning
+		}
 	}
 	shutdownReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://unix/shutdown", nil)
 	shutdownResp, err := client.Do(shutdownReq)

@@ -141,6 +141,27 @@ func (s SystemdService) Uninstall(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// HandOver points the unit at this executable and restarts it when the unit's
+// MainPID is oldPID, so a newer build replaces the server under systemd instead
+// of taking the socket outside it.
+func (s SystemdService) HandOver(ctx context.Context, oldPID int) (bool, error) {
+	status, err := s.Status(ctx, oldPID)
+	if err != nil || !status.Installed || oldPID <= 0 || status.MainPID != oldPID {
+		return false, nil
+	}
+	if _, err := s.Install(ctx); err != nil {
+		return true, err
+	}
+	s, systemctl, _, err := s.available(ctx)
+	if err != nil {
+		return true, err
+	}
+	if _, err := s.Run(ctx, systemctl, "--user", "restart", s.Config.SystemdUnitName); err != nil {
+		return true, fmt.Errorf("restart systemd user service: %w", err)
+	}
+	return true, nil
+}
+
 func (s SystemdService) Status(ctx context.Context, socketPID int) (SystemdStatus, error) {
 	status := SystemdStatus{SocketPID: socketPID}
 	s, systemctl, available, err := s.available(ctx)

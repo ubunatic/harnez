@@ -38,11 +38,6 @@ install: ⚙️ build  # install binary to ~/go/bin (user)
 	go install ./cmd/harnez
 	./$(BINARY) man --install
 	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
-	@if systemctl --user -q is-enabled harnez-agent-collector.service 2>/dev/null; then \
-		harnez server install </dev/null && \
-		systemctl --user restart harnez-agent-collector.service && \
-		echo "restarted harnez-agent-collector.service"; \
-	fi
 
 
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
