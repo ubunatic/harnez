@@ -26,5 +26,11 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **PTY output after exit**: `Wait` must drain the PTY to EOF, not return on child exit (loom 329).
 - **Unverified worker claims**: reproduce a worker's stated blocker before accepting a change
   built on it (voxi go.mod revert e4fe669).
+- **Readers that write**: a "read" command that runs schema DDL, migrations or history writes on
+  every call contends with real writers and fails with `database is locked`. Readers open `mode=ro`;
+  one process writes. Issues 828, 829.
+- **Green suite, wrong numbers**: after 829 M2 all tests passed while the live header showed a
+  15-minute-old time and Claude tokens of 4.2 billion (was 18 million). Run the installed binary and
+  compare magnitudes against the previous output. Issue 829 M3.
 - **Verify before pushing**: never chain `test && push` in one command when the test output
   decides the push; read the result first.

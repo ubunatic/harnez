@@ -8,8 +8,14 @@ Inventory from 2026-09-25 (codex luna:med scan, host-verified against the code a
 
 | Path | Written by | Holds | Read by |
 |---|---|---|---|
-| `~/.harnez/tool_catalog.sqlite` | `internal/telemetry/telemetry.go` | Tool-call telemetry and classifications (hooks) | `hook`, `stats`, `usage export` |
+| `~/.local/share/harnez/telemetry.sqlite` (legacy `~/.harnez/tool_catalog.sqlite`, migrated on first use) | `harnez server` only (target of issues 829/830; until 830 M3 also `rate`, `hook`, `codex-telemetry`) | Tool-call telemetry, usage store (quota windows, observations, history) | `usage` (read-only, 829), `stats`, `usage export` |
 | `~/.harnez/bench/bench.sqlite` | `internal/bench/store.go` | Bench runs: table `runs` with response, score detail, tokens, cached, order | `bench run`, `bench results` |
+
+Single-writer rule (2026-10-20, issues 828-830): only `harnez server` writes `telemetry.sqlite`.
+Clients open it read-only (`mode=ro`) and send updates to the server; when no server answers, usage
+readings are dropped and telemetry records go to a spool the server drains (830 M3). A reader that
+writes (828: schema DDL and history writes on every `usage` run) caused `database is locked` errors.
+`~/.local/share/harnez/usage.db` is an empty leftover (0 bytes, Oct 10).
 
 `~/.harnez/bench/enabled` is the marker file that turns `harnez bench` on (`internal/bench/setup.go`).
 

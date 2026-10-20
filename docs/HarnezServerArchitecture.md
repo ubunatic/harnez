@@ -102,6 +102,18 @@ Provider drivers (`internal/subagent/driver.go`), session records and resume
 TUI job panel (`internal/tui/jobs/`). Session JSON uses atomic rename; that prevents torn reads
 but is not a transactional task log.
 
+**First service built (2026-10-20, issues 829-831):** `harnez server` (`internal/server`) runs the
+usage data collector as its first service and is the single writer of `telemetry.sqlite`. It binds
+a fixed localhost TCP port from `spec/server.yaml` (127.0.0.1:18729; a failed bind plus a `/status`
+probe is the one-per-host singleton), serves `GET /status` and `POST /usage/passive`, and services
+register their own routes. `harnez usage` is a read-only client that auto-starts the server;
+statusline and hooks POST updates. 831 installs it as a systemd user service.
+
+Open divergence from this proposal, to settle before roadmap step 3 (issue 837): the proposal
+names the command `harnez serve` with a Unix socket and JSON-RPC; the built server is `harnez server`
+with HTTP on localhost TCP. Either converge (socket + JSON-RPC behind the same service interface) or
+amend the proposal.
+
 ## Roadmap
 
 1. Extract start/resume/compact orchestration from Cobra handlers into a service; document each
