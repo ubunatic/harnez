@@ -717,6 +717,13 @@ func ApplyAllVariant(target string, cfg *Config, opts ApplyOptions) error {
 	}
 	r.changes += removed
 
+	globalChanged, err := manageGlobalSections(cfg, false)
+	if err != nil {
+		return err
+	}
+	if globalChanged {
+		r.changes++
+	}
 	if err := applySettings(r, target, cfg, selection); err != nil {
 		return err
 	}
@@ -801,6 +808,9 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 
 	if err := report(diffSettingsJSON(filepath.Join(target, "settings.json"), buildSettingsDoc(cfg, selection))); err != nil {
 		return false, fmt.Errorf("settings: %w", err)
+	}
+	if err := report(manageGlobalSections(cfg, true)); err != nil {
+		return false, err
 	}
 	if err := report(diffSkills(cfg, selection)); err != nil {
 		return false, err
@@ -920,6 +930,11 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 
 // CleanAll cleans the config.
 func CleanAll(target string, cfg *Config) error {
+	withoutSections := *cfg
+	withoutSections.GlobalSections = nil
+	if _, err := manageGlobalSections(&withoutSections, false); err != nil {
+		return err
+	}
 	if _, err := applyManagedLocalPlugins(target, false, false); err != nil {
 		return fmt.Errorf("managed local plugins: %w", err)
 	}

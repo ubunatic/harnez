@@ -6,13 +6,13 @@ package claude
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-// TestApplyAll_DoesNotManageGlobalRootInstructionDocs verifies acceptance criteria
-// of Issue 415: harnez apply does not install, overwrite, or manage global root instruction
-// files (e.g. ~/.claude/CLAUDE.md, ~/.prime/agent/AGENTS.md, ~/.codex/AGENTS.md, ~/AGENTS.md).
-func TestApplyAll_DoesNotManageGlobalRootInstructionDocs(t *testing.T) {
+// Issue 818 permits managed sections while retaining issue 415's protection
+// against replacing user content or creating missing instruction files.
+func TestApplyAll_PreservesGlobalRootUserInstructions(t *testing.T) {
 	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
 	homeDir := t.TempDir()
@@ -56,7 +56,14 @@ func TestApplyAll_DoesNotManageGlobalRootInstructionDocs(t *testing.T) {
 		t.Fatalf("ApplyAll failed: %v", err)
 	}
 
-	// Verify all existing user global root files are 100% untouched
+	// Require the exact user bytes followed by exactly the configured blocks.
+	var managed strings.Builder
+	for _, section := range cfg.GlobalSections {
+		if section.RateFeedback && RateFeedbackDisabled(cfg, nil) {
+			continue
+		}
+		managed.WriteString("<!-- harnez:begin " + section.Name + " -->\n" + strings.TrimRight(section.Content, "\n") + "\n<!-- harnez:end " + section.Name + " -->\n")
+	}
 	for path, wantContent := range map[string]string{
 		claudeMDPath:    userClaudeContent,
 		primeAGENTSPath: userPrimeContent,
@@ -66,8 +73,8 @@ func TestApplyAll_DoesNotManageGlobalRootInstructionDocs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ReadFile %s: %v", path, err)
 		}
-		if string(got) != wantContent {
-			t.Errorf("expected %s to remain untouched:\nwant:\n%s\ngot:\n%s", path, wantContent, string(got))
+		if string(got) != wantContent+managed.String() {
+			t.Errorf("expected %s user text plus managed sections:\nwant:\n%s\ngot:\n%s", path, wantContent+managed.String(), string(got))
 		}
 	}
 

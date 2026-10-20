@@ -39,6 +39,8 @@ type Config struct {
 	PiAgentTarget        string               `yaml:"pi_agent_target"`
 	AgyTarget            string               `yaml:"agy_target"`
 	AgentsMD             AgentsMD             `yaml:"agents_md"`
+	GlobalSections       []MDSection          `yaml:"global_sections"`
+	GlobalSectionTargets []string             `yaml:"global_section_targets"`
 	Make                 MakeConfig           `yaml:"make"`
 	Feedback             FeedbackConfig       `yaml:"feedback"`
 	Exec                 ExecConfig           `yaml:"exec"`
@@ -89,7 +91,7 @@ type DebloatConfig struct {
 }
 
 // FeedbackConfig steers the Tool Feedback Protocol instruction injection
-// (the `harnez rate` call-to-action rendered into agents_md.global.sections
+// (the `harnez rate` call-to-action rendered into global_sections
 // and the tool-feedback-protocol skill) — see issue 142. It deliberately
 // does not touch any other telemetry: `harnez rate`, `harnez exec`, and
 // `harnez stats` keep working unconditionally regardless of this flag; it
@@ -97,7 +99,7 @@ type DebloatConfig struct {
 // agents to call `harnez rate` in the first place.
 type FeedbackConfig struct {
 	// DisableRateProtocol, when true, makes `harnez apply` omit (and
-	// actively remove, if already installed) every agents_md.global.sections
+	// actively remove, if already installed) every global_sections
 	// entry and skill marked `rate_feedback: true` in config.yaml. Also
 	// settable via the HARNEZ_DISABLE_RATE_FEEDBACK env var (any value other
 	// than "", "0", "false", "no", "off" counts as true) for a quick local
@@ -309,18 +311,21 @@ func LoadConfigEmbedded() (*Config, error) {
 }
 
 // ToolFeedbackProtocolBytes returns the combined byte size of every
-// agents_md.global.sections entry and skill marked `rate_feedback: true` in
+// global_sections entry and skill marked `rate_feedback: true` in
 // config.yaml — the Tool Feedback Protocol instruction text (issue 122)
 // that RateFeedbackDisabled lets `harnez apply` omit. It's a rough proxy
 // for the one-time, per-session system-prompt cost of that instruction
 // (injected once, not per `harnez rate` call) — see issue 142's overhead
 // measurement, which pairs this with the per-call cost from
-// telemetry.RateCallOverhead.
+// telemetry.RateCallOverhead. Legacy agents_md.global.sections still count
+// for callers that construct configs using the former layout.
 func ToolFeedbackProtocolBytes(cfg *Config) int {
 	n := 0
-	for _, s := range cfg.AgentsMD.Global.Sections {
-		if s.RateFeedback {
-			n += len(s.Content)
+	for _, sections := range [][]MDSection{cfg.AgentsMD.Global.Sections, cfg.GlobalSections} {
+		for _, s := range sections {
+			if s.RateFeedback {
+				n += len(s.Content)
+			}
 		}
 	}
 	for _, sk := range cfg.Skills {

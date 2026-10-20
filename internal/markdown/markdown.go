@@ -249,6 +249,11 @@ func diffSection(path, section, content string, m Markers) (bool, error) {
 		}
 	}
 
+	return DiffContent(fmt.Sprintf("%s [%s]", path, section), oldBlock, newBlock)
+}
+
+// DiffContent prints a unified diff without modifying either source file.
+func DiffContent(label, oldBlock, newBlock string) (bool, error) {
 	if oldBlock == newBlock {
 		return false, nil
 	}
@@ -275,7 +280,6 @@ func diffSection(path, section, content string, m Markers) (bool, error) {
 	}
 	defer os.Remove(newFile)
 
-	label := fmt.Sprintf("%s [%s]", path, section)
 	cmd := exec.Command("diff", "-u", "--label", label, "--label", label, oldFile, newFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
