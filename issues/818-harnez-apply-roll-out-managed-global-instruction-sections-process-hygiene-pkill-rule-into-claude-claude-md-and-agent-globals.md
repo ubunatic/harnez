@@ -1,6 +1,6 @@
 # harnez apply: roll out managed global instruction sections into ~/.claude/CLAUDE.md and agent globals
 
-Status: Open — M2 pre-work: do not delete existing global blocks
+Status: Closed — M2 preserves unknown Harnez blocks, restores feedback wording, and limits host diff to Process hygiene additions; checks passed in eb451ef7
 Priority: P2
 Category: Feature
 
