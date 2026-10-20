@@ -1,6 +1,6 @@
 # 829 — harnez usage is read-only: only the data collector writes the usage store
 
-**Status**: In Progress
+**Status**: Closed — M3 delivered in b9e63900; test-q1 green; installed usage showed 19:42:08 UTC · 0m ago and Claude weekly tokens 18,370,886
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture
