@@ -98,6 +98,7 @@ code and the environment in all three tickets. Check:
 | Worker cannot run podman ("namespace cloning denied") | the quota-1 sandbox blocks rootless podman | the host runs `make container-test` itself before closing the CI ticket |
 | `harnez agent send` cannot reach a running worker | send supports live Claude/Codex/AGY TUI sessions, not exec-mode turns | queue the follow-up as the worker's next round prompt |
 | `gh run view --log-failed` returns HTTP 403 | the local `gh` token lacks admin rights for log download | CI writes failures as annotations (shown by `gh run view`); or use the cloud agent's GitHub MCP `get_job_logs` |
+| Worker closes a ticket with green tests, host live check fails (2026-10-20: 815, 818, 820, 826) | unit fixtures miss real state: completed batch sessions, legacy global blocks, unreadable `/proc/1/ns/user`, goreleaser subdir binaries | host runs the real command (`harnez diff` before `apply`, real `dist/`, live send/resume) before pushing; reopen with M2 pre-work in the same ticket |
 
 ## 5. Finding out what agents ran
 
