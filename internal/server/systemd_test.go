@@ -66,7 +66,7 @@ func TestSystemdUninstallAndStatusUseFakeSystemctl(t *testing.T) {
 			switch {
 			case strings.Contains(strings.Join(args, " "), "MainPID"):
 				return []byte("1234\n"), nil
-			case args[len(args)-1] == "is-active":
+			case strings.Contains(strings.Join(args, " "), "is-active"):
 				return []byte("active\n"), nil
 			default:
 				return nil, nil
