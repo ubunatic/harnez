@@ -358,8 +358,7 @@ func TestRunIssuesVerb_OpenCommitsNewTicketAlreadyOpen(t *testing.T) {
 // TestRunIssuesVerb_ReasonChangeOnAlreadyClosedIsNotIdempotent covers issue
 // 232's distinction: correcting the reason text on an already-Closed
 // ticket (e.g. filling in a real commit sha per issue 126 option A) is a
-// real, expected action and must proceed normally, not be treated as a
-// no-op just because the canonical category (Closed) is unchanged.
+// real, expected action when explicitly requested with --amend-reason (816).
 func TestRunIssuesVerb_ReasonChangeOnAlreadyClosedIsNotIdempotent(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	var out bytes.Buffer
@@ -367,7 +366,7 @@ func TestRunIssuesVerb_ReasonChangeOnAlreadyClosedIsNotIdempotent(t *testing.T) 
 		t.Fatalf("first close: %v", err)
 	}
 
-	result, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved in abc1234"}, issuesRunOptions{Dir: dir})
+	result, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved in abc1234"}, issuesRunOptions{Dir: dir, AmendReason: true})
 	if err != nil {
 		t.Fatalf("reason-correcting close: %v", err)
 	}

@@ -642,6 +642,8 @@ agents_md:
           - Run `harnez index -d <repo>` and commit the ticket and index.
           - `harnez issues <verb> -d <repo> <n> [reason]` — change a ticket's status, resync
             `issues/README.md`, and commit, in one call
+          - Closing an already-Closed ticket is a no-op regardless of reason; use
+            `harnez issues close --amend-reason` to explicitly correct its reason.
           - Commit documentation and `issues/*.md` changes immediately; don't batch them behind
             pending code work.
 

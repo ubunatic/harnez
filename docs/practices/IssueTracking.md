@@ -74,6 +74,12 @@ Use `harnez issues <verb>` to change a ticket's status, resync `issues/README.md
 - `harnez issues mv <old> [new]` — Renumber a ticket, rename file, rewrite `# NNN — ...` header, and resync
 - `harnez issues list [filter]` — List matching tickets (e.g. `is:open`)
 
+Closing an already-Closed ticket (`close` or `done`) exits 0 without changing
+the ticket, index, or commits, even when a different reason is supplied. The
+notice preserves the existing reason. To correct it explicitly, use
+`harnez issues close <n> "<corrected resolution>" --amend-reason`; this updates
+the reason in one commit and errors without writing if the ticket is not Closed.
+
 The top of each ticket MUST contain the standardized metadata block:
 
 ```markdown

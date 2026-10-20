@@ -26,6 +26,13 @@ func TestManCommand(t *testing.T) {
 	if !strings.Contains(string(page), "--interactive") {
 		t.Errorf("generated page lacks --interactive: %s", path)
 	}
+	issuesPage, err := os.ReadFile(filepath.Join(dir, "harnez-issues.1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(issuesPage), "amend-reason") || !strings.Contains(string(issuesPage), "already-Closed ticket is always a no-op") {
+		t.Error("issues man page lacks close no-op policy or --amend-reason")
+	}
 }
 
 func TestManCommandPrintsRoff(t *testing.T) {

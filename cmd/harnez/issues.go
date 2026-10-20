@@ -54,12 +54,13 @@ type issuesResult struct {
 
 // issuesRunOptions bundles runIssuesVerb's inputs.
 type issuesRunOptions struct {
-	Dir       string
-	Check     bool
-	JSON      bool
-	NoCommit  bool
-	CommitMsg string // explicit --commit override; empty means "compose the default"
-	Stderr    io.Writer
+	Dir         string
+	Check       bool
+	JSON        bool
+	NoCommit    bool
+	AmendReason bool
+	CommitMsg   string // explicit --commit override; empty means "compose the default"
+	Stderr      io.Writer
 }
 
 func newIssuesCmd() *cobra.Command {
@@ -71,6 +72,7 @@ func newIssuesCmd() *cobra.Command {
 	var textFlag bool
 	var imageFlag bool
 	var noCommitFlag bool
+	var amendReasonFlag bool
 	var commitMsgFlag string
 	var cachedFlag bool
 	var limitFlag int
@@ -137,14 +139,14 @@ then the README is regenerated and the batch is committed once.
 "Closed — resolved" -- both are common in the corpus and this command does
 not guess which the caller means. It also never guesses a commit sha for a
 "resolved in <sha>" reason (that sha does not exist until this command's own
-commit is made) -- supply it explicitly, or correct it in a small follow-up
-call.
+commit is made) -- supply it explicitly, or correct it with --amend-reason.
 
 Idempotency: re-running a verb that would produce the exact same Status
 line text already on disk is a no-op -- exit 0, no file/README/commit
-changes. Changing the reason text on an already-matching status (e.g.
-correcting a placeholder commit sha) is a real, non-idempotent action and
-proceeds normally.
+changes. Closing an already-Closed ticket is always a no-op, regardless of
+the requested reason. Use close (or done) --amend-reason to explicitly
+correct its reason in one commit; this requires an already-Closed ticket.
+Other verbs still allow reason changes on an already-matching status.
 
 --check (alias --dry-run) reports what would change without writing or
 committing, and exits 1 if there is drift from the requested state (mirrors
@@ -154,6 +156,9 @@ A nonexistent or ambiguous ticket number is a caller-bug error (non-zero
 exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
 valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
+			if amendReasonFlag && (listFlag || len(args) == 0 || (args[0] != "close" && args[0] != "done")) {
+				return fmt.Errorf("issues: --amend-reason requires close or done")
+			}
 			if listFlag {
 				if len(args) != 0 {
 					return fmt.Errorf("issues -l: does not accept positional arguments")
@@ -239,12 +244,13 @@ valid, exit-0 answer.`,
 				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args[1:], jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}
 			opts := issuesRunOptions{
-				Dir:       dir,
-				Check:     checkFlag || dryRunFlag,
-				JSON:      jsonFlag,
-				NoCommit:  noCommitFlag,
-				CommitMsg: commitMsgFlag,
-				Stderr:    cmd.ErrOrStderr(),
+				Dir:         dir,
+				Check:       checkFlag || dryRunFlag,
+				JSON:        jsonFlag,
+				NoCommit:    noCommitFlag,
+				AmendReason: amendReasonFlag,
+				CommitMsg:   commitMsgFlag,
+				Stderr:      cmd.ErrOrStderr(),
 			}
 			if args[0] == "mv" {
 				oldArg := args[1]
@@ -305,6 +311,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVarP(&textFlag, "text", "t", false, "output raw text directly to stdout (alias for --raw)")
 	cmd.Flags().BoolVarP(&imageFlag, "image", "I", false, "render visual PNG card context")
 	cmd.Flags().BoolVar(&noCommitFlag, "no-commit", false, "rewrite the ticket file and README but do not git add/commit")
+	cmd.Flags().BoolVar(&amendReasonFlag, "amend-reason", false, "with close/done: amend the reason of an already-Closed ticket")
 	cmd.Flags().StringVar(&commitMsgFlag, "commit", "", `override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")`)
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 10, "with 'list': limit results (default: newest 10)")
 	cmd.Flags().BoolVarP(&allFlag, "all", "a", false, "with 'list': show all matching results")
@@ -459,11 +466,15 @@ func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issue
 		if !hasStatus {
 			return nil, false, fmt.Errorf("issues: %s has no '**Status**:' line to update", relPath)
 		}
-		updated, _, err := issues.RewriteStatus(string(content), newStatus)
+		targetStatus, err := issuesCloseStatus(verb, oldStatus, newStatus, opts.AmendReason)
+		if err != nil {
+			return nil, false, fmt.Errorf("issues: %s: %w", relPath, err)
+		}
+		updated, _, err := issues.RewriteStatus(string(content), targetStatus)
 		if err != nil {
 			return nil, false, fmt.Errorf("issues: %w", err)
 		}
-		result := issuesResult{Number: f.Number, File: relPath, OldStatus: oldStatus, NewStatus: newStatus, Noop: oldStatus == newStatus}
+		result := issuesResult{Number: f.Number, File: relPath, OldStatus: oldStatus, NewStatus: targetStatus, Noop: oldStatus == targetStatus}
 		targets = append(targets, target{path: filePath, relPath: relPath, old: content, updated: []byte(updated), result: result})
 	}
 
@@ -951,6 +962,19 @@ func messageReferencesTicket(message, ticketNumber string) bool {
 	return false
 }
 
+// issuesCloseStatus preserves an existing closure unless explicitly amended.
+func issuesCloseStatus(verb, oldStatus, newStatus string, amend bool) (string, error) {
+	closing := verb == "close" || verb == "done"
+	closed := issues.CanonicalizeStatus(oldStatus) == issues.StatusClosed
+	if amend && (!closing || !closed) {
+		return "", fmt.Errorf("--amend-reason requires close/done on an already Closed ticket")
+	}
+	if closing && closed && !amend {
+		return oldStatus, nil
+	}
+	return newStatus, nil
+}
+
 // runIssuesVerb performs the full status-change: locate the ticket,
 // compose the new Status line, rewrite the file (or simulate the rewrite
 // under --check), resync issues/README.md, and commit (unless --no-commit
@@ -983,11 +1007,19 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 		return issuesResult{}, false, fmt.Errorf("issues: %s has no '**Status**:' line to update", relPath)
 	}
 
+	newStatus, err = issuesCloseStatus(verb, oldStatus, newStatus, opts.AmendReason)
+	if err != nil {
+		return issuesResult{}, false, fmt.Errorf("issues: %s: %w", relPath, err)
+	}
 	result := issuesResult{
 		Number:    f.Number,
 		File:      relPath,
 		OldStatus: oldStatus,
 		NewStatus: newStatus,
+	}
+	if (verb == "close" || verb == "done") && oldStatus == newStatus {
+		result.Noop = true
+		return result, false, nil
 	}
 	if verb == "close" || verb == "done" {
 		warnMissingImplementationCommit(opts.Stderr, opts.Dir, result.Number)
@@ -1177,7 +1209,11 @@ func formatIssuesLine(r issuesResult, check bool) string {
 		if r.OldNumber != "" && r.OldNumber != r.Number {
 			return fmt.Sprintf("%s -> %s: already at %s (no change)", r.OldNumber, r.Number, r.File)
 		}
-		return fmt.Sprintf("%s: already %s (no change)", r.Number, r.NewStatus)
+		line := fmt.Sprintf("%s: already %s (no change)", r.Number, r.NewStatus)
+		if issues.CanonicalizeStatus(r.NewStatus) == issues.StatusClosed {
+			line += "; use --amend-reason to change the reason"
+		}
+		return line
 	}
 	var parts []string
 	if check {

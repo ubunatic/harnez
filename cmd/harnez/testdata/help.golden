@@ -1608,14 +1608,14 @@ then the README is regenerated and the batch is committed once.
 "Closed — resolved" -- both are common in the corpus and this command does
 not guess which the caller means. It also never guesses a commit sha for a
 "resolved in <sha>" reason (that sha does not exist until this command's own
-commit is made) -- supply it explicitly, or correct it in a small follow-up
-call.
+commit is made) -- supply it explicitly, or correct it with --amend-reason.
 
 Idempotency: re-running a verb that would produce the exact same Status
 line text already on disk is a no-op -- exit 0, no file/README/commit
-changes. Changing the reason text on an already-matching status (e.g.
-correcting a placeholder commit sha) is a real, non-idempotent action and
-proceeds normally.
+changes. Closing an already-Closed ticket is always a no-op, regardless of
+the requested reason. Use close (or done) --amend-reason to explicitly
+correct its reason in one commit; this requires an already-Closed ticket.
+Other verbs still allow reason changes on an already-matching status.
 
 --check (alias --dry-run) reports what would change without writing or
 committing, and exits 1 if there is drift from the requested state (mirrors
@@ -1630,6 +1630,7 @@ Usage:
 
 Flags:
   -a, --all             with 'list': show all matching results
+      --amend-reason    with close/done: amend the reason of an already-Closed ticket
       --cached          validate the staged Git snapshot (issues lint only)
       --check           report what would change without writing or committing; exit 1 on drift
       --commit string   override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
