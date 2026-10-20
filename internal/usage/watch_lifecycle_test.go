@@ -186,7 +186,7 @@ func TestWatchPTYHelper(t *testing.T) {
 	if strings.HasPrefix(mode, "splash-") {
 		opts.Splash = true
 	}
-	opts.SharedUsageCollector = func(ctx context.Context) UsageSummary {
+	opts.StoredUsageLoader = func(ctx context.Context) UsageSummary {
 		fmt.Fprint(os.Stdout, "FETCH_BLOCKED")
 		switch mode {
 		case "cancel":

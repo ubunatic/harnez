@@ -2,7 +2,10 @@ package usage
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"time"
+
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
 )
@@ -26,6 +29,7 @@ func PersistUsageSummary(ctx context.Context, homeDir, dbPath string, summary Us
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
+	summary.Timestamp = at
 	for _, agent := range summary.Agents {
 		observed := agent.LastRefreshed
 		if observed.IsZero() {
@@ -34,6 +38,17 @@ func PersistUsageSummary(ctx context.Context, homeDir, dbPath string, summary Us
 		if err := importAgent(store, ctx, agent.AgentID, "collector", observed, agent); err != nil {
 			return err
 		}
+	}
+	data, err := json.Marshal(summary)
+	if err != nil {
+		return err
+	}
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown-host"
+	}
+	if err := store.WriteLatestUsageSummary(ctx, usagestore.UsageSummaryRecord{Hostname: host, ObservedAt: at, Payload: data}); err != nil {
+		return err
 	}
 	return recordHistorySnapshot(ctx, store, summary, at)
 }

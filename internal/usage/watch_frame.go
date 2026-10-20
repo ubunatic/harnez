@@ -17,11 +17,8 @@ type WatchOptions struct {
 	// StoredUsageLoader reads the most recent collector snapshot for local views.
 	StoredUsageLoader func(context.Context) UsageSummary
 	// Loading distinguishes the first interactive frame from an empty result.
-	Loading bool
-	// SharedUsageCollector optionally supplies usage from the public shared
-	// usage controller. Nil preserves the legacy collector path.
-	SharedUsageCollector func(context.Context) UsageSummary
-	ProcCounts           *AgentProcessCount
+	Loading    bool
+	ProcCounts *AgentProcessCount
 	// Mode selects one of the spec-defined usage views. Empty uses the spec default.
 	Mode    string
 	Compact bool
@@ -529,10 +526,8 @@ func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out
 	var summary UsageSummary
 	if opt.StoredUsageLoader != nil {
 		summary = opt.StoredUsageLoader(ctx)
-	} else if opt.SharedUsageCollector != nil {
-		summary = opt.SharedUsageCollector(ctx)
 	} else {
-		summary = CollectAll(ctx, homeDir, client)
+		summary = storedSummaryOrError(ctx)
 	}
 	cols, rows := terminalSize(out)
 	opt.ShowProcesses = opt.ShowProcesses || showProcesses

@@ -350,9 +350,8 @@ func TestStatuslineSkipsMigrationUntilUsageStoreCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = StoreCompactSummaryAt(ctx, t.TempDir(), UsageSummary{Timestamp: time.Now().UTC()}, dbPath)
-	if err != nil {
-		t.Fatalf("usage store command migration: %v", err)
+	if err = InitializeUsageStore(ctx, t.TempDir(), dbPath); err != nil {
+		t.Fatalf("collector store initialization: %v", err)
 	}
 	store, err = usagestore.Open(dbPath)
 	if err != nil {

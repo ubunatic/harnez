@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -31,16 +32,30 @@ func ReadStoredSummary(ctx context.Context, dbPath string) (UsageSummary, error)
 		return UsageSummary{}, err
 	}
 	defer store.Close()
-	records, err := store.UsageSummaries(ctx)
+	record, err := store.LatestUsageSummary(ctx)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return UsageSummary{}, fmt.Errorf("usage store has no collector snapshots yet")
+		}
 		return UsageSummary{}, err
 	}
-	if len(records) == 0 {
-		return UsageSummary{}, fmt.Errorf("usage store has no collector snapshots yet")
-	}
 	var summary UsageSummary
-	if err := json.Unmarshal(records[len(records)-1].Payload, &summary); err != nil {
+	if err := json.Unmarshal(record.Payload, &summary); err != nil {
 		return UsageSummary{}, fmt.Errorf("decode usage snapshot: %w", err)
 	}
+	summary.Timestamp = record.ObservedAt
 	return summary, nil
+}
+
+func storedSummaryOrError(ctx context.Context) UsageSummary {
+	summary, err := ReadStoredSummary(ctx, "")
+	if err == nil {
+		return summary
+	}
+	message := fmt.Sprintf("stored usage unavailable: %v", err)
+	return UsageSummary{Agents: []AgentUsage{
+		{AgentID: "claude", Name: "Claude Code", Installed: true, QuotaFetchError: message},
+		{AgentID: "codex", Name: "OpenAI Codex", Installed: true, QuotaFetchError: message},
+		{AgentID: "agy", Name: "Antigravity (AGY)", Installed: true, QuotaFetchError: message},
+	}}
 }

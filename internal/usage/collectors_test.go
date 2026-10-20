@@ -89,8 +89,32 @@ func TestCollectClaude(t *testing.T) {
 	if usage.Tokens == nil {
 		t.Fatalf("expected Tokens != nil")
 	}
-	if usage.Tokens.TotalTokens != 10000 {
-		t.Errorf("expected TotalTokens = 10000, got %d", usage.Tokens.TotalTokens)
+	if usage.Tokens.TotalTokens != 3000 {
+		t.Errorf("expected TotalTokens = 3000 (input + output; cached traffic is separate), got %d", usage.Tokens.TotalTokens)
+	}
+	if usage.Tokens.CacheReadTokens != 3000 || usage.Tokens.CacheWriteTokens != 4000 {
+		t.Errorf("cache traffic = read %d write %d, want 3000 and 4000", usage.Tokens.CacheReadTokens, usage.Tokens.CacheWriteTokens)
+	}
+	if usage.ModelTokens["claude-sonnet-5"] != 3000 {
+		t.Errorf("model total = %d, want 3000", usage.ModelTokens["claude-sonnet-5"])
+	}
+}
+
+func TestCollectClaudeTotalExcludesCachedTraffic(t *testing.T) {
+	tempDir := t.TempDir()
+	statsJSON := `{"modelUsage":{"fixture":{"inputTokens":202697,"outputTokens":18168189,"cacheReadInputTokens":4136598389,"cacheCreationInputTokens":75884442}}}`
+	if err := os.WriteFile(filepath.Join(tempDir, "stats-cache.json"), []byte(statsJSON), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got := CollectClaude(context.Background(), tempDir, nil)
+	if got.Tokens == nil || got.Tokens.TotalTokens != 18370886 {
+		t.Fatalf("Claude total tokens = %+v, want 18,370,886 input + output", got.Tokens)
+	}
+	if got.Tokens.CacheReadTokens != 4136598389 || got.Tokens.CacheWriteTokens != 75884442 {
+		t.Fatalf("cached counters were lost: %+v", got.Tokens)
+	}
+	if got.ModelTokens["fixture"] != 18370886 {
+		t.Fatalf("model total = %d, want 18,370,886", got.ModelTokens["fixture"])
 	}
 }
 

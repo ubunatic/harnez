@@ -251,7 +251,9 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 			tb := &TokenBreakdown{}
 			modelToks := make(map[string]int64)
 			for modelName, m := range stats.ModelUsage {
-				modelTotal := m.InputTokens + m.OutputTokens + m.CacheReadInputTokens + m.CacheCreationInputTokens
+				// Cache token counters report reuse, not newly consumed tokens;
+				// including them in TotalTokens double-counts prompt traffic.
+				modelTotal := m.InputTokens + m.OutputTokens
 				modelToks[modelName] = modelTotal
 				tb.InputTokens += m.InputTokens
 				tb.OutputTokens += m.OutputTokens
@@ -259,7 +261,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 				tb.CacheWriteTokens += m.CacheCreationInputTokens
 				tb.CostUSD += m.CostUSD
 			}
-			tb.TotalTokens = tb.InputTokens + tb.OutputTokens + tb.CacheReadTokens + tb.CacheWriteTokens
+			tb.TotalTokens = tb.InputTokens + tb.OutputTokens
 			usage.Tokens = tb
 			if len(modelToks) > 0 {
 				usage.ModelTokens = modelToks

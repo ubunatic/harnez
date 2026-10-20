@@ -82,10 +82,8 @@ func RunLoom(ctx context.Context, homeDir string, client *http.Client, out io.Wr
 	var summary UsageSummary
 	if opts.StoredUsageLoader != nil {
 		summary = opts.StoredUsageLoader(ctx)
-	} else if opts.SharedUsageCollector != nil {
-		summary = opts.SharedUsageCollector(ctx)
 	} else {
-		summary = CollectAll(ctx, homeDir, client)
+		summary = storedSummaryOrError(ctx)
 	}
 	widget := NewUsageLoomWidget(summary, opts)
 

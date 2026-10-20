@@ -6,32 +6,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
-	"modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
 )
-
-// StoreCompactSummary makes the existing compact collection result durable,
-// then projects the store's normalized quota readings back into that result.
-// Database errors preserve collected values and add visible provider error rows.
-func StoreCompactSummary(ctx context.Context, homeDir string, summary UsageSummary) (UsageSummary, error) {
-	return storeCompactSummary(ctx, homeDir, summary, "")
-}
-
-// StoreCompactSummaryAt is the testable form of StoreCompactSummary with an
-// explicit telemetry database path.
-func StoreCompactSummaryAt(ctx context.Context, homeDir string, summary UsageSummary, dbPath string) (UsageSummary, error) {
-	return storeCompactSummary(ctx, homeDir, summary, dbPath)
-}
 
 // ImportUsageCompatibility backfills the existing quota snapshots/history
 // once so consumers can read them through the shared store API.
@@ -486,109 +470,6 @@ func writeUsageHistoryMirrors(ctx context.Context, store *usagestore.Store, dir 
 	return nil
 }
 
-func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSummary, dbPath string) (result UsageSummary, resultErr error) {
-	defer func() {
-		if resultErr != nil && ctx.Err() == nil {
-			result = compactProjectionFailure(homeDir, summary, resultErr)
-			if isStoreBusy(resultErr) {
-				resultErr = nil
-			}
-		}
-	}()
-	if dbPath == "" {
-		var err error
-		dbPath, err = telemetry.DefaultDBPath()
-		if err != nil {
-			return summary, err
-		}
-	}
-	busyTimeout, err := UsageStoreBusyTimeout()
-	if err != nil {
-		return summary, err
-	}
-	store, err := usagestore.OpenWithBusyTimeout(dbPath, busyTimeout)
-	if err != nil {
-		return summary, err
-	}
-	defer store.Close()
-	if err := store.EnsureUsageSchema(ctx); err != nil {
-		if !isStoreBusy(err) {
-			return summary, err
-		}
-		logStoreBusy(homeDir, "schema setup", err)
-	}
-	if err := store.MigrateStableWindowKeys(ctx); err != nil {
-		if !isStoreBusy(err) {
-			return summary, err
-		}
-		logStoreBusy(homeDir, "window-key migration", err)
-	}
-	if err := importCompatibility(store, ctx, homeDir); err != nil {
-		if !isStoreBusy(err) {
-			return summary, err
-		}
-		logStoreBusy(homeDir, "compatibility import", err)
-	}
-	now := summary.Timestamp
-	if now.IsZero() {
-		now = time.Now()
-	}
-	for _, agent := range summary.Agents {
-		at := now
-		if !agent.LastRefreshed.IsZero() {
-			at = agent.LastRefreshed
-		}
-		if err := importAgent(store, ctx, agent.AgentID, "collect-all", at, agent); err != nil {
-			if !isStoreBusy(err) {
-				return summary, err
-			}
-			logStoreBusy(homeDir, "observation write", err)
-		}
-	}
-	byProvider := make(map[string]int, len(summary.Agents))
-	for i := range summary.Agents {
-		byProvider[summary.Agents[i].AgentID] = i
-	}
-	for _, provider := range []struct{ id, name string }{
-		{"claude", "Claude Code"}, {"codex", "OpenAI Codex"}, {"agy", "Antigravity (AGY)"},
-	} {
-		readings, err := store.LatestFor(ctx, provider.id)
-		if err != nil {
-			return summary, err
-		}
-		hasQuota := false
-		for _, reading := range readings {
-			if reading.Pool != "tokens" {
-				hasQuota = true
-				break
-			}
-		}
-		if !hasQuota {
-			if i, ok := byProvider[provider.id]; !ok || (summary.Agents[i].Error == "" && summary.Agents[i].QuotaFetchError == "") {
-				continue
-			}
-		}
-		i, ok := byProvider[provider.id]
-		if !ok {
-			i = len(summary.Agents)
-			byProvider[provider.id] = i
-			summary.Agents = append(summary.Agents, AgentUsage{AgentID: provider.id, Name: provider.name, Installed: true})
-		}
-		// A durable quota observation proves the provider was installed even
-		// when this cycle's collector reports it absent or unauthenticated.
-		summary.Agents[i].Installed = true
-		if summary.Agents[i].Name == "" {
-			summary.Agents[i].Name = provider.name
-		}
-		applyStoredWindows(&summary.Agents[i], readings, now)
-	}
-	// The snapshot is best-effort: a busy store must not hide the live view.
-	if err := recordHistorySnapshot(ctx, store, summary, now); err != nil {
-		appendUsageDebugLog("", fmt.Sprintf("usage history snapshot failed: %v", err))
-	}
-	return summary, nil
-}
-
 // recordHistorySnapshot keeps the usage history that `harnez usage export`
 // reads going: live collection records one snapshot per host at most every
 // history_snapshot_interval. Recording stopped in 2026-08 when `usage
@@ -615,59 +496,6 @@ func recordHistorySnapshot(ctx context.Context, store *usagestore.Store, summary
 		return err
 	}
 	return store.WriteUsageSummary(ctx, usagestore.UsageSummaryRecord{Hostname: host, ObservedAt: now, Payload: payload})
-}
-
-// appendUsageDebugLog appends one timestamped line to ~/.harnez/debug.log.
-func appendUsageDebugLog(homeDir, msg string) {
-	if homeDir == "" {
-		homeDir, _ = os.UserHomeDir()
-	}
-	dir := filepath.Join(homeDir, ".harnez")
-	if os.MkdirAll(dir, 0o700) == nil {
-		if file, openErr := os.OpenFile(filepath.Join(dir, "debug.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); openErr == nil {
-			fmt.Fprintf(file, "[%s] %s\n", time.Now().UTC().Format(time.RFC3339Nano), msg)
-			file.Close()
-		}
-	}
-}
-
-// A failed projection cannot establish which providers exist in the store.
-// Keep all supported providers visible rather than treating that uncertainty
-// as evidence that a provider (notably Codex) is absent.
-func compactProjectionFailure(homeDir string, summary UsageSummary, err error) UsageSummary {
-	appendUsageDebugLog(homeDir, fmt.Sprintf("usage compact projection failed: %v", err))
-	summary.Agents = append([]AgentUsage(nil), summary.Agents...)
-	if isStoreBusy(err) {
-		if len(summary.Agents) == 0 {
-			summary.Agents = append(summary.Agents, AgentUsage{AgentID: "claude", Name: "Claude Code", Installed: true})
-		}
-		summary.Agents[0].QuotaFetchError = "store busy"
-		return summary
-	}
-	for _, provider := range []struct{ id, name string }{
-		{"claude", "Claude Code"}, {"codex", "OpenAI Codex"}, {"agy", "Antigravity (AGY)"},
-	} {
-		i := slices.IndexFunc(summary.Agents, func(a AgentUsage) bool { return a.AgentID == provider.id })
-		if i < 0 {
-			i = len(summary.Agents)
-			summary.Agents = append(summary.Agents, AgentUsage{AgentID: provider.id, Name: provider.name})
-		}
-		summary.Agents[i].Installed = true
-		if summary.Agents[i].Name == "" {
-			summary.Agents[i].Name = provider.name
-		}
-		summary.Agents[i].QuotaFetchError = fmt.Sprintf("store projection failed: %v", err)
-	}
-	return summary
-}
-
-func isStoreBusy(err error) bool {
-	var sqliteErr *sqlite.Error
-	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == 5
-}
-
-func logStoreBusy(homeDir, operation string, err error) {
-	appendUsageDebugLog(homeDir, fmt.Sprintf("usage %s skipped: %v", operation, err))
 }
 
 func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now time.Time) {

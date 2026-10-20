@@ -65,6 +65,30 @@ type UsageSummaryRecord struct {
 	RecordKey string
 }
 
+// WriteLatestUsageSummary replaces the current collector snapshot for a host.
+// The history table remains separately throttled for export consumers.
+func (s *Store) WriteLatestUsageSummary(ctx context.Context, record UsageSummaryRecord) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO usage_current_summaries(hostname,observed_at,summary_json) VALUES(?,?,?) ON CONFLICT(hostname) DO UPDATE SET observed_at=excluded.observed_at,summary_json=excluded.summary_json`, record.Hostname, record.ObservedAt.UTC().Format(time.RFC3339Nano), string(record.Payload))
+	return err
+}
+
+// LatestUsageSummary returns the newest collector snapshot without scanning
+// the throttled history table.
+func (s *Store) LatestUsageSummary(ctx context.Context) (UsageSummaryRecord, error) {
+	var record UsageSummaryRecord
+	var observed, payload string
+	err := s.db.QueryRowContext(ctx, `SELECT hostname,observed_at,summary_json FROM usage_current_summaries ORDER BY observed_at DESC LIMIT 1`).Scan(&record.Hostname, &observed, &payload)
+	if err != nil {
+		return UsageSummaryRecord{}, err
+	}
+	record.ObservedAt, err = time.Parse(time.RFC3339Nano, observed)
+	if err != nil {
+		return UsageSummaryRecord{}, err
+	}
+	record.Payload = []byte(payload)
+	return record, nil
+}
+
 // TurnQuotaDelta is a same-provider, same-pool, same-window comparison.
 type TurnQuotaDelta struct {
 	SessionID, Provider, Pool, WindowKey string
@@ -1056,6 +1080,7 @@ func EnsureSchema(ctx context.Context, exec func(context.Context, string) error)
 		`CREATE INDEX IF NOT EXISTS idx_usage_load_observations_provider_time ON usage_load_observations(provider,observed_at)`,
 		`CREATE TABLE IF NOT EXISTS usage_summary_observations (id INTEGER PRIMARY KEY AUTOINCREMENT, hostname TEXT NOT NULL, observed_at TEXT NOT NULL, summary_json TEXT NOT NULL, record_key TEXT NOT NULL UNIQUE)`,
 		`CREATE INDEX IF NOT EXISTS idx_usage_summary_observations_time ON usage_summary_observations(observed_at,hostname)`,
+		`CREATE TABLE IF NOT EXISTS usage_current_summaries (hostname TEXT PRIMARY KEY, observed_at TEXT NOT NULL, summary_json TEXT NOT NULL)`,
 	} {
 		if err := exec(ctx, statement); err != nil {
 			return err

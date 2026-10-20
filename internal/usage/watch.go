@@ -597,18 +597,6 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		splashStatus = splashStatusRecord(splashStatus, source, stage)
 		splashStatusMu.Unlock()
 	}
-	reportFetchDiagnostic := func(event FetchDiagnostic) {
-		if event.Stage == FetchStarted {
-			return
-		}
-		diagnosticsMu.Lock()
-		defer diagnosticsMu.Unlock()
-		diagnostics = append(diagnostics, formatDetailedDiagnosticEvent(event, time.Now()))
-		if len(diagnostics) > 24 {
-			diagnostics = diagnostics[len(diagnostics)-24:]
-		}
-	}
-
 	splashEstimate, splashHaveEstimate := loadFetchDurationEstimate(homeDir, fetchDurationKindForHost(configuredHost))
 	paintSplash := func(elapsed time.Duration, animate bool) (drained bool, err error) {
 		cols, rows := terminalSize(out)
@@ -651,10 +639,8 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			} else {
 				if opts.StoredUsageLoader != nil {
 					result.summary = opts.StoredUsageLoader(sigCtx)
-				} else if opts.SharedUsageCollector != nil {
-					result.summary = opts.SharedUsageCollector(sigCtx)
 				} else {
-					result.summary = CollectAllProgressDetailed(sigCtx, homeDir, client, reportFetchStage, reportFetchDiagnostic)
+					result.summary = storedSummaryOrError(sigCtx)
 				}
 			}
 			if sigCtx.Err() != nil {
