@@ -1,6 +1,6 @@
 # 813 — Extract cohesive units from internal/claude apply.go and init.go
 
-**Status**: Open
+**Status**: Closed — Extracted cohesive apply/init units and replaced long parameter lists with options; behavior and required checks verified in 3c3ffc1d and b82ec106
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Refactor
