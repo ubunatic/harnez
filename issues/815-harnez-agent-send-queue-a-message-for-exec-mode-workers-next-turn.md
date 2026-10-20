@@ -1,6 +1,6 @@
 # harnez agent send: queue a message for exec-mode workers' next turn
 
-Status: Open — M2 pre-work from host live check
+Status: Closed — M2 accepts resumable registry sessions and caps unknown-target candidates; regression coverage and requested checks pass (46b82388)
 Priority: P3
 Category: Feature
 
@@ -20,7 +20,8 @@ Store the message on the session; `resume` prepends queued messages to the next 
 ## Delivery
 - Implemented in `b0b62e5e`: exact-name registry fallback after live routes, durable FIFO messages
   with sender labels, atomic successful-turn acknowledgement under the registry flock, and
-  preservation across failures and concurrent sends/session saves. Completed/deleted targets fail.
+  preservation across failures and concurrent sends/session saves. M2 below corrects M1's
+  mistaken rejection of resumable completed sessions.
 - Queue consumption is explicit-resume only: batch exec providers have no turn-boundary hook.
 - Tests cover queue/resume once, ordered sends, failed resume retention, arrivals during resume,
   stale saves, unknown/ambiguous/completed/deleted names, store/directory scope, and live priority.
@@ -42,3 +43,15 @@ completed; unknown agent send target ...` followed by ~50 live Codex threads fro
    "(N more; use harnez agent list)" instead of every Codex thread on the machine.
 3. Then the host reruns: send, resume asks for the word (must contain it), second resume must not
    see it again.
+
+## M2 Delivery
+- Implemented in `46b82388`: accept resumable completed, idle, running, failed, and stopped
+  registry records; refuse blocked, quarantined, or provider sessions that fail `CheckResumable`.
+  Active interactive resumptions also prepend and acknowledge queued messages on successful send.
+- Unknown and ambiguous live-target errors show at most ten candidates, prioritize current-dir
+  entries, and point to `harnez agent list` for the full list.
+- Regression coverage verifies completed-session queueing, non-resumable refusal, current-dir
+  priority, candidate truncation, and interactive resume delivery/acknowledgement. Existing tests
+  cover FIFO order, failures, and messages arriving during batch resume.
+- Passed: `make lint`, `go test ./internal/subagent/ ./cmd/harnez/`, `make test-short`, and
+  `make install`. Updated `docs/AgentMessaging.md` and help goldens.
