@@ -34,6 +34,55 @@ type Window struct {
 	ObservedAt        time.Time  `json:"observed_at"`
 }
 
+// UnmarshalJSON accepts the pre-snake_case window keys emitted by earlier
+// quota-readings.jsonl writers while keeping new output consistently tagged.
+func (w *Window) UnmarshalJSON(data []byte) error {
+	type plain Window
+	var decoded plain
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var legacy struct {
+		UsedFraction      *float64
+		InputTokens       *int64
+		CachedInputTokens *int64
+		OutputTokens      *int64
+		ReasoningTokens   *int64
+		ResetAt           *time.Time
+		ObservedAt        *time.Time
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if _, ok := fields["used_fraction"]; !ok && legacy.UsedFraction != nil {
+		decoded.UsedFraction = *legacy.UsedFraction
+	}
+	if _, ok := fields["observed_at"]; !ok && legacy.ObservedAt != nil {
+		decoded.ObservedAt = *legacy.ObservedAt
+	}
+	if _, ok := fields["input_tokens"]; !ok {
+		decoded.InputTokens = legacy.InputTokens
+	}
+	if _, ok := fields["cached_input_tokens"]; !ok {
+		decoded.CachedInputTokens = legacy.CachedInputTokens
+	}
+	if _, ok := fields["output_tokens"]; !ok {
+		decoded.OutputTokens = legacy.OutputTokens
+	}
+	if _, ok := fields["reasoning_tokens"]; !ok {
+		decoded.ReasoningTokens = legacy.ReasoningTokens
+	}
+	if _, ok := fields["reset_at"]; !ok {
+		decoded.ResetAt = legacy.ResetAt
+	}
+	*w = Window(decoded)
+	return nil
+}
+
 // TurnQuotaBoundary preserves one quota capture at a turn boundary. Windows
 // retain their individual source, timestamp, and normalized pool/window key.
 type TurnQuotaBoundary struct {

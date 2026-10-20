@@ -12,6 +12,7 @@ type UpdateResult string
 
 const (
 	UpdateDelivered UpdateResult = "delivered"
+	UpdateSpooled   UpdateResult = "spooled"
 	UpdateDropped   UpdateResult = "dropped"
 )
 
@@ -20,6 +21,16 @@ func UnixHTTPClient(socket string, timeout time.Duration) *http.Client {
 		return (&net.Dialer{Timeout: timeout}).DialContext(ctx, "unix", socket)
 	}}
 	return &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+func PostTelemetry(ctx context.Context, socket, path string, payload []byte, timeout time.Duration, spoolDir string, spoolMaxBytes int64) UpdateResult {
+	if result := PostUpdate(ctx, socket, path, payload, timeout); result == UpdateDelivered {
+		return result
+	}
+	if err := AppendTelemetrySpool(spoolDir, payload, spoolMaxBytes); err != nil {
+		return UpdateDropped
+	}
+	return UpdateSpooled
 }
 
 func PostUpdate(ctx context.Context, socket, path string, payload []byte, timeout time.Duration) UpdateResult {

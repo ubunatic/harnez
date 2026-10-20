@@ -36,6 +36,16 @@ func TestWriteAndCurrentIdempotentAndFractional(t *testing.T) {
 	}
 }
 
+func TestWindowUnmarshalSupportsLegacyCamelCaseFractionAndTimestamp(t *testing.T) {
+	var got Window
+	if err := json.Unmarshal([]byte(`{"Provider":"claude","Key":"five_hour","Source":"legacy","Freshness":"fresh","UsedFraction":0.42,"ObservedAt":"2026-10-20T12:34:56Z"}`), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Provider != "claude" || got.UsedFraction != .42 || !got.ObservedAt.Equal(time.Date(2026, 10, 20, 12, 34, 56, 0, time.UTC)) {
+		t.Fatalf("decoded legacy window = %+v", got)
+	}
+}
+
 func TestWriteCurrentUpsertLooksUpExactObservationID(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "upsert-observation.sqlite")
 	s, err := Open(dbPath)
@@ -528,5 +538,16 @@ func TestDedupeUsageSummariesCollapsesSourceKeyedCopies(t *testing.T) {
 	}
 	if string(got[0].Payload) != `{"n":1}` {
 		t.Errorf("kept payload = %s, want the oldest copy", got[0].Payload)
+	}
+}
+
+func TestWindowLegacyTokensAndSnakeCasePrecedence(t *testing.T) {
+	var got Window
+	err := json.Unmarshal([]byte(`{"UsedFraction":0.8,"used_fraction":0.0,"InputTokens":12,"CachedInputTokens":4,"OutputTokens":7,"ReasoningTokens":3,"ResetAt":"2026-10-20T13:00:00Z","ObservedAt":"2026-10-20T12:00:00Z"}`), &got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UsedFraction != 0 || got.InputTokens == nil || *got.InputTokens != 12 || got.CachedInputTokens == nil || *got.CachedInputTokens != 4 || got.OutputTokens == nil || *got.OutputTokens != 7 || got.ReasoningTokens == nil || *got.ReasoningTokens != 3 || got.ResetAt == nil || got.ResetAt.Hour() != 13 || got.ObservedAt.Hour() != 12 {
+		t.Fatalf("legacy window: %+v", got)
 	}
 }

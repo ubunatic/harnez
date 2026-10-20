@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez local server settings",
   "type": "object",
-  "required": ["socket_path", "read_header_timeout", "shutdown_timeout", "http_client_timeout", "update_timeout", "update_max_body_bytes", "startup_timeout", "startup_poll_interval", "takeover_timeout"],
+  "required": ["socket_path", "read_header_timeout", "shutdown_timeout", "http_client_timeout", "update_timeout", "update_max_body_bytes", "telemetry_update_path", "telemetry_spool_path", "telemetry_spool_max_bytes", "startup_timeout", "startup_poll_interval", "takeover_timeout"],
   "properties": {
     "socket_path": { "type": "string", "minLength": 1 },
     "read_header_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
@@ -10,6 +10,9 @@
     "http_client_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "update_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "update_max_body_bytes": { "type": "integer", "minimum": 1 },
+    "telemetry_update_path": { "type": "string", "pattern": "^/[^?#]+$" },
+    "telemetry_spool_path": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "telemetry_spool_max_bytes": { "type": "integer", "minimum": 1 },
     "startup_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "startup_poll_interval": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "takeover_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" }

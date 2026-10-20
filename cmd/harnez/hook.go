@@ -1,7 +1,7 @@
 // agyhook implements `harnez hook agy` / `harnez hook agy-tool` (and hidden legacy `harnez agy-hook`),
 // the native lifecycle observation and enforcement hook for Google Antigravity (AGY).
 // It accepts Antigravity's PreToolUse JSON payload on stdin, enforces tool and reading discipline
-// policies (rejecting disallowed tools or full-file reads), records telemetry into SQLite,
+// policies (rejecting disallowed tools or full-file reads), submits telemetry to the server,
 // and routes shell commands through harnez exec.
 package main
 
@@ -23,8 +23,8 @@ import (
 	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/decide"
 	"ubunatic.com/harnez/internal/guard"
-	"ubunatic.com/harnez/internal/readcard"
 	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
 )
@@ -58,7 +58,7 @@ func newAgyHookCmd() *cobra.Command {
 		Short:  "Antigravity PreToolUse tool observation hook",
 		Hidden: true,
 		Long: `agy accepts Antigravity's PreToolUse JSON payload on stdin,
-records tool invocations into ~/.harnez/tool_catalog.sqlite under agent_id='agy',
+submits tool invocations to the local server under agent_id='agy',
 and outputs {"decision":"allow"} to stdout.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -126,53 +126,30 @@ func runAgyPostToolHook(in io.Reader, out io.Writer, opts agyPostHookOptions) er
 		return nil
 	}
 	sendAgyTurnEvent("tool-end")
-
-	outputStr := payload.Output
-	if outputStr == "" && payload.TranscriptPath != "" {
-		outputStr = extractTranscriptOutput(payload.TranscriptPath)
-	}
-	outputBytes := int64(len([]byte(outputStr)))
-	actualTok := int64(readcard.ComputeTextTokens(outputStr).TextTokens)
-	var actualTokens *int64 = &actualTok
-
-	dbPath := opts.DBPath
-	if dbPath == "" {
-		dbPath, _ = telemetry.DefaultDBPath()
+	output := payload.Output
+	if output == "" && payload.TranscriptPath != "" {
+		output = extractTranscriptOutput(payload.TranscriptPath)
 	}
 
 	if opts.Update != nil {
-		if err := opts.Update(dbPath, payload.ConversationID, outputBytes, 0); err != nil {
+		if err := opts.Update(opts.DBPath, payload.ConversationID, int64(len([]byte(output))), 0); err != nil {
 			fmt.Fprintf(os.Stderr, "harnez post-tool hook: update: %v\n", err)
 		}
 		return nil
 	}
-
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "harnez post-tool hook: open db: %v\n", err)
+	// The server cannot read a client-local transcript path.
+	if payload.Output == "" {
+		payload.Output = output
+	}
+	if opts.DBPath == "" {
+		sendTelemetryRecord("agy_post_tool", payload)
 		return nil
 	}
-	defer db.Close()
-
-	var durationMs int64
-	var savingsTokens, savingsBytes *int64
-	calls, queryErr := db.Query(telemetry.Filter{SessionID: payload.ConversationID})
-	if queryErr == nil && len(calls) > 0 {
-		if !calls[0].CreatedAt.IsZero() {
-			d := time.Since(calls[0].CreatedAt).Milliseconds()
-			if d > 0 {
-				durationMs = d
-			}
-		}
-		if isNativeReadTool(calls[0].ToolName) && outputStr != "" {
-			provider := readcard.ParseProvider(calls[0].AgentID)
-			estimate := readcard.EstimateSavings(outputStr, provider)
-			savingsTokens = &estimate.SavingsTokens
-			savingsBytes = &estimate.SavingsBytes
-		}
+	raw, err := json.Marshal(payload)
+	if err == nil {
+		err = server.ProcessAgyPostTool(opts.DBPath, raw)
 	}
-
-	if err := db.UpdateLatestToolCallMetrics(payload.ConversationID, outputBytes, durationMs, actualTokens, savingsTokens, savingsBytes); err != nil {
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "harnez post-tool hook: update metrics: %v\n", err)
 	}
 	return nil
@@ -197,15 +174,6 @@ func extractTranscriptOutput(path string) string {
 		}
 	}
 	return string(data)
-}
-
-func isNativeReadTool(name string) bool {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "view_file", "readmultiplefiles", "read_multiple_files", "cat":
-		return true
-	default:
-		return false
-	}
 }
 
 type agyHookOptions struct {
@@ -356,14 +324,11 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 	}
 
 	dbPath := opts.DBPath
-	if dbPath == "" {
-		dbPath, _ = telemetry.DefaultDBPath()
-	}
 
-	if dbPath != "" {
+	{
 		insertFn := opts.Insert
 		if insertFn == nil {
-			insertFn = defaultInsertExecRow
+			insertFn = insertAgyTelemetryRecord
 		}
 		_ = insertFn(dbPath, tc) // best-effort insert
 
@@ -408,6 +373,14 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		}
 	}
 	return json.NewEncoder(out).Encode(response)
+}
+
+func insertAgyTelemetryRecord(dbPath string, call telemetry.ToolCall) error {
+	if dbPath == "" {
+		sendTelemetryRecord("tool_call", call)
+		return nil
+	}
+	return server.InsertToolCallAt(dbPath, call)
 }
 
 func sendAgyTurnEvent(event string) {

@@ -30,14 +30,17 @@ retaining compatible snapshots and archives until their consumers have moved.
 
 `harnez server` is the one process that writes `telemetry.sqlite`. It owns the usage collector,
 schema setup, migrations, passive deduplication, and persistence. A single server runs per host on
-the loopback address and port from `spec/server.yaml`; the systemd unit installed by issue 831
+the Unix socket from `spec/server.yaml`; the systemd unit installed by issue 831
 starts that same command. `harnez usage` reads the store read-only and starts the server when it is
 not already running.
 
 Statuslines and other passive usage observers POST normalized windows to the server's local HTTP
 endpoint. They never open the store or start the server. A missing or failing server drops a usage
-update; the next statusline observation can replace it. Telemetry records use the same client and
-route pattern in M3, with the bounded local spool preserving records when no server answers.
+update; the next statusline observation can replace it. `rate`, AGY hooks and Codex telemetry send
+records to the server's telemetry route over that socket. If the server is unavailable, each record
+is appended as one JSON file under the spec-selected telemetry spool directory, within the configured
+byte cap; the server drains the spool at startup and on each collector tick. Only the server handles
+these telemetry writes.
 
 ## Status quo inventory
 
@@ -52,7 +55,7 @@ route pattern in M3, with the bounded local spool preserving records when no ser
 | `~/.harnez/agents/quota-readings.jsonl` | Harnez agent start/resume records before/after turn readings. | `stats --agents`; duplicates provider-cache reads and cannot retain richer source evidence. |
 | Client usage files | Providers write Claude `stats-cache.json`, Codex rollout JSONL, AGY logs/conversation data. | provider collectors and project usage. These are sources, not Harnez stores. |
 | Statuslines | Claude and AGY statusline commands render client information and POST fractional quota windows on refresh. | Server deduplicates and stores windows; statuslines drop an update when the server is unavailable. |
-| `$XDG_DATA_HOME/harnez/telemetry.sqlite` (legacy `~/.harnez/tool_catalog.sqlite`) | Hooks, `harnez exec`, telemetry adapters; per event. | `stats`, export, session analytics. It stores tool calls, provider token snapshots, session boundaries and economics, but quota/history readers bypass it. |
+| `$XDG_DATA_HOME/harnez/telemetry.sqlite` (legacy `~/.harnez/tool_catalog.sqlite`) | `harnez server`; observer events arrive over its Unix socket route or via the bounded spool. | `stats`, export, session analytics. It stores tool calls, provider token snapshots, session boundaries and economics, but quota/history readers bypass it. |
 | Remote load stream/snapshots | watch-side stream/remote fetch. | watch only; separate from quota collection and should join the registry as a non-provider collector. |
 
 ## Target flow

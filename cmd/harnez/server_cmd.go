@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
 )
 
@@ -61,6 +62,10 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 	if err != nil {
 		return err
 	}
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
+		return err
+	}
 	if interval <= 0 {
 		interval = usage.DefaultCollectorInterval()
 	}
@@ -70,5 +75,6 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 	}
 	requests := make(chan usage.PassiveRequest)
 	collector := &usageCollectorService{interval: interval, client: client, offline: offline, requests: requests, updateServer: usage.PassiveUpdateServer{Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}}
-	return (server.Server{Config: cfg, Version: harnez.Version, BuildIdentity: serverBuildIdentity, Services: []server.Service{collector}}).Run(ctx)
+	telemetryService := &telemetryCollectorService{config: cfg, path: dbPath, interval: interval}
+	return (server.Server{Config: cfg, Version: harnez.Version, BuildIdentity: serverBuildIdentity, Services: []server.Service{collector, telemetryService}}).Run(ctx)
 }

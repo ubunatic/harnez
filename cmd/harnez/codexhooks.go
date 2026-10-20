@@ -14,18 +14,12 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"time"
 
 	"github.com/spf13/cobra"
-	"ubunatic.com/harnez/internal/codex"
-	"ubunatic.com/harnez/internal/resolve"
-	"ubunatic.com/harnez/internal/telemetry"
+	"ubunatic.com/harnez/internal/server"
 )
 
 // codexPreToolUseInput mirrors Codex's documented PreToolUse stdin
@@ -99,11 +93,15 @@ func newCodexTelemetryCmd() *cobra.Command {
 }
 
 func runCodexTelemetry(in io.Reader) error {
-	dbPath, err := telemetry.DefaultDBPath()
+	raw, err := io.ReadAll(in)
 	if err != nil {
 		return nil
 	}
-	return runCodexTelemetryAt(in, dbPath)
+	prepared, err := server.PrepareCodexTelemetry(raw)
+	if err == nil {
+		sendTelemetryRecord("codex", json.RawMessage(prepared))
+	}
+	return nil
 }
 
 func runCodexTelemetryAt(in io.Reader, dbPath string) error {
@@ -111,157 +109,11 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 	if err != nil {
 		return nil
 	}
-	e := codex.ParseEvent(raw)
-	var hook struct {
-		SessionID      string `json:"session_id"`
-		TranscriptPath string `json:"transcript_path"`
-	}
-	_ = json.Unmarshal(raw, &hook)
-	if e.SessionID == "" {
-		e.SessionID = hook.SessionID
-	}
-	if e.SessionID == "" {
-		return nil
-	}
-	wd, _ := os.Getwd()
-	ticket, _ := resolve.Ticket(resolve.TicketOptions{SessionID: e.SessionID})
-	db, err := telemetry.Open(dbPath)
+	prepared, err := server.PrepareCodexTelemetry(raw)
 	if err != nil {
 		return nil
 	}
-	defer db.Close()
-	transcriptUsage := codex.Event{}
-	if hook.TranscriptPath != "" {
-		transcriptUsage = latestTranscriptTokens(hook.TranscriptPath, e.SessionID)
-	}
-	if e.Kind == "precompact" || e.Kind == "postcompact" {
-		id, insertErr := db.InsertCompactionEvent(telemetry.CompactionEvent{
-			CreatedAt: time.Now().UTC(), SessionID: e.SessionID, EventType: e.Kind,
-			TurnID: e.TurnID, Trigger: e.CompactionTrigger, Reason: e.CompactionReason,
-			InputTokens: e.InputTokens, CachedInputTokens: e.CachedInputTokens,
-			OutputTokens: e.OutputTokens, ReasoningTokens: e.ReasoningTokens, TotalTokens: e.TotalTokens,
-			Model: e.Model,
-		})
-		if insertErr != nil {
-			return insertErr
-		}
-		boundaryType := e.Kind
-		boundaryID, err := db.InsertSessionBoundary(telemetry.SessionBoundary{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, BoundaryType: boundaryType, CompactionEventID: &id})
-		if err != nil {
-			return err
-		}
-		if err := insertTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage); err != nil {
-			return err
-		}
-		if e.Kind == "postcompact" {
-			catalog, err := telemetry.LoadPricingCatalog("")
-			if err != nil {
-				return err
-			}
-			return db.ReconcileCompactionEconomics(e.SessionID, e.Model, catalog)
-		}
-		return nil
-	}
-	if e.Kind == "sessionstart" || e.Kind == "session_end" || e.Kind == "sessionend" {
-		boundaryID, err := db.InsertSessionBoundary(telemetry.SessionBoundary{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, BoundaryType: e.Kind})
-		if err != nil {
-			return err
-		}
-		source := e.Kind
-		if source == "session_end" {
-			source = "sessionend"
-		}
-		if err := insertTokenSnapshot(db, e.SessionID, source, &boundaryID, e, transcriptUsage); err != nil {
-			return err
-		}
-		if e.Kind == "sessionend" || e.Kind == "session_end" {
-			catalog, err := telemetry.LoadPricingCatalog("")
-			if err != nil {
-				return err
-			}
-			return db.ReconcileCompactionEconomics(e.SessionID, e.Model, catalog)
-		}
-		return nil
-	}
-	if transcriptUsage.TotalTokens != nil {
-		_ = db.UpdateLatestProviderUsage(e.SessionID, transcriptUsage.LastTotalTokens, transcriptUsage.LastInputTokens, transcriptUsage.LastCachedInputTokens, transcriptUsage.LastOutputTokens, transcriptUsage.LastReasoningTokens, transcriptUsage.TotalTokens)
-	}
-	if err := insertTokenSnapshot(db, e.SessionID, "tool", nil, e, transcriptUsage); err != nil {
-		return err
-	}
-	if e.ToolName == "" {
-		return nil
-	}
-	note := "codex:" + e.ToolCallID
-	if e.ToolCallID != "" {
-		if calls, queryErr := db.Query(telemetry.Filter{SessionID: e.SessionID}); queryErr == nil {
-			for _, prior := range calls {
-				if prior.Note == note {
-					return nil
-				}
-			}
-		}
-	}
-	callType := "hook:post"
-	if e.Success != nil && !*e.Success {
-		callType = "hook:failure"
-	}
-	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode, OutputBytes: e.OutputBytes, ActualTokens: e.LastTotalTokens, InputTokens: e.LastInputTokens, CachedInputTokens: e.LastCachedInputTokens, OutputTokens: e.LastOutputTokens, ReasoningTokens: e.LastReasoningTokens, TotalTokens: e.TotalTokens}
-	if err := db.Insert(call); err != nil {
-		return err
-	}
-	if skill := telemetry.SkillFromFileRef(e.Command); skill != "" {
-		skillCall := telemetry.ToolCall{
-			CreatedAt:   time.Now().UTC(),
-			SessionID:   e.SessionID,
-			TicketID:    ticket,
-			ProjectName: filepath.Base(wd),
-			WorkingDir:  wd,
-			AgentID:     "codex",
-			ToolName:    telemetry.SkillToolName,
-			CallType:    telemetry.CallTypeSkillInferred,
-			SkillName:   skill,
-		}
-		_ = db.Insert(skillCall)
-	}
-	return nil
-}
-
-func insertTokenSnapshot(db *telemetry.DB, sessionID, source string, boundaryID *int64, event, transcript codex.Event) error {
-	if event.TotalTokens == nil && transcript.TotalTokens == nil && event.LastTotalTokens == nil && transcript.LastTotalTokens == nil {
-		return nil
-	}
-	if event.TotalTokens == nil {
-		event.InputTokens, event.CachedInputTokens, event.OutputTokens, event.ReasoningTokens, event.TotalTokens = transcript.InputTokens, transcript.CachedInputTokens, transcript.OutputTokens, transcript.ReasoningTokens, transcript.TotalTokens
-	}
-	if event.LastTotalTokens == nil {
-		event.LastInputTokens, event.LastCachedInputTokens, event.LastOutputTokens, event.LastReasoningTokens, event.LastTotalTokens = transcript.LastInputTokens, transcript.LastCachedInputTokens, transcript.LastOutputTokens, transcript.LastReasoningTokens, transcript.LastTotalTokens
-	}
-	return db.InsertTokenSnapshot(telemetry.TokenSnapshot{
-		CreatedAt: time.Now().UTC(), SessionID: sessionID, Source: source, BoundaryID: boundaryID,
-		InputTokens: event.InputTokens, CachedInputTokens: event.CachedInputTokens,
-		OutputTokens: event.OutputTokens, ReasoningTokens: event.ReasoningTokens, TotalTokens: event.TotalTokens,
-		LastInputTokens: event.LastInputTokens, LastCachedInputTokens: event.LastCachedInputTokens,
-		LastOutputTokens: event.LastOutputTokens, LastReasoningTokens: event.LastReasoningTokens, LastTotalTokens: event.LastTotalTokens,
-	})
-}
-
-func latestTranscriptTokens(path, sessionID string) codex.Event {
-	file, err := os.Open(path)
-	if err != nil {
-		return codex.Event{}
-	}
-	defer file.Close()
-	var latest codex.Event
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		e := codex.ParseEvent(scanner.Bytes())
-		if e.SessionID != "" && e.SessionID != sessionID || e.TotalTokens == nil {
-			continue
-		}
-		latest = e
-	}
-	return latest
+	return server.ProcessCodexTelemetry(dbPath, prepared)
 }
 
 func runCodexHooksHook(in io.Reader, out io.Writer) error {

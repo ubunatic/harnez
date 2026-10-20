@@ -109,9 +109,10 @@ These do not show up in `go list` but bind the subsystems harder than imports do
 5. **Shared spec** `spec/*.yaml` via `DefaultFS`: `telemetry.yaml`, `agent.yaml`,
    `reminders.yaml`, `actions/colors/indicators.yaml` (usage TUI).
 6. **systemd unit** `harnez-agent-collector.service` — installed by apply, runs `harnez server`.
-7. **Usage client-server boundary.** `harnez server` is the per-host SQLite writer; `usage` reads
-   read-only and auto-starts it, while statuslines POST passive windows and drop failures. Telemetry
-   observers reuse the client/route pattern and spool records when the server is unavailable.
+7. **Usage client-server boundary.** `harnez server` is the per-host SQLite writer over the spec
+   Unix socket; `usage` reads read-only and auto-starts it, while statuslines POST passive windows and
+   drop failures. `rate`, AGY hooks and Codex telemetry use the server route, with one-file-per-record
+   fallback spooling under the spec byte cap and draining at startup and on collector ticks.
 
 ## 3. Use-Case Coverage
 

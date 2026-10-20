@@ -5,7 +5,7 @@
 // This is the most latency-sensitive command in the tool-telemetry
 // feature (issues 116/117/118/120) — it can fire many times per agent
 // turn — so it does the minimum work: parse args, resolve session/ticket/
-// agent, open the DB, insert one row, exit. No extra I/O, no network.
+// agent, submit one row over the local socket, spool on failure, and exit.
 package main
 
 import (
@@ -17,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -141,7 +142,7 @@ type rateOptions struct {
 	SessionFlag string
 	Getenv      func(string) string // nil means os.Getenv
 	StateDir    string              // resolve.Session/Ticket state/lock dir override
-	DBPath      string              // telemetry DB path override; empty means telemetry.DefaultDBPath()
+	DBPath      string              // explicit store path for test and maintenance callers; production submits to the server
 }
 
 // runRate does the actual parse/resolve/insert work.
@@ -184,15 +185,7 @@ func runRate(args []string, opts rateOptions) error {
 		return fmt.Errorf("rate: resolve ticket: %w", err)
 	}
 
-	dbPath := opts.DBPath
-	if dbPath == "" {
-		p, err := telemetry.DefaultDBPath()
-		if err != nil {
-			return fmt.Errorf("rate: %w", err)
-		}
-		dbPath = p
-	}
-	return insertRateRow(dbPath, toolName, description, agent, sessionID, ticketID, score)
+	return insertRateRow(opts.DBPath, toolName, description, agent, sessionID, ticketID, score)
 }
 
 // runRateOk implements `harnez rate --ok`: it resolves agent/session/ticket
@@ -229,15 +222,7 @@ func runRateOk(args []string, opts rateOptions, since int) error {
 		return fmt.Errorf("rate --ok: resolve ticket: %w", err)
 	}
 
-	dbPath := opts.DBPath
-	if dbPath == "" {
-		p, err := telemetry.DefaultDBPath()
-		if err != nil {
-			return fmt.Errorf("rate --ok: %w", err)
-		}
-		dbPath = p
-	}
-	return insertHeartbeatRow(dbPath, note, agent, sessionID, ticketID, since)
+	return insertHeartbeatRow(opts.DBPath, note, agent, sessionID, ticketID, since)
 }
 
 // rateCallPayloadBytes approximates the size of the `harnez rate` command
@@ -255,16 +240,9 @@ func rateCallPayloadBytes(toolName, description, ticketID string, score int) int
 	return int64(n)
 }
 
-// insertRateRow opens the telemetry DB at dbPath and writes one row. Split
-// out from runRate so tests can point it at a throwaway DB path via
-// TELEMETRY_DB_PATH-style plumbing without touching the user's real DB.
+// insertRateRow submits one record to the server in production. An explicit
+// dbPath is retained for tests and maintenance callers.
 func insertRateRow(dbPath, toolName, description, agent, sessionID, ticketID string, score int) error {
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		return fmt.Errorf("rate: open telemetry db: %w", err)
-	}
-	defer db.Close()
-
 	wd, err := os.Getwd()
 	if err != nil {
 		wd = ""
@@ -288,8 +266,11 @@ func insertRateRow(dbPath, toolName, description, agent, sessionID, ticketID str
 		// telemetry.RateCallOverhead and cmd/harnez/stats.go's --overhead.
 		RawBytes: rateCallPayloadBytes(toolName, description, ticketID, score),
 	}
-
-	if err := db.Insert(call); err != nil {
+	if dbPath == "" {
+		sendTelemetryRecord("tool_call", call)
+		return nil
+	}
+	if err := server.InsertToolCallAt(dbPath, call); err != nil {
 		// Insert deliberately doesn't duplicate the DB's own score-range
 		// CHECK constraint as a second hardcoded validation layer (see
 		// internal/telemetry/insert.go's doc comment, per docs/other/Spec.md).
@@ -319,19 +300,13 @@ func heartbeatCallPayloadBytes(note, ticketID string, since int) int64 {
 	return int64(n)
 }
 
-// insertHeartbeatRow opens the telemetry DB at dbPath and writes one
-// heartbeat row (call_type=heartbeat, score=NULL, exit_code=NULL) —
+// insertHeartbeatRow submits one heartbeat row (call_type=heartbeat,
+// score=NULL, exit_code=NULL) —
 // issue 179's lean alternative to a per-tool rating. since, when > 0, is
 // folded into the note for human reference; it isn't a queryable column
 // (kept lean — see telemetry.HeartbeatStats for the queryable
 // last-heartbeat/calls-since data `harnez stats` actually reports).
 func insertHeartbeatRow(dbPath, note, agent, sessionID, ticketID string, since int) error {
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		return fmt.Errorf("rate --ok: open telemetry db: %w", err)
-	}
-	defer db.Close()
-
 	wd, err := os.Getwd()
 	if err != nil {
 		wd = ""
@@ -355,8 +330,11 @@ func insertHeartbeatRow(dbPath, note, agent, sessionID, ticketID string, since i
 		ExitCode:    nil,
 		RawBytes:    rawBytes,
 	}
-
-	if err := db.Insert(call); err != nil {
+	if dbPath == "" {
+		sendTelemetryRecord("tool_call", call)
+		return nil
+	}
+	if err := server.InsertToolCallAt(dbPath, call); err != nil {
 		return fmt.Errorf("rate --ok: %w", err)
 	}
 	return nil
