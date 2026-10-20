@@ -9,8 +9,9 @@ func newReleaseCmd() *cobra.Command {
 	var opt release.Options
 
 	cmd := &cobra.Command{
-		Use:   "release",
-		Short: "Language-agnostic version bump, build, minisign, and forge publish pipeline",
+		SilenceUsage: true,
+		Use:          "release",
+		Short:        "Language-agnostic version bump, build, minisign, and forge publish pipeline",
 		Long: `Automates the full project release lifecycle:
   1. Reads or initializes the single source of truth version.yaml spec.
   2. Bumps semver (patch, minor, major, or explicit version) or resumes (--continue).

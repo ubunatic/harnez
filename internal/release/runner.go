@@ -203,15 +203,25 @@ func Run(opt Options) error {
 		}
 	}
 
-	// 5. Artifact Build & Packaging
-	if !opt.SkipBuild {
+	// 5. Reuse the exact signed set when resuming, including its signature.
+	reuse := false
+	if opt.Continue {
+		reuse, err = completeDist(opt.Dir, targetVersion)
+		if err != nil {
+			return fmt.Errorf("check resumable dist: %w", err)
+		}
+		if reuse {
+			fmt.Fprintf(opt.Out, "  [build]     Complete signed dist for %s exists, skipped build and signing\n", targetVersion)
+		}
+	}
+	if !opt.SkipBuild && !reuse {
 		if err := runBuildStep(opt, spec); err != nil {
 			return err
 		}
 	}
 
 	// 6. Minisign Cryptographic Signing
-	if !opt.SkipSign {
+	if !opt.SkipSign && !reuse {
 		if err := runSigningStep(opt, projectName, targetVersion, keyPath); err != nil {
 			return err
 		}
@@ -551,7 +561,7 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 		if forge != nil {
 			remoteName = forge.RemoteName
 		}
-		if err := PublishForgejoRelease(opt.Dir, tagName, title, attachments, remoteName, opt.DryRun, opt.Continue); err != nil {
+		if err := publishForgejoRelease(opt.Dir, tagName, title, attachments, opt.Out, fjCommand(opt.Dir, remoteName)); err != nil {
 			return err
 		}
 	}
