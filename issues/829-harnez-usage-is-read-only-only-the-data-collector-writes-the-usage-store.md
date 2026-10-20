@@ -1,6 +1,6 @@
 # 829 — harnez usage is read-only: only the data collector writes the usage store
 
-**Status**: Open
+**Status**: Closed — M2 delivered: local usage views read collector snapshots through a SQLite read-only connection; usage auto-starts the detached server and waits for ready status. M1/M2 tests and installed CLI checks completed; one quota run found only a stale help golden, which was updated and verified with TestHelpGolden.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture
