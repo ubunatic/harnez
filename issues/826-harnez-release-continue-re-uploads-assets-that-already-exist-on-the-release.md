@@ -1,6 +1,6 @@
 # 826 — harnez release --continue re-uploads assets that already exist on the release
 
-**Status**: Open
+**Status**: Closed — Fixed in d3799b83: verified signed dist reuse, existing-asset skipping with published checksum validation, and concise runtime/auth errors; lint, touched-package tests and test-short pass.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -20,3 +20,21 @@ signed dist set.
   or replace them, never add duplicates.
 - Do not rebuild artifacts when a signed dist set for this version already exists.
 - A forge auth failure prints a short hint (`fj auth login`), not the usage text.
+
+
+## Delivery
+
+- Implemented in `d3799b83`; recovery docs and release skill source updated in `d7f97014`.
+- Publishing lists fj release assets before upload, prints `exists, skipped` for existing
+  names, and checks local archives against published SHA256SUMS before any mutation.
+  Checksum conflicts or existing assets without a manifest stop for manual recovery;
+  remote assets are never deleted automatically.
+- Continue reuses a complete version-matched signed dist set, skipping build and signing.
+  Missing signatures/archives require rebuilding; corrupt archives fail clearly.
+- Release runtime errors suppress Cobra usage; token/auth errors suggest `fj auth login`.
+- Fake-backed tests cover absent/partial/complete remote sets, published and local hash
+  conflicts, auth/network failures, missing published checksums, and complete/partial dist.
+  A command test verifies runtime errors omit usage. Existing help goldens pass unchanged.
+- Verified: `make lint`, `go test ./internal/release ./cmd/harnez`, `make test-short`, and
+  `make install` all passed. Initial red tests failed on the two unimplemented helpers.
+- No real release, Codeberg access, push, or delegation was performed.
