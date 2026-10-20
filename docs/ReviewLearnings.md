@@ -32,5 +32,11 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **Green suite, wrong numbers**: after 829 M2 all tests passed while the live header showed a
   15-minute-old time and Claude tokens of 4.2 billion (was 18 million). Run the installed binary and
   compare magnitudes against the previous output. Issue 829 M3.
+- **Swallowed server errors**: 830 M1/M2 answered `503 collector write failed` for every update while
+  all tests passed; the writer got an empty DB path and the handler hid the cause. Log the error, and
+  test through the real route into a store opened the production way. Issue 830 M2 rework.
+- **Wire format by accident**: an untagged Go struct on an HTTP route makes `UsedFraction` the JSON
+  key; adding tags later breaks stored JSONL (Go's case-insensitive match does not cover `_`). Tag
+  wire types when the route is born. Issue 830 M3 pre-work.
 - **Verify before pushing**: never chain `test && push` in one command when the test output
   decides the push; read the result first.

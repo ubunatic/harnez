@@ -1,6 +1,7 @@
 # Harnez Server Architecture (proposed)
 
-**Status**: Proposal (2026-10-20), nothing below the existing drivers is built yet.
+**Status**: Proposal (2026-10-20). Built so far: `harnez server` with the usage collector as its first
+service (see "Already in place"); the session service, ledger and supervisor below are not built.
 **Related**: [HarnezAgentArchitecture.md](HarnezAgentArchitecture.md), [AgentMessaging.md](AgentMessaging.md), [PiAgent.md](PiAgent.md)
 
 Goal: turn harnez into an "any client" <-> "AI server harness": any client talks to one
@@ -110,7 +111,9 @@ probe provides the singleton: stale sockets are replaced, foreign listeners are 
 newer semver or equal-version newer build identity shuts down the old process before taking over.
 `/status` reports version, process ID, and the executable mtime captured when that process started.
 Services register their own routes. `harnez usage` starts/probes the server; statusline and hooks
-POST updates. On Linux, `harnez server install|status|uninstall` manages the systemd user service.
+POST updates: usage readings are dropped when no server answers, telemetry records go to a bounded
+spool the server drains (830). A boundary test fails on any writable `telemetry.sqlite` open outside
+the server. On Linux, `harnez server install|status|uninstall` manages the systemd user service.
 The unit restarts on failure. A successful takeover exits the old server with status 0, avoiding a
 systemd restart race; status reports when the socket owner differs from the unit's `MainPID` and
 prints the restart command that returns ownership to systemd. Other hosts can keep the server

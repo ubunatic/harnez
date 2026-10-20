@@ -8,12 +8,14 @@ Inventory from 2026-09-25 (codex luna:med scan, host-verified against the code a
 
 | Path | Written by | Holds | Read by |
 |---|---|---|---|
-| `~/.local/share/harnez/telemetry.sqlite` (legacy `~/.harnez/tool_catalog.sqlite`, migrated on first use) | `harnez server` only (target of issues 829/830; until 830 M3 also `rate`, `hook`, `codex-telemetry`) | Tool-call telemetry, usage store (quota windows, observations, history) | `usage` (read-only, 829), `stats`, `usage export` |
+| `~/.local/share/harnez/telemetry.sqlite` (legacy `~/.harnez/tool_catalog.sqlite`, migrated on first use) | `harnez server` only (829/830; `rate`, `hook`, `codex-telemetry` send to it or spool) | Tool-call telemetry, usage store (quota windows, observations, history) | `usage` (read-only, 829), `stats`, `usage export` |
 | `~/.harnez/bench/bench.sqlite` | `internal/bench/store.go` | Bench runs: table `runs` with response, score detail, tokens, cached, order | `bench run`, `bench results` |
 
 Single-writer rule (2026-10-20, issues 828-830): only `harnez server` writes `telemetry.sqlite`.
 Clients open it read-only (`mode=ro`) and send updates to the server; when no server answers, usage
-readings are dropped and telemetry records go to a spool the server drains (830 M3). A reader that
+readings are dropped and telemetry records go to a spool the server drains (830 M3; path and cap in
+`spec/server.yaml`). A missing database or table reads as empty. A boundary test in `cmd/harnez`
+fails on any new writable open outside the server (830 M4). A reader that
 writes (828: schema DDL and history writes on every `usage` run) caused `database is locked` errors.
 `~/.local/share/harnez/usage.db` is an empty leftover (0 bytes, Oct 10).
 
