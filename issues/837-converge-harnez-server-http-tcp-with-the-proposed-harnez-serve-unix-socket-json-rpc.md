@@ -1,6 +1,6 @@
 # 837 — Converge harnez server (HTTP/TCP) with the proposed harnez serve (Unix socket, JSON-RPC)
 
-**Status**: Open
+**Status**: Closed — harnez server serves HTTP over a Unix socket; newest build takes over the running server
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Architecture / Decision
