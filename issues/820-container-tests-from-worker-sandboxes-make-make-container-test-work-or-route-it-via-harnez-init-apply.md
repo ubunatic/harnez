@@ -1,6 +1,6 @@
 # Container tests from worker sandboxes: make make container-test work (or route it) via harnez init/apply
 
-Status: Closed — Delivered shared container-test Make target in 801420da; requested checks pass; fake-engine execution remains host-only because Quota-1 blocks it.
+Status: Open — M2 pre-work: sandbox detection misfires on host
 Priority: P2
 Category: Feature
 
@@ -58,3 +58,17 @@ disabled, only one scrubbing proxies.
   the current worker sandbox blocks it; the quota diagnostic was exercised in this environment.
 - Passed: `make lint`, `go test ./internal/claude`, `make test-short`, `make install`.
 - Synchronized `docs/other/Containerfile.md` to the managed `docs/Containerfile.md` copy.
+
+## M2 Pre-Work / Required Refinements (host review 2026-10-20)
+
+1. Sandbox detection misfires on the host: `readlink /proc/1/ns/user` is empty for a normal user
+   (pid 1 belongs to root), so `"" != user:[...]` is true and `make container-test` refuses on the
+   host too. The fake-engine test therefore SKIPS on the host as well (verified:
+   `go test ./internal/claude -run TestContainerTestTargetScrubsProxyAndPropagatesFailure -v` -> SKIP).
+   Use a reliable marker set by harnez's own sandbox instead (cmd/harnez/exec.go wraps quota-1 with
+   bwrap; have it export e.g. `HARNEZ_SANDBOX=quota1` inside, plus keep HARNEZ_QUOTA_1=1), and treat
+   unreadable namespace links as "not sandboxed". Unit-test the detection for: host (no marker),
+   quota-1 bwrap (marker), unreadable /proc/1/ns/user.
+2. The fake-engine test must run (not skip) on a normal host; skip only when the marker says sandboxed.
+3. In copy mode (default) `--workdir /src` assumes the Containerfile copies source to /src; document
+   that contract in the fragment header and docs/Containerfile.md, or make the workdir a variable.
