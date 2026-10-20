@@ -62,6 +62,13 @@ on every prompt or render and must stay fast. With one writer, the collector, lo
   (real path setup, schema and migrations), then reads the row back; (d) live: restart the server
   from the installed binary, POST, and query the row read-only. Also decide whether the wire format should
   have lower-case JSON tags; if so, change it in the handler, the client and the tests together.
+- **M2 delivered (statusline on the endpoint) in 8fbc23f8 + rework 62df1c68.** Cause: the store writer got
+  an empty DB path while init resolved the default. Host check 22:56: lower-case POST returns 204 and the row
+  is in `usage_observations` (read-only query); write failures now go to stderr and `collector.log`.
+- **M3 Pre-Work:** 62df1c68 added snake_case JSON tags to `usagestore.Window`; 2 of 1855 lines in
+  `~/.harnez/agents/quota-readings.jsonl` (read by `legacyarchive.go`) use the old CamelCase keys, and Go's
+  case-insensitive match does not map `UsedFraction` to `used_fraction`. Decode both forms (or prove the
+  reader ignores those fields) with a test.
 - **M3 — telemetry hooks on the server:** `rate`, `hook post-tool`/`hook agy` and `codex-telemetry` send
   their records to a server telemetry route instead of writing the DB. Decided (host, delegated by the
   user, 2026-10-20): when no server answers, telemetry records are **not dropped** but appended to a
