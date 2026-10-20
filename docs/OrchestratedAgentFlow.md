@@ -121,6 +121,12 @@ Shape used for harnez, loom, cati and voxi in one session:
 - **Rounds, not marathons.** Each developer gets a 3-4 item task file; the next round is a
   `resume` with the review findings, so the worker keeps its context. Queue follow-ups in a
   round file while the worker runs.
+- **Host reserves remote numbers.** Before dispatching remote/cloud work, the host runs
+  `harnez issues new` on main for every needed ticket, commits and pushes the placeholders,
+  then hands out their exact paths. Remote agents use those reservations and request more
+  from the host instead of choosing numbers from their own clone. If a merge still creates
+  duplicates, use `harnez issues mv -d . <file>` for each extra ticket; it updates filename
+  references as well as the title and index.
 - **Cloud agent = GitHub resource.** A Claude cloud session with GitHub MCP reads job logs,
   watches CI (saving the host's `gh` rate limit), and pushes fixes to a `ccr-*` branch that
   the host reviews and fast-forwards or cherry-picks. It owns `.github/` only, names a ticket

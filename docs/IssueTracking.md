@@ -25,7 +25,8 @@ In-repo tracker in `issues/`, one file per ticket (`issues/NNN-kebab-case-title.
 - `harnez issues new ["Title"] [--json]` — Atomically reserve number + create placeholder with `O_CREATE|O_EXCL`. Write directly to printed path.
 - `harnez issues <verb> <n> [reason]` — Update Status, regenerate index, commit in one step (`open`, `start`, `block` [reason req], `close`, `done` [alias for close], `draft`).
 - `harnez issues close <n> [reason]` (or `done`) — Already Closed: exit 0, preserve existing reason, no writes or commit. Use `--amend-reason` to explicitly correct the reason in one commit; requires an already-Closed ticket.
-- `harnez issues mv <old> [new]` — Renumber ticket, rename file, rewrite title header, resync index.
+- `harnez issues mv <old> [new]` — Renumber ticket, rename file, rewrite title header and exact filename references in issues/ and docs/, resync index, commit. Bare numbers stay unchanged.
+- Duplicate numbers after a merge: `harnez index` and `harnez status` fail with all colliding paths. Run `harnez issues mv -d . issues/NNN-extra-ticket.md` for each extra file (next free number by default); use the path because the number is ambiguous. If the title lacks a number, add `# NNN — Title` before retrying.
 - `harnez issues list [filter]` — List matching tickets (default `is:open`).
 
 ### 3.2 Metadata Header (Top of Every Ticket)

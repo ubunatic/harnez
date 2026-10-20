@@ -48,20 +48,23 @@ sort | tail`) for either.
 - `harnez find issues next --json` — outputs machine-readable JSON (`{"number":"195","reserved":false}`).
 - `harnez issues new "Ticket Title"` (or `harnez issues new` with no title) — atomically allocates the next number and creates a placeholder ticket file (`issues/NNN-<title-slug>.md` or `issues/NNN-reserved.md` with status `Draft`) using `O_CREATE|O_EXCL` to prevent number collisions between concurrent agents. Prints `NNN<TAB>issues/<reserved-filename>.md` — write the real ticket content directly to that printed path rather than re-deriving the slug from the title by hand; a hand-derived slug can diverge from the reserved filename and leave an orphaned placeholder behind (see issue 202). Add `--json` for the same JSON shape as above with `"reserved":true` plus `file`/`path`. `new` never commits.
 
-**Known gap — cross-clone collisions survive `O_CREATE|O_EXCL`.** The atomic reservation above
-only guards concurrent writers sharing one working tree; it cannot see a number reserved in a
-*different* clone/session that hasn't been pushed yet. A ticket filed locally can still collide
-with a ticket independently filed and pushed elsewhere in the interim — the collision only
-surfaces later, as a `git pull`/rebase conflict on the ticket file and on the generated
-`issues/README.md`. This has happened at least twice: issue 240 (duplicate 179/180, resolved by
-hand) and, concretely, this session (a locally-filed-but-unpushed 266 collided with remote
-tickets that had independently claimed 266 and 267). Manual recovery recipe until issue 269
-(`harnez issues mv`) ships: `git mv` the losing ticket file to the next free number, fix its
-in-file `# NNN — ...` header to match, resolve any `issues/README.md` conflict by taking either
-side (`git checkout --theirs`) and then regenerating authoritatively with `harnez index` rather
-than hand-merging conflict markers — `harnez index` does not always fully clear stray
-`<<<<<<<`/`=======`/`>>>>>>>` lines left in a file it's asked to regenerate over, so verify with a
-conflict-marker grep afterward.
+**Cross-clone collisions survive `O_CREATE|O_EXCL`.** Atomic reservation only guards writers
+sharing one working tree. For remote/cloud agents, the host reserves numbers on main with
+`harnez issues new`, commits and pushes the placeholders before dispatch; agents use those
+assigned paths instead of allocating independently.
+
+After a merge, `harnez index` and `harnez status` reject duplicate numbers and name every
+colliding file; index leaves README unchanged. Run
+`harnez issues mv -d . issues/NNN-extra-ticket.md` for each extra file. The path disambiguates
+the ticket; omitting the destination picks the next free number. The move rewrites the title,
+exact relative filename/basename references in issues/ and docs/, and the index in one commit.
+Bare numbers remain unchanged because they cannot identify which duplicate was intended.
+If the ticket lacks its numbered title, add `# NNN — Title` before retrying. After all moves,
+run `harnez index --check` and check for any remaining merge conflict markers.
+
+README synchronization uses a persistent `issues/README.md.lock` for `flock`; deleting it
+can split concurrent writers across different inodes. `harnez init` ignores it (and the
+reservation lock) in `.git/info/exclude`.
 
 ### Updating Ticket Status (`harnez issues <verb>`)
 Use `harnez issues <verb>` to change a ticket's status, resync `issues/README.md`, and commit in one call:
@@ -71,7 +74,7 @@ Use `harnez issues <verb>` to change a ticket's status, resync `issues/README.md
 - `harnez issues close <n> [reason]` — Status: Closed (or `Closed — <resolution>`)
 - `harnez issues done <n> [reason]` — Alias for `close`: Status: Closed (or `Closed — <resolution>`)
 - `harnez issues draft <n> [reason]` — Status: Draft (or `Draft — <reason>`)
-- `harnez issues mv <old> [new]` — Renumber a ticket, rename file, rewrite `# NNN — ...` header, and resync
+- `harnez issues mv <old> [new]` — Renumber a ticket, rename file, rewrite title and exact filename references in issues/ and docs/, resync index, and commit.
 - `harnez issues list [filter]` — List matching tickets (e.g. `is:open`)
 
 Closing an already-Closed ticket (`close` or `done`) exits 0 without changing
