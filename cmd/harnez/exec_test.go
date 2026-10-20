@@ -21,6 +21,25 @@ import (
 
 func strconvQuote(s string) string { return strconv.Quote(s) }
 
+func TestQuota1SandboxMarker(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{name: "host without marker, including unreadable namespace link"},
+		{name: "quota-1 bwrap", value: "quota1", want: true},
+		{name: "other marker", value: "other"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isQuota1SandboxMarker(tc.value); got != tc.want {
+				t.Fatalf("isQuota1SandboxMarker(%q) = %v, want %v", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestQuota1SandboxArgs(t *testing.T) {
 	got := quota1SandboxArgs([]string{"sh", "-c", "true"}, "/repo", "/cache/build", "/cache/mod", "")
 	want := []string{"--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--bind", "/repo", "/repo", "--bind", "/cache/build", "/cache/build", "--bind", "/cache/mod", "/cache/mod", "--chdir", "/repo", "--", "sh", "-c", "true"}

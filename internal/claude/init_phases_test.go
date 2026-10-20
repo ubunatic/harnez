@@ -172,6 +172,9 @@ func mustRead(t *testing.T, path string) []byte {
 }
 
 func TestContainerTestTargetScrubsProxyAndPropagatesFailure(t *testing.T) {
+	if os.Getenv("HARNEZ_SANDBOX") == "quota1" {
+		t.Skip("container engine cannot run inside the quota-1 sandbox")
+	}
 	dir := filepath.Join(t.TempDir(), "project with spaces")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
@@ -194,7 +197,7 @@ func TestContainerTestTargetScrubsProxyAndPropagatesFailure(t *testing.T) {
 	cleanEnv := func() []string {
 		var env []string
 		for _, entry := range os.Environ() {
-			if !strings.HasPrefix(entry, "HARNEZ_QUOTA_1=") {
+			if !strings.HasPrefix(entry, "HARNEZ_QUOTA_1=") && !strings.HasPrefix(entry, "HARNEZ_SANDBOX=") {
 				env = append(env, entry)
 			}
 		}
@@ -215,10 +218,13 @@ func TestContainerTestTargetScrubsProxyAndPropagatesFailure(t *testing.T) {
 	if output, err := blocked.CombinedOutput(); err == nil || !strings.Contains(string(output), "container tests need the host; ask the host") {
 		t.Fatalf("quota diagnostic err=%v output=%q", err, output)
 	}
+	marked := exec.Command("make", "container-test", "CONTAINER_ENGINE="+engine, "CONTAINER_OUTPUT="+output)
+	marked.Dir = dir
+	marked.Env = append(cleanEnv(), "CAPTURE="+capture, "HARNEZ_SANDBOX=quota1")
+	if output, err := marked.CombinedOutput(); err == nil || !strings.Contains(string(output), "container tests need the host; ask the host") {
+		t.Fatalf("sandbox marker diagnostic err=%v output=%q", err, output)
+	}
 	if output, err := run(false); err != nil {
-		if strings.Contains(string(output), "container tests need the host; ask the host") {
-			t.Skip("fake-engine invocation is correctly blocked inside the worker sandbox")
-		}
 		t.Fatalf("make container-test: %v\n%s", err, output)
 	}
 	data := string(mustRead(t, capture))

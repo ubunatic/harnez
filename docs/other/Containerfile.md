@@ -174,8 +174,8 @@ Podman first and Docker second, removes HTTP(S), ALL and NO proxy variables in b
 before build and run, writes output to `.container-test-output`, and returns the engine's
 failure status. A substantially customized target remains project-owned.
 
-The default contract expects the Containerfile to copy the project into `/src` and the
-project's `make test` target to run its checks there. Override `CONTAINER_FILE`,
+The default copy-mode contract expects the Containerfile to copy the project into `/src`
+and set `WORKDIR /src`; the project's `make test` target runs there. Override `CONTAINER_FILE`,
 `CONTAINER_IMAGE`, `CONTAINER_OUTPUT`, or `CONTAINER_TEST_CMD` in the project Makefile as
 needed. Set `CONTAINER_SOURCE_MODE=mount` when the image contains its dependencies but
 should use the current checkout mounted read-only at `/src`. `CONTAINER_OUTPUT_LABEL` and

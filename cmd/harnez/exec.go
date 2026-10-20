@@ -121,6 +121,13 @@ func detectExpectFailure(opts execOptions, args []string) bool {
 // quota1Env is the environment variable that triggers Quota-1 enforcement.
 const quota1Env = "HARNEZ_QUOTA_1"
 
+const quota1SandboxMarkerEnv = "HARNEZ_SANDBOX"
+const quota1SandboxMarkerValue = "quota1"
+
+func isQuota1SandboxMarker(value string) bool {
+	return value == quota1SandboxMarkerValue
+}
+
 // quota1CmdRE matches a leading HARNEZ_QUOTA_1=1 command prefix.
 var quota1CmdRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*` + quota1Env + `=(1|[Tt][Rr][Uu][Ee])\b`)
 
@@ -679,10 +686,12 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 	defer cancel()
 	c := exec.Command(args[0], args[1:]...)
+	quota1Sandboxed := false
 	if quota1Active && !opts.DisableSandbox {
 		cwd, _ := os.Getwd()
 		if bwrap, wrappedArgs, ok := quota1SandboxCommand(args, cwd); ok {
 			c = exec.Command(bwrap, wrappedArgs...)
+			quota1Sandboxed = true
 			// Keep the wrapped command in the process group recorded by harnez.
 			c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		} else {
@@ -691,6 +700,9 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Env = append(os.Environ(), execTimeoutEffectiveEnv+"="+timeout.String())
+	if quota1Sandboxed {
+		c.Env = append(c.Env, quota1SandboxMarkerEnv+"="+quota1SandboxMarkerValue)
+	}
 	c.Env = append(c.Env, execTimeoutExplicitEnv+"=0")
 	if hasExplicitExecTimeout(opts, args) {
 		c.Env[len(c.Env)-1] = execTimeoutExplicitEnv + "=1"
