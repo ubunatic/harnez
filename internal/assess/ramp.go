@@ -12,58 +12,40 @@ import (
 	"strings"
 )
 
-// RAMPRuleSetVersion identifies the small versioned rule set used for classification.
-const RAMPRuleSetVersion = "ramp-v1"
-
-// RAMPLevel represents the 4-tier repository AI maturity level.
+// RAMPLevel represents a repository AI maturity level.
 type RAMPLevel string
 
-const (
-	RAMPLevelL1 RAMPLevel = "L1" // Unconfigured
-	RAMPLevelL2 RAMPLevel = "L2" // Grounded prompting
-	RAMPLevelL3 RAMPLevel = "L3" // Agent augmented
-	RAMPLevelL4 RAMPLevel = "L4" // Orchestration
-)
-
-// RAMPCategory represents one of the nine RAMP artifact categories.
+// RAMPCategory represents a RAMP artifact category.
 type RAMPCategory string
-
-const (
-	// Level 1 (1 category)
-	RAMPCatUnconfigured RAMPCategory = "unconfigured"
-
-	// Level 2 (3 categories)
-	RAMPCatAIRules        RAMPCategory = "ai_rules"
-	RAMPCatToolConfig     RAMPCategory = "tool_config"
-	RAMPCatAgentStandards RAMPCategory = "agent_standards"
-
-	// Level 3 (3 categories)
-	RAMPCatNamedAgents      RAMPCategory = "named_agents"
-	RAMPCatReusableCommands RAMPCategory = "reusable_commands"
-	RAMPCatDomainSkills     RAMPCategory = "domain_skills"
-
-	// Level 4 (2 categories)
-	RAMPCatMultiAgentFlows RAMPCategory = "multi_agent_flows"
-	RAMPCatSessionRecords  RAMPCategory = "session_records"
-)
 
 // RAMPConfidence describes the classification confidence.
 type RAMPConfidence string
 
-const (
-	ConfidenceHigh    RAMPConfidence = "high"
-	ConfidenceMedium  RAMPConfidence = "medium"
-	ConfidenceLow     RAMPConfidence = "low"
-	ConfidenceUnknown RAMPConfidence = "unknown"
-)
-
-// ArtifactStatus describes whether an artifact is committed, uncommitted, or projected.
+// ArtifactStatus describes the evidence artifact state.
 type ArtifactStatus string
 
-const (
-	StatusCommitted   ArtifactStatus = "committed"
-	StatusUncommitted ArtifactStatus = "uncommitted"
-	StatusProjected   ArtifactStatus = "projected"
+// These logical identifiers are bound once at boot to validated embedded values.
+// The spec owns their serialized values; code owns classification and ranking.
+var (
+	RAMPRuleSetVersion      = rampVocabulary.Version
+	RAMPLevelL1             = RAMPLevel(rampVocabulary.Levels["l1"])
+	RAMPLevelL2             = RAMPLevel(rampVocabulary.Levels["l2"])
+	RAMPLevelL3             = RAMPLevel(rampVocabulary.Levels["l3"])
+	RAMPLevelL4             = RAMPLevel(rampVocabulary.Levels["l4"])
+	RAMPCatUnconfigured     = RAMPCategory(rampVocabulary.Categories["unconfigured"].ID)
+	RAMPCatAIRules          = RAMPCategory(rampVocabulary.Categories["ai_rules"].ID)
+	RAMPCatToolConfig       = RAMPCategory(rampVocabulary.Categories["tool_config"].ID)
+	RAMPCatAgentStandards   = RAMPCategory(rampVocabulary.Categories["agent_standards"].ID)
+	RAMPCatNamedAgents      = RAMPCategory(rampVocabulary.Categories["named_agents"].ID)
+	RAMPCatReusableCommands = RAMPCategory(rampVocabulary.Categories["reusable_commands"].ID)
+	RAMPCatDomainSkills     = RAMPCategory(rampVocabulary.Categories["domain_skills"].ID)
+	RAMPCatMultiAgentFlows  = RAMPCategory(rampVocabulary.Categories["multi_agent_flows"].ID)
+	RAMPCatSessionRecords   = RAMPCategory(rampVocabulary.Categories["session_records"].ID)
+	ConfidenceHigh          = RAMPConfidence(rampVocabulary.Confidence["high"])
+	ConfidenceUnknown       = RAMPConfidence(rampVocabulary.Confidence["unknown"])
+	StatusCommitted         = ArtifactStatus(rampVocabulary.ArtifactStatuses["committed"])
+	StatusUncommitted       = ArtifactStatus(rampVocabulary.ArtifactStatuses["uncommitted"])
+	StatusProjected         = ArtifactStatus(rampVocabulary.ArtifactStatuses["projected"])
 )
 
 // RAMPArtifact captures inspectable evidence for an AI maturity artifact.
@@ -94,44 +76,22 @@ type RAMPProfile struct {
 
 // LevelDescription returns a human-readable title for a RAMP level.
 func LevelDescription(level RAMPLevel) string {
-	switch level {
-	case RAMPLevelL1:
-		return "Unconfigured"
-	case RAMPLevelL2:
-		return "Grounded Prompting"
-	case RAMPLevelL3:
-		return "Agent Augmented"
-	case RAMPLevelL4:
-		return "Orchestration"
-	default:
-		return string(level)
+	for key, id := range rampVocabulary.Levels {
+		if id == string(level) {
+			return rampVocabulary.Descriptions.Levels[key]
+		}
 	}
+	return string(level)
 }
 
 // CategoryDescription returns a human-readable description for a RAMP category.
 func CategoryDescription(cat RAMPCategory) string {
-	switch cat {
-	case RAMPCatUnconfigured:
-		return "Unconfigured (no validated AI artifacts)"
-	case RAMPCatAIRules:
-		return "AI Behavior Rules (AGENTS.md, instructions, prompt rules)"
-	case RAMPCatToolConfig:
-		return "AI Tool Configuration (.claude, .cursor, aider configs)"
-	case RAMPCatAgentStandards:
-		return "Agent Architecture & Standards (invariants, workflow docs)"
-	case RAMPCatNamedAgents:
-		return "Named Agents (subagent personas, roles)"
-	case RAMPCatReusableCommands:
-		return "Reusable Commands (slash commands, prompt procedures)"
-	case RAMPCatDomainSkills:
-		return "Domain Skills (SKILL.md, agent tools)"
-	case RAMPCatMultiAgentFlows:
-		return "Multi-Agent Flows (runnable multi-agent orchestration)"
-	case RAMPCatSessionRecords:
-		return "Agent Session Records (committed transcripts/trajectories)"
-	default:
-		return string(cat)
+	for key, category := range rampVocabulary.Categories {
+		if category.ID == string(cat) {
+			return rampVocabulary.Descriptions.Categories[key]
+		}
 	}
+	return string(cat)
 }
 
 func levelRank(level RAMPLevel) int {
@@ -237,7 +197,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatSessionRecords,
-			Level:      RAMPLevelL4,
+			Level:      categoryLevel(RAMPCatSessionRecords),
 			RuleID:     "RULE_SESSION_TRANSCRIPTS",
 			Reason:     "Committed agent session execution log or trajectory record",
 			Confidence: ConfidenceHigh,
@@ -251,7 +211,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 			return &RAMPArtifact{
 				Path:       cleanRel,
 				Category:   RAMPCatMultiAgentFlows,
-				Level:      RAMPLevelL4,
+				Level:      categoryLevel(RAMPCatMultiAgentFlows),
 				RuleID:     "RULE_MULTI_AGENT_FLOW",
 				Reason:     "Runnable multi-agent orchestration flow configuration",
 				Confidence: ConfidenceHigh,
@@ -266,7 +226,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 			return &RAMPArtifact{
 				Path:       cleanRel,
 				Category:   RAMPCatDomainSkills,
-				Level:      RAMPLevelL3,
+				Level:      categoryLevel(RAMPCatDomainSkills),
 				RuleID:     "RULE_DOMAIN_SKILLS",
 				Reason:     "Agent skill definition with structured instructions",
 				Confidence: ConfidenceHigh,
@@ -280,7 +240,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatReusableCommands,
-			Level:      RAMPLevelL3,
+			Level:      categoryLevel(RAMPCatReusableCommands),
 			RuleID:     "RULE_REUSABLE_COMMANDS",
 			Reason:     "Reusable agent slash command definition",
 			Confidence: ConfidenceHigh,
@@ -293,7 +253,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatNamedAgents,
-			Level:      RAMPLevelL3,
+			Level:      categoryLevel(RAMPCatNamedAgents),
 			RuleID:     "RULE_NAMED_AGENTS",
 			Reason:     "Named subagent definition or persona specification",
 			Confidence: ConfidenceHigh,
@@ -306,7 +266,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatAIRules,
-			Level:      RAMPLevelL2,
+			Level:      categoryLevel(RAMPCatAIRules),
 			RuleID:     "RULE_AGENTS_MD",
 			Reason:     "Canonical agent instructions and behavior rules",
 			Confidence: ConfidenceHigh,
@@ -316,7 +276,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatAIRules,
-			Level:      RAMPLevelL2,
+			Level:      categoryLevel(RAMPCatAIRules),
 			RuleID:     "RULE_CURSOR_RULES",
 			Reason:     "Cursor IDE AI behavior rules",
 			Confidence: ConfidenceHigh,
@@ -326,7 +286,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatAIRules,
-			Level:      RAMPLevelL2,
+			Level:      categoryLevel(RAMPCatAIRules),
 			RuleID:     "RULE_WINDSURF_RULES",
 			Reason:     "Windsurf AI behavior rules",
 			Confidence: ConfidenceHigh,
@@ -336,7 +296,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatAIRules,
-			Level:      RAMPLevelL2,
+			Level:      categoryLevel(RAMPCatAIRules),
 			RuleID:     "RULE_COPILOT_INSTRUCTIONS",
 			Reason:     "GitHub Copilot custom instructions",
 			Confidence: ConfidenceHigh,
@@ -348,7 +308,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatToolConfig,
-			Level:      RAMPLevelL2,
+			Level:      categoryLevel(RAMPCatToolConfig),
 			RuleID:     "RULE_CLAUDE_CONFIG",
 			Reason:     "Claude Code tool and permission configuration",
 			Confidence: ConfidenceHigh,
@@ -358,7 +318,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatToolConfig,
-			Level:      RAMPLevelL2,
+			Level:      categoryLevel(RAMPCatToolConfig),
 			RuleID:     "RULE_AI_TOOL_CONFIG",
 			Reason:     "AI coding tool configuration file",
 			Confidence: ConfidenceHigh,
@@ -370,7 +330,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatAgentStandards,
-			Level:      RAMPLevelL2,
+			Level:      categoryLevel(RAMPCatAgentStandards),
 			RuleID:     "RULE_AGENTIC_STANDARDS",
 			Reason:     "Normative agentic loop practices and coding standards",
 			Confidence: ConfidenceHigh,
@@ -380,7 +340,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 		return &RAMPArtifact{
 			Path:       cleanRel,
 			Category:   RAMPCatAgentStandards,
-			Level:      RAMPLevelL2,
+			Level:      categoryLevel(RAMPCatAgentStandards),
 			RuleID:     "RULE_PROMPT_DOC",
 			Reason:     "Agent prompt or architecture specification doc",
 			Confidence: ConfidenceHigh,
@@ -393,7 +353,7 @@ func classifyRAMPPath(relPath string, data []byte) *RAMPArtifact {
 			return &RAMPArtifact{
 				Path:       cleanRel,
 				Category:   RAMPCatUnconfigured,
-				Level:      RAMPLevelL1,
+				Level:      categoryLevel(RAMPCatUnconfigured),
 				RuleID:     "RULE_AMBIGUOUS_AI_ARTIFACT",
 				Reason:     "Ambiguous AI-related path without verified RAMP structure; marked unknown to prevent false promotion",
 				Confidence: ConfidenceUnknown,
@@ -513,7 +473,7 @@ func AssessRAMPWithProjected(repoDir string, projectedFiles []string) (*RAMPProf
 					art = &RAMPArtifact{
 						Path:       cleanProj,
 						Category:   RAMPCatAIRules,
-						Level:      RAMPLevelL2,
+						Level:      categoryLevel(RAMPCatAIRules),
 						RuleID:     "RULE_AGENTS_MD",
 						Reason:     "Canonical agent instructions (projected write)",
 						Confidence: ConfidenceHigh,
@@ -522,7 +482,7 @@ func AssessRAMPWithProjected(repoDir string, projectedFiles []string) (*RAMPProf
 					art = &RAMPArtifact{
 						Path:       cleanProj,
 						Category:   RAMPCatAgentStandards,
-						Level:      RAMPLevelL2,
+						Level:      categoryLevel(RAMPCatAgentStandards),
 						RuleID:     "RULE_AGENTIC_STANDARDS",
 						Reason:     "Projected agent guidance doc",
 						Confidence: ConfidenceHigh,
@@ -598,15 +558,15 @@ func AssessRAMPWithProjected(repoDir string, projectedFiles []string) (*RAMPProf
 		hasL3 := catMap[RAMPCatNamedAgents] || catMap[RAMPCatReusableCommands] || catMap[RAMPCatDomainSkills]
 		hasL2 := catMap[RAMPCatAIRules] || catMap[RAMPCatToolConfig] || catMap[RAMPCatAgentStandards]
 		if !hasL3 {
-			alerts = append(alerts, "Coherence warning: Level L4 (Orchestration) evidenced without L3 (Agent Augmented) capabilities")
+			alerts = append(alerts, fmt.Sprintf("Coherence warning: Level %s (%s) evidenced without %s (%s) capabilities", RAMPLevelL4, LevelDescription(RAMPLevelL4), RAMPLevelL3, LevelDescription(RAMPLevelL3)))
 		}
 		if !hasL2 {
-			alerts = append(alerts, "Coherence warning: Level L4 (Orchestration) evidenced without L2 (Grounded Prompting) baseline rules")
+			alerts = append(alerts, fmt.Sprintf("Coherence warning: Level %s (%s) evidenced without %s (%s) baseline rules", RAMPLevelL4, LevelDescription(RAMPLevelL4), RAMPLevelL2, LevelDescription(RAMPLevelL2)))
 		}
 	} else if evalLevel == RAMPLevelL3 {
 		hasL2 := catMap[RAMPCatAIRules] || catMap[RAMPCatToolConfig] || catMap[RAMPCatAgentStandards]
 		if !hasL2 {
-			alerts = append(alerts, "Coherence warning: Level L3 (Agent Augmented) evidenced without L2 (Grounded Prompting) baseline rules")
+			alerts = append(alerts, fmt.Sprintf("Coherence warning: Level %s (%s) evidenced without %s (%s) baseline rules", RAMPLevelL3, LevelDescription(RAMPLevelL3), RAMPLevelL2, LevelDescription(RAMPLevelL2)))
 		}
 	}
 

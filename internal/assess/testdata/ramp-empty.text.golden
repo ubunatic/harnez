@@ -1,0 +1,14 @@
+── RAMP Repository AI Maturity Profile ───────────────────────────────
+Baseline Level:    L1 (Unconfigured)
+Projected Level:   L2 (Grounded Prompting)
+Rule Set Version:  ramp-v1
+Classification:    RAMP-informed estimate (offline, read-only)
+
+Evidence Artifact Inventory:
+  • .codex/AGENTS.md                 [L2, ai_rules] (projected, high confidence)
+    Rule: RULE_AGENTS_MD — Canonical agent instructions and behavior rules
+  • agent_helper.sh                  [L1, unconfigured] (uncommitted, unknown)
+    Rule: RULE_AMBIGUOUS_AI_ARTIFACT — Ambiguous AI-related path without verified RAMP structure; marked unknown to prevent false promotion
+
+Coherence Status:
+  ✓ Artifact levels are coherent

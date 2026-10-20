@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RAMP assessment vocabulary",
+  "type": "object",
+  "required": [
+    "version",
+    "levels",
+    "categories",
+    "confidence",
+    "artifact_statuses",
+    "descriptions"
+  ],
+  "properties": {
+    "version": {
+      "$ref": "#/$defs/text"
+    },
+    "levels": {
+      "type": "object",
+      "required": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "properties": {
+        "l1": {
+          "$ref": "#/$defs/text"
+        },
+        "l2": {
+          "$ref": "#/$defs/text"
+        },
+        "l3": {
+          "$ref": "#/$defs/text"
+        },
+        "l4": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "additionalProperties": false
+    },
+    "categories": {
+      "type": "object",
+      "required": [
+        "unconfigured",
+        "ai_rules",
+        "tool_config",
+        "agent_standards",
+        "named_agents",
+        "reusable_commands",
+        "domain_skills",
+        "multi_agent_flows",
+        "session_records"
+      ],
+      "properties": {
+        "unconfigured": {
+          "$ref": "#/$defs/category"
+        },
+        "ai_rules": {
+          "$ref": "#/$defs/category"
+        },
+        "tool_config": {
+          "$ref": "#/$defs/category"
+        },
+        "agent_standards": {
+          "$ref": "#/$defs/category"
+        },
+        "named_agents": {
+          "$ref": "#/$defs/category"
+        },
+        "reusable_commands": {
+          "$ref": "#/$defs/category"
+        },
+        "domain_skills": {
+          "$ref": "#/$defs/category"
+        },
+        "multi_agent_flows": {
+          "$ref": "#/$defs/category"
+        },
+        "session_records": {
+          "$ref": "#/$defs/category"
+        }
+      },
+      "additionalProperties": false
+    },
+    "confidence": {
+      "type": "object",
+      "required": [
+        "high",
+        "medium",
+        "low",
+        "unknown"
+      ],
+      "properties": {
+        "high": {
+          "$ref": "#/$defs/text"
+        },
+        "medium": {
+          "$ref": "#/$defs/text"
+        },
+        "low": {
+          "$ref": "#/$defs/text"
+        },
+        "unknown": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifact_statuses": {
+      "type": "object",
+      "required": [
+        "committed",
+        "uncommitted",
+        "projected"
+      ],
+      "properties": {
+        "committed": {
+          "$ref": "#/$defs/text"
+        },
+        "uncommitted": {
+          "$ref": "#/$defs/text"
+        },
+        "projected": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "additionalProperties": false
+    },
+    "descriptions": {
+      "type": "object",
+      "required": [
+        "levels",
+        "categories"
+      ],
+      "properties": {
+        "levels": {
+          "type": "object",
+          "required": [
+            "l1",
+            "l2",
+            "l3",
+            "l4"
+          ],
+          "properties": {
+            "l1": {
+              "$ref": "#/$defs/text"
+            },
+            "l2": {
+              "$ref": "#/$defs/text"
+            },
+            "l3": {
+              "$ref": "#/$defs/text"
+            },
+            "l4": {
+              "$ref": "#/$defs/text"
+            }
+          },
+          "additionalProperties": false
+        },
+        "categories": {
+          "type": "object",
+          "required": [
+            "unconfigured",
+            "ai_rules",
+            "tool_config",
+            "agent_standards",
+            "named_agents",
+            "reusable_commands",
+            "domain_skills",
+            "multi_agent_flows",
+            "session_records"
+          ],
+          "properties": {
+            "unconfigured": {
+              "$ref": "#/$defs/text"
+            },
+            "ai_rules": {
+              "$ref": "#/$defs/text"
+            },
+            "tool_config": {
+              "$ref": "#/$defs/text"
+            },
+            "agent_standards": {
+              "$ref": "#/$defs/text"
+            },
+            "named_agents": {
+              "$ref": "#/$defs/text"
+            },
+            "reusable_commands": {
+              "$ref": "#/$defs/text"
+            },
+            "domain_skills": {
+              "$ref": "#/$defs/text"
+            },
+            "multi_agent_flows": {
+              "$ref": "#/$defs/text"
+            },
+            "session_records": {
+              "$ref": "#/$defs/text"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "category": {
+      "type": "object",
+      "required": [
+        "id",
+        "level"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/text"
+        },
+        "level": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

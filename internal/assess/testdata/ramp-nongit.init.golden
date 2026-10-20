@@ -1,0 +1,16 @@
+RAMP Maturity Profile:
+  Baseline:  L1 (Unconfigured)
+  Projected: L4 (Orchestration)
+  Notice:    Git metadata absent: existing working-tree files treated as uncommitted/projected
+  Projected Evidence (10):
+    + .claude/agents/helper.md [L3, named_agents] (uncommitted)
+    + .claude/commands/check.md [L3, reusable_commands] (uncommitted)
+    + .claude/settings.json [L2, tool_config] (uncommitted)
+    + .codex/AGENTS.md [L2, ai_rules] (projected)
+    + AGENTS.md [L2, ai_rules] (uncommitted)
+    + agent-sessions/run.jsonl [L4, session_records] (uncommitted)
+    + agent_helper.sh [L1, unconfigured] (uncommitted)
+    + docs/AgenticLoop.md [L2, agent_standards] (uncommitted)
+    + flows/team.yaml [L4, multi_agent_flows] (uncommitted)
+    + skills/check/SKILL.md [L3, domain_skills] (uncommitted)
+  Note: Working-tree files remain projected until committed in Git.

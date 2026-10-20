@@ -1,0 +1,120 @@
+{
+  "rule_set_version": "ramp-v1",
+  "baseline_level": "L1",
+  "projected_level": "L4",
+  "projected_categories": [
+    "agent_standards",
+    "ai_rules",
+    "domain_skills",
+    "multi_agent_flows",
+    "named_agents",
+    "reusable_commands",
+    "session_records",
+    "tool_config"
+  ],
+  "artifacts": [
+    {
+      "path": ".claude/agents/helper.md",
+      "category": "named_agents",
+      "level": "L3",
+      "rule_id": "RULE_NAMED_AGENTS",
+      "reason": "Named subagent definition or persona specification",
+      "confidence": "high",
+      "status": "uncommitted",
+      "is_baseline": false
+    },
+    {
+      "path": ".claude/commands/check.md",
+      "category": "reusable_commands",
+      "level": "L3",
+      "rule_id": "RULE_REUSABLE_COMMANDS",
+      "reason": "Reusable agent slash command definition",
+      "confidence": "high",
+      "status": "uncommitted",
+      "is_baseline": false
+    },
+    {
+      "path": ".claude/settings.json",
+      "category": "tool_config",
+      "level": "L2",
+      "rule_id": "RULE_CLAUDE_CONFIG",
+      "reason": "Claude Code tool and permission configuration",
+      "confidence": "high",
+      "status": "uncommitted",
+      "is_baseline": false
+    },
+    {
+      "path": ".codex/AGENTS.md",
+      "category": "ai_rules",
+      "level": "L2",
+      "rule_id": "RULE_AGENTS_MD",
+      "reason": "Canonical agent instructions and behavior rules",
+      "confidence": "high",
+      "status": "projected",
+      "is_baseline": false
+    },
+    {
+      "path": "AGENTS.md",
+      "category": "ai_rules",
+      "level": "L2",
+      "rule_id": "RULE_AGENTS_MD",
+      "reason": "Canonical agent instructions and behavior rules",
+      "confidence": "high",
+      "status": "uncommitted",
+      "is_baseline": false
+    },
+    {
+      "path": "agent-sessions/run.jsonl",
+      "category": "session_records",
+      "level": "L4",
+      "rule_id": "RULE_SESSION_TRANSCRIPTS",
+      "reason": "Committed agent session execution log or trajectory record",
+      "confidence": "high",
+      "status": "uncommitted",
+      "is_baseline": false
+    },
+    {
+      "path": "agent_helper.sh",
+      "category": "unconfigured",
+      "level": "L1",
+      "rule_id": "RULE_AMBIGUOUS_AI_ARTIFACT",
+      "reason": "Ambiguous AI-related path without verified RAMP structure; marked unknown to prevent false promotion",
+      "confidence": "unknown",
+      "status": "uncommitted",
+      "is_baseline": false
+    },
+    {
+      "path": "docs/AgenticLoop.md",
+      "category": "agent_standards",
+      "level": "L2",
+      "rule_id": "RULE_AGENTIC_STANDARDS",
+      "reason": "Normative agentic loop practices and coding standards",
+      "confidence": "high",
+      "status": "uncommitted",
+      "is_baseline": false
+    },
+    {
+      "path": "flows/team.yaml",
+      "category": "multi_agent_flows",
+      "level": "L4",
+      "rule_id": "RULE_MULTI_AGENT_FLOW",
+      "reason": "Runnable multi-agent orchestration flow configuration",
+      "confidence": "high",
+      "status": "uncommitted",
+      "is_baseline": false
+    },
+    {
+      "path": "skills/check/SKILL.md",
+      "category": "domain_skills",
+      "level": "L3",
+      "rule_id": "RULE_DOMAIN_SKILLS",
+      "reason": "Agent skill definition with structured instructions",
+      "confidence": "high",
+      "status": "uncommitted",
+      "is_baseline": false
+    }
+  ],
+  "git_available": false,
+  "git_notice": "Git metadata absent: existing working-tree files treated as uncommitted/projected",
+  "summary": "RAMP-informed estimate: Baseline L1 (Unconfigured), Projected L4 (Orchestration)"
+}

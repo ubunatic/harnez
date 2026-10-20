@@ -1,0 +1,32 @@
+{
+  "rule_set_version": "ramp-v1",
+  "baseline_level": "L1",
+  "projected_level": "L2",
+  "projected_categories": [
+    "ai_rules"
+  ],
+  "artifacts": [
+    {
+      "path": ".codex/AGENTS.md",
+      "category": "ai_rules",
+      "level": "L2",
+      "rule_id": "RULE_AGENTS_MD",
+      "reason": "Canonical agent instructions and behavior rules",
+      "confidence": "high",
+      "status": "projected",
+      "is_baseline": false
+    },
+    {
+      "path": "agent_helper.sh",
+      "category": "unconfigured",
+      "level": "L1",
+      "rule_id": "RULE_AMBIGUOUS_AI_ARTIFACT",
+      "reason": "Ambiguous AI-related path without verified RAMP structure; marked unknown to prevent false promotion",
+      "confidence": "unknown",
+      "status": "uncommitted",
+      "is_baseline": false
+    }
+  ],
+  "git_available": true,
+  "summary": "RAMP-informed estimate: Baseline L1 (Unconfigured), Projected L2 (Grounded Prompting)"
+}

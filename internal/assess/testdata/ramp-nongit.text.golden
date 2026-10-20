@@ -1,0 +1,31 @@
+── RAMP Repository AI Maturity Profile ───────────────────────────────
+Baseline Level:    L1 (Unconfigured)
+Projected Level:   L4 (Orchestration)
+Rule Set Version:  ramp-v1
+Classification:    RAMP-informed estimate (offline, read-only)
+Notice:            ℹ️  Git metadata absent: existing working-tree files treated as uncommitted/projected
+
+Evidence Artifact Inventory:
+  • .claude/agents/helper.md         [L3, named_agents] (uncommitted, high confidence)
+    Rule: RULE_NAMED_AGENTS — Named subagent definition or persona specification
+  • .claude/commands/check.md        [L3, reusable_commands] (uncommitted, high confidence)
+    Rule: RULE_REUSABLE_COMMANDS — Reusable agent slash command definition
+  • .claude/settings.json            [L2, tool_config] (uncommitted, high confidence)
+    Rule: RULE_CLAUDE_CONFIG — Claude Code tool and permission configuration
+  • .codex/AGENTS.md                 [L2, ai_rules] (projected, high confidence)
+    Rule: RULE_AGENTS_MD — Canonical agent instructions and behavior rules
+  • AGENTS.md                        [L2, ai_rules] (uncommitted, high confidence)
+    Rule: RULE_AGENTS_MD — Canonical agent instructions and behavior rules
+  • agent-sessions/run.jsonl         [L4, session_records] (uncommitted, high confidence)
+    Rule: RULE_SESSION_TRANSCRIPTS — Committed agent session execution log or trajectory record
+  • agent_helper.sh                  [L1, unconfigured] (uncommitted, unknown)
+    Rule: RULE_AMBIGUOUS_AI_ARTIFACT — Ambiguous AI-related path without verified RAMP structure; marked unknown to prevent false promotion
+  • docs/AgenticLoop.md              [L2, agent_standards] (uncommitted, high confidence)
+    Rule: RULE_AGENTIC_STANDARDS — Normative agentic loop practices and coding standards
+  • flows/team.yaml                  [L4, multi_agent_flows] (uncommitted, high confidence)
+    Rule: RULE_MULTI_AGENT_FLOW — Runnable multi-agent orchestration flow configuration
+  • skills/check/SKILL.md            [L3, domain_skills] (uncommitted, high confidence)
+    Rule: RULE_DOMAIN_SKILLS — Agent skill definition with structured instructions
+
+Coherence Status:
+  ✓ Artifact levels are coherent

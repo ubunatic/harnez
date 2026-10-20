@@ -31,12 +31,12 @@ func RenderRAMPText(profile *RAMPProfile) string {
 
 	b.WriteString("\nEvidence Artifact Inventory:\n")
 	if len(profile.Artifacts) == 0 {
-		b.WriteString("  • No AI practice artifacts detected (L1 Unconfigured)\n")
+		b.WriteString(fmt.Sprintf("  • No AI practice artifacts detected (%s %s)\n", RAMPLevelL1, LevelDescription(RAMPLevelL1)))
 	} else {
 		for _, a := range profile.Artifacts {
 			statusTag := string(a.Status)
 			if a.Confidence == ConfidenceUnknown {
-				statusTag += ", unknown"
+				statusTag += ", " + string(ConfidenceUnknown)
 			} else {
 				statusTag += ", " + string(a.Confidence) + " confidence"
 			}

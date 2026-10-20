@@ -1,0 +1,17 @@
+── RAMP Repository AI Maturity Profile ───────────────────────────────
+Baseline Level:    L4 (Orchestration)
+Projected Level:   L4 (Orchestration)
+Rule Set Version:  ramp-v1
+Classification:    RAMP-informed estimate (offline, read-only)
+
+Evidence Artifact Inventory:
+  • .codex/AGENTS.md                 [L2, ai_rules] (projected, high confidence)
+    Rule: RULE_AGENTS_MD — Canonical agent instructions and behavior rules
+  • agent_helper.sh                  [L1, unconfigured] (uncommitted, unknown)
+    Rule: RULE_AMBIGUOUS_AI_ARTIFACT — Ambiguous AI-related path without verified RAMP structure; marked unknown to prevent false promotion
+  • flows/team.yaml                  [L4, multi_agent_flows] (committed, high confidence)
+    Rule: RULE_MULTI_AGENT_FLOW — Runnable multi-agent orchestration flow configuration
+
+Coherence Status:
+  ⚠️  Coherence warning: Level L4 (Orchestration) evidenced without L3 (Agent Augmented) capabilities
+  ⚠️  Coherence warning: Level L4 (Orchestration) evidenced without L2 (Grounded Prompting) baseline rules

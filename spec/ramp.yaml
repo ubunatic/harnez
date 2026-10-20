@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=schemas/ramp.schema.json
+# Stable keys bind classification mechanics to spec-owned vocabulary.
+version: ramp-v1
+levels:
+  l1: L1
+  l2: L2
+  l3: L3
+  l4: L4
+categories:
+  unconfigured:
+    id: unconfigured
+    level: L1
+  ai_rules:
+    id: ai_rules
+    level: L2
+  tool_config:
+    id: tool_config
+    level: L2
+  agent_standards:
+    id: agent_standards
+    level: L2
+  named_agents:
+    id: named_agents
+    level: L3
+  reusable_commands:
+    id: reusable_commands
+    level: L3
+  domain_skills:
+    id: domain_skills
+    level: L3
+  multi_agent_flows:
+    id: multi_agent_flows
+    level: L4
+  session_records:
+    id: session_records
+    level: L4
+confidence:
+  high: high
+  medium: medium
+  low: low
+  unknown: unknown
+artifact_statuses:
+  committed: committed
+  uncommitted: uncommitted
+  projected: projected
+descriptions:
+  levels:
+    l1: "Unconfigured"
+    l2: "Grounded Prompting"
+    l3: "Agent Augmented"
+    l4: "Orchestration"
+  categories:
+    unconfigured: "Unconfigured (no validated AI artifacts)"
+    ai_rules: "AI Behavior Rules (AGENTS.md, instructions, prompt rules)"
+    tool_config: "AI Tool Configuration (.claude, .cursor, aider configs)"
+    agent_standards: "Agent Architecture & Standards (invariants, workflow docs)"
+    named_agents: "Named Agents (subagent personas, roles)"
+    reusable_commands: "Reusable Commands (slash commands, prompt procedures)"
+    domain_skills: "Domain Skills (SKILL.md, agent tools)"
+    multi_agent_flows: "Multi-Agent Flows (runnable multi-agent orchestration)"
+    session_records: "Agent Session Records (committed transcripts/trajectories)"

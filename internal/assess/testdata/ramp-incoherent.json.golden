@@ -1,0 +1,50 @@
+{
+  "rule_set_version": "ramp-v1",
+  "baseline_level": "L4",
+  "projected_level": "L4",
+  "baseline_categories": [
+    "multi_agent_flows"
+  ],
+  "projected_categories": [
+    "ai_rules",
+    "multi_agent_flows"
+  ],
+  "artifacts": [
+    {
+      "path": ".codex/AGENTS.md",
+      "category": "ai_rules",
+      "level": "L2",
+      "rule_id": "RULE_AGENTS_MD",
+      "reason": "Canonical agent instructions and behavior rules",
+      "confidence": "high",
+      "status": "projected",
+      "is_baseline": false
+    },
+    {
+      "path": "agent_helper.sh",
+      "category": "unconfigured",
+      "level": "L1",
+      "rule_id": "RULE_AMBIGUOUS_AI_ARTIFACT",
+      "reason": "Ambiguous AI-related path without verified RAMP structure; marked unknown to prevent false promotion",
+      "confidence": "unknown",
+      "status": "uncommitted",
+      "is_baseline": false
+    },
+    {
+      "path": "flows/team.yaml",
+      "category": "multi_agent_flows",
+      "level": "L4",
+      "rule_id": "RULE_MULTI_AGENT_FLOW",
+      "reason": "Runnable multi-agent orchestration flow configuration",
+      "confidence": "high",
+      "status": "committed",
+      "is_baseline": true
+    }
+  ],
+  "coherence_alerts": [
+    "Coherence warning: Level L4 (Orchestration) evidenced without L3 (Agent Augmented) capabilities",
+    "Coherence warning: Level L4 (Orchestration) evidenced without L2 (Grounded Prompting) baseline rules"
+  ],
+  "git_available": true,
+  "summary": "RAMP-informed estimate: Baseline L4 (Orchestration), Projected L4 (Orchestration)"
+}

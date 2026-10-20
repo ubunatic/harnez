@@ -1,0 +1,7 @@
+RAMP Maturity Profile:
+  Baseline:  L4 (Orchestration)
+  Projected: L4 (Orchestration)
+  Projected Evidence (2):
+    + .codex/AGENTS.md [L2, ai_rules] (projected)
+    + agent_helper.sh [L1, unconfigured] (uncommitted)
+  Note: Working-tree files remain projected until committed in Git.
