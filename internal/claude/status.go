@@ -23,6 +23,11 @@ func hasSettingsKey(path, key string) bool {
 
 // RunStatus prints the current applied status of configuration parameters.
 func RunStatus(configPath string, cfg *Config, target string, selection Set) error {
+	if _, err := os.Stat("issues"); err == nil {
+		if err := issues.CheckDuplicateNumbers("issues"); err != nil {
+			return fmt.Errorf("status: %w", err)
+		}
+	}
 	fmt.Println("Config:")
 	fmt.Printf("  %-14s %s\n", "file:", configPath)
 	fmt.Printf("  %-14s %s\n", "target:", target)

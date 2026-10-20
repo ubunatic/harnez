@@ -830,7 +830,12 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 
 	newContent, err := issues.RewriteHeaderNumber(string(content), newNum)
 	if err != nil {
-		return issuesResult{}, false, fmt.Errorf("issues mv: %w", err)
+		return issuesResult{}, false, fmt.Errorf("issues mv: %s: %w; add a '# %s — Title' header and retry", oldGitRelPath, err, f.Number)
+	}
+	newContent = rewriteIssueReferences(newContent, oldGitRelPath, newGitRelPath)
+	referenceEdits, err := planIssueReferences(opts.Dir, oldGitRelPath, newGitRelPath)
+	if err != nil {
+		return issuesResult{}, false, fmt.Errorf("issues mv: scan references: %w", err)
 	}
 
 	readmePath := filepath.Join(issuesDir, "README.md")
@@ -891,8 +896,15 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		return issuesResult{}, false, fmt.Errorf("issues mv: remove old file %s: %w", oldPath, err)
 	}
 
+	if err := writeIssueReferences(referenceEdits, false); err != nil {
+		_ = writeIssueReferences(referenceEdits, true)
+		_ = os.WriteFile(oldPath, content, 0o644)
+		_ = os.Remove(newPath)
+		return issuesResult{}, false, fmt.Errorf("issues mv: rewrite references: %w", err)
+	}
 	readmeChanged, err := index.UpdateIssuesReadme(readmePath, issuesDir)
 	if err != nil {
+		_ = writeIssueReferences(referenceEdits, true)
 		_ = os.WriteFile(oldPath, content, 0o644)
 		_ = os.Remove(newPath)
 		return issuesResult{}, false, fmt.Errorf("issues mv: update README: %w", err)
@@ -905,7 +917,15 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 			msg = fmt.Sprintf("docs(issues): renumber %s to %s", f.Number, newNum)
 		}
 		readmeRelPath := filepath.ToSlash(filepath.Join("issues", "README.md"))
-		sha, err := gitAddAndCommit(opts.Dir, []string{oldGitRelPath, newGitRelPath, readmeRelPath}, msg)
+		paths := []string{oldGitRelPath, newGitRelPath, readmeRelPath}
+		for _, edit := range referenceEdits {
+			rel, err := filepath.Rel(opts.Dir, edit.path)
+			if err != nil {
+				return issuesResult{}, false, err
+			}
+			paths = append(paths, filepath.ToSlash(rel))
+		}
+		sha, err := gitAddAndCommit(opts.Dir, paths, msg)
 		if err != nil {
 			return issuesResult{}, false, fmt.Errorf("issues mv: commit: %w", err)
 		}

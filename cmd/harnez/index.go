@@ -103,6 +103,12 @@ func runIndex(w io.Writer, opts indexOptions) error {
 	hasIssues := dirExists(issuesDir) || pathExists(issuesReadme)
 	hasDocs := pathExists(docsReadme)
 
+	if hasIssues {
+		if err := issues.CheckDuplicateNumbers(issuesDir); err != nil {
+			return fmt.Errorf("index: %w", err)
+		}
+	}
+
 	if !hasIssues && !hasDocs {
 		return fmt.Errorf("index: no issues/ or docs/studies/ found in %s", dir)
 	}
