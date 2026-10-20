@@ -3,8 +3,11 @@ package usage
 import (
 	"context"
 	"io"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 // TestRunCollectorWritesSnapshotsOnce checks that a single collectTick (as
@@ -28,6 +31,52 @@ func TestRunCollectorWritesSnapshotsOnce(t *testing.T) {
 		if snap.Usage.AgentID != agentID {
 			t.Errorf("agent %s: snapshot AgentID = %q", agentID, snap.Usage.AgentID)
 		}
+	}
+}
+
+func TestCollectorTickPersistsStoreAndSnapshotWithInjectedFetch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	dbPath := filepath.Join(home, "usage.sqlite")
+	called := false
+	ctx := context.Background()
+	if err := InitializeUsageStore(ctx, home, dbPath); err != nil {
+		t.Fatal(err)
+	}
+	err := collectTickWithFetch(ctx, home, dbPath, StateDir(home), io.Discard, false, func(context.Context) (UsageSummary, error) {
+		called = true
+		return UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{
+			AgentID: "claude", Name: "Claude Code", Installed: true,
+			Session: &QuotaWindow{Name: "5-hour", UsedPercent: 42},
+		}}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("injected fetch was not called")
+	}
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	rows, err := store.CurrentFor(context.Background(), "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("collector tick wrote no normalized usage observations")
+	}
+	snapshot, err := ReadAgentSnapshot(StateDir(home), "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot == nil {
+		t.Fatal("collector tick wrote no JSON snapshot")
 	}
 }
 

@@ -400,12 +400,10 @@ func newCollectorCmd() *cobra.Command {
 	var collectorOffline bool
 	collectorCmd := &cobra.Command{
 		Use:   "agent-collector",
-		Short: "Run the background usage-collector daemon (see systemd/harnez-agent-collector.service)",
-		Long: "Runs the Claude/Codex/AGY usage collectors on a timer and atomically writes one JSON\n" +
-			"snapshot per agent to the shared harnez state directory (see `harnez usage --json` for the\n" +
-			"schema of each snapshot's \"usage\" field). `harnez usage` and the --watch TUI read this\n" +
-			"cache first, falling back to a live collect if it's missing or stale. Intended to run as\n" +
-			"a systemd --user service; install the unit with `harnez apply` (see docs/CLIDesign.md).",
+		Short: "Run the local server and usage collector (compatibility alias for server)",
+		Long: "Compatibility command for `harnez server`. Runs the local server and usage collector,\n" +
+			"which writes normalized observations, history, and JSON snapshots. The --once option keeps\n" +
+			"its one-shot snapshot behavior; the systemd user unit runs `harnez server`.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var client *http.Client
 			if !collectorOffline {
@@ -413,6 +411,12 @@ func newCollectorCmd() *cobra.Command {
 			}
 			if collectorOnce {
 				summary := usage.CollectAllLive(cmd.Context(), "", client)
+				if err := usage.InitializeUsageStore(cmd.Context(), "", ""); err != nil {
+					return fmt.Errorf("initialize usage store: %w", err)
+				}
+				if err := usage.PersistUsageSummary(cmd.Context(), "", "", summary); err != nil {
+					return fmt.Errorf("persist usage store: %w", err)
+				}
 				stateDir := usage.StateDir("")
 				for _, agent := range summary.Agents {
 					if err := usage.PersistAgentSnapshot(stateDir, agent, collectorOffline); err != nil {
@@ -424,7 +428,7 @@ func newCollectorCmd() *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return usage.RunCollector(ctx, "", client, collectorInterval, cmd.OutOrStdout(), collectorOffline)
+			return runHarnezServer(ctx, collectorInterval, collectorOffline)
 		},
 	}
 	collectorCmd.Flags().DurationVar(&collectorInterval, "interval", usage.DefaultCollectorInterval(),

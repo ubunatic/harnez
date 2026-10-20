@@ -86,8 +86,8 @@ func copyFile(src, dst string) (applyResult, error) {
 	return applyResult{changed: changed}, nil
 }
 
-// systemdUnitSource/systemdUnitName locate the bundled harnez-agent-collector
-// unit template (issue 082) within cfg.FS, and name it on disk.
+// systemdUnitSource/systemdUnitName locate the bundled server unit template
+// (issue 082/829) within cfg.FS, and name it on disk.
 const systemdUnitSource = "systemd/harnez-agent-collector.service"
 const systemdUnitName = "harnez-agent-collector.service"
 

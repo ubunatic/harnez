@@ -6,15 +6,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart={{HARNEZ_BIN}} agent-collector
+ExecStart={{HARNEZ_BIN}} server
 Restart=on-failure
 RestartSec=5s
 
-# Writes only to $XDG_STATE_HOME/harnez/agents/usage (default
-# ~/.local/state/harnez/agents/usage) — no other filesystem access needed.
+# Writes usage data under %S/harnez and listens on 127.0.0.1.
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%S/harnez
+ReadWritePaths=%S/harnez %D/harnez %C/harnez
 
 [Install]
 WantedBy=default.target

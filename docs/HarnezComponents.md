@@ -108,7 +108,7 @@ These do not show up in `go list` but bind the subsystems harder than imports do
    `permissions`, `status_line`). `claude.Config` is the only parser.
 5. **Shared spec** `spec/*.yaml` via `DefaultFS`: `telemetry.yaml`, `agent.yaml`,
    `reminders.yaml`, `actions/colors/indicators.yaml` (usage TUI).
-6. **systemd unit** `harnez-agent-collector.service` — installed by apply, runs a usage command.
+6. **systemd unit** `harnez-agent-collector.service` — installed by apply, runs `harnez server`.
 
 ## 3. Use-Case Coverage
 

@@ -45,7 +45,7 @@ func TestInstallSystemdUnitWritesExpandedExecStart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("os.Executable: %v", err)
 	}
-	if !strings.Contains(content, "ExecStart="+exe+" agent-collector") {
+	if !strings.Contains(content, "ExecStart="+exe+" server") {
 		t.Errorf("unit ExecStart does not reference the running binary %q:\n%s", exe, content)
 	}
 

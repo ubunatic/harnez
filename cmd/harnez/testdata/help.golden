@@ -6,7 +6,7 @@ Usage:
 
 Available Commands:
   agent           Manage subagent sessions
-  agent-collector Run the background usage-collector daemon (see systemd/harnez-agent-collector.service)
+  agent-collector Run the local server and usage collector (compatibility alias for server)
   agy-statusline  Render or manage the Antigravity CLI context and quota status line
   apply           Apply config.yaml to global Claude Code and agent harness directories
   assess          Fast code/doc metrics, token estimation, and repository feasibility report
@@ -41,6 +41,7 @@ Available Commands:
   repo-status     Brief, quiet-by-default summary of git working-tree state
   revert          Revert managed configuration or one-off changes
   scan-docs       Scan immediate child agent projects for managed-docs drift
+  server          Run Harnez local services
   skill           Install, search, and explore external agent skills from git repositories
   skills          Inspect and export Harnez's built-in skill catalogue
   stats           Report call frequency, average score, failure rate, and byte savings from tool_calls telemetry
@@ -518,11 +519,9 @@ Global Flags:
       --store-dir string        session store directory (default "$HOME/.harnez/agents")
 
 === harnez agent-collector
-Runs the Claude/Codex/AGY usage collectors on a timer and atomically writes one JSON
-snapshot per agent to the shared harnez state directory (see `harnez usage --json` for the
-schema of each snapshot's "usage" field). `harnez usage` and the --watch TUI read this
-cache first, falling back to a live collect if it's missing or stale. Intended to run as
-a systemd --user service; install the unit with `harnez apply` (see docs/CLIDesign.md).
+Compatibility command for `harnez server`. Runs the local server and usage collector,
+which writes normalized observations, history, and JSON snapshots. The --once option keeps
+its one-shot snapshot behavior; the systemd user unit runs `harnez server`.
 
 Usage:
   harnez agent-collector [flags]
@@ -2149,6 +2148,15 @@ Usage:
 Flags:
   -c, --config string   path to config YAML file (default: embedded)
   -h, --help            help for scan-docs
+
+=== harnez server
+Run Harnez local services
+
+Usage:
+  harnez server [flags]
+
+Flags:
+  -h, --help   help for server
 
 === harnez skill
 Manage external skills: SKILL.md directories from third-party git repositories.
