@@ -31,6 +31,13 @@ Settle it before roadmap step 3 (the supervisor) builds on either one.
 - Socket path in spec, under `$XDG_RUNTIME_DIR/harnez/` (fallback state dir), dir `0700`, socket `0600`.
 - Singleton: if the socket exists, probe `/status`; healthy harnez → "already running", exit 0;
   no answer → stale, remove and bind; another program → error. Drop the TCP port and its spec key.
+- User: the latest version wins. When a healthy harnez server answers, compare versions: if the new
+  binary is newer, ask the running server to shut down (authenticated by socket permissions, e.g.
+  `POST /shutdown`), wait for the socket to go away within a spec timeout, then bind; if same or older,
+  print "already running (vX)" and exit 0. `/status` must report a comparable version. Host decision:
+  "newer" = higher semver; for equal semver compare build identity (binary mtime or embedded build
+  time), so a fresh `make install` of the same version replaces the old process. Test both directions
+  and the equal case. This also covers 535's "restart after upgrade" for clients that auto-start.
 - Order: after 830 M2 lands; 830 M3 and 831 then use the socket.
 
 ## 3. Implementation & Verification Plan
