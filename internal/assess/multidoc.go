@@ -616,8 +616,11 @@ func RenderStackedBar(categoryTok map[string]int, totalTokens int, width int, us
 		}
 	}
 
-	// Sort by token size descending
+	// Sort by token size descending, then key to break map-derived ties.
 	sort.Slice(shares, func(i, j int) bool {
+		if shares[i].tok == shares[j].tok {
+			return shares[i].key < shares[j].key
+		}
 		return shares[i].tok > shares[j].tok
 	})
 

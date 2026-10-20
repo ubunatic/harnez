@@ -268,7 +268,7 @@ func AssessPath(targetPath string) (*AssessmentReport, error) {
 		report.TotalBytes += m.Bytes
 
 		// Track code vs test directories
-		dirOfFile := filepath.Dir(rel)
+		dirOfFile := filepath.ToSlash(filepath.Dir(rel))
 		if m.Category == CategoryCode {
 			codeFilesPerDir[dirOfFile]++
 		} else if m.Category == CategoryTests {
@@ -321,11 +321,17 @@ func AssessPath(targetPath string) (*AssessmentReport, error) {
 
 	report.Files = fileList
 
-	// Check directory-level missing test warnings
+	// Keep the full target-relative path as the directory identity and sort keys
+	// before emitting findings; map iteration must not determine report order.
+	var untestedDirs []string
 	for dir, codeCount := range codeFilesPerDir {
 		if codeCount >= 3 && testFilesPerDir[dir] == 0 {
-			report.Warnings = append(report.Warnings, fmt.Sprintf("Directory %s contains %d code files but no test files", dir, codeCount))
+			untestedDirs = append(untestedDirs, dir)
 		}
+	}
+	sort.Strings(untestedDirs)
+	for _, dir := range untestedDirs {
+		report.Warnings = append(report.Warnings, fmt.Sprintf("Directory %s contains %d code files but no test files", dir, codeFilesPerDir[dir]))
 	}
 
 	// Calculate ratios
@@ -380,8 +386,11 @@ func AssessPath(targetPath string) (*AssessmentReport, error) {
 		categories = append(categories, *cs)
 	}
 
-	// Sort categories by lines descending
+	// Sort categories by lines descending, then name for equal-sized groups.
 	sort.Slice(categories, func(i, j int) bool {
+		if categories[i].Lines == categories[j].Lines {
+			return categories[i].Name < categories[j].Name
+		}
 		return categories[i].Lines > categories[j].Lines
 	})
 	report.Categories = categories
