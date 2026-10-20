@@ -3,6 +3,7 @@ package release
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,6 +42,38 @@ func verifyChecksum(path, want string) error {
 	return nil
 }
 
+func checksumArtifactPath(dir, name string) (string, error) {
+	manifestPath := filepath.Join(dir, "dist", "artifacts.json")
+	data, err := os.ReadFile(manifestPath)
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	if err == nil {
+		var artifacts []struct {
+			Name string `json:"name"`
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(data, &artifacts); err != nil {
+			return "", fmt.Errorf("parse %s: %w", manifestPath, err)
+		}
+		for _, artifact := range artifacts {
+			if artifact.Name != name || artifact.Path == "" {
+				continue
+			}
+			path := filepath.Clean(filepath.FromSlash(artifact.Path))
+			if !filepath.IsAbs(path) {
+				path = filepath.Join(dir, path)
+			}
+			rel, err := filepath.Rel(dir, path)
+			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return "", fmt.Errorf("artifact %s path %q escapes project directory", name, artifact.Path)
+			}
+			return path, nil
+		}
+	}
+	return filepath.Join(dir, "dist", name), nil
+}
+
 // completeDist treats the checksum manifest as the expected artifact inventory.
 // Missing files require a rebuild; corrupt files require explicit recovery.
 func completeDist(dir, version string) (bool, error) {
@@ -70,7 +103,11 @@ func completeDist(dir, version string) (bool, error) {
 		return false, err
 	}
 	for name, sum := range sums {
-		if err := verifyChecksum(filepath.Join(dist, name), sum); err != nil {
+		artifactPath, err := checksumArtifactPath(dir, name)
+		if err != nil {
+			return false, err
+		}
+		if err := verifyChecksum(artifactPath, sum); err != nil {
 			if os.IsNotExist(err) {
 				return false, nil
 			}

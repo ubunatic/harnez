@@ -57,6 +57,51 @@ func TestCompleteDist(t *testing.T) {
 	}
 }
 
+func TestCompleteDistResolvesGoReleaserArtifactPaths(t *testing.T) {
+	dir := t.TempDir()
+	dist := filepath.Join(dir, "dist")
+	for _, subdir := range []string{"app-linux_linux_amd64_v1", "app-linux_linux_arm64_v8.0"} {
+		if err := os.MkdirAll(filepath.Join(dist, subdir), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	amd64 := "app-linux_linux_amd64_v1/app"
+	arm64 := "app-linux_linux_arm64_v8.0/app"
+	files := map[string]string{
+		amd64: "amd64 binary", arm64: "arm64 binary",
+		"app-1.2.3-linux-amd64.tar.gz": "archive",
+	}
+	var sums strings.Builder
+	for path, data := range files {
+		if err := os.WriteFile(filepath.Join(dist, filepath.FromSlash(path)), []byte(data), 0644); err != nil {
+			t.Fatal(err)
+		}
+		name := filepath.Base(path)
+		if strings.Contains(path, "/") {
+			if path == amd64 {
+				name = "app-x86_64-linux"
+			} else {
+				name = "app-aarch64-linux"
+			}
+		}
+		fmt.Fprintf(&sums, "%x  %s\n", sha256.Sum256([]byte(data)), name)
+	}
+	if err := os.WriteFile(filepath.Join(dist, "SHA256SUMS"), []byte(sums.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dist, "SHA256SUMS.minisig"), []byte("signature"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `[{"name":"app-x86_64-linux","path":"dist/app-linux_linux_amd64_v1/app"},{"name":"app-aarch64-linux","path":"dist/app-linux_linux_arm64_v8.0/app"}]`
+	if err := os.WriteFile(filepath.Join(dist, "artifacts.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := completeDist(dir, "1.2.3")
+	if err != nil || !got {
+		t.Fatalf("completeDist = %v, %v; expected real-shaped signed dist to be complete", got, err)
+	}
+}
+
 func TestPublishAssetResume(t *testing.T) {
 	for _, scenario := range []string{"absent", "partial", "complete", "mismatch", "local mismatch", "auth", "network", "missing sums"} {
 		t.Run(scenario, func(t *testing.T) {
