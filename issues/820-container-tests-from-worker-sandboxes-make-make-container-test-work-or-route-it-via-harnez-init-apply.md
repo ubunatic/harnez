@@ -1,6 +1,6 @@
 # Container tests from worker sandboxes: make make container-test work (or route it) via harnez init/apply
 
-Status: Open — M2 pre-work: sandbox detection misfires on host
+Status: Closed — M2 refinements delivered in 0d9c8305d139f3933429a93b7a92ce44dd52f55e: explicit quota-1 bwrap marker, host-running fake-engine test, and documented /src copy-mode workdir contract; requested checks passed.
 Priority: P2
 Category: Feature
 
@@ -72,3 +72,13 @@ disabled, only one scrubbing proxies.
 2. The fake-engine test must run (not skip) on a normal host; skip only when the marker says sandboxed.
 3. In copy mode (default) `--workdir /src` assumes the Containerfile copies source to /src; document
    that contract in the fragment header and docs/Containerfile.md, or make the workdir a variable.
+
+## M2 Delivery
+
+- Addressed the review refinements in commit `0d9c8305d139f3933429a93b7a92ce44dd52f55e`:
+  quota-1 bwrap children receive `HARNEZ_SANDBOX=quota1`; the shared Make target uses the explicit
+  marker and no longer reads `/proc` namespace links. The fake-engine test now runs on a normal
+  host and skips only when that marker is present. The fragment header and Containerfile docs state
+  the default copy-mode `/src` workdir contract.
+- Passed: targeted sandbox-marker and container-target tests, `make lint`,
+  `go test ./internal/claude/ ./cmd/harnez/`, `make test-short`, and `make install`.
