@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
@@ -146,6 +147,72 @@ func TestPassivePostIsNotBlockedByStalledFetch(t *testing.T) {
 	}
 	if len(rows) == 0 {
 		t.Fatal("passive update was not persisted while fetch stalled")
+	}
+}
+
+func TestPassiveRoutePersistsToProductionDefaultStore(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := make(chan PassiveRequest)
+	fetchStarted := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- runCollectorWithRequests(ctx, home, "", time.Hour, io.Discard, false, func(ctx context.Context) (UsageSummary, error) {
+			close(fetchStarted)
+			<-ctx.Done()
+			return UsageSummary{}, ctx.Err()
+		}, nil, requests)
+	}()
+	<-fetchStarted
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := PassiveUpdatePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	(PassiveUpdateServer{Path: path, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}).RegisterRoutes(mux)
+	window := usagestore.Window{Provider: "claude", Key: "five_hour", Name: "5-hour", Source: "statusline", Freshness: "fresh", UsedFraction: .42, ObservedAt: time.Now().UTC()}
+	body, err := json.Marshal(struct {
+		Windows []usagestore.Window `json:"windows"`
+	}{[]usagestore.Window{window}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(body, []byte(`"used_fraction"`)) || bytes.Contains(body, []byte(`"UsedFraction"`)) {
+		t.Fatalf("passive update wire format is not lower-case JSON: %s", body)
+	}
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body)))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("POST status = %d, body %s", response.Code, response.Body)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	store, err := usagestore.OpenReadOnly(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var stored float64
+	if err := store.QueryRow(context.Background(), `SELECT q.used_fraction FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE o.provider=? AND o.source=? AND q.window_key=? ORDER BY o.id DESC LIMIT 1`, "claude", "statusline", "five_hour").Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != window.UsedFraction {
+		t.Fatalf("stored used fraction = %v, want %v", stored, window.UsedFraction)
 	}
 }
 

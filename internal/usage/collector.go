@@ -6,9 +6,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
@@ -65,6 +67,13 @@ func runCollectorWithRequests(ctx context.Context, homeDir, dbPath string, inter
 	}
 	if ctx.Err() != nil {
 		return nil
+	}
+	if dbPath == "" {
+		var err error
+		dbPath, err = telemetry.DefaultDBPath()
+		if err != nil {
+			return fmt.Errorf("resolve usage store path: %w", err)
+		}
 	}
 	if err := InitializeUsageStore(ctx, homeDir, dbPath); err != nil {
 		return fmt.Errorf("initialize usage store: %w", err)
@@ -138,6 +147,9 @@ func runStoreWriter(ctx context.Context, homeDir, dbPath, stateDir string, out i
 			if err == nil {
 				err = persistPassive(ctx, dbPath, dedupe, request.Windows)
 			}
+			if err != nil {
+				logPassiveWriteFailure(stateDir, err)
+			}
 			select {
 			case request.Done <- err:
 			case <-ctx.Done():
@@ -151,6 +163,16 @@ func runStoreWriter(ctx context.Context, homeDir, dbPath, stateDir string, out i
 			}
 			ready()
 		}
+	}
+}
+
+func logPassiveWriteFailure(stateDir string, cause error) {
+	message := fmt.Sprintf("harnez server: passive usage write failed: %v\n", cause)
+	_, _ = io.WriteString(os.Stderr, message)
+	file, err := os.OpenFile(filepath.Join(stateDir, "collector.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err == nil {
+		_, _ = io.WriteString(file, message)
+		_ = file.Close()
 	}
 }
 

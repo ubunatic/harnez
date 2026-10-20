@@ -19,11 +19,19 @@ import (
 type Store struct{ db *sql.DB }
 
 type Window struct {
-	Provider, Pool, Key, Name, Source, Freshness                  string
-	UsedFraction                                                  float64
-	InputTokens, CachedInputTokens, OutputTokens, ReasoningTokens *int64
-	ResetAt                                                       *time.Time
-	ObservedAt                                                    time.Time
+	Provider          string     `json:"provider"`
+	Pool              string     `json:"pool,omitempty"`
+	Key               string     `json:"key"`
+	Name              string     `json:"name,omitempty"`
+	Source            string     `json:"source"`
+	Freshness         string     `json:"freshness"`
+	UsedFraction      float64    `json:"used_fraction"`
+	InputTokens       *int64     `json:"input_tokens,omitempty"`
+	CachedInputTokens *int64     `json:"cached_input_tokens,omitempty"`
+	OutputTokens      *int64     `json:"output_tokens,omitempty"`
+	ReasoningTokens   *int64     `json:"reasoning_tokens,omitempty"`
+	ResetAt           *time.Time `json:"reset_at,omitempty"`
+	ObservedAt        time.Time  `json:"observed_at"`
 }
 
 // TurnQuotaBoundary preserves one quota capture at a turn boundary. Windows
