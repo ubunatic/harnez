@@ -23,6 +23,10 @@ on every prompt or render and must stay fast. With one writer, the collector, lo
   per-host port from 829. When no collector answers, the observer drops the update (decided by the
   user, 2026-10-20); it never starts a collector and never blocks.
 
+### Pre-Work from 829 (host review 2026-10-20)
+- After 829 M3 (b9e63900) the `harnez usage` header shows `19:42:08 UTC`; before it showed local time
+  (`21:19:52 CEST`). Show local time again; add a test that pins the timezone.
+
 ## 3. Implementation & Verification Plan
 - Plan first: list every observer that writes, and choose the hand-off with its no-collector behaviour.
 - Test: an observer completes within its time budget while a blocker holds the DB write lock, and the
