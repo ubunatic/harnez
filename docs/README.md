@@ -17,6 +17,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [ClaudeFunctionHooks.md](ClaudeFunctionHooks.md) | Claude Code function-hook plugins: loader rules that silently register zero hooks, available runtime (`$.process.run` only), probing practice (read before writing any hook plugin) |
 | [JevCompaction.md](JevCompaction.md) | Replacing agent compaction with `harnez compact`: per-harness hook support (Claude yes, Codex/agy no), embedded Claude plugin, function-hook runtime pitfalls, canaries (consult before touching compaction hooks) |
 | [HarnezAgentArchitecture.md](HarnezAgentArchitecture.md) | `harnez agent`: command forms, prompt assembly, session attribution, roles, stream output protocol, compaction, dispatch policy (consult before changing agent dispatch or its output) |
+| [HarnezServerArchitecture.md](HarnezServerArchitecture.md) | Proposed `harnez serve`: any-client adapters, durable execution ledger, scheduler, level-3 goal policy, roadmap and Pi Durable/Pi Pocket prior art |
 | [OrchestratedAgentFlow.md](OrchestratedAgentFlow.md) | Orchestrator + leaf developer sprint flow: enforced roles, per-ticket loop, review checklist, pitfalls found, how to find out what agents ran (consult before an orchestrated run or when an agent misuses `harnez agent`) |
 | [CodexEvents.md](CodexEvents.md) | Codex event shapes used by the analytics adapter (consult when changing Codex telemetry parsing) |
 | [CodexHooks.md](CodexHooks.md) | Codex lifecycle hook reference schema (consult when changing Codex hook wiring) |
