@@ -932,6 +932,10 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 func CleanAll(target string, cfg *Config) error {
 	withoutSections := *cfg
 	withoutSections.GlobalSections = nil
+	withoutSections.RetiredGlobalSections = append([]string(nil), cfg.RetiredGlobalSections...)
+	for _, section := range cfg.GlobalSections {
+		withoutSections.RetiredGlobalSections = append(withoutSections.RetiredGlobalSections, section.Name)
+	}
 	if _, err := manageGlobalSections(&withoutSections, false); err != nil {
 		return err
 	}

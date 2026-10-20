@@ -65,3 +65,17 @@ docs, and the user relies on them. It also rewrites the Tool Feedback Protocol t
    the pre-818 rendering). Only the new Process hygiene section is added.
 3. Expected real-home diff after the fix: only the added Process hygiene block per target, nothing
    removed. Do not run apply on the real home; the host runs `harnez diff` then apply.
+
+## M2 Delivery
+
+- Reconciliation now updates only configured IDs, removes only IDs explicitly listed in
+  `retired_global_sections`, and preserves all other complete Harnez marker blocks byte-for-byte.
+- Restored the Tool Feedback Protocol wording from the pre-818 config. A regression test compares
+  its rendered text exactly; it is existing-only, so apply preserves it where present without adding
+  it to other global files. Its explicit feedback opt-out can still retire that known section.
+- Added regression coverage for the three existing IDs from the host diff and confirmed the
+  process-hygiene block is the only addition when those legacy blocks are present. Read-only
+  `harnez diff` from `/home/uwe` showed additions only in existing Claude, Codex, and Prime globals;
+  none of the three legacy blocks or feedback wording changed.
+- Passed: `make lint`, `go test ./internal/claude/ ./internal/markdown/ ./cmd/harnez/`,
+  `make test-short`, and `make install`. No real-home apply or push.

@@ -16,11 +16,17 @@
         "properties": {
           "name": {"type": "string", "minLength": 1, "pattern": "^[^<>\\r\\n]+$"},
           "content": {"type": "string"},
-          "rate_feedback": {"type": "boolean"}
+          "rate_feedback": {"type": "boolean"},
+          "existing_only": {"type": "boolean"}
         },
         "additionalProperties": false
       }
     }
   },
+    "retired_global_sections": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "pattern": "^[^<>\\r\\n]+$"}
+    },
   "additionalProperties": true
 }

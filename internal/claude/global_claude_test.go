@@ -59,6 +59,9 @@ func TestApplyAll_PreservesGlobalRootUserInstructions(t *testing.T) {
 	// Require the exact user bytes followed by exactly the configured blocks.
 	var managed strings.Builder
 	for _, section := range cfg.GlobalSections {
+		if section.ExistingOnly {
+			continue
+		}
 		if section.RateFeedback && RateFeedbackDisabled(cfg, nil) {
 			continue
 		}

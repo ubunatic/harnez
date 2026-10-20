@@ -29,6 +29,19 @@ func TestReconcileSectionsPreservesUserText(t *testing.T) {
 	}
 }
 
+func TestReconcileSectionsKeepsUnknownHarnezBlocks(t *testing.T) {
+	const existing = "<!-- harnez:begin Instructions Hierarchy -->\nlegacy hierarchy\n<!-- harnez:end Instructions Hierarchy -->\n" +
+		"<!-- harnez:begin Issue Tracker Discovery -->\nlegacy tracker\n<!-- harnez:end Issue Tracker Discovery -->\n" +
+		"<!-- harnez:begin Agent-Filed Feedback -->\nlegacy feedback\n<!-- harnez:end Agent-Filed Feedback -->\n"
+	got, err := ReconcileSections(existing, []ManagedSection{{Name: "Process hygiene", Content: "new rule"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(got, existing) || strings.Count(got, "<!-- harnez:begin ") != 4 {
+		t.Fatalf("unknown blocks changed or were deleted: %q", got)
+	}
+}
+
 func TestReconcileSectionsRejectsInvalidConfig(t *testing.T) {
 	for _, sections := range [][]ManagedSection{
 		{{Name: ""}},

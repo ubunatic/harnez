@@ -13,14 +13,16 @@ import (
 // marker IDs. Global instruction files are user-owned: never create them.
 func manageGlobalSections(cfg *Config, check bool) (bool, error) {
 	sections := make([]markdown.ManagedSection, 0, len(cfg.GlobalSections))
+	retired := append([]string(nil), cfg.RetiredGlobalSections...)
 	for _, section := range cfg.GlobalSections {
 		if section.RateFeedback && RateFeedbackDisabled(cfg, nil) {
+			retired = append(retired, section.Name)
 			continue
 		}
-		sections = append(sections, markdown.ManagedSection{Name: section.Name, Content: section.Content})
+		sections = append(sections, markdown.ManagedSection{Name: section.Name, Content: section.Content, ExistingOnly: section.ExistingOnly})
 	}
 	// Validate even when no target file exists.
-	if _, err := markdown.ReconcileSections("", sections); err != nil {
+	if _, err := markdown.ReconcileSections("", sections, retired...); err != nil {
 		return false, err
 	}
 	changed := false
@@ -33,7 +35,7 @@ func manageGlobalSections(cfg *Config, check bool) (bool, error) {
 		if err != nil {
 			return changed, err
 		}
-		desired, err := markdown.ReconcileSections(string(data), sections)
+		desired, err := markdown.ReconcileSections(string(data), sections, retired...)
 		if err != nil {
 			return changed, fmt.Errorf("global instructions %s: %w", path, err)
 		}

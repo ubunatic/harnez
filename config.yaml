@@ -13,13 +13,14 @@ feedback:
   disable_rate_protocol: false
 
 # Existing user-owned global files only; apply never creates these files or symlinks.
-# Section names are stable marker IDs; removing an entry removes its managed block.
+# Section names are stable marker IDs; use retired_global_sections to retire a block.
 global_section_targets:
   - ~/.claude/CLAUDE.md
   - ~/.codex/AGENTS.md
   - ~/.gemini/GEMINI.md
   - ~/.prime/agent/AGENTS.md
   - ~/.pi/agent/AGENTS.md
+retired_global_sections: []
 global_sections:
   - name: Process hygiene
     content: |
@@ -29,11 +30,16 @@ global_sections:
       - Set `HTO=0` for long-running commands, tests, or waits run as background tasks/jobs.
   - name: Tool Feedback Protocol
     rate_feedback: true
+    existing_only: true
     content: |
       ### Tool Feedback Protocol
-      Harnez-tracked projects only (`issues/` present). Rate failed or unexpected tool outcomes:
-      `harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"`.
-      Skip routine successes. If nudged after a quiet stretch with no failures, use `harnez rate --ok`.
+      Harnez-tracked projects only (`issues/` present); omit ticket or skip otherwise.
+      Rate a call only when it failed or produced an unexpected outcome — not routine successes:
+      `harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"`
+      Example: `harnez rate Grep 1 "missed target, wrong file" harnez/117-harnez-rate-command`
+      Score 5 flawless, 3 partial, 1 useless.
+      If prompted after a long quiet stretch and nothing has failed, confirm with
+      `harnez rate --ok` instead of staying silent — no tool name, score, or ticket required.
 
 # Global copyable docs to install into ~/.claude/docs/ and ~/.prime/agent/docs/ on `apply`.
 # Global docs are opt-in via `apply --docs <name>...` (or `--docs all` / `-d <name>...`) and default to empty.

@@ -12,40 +12,41 @@ import (
 )
 
 type Config struct {
-	Dir                  string               `yaml:"-"`
-	FS                   fs.FS                `yaml:"-"`
-	TargetDir            string               `yaml:"target_dir"`
-	ComponentNames       []string             `yaml:"components,omitempty"`
-	Docs                 []string             `yaml:"docs"`
-	DocsProfiles         map[string][]string  `yaml:"docs_profiles"`
-	Model                string               `yaml:"model"`
-	Effort               string               `yaml:"effort"`
-	Verbs                []string             `yaml:"verbs"`
-	Permissions          Permissions          `yaml:"permissions"`
-	Hooks                []Hook               `yaml:"hooks"`
-	Env                  map[string]string    `yaml:"env"`
-	StatusLine           bool                 `yaml:"status_line"`
-	JevCompactionEnabled bool                 `yaml:"jev_compaction_enabled"`
-	Commands             []Command            `yaml:"commands"`
-	Skills               []Command            `yaml:"skills"`
-	BundledSkills        []BundledSkillSource `yaml:"bundled_skills"`
-	DistillAutopipe      DistillAutopipe      `yaml:"distill_autopipe"`
-	SkillsTarget         string               `yaml:"skills_target"`
-	CodexSkillsTarget    string               `yaml:"codex_skills_target"`
-	CodexHooksTarget     string               `yaml:"codex_hooks_target"`
-	AgyHooksTarget       string               `yaml:"agy_hooks_target"`
-	ClaudeSkillsTarget   string               `yaml:"claude_skills_target"`
-	PrimeAgentTarget     string               `yaml:"prime_agent_target"`
-	PiAgentTarget        string               `yaml:"pi_agent_target"`
-	AgyTarget            string               `yaml:"agy_target"`
-	AgentsMD             AgentsMD             `yaml:"agents_md"`
-	GlobalSections       []MDSection          `yaml:"global_sections"`
-	GlobalSectionTargets []string             `yaml:"global_section_targets"`
-	Make                 MakeConfig           `yaml:"make"`
-	Feedback             FeedbackConfig       `yaml:"feedback"`
-	Exec                 ExecConfig           `yaml:"exec"`
-	Debloat              DebloatConfig        `yaml:"debloat"`
-	Decommissioned       DecommissionedConfig `yaml:"decommissioned"`
+	Dir                   string               `yaml:"-"`
+	FS                    fs.FS                `yaml:"-"`
+	TargetDir             string               `yaml:"target_dir"`
+	ComponentNames        []string             `yaml:"components,omitempty"`
+	Docs                  []string             `yaml:"docs"`
+	DocsProfiles          map[string][]string  `yaml:"docs_profiles"`
+	Model                 string               `yaml:"model"`
+	Effort                string               `yaml:"effort"`
+	Verbs                 []string             `yaml:"verbs"`
+	Permissions           Permissions          `yaml:"permissions"`
+	Hooks                 []Hook               `yaml:"hooks"`
+	Env                   map[string]string    `yaml:"env"`
+	StatusLine            bool                 `yaml:"status_line"`
+	JevCompactionEnabled  bool                 `yaml:"jev_compaction_enabled"`
+	Commands              []Command            `yaml:"commands"`
+	Skills                []Command            `yaml:"skills"`
+	BundledSkills         []BundledSkillSource `yaml:"bundled_skills"`
+	DistillAutopipe       DistillAutopipe      `yaml:"distill_autopipe"`
+	SkillsTarget          string               `yaml:"skills_target"`
+	CodexSkillsTarget     string               `yaml:"codex_skills_target"`
+	CodexHooksTarget      string               `yaml:"codex_hooks_target"`
+	AgyHooksTarget        string               `yaml:"agy_hooks_target"`
+	ClaudeSkillsTarget    string               `yaml:"claude_skills_target"`
+	PrimeAgentTarget      string               `yaml:"prime_agent_target"`
+	PiAgentTarget         string               `yaml:"pi_agent_target"`
+	AgyTarget             string               `yaml:"agy_target"`
+	AgentsMD              AgentsMD             `yaml:"agents_md"`
+	GlobalSections        []MDSection          `yaml:"global_sections"`
+	RetiredGlobalSections []string             `yaml:"retired_global_sections"`
+	GlobalSectionTargets  []string             `yaml:"global_section_targets"`
+	Make                  MakeConfig           `yaml:"make"`
+	Feedback              FeedbackConfig       `yaml:"feedback"`
+	Exec                  ExecConfig           `yaml:"exec"`
+	Debloat               DebloatConfig        `yaml:"debloat"`
+	Decommissioned        DecommissionedConfig `yaml:"decommissioned"`
 }
 
 type ExecConfig struct {
@@ -235,6 +236,9 @@ type AgentsMDTarget struct {
 type MDSection struct {
 	Name    string `yaml:"name"`
 	Content string `yaml:"content"`
+	// ExistingOnly updates a legacy global section when present but avoids
+	// adding it to global targets that never had the section.
+	ExistingOnly bool `yaml:"existing_only,omitempty"`
 	// RateFeedback marks this section as part of the Tool Feedback Protocol
 	// instruction (issue 142): `harnez apply` omits/removes it when
 	// RateFeedbackDisabled(cfg) is true.

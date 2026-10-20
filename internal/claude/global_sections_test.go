@@ -43,6 +43,17 @@ func TestGlobalSectionsSpec(t *testing.T) {
 	if !strings.Contains(cfg.GlobalSections[0].Content, "pkill -f") || !strings.Contains(cfg.GlobalSections[0].Content, "HTO=0") {
 		t.Fatal("process hygiene rules missing")
 	}
+	const wantFeedback = "### Tool Feedback Protocol\n" +
+		"Harnez-tracked projects only (`issues/` present); omit ticket or skip otherwise.\n" +
+		"Rate a call only when it failed or produced an unexpected outcome — not routine successes:\n" +
+		"`harnez rate <tool_name> <1-5> \"<1-line outcome summary>\" \"<project_folder>/<ticket_name>\"`\n" +
+		"Example: `harnez rate Grep 1 \"missed target, wrong file\" harnez/117-harnez-rate-command`\n" +
+		"Score 5 flawless, 3 partial, 1 useless.\n" +
+		"If prompted after a long quiet stretch and nothing has failed, confirm with\n" +
+		"`harnez rate --ok` instead of staying silent — no tool name, score, or ticket required.\n"
+	if cfg.GlobalSections[1].Content != wantFeedback {
+		t.Fatalf("Tool Feedback text changed:\nwant %q\n got %q", wantFeedback, cfg.GlobalSections[1].Content)
+	}
 }
 
 func TestApplyAndDiffGlobalSections(t *testing.T) {
@@ -70,6 +81,51 @@ func TestApplyAndDiffGlobalSections(t *testing.T) {
 	data, err := os.ReadFile(path)
 	if err != nil || strings.Contains(string(data), "changed") {
 		t.Fatalf("diff wrote file: %q, %v", data, err)
+	}
+}
+
+func TestCleanManagedSectionsPreservesUnknownBlocks(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join(home, "CLAUDE.md")
+	unknown := "<!-- harnez:begin Instructions Hierarchy -->\nkeep hierarchy\n<!-- harnez:end Instructions Hierarchy -->\n" +
+		"<!-- harnez:begin Issue Tracker Discovery -->\nkeep tracker\n<!-- harnez:end Issue Tracker Discovery -->\n" +
+		"<!-- harnez:begin Agent-Filed Feedback -->\nkeep feedback\n<!-- harnez:end Agent-Filed Feedback -->\n"
+	if err := os.WriteFile(path, []byte(unknown), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := loadTestConfig(t)
+	cfg.GlobalSectionTargets = []string{path}
+	if err := ApplyAll(filepath.Join(home, ".claude"), cfg, nil, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := CleanAll(filepath.Join(home, ".claude"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != unknown {
+		t.Fatalf("clean changed unknown blocks: %q, %v", data, err)
+	}
+}
+
+func TestGlobalSectionsOnlyAddsProcessHygieneToNewTargets(t *testing.T) {
+	t.Setenv("HARNEZ_DISABLE_RATE_FEEDBACK", "0")
+	path := filepath.Join(t.TempDir(), "CLAUDE.md")
+	const userText = "user instructions\n"
+	if err := os.WriteFile(path, []byte(userText), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := loadTestConfig(t)
+	cfg.GlobalSectionTargets = []string{path}
+	if _, err := manageGlobalSections(cfg, false); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "<!-- harnez:begin Process hygiene -->") || strings.Contains(string(data), "<!-- harnez:begin Tool Feedback Protocol -->") {
+		t.Fatalf("new target received unexpected managed blocks: %q", data)
 	}
 }
 
@@ -115,6 +171,7 @@ func TestGlobalSectionsLifecycle(t *testing.T) {
 		}
 	}
 	cfg.GlobalSections = nil
+	cfg.RetiredGlobalSections = []string{"Process hygiene"}
 	if changed, err := manageGlobalSections(cfg, true); err != nil || !changed {
 		t.Fatalf("pending removal: %v, %v", changed, err)
 	}
@@ -137,14 +194,17 @@ func TestGlobalSectionsLifecycle(t *testing.T) {
 	}
 }
 
-func TestGlobalSectionsLegacyFeedback(t *testing.T) {
+func TestGlobalSectionsKeepsFeedbackAndMigratesWithoutRewrite(t *testing.T) {
 	t.Setenv("HARNEZ_DISABLE_RATE_FEEDBACK", "0")
 	path := filepath.Join(t.TempDir(), "CLAUDE.md")
-	legacy := "before\n<!-- harnez:begin Tool Feedback Protocol -->\nold\n<!-- harnez:end Tool Feedback Protocol -->\nafter"
+	feedback := strings.TrimSuffix(loadTestConfig(t).GlobalSections[1].Content, "\n")
+	legacy := "before\n<!-- harnez:begin Tool Feedback Protocol -->\n" + feedback + "\n<!-- harnez:end Tool Feedback Protocol -->\nafter\n"
 	if err := os.WriteFile(path, []byte(legacy), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cfg := &Config{GlobalSectionTargets: []string{path}, GlobalSections: []MDSection{{Name: "Tool Feedback Protocol", Content: "new", RateFeedback: true}}}
+	cfg := loadTestConfig(t)
+	cfg.GlobalSectionTargets = []string{path}
+	processBlock := "<!-- harnez:begin Process hygiene -->\n" + strings.TrimSuffix(cfg.GlobalSections[0].Content, "\n") + "\n<!-- harnez:end Process hygiene -->\n"
 	for _, want := range []bool{true, false} {
 		changed, err := manageGlobalSections(cfg, false)
 		if err != nil || changed != want {
@@ -152,15 +212,15 @@ func TestGlobalSectionsLegacyFeedback(t *testing.T) {
 		}
 	}
 	data, _ := os.ReadFile(path)
-	if string(data) != strings.Replace(legacy, "old", "new", 1) {
-		t.Fatalf("migration duplicated or moved block: %q", data)
+	if string(data) != legacy+processBlock {
+		t.Fatalf("feedback wording or placement changed: %q", data)
 	}
 	cfg.Feedback.DisableRateProtocol = true
 	if _, err := manageGlobalSections(cfg, false); err != nil {
 		t.Fatal(err)
 	}
 	data, _ = os.ReadFile(path)
-	if string(data) != "before\nafter" {
-		t.Fatalf("disabled feedback retained: %q", data)
+	if string(data) != "before\nafter\n"+processBlock {
+		t.Fatalf("known feedback block was not removed during opt-out: %q", data)
 	}
 }

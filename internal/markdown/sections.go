@@ -8,14 +8,15 @@ import (
 // ManagedSection names a stable marker ID and its desired Markdown content.
 type ManagedSection struct {
 	Name, Content string
+	ExistingOnly  bool
 }
 
-// ReconcileSections updates sections in place, prunes retired Harnez blocks,
-// and appends new ones. Every byte outside complete marker pairs is retained.
-// Existing section names remain their IDs, including Tool Feedback Protocol.
-func ReconcileSections(existing string, sections []ManagedSection) (string, error) {
+// ReconcileSections updates configured sections, removes explicitly retired
+// IDs, preserves unknown blocks byte-for-byte, and appends missing sections.
+func ReconcileSections(existing string, sections []ManagedSection, retired ...string) (string, error) {
 	original := existing
 	desired := make(map[string]string, len(sections))
+	existingOnly := make(map[string]bool, len(sections))
 	for _, section := range sections {
 		if section.Name == "" || strings.ContainsAny(section.Name, "\r\n<>") {
 			return "", fmt.Errorf("invalid managed section ID %q", section.Name)
@@ -27,6 +28,17 @@ func ReconcileSections(existing string, sections []ManagedSection) (string, erro
 			return "", fmt.Errorf("nested managed markers in section %q", section.Name)
 		}
 		desired[section.Name] = MDMarkers.Begin(section.Name) + "\n" + strings.TrimRight(section.Content, "\n") + "\n" + MDMarkers.End(section.Name) + "\n"
+		existingOnly[section.Name] = section.ExistingOnly
+	}
+	retiredIDs := make(map[string]bool, len(retired))
+	for _, id := range retired {
+		if id == "" || strings.ContainsAny(id, "\r\n<>") {
+			return "", fmt.Errorf("invalid retired managed section ID %q", id)
+		}
+		if _, active := desired[id]; active {
+			return "", fmt.Errorf("managed section ID %q is both active and retired", id)
+		}
+		retiredIDs[id] = true
 	}
 	var result strings.Builder
 	seen := make(map[string]bool)
@@ -56,16 +68,22 @@ func ReconcileSections(existing string, sections []ManagedSection) (string, erro
 		if end < len(existing) && existing[end] == '\n' {
 			end++
 		}
-		if block, keep := desired[name]; keep && !seen[name] {
-			result.WriteString(block)
-			seen[name] = true
+		switch {
+		case retiredIDs[name]:
+		case desired[name] != "":
+			if !seen[name] {
+				result.WriteString(desired[name])
+				seen[name] = true
+			}
+		default:
+			result.WriteString(existing[:end])
 		}
 		existing = existing[end:]
 	}
 	for _, section := range sections {
 		// A malformed block may have stopped reconciliation before this ID.
 		// Preserve it and avoid appending another copy on every apply.
-		if !seen[section.Name] && !strings.Contains(original, MDMarkers.Begin(section.Name)) {
+		if !seen[section.Name] && !existingOnly[section.Name] && !strings.Contains(original, MDMarkers.Begin(section.Name)) {
 			result.WriteString(desired[section.Name])
 		}
 	}
