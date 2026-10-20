@@ -1,6 +1,6 @@
 # 829 — harnez usage is read-only: only the data collector writes the usage store
 
-**Status**: Closed — M2 delivered: local usage views read collector snapshots through a SQLite read-only connection; usage auto-starts the detached server and waits for ready status. M1/M2 tests and installed CLI checks completed; one quota run found only a stale help golden, which was updated and verified with TestHelpGolden.
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture
@@ -55,6 +55,19 @@ and hides who owns the data. One writer, the data collector, keeps locking simpl
 - **M2 — read-only usage client with auto-start:** compact and `--watch` read the store read-only and
   never fetch live; if no server answers, start `harnez server` detached, then read. Test against a
   read-only (chmod) DB. Remove the 828 best-effort write paths that no longer apply.
+- **M2 delivered (read-only client) in 4de0d881**, `make test-q1` green on host rerun. Host live check found:
+- **M3 Pre-Work / Required Refinements (reopened 2026-10-20):**
+  1. Stale header: server (started 21:31:35) wrote JSON snapshots at 21:31:41, but `harnez usage`
+     showed `21:19:52 · 15m ago · stale`. Find which source the client reads and why the collector's
+     fresh data does not reach it (DB not written at startup? reads a different file/DB?).
+  2. Implausible tokens: Claude weekly tokens `4,230,853,717` vs `18,370,886` before M2. Find the cause
+     (double counting, summing all history rows, wrong field) and fix it; add a test with known totals.
+  3. Dead write/collect paths: `StoreCompactSummary*` (`internal/usage/store.go:23-32`) is now only used
+     by tests, and `watch.go:657`, `watch_frame.go:535`, `loom.go:88` still fall back to live `CollectAll`
+     when no loader is set. Move what the collector needs into the collector and delete the rest, so a
+     client cannot write or live-fetch by accident.
+- **M3 — verify:** host reruns `harnez usage` (×3), `--json`, and `-w` in a pty; header time matches the
+  newest collector write; totals match the pre-829 magnitude.
 
 ## 4. Implementation & Verification Plan
 - Plan first: list every write reachable from `harnez usage` and where each one moves.
