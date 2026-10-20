@@ -22,6 +22,21 @@ func TestPrintServerSystemdStatusShowsOwnerAndHandoff(t *testing.T) {
 	}
 }
 
+func TestPrintServerSystemdStatusSuggestsInstallWhenUnitIsMissing(t *testing.T) {
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	printServerSystemdStatus(&output, cfg, server.SystemdStatus{Available: true, MainPID: 0, SocketPID: 200})
+	if !strings.Contains(output.String(), "harnez server install") {
+		t.Fatalf("missing install suggestion: %q", output.String())
+	}
+	if strings.Contains(output.String(), "systemctl --user restart") {
+		t.Fatalf("uninstalled unit got restart suggestion: %q", output.String())
+	}
+}
+
 func TestPrintServerSystemdStatusExplainsUsageFallback(t *testing.T) {
 	var output bytes.Buffer
 	printServerSystemdStatus(&output, server.Config{}, server.SystemdStatus{SocketPID: 200})

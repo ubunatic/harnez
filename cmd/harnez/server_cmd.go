@@ -125,6 +125,15 @@ func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.Sy
 		return
 	}
 	fmt.Fprintf(out, "unit: %s (installed=%t, active=%t, MainPID=%d)\n", cfg.SystemdUnitName, status.Installed, status.Active, status.MainPID)
+	if !status.Installed {
+		fmt.Fprintln(out, "install the collector service with: harnez server install")
+		if status.SocketPID > 0 {
+			fmt.Fprintf(out, "socket owner: another process (PID %d)\n", status.SocketPID)
+		} else {
+			fmt.Fprintln(out, "socket owner: none")
+		}
+		return
+	}
 	if status.SocketPID == 0 {
 		fmt.Fprintln(out, "socket owner: none")
 		return
