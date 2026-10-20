@@ -14,6 +14,8 @@ import (
 // WatchOptions bundles optional customization for watch frame rendering.
 type WatchOptions struct {
 	Host string
+	// StoredUsageLoader reads the most recent collector snapshot for local views.
+	StoredUsageLoader func(context.Context) UsageSummary
 	// Loading distinguishes the first interactive frame from an empty result.
 	Loading bool
 	// SharedUsageCollector optionally supplies usage from the public shared
@@ -319,9 +321,10 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 
 	var header []string
 	if mode.titleBar() {
+		ageLabel := usageSnapshotAgeLabel(summary.Timestamp, now)
 		header = []string{
 			fmt.Sprintf("%s%s\x1b[0m  %s%s",
-				ansiBold, titlePrefix, summary.Timestamp.Format("15:04:05 MST"), hiddenHint),
+				ansiBold, titlePrefix, summary.Timestamp.Format("15:04:05 MST")+" · "+ageLabel, hiddenHint),
 			"",
 		}
 	}
@@ -524,7 +527,9 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out io.Writer, showProcesses bool, opts ...WatchOptions) {
 	opt := firstOpt(opts)
 	var summary UsageSummary
-	if opt.SharedUsageCollector != nil {
+	if opt.StoredUsageLoader != nil {
+		summary = opt.StoredUsageLoader(ctx)
+	} else if opt.SharedUsageCollector != nil {
 		summary = opt.SharedUsageCollector(ctx)
 	} else {
 		summary = CollectAll(ctx, homeDir, client)

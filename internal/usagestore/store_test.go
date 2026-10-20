@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -139,6 +140,39 @@ func TestUsageSummaryHistoryIsIdempotentAndOrdered(t *testing.T) {
 	}
 	if len(got) != 2 || !got[0].ObservedAt.Equal(first) || string(got[0].Payload) != `{"timestamp":"earlier"}` || !got[1].ObservedAt.Equal(second) {
 		t.Fatalf("usage summaries = %+v", got)
+	}
+}
+
+func TestOpenReadOnlyReadsChmodDatabaseAndRejectsWrites(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "read only usage.sqlite")
+	writable, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, q string) error { return writable.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := writable.WriteUsageSummary(ctx, UsageSummaryRecord{Hostname: "host", ObservedAt: time.Now().UTC(), Payload: []byte(`{"agents":[]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writable.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	readonly, err := OpenReadOnly(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readonly.Close()
+	rows, err := readonly.UsageSummaries(ctx)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("read rows=%d err=%v", len(rows), err)
+	}
+	if err := readonly.Exec(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('reader-write','now')`); err == nil {
+		t.Fatal("read-only store accepted a write")
 	}
 }
 

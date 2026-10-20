@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 type waitingService struct{ started chan struct{} }
 
 func (s waitingService) Run(ctx context.Context) error { close(s.started); <-ctx.Done(); return nil }
+func (waitingService) Ready() bool                     { return false }
 
 func TestStatusEndpoint(t *testing.T) {
 	response := httptest.NewRecorder()
@@ -25,9 +27,24 @@ func TestStatusEndpoint(t *testing.T) {
 	}
 }
 
+func TestStatusEndpointReportsStartingUntilCollectorReady(t *testing.T) {
+	response := httptest.NewRecorder()
+	statusHandlerReady("test-version", false).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/status", nil))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d", response.Code)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["health"] != "starting" {
+		t.Fatalf("health = %q", got["health"])
+	}
+}
+
 func TestSecondServerRecognizesHarnezStatus(t *testing.T) {
 	port := freePort(t)
-	cfg := Config{Host: "127.0.0.1", Port: port, ReadHeaderTimeout: "1s", ShutdownTimeout: "1s", HTTPClientTimeout: "1s"}
+	cfg := Config{Host: "127.0.0.1", Port: port, ReadHeaderTimeout: time.Second, ShutdownTimeout: time.Second, HTTPClientTimeout: time.Second}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	started := make(chan struct{})
@@ -51,7 +68,7 @@ func TestOccupiedPortWithoutHarnezStatusFails(t *testing.T) {
 	}
 	defer listener.Close()
 	port := listener.Addr().(*net.TCPAddr).Port
-	cfg := Config{Host: "127.0.0.1", Port: port, ReadHeaderTimeout: "1s", ShutdownTimeout: "1s", HTTPClientTimeout: "1s"}
+	cfg := Config{Host: "127.0.0.1", Port: port, ReadHeaderTimeout: time.Second, ShutdownTimeout: time.Second, HTTPClientTimeout: time.Second}
 	if err := (Server{Config: cfg, Version: "test"}).Run(context.Background()); err == nil {
 		t.Fatal("occupied non-Harnez port unexpectedly succeeded")
 	}

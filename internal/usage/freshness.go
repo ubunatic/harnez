@@ -2,6 +2,21 @@ package usage
 
 import "time"
 
+func usageSnapshotAgeLabel(at, now time.Time) string {
+	if at.IsZero() {
+		return "age unknown"
+	}
+	age := now.Sub(at)
+	if age < 0 {
+		age = 0
+	}
+	label := FormatCompactDuration(age) + " ago"
+	if age >= DefaultCollectorInterval() {
+		label += " · stale"
+	}
+	return label
+}
+
 // freshnessFraction returns how much of DefaultCollectorInterval remains
 // before the next background-collector tick (issue 082) for an agent whose
 // data was last refreshed at lastRefreshed, as a 0.0-1.0 fraction of the

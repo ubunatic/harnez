@@ -2,7 +2,10 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"os"
 	"testing"
+	"time"
 
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -218,6 +221,7 @@ func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
 
 func TestUsageCmd_LoomFlagExecution(t *testing.T) {
 	skipShort(t, "first usage render burst-samples CPU load for ~2s")
+	seedUsageStore(t)
 	root := newRootCmd()
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
@@ -235,6 +239,7 @@ func TestUsageCmd_LoomFlagExecution(t *testing.T) {
 
 func TestUsageCmd_MinimalFlagExecution(t *testing.T) {
 	skipShort(t, "first usage render burst-samples CPU load for ~2s")
+	seedUsageStore(t)
 	root := newRootCmd()
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
@@ -246,4 +251,33 @@ func TestUsageCmd_MinimalFlagExecution(t *testing.T) {
 	if bytes.Contains(buf.Bytes(), []byte("Agentic usage")) || bytes.Contains(buf.Bytes(), []byte("hidden")) {
 		t.Fatalf("minimal output should omit the title and hidden-panel summary:\n%s", buf.String())
 	}
+}
+
+func TestUsageCmdJSONReadsChmodReadOnlyStore(t *testing.T) {
+	path := seedUsageStore(t)
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	root := newRootCmd()
+	root.SetArgs([]string{"usage", "--json", "--offline"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedUsageStore(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", home+"/data")
+	t.Setenv("XDG_STATE_HOME", home+"/state")
+	t.Setenv("XDG_CACHE_HOME", home+"/cache")
+	ctx := context.Background()
+	if err := usage.InitializeUsageStore(ctx, home, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := usage.PersistUsageSummary(ctx, home, "", usage.UsageSummary{Timestamp: time.Now(), Agents: []usage.AgentUsage{{AgentID: "claude", Name: "Claude Code", Installed: true}}}); err != nil {
+		t.Fatal(err)
+	}
+	return usage.UsageStorePath()
 }

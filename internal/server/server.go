@@ -12,6 +12,7 @@ import (
 )
 
 type Service interface{ Run(context.Context) error }
+type readiness interface{ Ready() bool }
 
 type Server struct {
 	Config   Config
@@ -26,7 +27,7 @@ func (s Server) Run(ctx context.Context) error {
 	listener, err := net.Listen("tcp", s.Config.Address())
 	if err != nil {
 		if isAddressInUse(err) {
-			client := &http.Client{Timeout: duration(s.Config.HTTPClientTimeout)}
+			client := &http.Client{Timeout: s.Config.HTTPClientTimeout}
 			resp, probeErr := client.Get("http://" + s.Config.Address() + "/status")
 			if probeErr == nil {
 				defer resp.Body.Close()
@@ -35,7 +36,7 @@ func (s Server) Run(ctx context.Context) error {
 					Version string `json:"version"`
 					Server  string `json:"server"`
 				}
-				if resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(&status) == nil && status.Health == "ok" && status.Server == "harnez" && strings.TrimSpace(status.Version) != "" {
+				if json.NewDecoder(resp.Body).Decode(&status) == nil && status.Server == "harnez" && strings.TrimSpace(status.Version) != "" && ((resp.StatusCode == http.StatusOK && status.Health == "ok") || (resp.StatusCode == http.StatusServiceUnavailable && status.Health == "starting")) {
 					fmt.Println("harnez server already running")
 					return nil
 				}
@@ -46,8 +47,16 @@ func (s Server) Run(ctx context.Context) error {
 	}
 	defer listener.Close()
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /status", statusHandler(s.Version))
-	httpServer := &http.Server{Handler: mux, ReadHeaderTimeout: duration(s.Config.ReadHeaderTimeout)}
+	ready := func() bool {
+		for _, service := range s.Services {
+			if service, ok := service.(readiness); ok && !service.Ready() {
+				return false
+			}
+		}
+		return true
+	}
+	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) { statusHandlerReady(s.Version, ready()).ServeHTTP(w, r) })
+	httpServer := &http.Server{Handler: mux, ReadHeaderTimeout: s.Config.ReadHeaderTimeout}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- httpServer.Serve(listener) }()
 	serviceCtx, cancel := context.WithCancel(ctx)
@@ -69,7 +78,7 @@ func (s Server) Run(ctx context.Context) error {
 		}
 	}
 	cancel()
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownTimeout))
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), s.Config.ShutdownTimeout)
 	defer shutdownCancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil && result == nil {
 		result = err
@@ -82,8 +91,19 @@ func isAddressInUse(err error) bool {
 }
 
 func statusHandler(version string) http.HandlerFunc {
+	return statusHandlerReady(version, true)
+}
+
+func statusHandlerReady(version string, ready bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"health": "ok", "server": "harnez", "version": version})
+		if !ready {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+		health := "ok"
+		if !ready {
+			health = "starting"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"health": health, "server": "harnez", "version": version})
 	}
 }

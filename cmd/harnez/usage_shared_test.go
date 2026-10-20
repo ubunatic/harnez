@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -40,17 +39,12 @@ func TestUsageNoSharedFlagByteIdenticalToExplicitFalse(t *testing.T) {
 	}
 }
 
-func TestSharedUsageRejectsHostAndProject(t *testing.T) {
-	for _, args := range [][]string{
-		{"usage", "--shared", "--host", "example.invalid"},
-		{"usage", "--shared", "--project", "."},
-	} {
-		root := newRootCmd()
-		root.SetArgs(args)
-		err := root.Execute()
-		if err == nil || !strings.Contains(err.Error(), "--shared cannot be used") {
-			t.Errorf("execute %v error = %v, want clear --shared incompatibility", args, err)
-		}
+func TestSharedFlagUsesReadOnlyCollectorSnapshot(t *testing.T) {
+	seedUsageStore(t)
+	root := newRootCmd()
+	root.SetArgs([]string{"usage", "--shared", "--offline", "--json"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
 	}
 }
 

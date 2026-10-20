@@ -80,7 +80,9 @@ func RenderLoom(summary UsageSummary, opts WatchOptions, cols, rows int) []strin
 func RunLoom(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, opts WatchOptions) error {
 	opts.Compact = true
 	var summary UsageSummary
-	if opts.SharedUsageCollector != nil {
+	if opts.StoredUsageLoader != nil {
+		summary = opts.StoredUsageLoader(ctx)
+	} else if opts.SharedUsageCollector != nil {
 		summary = opts.SharedUsageCollector(ctx)
 	} else {
 		summary = CollectAll(ctx, homeDir, client)

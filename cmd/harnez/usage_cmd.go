@@ -13,7 +13,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/usage"
-	sharedusage "ubunatic.com/harnez/usage"
 )
 
 // newUsageCmd builds `harnez usage` with its history, export and archive subcommands.
@@ -62,32 +61,7 @@ func newUsageCmd() *cobra.Command {
 			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, explicitMode && usageCompactMode, usageLoom, usageSplash); err != nil {
 				return err
 			}
-			if usageShared && usageHost != "" {
-				return fmt.Errorf("--shared cannot be used with --host; shared usage is local-only")
-			}
-			if usageShared && usageProject != "" {
-				return fmt.Errorf("--shared cannot be used with --project; project attribution uses its own local data source")
-			}
-			var sharedClient sharedusage.Client
-			if usageShared {
-				var err error
-				sharedClient, err = sharedusage.Open(sharedusage.Options{
-					StartIfAbsent: !usageOffline,
-					Collector:     realUsageCollector{client: client},
-				})
-				if err != nil {
-					return fmt.Errorf("open shared usage controller: %w", err)
-				}
-				defer sharedClient.Close()
-				releaseShared, err := pinSharedClient(ctx, sharedClient)
-				if err != nil {
-					return err
-				}
-				defer releaseShared()
-			}
-			sharedCollect := func(ctx context.Context) usage.UsageSummary {
-				return collectSharedUsage(ctx, sharedClient, !usageOffline)
-			}
+			_ = usageShared // retained as a compatibility flag; all local views use the collector store.
 
 			// The local config file is optional and this is a convenience
 			// default, not a required config — a load error (malformed
@@ -105,6 +79,14 @@ func newUsageCmd() *cobra.Command {
 			}
 
 			if usageLoom {
+				var cached usage.UsageSummary
+				if usageHost == "" {
+					var err error
+					cached, err = loadLocalUsage(ctx, usageOffline)
+					if err != nil {
+						return fmt.Errorf("read usage store: %w", err)
+					}
+				}
 				loadOpt := usage.WatchOptions{
 					Compact:        true,
 					ShowProcesses:  usageProcesses,
@@ -112,8 +94,8 @@ func newUsageCmd() *cobra.Command {
 					RemoteLoadHost: loadWatchHost,
 					Host:           usageHost,
 				}
-				if sharedClient != nil {
-					loadOpt.SharedUsageCollector = sharedCollect
+				if usageHost == "" {
+					loadOpt.StoredUsageLoader = func(context.Context) usage.UsageSummary { return cached }
 				}
 				return usage.RunLoom(ctx, "", client, cmd.OutOrStdout(), usageInterval, loadOpt)
 			}
@@ -125,18 +107,27 @@ func newUsageCmd() *cobra.Command {
 				// 110 Decision §2/§3), the same way it owns fetching
 				// summary/rates/procs internally rather than the caller
 				// pre-fetching a single snapshot up front.
-				var sharedWatchCollector func(context.Context) usage.UsageSummary
-				if sharedClient != nil {
-					sharedWatchCollector = sharedCollect
+				var storedLoader func(context.Context) usage.UsageSummary
+				if usageHost == "" {
+					cached, err := loadLocalUsage(ctx, usageOffline)
+					if err != nil {
+						return fmt.Errorf("read usage store: %w", err)
+					}
+					storedLoader = func(ctx context.Context) usage.UsageSummary {
+						if latest, err := loadLocalUsage(ctx, usageOffline); err == nil {
+							cached = latest
+						}
+						return cached
+					}
 				}
 				return usage.RunWatchWithOptions(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", usage.WatchOptions{
-					Host:                 usageHost,
-					SharedUsageCollector: sharedWatchCollector,
-					Mode:                 selectedMode,
-					ShowProcesses:        usageProcesses,
-					ShowMic:              usageMic,
-					Splash:               usageSplash,
-					RemoteLoadHost:       loadWatchHost,
+					Host:              usageHost,
+					StoredUsageLoader: storedLoader,
+					Mode:              selectedMode,
+					ShowProcesses:     usageProcesses,
+					ShowMic:           usageMic,
+					Splash:            usageSplash,
+					RemoteLoadHost:    loadWatchHost,
 				})
 			}
 
@@ -166,10 +157,9 @@ func newUsageCmd() *cobra.Command {
 					}
 					summary = s
 				} else {
-					if sharedClient != nil {
-						summary = sharedCollect(ctx)
-					} else {
-						summary = usage.CollectAll(ctx, "", client)
+					summary, err = loadLocalUsage(ctx, usageOffline)
+					if err != nil {
+						return fmt.Errorf("read usage store: %w", err)
 					}
 				}
 				if usageAgent != "" {
@@ -183,17 +173,6 @@ func newUsageCmd() *cobra.Command {
 				}
 
 				if usageJSON {
-					// Only attach a load snapshot when this invocation is
-					// itself the local collection (usageHost == ""), which
-					// is also the case when this process is the one
-					// CollectRemote runs over SSH on the remote host. A
-					// local `--json --host` combo already carries whatever
-					// load snapshot the remote side attached, via summary
-					// from CollectRemote above.
-					if usageHost == "" && summary.Load == nil {
-						snap := usage.CollectLoadSnapshot()
-						summary.Load = &snap
-					}
 					out, err := renderUsageOutput(summary, true, false)
 					if err != nil {
 						return err
@@ -229,32 +208,24 @@ func newUsageCmd() *cobra.Command {
 			if usageHost != "" {
 				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			} else {
-				if sharedClient != nil {
-					loadOpt.SharedUsageCollector = sharedCollect
+				summary, err := loadLocalUsage(ctx, usageOffline)
+				if err != nil {
+					return fmt.Errorf("read usage store: %w", err)
 				}
-				if sharedClient == nil {
-					summary := usage.CollectAll(ctx, "", client)
-					stored, err := usage.StoreCompactSummary(ctx, "", summary)
-					if err != nil {
-						debugLog("usage store persistence failed: %v", err)
-					}
-					usage.RenderSummaryWithUsage(stored, cmd.OutOrStdout(), usageProcesses, loadOpt)
-				} else {
-					usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses, loadOpt)
-				}
+				usage.RenderSummaryWithUsage(summary, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			}
 			return nil
 		},
 	}
 	usageCmd.Flags().StringVar(&usageProject, "project", "", "attribute lifetime tokens and cost-of-change to a repository directory")
 	usageCmd.Flags().StringVar(&usageProject, "cwd", "", "alias for --project")
-	usageCmd.PersistentFlags().BoolVar(&usageShared, "shared", false, "use the shared local usage controller")
+	usageCmd.PersistentFlags().BoolVar(&usageShared, "shared", false, "deprecated compatibility flag; local usage reads the collector store")
 	usageCmd.Flags().BoolVar(&usageJSON, "json", false, "output usage in JSON format")
 	usageCmd.Flags().StringVar(&usageAgent, "agent", "", "filter to a specific agent (claude, agy, codex)")
 	usageCmd.Flags().StringVar(&usageHost, "host", "", "query usage from a remote host via SSH")
-	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
-	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the selected view in place with a tokens/min trend")
-	usageCmd.Flags().BoolVar(&usageSplash, "splash", false, "render startup splash screen while initial collection is in flight (--watch only)")
+	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "read stored usage without starting the collector")
+	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "refresh the stored view in place with collector age markers")
+	usageCmd.Flags().BoolVar(&usageSplash, "splash", false, "render startup splash while the first stored frame loads (--watch only)")
 	usageCmd.Flags().BoolVar(&usageNormal, "normal", false, "show the usage table (the default view)")
 	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show the compact all-usage and load panels")
 	usageCmd.Flags().BoolVar(&usageMinimal, "minimal", false, "show compact panels without title/status bars or hidden-panel and overflow hints")
@@ -271,9 +242,9 @@ func newUsageCmd() *cobra.Command {
 }
 
 // newUsageHistoryCmd builds `harnez usage history` and its subcommands.
-// offline and shared point at the parent usage command's flag values:
-// `history record` reads the inherited --shared persistent flag.
+// offline points at the parent usage command's flag value.
 func newUsageHistoryCmd(offline, shared *bool) *cobra.Command {
+	_ = shared // retained in the constructor to avoid breaking internal callers.
 	var historyJSON bool
 	historyCmd := &cobra.Command{
 		Use:     "history",
@@ -323,25 +294,9 @@ func newUsageHistoryCmd(offline, shared *bool) *cobra.Command {
 		Short:   "Collect and record a usage snapshot to the local machine history log",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			var client *http.Client
-			if !*offline {
-				client = &http.Client{Timeout: 5 * time.Second}
-			}
-			var summary usage.UsageSummary
-			if *shared {
-				sharedClient, err := sharedusage.Open(sharedusage.Options{StartIfAbsent: !*offline, Collector: realUsageCollector{client: client}})
-				if err != nil {
-					return fmt.Errorf("open shared usage controller: %w", err)
-				}
-				defer sharedClient.Close()
-				releaseShared, err := pinSharedClient(ctx, sharedClient)
-				if err != nil {
-					return err
-				}
-				defer releaseShared()
-				summary = collectSharedUsage(ctx, sharedClient, !*offline)
-			} else {
-				summary = usage.CollectAll(ctx, "", client)
+			summary, err := loadLocalUsage(ctx, *offline)
+			if err != nil {
+				return fmt.Errorf("read usage store: %w", err)
 			}
 			historyDir := usage.HistoryDir("")
 			if err := usage.AppendHistory(historyDir, summary); err != nil {

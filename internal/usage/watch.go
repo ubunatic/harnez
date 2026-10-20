@@ -130,13 +130,7 @@ func (t *rateTracker) update(summary UsageSummary) map[string]agentRate {
 
 // RunWatch redraws a compact, btop-style usage dashboard in place on a fixed
 // interval, instead of the full `harnez usage` report which is too chatty to
-// redraw every tick. It polls at most once per interval; interval is clamped
-// to MinWatchInterval so `--watch` cannot be used to accidentally hammer live
-// quota APIs.
-//
-// When historyDir is non-empty, every fetched frame is also appended to that
-// machine's history log (see AppendHistory) so a `--watch` session builds a
-// timeline as it runs, not just at exit.
+// redraw every tick. It polls stored data at most once per interval.
 func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, showProcesses ...bool) error {
 	return RunWatchWithHost(ctx, homeDir, client, out, interval, historyDir, "", showProcesses...)
 }
@@ -280,6 +274,7 @@ func (t *redrawThrottler) Stop() {
 }
 
 func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, opts WatchOptions) error {
+	_ = historyDir // retained for source compatibility; watch no longer writes history.
 	if interval < MinWatchInterval {
 		interval = MinWatchInterval
 	}
@@ -650,27 +645,21 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		done := fetchDone
 		go func() {
 			defer close(done)
-			started := time.Now()
 			result := fetchResult{host: targetHost}
 			if targetHost != "" {
 				result.summary, result.procs, _ = CollectRemoteProgress(sigCtx, targetHost, procRequested, reportFetchStage)
 			} else {
-				if opts.SharedUsageCollector != nil {
+				if opts.StoredUsageLoader != nil {
+					result.summary = opts.StoredUsageLoader(sigCtx)
+				} else if opts.SharedUsageCollector != nil {
 					result.summary = opts.SharedUsageCollector(sigCtx)
 				} else {
 					result.summary = CollectAllProgressDetailed(sigCtx, homeDir, client, reportFetchStage, reportFetchDiagnostic)
-				}
-				if sigCtx.Err() == nil {
-					result.summary, _ = StoreCompactSummary(sigCtx, homeDir, result.summary)
-				}
-				if sigCtx.Err() == nil && historyDir != "" {
-					_ = AppendHistory(historyDir, result.summary)
 				}
 			}
 			if sigCtx.Err() != nil {
 				return
 			}
-			recordFetchDuration(homeDir, fetchDurationKindForHost(targetHost), time.Since(started))
 			select {
 			case results <- result:
 			case <-sigCtx.Done():

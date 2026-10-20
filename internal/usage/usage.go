@@ -16,7 +16,7 @@ import (
 // FetchStage reports one per-source fetch's lifecycle during
 // CollectAll/CollectAllProgress and CollectRemote/CollectRemoteProgress
 // (issue 169). It exists purely so a live caller (the `--watch` startup
-// splash) can render a "what's happening right now" status line -- it has no
+// remote watch splash can render a "what's happening right now" status line -- it has no
 // effect on the fetch itself and non-watch callers never see it.
 type FetchStage int
 
@@ -171,7 +171,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 	var sb strings.Builder
 
 	sb.WriteString("Agentic Coding Usage & Quota Monitor\n")
-	sb.WriteString(fmt.Sprintf("Snapshot taken at: %s\n\n", summary.Timestamp.Format("2006-01-02 15:04:05 MST")))
+	sb.WriteString(fmt.Sprintf("Snapshot taken at: %s (%s)\n\n", summary.Timestamp.Format("2006-01-02 15:04:05 MST"), usageSnapshotAgeLabel(summary.Timestamp, now)))
 
 	shown := 0
 	for _, agent := range summary.Agents {

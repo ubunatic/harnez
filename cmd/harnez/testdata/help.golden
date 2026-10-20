@@ -2534,14 +2534,14 @@ Flags:
       --mic                 show the microphone level/recording panel in --watch (hidden if no audio interface is found)
       --minimal             show compact panels without title/status bars or hidden-panel and overflow hints
       --normal              show the usage table (the default view)
-      --offline             disable live network queries and use local caches only
+      --offline             read stored usage without starting the collector
   -p, --proc                show running agent processes panel in the default view / --watch
       --processes           show running agent processes panel in the default view / --watch
       --project string      attribute lifetime tokens and cost-of-change to a repository directory
   -r, --raw                 print the detailed per-field usage report instead of the selected view
-      --shared              use the shared local usage controller
-      --splash              render startup splash screen while initial collection is in flight (--watch only)
-  -w, --watch               live-refresh the selected view in place with a tokens/min trend
+      --shared              deprecated compatibility flag; local usage reads the collector store
+      --splash              render startup splash while the first stored frame loads (--watch only)
+  -w, --watch               refresh the stored view in place with collector age markers
 
 Use "harnez usage [command] --help" for more information about a command.
 
@@ -2559,7 +2559,7 @@ Flags:
   -h, --help   help for archive
 
 Global Flags:
-      --shared   use the shared local usage controller
+      --shared   deprecated compatibility flag; local usage reads the collector store
 
 Use "harnez usage archive [command] --help" for more information about a command.
 
@@ -2573,7 +2573,7 @@ Flags:
   -h, --help   help for create
 
 Global Flags:
-      --shared   use the shared local usage controller
+      --shared   deprecated compatibility flag; local usage reads the collector store
 
 === harnez usage archive import
 Validate and import a legacy usage archive into the telemetry store
@@ -2585,7 +2585,7 @@ Flags:
   -h, --help   help for import
 
 Global Flags:
-      --shared   use the shared local usage controller
+      --shared   deprecated compatibility flag; local usage reads the collector store
 
 === harnez usage export
 export writes a single scrubbed JSON file combining:
@@ -2639,7 +2639,7 @@ Flags:
       --privacy string       privacy level: public|agent-sanitized|internal|raw (default "public")
 
 Global Flags:
-      --shared   use the shared local usage controller
+      --shared   deprecated compatibility flag; local usage reads the collector store
 
 === harnez usage history
 Inspect and manage recorded usage history and timelines
@@ -2662,7 +2662,7 @@ Flags:
       --json   output history in JSON format
 
 Global Flags:
-      --shared   use the shared local usage controller
+      --shared   deprecated compatibility flag; local usage reads the collector store
 
 Use "harnez usage history [command] --help" for more information about a command.
 
@@ -2677,7 +2677,7 @@ Flags:
 
 Global Flags:
       --json     output history in JSON format
-      --shared   use the shared local usage controller
+      --shared   deprecated compatibility flag; local usage reads the collector store
 
 === harnez usage history record
 Collect and record a usage snapshot to the local machine history log
@@ -2693,7 +2693,7 @@ Flags:
 
 Global Flags:
       --json     output history in JSON format
-      --shared   use the shared local usage controller
+      --shared   deprecated compatibility flag; local usage reads the collector store
 
 === harnez usage history stats
 Display aggregate statistics across recorded usage history
@@ -2706,7 +2706,7 @@ Flags:
 
 Global Flags:
       --json     output history in JSON format
-      --shared   use the shared local usage controller
+      --shared   deprecated compatibility flag; local usage reads the collector store
 
 === harnez usage history timeline
 Display snapshot and quota history across all recorded machine logs
@@ -2719,5 +2719,5 @@ Flags:
 
 Global Flags:
       --json     output history in JSON format
-      --shared   use the shared local usage controller
+      --shared   deprecated compatibility flag; local usage reads the collector store
 

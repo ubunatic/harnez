@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,6 +93,24 @@ func OpenWithBusyTimeout(path string, busyTimeout time.Duration) (*Store, error)
 		busyTimeout = 0
 	}
 	db, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)", path, busyTimeout.Milliseconds()))
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &Store{db: db}, nil
+}
+
+// OpenReadOnly opens an existing usage database without creating directories,
+// changing journal mode, or permitting writes.
+func OpenReadOnly(path string) (*Store, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	uri := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String() + "?mode=ro&_pragma=query_only(ON)"
+	db, err := sql.Open("sqlite", uri)
 	if err != nil {
 		return nil, err
 	}

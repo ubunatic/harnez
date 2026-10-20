@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"io"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -77,6 +78,29 @@ func TestCollectorTickPersistsStoreAndSnapshotWithInjectedFetch(t *testing.T) {
 	}
 	if snapshot == nil {
 		t.Fatal("collector tick wrote no JSON snapshot")
+	}
+}
+
+func TestReadStoredSummaryUsesChmodReadOnlyStore(t *testing.T) {
+	home := t.TempDir()
+	dbPath := filepath.Join(home, "usage.sqlite")
+	ctx := context.Background()
+	if err := InitializeUsageStore(ctx, home, dbPath); err != nil {
+		t.Fatal(err)
+	}
+	want := UsageSummary{Timestamp: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC), Agents: []AgentUsage{{AgentID: "claude", Name: "Claude Code", Installed: true}}}
+	if err := PersistUsageSummary(ctx, home, dbPath, want); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dbPath, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadStoredSummary(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Timestamp.Equal(want.Timestamp) || len(got.Agents) != 1 || got.Agents[0].AgentID != "claude" {
+		t.Fatalf("summary = %+v", got)
 	}
 }
 
