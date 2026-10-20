@@ -187,6 +187,16 @@ If GoReleaser succeeds or tags are pushed but publishing encounters a network/fo
 harnez release --continue
 ```
 
+`--continue` reuses `dist/` without rebuilding or re-signing when `SHA256SUMS`,
+`SHA256SUMS.minisig`, and every archive listed for this version are present and the
+archive hashes verify. Missing files trigger a rebuild; checksum corruption fails.
+Before uploading, fj lists existing release assets and downloads published
+`SHA256SUMS`. Existing names print `exists, skipped`; local files must match the
+published checksum set. A mismatch stops publication for manual recovery and never
+deletes remote assets. An existing nonempty release without `SHA256SUMS` also stops.
+Runtime errors suppress usage; token/auth failures suggest `fj auth login`. After
+renewing authentication, retry with `harnez release --continue`.
+
 ### go.work and Local Co-Development
 
 If sibling modules are checked out under a shared `go.work` (e.g. `~/projects/go.work`

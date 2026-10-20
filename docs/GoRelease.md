@@ -130,6 +130,14 @@ harnez release --continue        # resume a failed/interrupted publish
 DON'T delete or move tags when GoReleaser succeeded or tags were pushed but publishing hit a
 network/forge error — `--continue` resumes safely.
 
+`--continue` skips build and signing when `dist/SHA256SUMS`, its `.minisig`, and all
+listed archives for this version exist and their hashes verify. Missing files rebuild;
+checksum corruption fails. Before upload, fj lists existing assets and downloads
+published `SHA256SUMS`: existing names print `exists, skipped`; differing checksum
+sets fail for manual recovery without deleting remote assets. A nonempty release
+without `SHA256SUMS` also stops. Runtime errors suppress usage; auth failures suggest
+`fj auth login`, followed by `harnez release --continue`.
+
 ### 4.1 `go.work` and local co-development
 
 Build step forces `GOWORK=off` by default: an enclosing `go.work` silently substitutes an

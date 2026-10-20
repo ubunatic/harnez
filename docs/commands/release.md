@@ -19,6 +19,12 @@ Reference Practice: `@docs/practices/GoRelease.md`
    - If it fails because a login/auth step is needed (e.g. forge token, minisign
      key), stop and ask the user to complete that step — do not attempt to work
      around auth interactively.
+     Forge token errors suggest `fj auth login`; after login, resume with
+     `harnez release --continue` so a complete signed `dist/` is reused.
+   - Resume lists remote assets and prints `exists, skipped` for existing names.
+     Local archives must match published `SHA256SUMS`; checksum conflicts require
+     manual recovery. Never delete remote assets automatically or rebuild a valid
+     signed set to work around a conflict. Missing local files trigger rebuilding.
    - For any other failure, diagnose and fix (failing test, dirty tree, version
      spec issue) and retry once. Escalate to the user if the second attempt
      also fails.
