@@ -47,3 +47,13 @@ table, the truncated error text is noise to the user, and the lock seems to take
   failure show last-known data with one compact "store busy" note instead of per-row raw errors.
 - Shorten writer transactions if one turns out to hold the lock long.
 - Test with a blocker connection holding a write lock (pattern exists in `passive_test.go`).
+
+## 4. Delivery (sprint 2026-10-20)
+- M1 delivered (read path stops writing) in ab180545. Root cause: every `usage` run repeated schema DDL,
+  the window-key migration transaction, compat imports and observation writes. Completed migrations are
+  now gated by markers. Busy writes use a 25ms spec timeout, are logged and skipped. A read that is still
+  busy shows one "store busy" note.
+- Host verification: `make test-q1` green (the developer's last edit was untested; the host reran it),
+  and three live `harnez usage` runs showed no lock/busy/unavailable rows.
+- Caveat for future work: `EnsureUsageSchema` skips `EnsureSchema` once `usage-schema-v1` exists, so a
+  new table or column in `EnsureSchema` needs a new marker name, or it never reaches existing databases.
