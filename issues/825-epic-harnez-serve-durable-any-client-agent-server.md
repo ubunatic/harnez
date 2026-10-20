@@ -20,4 +20,6 @@ unattended goals. Research: [docs/studies/2026-10-20-harnez-server-durable-resea
 5. Bounded unattended goals, durable approvals, cancellation trees, "Running now" view.
 6. ACP/web/chat/cloud adapters, cross-provider handoffs, optional Pi Durable worker (API models only).
 
+7. Scoped host container-check broker for workers (from 820 plan M1+M2: spec contract, `harnez exec --host container-test`, durable results; never expose the podman socket).
+
 Open question: confirm Anthropic's current policy on Claude subscription tokens in third-party harnesses.
