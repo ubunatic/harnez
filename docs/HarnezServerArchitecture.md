@@ -72,6 +72,14 @@ durably (crash-safe) and optionally unattended ("level 3: out of the loop").
 
 ## Design rules
 
+- **Native CLI sessions are the execution unit.** Workers drive the real `claude -p`,
+  `codex exec`, `agy` (and `pi`) sessions so subscriptions (Claude Pro/Max, ChatGPT, Google)
+  keep paying; no silent API fallback for subscription providers. Pi Durable and Pi Pocket call
+  provider APIs through `pi-ai` (API keys or `/login` subscription tokens), which puts Claude on
+  API billing, so they are not the execution engine. Consequences: the smallest checkpoint is a
+  finished provider turn, crash recovery resumes the native session by provider ID, and policy is
+  enforced through each CLI's own controls (permission modes, hooks, sandbox flags). A Pi Durable
+  worker is only for API-billed models (OpenAI API, local/lmcoder). See 776.
 - Durability (crash recovery) and autonomy (no human approving steps) are separate axes.
 - State crash guarantees at commit boundaries, including the streaming loss window.
 - Durable is not exactly-once: external effects need idempotency keys or postcondition checks.
