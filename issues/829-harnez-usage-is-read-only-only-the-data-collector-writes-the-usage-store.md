@@ -30,7 +30,27 @@ and hides who owns the data. One writer, the data collector, keeps locking simpl
 - Follows from that: the collector runs schema setup and migrations at startup, so a fresh install
   is handled by the collector that `usage` starts.
 
-## 3. Implementation & Verification Plan
+### Searcher findings (sprint 2026-10-20)
+- Today `harnez agent-collector` (`cmd/harnez/usage_cmd.go:402`, `internal/usage/collector.go:26-36`) runs
+  `CollectAllLive` every 15m (`spec/usage.yaml:17`) and writes JSON snapshots only; systemd unit from 082
+  (`internal/claude/apply.go:89,116`). The SQLite store is written by `usage` compact and `--watch`
+  (`internal/usage/store.go:489-586`, `internal/usage/watch.go:658-661`).
+- `usage` fetches via `CollectAll` (`internal/usage/usage.go:77-82`): JSON cache, else live provider fetch.
+- No general server exists; MCP channel HTTP server (`internal/channel/server.go:68`) and AGY meter
+  listener (`internal/agymeter/meter.go:183`) are prior art for listeners. A fixed-port bind is the singleton.
+
+## 3. Milestones
+- **M1 — server skeleton with collector service:** new `harnez server` command; fixed localhost port from
+  a new spec file (with schema); a bind failure means another server runs, so exit cleanly. The collector
+  service does live collection on the spec cadence and owns all SQLite writes (schema, migrations, compat
+  import, observations, history snapshots, JSON snapshots). A minimal status endpoint (health + version)
+  so clients can detect it. `agent-collector` becomes an alias that runs the server (keep callers working;
+  update the 082 unit template to run `harnez server`).
+- **M2 — read-only usage client with auto-start:** compact and `--watch` read the store read-only and
+  never fetch live; if no server answers, start `harnez server` detached, then read. Test against a
+  read-only (chmod) DB. Remove the 828 best-effort write paths that no longer apply.
+
+## 4. Implementation & Verification Plan
 - Plan first: list every write reachable from `harnez usage` and where each one moves.
 - Test: `usage` against a read-only (chmod) store renders rows, and no write is attempted.
 - Live check: `harnez usage` and `--watch` while the collector writes; no busy note, no lock errors.
