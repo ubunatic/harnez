@@ -32,6 +32,7 @@ type statusInfo struct {
 	Server        string `json:"server"`
 	Version       string `json:"version"`
 	BuildIdentity string `json:"build_identity"`
+	PID           int    `json:"pid"`
 }
 
 func CaptureBuildIdentity() string {
@@ -211,7 +212,7 @@ func writeStatus(w http.ResponseWriter, version, identity string, ready bool) {
 		code, health = http.StatusServiceUnavailable, "starting"
 	}
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity})
+	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid()})
 }
 
 func statusHandler(version string) http.HandlerFunc { return statusHandlerReady(version, true) }

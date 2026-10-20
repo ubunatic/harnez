@@ -7,13 +7,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart={{HARNEZ_BIN}} server
-Restart=on-failure
-RestartSec=5s
+Restart={{RESTART_POLICY}}
+RestartSec={{RESTART_DELAY}}
 
-# Writes usage data under %S/harnez and listens on 127.0.0.1.
+# Writes its Unix socket and usage data to the per-user XDG directories.
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%S/harnez %D/harnez %C/harnez
+ReadWritePaths=%t/harnez %S/harnez %C/harnez %h/.local/share/harnez
 
 [Install]
 WantedBy=default.target

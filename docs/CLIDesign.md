@@ -19,6 +19,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `clean [procs] [q1]` | Runtime / Repository | Inspect or remove stale process groups and release verified incomplete quota-1 state |
 | `status`| Global | Config summary + applied-state checks |
 | `usage` | Multi-Agent (local/remote) | Zero-cost token counters, live quota tracking, project attribution (`--project`), procs (`-p`), remote host (`--host`) |
+| `server` | Local / User Service | Run local services; install, inspect, and remove the systemd user collector service |
 | `usage history` | Analytical / Logs | Timeline, remote fetch, stats & sparklines across `~/.claude/harnez/usage-history/` |
 | `assess`| Local / Repo | Fast code/doc metrics, token estimation, and feasibility report (`--json`) |
 | `dochistory` / `repo-history` | Local / Repo | Multi-track Git artifact evolution, Braille sparklines (`--tracks`), and diff breakdown (`--diff`) |

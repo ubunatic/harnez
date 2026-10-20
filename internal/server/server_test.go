@@ -33,7 +33,7 @@ func TestStatusEndpointReportsVersionAndBuildIdentity(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != http.StatusOK || got.Health != "ok" || got.Server != "harnez" || got.Version != "1.2.3" || got.BuildIdentity != "build-a" {
+	if response.Code != http.StatusOK || got.Health != "ok" || got.Server != "harnez" || got.Version != "1.2.3" || got.BuildIdentity != "build-a" || got.PID != os.Getpid() {
 		t.Fatalf("status = %d %+v", response.Code, got)
 	}
 }
@@ -81,7 +81,7 @@ func TestServerCreatesPrivateSocketAndEqualBuildReturnsAlreadyRunning(t *testing
 	}
 }
 
-func TestNewerBuildTakesOverAndOldIdentityRemainsCaptured(t *testing.T) {
+func TestNewerBuildTakesOverAndOldServerExitsSuccessfully(t *testing.T) {
 	cfg := testConfig(t)
 	socket, _ := cfg.Socket()
 	executable, err := os.Executable()

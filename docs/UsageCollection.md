@@ -31,8 +31,15 @@ retaining compatible snapshots and archives until their consumers have moved.
 `harnez server` is the one process that writes `telemetry.sqlite`. It owns the usage collector,
 schema setup, migrations, passive deduplication, and persistence. A single server runs per host on
 the Unix socket from `spec/server.yaml`; the systemd unit installed by issue 831
-starts that same command. `harnez usage` reads the store read-only and starts the server when it is
-not already running.
+starts that same command. On Linux with a systemd user manager, install, inspect and remove it
+with `harnez server install`, `harnez server status` and `harnez server uninstall`. On other hosts,
+`harnez usage -w` keeps the auto-started server available while the view runs.
+
+`harnez usage` can auto-start the server detached. A newer binary takes over the socket owner and
+asks the old process to shut down; the old process exits successfully, so systemd's
+`Restart=on-failure` does not race the takeover. `harnez server status` compares the socket
+owner PID with the service's `MainPID`. If an auto-started process owns the socket instead, it
+prints `systemctl --user restart harnez-agent-collector.service` to hand ownership back.
 
 Statuslines and other passive usage observers POST normalized windows to the server's local HTTP
 endpoint. They never open the store or start the server. A missing or failing server drops a usage

@@ -11,3 +11,7 @@ telemetry_spool_max_bytes: 10485760
 startup_timeout: 30s
 startup_poll_interval: 100ms
 takeover_timeout: 5s
+systemd_unit_name: harnez-agent-collector.service
+systemd_unit_source: systemd/harnez-agent-collector.service
+systemd_restart_policy: on-failure
+systemd_restart_delay: 5s

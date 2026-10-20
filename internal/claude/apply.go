@@ -16,6 +16,7 @@ import (
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/jsonc"
 	"ubunatic.com/harnez/internal/markdown"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/skillreg"
 )
 
@@ -86,18 +87,12 @@ func copyFile(src, dst string) (applyResult, error) {
 	return applyResult{changed: changed}, nil
 }
 
-// systemdUnitSource/systemdUnitName locate the bundled server unit template
-// (issue 082/829) within cfg.FS, and name it on disk.
-const systemdUnitSource = "systemd/harnez-agent-collector.service"
-const systemdUnitName = "harnez-agent-collector.service"
-
-// systemdUnitExecPlaceholder is substituted in the bundled unit template
-// with the absolute path to the currently running harnez binary.
-const systemdUnitExecPlaceholder = "{{HARNEZ_BIN}}"
-
 // systemdUserUnitDir resolves the standard systemd --user unit directory:
 // ~/.config/systemd/user/.
 func systemdUserUnitDir() (string, error) {
+	if base := os.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(base) {
+		return filepath.Join(base, "systemd", "user"), nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve home dir: %w", err)
@@ -114,6 +109,10 @@ func systemdUserUnitDir() (string, error) {
 // whether harnez was installed via `go install` (~/go/bin) or
 // `make install-system` (/usr/local/bin).
 func installSystemdUnit(fsys fs.FS) (string, applyResult, error) {
+	serverConfig, err := server.LoadConfig()
+	if err != nil {
+		return "", applyResult{}, err
+	}
 	unitDir, err := systemdUserUnitDir()
 	if err != nil {
 		return "", applyResult{}, err
@@ -122,12 +121,12 @@ func installSystemdUnit(fsys fs.FS) (string, applyResult, error) {
 	if err != nil {
 		return "", applyResult{}, fmt.Errorf("resolve harnez binary path: %w", err)
 	}
-	tmpl, err := fs.ReadFile(fsys, systemdUnitSource)
+	tmpl, err := fs.ReadFile(fsys, serverConfig.SystemdUnitSource)
 	if err != nil {
-		return "", applyResult{}, fmt.Errorf("read %s: %w", systemdUnitSource, err)
+		return "", applyResult{}, fmt.Errorf("read %s: %w", serverConfig.SystemdUnitSource, err)
 	}
-	content := strings.ReplaceAll(string(tmpl), systemdUnitExecPlaceholder, exe)
-	dst := filepath.Join(unitDir, systemdUnitName)
+	content := strings.NewReplacer("{{HARNEZ_BIN}}", exe, "{{RESTART_POLICY}}", serverConfig.SystemdRestartPolicy, "{{RESTART_DELAY}}", serverConfig.SystemdRestartDelay.String()).Replace(string(tmpl))
+	dst := filepath.Join(unitDir, serverConfig.SystemdUnitName)
 	if err := os.MkdirAll(unitDir, 0755); err != nil {
 		return "", applyResult{}, fmt.Errorf("create %s: %w", unitDir, err)
 	}
@@ -776,7 +775,7 @@ func ApplyAllVariant(target string, cfg *Config, opts ApplyOptions) error {
 		}
 		printResult("wrote", unitPath, ur)
 		if ur.changed {
-			fmt.Println("  enable with: systemctl --user enable --now harnez-agent-collector.service")
+			fmt.Println("  install and start with: harnez server install")
 		}
 	}
 

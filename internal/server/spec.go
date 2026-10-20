@@ -25,6 +25,10 @@ type Config struct {
 	StartupTimeout         time.Duration
 	StartupPoll            time.Duration
 	TakeoverTimeout        time.Duration
+	SystemdUnitName        string
+	SystemdUnitSource      string
+	SystemdRestartPolicy   string
+	SystemdRestartDelay    time.Duration
 }
 
 type specConfig struct {
@@ -40,6 +44,10 @@ type specConfig struct {
 	StartupTimeout         string `yaml:"startup_timeout"`
 	StartupPoll            string `yaml:"startup_poll_interval"`
 	TakeoverTimeout        string `yaml:"takeover_timeout"`
+	SystemdUnitName        string `yaml:"systemd_unit_name"`
+	SystemdUnitSource      string `yaml:"systemd_unit_source"`
+	SystemdRestartPolicy   string `yaml:"systemd_restart_policy"`
+	SystemdRestartDelay    string `yaml:"systemd_restart_delay"`
 }
 
 func LoadConfig() (Config, error) {
@@ -54,7 +62,7 @@ func LoadConfig() (Config, error) {
 	if raw.SocketPath == "" || filepath.IsAbs(raw.SocketPath) || strings.Contains(raw.SocketPath, "..") || filepath.Base(raw.SocketPath) != raw.SocketPath {
 		return Config{}, fmt.Errorf("spec/server.yaml: socket_path must be a filename")
 	}
-	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes, TelemetryPath: raw.TelemetryPath, TelemetrySpoolPath: raw.TelemetrySpoolPath, TelemetrySpoolMaxBytes: raw.TelemetrySpoolMaxBytes}
+	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes, TelemetryPath: raw.TelemetryPath, TelemetrySpoolPath: raw.TelemetrySpoolPath, TelemetrySpoolMaxBytes: raw.TelemetrySpoolMaxBytes, SystemdUnitName: raw.SystemdUnitName, SystemdUnitSource: raw.SystemdUnitSource, SystemdRestartPolicy: raw.SystemdRestartPolicy}
 	if cfg.UpdateMaxBodyBytes <= 0 {
 		return Config{}, fmt.Errorf("spec/server.yaml: update_max_body_bytes must be positive")
 	}
@@ -67,9 +75,18 @@ func LoadConfig() (Config, error) {
 	if cfg.TelemetrySpoolMaxBytes <= 0 {
 		return Config{}, fmt.Errorf("spec/server.yaml: telemetry_spool_max_bytes must be positive")
 	}
+	if !strings.HasSuffix(cfg.SystemdUnitName, ".service") || filepath.Base(cfg.SystemdUnitName) != cfg.SystemdUnitName {
+		return Config{}, fmt.Errorf("spec/server.yaml: systemd_unit_name must be a service filename")
+	}
+	if !strings.HasPrefix(cfg.SystemdUnitSource, "systemd/") || strings.Contains(cfg.SystemdUnitSource, "..") {
+		return Config{}, fmt.Errorf("spec/server.yaml: systemd_unit_source must be inside systemd/")
+	}
+	if cfg.SystemdRestartPolicy != "on-failure" {
+		return Config{}, fmt.Errorf("spec/server.yaml: systemd_restart_policy must be on-failure")
+	}
 	for _, item := range []struct{ name, value string }{
 		{"read_header_timeout", raw.ReadHeaderTimeout}, {"shutdown_timeout", raw.ShutdownTimeout}, {"http_client_timeout", raw.HTTPClientTimeout},
-		{"update_timeout", raw.UpdateTimeout}, {"startup_timeout", raw.StartupTimeout}, {"startup_poll_interval", raw.StartupPoll}, {"takeover_timeout", raw.TakeoverTimeout},
+		{"update_timeout", raw.UpdateTimeout}, {"startup_timeout", raw.StartupTimeout}, {"startup_poll_interval", raw.StartupPoll}, {"takeover_timeout", raw.TakeoverTimeout}, {"systemd_restart_delay", raw.SystemdRestartDelay},
 	} {
 		d, err := time.ParseDuration(item.value)
 		if err != nil || d <= 0 {
@@ -90,6 +107,8 @@ func LoadConfig() (Config, error) {
 			cfg.StartupPoll = d
 		case "takeover_timeout":
 			cfg.TakeoverTimeout = d
+		case "systemd_restart_delay":
+			cfg.SystemdRestartDelay = d
 		}
 	}
 	return cfg, nil

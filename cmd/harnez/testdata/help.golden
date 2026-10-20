@@ -615,7 +615,7 @@ Flags:
       --no-docs                                do not install global docs, removing any previously installed global docs
       --remove-docs                            remove all global docs from ~/.claude/docs/ and ~/.prime/agent/docs/
   -s, --shell                                  inject harnez environment source into ~/.bashrc and ~/.zshrc
-      --systemd                                install the harnez-agent-collector systemd --user unit to ~/.config/systemd/user (issue 082)
+      --systemd harnez server install          write the harnez-agent-collector systemd --user unit; use harnez server install to enable and start it
   -t, --target string                          Claude config directory (default: ~/.claude)
       --variant string                         doc variant to install: lite or full (docs without a lite variant fall back to full) (default "full")
 
@@ -2154,9 +2154,44 @@ Run Harnez local services
 
 Usage:
   harnez server [flags]
+  harnez server [command]
+
+Available Commands:
+  install     Install and start the systemd user service
+  status      Show the local server and systemd service owner
+  uninstall   Stop and remove the systemd user service
 
 Flags:
   -h, --help   help for server
+
+Use "harnez server [command] --help" for more information about a command.
+
+=== harnez server install
+Install and start the systemd user service
+
+Usage:
+  harnez server install [flags]
+
+Flags:
+  -h, --help   help for install
+
+=== harnez server status
+Show the local server and systemd service owner
+
+Usage:
+  harnez server status [flags]
+
+Flags:
+  -h, --help   help for status
+
+=== harnez server uninstall
+Stop and remove the systemd user service
+
+Usage:
+  harnez server uninstall [flags]
+
+Flags:
+  -h, --help   help for uninstall
 
 === harnez skill
 Manage external skills: SKILL.md directories from third-party git repositories.

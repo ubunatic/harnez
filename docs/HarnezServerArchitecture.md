@@ -108,9 +108,13 @@ but is not a transactional task log.
 (falling back to the state directory), with directory mode 0700 and socket mode 0600. The socket
 probe provides the singleton: stale sockets are replaced, foreign listeners are rejected, and a
 newer semver or equal-version newer build identity shuts down the old process before taking over.
-`/status` reports version and the executable mtime captured when that process started. Services
-register their own routes. `harnez usage` starts/probes the server; statusline and hooks POST updates.
-831 installs it as a systemd user service.
+`/status` reports version, process ID, and the executable mtime captured when that process started.
+Services register their own routes. `harnez usage` starts/probes the server; statusline and hooks
+POST updates. On Linux, `harnez server install|status|uninstall` manages the systemd user service.
+The unit restarts on failure. A successful takeover exits the old server with status 0, avoiding a
+systemd restart race; status reports when the socket owner differs from the unit's `MainPID` and
+prints the restart command that returns ownership to systemd. Other hosts can keep the server
+available with `harnez usage -w`.
 
 The built command remains `harnez server` and these local routes remain HTTP over the Unix socket.
 JSON-RPC remains the target for the later agent-session API (roadmap step 4), behind transport

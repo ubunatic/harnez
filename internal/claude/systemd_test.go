@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	harnez "ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/server"
 )
 
 // TestInstallSystemdUnitWritesExpandedExecStart checks that
@@ -19,6 +20,10 @@ func TestInstallSystemdUnitWritesExpandedExecStart(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
 	dst, r, err := installSystemdUnit(harnez.DefaultFS)
 	if err != nil {
 		t.Fatalf("installSystemdUnit: %v", err)
@@ -27,7 +32,7 @@ func TestInstallSystemdUnitWritesExpandedExecStart(t *testing.T) {
 		t.Fatal("expected first install to report changed=true")
 	}
 
-	wantDst := filepath.Join(home, ".config", "systemd", "user", systemdUnitName)
+	wantDst := filepath.Join(home, ".config", "systemd", "user", cfg.SystemdUnitName)
 	if dst != wantDst {
 		t.Errorf("dst = %q, want %q", dst, wantDst)
 	}
@@ -38,8 +43,8 @@ func TestInstallSystemdUnitWritesExpandedExecStart(t *testing.T) {
 	}
 	content := string(data)
 
-	if strings.Contains(content, systemdUnitExecPlaceholder) {
-		t.Errorf("unit still contains unexpanded placeholder %q:\n%s", systemdUnitExecPlaceholder, content)
+	if strings.Contains(content, "{{") {
+		t.Errorf("unit still contains an unexpanded placeholder:\n%s", content)
 	}
 	exe, err := os.Executable()
 	if err != nil {

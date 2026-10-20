@@ -176,7 +176,7 @@ func newApplyCmd() *cobra.Command {
 	apply.Flags().BoolVar(&applyNoDocs, "no-docs", false, "do not install global docs, removing any previously installed global docs")
 	apply.Flags().StringVar(&applyVariant, "variant", "full", "doc variant to install: lite or full (docs without a lite variant fall back to full)")
 	apply.Flags().BoolVar(&applySystemd, "systemd", false,
-		"install the harnez-agent-collector systemd --user unit to ~/.config/systemd/user (issue 082)")
+		"write the harnez-agent-collector systemd --user unit; use `harnez server install` to enable and start it")
 	apply.Flags().BoolVarP(&applyShell, "shell", "s", false,
 		"inject harnez environment source into ~/.bashrc and ~/.zshrc")
 	apply.Flags().BoolVar(&debloat, "debloat", false,
