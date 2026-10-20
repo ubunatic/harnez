@@ -25,6 +25,13 @@ func TestEmbeddedUsageSpec(t *testing.T) {
 	if mode != "normal" {
 		t.Fatalf("default usage view = %q, want normal from embedded spec", mode)
 	}
+	storeBusy, err := UsageStoreBusyTimeout()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storeBusy != 25*time.Millisecond {
+		t.Fatalf("usage store busy timeout = %s, want 25ms from embedded spec", storeBusy)
+	}
 }
 
 func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
@@ -44,7 +51,7 @@ func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatal(err)
 	}
-	if len(schema.Required) != 17 || schema.Properties["agent_quota_warn_percent"] == nil || schema.Properties["agent_quota_max_reading_age"] == nil || schema.Properties["agy_quota"] == nil || schema.Properties["cache_staleness_multiplier"] == nil || schema.Properties["display_staleness"] == nil || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["statusline_busy_timeout"] == nil || schema.Properties["statusline_write_timeout"] == nil || schema.Properties["view_modes"] == nil {
+	if len(schema.Required) != 18 || schema.Properties["agent_quota_warn_percent"] == nil || schema.Properties["agent_quota_max_reading_age"] == nil || schema.Properties["agy_quota"] == nil || schema.Properties["cache_staleness_multiplier"] == nil || schema.Properties["display_staleness"] == nil || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["statusline_busy_timeout"] == nil || schema.Properties["statusline_write_timeout"] == nil || schema.Properties["usage_store_busy_timeout"] == nil || schema.Properties["view_modes"] == nil {
 		t.Fatalf("usage schema does not define required agy_meter_max_age: %+v", schema)
 	}
 	if schema.Definitions["viewMode"].Properties["panels"].MinItems != 1 {
@@ -75,6 +82,7 @@ history_snapshot_interval: 15m
 export_host_key: export-host-key
 statusline_busy_timeout: 25ms
 statusline_write_timeout: 100ms
+usage_store_busy_timeout: 25ms
 nvidia_smi_timeout: 1s
 nvidia_smi_cache_ttl: 2s
 watch_loading_label: Collecting usage

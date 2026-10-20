@@ -41,6 +41,57 @@ func TestStoreCompactSummaryWritesAndReadsFreshReading(t *testing.T) {
 	}
 }
 
+func TestStoreCompactSummaryProjectsWhileWriterLocked(t *testing.T) {
+	home := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
+	ctx := context.Background()
+	stored := UsageSummary{Timestamp: time.Now().UTC(), Agents: []AgentUsage{{AgentID: "claude", Installed: true, LastRefreshed: time.Now().UTC(), Session: &QuotaWindow{Name: "Five Hour", UsedPercent: 42.125}}}}
+	if _, err := StoreCompactSummaryAt(ctx, home, stored, dbPath); err != nil {
+		t.Fatal(err)
+	}
+
+	blocker, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(0)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Close()
+	tx, err := blocker.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES('lock-probe','test','2026-10-20T00:00:00Z','fresh')`); err != nil {
+		t.Fatal(err)
+	}
+
+	current := UsageSummary{Timestamp: time.Now().UTC(), Agents: []AgentUsage{{AgentID: "claude", Installed: true, LastRefreshed: time.Now().UTC()}}}
+	got, err := StoreCompactSummaryAt(ctx, home, current, dbPath)
+	if err != nil {
+		t.Fatalf("projection failed while writer held lock: %v", err)
+	}
+	if len(got.Agents) == 0 || got.Agents[0].Session == nil || got.Agents[0].Session.UsedPercent != 42.125 {
+		t.Fatalf("last stored provider data not projected: %+v", got.Agents)
+	}
+	for _, agent := range got.Agents {
+		if strings.Contains(strings.ToLower(agent.QuotaFetchError), "locked") || strings.Contains(strings.ToLower(agent.QuotaFetchError), "busy") {
+			t.Fatalf("raw store lock error leaked to provider %q: %q", agent.AgentID, agent.QuotaFetchError)
+		}
+	}
+}
+
+func TestStoreCompactSummaryWithoutLockHasNoBusyNote(t *testing.T) {
+	home := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
+	summary := UsageSummary{Timestamp: time.Now().UTC(), Agents: []AgentUsage{{AgentID: "claude", Installed: true, LastRefreshed: time.Now().UTC(), Session: &QuotaWindow{Name: "Five Hour", UsedPercent: 42.125}}}}
+	got, err := StoreCompactSummaryAt(context.Background(), home, summary, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Agents[0].QuotaFetchError != "" || strings.Contains(strings.ToLower(strings.Join(allUsageLines(got, 240, false), "\n")), "store busy") {
+		t.Fatalf("unexpected busy note without a lock: %+v", got.Agents[0])
+	}
+}
+
 func TestStoreCompactSummaryUnavailableFallsBack(t *testing.T) {
 	summary := UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude", Session: &QuotaWindow{Name: "5-hour", UsedPercent: 37}}}}
 	got, err := StoreCompactSummaryAt(context.Background(), t.TempDir(), summary, "/dev/null/usage.sqlite")

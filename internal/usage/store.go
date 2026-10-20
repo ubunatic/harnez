@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
 )
@@ -46,7 +48,7 @@ func ImportUsageCompatibility(ctx context.Context, homeDir, dbPath string) error
 		return err
 	}
 	defer store.Close()
-	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+	if err := store.EnsureUsageSchema(ctx); err != nil {
 		return err
 	}
 	if err := archiveLegacySourcesBeforeImport(ctx, store); err != nil {
@@ -488,6 +490,9 @@ func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSumma
 	defer func() {
 		if resultErr != nil && ctx.Err() == nil {
 			result = compactProjectionFailure(homeDir, summary, resultErr)
+			if isStoreBusy(resultErr) {
+				resultErr = nil
+			}
 		}
 	}()
 	if dbPath == "" {
@@ -497,19 +502,32 @@ func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSumma
 			return summary, err
 		}
 	}
-	store, err := usagestore.Open(dbPath)
+	busyTimeout, err := UsageStoreBusyTimeout()
+	if err != nil {
+		return summary, err
+	}
+	store, err := usagestore.OpenWithBusyTimeout(dbPath, busyTimeout)
 	if err != nil {
 		return summary, err
 	}
 	defer store.Close()
-	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, q string) error { return store.Exec(ctx, q) }); err != nil {
-		return summary, err
+	if err := store.EnsureUsageSchema(ctx); err != nil {
+		if !isStoreBusy(err) {
+			return summary, err
+		}
+		logStoreBusy(homeDir, "schema setup", err)
 	}
 	if err := store.MigrateStableWindowKeys(ctx); err != nil {
-		return summary, err
+		if !isStoreBusy(err) {
+			return summary, err
+		}
+		logStoreBusy(homeDir, "window-key migration", err)
 	}
 	if err := importCompatibility(store, ctx, homeDir); err != nil {
-		return summary, err
+		if !isStoreBusy(err) {
+			return summary, err
+		}
+		logStoreBusy(homeDir, "compatibility import", err)
 	}
 	now := summary.Timestamp
 	if now.IsZero() {
@@ -521,7 +539,10 @@ func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSumma
 			at = agent.LastRefreshed
 		}
 		if err := importAgent(store, ctx, agent.AgentID, "collect-all", at, agent); err != nil {
-			return summary, err
+			if !isStoreBusy(err) {
+				return summary, err
+			}
+			logStoreBusy(homeDir, "observation write", err)
 		}
 	}
 	byProvider := make(map[string]int, len(summary.Agents))
@@ -616,6 +637,13 @@ func appendUsageDebugLog(homeDir, msg string) {
 func compactProjectionFailure(homeDir string, summary UsageSummary, err error) UsageSummary {
 	appendUsageDebugLog(homeDir, fmt.Sprintf("usage compact projection failed: %v", err))
 	summary.Agents = append([]AgentUsage(nil), summary.Agents...)
+	if isStoreBusy(err) {
+		if len(summary.Agents) == 0 {
+			summary.Agents = append(summary.Agents, AgentUsage{AgentID: "claude", Name: "Claude Code", Installed: true})
+		}
+		summary.Agents[0].QuotaFetchError = "store busy"
+		return summary
+	}
 	for _, provider := range []struct{ id, name string }{
 		{"claude", "Claude Code"}, {"codex", "OpenAI Codex"}, {"agy", "Antigravity (AGY)"},
 	} {
@@ -631,6 +659,15 @@ func compactProjectionFailure(homeDir string, summary UsageSummary, err error) U
 		summary.Agents[i].QuotaFetchError = fmt.Sprintf("store projection failed: %v", err)
 	}
 	return summary
+}
+
+func isStoreBusy(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == 5
+}
+
+func logStoreBusy(homeDir, operation string, err error) {
+	appendUsageDebugLog(homeDir, fmt.Sprintf("usage %s skipped: %v", operation, err))
 }
 
 func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now time.Time) {
@@ -719,18 +756,15 @@ func staleName(name string) string {
 
 // ImportCompatibility performs a one-time backfill, gated by an import marker.
 func importCompatibility(s *usagestore.Store, ctx context.Context, homeDir string) error {
-	if err := importUsageSummaryHistory(s, ctx, homeDir); err != nil {
-		return err
-	}
-	if err := s.Exec(ctx, `CREATE TABLE IF NOT EXISTS usage_store_migrations (name TEXT PRIMARY KEY, completed_at TEXT NOT NULL)`); err != nil {
-		return err
-	}
 	var count int
 	if err := s.QueryRow(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='compat-v1'`).Scan(&count); err != nil {
 		return err
 	}
 	if count > 0 {
-		return nil
+		return importUsageSummaryHistory(s, ctx, homeDir)
+	}
+	if err := importUsageSummaryHistory(s, ctx, homeDir); err != nil {
+		return err
 	}
 	var existing int
 	if err := s.QueryRow(ctx, `SELECT count(*) FROM quota_windows`).Scan(&existing); err != nil {
@@ -815,9 +849,6 @@ func importCompatibility(s *usagestore.Store, ctx context.Context, homeDir strin
 }
 
 func importUsageSummaryHistory(s *usagestore.Store, ctx context.Context, homeDir string) error {
-	if err := s.Exec(ctx, `CREATE TABLE IF NOT EXISTS usage_store_migrations (name TEXT PRIMARY KEY, completed_at TEXT NOT NULL)`); err != nil {
-		return err
-	}
 	if _, err := s.DedupeUsageSummaries(ctx); err != nil {
 		return err
 	}

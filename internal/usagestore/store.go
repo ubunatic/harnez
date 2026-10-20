@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -112,6 +113,37 @@ func (s *Store) QueryRow(ctx context.Context, query string, args ...any) *sql.Ro
 	return s.db.QueryRowContext(ctx, query, args...)
 }
 
+// EnsureUsageSchema checks a read-only migration marker before running the
+// additive schema setup. The common current-schema path stays read-only.
+func (s *Store) EnsureUsageSchema(ctx context.Context) error {
+	done, err := s.migrationDone(ctx, "usage-schema-v1")
+	if err != nil {
+		return err
+	}
+	if done {
+		return nil
+	}
+	if err := EnsureSchema(ctx, func(ctx context.Context, query string) error { return s.Exec(ctx, query) }); err != nil {
+		return err
+	}
+	if err := s.Exec(ctx, `CREATE TABLE IF NOT EXISTS usage_store_migrations (name TEXT PRIMARY KEY, completed_at TEXT NOT NULL)`); err != nil {
+		return err
+	}
+	return s.Exec(ctx, `INSERT OR IGNORE INTO usage_store_migrations(name,completed_at) VALUES('usage-schema-v1',?)`, time.Now().UTC().Format(time.RFC3339Nano))
+}
+
+func (s *Store) migrationDone(ctx context.Context, name string) (bool, error) {
+	var found int
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM usage_store_migrations WHERE name=? LIMIT 1`, name).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "no such table: usage_store_migrations") {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 func (s *Store) WriteUsageSummary(ctx context.Context, record UsageSummaryRecord) error {
 	if record.Hostname == "" || record.ObservedAt.IsZero() || len(record.Payload) == 0 {
 		return fmt.Errorf("invalid usage summary record")
@@ -144,6 +176,10 @@ func (s *Store) LatestUsageSummaryAt(ctx context.Context, hostname string) (at t
 // that canonical pair, and records a migration marker so it runs once. It
 // returns the number of deleted rows.
 func (s *Store) DedupeUsageSummaries(ctx context.Context) (int64, error) {
+	migrated, err := s.migrationDone(ctx, "usage-summary-dedupe-v1")
+	if err != nil || migrated {
+		return 0, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -220,6 +256,10 @@ func (s *Store) UsageSummaries(ctx context.Context) ([]UsageSummaryRecord, error
 // pool, and canonical key are copied to an archive table before the duplicate
 // is removed from reader-facing tables.
 func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
+	done, err := s.migrationDone(ctx, "normalized-window-keys-v5")
+	if err != nil || done {
+		return err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -326,6 +366,9 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v4',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v5',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	return tx.Commit()

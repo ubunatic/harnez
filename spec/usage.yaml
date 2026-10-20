@@ -31,6 +31,8 @@ history_snapshot_interval: 15m
 export_host_key: export-host-key
 statusline_busy_timeout: 25ms
 statusline_write_timeout: 100ms
+# Compact projection does not wait long to persist freshly collected readings.
+usage_store_busy_timeout: 25ms
 # NVIDIA GPUs are read via nvidia-smi (issue 765). One call costs ~123ms, and
 # the Load box redraws every 100ms, so each reading is reused for the TTL and
 # a hung call is cut off at the timeout.

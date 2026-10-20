@@ -28,6 +28,7 @@ type usageSpec struct {
 	PassiveDedupeInterval    string             `yaml:"passive_dedupe_interval"`
 	StatuslineBusyTimeout    string             `yaml:"statusline_busy_timeout"`
 	StatuslineWriteTimeout   string             `yaml:"statusline_write_timeout"`
+	UsageStoreBusyTimeout    string             `yaml:"usage_store_busy_timeout"`
 	HistorySnapshotEvery     string             `yaml:"history_snapshot_interval"`
 	ExportHostKey            string             `yaml:"export_host_key"`
 	NVIDIASMITimeout         string             `yaml:"nvidia_smi_timeout"`
@@ -84,21 +85,22 @@ func (s usageViewModeSpec) hiddenList() bool   { return s.HiddenList != nil && *
 func (s usageViewModeSpec) overflowHint() bool { return s.OverflowHint != nil && *s.OverflowHint }
 
 var (
-	usageSpecOnce         sync.Once
-	usageSpecAge          time.Duration
-	usageSpecCadence      time.Duration
-	usageSpecTimeout      time.Duration
-	usageSpecDedupe       time.Duration
-	usageSpecBusyTimeout  time.Duration
-	usageSpecWriteTimeout time.Duration
-	usageSpecErr          error
-	usageSpecLoadingLabel string
-	usageSpecHistoryEvery time.Duration
-	usageSpecHostKey      string
-	usageSpecViewModes    usageViewModesSpec
-	usageSpecNVTimeout    time.Duration
-	usageSpecNVCacheTTL   time.Duration
-	usageSpecCachePolicy  cacheFreshnessPolicy
+	usageSpecOnce             sync.Once
+	usageSpecAge              time.Duration
+	usageSpecCadence          time.Duration
+	usageSpecTimeout          time.Duration
+	usageSpecDedupe           time.Duration
+	usageSpecBusyTimeout      time.Duration
+	usageSpecStoreBusyTimeout time.Duration
+	usageSpecWriteTimeout     time.Duration
+	usageSpecErr              error
+	usageSpecLoadingLabel     string
+	usageSpecHistoryEvery     time.Duration
+	usageSpecHostKey          string
+	usageSpecViewModes        usageViewModesSpec
+	usageSpecNVTimeout        time.Duration
+	usageSpecNVCacheTTL       time.Duration
+	usageSpecCachePolicy      cacheFreshnessPolicy
 )
 
 type cacheFreshnessPolicy struct {
@@ -174,6 +176,12 @@ func PassivePolicy() (time.Duration, time.Duration, time.Duration, error) {
 	return usageSpecDedupe, usageSpecBusyTimeout, usageSpecWriteTimeout, err
 }
 
+// UsageStoreBusyTimeout bounds best-effort writes during compact projection.
+func UsageStoreBusyTimeout() (time.Duration, error) {
+	_, _, _, _, _, err := usageDurations()
+	return usageSpecStoreBusyTimeout, err
+}
+
 func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duration, time.Duration, error) {
 	usageSpecOnce.Do(func() {
 		data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
@@ -195,6 +203,7 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 			usageSpecNVTimeout, _ = time.ParseDuration(spec.NVIDIASMITimeout)
 			usageSpecNVCacheTTL, _ = time.ParseDuration(spec.NVIDIASMICacheTTL)
 			usageSpecWriteTimeout, _ = time.ParseDuration(spec.StatuslineWriteTimeout)
+			usageSpecStoreBusyTimeout, _ = time.ParseDuration(spec.UsageStoreBusyTimeout)
 		}
 	})
 	return usageSpecAge, usageSpecCadence, usageSpecTimeout, usageSpecDedupe, usageSpecBusyTimeout, usageSpecErr
@@ -247,6 +256,10 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	busy, err := time.ParseDuration(spec.StatuslineBusyTimeout)
 	if err != nil || busy <= 0 || busy > time.Second {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: statusline_busy_timeout must be between 1ns and 1s", usageSpecPath)
+	}
+	storeBusy, err := time.ParseDuration(spec.UsageStoreBusyTimeout)
+	if err != nil || storeBusy <= 0 || storeBusy > time.Second {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: usage_store_busy_timeout must be between 1ns and 1s", usageSpecPath)
 	}
 	if writeTimeout, err := time.ParseDuration(spec.StatuslineWriteTimeout); err != nil || writeTimeout <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: statusline_write_timeout must be a positive duration", usageSpecPath)
