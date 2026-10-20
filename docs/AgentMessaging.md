@@ -29,8 +29,9 @@ Not used for live delivery: hooks (inject only on prompt/tool events, no idle wa
 
 - `harnez agent send --name <worker> "<message>"` falls back to an exact name in the current
   `--store-dir` only when no live route matches. `--dir` filters registry candidates too.
-  Duplicate names fail with candidate IDs; completed and deleted sessions fail clearly.
-- A running, failed, or stopped exec worker stores sender-labeled messages in FIFO order on its
+  Duplicate names fail with candidate IDs; resumable completed sessions can be queued, while
+  deleted, blocked, or provider sessions that cannot resume fail clearly.
+- A resumable registry session stores sender-labeled messages in FIFO order on its
   session record. Success prints `queued for next turn of <name>`. `--wait` requires live Claude.
 - Batch workers (`codex exec`, `claude -p`, and other exec providers) have no turn-boundary hook.
   Delivery occurs on the next explicit `harnez agent resume --name <worker> "<prompt>"` only.
@@ -38,6 +39,8 @@ Not used for live delivery: hooks (inject only on prompt/tool events, no idle wa
 - Successful resume clears only its queue snapshot in the same atomic write that records the
   turn. Failed resume retains it. Sends arriving during resume remain for a later resume;
   registry writes share a flock so ordinary session updates cannot drop or resurrect messages.
+- Unknown live-target diagnostics show at most ten candidates, prioritize sessions from the
+  current directory, and point to `harnez agent list` for the full list.
 
 ## Claude channel design (740)
 

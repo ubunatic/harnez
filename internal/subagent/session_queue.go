@@ -114,11 +114,14 @@ func (s *FileSessionStore) QueueMessage(name, dir, sender, text string) (*Sessio
 		return nil, fmt.Errorf("ambiguous registry exec session %q; candidates:\n  %s", name, strings.Join(candidates, "\n  "))
 	}
 	sess := matches[0]
-	if sess.HarnessType == "interactive" {
-		return nil, fmt.Errorf("session %q is not an exec session; use its live delivery route", name)
-	}
-	if sess.Status != "running" && sess.Status != "failed" && sess.Status != "stopped" {
+	if sess.Status != "running" && sess.Status != "failed" && sess.Status != "stopped" && sess.Status != "completed" && sess.Status != "active" && sess.Status != "idle" {
 		return nil, fmt.Errorf("session %q cannot queue messages: status %s", name, sess.Status)
+	}
+	if sess.ResumeBlockedReason != "" {
+		return nil, fmt.Errorf("session %q cannot be resumed: %s", name, sess.ResumeBlockedReason)
+	}
+	if sess.Provider == "codex" && sess.CodexQuarantine != nil {
+		return nil, fmt.Errorf("session %q is quarantined: %s", name, sess.CodexQuarantine.Reason)
 	}
 	sess.PendingMessages = append(sess.PendingMessages, QueuedMessage{ID: uuid.NewString(), Sender: sender, Text: text})
 	if err := s.save(sess); err != nil {

@@ -102,6 +102,9 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.QueueMessage("active", "", "From queue sender", "read the requested word"); err != nil {
+		t.Fatal(err)
+	}
 	for _, args := range [][]string{{"resume", "--name", "active", "orchestrator prompt"}, {"compact", "--name", "active"}, {"stop", "--name", "active"}} {
 		cmd := newAgentCmd()
 		cmd.SetOut(new(bytes.Buffer))
@@ -111,7 +114,7 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 			t.Fatalf("%v: %v", args, err)
 		}
 	}
-	for _, want := range []struct{ action, prompt string }{{"prompt", "orchestrator prompt"}, {"compact", ""}, {"stop", ""}} {
+	for _, want := range []struct{ action, prompt string }{{"prompt", "From queue sender\n\nread the requested word\n\norchestrator prompt"}, {"compact", ""}, {"stop", ""}} {
 		got := <-actions
 		if got.Action != want.action || got.Prompt != want.prompt {
 			t.Errorf("control = %#v, want %#v", got, want)
@@ -120,6 +123,9 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 	sess, err = store.Find("active")
 	if err != nil || sess.Status != "stopped" {
 		t.Fatalf("stopped session = %#v, %v", sess, err)
+	}
+	if len(sess.PendingMessages) != 0 {
+		t.Fatalf("interactive resume did not consume queued messages: %#v", sess.PendingMessages)
 	}
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))

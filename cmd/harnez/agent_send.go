@@ -206,6 +206,23 @@ func agyStoreSessions(storeDir string) []*subagent.Session {
 
 type unknownLiveSendTarget struct{ error }
 
+const maxSendCandidates = 10
+
+func checkAgentSendResumable(session *subagent.Session, driver subagent.Driver) error {
+	if session.ResumeBlockedReason != "" {
+		return fmt.Errorf("session %q cannot be resumed: %s", session.Name, session.ResumeBlockedReason)
+	}
+	if session.Provider == "codex" && session.CodexQuarantine != nil {
+		return fmt.Errorf("session %q is quarantined: %s", session.Name, session.CodexQuarantine.Reason)
+	}
+	if checker, ok := driver.(subagent.ResumeChecker); ok {
+		if resumable, detail := checker.CheckResumable(session.ProviderID()); !resumable {
+			return fmt.Errorf("session %q cannot be resumed: %s", session.Name, detail)
+		}
+	}
+	return nil
+}
+
 func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelIdentity, threads []channel.CodexThread, agySessions []*subagent.Session, name, id, dir string) (agentSendTarget, error) {
 	wantDir := ""
 	if dir != "" {
@@ -271,12 +288,31 @@ func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelId
 		return matches[0], nil
 	}
 	sort.Strings(candidates)
+	preferredDir := dir
+	if preferredDir == "" {
+		preferredDir, _ = os.Getwd()
+	}
+	preferredDir, _ = filepath.Abs(preferredDir)
+	prioritized := make([]string, 0, len(candidates))
+	other := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		if strings.Contains(candidate, fmt.Sprintf("dir=%q", preferredDir)) {
+			prioritized = append(prioritized, candidate)
+		} else {
+			other = append(other, candidate)
+		}
+	}
+	candidates = append(prioritized, other...)
 	if len(candidates) == 0 {
 		candidates = append(candidates, "(no live Claude, Codex or supervised AGY sessions)")
 	}
 	reason := "unknown"
 	if len(matches) > 1 {
 		reason = "ambiguous"
+	}
+	more := len(candidates) - maxSendCandidates
+	if more > 0 {
+		candidates = append(candidates[:maxSendCandidates], fmt.Sprintf("(%d more; use harnez agent list)", more))
 	}
 	err := fmt.Errorf("%s agent send target %q; live candidates:\n  %s", reason, name+id, strings.Join(candidates, "\n  "))
 	if len(matches) == 0 {
@@ -391,7 +427,7 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 	var timeout time.Duration
 	cmd := &cobra.Command{
 		Use: "send (--name <session> | --id <session-id>) <message>", Short: "Send to a live session or queue for an exec worker",
-		Long: "Send to a live Claude channel, Codex session, or supervised AGY session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. AGY messages queue until the supervised session is idle. Only Claude supports --wait for optional receipt confirmation, which does not confirm task completion. If no live route matches, an exact registry exec session in --store-dir receives a durable queue message for its next explicit resume. Completed or deleted sessions cannot receive queued messages. Batch workers consume the queue on resume only, not during a running turn.",
+		Long: "Send to a live Claude channel, Codex session, or supervised AGY session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. AGY messages queue until the supervised session is idle. Only Claude supports --wait for optional receipt confirmation, which does not confirm task completion. If no live route matches, an exact registry exec session in --store-dir receives a durable queue message for its next explicit resume. Resumable completed sessions can receive queued messages; deleted, blocked, or non-resumable sessions cannot. Batch workers consume the queue on resume only, not during a running turn.",
 		Example: `  harnez agent send --name harnez-53ih "look at ticket 748 in harnez"
   harnez agent send --name agy-worker "please review this"
   harnez agent send --id 86443124-b692-49e4-ae92-942b0177664f --wait "please confirm"`,
@@ -456,6 +492,13 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 				store, storeErr := subagent.OpenSessionStore(*storeDir)
 				if storeErr != nil {
 					return storeErr
+				}
+				registrySession, findErr := store.Find(*name)
+				if findErr == nil && registrySession.Name == *name {
+					resumeDriver := agentDriver(subagent.Model{Provider: registrySession.Provider, Name: registrySession.Model, Tier: registrySession.Tier}, registrySession.WorkingDir)
+					if checkErr := checkAgentSendResumable(registrySession, resumeDriver); checkErr != nil {
+						return checkErr
+					}
 				}
 				sess, queueErr := store.QueueMessage(*name, dir, channelSender(cfg, identities, currentHostSession()), message)
 				if queueErr != nil {

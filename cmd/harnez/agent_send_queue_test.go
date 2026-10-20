@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,7 +102,7 @@ func TestAgentSendRegistryFallback(t *testing.T) {
 	t.Setenv("HARNEZ_SESSION_ID", "sender-815")
 	dir := t.TempDir()
 	store, _ := subagent.NewSessionStore(dir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", HarnessType: "harnez", Status: "running"}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", HarnessType: "harnez", Status: "completed"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, message := range []string{"ONE", "TWO"} {
@@ -145,5 +146,47 @@ func TestLiveSendResolutionDoesNotFallBack(t *testing.T) {
 	var unknown *unknownLiveSendTarget
 	if err == nil || errors.As(err, &unknown) {
 		t.Fatalf("live ambiguity would fall back: %v", err)
+	}
+}
+
+func TestUnknownLiveTargetCapsCandidateList(t *testing.T) {
+	threads := make([]channel.CodexThread, 14)
+	for i := range threads {
+		threads[i] = channel.CodexThread{ID: fmt.Sprintf("thread-%02d", i), Name: fmt.Sprintf("worker-%02d", i), CWD: "/projects/other"}
+	}
+	_, err := resolveAgentSendTarget(nil, nil, threads, nil, "missing", "", "")
+	if err == nil || !strings.Contains(err.Error(), "(4 more; use harnez agent list)") {
+		t.Fatalf("candidate limit notice: %v", err)
+	}
+	for _, omitted := range []string{"thread-10", "thread-11", "thread-12", "thread-13"} {
+		if strings.Contains(err.Error(), omitted) {
+			t.Fatalf("candidate list is not capped: %v", err)
+		}
+	}
+	if !strings.Contains(err.Error(), "thread-00") || !strings.Contains(err.Error(), "thread-09") {
+		t.Fatalf("candidate list missing first ten: %v", err)
+	}
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	threads[13].CWD = workingDir
+	_, err = resolveAgentSendTarget(nil, nil, threads, nil, "missing", "", "")
+	if err == nil || !strings.Contains(strings.Split(err.Error(), "\n")[1], "thread-13") {
+		t.Fatalf("current directory candidate was not prioritized: %v", err)
+	}
+}
+
+func TestAgentSendQueuesOnlyResumableRecords(t *testing.T) {
+	completed := &subagent.Session{ID: "done", Name: "done", Provider: "codex", Status: "completed"}
+	if err := checkAgentSendResumable(completed, &resumeOutcomeDriver{}); err != nil {
+		t.Fatalf("completed resumable record rejected: %v", err)
+	}
+	if err := checkAgentSendResumable(completed, &resumeOutcomeDriver{terminal: true}); err == nil || !strings.Contains(err.Error(), "cannot be resumed") {
+		t.Fatalf("terminal provider session accepted: %v", err)
+	}
+	completed.ResumeBlockedReason = "provider session expired"
+	if err := checkAgentSendResumable(completed, &resumeOutcomeDriver{}); err == nil || !strings.Contains(err.Error(), "expired") {
+		t.Fatalf("resume-blocked session accepted: %v", err)
 	}
 }

@@ -65,14 +65,16 @@ func TestSessionQueueResolution(t *testing.T) {
 		{ID: "a", Name: "duplicate", Status: "running", WorkingDir: "/a"},
 		{ID: "b", Name: "duplicate", Status: "running", WorkingDir: "/b"},
 		{ID: "done", Name: "done", Status: "completed"},
+		{ID: "blocked", Name: "blocked", Status: "completed", ResumeBlockedReason: "provider session expired"},
 		{ID: "interactive", Name: "interactive", Status: "active", HarnessType: "interactive"},
+		{ID: "idle", Name: "idle", Status: "idle"},
 	} {
 		if err := store.Save(sess); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, tc := range []struct{ name, want string }{
-		{"missing", "unknown"}, {"duplicate", "ambiguous"}, {"done", "completed"}, {"interactive", "exec"},
+		{"missing", "unknown"}, {"duplicate", "ambiguous"}, {"blocked", "cannot be resumed"},
 	} {
 		_, err := store.QueueMessage(tc.name, "", "host", "hello")
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -81,6 +83,18 @@ func TestSessionQueueResolution(t *testing.T) {
 		if tc.name == "duplicate" && (!strings.Contains(err.Error(), "id=a") || !strings.Contains(err.Error(), "id=b")) {
 			t.Fatal(err)
 		}
+	}
+	completed, err := store.QueueMessage("done", "", "host", "message for next turn")
+	if err != nil || len(completed.PendingMessages) != 1 {
+		t.Fatalf("completed resumable session: %#v, %v", completed, err)
+	}
+	active, err := store.QueueMessage("interactive", "", "host", "interactive resume")
+	if err != nil || len(active.PendingMessages) != 1 {
+		t.Fatalf("active resumable session: %#v, %v", active, err)
+	}
+	idle, err := store.QueueMessage("idle", "", "host", "idle resume")
+	if err != nil || len(idle.PendingMessages) != 1 {
+		t.Fatalf("idle resumable session: %#v, %v", idle, err)
 	}
 	matched, err := store.QueueMessage("duplicate", "/b", "host", "scoped")
 	if err != nil || matched.ID != "b" {

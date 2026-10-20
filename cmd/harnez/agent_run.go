@@ -771,6 +771,12 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		compactNote = fmt.Sprintf("verified /compact at %s context tokens", humanCount(contextTokens))
 		sess.TokensSinceCompact = 0
 	}
+	queuedSession, err := s.Get(sess.ID)
+	if err != nil {
+		return err
+	}
+	queuedMessages := queuedSession.PendingMessages
+	req.Prompt = subagent.PrependQueuedMessages(queuedMessages, req.Prompt)
 	if interactive {
 		action := "prompt"
 		if sess.Provider == "agy" {
@@ -780,7 +786,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return err
 		}
 		sess.LastActiveAt = time.Now()
-		if err := s.Save(sess); err != nil {
+		if err := s.SaveQueuedTurn(sess, queuedMessages); err != nil {
 			return err
 		}
 		return writeAgentOutput(cmd, req.JSON, agentOutput{Session: sess, Response: "prompt delivered"})
@@ -829,12 +835,6 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return fmt.Errorf("could not persist running state for session %q: %w", sess.Name, err)
 		}
 	}
-	queuedSession, err := s.Get(sess.ID)
-	if err != nil {
-		return err
-	}
-	queuedMessages := queuedSession.PendingMessages
-	req.Prompt = subagent.PrependQueuedMessages(queuedMessages, req.Prompt)
 	resumeTurn.Opts.Prompt = req.Prompt
 	turnStarted := time.Now().UTC()
 	warnModelQuota(cmd, d.availability, sess.Provider, sess.Model, turnStarted.Local())

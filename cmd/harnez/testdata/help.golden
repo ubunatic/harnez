@@ -357,7 +357,7 @@ Run agent background task execution self-test.
 Run with --step hello to begin.
 
 === harnez agent send
-Send to a live Claude channel, Codex session, or supervised AGY session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. AGY messages queue until the supervised session is idle. Only Claude supports --wait for optional receipt confirmation, which does not confirm task completion. If no live route matches, an exact registry exec session in --store-dir receives a durable queue message for its next explicit resume. Completed or deleted sessions cannot receive queued messages. Batch workers consume the queue on resume only, not during a running turn.
+Send to a live Claude channel, Codex session, or supervised AGY session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. AGY messages queue until the supervised session is idle. Only Claude supports --wait for optional receipt confirmation, which does not confirm task completion. If no live route matches, an exact registry exec session in --store-dir receives a durable queue message for its next explicit resume. Resumable completed sessions can receive queued messages; deleted, blocked, or non-resumable sessions cannot. Batch workers consume the queue on resume only, not during a running turn.
 
 Usage:
   harnez agent send (--name <session> | --id <session-id>) <message> [flags]
