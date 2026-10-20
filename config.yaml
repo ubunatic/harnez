@@ -638,6 +638,7 @@ agents_md:
             Existing PNG documentation links may still be inspected as documentation.
           - `harnez find -d <repo> issues next` — report the next free ticket number (read-only)
           - `harnez issues new -d <repo> "<title>"` — run this right away; it reserves the number and creates the ticket skeleton.
+          - Cloud agents use `harnez issues new --remote -d <repo> "<title>"` (automatic when `CLAUDE_CODE_REMOTE` is set): authenticated gh on the github remote allocates permanent GH IDs. No host reservation or local fallback; local numbering ignores GH IDs.
           - Open the printed file and fill it in, keeping its schema; do not search for a template first.
           - Run `harnez index -d <repo>` and commit the ticket and index.
           - `harnez issues <verb> -d <repo> <n> [reason]` — change a ticket's status, resync
@@ -694,6 +695,7 @@ agents_md:
           - `harnez find -d <repo> issues -a status:open` lists active tickets.
           - `harnez find -d <repo> issues next` reports the next free ticket number.
           - `harnez issues new -d <repo> "<title>"` reserves a number; fill the printed file, run `harnez index -d <repo>`, and commit ticket/index changes.
+          - Cloud agents use `harnez issues new --remote -d <repo> "<title>"` (automatic when `CLAUDE_CODE_REMOTE` is set): authenticated gh on the github remote allocates permanent GH IDs. No host reservation or local fallback; local numbering ignores GH IDs.
       - name: Quota.md
         quota: true
         content: |

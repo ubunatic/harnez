@@ -1,6 +1,7 @@
 package find
 
 import (
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -210,5 +211,16 @@ func TestFormatTSV_SanitizesEmbeddedTabsAndNewlines(t *testing.T) {
 	want := "100\tOpen note\tTitle with tabs\tissues/100.md"
 	if got != want {
 		t.Errorf("FormatTSV = %q, want %q", got, want)
+	}
+}
+
+func TestSearchMixedTicketIDs(t *testing.T) {
+	files := []issues.IssueFile{}
+	for _, id := range []string{"GH100", "GH9", "042", "GH42"} {
+		files = append(files, issues.IssueFile{Number: id, Title: id + " — Cloud task", RawStatus: "Open", RelPath: id + "-cloud.md"})
+	}
+	results := Search(files, mustParse(t, "cloud"))
+	if got := strings.Join(numbers(results), ","); got != "042,GH9,GH42,GH100" {
+		t.Fatalf("mixed ID order: %s", got)
 	}
 }

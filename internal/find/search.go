@@ -2,7 +2,6 @@ package find
 
 import (
 	"sort"
-	"strconv"
 	"strings"
 
 	"ubunatic.com/harnez/internal/issues"
@@ -103,13 +102,8 @@ func Search(files []issues.IssueFile, q *Query) []Result {
 		if a.sumClasses != b.sumClasses {
 			return a.sumClasses < b.sumClasses
 		}
-		an, aerr := strconv.Atoi(a.Number)
-		bn, berr := strconv.Atoi(b.Number)
-		if aerr == nil && berr == nil && an != bn {
-			return an < bn
-		}
 		if a.Number != b.Number {
-			return a.Number < b.Number
+			return issues.LessID(a.Number, b.Number)
 		}
 		return a.Path < b.Path
 	})

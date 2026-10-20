@@ -38,7 +38,7 @@ Do not conflate **Priority** with **Severity**:
 
 ## 3. Standard Ticket Metadata Schema
 
-Every issue file is placed under `issues/NNN-kebab-case-title.md` (e.g. `issues/042-standardized-issue-priority-schema.md`).
+Local issue files are placed under `issues/NNN-kebab-case-title.md` (e.g. `issues/042-standardized-issue-priority-schema.md`).
 
 ### Allocating & Reserving Ticket Numbers
 Computing the next issue number and reserving/creating it are two separate commands, split across
@@ -48,10 +48,26 @@ sort | tail`) for either.
 - `harnez find issues next --json` — outputs machine-readable JSON (`{"number":"195","reserved":false}`).
 - `harnez issues new "Ticket Title"` (or `harnez issues new` with no title) — atomically allocates the next number and creates a placeholder ticket file (`issues/NNN-<title-slug>.md` or `issues/NNN-reserved.md` with status `Draft`) using `O_CREATE|O_EXCL` to prevent number collisions between concurrent agents. Prints `NNN<TAB>issues/<reserved-filename>.md` — write the real ticket content directly to that printed path rather than re-deriving the slug from the title by hand; a hand-derived slug can diverge from the reserved filename and leave an orphaned placeholder behind (see issue 202). Add `--json` for the same JSON shape as above with `"reserved":true` plus `file`/`path`. `new` never commits.
 
-**Cross-clone collisions survive `O_CREATE|O_EXCL`.** Atomic reservation only guards writers
-sharing one working tree. For remote/cloud agents, the host reserves numbers on main with
-`harnez issues new`, commits and pushes the placeholders before dispatch; agents use those
-assigned paths instead of allocating independently.
+**Remote/cloud allocation:** `harnez issues new --remote "Ticket Title"` creates a GitHub
+issue on the repository's `github` remote using authenticated `gh issue create`, then links its
+body to the exact ticket path. Its number allocates a permanent `GH<n>` ID, stored as
+`issues/GH<n>-<title-slug>.md` with header `# GH<n> — Ticket Title`. No host reservation or
+local counter is needed. Missing/unauthenticated `gh` is an error, with no local fallback.
+If updating the GitHub body or writing the ticket fails after allocation, the error identifies
+the existing GitHub issue; it does not reuse that ID or allocate a local number.
+
+Setting `CLAUDE_CODE_REMOTE` (even to an empty value) automatically selects remote mode;
+`new` prints the selected mode to stderr, keeping text/JSON stdout machine-readable.
+GH IDs never renumber on merge and cannot be moved with `issues mv`. Local allocation and
+`find issues next` ignore GH IDs. All status verbs, `show`, `find`, `index`, lint and duplicate
+checks accept both namespaces; arguments `GH42` and `gh42` select the same remote ticket,
+while `42` selects local `042`. README sorts local numbers first, then GH IDs numerically.
+
+Atomic local reservation only guards writers sharing one working tree. Cloud agents must
+use remote allocation rather than choosing local numbers from a divergent clone.
+
+Duplicate GH IDs are errors: reconcile the duplicate files while preserving the permanent ID.
+The renumbering repair below applies only to local numeric IDs.
 
 After a merge, `harnez index` and `harnez status` reject duplicate numbers and name every
 colliding file; index leaves README unchanged. Run

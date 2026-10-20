@@ -44,6 +44,7 @@ instead of `ls issues/`, `find`, or raw grep:
   Existing PNG documentation links may still be inspected as documentation.
 - `harnez find -d <repo> issues next` — report the next free ticket number (read-only)
 - `harnez issues new -d <repo> "<title>"` — run this right away; it reserves the number and creates the ticket skeleton.
+- Cloud agents use `harnez issues new --remote -d <repo> "<title>"` (automatic when `CLAUDE_CODE_REMOTE` is set): authenticated gh on the github remote allocates permanent GH IDs. No host reservation or local fallback; local numbering ignores GH IDs.
 - Open the printed file and fill it in, keeping its schema; do not search for a template first.
 - Run `harnez index -d <repo>` and commit the ticket and index.
 - `harnez issues <verb> -d <repo> <n> [reason]` — change a ticket's status, resync

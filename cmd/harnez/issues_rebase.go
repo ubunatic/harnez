@@ -476,7 +476,7 @@ func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []
 		title, _, _ := issues.ParseIssueFile(string(content))
 		fields := strings.Fields(title)
 		if len(fields) > 0 {
-			_, parseErr := strconv.Atoi(fields[0])
+			_, parseErr := issues.NormalizeID(fields[0])
 			if parseErr == nil && fields[0] != f.Number {
 				return fmt.Errorf("issues lint: filename/header mismatch in issues/%s (header %q)", f.RelPath, title)
 			}

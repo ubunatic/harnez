@@ -64,6 +64,11 @@ type issuesRunOptions struct {
 }
 
 func newIssuesCmd() *cobra.Command {
+	return newIssuesCmdWithGHRunner(runGH)
+}
+
+func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
+	var remoteFlag bool
 	var dir string
 	var checkFlag bool
 	var dryRunFlag bool
@@ -97,11 +102,14 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
   done [reason]    Status: Closed (bare), or "Closed — <reason>" (alias for close)
   draft [reason]   Status: Draft, or "Draft — <reason>"
 
-Status verbs accept one or more ticket numbers. Leading all-digit arguments
+Status verbs accept one or more ticket numbers. Leading numeric or GH-prefixed arguments
 are targets; the first non-number argument starts the reason. A numeric-only
 reason is therefore ambiguous: include text in the reason (for example,
 '"123 tickets"'). Batch targets are all validated before any file is changed,
 then the README is regenerated and the batch is committed once.
+  new --remote "title"  Create a GitHub issue on the github remote and reserve
+                    its permanent GH<number> ID. Requires authenticated gh;
+                    also selected when CLAUDE_CODE_REMOTE is set. No fallback.
   new [title]      Atomically reserve the next free issue number and create
                     a Draft placeholder file (issues/<NNN>-<title-slug>.md,
                     or issues/<NNN>-reserved.md with no title), using
@@ -158,6 +166,9 @@ valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if amendReasonFlag && (listFlag || len(args) == 0 || (args[0] != "close" && args[0] != "done")) {
 				return fmt.Errorf("issues: --amend-reason requires close or done")
+			}
+			if remoteFlag && (len(args) == 0 || args[0] != "new") {
+				return fmt.Errorf("issues: --remote requires new")
 			}
 			if listFlag {
 				if len(args) != 0 {
@@ -229,6 +240,12 @@ valid, exit-0 answer.`,
 			}
 			if args[0] == "new" {
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
+				_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
+				if remoteFlag || remoteEnv {
+					fmt.Fprintln(cmd.ErrOrStderr(), "issues new: remote mode")
+					return runIssuesNewRemote(cmd.OutOrStdout(), dir, title, jsonFlag, gh)
+				}
+				fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
 				return runIssuesNew(cmd.OutOrStdout(), dir, title, jsonFlag)
 			}
 			if args[0] == "show" {
@@ -302,6 +319,7 @@ valid, exit-0 answer.`,
 		},
 		ValidArgsFunction: issuesCompletion,
 	}
+	cmd.Flags().BoolVar(&remoteFlag, "remote", false, "with new: allocate a permanent GH id using authenticated gh on the github remote")
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
 	cmd.Flags().BoolVar(&checkFlag, "check", false, "report what would change without writing or committing; exit 1 on drift")
@@ -326,14 +344,7 @@ func leadingIssueNumberCount(args []string) int {
 		if arg == "" {
 			break
 		}
-		isNumber := true
-		for _, r := range arg {
-			if r < '0' || r > '9' {
-				isNumber = false
-				break
-			}
-		}
-		if !isNumber {
+		if _, err := issues.NormalizeID(arg); err != nil {
 			break
 		}
 		count++
@@ -667,6 +678,11 @@ func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
 	if err != nil {
 		return fmt.Errorf("issues new: %w", err)
 	}
+	return finishIssuesNew(w, dir, num, filename, jsonOutput)
+}
+
+func finishIssuesNew(w io.Writer, dir, num, filename string, jsonOutput bool) error {
+	issuesDir := filepath.Join(dir, "issues")
 	readmePath := filepath.Join(issuesDir, "README.md")
 	if _, err := index.UpdateIssuesReadme(readmePath, issuesDir); err != nil {
 		return fmt.Errorf("issues new: update README: %w", err)
@@ -704,12 +720,8 @@ func findTicketFile(issuesDir, ticketArg string) (issues.IssueFile, error) {
 		return issues.IssueFile{}, fmt.Errorf("issues: %w", err)
 	}
 
-	n, err := strconv.Atoi(ticketArg)
-	if err == nil {
-		if n < 0 {
-			return issues.IssueFile{}, fmt.Errorf("issues: invalid ticket number %q (expected a non-negative integer)", ticketArg)
-		}
-		ticketNum := fmt.Sprintf("%03d", n)
+	ticketNum, idErr := issues.NormalizeID(ticketArg)
+	if idErr == nil {
 		var matches []issues.IssueFile
 		for _, f := range files {
 			if f.Number == ticketNum {
@@ -768,6 +780,9 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		return issuesResult{}, false, err
 	}
 
+	if strings.HasPrefix(f.Number, "GH") {
+		return issuesResult{}, false, fmt.Errorf("issues mv: %s is a permanent GitHub id and cannot be renumbered", f.Number)
+	}
 	files, err := issues.Scan(issuesDir)
 	if err != nil {
 		return issuesResult{}, false, fmt.Errorf("issues mv: %w", err)

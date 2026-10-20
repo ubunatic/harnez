@@ -1566,11 +1566,14 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
   done [reason]    Status: Closed (bare), or "Closed — <reason>" (alias for close)
   draft [reason]   Status: Draft, or "Draft — <reason>"
 
-Status verbs accept one or more ticket numbers. Leading all-digit arguments
+Status verbs accept one or more ticket numbers. Leading numeric or GH-prefixed arguments
 are targets; the first non-number argument starts the reason. A numeric-only
 reason is therefore ambiguous: include text in the reason (for example,
 '"123 tickets"'). Batch targets are all validated before any file is changed,
 then the README is regenerated and the batch is committed once.
+  new --remote "title"  Create a GitHub issue on the github remote and reserve
+                    its permanent GH<number> ID. Requires authenticated gh;
+                    also selected when CLAUDE_CODE_REMOTE is set. No fallback.
   new [title]      Atomically reserve the next free issue number and create
                     a Draft placeholder file (issues/<NNN>-<title-slug>.md,
                     or issues/<NNN>-reserved.md with no title), using
@@ -1643,6 +1646,7 @@ Flags:
   -l, --list            list open issues (alias for the list verb)
       --no-commit       rewrite the ticket file and README but do not git add/commit
   -r, --raw             output raw text directly to stdout
+      --remote          with new: allocate a permanent GH id using authenticated gh on the github remote
   -t, --text            output raw text directly to stdout (alias for --raw)
 
 === harnez lint

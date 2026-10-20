@@ -72,7 +72,7 @@ type Report struct {
 }
 
 var (
-	issueFileRegex        = regexp.MustCompile(`^(\d{3})-.*\.md$`)
+	issueFileRegex        = regexp.MustCompile(`^(\d{3}|GH[1-9]\d*)-.*\.md$`)
 	statusLineRegex       = regexp.MustCompile(`(?i)^\s*[-*]?\s*(?:\*\*status:?\*\*|status):?\s*(.+)$`)
 	closedCommitOnlyRegex = regexp.MustCompile(`(?i)^(?:(?:in|resolved\s+in|fixed\s+in|completed\s+in|closed\s+in)\s+)?[\x60(]?[0-9a-f]{7,40}[\x60)]?[.,]?$`)
 	closedLifecycleRegex  = regexp.MustCompile(`(?i)^(closed|resolved|fixed|complete|completed|implemented|shipped)\b`)
@@ -83,7 +83,7 @@ var (
 	// is not mistaken for a column boundary. See issue 239.
 	tableRowRegex    = regexp.MustCompile(`^\|((?:\\.|[^|\\])*)\|((?:\\.|[^|\\])*)\|((?:\\.|[^|\\])*)\|((?:\\.|[^|\\])*)\|$`)
 	markdownLinkRegx = regexp.MustCompile(`^\[([^\]]+)\]\(([^)]+)\)$`)
-	headerLineRegex  = regexp.MustCompile(`^(\s*#\s*)(\d+)(\s*[—–:-].*|\s*)$`)
+	headerLineRegex  = regexp.MustCompile(`^(\s*#\s*)(GH[1-9]\d*|\d+)(\s*[—–:-].*|\s*)$`)
 )
 
 // LeadingLifecycle extracts the leading raw lifecycle token from a free-form
@@ -290,7 +290,7 @@ func ParseBody(content string) string {
 // ticketNumberPrefixRegex strips the leading "NNN <sep>" portion of a parsed
 // issue title, e.g. "158 — Add a `harnez find` command" -> "Add a `harnez
 // find` command".
-var ticketNumberPrefixRegex = regexp.MustCompile(`^\d+\s*[—–:-]\s*`)
+var ticketNumberPrefixRegex = regexp.MustCompile(`^(?:GH[1-9]\d*|\d+)\s*[—–:-]\s*`)
 
 // StripTicketNumber removes the leading ticket-number portion of a raw H1
 // title, if present.
@@ -436,7 +436,7 @@ func ScanFS(sysFS fs.FS, root string) ([]IssueFile, error) {
 
 	sort.Slice(issueFiles, func(i, j int) bool {
 		if issueFiles[i].Number != issueFiles[j].Number {
-			return issueFiles[i].Number < issueFiles[j].Number
+			return LessID(issueFiles[i].Number, issueFiles[j].Number)
 		}
 		return issueFiles[i].RelPath < issueFiles[j].RelPath
 	})
@@ -646,7 +646,8 @@ func Slugify(s string) string {
 
 // ReserveOptions configures ticket reservation.
 type ReserveOptions struct {
-	Title string // Optional title for the reserved ticket
+	Title    string // Optional title for the reserved ticket
+	RemoteID string // Already allocated GitHub ID; never falls back to local numbering
 }
 
 // Reserve allocates the next ticket number and atomically creates a placeholder
@@ -676,6 +677,17 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 			return "", "", fmt.Errorf("scan issues for reservation: %w", err)
 		}
 		nextNum := NextNumberFromFiles(files)
+		if opts.RemoteID != "" {
+			nextNum = opts.RemoteID
+			if !remoteIDRegex.MatchString(nextNum) {
+				return "", "", fmt.Errorf("invalid GitHub ticket id %q", nextNum)
+			}
+			for _, f := range files {
+				if f.Number == nextNum {
+					return "", "", fmt.Errorf("duplicate ticket number %s: issues/%s", nextNum, f.RelPath)
+				}
+			}
+		}
 
 		var baseName string
 		var titleText string
@@ -686,6 +698,9 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 		} else {
 			baseName = fmt.Sprintf("%s-reserved.md", nextNum)
 			titleText = "Reserved"
+			if opts.RemoteID != "" && strings.TrimSpace(opts.Title) != "" {
+				titleText = strings.TrimSpace(opts.Title)
+			}
 		}
 
 		content := fmt.Sprintf(`# %s — %s
@@ -711,7 +726,7 @@ Describe the implementation and how it will be verified.
 		targetPath := filepath.Join(issuesDir, baseName)
 		f, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
-			if os.IsExist(err) {
+			if os.IsExist(err) && opts.RemoteID == "" {
 				// File already exists; retry loop to allocate the next number.
 				time.Sleep(time.Millisecond)
 				continue

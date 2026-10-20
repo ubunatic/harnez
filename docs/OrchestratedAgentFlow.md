@@ -91,7 +91,7 @@ code and the environment in all three tickets. Check:
 | Live-testing a batch of agy models felt slow and left stray state | one `--conversation` resume took 118s; leftover named sessions persist after the run | use empty scratch dirs with no `AGENTS.md`, one tiny prompt plus one resume per model, unique session names, `harnez agent delete` afterward (ticket 500) |
 | Backgrounded `harnez agent resume … &` dies after 60s, its codex child keeps running untracked | the shell's `&` job sits inside `harnez exec`'s 60s default timeout | start agents with the harness's own background mechanism (e.g. Claude Code `run_in_background`), never `&`; to track an orphan, wait on its PID in a background loop |
 | `agent start -d X` worker asks "which repository?" (800) | codex driver ignored `-d` for the working directory | fixed in 800; until every provider is verified, also `cd X` before starting |
-| Two writers allocate the same ticket number (local 805 vs cloud 805) | each reads `issues/` from its own snapshot; a cloud agent works from GitHub, not the local tree | the host reserves numbers for remote agents with `harnez issues new` on main, pushes, and hands out the number |
+| Two writers allocate the same ticket number (local 805 vs cloud 805) | each reads `issues/` from its own snapshot; a cloud agent works from GitHub, not the local tree | cloud agents use `harnez issues new --remote "Title"` to allocate permanent GH IDs using authenticated gh on the github remote |
 | Cloud agent's branch no longer fast-forwards | the host pushed local workers' commits to main meanwhile | cherry-pick the branch's own commits (check `git diff --name-only <merge-base>`) and ask the agent to reset its branch to main |
 | Two agents fixed the same ticket (loom 329) | a remote agent picked a ticket the host had already dispatched locally | remote agents name the ticket before starting; the host keeps one owner per ticket and merges the better fix plus the other's regression test |
 | Worker states a false fact as a blocker (voxi: "`go 1.26.5` breaks `go install`") | unverified model claim | reproduce the claim before accepting the change; revert with the evidence in the commit message |
@@ -121,16 +121,17 @@ Shape used for harnez, loom, cati and voxi in one session:
 - **Rounds, not marathons.** Each developer gets a 3-4 item task file; the next round is a
   `resume` with the review findings, so the worker keeps its context. Queue follow-ups in a
   round file while the worker runs.
-- **Host reserves remote numbers.** Before dispatching remote/cloud work, the host runs
-  `harnez issues new` on main for every needed ticket, commits and pushes the placeholders,
-  then hands out their exact paths. Remote agents use those reservations and request more
-  from the host instead of choosing numbers from their own clone. If a merge still creates
-  duplicates, use `harnez issues mv -d . <file>` for each extra ticket; it updates filename
-  references as well as the title and index.
+- **Cloud agents allocate remote IDs.** Remote/cloud workers use
+  `harnez issues new --remote "Title"` themselves; `CLAUDE_CODE_REMOTE` also selects this
+  mode automatically. Authenticated `gh` creates an issue on the repo's `github` remote,
+  allocating permanent `GH<n>` files and headers without host reservations or local counters.
+  Missing gh/authentication is an error; never fall back to local numbers. GH IDs stay
+  permanent through merges. Reconcile duplicate GH files preserving their ID; only local
+  numeric duplicates use `harnez issues mv -d . <file>`.
 - **Cloud agent = GitHub resource.** A Claude cloud session with GitHub MCP reads job logs,
   watches CI (saving the host's `gh` rate limit), and pushes fixes to a `ccr-*` branch that
   the host reviews and fast-forwards or cherry-picks. It owns `.github/` only, names a ticket
-  before starting, and gets ticket numbers from the host. Messages to it are one-way from
+  before starting, and allocates GH ticket IDs with `issues new --remote`. Messages to it are one-way from
   the host; its reports arrive as cross-session messages.
 - **Quota routing.** Check `harnez usage` before each round. Heavy refactors on `opus`, routine
   work on `codex:sol`, coverage and lint sweeps on `agy:flash38`. When the Claude window runs

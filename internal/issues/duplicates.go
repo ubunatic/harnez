@@ -31,7 +31,7 @@ func CheckDuplicateNumbers(issuesDir string) error {
 		conflicts = append(conflicts, fmt.Sprintf("duplicate ticket number %s: %s", number, strings.Join(groups[number], ", ")))
 	}
 	if len(conflicts) > 0 {
-		return fmt.Errorf("%s; renumber each extra file with harnez issues mv -d . <file> (run from the repository root)", strings.Join(conflicts, "; "))
+		return fmt.Errorf("%s; renumber local numeric extras with harnez issues mv -d . <file> (run from the repository root); reconcile duplicate GH files preserving their permanent ID", strings.Join(conflicts, "; "))
 	}
 	return nil
 }
