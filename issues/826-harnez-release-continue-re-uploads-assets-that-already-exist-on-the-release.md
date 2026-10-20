@@ -1,6 +1,6 @@
 # 826 — harnez release --continue re-uploads assets that already exist on the release
 
-**Status**: Closed — Fixed in d3799b83: verified signed dist reuse, existing-asset skipping with published checksum validation, and concise runtime/auth errors; lint, touched-package tests and test-short pass.
+**Status**: Open — M2 pre-work from host review
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
