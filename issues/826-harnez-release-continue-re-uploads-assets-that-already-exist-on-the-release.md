@@ -38,3 +38,14 @@ signed dist set.
 - Verified: `make lint`, `go test ./internal/release ./cmd/harnez`, `make test-short`, and
   `make install` all passed. Initial red tests failed on the two unimplemented helpers.
 - No real release, Codeberg access, push, or delegation was performed.
+
+## M2 Pre-Work / Required Refinements (host review 2026-10-20)
+
+- Real harnez dist fails `completeDist`: SHA256SUMS lists `harnez-x86_64-linux` and
+  `harnez-aarch64-linux`, which goreleaser keeps in `dist/harnez-linux_linux_amd64_v1/` and
+  `dist/harnez-linux_linux_arm64_v8.0/`, not at `dist/<name>`. Result: `--continue` always rebuilds,
+  so the 826 duplicate-bytes problem stays. Resolve listed names via goreleaser's
+  `dist/artifacts.json` (path per name), or verify only the files that get uploaded; keep missing
+  minisig/archives -> rebuild. Add a test fixture shaped like the real dist (binaries in subdirs).
+- Verify against the real `dist/` (read-only, no publish): add a dry check or test helper and show
+  `completeDist` returns true for the current v0.1.32 dist.
