@@ -26,6 +26,7 @@ type usageSpec struct {
 	AgentQuotaMaxReadingAge  string             `yaml:"agent_quota_max_reading_age"`
 	CollectorTimeout         string             `yaml:"collector_timeout"`
 	PassiveDedupeInterval    string             `yaml:"passive_dedupe_interval"`
+	PassiveUpdatePath        string             `yaml:"passive_update_path"`
 	StatuslineBusyTimeout    string             `yaml:"statusline_busy_timeout"`
 	StatuslineWriteTimeout   string             `yaml:"statusline_write_timeout"`
 	UsageStoreBusyTimeout    string             `yaml:"usage_store_busy_timeout"`
@@ -90,6 +91,7 @@ var (
 	usageSpecCadence          time.Duration
 	usageSpecTimeout          time.Duration
 	usageSpecDedupe           time.Duration
+	usageSpecPassivePath      string
 	usageSpecBusyTimeout      time.Duration
 	usageSpecStoreBusyTimeout time.Duration
 	usageSpecWriteTimeout     time.Duration
@@ -196,6 +198,7 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 		var spec usageSpec
 		if err := yaml.Unmarshal(data, &spec); err == nil {
 			usageSpecCachePolicy, _ = spec.cachePolicy() // Validated by parseUsageSpec.
+			usageSpecPassivePath = spec.PassiveUpdatePath
 			usageSpecLoadingLabel = spec.WatchLoadingLabel
 			usageSpecHistoryEvery, _ = time.ParseDuration(spec.HistorySnapshotEvery)
 			usageSpecHostKey = spec.ExportHostKey
@@ -240,6 +243,9 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	dedupe, err := time.ParseDuration(spec.PassiveDedupeInterval)
 	if err != nil || dedupe <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: passive_dedupe_interval must be a positive duration", usageSpecPath)
+	}
+	if !strings.HasPrefix(spec.PassiveUpdatePath, "/") || strings.ContainsAny(spec.PassiveUpdatePath, "?#") {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: passive_update_path must be an absolute route path", usageSpecPath)
 	}
 	if every, err := time.ParseDuration(spec.HistorySnapshotEvery); err != nil || every <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: history_snapshot_interval must be a positive duration", usageSpecPath)

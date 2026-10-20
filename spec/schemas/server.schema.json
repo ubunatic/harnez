@@ -2,13 +2,15 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez local server settings",
   "type": "object",
-  "required": ["host", "port", "read_header_timeout", "shutdown_timeout", "http_client_timeout", "startup_timeout", "startup_poll_interval"],
+  "required": ["host", "port", "read_header_timeout", "shutdown_timeout", "http_client_timeout", "update_timeout", "update_max_body_bytes", "startup_timeout", "startup_poll_interval"],
   "properties": {
     "host": { "type": "string", "const": "127.0.0.1" },
     "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
     "read_header_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "shutdown_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "http_client_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
+    "update_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
+    "update_max_body_bytes": { "type": "integer", "minimum": 1 },
     "startup_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "startup_poll_interval": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" }
   },

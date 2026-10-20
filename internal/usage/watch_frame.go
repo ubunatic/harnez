@@ -321,7 +321,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		ageLabel := usageSnapshotAgeLabel(summary.Timestamp, now)
 		header = []string{
 			fmt.Sprintf("%s%s\x1b[0m  %s%s",
-				ansiBold, titlePrefix, summary.Timestamp.Format("15:04:05 MST")+" · "+ageLabel, hiddenHint),
+				ansiBold, titlePrefix, summary.Timestamp.Local().Format("15:04:05 MST")+" · "+ageLabel, hiddenHint),
 			"",
 		}
 	}

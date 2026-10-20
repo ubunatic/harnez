@@ -42,6 +42,20 @@ func TestStatusEndpointReportsStartingUntilCollectorReady(t *testing.T) {
 	}
 }
 
+func TestPostUpdateDropsWhenServerDoesNotAnswer(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := PostUpdate(context.Background(), address, "/usage/passive", []byte(`{"windows":[]}`), time.Second); got != UpdateDropped {
+		t.Fatalf("result = %q, want dropped", got)
+	}
+}
+
 func TestSecondServerRecognizesHarnezStatus(t *testing.T) {
 	port := freePort(t)
 	cfg := Config{Host: "127.0.0.1", Port: port, ReadHeaderTimeout: time.Second, ShutdownTimeout: time.Second, HTTPClientTimeout: time.Second}

@@ -56,6 +56,17 @@ func TestBuildWatchFrameRowsFitWidth(t *testing.T) {
 	}
 }
 
+func TestBuildWatchFrameHeaderUsesLocalTimezone(t *testing.T) {
+	oldLocal := time.Local
+	time.Local = time.FixedZone("CEST", 2*60*60)
+	t.Cleanup(func() { time.Local = oldLocal })
+	summary := UsageSummary{Timestamp: time.Date(2026, 10, 20, 19, 42, 8, 0, time.UTC), Agents: []AgentUsage{{AgentID: "claude", Name: "Claude", Installed: true}}}
+	frame := buildWatchFrame(summary, nil, time.Minute, defaultWatchSections(), 100, 24, false)
+	if !strings.Contains(strings.Join(frame.lines, "\n"), "21:42:08 CEST") {
+		t.Fatalf("header does not show local time: %q", frame.lines[0])
+	}
+}
+
 // TestRenderWBoxWidth checks a rendered panel occupies exactly its declared
 // width on every line, so side-by-side rows line up.
 func TestRenderWBoxWidth(t *testing.T) {

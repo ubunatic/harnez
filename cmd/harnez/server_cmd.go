@@ -16,14 +16,20 @@ import (
 )
 
 type usageCollectorService struct {
-	interval time.Duration
-	client   *http.Client
-	offline  bool
-	ready    atomic.Bool
+	interval     time.Duration
+	client       *http.Client
+	offline      bool
+	ready        atomic.Bool
+	requests     chan usage.PassiveRequest
+	updateServer usage.PassiveUpdateServer
 }
 
 func (s *usageCollectorService) Run(ctx context.Context) error {
-	return usage.RunCollectorWithReady(ctx, "", s.client, s.interval, os.Stdout, s.offline, func() { s.ready.Store(true) })
+	return usage.RunCollectorWithRequests(ctx, "", s.client, s.interval, os.Stdout, s.offline, s.requests, func() { s.ready.Store(true) })
+}
+
+func (s *usageCollectorService) RegisterRoutes(mux *http.ServeMux) {
+	s.updateServer.RegisterRoutes(mux)
 }
 
 func (s *usageCollectorService) Ready() bool { return s.ready.Load() }
@@ -56,6 +62,7 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 	if !offline {
 		client = &http.Client{Timeout: cfg.HTTPClientTimeout}
 	}
-	collector := &usageCollectorService{interval: interval, client: client, offline: offline}
+	requests := make(chan usage.PassiveRequest)
+	collector := &usageCollectorService{interval: interval, client: client, offline: offline, requests: requests, updateServer: usage.PassiveUpdateServer{Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}}
 	return (server.Server{Config: cfg, Version: harnez.Version, Services: []server.Service{collector}}).Run(ctx)
 }

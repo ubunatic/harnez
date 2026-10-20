@@ -13,6 +13,7 @@ import (
 
 type Service interface{ Run(context.Context) error }
 type readiness interface{ Ready() bool }
+type RouteRegistrar interface{ RegisterRoutes(*http.ServeMux) }
 
 type Server struct {
 	Config   Config
@@ -56,7 +57,12 @@ func (s Server) Run(ctx context.Context) error {
 		return true
 	}
 	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) { statusHandlerReady(s.Version, ready()).ServeHTTP(w, r) })
-	httpServer := &http.Server{Handler: mux, ReadHeaderTimeout: s.Config.ReadHeaderTimeout}
+	for _, service := range s.Services {
+		if registrar, ok := service.(RouteRegistrar); ok {
+			registrar.RegisterRoutes(mux)
+		}
+	}
+	httpServer := &http.Server{Handler: mux, ReadHeaderTimeout: s.Config.ReadHeaderTimeout, ReadTimeout: s.Config.UpdateTimeout}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- httpServer.Serve(listener) }()
 	serviceCtx, cancel := context.WithCancel(ctx)

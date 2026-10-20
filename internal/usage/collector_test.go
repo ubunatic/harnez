@@ -1,13 +1,19 @@
 package usage
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
@@ -78,6 +84,90 @@ func TestCollectorTickPersistsStoreAndSnapshotWithInjectedFetch(t *testing.T) {
 	}
 	if snapshot == nil {
 		t.Fatal("collector tick wrote no JSON snapshot")
+	}
+}
+
+func TestPassivePostIsNotBlockedByStalledFetch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	dbPath := filepath.Join(home, "usage.sqlite")
+	requests := make(chan PassiveRequest)
+	fetchStarted := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- runCollectorWithRequests(ctx, home, dbPath, time.Hour, io.Discard, false, func(ctx context.Context) (UsageSummary, error) {
+			close(fetchStarted)
+			<-ctx.Done()
+			return UsageSummary{}, ctx.Err()
+		}, nil, requests)
+	}()
+	<-fetchStarted
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := PassiveUpdateServer{Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}
+	mux := http.NewServeMux()
+	endpoint.RegisterRoutes(mux)
+	window := usagestore.Window{Provider: "claude", Key: "weekly", Name: "7-day", Source: "statusline", Freshness: "fresh", UsedFraction: .25, ObservedAt: time.Now()}
+	body, err := json.Marshal(struct {
+		Windows []usagestore.Window `json:"windows"`
+	}{[]usagestore.Window{window}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/usage/passive", bytes.NewReader(body))
+	mux.ServeHTTP(response, req)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("POST status = %d, body %s", response.Code, response.Body)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	store, err := usagestore.OpenReadOnly(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	rows, err := store.CurrentFor(context.Background(), "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("passive update was not persisted while fetch stalled")
+	}
+}
+
+func TestPassiveUpdateRejectsMalformedAndOversizedBodies(t *testing.T) {
+	requests := make(chan PassiveRequest)
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := PassiveUpdateServer{Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: 8}
+	mux := http.NewServeMux()
+	endpoint.RegisterRoutes(mux)
+	for _, tc := range []struct {
+		name, body string
+		want       int
+	}{
+		{"malformed", "{", http.StatusBadRequest},
+		{"oversized", `{"windows": []}`, http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/usage/passive", strings.NewReader(tc.body)))
+			if response.Code != tc.want {
+				t.Fatalf("status = %d, want %d", response.Code, tc.want)
+			}
+		})
 	}
 }
 

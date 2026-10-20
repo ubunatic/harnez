@@ -6,8 +6,16 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"time"
+
+	"ubunatic.com/harnez/internal/usagestore"
 )
+
+type PassiveRequest struct {
+	Windows []usagestore.Window
+	Done    chan error
+}
 
 // RunCollector runs the background usage-collector loop backing `harnez
 // server: it collects Claude/Codex/AGY usage live via CollectAllLive,
@@ -41,6 +49,14 @@ func RunCollectorWithFetch(ctx context.Context, homeDir, dbPath string, interval
 }
 
 func RunCollectorWithFetchReady(ctx context.Context, homeDir, dbPath string, interval time.Duration, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error), ready func()) error {
+	return runCollectorWithRequests(ctx, homeDir, dbPath, interval, out, offline, fetch, ready, nil)
+}
+
+func RunCollectorWithRequests(ctx context.Context, homeDir string, client *http.Client, interval time.Duration, out io.Writer, offline bool, requests <-chan PassiveRequest, ready func()) error {
+	return runCollectorWithRequests(ctx, homeDir, "", interval, out, offline, func(ctx context.Context) (UsageSummary, error) { return CollectAllLive(ctx, homeDir, client), nil }, ready, requests)
+}
+
+func runCollectorWithRequests(ctx context.Context, homeDir, dbPath string, interval time.Duration, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error), ready func(), requests <-chan PassiveRequest) error {
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
@@ -59,25 +75,92 @@ func RunCollectorWithFetchReady(ctx context.Context, homeDir, dbPath string, int
 	}
 	fmt.Fprintf(out, "harnez server: collecting usage to %s every %s\n", stateDir, interval)
 
-	if err := collectTickWithFetch(ctx, homeDir, dbPath, stateDir, out, offline, fetch); err != nil {
-		return err
+	if requests == nil {
+		requests = make(chan PassiveRequest)
 	}
-	if ready != nil {
-		ready()
+	fetchResults := make(chan fetchResult)
+	writerDone := make(chan error, 1)
+	var readyOnce sync.Once
+	writerReady := func() {
+		if ready != nil {
+			readyOnce.Do(ready)
+		}
 	}
+	go func() {
+		writerDone <- runStoreWriter(ctx, homeDir, dbPath, stateDir, out, offline, requests, fetchResults, writerReady)
+	}()
+	go func() {
+		for {
+			summary, err := fetch(ctx)
+			select {
+			case fetchResults <- fetchResult{summary: summary, err: err}:
+			case <-ctx.Done():
+				return
+			}
+			if err != nil {
+				return
+			}
+			timer := time.NewTimer(interval)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			<-writerDone
+			return nil
+		case err := <-writerDone:
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+}
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+type fetchResult struct {
+	summary UsageSummary
+	err     error
+}
+
+func runStoreWriter(ctx context.Context, homeDir, dbPath, stateDir string, out io.Writer, offline bool, requests <-chan PassiveRequest, results <-chan fetchResult, ready func()) error {
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
-			if err := collectTickWithFetch(ctx, homeDir, dbPath, stateDir, out, offline, fetch); err != nil {
+		case request := <-requests:
+			dedupe, _, _, err := PassivePolicy()
+			if err == nil {
+				err = persistPassive(ctx, dbPath, dedupe, request.Windows)
+			}
+			select {
+			case request.Done <- err:
+			case <-ctx.Done():
+			}
+		case result := <-results:
+			if result.err != nil {
+				return result.err
+			}
+			if err := persistUsage(ctx, homeDir, dbPath, stateDir, out, offline, result.summary); err != nil {
 				return err
 			}
+			ready()
 		}
 	}
+}
+
+func persistPassive(ctx context.Context, dbPath string, dedupe time.Duration, windows []usagestore.Window) error {
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	return store.WritePassive(ctx, dedupe, windows)
 }
 
 func collectTickWithFetch(ctx context.Context, homeDir, dbPath, stateDir string, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error)) error {
@@ -85,6 +168,10 @@ func collectTickWithFetch(ctx context.Context, homeDir, dbPath, stateDir string,
 	if err != nil {
 		return err
 	}
+	return persistUsage(ctx, homeDir, dbPath, stateDir, out, offline, summary)
+}
+
+func persistUsage(ctx context.Context, homeDir, dbPath, stateDir string, out io.Writer, offline bool, summary UsageSummary) error {
 	if err := PersistUsageSummary(ctx, homeDir, dbPath, summary); err != nil {
 		return err
 	}
