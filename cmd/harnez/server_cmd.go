@@ -138,6 +138,9 @@ func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.Sy
 }
 
 func localServerPID(ctx context.Context, cfg server.Config, socket string) int {
+	if pid, err := socketPeerPID(socket); err == nil {
+		return pid
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/status", nil)
 	if err != nil {
 		return 0
