@@ -1,6 +1,6 @@
 # 826 — harnez release --continue re-uploads assets that already exist on the release
 
-**Status**: Open — M2 pre-work from host review
+**Status**: Closed — Fixed in 4ade5768: completeDist resolves GoReleaser raw binaries through artifacts.json; the real v0.1.32 dist passed a read-only dry check, and lint plus all requested tests passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -49,3 +49,16 @@ signed dist set.
   minisig/archives -> rebuild. Add a test fixture shaped like the real dist (binaries in subdirs).
 - Verify against the real `dist/` (read-only, no publish): add a dry check or test helper and show
   `completeDist` returns true for the current v0.1.32 dist.
+
+## M2 Delivery
+
+- Fixed in `4ade5768`: checksum names resolve through `dist/artifacts.json` to the actual
+  GoReleaser paths, including raw binaries under platform subdirectories. Manifest paths are
+  constrained to the project directory; missing signatures or files still trigger rebuilding.
+- Added a real-shaped fixture with two nested raw binaries, a versioned archive, checksum
+  manifest, signature, and artifact path manifest. The test confirms the set is complete.
+- Read-only check of the current v0.1.32 distribution passed:
+  `./harnez release --dir . --continue --dry-run --skip-sign --skip-publish --skip-push`
+  reported `Complete signed dist for 0.1.32 exists, skipped build and signing`.
+- Passed: `make lint`, `go test ./internal/release ./cmd/harnez`, `make test-short`, and
+  `make install`. No release or remote publish was run.
