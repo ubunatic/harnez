@@ -29,3 +29,7 @@ session warning and refusal, including the suggested rating command.
 - Document the rating step before session deletion in lean-sprint teardown.
 - Ensure teardown handles the rating result before proceeding with deletion.
 - Verify the skill instructions consistently describe the rating-then-delete sequence.
+
+## Evidence (2026-10-20)
+uman sprint 037: `harnez agent delete --name <dev>` refused with "refusing to delete unrated
+session without --force"; the skill teardown did not mention rating, so the session was left.
