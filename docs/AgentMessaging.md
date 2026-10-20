@@ -19,8 +19,25 @@ without transcribing their work.
 | CLI, Claude, AGY → Codex | `harnez agent send` → `codex queue` | proven (680, 25c6e837); `queued` |
 | CLI, Claude, Codex → AGY | `harnez agent send` → `harnez-agy` supervisor inbox queue (`\x1b[200~...\x1b[201~\r`) | proven (758, eb37d24b, 6a19c3ee); idle-gated, typing-guarded; `queued` |
 
-Not used: hooks (inject only on prompt/tool events, no idle wake-up), plain MCP (cannot push),
-SDK `--resume` (stopped sessions), Claude's private `cc-socks` sockets (undocumented).
+Live routes take priority over registry exec workers with the same name. Batch workers use the
+durable registry queue described below.
+
+Not used for live delivery: hooks (inject only on prompt/tool events, no idle wake-up), plain MCP
+(cannot push), SDK `--resume`, Claude's private `cc-socks` sockets (undocumented).
+
+## Exec worker queue (815)
+
+- `harnez agent send --name <worker> "<message>"` falls back to an exact name in the current
+  `--store-dir` only when no live route matches. `--dir` filters registry candidates too.
+  Duplicate names fail with candidate IDs; completed and deleted sessions fail clearly.
+- A running, failed, or stopped exec worker stores sender-labeled messages in FIFO order on its
+  session record. Success prints `queued for next turn of <name>`. `--wait` requires live Claude.
+- Batch workers (`codex exec`, `claude -p`, and other exec providers) have no turn-boundary hook.
+  Delivery occurs on the next explicit `harnez agent resume --name <worker> "<prompt>"` only.
+  Queued messages precede the prompt; they do not interrupt or automatically restart the worker.
+- Successful resume clears only its queue snapshot in the same atomic write that records the
+  turn. Failed resume retains it. Sends arriving during resume remain for a later resume;
+  registry writes share a flock so ordinary session updates cannot drop or resurrect messages.
 
 ## Claude channel design (740)
 

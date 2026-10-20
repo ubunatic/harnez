@@ -204,6 +204,8 @@ func agyStoreSessions(storeDir string) []*subagent.Session {
 	return sessions
 }
 
+type unknownLiveSendTarget struct{ error }
+
 func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelIdentity, threads []channel.CodexThread, agySessions []*subagent.Session, name, id, dir string) (agentSendTarget, error) {
 	wantDir := ""
 	if dir != "" {
@@ -276,7 +278,11 @@ func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelId
 	if len(matches) > 1 {
 		reason = "ambiguous"
 	}
-	return agentSendTarget{}, fmt.Errorf("%s agent send target %q; live candidates:\n  %s", reason, name+id, strings.Join(candidates, "\n  "))
+	err := fmt.Errorf("%s agent send target %q; live candidates:\n  %s", reason, name+id, strings.Join(candidates, "\n  "))
+	if len(matches) == 0 {
+		return agentSendTarget{}, &unknownLiveSendTarget{err}
+	}
+	return agentSendTarget{}, err
 }
 
 func liveAgentNames(endpoints []channel.Endpoint, identities []channelIdentity, threads []channel.CodexThread, agySessions []*subagent.Session, dir string) []string {
@@ -384,8 +390,8 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 	var wait bool
 	var timeout time.Duration
 	cmd := &cobra.Command{
-		Use: "send (--name <session> | --id <session-id>) <message>", Short: "Send to a live Claude, Codex, or supervised AGY session",
-		Long: "Send to a live Claude channel, Codex session, or supervised AGY session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. AGY messages queue until the supervised session is idle. Only Claude supports --wait for optional receipt confirmation, which does not confirm task completion. Non-supervised AGY sessions cannot receive messages through this command.",
+		Use: "send (--name <session> | --id <session-id>) <message>", Short: "Send to a live session or queue for an exec worker",
+		Long: "Send to a live Claude channel, Codex session, or supervised AGY session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. AGY messages queue until the supervised session is idle. Only Claude supports --wait for optional receipt confirmation, which does not confirm task completion. If no live route matches, an exact registry exec session in --store-dir receives a durable queue message for its next explicit resume. Completed or deleted sessions cannot receive queued messages. Batch workers consume the queue on resume only, not during a running turn.",
 		Example: `  harnez agent send --name harnez-53ih "look at ticket 748 in harnez"
   harnez agent send --name agy-worker "please review this"
   harnez agent send --id 86443124-b692-49e4-ae92-942b0177664f --wait "please confirm"`,
@@ -432,11 +438,30 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 			}
 			target, err := resolveAgentSendTarget(endpoints, identities, threads, agySessions, *name, id, dir)
 			if err != nil {
+				var unknown *unknownLiveSendTarget
+				if !errors.As(err, &unknown) {
+					return err
+				}
 				for _, session := range allAgySessions {
-					if session.Provider == "agy" && ((id != "" && (id == session.ID || id == session.ProviderID())) || (*name != "" && *name == session.Name)) {
+					if session.Provider == "agy" && session.HarnessType != "harnez" && ((id != "" && (id == session.ID || id == session.ProviderID())) || (*name != "" && *name == session.Name)) {
 						return fmt.Errorf("AGY session %q is not supervised; use harnez-agy --meter for live delivery or harnez agent resume", session.Name)
 					}
 				}
+				if *name == "" {
+					return err
+				}
+				if wait {
+					return fmt.Errorf("--wait is supported only for live Claude sessions")
+				}
+				store, storeErr := subagent.OpenSessionStore(*storeDir)
+				if storeErr != nil {
+					return storeErr
+				}
+				sess, queueErr := store.QueueMessage(*name, dir, channelSender(cfg, identities, currentHostSession()), message)
+				if queueErr != nil {
+					return fmt.Errorf("%w; %v", queueErr, err)
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "queued for next turn of %s\n", sess.Name)
 				return err
 			}
 			encoder := json.NewEncoder(cmd.OutOrStdout())

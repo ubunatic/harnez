@@ -166,6 +166,14 @@ func TestAgentSendAcceptedAndOptionalWait(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(cfg.ClaudeMetadataDir, "target.json"), []byte(`{"sessionId":"target","name":"target-name"}`), 0600); err != nil {
 				t.Fatal(err)
 			}
+			storeDir := t.TempDir()
+			store, err := subagent.NewSessionStore(storeDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Save(&subagent.Session{ID: "registry-worker", Name: "target-name", Provider: "codex", Status: "running", HarnessType: "harnez"}); err != nil {
+				t.Fatal(err)
+			}
 			cmd := newAgentCmd()
 			cmd.PersistentPreRunE = func(c *cobra.Command, _ []string) error { return guardLeafRole(c.Name()) }
 			var out bytes.Buffer
@@ -182,8 +190,12 @@ func TestAgentSendAcceptedAndOptionalWait(t *testing.T) {
 			case "received", "timeout", "old-server":
 				args = append(args, "--wait", "--timeout", "25ms")
 			}
-			cmd.SetArgs(args)
+			cmd.SetArgs(append(args, "--store-dir", storeDir))
 			err = cmd.ExecuteContext(context.Background())
+			worker, getErr := store.Get("registry-worker")
+			if getErr != nil || len(worker.PendingMessages) != 0 {
+				t.Fatalf("live send used registry fallback: %#v, %v", worker, getErr)
+			}
 			if mode == "no-target" {
 				if err == nil || !strings.Contains(err.Error(), "live sessions:\n  target-name\n") || strings.Contains(err.Error(), "  target\n") || delivered != "" {
 					t.Fatalf("no-target error: %v (delivered %q)", err, delivered)

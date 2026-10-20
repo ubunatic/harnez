@@ -829,6 +829,13 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return fmt.Errorf("could not persist running state for session %q: %w", sess.Name, err)
 		}
 	}
+	queuedSession, err := s.Get(sess.ID)
+	if err != nil {
+		return err
+	}
+	queuedMessages := queuedSession.PendingMessages
+	req.Prompt = subagent.PrependQueuedMessages(queuedMessages, req.Prompt)
+	resumeTurn.Opts.Prompt = req.Prompt
 	turnStarted := time.Now().UTC()
 	warnModelQuota(cmd, d.availability, sess.Provider, sess.Model, turnStarted.Local())
 	beforeCapture, stopCapture := startTurnQuotaCapture(ctx, d.quota, sess.Provider)
@@ -939,7 +946,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	storeTurnQuota(d.dbPath, sess.ID, sess.Provider, turn, "before", before)
 	recordTurnQuota(d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 	persistAgentTurnTokens(d.dbPath, sess, r, sess.LastActiveAt)
-	if err = s.Save(sess); err != nil {
+	if err = s.SaveQueuedTurn(sess, queuedMessages); err != nil {
 		return err
 	}
 	if streaming {

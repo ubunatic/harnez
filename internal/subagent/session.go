@@ -69,10 +69,11 @@ type Session struct {
 	StdoutLog               string           `json:"stdout_log,omitempty"`
 	StderrLog               string           `json:"stderr_log,omitempty"`
 	externalRolloutPath     string
-	ResumeFailures          int           `json:"resume_failures,omitempty"`
-	Turn                    int           `json:"turn,omitempty"`
-	TurnRecords             []TurnRecord  `json:"turn_records,omitempty"`
-	ReplyHistory            []ReplyRecord `json:"reply_history"`
+	ResumeFailures          int             `json:"resume_failures,omitempty"`
+	Turn                    int             `json:"turn,omitempty"`
+	TurnRecords             []TurnRecord    `json:"turn_records,omitempty"`
+	ReplyHistory            []ReplyRecord   `json:"reply_history"`
+	PendingMessages         []QueuedMessage `json:"pending_messages,omitempty"`
 }
 
 // CodexQuarantine records the bounded failed probe after a quota interruption.
@@ -200,6 +201,11 @@ func DefaultStoreDir() string {
 
 // Save persists a session to disk.
 func (s *FileSessionStore) Save(sess *Session) error {
+	return s.saveQueued(sess, nil, false)
+}
+
+// save writes the session atomically. Callers must hold the registry lock.
+func (s *FileSessionStore) save(sess *Session) error {
 	if sess.ID == "" {
 		return fmt.Errorf("session must have an ID")
 	}
@@ -334,6 +340,11 @@ func (s *FileSessionStore) listFrom(dir, parentID string, allSessions bool) ([]*
 
 // Delete removes a session file.
 func (s *FileSessionStore) Delete(id string) error {
+	unlock, err := s.lockRegistry()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	path := filepath.Join(s.dir, id+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
