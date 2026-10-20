@@ -833,4 +833,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 832 | [832-lean-sprint-handoff-lists-old-vs-new-lines-for-output-changes.md](832-lean-sprint-handoff-lists-old-vs-new-lines-for-output-changes.md) | lean-sprint: handoff lists old vs new lines for output changes | Open |
 | 833 | [833-usage-w-exits-on-arrow-keys-only-q-and-ctrl-c-may-quit.md](833-usage-w-exits-on-arrow-keys-only-q-and-ctrl-c-may-quit.md) | usage -w exits on arrow keys; only q and Ctrl-C may quit | Open |
 | 834 | [834-lean-sprint-developer-runs-the-real-deploy-or-host-command-once-before-committing.md](834-lean-sprint-developer-runs-the-real-deploy-or-host-command-once-before-committing.md) | lean-sprint: developer runs the real deploy or host command once before committing | Open |
-| 835 | [835-lean-sprint-allow-agy-argon-low-as-architect-tier.md](835-lean-sprint-allow-agy-argon-low-as-architect-tier.md) | lean-sprint: allow agy:argon:low as architect tier | Draft |
+| 835 | [835-lean-sprint-allow-agy-argon-low-as-architect-tier.md](835-lean-sprint-allow-agy-argon-low-as-architect-tier.md) | lean-sprint: allow agy:argon:low as architect tier | Open |
