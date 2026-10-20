@@ -51,6 +51,17 @@ on every prompt or render and must stay fast. With one writer, the collector, lo
   `docs/UsageCollection.md` (and `docs/HarnezComponents.md`): `harnez server` is the single writer;
   `usage` reads read-only and auto-starts the server; observers POST and drop on failure (usage) or
   spool (telemetry, M3); one server per host on the spec port; systemd service per 831.
+- **M2 committed in 8fbc23f8, not accepted (live write fails).** Host check 22:55, server restarted on
+  the installed 8fbc23f8 binary, `/status` ok: every valid `POST /usage/passive` (e.g. `{"Windows":[{
+  "Provider":"claude","Key":"five_hour","Source":"probe","ObservedAt":"<now>","UsedFraction":0.42}]}`)
+  returns `503 collector write failed` within ~1 ms. It is not lock contention, which would wait out
+  the busy timeout. The M1 server failed the same way, so M1's tests also missed it.
+  **M2 rework:** (a) the server logs the write error (stderr, and a log file under the state dir when
+  detached) instead of only answering 503; (b) find and fix the cause; (c) add a test that posts
+  through the real HTTP route into a real store opened the way `harnez server` opens it in production
+  (real path setup, schema and migrations), then reads the row back; (d) live: restart the server
+  from the installed binary, POST, and query the row read-only. Also decide whether the wire format should
+  have lower-case JSON tags; if so, change it in the handler, the client and the tests together.
 - **M3 — telemetry hooks on the server:** `rate`, `hook post-tool`/`hook agy` and `codex-telemetry` send
   their records to a server telemetry route instead of writing the DB. Decided (host, delegated by the
   user, 2026-10-20): when no server answers, telemetry records are **not dropped** but appended to a
