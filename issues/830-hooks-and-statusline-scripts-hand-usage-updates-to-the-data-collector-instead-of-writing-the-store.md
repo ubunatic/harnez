@@ -1,6 +1,6 @@
 # 830 — Hooks and statusline scripts hand usage updates to the data collector instead of writing the store
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture
