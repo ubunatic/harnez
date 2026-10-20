@@ -31,6 +31,17 @@ table, the truncated error text is noise to the user, and the lock seems to take
 - Uncertain: which writer holds the lock in the observed cases (collector vs. statusline vs. a
   concurrent `usage --watch`). Check `~/.harnez/debug.log` (`usage compact projection failed`).
 
+### Searcher findings (sprint 2026-10-20)
+- `usage` compact and `--watch` project via `storeCompactSummary` (`internal/usage/store.go:24-31,487-500`),
+  opening with `usagestore.Open`: WAL plus a **5s** busy timeout (`internal/usagestore/store.go:79-100`).
+  Statusline writers use a 25ms timeout (`internal/usage/passive.go:52-90`).
+- Writer transactions (`WriteCurrent`, `internal/usagestore/store.go:402-439`) do no network/file I/O.
+- There is no retry or last-known fallback (`internal/usage/store.go:613-633`). debug.log shows 13 failures,
+  the last ones on Oct 6, 8 and 9, all `SQLITE_BUSY`.
+- Open question: a WAL reader should not hit SQLITE_BUSY after 5s. Does the read path write
+  (schema migration in `Open`, mirror/compat writes, checkpoints)? Is the busy timeout actually applied to every
+  pooled connection? Find the real cause first.
+
 ## 3. Implementation & Verification Plan
 - Give the interactive read path a spec-configured busy timeout and/or a bounded retry; on
   failure show last-known data with one compact "store busy" note instead of per-row raw errors.
