@@ -1,6 +1,6 @@
 # harnez agent send: queue a message for exec-mode workers' next turn
 
-Status: Closed — Implemented durable exec-worker message queues consumed once on successful explicit resume; concurrent sends preserved, live routes retain priority; checks passed (b0b62e5e)
+Status: Open — M2 pre-work from host live check
 Priority: P3
 Category: Feature
 
@@ -27,3 +27,18 @@ Store the message on the session; `resume` prepends queued messages to the next 
 - Passed: `make lint`, `go test ./internal/subagent/ ./cmd/harnez/`, `make test-short`, `make install`.
   Updated `docs/AgentMessaging.md` and help goldens. Dedicated self-review completed; no delegation.
 - Host owns the live agent check; no live agent sessions were started by this leaf worker.
+
+## M2 Pre-Work / Required Refinements (host live check 2026-10-20)
+
+Live: `harnez agent start --name ping-815 --model flash38:low ...` then
+`harnez agent send --name ping-815 "..."` -> exit 1: `session "ping-815" cannot queue messages: status
+completed; unknown agent send target ...` followed by ~50 live Codex threads from all projects.
+
+1. Host task error (my spec said completed -> error): a batch session is `completed` between every turn;
+   that is exactly the state a queued message targets. Accept any resumable session (completed, idle,
+   running, failed-but-resumable); refuse only deleted/missing sessions or ones whose provider
+   session can no longer be resumed. Test with a completed batch session record.
+2. Unknown-target error: list at most ~10 candidates, prefer the current dir/store, and print
+   "(N more; use harnez agent list)" instead of every Codex thread on the machine.
+3. Then the host reruns: send, resume asks for the word (must contain it), second resume must not
+   see it again.
