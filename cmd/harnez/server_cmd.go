@@ -24,6 +24,8 @@ type usageCollectorService struct {
 	updateServer usage.PassiveUpdateServer
 }
 
+var serverBuildIdentity = server.CaptureBuildIdentity()
+
 func (s *usageCollectorService) Run(ctx context.Context) error {
 	return usage.RunCollectorWithRequests(ctx, "", s.client, s.interval, os.Stdout, s.offline, s.requests, func() { s.ready.Store(true) })
 }
@@ -68,5 +70,5 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 	}
 	requests := make(chan usage.PassiveRequest)
 	collector := &usageCollectorService{interval: interval, client: client, offline: offline, requests: requests, updateServer: usage.PassiveUpdateServer{Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}}
-	return (server.Server{Config: cfg, Version: harnez.Version, Services: []server.Service{collector}}).Run(ctx)
+	return (server.Server{Config: cfg, Version: harnez.Version, BuildIdentity: serverBuildIdentity, Services: []server.Service{collector}}).Run(ctx)
 }

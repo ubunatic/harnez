@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -132,7 +132,11 @@ func TestStatuslineSendsWindowsWithoutOpeningLockedStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	posted := make(chan struct{}, 1)
-	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "server.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Windows []usagestore.Window `json:"windows"`
 		}
@@ -142,13 +146,15 @@ func TestStatuslineSendsWindowsWithoutOpeningLockedStore(t *testing.T) {
 		posted <- struct{}{}
 		w.WriteHeader(http.StatusNoContent)
 	}))
+	collector.Listener = listener
+	collector.Start()
 	defer collector.Close()
 	path, err := PassiveUpdatePath()
 	if err != nil {
 		t.Fatal(err)
 	}
 	started := time.Now()
-	result := ObserveStatuslineTo(context.Background(), "claude", data, strings.TrimPrefix(collector.URL, "http://"), path, cfg.UpdateTimeout)
+	result := ObserveStatuslineTo(context.Background(), "claude", data, listener.Addr().String(), path, cfg.UpdateTimeout)
 	if elapsed := time.Since(started); elapsed > cfg.UpdateTimeout {
 		t.Fatalf("statusline took %s, update timeout %s", elapsed, cfg.UpdateTimeout)
 	}

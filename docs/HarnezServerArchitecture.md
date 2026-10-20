@@ -102,17 +102,19 @@ Provider drivers (`internal/subagent/driver.go`), session records and resume
 TUI job panel (`internal/tui/jobs/`). Session JSON uses atomic rename; that prevents torn reads
 but is not a transactional task log.
 
-**First service built (2026-10-20, issues 829-831):** `harnez server` (`internal/server`) runs the
-usage data collector as its first service and is the single writer of `telemetry.sqlite`. It binds
-a fixed localhost TCP port from `spec/server.yaml` (127.0.0.1:18729; a failed bind plus a `/status`
-probe is the one-per-host singleton), serves `GET /status` and `POST /usage/passive`, and services
-register their own routes. `harnez usage` is a read-only client that auto-starts the server;
-statusline and hooks POST updates. 831 installs it as a systemd user service.
+**First service built (2026-10-20, issues 829-831; transport converged in 837):** `harnez server`
+(`internal/server`) runs the usage data collector as its first service and is the single writer of
+`telemetry.sqlite`. It serves its HTTP routes over a Unix socket under `$XDG_RUNTIME_DIR/harnez/`
+(falling back to the state directory), with directory mode 0700 and socket mode 0600. The socket
+probe provides the singleton: stale sockets are replaced, foreign listeners are rejected, and a
+newer semver or equal-version newer build identity shuts down the old process before taking over.
+`/status` reports version and the executable mtime captured when that process started. Services
+register their own routes. `harnez usage` starts/probes the server; statusline and hooks POST updates.
+831 installs it as a systemd user service.
 
-Open divergence from this proposal, to settle before roadmap step 3 (issue 837): the proposal
-names the command `harnez serve` with a Unix socket and JSON-RPC; the built server is `harnez server`
-with HTTP on localhost TCP. Either converge (socket + JSON-RPC behind the same service interface) or
-amend the proposal.
+The built command remains `harnez server` and these local routes remain HTTP over the Unix socket.
+JSON-RPC remains the target for the later agent-session API (roadmap step 4), behind transport
+adapters; it is not required for usage collection.
 
 ## Roadmap
 

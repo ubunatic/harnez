@@ -1,6 +1,5 @@
 # yaml-language-server: $schema=schemas/server.schema.json
-host: 127.0.0.1
-port: 18729
+socket_path: server.sock
 read_header_timeout: 5s
 shutdown_timeout: 5s
 http_client_timeout: 5s
@@ -8,3 +7,4 @@ update_timeout: 100ms
 update_max_body_bytes: 65536
 startup_timeout: 30s
 startup_poll_interval: 100ms
+takeover_timeout: 5s

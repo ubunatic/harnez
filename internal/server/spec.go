@@ -3,7 +3,9 @@ package server
 import (
 	"fmt"
 	"io/fs"
-	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -11,20 +13,19 @@ import (
 )
 
 type Config struct {
-	Host               string        `yaml:"host"`
-	Port               int           `yaml:"port"`
-	ReadHeaderTimeout  time.Duration `yaml:"-"`
-	ShutdownTimeout    time.Duration `yaml:"-"`
-	HTTPClientTimeout  time.Duration `yaml:"-"`
-	UpdateTimeout      time.Duration `yaml:"-"`
-	UpdateMaxBodyBytes int64         `yaml:"-"`
-	StartupTimeout     time.Duration `yaml:"-"`
-	StartupPoll        time.Duration `yaml:"-"`
+	SocketPath         string
+	ReadHeaderTimeout  time.Duration
+	ShutdownTimeout    time.Duration
+	HTTPClientTimeout  time.Duration
+	UpdateTimeout      time.Duration
+	UpdateMaxBodyBytes int64
+	StartupTimeout     time.Duration
+	StartupPoll        time.Duration
+	TakeoverTimeout    time.Duration
 }
 
 type specConfig struct {
-	Host               string `yaml:"host"`
-	Port               int    `yaml:"port"`
+	SocketPath         string `yaml:"socket_path"`
 	ReadHeaderTimeout  string `yaml:"read_header_timeout"`
 	ShutdownTimeout    string `yaml:"shutdown_timeout"`
 	HTTPClientTimeout  string `yaml:"http_client_timeout"`
@@ -32,6 +33,7 @@ type specConfig struct {
 	UpdateMaxBodyBytes int64  `yaml:"update_max_body_bytes"`
 	StartupTimeout     string `yaml:"startup_timeout"`
 	StartupPoll        string `yaml:"startup_poll_interval"`
+	TakeoverTimeout    string `yaml:"takeover_timeout"`
 }
 
 func LoadConfig() (Config, error) {
@@ -43,24 +45,22 @@ func LoadConfig() (Config, error) {
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return Config{}, err
 	}
-	if raw.Host != "127.0.0.1" || raw.Port < 1 || raw.Port > 65535 {
-		return Config{}, fmt.Errorf("spec/server.yaml: host must be 127.0.0.1 and port must be 1..65535")
+	if raw.SocketPath == "" || filepath.IsAbs(raw.SocketPath) || strings.Contains(raw.SocketPath, "..") || filepath.Base(raw.SocketPath) != raw.SocketPath {
+		return Config{}, fmt.Errorf("spec/server.yaml: socket_path must be a filename")
 	}
-	cfg := Config{Host: raw.Host, Port: raw.Port}
-	cfg.UpdateMaxBodyBytes = raw.UpdateMaxBodyBytes
+	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes}
 	if cfg.UpdateMaxBodyBytes <= 0 {
 		return Config{}, fmt.Errorf("spec/server.yaml: update_max_body_bytes must be positive")
 	}
 	for _, item := range []struct{ name, value string }{
 		{"read_header_timeout", raw.ReadHeaderTimeout}, {"shutdown_timeout", raw.ShutdownTimeout}, {"http_client_timeout", raw.HTTPClientTimeout},
-		{"update_timeout", raw.UpdateTimeout}, {"startup_timeout", raw.StartupTimeout}, {"startup_poll_interval", raw.StartupPoll},
+		{"update_timeout", raw.UpdateTimeout}, {"startup_timeout", raw.StartupTimeout}, {"startup_poll_interval", raw.StartupPoll}, {"takeover_timeout", raw.TakeoverTimeout},
 	} {
-		name, value := item.name, item.value
-		d, err := time.ParseDuration(value)
+		d, err := time.ParseDuration(item.value)
 		if err != nil || d <= 0 {
-			return Config{}, fmt.Errorf("spec/server.yaml: %s must be a positive duration", name)
+			return Config{}, fmt.Errorf("spec/server.yaml: %s must be a positive duration", item.name)
 		}
-		switch name {
+		switch item.name {
 		case "read_header_timeout":
 			cfg.ReadHeaderTimeout = d
 		case "shutdown_timeout":
@@ -73,9 +73,35 @@ func LoadConfig() (Config, error) {
 			cfg.StartupTimeout = d
 		case "startup_poll_interval":
 			cfg.StartupPoll = d
+		case "takeover_timeout":
+			cfg.TakeoverTimeout = d
 		}
 	}
 	return cfg, nil
 }
 
-func (c Config) Address() string { return net.JoinHostPort(c.Host, fmt.Sprint(c.Port)) }
+func (c Config) Socket() (string, error) {
+	base := os.Getenv("XDG_RUNTIME_DIR")
+	if !filepath.IsAbs(base) {
+		base = os.Getenv("XDG_STATE_HOME")
+		if !filepath.IsAbs(base) {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return "", err
+			}
+			base = filepath.Join(home, ".local", "state")
+		}
+	}
+	dir := filepath.Join(base, "harnez")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, c.SocketPath)
+	if len(path) >= 108 {
+		return "", fmt.Errorf("Unix socket path exceeds 107 bytes: %s", path)
+	}
+	return path, nil
+}

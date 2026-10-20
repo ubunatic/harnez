@@ -56,9 +56,6 @@ func loadLocalUsage(ctx context.Context, offline bool) (usage.UsageSummary, erro
 }
 
 func (s serverStarter) ensure(ctx context.Context, cfg server.Config) error {
-	if s.probe(ctx, cfg) {
-		return nil
-	}
 	if err := s.start(); err != nil {
 		return fmt.Errorf("start harnez server: %w", err)
 	}
@@ -75,8 +72,12 @@ func (s serverStarter) ensure(ctx context.Context, cfg server.Config) error {
 }
 
 func probeHarnezServer(ctx context.Context, cfg server.Config) bool {
-	client := &http.Client{Timeout: cfg.HTTPClientTimeout}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+cfg.Address()+"/status", nil)
+	socket, err := cfg.Socket()
+	if err != nil {
+		return false
+	}
+	client := server.UnixHTTPClient(socket, cfg.HTTPClientTimeout)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/status", nil)
 	if err != nil {
 		return false
 	}
@@ -86,11 +87,12 @@ func probeHarnezServer(ctx context.Context, cfg server.Config) bool {
 	}
 	defer resp.Body.Close()
 	var status struct {
-		Health  string `json:"health"`
-		Server  string `json:"server"`
-		Version string `json:"version"`
+		Health        string `json:"health"`
+		Server        string `json:"server"`
+		Version       string `json:"version"`
+		BuildIdentity string `json:"build_identity"`
 	}
-	return resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(&status) == nil && status.Health == "ok" && status.Server == "harnez" && status.Version != ""
+	return resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(&status) == nil && status.Health == "ok" && status.Server == "harnez" && status.Version != "" && status.BuildIdentity != ""
 }
 
 func startDetachedServer() error {

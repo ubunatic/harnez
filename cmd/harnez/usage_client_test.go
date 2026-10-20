@@ -20,19 +20,19 @@ func TestEnsureLocalServerStartsOnceAndWaitsForReady(t *testing.T) {
 	if err := starter.ensure(context.Background(), cfg); err != nil {
 		t.Fatal(err)
 	}
-	if starts != 1 || probes != 3 || waits != 1 {
+	if starts != 1 || probes != 3 || waits != 2 {
 		t.Fatalf("starts=%d probes=%d waits=%d", starts, probes, waits)
 	}
 }
 
-func TestEnsureLocalServerDoesNotStartHealthyServer(t *testing.T) {
+func TestEnsureLocalServerChecksAndKeepsHealthyServer(t *testing.T) {
 	starts := 0
 	starter := serverStarter{probe: func(context.Context, server.Config) bool { return true }, start: func() error { starts++; return nil }}
 	if err := starter.ensure(context.Background(), server.Config{}); err != nil {
 		t.Fatal(err)
 	}
-	if starts != 0 {
-		t.Fatalf("start called %d times", starts)
+	if starts != 1 {
+		t.Fatalf("start called %d times, want one version check", starts)
 	}
 }
 

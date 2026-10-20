@@ -5,8 +5,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -208,12 +208,17 @@ func TestAGYStatuslineLockedStoreStillPrintsWithinBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	started := make(chan struct{})
-	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "server.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		close(started)
 		http.Error(w, "collector busy", http.StatusServiceUnavailable)
-	}))
+	})}
+	go func() { _ = collector.Serve(listener) }()
 	defer collector.Close()
-	address := strings.TrimPrefix(collector.URL, "http://")
+	address := listener.Addr().String()
 	path, err := usage.PassiveUpdatePath()
 	if err != nil {
 		t.Fatal(err)

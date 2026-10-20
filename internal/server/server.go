@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
-	"syscall"
+	"time"
+
+	"golang.org/x/mod/semver"
 )
 
 type Service interface{ Run(context.Context) error }
@@ -16,37 +20,55 @@ type readiness interface{ Ready() bool }
 type RouteRegistrar interface{ RegisterRoutes(*http.ServeMux) }
 
 type Server struct {
-	Config   Config
-	Version  string
-	Services []Service
+	Config        Config
+	Version       string
+	BuildIdentity string
+	Services      []Service
+	Output        io.Writer
+}
+
+type statusInfo struct {
+	Health        string `json:"health"`
+	Server        string `json:"server"`
+	Version       string `json:"version"`
+	BuildIdentity string `json:"build_identity"`
+}
+
+func CaptureBuildIdentity() string {
+	path, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	return info.ModTime().UTC().Format(time.RFC3339Nano)
 }
 
 func (s Server) Run(ctx context.Context) error {
-	if s.Config.Host != "127.0.0.1" {
-		return fmt.Errorf("server must bind to 127.0.0.1")
-	}
-	listener, err := net.Listen("tcp", s.Config.Address())
+	socket, err := s.Config.Socket()
 	if err != nil {
-		if isAddressInUse(err) {
-			client := &http.Client{Timeout: s.Config.HTTPClientTimeout}
-			resp, probeErr := client.Get("http://" + s.Config.Address() + "/status")
-			if probeErr == nil {
-				defer resp.Body.Close()
-				var status struct {
-					Health  string `json:"health"`
-					Version string `json:"version"`
-					Server  string `json:"server"`
-				}
-				if json.NewDecoder(resp.Body).Decode(&status) == nil && status.Server == "harnez" && strings.TrimSpace(status.Version) != "" && ((resp.StatusCode == http.StatusOK && status.Health == "ok") || (resp.StatusCode == http.StatusServiceUnavailable && status.Health == "starting")) {
-					fmt.Println("harnez server already running")
-					return nil
-				}
-			}
-			return fmt.Errorf("cannot start harnez server: %s is in use by another program (status probe failed)", s.Config.Address())
+		return err
+	}
+	identity := s.BuildIdentity
+	if identity == "" {
+		identity = CaptureBuildIdentity()
+	}
+	if err := s.claimExisting(ctx, socket, identity); err != nil {
+		if errors.Is(err, errAlreadyRunning) {
+			return nil
 		}
-		return fmt.Errorf("listen on %s: %w", s.Config.Address(), err)
+		return err
+	}
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		return fmt.Errorf("listen on %s: %w", socket, err)
 	}
 	defer listener.Close()
+	if err := os.Chmod(socket, 0600); err != nil {
+		return err
+	}
 	mux := http.NewServeMux()
 	ready := func() bool {
 		for _, service := range s.Services {
@@ -56,7 +78,15 @@ func (s Server) Run(ctx context.Context) error {
 		}
 		return true
 	}
-	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) { statusHandlerReady(s.Version, ready()).ServeHTTP(w, r) })
+	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) { writeStatus(w, s.Version, identity, ready()) })
+	shutdown := make(chan struct{}, 1)
+	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		select {
+		case shutdown <- struct{}{}:
+		default:
+		}
+	})
 	for _, service := range s.Services {
 		if registrar, ok := service.(RouteRegistrar); ok {
 			registrar.RegisterRoutes(mux)
@@ -74,6 +104,7 @@ func (s Server) Run(ctx context.Context) error {
 	var result error
 	select {
 	case <-ctx.Done():
+	case <-shutdown:
 	case err := <-serveErr:
 		if !errors.Is(err, http.ErrServerClosed) {
 			result = err
@@ -92,24 +123,98 @@ func (s Server) Run(ctx context.Context) error {
 	return result
 }
 
-func isAddressInUse(err error) bool {
-	return errors.Is(err, syscall.EADDRINUSE)
-}
-
-func statusHandler(version string) http.HandlerFunc {
-	return statusHandlerReady(version, true)
-}
-
-func statusHandlerReady(version string, ready bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if !ready {
-			w.WriteHeader(http.StatusServiceUnavailable)
-		}
-		health := "ok"
-		if !ready {
-			health = "starting"
-		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"health": health, "server": "harnez", "version": version})
+func (s Server) claimExisting(ctx context.Context, socket, identity string) error {
+	if _, err := os.Lstat(socket); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
 	}
+	client := UnixHTTPClient(socket, s.Config.HTTPClientTimeout)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/status", nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		return removeStaleSocket(socket)
+	}
+	defer resp.Body.Close()
+	var status statusInfo
+	if json.NewDecoder(resp.Body).Decode(&status) != nil || status.Server != "harnez" || strings.TrimSpace(status.Version) == "" || status.BuildIdentity == "" || (resp.StatusCode == http.StatusOK && status.Health != "ok") || (resp.StatusCode == http.StatusServiceUnavailable && status.Health != "starting") || (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusServiceUnavailable) {
+		return fmt.Errorf("cannot start harnez server: %s is in use by another program", socket)
+	}
+	if compareBuild(s.Version, identity, status.Version, status.BuildIdentity) <= 0 {
+		out := s.Output
+		if out == nil {
+			out = os.Stdout
+		}
+		fmt.Fprintf(out, "already running (v%s)\n", status.Version)
+		return errAlreadyRunning
+	}
+	shutdownReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://unix/shutdown", nil)
+	shutdownResp, err := client.Do(shutdownReq)
+	if err != nil {
+		return fmt.Errorf("request old harnez server shutdown: %w", err)
+	}
+	shutdownResp.Body.Close()
+	if shutdownResp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("old harnez server rejected shutdown: HTTP %d", shutdownResp.StatusCode)
+	}
+	timer := time.NewTimer(s.Config.TakeoverTimeout)
+	defer timer.Stop()
+	for {
+		if _, err := os.Lstat(socket); errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return fmt.Errorf("old harnez server did not release socket within %s", s.Config.TakeoverTimeout)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+var errAlreadyRunning = errors.New("already running")
+
+func removeStaleSocket(socket string) error {
+	if err := os.Remove(socket); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove stale server socket: %w", err)
+	}
+	return nil
+}
+
+func compareBuild(versionA, identityA, versionB, identityB string) int {
+	a, b := versionA, versionB
+	if !strings.HasPrefix(a, "v") {
+		a = "v" + a
+	}
+	if !strings.HasPrefix(b, "v") {
+		b = "v" + b
+	}
+	if semver.IsValid(a) && semver.IsValid(b) {
+		if cmp := semver.Compare(a, b); cmp != 0 {
+			return cmp
+		}
+	}
+	if identityA > identityB {
+		return 1
+	}
+	if identityA < identityB {
+		return -1
+	}
+	return 0
+}
+
+func writeStatus(w http.ResponseWriter, version, identity string, ready bool) {
+	w.Header().Set("Content-Type", "application/json")
+	code, health := http.StatusOK, "ok"
+	if !ready {
+		code, health = http.StatusServiceUnavailable, "starting"
+	}
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity})
+}
+
+func statusHandler(version string) http.HandlerFunc { return statusHandlerReady(version, true) }
+func statusHandlerReady(version string, ready bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) { writeStatus(w, version, "test-identity", ready) }
 }

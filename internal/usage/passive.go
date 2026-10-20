@@ -40,7 +40,11 @@ func ObserveStatusline(parent context.Context, provider string, payload []byte) 
 	if err != nil {
 		return
 	}
-	_ = ObserveStatuslineTo(parent, provider, payload, cfg.Address(), path, cfg.UpdateTimeout)
+	socket, err := cfg.Socket()
+	if err != nil {
+		return
+	}
+	_ = ObserveStatuslineTo(parent, provider, payload, socket, path, cfg.UpdateTimeout)
 }
 
 func ObserveStatuslineTo(parent context.Context, provider string, payload []byte, address, path string, timeout time.Duration) server.UpdateResult {
