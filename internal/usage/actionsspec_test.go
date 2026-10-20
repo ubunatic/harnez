@@ -104,7 +104,7 @@ func TestParseWatchActionsYAMLAcceptsAMinimalValidSpec(t *testing.T) {
 actions:
   quit:
     title: Quit
-    keys: ["q", "<c-c>", "<esc>"]
+    keys: ["q", "Q", "<c-c>"]
     symbol: "q"
     category: session
   toggle_load:
@@ -124,8 +124,11 @@ actions:
 	if wa.actionForKey(3) != "quit" {
 		t.Errorf("expected Ctrl-C (byte 3) to map to quit, got %q", wa.actionForKey(3))
 	}
-	if wa.actionForKey(27) != "quit" {
-		t.Errorf("expected Esc (byte 27) to map to quit, got %q", wa.actionForKey(27))
+	if wa.actionForKey('Q') != "quit" {
+		t.Errorf("expected 'Q' to map to quit, got %q", wa.actionForKey('Q'))
+	}
+	if wa.actionForKey(27) == "quit" {
+		t.Errorf("expected Esc (byte 27) not to map to quit")
 	}
 	if wa.actionForKey('7') != "toggle_load" {
 		t.Errorf("expected '7' to map to toggle_load, got %q", wa.actionForKey('7'))
@@ -147,7 +150,7 @@ func TestDecodeSpecKey(t *testing.T) {
 		ok   bool
 	}{
 		{"<c-c>", 3, true},
-		{"<esc>", 27, true},
+		{"<esc>", 0, false},
 		{"q", 'q', true},
 		{"1", '1', true},
 		{"", 0, false},

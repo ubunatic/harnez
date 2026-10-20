@@ -35,7 +35,6 @@ func TestWatchPTYLifecycle(t *testing.T) {
 		{"startup-q", "startup", 'q'},
 		{"startup-Q", "startup", 'Q'},
 		{"startup-ctrl-c", "startup", 3},
-		{"startup-escape", "startup", 27},
 		{"splash-startup-q", "splash-startup", 'q'},
 		{"splash-startup-Q", "splash-startup", 'Q'},
 		{"splash-startup-ctrl-c", "splash-startup", 3},

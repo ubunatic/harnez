@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"reflect"
 	"regexp"
@@ -1708,7 +1709,7 @@ func TestControlsOverlayListsAllActiveCommandsGroupedByPurpose(t *testing.T) {
 	// the single source of truth.
 	for _, key := range []string{
 		"[¹]", "[⁶]", "[⁷]", "[A]",
-		"[T]", "[m]", "[r]", "[q]",
+		"[T]", "[m]", "[r]", "[q/Q]",
 	} {
 		if !strings.Contains(plain, key) {
 			t.Errorf("expected overlay to document key %s, got:\n%s", key, plain)
@@ -1722,6 +1723,9 @@ func TestControlsOverlayListsAllActiveCommandsGroupedByPurpose(t *testing.T) {
 
 	if !strings.Contains(plain, "?") {
 		t.Errorf("expected overlay dismiss instructions to mention ?, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Ctrl-C") {
+		t.Errorf("expected overlay quit instructions to mention Ctrl-C, got:\n%s", plain)
 	}
 }
 
@@ -2113,10 +2117,7 @@ func TestDispatchWatchKeyModeCyclesAndKeepsShowProcesses(t *testing.T) {
 
 // TestDispatchSplashKeyEscSkipsNotQuits is issue 164's core dispatch
 // contract: Esc during the startup splash must abort only the splash wait,
-// never quit -- a deliberate deviation from dispatchWatchKey, where Esc is
-// one of the quit keys once the splash has ended (see
-// TestDispatchWatchKeyEscQuitsOnMainDashboard below for that unchanged
-// behavior).
+// never quit. A lone Esc has no quit meaning after the splash either.
 func TestDispatchSplashKeyEscSkipsNotQuits(t *testing.T) {
 	eff := dispatchSplashKey(27)
 	if !eff.skip {
@@ -2152,15 +2153,78 @@ func TestDispatchSplashKeyOtherKeysAreNoOps(t *testing.T) {
 	}
 }
 
-// TestDispatchWatchKeyEscQuitsOnMainDashboard pins down that this ticket's
-// splash-only Esc deviation does not leak into the main dashboard: once
-// splash has ended, dispatchWatchKey's existing Esc/quit mapping (watch.go
-// dispatchWatchKey) must be unchanged.
-func TestDispatchWatchKeyEscQuitsOnMainDashboard(t *testing.T) {
+// TestDispatchWatchKeyEscDoesNotQuitOnMainDashboard covers issue 833: a lone
+// Esc is ignored on the main dashboard and closes overlays without quitting.
+func TestDispatchWatchKeyEscDoesNotQuitOnMainDashboard(t *testing.T) {
 	st := watchKeyState{sec: defaultWatchSections()}
 	_, eff := dispatchWatchKey(st, 27, false)
-	if !eff.quit {
-		t.Fatalf("expected Esc on the main dashboard to still quit, got %+v", eff)
+	if eff.quit || eff.redraw || eff.fetch {
+		t.Fatalf("expected lone Esc on the main dashboard to do nothing, got %+v", eff)
+	}
+
+	opened, _ := dispatchWatchKey(st, '?', false)
+	closed, eff := dispatchWatchKey(opened, 27, false)
+	if closed.overlayOpen || !eff.redraw || eff.quit {
+		t.Fatalf("expected lone Esc to close the overlay without quitting, state=%+v effect=%+v", closed, eff)
+	}
+}
+
+func TestReadWatchKeyEscapeSequencesAreSingleIgnoredKeys(t *testing.T) {
+	sequences := []string{
+		"\x1b[A", "\x1b[B", "\x1b[C", "\x1b[D",
+		"\x1b[H", "\x1b[F", "\x1b[5~", "\x1b[6~", "\x1bOP",
+	}
+	for _, sequence := range sequences {
+		t.Run(sequence, func(t *testing.T) {
+			key, err := readWatchKey(bytes.NewReader([]byte(sequence)))
+			if err != nil {
+				t.Fatalf("readWatchKey(%q): %v", sequence, err)
+			}
+			if key != 0 {
+				t.Fatalf("expected %q to be consumed as one ignored key, got %q", sequence, key)
+			}
+		})
+		// Each Read returns at most one byte, including Esc by itself before
+		// the remainder, reproducing terminal escape sequences split by reads.
+		reader := io.MultiReader(bytes.NewReader([]byte("\x1b")), bytes.NewReader([]byte(sequence[1:])))
+		key, err := readWatchKey(reader)
+		if err != nil || key != 0 {
+			t.Errorf("split read of %q: key=%q err=%v, want ignored key", sequence, key, err)
+		}
+	}
+}
+
+func TestReadWatchKeyLoneEscapeAndQuitKeys(t *testing.T) {
+	key, err := readWatchKey(bytes.NewReader([]byte{27}))
+	if err != nil || key != 27 {
+		t.Fatalf("expected lone Esc to be returned for overlay handling, key=%q err=%v", key, err)
+	}
+	for _, key := range []byte{'q', 'Q', 3} {
+		got, err := readWatchKey(bytes.NewReader([]byte{key}))
+		if err != nil || got != key {
+			t.Errorf("expected quit key %q to pass through, got %q err=%v", key, got, err)
+		}
+	}
+}
+
+func TestReadWatchKeyBracketedPasteCannotTriggerQuit(t *testing.T) {
+	input := "\x1b[200~qQ\x03\x1b[A\x1b[201~"
+	reader := bytes.NewReader([]byte(input))
+	key, err := readWatchKey(reader)
+	if err != nil || key != 0 {
+		t.Fatalf("expected pasted content to be consumed as one ignored key, got key=%q err=%v", key, err)
+	}
+	if _, err := reader.ReadByte(); err != io.EOF {
+		t.Fatalf("expected the full paste, including embedded quit keys, to be consumed; next read err=%v", err)
+	}
+}
+
+func TestDispatchWatchKeyOnlyQuitKeysQuit(t *testing.T) {
+	for _, key := range []byte{'q', 'Q', 3} {
+		_, eff := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, key, false)
+		if !eff.quit {
+			t.Errorf("expected key %q to quit, got %+v", key, eff)
+		}
 	}
 }
 

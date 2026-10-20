@@ -117,7 +117,7 @@ func controlsOverlayLines() []string {
 	l = append(l, fmt.Sprintf("  [%s]              toggle remote/local host (when a host is configured)", sym("toggle_remote")))
 	l = append(l, fmt.Sprintf("  [%s]              open/close fetch diagnostics", sym("toggle_diagnostics")))
 	l = append(l, fmt.Sprintf("  [%s]              toggle per-agent freshness countdown gauge (All Usage panel)", sym("toggle_debug_overlay")))
-	l = append(l, fmt.Sprintf("  [%s] / Ctrl-C / Esc   quit", sym("quit")))
+	l = append(l, fmt.Sprintf("  [%s/Q] / Ctrl-C   quit", sym("quit")))
 	l = append(l, "")
 	l = append(l, dim("[a] is a compat alias for All Usage's [1]. The footer only shows the"))
 	l = append(l, dim("most common controls — this overlay is the full reference, sourced"))
@@ -330,7 +330,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		wa := mustWatchActions()
 		footer = []string{
 			"",
-			fmt.Sprintf("refresh every %s   %s[%s]controls  [%s]ode  [%s]emote  [%s]uit\x1b[0m",
+			fmt.Sprintf("refresh every %s   %s[%s]controls  [%s]ode  [%s]emote  [%s/Q]uit\x1b[0m",
 				interval, ansiDimGrey, wa.symbol("toggle_controls"), wa.symbol("cycle_preset"), wa.symbol("toggle_remote"), wa.symbol("quit")),
 		}
 	}

@@ -11,7 +11,6 @@
 # Key tokens: a single literal character ("q", "1", "?"), or one of the
 # bracketed control tokens below for non-printable keys:
 #   <c-c>  - Ctrl-C (byte 3)
-#   <esc>  - Escape (byte 27)
 #
 # category:
 #   box     - toggles one top-level panel's visibility (superscript digit
@@ -74,8 +73,8 @@ actions:
     category: session
   quit:
     title: "Quit"
-    description: "Quit harnez usage --watch"
-    keys: ["q", "Q", "<c-c>", "<esc>"]
+    description: "Quit harnez usage --watch with q, Q or Ctrl-C"
+    keys: ["q", "Q", "<c-c>"]
     symbol: "q"
     category: session
   toggle_controls:

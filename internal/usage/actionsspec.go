@@ -51,13 +51,11 @@ var validBoxIDs = map[string]bool{
 
 // decodeSpecKey turns one spec key token into the byte RunWatchWithOptions's
 // tty reader compares keypresses against. Single-character tokens map
-// directly; the two bracketed tokens name non-printable control keys.
+// directly; <c-c> names the non-printable Ctrl-C key.
 func decodeSpecKey(tok string) (byte, bool) {
 	switch tok {
 	case "<c-c>":
 		return 3, true
-	case "<esc>":
-		return 27, true
 	}
 	if len(tok) == 1 {
 		return tok[0], true

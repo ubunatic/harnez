@@ -2,8 +2,10 @@ package usage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -52,6 +54,134 @@ const maxPanelContentWidth = 80
 // triggers, so the measured width reflects the panel's actual full-detail
 // content, not an accidental truncation artifact.
 const measureWidth = 200
+
+const watchEscapeSequenceTimeout = 50 * time.Millisecond
+
+type watchReadDeadliner interface {
+	SetReadDeadline(time.Time) error
+}
+
+// readWatchKey returns one key from the watch terminal. Escape-prefixed
+// terminal sequences are consumed as a unit and represented by key 0 so
+// their payload can never trigger a watch action. A lone Esc is returned as
+// 27 after the short sequence window, allowing overlays to close promptly.
+func readWatchKey(r io.Reader) (byte, error) {
+	readByte := func() (byte, error) {
+		var buf [1]byte
+		_, err := io.ReadFull(r, buf[:])
+		return buf[0], err
+	}
+
+	key, err := readByte()
+	if err != nil || key != 27 {
+		return key, err
+	}
+
+	deadliner, hasDeadline := r.(watchReadDeadliner)
+	readContinuation := func() (byte, error) {
+		if hasDeadline {
+			if err := deadliner.SetReadDeadline(time.Now().Add(watchEscapeSequenceTimeout)); err != nil {
+				return 0, err
+			}
+		}
+		return readByte()
+	}
+	if hasDeadline {
+		defer deadliner.SetReadDeadline(time.Time{})
+	}
+
+	first, err := readContinuation()
+	if err != nil {
+		if errorsIsEscapeEnd(err) {
+			return 27, nil
+		}
+		return 0, err
+	}
+	switch first {
+	case '[':
+		sequence := make([]byte, 1, 16)
+		sequence[0] = first
+		for len(sequence) < 128 {
+			b, readErr := readContinuation()
+			if readErr != nil {
+				if errorsIsEscapeEnd(readErr) {
+					return 0, nil
+				}
+				return 0, readErr
+			}
+			sequence = append(sequence, b)
+			if b >= 0x40 && b <= 0x7e {
+				if string(sequence) == "[200~" {
+					if err := consumeBracketedPaste(readContinuation); err != nil && !errorsIsEscapeEnd(err) {
+						return 0, err
+					}
+				}
+				return 0, nil
+			}
+		}
+		return 0, nil
+	case 'O': // SS3 function/navigation keys, for example F1 and keypad arrows.
+		_, err := readContinuation()
+		if errorsIsEscapeEnd(err) {
+			return 0, nil
+		}
+		return 0, err
+	case ']', 'P', '^', '_': // OSC, DCS, PM and APC string sequences.
+		err := consumeStringSequence(readContinuation, first == ']')
+		if errorsIsEscapeEnd(err) {
+			return 0, nil
+		}
+		return 0, err
+	default:
+		if first == 3 || first == 'q' || first == 'Q' {
+			return first, nil
+		}
+		return 0, nil
+	}
+}
+
+func errorsIsEscapeEnd(err error) bool {
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
+}
+
+func consumeBracketedPaste(readByte func() (byte, error)) error {
+	const end = "\x1b[201~"
+	var tail []byte
+	for {
+		b, err := readByte()
+		if err != nil {
+			return err
+		}
+		tail = append(tail, b)
+		if len(tail) > len(end) {
+			tail = tail[1:]
+		}
+		if string(tail) == end {
+			return nil
+		}
+	}
+}
+
+func consumeStringSequence(readByte func() (byte, error), osc bool) error {
+	previousEsc := false
+	for {
+		b, err := readByte()
+		if err != nil {
+			return err
+		}
+		if osc && b == 7 { // OSC may end with BEL.
+			return nil
+		}
+		if previousEsc && b == '\\' {
+			return nil
+		}
+		previousEsc = b == 27
+	}
+}
 
 // boxGap is the number of blank columns combineRow puts between side-by-side
 // panels. Layout math must account for it: forgetting the gutter is what made
@@ -402,15 +532,14 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		}()
 		go func() {
 			defer close(readerDone)
-			buf := make([]byte, 1)
 			for {
-				n, err := tty.Read(buf)
-				if err != nil || n == 0 {
+				key, err := readWatchKey(tty)
+				if err != nil {
 					stop()
 					return
 				}
 				if splashActive.Load() {
-					eff := dispatchSplashKey(buf[0])
+					eff := dispatchSplashKey(key)
 					if eff.quit {
 						stop()
 						return
@@ -434,7 +563,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 					activeHost:        activeHost,
 					debugOverlay:      debugOverlay,
 				}
-				newSt, eff := dispatchWatchKey(st, buf[0], opts.ShowProcesses)
+				newSt, eff := dispatchWatchKey(st, key, opts.ShowProcesses)
 				sec, overlayOpen, diagnosticsOpen, presetIdx, activeHost, debugOverlay, diagnosticsOffset = newSt.sec, newSt.overlayOpen, newSt.diagnosticsOpen, newSt.presetIdx, newSt.activeHost, newSt.debugOverlay, newSt.diagnosticsOffset
 
 				if eff.quit {

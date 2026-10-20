@@ -89,8 +89,8 @@ type watchKeyEffect struct {
 //     countdown gauge) — in-process only, never persisted.
 //  5. Existing single-key panel toggles (applyWatchSectionKey) keep working
 //     unchanged, for backward compatibility.
-//  6. [r]/[R] flips remote/local when a host was configured; [q]/[Q]/
-//     Ctrl-C/Esc quits.
+//  6. [r]/[R] flips remote/local when a host was configured; [q]/[Q]/Ctrl-C
+//     quits. A lone Esc is ignored on the main view and closes overlays.
 func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyState, watchKeyEffect) {
 	action := mustWatchActions().actionForKey(key)
 
@@ -179,13 +179,10 @@ type splashKeyEffect struct {
 
 // dispatchSplashKey applies one keypress received while the startup splash
 // is active. It is deliberately narrower than, and separate from,
-// dispatchWatchKey: byte 27 (Esc) here only skips the splash wait -- it must
-// NOT quit, which is a deliberate deviation from Esc's meaning on the main
-// dashboard once the splash has ended (dispatchWatchKey still owns that
-// unchanged). Ctrl-C (byte 3) quits either way, since it is the universal
-// interrupt. Every other key is ignored during splash -- the dashboard
-// (sec/overlayOpen/etc.) is not showing yet, so panel toggles have nothing
-// to act on.
+// dispatchWatchKey: byte 27 (Esc) here only skips the splash wait. Ctrl-C
+// (byte 3) quits either way, since it is the universal interrupt. Every
+// other key is ignored during splash -- the dashboard (sec/overlayOpen/etc.)
+// is not showing yet, so panel toggles have nothing to act on.
 func dispatchSplashKey(key byte) splashKeyEffect {
 	switch key {
 	case 3, 'q', 'Q':
