@@ -1,6 +1,6 @@
 # 799 — respect spec: RAMP assessment rules and labels
 
-**Status**: Open
+**Status**: Closed — Moved all 34 RAMP vocabulary and description values into the validated embedded spec; output goldens unchanged and required checks passed (ee796a7a)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Spec
@@ -44,3 +44,20 @@ classification vocabulary or its labels.
   constants or description switches.
 - Add a test that loads the embedded spec and asserts its keys exist and are
   consumed by the RAMP assessment.
+
+## Delivery
+
+- Implemented in `ee796a7a`: all 34 vocabulary/title/description values now
+  live in embedded `spec/ramp.yaml`, validated against
+  `spec/schemas/ramp.schema.json`. Logical Go identifiers read spec values;
+  category levels and description lookups also consume the spec directly.
+- Loading rejects unknown category level references, duplicate vocabulary IDs,
+  missing descriptions, malformed YAML, unknown fields, and invalid types.
+  Ranking, inspection, sorting, and classification mechanics remain in Go.
+- Tests were added first: embedded-key/consumer coverage and negative validation
+  cases; 12 goldens captured before implementation prove byte-for-byte text,
+  init-preview, and JSON compatibility across baseline, complete, incoherent,
+  and non-Git profiles.
+- Passed `make lint` (warnings only),
+  `go test ./internal/assess/ ./cmd/harnez/`, `make test-short`,
+  `git diff --check`, and `make install`. No open implementation problems.
