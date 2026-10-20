@@ -69,6 +69,13 @@ on every prompt or render and must stay fast. With one writer, the collector, lo
   `~/.harnez/agents/quota-readings.jsonl` (read by `legacyarchive.go`) use the old CamelCase keys, and Go's
   case-insensitive match does not map `UsedFraction` to `used_fraction`. Decode both forms (or prove the
   reader ignores those fields) with a test.
+- **M3 partly delivered (telemetry hooks on the server) in c7848059.** The first worker died mid-turn; d830b
+  finished it. Live: rows stored with the server up; records spooled while it was down and drained on start.
+  Open: `TestHelpGolden` (the agy hook help text changed on purpose; regenerate with `-update`), and
+  12 writable `telemetry.sqlite` opens remain outside `internal/server`.
+- **M4 — single writer complete:** list the 12 opens, move each write behind the server (route or spool)
+  or make the open read-only; a test or check fails on any new writable open outside the server. Regenerate
+  the help golden. Then close 830.
 - **M3 — telemetry hooks on the server:** `rate`, `hook post-tool`/`hook agy` and `codex-telemetry` send
   their records to a server telemetry route instead of writing the DB. Decided (host, delegated by the
   user, 2026-10-20): when no server answers, telemetry records are **not dropped** but appended to a
