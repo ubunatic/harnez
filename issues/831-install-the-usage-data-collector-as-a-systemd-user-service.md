@@ -39,5 +39,6 @@ across sessions and reboots.
 
 Enabled on t14 by the user (`harnez server install`). A newer build that finds the unit running
 the old server now rewrites `ExecStart` and restarts the unit instead of taking the socket
-(4367df05), so `go install` and release installs stay under systemd. Remaining limit: the restart
-happens only when `harnez usage` or `harnez server` starts the new build; statusline and hooks do not.
+(4367df05), so `go install` and release installs stay under systemd. The restart happens only when
+`harnez usage` or `harnez server` starts the new build; statusline and hooks do not. Accepted by the
+user (2026-10-21): no further work.
