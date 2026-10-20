@@ -1,7 +1,7 @@
 # 837 — Converge harnez server (HTTP/TCP) with the proposed harnez serve (Unix socket, JSON-RPC)
 
 **Status**: Open
-**Priority**: P3 (Low)
+**Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Architecture / Decision
 **Related**: 829, 830, 831, 776
@@ -22,6 +22,16 @@ Settle it before roadmap step 3 (the supervisor) builds on either one.
 - Trade-offs to weigh: a Unix socket has file permissions as auth and no port clash, while TCP is
   reachable by any local user unless authenticated; HTTP is easy for hooks (curl) and tests.
 - Uncertain: whether statusline/hook clients (830) need anything beyond HTTP POST.
+
+### Decisions (2026-10-20)
+- User: switch to a Unix socket now, before 830 M3 and 831 build on the TCP port.
+- Host (delegated): keep HTTP routes, served over the Unix socket (`curl --unix-socket` still works,
+  830 client tests keep their shape). JSON-RPC stays the target for the later agent-session API
+  (roadmap step 4), not for these routes. Keep the command name `harnez server`; amend the doc.
+- Socket path in spec, under `$XDG_RUNTIME_DIR/harnez/` (fallback state dir), dir `0700`, socket `0600`.
+- Singleton: if the socket exists, probe `/status`; healthy harnez → "already running", exit 0;
+  no answer → stale, remove and bind; another program → error. Drop the TCP port and its spec key.
+- Order: after 830 M2 lands; 830 M3 and 831 then use the socket.
 
 ## 3. Implementation & Verification Plan
 - Decide (user) the command name, transport and protocol; record it in the architecture doc.
