@@ -106,6 +106,36 @@ but is not a transactional task log.
 6. ACP, web, Slack and cloud adapters with authenticated sessions; cross-provider handoffs;
    optional Pi Durable worker bridge.
 
+## Lessons from Pi Pocket's code (2026-10-20)
+
+Audited `TannerMidd/pi-pocket` at `88511086` (single Node process, one SQLite owner, Pi Durable 1.1.0).
+
+- **Two event products**: Pocket's SSE (`src/server/http/events.ts`) is a live projection with
+  bounded queues and long-poll fallback; reconnect means a fresh snapshot. It is not a durable
+  cursor stream. Harnez should keep both, separately: a lossy live view (coalesced ~90 ms room,
+  ~400 ms lists) and a durable cursor/outbox for notifications.
+- **Commit listener contract**: one listener processes unordered commit batches in deterministic
+  passes, never writes back reentrantly (follow-up writes deferred), and derived data such as
+  authorship is repaired at startup.
+- **Requester IDs**: `u:<user>:<key>` for human-authored, `p:<user>:<key>` for sent on a user's
+  behalf; the newest attributable message decides spend, approvals, schedules and subagents.
+- **Durable timers**: schedules are tasks; overdue work sends once after restart, deduplicated
+  by request ID. Approval and goal-check answers are task memos.
+- **Fork policy**: each record kind declares fork behavior (copy or empty); fork cleanup commits
+  with fork creation.
+- **Bounded unattended loops**: `/until` (max 5 checks), `/watch` PR follow-up (max 10 messages),
+  signed webhooks, per-user spend limits; approval-gated calls still wait for a person.
+- **Operator surface**: a cross-session "Running now" view with Stop, and push notifications for
+  completion, approval needs and mentions (some approvals answerable from the notification).
+- **Not a sandbox**: steering, plan mode, invites, worktrees and in-process extensions are access
+  control, not isolation; the browser tool can bypass the guard. Harnez must enforce limits at the
+  worker and tool boundary.
+- **Recovery tests to copy**: restart during scheduled send, subagent reports across restart,
+  approvals with attribution across restart, duplicate request IDs (`test/*.test.ts`). Harnez
+  needs a recovery matrix per driver: before/after submit, provider turn, tool effect, approval.
+- **Not validated by Pocket**: multi-worker leases and fencing, multi-provider continuation, power
+  loss durability, exactly-once side effects.
+
 ## Prior art
 
 - Pi Durable (Earendil Works, experimental): storage-backed harness that saves each step before
@@ -114,7 +144,8 @@ but is not a transactional task log.
 - Pi Pocket: single Node server + one SQLite file, SSE clients, durable inbox, schedules,
   `/until` checks, Lancet Guard approvals saved across restart, push notifications. Not a sandbox.
   <https://tannermidd.github.io/pi-pocket/durable.html>,
-  <https://tannermidd.github.io/pi-pocket/architecture.html>, <https://github.com/TannerMidd/pi-pocket>
+  <https://tannermidd.github.io/pi-pocket/architecture.html>, <https://tannermidd.github.io/pi-pocket/>,
+  <https://github.com/TannerMidd/pi-pocket> (features: `docs/features.md`, limits: `SECURITY.md`)
 - `disler/durable-pi`: per-device backend over Pi Durable. <https://github.com/disler/durable-pi>
 - Comparables: Temporal (event-history replay), DBOS (database step checkpoints), Cloudflare
   Durable Objects (addressed actor + transactional storage).
