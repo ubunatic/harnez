@@ -1,6 +1,6 @@
 # 830 — Hooks and statusline scripts hand usage updates to the data collector instead of writing the store
 
-**Status**: In Progress
+**Status**: Closed — M4 complete: all 12 external telemetry opens are read-only or server-routed; writable-open guard added, test-q1 passed, live rate and agy hook rows verified through installed server.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture
