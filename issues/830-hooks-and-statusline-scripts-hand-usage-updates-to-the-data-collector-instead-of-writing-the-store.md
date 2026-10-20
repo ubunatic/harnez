@@ -1,0 +1,30 @@
+# 830 — Hooks and statusline scripts hand usage updates to the data collector instead of writing the store
+
+**Status**: Open
+**Priority**: P2 (Medium)
+**Severity**: Minor
+**Category**: Architecture
+**Related**: 829, 828, 653, 560
+
+---
+
+/goal Hooks, statusline scripts and other passive observers never open a write transaction on the usage store. They hand each update to the data collector, which stores it or drops it (duplicate, stale, collector busy), and the observer never blocks on a DB lock. Stop and report when blocked on a user decision or denied permission.
+
+## 1. Problem & Motivation
+Statusline observations write to the store directly (`internal/usage/passive.go`, 25ms busy timeout),
+so they compete with the collector and with `harnez usage` for the write lock (see 828). Observers run
+on every prompt or render and must stay fast. With one writer, the collector, locks are never contended.
+
+## 2. Technical Specification / Findings
+- The current direct writers include the statusline passive observation path (`internal/usage/passive.go`,
+  `WriteCurrent` in `internal/usagestore/store.go`). Find any other hook-side writers in the plan.
+- The collector already decides what to keep (passive dedupe interval in `spec/usage.yaml`).
+- Uncertain: the hand-off channel. Candidates: a spool directory of small files the collector drains,
+  a local socket, or the harnez daemon if one runs. It must not block or lose data silently when no
+  collector runs. Decide in the plan, and check what the collector supports today.
+
+## 3. Implementation & Verification Plan
+- Plan first: list every observer that writes, and choose the hand-off with its no-collector behaviour.
+- Test: an observer completes within its time budget while a blocker holds the DB write lock, and the
+  collector later stores (or deliberately drops) that update.
+- Docs: record the single-writer rule in the usage architecture doc.
