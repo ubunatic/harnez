@@ -40,6 +40,12 @@ Settle it before roadmap step 3 (the supervisor) builds on either one.
   and the equal case. This also covers 535's "restart after upgrade" for clients that auto-start.
 - Order: after 830 M2 lands; 830 M3 and 831 then use the socket.
 
+### Delivered (31f04748)
+Host check 23:08: developer edited tests after its single quota run; host `make test-q1` rerun green.
+`harnez usage` auto-started the server on `/run/user/1000/harnez/server.sock` (0600, no TCP port);
+`/status` reports `build_identity`; a second `harnez server` prints "already running (v0.1.33)", exit 0;
+statusline update stored (row 278607).
+
 ## 3. Implementation & Verification Plan
 - Decide (user) the command name, transport and protocol; record it in the architecture doc.
 - If converging: keep the service interface, swap the transport, keep the 829/830 client tests green.
