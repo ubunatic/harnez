@@ -1,6 +1,6 @@
 # 841 — Research Go DBOS + SQLite as storage backend for durable agents and harnez state
 
-**Status**: Open
+**Status**: Closed — Report docs/studies/2026-10-21-dbos-sqlite-storage-research.md: DBOS Go+SQLite conditional GO for single-owner harnez serve prototype, NO-GO as general harnez store
 **Priority**: P3 (Low) — research feeding Epic 825 (P4); decide before 825 step 2 starts
 **Severity**: Minor
 **Category**: Research
