@@ -1,6 +1,6 @@
 # 460 — ANSI 256-color and 24-bit truecolor SGR support in readcard (428 follow-up)
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Enhancement

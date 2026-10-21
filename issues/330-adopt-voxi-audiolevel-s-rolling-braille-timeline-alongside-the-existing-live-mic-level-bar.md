@@ -1,6 +1,6 @@
 # 330 — Adopt voxi `audiolevel`'s Rolling Braille Timeline Alongside the Existing Live Mic-Level Bar
 
-**Status:** Open
+**Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Category:** Usage TUI / Mic Indicators
 **Related:** [internal/usage/miclive.go](../internal/usage/miclive.go), [internal/usage/mic.go](../internal/usage/mic.go), [internal/usage/watch.go](../internal/usage/watch.go) (`st.Level`/`st.LiveLevel` bar rendering around line 1303/1333), `ubunatic.com/voxi/audiolevel` (`Meter.EnableSparkline`, `Manager.Sparkline`, `SparklineStream`), voxi issues 109 (added the export) and 110 (`examples/miclevel`, the loom TUI demo that prompted this ticket)
 

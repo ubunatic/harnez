@@ -1,6 +1,6 @@
 # 340 — Support label, project, and category query filters in harnez find issues
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Ergonomics / Feature
 **Category**: Issue Tracker / CLI Ergonomics

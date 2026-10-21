@@ -1,6 +1,6 @@
 # 322 — Evolve /story skill with optional focus areas, tooling fit, and human-steering divergence analysis
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

@@ -1,6 +1,6 @@
 # 724 — Codex ignores harnez-installed hooks until the user trusts them, but harnez status reports ok
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug

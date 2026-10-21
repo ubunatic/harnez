@@ -1,6 +1,6 @@
 # 274 — Add session start hooks to check harnez harness configuration across all agents
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture / Agentic Ergonomics

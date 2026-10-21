@@ -1,6 +1,6 @@
 # 285 — Agent must not claim it "noted" something without writing it to a durable file
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Bug (silent-correctness risk / trust)
 **Category**: Agentic Ergonomics

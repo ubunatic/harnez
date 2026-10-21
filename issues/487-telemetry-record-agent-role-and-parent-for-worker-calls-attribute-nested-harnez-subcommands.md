@@ -1,6 +1,6 @@
 # 487 — Telemetry: record agent role and parent for worker calls, attribute nested harnez subcommands
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 
 **Priority**: P2 (Medium)
 **Severity**: Moderate

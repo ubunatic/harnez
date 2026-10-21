@@ -1,6 +1,6 @@
 # 677 — Show rate-fetch status consistently in usage watch TUI
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug

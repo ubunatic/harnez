@@ -1,6 +1,6 @@
 # 704 — Quota-1: host verification rerun runs make test, not test-q1
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Docs

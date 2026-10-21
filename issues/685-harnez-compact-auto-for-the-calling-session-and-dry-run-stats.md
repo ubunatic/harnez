@@ -1,6 +1,6 @@
 # 685 — harnez compact --auto for the calling session and --dry-run stats
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

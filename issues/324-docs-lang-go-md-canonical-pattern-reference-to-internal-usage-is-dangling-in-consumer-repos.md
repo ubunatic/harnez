@@ -1,6 +1,6 @@
 # 324 — docs/lang/Go.md canonical-pattern reference to internal/usage is dangling in consumer repos
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation

@@ -1,6 +1,6 @@
 # 440 — PNG card header in metadata instead of image pixels
 
-**Status**: Blocked — Dot8 experiment on hold; see 444
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Reading / Token Efficiency (experimental)

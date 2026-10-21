@@ -1,6 +1,6 @@
 # 762 — Rollup: Review and audit cross-provider messaging and supervised AGY queueing changes
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Feature

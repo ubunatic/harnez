@@ -1,6 +1,6 @@
 # 656 — harnez agent send: opt-in messaging across providers to existing interactive and detached sessions
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium) — start only after 630 (start/resume/wait backgrounding guides) is closed
 **Severity**: Moderate
 **Category**: Agentic Ergonomics / Feature

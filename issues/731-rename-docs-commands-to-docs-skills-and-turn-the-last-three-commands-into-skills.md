@@ -1,6 +1,6 @@
 # 731 — Rename docs/commands to docs/skills and turn the last three commands into skills
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Refactor

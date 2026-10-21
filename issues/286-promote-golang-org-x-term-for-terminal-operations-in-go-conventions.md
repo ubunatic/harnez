@@ -1,6 +1,6 @@
 # 286 — Promote `golang.org/x/term` for terminal operations in Go conventions
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Instruction gap (performance/correctness risk from missing convention)
 **Category**: Agentic Ergonomics / Go Conventions

@@ -1,6 +1,6 @@
 # 225 — Local SLM Batch Classifier: Reliability & Accuracy Follow-Up
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Quality / Telemetry

@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: register remote load as an active source and expose store-backed data, sequenced with 652 ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture

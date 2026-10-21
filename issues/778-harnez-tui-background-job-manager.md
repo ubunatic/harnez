@@ -1,6 +1,6 @@
 # 778 — harnez tui Background Job Manager
 
-**Status**: In Progress — v1 in (2026-10-16): `!` jobs, Ctrl+B panel, live log, cancel
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Interactive TUI / Background Execution

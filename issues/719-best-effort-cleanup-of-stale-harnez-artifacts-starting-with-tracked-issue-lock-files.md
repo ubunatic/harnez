@@ -1,6 +1,6 @@
 # 719 — Best-effort cleanup of stale harnez artifacts, starting with tracked issue lock files
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

@@ -1,6 +1,6 @@
 # 683 — Learning: agent-friendly CLI design rules (TTY, prompts, side effects, shell wrappers)
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Documentation

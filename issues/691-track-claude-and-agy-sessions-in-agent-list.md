@@ -1,6 +1,6 @@
 # 691 — track Claude and Agy sessions in agent list
 
-**Status**: Open — provider discovery work remains
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature

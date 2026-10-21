@@ -1,6 +1,6 @@
 # 568 — Split IssueTracking, AgenticLoop and GoRelease into generic docs and harnez rules
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2
 **Severity**: Low
 **Category**: Docs / Agent Instructions

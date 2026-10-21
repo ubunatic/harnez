@@ -1,6 +1,6 @@
 # 165 — Two-Phase Architect/Patch Execution Harness for Small Local Models
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

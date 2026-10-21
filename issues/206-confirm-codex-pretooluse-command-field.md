@@ -1,6 +1,6 @@
 # 206 — Confirm `tool_input.command` field name against a live Codex PreToolUse call
 
-**Status**: Draft
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug risk / Verification

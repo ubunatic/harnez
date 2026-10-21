@@ -1,6 +1,6 @@
 # 231 — local-compact doc profile for small local models
 
-**Status**: Open — blocked on [[149-agent-specific-profiles-codex-async-wait-instruction]], tracking only
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

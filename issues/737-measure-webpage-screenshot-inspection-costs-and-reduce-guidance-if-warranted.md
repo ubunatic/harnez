@@ -1,6 +1,6 @@
 # 737 — Measure webpage screenshot inspection costs and reduce guidance if warranted
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Performance

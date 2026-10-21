@@ -1,6 +1,6 @@
 # 444 — Fix Dot8 renderer cell pitch for mixed glyphs
 
-**Status**: Blocked — Dot8 experiment on hold; root P1 of the chain, see the On hold section
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug

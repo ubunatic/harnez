@@ -1,6 +1,6 @@
 # 733 — Add an AGPL-3.0 license rule to the guidance every agent loads
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Documentation

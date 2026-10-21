@@ -1,6 +1,6 @@
 # 278 — Mic Box: Clarify "recording n/a" Wording and Investigate Real Recording-Active Probe for PipeWire-Native Backend
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug / Feature

@@ -1,6 +1,6 @@
 # 761 — Harness refinements: Quota-1 test logging guidance, block lexer patterns, and subagent prompt safeguards
 
-**Status**: Draft
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

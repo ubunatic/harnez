@@ -1,6 +1,6 @@
 # 538 — harnez agent: report leftover processes at turn end, reap only stopped ones
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2
 **Severity**: Medium
 **Category**: Feature / Agents

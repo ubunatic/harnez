@@ -1,6 +1,6 @@
 # 012 — Website: feature the TUI demo video
 
-**Status:** 🔴 Open (Blocked on clean recording & user verification)
+**Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 
 ## Context
 

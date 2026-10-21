@@ -1,6 +1,6 @@
 # 298 — Third recurrence of the commit-checkpoint gap: file granularity, git checkout -- destructiveness
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

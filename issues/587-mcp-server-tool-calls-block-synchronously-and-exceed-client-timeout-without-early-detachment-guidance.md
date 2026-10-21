@@ -1,6 +1,6 @@
 # 587 — MCP server tool calls block synchronously and exceed client timeout without early detachment guidance
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture

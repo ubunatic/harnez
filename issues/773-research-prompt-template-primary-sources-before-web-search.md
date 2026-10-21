@@ -1,6 +1,6 @@
 # 773 — Research prompt template: primary sources before web search
 
-**Status**: Draft
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

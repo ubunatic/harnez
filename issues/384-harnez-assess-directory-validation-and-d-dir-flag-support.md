@@ -1,6 +1,6 @@
 # 384 — harnez assess directory validation and -d/--dir flag support
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Usability

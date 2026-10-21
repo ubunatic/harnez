@@ -1,6 +1,6 @@
 # 783 — process-group kill tests fail in containers without a reaping init
 
-**Status**: Draft
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug / Tests

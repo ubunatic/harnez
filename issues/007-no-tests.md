@@ -1,6 +1,6 @@
 # Thin test coverage — gaps remaining
 
-**Status:** Open — partially addressed
+**Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 
 **Severity:** Low
 

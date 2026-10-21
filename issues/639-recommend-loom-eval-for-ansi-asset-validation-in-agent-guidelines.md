@@ -1,6 +1,6 @@
 # 639 — Recommend `loom eval` for .ansi Asset Validation in Agent Guidelines
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Normal
 **Category**: Documentation / Agent UX

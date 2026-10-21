@@ -1,6 +1,6 @@
 # 476 — Improve agent start/resume UX with explicit sync, async, workdir, and planning controls
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 
 **Priority**: P2 (Medium)
 **Severity**: Moderate

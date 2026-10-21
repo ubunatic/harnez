@@ -1,6 +1,6 @@
 # 542 — Reduce idle CPU of harnez usage --compact --watch (~8% of a core)
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2
 **Severity**: Medium
 **Category**: Performance

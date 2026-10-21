@@ -1,6 +1,6 @@
 # 350 — Consider a `harnez memory` command to list/clear Claude Code auto-memory
 
-**Status**: Draft
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Tooling / Agent Ergonomics

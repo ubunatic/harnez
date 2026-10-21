@@ -1,6 +1,6 @@
 # 313 — Canary convention: require go.work/GOWORK probe before trusting scratch-module dependency checks
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation

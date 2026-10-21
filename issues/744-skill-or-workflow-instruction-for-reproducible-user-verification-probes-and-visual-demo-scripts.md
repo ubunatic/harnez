@@ -1,6 +1,6 @@
 # 744 — Skill or workflow instruction for reproducible user verification probes and visual demo scripts
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

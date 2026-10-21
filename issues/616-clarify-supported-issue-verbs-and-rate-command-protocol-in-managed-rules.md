@@ -1,6 +1,6 @@
 # 616 — Clarify supported issue verbs and rate command protocol in managed rules
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

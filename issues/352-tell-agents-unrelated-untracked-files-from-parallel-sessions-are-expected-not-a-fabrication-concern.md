@@ -1,6 +1,6 @@
 # 352 — Tell agents unrelated untracked files from parallel sessions are expected, not a fabrication concern
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Docs

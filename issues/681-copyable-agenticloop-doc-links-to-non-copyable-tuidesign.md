@@ -1,6 +1,6 @@
 # 681 — Copyable AgenticLoop doc links to non-copyable TUIDesign
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation

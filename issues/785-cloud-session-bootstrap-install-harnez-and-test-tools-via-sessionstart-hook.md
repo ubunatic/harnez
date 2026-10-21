@@ -1,6 +1,6 @@
 # 785 — cloud session bootstrap: install harnez and test tools via SessionStart hook
 
-**Status**: Draft
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Tooling / Cloud Agents

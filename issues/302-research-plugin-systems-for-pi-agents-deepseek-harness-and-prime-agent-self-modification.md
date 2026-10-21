@@ -1,6 +1,6 @@
 # 302 — Research plugin systems for pi agents, DeepSeek Harness, and Prime Agent self-modification
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: N/A (research)
 **Category**: Documentation

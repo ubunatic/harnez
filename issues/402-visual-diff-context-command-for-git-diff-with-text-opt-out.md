@@ -1,6 +1,6 @@
 # 402 — Move config diff below status and free top-level harnez diff for visual git diff
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: CLI & Tooling / Context Optimization

@@ -1,6 +1,6 @@
 # 516 — Measure agy plan-quota cost on Google Pro
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Research

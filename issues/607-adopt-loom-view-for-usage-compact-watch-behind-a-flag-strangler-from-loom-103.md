@@ -1,6 +1,6 @@
 # 607 — Adopt Loom view for usage --compact --watch behind a flag (strangler, from loom 103)
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

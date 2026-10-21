@@ -1,6 +1,6 @@
 # 458 — Move remaining telemetry SQL into `spec/` (127 follow-up)
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Architecture

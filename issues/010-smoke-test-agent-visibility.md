@@ -1,6 +1,6 @@
 # Smoke-test that agents can see installed skills and commands
 
-**Status:** Open — blocked on wayreel#11 (V step)
+**Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 
 **Severity:** Low — correctness gap, not a data-loss bug
 

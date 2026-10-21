@@ -1,6 +1,6 @@
 # Latest release links & README/website install section consolidation
 
-**Status:** Open — proposed assessment & exploration
+**Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Severity:** N/A (DX / Documentation Architecture Proposal)
 **Category:** Documentation / Release Integration
 

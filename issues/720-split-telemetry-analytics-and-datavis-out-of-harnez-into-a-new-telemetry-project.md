@@ -1,6 +1,6 @@
 # 720 — Split telemetry analytics and datavis out of harnez into a new telemetry project
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor

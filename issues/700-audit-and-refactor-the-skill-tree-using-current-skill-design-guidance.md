@@ -1,6 +1,6 @@
 # 700 — Audit and refactor the skill tree using current skill-design guidance
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor

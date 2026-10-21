@@ -1,6 +1,6 @@
 # 233 — AGENTS.md note: verify doc edits target the right file (repo-local vs docs/practices, lang, other source)
 
-**Status**: Draft
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Documentation

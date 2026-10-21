@@ -1,6 +1,6 @@
 # 845 — lean-sprint: absolute paths for out-of-repo files in the developer handoff
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

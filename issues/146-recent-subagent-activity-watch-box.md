@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: keep display work downstream of the shared session-usage API in milestone 654 ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature

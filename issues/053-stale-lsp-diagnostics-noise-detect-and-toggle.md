@@ -1,6 +1,6 @@
 # 053 — Background LSP diagnostics post stale/wrong findings; harness should detect and offer to disable per-agent
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Category**: Agentic Ergonomics / Harness Behavior
 **Related**: [docs/practices/AgenticLoop.md](../docs/practices/AgenticLoop.md); observed in and drawn from sibling project `weg`'s session retrospective `docs/feedback/2026-08-23-hardening-automation-and-a-production-incident.md` (not linkable across repos — see that file directly in the `weg` checkout)
 

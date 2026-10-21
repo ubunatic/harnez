@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: this stays a reader/rendering concern and consumes the store API, never provider collectors ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Open — feasibility assessment, no implementation decision yet
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture

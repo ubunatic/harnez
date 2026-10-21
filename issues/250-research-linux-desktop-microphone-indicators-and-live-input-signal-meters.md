@@ -1,6 +1,6 @@
 # 250 — Research Linux Desktop Microphone Indicators and Live Input Signal Meters
 
-**Status**: In Progress — research complete; doc at `docs/MicIndicators.md`; Xfce live canary and KDE `node.virtual` canary still pending
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor (cross-desktop privacy UX and portability uncertainty)
 **Category**: Architecture

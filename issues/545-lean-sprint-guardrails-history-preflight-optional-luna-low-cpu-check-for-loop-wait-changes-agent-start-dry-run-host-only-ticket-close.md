@@ -1,6 +1,6 @@
 # 545 — Lean-sprint guardrails: history preflight (optional luna:low), CPU check for loop/wait changes, agent start --dry-run, host-only ticket close
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2
 **Severity**: Medium
 **Category**: Agents / Workflow

@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: export the additive canonical usage schema planned in [UsageCollection.md](../docs/UsageCollection.md), not a new usage database.
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

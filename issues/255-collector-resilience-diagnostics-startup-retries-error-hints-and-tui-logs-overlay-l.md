@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: registry observations retain source timing/error evidence under 652 ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Open — partial; bounded retries and a basic `l` diagnostics overlay are implemented, richer diagnostics remain
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate (transient collector failure during startup splash causes false-positive failure badges and opaque errors)
 **Category**: Architecture / UX / Diagnostics

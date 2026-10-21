@@ -1,6 +1,6 @@
 # 296 — Always compute distill savings for stats even when HARNEZ_DISTILL_AUTOPIPE is off
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Telemetry / Distillation

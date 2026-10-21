@@ -1,6 +1,6 @@
 # 403 — Transparent hook interception and distill adapter for multi-slice file reads via harnez read
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Hooks & Distill / Context Optimization

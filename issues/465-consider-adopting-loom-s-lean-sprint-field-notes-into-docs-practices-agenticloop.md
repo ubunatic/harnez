@@ -1,6 +1,6 @@
 # 465 — Consider adopting loom's lean-sprint field notes into docs/practices AgenticLoop
 
-**Status**: Open — filed from loom session
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3
 **Severity**: Minor
 **Category**: Docs / Practice

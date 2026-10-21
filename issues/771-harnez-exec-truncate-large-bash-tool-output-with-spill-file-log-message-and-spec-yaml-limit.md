@@ -1,6 +1,6 @@
 # 771 — harnez exec: truncate large bash tool output with spill file log message and spec yaml limit
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

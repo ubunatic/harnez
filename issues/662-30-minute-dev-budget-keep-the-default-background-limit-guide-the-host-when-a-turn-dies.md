@@ -1,6 +1,6 @@
 # 662 — 30-minute dev budget: keep the default background limit, guide the host when a turn dies
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

@@ -1,6 +1,6 @@
 # 473 — Study MiniMax CLI harness efficiency and adopt the best Harnez practices
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

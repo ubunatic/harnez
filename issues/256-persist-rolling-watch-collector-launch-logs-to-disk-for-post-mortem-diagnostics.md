@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: keep diagnostics as bounded operational logs; normalized readings belong in the store plan ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate (lack of persisted launch logs prevents root-cause analysis of intermittent failures across sessions)
 **Category**: Architecture / Diagnostics / Observability

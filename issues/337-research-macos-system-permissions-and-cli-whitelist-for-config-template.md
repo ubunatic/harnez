@@ -1,6 +1,6 @@
 # 337 — Research macOS system permissions and CLI whitelist for config template
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Security & Usability (Platform Parity)
 **Category**: Permissions / Multi-OS

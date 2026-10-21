@@ -1,6 +1,6 @@
 # 339 — Graceful degradation and gating of hardware telemetry and mic probes on macOS
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: UX & Reliability (Multi-OS Parity)
 **Category**: Usage & Watch / Multi-OS

@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: add any active system metric through the collector registry/store path, not a watch-only collector ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

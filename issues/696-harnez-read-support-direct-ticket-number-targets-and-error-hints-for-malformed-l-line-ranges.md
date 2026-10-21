@@ -1,6 +1,6 @@
 # 696 — harnez read: support direct ticket number targets and error hints for malformed -L line ranges
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Ergonomics / Tooling

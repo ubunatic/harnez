@@ -1,6 +1,6 @@
 # 494 — Project-level component selection in init with harnez and local topic files
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

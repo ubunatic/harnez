@@ -1,6 +1,6 @@
 # 436 — Dense Dot8 Braille PNG cards (--dot8) for codex and agy
 
-**Status**: Blocked — Dot8 experiment on hold; see 444
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Reading / Token Efficiency (experimental)

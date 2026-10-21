@@ -1,6 +1,6 @@
 # 128 — Per-agent full system-prompt self-audit for repetition and conciseness
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

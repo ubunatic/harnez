@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: persist source timing as observation provenance under 652 ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

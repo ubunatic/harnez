@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: hooks are passive observations for the shared store, not a separate usage cache; sequence under 653/654 after 651 ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Open  
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Category**: Architecture / Telemetry  
 **Related**: [Issue 023: `harnez usage`](023-usage-command-token-quota-tracking.md), [Issue 030: Missing Local Token Counts](030-agy-codex-missing-local-token-counts.md), [Issue 035: Transparent HTTP Proxy Sidecar](035-transparent-proxy-quota-and-token-sidecar.md), [Study: Agent Telemetry](../docs/studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md)  
 

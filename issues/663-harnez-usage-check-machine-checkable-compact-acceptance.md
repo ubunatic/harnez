@@ -1,6 +1,6 @@
 # 663 — harnez usage --check: machine-checkable compact acceptance
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

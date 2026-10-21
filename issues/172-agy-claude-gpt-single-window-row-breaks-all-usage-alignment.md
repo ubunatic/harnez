@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: preserve fractional normalized windows/provenance at the store boundary before rendering ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Blocked — rendering bug (§2/§3.2) fixed; upstream AGY-CLI question (§1/§3.1) and
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 n/a-placeholder design question (§3.3) remain open pending live account verification
 **Priority**: P2 (Medium)
 **Severity**: Minor

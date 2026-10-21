@@ -2,7 +2,7 @@
 
 > 2026-09-30 architecture note: coordinate command placement with registry milestone 652; do not create another collection path ([UsageCollection.md](../docs/UsageCollection.md)).
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Cosmetic
 **Category**: CLI Design

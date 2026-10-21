@@ -1,6 +1,6 @@
 # 314 — harnez release: auto-create minisign key if missing and no repo key defined
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Release Engine

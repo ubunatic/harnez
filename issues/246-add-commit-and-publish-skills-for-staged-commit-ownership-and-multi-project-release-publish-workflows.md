@@ -1,6 +1,6 @@
 # 246 — Add /commit and /publish Skills for Staged Commit Ownership and Multi-Project Release/Publish Workflows
 
-**Status**: Open — filed via /issue
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

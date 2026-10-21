@@ -1,6 +1,6 @@
 # 365 — Add `harnez release --init=<lang|mode>` to bootstrap release scaffolding
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

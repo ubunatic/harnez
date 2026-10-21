@@ -1,6 +1,6 @@
 # 334 — Research OS-agnostic process inspection across macOS and Linux
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Functional Gap (Platform Portability)
 **Category**: Architecture / Multi-OS

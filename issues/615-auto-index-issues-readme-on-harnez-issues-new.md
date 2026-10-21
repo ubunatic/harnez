@@ -1,6 +1,6 @@
 # 615 — Auto-index issues README on harnez issues new
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

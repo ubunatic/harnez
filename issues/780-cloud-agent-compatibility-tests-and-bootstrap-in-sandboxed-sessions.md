@@ -1,6 +1,6 @@
 # 780 — Cloud agent compatibility: tests and bootstrap in sandboxed sessions
 
-**Status**: Draft
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Tooling / Cloud Agents

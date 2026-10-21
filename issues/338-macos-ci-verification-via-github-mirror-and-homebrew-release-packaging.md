@@ -1,6 +1,6 @@
 # 338 — macOS CI verification via GitHub mirror
 
-**Status**: Open — core CI landed, Homebrew scope dropped, push/PR trigger + CLI smoke test remain
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Build & Distribution (macOS Delivery)
 **Category**: Packaging & CI / Multi-OS

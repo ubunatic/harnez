@@ -1,6 +1,6 @@
 # 609 — Keep finder query text in local telemetry (opt-in)
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

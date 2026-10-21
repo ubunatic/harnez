@@ -1,6 +1,6 @@
 # 447 — Use B and hash as matrix color symbols
 
-**Status**: Blocked — Dot8 experiment on hold; see 444
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture

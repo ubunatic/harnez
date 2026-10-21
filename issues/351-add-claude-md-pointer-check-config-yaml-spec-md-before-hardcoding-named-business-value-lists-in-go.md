@@ -1,6 +1,6 @@
 # 351 — Add AGENTS.md pointer: check config.yaml/Spec.md before hardcoding named business-value lists in Go
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Docs

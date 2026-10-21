@@ -1,6 +1,6 @@
 # 288 — Add a `/harnez-agent` skill: lean fresh-handoff sprint that dispatches to an external agent CLI instead of a same-vendor subagent (covers `codex` and `agy`)
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Enhancement
 **Category**: Feature

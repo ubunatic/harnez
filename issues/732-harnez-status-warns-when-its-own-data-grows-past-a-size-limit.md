@@ -1,6 +1,6 @@
 # 732 — harnez status warns when its own data grows past a size limit
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature

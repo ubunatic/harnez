@@ -1,6 +1,6 @@
 # 016 — `make smoke` convention: live-run targets in Make.md
 
-**Status:** Open
+**Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 
 ## Context
 

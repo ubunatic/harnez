@@ -1,6 +1,6 @@
 # 336 — Research cross-platform shell shim patterns for macOS and Linux
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Architecture (Platform Portability)
 **Category**: Architecture / Shims & Hooks

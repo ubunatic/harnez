@@ -1,6 +1,6 @@
 # 151 — Research: on-demand doc lookup vs. materialized instructions, and temporary per-repo agent profiles
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: N/A (research)
 **Category**: Research / Architecture

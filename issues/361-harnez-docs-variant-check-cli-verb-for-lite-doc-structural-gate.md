@@ -1,6 +1,6 @@
 # 361 — harnez docs variant --check CLI verb for lite-doc structural gate
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Feature
 **Category**: CLI / Templates

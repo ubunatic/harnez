@@ -1,6 +1,6 @@
 # 535 — Review agent-collector lifecycle automation: install, auto-start, keep current
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2
 **Severity**: Medium
 **Category**: Discovery / Ops

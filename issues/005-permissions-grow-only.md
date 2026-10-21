@@ -1,6 +1,6 @@
 # Permissions are grow-only — revoked entries never removed
 
-**Status:** Open  
+**Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Severity:** Medium — declarative config doesn't fully control permission state
 
 ## Problem

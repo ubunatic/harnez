@@ -1,6 +1,6 @@
 # 566 — harnez bench: optional isolated agent config per run
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3
 **Severity**: Low
 **Category**: Bench / Tooling

@@ -1,6 +1,6 @@
 # 776 — harnez tui External Harness Forwarding and Subscription-Aware Model Router
 
-**Status**: In Progress — router, streaming (codex/claude/pi), cancel, `/model`, model picker done; agy streaming, direct API, quota indicators open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P1 (High)
 **Severity**: Feature
 **Category**: Interactive TUI / Model Orchestration

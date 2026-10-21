@@ -1,6 +1,6 @@
 # 718 — Show the resolved model tier in the agent session header
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

@@ -1,6 +1,6 @@
 # 633 — harnez decide: decision-model abstraction & backend engine (Jev, Lmcoder, Needle3, Laya)
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Feature

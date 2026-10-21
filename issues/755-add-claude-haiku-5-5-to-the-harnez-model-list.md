@@ -1,6 +1,6 @@
 # 755 — Add Claude Haiku 5.5 to the harnez model list
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

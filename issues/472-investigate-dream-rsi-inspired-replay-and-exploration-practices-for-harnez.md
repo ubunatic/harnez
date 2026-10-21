@@ -1,6 +1,6 @@
 # 472 — Investigate Dream-RSI-inspired replay and exploration practices for harnez
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

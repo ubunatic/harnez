@@ -1,6 +1,6 @@
 # 675 — agent: claude compaction runs on the default model instead of the session model
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug

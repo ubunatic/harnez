@@ -1,6 +1,6 @@
 # 264 — Add ALSA/arecord live-mic-level backend so amixer-only systems get live levels too
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature

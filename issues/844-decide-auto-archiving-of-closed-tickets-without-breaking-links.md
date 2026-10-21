@@ -1,6 +1,6 @@
 # 844 — Decide auto-archiving of closed tickets without breaking links
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low) — parked by user for later discussion
 **Severity**: Minor
 **Category**: Design

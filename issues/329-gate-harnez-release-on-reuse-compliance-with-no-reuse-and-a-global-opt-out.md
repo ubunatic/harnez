@@ -1,6 +1,6 @@
 # 329 — Gate `harnez release` on REUSE Compliance, with `--no-reuse` and a Global Opt-Out
 
-**Status:** Open  
+**Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Category:** Release Pipeline / Compliance  
 **Related:** [internal/release/runner.go](../internal/release/runner.go), [cmd/harnez/release.go](../cmd/harnez/release.go), [docs/practices/GoRelease.md](../docs/practices/GoRelease.md)
 

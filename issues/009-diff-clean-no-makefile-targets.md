@@ -1,6 +1,6 @@
 # diff and clean don't cover Makefile targets
 
-**Status:** Open
+**Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 
 **Severity:** Low — apply is idempotent; diff/clean gaps are cosmetic for now
 

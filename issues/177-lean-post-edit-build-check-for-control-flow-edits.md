@@ -1,6 +1,6 @@
 # 177 — Lean, Scoped Post-Edit Build Check for Control-Flow-Reshaping Edits
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Practices / Prompting

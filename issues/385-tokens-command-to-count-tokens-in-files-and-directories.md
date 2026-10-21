@@ -1,6 +1,6 @@
 # 385 — Tokens command to count tokens in files and directories
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature

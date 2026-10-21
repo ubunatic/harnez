@@ -1,6 +1,6 @@
 # 736 — harnez-advisor skill is stale and pulls agents into heavy session-reuse flows when they only need a reviewer or a quick answer
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

@@ -1,6 +1,6 @@
 # 468 — Compact `make test-q1` output to summary and failing tests, growing `harnez distill`
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Ergonomics / Distillation

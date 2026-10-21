@@ -1,6 +1,6 @@
 # 251 — Best-Effort Suppression of Desktop Mic Indicators for Live Meter Stream via Known App Properties and IDs
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor (privacy/ergonomics polish: prevents false recording indicator on GNOME/KDE)
 **Category**: Architecture / UX

@@ -1,6 +1,6 @@
 # 253 — Mic View (Preset 8) Triggers Desktop Privacy Indicator: Evaluate Separate Watcher Process / Daemon Architecture
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Moderate (privacy indicator false alarm when toggling Mic panel via preset `8` or `m`)
 **Category**: Architecture / UX / Privacy

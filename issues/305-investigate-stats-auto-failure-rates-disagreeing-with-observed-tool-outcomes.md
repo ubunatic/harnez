@@ -1,6 +1,6 @@
 # 305 — Investigate `stats --auto` failure rates disagreeing with observed tool outcomes
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug

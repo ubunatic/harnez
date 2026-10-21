@@ -1,6 +1,6 @@
 # 623 — Short peer-addressable names for interactive agent sessions
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Usability / Agent Orchestration

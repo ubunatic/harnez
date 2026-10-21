@@ -1,6 +1,6 @@
 # 518 — Measure gpt-6-sol plan-quota cost
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Research

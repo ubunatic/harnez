@@ -1,6 +1,6 @@
 # 134 — Add a ConciseMode trigger Skill alongside `harnez mode`'s persistence mechanism
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

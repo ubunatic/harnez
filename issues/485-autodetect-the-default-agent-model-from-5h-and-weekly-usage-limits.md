@@ -1,6 +1,6 @@
 # 485 — Autodetect the default agent model from 5h and weekly usage limits
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 
 **Priority**: P3 (Low)
 **Severity**: Minor

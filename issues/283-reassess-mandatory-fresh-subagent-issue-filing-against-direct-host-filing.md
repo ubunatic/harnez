@@ -1,6 +1,6 @@
 # 283 — Reassess mandatory fresh-subagent issue filing against direct host filing
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

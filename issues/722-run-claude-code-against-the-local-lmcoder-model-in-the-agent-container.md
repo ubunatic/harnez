@@ -1,6 +1,6 @@
 # 722 — Run Claude Code against the local lmcoder model in the agent container
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

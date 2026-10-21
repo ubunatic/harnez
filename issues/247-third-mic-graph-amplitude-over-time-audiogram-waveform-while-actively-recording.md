@@ -1,6 +1,6 @@
 # 247 — Third Mic Graph: Amplitude-Over-Time Audiogram/Waveform While Actively Recording
 
-**Status**: Open — filed via /issue
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: UX / Agentic Ergonomics

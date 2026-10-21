@@ -1,6 +1,6 @@
 # 546 — harnez init: toggle the harnez read -I recommendation per project
 
-**Status**: Open
+**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2
 **Severity**: Medium
 **Category**: CLI / Managed Conventions
