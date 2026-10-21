@@ -131,6 +131,11 @@ adapters; it is not required for usage collection.
 1. Extract start/resume/compact orchestration from Cobra handlers into a service; document each
    provider's guarantees. No behavior change.
 2. Transactional ledger (SQLite/WAL, versioned schema), idempotent submit, import existing sessions.
+   Engine choice open: DBOS Go v1.7 on SQLite is a candidate only inside the single server owner
+   (issue 841). Its canary recovered a killed workflow from the last completed step, but costs
+   ~26 ms warm startup and +12.6 MB, and concurrent multi-process init hit `SQLITE_BUSY`.
+   Plain SQLite stays for telemetry, bench, sessions, usage and feedback. See
+   [2026-10-21 DBOS study](studies/2026-10-21-dbos-sqlite-storage-research.md).
 3. `harnez serve` supervisor: leases, restart reconciliation, quota wake-ups, crash quarantine.
    Canary: kill client, worker and server separately.
 4. Immediate task handles, cursor subscriptions, outbox delivery; move CLI, MCP and TUI onto it.
