@@ -1,6 +1,6 @@
 # 847 — Mark harnez-index generated files with a top-of-file "managed by harnez index, do not edit" header
 
-**Status**: Open — reopened: driver not installed by a real harnez init
+**Status**: Closed — M3: plain init now installs the generated-index merge driver in repos with issues/; real-CLI two-branch merge and hand-written conflict E2E passed; make lint, make test-short, make install passed. Commits: 66b8387b (M1), 27503f72 (M2), fa6a7493 (M3).
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
