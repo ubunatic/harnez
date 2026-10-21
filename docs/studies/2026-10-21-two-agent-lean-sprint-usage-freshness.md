@@ -25,3 +25,14 @@ all rows "just now" after M2.
   `agy -p "/usage"` calls, the pattern issue 112 suspected of triggering Google reauth. The
   developer did not flag it; watch for reauth prompts.
 - Cost: searcher 58k new tokens; developer 3 turns, ~465k new tokens, ~12 min total.
+
+## Follow-up sprint: issue 838 (`!` overlay spinner)
+- Searcher `s838`: the glyph is an age countdown (`timeoutSnakeGlyph`) measured against the
+  watch interval; since the collector owns fetching it drains in seconds and then sits still.
+- Developer `d838` plan picked `braille-classic-10` and a new fetch-status socket route; the
+  user wanted the old `braille-snake-2x3` unchanged. Host corrected before write authority.
+- M1 (collector-cadence gauge), `8a2251a1`: debug overlay drains over `collector_cadence`. Host
+  pty check of the installed binary showed partial frames ⠷/⠧ (developer's pty run was killed
+  by the exec wrapper).
+- Lesson: user clarifications that arrive during a plan turn must be checked against the plan;
+  "same as before" settled scope to a 3-line fix.
