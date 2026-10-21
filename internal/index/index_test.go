@@ -466,6 +466,25 @@ Some intro.
 	}
 }
 
+func TestRenderDocsReadmeReplacesConflictedMarkedSectionAndPreservesOutsideBytes(t *testing.T) {
+	dir := t.TempDir()
+	docsDir := filepath.Join(dir, "docs")
+	writeFile(t, filepath.Join(docsDir, "studies", "fresh.md"), "# Study: Fresh\n\n**Scope**: regenerated row\n")
+	path := filepath.Join(docsDir, "README.md")
+	prefix := docsStudiesNotice + "\n# Docs\r\n\r\nHand-written preface.\r\n\r\n**`docs/studies/`** — case studies\r\n\r\n<!-- harnez:begin docs-studies-index -->\r\n"
+	conflicted := prefix + "<<<<<<< ours\r\n| stale | hand edited |\r\n=======\r\n| theirs | conflict |\r\n>>>>>>> theirs\r\n<!-- harnez:end docs-studies-index -->\r\n\r\n**Hand-written table**\r\n\r\nKeep exactly.\r\n"
+	got, err := RenderDocsReadme(conflicted, docsDir, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "<<<<<<<") || !strings.Contains(got, "| [studies/fresh.md](studies/fresh.md) | regenerated row |") {
+		t.Fatalf("generated conflict was not resolved from source: %s", got)
+	}
+	if !strings.Contains(got, "# Docs\r\n\r\nHand-written preface.\r\n") || !strings.HasSuffix(got, "\r\n\r\n**Hand-written table**\r\n\r\nKeep exactly.\r\n") {
+		t.Fatalf("bytes outside generated section changed: %q", got)
+	}
+}
+
 func TestUpdateDocsReadmeAppendsMissingStudiesSection(t *testing.T) {
 	dir := t.TempDir()
 	docsDir := filepath.Join(dir, "docs")

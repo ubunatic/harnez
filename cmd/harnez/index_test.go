@@ -83,6 +83,32 @@ func TestRunIndexCheckDetectsAndRestoresAllIssueIndexes(t *testing.T) {
 	}
 }
 
+func TestRunIndexCheckDetectsAndRestoresDocsStudiesIndex(t *testing.T) {
+	root := t.TempDir()
+	docsDir := filepath.Join(root, "docs")
+	studiesDir := filepath.Join(docsDir, "studies")
+	if err := os.MkdirAll(studiesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(studiesDir, "fresh.md"), []byte("# Fresh\n\n**Scope**: new topic\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	readmePath := filepath.Join(docsDir, "README.md")
+	original := "# Docs\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n| [studies/stale.md](studies/stale.md) | stale |\n"
+	if err := os.WriteFile(readmePath, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	err := runIndexCheck(&out, "", "", readmePath, docsDir, false, true)
+	if err == nil || !strings.Contains(out.String(), readmePath) {
+		t.Fatalf("runIndexCheck error = %v, output %q; want docs drift", err, out.String())
+	}
+	got, err := os.ReadFile(readmePath)
+	if err != nil || string(got) != original {
+		t.Fatalf("--check changed docs README: got %q, err=%v", got, err)
+	}
+}
+
 func TestRunIndex_WarnsOnMismatchedIssueHeadingToStderr(t *testing.T) {
 	repoDir := indexSnapshotFixtureDir(t)
 	if err := os.WriteFile(filepath.Join(repoDir, "issues", "001-first.md"),

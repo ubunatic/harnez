@@ -141,6 +141,27 @@ func TestIssuesLintChecksBacklogAndClosedIndexes(t *testing.T) {
 	if err := runIssuesLint(&bytes.Buffer{}, dir); err != nil {
 		t.Fatalf("runIssuesLint on generated indexes: %v", err)
 	}
+	docsDir := filepath.Join(dir, "docs")
+	if err := os.MkdirAll(filepath.Join(docsDir, "studies"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(docsDir, "studies", "study.md"), []byte("# Study\n\n**Scope**: Fresh topic\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	docsReadme := filepath.Join(docsDir, "README.md")
+	staleDocs := "<!-- managed by harnez index: only the studies table is generated; evergreen documentation and other tables are hand-written -->\n# Docs\n\n**`docs/studies/`** — case studies\n\n<!-- harnez:begin docs-studies-index -->\n| File | Topic |\n|------|-------|\n| [studies/stale.md](studies/stale.md) | stale |\n<!-- harnez:end docs-studies-index -->\n"
+	if err := os.WriteFile(docsReadme, []byte(staleDocs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "docs/README.md is generated studies index drift") {
+		t.Fatalf("runIssuesLint error = %v, want docs/README.md drift", err)
+	}
+	if _, err := indexpkg.UpdateDocsReadme(docsReadme, docsDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := runIssuesLint(&bytes.Buffer{}, dir); err != nil {
+		t.Fatalf("runIssuesLint after docs index regeneration: %v", err)
+	}
 	backlog := filepath.Join(dir, "issues", "BACKLOG.md")
 	if err := os.WriteFile(backlog, []byte("# Backlog\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -228,7 +249,7 @@ func TestIssuesRebaseMissingIntegrationShowsExactSetupCommand(t *testing.T) {
 	}
 }
 
-func TestIssuesMergeDriverOnlyValidatesCurrentVersion(t *testing.T) {
+func TestIssuesMergeDriverRegeneratesCurrentVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "current")
 	readme, err := os.ReadFile(filepath.Join("..", "..", "issues", "README.md"))
 	if err != nil {
@@ -237,10 +258,54 @@ func TestIssuesMergeDriverOnlyValidatesCurrentVersion(t *testing.T) {
 	if err := os.WriteFile(path, readme, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := runIssuesMergeDriver(path); err != nil {
+	if err := runIssuesMergeDriver(path, "issues/README.md"); err != nil {
 		t.Fatal(err)
 	}
-	if err := runIssuesMergeDriver(filepath.Join(t.TempDir(), "missing")); err == nil {
+	if err := runIssuesMergeDriver(filepath.Join(t.TempDir(), "missing"), "issues/README.md"); err == nil {
 		t.Fatal("expected missing-current-version error")
+	}
+}
+
+func TestIssuesMergeDriverReplacesConflictInsideDocsBlock(t *testing.T) {
+	original, err := os.ReadFile(filepath.Join("..", "..", "docs", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicted := strings.Replace(string(original), "<!-- harnez:begin docs-studies-index -->\n", "<!-- harnez:begin docs-studies-index -->\n<<<<<<< ours\n| File | Topic |\n=======\n| conflict | conflict |\n>>>>>>> theirs\n", 1)
+	path := filepath.Join(t.TempDir(), "current")
+	if err := os.WriteFile(path, []byte(conflicted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runIssuesMergeDriver(path, "docs/README.md"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), "<<<<<<<") || !strings.Contains(string(got), "<!-- harnez:begin docs-studies-index -->") {
+		t.Fatalf("driver left generated-section conflict unresolved:\n%s", got)
+	}
+}
+
+func TestIssuesMergeDriverRejectsConflictOutsideDocsBlock(t *testing.T) {
+	original, err := os.ReadFile(filepath.Join("..", "..", "docs", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicted := strings.Replace(string(original), "# Docs — Evergreen Project Docs", "# Docs — Evergreen Project Docs\n\n<<<<<<< ours\nhand-written conflict\n=======\nother version\n>>>>>>> theirs", 1)
+	path := filepath.Join(t.TempDir(), "current")
+	if err := os.WriteFile(path, []byte(conflicted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runIssuesMergeDriver(path, "docs/README.md"); err == nil || !strings.Contains(err.Error(), "unresolved conflict outside generated block") {
+		t.Fatalf("driver error = %v, want unresolved hand-written conflict", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != conflicted {
+		t.Fatalf("driver changed unresolved hand-written conflict:\n%s", got)
 	}
 }

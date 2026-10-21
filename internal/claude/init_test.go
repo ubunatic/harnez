@@ -428,10 +428,14 @@ func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
 		t.Fatal(err)
 	}
 	hookPath := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	postMergeHookPath := filepath.Join(dir, ".git", "hooks", "post-merge")
 	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.bin binary\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho user-hook\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(postMergeHookPath, []byte("#!/bin/sh\necho post-merge-user-hook\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := exec.Command("git", "-C", dir, "config", "--local", "custom.keep", "yes").Run(); err != nil {
@@ -452,6 +456,10 @@ func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
 	if string(hook) != "#!/bin/sh\necho user-hook\n" {
 		t.Fatalf("plain init changed hook: %q", hook)
 	}
+	postMergeHook, _ := os.ReadFile(postMergeHookPath)
+	if string(postMergeHook) != "#!/bin/sh\necho post-merge-user-hook\n" {
+		t.Fatalf("plain init changed post-merge hook: %q", postMergeHook)
+	}
 
 	enabled := true
 	for range 2 {
@@ -460,16 +468,27 @@ func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
 		}
 	}
 	attributes, _ = os.ReadFile(filepath.Join(dir, ".gitattributes"))
-	if strings.Count(string(attributes), "issues/README.md merge=harnez-issues-index") != 1 {
-		t.Fatalf("enable did not install one managed attribute: %q", attributes)
+	for _, line := range []string{
+		"issues/README.md merge=harnez-issues-index",
+		"issues/BACKLOG.md merge=harnez-issues-index",
+		"issues/CLOSED.md merge=harnez-issues-index",
+		"docs/README.md merge=harnez-issues-index",
+	} {
+		if strings.Count(string(attributes), line) != 1 {
+			t.Fatalf("enable did not install one %q attribute: %q", line, attributes)
+		}
 	}
 	driver, err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Output()
-	if err != nil || strings.TrimSpace(string(driver)) != "harnez issues merge-driver %O %A %B" {
+	if err != nil || strings.TrimSpace(string(driver)) != "harnez issues merge-driver %O %A %B %P" {
 		t.Fatalf("enable did not configure merge driver: %v (%q)", err, driver)
 	}
 	hook, _ = os.ReadFile(hookPath)
 	if strings.Count(string(hook), "# harnez:begin issues-index-lint") != 1 || !strings.Contains(string(hook), "echo user-hook") {
 		t.Fatalf("enable did not install one managed hook block: %q", hook)
+	}
+	postMergeHook, _ = os.ReadFile(postMergeHookPath)
+	if strings.Count(string(postMergeHook), "# harnez:begin issues-index-refresh") != 1 || !strings.Contains(string(postMergeHook), "harnez index -d") || !strings.Contains(string(postMergeHook), "echo post-merge-user-hook") {
+		t.Fatalf("enable did not install one post-merge refresh block: %q", postMergeHook)
 	}
 	disabled := false
 	if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{IssuesGit: &disabled}); err != nil {
@@ -488,6 +507,10 @@ func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
 	hook, _ = os.ReadFile(hookPath)
 	if string(hook) != "#!/bin/sh\necho user-hook\n" {
 		t.Errorf("disable did not preserve unrelated hook: %q", hook)
+	}
+	postMergeHook, _ = os.ReadFile(postMergeHookPath)
+	if string(postMergeHook) != "#!/bin/sh\necho post-merge-user-hook\n" {
+		t.Errorf("disable did not preserve unrelated post-merge hook: %q", postMergeHook)
 	}
 	if err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Run(); err == nil {
 		t.Error("disable left issue merge driver configured")

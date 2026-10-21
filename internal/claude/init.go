@@ -1177,12 +1177,35 @@ func rulesAreGitIgnored(dir string) (bool, error) {
 	return false, err
 }
 
-const issuesAttributesLine = "issues/README.md merge=harnez-issues-index"
+func issuesAttributesLines() []string {
+	return []string{
+		"issues/README.md merge=harnez-issues-index",
+		"issues/BACKLOG.md merge=harnez-issues-index",
+		"issues/CLOSED.md merge=harnez-issues-index",
+		"docs/README.md merge=harnez-issues-index",
+	}
+}
+
+func isIssuesAttributeLine(line string) bool {
+	for _, generated := range issuesAttributesLines() {
+		if line == generated {
+			return true
+		}
+	}
+	return false
+}
+
 const issuesHookBlock = `# harnez:begin issues-index-lint
 if command -v harnez >/dev/null 2>&1
 then harnez issues lint --cached -d "$(git rev-parse --show-toplevel)" || exit $?
 fi
 # harnez:end issues-index-lint
+`
+const issuesPostMergeHookBlock = `# harnez:begin issues-index-refresh
+if command -v harnez >/dev/null 2>&1
+then harnez index -d "$(git rev-parse --show-toplevel)" || exit $?
+fi
+# harnez:end issues-index-refresh
 `
 
 // installIssuesGitIntegration installs clone-local driver configuration and
@@ -1198,18 +1221,24 @@ func installIssuesGitIntegration(dir string) (int, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return 0, fmt.Errorf("read %s: %w", attributes, err)
 	}
-	if !containsExactLine(string(content), issuesAttributesLine) {
-		prefix := string(content)
-		if prefix != "" && !strings.HasSuffix(prefix, "\n") {
-			prefix += "\n"
+	attributeText := string(content)
+	for _, line := range issuesAttributesLines() {
+		if containsExactLine(attributeText, line) {
+			continue
 		}
-		if err := os.WriteFile(attributes, []byte(prefix+issuesAttributesLine+"\n"), 0o644); err != nil {
-			return 0, fmt.Errorf("write %s: %w", attributes, err)
+		if attributeText != "" && !strings.HasSuffix(attributeText, "\n") {
+			attributeText += "\n"
 		}
-		fmt.Printf("  configured %s as a generated merge path\n", attributes)
+		attributeText += line + "\n"
 		changes++
 	}
-	configArgs := []string{"-C", dir, "config", "--local", "merge.harnez-issues-index.driver", "harnez issues merge-driver %O %A %B"}
+	if attributeText != string(content) {
+		if err := os.WriteFile(attributes, []byte(attributeText), 0o644); err != nil {
+			return 0, fmt.Errorf("write %s: %w", attributes, err)
+		}
+		fmt.Printf("  configured %s as generated merge paths\n", attributes)
+	}
+	configArgs := []string{"-C", dir, "config", "--local", "merge.harnez-issues-index.driver", "harnez issues merge-driver %O %A %B %P"}
 	if out, err := exec.Command("git", configArgs...).CombinedOutput(); err != nil {
 		return 0, fmt.Errorf("configure generated issue-index merge driver: %w: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -1276,7 +1305,60 @@ func installIssuesGitIntegration(dir string) (int, error) {
 		}
 		changes++
 	}
+	postMergeHook := filepath.Join(hooksDir, "post-merge")
+	installed, err := installManagedHookBlock(postMergeHook, "# harnez:begin issues-index-refresh", "# harnez:end issues-index-refresh", issuesPostMergeHookBlock)
+	if err != nil {
+		return 0, fmt.Errorf("install generated-index refresh hook: %w", err)
+	}
+	if installed {
+		changes++
+	}
 	return changes, nil
+}
+
+func installManagedHookBlock(path, startMarker, endMarker, block string) (bool, error) {
+	hookContent, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return false, fmt.Errorf("read %s: %w", path, err)
+	}
+	hookText := string(hookContent)
+	wantHook := hookText
+	if start := strings.Index(hookText, startMarker); start >= 0 {
+		endRel := strings.Index(hookText[start:], endMarker)
+		if endRel < 0 {
+			return false, fmt.Errorf("managed hook block has no end marker")
+		}
+		end := start + endRel + len(endMarker)
+		if end < len(hookText) && hookText[end] == '\n' {
+			end++
+		}
+		wantHook = hookText[:start] + block + hookText[end:]
+	} else {
+		prefix := hookText
+		if prefix == "" {
+			prefix = "#!/bin/sh\n"
+		} else if !strings.HasSuffix(prefix, "\n") {
+			prefix += "\n"
+		}
+		wantHook = prefix + block
+	}
+	changed := wantHook != hookText
+	if changed {
+		if err := os.WriteFile(path, []byte(wantHook), 0o755); err != nil {
+			return false, fmt.Errorf("write %s: %w", path, err)
+		}
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, fmt.Errorf("stat %s: %w", path, err)
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		if err := os.Chmod(path, info.Mode().Perm()|0o111); err != nil {
+			return false, fmt.Errorf("make %s executable: %w", path, err)
+		}
+		changed = true
+	}
+	return changed, nil
 }
 
 func removeIssuesGitIntegration(dir string) (int, error) {
@@ -1293,7 +1375,7 @@ func removeIssuesGitIntegration(dir string) (int, error) {
 		var kept []string
 		removed := false
 		for _, line := range strings.Split(string(content), "\n") {
-			if strings.TrimSpace(line) == issuesAttributesLine {
+			if isIssuesAttributeLine(strings.TrimSpace(line)) {
 				removed = true
 				continue
 			}
@@ -1339,12 +1421,31 @@ func removeIssuesGitIntegration(dir string) (int, error) {
 			changes++
 		}
 	}
+	postMergeHook := filepath.Join(hooksDir, "post-merge")
+	postMergeContent, err := os.ReadFile(postMergeHook)
+	if err != nil && !os.IsNotExist(err) {
+		return 0, fmt.Errorf("read %s: %w", postMergeHook, err)
+	}
+	if err == nil {
+		updated, removed, err := removeManagedHookBlock(string(postMergeContent), "# harnez:begin issues-index-refresh", "# harnez:end issues-index-refresh")
+		if err != nil {
+			return 0, fmt.Errorf("update %s: %w", postMergeHook, err)
+		}
+		if removed {
+			if err := os.WriteFile(postMergeHook, []byte(updated), 0o755); err != nil {
+				return 0, fmt.Errorf("write %s: %w", postMergeHook, err)
+			}
+			changes++
+		}
+	}
 	return changes, nil
 }
 
 func removeManagedIssuesHook(content string) (string, bool, error) {
-	const startMarker = "# harnez:begin issues-index-lint"
-	const endMarker = "# harnez:end issues-index-lint"
+	return removeManagedHookBlock(content, "# harnez:begin issues-index-lint", "# harnez:end issues-index-lint")
+}
+
+func removeManagedHookBlock(content, startMarker, endMarker string) (string, bool, error) {
 	start := strings.Index(content, startMarker)
 	if start < 0 {
 		return content, false, nil

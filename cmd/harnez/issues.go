@@ -227,8 +227,8 @@ valid, exit-0 answer.`,
 				return nil
 			}
 			if args[0] == "merge-driver" {
-				if len(args) != 4 {
-					return fmt.Errorf("issues merge-driver: expected %%O %%A %%B paths")
+				if len(args) != 4 && len(args) != 5 {
+					return fmt.Errorf("issues merge-driver: expected %%O %%A %%B [%%P] paths")
 				}
 				return nil
 			}
@@ -240,7 +240,11 @@ valid, exit-0 answer.`,
 				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, nil, jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}
 			if args[0] == "merge-driver" {
-				return runIssuesMergeDriver(args[2])
+				target := "issues/README.md"
+				if len(args) == 5 {
+					target = args[4]
+				}
+				return runIssuesMergeDriver(args[2], target)
 			}
 			if args[0] == "rebase" {
 				upstream := "@{upstream}"

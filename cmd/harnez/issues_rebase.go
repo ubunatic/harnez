@@ -554,6 +554,19 @@ func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []
 			return fmt.Errorf("issues lint: issues/%s is generated index drift; run 'harnez index'", name)
 		}
 	}
+	docsReadme := filepath.Join(dir, "docs", "README.md")
+	docsContent, err := os.ReadFile(docsReadme)
+	if err == nil {
+		generated, err := index.RenderDocsReadme(string(docsContent), filepath.Join(dir, "docs"), docsReadme)
+		if err != nil {
+			return fmt.Errorf("issues lint: %w", err)
+		}
+		if generated != string(docsContent) {
+			return fmt.Errorf("issues lint: docs/README.md is generated studies index drift; run 'harnez index'")
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("issues lint: read docs index: %w", err)
+	}
 	fmt.Fprintln(w, "issues tracker valid")
 	if err := warnActiveTicketCap(w, issuesDir); err != nil {
 		return fmt.Errorf("issues lint: %w", err)
@@ -607,10 +620,10 @@ func runIssuesLintCached(w io.Writer, dir string) error {
 	return runIssuesLintMode(w, tmp, true, untrackedTickets)
 }
 
-// runIssuesMergeDriver rebuilds Git's current temporary version from ticket
-// files in the worktree. Git runs custom merge drivers at the repository root;
-// the wrapper repeats regeneration after replay to cover the complete tree.
-func runIssuesMergeDriver(currentPath string) error {
+// runIssuesMergeDriver rebuilds a generated index from its source files. For
+// partial files it preserves content outside the generated block and refuses
+// to claim a clean merge when that hand-written content has conflict markers.
+func runIssuesMergeDriver(currentPath, targetPath string) error {
 	if strings.TrimSpace(currentPath) == "" {
 		return fmt.Errorf("issues merge-driver: Git did not provide the current-version path")
 	}
@@ -622,10 +635,34 @@ func runIssuesMergeDriver(currentPath string) error {
 	if err != nil {
 		return fmt.Errorf("issues merge-driver: locate worktree: %w", err)
 	}
+	target := filepath.ToSlash(filepath.Clean(filepath.FromSlash(targetPath)))
+	if filepath.IsAbs(target) || target == ".." || strings.HasPrefix(target, "../") {
+		return fmt.Errorf("issues merge-driver: invalid target path %q", targetPath)
+	}
 	issuesDir := filepath.Join(root, "issues")
-	generated, err := index.RenderIssuesReadme(string(orig), issuesDir, currentPath)
+	var generated string
+	switch target {
+	case "issues/README.md":
+		if index.HasConflictOutsideManagedBlock(string(orig), "issues-active-index") {
+			return fmt.Errorf("issues merge-driver: unresolved conflict outside generated block in %s", target)
+		}
+		generated, err = index.RenderIssuesReadme(string(orig), issuesDir, target)
+	case "issues/BACKLOG.md":
+		fallthrough
+	case "issues/CLOSED.md":
+		var indexes map[string]string
+		indexes, err = index.IssueIndexFiles(issuesDir)
+		generated = indexes[filepath.Base(target)]
+	case "docs/README.md":
+		if index.HasConflictOutsideManagedBlock(string(orig), "docs-studies-index") {
+			return fmt.Errorf("issues merge-driver: unresolved conflict outside generated block in %s", target)
+		}
+		generated, err = index.RenderDocsReadme(string(orig), filepath.Join(root, "docs"), target)
+	default:
+		return fmt.Errorf("issues merge-driver: unsupported generated path %q", target)
+	}
 	if err != nil {
-		return fmt.Errorf("issues merge-driver: regenerate %s: %w", currentPath, err)
+		return fmt.Errorf("issues merge-driver: regenerate %s: %w", target, err)
 	}
 	if err := os.WriteFile(currentPath, []byte(generated), 0o644); err != nil {
 		return fmt.Errorf("issues merge-driver: write %s: %w", currentPath, err)

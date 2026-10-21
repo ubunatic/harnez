@@ -137,6 +137,9 @@ func replaceManagedBlock(content, id, generated string, legacyStart, legacyEnd i
 		if lineEnd >= 0 {
 			blockEnd = endAt + len(end) + lineEnd + 1
 			blockSuffix = "\n"
+			if lineEnd > 0 && content[endAt+len(end)+lineEnd-1] == '\r' {
+				blockSuffix = "\r\n"
+			}
 		}
 		block := begin + "\n" + strings.TrimRight(generated, "\n") + "\n" + end + blockSuffix
 		return content[:lineStart] + block + content[blockEnd:], nil
@@ -146,6 +149,36 @@ func replaceManagedBlock(content, id, generated string, legacyStart, legacyEnd i
 	}
 	block := begin + "\n" + strings.TrimRight(generated, "\n") + "\n" + end
 	return content[:legacyStart] + block + content[legacyEnd:], nil
+}
+
+// HasConflictOutsideManagedBlock reports Git conflict markers outside a
+// generated section. A merge driver may regenerate the marked section, but it
+// must leave hand-written conflicts for the user to resolve.
+func HasConflictOutsideManagedBlock(content, id string) bool {
+	begin, end := markdown.MDMarkers.Begin(id), markdown.MDMarkers.End(id)
+	beginAt, endAt := strings.Index(content, begin), strings.Index(content, end)
+	if beginAt < 0 || endAt < beginAt {
+		return hasConflictMarkers(content)
+	}
+	lineStart := strings.LastIndex(content[:beginAt], "\n") + 1
+	if lineStart != beginAt {
+		return hasConflictMarkers(content)
+	}
+	endAfter := endAt + len(end)
+	if newline := strings.IndexByte(content[endAfter:], '\n'); newline >= 0 {
+		endAfter += newline + 1
+	}
+	return hasConflictMarkers(content[:lineStart]) || hasConflictMarkers(content[endAfter:])
+}
+
+func hasConflictMarkers(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+		if strings.HasPrefix(line, "<<<<<<< ") || strings.HasPrefix(line, ">>>>>>> ") || strings.HasPrefix(line, "||||||| ") || line == "=======" {
+			return true
+		}
+	}
+	return false
 }
 
 func renderIssueTable(files []issues.IssueFile, include func(issues.IssueFile) bool) string {
@@ -425,29 +458,37 @@ func UpdateDocsReadme(readmePath, docsDir string) (bool, error) {
 	if err := os.MkdirAll(filepath.Join(docsDir, "studies"), 0o755); err != nil {
 		return false, fmt.Errorf("create %s: %w", filepath.Join(docsDir, "studies"), err)
 	}
-	table, err := StudiesTable(docsDir)
-	if err != nil {
-		return false, err
-	}
-
 	orig, err := os.ReadFile(readmePath)
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", readmePath, err)
 	}
-	content := string(orig)
+	newContent, err := RenderDocsReadme(string(orig), docsDir, readmePath)
+	if err != nil {
+		return false, err
+	}
+	if newContent == string(orig) {
+		return false, nil
+	}
+	if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
+		return false, fmt.Errorf("write %s: %w", readmePath, err)
+	}
+	return true, nil
+}
+
+// RenderDocsReadme regenerates the marked studies table without writing files.
+// The rest of docs/README.md is kept byte-for-byte, including local line endings.
+func RenderDocsReadme(content, docsDir, readmePath string) (string, error) {
+	table, err := StudiesTable(docsDir)
+	if err != nil {
+		return "", err
+	}
 	content = ensureManagedNotice(content, docsStudiesNotice)
 	if strings.Contains(content, markdown.MDMarkers.Begin("docs-studies-index")) || strings.Contains(content, markdown.MDMarkers.End("docs-studies-index")) {
 		newContent, err := replaceManagedBlock(content, "docs-studies-index", table, -1, -1)
 		if err != nil {
-			return false, fmt.Errorf("%s: %w", readmePath, err)
+			return "", fmt.Errorf("%s: %w", readmePath, err)
 		}
-		if newContent == string(orig) {
-			return false, nil
-		}
-		if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
-			return false, fmt.Errorf("write %s: %w", readmePath, err)
-		}
-		return true, nil
+		return newContent, nil
 	}
 
 	anchorIdx := strings.Index(content, docsStudiesAnchor)
@@ -461,17 +502,11 @@ func UpdateDocsReadme(readmePath, docsDir string) (bool, error) {
 		}
 		section := docsStudiesAnchor + " — case studies\n\n" + markdown.MDMarkers.Begin("docs-studies-index") + "\n" + strings.TrimRight(table, "\n") + "\n" + markdown.MDMarkers.End("docs-studies-index") + "\n"
 		newContent := prefix + section
-		if newContent == content {
-			return false, nil
-		}
-		if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
-			return false, fmt.Errorf("write %s: %w", readmePath, err)
-		}
-		return true, nil
+		return newContent, nil
 	}
 	headerRel := strings.Index(content[anchorIdx:], docsStudiesTableHead)
 	if headerRel == -1 {
-		return false, fmt.Errorf("%s: could not find studies table header after %q", readmePath, docsStudiesAnchor)
+		return "", fmt.Errorf("%s: could not find studies table header after %q", readmePath, docsStudiesAnchor)
 	}
 	headerIdx := anchorIdx + headerRel
 
@@ -488,13 +523,7 @@ func UpdateDocsReadme(readmePath, docsDir string) (bool, error) {
 
 	newContent, err := replaceManagedBlock(content, "docs-studies-index", table, headerIdx, blockEnd)
 	if err != nil {
-		return false, fmt.Errorf("%s: %w", readmePath, err)
+		return "", fmt.Errorf("%s: %w", readmePath, err)
 	}
-	if newContent == content {
-		return false, nil
-	}
-	if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
-		return false, fmt.Errorf("write %s: %w", readmePath, err)
-	}
-	return true, nil
+	return newContent, nil
 }
