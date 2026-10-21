@@ -1,4 +1,4 @@
-# 839 — usage: AGY Updated column stale (36m ago) while agy is in active use
+# 839 — usage: Updated column stale (AGY 36m, Claude 15m) while agents are in active use
 
 **Status**: Open
 **Priority**: P2 (Medium)
