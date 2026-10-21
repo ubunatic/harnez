@@ -11,6 +11,8 @@ Restart={{RESTART_POLICY}}
 RestartSec={{RESTART_DELAY}}
 
 # Writes its Unix socket and usage data to the per-user XDG directories.
+# SQLite needs a writable temporary directory under this strict filesystem sandbox.
+PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=%t/harnez %S/harnez %C/harnez %h/.local/share/harnez

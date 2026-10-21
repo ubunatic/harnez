@@ -46,10 +46,22 @@ Unverified candidate causes, check before designing:
 - Real bug: systemd journal shows SQLite `disk I/O error (6410)` writing all provider
   snapshots at 01:47, 02:02, 02:17, 02:32 CEST (also after a restart). Stored snapshots stuck
   at ~00:44. Reported ages don't match these files exactly; verify the runtime read path.
+- M1 root cause: SQLite code 6410 is `SQLITE_IOERR_GETTEMPPATH`; the collector unit's
+  `ProtectSystem=strict` made `/tmp` read-only in its mount namespace, leaving SQLite no
+  suitable temporary directory. The telemetry database and WAL/SHM were owned by `uwe` under
+  the unit's writable `.local/share/harnez` path; the filesystem had 55 GB free.
+- The unit first started at 00:46 CEST on 2026-10-21, and the first collection immediately
+  logged 6410 for all three providers. It restarted at 00:57 and 01:02 with the same errors;
+  01:47 was a later 15-minute tick, not when the failure began. `PrivateTmp=yes` is the fix.
+- M1 verification (2026-10-21): the new unit's private `/tmp` is writable; after restart at
+  02:46 CEST the SQLite database/WAL advanced and the journal showed no snapshot write errors.
+  `harnez usage --offline` read a 0m-old overall snapshot. `make test-q1` passed after the
+  unit-template regression assertion was added (the pre-fix run failed at that assertion), and
+  `make install` succeeded. AGY quota data remained 12m old, which is M2 scope.
 
 ## Milestones
-- **M1 (collector persistence I/O error):** reproduce and fix the SQLite disk I/O error in the
-  collector (check systemd unit sandboxing, DB path/WAL, file locks); regression test.
+- **M1 (collector persistence I/O error) — resolved 2026-10-21:** enabled `PrivateTmp=yes`;
+  regression assertion and live collector verification passed.
 - **M2 (shorter cadence):** user decision (2026-10-21): keep Updated = last quota fetch, but
   fetch more often. Lower the collector interval in `spec/usage.yaml` (proposed 5 min; no Go
   default) and check `MinWatchInterval` reuse does not cancel the gain. AGY polling must keep

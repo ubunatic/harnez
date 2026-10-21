@@ -53,6 +53,9 @@ func TestInstallSystemdUnitWritesExpandedExecStart(t *testing.T) {
 	if !strings.Contains(content, "ExecStart="+exe+" server") {
 		t.Errorf("unit ExecStart does not reference the running binary %q:\n%s", exe, content)
 	}
+	if !strings.Contains(content, "PrivateTmp=yes") {
+		t.Errorf("unit must provide a writable private /tmp for SQLite temporary files:\n%s", content)
+	}
 
 	// Second call: no changes should be reported (idempotent).
 	_, r2, err := installSystemdUnit(harnez.DefaultFS)
