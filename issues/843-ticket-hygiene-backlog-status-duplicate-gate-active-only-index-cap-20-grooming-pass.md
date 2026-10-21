@@ -87,3 +87,14 @@ reservation or `gh issue create`; `--force` bypasses the gate. The live local tr
 for #697's title at score 0.800 (strong). No local ticket has a `Closed — duplicate of` status;
 GitHub's live repo API has no closed issues marked duplicate, and Codeberg returns no issue records,
 so three closed-duplicate recall cases could not be measured in M2.
+
+## M2 delivered (2026-10-22): duplicate gate — 029d9a6b
+
+`find issues similar` (title-weighted, all statuses incl. `issues/archive/`), `issues new` blocks at the
+spec threshold 0.55 unless `--force`; Backlog counted in index/telemetry snapshot (schema v10). Host live
+check: usage-error text → 714 (0.571), lean-sprint paths text → 845 (0.733), unrelated title max 0.40.
+No local "duplicate of" pairs exist, so recall was validated only on 697/698 and the host probes above.
+
+## M3 Pre-Work
+
+- None from M2. Keep the archive dir (`issues/archive/`) out of the active README but inside lint.
