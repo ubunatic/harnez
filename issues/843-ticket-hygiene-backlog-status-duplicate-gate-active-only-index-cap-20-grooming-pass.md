@@ -111,3 +111,9 @@ No local "duplicate of" pairs exist, so recall was validated only on 697/698 and
 `issues/README.md` 248 KB → 67 KB (active only; drops to a few KB after M4). Lint: valid, warns
 "273 active tickets exceeds configured cap 20". Rules, IssueTracking docs and /issue, /roadmap, /next
 skill sources updated.
+
+## M4 delivered (2026-10-22): grooming pass — 31dfaf20
+
+User confirmed the active set: list above plus 846 and 847, minus 705. 251 tickets → Backlog, 697 closed as
+duplicate of 698. README 5.9 KB, `find issues is:open` 1.9 KB. Report:
+`docs/studies/2026-10-22-two-agent-lean-sprint-ticket-hygiene.md`.
