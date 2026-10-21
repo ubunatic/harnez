@@ -197,9 +197,17 @@ func TestCanonicalizeStatus(t *testing.T) {
 		{"Fixed in abc1234", StatusClosed},
 		{"Complete — extracted to standalone repo", StatusClosed},
 		{"Implemented", StatusClosed},
+		{"Done", StatusClosed},
+		{"Done — completed elsewhere", StatusClosed},
+		{"Doneish", StatusUnknown},
+		{"Done: completed elsewhere", StatusUnknown},
 		{"Draft", StatusDraft},
 		{"WIP", StatusDraft},
 		{"Proposal", StatusDraft},
+		{"Backlog", StatusBacklog},
+		{"Backlog — deferred for later", StatusBacklog},
+		{"Backlogged", StatusUnknown},
+		{"Backlog:", StatusUnknown},
 		{"", StatusUnknown},
 		{"Random notes", StatusUnknown},
 	}
@@ -301,6 +309,27 @@ func TestParseTrackerTable_PunctuationInTitle(t *testing.T) {
 }
 
 func TestLintFS_Scenarios(t *testing.T) {
+	t.Run("Backlog status is accepted", func(t *testing.T) {
+		fs := fstest.MapFS{
+			"README.md":      &fstest.MapFile{Data: []byte("| # | File | Title | Status |\n|---|------|-------|--------|\n| 001 | [001-backlog.md](001-backlog.md) | Deferred | Backlog — later |\n")},
+			"001-backlog.md": &fstest.MapFile{Data: []byte("# 001 — Deferred\n\n**Status:** Backlog — later\n")},
+		}
+		report, err := LintFS(fs, ".")
+		if err != nil {
+			t.Fatalf("LintFS error: %v", err)
+		}
+		files, err := ScanFS(fs, ".")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(files) != 1 || files[0].Canonical != StatusBacklog {
+			t.Fatalf("parsed Backlog ticket = %+v", files)
+		}
+		if len(report.Diagnostics) != 0 {
+			t.Fatalf("Backlog ticket produced lint diagnostics: %+v", report.Diagnostics)
+		}
+	})
+
 	t.Run("closed status must include an outcome beyond a commit reference", func(t *testing.T) {
 		fs := fstest.MapFS{
 			"README.md":      &fstest.MapFile{Data: []byte("\n| # | File | Title | Status |\n|---|------|-------|--------|\n| 001 | [001-bare.md](001-bare.md) | Bare | Closed |\n| 002 | [002-sha.md](002-sha.md) | SHA only | Closed — resolved in abc1234 |\n| 003 | [003-outcome.md](003-outcome.md) | Outcome | Closed — superseded: SQLite chosen (def5678) |\n")},

@@ -180,6 +180,32 @@ func TestSearch_StatusFilter_Draft(t *testing.T) {
 	}
 }
 
+func TestSearch_StatusFilter_BacklogAndUnresolved(t *testing.T) {
+	files := []issues.IssueFile{
+		{Number: "100", RawStatus: "Open", Canonical: issues.StatusOpen},
+		{Number: "101", RawStatus: "In Progress", Canonical: issues.StatusOpen},
+		{Number: "102", RawStatus: "Blocked — waiting", Canonical: issues.StatusOpen},
+		{Number: "103", RawStatus: "Draft", Canonical: issues.StatusDraft},
+		{Number: "104", RawStatus: "Backlog", Canonical: issues.StatusBacklog},
+		{Number: "105", RawStatus: "Closed", Canonical: issues.StatusClosed},
+	}
+
+	backlog := numbers(Search(files, mustParse(t, "status:backlog")))
+	if len(backlog) != 1 || backlog[0] != "104" {
+		t.Fatalf("status:backlog: got %v, want [104]", backlog)
+	}
+
+	open := numbers(Search(files, mustParse(t, "is:open")))
+	if got := strings.Join(open, ","); got != "100,101,102" {
+		t.Fatalf("is:open: got %v, want [100 101 102]", open)
+	}
+
+	unresolved := numbers(Search(files, mustParse(t, "status:unresolved")))
+	if got := strings.Join(unresolved, ","); got != "100,101,102,103,104" {
+		t.Fatalf("status:unresolved: got %v, want [100 101 102 103 104]", unresolved)
+	}
+}
+
 func TestSearch_AndDoesNotRelaxToOrOnZeroResults(t *testing.T) {
 	files := scanFixture(t)
 	// "gtt" only appears in 101's body; "zzznotfound" appears nowhere. An

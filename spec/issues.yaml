@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=schemas/issues.schema.json
+# Lifecycle terms used by issue parsing and find filters.
+lifecycle:
+  unresolved: [open, in-progress, blocked, draft, backlog]
+  fallback_order: [draft, closed, open]
+  statuses:
+    - key: open
+      label: Open
+      category: Open
+      filters: [open]
+      match_mode: lead_contains
+      match_terms: [open, in progress, blocked, investigating]
+      fallback_terms: [open, in progress, blocked, partially]
+    - key: in-progress
+      label: In Progress
+      category: Open
+      filters: [open, in-progress]
+      match_mode: lead_exact
+      match_terms: [in progress]
+    - key: blocked
+      label: Blocked
+      category: Open
+      filters: [open, blocked]
+      match_mode: lead_exact
+      match_terms: [blocked]
+    - key: closed
+      label: Closed
+      category: Closed
+      filters: [closed]
+      match_mode: lead_contains
+      match_terms: [closed, resolved, fixed, complete, completed, implemented, invalid]
+      fallback_terms: [closed, resolved, fixed, complete, completed, implemented, invalid]
+    - key: draft
+      label: Draft
+      category: Draft
+      filters: [draft]
+      match_mode: lead_contains
+      match_terms: [draft, wip, proposal]
+      fallback_terms: [draft, wip, proposal]
+    - key: backlog
+      label: Backlog
+      category: Backlog
+      filters: [backlog]
+      match_mode: lead_exact_dash
+      match_terms: [backlog]
+    - key: done
+      label: Closed
+      category: Closed
+      filters: [closed]
+      match_mode: lead_token
+      match_terms: [done]

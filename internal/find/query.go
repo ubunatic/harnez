@@ -7,27 +7,12 @@ package find
 import (
 	"fmt"
 	"strings"
+
+	"ubunatic.com/harnez/internal/issues"
 )
 
-// StatusValue is one of the five query-spellings accepted by a status/is
-// filter. Only these exact spellings are accepted; matching against a
-// ticket's raw status text is case-insensitive and suffix-tolerant, but the
-// query vocabulary itself is fixed (issue 158).
+// StatusValue is one query spelling accepted by a status/is filter.
 type StatusValue string
-
-const (
-	StatusOpenValue       StatusValue = "open"
-	StatusInProgressValue StatusValue = "in-progress"
-	StatusBlockedValue    StatusValue = "blocked"
-	StatusClosedValue     StatusValue = "closed"
-	StatusDraftValue      StatusValue = "draft"
-)
-
-// validStatusValues lists the accepted query spellings, in the order they
-// should appear in an error hint.
-var validStatusValues = []StatusValue{
-	StatusOpenValue, StatusInProgressValue, StatusBlockedValue, StatusClosedValue, StatusDraftValue,
-}
 
 // Filter is a field:value term, ANDed with every other term in the query.
 // Version one supports only the status field (with alias "is").
@@ -124,16 +109,16 @@ func parseFilter(field, value string) (Filter, error) {
 		return Filter{}, fmt.Errorf("find: filter %q cannot use '|' alternatives; filters do not support OR", field+":"+value)
 	}
 	if value == "" {
-		return Filter{}, fmt.Errorf("find: filter %q has no value (accepted values: open, in-progress, blocked, closed, draft)", field+":")
+		return Filter{}, fmt.Errorf("find: filter %q has no value (accepted values: %s)", field+":", strings.Join(issues.StatusFilterValues(), ", "))
 	}
 
 	sv := StatusValue(strings.ToLower(value))
-	for _, v := range validStatusValues {
-		if sv == v {
+	for _, v := range issues.StatusFilterValues() {
+		if string(sv) == v {
 			return Filter{Value: sv}, nil
 		}
 	}
-	return Filter{}, fmt.Errorf("find: unsupported status value %q (accepted values: open, in-progress, blocked, closed, draft)", value)
+	return Filter{}, fmt.Errorf("find: unsupported status value %q (accepted values: %s)", value, strings.Join(issues.StatusFilterValues(), ", "))
 }
 
 // parseGroup splits a whitespace-delimited term on '|' into its OR

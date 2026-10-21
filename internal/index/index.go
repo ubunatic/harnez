@@ -103,6 +103,10 @@ func StatusCounts(issuesDir string) (open, closed, draft, unknown int, err error
 			closed++
 		case issues.StatusDraft:
 			draft++
+		case issues.StatusBacklog:
+			// The legacy snapshot schema has no backlog column; keep this known
+			// lifecycle value out of the unknown-status count.
+			continue
 		default:
 			unknown++
 		}

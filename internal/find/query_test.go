@@ -44,6 +44,7 @@ func TestParseQuery_FieldAliasesAndValues(t *testing.T) {
 		{"status", "open"}, {"is", "open"},
 		{"status", "in-progress"}, {"status", "blocked"},
 		{"status", "closed"}, {"status", "draft"},
+		{"status", "backlog"}, {"status", "unresolved"},
 		{"STATUS", "OPEN"}, {"Is", "Closed"},
 	} {
 		q, err := ParseQuery(tc.field + ":" + tc.value)
@@ -61,7 +62,7 @@ func TestParseQuery_PrecedenceFieldPlusOR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(q.Filters) != 1 || q.Filters[0].Value != StatusOpenValue {
+	if len(q.Filters) != 1 || q.Filters[0].Value != StatusValue("open") {
 		t.Fatalf("expected 1 status:open filter, got %+v", q.Filters)
 	}
 	if len(q.Groups) != 1 || len(q.Groups[0].Alternatives) != 2 {
@@ -89,6 +90,7 @@ func TestParseQuery_MalformedCases(t *testing.T) {
 		"foo:bar",
 		"status:archived",
 		"is:wip",
+		"status:backlogged",
 	}
 	for _, c := range cases {
 		if _, err := ParseQuery(c); err == nil {

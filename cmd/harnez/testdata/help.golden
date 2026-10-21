@@ -1564,6 +1564,8 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
   close [reason]   Status: Closed (bare), or "Closed — <reason>"
   done [reason]    Status: Closed (bare), or "Closed — <reason>" (alias for close)
   draft [reason]   Status: Draft, or "Draft — <reason>"
+  backlog [reason] Status: Backlog, or "Backlog — <reason>"
+  promote          Move a Backlog ticket back to Open
 
 Status verbs accept one or more ticket numbers. Leading numeric or GH-prefixed arguments
 are targets; the first non-number argument starts the reason. A numeric-only

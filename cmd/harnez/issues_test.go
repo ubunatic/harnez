@@ -56,6 +56,9 @@ func TestComposeNewStatus_Table(t *testing.T) {
 		{"done", "resolved", "Closed — resolved", false},
 		{"draft", "", "Draft", false},
 		{"draft", "x", "Draft — x", false},
+		{"backlog", "", "Backlog", false},
+		{"backlog", "later", "Backlog — later", false},
+		{"promote", "", "Open", false},
 		{"review", "", "", true},
 	}
 	for _, c := range cases {
@@ -199,6 +202,76 @@ func TestIssuesCmd_BatchMissingTicketChangesNothing(t *testing.T) {
 	afterHead := strings.TrimSpace(repoRunGitOutput(t, dir, "rev-parse", "HEAD"))
 	if string(beforeTicket) != string(afterTicket) || string(beforeReadme) != string(afterReadme) || beforeHead != afterHead {
 		t.Fatal("missing target caused files or Git history to change")
+	}
+}
+
+func TestIssuesCmd_BacklogBatchJSONAndPromote(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	for _, num := range []string{"043"} {
+		content := strings.Replace(sampleTicket, "042", num, 1)
+		if err := os.WriteFile(filepath.Join(dir, "issues", num+"-example-ticket.md"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out, errOut bytes.Buffer
+	cmd := newIssuesCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"backlog", "42", "43", "later", "--json", "--no-commit", "-d", dir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("backlog batch: %v (stderr: %s)", err, errOut.String())
+	}
+	var results []issuesResult
+	if err := json.Unmarshal(out.Bytes(), &results); err != nil {
+		t.Fatalf("decode JSON results: %v; output %q", err, out.String())
+	}
+	if len(results) != 2 || results[0].NewStatus != "Backlog — later" || results[1].NewStatus != "Backlog — later" {
+		t.Fatalf("backlog JSON results = %+v", results)
+	}
+
+	out.Reset()
+	cmd = newIssuesCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"promote", "42", "--no-commit", "-d", dir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("promote backlog: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(dir, "issues", "042-example-ticket.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "**Status**: Open\n") {
+		t.Fatalf("promote did not restore Open: %s", content)
+	}
+}
+
+func TestIssuesCmd_BacklogRefusesClosedAndPromoteRequiresBacklog(t *testing.T) {
+	dir, ticket := issuesFixtureRepo(t, strings.Replace(sampleTicket, "Status**: Open", "Status**: Closed — done", 1))
+	before, err := os.ReadFile(ticket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, verb := range []string{"backlog", "promote"} {
+		cmd := newIssuesCmd()
+		cmd.SetArgs([]string{verb, "42", "-d", dir, "--no-commit"})
+		if err := cmd.Execute(); err == nil {
+			t.Errorf("%s on a Closed ticket succeeded", verb)
+		}
+		after, readErr := os.ReadFile(ticket)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if !bytes.Equal(before, after) {
+			t.Errorf("%s on a Closed ticket changed it", verb)
+		}
+	}
+
+	dir, ticket = issuesFixtureRepo(t, sampleTicket)
+	cmd := newIssuesCmd()
+	cmd.SetArgs([]string{"promote", "42", "-d", dir, "--no-commit"})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "Backlog") {
+		t.Fatalf("promote on non-Backlog ticket: got %v, want an error naming Backlog", err)
 	}
 }
 
@@ -1092,7 +1165,7 @@ func TestIssuesCmd_ListAliasAndCompletion(t *testing.T) {
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("verb completion directive = %v, want no-file", directive)
 	}
-	wantVerbs := []string{"open", "start", "block", "close", "done", "draft", "new", "show", "mv", "rebase", "lint", "list"}
+	wantVerbs := []string{"open", "start", "block", "close", "done", "draft", "backlog", "promote", "new", "show", "mv", "rebase", "lint", "list"}
 	for _, want := range wantVerbs {
 		if !containsCompletion(verbs, want) {
 			t.Errorf("verb completion missing %q: %v", want, verbs)
@@ -1107,7 +1180,7 @@ func TestIssuesCmd_ListAliasAndCompletion(t *testing.T) {
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("list completion directive = %v, want no-file", directive)
 	}
-	wantFilters := []string{"is:open", "is:in-progress", "is:blocked", "is:closed", "is:draft"}
+	wantFilters := []string{"is:open", "is:in-progress", "is:blocked", "is:closed", "is:draft", "is:backlog", "is:unresolved"}
 	for _, want := range wantFilters {
 		if !containsCompletion(filters, want) {
 			t.Errorf("list completion missing filter %q: %v", want, filters)
@@ -1240,4 +1313,20 @@ func TestRunIssuesList_FormattingOptions(t *testing.T) {
 			t.Errorf("expected Rendered: in output, got: %s", out.String())
 		}
 	})
+}
+
+func TestRunIssuesShowJSONBacklogCategory(t *testing.T) {
+	content := strings.Replace(sampleTicket, "Status**: Open", "Status**: Backlog — later", 1)
+	dir, _ := issuesFixtureRepo(t, content)
+	var out bytes.Buffer
+	if err := runIssuesShow(&out, dir, "42", true, false, false, false); err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(out.Bytes(), &parsed); err != nil {
+		t.Fatalf("decode show JSON: %v", err)
+	}
+	if parsed["canonical_status"] != "Backlog" {
+		t.Fatalf("canonical_status = %v, want Backlog", parsed["canonical_status"])
+	}
 }

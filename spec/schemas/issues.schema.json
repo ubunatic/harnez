@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harnez issue lifecycle vocabulary",
+  "type": "object",
+  "required": ["lifecycle"],
+  "properties": {
+    "lifecycle": {
+      "type": "object",
+      "required": ["unresolved", "fallback_order", "statuses"],
+      "properties": {
+        "unresolved": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "fallback_order": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "statuses": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["key", "label", "category", "filters", "match_mode", "match_terms"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "label": { "type": "string", "minLength": 1 },
+              "category": { "type": "string", "enum": ["Open", "Closed", "Draft", "Backlog"] },
+              "filters": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "match_mode": {
+                "type": "string",
+                "enum": ["lead_contains", "lead_exact", "lead_exact_dash", "lead_token"]
+              },
+              "match_terms": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "fallback_terms": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

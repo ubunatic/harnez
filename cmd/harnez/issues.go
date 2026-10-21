@@ -101,6 +101,8 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
   close [reason]   Status: Closed (bare), or "Closed — <reason>"
   done [reason]    Status: Closed (bare), or "Closed — <reason>" (alias for close)
   draft [reason]   Status: Draft, or "Draft — <reason>"
+  backlog [reason] Status: Backlog, or "Backlog — <reason>"
+  promote          Move a Backlog ticket back to Open
 
 Status verbs accept one or more ticket numbers. Leading numeric or GH-prefixed arguments
 are targets; the first non-number argument starts the reason. A numeric-only
@@ -177,7 +179,7 @@ valid, exit-0 answer.`,
 				return nil
 			}
 			if len(args) == 0 {
-				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, new, show, mv, rebase, lint, list)")
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, backlog, promote, new, show, mv, rebase, lint, list)")
 			}
 			if args[0] == "new" {
 				return nil // [title] is optional, no ticket-number argument exists yet
@@ -477,6 +479,9 @@ func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issue
 		if !hasStatus {
 			return nil, false, fmt.Errorf("issues: %s has no '**Status**:' line to update", relPath)
 		}
+		if err := validateLifecycleTransition(verb, oldStatus); err != nil {
+			return nil, false, fmt.Errorf("issues: %s: %w", relPath, err)
+		}
 		targetStatus, err := issuesCloseStatus(verb, oldStatus, newStatus, opts.AmendReason)
 		if err != nil {
 			return nil, false, fmt.Errorf("issues: %s: %w", relPath, err)
@@ -592,6 +597,8 @@ func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]s
 			"close\tclose a ticket",
 			"done\tclose a ticket (alias for close)",
 			"draft\tmark a ticket draft",
+			"backlog\tdefer a ticket to Backlog",
+			"promote\tmove a Backlog ticket to Open",
 			"new\tcreate a ticket placeholder",
 			"show\tinspect a ticket",
 			"mv\trenumber a ticket",
@@ -612,12 +619,9 @@ func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]s
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	completions := []string{
-		"is:open\topen and unresolved tickets",
-		"is:in-progress\ttickets in progress",
-		"is:blocked\tblocked tickets",
-		"is:closed\tclosed tickets",
-		"is:draft\tdraft tickets",
+	completions := make([]string, 0, len(issues.StatusFilterValues())+len(files))
+	for _, filter := range issues.StatusFilterValues() {
+		completions = append(completions, "is:"+filter+"\tstatus filter "+filter)
 	}
 	for _, f := range files {
 		completions = append(completions, f.Number+"\t"+issues.PlainTitle(f.Title))
@@ -632,35 +636,54 @@ func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]s
 // comes verbatim from the caller.
 func composeNewStatus(verb, reason string) (string, error) {
 	reason = strings.TrimSpace(reason)
+	statusFor := func(key string) (string, error) {
+		label, ok := issues.StatusLabel(key)
+		if !ok {
+			return "", fmt.Errorf("issues: missing lifecycle label for %q", key)
+		}
+		if reason == "" {
+			return label, nil
+		}
+		return label + " — " + reason, nil
+	}
 	switch verb {
 	case "open":
-		if reason == "" {
-			return "Open", nil
-		}
-		return "Open — " + reason, nil
+		return statusFor("open")
 	case "start":
-		if reason == "" {
-			return "In Progress", nil
-		}
-		return "In Progress — " + reason, nil
+		return statusFor("in-progress")
 	case "block":
 		if reason == "" {
 			return "", fmt.Errorf(`issues block: reason is required, e.g. 'harnez issues block <number> "waiting on upstream fix"'`)
 		}
-		return "Blocked — " + reason, nil
+		return statusFor("blocked")
 	case "close", "done":
-		if reason == "" {
-			return "Closed", nil
-		}
-		return "Closed — " + reason, nil
+		return statusFor("closed")
 	case "draft":
-		if reason == "" {
-			return "Draft", nil
+		return statusFor("draft")
+	case "backlog":
+		return statusFor("backlog")
+	case "promote":
+		if reason != "" {
+			return "", fmt.Errorf("issues promote: does not accept a reason")
 		}
-		return "Draft — " + reason, nil
+		return statusFor("open")
 	default:
-		return "", fmt.Errorf("issues: unknown verb %q (expected one of: open, start, block, close, done, draft)", verb)
+		return "", fmt.Errorf("issues: unknown verb %q (expected one of: open, start, block, close, done, draft, backlog, promote)", verb)
 	}
+}
+
+func validateLifecycleTransition(verb, oldStatus string) error {
+	switch verb {
+	case "backlog":
+		if issues.CanonicalizeStatus(oldStatus) == issues.StatusClosed {
+			return fmt.Errorf("issues backlog: cannot move a Closed ticket to Backlog")
+		}
+	case "promote":
+		if issues.CanonicalizeStatus(oldStatus) != issues.StatusBacklog {
+			return fmt.Errorf("issues promote: ticket must be Backlog")
+		}
+	}
+	return nil
 }
 
 // runIssuesNew implements `harnez issues new [title]`: atomically reserve
@@ -1040,6 +1063,9 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 	_, oldStatus, hasStatus := issues.ParseIssueFile(string(content))
 	if !hasStatus {
 		return issuesResult{}, false, fmt.Errorf("issues: %s has no '**Status**:' line to update", relPath)
+	}
+	if err := validateLifecycleTransition(verb, oldStatus); err != nil {
+		return issuesResult{}, false, fmt.Errorf("issues: %s: %w", relPath, err)
 	}
 
 	newStatus, err = issuesCloseStatus(verb, oldStatus, newStatus, opts.AmendReason)

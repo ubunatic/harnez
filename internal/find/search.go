@@ -19,30 +19,10 @@ type Result struct {
 	sumClasses int
 }
 
-// statusMatches implements the status/is filter semantics from issue 158:
-// open/in-progress/blocked compare the ticket's leading raw lifecycle token
-// (case-insensitive, suffix-stripped), so they can distinguish stages that
-// issues.CanonicalizeStatus otherwise collapses together; closed/draft
-// compare the canonical category.
+// statusMatches delegates lifecycle vocabulary and matching to the embedded
+// issue spec so the query parser and evaluator share one definition.
 func statusMatches(f issues.IssueFile, v StatusValue) bool {
-	switch v {
-	case StatusClosedValue:
-		return f.Canonical == issues.StatusClosed
-	case StatusDraftValue:
-		return f.Canonical == issues.StatusDraft
-	case StatusInProgressValue:
-		return issues.LeadingLifecycle(f.RawStatus) == "in progress"
-	case StatusBlockedValue:
-		return issues.LeadingLifecycle(f.RawStatus) == "blocked"
-	case StatusOpenValue:
-		switch issues.LeadingLifecycle(f.RawStatus) {
-		case "open", "in progress", "blocked":
-			return true
-		}
-		return false
-	default:
-		return false
-	}
+	return issues.StatusFilterMatches(f.RawStatus, string(v))
 }
 
 // Search evaluates q against every issue file, returning matches ordered by

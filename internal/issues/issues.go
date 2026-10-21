@@ -21,7 +21,7 @@ type IssueFile struct {
 	RelPath      string         // e.g. "036-harnez-status-issues-tracker-linter.md" or "archive/001-diff-clean-wrong-path.md"
 	Title        string         // e.g. "036 — `harnez status` Issues Tracker Status Linter"
 	RawStatus    string         // exact string after "**Status:**", e.g. "Closed — fixed in 444c29f"
-	Canonical    StatusCategory // Open, Closed, Draft, Unknown
+	Canonical    StatusCategory // Open, Closed, Draft, Backlog, Unknown
 	HasStatusTag bool
 	Body         string // ticket content after the first metadata-closing horizontal rule following the title; empty if none is found (see 158)
 }
@@ -43,6 +43,7 @@ const (
 	StatusOpen    StatusCategory = "Open"
 	StatusClosed  StatusCategory = "Closed"
 	StatusDraft   StatusCategory = "Draft"
+	StatusBacklog StatusCategory = "Backlog"
 	StatusUnknown StatusCategory = "Unknown"
 )
 
@@ -111,57 +112,30 @@ func LeadingLifecycle(status string) string {
 
 // CanonicalizeStatus normalizes free-form status strings into core categories.
 func CanonicalizeStatus(status string) StatusCategory {
-	s := strings.ToLower(status)
-	s = strings.ReplaceAll(s, "*", "")
-	s = strings.ReplaceAll(s, "`", "")
-	s = strings.ReplaceAll(s, "_", "")
-	s = strings.TrimSpace(s)
-
-	if s == "" {
+	if normalizeStatusText(status) == "" {
 		return StatusUnknown
 	}
-
-	// Check leading status prefix first (e.g. "Open — partially fixed")
-	lead := s
-	if idx := strings.IndexAny(s, "—–-:,"); idx != -1 {
-		lead = strings.TrimSpace(s[:idx])
+	spec, err := currentLifecycleSpec()
+	if err != nil {
+		return StatusUnknown
 	}
-	// Check draft
-	for _, kw := range []string{"draft", "wip", "proposal"} {
-		if strings.Contains(lead, kw) {
-			return StatusDraft
+	for _, rule := range spec.Lifecycle.Statuses {
+		if statusRuleMatches(rule, status) {
+			return rule.Category
 		}
 	}
-	// Check open
-	for _, kw := range []string{"open", "in progress", "blocked", "investigating"} {
-		if strings.Contains(lead, kw) {
-			return StatusOpen
+	for _, rule := range spec.Lifecycle.Statuses {
+		if statusRuleHasNearMiss(rule, status) {
+			return StatusUnknown
 		}
 	}
-	// Check closed
-	for _, kw := range []string{"closed", "resolved", "fixed", "complete", "completed", "implemented", "invalid"} {
-		if strings.Contains(lead, kw) {
-			return StatusClosed
+	for _, key := range spec.Lifecycle.FallbackOrder {
+		for _, rule := range spec.Lifecycle.Statuses {
+			if rule.Key == key && statusFallbackMatches(rule, status) {
+				return rule.Category
+			}
 		}
 	}
-
-	// Fallback to searching anywhere in the full string
-	for _, kw := range []string{"draft", "wip", "proposal"} {
-		if strings.Contains(s, kw) {
-			return StatusDraft
-		}
-	}
-	for _, kw := range []string{"closed", "resolved", "fixed", "complete", "completed", "implemented", "invalid"} {
-		if strings.Contains(s, kw) {
-			return StatusClosed
-		}
-	}
-	for _, kw := range []string{"open", "in progress", "blocked", "partially"} {
-		if strings.Contains(s, kw) {
-			return StatusOpen
-		}
-	}
-
 	return StatusUnknown
 }
 
