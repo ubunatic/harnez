@@ -64,3 +64,15 @@ User moved `harnez tui` (776, 778) to the backlog. Active 20: 843, 560 (rescope 
   copies, skills next/roadmap/peer-assistant/harnez-handoff.
 - Unverified claim: 747 of 822 files have no parseable status line. Implausible vs. ~249 active in the
   index; developer must recheck with the real parser before normalizing.
+
+## M1 delivered (2026-10-22): Backlog status and backlog/promote verbs — 11b03174
+
+Lifecycle vocabulary in `spec/issues.yaml` (+ schema); `is:open` excludes Backlog, `status:backlog` and
+`status:unresolved` reach it; `backlog`/`promote` verbs refuse Closed→Backlog and promote of non-Backlog.
+`Done` now normalizes to Closed (687, 689, 779). Host verified on a scratch tracker. Live counts: 840
+tickets, 254 Open, 567 Closed, 17 Draft, 2 Unknown (`In Review`: 211, 213).
+
+## M2 Pre-Work / Required Refinements
+
+- `index.StatusCounts` skips Backlog (no column): add a backlog count so totals add up.
+- 211, 213 (`In Review`): leave as Unknown; the grooming pass (M4) decides.
