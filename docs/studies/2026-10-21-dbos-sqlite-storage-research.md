@@ -1,6 +1,6 @@
 # DBOS Go + SQLite as Harnez storage — issue 841 M1
 
-Research date: 2026-10-21. DBOS was pinned to v1.7.0. The canary source and its binaries/databases are outside this repository at `/tmp/claude-1000/-home-uwe-projects-harnez/471e7cd0-6fbf-43b9-a74d-0b45ca76d587/scratchpad/dbos-canary/`.
+Research date: 2026-10-21. DBOS was pinned to v1.7.0. The canary source, timing files and logs are kept outside this repository at `~/.local/share/harnez/canaries/dbos-canary/` (binaries and databases not kept; rebuild with `go build`).
 
 ## Recommendations
 
@@ -111,4 +111,4 @@ _, err = dbos.RunAsStep(ctx, func(stepCtx context.Context) (string, error) {
 })
 ```
 
-Full canary source remains in the approved external scratch directory. No DBOS dependency or canary source was added to Harnez.
+Full canary source is in `~/.local/share/harnez/canaries/dbos-canary/`. No DBOS dependency or canary source was added to Harnez.
