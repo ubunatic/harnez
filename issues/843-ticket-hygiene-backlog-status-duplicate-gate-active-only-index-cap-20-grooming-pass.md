@@ -105,3 +105,9 @@ No local "duplicate of" pairs exist, so recall was validated only on 697/698 and
 - Added `status:active` for those four active lifecycle states and configured the active cap (20) in `spec/issues.yaml`. `issues lint` and `issues status` warn above the cap and lint validates all three generated indexes.
 - The parser classifies the existing `In Review` variant as active Open; live status counts are 256 Open, 17 Draft, 0 Backlog, 567 Closed, 0 Unknown. No real ticket statuses were changed for M3.
 - Updated managed issue rules, IssueTracking full/lite sources and root copy, plus `/issue`, `/roadmap`, and `/next` command sources.
+
+## M3 delivered (2026-10-22): active-only index, BACKLOG/CLOSED files, cap warning — cbd7ec0e
+
+`issues/README.md` 248 KB → 67 KB (active only; drops to a few KB after M4). Lint: valid, warns
+"273 active tickets exceeds configured cap 20". Rules, IssueTracking docs and /issue, /roadmap, /next
+skill sources updated.
