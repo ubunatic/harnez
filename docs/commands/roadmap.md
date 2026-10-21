@@ -29,7 +29,7 @@ result unless the user explicitly asked to wait.
 
 ### Step 1 — Check open issues
 
-- Run `harnez find -d <repo> issues -a status:open` for a text backlog overview. Use `-r` or `--json` when scripting programmatic extractions. Add `-I/--image` only when the user explicitly requests image output.
+- Run `harnez find -d <repo> issues -a status:active` for the active-ticket overview (Open, In Progress, Blocked, Draft). The generated `issues/README.md` links to Backlog and Closed indexes. Use `-r` or `--json` when scripting programmatic extractions. Add `-I/--image` only when the user explicitly requests image output.
 - Read each open ticket as text with `harnez issues show -d <repo> <n>` or targeted range reads. Most tickets carry an appended `## Implementation Plan` section
   from a prior planning pass — if present, use it for scope, dependencies, and blockers rather
   than re-deriving them from scratch. Fall back to the ticket's own problem statement and

@@ -25,6 +25,7 @@ func TestIssuesTable(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "001-first-bug.md"), "# 001 — First bug\n\n**Status**: Open\n**Priority**: P2 (Medium)\n")
 	writeFile(t, filepath.Join(dir, "archive", "002-old-bug.md"), "# 002 — Old bug\n\n**Status**: Closed — resolved in abc123\n")
+	writeFile(t, filepath.Join(dir, "003-backlog.md"), "# 003 — Backlog\n\n**Status**: Backlog — later\n")
 
 	table, err := IssuesTable(dir)
 	if err != nil {
@@ -34,10 +35,58 @@ func TestIssuesTable(t *testing.T) {
 	want := `| # | File | Title | Status |
 |---|------|-------|--------|
 | 001 | [001-first-bug.md](001-first-bug.md) | First bug | Open |
-| 002 | [archive/002-old-bug.md](archive/002-old-bug.md) | Old bug | Closed — resolved in abc123 |
 `
 	if table != want {
 		t.Errorf("IssuesTable mismatch:\ngot:\n%s\nwant:\n%s", table, want)
+	}
+}
+
+func TestIssueIndexFilesPartitionStatusesAndArchive(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "001-open.md"), "# 001 — Open\n\n**Status**: Blocked — waiting\n")
+	writeFile(t, filepath.Join(dir, "002-draft.md"), "# 002 — Draft\n\n**Status**: Draft\n")
+	writeFile(t, filepath.Join(dir, "003-backlog.md"), "# 003 — Backlog\n\n**Status**: Backlog — later\n")
+	writeFile(t, filepath.Join(dir, "archive", "004-closed.md"), "# 004 — Closed\n\n**Status**: Closed — resolved\n")
+
+	indexes, err := IssueIndexFiles(dir)
+	if err != nil {
+		t.Fatalf("IssueIndexFiles: %v", err)
+	}
+	for name, want := range map[string][]string{
+		"README.md":  {"001-open.md", "002-draft.md"},
+		"BACKLOG.md": {"003-backlog.md"},
+		"CLOSED.md":  {"archive/004-closed.md"},
+	} {
+		for _, path := range want {
+			if !strings.Contains(indexes[name], path) {
+				t.Errorf("%s missing %s:\n%s", name, path, indexes[name])
+			}
+		}
+	}
+	for name, excluded := range map[string][]string{
+		"README.md":  {"003-backlog.md", "archive/004-closed.md"},
+		"BACKLOG.md": {"001-open.md", "002-draft.md", "archive/004-closed.md"},
+		"CLOSED.md":  {"001-open.md", "002-draft.md", "003-backlog.md"},
+	} {
+		for _, path := range excluded {
+			if strings.Contains(indexes[name], path) {
+				t.Errorf("%s unexpectedly contains %s:\n%s", name, path, indexes[name])
+			}
+		}
+	}
+}
+
+func TestIssueIndexFilesOmitsUnknownStatus(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "001-unknown.md"), "# 001 — Unknown\n\n**Status**: Pending QA\n")
+	indexes, err := IssueIndexFiles(dir)
+	if err != nil {
+		t.Fatalf("IssueIndexFiles: %v", err)
+	}
+	for name, content := range indexes {
+		if strings.Contains(content, "001-unknown.md") {
+			t.Errorf("%s unexpectedly lists unknown status ticket:\n%s", name, content)
+		}
 	}
 }
 
@@ -49,8 +98,8 @@ func TestIssuesTableMissingStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IssuesTable: %v", err)
 	}
-	if !strings.Contains(table, "| 003 | [003-no-status.md](003-no-status.md) | No status field | Unknown |") {
-		t.Errorf("expected Unknown status fallback, got:\n%s", table)
+	if strings.Contains(table, "003-no-status.md") {
+		t.Errorf("unknown-status ticket must not appear in the active table, got:\n%s", table)
 	}
 }
 
@@ -66,7 +115,7 @@ func TestStatusCountsIncludesBacklog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if open != 1 || closed != 1 || draft != 1 || backlog != 1 || unknown != 1 {
+	if open != 2 || closed != 1 || draft != 1 || backlog != 1 || unknown != 0 {
 		t.Fatalf("StatusCounts = open:%d closed:%d draft:%d backlog:%d unknown:%d", open, closed, draft, backlog, unknown)
 	}
 }
@@ -97,7 +146,7 @@ func TestIssuesTableReservedPlaceholder(t *testing.T) {
 // from the title's pipe being read back as a column separator).
 func TestIssuesTablePipeInTitleRoundTripsThroughLint(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "233-pipe-title.md"), "# 233 — docs/practices|lang|other source\n\n**Status**: Closed — migrated\n")
+	writeFile(t, filepath.Join(dir, "233-pipe-title.md"), "# 233 — docs/practices|lang|other source\n\n**Status**: Open\n")
 
 	table, err := IssuesTable(dir)
 	if err != nil {
@@ -127,7 +176,7 @@ func TestIssuesTablePunctuationInTitleRoundTripsThroughLint(t *testing.T) {
 	ticketPath := filepath.Join(dir, "040-treemap-theming-theme-1-current-vs-theme-2-quad-halfblock-sub-cell-rendering.md")
 	ticketContent := `# 040 — Treemap theming: theme 1 (current) vs. theme 2 (quad/halfblock sub-cell rendering)
 
-**Status**: Closed — shipped as ` + "`TreemapThemeNumbered`" + ` (thin seven-eighths edges + a corner number on every box), --theme 1|2, tests, verified. Superseded two earlier designs after live visual review; see §7.
+**Status**: Open
 **Priority**: P3 (Low)
 
 ---

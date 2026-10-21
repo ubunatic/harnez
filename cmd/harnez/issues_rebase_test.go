@@ -123,6 +123,71 @@ func TestIssuesRebaseRepairsIndependentTicketCollisions(t *testing.T) {
 	}
 }
 
+func TestIssuesLintChecksBacklogAndClosedIndexes(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for n, status := range map[int]string{1: "Open", 2: "Backlog — later", 3: "Closed — resolved"} {
+		path := filepath.Join(dir, "issues", fmt.Sprintf("%03d-ticket.md", n))
+		content := fmt.Sprintf("# %03d — Ticket\n\n**Status**: %s\n", n, status)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := indexpkg.UpdateIssuesReadme(filepath.Join(dir, "issues", "README.md"), filepath.Join(dir, "issues")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runIssuesLint(&bytes.Buffer{}, dir); err != nil {
+		t.Fatalf("runIssuesLint on generated indexes: %v", err)
+	}
+	backlog := filepath.Join(dir, "issues", "BACKLOG.md")
+	if err := os.WriteFile(backlog, []byte("# Backlog\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "BACKLOG.md") {
+		t.Fatalf("runIssuesLint error = %v, want BACKLOG.md drift", err)
+	}
+	unknown := filepath.Join(dir, "issues", "004-unknown.md")
+	if err := os.WriteFile(unknown, []byte("# 004 — Unknown\n\n**Status**: Pending QA\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := indexpkg.UpdateIssuesReadme(filepath.Join(dir, "issues", "README.md"), filepath.Join(dir, "issues")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "unknown status") {
+		t.Fatalf("runIssuesLint error = %v, want unknown status diagnostic", err)
+	}
+}
+
+func TestRunIssuesLintWarnsWhenActiveCapExceeded(t *testing.T) {
+	dir := t.TempDir()
+	issuesDir := filepath.Join(dir, "issues")
+	if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for n := 1; n <= 21; n++ {
+		writeTestTicket(t, dir, n, fmt.Sprintf("ticket-%02d", n))
+	}
+	if _, err := indexpkg.UpdateIssuesReadme(filepath.Join(issuesDir, "README.md"), issuesDir); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runIssuesLint(&out, dir); err != nil {
+		t.Fatalf("runIssuesLint: %v", err)
+	}
+	if !strings.Contains(out.String(), "warning: 21 active tickets exceeds configured cap 20") {
+		t.Fatalf("missing active cap warning: %q", out.String())
+	}
+	out.Reset()
+	if err := runIssuesStatus(&out, dir); err != nil {
+		t.Fatalf("runIssuesStatus: %v", err)
+	}
+	if !strings.Contains(out.String(), "warning: 21 active tickets exceeds configured cap 20") {
+		t.Fatalf("status missing active cap warning: %q", out.String())
+	}
+}
+
 const issuesAttributesLineForTest = "issues/README.md merge=harnez-issues-index"
 
 func TestRunIssuesLintCachedNamesUntrackedTicketWhenIndexIncludesIt(t *testing.T) {

@@ -26,9 +26,9 @@ Available Commands:
   find            Query repository-data entities with a short fuzzy-text/filter grammar
   guard           Rule enforcer and safety guardrail commands
   help            Help about any command
-  index           Regenerate issues/README.md and docs/README.md's studies table from source files
+  index           Regenerate issue indexes and docs/README.md's studies table from source files
   init            Set up a project directory with AGENTS.md, language docs, and Makefile targets
-  issues          Change a ticket's Status line, resync issues/README.md, and commit -- in one call
+  issues          Change a ticket's Status line, resync issue indexes, and commit -- in one call
   lint            Check files against harnez repository rules and conventions
   log             Show harnez's own CLI invocation history, newest first (git log for harnez)
   man             Generate, print, or install roff man pages
@@ -1501,7 +1501,9 @@ Flags:
 index regenerates two hand-maintained index tables from the files that are
 their actual source of truth, so they stop drifting:
 
-  issues/README.md   <- issues/*.md + issues/archive/*.md metadata
+  issues/README.md   <- active Open/In Progress/Blocked/Draft tickets
+  issues/BACKLOG.md  <- Backlog tickets
+  issues/CLOSED.md   <- Closed tickets, including archived tickets
   docs/README.md      <- docs/studies/*.md (docs/studies/ table only)
 
 It is idempotent: run against unchanged sources, it reports no changes.
@@ -1556,8 +1558,8 @@ Flags:
 issues collapses today's four-step ticket-status-change dance (hand-edit the
 '**Status**:' line, run 'harnez index', 'git add' the changed files, 'git
 commit') into one call: it rewrites the ticket's Status line, regenerates
-issues/README.md in-process (the same logic 'harnez index' uses), and
-commits both files by default.
+issues/README.md, BACKLOG.md, and CLOSED.md in-process (the same logic
+'harnez index' uses), and commits the changed files by default.
 
 Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
 
@@ -1606,7 +1608,9 @@ then the README is regenerated and the batch is committed once.
                     number collisions in an explicit final commit. --dry-run
                     prints the plan without changing Git state.
   lint              Read-only validation for duplicate numbers, conflicting
-                    filename/H1 numbers, and generated-index drift.
+                    filename/H1 numbers, and drift across all three indexes.
+  status            Show lifecycle counts and warn when active tickets exceed
+                    the configured spec cap.
   list [filter]     Read-only: list tickets matching [filter] (default:
                     "is:open"), a thin wrapper over 'harnez find issues' --
                     not a status-mutation verb, and does not accept

@@ -155,9 +155,16 @@ The top of each ticket MUST contain the standardized metadata block:
 
 ### 4.1 Index Table (`issues/README.md`)
 
-The tracker index `issues/README.md` maintains a synchronized inventory of all tickets.
-Run `harnez index` (issue 148) to regenerate its table from `issues/*.md` +
-`issues/archive/*.md` metadata instead of hand-editing rows — it is idempotent (a
+`issues/README.md` contains active tickets only: `Open`, `In Progress`, `Blocked`, and `Draft`.
+It links to generated `issues/BACKLOG.md` and `issues/CLOSED.md`. `harnez index` regenerates all
+three files; `harnez issues lint` checks their completeness and generated content. Use
+`harnez find -d <repo> issues -a status:active` for the same active set. The configured active
+ticket cap lives in `spec/issues.yaml`; `harnez issues lint` and `harnez issues status` warn when
+the active count exceeds it.
+
+The active index `issues/README.md` and generated `BACKLOG.md` and `CLOSED.md` maintain a
+synchronized inventory of all tickets. Run `harnez index` (issue 148) to regenerate all three
+tables from `issues/*.md` + `issues/archive/*.md` metadata instead of hand-editing rows — it is idempotent (a
 second run against unchanged tickets makes no further change) and has a `--check`
 flag that exits 1 on drift without writing, for CI/pre-commit use — and prints a
 unified diff of exactly what would change, so running it directly in an agent
@@ -168,7 +175,8 @@ managed: prose before or after that table is preserved verbatim. A customized
 table header (for example, one with an added Priority or Target column) is
 refused without writing the file, because harnez cannot regenerate values for
 project-specific columns; reconcile that schema manually before adopting the
-generated table. `harnez index`
+generated table. `BACKLOG.md` and `CLOSED.md` are generated as complete files.
+`harnez index`
 also regenerates the project's studies index when that convention exists; otherwise
 the issues index is updated independently. Manual edits to
 rows within either managed table will be overwritten by the next `harnez index`
@@ -177,21 +185,21 @@ run — prefer fixing the source ticket/study file instead.
 ```markdown
 # Issues
 
+See [Backlog](BACKLOG.md) and [Closed](CLOSED.md).
+
 | # | File | Title | Status |
 |---|------|-------|--------|
-| 001 | [archive/001-diff-clean-wrong-path.md](archive/001-diff-clean-wrong-path.md) | diff and clean operate on wrong file | Closed — resolved |
-| 042 | [042-standardized-issue-priority-schema.md](042-standardized-issue-priority-schema.md) | Standardized issue priority schema | Closed |
+| 005 | [005-permissions-grow-only.md](005-permissions-grow-only.md) | Permissions are grow-only — revoked entries never removed | Open |
+| 007 | [007-no-tests.md](007-no-tests.md) | Thin test coverage — gaps remaining | Open — partially addressed |
 ```
 
-`harnez status` includes an issue tracker linter that verifies:
-1. Every ticket on disk is indexed in `issues/README.md`.
-2. Every table link points to a valid file (accounting for `issues/` and `issues/archive/`).
-3. Ticket status declared in the file matches the status in the index table.
-4. No duplicate ticket numbers exist.
+`harnez issues lint` verifies every ticket appears in the index for its lifecycle category,
+all table links point to valid files (including `issues/archive/`), statuses match, and ticket
+numbers are unique. The broader `harnez status` tracker summary also checks index consistency.
 
 ### 4.2 Archiving Closed Issues
 
-When an issue is closed and verified, move it to `issues/archive/NNN-kebab-case.md` to keep the active `issues/` directory clean and focused. Update the markdown link in `issues/README.md` accordingly.
+When an issue is closed and verified, it may be moved to `issues/archive/NNN-kebab-case.md` to keep the active `issues/` directory clean and focused. `harnez index` keeps it in the generated `issues/CLOSED.md` index.
 
 ---
 

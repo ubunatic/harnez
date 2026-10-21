@@ -405,7 +405,7 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath 
 		fmt.Fprintln(w, "issues rebase: no repair needed")
 		return nil
 	}
-	stage = append(stage, "issues/README.md")
+	stage = append(stage, issueIndexRelPaths()...)
 	if !mutated && !changed {
 		pathStatus, err := gitOutput(dir, append([]string{"status", "--porcelain", "--"}, stage...)...)
 		if err != nil {
@@ -457,6 +457,43 @@ func runIssuesLint(w io.Writer, dir string) error {
 	return runIssuesLintMode(w, dir, false, nil)
 }
 
+type issueIndexSnapshot map[string]fileSnapshot
+
+type fileSnapshot struct {
+	content []byte
+	existed bool
+}
+
+func issueIndexRelPaths() []string {
+	return []string{"issues/README.md", "issues/BACKLOG.md", "issues/CLOSED.md"}
+}
+
+func snapshotIssueIndexes(issuesDir string) (issueIndexSnapshot, error) {
+	snapshot := make(issueIndexSnapshot, 3)
+	for _, name := range []string{"README.md", "BACKLOG.md", "CLOSED.md"} {
+		content, err := os.ReadFile(filepath.Join(issuesDir, name))
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		snapshot[name] = fileSnapshot{content: content, existed: err == nil}
+	}
+	return snapshot, nil
+}
+
+func restoreIssueIndexes(issuesDir string, snapshot issueIndexSnapshot) error {
+	for name, file := range snapshot {
+		path := filepath.Join(issuesDir, name)
+		if file.existed {
+			if err := os.WriteFile(path, file.content, 0o644); err != nil {
+				return err
+			}
+		} else if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []string) error {
 	issuesDir := filepath.Join(dir, "issues")
 	files, err := issues.Scan(issuesDir)
@@ -465,6 +502,9 @@ func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []
 	}
 	seen := map[string]string{}
 	for _, f := range files {
+		if f.Canonical == issues.StatusUnknown {
+			return fmt.Errorf("issues lint: %s has unknown status %q and cannot appear in the three lifecycle indexes", f.RelPath, f.RawStatus)
+		}
 		if prior := seen[f.Number]; prior != "" {
 			return fmt.Errorf("issues lint: duplicate ticket number %s: %s and %s", f.Number, prior, f.RelPath)
 		}
@@ -500,8 +540,51 @@ func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []
 		}
 		return fmt.Errorf("issues lint: issues/README.md is generated index drift; run 'harnez index'")
 	}
+	indexes, err := index.IssueIndexFiles(issuesDir)
+	if err != nil {
+		return fmt.Errorf("issues lint: %w", err)
+	}
+	for _, name := range []string{"BACKLOG.md", "CLOSED.md"} {
+		path := filepath.Join(issuesDir, name)
+		actual, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("issues lint: read index %s: %w", path, err)
+		}
+		if string(actual) != indexes[name] {
+			return fmt.Errorf("issues lint: issues/%s is generated index drift; run 'harnez index'", name)
+		}
+	}
 	fmt.Fprintln(w, "issues tracker valid")
+	if err := warnActiveTicketCap(w, issuesDir); err != nil {
+		return fmt.Errorf("issues lint: %w", err)
+	}
 	return nil
+}
+
+func warnActiveTicketCap(w io.Writer, issuesDir string) error {
+	cap, err := issues.ActiveIssueCap()
+	if err != nil {
+		return err
+	}
+	open, _, draft, _, _, err := index.StatusCounts(issuesDir)
+	if err != nil {
+		return err
+	}
+	active := open + draft
+	if active > cap {
+		fmt.Fprintf(w, "warning: %d active tickets exceeds configured cap %d\n", active, cap)
+	}
+	return nil
+}
+
+func runIssuesStatus(w io.Writer, dir string) error {
+	issuesDir := filepath.Join(dir, "issues")
+	open, closed, draft, backlog, unknown, err := index.StatusCounts(issuesDir)
+	if err != nil {
+		return fmt.Errorf("issues status: %w", err)
+	}
+	fmt.Fprintf(w, "open=%d draft=%d backlog=%d closed=%d unknown=%d\n", open, draft, backlog, closed, unknown)
+	return warnActiveTicketCap(w, issuesDir)
 }
 
 func runIssuesLintCached(w io.Writer, dir string) error {

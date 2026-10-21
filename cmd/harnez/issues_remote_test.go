@@ -113,10 +113,14 @@ func TestGHTicketLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i, id := range []string{"042", "GH9", "GH42", "GH100", "GH900"} {
+	for i, id := range []string{"042", "GH9", "GH100", "GH900"} {
 		if rows[i].Number != id {
 			t.Fatalf("sort: %+v", rows)
 		}
+	}
+	closed, err := os.ReadFile(filepath.Join(dir, "issues", "CLOSED.md"))
+	if err != nil || !strings.Contains(string(closed), "GH42-cloud.md") {
+		t.Fatalf("closed index missing GH42: %s, err=%v", closed, err)
 	}
 	files, err := issues.Scan(filepath.Join(dir, "issues"))
 	if err != nil {

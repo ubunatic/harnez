@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez issue lifecycle vocabulary",
   "type": "object",
-  "required": ["lifecycle", "duplicate_gate"],
+  "required": ["lifecycle", "duplicate_gate", "issue_index"],
   "properties": {
     "lifecycle": {
       "type": "object",
@@ -68,6 +68,14 @@
           "uniqueItems": true,
           "items": { "type": "string", "minLength": 1 }
         }
+      },
+      "additionalProperties": false
+    },
+    "issue_index": {
+      "type": "object",
+      "required": ["active_cap"],
+      "properties": {
+        "active_cap": { "type": "integer", "minimum": 1 }
       },
       "additionalProperties": false
     }

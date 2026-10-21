@@ -87,12 +87,12 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "issues <verb> <ticket-number...> [reason...]",
-		Short: "Change a ticket's Status line, resync issues/README.md, and commit -- in one call",
+		Short: "Change a ticket's Status line, resync issue indexes, and commit -- in one call",
 		Long: `issues collapses today's four-step ticket-status-change dance (hand-edit the
 '**Status**:' line, run 'harnez index', 'git add' the changed files, 'git
 commit') into one call: it rewrites the ticket's Status line, regenerates
-issues/README.md in-process (the same logic 'harnez index' uses), and
-commits both files by default.
+issues/README.md, BACKLOG.md, and CLOSED.md in-process (the same logic
+'harnez index' uses), and commits the changed files by default.
 
 Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
 
@@ -141,7 +141,9 @@ then the README is regenerated and the batch is committed once.
                     number collisions in an explicit final commit. --dry-run
                     prints the plan without changing Git state.
   lint              Read-only validation for duplicate numbers, conflicting
-                    filename/H1 numbers, and generated-index drift.
+                    filename/H1 numbers, and drift across all three indexes.
+  status            Show lifecycle counts and warn when active tickets exceed
+                    the configured spec cap.
   list [filter]     Read-only: list tickets matching [filter] (default:
                     "is:open"), a thin wrapper over 'harnez find issues' --
                     not a status-mutation verb, and does not accept
@@ -186,7 +188,7 @@ valid, exit-0 answer.`,
 				return nil
 			}
 			if len(args) == 0 {
-				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, backlog, promote, new, show, mv, rebase, lint, list)")
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, backlog, promote, new, show, mv, rebase, lint, status, list)")
 			}
 			if args[0] == "new" {
 				return nil // [title] is optional, no ticket-number argument exists yet
@@ -218,6 +220,12 @@ valid, exit-0 answer.`,
 				}
 				return nil
 			}
+			if args[0] == "status" {
+				if len(args) != 1 {
+					return fmt.Errorf("issues status: accepts no arguments")
+				}
+				return nil
+			}
 			if args[0] == "merge-driver" {
 				if len(args) != 4 {
 					return fmt.Errorf("issues merge-driver: expected %%O %%A %%B paths")
@@ -246,6 +254,9 @@ valid, exit-0 answer.`,
 					return runIssuesLintCached(cmd.OutOrStdout(), dir)
 				}
 				return runIssuesLint(cmd.OutOrStdout(), dir)
+			}
+			if args[0] == "status" {
+				return runIssuesStatus(cmd.OutOrStdout(), dir)
 			}
 			if args[0] == "new" {
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
@@ -525,21 +536,15 @@ func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issue
 	}
 
 	readmePath := filepath.Join(issuesDir, "README.md")
-	readmeRelPath := filepath.ToSlash(filepath.Join("issues", "README.md"))
-	origReadme, readErr := os.ReadFile(readmePath)
-	readmeExisted := readErr == nil
-	if readErr != nil && !os.IsNotExist(readErr) {
-		return nil, false, fmt.Errorf("issues: read %s: %w", readmePath, readErr)
+	indexSnapshot, snapshotErr := snapshotIssueIndexes(issuesDir)
+	if snapshotErr != nil {
+		return nil, false, fmt.Errorf("issues: snapshot indexes: %w", snapshotErr)
 	}
 	restore := func() {
 		for _, i := range changed {
 			_ = os.WriteFile(targets[i].path, targets[i].old, 0o644)
 		}
-		if readmeExisted {
-			_ = os.WriteFile(readmePath, origReadme, 0o644)
-		} else {
-			_ = os.Remove(readmePath)
-		}
+		_ = restoreIssueIndexes(issuesDir, indexSnapshot)
 	}
 	for _, i := range changed {
 		if err := os.WriteFile(targets[i].path, targets[i].updated, 0o644); err != nil {
@@ -572,7 +577,7 @@ func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issue
 			paths = append(paths, targets[i].relPath)
 			numbers = append(numbers, targets[i].result.Number)
 		}
-		paths = append(paths, readmeRelPath)
+		paths = append(paths, issueIndexRelPaths()...)
 		msg := opts.CommitMsg
 		if msg == "" {
 			commitVerb := verb
@@ -612,6 +617,7 @@ func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]s
 			"mv\trenumber a ticket",
 			"rebase\treplay local issue commits",
 			"lint\tvalidate the issue tracker",
+			"status\tshow issue lifecycle counts",
 			"list\tlist matching tickets",
 		}, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -899,10 +905,9 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		if _, err := os.Stat(newPath); err == nil {
 			return issuesResult{}, false, fmt.Errorf("issues mv --check: destination file %s already exists", newGitRelPath)
 		}
-		origReadme, readErr := os.ReadFile(readmePath)
-		readmeExisted := readErr == nil
-		if readErr != nil && !os.IsNotExist(readErr) {
-			return issuesResult{}, false, fmt.Errorf("issues mv --check: read %s: %w", readmePath, readErr)
+		indexSnapshot, snapshotErr := snapshotIssueIndexes(issuesDir)
+		if snapshotErr != nil {
+			return issuesResult{}, false, fmt.Errorf("issues mv --check: snapshot indexes: %w", snapshotErr)
 		}
 
 		if err := os.WriteFile(newPath, []byte(newContent), 0o644); err != nil {
@@ -915,11 +920,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		// Always restore
 		_ = os.WriteFile(oldPath, content, 0o644)
 		_ = os.Remove(newPath)
-		if readmeExisted {
-			_ = os.WriteFile(readmePath, origReadme, 0o644)
-		} else {
-			_ = os.Remove(readmePath)
-		}
+		_ = restoreIssueIndexes(issuesDir, indexSnapshot)
 
 		if updErr != nil {
 			return issuesResult{}, false, fmt.Errorf("issues mv --check: %w", updErr)
@@ -971,8 +972,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		if msg == "" {
 			msg = fmt.Sprintf("docs(issues): renumber %s to %s", f.Number, newNum)
 		}
-		readmeRelPath := filepath.ToSlash(filepath.Join("issues", "README.md"))
-		paths := []string{oldGitRelPath, newGitRelPath, readmeRelPath}
+		paths := append([]string{oldGitRelPath, newGitRelPath}, issueIndexRelPaths()...)
 		for _, edit := range referenceEdits {
 			rel, err := filepath.Rel(opts.Dir, edit.path)
 			if err != nil {
@@ -1116,8 +1116,7 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
 		}
 		result.ReadmeUpdated = readmeChanged
-		readmeRelPath := filepath.ToSlash(filepath.Join("issues", "README.md"))
-		paths := []string{relPath, readmeRelPath}
+		paths := append([]string{relPath}, issueIndexRelPaths()...)
 		changed, err := gitPathsChanged(opts.Dir, paths)
 		if err != nil {
 			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
@@ -1146,10 +1145,9 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 	}
 
 	if opts.Check {
-		origReadme, readErr := os.ReadFile(readmePath)
-		readmeExisted := readErr == nil
-		if readErr != nil && !os.IsNotExist(readErr) {
-			return issuesResult{}, false, fmt.Errorf("issues --check: read %s: %w", readmePath, readErr)
+		indexSnapshot, snapshotErr := snapshotIssueIndexes(issuesDir)
+		if snapshotErr != nil {
+			return issuesResult{}, false, fmt.Errorf("issues --check: snapshot indexes: %w", snapshotErr)
 		}
 
 		if err := os.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
@@ -1162,10 +1160,8 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 		if werr := os.WriteFile(filePath, content, 0o644); werr != nil {
 			return issuesResult{}, false, fmt.Errorf("issues --check: restore %s: %w", filePath, werr)
 		}
-		if readmeExisted {
-			os.WriteFile(readmePath, origReadme, 0o644)
-		} else {
-			os.Remove(readmePath)
+		if restoreErr := restoreIssueIndexes(issuesDir, indexSnapshot); restoreErr != nil {
+			return issuesResult{}, false, fmt.Errorf("issues --check: restore indexes: %w", restoreErr)
 		}
 		if updErr != nil {
 			return issuesResult{}, false, fmt.Errorf("issues --check: %w", updErr)
@@ -1189,8 +1185,7 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 		if msg == "" {
 			msg = defaultCommitMessage(verb, f.Number, reason)
 		}
-		readmeRelPath := filepath.ToSlash(filepath.Join("issues", "README.md"))
-		sha, err := gitAddAndCommit(opts.Dir, []string{relPath, readmeRelPath}, msg)
+		sha, err := gitAddAndCommit(opts.Dir, append([]string{relPath}, issueIndexRelPaths()...), msg)
 		if err != nil {
 			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
 		}

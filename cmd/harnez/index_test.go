@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,46 @@ func TestPrintUnifiedDiff_NoChangesNoOutput(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Errorf("expected no diff output for identical content, got:\n%s", out.String())
+	}
+}
+
+func TestRunIndexCheckDetectsAndRestoresAllIssueIndexes(t *testing.T) {
+	root := t.TempDir()
+	issuesDir := filepath.Join(root, "issues")
+	if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for n, status := range map[int]string{1: "Open", 2: "Backlog — later", 3: "Closed — resolved"} {
+		path := filepath.Join(issuesDir, fmt.Sprintf("%03d-ticket.md", n))
+		content := fmt.Sprintf("# %03d — Ticket\n\n**Status**: %s\n", n, status)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	originals := map[string][]byte{
+		"README.md":  []byte("# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"),
+		"BACKLOG.md": []byte("stale backlog\n"),
+		"CLOSED.md":  []byte("stale closed\n"),
+	}
+	for name, content := range originals {
+		if err := os.WriteFile(filepath.Join(issuesDir, name), content, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out bytes.Buffer
+	if err := runIndexCheck(&out, filepath.Join(issuesDir, "README.md"), issuesDir, "", "", true, false); err == nil {
+		t.Fatal("runIndexCheck accepted index drift")
+	}
+	for name, want := range originals {
+		got, err := os.ReadFile(filepath.Join(issuesDir, name))
+		if err != nil || !bytes.Equal(got, want) {
+			t.Errorf("--check changed %s: got %q, err=%v", name, got, err)
+		}
+	}
+	for _, name := range []string{"README.md", "BACKLOG.md", "CLOSED.md"} {
+		if !strings.Contains(out.String(), filepath.Join(issuesDir, name)) {
+			t.Errorf("diff output missing %s: %s", name, out.String())
+		}
 	}
 }
 

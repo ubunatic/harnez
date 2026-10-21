@@ -16,6 +16,11 @@ const lifecycleSpecPath = "spec/issues.yaml"
 type lifecycleSpec struct {
 	Lifecycle     lifecycleDefinition     `yaml:"lifecycle"`
 	DuplicateGate duplicateGateDefinition `yaml:"duplicate_gate"`
+	IssueIndex    issueIndexDefinition    `yaml:"issue_index"`
+}
+
+type issueIndexDefinition struct {
+	ActiveCap int `yaml:"active_cap"`
 }
 
 type duplicateGateDefinition struct {
@@ -124,6 +129,9 @@ func validateLifecycleSpec(spec lifecycleSpec) error {
 		gate.TitleWeight < 1 || gate.BodyWeight < 1 || len(gate.Stopwords) == 0 {
 		return fmt.Errorf("issues lifecycle spec: duplicate_gate requires a threshold in (0, 1], positive limits/weights, and stopwords")
 	}
+	if spec.IssueIndex.ActiveCap < 1 {
+		return fmt.Errorf("issues lifecycle spec: issue_index.active_cap must be positive")
+	}
 	stopwords := make(map[string]bool)
 	for _, word := range gate.Stopwords {
 		if word == "" || stopwords[word] {
@@ -132,6 +140,15 @@ func validateLifecycleSpec(spec lifecycleSpec) error {
 		stopwords[word] = true
 	}
 	return nil
+}
+
+// ActiveIssueCap returns the configured maximum active-ticket count.
+func ActiveIssueCap() (int, error) {
+	spec, err := currentLifecycleSpec()
+	if err != nil {
+		return 0, err
+	}
+	return spec.IssueIndex.ActiveCap, nil
 }
 
 // DuplicateGateSettings returns a copy of the duplicate-search policy from

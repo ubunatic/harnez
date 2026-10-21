@@ -35,7 +35,8 @@ subagents in a sprint skip it unless their skill requires it at the end; the hos
 Applies when this project has an `issues/` tracker. To search existing issues,
 compute the next ticket number, or allocate one, use `harnez find` / `harnez issues`
 instead of `ls issues/`, `find`, or raw grep:
-- `harnez find -d <repo> issues -a status:open` — list active open issues as text.
+- `harnez find -d <repo> issues -a status:active` — list active tickets (Open, In Progress, Blocked, Draft) as text.
+- `issues/README.md` is the generated active index; follow its links to `issues/BACKLOG.md` and `issues/CLOSED.md` for other lifecycle groups.
 - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text.
 - `harnez issues show -d <repo> <n>` — read a single issue as text.
 - Use text for routine issue discovery and document reads. Render PNG cards with

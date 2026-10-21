@@ -55,7 +55,7 @@ func TestNextSkillInstallToEveryConfiguredTarget(t *testing.T) {
 			"## Workflow Detection",
 			"## Target Discovery",
 			"## Execution Contract",
-			"harnez find -d . issues -a status:open",
+			"harnez find -d . issues -a status:active",
 			"ask the user to choose before execution",
 		} {
 			if !strings.Contains(content, want) {

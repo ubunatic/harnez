@@ -98,3 +98,10 @@ No local "duplicate of" pairs exist, so recall was validated only on 697/698 and
 ## M3 Pre-Work
 
 - None from M2. Keep the archive dir (`issues/archive/`) out of the active README but inside lint.
+
+## M3 implementation (2026-10-22)
+
+- `issues/README.md` now lists Open, In Progress, Blocked, and Draft tickets; generated `BACKLOG.md` and `CLOSED.md` retain the other categories, including archived tickets.
+- Added `status:active` for those four active lifecycle states and configured the active cap (20) in `spec/issues.yaml`. `issues lint` and `issues status` warn above the cap and lint validates all three generated indexes.
+- The parser classifies the existing `In Review` variant as active Open; live status counts are 256 Open, 17 Draft, 0 Backlog, 567 Closed, 0 Unknown. No real ticket statuses were changed for M3.
+- Updated managed issue rules, IssueTracking full/lite sources and root copy, plus `/issue`, `/roadmap`, and `/next` command sources.

@@ -542,6 +542,12 @@ func LintFS(sysFS fs.FS, root string) (*Report, error) {
 		}
 		if _, indexedByPath := tablePathMap[f.RelPath]; !indexedByPath {
 			if tableNumCount[f.Number] == 0 {
+				// Backlog and closed tickets are indexed in their dedicated
+				// generated files. The CLI lint checks those files; this legacy
+				// README-only report must not mislabel them as missing.
+				if f.Canonical == StatusBacklog || f.Canonical == StatusClosed {
+					continue
+				}
 				diags = append(diags, Diagnostic{
 					Kind:     DiagUnindexedFile,
 					IssueNum: f.Number,

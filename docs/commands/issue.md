@@ -18,7 +18,9 @@ The selected executor reads the target repository's applicable instructions and
 issue-tracking guidance before acting, then runs the filing workflow end to end:
 
 ```bash
+harnez find -d <repo> issues -a status:active
 harnez find -d <repo> issues "<search terms>"
+harnez find -d <repo> issues similar "<search terms>"
 harnez issues new -d <repo> "<title>"
 # Fill the returned ticket path using the repository's issue conventions.
 harnez issues open -d <repo> <n> --commit "docs(issues): file <n>, <summary>"
@@ -26,6 +28,8 @@ harnez issues open -d <repo> <n> --commit "docs(issues): file <n>, <summary>"
 
 Use text for routine issue discovery. Add `-I/--image` only when the user explicitly
 requests image output; an assumed token benefit is not a reason to render PNG cards.
+The active index `issues/README.md` covers Open, In Progress, Blocked, and Draft tickets;
+it links to the generated Backlog and Closed indexes.
 
 On the delegated path, keep the host responsive: report that filing was dispatched and don't block the main chat
 on the subagent's result, unless the user explicitly asked to wait or the very next step in

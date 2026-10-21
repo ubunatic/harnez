@@ -27,7 +27,7 @@ history that is not available.
 - Otherwise use the roadmap at `docs/Roadmap.md` when the prior workflow was
   following it.
 - For issue work, discover open candidates with
-  `harnez find -d . issues -a status:open`; use the prior sequence, roadmap
+  `harnez find -d . issues -a status:active`; use the prior sequence, roadmap
   ordering, or explicit user criteria to choose the next one.
 - Do not assume the numerically lowest open issue is the next item. Exclude the
   item just completed and items that are closed, blocked, or unrelated to the

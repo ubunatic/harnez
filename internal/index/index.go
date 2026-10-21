@@ -61,19 +61,51 @@ func unlockReadme(f *os.File) {
 	_ = f.Close()
 }
 
-// IssuesTable renders the full issues/README.md table (header row,
-// separator row, and one row per ticket) from the tickets found under
-// issuesDir and issuesDir/archive.
+// IssuesTable renders the active-ticket table used by issues/README.md.
+// Open (including In Progress and Blocked) and Draft tickets are active.
 func IssuesTable(issuesDir string) (string, error) {
 	files, err := issues.Scan(issuesDir)
 	if err != nil {
 		return "", fmt.Errorf("scan issues: %w", err)
 	}
+	return renderIssueTable(files, func(f issues.IssueFile) bool {
+		return f.Canonical == issues.StatusOpen || f.Canonical == issues.StatusDraft
+	}), nil
+}
+
+// IssueIndexFiles renders the three generated tracker indexes. The README
+// contains active work; Backlog and Closed retain their complete status sets,
+// including archived closed tickets.
+func IssueIndexFiles(issuesDir string) (map[string]string, error) {
+	files, err := issues.Scan(issuesDir)
+	if err != nil {
+		return nil, fmt.Errorf("scan issues: %w", err)
+	}
+	active := renderIssueTable(files, func(f issues.IssueFile) bool {
+		return f.Canonical == issues.StatusOpen || f.Canonical == issues.StatusDraft
+	})
+	backlog := renderIssueTable(files, func(f issues.IssueFile) bool {
+		return f.Canonical == issues.StatusBacklog
+	})
+	closed := renderIssueTable(files, func(f issues.IssueFile) bool {
+		return f.Canonical == issues.StatusClosed
+	})
+	return map[string]string{
+		"README.md":  "# Issues\n\nActive tickets. See [Backlog](BACKLOG.md) and [Closed](CLOSED.md).\n\n" + active,
+		"BACKLOG.md": "# Backlog\n\n" + backlog,
+		"CLOSED.md":  "# Closed\n\n" + closed,
+	}, nil
+}
+
+func renderIssueTable(files []issues.IssueFile, include func(issues.IssueFile) bool) string {
 
 	var b strings.Builder
 	b.WriteString("| # | File | Title | Status |\n")
 	b.WriteString("|---|------|-------|--------|\n")
 	for _, f := range files {
+		if !include(f) {
+			continue
+		}
 		title := issues.StripTicketNumber(f.Title)
 		title = strings.ReplaceAll(title, "|", `\|`)
 		status := strings.ReplaceAll(f.RawStatus, "|", `\|`)
@@ -82,7 +114,7 @@ func IssuesTable(issuesDir string) (string, error) {
 		}
 		fmt.Fprintf(&b, "| %s | [%s](%s) | %s | %s |\n", f.Number, f.RelPath, f.RelPath, title, status)
 	}
-	return b.String(), nil
+	return b.String()
 }
 
 // StatusCounts aggregates the same ticket set IssuesTable renders
@@ -140,13 +172,31 @@ func UpdateIssuesReadme(readmePath, issuesDir string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if newContent == string(orig) {
-		return false, nil
+	indexes, err := IssueIndexFiles(issuesDir)
+	if err != nil {
+		return false, err
 	}
-	if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
-		return false, fmt.Errorf("write %s: %w", readmePath, err)
+	changed := newContent != string(orig)
+	if changed {
+		if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
+			return false, fmt.Errorf("write %s: %w", readmePath, err)
+		}
 	}
-	return true, nil
+	for _, name := range []string{"BACKLOG.md", "CLOSED.md"} {
+		path := filepath.Join(filepath.Dir(readmePath), name)
+		old, readErr := os.ReadFile(path)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return false, fmt.Errorf("read %s: %w", path, readErr)
+		}
+		if string(old) == indexes[name] {
+			continue
+		}
+		if err := os.WriteFile(path, []byte(indexes[name]), 0o644); err != nil {
+			return false, fmt.Errorf("write %s: %w", path, err)
+		}
+		changed = true
+	}
+	return changed, nil
 }
 
 // RenderIssuesReadme returns the canonical generated tracker content without
@@ -191,7 +241,18 @@ func RenderIssuesReadme(content, issuesDir, readmePath string) (string, error) {
 		tableEnd = lineEnd
 	}
 
-	newContent := content[:loc[0]] + table + content[tableEnd:]
+	prefix := content[:loc[0]]
+	var missingLinks []string
+	if !strings.Contains(prefix, "[Backlog](BACKLOG.md)") {
+		missingLinks = append(missingLinks, "[Backlog](BACKLOG.md)")
+	}
+	if !strings.Contains(prefix, "[Closed](CLOSED.md)") {
+		missingLinks = append(missingLinks, "[Closed](CLOSED.md)")
+	}
+	if len(missingLinks) > 0 {
+		prefix += strings.Join(missingLinks, " · ") + "\n\n"
+	}
+	newContent := prefix + table + content[tableEnd:]
 	return newContent, nil
 }
 

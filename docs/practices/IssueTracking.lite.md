@@ -57,9 +57,10 @@ In-repo tracker in `issues/`, one file per ticket (`issues/NNN-kebab-case-title.
 
 ## 4. Issues Index & Archive Conventions
 
-- `issues/README.md` is managed by `harnez index` (idempotent, supports `--check` for CI diff/drift verification). Never hand-edit rows.
-- `harnez status` lints index completeness, link validity, status parity, and duplicate numbers.
-- **Archiving**: Move closed tickets to `issues/archive/NNN-kebab-case.md` and update index link.
+- `issues/README.md` lists active tickets only (Open, In Progress, Blocked, Draft) and links to generated `issues/BACKLOG.md` and `issues/CLOSED.md`.
+- `harnez index` regenerates all three indexes; `harnez issues lint` checks completeness across them. Never hand-edit rows.
+- `harnez find -d <repo> issues -a status:active` searches the active set. `harnez issues lint` and `harnez issues status` warn above the active cap configured in `spec/issues.yaml`.
+- **Archiving**: Closed tickets may move to `issues/archive/NNN-kebab-case.md`; `harnez index` keeps them listed in `issues/CLOSED.md`.
 
 ## 5. Lifecycle Invariants
 

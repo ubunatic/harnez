@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -39,11 +40,13 @@ func newIndexCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "index",
-		Short: "Regenerate issues/README.md and docs/README.md's studies table from source files",
+		Short: "Regenerate issue indexes and docs/README.md's studies table from source files",
 		Long: `index regenerates two hand-maintained index tables from the files that are
 their actual source of truth, so they stop drifting:
 
-  issues/README.md   <- issues/*.md + issues/archive/*.md metadata
+  issues/README.md   <- active Open/In Progress/Blocked/Draft tickets
+  issues/BACKLOG.md  <- Backlog tickets
+  issues/CLOSED.md   <- Closed tickets, including archived tickets
   docs/README.md      <- docs/studies/*.md (docs/studies/ table only)
 
 It is idempotent: run against unchanged sources, it reports no changes.
@@ -216,18 +219,45 @@ func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir str
 		}
 	}()
 
+	if hasIssues {
+		snapshot, err := snapshotIssueIndexes(issuesDir)
+		if err != nil {
+			return fmt.Errorf("index --check: snapshot issue indexes: %w", err)
+		}
+		if _, err := index.UpdateIssuesReadme(issuesReadme, issuesDir); err != nil {
+			_ = restoreIssueIndexes(issuesDir, snapshot)
+			return fmt.Errorf("index --check: %w", err)
+		}
+		for _, name := range []string{"README.md", "BACKLOG.md", "CLOSED.md"} {
+			path := filepath.Join(issuesDir, name)
+			generated, err := os.ReadFile(path)
+			if err != nil {
+				_ = restoreIssueIndexes(issuesDir, snapshot)
+				return fmt.Errorf("index --check: read regenerated %s: %w", path, err)
+			}
+			old := snapshot[name]
+			if !old.existed || !bytes.Equal(old.content, generated) {
+				drift = true
+				fmt.Fprintf(w, "would update %s\n", path)
+				if err := printUnifiedDiff(w, path, old.content, generated); err != nil {
+					_ = restoreIssueIndexes(issuesDir, snapshot)
+					return fmt.Errorf("index --check: %w", err)
+				}
+			} else {
+				fmt.Fprintf(w, "%s up to date\n", path)
+			}
+		}
+		if err := restoreIssueIndexes(issuesDir, snapshot); err != nil {
+			return fmt.Errorf("index --check: restore issue indexes: %w", err)
+		}
+	}
+
 	type target struct {
 		path   string
 		update func() (bool, error)
 	}
 	var targets []target
 
-	if hasIssues {
-		targets = append(targets, target{
-			path:   issuesReadme,
-			update: func() (bool, error) { return index.UpdateIssuesReadme(issuesReadme, issuesDir) },
-		})
-	}
 	if hasDocs {
 		targets = append(targets, target{
 			path:   docsReadme,

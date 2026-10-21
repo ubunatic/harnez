@@ -20,8 +20,19 @@ func TestEmbeddedLifecycleSpecAndSchema(t *testing.T) {
 	if err != nil || gate.Threshold <= 0 || gate.MaxResults != 5 || gate.MinimumQueryTokens != 2 || len(gate.Stopwords) == 0 {
 		t.Fatalf("embedded duplicate gate settings = %+v, err=%v", gate, err)
 	}
+	if cap, err := ActiveIssueCap(); err != nil || cap != 20 {
+		t.Fatalf("embedded active issue cap = %d, err=%v", cap, err)
+	}
 	if !StatusFilterMatches("Backlog", "backlog") || !StatusFilterMatches("Backlog — later", "unresolved") {
 		t.Fatal("embedded lifecycle filters do not match Backlog")
+	}
+	for _, status := range []string{"Open", "In Progress", "Blocked — waiting", "In Review", "Draft"} {
+		if !StatusFilterMatches(status, "active") {
+			t.Errorf("active filter does not match %q", status)
+		}
+	}
+	if StatusFilterMatches("Backlog", "active") || StatusFilterMatches("Closed — done", "active") {
+		t.Fatal("active filter matched a non-active lifecycle status")
 	}
 	if StatusFilterMatches("Backlog:", "backlog") || StatusFilterMatches("Backlogged", "backlog") {
 		t.Fatal("Backlog filter accepted a near-miss")
@@ -39,7 +50,7 @@ func TestEmbeddedLifecycleSpecAndSchema(t *testing.T) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatalf("decode lifecycle schema: %v", err)
 	}
-	if schema.Type != "object" || schema.AdditionalProperties || !containsString(schema.Required, "lifecycle") {
+	if schema.Type != "object" || schema.AdditionalProperties || !containsString(schema.Required, "lifecycle") || !containsString(schema.Required, "issue_index") {
 		t.Fatalf("lifecycle schema is not strict at the root: %+v", schema)
 	}
 

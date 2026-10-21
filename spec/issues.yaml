@@ -7,20 +7,20 @@ lifecycle:
     - key: open
       label: Open
       category: Open
-      filters: [open]
+      filters: [open, active]
       match_mode: lead_contains
-      match_terms: [open, in progress, blocked, investigating]
-      fallback_terms: [open, in progress, blocked, partially]
+      match_terms: [open, in progress, blocked, investigating, in review]
+      fallback_terms: [open, in progress, blocked, partially, in review]
     - key: in-progress
       label: In Progress
       category: Open
-      filters: [open, in-progress]
+      filters: [open, in-progress, active]
       match_mode: lead_exact
       match_terms: [in progress]
     - key: blocked
       label: Blocked
       category: Open
-      filters: [open, blocked]
+      filters: [open, blocked, active]
       match_mode: lead_exact
       match_terms: [blocked]
     - key: closed
@@ -33,7 +33,7 @@ lifecycle:
     - key: draft
       label: Draft
       category: Draft
-      filters: [draft]
+      filters: [draft, active]
       match_mode: lead_contains
       match_terms: [draft, wip, proposal]
       fallback_terms: [draft, wip, proposal]
@@ -57,3 +57,6 @@ duplicate_gate:
   title_weight: 3
   body_weight: 1
   stopwords: [a, an, and, are, as, at, be, by, for, from, has, have, in, into, is, it, its, of, on, or, that, the, their, this, to, was, were, what, where, which, who, why, with]
+
+issue_index:
+  active_cap: 20

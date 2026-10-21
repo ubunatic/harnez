@@ -112,12 +112,12 @@ func TestRunIssuesVerb_CloseRewritesStatusAndPreservesRestOfFile(t *testing.T) {
 		t.Errorf("ticket file rewritten unexpectedly.\ngot:  %q\nwant: %q", string(got), want)
 	}
 
-	readme, err := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+	readme, err := os.ReadFile(filepath.Join(dir, "issues", "CLOSED.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(readme), "Closed — resolved") {
-		t.Errorf("README not resynced with new status, got:\n%s", readme)
+		t.Errorf("CLOSED index not resynced with new status, got:\n%s", readme)
 	}
 
 	// Verify the commit actually happened and staged exactly the two files.
@@ -125,8 +125,8 @@ func TestRunIssuesVerb_CloseRewritesStatusAndPreservesRestOfFile(t *testing.T) {
 	if !strings.Contains(logOut, "docs(issues): close 042, resolved") {
 		t.Errorf("unexpected commit message, got:\n%s", logOut)
 	}
-	if !strings.Contains(logOut, "issues/042-example-ticket.md") || !strings.Contains(logOut, "issues/README.md") {
-		t.Errorf("expected commit to touch ticket file + README, got:\n%s", logOut)
+	if !strings.Contains(logOut, "issues/042-example-ticket.md") || !strings.Contains(logOut, "issues/README.md") || !strings.Contains(logOut, "issues/CLOSED.md") {
+		t.Errorf("expected commit to touch ticket file and generated indexes, got:\n%s", logOut)
 	}
 }
 
