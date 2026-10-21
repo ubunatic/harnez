@@ -1,6 +1,6 @@
 # 697 — Agent release practice: when and how to release
 
-**Status:** Open
+**Status:** Closed — duplicate of 698
 **Priority:** P2 (Medium)
 **Severity:** Moderate
 **Category:** Docs / Agent Practice
