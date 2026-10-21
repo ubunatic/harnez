@@ -89,3 +89,23 @@ Notices and `.gitattributes` lines are correct in this repo. But the live check 
 - Install it in this clone via the real CLI path, not by hand.
 - Add an end-to-end test that runs the real init command (not the internal function), then a two-branch
   merge with new tickets and new studies, asserting no conflict markers in all four generated files.
+
+## M3 delivered (fa6a7493), host review FAILED again (2026-10-22)
+
+Plain `init` now installs the driver (verified in a scratch repo and in this clone). But a two-branch merge
+(feat adds `002` + `studies/b.md`, main adds `003` + `studies/c.md`) commits generated files **without
+the incoming branch's rows** (002, b.md): the driver regenerates from the working tree, where git has not
+yet checked out the other side's new files. The post-merge hook then rewrites both READMEs, leaving the
+tree dirty, and `issues lint --cached` in pre-commit blocks every later commit until someone regenerates.
+`issues/README.md` also lacks a trailing newline after the end marker in the merged result.
+
+## M4 Pre-Work / Required Refinements
+
+- Driver must produce the final merged content itself: build rows from the merge result's sources
+  (e.g. the union of ticket/study paths in `%A` + `%B` trees via `git ls-tree`/`MERGE_HEAD`, or union of
+  the generated rows from `%A` and `%B` re-sorted canonically), so the merge commit already equals a
+  fresh `harnez index` and post-merge leaves a clean tree.
+- E2E test must assert on the **merge commit content** (`git show HEAD:issues/README.md`) and a clean
+  `git status` after merge, not on the working tree after hooks ran.
+- Trailing newline after the end marker.
+- Hand-written conflict case: re-test from a clean state (my run was blocked by the bug above).
