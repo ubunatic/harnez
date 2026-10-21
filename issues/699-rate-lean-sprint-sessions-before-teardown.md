@@ -33,3 +33,8 @@ session warning and refusal, including the suggested rating command.
 ## Evidence (2026-10-20)
 uman sprint 037: `harnez agent delete --name <dev>` refused with "refusing to delete unrated
 session without --force"; the skill teardown did not mention rating, so the session was left.
+
+## Recurrence (2026-10-21, sprint 841)
+
+Teardown stalled again: `harnez agent delete` refused all three unrated sessions; the skill's
+teardown step still says only "delete". Fix: "rate each agent with `harnez agent rate`, then delete".
