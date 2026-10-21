@@ -183,8 +183,8 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-09-supervised-agy-prompt-queueing-and-cross-session-messaging.md](studies/2026-10-09-supervised-agy-prompt-queueing-and-cross-session-messaging.md) | Supervised AGY Prompt Queueing and Cross-Session Messaging Case Study |
 | [studies/2026-10-10-harnez-tui-interactive-harness-research.md](studies/2026-10-10-harnez-tui-interactive-harness-research.md) | `harnez tui` interactive chat interface design, harness forwarding, subscription routing, and TUI interaction patterns. |
 | [studies/2026-10-20-harnez-server-durable-research.md](studies/2026-10-20-harnez-server-durable-research.md) | Harnez Server: Pi Durable and Pi Pocket Research |
-| [studies/2026-10-21-dbos-sqlite-storage-research.md](studies/2026-10-21-dbos-sqlite-storage-research.md) | DBOS Go + SQLite as harnez storage: crash-recovery canary, costs, verdict (issue 841) |
 | [studies/2026-10-20-two-agent-lean-sprint-usage-client-server.md](studies/2026-10-20-two-agent-lean-sprint-usage-client-server.md) | Two-Agent Lean Sprint: usage client-server split (828-830) |
+| [studies/2026-10-21-dbos-sqlite-storage-research.md](studies/2026-10-21-dbos-sqlite-storage-research.md) | DBOS Go + SQLite as harnez storage: crash-recovery canary, costs, verdict (issue 841) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
