@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
-**Related**: [649](649-harnez-usage-compact-no-longer-shows-agy-gemini-quota-rows.md), [101](archive/101-usage-keep-stale-agents-visible-until-7d.md)
+**Related**: 714, [649](649-harnez-usage-compact-no-longer-shows-agy-gemini-quota-rows.md), [101](archive/101-usage-keep-stale-agents-visible-until-7d.md)
 
 ---
 
@@ -21,3 +21,9 @@ The cause is unconfirmed. Check whether quota refresh is failing, stale fallback
 - Correct any confirmed refresh or stale-rendering defect and add meaningful regression coverage.
 - Ensure the TUI communicates when quota data was last refreshed and why stale fallback remains, so color alone does not leave freshness ambiguous.
 - Verify fresh and stale states for both rows; record the cause and any remaining upstream limitation.
+
+## 4. Recurrence (2026-10-22)
+
+User reports rows "often" turning gray in the live `harnez usage` view, together with the
+`unavailable (signal: killed)` errors tracked in 714. Likely the same root cause (collector
+killed → stale snapshot → gray); fix 714 first and re-check this one.

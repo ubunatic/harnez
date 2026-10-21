@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
-**Related**: [[527-agy-live-quota-fetch-is-killed-on-most-agent-turn-boundaries]],
+**Related**: 710, [[527-agy-live-quota-fetch-is-killed-on-most-agent-turn-boundaries]],
 [[649-harnez-usage-compact-no-longer-shows-agy-gemini-quota-rows]],
 [[657-usage-compact-drops-claude-and-codex-writers-store-label-window-keys-cross-provider-observation-links-codex-limits-not-collected]]
 
@@ -41,3 +41,18 @@ choosing a fix.
   valid cached usage.
 - Add regression coverage for both pools; run `make test-q1` and verify the
   installed `harnez usage` UI when the required live services are available.
+
+## 4. Recurrence (2026-10-22)
+
+User saw it again in the live `harnez usage` view, now on three rows:
+
+```text
+Claude/GPT unavailable (signal: kill…
+Gemini 4 Argon unavailable (signal: kill…
+Gemini unavailable (signal: kill…
+```
+
+Since the original report, collection moved to `harnez server` with a 5-minute snapshot
+cadence (828-830, 837, 839), so the killer may now be the server collector's timeout or socket
+takeover (837) rather than a client. Check that path first. Rows also go gray often in the same
+view; see 710.
