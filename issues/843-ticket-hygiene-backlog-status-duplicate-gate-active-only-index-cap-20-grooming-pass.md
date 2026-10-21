@@ -1,6 +1,6 @@
 # 843 — Ticket hygiene: Backlog status, duplicate gate, active-only index, cap 20, grooming pass
 
-**Status**: Open
+**Status**: Closed — Backlog status, duplicate gate, active-only index with cap 20 and grooming pass delivered (11b03174, 029d9a6b, cbd7ec0e, 31dfaf20); 20 active tickets
 **Priority**: P1 (High) — every agent session pays the open-list/README context cost
 **Severity**: Major
 **Category**: Feature
