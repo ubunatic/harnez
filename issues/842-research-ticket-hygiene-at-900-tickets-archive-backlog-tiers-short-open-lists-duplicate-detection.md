@@ -1,6 +1,6 @@
 # 842 — Research ticket hygiene at ~900 tickets: archive/backlog tiers, short open lists, duplicate detection
 
-**Status**: Open
+**Status**: Closed — User decided: S1 Backlog status + add-ons, blocking dup gate, cap 20, no archiving yet; implementation in 843, archiving parked in 844
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Research
