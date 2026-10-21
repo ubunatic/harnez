@@ -24,6 +24,9 @@ when data is being collected.
   (test: `internal/usage/watch_test.go` around line 1990, glyph `timeoutSnakeGlyph`).
 - Needed: a way for the watch client to observe the collector (e.g. last-fetch / in-flight
   state per agent exposed over the server socket) and map that to the spinner.
+- User note: the non-minimal view (`harnez usage -w` without `--minimal`) already shows
+  collector freshness in its "Updated" column, so the data reaches the client. Reuse that
+  source for the minimal overlay's spinner instead of building a new collector channel.
 - Unverified: whether the existing test still passes because it renders a static frame;
   check whether the gap is in the data path or the render path before designing.
 
