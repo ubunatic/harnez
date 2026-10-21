@@ -50,5 +50,7 @@ Unverified candidate causes, check before designing:
 ## Milestones
 - **M1 (collector persistence I/O error):** reproduce and fix the SQLite disk I/O error in the
   collector (check systemd unit sandboxing, DB path/WAL, file locks); regression test.
-- **M2 (column meaning):** pending user decision: keep Updated = last quota fetch (15 min
-  cadence), or show last activity / shorten cadence.
+- **M2 (shorter cadence):** user decision (2026-10-21): keep Updated = last quota fetch, but
+  fetch more often. Lower the collector interval in `spec/usage.yaml` (proposed 5 min; no Go
+  default) and check `MinWatchInterval` reuse does not cancel the gain. AGY polling must keep
+  issue 112's auth backoff, since frequent `agy -p "/usage"` calls may trigger Google reauth.
