@@ -33,6 +33,11 @@ per session outranks work that adds new surface.
 (hooks, shims, `exec`, CI). 560's open portability question (flock, socket) is the newest
 instance.
 
+> **Stale "Now" bucket (2026-10-22).** 7 of the 10 Now items are closed. Until the next roadmap
+> pass, the active work set is the ~20-ticket list in issue 843 (M4); everything else moves to the
+> new `Backlog` status (842 decision). `harnez tui` (776, 778) is backlog; 560 needs a rescope now
+> that `harnez server` collects usage.
+
 Sequencing buckets:
 
 - **Now** — actionable today, no blockers, high daily-loop value, or a prerequisite for other
@@ -198,6 +203,7 @@ loom work; re-sort them when M3 is planned.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
+| 843 — Backlog status, blocking duplicate gate, active-only `issues/README.md`, cap 20, grooming (decided in 842; archiving parked in 844) | M — P1; README is 244 KB, `-a status:open` 41 KB per read | **Now** |
 | 426 + 475 — text-first `find` output; "PNG card" wording | S + S | **Next** (moved from Now: 582 reworked `find` just now; do this on top of it) |
 | 340 — label/project/category filters in `find issues` | S/M — this pass again read ~190 open tickets by hand | **Next** |
 | 283 / 246 / 279 / 241 | as before (241 after 487) | **Next / Later** |
