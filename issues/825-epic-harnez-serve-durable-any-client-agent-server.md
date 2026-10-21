@@ -3,7 +3,7 @@
 **Status**: Open
 **Priority**: P4 (Backlog) — deferred 2026-10-20: finish other open work first
 **Category**: Feature
-**Related**: 776, 476, 587, 611, 293, 463, 646
+**Related**: 776, 476, 587, 611, 293, 463, 646, 841
 
 ## Goal
 
@@ -14,7 +14,9 @@ unattended goals. Research: [docs/studies/2026-10-20-harnez-server-durable-resea
 ## Steps (file as child tickets when started)
 
 1. Extract start/resume/compact orchestration into a service; per-provider capability matrix.
-2. Transactional SQLite ledger, idempotent submit, import existing sessions.
+2. Transactional SQLite ledger, idempotent submit, import existing sessions. Decide DBOS vs. plain
+   ledger first (841 report: conditional GO for single-owner server); repeat its 8-process
+   SQLITE_BUSY canary with the production DSN (WAL + busy_timeout) before choosing.
 3. `harnez serve` supervisor with leases, restart reconciliation, timers; kill-test canary.
 4. Task handles, live view vs. durable cursor/outbox, move CLI/MCP/TUI onto it.
 5. Bounded unattended goals, durable approvals, cancellation trees, "Running now" view.
