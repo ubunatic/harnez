@@ -42,6 +42,32 @@ Per the user's request, fan out parallel read-only researchers, then synthesize:
 4. Optional canary (per `docs/Canary.md`): tiny Go program, DBOS workflow on SQLite,
    kill mid-step, verify recovery; measure startup cost.
 
+## 4. Searcher Findings (2026-10-21)
+
+- **Upstream (s841-dbos, UNVERIFIED items flagged):** DBOS Go v1.7.0 (2026-10-15), MIT. SQLite opt-in
+  via `modernc.org/sqlite` (pure Go, same driver harnez already uses: go.mod `v1.57.0`). Provides
+  workflows, checkpointed steps, queues, durable sleep/schedules, events/messages, cancellation,
+  workflow-ID idempotency, recovery from last step; Conductor optional. `NewContext` connects,
+  migrates, pings on every start; deps include pgx, Cobra/Viper, cron. Unverified: startup cost,
+  binary size, SQLite multi-process contention.
+- **Harnez stores (s841-code):** telemetry SQLite (`internal/telemetry`, WAL + busy_timeout 5000,
+  server is designated writer), bench SQLite (`internal/bench/store.go`), session registry JSON
+  (`internal/subagent/session.go`, flock + atomic rename), sessionstate/usage JSON/JSONL with lock
+  sidecars, feedback JSONL. Ledger for 825 does not exist yet; requirements in
+  `docs/HarnezServerArchitecture.md` "Request flow", "Design rules", "Roadmap" (lines ~61–139).
+
+## M1 — Canary + report (developer)
+
+1. Canary in a throwaway Go module under `/mnt/kdev/scratch/dbos-canary/` (or the session scratch
+   dir if not mounted), never in this repo: DBOS workflow with 3 steps on SQLite; kill the process
+   mid-step; restart; verify resume. Measure: cold/warm `NewContext`+`Launch`+`Shutdown` time
+   (≥10 runs, median), binary size delta vs. a plain modernc-sqlite hello, and N=8 concurrent
+   short processes opening the same DB file (errors/busy, latency).
+2. Report `docs/studies/2026-10-21-dbos-sqlite-storage-research.md`: findings, measured numbers with
+   method, mapping of 825 ledger requirements to DBOS features (given vs. to build), per-store
+   verdict for (b), recommendation for (a) and (b), uncertainties. Include canary source inline or
+   as a short excerpt.
+
 Host synthesizes one report with a recommendation per (a) and (b) and records
 uncertainties instead of guessing. Follow-up implementation tickets are filed only after
 the user decides.
