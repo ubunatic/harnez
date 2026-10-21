@@ -51,6 +51,19 @@ func TestEmbeddedCacheFreshnessPolicy(t *testing.T) {
 	if err != nil || collectorCadence != cadence {
 		t.Fatalf("collector cadence = %s, err=%v; want %s", collectorCadence, err, cadence)
 	}
+	if cadence != 5*time.Minute {
+		t.Fatalf("collector cadence = %s, want five minutes", cadence)
+	}
+	if cacheAge > cadence {
+		t.Fatalf("cache freshness age = %s, must not exceed collector cadence %s", cacheAge, cadence)
+	}
+	if MinWatchInterval >= cadence {
+		t.Fatalf("MinWatchInterval = %s, must be shorter than collector cadence %s", MinWatchInterval, cadence)
+	}
+	agyMeterAge, err := agyMeterMaxAge()
+	if err != nil || agyMeterAge > cadence {
+		t.Fatalf("AGY meter max age = %s, err=%v; must not exceed collector cadence %s", agyMeterAge, err, cadence)
+	}
 	now := time.Now()
 	if fraction := freshnessFraction(now.Add(-cadence/2), now); fraction != .5 {
 		t.Fatalf("half a collector tick should leave half the freshness bar, got %v", fraction)

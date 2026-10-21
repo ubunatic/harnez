@@ -53,7 +53,7 @@ these telemetry writes.
 
 | Path | Writer; cadence | Readers / duplication |
 | --- | --- | --- |
-| `CollectClaude`, `CollectCodex`, `CollectAGY` | CLI, watch fallback, and collector; on demand or 15-minute daemon tick. Claude/Codex call provider APIs; AGY runs `agy -p /usage`; all also parse client files. | `CollectAll`, watch, compact. Each has bespoke normalization and may repeat a live fetch. |
+| `CollectClaude`, `CollectCodex`, `CollectAGY` | CLI, watch fallback, and collector; on demand or 5-minute daemon tick. Claude/Codex call provider APIs; AGY runs `agy -p /usage`; all also parse client files. | `CollectAll`, watch, compact. Each has bespoke normalization and may repeat a live fetch. |
 | AGY meter/proxy (`~/.harnez/agymeter/`) | AGY proxy per call; passive/live meter readings. | AGY collector and stats; overlaps `agy -p /usage` quota windows and token estimates. |
 | `$XDG_CACHE_HOME/harnez/quota-cache-{claude,codex,agy}.json` | Every provider collector after a live result; short freshness gate and flock. | Collectors and `CachedProviderQuotaAvailability` (agent models/start). Latest-only duplicate of snapshots. |
 | `liveFetchCache` legacy provider-adjacent file | Compatibility migration/fallback path. | Provider collectors. It duplicates the XDG cache by design during migration. |

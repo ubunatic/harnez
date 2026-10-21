@@ -528,7 +528,7 @@ Usage:
 
 Flags:
   -h, --help                help for agent-collector
-      --interval duration   snapshot collection interval (default 15m0s)
+      --interval duration   snapshot collection interval (default 5m0s)
       --offline             disable live network queries and use local caches only
       --once                collect and write snapshots once, then exit (no timer loop)
 

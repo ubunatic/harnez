@@ -2055,7 +2055,7 @@ func TestAllUsageLinesAtDebugOverlayCountsDown(t *testing.T) {
 // TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval exercises the
 // compact frame path that RunWatch redraws. At the default 60-second watch
 // cadence, the halfway glyph must appear 30 seconds after the last fetch,
-// independent of the collector's 15-minute cadence (issue 147).
+// independent of the collector's 5-minute cadence (issue 147).
 func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
 	// refreshed must track real wall-clock time (not a fixed past date): issue
 	// 107's IsValueStale checks LastRefreshed against actual time.Now(), and

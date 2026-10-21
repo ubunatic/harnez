@@ -58,11 +58,21 @@ Unverified candidate causes, check before designing:
   `harnez usage --offline` read a 0m-old overall snapshot. `make test-q1` passed after the
   unit-template regression assertion was added (the pre-fix run failed at that assertion), and
   `make install` succeeded. AGY quota data remained 12m old, which is M2 scope.
+- M2 findings (2026-10-21): the collector started using its systemd unit at 00:46 CEST, when
+  the first snapshot attempt failed; 01:47 was a later tick, not the start of the age increase.
+  Reducing `collector_cadence` from 15m to 5m and the cache staleness multiplier from 2 to 1
+  keeps automatic cache reuse within one tick. `MinWatchInterval` remains 30s, below the new
+  cadence. AGY meter quota older than 5m now triggers a live refresh; the 30m meter regression
+  test asserts this, while the issue 112 30m auth backoff test remains intact.
+- M2 verification (2026-10-21): the pre-fix `make test-q1` failed on the new cadence, cache-age,
+  and old-meter regressions; after the spec and expectations were updated, `make test-q1` passed.
+  `make install` succeeded and the collector restarted at 02:54 CEST, logging a 5m0s interval.
+  At 02:54:45 CEST, `harnez usage` showed Claude Code, OpenAI Codex, and Antigravity (AGY)
+  updated “just now”; the journal showed the collector running without snapshot errors.
 
 ## Milestones
 - **M1 (collector persistence I/O error) — resolved 2026-10-21:** enabled `PrivateTmp=yes`;
   regression assertion and live collector verification passed.
-- **M2 (shorter cadence):** user decision (2026-10-21): keep Updated = last quota fetch, but
-  fetch more often. Lower the collector interval in `spec/usage.yaml` (proposed 5 min; no Go
-  default) and check `MinWatchInterval` reuse does not cancel the gain. AGY polling must keep
-  issue 112's auth backoff, since frequent `agy -p "/usage"` calls may trigger Google reauth.
+- **M2 (shorter cadence) — resolved 2026-10-21:** set the spec cadence to 5m, cache staleness
+  multiplier to 1, and AGY meter max age to 5m. `MinWatchInterval` reuse is 30s, and the issue
+  112 auth backoff remains 30m. Tests and live collector verification passed; see findings above.

@@ -95,10 +95,10 @@ func TestFreshnessGauge(t *testing.T) {
 
 func TestUsageSnapshotAgeMarksCollectorCadenceAsStale(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-	if got := usageSnapshotAgeLabel(now.Add(-14*time.Minute), now); strings.Contains(got, "stale") {
+	if got := usageSnapshotAgeLabel(now.Add(-4*time.Minute), now); strings.Contains(got, "stale") {
 		t.Fatalf("fresh label = %q", got)
 	}
-	if got := usageSnapshotAgeLabel(now.Add(-15*time.Minute), now); !strings.Contains(got, "15m ago · stale") {
+	if got := usageSnapshotAgeLabel(now.Add(-5*time.Minute), now); !strings.Contains(got, "5m ago · stale") {
 		t.Fatalf("stale label = %q", got)
 	}
 }

@@ -118,7 +118,7 @@ func isAGYAuthRequired(out []byte, err error) bool {
 // (falling back to cache/history instead) after detecting an
 // auth/login-required response, before trying `agy -p "/usage"` live
 // again. Chosen as a low-cost mitigation (issue 112): once agy needs
-// interactive reauth, retrying on the normal ~15min collector /
+// interactive reauth, retrying on the normal ~5min collector /
 // ~30s-minimum --watch cadence just re-hits the same stuck prompt or
 // abuse-detection surface without making progress, so back off rather
 // than hammer it while the user is (or isn't yet) dealing with the

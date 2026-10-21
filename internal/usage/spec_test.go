@@ -15,8 +15,8 @@ func TestEmbeddedUsageSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if age != 60*time.Minute {
-		t.Fatalf("AGY meter max age = %s, want 1h from embedded spec", age)
+	if age != 5*time.Minute {
+		t.Fatalf("AGY meter max age = %s, want 5m from embedded spec", age)
 	}
 	mode, err := DefaultUsageViewMode()
 	if err != nil {
@@ -60,9 +60,9 @@ func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
 }
 
 func TestParseUsageSpecRejectsInvalidAge(t *testing.T) {
-	valid := `agy_meter_max_age: 1h
-collector_cadence: 15m
-cache_staleness_multiplier: 2
+	valid := `agy_meter_max_age: 5m
+collector_cadence: 5m
+cache_staleness_multiplier: 1
 display_staleness: 168h
 agent_quota_warn_percent: 80
 agent_quota_max_reading_age: 2m
@@ -95,18 +95,18 @@ view_modes:
 		name string
 		data string
 	}{
-		{name: "zero age", data: strings.Replace(valid, "agy_meter_max_age: 1h", "agy_meter_max_age: 0s", 1)},
-		{name: "invalid age", data: strings.Replace(valid, "agy_meter_max_age: 1h", "agy_meter_max_age: not-a-duration", 1)},
+		{name: "zero age", data: strings.Replace(valid, "agy_meter_max_age: 5m", "agy_meter_max_age: 0s", 1)},
+		{name: "invalid age", data: strings.Replace(valid, "agy_meter_max_age: 5m", "agy_meter_max_age: not-a-duration", 1)},
 		{name: "unknown field", data: valid + "unknown: true\n"},
 		{name: "empty export host key", data: strings.Replace(valid, "export_host_key: export-host-key", "export_host_key: ''", 1)},
 		{name: "zero history snapshot interval", data: strings.Replace(valid, "history_snapshot_interval: 15m", "history_snapshot_interval: 0s", 1)},
-		{name: "zero cadence", data: strings.Replace(valid, "collector_cadence: 15m", "collector_cadence: 0s", 1)},
-		{name: "missing cadence", data: strings.Replace(valid, "collector_cadence: 15m\n", "", 1)},
-		{name: "missing multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 2\n", "", 1)},
-		{name: "zero multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 2", "cache_staleness_multiplier: 0", 1)},
-		{name: "negative multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 2", "cache_staleness_multiplier: -1", 1)},
-		{name: "fractional multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 2", "cache_staleness_multiplier: 1.5", 1)},
-		{name: "overflowing cache age", data: strings.Replace(valid, "cache_staleness_multiplier: 2", "cache_staleness_multiplier: 9223372036854775807", 1)},
+		{name: "zero cadence", data: strings.Replace(valid, "collector_cadence: 5m", "collector_cadence: 0s", 1)},
+		{name: "missing cadence", data: strings.Replace(valid, "collector_cadence: 5m\n", "", 1)},
+		{name: "missing multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 1\n", "", 1)},
+		{name: "zero multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 1", "cache_staleness_multiplier: 0", 1)},
+		{name: "negative multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 1", "cache_staleness_multiplier: -1", 1)},
+		{name: "fractional multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 1", "cache_staleness_multiplier: 1.5", 1)},
+		{name: "overflowing cache age", data: strings.Replace(valid, "cache_staleness_multiplier: 1", "cache_staleness_multiplier: 9223372036854775807", 1)},
 		{name: "missing display age", data: strings.Replace(valid, "display_staleness: 168h\n", "", 1)},
 		{name: "zero display age", data: strings.Replace(valid, "display_staleness: 168h", "display_staleness: 0s", 1)},
 		{name: "negative display age", data: strings.Replace(valid, "display_staleness: 168h", "display_staleness: -1h", 1)},

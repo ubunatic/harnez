@@ -186,7 +186,7 @@ func TestCollectAGYRefreshesOldActiveMeterQuota(t *testing.T) {
 	}
 }
 
-func TestCollectAGYUsesThirtyMinuteOldMeterQuota(t *testing.T) {
+func TestCollectAGYRefreshesThirtyMinuteOldMeterQuota(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	geminiDir := filepath.Join(home, ".gemini", "antigravity-cli")
@@ -203,11 +203,11 @@ func TestCollectAGYUsesThirtyMinuteOldMeterQuota(t *testing.T) {
 	defer cleanup()
 
 	got := CollectAGY(context.Background(), geminiDir, http.DefaultClient)
-	if atomic.LoadInt32(calls) != 0 {
-		t.Fatalf("agy -p /usage calls = %d, want none for 30m-old meter data", atomic.LoadInt32(calls))
+	if atomic.LoadInt32(calls) != 1 {
+		t.Fatalf("agy -p /usage calls = %d, want one refresh for 30m-old meter data", atomic.LoadInt32(calls))
 	}
-	if len(got.ModelGroups) == 0 || got.ModelGroups[0].Windows[0].Source != "agy-meter" {
-		t.Fatalf("groups = %+v, want meter values", got.ModelGroups)
+	if len(got.ModelGroups) == 0 || got.ModelGroups[0].Windows[0].Source == "agy-meter" {
+		t.Fatalf("groups = %+v, want fresh live values", got.ModelGroups)
 	}
 }
 

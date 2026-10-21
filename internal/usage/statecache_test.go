@@ -442,7 +442,7 @@ func TestAgentUsageIsValueStale(t *testing.T) {
 	}{
 		{"zero LastRefreshed, no other signal", AgentUsage{}, false},
 		{"just refreshed", AgentUsage{LastRefreshed: time.Now()}, false},
-		{"5 minutes old, well within cache window", AgentUsage{LastRefreshed: time.Now().Add(-5 * time.Minute)}, false},
+		{"4 minutes old, within one cadence", AgentUsage{LastRefreshed: time.Now().Add(-4 * time.Minute)}, false},
 		{"3 hours old, past the live-recollect window", AgentUsage{LastRefreshed: time.Now().Add(-3 * time.Hour)}, true},
 		{"QuotaFetchError set even though just refreshed", AgentUsage{LastRefreshed: time.Now(), QuotaFetchError: "connection refused"}, true},
 		{"Sources tagged (stale)", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"~/.claude/harnez-quota-cache.json (stale)"}}, true},

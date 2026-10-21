@@ -55,7 +55,7 @@ func TestUsageNewRegistryDeclaresProviderCapabilitiesAndSpecPolicy(t *testing.T)
 		t.Fatalf("collectors = %d, want Claude/Codex/AGY/AGY-meter", len(registry.collectors))
 	}
 	for _, c := range registry.collectors {
-		if c.Cadence != 15*time.Minute || c.Timeout != 2*time.Minute || len(c.Capabilities) == 0 {
+		if c.Cadence != 5*time.Minute || c.Timeout != 2*time.Minute || len(c.Capabilities) == 0 {
 			t.Errorf("collector policy = %+v", c)
 		}
 	}
