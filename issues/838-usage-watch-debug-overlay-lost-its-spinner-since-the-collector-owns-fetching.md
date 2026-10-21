@@ -50,7 +50,8 @@ last-fetch signal in the client read path.
 Clarification (user): a **single character**, not a plain rotator but a **progress spinner**:
 the braille glyph drains from many dots to fewer to a single dot as progress advances, while the
 dots still **spin** (rotate) around the cell. Check whether the existing `timeoutSnakeGlyph`
-already is this glyph family and only its input is wrong.
+already is this glyph family and only its input is wrong. User repeated: **same as before**,
+so reuse the existing glyph sequence unchanged; no new indicator design.
 
 ## 3. Implementation & Verification Plan
 - Re-verify live behaviour and recent commits first (ticket may be stale).
