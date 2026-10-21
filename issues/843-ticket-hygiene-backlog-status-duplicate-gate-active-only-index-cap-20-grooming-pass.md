@@ -50,3 +50,17 @@ status:open` bytes (41 KB baseline), active count (~249 baseline → ≤20).
 User moved `harnez tui` (776, 778) to the backlog. Active 20: 843, 560 (rescope vs. live
 `harnez server` first), 435, 450, 643, 647, 698 (close dup 697), 353, 714, 710, 701, 595, 745,
 728, 658, 734, 840, 834, 836, 705. Everything else → Backlog once M1 exists.
+
+## Searcher findings (2026-10-22, s843 luna:low)
+
+- Status parse: `internal/issues/issues.go:72` (`statusLineRegex`, `ParseIssueFile`), `CanonicalizeStatus` :112
+  (Open/Closed/Draft/Unknown). Filters: `internal/find/query.go:12`, matching `internal/find/search.go:27`;
+  `is:open` = Open/In Progress/Blocked. No lifecycle spec in `spec/` yet.
+- Verbs: `cmd/harnez/issues.go:586` dispatch/completion, `composeNewStatus` :633; JSON `issuesResult` :45;
+  lint `internal/issues/issues.go:448`. No `backlog`/`promote` yet.
+- Index: `cmd/harnez/index.go:97` → `internal/index/index.go:65`. `issues new`: `Reserve` (issues.go:656),
+  remote `cmd/harnez/issues_remote.go:27`. `find issues` has OR within a term, no similarity ranking.
+- `-a status:open` in `.harnez/rules/{Tools,Issues}.md`, `docs/practices/IssueTracking{,.lite}.md` + root
+  copies, skills next/roadmap/peer-assistant/harnez-handoff.
+- Unverified claim: 747 of 822 files have no parseable status line. Implausible vs. ~249 active in the
+  index; developer must recheck with the real parser before normalizing.
