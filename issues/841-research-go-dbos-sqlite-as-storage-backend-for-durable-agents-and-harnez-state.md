@@ -68,6 +68,14 @@ Per the user's request, fan out parallel read-only researchers, then synthesize:
    verdict for (b), recommendation for (a) and (b), uncertainties. Include canary source inline or
    as a short excerpt.
 
+## M1 delivered: canary + report (d5b37aa5)
+
+Report: `docs/studies/2026-10-21-dbos-sqlite-storage-research.md`. Host re-checked raw canary
+files: cold median 77.1 ms, warm 26.3 ms, binary +12.6 MB, 6/8 concurrent logs show SQLITE_BUSY,
+1 terminal. Verdict: (a) conditional GO for a single-owner `harnez serve` prototype; (b) NO-GO.
+Caveat: concurrent test ran without `busy_timeout`; repeat with the production DSN before 825 step 2.
+Sprint: 2 luna:low searchers in parallel, 1 luna:high developer (plan turn + one write turn).
+
 Host synthesizes one report with a recommendation per (a) and (b) and records
 uncertainties instead of guessing. Follow-up implementation tickets are filed only after
 the user decides.
