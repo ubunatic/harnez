@@ -1261,13 +1261,18 @@ Subcommands / Allocation:
            (cmd/harnez/issues.go) -- find never mutates.
 
   harnez find issues history [--project <name>] [--json]
-           Render the open/closed/draft/unknown ticket-count snapshot
+           Render the open/closed/draft/backlog/unknown ticket-count snapshot
            history 'harnez index' records into the telemetry DB on each run
            (issue 228), oldest first. --project narrows to one project_name
            (the same identity 'harnez stats --project' filters on, issue
            227); omitted shows every project's snapshots. Non-JSON output is
            a formatted table: PROJECT, CREATED_AT, OPEN, CLOSED, DRAFT,
-           UNKNOWN.
+           BACKLOG, UNKNOWN.
+
+  harnez find issues similar "<title>" [--json]
+           OR-rank likely duplicate tickets across every lifecycle status.
+           Results show score and raw status; threshold and top count come
+           from spec/issues.yaml.
 
 Query grammar:
   whitespace         AND: 'vram gtt' requires both terms.
@@ -1276,12 +1281,10 @@ Query grammar:
                      so 'status:open vram|gtt' means
                      'status:open AND (vram OR gtt)'.
   status:VALUE       filter (alias 'is:VALUE'), ANDed with other terms.
-                     Accepted values: open, in-progress, blocked, closed,
-                     draft. 'open'/'is:open' match every unresolved issue
-                     whose leading raw status is Open, In Progress, or
-                     Blocked; 'in-progress'/'blocked' narrow to just that
-                     raw lifecycle stage; 'closed'/'draft' match their
-                     canonical category. Matching ignores case and
+                     Accepted values come from spec/issues.yaml. 'open'
+                     excludes Backlog; 'backlog' selects it, and
+                     'unresolved' includes Open, In Progress, Blocked,
+                     Draft, and Backlog. Matching ignores case and
                      explanatory status suffixes (e.g. "Blocked — waiting
                      for upstream").
 
@@ -1572,10 +1575,12 @@ are targets; the first non-number argument starts the reason. A numeric-only
 reason is therefore ambiguous: include text in the reason (for example,
 '"123 tickets"'). Batch targets are all validated before any file is changed,
 then the README is regenerated and the batch is committed once.
-  new --remote "title"  Create a GitHub issue on the github remote and reserve
+  new --remote [--force] "title" Create a GitHub issue on the github remote and reserve
                     its permanent GH<number> ID. Requires authenticated gh;
-                    also selected when CLAUDE_CODE_REMOTE is set. No fallback.
-  new [title]      Atomically reserve the next free issue number and create
+                    also selected when CLAUDE_CODE_REMOTE is set. Strong
+                    duplicate matches block before gh issue create unless
+                    --force is supplied. No fallback.
+  new [--force] [title] Atomically reserve the next free issue number and create
                     a Draft placeholder file (issues/<NNN>-<title-slug>.md,
                     or issues/<NNN>-reserved.md with no title), using
                     O_CREATE|O_EXCL so concurrent callers never collide. Non-
@@ -1583,9 +1588,10 @@ then the README is regenerated and the batch is committed once.
                     real content directly to that printed path instead of
                     re-deriving the slug from the title by hand (a
                     hand-derived slug can diverge and leave an orphaned
-                    placeholder behind, see issue 202). Unlike every other
-                    verb, 'new' takes no ticket number (there isn't one yet)
-                    and never commits.
+                    placeholder behind, see issue 202). Strong duplicate
+                    matches block unless --force is supplied. Unlike every
+                    other verb, 'new' takes no ticket number (there isn't one
+                    yet) and never commits.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -1640,6 +1646,7 @@ Flags:
       --commit string   override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
   -d, --dir string      repo root containing issues/ (default ".")
       --dry-run         alias for --check
+      --force           with new: create despite strong duplicate matches
   -h, --help            help for issues
   -I, --image           render visual PNG card context
       --json            output a single JSON object instead of a text line

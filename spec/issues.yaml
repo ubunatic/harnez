@@ -49,3 +49,11 @@ lifecycle:
       filters: [closed]
       match_mode: lead_token
       match_terms: [done]
+duplicate_gate:
+  threshold: 0.55
+  max_results: 5
+  minimum_query_tokens: 2
+  minimum_token_length: 3
+  title_weight: 3
+  body_weight: 1
+  stopwords: [a, an, and, are, as, at, be, by, for, from, has, have, in, into, is, it, its, of, on, or, that, the, their, this, to, was, were, what, where, which, who, why, with]

@@ -1,6 +1,8 @@
 package telemetry
 
 import (
+	"database/sql"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -16,7 +18,7 @@ func TestInsertIssueSnapshot_RecordsAcrossTwoDistinctPoints(t *testing.T) {
 	t2 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 
 	inserted, err := db.InsertIssueSnapshot(IssueStatusSnapshot{
-		CreatedAt: t1, ProjectName: "harnez", OpenCount: 10, ClosedCount: 5,
+		CreatedAt: t1, ProjectName: "harnez", OpenCount: 10, ClosedCount: 5, BacklogCount: 2,
 	})
 	if err != nil {
 		t.Fatalf("InsertIssueSnapshot (1): %v", err)
@@ -42,7 +44,7 @@ func TestInsertIssueSnapshot_RecordsAcrossTwoDistinctPoints(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("expected 2 snapshots, got %d: %+v", len(got), got)
 	}
-	if got[0].OpenCount != 10 || got[0].ClosedCount != 5 {
+	if got[0].OpenCount != 10 || got[0].ClosedCount != 5 || got[0].BacklogCount != 2 {
 		t.Errorf("expected oldest-first ordering, got[0] = %+v", got[0])
 	}
 	if got[1].OpenCount != 8 || got[1].ClosedCount != 8 {
@@ -105,6 +107,64 @@ func TestInsertIssueSnapshot_DedupesIdenticalConsecutiveSnapshots(t *testing.T) 
 	}
 	if len(got) != 2 {
 		t.Fatalf("expected 2 snapshots after a genuine count change, got %d", len(got))
+	}
+}
+
+func TestInsertIssueSnapshot_DedupesWithBacklogCount(t *testing.T) {
+	db := openTestDB(t)
+	snap := IssueStatusSnapshot{ProjectName: "harnez", OpenCount: 3, BacklogCount: 2}
+	if inserted, err := db.InsertIssueSnapshot(snap); err != nil || !inserted {
+		t.Fatalf("first snapshot: inserted=%t err=%v", inserted, err)
+	}
+	changed := snap
+	changed.BacklogCount++
+	if inserted, err := db.InsertIssueSnapshot(changed); err != nil || !inserted {
+		t.Fatalf("backlog change should create a snapshot: inserted=%t err=%v", inserted, err)
+	}
+	rows, err := db.QueryIssueSnapshots("harnez")
+	if err != nil || len(rows) != 2 || rows[1].BacklogCount != 3 {
+		t.Fatalf("snapshots = %+v, err=%v", rows, err)
+	}
+}
+
+func TestOpenMigratesIssueSnapshotBacklogCount(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.sqlite")
+	current, err := Open(path)
+	if err != nil {
+		t.Fatalf("create current test database: %v", err)
+	}
+	if err := current.Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec("ALTER TABLE issue_status_snapshots DROP COLUMN backlog_count"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec("PRAGMA user_version = 10"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`INSERT INTO issue_status_snapshots (created_at, project_name, open_count)
+		VALUES ('2026-10-20T00:00:00Z', 'legacy', 4)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open v10 database: %v", err)
+	}
+	defer db.Close()
+	if version, err := db.SchemaVersion(); err != nil || version != 11 {
+		t.Fatalf("schema version = %d, err=%v; want 11", version, err)
+	}
+	rows, err := db.QueryIssueSnapshots("legacy")
+	if err != nil || len(rows) != 1 || rows[0].BacklogCount != 0 {
+		t.Fatalf("legacy snapshot after migration = %+v, err=%v", rows, err)
 	}
 }
 

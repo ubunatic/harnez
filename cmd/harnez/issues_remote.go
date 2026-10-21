@@ -25,8 +25,17 @@ func runGH(dir string, args ...string) ([]byte, error) {
 }
 
 func runIssuesNewRemote(w io.Writer, dir, title string, jsonOutput bool, gh ghRunner) error {
+	return runIssuesNewRemoteWithForce(w, dir, title, jsonOutput, false, gh)
+}
+
+func runIssuesNewRemoteWithForce(w io.Writer, dir, title string, jsonOutput, force bool, gh ghRunner) error {
 	if strings.TrimSpace(title) == "" {
 		return fmt.Errorf("issues new --remote: a title is required")
+	}
+	if !force {
+		if err := checkIssueDuplicates(filepath.Join(dir, "issues"), title); err != nil {
+			return err
+		}
 	}
 	remote, err := gitOutput(dir, "remote", "get-url", "github")
 	if err != nil {

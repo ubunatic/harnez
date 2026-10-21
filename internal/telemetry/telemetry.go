@@ -338,6 +338,13 @@ func checkAndMigrateSchema(sqlDB schemaExecutor, path string, preexisting bool) 
 		if skillNameMigrated {
 			migrations = append(migrations, "tool_calls.skill_name")
 		}
+		backlogCountMigrated, err := migrateIssueSnapshotBacklogCount(sqlDB)
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: migrate issue_status_snapshots.backlog_count: %w", err)
+		}
+		if backlogCountMigrated {
+			migrations = append(migrations, "issue_status_snapshots.backlog_count")
+		}
 		// Version 5 is additive: schemaDDL creates compaction_events and
 		// session_boundaries for existing databases before this check.
 		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
@@ -353,12 +360,51 @@ func checkAndMigrateSchema(sqlDB schemaExecutor, path string, preexisting bool) 
 		if compactionEventsMigrated {
 			migrations = append(migrations, "compaction_events.model")
 		}
+		backlogCountMigrated, err := migrateIssueSnapshotBacklogCount(sqlDB)
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: repair issue_status_snapshots.backlog_count: %w", err)
+		}
+		if backlogCountMigrated {
+			migrations = append(migrations, "issue_status_snapshots.backlog_count")
+		}
 	}
 	return migrations, nil
 }
 
+// migrateIssueSnapshotBacklogCount adds the version-11 backlog_count column;
+// older snapshots retain zero because historical backlog counts were not
+// recorded.
+func migrateIssueSnapshotBacklogCount(sqlDB schemaExecutor) (bool, error) {
+	statements := mustTelemetrySQL().Statements
+	rows, err := sqlDB.Query(statements["issue_snapshots_columns"])
+	if err != nil {
+		return false, err
+	}
+	present := false
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return false, err
+		}
+		present = present || name == "backlog_count"
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return false, err
+	}
+	if err := rows.Close(); err != nil {
+		return false, err
+	}
+	if present {
+		return false, nil
+	}
+	_, err = sqlDB.Exec(statements["issue_snapshots_add_backlog_count"])
+	return err == nil, err
+}
+
 // migrateToolCallsSkillName adds the version-10 skill_name column; older
-// rows keep ” (issue 735 records skill calls from then on, no backfill).
+// rows keep an empty value (issue 735 records skill calls from then on).
 func migrateToolCallsSkillName(sqlDB schemaExecutor) (bool, error) {
 	statements := mustTelemetrySQL().Statements
 	rows, err := sqlDB.Query(statements["tool_calls_columns"])

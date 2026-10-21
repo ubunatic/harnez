@@ -54,6 +54,23 @@ func TestIssuesTableMissingStatus(t *testing.T) {
 	}
 }
 
+func TestStatusCountsIncludesBacklog(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "001-open.md"), "# 001 — Open\n\n**Status**: Open\n")
+	writeFile(t, filepath.Join(dir, "002-closed.md"), "# 002 — Closed\n\n**Status**: Closed — done\n")
+	writeFile(t, filepath.Join(dir, "003-draft.md"), "# 003 — Draft\n\n**Status**: Draft\n")
+	writeFile(t, filepath.Join(dir, "004-backlog.md"), "# 004 — Backlog\n\n**Status**: Backlog\n")
+	writeFile(t, filepath.Join(dir, "005-unknown.md"), "# 005 — Unknown\n\n**Status**: In Review\n")
+
+	open, closed, draft, backlog, unknown, err := StatusCounts(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open != 1 || closed != 1 || draft != 1 || backlog != 1 || unknown != 1 {
+		t.Fatalf("StatusCounts = open:%d closed:%d draft:%d backlog:%d unknown:%d", open, closed, draft, backlog, unknown)
+	}
+}
+
 func TestIssuesTableReservedPlaceholder(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "001-open-task.md"), "# 001 — Open task\n\n**Status**: Open\n")

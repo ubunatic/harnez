@@ -16,6 +16,10 @@ func TestEmbeddedLifecycleSpecAndSchema(t *testing.T) {
 	if !containsString(spec.Lifecycle.Unresolved, "backlog") {
 		t.Fatal("embedded unresolved lifecycle does not include backlog")
 	}
+	gate, err := DuplicateGateSettings()
+	if err != nil || gate.Threshold <= 0 || gate.MaxResults != 5 || gate.MinimumQueryTokens != 2 || len(gate.Stopwords) == 0 {
+		t.Fatalf("embedded duplicate gate settings = %+v, err=%v", gate, err)
+	}
 	if !StatusFilterMatches("Backlog", "backlog") || !StatusFilterMatches("Backlog — later", "unresolved") {
 		t.Fatal("embedded lifecycle filters do not match Backlog")
 	}

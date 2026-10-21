@@ -275,6 +275,42 @@ func TestIssuesCmd_BacklogRefusesClosedAndPromoteRequiresBacklog(t *testing.T) {
 	}
 }
 
+func TestIssuesNewDuplicateGateAndForce(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	writeDuplicateFile(t, dir, "issues/043-backlog-example-ticket.md", "# 043 — Example Ticket (deferred)\n\n**Status**: Backlog — later\n")
+	var out bytes.Buffer
+	err := runIssuesNew(&out, dir, "Example ticket", false)
+	if err == nil || !strings.Contains(err.Error(), "harnez issues open 042") || !strings.Contains(err.Error(), "harnez issues promote 043") {
+		t.Fatalf("duplicate title: got %v, want open and promote hints", err)
+	}
+	files, scanErr := issues.Scan(filepath.Join(dir, "issues"))
+	if scanErr != nil || len(files) != 2 {
+		t.Fatalf("blocked duplicate reserved a ticket: files=%d err=%v", len(files), scanErr)
+	}
+
+	cmd := newIssuesCmd()
+	cmd.SetArgs([]string{"new", "--force", "-d", dir, "Example ticket"})
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("--force should allow duplicate title: %v", err)
+	}
+	files, scanErr = issues.Scan(filepath.Join(dir, "issues"))
+	if scanErr != nil || len(files) != 3 {
+		t.Fatalf("--force did not reserve ticket: files=%d err=%v", len(files), scanErr)
+	}
+}
+
+func TestIssuesNewDuplicateGateSkipsUnrelatedAndShortTitles(t *testing.T) {
+	for _, title := range []string{"Solaris charging protocol", "release", "the and of"} {
+		t.Run(title, func(t *testing.T) {
+			dir, _ := issuesFixtureRepo(t, sampleTicket)
+			if err := runIssuesNew(&bytes.Buffer{}, dir, title, false); err != nil {
+				t.Fatalf("title should not be blocked: %v", err)
+			}
+		})
+	}
+}
+
 func TestRunIssuesVerb_BareCloseDoesNotFabricateReason(t *testing.T) {
 	dir, ticketPath := issuesFixtureRepo(t, sampleTicket)
 

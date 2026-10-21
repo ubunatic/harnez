@@ -69,6 +69,7 @@ func newIssuesCmd() *cobra.Command {
 
 func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var remoteFlag bool
+	var forceFlag bool
 	var dir string
 	var checkFlag bool
 	var dryRunFlag bool
@@ -109,10 +110,12 @@ are targets; the first non-number argument starts the reason. A numeric-only
 reason is therefore ambiguous: include text in the reason (for example,
 '"123 tickets"'). Batch targets are all validated before any file is changed,
 then the README is regenerated and the batch is committed once.
-  new --remote "title"  Create a GitHub issue on the github remote and reserve
+  new --remote [--force] "title" Create a GitHub issue on the github remote and reserve
                     its permanent GH<number> ID. Requires authenticated gh;
-                    also selected when CLAUDE_CODE_REMOTE is set. No fallback.
-  new [title]      Atomically reserve the next free issue number and create
+                    also selected when CLAUDE_CODE_REMOTE is set. Strong
+                    duplicate matches block before gh issue create unless
+                    --force is supplied. No fallback.
+  new [--force] [title] Atomically reserve the next free issue number and create
                     a Draft placeholder file (issues/<NNN>-<title-slug>.md,
                     or issues/<NNN>-reserved.md with no title), using
                     O_CREATE|O_EXCL so concurrent callers never collide. Non-
@@ -120,9 +123,10 @@ then the README is regenerated and the batch is committed once.
                     real content directly to that printed path instead of
                     re-deriving the slug from the title by hand (a
                     hand-derived slug can diverge and leave an orphaned
-                    placeholder behind, see issue 202). Unlike every other
-                    verb, 'new' takes no ticket number (there isn't one yet)
-                    and never commits.
+                    placeholder behind, see issue 202). Strong duplicate
+                    matches block unless --force is supplied. Unlike every
+                    other verb, 'new' takes no ticket number (there isn't one
+                    yet) and never commits.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -171,6 +175,9 @@ valid, exit-0 answer.`,
 			}
 			if remoteFlag && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --remote requires new")
+			}
+			if forceFlag && (len(args) == 0 || args[0] != "new") {
+				return fmt.Errorf("issues: --force requires new")
 			}
 			if listFlag {
 				if len(args) != 0 {
@@ -245,10 +252,10 @@ valid, exit-0 answer.`,
 				_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
 				if remoteFlag || remoteEnv {
 					fmt.Fprintln(cmd.ErrOrStderr(), "issues new: remote mode")
-					return runIssuesNewRemote(cmd.OutOrStdout(), dir, title, jsonFlag, gh)
+					return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
 				}
 				fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
-				return runIssuesNew(cmd.OutOrStdout(), dir, title, jsonFlag)
+				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag)
 			}
 			if args[0] == "show" {
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
@@ -322,6 +329,7 @@ valid, exit-0 answer.`,
 		ValidArgsFunction: issuesCompletion,
 	}
 	cmd.Flags().BoolVar(&remoteFlag, "remote", false, "with new: allocate a permanent GH id using authenticated gh on the github remote")
+	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: create despite strong duplicate matches")
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
 	cmd.Flags().BoolVar(&checkFlag, "check", false, "report what would change without writing or committing; exit 1 on drift")
@@ -696,6 +704,15 @@ func validateLifecycleTransition(verb, oldStatus string) error {
 // (or accept) a ticket number -- there isn't one until this call allocates it
 // -- and never commits.
 func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
+	return runIssuesNewWithForce(w, dir, title, jsonOutput, false)
+}
+
+func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force bool) error {
+	if !force {
+		if err := checkIssueDuplicates(filepath.Join(dir, "issues"), title); err != nil {
+			return err
+		}
+	}
 	issuesDir := filepath.Join(dir, "issues")
 	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: title})
 	if err != nil {

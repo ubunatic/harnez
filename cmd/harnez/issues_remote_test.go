@@ -188,6 +188,45 @@ func TestIssuesRemotePreconditions(t *testing.T) {
 	}
 }
 
+func TestIssuesRemoteDuplicateGateRunsBeforeGitHubCreate(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	repoRunGit(t, dir, "remote", "add", "github", "https://github.com/example/tracker.git")
+	calls := 0
+	err := runIssuesNewRemote(&bytes.Buffer{}, dir, "Example ticket", false, func(string, ...string) ([]byte, error) {
+		calls++
+		return []byte("https://github.com/example/tracker/issues/99"), nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "harnez issues open 042") {
+		t.Fatalf("duplicate remote title: got %v, want an open hint", err)
+	}
+	if calls != 0 {
+		t.Fatalf("duplicate gate called gh %d times before refusing", calls)
+	}
+	files, scanErr := issues.Scan(filepath.Join(dir, "issues"))
+	if scanErr != nil || len(files) != 1 {
+		t.Fatalf("duplicate remote title changed local tracker: files=%d err=%v", len(files), scanErr)
+	}
+}
+
+func TestIssuesRemoteForceBypassesDuplicateGate(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	repoRunGit(t, dir, "remote", "add", "github", "https://github.com/example/tracker.git")
+	calls := 0
+	err := runIssuesNewRemoteWithForce(&bytes.Buffer{}, dir, "Example ticket", false, true, func(_ string, args ...string) ([]byte, error) {
+		calls++
+		if calls == 1 {
+			return []byte("https://github.com/example/tracker/issues/99"), nil
+		}
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatalf("--force remote create: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("--force remote create made %d gh calls, want create and edit", calls)
+	}
+}
+
 func TestIssuesNewLocalModeAndRemoteJSON(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	t.Setenv("CLAUDE_CODE_REMOTE", "")

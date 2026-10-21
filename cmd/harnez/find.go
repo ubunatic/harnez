@@ -85,13 +85,18 @@ Subcommands / Allocation:
            (cmd/harnez/issues.go) -- find never mutates.
 
   harnez find issues history [--project <name>] [--json]
-           Render the open/closed/draft/unknown ticket-count snapshot
+           Render the open/closed/draft/backlog/unknown ticket-count snapshot
            history 'harnez index' records into the telemetry DB on each run
            (issue 228), oldest first. --project narrows to one project_name
            (the same identity 'harnez stats --project' filters on, issue
            227); omitted shows every project's snapshots. Non-JSON output is
            a formatted table: PROJECT, CREATED_AT, OPEN, CLOSED, DRAFT,
-           UNKNOWN.
+           BACKLOG, UNKNOWN.
+
+  harnez find issues similar "<title>" [--json]
+           OR-rank likely duplicate tickets across every lifecycle status.
+           Results show score and raw status; threshold and top count come
+           from spec/issues.yaml.
 
 Query grammar:
   whitespace         AND: 'vram gtt' requires both terms.
@@ -100,12 +105,10 @@ Query grammar:
                      so 'status:open vram|gtt' means
                      'status:open AND (vram OR gtt)'.
   status:VALUE       filter (alias 'is:VALUE'), ANDed with other terms.
-                     Accepted values: open, in-progress, blocked, closed,
-                     draft. 'open'/'is:open' match every unresolved issue
-                     whose leading raw status is Open, In Progress, or
-                     Blocked; 'in-progress'/'blocked' narrow to just that
-                     raw lifecycle stage; 'closed'/'draft' match their
-                     canonical category. Matching ignores case and
+                     Accepted values come from spec/issues.yaml. 'open'
+                     excludes Backlog; 'backlog' selects it, and
+                     'unresolved' includes Open, In Progress, Blocked,
+                     Draft, and Backlog. Matching ignores case and
                      explanatory status suffixes (e.g. "Blocked — waiting
                      for upstream").
 
@@ -265,11 +268,11 @@ func runFindHistory(w io.Writer, opts findHistoryOptions) error {
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "PROJECT\tCREATED_AT\tOPEN\tCLOSED\tDRAFT\tUNKNOWN")
+	fmt.Fprintln(tw, "PROJECT\tCREATED_AT\tOPEN\tCLOSED\tDRAFT\tBACKLOG\tUNKNOWN")
 	for _, s := range snapshots {
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%d\t%d\n",
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%d\t%d\t%d\n",
 			s.ProjectName, s.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			s.OpenCount, s.ClosedCount, s.DraftCount, s.UnknownCount)
+			s.OpenCount, s.ClosedCount, s.DraftCount, s.BacklogCount, s.UnknownCount)
 	}
 	return tw.Flush()
 }
@@ -365,6 +368,12 @@ func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) e
 	// its ordering and limit stay identical to the established default.
 	if len(args) > 1 {
 		switch args[1] {
+		case "similar":
+			query := strings.TrimSpace(strings.Join(args[2:], " "))
+			if query == "" {
+				return fmt.Errorf("find issues similar: title must not be empty")
+			}
+			return runFindSimilar(w, opts, query)
 		case "last":
 			if len(args) > 2 {
 				return fmt.Errorf("find issues last: accepts no query terms")
@@ -470,6 +479,35 @@ func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) e
 
 	for _, r := range results {
 		fmt.Fprintln(w, find.FormatTSV(r))
+	}
+	return nil
+}
+
+func runFindSimilar(w io.Writer, opts findRunOptions, query string) error {
+	files, err := issues.Scan(filepath.Join(opts.Dir, "issues"))
+	if err != nil {
+		return fmt.Errorf("find issues similar: %w", err)
+	}
+	for i := range files {
+		files[i].RelPath = filepath.ToSlash(filepath.Join("issues", files[i].RelPath))
+	}
+	results, err := find.Similar(files, query)
+	if err != nil {
+		return err
+	}
+	if opts.JSON {
+		if results == nil {
+			results = []find.SimilarResult{}
+		}
+		data, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			return fmt.Errorf("find issues similar: render json: %w", err)
+		}
+		fmt.Fprintln(w, string(data))
+		return nil
+	}
+	for _, result := range results {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%.3f\t%s\n", result.Number, result.RawStatus, result.PlainTitle, result.Score, result.Path)
 	}
 	return nil
 }

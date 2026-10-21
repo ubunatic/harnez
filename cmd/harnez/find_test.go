@@ -40,6 +40,43 @@ func TestRunFindHistoryMissingTableIsEmpty(t *testing.T) {
 	}
 }
 
+func TestRunFindIssuesSimilarShowsScoresAndStatus(t *testing.T) {
+	dir := t.TempDir()
+	issuesDir := filepath.Join(dir, "issues")
+	if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"010-release.md":   "# 010 — Agent release playbook\n\n**Status**: Open\n\n---\n\nRelease workflow notes.\n",
+		"011-unrelated.md": "# 011 — Solar charger protocol\n\n**Status**: Backlog — later\n\n---\n\nBattery details.\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(issuesDir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var out bytes.Buffer
+	if err := runFindWithOptions(&out, io.Discard, []string{"issues", "similar", "agent", "release", "playbook"}, findRunOptions{Dir: dir, Text: true}); err != nil {
+		t.Fatalf("similar text: %v", err)
+	}
+	if !strings.Contains(out.String(), "010\tOpen\tAgent release playbook") || !strings.Contains(out.String(), "1.000") {
+		t.Fatalf("similar TSV omitted score/status/title: %q", out.String())
+	}
+
+	out.Reset()
+	if err := runFindWithOptions(&out, io.Discard, []string{"issues", "similar", "agent", "release"}, findRunOptions{Dir: dir, JSON: true}); err != nil {
+		t.Fatalf("similar JSON: %v", err)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil || len(rows) == 0 {
+		t.Fatalf("similar JSON rows=%v err=%v output=%q", rows, err, out.String())
+	}
+	if rows[0]["raw_status"] != "Open" || rows[0]["score"] == nil {
+		t.Fatalf("similar JSON result omitted status/score: %+v", rows[0])
+	}
+}
+
 // findFixtureDir writes a small temporary tracker fixture (issue 158's
 // verification plan requires an on-disk fixture, not just an in-memory
 // one) covering active, archived, and suffix-status tickets, plus a file
@@ -352,12 +389,12 @@ func TestRunFindHistory_TableShowsBothRecordedPoints(t *testing.T) {
 	t1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	t2 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	if _, err := db.InsertIssueSnapshot(telemetry.IssueStatusSnapshot{
-		CreatedAt: t1, ProjectName: "harnez", OpenCount: 10, ClosedCount: 5,
+		CreatedAt: t1, ProjectName: "harnez", OpenCount: 10, ClosedCount: 5, BacklogCount: 2,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.InsertIssueSnapshot(telemetry.IssueStatusSnapshot{
-		CreatedAt: t2, ProjectName: "harnez", OpenCount: 8, ClosedCount: 8,
+		CreatedAt: t2, ProjectName: "harnez", OpenCount: 8, ClosedCount: 8, BacklogCount: 3,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -371,6 +408,9 @@ func TestRunFindHistory_TableShowsBothRecordedPoints(t *testing.T) {
 	}
 
 	got := out.String()
+	if !strings.Contains(got, "BACKLOG") || !strings.Contains(got, "2") || !strings.Contains(got, "3") {
+		t.Errorf("expected backlog counts in snapshot table, got:\n%s", got)
+	}
 	if !strings.Contains(got, "10") || !strings.Contains(got, "5") {
 		t.Errorf("expected first snapshot's counts in output, got:\n%s", got)
 	}

@@ -3,6 +3,7 @@ package issues
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 
@@ -13,7 +14,30 @@ import (
 const lifecycleSpecPath = "spec/issues.yaml"
 
 type lifecycleSpec struct {
-	Lifecycle lifecycleDefinition `yaml:"lifecycle"`
+	Lifecycle     lifecycleDefinition     `yaml:"lifecycle"`
+	DuplicateGate duplicateGateDefinition `yaml:"duplicate_gate"`
+}
+
+type duplicateGateDefinition struct {
+	Threshold          float64  `yaml:"threshold"`
+	MaxResults         int      `yaml:"max_results"`
+	MinimumQueryTokens int      `yaml:"minimum_query_tokens"`
+	MinimumTokenLength int      `yaml:"minimum_token_length"`
+	TitleWeight        int      `yaml:"title_weight"`
+	BodyWeight         int      `yaml:"body_weight"`
+	Stopwords          []string `yaml:"stopwords"`
+}
+
+// DuplicateGatePolicy is the spec-owned threshold and tokenization policy
+// used by `find issues similar` and the `issues new` duplicate gate.
+type DuplicateGatePolicy struct {
+	Threshold          float64
+	MaxResults         int
+	MinimumQueryTokens int
+	MinimumTokenLength int
+	TitleWeight        int
+	BodyWeight         int
+	Stopwords          []string
 }
 
 type lifecycleDefinition struct {
@@ -94,7 +118,39 @@ func validateLifecycleSpec(spec lifecycleSpec) error {
 			return fmt.Errorf("issues lifecycle spec: fallback order references unknown status %q", key)
 		}
 	}
+	gate := spec.DuplicateGate
+	if math.IsNaN(gate.Threshold) || math.IsInf(gate.Threshold, 0) || gate.Threshold <= 0 || gate.Threshold > 1 ||
+		gate.MaxResults < 1 || gate.MinimumQueryTokens < 1 || gate.MinimumTokenLength < 1 ||
+		gate.TitleWeight < 1 || gate.BodyWeight < 1 || len(gate.Stopwords) == 0 {
+		return fmt.Errorf("issues lifecycle spec: duplicate_gate requires a threshold in (0, 1], positive limits/weights, and stopwords")
+	}
+	stopwords := make(map[string]bool)
+	for _, word := range gate.Stopwords {
+		if word == "" || stopwords[word] {
+			return fmt.Errorf("issues lifecycle spec: duplicate_gate stopwords must be nonempty and unique")
+		}
+		stopwords[word] = true
+	}
 	return nil
+}
+
+// DuplicateGateSettings returns a copy of the duplicate-search policy from
+// the embedded issue spec.
+func DuplicateGateSettings() (DuplicateGatePolicy, error) {
+	spec, err := currentLifecycleSpec()
+	if err != nil {
+		return DuplicateGatePolicy{}, err
+	}
+	gate := spec.DuplicateGate
+	return DuplicateGatePolicy{
+		Threshold:          gate.Threshold,
+		MaxResults:         gate.MaxResults,
+		MinimumQueryTokens: gate.MinimumQueryTokens,
+		MinimumTokenLength: gate.MinimumTokenLength,
+		TitleWeight:        gate.TitleWeight,
+		BodyWeight:         gate.BodyWeight,
+		Stopwords:          append([]string(nil), gate.Stopwords...),
+	}, nil
 }
 
 // StatusFilterValues returns the accepted status and is filter names from the embedded lifecycle spec.

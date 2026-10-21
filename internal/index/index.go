@@ -86,14 +86,14 @@ func IssuesTable(issuesDir string) (string, error) {
 }
 
 // StatusCounts aggregates the same ticket set IssuesTable renders
-// (issuesDir + issuesDir/archive/*.md) into open/closed/draft/unknown
+// (issuesDir + issuesDir/archive/*.md) into open/closed/draft/backlog/unknown
 // counts by canonical status category -- the rollup issue 228's
 // `harnez index` snapshot-write path records into the telemetry DB's
 // issue_status_snapshots table (internal/telemetry).
-func StatusCounts(issuesDir string) (open, closed, draft, unknown int, err error) {
+func StatusCounts(issuesDir string) (open, closed, draft, backlog, unknown int, err error) {
 	files, err := issues.Scan(issuesDir)
 	if err != nil {
-		return 0, 0, 0, 0, fmt.Errorf("scan issues: %w", err)
+		return 0, 0, 0, 0, 0, fmt.Errorf("scan issues: %w", err)
 	}
 	for _, f := range files {
 		switch f.Canonical {
@@ -104,14 +104,12 @@ func StatusCounts(issuesDir string) (open, closed, draft, unknown int, err error
 		case issues.StatusDraft:
 			draft++
 		case issues.StatusBacklog:
-			// The legacy snapshot schema has no backlog column; keep this known
-			// lifecycle value out of the unknown-status count.
-			continue
+			backlog++
 		default:
 			unknown++
 		}
 	}
-	return open, closed, draft, unknown, nil
+	return open, closed, draft, backlog, unknown, nil
 }
 
 var issuesTableHeaderRe = regexp.MustCompile(`(?m)^\|\s*#\s*\|`)

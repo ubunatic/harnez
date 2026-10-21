@@ -17,6 +17,7 @@ type IssueStatusSnapshot struct {
 	OpenCount    int       `json:"open_count"`
 	ClosedCount  int       `json:"closed_count"`
 	DraftCount   int       `json:"draft_count"`
+	BacklogCount int       `json:"backlog_count"`
 	UnknownCount int       `json:"unknown_count"`
 }
 
@@ -33,7 +34,7 @@ func (d *DB) InsertIssueSnapshot(s IssueStatusSnapshot) (bool, error) {
 		return false, err
 	}
 	if ok && last.OpenCount == s.OpenCount && last.ClosedCount == s.ClosedCount &&
-		last.DraftCount == s.DraftCount && last.UnknownCount == s.UnknownCount {
+		last.DraftCount == s.DraftCount && last.BacklogCount == s.BacklogCount && last.UnknownCount == s.UnknownCount {
 		return false, nil
 	}
 
@@ -47,10 +48,10 @@ func (d *DB) InsertIssueSnapshot(s IssueStatusSnapshot) (bool, error) {
 
 	_, err = d.sql.ExecContext(ctx, `
 		INSERT INTO issue_status_snapshots (
-			created_at, project_name, open_count, closed_count, draft_count, unknown_count
-		) VALUES (?, ?, ?, ?, ?, ?)`,
+			created_at, project_name, open_count, closed_count, draft_count, backlog_count, unknown_count
+		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		createdAt.Format(time.RFC3339Nano),
-		s.ProjectName, s.OpenCount, s.ClosedCount, s.DraftCount, s.UnknownCount,
+		s.ProjectName, s.OpenCount, s.ClosedCount, s.DraftCount, s.BacklogCount, s.UnknownCount,
 	)
 	if err != nil {
 		return false, fmt.Errorf("telemetry: insert issue snapshot: %w", err)
@@ -66,7 +67,7 @@ func (d *DB) latestIssueSnapshot(project string) (IssueStatusSnapshot, bool, err
 	defer cancel()
 
 	row := d.sql.QueryRowContext(ctx, `
-		SELECT id, created_at, project_name, open_count, closed_count, draft_count, unknown_count
+		SELECT id, created_at, project_name, open_count, closed_count, draft_count, backlog_count, unknown_count
 		FROM issue_status_snapshots
 		WHERE project_name = ?
 		ORDER BY created_at DESC, id DESC
@@ -74,7 +75,7 @@ func (d *DB) latestIssueSnapshot(project string) (IssueStatusSnapshot, bool, err
 
 	var s IssueStatusSnapshot
 	var createdAt string
-	err := row.Scan(&s.ID, &createdAt, &s.ProjectName, &s.OpenCount, &s.ClosedCount, &s.DraftCount, &s.UnknownCount)
+	err := row.Scan(&s.ID, &createdAt, &s.ProjectName, &s.OpenCount, &s.ClosedCount, &s.DraftCount, &s.BacklogCount, &s.UnknownCount)
 	if err == sql.ErrNoRows {
 		return IssueStatusSnapshot{}, false, nil
 	}
@@ -98,7 +99,7 @@ func (d *DB) QueryIssueSnapshots(project string) ([]IssueStatusSnapshot, error) 
 	defer cancel()
 
 	query := `
-		SELECT id, created_at, project_name, open_count, closed_count, draft_count, unknown_count
+		SELECT id, created_at, project_name, open_count, closed_count, draft_count, backlog_count, unknown_count
 		FROM issue_status_snapshots`
 	var args []any
 	if project != "" {
@@ -117,7 +118,7 @@ func (d *DB) QueryIssueSnapshots(project string) ([]IssueStatusSnapshot, error) 
 	for rows.Next() {
 		var s IssueStatusSnapshot
 		var createdAt string
-		if err := rows.Scan(&s.ID, &createdAt, &s.ProjectName, &s.OpenCount, &s.ClosedCount, &s.DraftCount, &s.UnknownCount); err != nil {
+		if err := rows.Scan(&s.ID, &createdAt, &s.ProjectName, &s.OpenCount, &s.ClosedCount, &s.DraftCount, &s.BacklogCount, &s.UnknownCount); err != nil {
 			return nil, fmt.Errorf("telemetry: scan issue snapshot row: %w", err)
 		}
 		parsed, err := time.Parse(time.RFC3339Nano, createdAt)

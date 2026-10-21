@@ -74,5 +74,16 @@ tickets, 254 Open, 567 Closed, 17 Draft, 2 Unknown (`In Review`: 211, 213).
 
 ## M2 Pre-Work / Required Refinements
 
-- `index.StatusCounts` skips Backlog (no column): add a backlog count so totals add up.
+- `index.StatusCounts` skipped Backlog (no column): M2 adds a backlog count to snapshots and
+  history output; telemetry schema version 11 adds the column to existing databases with a
+  zero default for historical rows.
 - 211, 213 (`In Review`): leave as Unknown; the grooming pass (M4) decides.
+
+## M2 implementation (2026-10-22)
+
+Added `find issues similar "<title>"` with spec-owned stopwords, threshold, weights, minimum query
+length, and top-five limit. `issues new` and `issues new --remote` block strong matches before
+reservation or `gh issue create`; `--force` bypasses the gate. The live local tracker returns #698
+for #697's title at score 0.800 (strong). No local ticket has a `Closed — duplicate of` status;
+GitHub's live repo API has no closed issues marked duplicate, and Codeberg returns no issue records,
+so three closed-duplicate recall cases could not be measured in M2.

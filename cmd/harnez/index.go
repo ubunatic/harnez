@@ -145,7 +145,7 @@ func runIndex(w io.Writer, opts indexOptions) error {
 // logs via debugLog (DEBUG=1) and returns without propagating an error to
 // runIndex's caller.
 func recordIssueSnapshot(issuesDir, dbPath string) {
-	open, closed, draft, unknown, err := index.StatusCounts(issuesDir)
+	open, closed, draft, backlog, unknown, err := index.StatusCounts(issuesDir)
 	if err != nil {
 		debugLog("index: compute issue status counts failed, dropping snapshot: %v", err)
 		return
@@ -157,6 +157,7 @@ func recordIssueSnapshot(issuesDir, dbPath string) {
 		OpenCount:    open,
 		ClosedCount:  closed,
 		DraftCount:   draft,
+		BacklogCount: backlog,
 		UnknownCount: unknown,
 	}
 	if dbPath != "" { // explicit test override

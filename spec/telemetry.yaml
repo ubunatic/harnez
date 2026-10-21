@@ -59,7 +59,7 @@ schema: |
   );
   
   -- issue_status_snapshots backs issue 228: an append-only history of
-  -- open/closed/draft/unknown ticket counts per project, one row per
+  -- open/closed/draft/backlog/unknown ticket counts per project, one row per
   -- 'harnez index' run whose counts differ from that project's most recent
   -- prior row (see InsertIssueSnapshot's dedupe check in issuesnapshot.go --
   -- the dedupe itself is a Go-side read-then-compare, not a DB constraint,
@@ -76,6 +76,7 @@ schema: |
   	open_count    INTEGER NOT NULL DEFAULT 0 CHECK (open_count >= 0),
   	closed_count  INTEGER NOT NULL DEFAULT 0 CHECK (closed_count >= 0),
   	draft_count   INTEGER NOT NULL DEFAULT 0 CHECK (draft_count >= 0),
+  backlog_count INTEGER NOT NULL DEFAULT 0 CHECK (backlog_count >= 0),
   	unknown_count INTEGER NOT NULL DEFAULT 0 CHECK (unknown_count >= 0)
   );
   
@@ -273,6 +274,8 @@ statements:
   tool_call_count: 'SELECT COUNT(*) FROM tool_calls'
   tool_calls_columns: "SELECT name FROM pragma_table_info('tool_calls')"
   tool_calls_add_skill_name: "ALTER TABLE tool_calls ADD COLUMN skill_name TEXT NOT NULL DEFAULT ''"
+  issue_snapshots_columns: "SELECT name FROM pragma_table_info('issue_status_snapshots')"
+  issue_snapshots_add_backlog_count: "ALTER TABLE issue_status_snapshots ADD COLUMN backlog_count INTEGER NOT NULL DEFAULT 0 CHECK (backlog_count >= 0)"
   backup_into: 'VACUUM INTO ?'
   prune_cli_invocations: 'DELETE FROM cli_invocations WHERE id <= (SELECT MAX(id) - ? FROM cli_invocations)'
 predicates:
