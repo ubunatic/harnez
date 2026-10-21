@@ -1,6 +1,6 @@
 # 838 — usage watch: ! debug overlay lost its spinner since the collector owns fetching
 
-**Status**: Open
+**Status**: Closed — debug overlay gauge (braille-snake-2x3, unchanged) now drains over the 5m collector cadence from LastRefreshed and refills on each new snapshot (8a2251a1); host pty check showed partial frames ⠷/⠧ in harnez usage -w --minimal
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
