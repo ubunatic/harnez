@@ -76,3 +76,5 @@ Unverified candidate causes, check before designing:
 - **M2 (shorter cadence) — resolved 2026-10-21:** set the spec cadence to 5m, cache staleness
   multiplier to 1, and AGY meter max age to 5m. `MinWatchInterval` reuse is 30s, and the issue
   112 auth backoff remains 30m. Tests and live collector verification passed; see findings above.
+- **Accepted risk (user, 2026-10-21):** up to 12x more live `agy -p "/usage"` calls may trigger
+  Google reauth prompts (issue 112). If they appear, raise `agy_meter_max_age` in `spec/usage.yaml`.
