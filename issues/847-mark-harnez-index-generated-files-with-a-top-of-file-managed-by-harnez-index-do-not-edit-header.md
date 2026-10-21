@@ -72,3 +72,20 @@ Generated files must not cause manual merge conflicts:
   CLOSED.md and docs/README.md (driver regenerates, works for partly generated files); `index --check`
   and lint cover the docs/README studies table; regenerate this repo and verify a forced conflict
   resolves via the driver.
+
+## M1/M2 delivered (66b8387b, 27503f72), host review FAILED (2026-10-22)
+
+Notices and `.gitattributes` lines are correct in this repo. But the live check fails:
+- Scratch repo (`git init`, one ticket, docs/README with a studies anchor) → `harnez init -d .` exit 0, then
+  `harnez index`: no `merge.*` git config, no `merge=` lines in `.gitattributes`. A forced conflict on
+  new tickets/studies on two branches leaves `<<<<<<<` in `docs/README.md` and `issues/README.md`.
+- This clone (`/home/uwe/projects/harnez`) has no `merge.harnez-issues-index.*` config either, so the
+  committed `.gitattributes` lines are inert here.
+
+## M3 Pre-Work / Required Refinements
+
+- Find out why `init` skips the driver (gating?) and make a plain `harnez init` on a repo with `issues/`
+  install it; if it is opt-in by design, report the flag and make the opt-in path work end to end.
+- Install it in this clone via the real CLI path, not by hand.
+- Add an end-to-end test that runs the real init command (not the internal function), then a two-branch
+  merge with new tickets and new studies, asserting no conflict markers in all four generated files.
