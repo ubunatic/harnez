@@ -2052,11 +2052,10 @@ func TestAllUsageLinesAtDebugOverlayCountsDown(t *testing.T) {
 	assertGauge(refreshed.Add(2*DefaultWatchInterval), timeoutSnakeGlyph(0))
 }
 
-// TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval exercises the
-// compact frame path that RunWatch redraws. At the default 60-second watch
-// cadence, the halfway glyph must appear 30 seconds after the last fetch,
-// independent of the collector's 5-minute cadence (issue 147).
-func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
+// TestBuildWatchFrameAtDebugOverlayUsesCollectorCadence exercises the
+// compact frame path that RunWatch redraws. The debug gauge drains across the
+// collector cadence even when the watch redraw cadence is shorter (issue 838).
+func TestBuildWatchFrameAtDebugOverlayUsesCollectorCadence(t *testing.T) {
 	// refreshed must track real wall-clock time (not a fixed past date): issue
 	// 107's IsValueStale checks LastRefreshed against actual time.Now(), and
 	// this test's debug-gauge math only cares about the relative offset
@@ -2068,11 +2067,12 @@ func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
 		LastRefreshed: refreshed, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 25},
 	}}}
 
-	frame := buildWatchFrameAt(summary, nil, DefaultWatchInterval, compactWatchSections(), 90, 24, true, refreshed.Add(DefaultWatchInterval/2), WatchOptions{Compact: true, DebugOverlay: true})
+	midCycle := refreshed.Add(DefaultCollectorInterval() / 2)
+	frame := buildWatchFrameAt(summary, nil, DefaultWatchInterval, compactWatchSections(), 90, 24, true, midCycle, WatchOptions{Compact: true, DebugOverlay: true})
 	text := stripANSI(strings.Join(frame.lines, "\n"))
 	halfGauge := timeoutSnakeGlyph(.5)
 	if !strings.Contains(text, halfGauge+" Claude C…") {
-		t.Fatalf("watch frame at half its fetch interval did not render half gauge:\n%s", text)
+		t.Fatalf("watch frame at half its collector cadence did not render half gauge:\n%s", text)
 	}
 	raw := strings.Join(frame.lines, "\n")
 	wantGauge := "\x1b[" + colorSGR("time-gauge-fg") + "m"
@@ -2085,6 +2085,19 @@ func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
 	}
 	if got := strings.Count(raw, wantGauge); got != 1 {
 		t.Fatalf("time-gauge styled glyph appears %d times, want only the compact gauge: %q", got, raw)
+	}
+	refilledSummary := UsageSummary{Agents: []AgentUsage{{
+		AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+		LastRefreshed: midCycle, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 25},
+	}}}
+	refilled := buildWatchFrameAt(refilledSummary, nil, DefaultWatchInterval, compactWatchSections(), 90, 24, true, midCycle.Add(time.Second), WatchOptions{Compact: true, DebugOverlay: true})
+	refilledText := stripANSI(strings.Join(refilled.lines, "\n"))
+	if !strings.Contains(refilledText, timeoutSnakeGlyph(1)+" Claude C…") {
+		t.Fatalf("watch frame did not refill after a newer collector snapshot:\n%s", refilledText)
+	}
+	if frame.cols != refilled.cols || frame.rows != refilled.rows || len(frame.lines) != len(refilled.lines) {
+		t.Fatalf("collector refresh changed debug frame geometry: before=%dx%d/%d lines after=%dx%d/%d lines",
+			frame.cols, frame.rows, len(frame.lines), refilled.cols, refilled.rows, len(refilled.lines))
 	}
 	// A heat-colored graph combines the shared panel background with its
 	// value-derived foreground in one SGR sequence (for example 40;34), while

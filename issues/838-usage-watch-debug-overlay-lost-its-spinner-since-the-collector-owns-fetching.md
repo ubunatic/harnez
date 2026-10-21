@@ -22,8 +22,8 @@ when data is being collected.
 ## 2. Technical Specification / Findings
 - Key handling: `dispatchWatchKey(state, '!', …)` toggles `debugOverlay`
   (test: `internal/usage/watch_test.go` around line 1990, glyph `timeoutSnakeGlyph`).
-- Needed: a way for the watch client to observe the collector (e.g. last-fetch / in-flight
-  state per agent exposed over the server socket) and map that to the spinner.
+- Needed: use each stored snapshot's `LastRefreshed` with the collector cadence for the
+  existing overlay glyph. No fetch-status socket API or new indicator is needed.
 - User note: the non-minimal view (`harnez usage -w` without `--minimal`) already shows
   collector freshness in its "Updated" column, so the data reaches the client. Reuse that
   source for the minimal overlay's spinner instead of building a new collector channel.
@@ -42,19 +42,23 @@ when data is being collected.
   fetch-in-progress signal exists in the read path.
 
 ## User decision (2026-10-21)
-Show "the same braille progress spinner as before": the overlay animates the braille spinner
-(likely `braille-classic-10` from `spec/indicators.yaml`, check pre-829 history for the exact
-behaviour) while the collector is fetching. This needs a collector fetch-in-progress /
-last-fetch signal in the client read path.
+Keep the existing single-cell `braille-snake-2x3` sequence (`timeoutSnakeGlyph`) unchanged;
+the bug is its time input. Drain from `LastRefreshed` over `collector_cadence` in `spec/usage.yaml`
+(currently 5m), then refill when the collector stores a newer snapshot. Do not add a fetch-status
+socket route or change `spec/indicators.yaml`.
 
-Clarification (user): a **single character**, not a plain rotator but a **progress spinner**:
-the braille glyph drains from many dots to fewer to a single dot as progress advances, while the
-dots still **spin** (rotate) around the cell. Check whether the existing `timeoutSnakeGlyph`
-already is this glyph family and only its input is wrong. User repeated: **same as before**,
-so reuse the existing glyph sequence unchanged; no new indicator design.
+## Implementation findings (issue 838 M1)
+- `buildAllUsageBoxAt` received the watch interval and passed it to the overlay countdown, so the
+  glyph reached its empty frame after one watch interval even though stored snapshots update on
+  the collector cadence.
+- For debug-overlay rendering, it now uses `DefaultCollectorInterval()` from the embedded usage
+  spec. The normal watch redraw interval and the existing Braille sequence are unchanged.
+- Regression coverage checks the half-cadence glyph, refill after a newer `LastRefreshed`, and
+  unchanged frame geometry.
+- `make test-q1` passed; `grep -- '--- FAIL'` found no failures. `make install` succeeded and
+  `harnez server status` confirmed the systemd collector unit remained active.
+- Live PTY verification was attempted, but the exec wrapper killed the interactive watch before
+  it rendered (stopped process group, exit 125); the cadence behavior is verified by the frame test.
 
 ## 3. Implementation & Verification Plan
-- Re-verify live behaviour and recent commits first (ticket may be stale).
-- Expose collector activity to the client; animate the overlay spinner from it.
-- Test: overlay frame changes while the collector reports a fetch in flight; live check
-  with the installed collector service after `make install`.
+- Host review remains; do not close this ticket before that review.

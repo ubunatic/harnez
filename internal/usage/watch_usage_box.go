@@ -43,6 +43,9 @@ func buildAllUsageBox(summary UsageSummary, width int, debugOverlay bool) wbox {
 // every row. The watch redraw captures this timestamp once so each agent's
 // gauge advances together on every frame rather than retaining prior output.
 func buildAllUsageBoxAt(summary UsageSummary, width int, debugOverlay bool, now time.Time, refreshInterval time.Duration) wbox {
+	if debugOverlay {
+		refreshInterval = DefaultCollectorInterval()
+	}
 	lines := allUsageLinesAt(summary, width-4, debugOverlay, now, refreshInterval)
 	if len(lines) == 0 {
 		lines = []string{ansiDimGrey + "no quota windows available\x1b[0m"}
