@@ -17,6 +17,10 @@ decision or denied permission.
 user is actively working in an agy session (model argon). The row looks stale, so its quota
 numbers cannot be trusted.
 
+Same symptom for Claude: its row showed "15m ago" while several Claude sessions were running.
+So the cause is likely shared (collector cadence or the timestamp the column reads), not
+agy-specific; fix and verify both rows.
+
 ## 2. Technical Specification / Findings
 Unverified candidate causes, check before designing:
 - The collector (since 829-837) may poll agy rarely, or be in the auth/backoff state added in
