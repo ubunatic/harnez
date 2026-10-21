@@ -1,6 +1,6 @@
 # 839 — usage: Updated column stale (AGY 36m, Claude 15m) while agents are in active use
 
-**Status**: Open
+**Status**: Closed — M1 PrivateTmp persistence fix and M2 five-minute collector cadence verified; make test-q1 and make install passed, collector restarted at 02:54 CEST, and Claude, Codex, and AGY rows were just now at 02:54:45 CEST. AGY meter refresh is capped at 5m and issue 112 auth backoff remains 30m.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
