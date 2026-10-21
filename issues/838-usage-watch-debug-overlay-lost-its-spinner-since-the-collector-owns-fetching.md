@@ -41,6 +41,12 @@ when data is being collected.
 - Updated column = `FormatAgo(agent.LastRefreshed)` (`usagetable.go:102`), same source. No
   fetch-in-progress signal exists in the read path.
 
+## User decision (2026-10-21)
+Show "the same braille progress spinner as before": the overlay animates the braille spinner
+(likely `braille-classic-10` from `spec/indicators.yaml`, check pre-829 history for the exact
+behaviour) while the collector is fetching. This needs a collector fetch-in-progress /
+last-fetch signal in the client read path.
+
 ## 3. Implementation & Verification Plan
 - Re-verify live behaviour and recent commits first (ticket may be stale).
 - Expose collector activity to the client; animate the overlay spinner from it.
