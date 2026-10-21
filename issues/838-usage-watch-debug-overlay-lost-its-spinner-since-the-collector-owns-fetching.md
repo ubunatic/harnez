@@ -47,6 +47,11 @@ Show "the same braille progress spinner as before": the overlay animates the bra
 behaviour) while the collector is fetching. This needs a collector fetch-in-progress /
 last-fetch signal in the client read path.
 
+Clarification (user): a **single character**, not a plain rotator but a **progress spinner**:
+the braille glyph drains from many dots to fewer to a single dot as progress advances, while the
+dots still **spin** (rotate) around the cell. Check whether the existing `timeoutSnakeGlyph`
+already is this glyph family and only its input is wrong.
+
 ## 3. Implementation & Verification Plan
 - Re-verify live behaviour and recent commits first (ticket may be stale).
 - Expose collector activity to the client; animate the overlay spinner from it.
