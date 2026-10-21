@@ -48,3 +48,27 @@ Generated files must not cause manual merge conflicts:
   discourage editing the hand-written evergreen table.
 - Use `harnez:begin/end`-style block markers around generated sections, in addition to the
   top marker?
+
+## Searcher findings (2026-10-22, s847 luna:low)
+
+- Generated: `issues/README.md` (table only), `issues/BACKLOG.md`, `issues/CLOSED.md` (full),
+  `docs/README.md` (studies table only, found via `**\`docs/studies/\`**` + `| File | Topic |`).
+  Writers `internal/index/index.go:68,202,358-383`, caller `cmd/harnez/index.go:125`. Roadmap not generated.
+- Block-marker helpers exist: `internal/markdown/markdown.go:12`, `sections.go:14`. 018 uses
+  `managed-by: harnez` front matter.
+- `harnez init` already writes `.gitattributes`, a local merge driver and a pre-commit hook
+  (`internal/claude/init.go:1180`), but attributes cover only `issues/README.md`.
+- Freshness: `issues lint` checks all three issue indexes (`cmd/harnez/issues_rebase.go:525`),
+  `harnez index --check` exists; nothing checks the docs/README studies table.
+- Output is deterministic (sorted, no timestamps/counts).
+
+## Milestones
+
+- **M1 — markers:** top-of-file notice in every generated file (one line; for partly generated files it
+  names the generated sections); wrap generated sections in `harnez:begin/end`-style block markers via
+  the existing helpers, with a migration that finds today's heading/table anchors once. Hand-written
+  parts of `docs/README.md` stay editable and are named as such.
+- **M2 — merge driver + freshness:** extend the init-installed `.gitattributes`/driver to BACKLOG.md,
+  CLOSED.md and docs/README.md (driver regenerates, works for partly generated files); `index --check`
+  and lint cover the docs/README studies table; regenerate this repo and verify a forced conflict
+  resolves via the driver.
