@@ -1,6 +1,6 @@
 # 847 — Mark harnez-index generated files with a top-of-file "managed by harnez index, do not edit" header
 
-**Status**: Closed — M1 markers committed 66b8387b; M2 merge driver, freshness checks, and post-merge regeneration committed 27503f72; make lint, make test-short, make install, and forced-conflict verification passed.
+**Status**: Open — reopened: driver not installed by a real harnez init
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
