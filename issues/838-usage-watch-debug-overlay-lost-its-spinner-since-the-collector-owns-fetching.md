@@ -30,6 +30,17 @@ when data is being collected.
 - Unverified: whether the existing test still passes because it renders a static frame;
   check whether the gap is in the data path or the render path before designing.
 
+## Searcher findings (2026-10-21, s838 luna:low)
+- The `!` glyph is an age countdown, not a rotating spinner: `timeoutSnakeGlyph` compares
+  `LastRefreshed` with the redraw time against the *watch interval*
+  (`internal/usage/freshness.go:20`, `watch_usage_box.go:177`, `indicatorsspec.go:510`).
+- Minimal mode redraws every second (`watch.go:881,910`), so render is fine. Since 829 the watch
+  reads stored collector snapshots (`watch.go:765`, `readstore.go:23`); the timestamp only moves
+  when the collector writes (now every 5 min after 839), so the gauge runs out after one watch
+  interval and then sits still.
+- Updated column = `FormatAgo(agent.LastRefreshed)` (`usagetable.go:102`), same source. No
+  fetch-in-progress signal exists in the read path.
+
 ## 3. Implementation & Verification Plan
 - Re-verify live behaviour and recent commits first (ticket may be stale).
 - Expose collector activity to the client; animate the overlay spinner from it.
