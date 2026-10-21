@@ -190,6 +190,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-21-ticket-hygiene-opus.md](studies/2026-10-21-ticket-hygiene-opus.md) | read-only research; three solutions within the file-based `issues/*.md` tracker. No code. |
 | [studies/2026-10-21-ticket-hygiene-sol.md](studies/2026-10-21-ticket-hygiene-sol.md) | Ticket hygiene: three file-based approaches (sol) |
 | [studies/2026-10-21-two-agent-lean-sprint-usage-freshness.md](studies/2026-10-21-two-agent-lean-sprint-usage-freshness.md) | Two-Agent Lean Sprint: usage freshness (issue 839) |
+| [studies/2026-10-22-two-agent-lean-sprint-ticket-hygiene.md](studies/2026-10-22-two-agent-lean-sprint-ticket-hygiene.md) | Two-Agent Lean Sprint: ticket hygiene (issue 843) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
