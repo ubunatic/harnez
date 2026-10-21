@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/issues"
+	"ubunatic.com/harnez/internal/markdown"
 )
 
 // readmeLockRetries/readmeLockDelay bound how long UpdateIssuesReadme waits
@@ -91,10 +92,60 @@ func IssueIndexFiles(issuesDir string) (map[string]string, error) {
 		return f.Canonical == issues.StatusClosed
 	})
 	return map[string]string{
-		"README.md":  "# Issues\n\nActive tickets. See [Backlog](BACKLOG.md) and [Closed](CLOSED.md).\n\n" + active,
-		"BACKLOG.md": "# Backlog\n\n" + backlog,
-		"CLOSED.md":  "# Closed\n\n" + closed,
+		"README.md":  managedDocument("# Issues\n\nActive tickets. See [Backlog](BACKLOG.md) and [Closed](CLOSED.md).\n\n"+active, "issues-active-index", issuesActiveNotice),
+		"BACKLOG.md": managedDocument("# Backlog\n\n"+backlog, "issues-backlog-index", issuesFullNotice),
+		"CLOSED.md":  managedDocument("# Closed\n\n"+closed, "issues-closed-index", issuesFullNotice),
 	}, nil
+}
+
+const (
+	issuesActiveNotice = "<!-- managed by harnez index: active ticket table generated from issue files; edit ticket files instead -->"
+	issuesFullNotice   = "<!-- managed by harnez index: generated from issue files; edit ticket files instead -->"
+	docsStudiesNotice  = "<!-- managed by harnez index: only the studies table is generated; evergreen documentation and other tables are hand-written -->"
+)
+
+func managedDocument(content, id, notice string) string {
+	return notice + "\n" + markdown.MDMarkers.Begin(id) + "\n" + strings.TrimRight(content, "\n") + "\n" + markdown.MDMarkers.End(id) + "\n"
+}
+
+func ensureManagedNotice(content, notice string) string {
+	if strings.HasPrefix(content, "<!-- managed by harnez index:") {
+		if end := strings.IndexByte(content, '\n'); end >= 0 {
+			return notice + content[end:]
+		}
+		return notice + "\n"
+	}
+	return notice + "\n" + content
+}
+
+// replaceManagedBlock replaces a marked section or migrates a legacy section
+// using its source offsets. Content outside the section is preserved verbatim.
+func replaceManagedBlock(content, id, generated string, legacyStart, legacyEnd int) (string, error) {
+	begin, end := markdown.MDMarkers.Begin(id), markdown.MDMarkers.End(id)
+	beginAt, endAt := strings.Index(content, begin), strings.Index(content, end)
+	if beginAt >= 0 || endAt >= 0 {
+		if beginAt < 0 || endAt < beginAt || strings.Index(content[beginAt+len(begin):], begin) >= 0 {
+			return "", fmt.Errorf("malformed generated block %q", id)
+		}
+		lineStart := strings.LastIndex(content[:beginAt], "\n") + 1
+		lineEnd := strings.IndexByte(content[endAt+len(end):], '\n')
+		if lineStart != beginAt || (lineEnd < 0 && endAt+len(end) != len(content)) {
+			return "", fmt.Errorf("generated block %q markers must occupy complete lines", id)
+		}
+		blockEnd := len(content)
+		blockSuffix := ""
+		if lineEnd >= 0 {
+			blockEnd = endAt + len(end) + lineEnd + 1
+			blockSuffix = "\n"
+		}
+		block := begin + "\n" + strings.TrimRight(generated, "\n") + "\n" + end + blockSuffix
+		return content[:lineStart] + block + content[blockEnd:], nil
+	}
+	if legacyStart < 0 || legacyEnd < legacyStart || legacyEnd > len(content) {
+		return "", fmt.Errorf("cannot locate legacy generated section %q", id)
+	}
+	block := begin + "\n" + strings.TrimRight(generated, "\n") + "\n" + end
+	return content[:legacyStart] + block + content[legacyEnd:], nil
 }
 
 func renderIssueTable(files []issues.IssueFile, include func(issues.IssueFile) bool) string {
@@ -207,6 +258,10 @@ func RenderIssuesReadme(content, issuesDir, readmePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	content = ensureManagedNotice(content, issuesActiveNotice)
+	if strings.Contains(content, markdown.MDMarkers.Begin("issues-active-index")) || strings.Contains(content, markdown.MDMarkers.End("issues-active-index")) {
+		return replaceManagedBlock(content, "issues-active-index", table, -1, -1)
+	}
 
 	loc := issuesTableHeaderRe.FindStringIndex(content)
 	if loc == nil {
@@ -252,8 +307,9 @@ func RenderIssuesReadme(content, issuesDir, readmePath string) (string, error) {
 	if len(missingLinks) > 0 {
 		prefix += strings.Join(missingLinks, " · ") + "\n\n"
 	}
-	newContent := prefix + table + content[tableEnd:]
-	return newContent, nil
+	content = prefix + content[loc[0]:]
+	tableStart := len(prefix)
+	return replaceManagedBlock(content, "issues-active-index", table, tableStart, tableStart+tableEnd-loc[0])
 }
 
 var (
@@ -379,11 +435,32 @@ func UpdateDocsReadme(readmePath, docsDir string) (bool, error) {
 		return false, fmt.Errorf("read %s: %w", readmePath, err)
 	}
 	content := string(orig)
+	content = ensureManagedNotice(content, docsStudiesNotice)
+	if strings.Contains(content, markdown.MDMarkers.Begin("docs-studies-index")) || strings.Contains(content, markdown.MDMarkers.End("docs-studies-index")) {
+		newContent, err := replaceManagedBlock(content, "docs-studies-index", table, -1, -1)
+		if err != nil {
+			return false, fmt.Errorf("%s: %w", readmePath, err)
+		}
+		if newContent == string(orig) {
+			return false, nil
+		}
+		if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
+			return false, fmt.Errorf("write %s: %w", readmePath, err)
+		}
+		return true, nil
+	}
 
 	anchorIdx := strings.Index(content, docsStudiesAnchor)
 	if anchorIdx == -1 {
-		section := "\n" + docsStudiesAnchor + " — case studies\n\n" + strings.TrimRight(table, "\n") + "\n"
-		newContent := strings.TrimRight(content, "\n") + "\n" + section
+		prefix := content
+		if !strings.HasSuffix(prefix, "\n") {
+			prefix += "\n"
+		}
+		if !strings.HasSuffix(prefix, "\n\n") {
+			prefix += "\n"
+		}
+		section := docsStudiesAnchor + " — case studies\n\n" + markdown.MDMarkers.Begin("docs-studies-index") + "\n" + strings.TrimRight(table, "\n") + "\n" + markdown.MDMarkers.End("docs-studies-index") + "\n"
+		newContent := prefix + section
 		if newContent == content {
 			return false, nil
 		}
@@ -409,7 +486,10 @@ func UpdateDocsReadme(readmePath, docsDir string) (bool, error) {
 		blockEnd--
 	}
 
-	newContent := content[:headerIdx] + strings.TrimRight(table, "\n") + content[blockEnd:]
+	newContent, err := replaceManagedBlock(content, "docs-studies-index", table, headerIdx, blockEnd)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", readmePath, err)
+	}
 	if newContent == content {
 		return false, nil
 	}

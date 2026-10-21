@@ -76,6 +76,28 @@ func TestIssueIndexFilesPartitionStatusesAndArchive(t *testing.T) {
 	}
 }
 
+func TestIssueIndexFilesHaveTopNoticeAndManagedBlock(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "001-open.md"), "# 001 — Open\n\n**Status**: Open\n")
+	indexes, err := IssueIndexFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, id := range map[string]string{
+		"README.md":  "issues-active-index",
+		"BACKLOG.md": "issues-backlog-index",
+		"CLOSED.md":  "issues-closed-index",
+	} {
+		content := indexes[name]
+		if !strings.HasPrefix(content, "<!-- managed by harnez index:") {
+			t.Errorf("%s missing top notice: %q", name, content)
+		}
+		if !strings.Contains(content, "<!-- harnez:begin "+id+" -->") || !strings.Contains(content, "<!-- harnez:end "+id+" -->") {
+			t.Errorf("%s missing generated block %q: %s", name, id, content)
+		}
+	}
+}
+
 func TestIssueIndexFilesOmitsUnknownStatus(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "001-unknown.md"), "# 001 — Unknown\n\n**Status**: Pending QA\n")
@@ -266,6 +288,39 @@ func TestUpdateIssuesReadmePreservesTrailingProse(t *testing.T) {
 	}
 	if !strings.Contains(string(got), "[001-first-bug.md](001-first-bug.md)") {
 		t.Errorf("canonical table was not regenerated:\n%s", got)
+	}
+}
+
+func TestRenderIssuesReadmeMigratesLegacyTableAndReplacesEditedBlock(t *testing.T) {
+	dir := t.TempDir()
+	issuesDir := filepath.Join(dir, "issues")
+	writeFile(t, filepath.Join(issuesDir, "001-first-bug.md"), "# 001 — First bug\n\n**Status**: Open\n")
+	readme := "# Issues\n\nIntro text.\n\n[Backlog](BACKLOG.md) · [Closed](CLOSED.md)\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n| 001 | [edited.md](edited.md) | hand edit | Open |\n\n## Hand-written\n\nKeep these bytes.\n"
+	got, err := RenderIssuesReadme(readme, issuesDir, filepath.Join(issuesDir, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(got, "<!-- managed by harnez index:") {
+		t.Fatalf("missing first-line notice: %q", got)
+	}
+	if !strings.Contains(got, "<!-- harnez:begin issues-active-index -->\n| # | File | Title | Status |\n") || !strings.Contains(got, "<!-- harnez:end issues-active-index -->") {
+		t.Fatalf("legacy table was not wrapped: %s", got)
+	}
+	if !strings.Contains(got, "| 001 | [001-first-bug.md](001-first-bug.md) | First bug | Open |") {
+		t.Fatalf("table was not regenerated: %s", got)
+	}
+	if !strings.HasSuffix(got, "## Hand-written\n\nKeep these bytes.\n") {
+		t.Fatalf("bytes outside generated table changed: %q", got)
+	}
+
+	edited := strings.Replace(got, "First bug", "hand edited inside marker", 1)
+	withConflict := strings.Replace(edited, "hand edited inside marker", "<<<<<<< ours\nhand edited inside marker\n=======\ntheirs\n>>>>>>> theirs", 1)
+	regenerated, err := RenderIssuesReadme(withConflict, issuesDir, filepath.Join(issuesDir, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(regenerated, "<<<<<<<") || !strings.Contains(regenerated, "First bug") {
+		t.Fatalf("marked generated content was not replaced cleanly: %s", regenerated)
 	}
 }
 
@@ -474,7 +529,7 @@ func TestUpdateDocsReadmeStudiesTableAtEOF(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := "# Docs\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n| [studies/example.md](studies/example.md) | Generated topic |" + ending
+			want := docsStudiesNotice + "\n# Docs\n\n**`docs/studies/`** — case studies\n\n<!-- harnez:begin docs-studies-index -->\n| File | Topic |\n|------|-------|\n| [studies/example.md](studies/example.md) | Generated topic |\n<!-- harnez:end docs-studies-index -->" + ending
 			if !changed || string(got) != want {
 				t.Fatalf("UpdateDocsReadme() = changed %v, content %q; want changed true, content %q", changed, got, want)
 			}

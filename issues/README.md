@@ -1,3 +1,4 @@
+<!-- managed by harnez index: active ticket table generated from issue files; edit ticket files instead -->
 # Issues
 
 Concrete bugs, design issues, and feature gaps. Each file has a status line.
@@ -6,6 +7,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 
 [Backlog](BACKLOG.md) · [Closed](CLOSED.md)
 
+<!-- harnez:begin issues-active-index -->
 | # | File | Title | Status |
 |---|------|-------|--------|
 | 353 | [353-tell-only-claude-never-propose-claude-md-changes-assume-other-agents-respect-agents-md.md](353-tell-only-claude-never-propose-claude-md-changes-assume-other-agents-respect-agents-md.md) | Tell only Claude: never propose CLAUDE.md changes; check repo docs/AGENTS.md before any instruction-file change | Open |
@@ -28,3 +30,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 840 | [840-lean-sprint-host-decides-reversible-low-risk-choices-itself-and-reports-them.md](840-lean-sprint-host-decides-reversible-low-risk-choices-itself-and-reports-them.md) | lean-sprint: host decides reversible, low-risk choices itself and reports them | Open |
 | 846 | [846-roadmap-freshness-labels-last-updated-planned-ticket-count-unplanned-new-tickets-refreshed-by-harnez-index.md](846-roadmap-freshness-labels-last-updated-planned-ticket-count-unplanned-new-tickets-refreshed-by-harnez-index.md) | Roadmap freshness labels: last updated, planned ticket count, unplanned new tickets, refreshed by harnez index | Open |
 | 847 | [847-mark-harnez-index-generated-files-with-a-top-of-file-managed-by-harnez-index-do-not-edit-header.md](847-mark-harnez-index-generated-files-with-a-top-of-file-managed-by-harnez-index-do-not-edit-header.md) | Mark harnez-index generated files with a top-of-file "managed by harnez index, do not edit" header | Open |
+<!-- harnez:end issues-active-index -->

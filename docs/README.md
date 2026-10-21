@@ -1,3 +1,4 @@
+<!-- managed by harnez index: only the studies table is generated; evergreen documentation and other tables are hand-written -->
 # Docs — Evergreen Project Docs
 
 In-depth references for decisions, architecture, and pitfalls specific to this codebase.
@@ -101,6 +102,7 @@ filename order. The Topic column comes from, in priority order: an explicit
 `harnez:topic` comment to a study when the derived text is too long or generic for the
 table — don't hand-edit the row here, it will be overwritten on the next run.
 
+<!-- harnez:begin docs-studies-index -->
 | File | Topic |
 |------|-------|
 | [studies/2026-08-16-harnez-migration-and-workspace-unification.md](studies/2026-08-16-harnez-migration-and-workspace-unification.md) | Spec Generalization, Harnez Migration & Workspace Diagnostics |
@@ -200,6 +202,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/Quota1Approach.md](studies/Quota1Approach.md) | Research Study: Quota-1 Guardrails for LLM Agent Loops |
 | [studies/RTKShellWrapperHandling.md](studies/RTKShellWrapperHandling.md) | RTK: Shell-Wrapper and Pipe Handling in Command-Rewrite Hooks |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees — learnings & TODOs |
+<!-- harnez:end docs-studies-index -->
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports
 

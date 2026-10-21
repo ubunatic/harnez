@@ -1,3 +1,5 @@
+<!-- managed by harnez index: generated from issue files; edit ticket files instead -->
+<!-- harnez:begin issues-closed-index -->
 # Closed
 
 | # | File | Title | Status |
@@ -571,3 +573,4 @@
 | 841 | [841-research-go-dbos-sqlite-as-storage-backend-for-durable-agents-and-harnez-state.md](841-research-go-dbos-sqlite-as-storage-backend-for-durable-agents-and-harnez-state.md) | Research Go DBOS + SQLite as storage backend for durable agents and harnez state | Closed — Report docs/studies/2026-10-21-dbos-sqlite-storage-research.md: DBOS Go+SQLite conditional GO for single-owner harnez serve prototype, NO-GO as general harnez store |
 | 842 | [842-research-ticket-hygiene-at-900-tickets-archive-backlog-tiers-short-open-lists-duplicate-detection.md](842-research-ticket-hygiene-at-900-tickets-archive-backlog-tiers-short-open-lists-duplicate-detection.md) | Research ticket hygiene at ~900 tickets: archive/backlog tiers, short open lists, duplicate detection | Closed — User decided: S1 Backlog status + add-ons, blocking dup gate, cap 20, no archiving yet; implementation in 843, archiving parked in 844 |
 | 843 | [843-ticket-hygiene-backlog-status-duplicate-gate-active-only-index-cap-20-grooming-pass.md](843-ticket-hygiene-backlog-status-duplicate-gate-active-only-index-cap-20-grooming-pass.md) | Ticket hygiene: Backlog status, duplicate gate, active-only index, cap 20, grooming pass | Closed — Backlog status, duplicate gate, active-only index with cap 20 and grooming pass delivered (11b03174, 029d9a6b, cbd7ec0e, 31dfaf20); 20 active tickets |
+<!-- harnez:end issues-closed-index -->

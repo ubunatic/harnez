@@ -1,3 +1,5 @@
+<!-- managed by harnez index: generated from issue files; edit ticket files instead -->
+<!-- harnez:begin issues-backlog-index -->
 # Backlog
 
 | # | File | Title | Status |
@@ -253,3 +255,4 @@
 | 835 | [835-lean-sprint-allow-agy-argon-low-as-architect-tier.md](835-lean-sprint-allow-agy-argon-low-as-architect-tier.md) | lean-sprint: allow agy:argon:low as architect tier | Backlog — grooming pass 843 M4 (2026-10-22); promote when needed |
 | 844 | [844-decide-auto-archiving-of-closed-tickets-without-breaking-links.md](844-decide-auto-archiving-of-closed-tickets-without-breaking-links.md) | Decide auto-archiving of closed tickets without breaking links | Backlog — grooming pass 843 M4 (2026-10-22); promote when needed |
 | 845 | [845-lean-sprint-rate-agents-before-delete-at-teardown-absolute-paths-for-out-of-repo-files-in-handoff.md](845-lean-sprint-rate-agents-before-delete-at-teardown-absolute-paths-for-out-of-repo-files-in-handoff.md) | lean-sprint: absolute paths for out-of-repo files in the developer handoff | Backlog — grooming pass 843 M4 (2026-10-22); promote when needed |
+<!-- harnez:end issues-backlog-index -->
