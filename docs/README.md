@@ -185,6 +185,10 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-20-harnez-server-durable-research.md](studies/2026-10-20-harnez-server-durable-research.md) | Harnez Server: Pi Durable and Pi Pocket Research |
 | [studies/2026-10-20-two-agent-lean-sprint-usage-client-server.md](studies/2026-10-20-two-agent-lean-sprint-usage-client-server.md) | Two-Agent Lean Sprint: usage client-server split (828-830) |
 | [studies/2026-10-21-dbos-sqlite-storage-research.md](studies/2026-10-21-dbos-sqlite-storage-research.md) | DBOS Go + SQLite as harnez storage: crash-recovery canary, costs, verdict (issue 841) |
+| [studies/2026-10-21-ticket-hygiene-decision.md](studies/2026-10-21-ticket-hygiene-decision.md) | Ticket hygiene decision matrix: backlog/archive tiers, duplicate gate (issue 842); links sol/opus/argon reports |
+| [studies/2026-10-21-ticket-hygiene-sol.md](studies/2026-10-21-ticket-hygiene-sol.md) | Ticket hygiene research, sol:med (issue 842) |
+| [studies/2026-10-21-ticket-hygiene-opus.md](studies/2026-10-21-ticket-hygiene-opus.md) | Ticket hygiene research, opus:med (issue 842) |
+| [studies/2026-10-21-ticket-hygiene-argon.md](studies/2026-10-21-ticket-hygiene-argon.md) | Ticket hygiene research, argon:low (issue 842) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |

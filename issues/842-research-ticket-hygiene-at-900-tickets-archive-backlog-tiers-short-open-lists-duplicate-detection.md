@@ -48,3 +48,11 @@ solutions, columns = context cost, hygiene effect, duplicate detection, migratio
 tooling change, risks) with a short pros/cons summary and a recommendation, in
 `docs/studies/2026-10-21-ticket-hygiene-decision.md`. The user then decides; implementation
 tickets are filed only after that decision.
+
+## 4. Research delivered (2026-10-21)
+
+Reports: sol, opus, argon (`docs/studies/2026-10-21-ticket-hygiene-*.md`); matrix:
+`docs/studies/2026-10-21-ticket-hygiene-decision.md`. 9 proposals → 4 solutions (Backlog status,
+tier field, directories, NOW list). Recommendation: Backlog status + duplicate gate + README split
++ rule fix + cap lint. Host verified sizes: `issues/README.md` 244 KB, `-a status:open` 41 KB.
+**Awaiting user decision** (4 questions in the matrix doc).
