@@ -44,3 +44,9 @@ From `docs/studies/2026-10-21-ticket-hygiene-decision.md`:
 
 Measure before/after on the live tracker: README size (244 KB baseline), `find issues -a
 status:open` bytes (41 KB baseline), active count (~249 baseline → ≤20).
+
+## M4 input: proposed active set (2026-10-22, pending user confirmation)
+
+User moved `harnez tui` (776, 778) to the backlog. Active 20: 843, 560 (rescope vs. live
+`harnez server` first), 435, 450, 643, 647, 698 (close dup 697), 353, 714, 710, 701, 595, 745,
+728, 658, 734, 840, 834, 836, 705. Everything else → Backlog once M1 exists.

@@ -284,3 +284,11 @@ Suite green on 610842f; `--host`/`--project` errors OK. Real run failed conditio
 - Blocked: Codex quota exhausted (terra/luna refused). User to decide: wait for quota, or revert 610842f.
 - Verify with a real run: checksum `~/.local/state/harnez/agents/usage/` before/after `harnez usage --shared`,
   and diff `--shared --json` vs plain JSON ignoring timestamps.
+
+## Rescope needed (2026-10-22)
+
+Last touched 2026-09-27 with M4 `--shared` broken. Since then `harnez server` went live and
+collects usage itself (828-830 client/server split, 837 socket takeover, 839 5-minute cadence).
+Before any further work: compare M2 (library Unix controller) and M4 (`--shared`) with the
+server's collector, decide what is superseded (likely revert or remove `--shared` and the
+library controller), and reduce 560 to the remaining library/API goal or close it.
