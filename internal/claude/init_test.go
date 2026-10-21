@@ -401,22 +401,24 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 	if !strings.Contains(string(exclude), "*.local-cache") {
 		t.Errorf("existing local exclude content was lost:\n%s", exclude)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".gitattributes")); !os.IsNotExist(err) {
-		t.Errorf("plain init unexpectedly created .gitattributes: %v", err)
+	attributes, err := os.ReadFile(filepath.Join(dir, ".gitattributes"))
+	if err != nil || !strings.Contains(string(attributes), "issues/README.md merge=harnez-issues-index") {
+		t.Errorf("plain init did not install issue merge attributes: %v (%q)", err, attributes)
 	}
-	if err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Run(); err == nil {
-		t.Error("plain init unexpectedly configured merge driver")
+	driver, err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Output()
+	if err != nil || strings.TrimSpace(string(driver)) != "harnez issues merge-driver %O %A %B %P" {
+		t.Errorf("plain init did not configure merge driver: %v (%q)", err, driver)
 	}
 	hook, err := os.ReadFile(hookPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(hook) != "#!/bin/sh\necho user-hook\n" {
-		t.Errorf("plain init unexpectedly changed pre-commit hook:\n%s", hook)
+	if !strings.Contains(string(hook), "echo user-hook") || !strings.Contains(string(hook), "harnez issues lint --cached") {
+		t.Errorf("plain init did not preserve and extend pre-commit hook:\n%s", hook)
 	}
 }
 
-func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
+func TestRunInit_IssuesGitDefaultsOnAndIsRemovable(t *testing.T) {
 	dir := t.TempDir()
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
 		t.Fatalf("git init: %v", err)
@@ -446,25 +448,25 @@ func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
 		t.Fatalf("plain RunInit failed: %v", err)
 	}
 	attributes, _ := os.ReadFile(filepath.Join(dir, ".gitattributes"))
-	if string(attributes) != "*.bin binary\n" {
-		t.Fatalf("plain init changed attributes: %q", attributes)
+	if !strings.HasPrefix(string(attributes), "*.bin binary\n") || !strings.Contains(string(attributes), "issues/README.md merge=harnez-issues-index") {
+		t.Fatalf("plain init did not preserve unrelated and add issue attributes: %q", attributes)
 	}
-	if err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Run(); err == nil {
-		t.Fatal("plain init unexpectedly configured issue merge driver")
+	if err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Run(); err != nil {
+		t.Fatal("plain init did not configure issue merge driver")
 	}
 	hook, _ := os.ReadFile(hookPath)
-	if string(hook) != "#!/bin/sh\necho user-hook\n" {
-		t.Fatalf("plain init changed hook: %q", hook)
+	if !strings.Contains(string(hook), "echo user-hook") || !strings.Contains(string(hook), "harnez issues lint --cached") {
+		t.Fatalf("plain init did not preserve and extend hook: %q", hook)
 	}
 	postMergeHook, _ := os.ReadFile(postMergeHookPath)
-	if string(postMergeHook) != "#!/bin/sh\necho post-merge-user-hook\n" {
-		t.Fatalf("plain init changed post-merge hook: %q", postMergeHook)
+	if !strings.Contains(string(postMergeHook), "echo post-merge-user-hook") || !strings.Contains(string(postMergeHook), "harnez index -d") {
+		t.Fatalf("plain init did not preserve and extend post-merge hook: %q", postMergeHook)
 	}
 
 	enabled := true
 	for range 2 {
 		if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{IssuesGit: &enabled}); err != nil {
-			t.Fatalf("enable issues Git integration: %v", err)
+			t.Fatalf("repeat issue Git integration: %v", err)
 		}
 	}
 	attributes, _ = os.ReadFile(filepath.Join(dir, ".gitattributes"))

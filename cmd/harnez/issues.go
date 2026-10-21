@@ -241,10 +241,13 @@ valid, exit-0 answer.`,
 			}
 			if args[0] == "merge-driver" {
 				target := "issues/README.md"
+				if len(args) == 4 {
+					return runIssuesMergeDriverVersions(args[1], args[2], args[3], target)
+				}
 				if len(args) == 5 {
 					target = args[4]
 				}
-				return runIssuesMergeDriver(args[2], target)
+				return runIssuesMergeDriverVersions(args[1], args[2], args[3], target)
 			}
 			if args[0] == "rebase" {
 				upstream := "@{upstream}"

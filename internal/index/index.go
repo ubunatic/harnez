@@ -108,6 +108,22 @@ func managedDocument(content, id, notice string) string {
 	return notice + "\n" + markdown.MDMarkers.Begin(id) + "\n" + strings.TrimRight(content, "\n") + "\n" + markdown.MDMarkers.End(id) + "\n"
 }
 
+// HasConcurrentEditsOutsideManagedBlock reports whether both sides changed
+// the hand-written bytes outside id's managed block from the common ancestor
+// and disagree with one another. Missing or malformed markers treat the full
+// document as hand-written, which makes a merge driver fail safely.
+func HasConcurrentEditsOutsideManagedBlock(ancestor, ours, theirs, id string) bool {
+	outside := func(content string) string {
+		start, end, found := markdown.SectionBounds(content, markdown.MDMarkers.Begin(id), markdown.MDMarkers.End(id))
+		if !found {
+			return content
+		}
+		return content[:start] + content[end:]
+	}
+	baseOutside, oursOutside, theirsOutside := outside(ancestor), outside(ours), outside(theirs)
+	return oursOutside != baseOutside && theirsOutside != baseOutside && oursOutside != theirsOutside
+}
+
 func ensureManagedNotice(content, notice string) string {
 	if strings.HasPrefix(content, "<!-- managed by harnez index:") {
 		if end := strings.IndexByte(content, '\n'); end >= 0 {

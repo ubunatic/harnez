@@ -71,7 +71,7 @@ func initAgentFile(ir *initReport, dir string, cfg *Config, replace bool) (bool,
 	return agentBlocksSafe, nil
 }
 
-// initGitIntegration maintains local excludes and the opt-in issue index hook.
+// initGitIntegration maintains local excludes and issue-index Git integration.
 func initGitIntegration(ir *initReport, dir string, issuesGit *bool) error {
 	var err error
 	_, _ = fsutil.EnsureGitExclude(dir, "AGENTS.local.md")
@@ -94,9 +94,9 @@ func initGitIntegration(ir *initReport, dir string, issuesGit *bool) error {
 			}
 		}
 	}
-	if issuesGit != nil {
+	if issuesGit != nil || fileExists(filepath.Join(dir, "issues")) {
 		var gitChanges int
-		if *issuesGit {
+		if issuesGit == nil || *issuesGit {
 			gitChanges, err = installIssuesGitIntegration(dir)
 		} else {
 			gitChanges, err = removeIssuesGitIntegration(dir)

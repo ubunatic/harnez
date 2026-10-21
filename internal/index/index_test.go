@@ -466,6 +466,23 @@ Some intro.
 	}
 }
 
+func TestHasConcurrentEditsOutsideManagedBlock(t *testing.T) {
+	base := "preface\n<!-- harnez:begin studies -->\nold table\n<!-- harnez:end studies -->\ntail\n"
+	oursGenerated := "preface\n<!-- harnez:begin studies -->\nours table\n<!-- harnez:end studies -->\ntail\n"
+	theirsGenerated := "preface\n<!-- harnez:begin studies -->\ntheirs table\n<!-- harnez:end studies -->\ntail\n"
+	if HasConcurrentEditsOutsideManagedBlock(base, oursGenerated, theirsGenerated, "studies") {
+		t.Fatal("generated block changes should not be considered hand-written conflicts")
+	}
+	oursHandwritten := strings.Replace(base, "preface", "ours preface", 1)
+	theirsHandwritten := strings.Replace(base, "preface", "theirs preface", 1)
+	if !HasConcurrentEditsOutsideManagedBlock(base, oursHandwritten, theirsHandwritten, "studies") {
+		t.Fatal("divergent hand-written changes should require normal Git conflict handling")
+	}
+	if HasConcurrentEditsOutsideManagedBlock(base, oursHandwritten, oursHandwritten, "studies") {
+		t.Fatal("identical hand-written changes should not be considered conflicting")
+	}
+}
+
 func TestRenderDocsReadmeReplacesConflictedMarkedSectionAndPreservesOutsideBytes(t *testing.T) {
 	dir := t.TempDir()
 	docsDir := filepath.Join(dir, "docs")

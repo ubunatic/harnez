@@ -620,10 +620,15 @@ func runIssuesLintCached(w io.Writer, dir string) error {
 	return runIssuesLintMode(w, tmp, true, untrackedTickets)
 }
 
-// runIssuesMergeDriver rebuilds a generated index from its source files. For
-// partial files it preserves content outside the generated block and refuses
-// to claim a clean merge when that hand-written content has conflict markers.
+// runIssuesMergeDriver retains the two-path helper used by unit tests.
 func runIssuesMergeDriver(currentPath, targetPath string) error {
+	return runIssuesMergeDriverVersions("", currentPath, "", targetPath)
+}
+
+// runIssuesMergeDriverVersions rebuilds a generated index from its source
+// files. For partial files it refuses a clean merge when both sides changed
+// the hand-written content outside the generated block.
+func runIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPath string) error {
 	if strings.TrimSpace(currentPath) == "" {
 		return fmt.Errorf("issues merge-driver: Git did not provide the current-version path")
 	}
@@ -654,6 +659,24 @@ func runIssuesMergeDriver(currentPath, targetPath string) error {
 		indexes, err = index.IssueIndexFiles(issuesDir)
 		generated = indexes[filepath.Base(target)]
 	case "docs/README.md":
+		if ancestorPath != "" && otherPath != "" {
+			ancestor, readErr := os.ReadFile(ancestorPath)
+			if readErr != nil {
+				return fmt.Errorf("issues merge-driver: common ancestor %s: %w", ancestorPath, readErr)
+			}
+			other, readErr := os.ReadFile(otherPath)
+			if readErr != nil {
+				return fmt.Errorf("issues merge-driver: other version %s: %w", otherPath, readErr)
+			}
+			if index.HasConcurrentEditsOutsideManagedBlock(string(ancestor), string(orig), string(other), "docs-studies-index") {
+				if !index.HasConflictOutsideManagedBlock(string(orig), "docs-studies-index") {
+					if writeErr := writeMergeConflictMarkers(currentPath, string(orig), string(other)); writeErr != nil {
+						return fmt.Errorf("issues merge-driver: preserve hand-written conflict in %s: %w", target, writeErr)
+					}
+				}
+				return fmt.Errorf("issues merge-driver: conflicting hand-written content outside generated block in %s", target)
+			}
+		}
 		if index.HasConflictOutsideManagedBlock(string(orig), "docs-studies-index") {
 			return fmt.Errorf("issues merge-driver: unresolved conflict outside generated block in %s", target)
 		}
@@ -668,4 +691,9 @@ func runIssuesMergeDriver(currentPath, targetPath string) error {
 		return fmt.Errorf("issues merge-driver: write %s: %w", currentPath, err)
 	}
 	return nil
+}
+
+func writeMergeConflictMarkers(path, ours, theirs string) error {
+	conflict := "<<<<<<< ours\n" + strings.TrimRight(ours, "\r\n") + "\n=======\n" + strings.TrimRight(theirs, "\r\n") + "\n>>>>>>> theirs\n"
+	return os.WriteFile(path, []byte(conflict), 0o644)
 }
