@@ -29,6 +29,19 @@ no such notice at its top either.
 - `harnez index` writes and keeps the marker; lint warns if it is missing.
 - Consistent with the 018 front-matter convention and the roadmap block from 846.
 
+## Merge conflicts in generated files (user decision 2026-10-22)
+
+843 M3 adds `issues/BACKLOG.md` and `issues/CLOSED.md`, so the set of generated files keeps growing.
+Generated files must not cause manual merge conflicts:
+
+- **Merge driver:** `.gitattributes` maps each generated file to `merge=harnez-index`; the driver
+  regenerates the file from the sources (tickets, studies) and accepts the result. `harnez init`
+  installs the driver in `.git/config`, since git only reads drivers from there.
+- **Safety net:** regenerate after merge/rebase (hook or `harnez issues rebase`); lint fails when a
+  committed generated file differs from a fresh `harnez index`.
+- **Low churn:** keep one line per ticket in a stable sort order, with no volatile counts or long text in
+  rows, so any conflicts that remain are rare and trivial.
+
 ## Open questions
 
 - Which parts of `docs/README.md` are hand-written vs. generated? The marker must not
