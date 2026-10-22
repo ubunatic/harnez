@@ -1,6 +1,6 @@
 # 861 — harnez server stop: stop the running local server cleanly
 
-**Status**: Open
+**Status**: Closed — harnez server stop: systemd unit stopped via systemctl (unit stays enabled), foreground server via POST /shutdown plus socket wait with spec timeouts, not running exits 0; host live check stop/status/restart passed (e17c10a2)
 **Priority**: P2 (Medium) — the server has `install`, `status`, `uninstall`, but no way to stop it without
 removing the service or killing a PID
 **Severity**: Minor
