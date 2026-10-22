@@ -25,6 +25,7 @@ type issueIndexDefinition struct {
 
 type duplicateGateDefinition struct {
 	Threshold          float64  `yaml:"threshold"`
+	IDFSmoothing       float64  `yaml:"idf_smoothing"`
 	MaxResults         int      `yaml:"max_results"`
 	MinimumQueryTokens int      `yaml:"minimum_query_tokens"`
 	MinimumTokenLength int      `yaml:"minimum_token_length"`
@@ -37,6 +38,7 @@ type duplicateGateDefinition struct {
 // used by `find issues similar` and the `issues new` duplicate gate.
 type DuplicateGatePolicy struct {
 	Threshold          float64
+	IDFSmoothing       float64
 	MaxResults         int
 	MinimumQueryTokens int
 	MinimumTokenLength int
@@ -125,6 +127,7 @@ func validateLifecycleSpec(spec lifecycleSpec) error {
 	}
 	gate := spec.DuplicateGate
 	if math.IsNaN(gate.Threshold) || math.IsInf(gate.Threshold, 0) || gate.Threshold <= 0 || gate.Threshold > 1 ||
+		math.IsNaN(gate.IDFSmoothing) || math.IsInf(gate.IDFSmoothing, 0) || gate.IDFSmoothing <= 0 ||
 		gate.MaxResults < 1 || gate.MinimumQueryTokens < 1 || gate.MinimumTokenLength < 1 ||
 		gate.TitleWeight < 1 || gate.BodyWeight < 1 || len(gate.Stopwords) == 0 {
 		return fmt.Errorf("issues lifecycle spec: duplicate_gate requires a threshold in (0, 1], positive limits/weights, and stopwords")
@@ -161,6 +164,7 @@ func DuplicateGateSettings() (DuplicateGatePolicy, error) {
 	gate := spec.DuplicateGate
 	return DuplicateGatePolicy{
 		Threshold:          gate.Threshold,
+		IDFSmoothing:       gate.IDFSmoothing,
 		MaxResults:         gate.MaxResults,
 		MinimumQueryTokens: gate.MinimumQueryTokens,
 		MinimumTokenLength: gate.MinimumTokenLength,

@@ -51,6 +51,7 @@ lifecycle:
       match_terms: [done]
 duplicate_gate:
   threshold: 0.55
+  idf_smoothing: 1.0
   max_results: 5
   minimum_query_tokens: 2
   minimum_token_length: 3

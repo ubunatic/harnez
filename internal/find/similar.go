@@ -3,6 +3,7 @@ package find
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -28,9 +29,10 @@ type SimilarResult struct {
 	matched      int
 }
 
-// Similar ranks every ticket by independent query-token matches. A query
-// token can match the title or body; title matches receive the larger
-// spec-defined weight. Tickets are not filtered by lifecycle status.
+// Similar ranks every ticket by independent query-token matches weighted by
+// smoothed inverse document frequency over the scanned corpus. A query token
+// can match the title or body; title matches receive the larger spec weight.
+// Tickets are not filtered by lifecycle status.
 func Similar(files []issues.IssueFile, query string) ([]SimilarResult, error) {
 	policy, err := issues.DuplicateGateSettings()
 	if err != nil {
@@ -53,31 +55,52 @@ func Similar(files []issues.IssueFile, query string) ([]SimilarResult, error) {
 		return nil, fmt.Errorf("find issues similar: title needs at least %d meaningful words after stopwords: %w", policy.MinimumQueryTokens, ErrTooFewSimilarityTokens)
 	}
 
-	denominator := float64(len(tokens) * policy.TitleWeight)
+	documentFrequencies := make(map[string]int, len(tokens))
+	for _, file := range files {
+		title := Normalize(issues.StripTicketNumber(file.Title))
+		body := Normalize(file.Body)
+		for _, token := range tokens {
+			if MatchClass(token, title) != ClassNone || MatchClass(token, body) != ClassNone {
+				documentFrequencies[token]++
+			}
+		}
+	}
+	idf := make(map[string]float64, len(tokens))
+	denominator := 0.0
+	for _, token := range tokens {
+		df := float64(documentFrequencies[token])
+		corpusSize := float64(len(files))
+		weight := math.Log(1 + (corpusSize-df+policy.IDFSmoothing)/(df+policy.IDFSmoothing))
+		idf[token] = weight
+		denominator += weight * float64(policy.TitleWeight)
+	}
+	if denominator == 0 {
+		return []SimilarResult{}, nil
+	}
 	results := make([]SimilarResult, 0, len(files))
 	for _, file := range files {
 		title := Normalize(issues.StripTicketNumber(file.Title))
 		body := Normalize(file.Body)
-		weight := 0
+		weight := 0.0
 		titleMatches := 0
 		matched := 0
 		for _, token := range tokens {
 			titleClass := MatchClass(token, title)
 			if titleClass != ClassNone {
-				weight += policy.TitleWeight
+				weight += idf[token] * float64(policy.TitleWeight)
 				titleMatches++
 				matched++
 				continue
 			}
 			if MatchClass(token, body) != ClassNone {
-				weight += policy.BodyWeight
+				weight += idf[token] * float64(policy.BodyWeight)
 				matched++
 			}
 		}
 		if matched == 0 {
 			continue
 		}
-		score := float64(weight) / denominator
+		score := weight / denominator
 		results = append(results, SimilarResult{
 			Number:       file.Number,
 			RawStatus:    file.RawStatus,

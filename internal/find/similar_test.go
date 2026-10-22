@@ -11,7 +11,7 @@ import (
 func TestSimilar_ORTitleWeightedAcrossStatuses(t *testing.T) {
 	files := []issues.IssueFile{
 		{Number: "010", Title: "010 — agent release playbook", RawStatus: "Open", Body: "release"},
-		{Number: "011", Title: "011 — unrelated", RawStatus: "Backlog", Body: "agent release playbook"},
+		{Number: "011", Title: "011 — unrelated", RawStatus: "Backlog", Body: "agent"},
 		{Number: "012", Title: "012 — agent tooling", RawStatus: "Closed — done"},
 	}
 
@@ -30,6 +30,26 @@ func TestSimilar_ORTitleWeightedAcrossStatuses(t *testing.T) {
 	}
 	if got[2].Number != "011" || got[1].titleMatches <= got[2].titleMatches {
 		t.Fatalf("title match should win equal-score tie against body-only result: %+v", got)
+	}
+}
+
+func TestSimilar_RareQueryTokenOutweighsCommonToken(t *testing.T) {
+	files := []issues.IssueFile{
+		{Number: "001", Title: "001 — rareterm widget"},
+		{Number: "002", Title: "002 — common widget"},
+		{Number: "003", Title: "003 — other", Body: "common"},
+		{Number: "004", Title: "004 — unrelated"},
+	}
+
+	got, err := Similar(files, "rareterm common")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) < 2 || got[0].Number != "001" || got[1].Number != "002" {
+		t.Fatalf("rare-word match should outrank common-word match: %+v", got)
+	}
+	if got[0].Score <= got[1].Score {
+		t.Fatalf("rare-word score %.3f should exceed common-word score %.3f", got[0].Score, got[1].Score)
 	}
 }
 
