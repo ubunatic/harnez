@@ -166,9 +166,9 @@ Deferred work goes to the **Backlog** lifecycle (`Status: Backlog — <reason>`)
 `harnez issues backlog <n…> [reason]`; `harnez issues promote <n…>` returns it to Open. `is:open`
 excludes Backlog; `status:backlog` and `status:unresolved` reach it. Closed tickets cannot be
 backlogged. Before filing, `harnez issues new` runs `harnez find issues similar "<title>"` over all
-tickets (including Backlog, Closed and `issues/archive/`) and refuses on a strong match (threshold in
-`spec/issues.yaml`), printing `issues open|promote <n>` hints; reopen or promote the match instead,
-or pass `--force` for a genuinely new ticket.
+tickets (including Backlog, Closed and `issues/archive/`) and refuses on a strong match (score at or
+above 0.65; threshold in `spec/issues.yaml`), printing `issues open|promote <n>` hints; reopen or
+promote the match instead, or pass `--force` for a genuinely new ticket.
 
 Generated files start with a `<!-- managed by harnez index: … -->` line and wrap generated tables
 in `harnez:begin/end` markers; edit the source ticket or study, never the rows. `harnez init`

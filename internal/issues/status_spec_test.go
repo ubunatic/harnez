@@ -20,6 +20,9 @@ func TestEmbeddedLifecycleSpecAndSchema(t *testing.T) {
 	if err != nil || gate.Threshold <= 0 || gate.MaxResults != 5 || gate.MinimumQueryTokens != 2 || len(gate.Stopwords) == 0 {
 		t.Fatalf("embedded duplicate gate settings = %+v, err=%v", gate, err)
 	}
+	if gate.Threshold != 0.65 {
+		t.Fatalf("duplicate gate threshold = %.2f, want 0.65", gate.Threshold)
+	}
 	if cap, err := ActiveIssueCap(); err != nil || cap != 20 {
 		t.Fatalf("embedded active issue cap = %d, err=%v", cap, err)
 	}

@@ -1,6 +1,6 @@
 # 850 — Duplicate gate false positives: generic words push unrelated tickets above the 0.55 cutoff
 
-**Status**: Open — M2: raise cutoff to 0.65 after IDF measurement
+**Status**: Closed — Raised cutoff to 0.65; live probe table: true #849=0.898, #714=1.000, #845=1.000, #698=0.683; false #119=0.594, #716=0.549, #772=0.526, #355=0.504.
 **Priority**: P2 (Medium) — the gate blocks `issues new` on strong matches
 **Severity**: Minor
 **Category**: Bug

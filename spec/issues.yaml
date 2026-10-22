@@ -50,7 +50,7 @@ lifecycle:
       match_mode: lead_token
       match_terms: [done]
 duplicate_gate:
-  threshold: 0.55
+  threshold: 0.65
   idf_smoothing: 1.0
   max_results: 5
   minimum_query_tokens: 2
