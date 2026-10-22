@@ -102,6 +102,18 @@ repo's repo.yaml committed; tests green, self-init clean.
 - Detection tests for each key: foreign `issues/` (no marker) → `none`; harnez-marked → `harnez`; Makefile
   without target → `container_test: false`; existing repo.yaml is not rewritten without a flag.
 
+**M2 delivered (`b2e5e5ad`)**: detection fixed, container-test and quota gated by repo.yaml, notices written to
+Index.md. Host scratch check (Makefile + foreign `issues/README.md`): repo.yaml `tracker: none`, no
+container-test target, both notices present. Still seen there: the merge driver and `.gitattributes` are
+installed although repo.yaml says `merge_driver: false` (853, next), and init adds the `.PHONY`/`help`
+scaffold to the foreign Makefile and copies `docs/Make.md` (detected via `copies: [make]`).
+
+**M3 Pre-Work / Required Refinements**:
+- `writeRules(..., repoConfigs ...*RepoConfig)`: replace the variadic with a plain `*RepoConfig` parameter
+  (nil allowed) and update callers/tests.
+- Audit table: add rows for the Makefile help scaffold and doc copies into a foreign repo, mark what M1/M2
+  now gate.
+
 Checks: scratch repo with a Makefile and no `issues/`/`docs/`: init adds no container-test target, writes
 repo.yaml with `tracker: none`, writes the notice; this repo: `make install && harnez init -d .` leaves a
 clean `git status`.
