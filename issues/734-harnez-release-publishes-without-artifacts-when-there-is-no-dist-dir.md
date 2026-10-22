@@ -32,3 +32,10 @@ cannot create a release without attachments.
 - Test: release run against a temp repo without `dist/` warns and calls
   publish with zero attachments.
 - Live check on a repo without a goreleaser config.
+
+## Live check (2026-10-22, lean sprint): still current
+
+Title is misleading: today release refuses to publish (missing dist `internal/release/runner.go:503`, no
+artifacts `runner.go:550`); the goal above (warn, publish without attachments) is still the way forward.
+Check `publishForgejoRelease` with an empty list; tests in `internal/release/release_test.go` for missing
+and empty dist, plus dry run.

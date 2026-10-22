@@ -34,3 +34,9 @@ for the German table; NFD would need `golang.org/x/text` or a small hand table.
 2. Table test: `Liegestühle` → `liegestuehle`, `Anträge` → `antraege`, `Größe` → `groesse`,
    `café` → `cafe`.
 3. Check whether `harnez init` in existing repos adds the `issues/*.lock` ignore (issue 238).
+
+## Live check (2026-10-22, lean sprint): still current
+
+`Slugify` (`internal/issues/issues.go:619`) maps all non-`[a-z0-9]` to `-`: "Größe ändern Übersicht" →
+`gr-e-ndern-bersicht`. Way forward: transliterate (ä→ae, ö→oe, ü→ue, ß→ss) and strip other diacritics
+(é→e) before the ASCII step. Table tests in `internal/issues/issues_test.go`, incl. uppercase Ä/Ö/Ü.

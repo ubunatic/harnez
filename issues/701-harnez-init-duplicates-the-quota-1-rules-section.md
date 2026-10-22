@@ -29,3 +29,11 @@ rules incl. **Media & Demo Verification Gate**) and then `## Quota-1 Guardrails`
 rules (no media gate, no `Report Untested Edits`). So the two copies differ in a different
 way than in the Tilix run: the generator seems to merge a file-level template and an
 AGENTS.md-style section rather than duplicating one block.
+
+## Live check (2026-10-22, lean sprint): still current
+
+`migrateManagedBlocks` appends the migrated Quota-1 block to `.harnez/rules/Quota.md`
+(`internal/claude/init.go:665`) while `writeRules` keeps the existing file (`init.go:505`); no dedupe.
+Way forward: reconcile the migrated block with the generated `Quota.md` content (one managed section,
+local text kept). Test in `internal/claude/quota1_init_test.go`: generated Quota.md plus a managed Quota-1
+block in AGENTS.md → init → exactly one heading; second init idempotent.
