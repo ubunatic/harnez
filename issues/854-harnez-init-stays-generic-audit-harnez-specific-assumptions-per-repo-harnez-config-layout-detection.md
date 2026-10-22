@@ -91,6 +91,17 @@ Absent file = today's detection, written once on first init. Unknown keys fail s
 - **M3 (docs)**: `docs/CLIDesign.md` init flow and `docs/Spec.md`/schema docs describe repo.yaml; audit table
   above updated with what is now gated.
 
+**M1 delivered (`85f6732a`)**: repo.yaml schema, loader with validation, detect-once, flag recording; this
+repo's repo.yaml committed; tests green, self-init clean.
+
+**M2 Pre-Work / Required Refinements** (from M1 review):
+- `make.container_test` detection uses "Makefile exists"; detect "Makefile already has the container-test
+  target" instead, so new repos default to false.
+- `rules.quota` detection is true when `.harnez/rules/Quota.md` exists, which init writes for every repo;
+  detect the quota section / `test-q1` target only.
+- Detection tests for each key: foreign `issues/` (no marker) → `none`; harnez-marked → `harnez`; Makefile
+  without target → `container_test: false`; existing repo.yaml is not rewritten without a flag.
+
 Checks: scratch repo with a Makefile and no `issues/`/`docs/`: init adds no container-test target, writes
 repo.yaml with `tracker: none`, writes the notice; this repo: `make install && harnez init -d .` leaves a
 clean `git status`.
