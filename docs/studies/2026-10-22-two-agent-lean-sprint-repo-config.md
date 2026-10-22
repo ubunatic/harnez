@@ -36,5 +36,11 @@ Plan turn gave per-file guard wording; approved with one rule: guards name only 
 normal path. Delivered in `d36a4ba8` (8 skills, quota rule fallback to `harnez exec --quota-1`); installed
 skills verified, tests green, self-init clean. No review rounds needed.
 
+## Follow-up sprint: 860 (Makefile scaffold opt-out), dev-860 (luna:high)
+
+User decision: the harnez Makefile style is the default; only an opt-out was added. Plan made `docs.copies`
+authoritative; host added a hint line for newly detected docs so they don't vanish silently. Delivered in
+`814a9f98`; host scratch check: `make.scaffold: false` leaves the Makefile byte-identical.
+
 Learning: when gating a recommended default, test the adoption path (empty repo → first use), not only the
 foreign-repo path.
