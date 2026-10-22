@@ -44,12 +44,13 @@ it, and tell agents so via the notice above. Other issue providers are out of sc
 |---|---|---|---|
 | `internal/claude/init_agent_file.go:62` | AGENTS.md + CLAUDE.md symlink | default | ok (core), list in config |
 | `internal/claude/init_agent_file.go:96` | merge driver, hook, excludes | any `issues/` dir | yes → 853 |
-| `internal/claude/init.go:1115` | `.harnez/rules` + managed AGENTS.md sections | default | yes: rule categories ungated |
-| `internal/claude/init_phases.go:147` | adds container-test target to any existing Makefile | default | yes: should be opt-in |
-| `internal/claude/init_phases.go:80` | language docs, templates, Makefile targets | `--docs` / detection | check detection defaults |
-| `internal/claude/init.go:1186`, `init_quota.go:16` | quota rules + `test-q1` target | `--quota-1` | ok (flag), record in config |
-| `internal/claude/init.go:1142` | go.work | `--gowork` | ok (flag) |
-| `internal/claude/init.go:798,865` | `--all` eligibility, doc detection by markers (Makefile, issues/, spec/) | detection | feed into config detection |
+| `internal/claude/init.go:1115` | `.harnez/rules` + managed AGENTS.md sections | default | remaining rule categories are shared; quota is gated by `rules.quota` (M2) |
+| `internal/claude/init_phases.go:147` | adds container-test target to an existing Makefile | `make.container_test` true | gated by repo config; detection requires an existing target (M2) |
+| `internal/claude/init_phases.go:80` | copies selected language docs and injects their Makefile targets | `--docs`, existing AGENTS refs, or auto-detection | `docs.copies` records first detection; it does not gate copy behavior; scratch Makefile still receives Make.md and target changes |
+| `internal/claude/init_phases.go` Makefile reconciliation | scaffolds the help target in a selected Make doc's Makefile block | copied Make doc + existing Makefile | still adds `.PHONY`/help scaffold to foreign Makefiles; no repo config gate |
+| `internal/claude/init.go:1186`, `init_quota.go:16` | quota rules + `test-q1` target | `--quota-1`; existing setup detected in repo config | quota rule inclusion gated by `rules.quota` (M2); explicit flag creates the section/target |
+| `internal/claude/init.go:1142` | go.work | `--gowork` | opt-in flag; not represented in repo config |
+| `internal/claude/init.go:798,865` | `--all` eligibility and docs detection | detected project markers / docs config | first layout is recorded in repo config; eligibility and doc selection still use detection |
 | `cmd/harnez/issues.go:351` | issue verbs | invocation | misread a foreign `issues/` format; detect format |
 
 Related backlog: 494 (component selection in init, overlaps; reconcile here), 568 (split copyable
@@ -101,6 +102,15 @@ repo's repo.yaml committed; tests green, self-init clean.
   detect the quota section / `test-q1` target only.
 - Detection tests for each key: foreign `issues/` (no marker) → `none`; harnez-marked → `harnez`; Makefile
   without target → `container_test: false`; existing repo.yaml is not rewritten without a flag.
+
+**M3 Pre-Work / Required Refinements** (from M2 review):
+- `writeRules` takes a plain `*RepoConfig` argument (nil allowed), not a variadic; its caller and nil case
+  test are updated.
+- The audit explicitly records Makefile help scaffolding and doc copies into foreign repos, and marks
+  the container-test and quota gates added in M2.
+
+**M3 delivered**: init flow, spec/config distinction, and audit table documentation updated. Ticket remains
+open for follow-up divergences, including 853 and the ungated Makefile/doc-copy behavior above.
 
 **M2 delivered (`b2e5e5ad`)**: detection fixed, container-test and quota gated by repo.yaml, notices written to
 Index.md. Host scratch check (Makefile + foreign `issues/README.md`): repo.yaml `tracker: none`, no

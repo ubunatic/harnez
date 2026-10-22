@@ -502,7 +502,7 @@ func isRulesHeaderLine(line string) bool {
 		strings.Contains(line, ".harnez/rules/")
 }
 
-func writeRules(dir string, rules RulesConfig, quota bool, repoConfigs ...*RepoConfig) (int, error) {
+func writeRules(dir string, rules RulesConfig, quota bool, repoConfig *RepoConfig) (int, error) {
 	if rules.Index == "" {
 		return 0, nil
 	}
@@ -518,8 +518,8 @@ func writeRules(dir string, rules RulesConfig, quota bool, repoConfigs ...*RepoC
 		files = append(files, file)
 	}
 	index := rules.Index
-	if len(repoConfigs) > 0 && repoConfigs[0] != nil {
-		repo := repoConfigs[0]
+	if repoConfig != nil {
+		repo := repoConfig
 		if repo.Issues.Tracker == "none" {
 			index += "\n> This repo does not use file-based issues; skip those steps and use the repo's own tracker.\n"
 		}

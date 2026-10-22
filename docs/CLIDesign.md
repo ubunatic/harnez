@@ -152,16 +152,21 @@ by-product: there is no `--project` flag anymore.
 harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [--force]
         │
         ├── validate target directory (refuses $HOME, root, or non-coding dirs without --force)
+        ├── load and validate .harnez/repo.yaml, or detect the project layout and write it once
+        │   └── explicit --issues-git, --quota-1, and --docs choices update their recorded values
         ├── warn on stderr when init will rewrite files with uncommitted changes
         ├── check for project drift (go.mod module vs. git origin vs. directory name)
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
         ├── ignore /issues/README.md.lock in .git/info/exclude when issues/ exists
-        ├── enable issue-index attributes, local merge driver, and hook by default (847);
-        │   today any issues/ dir triggers this, to become opt-in via .harnez/ config (853)
-        │   └── --issues-git=false narrowly removes only the harnez-managed integration
-        ├── auto-detect docs (default:auto/true entries in config.yaml)
+        ├── enable issue-index attributes, local merge driver, and hook (847);
+        │   issue-git integration is still triggered by issues/ or --issues-git and is being
+        │   gated by repo config in 853; --issues-git=false removes only the Harnez integration
+        ├── auto-detect docs from config.yaml and record the initial layout in repo.yaml
         ├── apply cfg.AgentsMD.Local sections (Language Conventions, etc.)
+        ├── add container-test only when repo.yaml make.container_test is true
+        ├── include quota rules only when repo.yaml rules.quota is true (or --quota-1 enables it)
+        ├── add tracker/studies notices to .harnez/rules/Index.md when those features are disabled
         └── resolve explicit hard doc dependencies transitively
             (project-local only; never expands apply's global scope)
             └── for each --docs <name> (explicit + auto-detected + dependencies):
@@ -171,6 +176,15 @@ harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [--force]
 ```
 
 All steps are idempotent. Running `init --docs golang` twice is safe. Running in non-coding repositories or `$HOME` is rejected unless `--force` (`-f`) is explicitly passed.
+
+`.harnez/repo.yaml` is project-local configuration, separate from the embedded/global
+`config.yaml` used by `apply`. On first init, Harnez detects the existing tracker format,
+studies directory, installed Make targets, quota section, and language files, then writes
+the result once. Later runs respect the file; schema errors, including unknown keys, stop
+init before project changes. Explicit setup flags update the corresponding recorded choices.
+The file-first Harnez issue tracker remains the recommended default. A repo detected without
+that tracker or indexed studies gets a notice in `.harnez/rules/Index.md`, which the generated
+rules header asks agents to read.
 
 ## Copyable-doc contract
 

@@ -125,3 +125,21 @@ func TestRepoConfigRecognizesHarnezTracker(t *testing.T) {
 		t.Fatalf("tracker not recognized: %+v", got.Issues)
 	}
 }
+
+func TestWriteRulesAcceptsNilRepoConfig(t *testing.T) {
+	dir := t.TempDir()
+	changes, err := writeRules(dir, RulesConfig{Index: "# Harnez Rules\n"}, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changes != 1 {
+		t.Fatalf("writeRules changes=%d, want 1", changes)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Index.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "does not use") {
+		t.Fatalf("nil repo config emitted notice: %s", data)
+	}
+}

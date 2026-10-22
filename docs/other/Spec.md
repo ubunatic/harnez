@@ -19,6 +19,39 @@ The `spec/` directory is **application code**, not runtime user configuration. T
 - **JSON Schema for validation**: Every YAML file must have a companion JSON Schema (`spec/schemas/*.schema.json`) for automated IDE validation, editor auto-completion, and CI/pre-commit verification.
 - **Embedded application code**: In compiled languages, embed the `spec/` directory directly into the binary (e.g. Go `//go:embed`, Rust `include_str!`). The spec is part of the application artifact, not external config.
 
+### Project-local Harnez configuration
+Harnez repositories may also contain `.harnez/repo.yaml`, validated by
+`spec/schemas/repo.schema.json`. This is runtime project configuration, not an
+application spec: it records the project's detected or explicitly selected Harnez
+features, while `config.yaml` remains the embedded/global definition used by
+`apply`. The repository file has a required `version: 1`, strict feature-area
+objects, and rejects unknown keys.
+
+```yaml
+version: 1
+issues:
+  tracker: harnez   # harnez | none
+  merge_driver: true
+docs:
+  studies: true
+  copies: [golang, bash]
+rules:
+  quota: false
+make:
+  container_test: false
+```
+
+`init` writes the file on first initialization after detecting the repo's issue
+format, existing studies directory, copied language docs, quota section or
+`test-q1` target, and existing `container-test` target. It validates later reads
+against the schema and leaves an existing file unchanged unless a setup flag
+records an override. `issues.tracker` keeps the file-first Harnez tracker as the
+recommended default; `none` records that this repo uses another approach or has
+no file-based tracker. `make.container_test` and `rules.quota` gate the respective
+init behavior. When the tracker is `none` or `docs.studies` is false, init writes
+a reminder into `.harnez/rules/Index.md`, which the generated AGENTS.md rules
+header directs agents to read.
+
 ### Anti-Patterns to Avoid
 - ❌ **Shadowing / hardcoded fallbacks**: Hardcoding fallback maps or default string tables in source code that mirror spec content.
 - ❌ **Undocumented actions/keys**: Handling IDs, keys, or action names in code that are not defined in the spec.
