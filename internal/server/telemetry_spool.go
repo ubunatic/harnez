@@ -18,6 +18,11 @@ type TelemetryRecord struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
+// ErrQuarantine signals to DrainTelemetrySpool that a record is permanently
+// invalid and should be moved out of the active spool to quarantine/ rather than
+// retried on subsequent ticks.
+var ErrQuarantine = errors.New("telemetry record quarantined")
+
 func AppendTelemetrySpool(dir string, record []byte, maxBytes int64) error {
 	if maxBytes <= 0 || int64(len(record)) > maxBytes {
 		return fmt.Errorf("telemetry spool record exceeds configured byte cap")
@@ -99,6 +104,12 @@ func DrainTelemetrySpool(ctx context.Context, dir string, consume func(context.C
 			return err
 		}
 		if err := consume(ctx, data); err != nil {
+			if errors.Is(err, ErrQuarantine) {
+				quarantineDir := filepath.Join(dir, "quarantine")
+				_ = os.MkdirAll(quarantineDir, 0700)
+				_ = os.Rename(path, filepath.Join(quarantineDir, entry.Name()))
+				continue
+			}
 			failures = append(failures, err)
 			continue
 		}

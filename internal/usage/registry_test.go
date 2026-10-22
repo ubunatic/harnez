@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -145,5 +146,65 @@ func TestUsageNewRegistryRejectsMissingPolicyAndDuplicateIDs(t *testing.T) {
 	}
 	if _, err := NewRegistry(Collector{ID: "bad"}); err == nil {
 		t.Fatal("incomplete collector accepted")
+	}
+}
+
+func TestUsageRegistryLogsFetchFailureWithDetails(t *testing.T) {
+	var logged []string
+	logFn := func(msg string) {
+		logged = append(logged, msg)
+	}
+
+	// Case 1: context deadline exceeded (our context timeout)
+	r1, err := NewRegistry(Collector{
+		ID:       "agy",
+		Provider: "agy",
+		Command:  `agy -p "/usage"`,
+		Cadence:  time.Minute,
+		Timeout:  10 * time.Millisecond,
+		Collect: func(ctx context.Context) (AgentUsage, error) {
+			time.Sleep(30 * time.Millisecond)
+			return AgentUsage{}, ctx.Err()
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r1.logFetchFailure = logFn
+	r1.Collect(context.Background(), nil, nil)
+
+	if len(logged) != 1 {
+		t.Fatalf("logged count = %d, want 1", len(logged))
+	}
+	if !strings.Contains(logged[0], "provider: agy") ||
+		!strings.Contains(logged[0], `command: "agy -p \"/usage\""`) ||
+		!strings.Contains(logged[0], "our context timeout") {
+		t.Fatalf("logged[0] = %q, want provider, command, and context timeout cause", logged[0])
+	}
+
+	// Case 2: external signal (e.g. signal: killed)
+	logged = nil
+	r2, err := NewRegistry(Collector{
+		ID:       "agy",
+		Provider: "agy",
+		Command:  `agy -p "/usage"`,
+		Cadence:  time.Minute,
+		Timeout:  2 * time.Minute,
+		Collect: func(ctx context.Context) (AgentUsage, error) {
+			return AgentUsage{QuotaFetchError: "signal: killed"}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2.logFetchFailure = logFn
+	r2.Collect(context.Background(), nil, nil)
+
+	if len(logged) != 1 {
+		t.Fatalf("logged count = %d, want 1", len(logged))
+	}
+	if !strings.Contains(logged[0], "provider: agy") ||
+		!strings.Contains(logged[0], "external signal (signal: killed)") {
+		t.Fatalf("logged[0] = %q, want provider and external signal cause", logged[0])
 	}
 }

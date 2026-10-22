@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez local server settings",
   "type": "object",
-  "required": ["socket_path", "read_header_timeout", "shutdown_timeout", "http_client_timeout", "update_timeout", "update_max_body_bytes", "telemetry_update_path", "telemetry_spool_path", "telemetry_spool_max_bytes", "startup_timeout", "startup_poll_interval", "takeover_timeout", "systemd_unit_name", "systemd_unit_source", "systemd_restart_policy", "systemd_restart_delay", "default_log_lines"],
+  "required": ["socket_path", "read_header_timeout", "shutdown_timeout", "http_client_timeout", "update_timeout", "update_max_body_bytes", "telemetry_update_path", "telemetry_spool_path", "telemetry_spool_max_bytes", "startup_timeout", "startup_poll_interval", "takeover_timeout", "systemd_unit_name", "systemd_unit_source", "systemd_restart_policy", "systemd_restart_delay", "telemetry_warning_rate_limit", "default_log_lines"],
   "properties": {
     "socket_path": { "type": "string", "minLength": 1 },
     "read_header_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
@@ -20,6 +20,7 @@
     "systemd_unit_source": { "type": "string", "pattern": "^systemd/[A-Za-z0-9_.@-]+\\.service$" },
     "systemd_restart_policy": { "type": "string", "enum": ["no", "on-failure", "on-abnormal", "on-watchdog", "on-abort", "always"] },
     "systemd_restart_delay": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
+    "telemetry_warning_rate_limit": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "default_log_lines": { "type": "integer", "minimum": 1 }
   },
   "additionalProperties": false

@@ -13,43 +13,45 @@ import (
 )
 
 type Config struct {
-	SocketPath             string
-	ReadHeaderTimeout      time.Duration
-	ShutdownTimeout        time.Duration
-	HTTPClientTimeout      time.Duration
-	UpdateTimeout          time.Duration
-	UpdateMaxBodyBytes     int64
-	TelemetryPath          string
-	TelemetrySpoolPath     string
-	TelemetrySpoolMaxBytes int64
-	StartupTimeout         time.Duration
-	StartupPoll            time.Duration
-	TakeoverTimeout        time.Duration
-	SystemdUnitName        string
-	SystemdUnitSource      string
-	SystemdRestartPolicy   string
-	SystemdRestartDelay    time.Duration
-	DefaultLogLines        int
+	SocketPath                string
+	ReadHeaderTimeout         time.Duration
+	ShutdownTimeout           time.Duration
+	HTTPClientTimeout         time.Duration
+	UpdateTimeout             time.Duration
+	UpdateMaxBodyBytes        int64
+	TelemetryPath             string
+	TelemetrySpoolPath        string
+	TelemetrySpoolMaxBytes    int64
+	StartupTimeout            time.Duration
+	StartupPoll               time.Duration
+	TakeoverTimeout           time.Duration
+	SystemdUnitName           string
+	SystemdUnitSource         string
+	SystemdRestartPolicy      string
+	SystemdRestartDelay       time.Duration
+	TelemetryWarningRateLimit time.Duration
+	DefaultLogLines           int
 }
 
 type specConfig struct {
-	SocketPath             string `yaml:"socket_path"`
-	ReadHeaderTimeout      string `yaml:"read_header_timeout"`
-	ShutdownTimeout        string `yaml:"shutdown_timeout"`
-	HTTPClientTimeout      string `yaml:"http_client_timeout"`
-	UpdateTimeout          string `yaml:"update_timeout"`
-	UpdateMaxBodyBytes     int64  `yaml:"update_max_body_bytes"`
-	TelemetryPath          string `yaml:"telemetry_update_path"`
-	TelemetrySpoolPath     string `yaml:"telemetry_spool_path"`
-	TelemetrySpoolMaxBytes int64  `yaml:"telemetry_spool_max_bytes"`
-	StartupTimeout         string `yaml:"startup_timeout"`
-	StartupPoll            string `yaml:"startup_poll_interval"`
-	TakeoverTimeout        string `yaml:"takeover_timeout"`
-	SystemdUnitName        string `yaml:"systemd_unit_name"`
-	SystemdUnitSource      string `yaml:"systemd_unit_source"`
-	SystemdRestartPolicy   string `yaml:"systemd_restart_policy"`
-	SystemdRestartDelay    string `yaml:"systemd_restart_delay"`
-	DefaultLogLines        int    `yaml:"default_log_lines"`
+	SocketPath                string `yaml:"socket_path"`
+	ReadHeaderTimeout         string `yaml:"read_header_timeout"`
+	ShutdownTimeout           string `yaml:"shutdown_timeout"`
+	HTTPClientTimeout         string `yaml:"http_client_timeout"`
+	UpdateTimeout             string `yaml:"update_timeout"`
+	UpdateMaxBodyBytes        int64  `yaml:"update_max_body_bytes"`
+	TelemetryPath             string `yaml:"telemetry_update_path"`
+	TelemetrySpoolPath        string `yaml:"telemetry_spool_path"`
+	TelemetrySpoolMaxBytes    int64  `yaml:"telemetry_spool_max_bytes"`
+	StartupTimeout            string `yaml:"startup_timeout"`
+	StartupPoll               string `yaml:"startup_poll_interval"`
+	TakeoverTimeout           string `yaml:"takeover_timeout"`
+	SystemdUnitName           string `yaml:"systemd_unit_name"`
+	SystemdUnitSource         string `yaml:"systemd_unit_source"`
+	SystemdRestartPolicy      string `yaml:"systemd_restart_policy"`
+	SystemdRestartDelay       string `yaml:"systemd_restart_delay"`
+	TelemetryWarningRateLimit string `yaml:"telemetry_warning_rate_limit"`
+	DefaultLogLines           int    `yaml:"default_log_lines"`
 }
 
 func LoadConfig() (Config, error) {
@@ -91,7 +93,7 @@ func LoadConfig() (Config, error) {
 	}
 	for _, item := range []struct{ name, value string }{
 		{"read_header_timeout", raw.ReadHeaderTimeout}, {"shutdown_timeout", raw.ShutdownTimeout}, {"http_client_timeout", raw.HTTPClientTimeout},
-		{"update_timeout", raw.UpdateTimeout}, {"startup_timeout", raw.StartupTimeout}, {"startup_poll_interval", raw.StartupPoll}, {"takeover_timeout", raw.TakeoverTimeout}, {"systemd_restart_delay", raw.SystemdRestartDelay},
+		{"update_timeout", raw.UpdateTimeout}, {"startup_timeout", raw.StartupTimeout}, {"startup_poll_interval", raw.StartupPoll}, {"takeover_timeout", raw.TakeoverTimeout}, {"systemd_restart_delay", raw.SystemdRestartDelay}, {"telemetry_warning_rate_limit", raw.TelemetryWarningRateLimit},
 	} {
 		d, err := time.ParseDuration(item.value)
 		if err != nil || d <= 0 {
@@ -114,6 +116,8 @@ func LoadConfig() (Config, error) {
 			cfg.TakeoverTimeout = d
 		case "systemd_restart_delay":
 			cfg.SystemdRestartDelay = d
+		case "telemetry_warning_rate_limit":
+			cfg.TelemetryWarningRateLimit = d
 		}
 	}
 	return cfg, nil

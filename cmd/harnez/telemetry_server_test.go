@@ -146,6 +146,100 @@ func TestTelemetrySpoolDrainsPreThenPostTool(t *testing.T) {
 	}
 }
 
+func TestTelemetrySpoolQuarantinesConstraintViolationAndContinues(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", home)
+	config, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, "telemetry.sqlite")
+	service := &telemetryCollectorService{config: config, path: path}
+	dir, err := config.TelemetrySpoolDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidScore := 0
+	badCall := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: "bad-call", ToolName: "bad", AgentID: "claude", CallType: "internal", Score: &invalidScore}
+	badRaw, _ := json.Marshal(badCall)
+
+	goodCall := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: "good-call", ToolName: "good", AgentID: "claude", CallType: "internal"}
+	goodRaw, _ := json.Marshal(goodCall)
+
+	for _, record := range []server.TelemetryRecord{
+		{Kind: "tool_call", Payload: badRaw},
+		{Kind: "tool_call", Payload: goodRaw},
+	} {
+		data, err := json.Marshal(record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := server.AppendTelemetrySpool(dir, data, config.TelemetrySpoolMaxBytes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := service.drainSpool(context.Background()); err != nil {
+		t.Fatalf("drainSpool returned error: %v", err)
+	}
+	db, err := telemetry.OpenReadOnly(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{SessionID: "good-call"})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("good-call rows = %d, err = %v", len(rows), err)
+	}
+	quarantineEntries, err := os.ReadDir(filepath.Join(dir, "quarantine"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(quarantineEntries) != 1 {
+		t.Fatalf("quarantined entries = %d, want 1", len(quarantineEntries))
+	}
+}
+
+func TestTelemetrySpoolRateLimitsNoToolCallWarning(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", home)
+	config, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.TelemetryWarningRateLimit = 100 * time.Millisecond
+	path := filepath.Join(home, "telemetry.sqlite")
+	service := &telemetryCollectorService{config: config, path: path}
+	dir, err := config.TelemetrySpoolDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Post-tool update for a session with no prior tool calls
+	postRaw := json.RawMessage(`{"conversationId":"missing-session","output":"some output"}`)
+	for i := 0; i < 3; i++ {
+		record := server.TelemetryRecord{Kind: "agy_post_tool", Payload: postRaw}
+		data, err := json.Marshal(record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := server.AppendTelemetrySpool(dir, data, config.TelemetrySpoolMaxBytes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Drain should process all records without failing, rate-limiting the warning
+	if err := service.drainSpool(context.Background()); err != nil {
+		t.Fatalf("drainSpool error: %v", err)
+	}
+	remaining, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range remaining {
+		if strings.HasSuffix(entry.Name(), ".json") {
+			t.Fatalf("unprocessed spool entry found: %s", entry.Name())
+		}
+	}
+}
+
 func TestTelemetryMaintenanceRecordsAndMergeRoute(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "telemetry.sqlite")

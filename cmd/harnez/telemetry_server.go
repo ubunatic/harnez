@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"ubunatic.com/harnez/internal/server"
@@ -15,9 +17,11 @@ import (
 )
 
 type telemetryCollectorService struct {
-	config   server.Config
-	path     string
-	interval time.Duration
+	config       server.Config
+	path         string
+	interval     time.Duration
+	warnMu       sync.Mutex
+	warnedRecord map[string]time.Time
 }
 
 func (s *telemetryCollectorService) RegisterRoutes(mux *http.ServeMux) {
@@ -75,10 +79,53 @@ func (s *telemetryCollectorService) drainSpool(ctx context.Context) error {
 	return server.DrainTelemetrySpool(ctx, dir, func(_ context.Context, data []byte) error {
 		var record server.TelemetryRecord
 		if err := json.Unmarshal(data, &record); err != nil {
-			return err
+			return errors.Join(err, server.ErrQuarantine)
 		}
-		return processTelemetryRecord(record, s.path)
+		err := processTelemetryRecord(record, s.path)
+		if err != nil {
+			if s.shouldRateLimitWarning(err) {
+				return nil
+			}
+			if isPermanentTelemetryError(err) {
+				return errors.Join(err, server.ErrQuarantine)
+			}
+		}
+		return err
 	})
+}
+
+func (s *telemetryCollectorService) shouldRateLimitWarning(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "telemetry: no tool call found for session") {
+		return false
+	}
+	s.warnMu.Lock()
+	defer s.warnMu.Unlock()
+	if s.warnedRecord == nil {
+		s.warnedRecord = make(map[string]time.Time)
+	}
+	limit := s.config.TelemetryWarningRateLimit
+	if limit <= 0 {
+		limit = time.Minute
+	}
+	now := time.Now()
+	if last, ok := s.warnedRecord[msg]; ok && now.Sub(last) < limit {
+		return true
+	}
+	s.warnedRecord[msg] = now
+	fmt.Fprintf(os.Stderr, "harnez server: %v\n", err)
+	return true
+}
+
+func isPermanentTelemetryError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "constraint") || strings.Contains(msg, "schema missing")
 }
 
 func processTelemetryRecord(record server.TelemetryRecord, dbPath string) error {

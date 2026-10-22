@@ -80,3 +80,45 @@ func TestTelemetrySpoolKeepsOrderAndContinuesPastFailedRecords(t *testing.T) {
 		t.Fatalf("drain = %v, %v", got, err)
 	}
 }
+
+func TestTelemetrySpoolQuarantinesInvalidRecord(t *testing.T) {
+	dir := t.TempDir()
+	badData := []byte(`{"invalid json":`)
+	goodData := []byte(`{"kind":"codex","payload":{}}`)
+	if err := AppendTelemetrySpool(dir, badData, 4096); err != nil {
+		t.Fatal(err)
+	}
+	if err := AppendTelemetrySpool(dir, goodData, 4096); err != nil {
+		t.Fatal(err)
+	}
+	var drained []string
+	err := DrainTelemetrySpool(context.Background(), dir, func(_ context.Context, data []byte) error {
+		drained = append(drained, string(data))
+		if string(data) == string(badData) {
+			return ErrQuarantine
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("DrainTelemetrySpool returned unexpected error: %v", err)
+	}
+	if len(drained) != 2 || drained[0] != string(badData) || drained[1] != string(goodData) {
+		t.Fatalf("drained = %v, want both bad and good processed", drained)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) == ".json" {
+			t.Fatalf("json spool file remained in root: %s", e.Name())
+		}
+	}
+	quarantineEntries, err := os.ReadDir(filepath.Join(dir, "quarantine"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(quarantineEntries) != 1 {
+		t.Fatalf("quarantine count = %d, want 1", len(quarantineEntries))
+	}
+}
