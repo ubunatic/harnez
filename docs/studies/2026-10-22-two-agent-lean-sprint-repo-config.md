@@ -29,5 +29,12 @@ surface in the same session; their findings are in 853, 854, 856.
 | Gating by `issues.*`, index no-op note | `08f92875` | Host scratch: foreign README untouched, no driver; but a fresh repo could no longer adopt the tracker |
 | Adoption on first `issues new` | `b14ac743` | Host fresh-repo flow: repo.yaml switches to harnez, next init installs driver, notice removed |
 
+## Follow-up sprint: 856 (repo-aware skills), dev-856 (luna:high)
+
+Plan turn gave per-file guard wording; approved with one rule: guards name only the exception
+(`issues.tracker: none`, `docs.studies: false`) and point to the Index.md notice, so the harnez tracker stays the
+normal path. Delivered in `d36a4ba8` (8 skills, quota rule fallback to `harnez exec --quota-1`); installed
+skills verified, tests green, self-init clean. No review rounds needed.
+
 Learning: when gating a recommended default, test the adoption path (empty repo → first use), not only the
 foreign-repo path.
