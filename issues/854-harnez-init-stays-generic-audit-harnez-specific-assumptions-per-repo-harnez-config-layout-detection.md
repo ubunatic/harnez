@@ -1,6 +1,6 @@
 # 854 — harnez init stays generic: audit harnez-specific assumptions, per-repo .harnez config, layout detection
 
-**Status**: Open
+**Status**: Closed — repo.yaml with schema and detect-once (M1), container-test and quota gated plus agent notices (M2), docs (M3); host scratch check: tracker none, no container-test target, notices present; remaining divergences in 853 and 860
 **Priority**: P2 (Medium) — init must keep working for repos that are not built like harnez
 **Severity**: Major
 **Category**: Architecture
