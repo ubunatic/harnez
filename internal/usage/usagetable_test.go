@@ -40,7 +40,7 @@ func TestUsageTableOneRowPerQuotaWindow(t *testing.T) {
 		"Agent Quota Used Resets Tokens Tok/min Updated Model Account",
 		"Claude Code weekly 92% 22h 1,234,567 42 - sonnet Pro",
 		"Claude Code 5h 10% 3h",
-		"OpenAI Codex unavailable (no session found) - - - - -",
+		"OpenAI Codex unavailable (no session found) - - - - fetch failed: no session found",
 		"Antigravity (AGY) Gemini weekly 55% - - - - Gemini Flash a@example.com · Consumer",
 		"Antigravity (AGY) Gemini 5h 7% -",
 	}
@@ -90,7 +90,7 @@ func TestUsageTableExplainsGrayQuotaRows(t *testing.T) {
 	}
 	lines := usageTableLines(agents, nil, false, now)
 	joined := stripANSI(strings.Join(lines, "\n"))
-	if !strings.Contains(joined, "Fresh weekly 10%") {
+	if !strings.Contains(strings.Join(strings.Fields(joined), " "), "Fresh weekly 10%") {
 		t.Fatalf("fresh row missing:\n%s", joined)
 	}
 	if !strings.Contains(joined, "Stale weekly 20%") || !strings.Contains(joined, "2h ago · stale") {
