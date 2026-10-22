@@ -31,11 +31,12 @@ type Server struct {
 }
 
 type statusInfo struct {
-	Health        string `json:"health"`
-	Server        string `json:"server"`
-	Version       string `json:"version"`
-	BuildIdentity string `json:"build_identity"`
-	PID           int    `json:"pid"`
+	Health        string    `json:"health"`
+	Server        string    `json:"server"`
+	Version       string    `json:"version"`
+	BuildIdentity string    `json:"build_identity"`
+	PID           int       `json:"pid"`
+	StartedAt     time.Time `json:"started_at,omitempty"`
 }
 
 func CaptureBuildIdentity() string {
@@ -82,7 +83,10 @@ func (s Server) Run(ctx context.Context) error {
 		}
 		return true
 	}
-	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) { writeStatus(w, s.Version, identity, ready()) })
+	startedAt := time.Now().UTC()
+	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) {
+		writeStatusWithStart(w, s.Version, identity, ready(), startedAt)
+	})
 	shutdown := make(chan struct{}, 1)
 	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
@@ -223,13 +227,17 @@ func compareBuild(versionA, identityA, versionB, identityB string) int {
 }
 
 func writeStatus(w http.ResponseWriter, version, identity string, ready bool) {
+	writeStatusWithStart(w, version, identity, ready, time.Time{})
+}
+
+func writeStatusWithStart(w http.ResponseWriter, version, identity string, ready bool, startedAt time.Time) {
 	w.Header().Set("Content-Type", "application/json")
 	code, health := http.StatusOK, "ok"
 	if !ready {
 		code, health = http.StatusServiceUnavailable, "starting"
 	}
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid()})
+	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid(), StartedAt: startedAt})
 }
 
 func statusHandler(version string) http.HandlerFunc { return statusHandlerReady(version, true) }

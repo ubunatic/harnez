@@ -107,12 +107,12 @@ func newServerStatusCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		socketPID := localServerPID(cmd.Context(), cfg, socket)
-		status, err := server.NewSystemdService(cfg).Status(cmd.Context(), socketPID)
+		srvStatus := queryLocalServerStatus(cmd.Context(), cfg, socket)
+		status, err := server.NewSystemdService(cfg).Status(cmd.Context(), srvStatus.PID)
 		if err != nil {
 			return err
 		}
-		printServerSystemdStatus(cmd.OutOrStdout(), cfg, status)
+		printServerSystemdStatus(cmd.OutOrStdout(), cfg, status, srvStatus)
 		return nil
 	}}
 }
@@ -251,11 +251,20 @@ func stopLocalServer(ctx context.Context, cfg server.Config, socket string, sock
 	}
 }
 
-func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.SystemdStatus) {
+type localServerStatusResponse struct {
+	Server        string    `json:"server"`
+	Version       string    `json:"version"`
+	BuildIdentity string    `json:"build_identity"`
+	PID           int       `json:"pid"`
+	StartedAt     time.Time `json:"started_at"`
+}
+
+func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.SystemdStatus, srv localServerStatusResponse) {
 	if !status.Available {
 		fmt.Fprintln(out, "systemd user service is unavailable; run `harnez usage -w` to keep the collector running")
 		if status.SocketPID > 0 {
 			fmt.Fprintf(out, "harnez server owns the socket (PID %d)\n", status.SocketPID)
+			printServerUptimeAndVersion(out, srv)
 		}
 		return
 	}
@@ -264,6 +273,7 @@ func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.Sy
 		fmt.Fprintln(out, "install the collector service with: harnez server install")
 		if status.SocketPID > 0 {
 			fmt.Fprintf(out, "socket owner: another process (PID %d)\n", status.SocketPID)
+			printServerUptimeAndVersion(out, srv)
 		} else {
 			fmt.Fprintln(out, "socket owner: none")
 		}
@@ -275,33 +285,57 @@ func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.Sy
 	}
 	if status.SocketPID == status.MainPID {
 		fmt.Fprintf(out, "socket owner: systemd service (PID %d)\n", status.SocketPID)
-		return
+	} else {
+		fmt.Fprintf(out, "socket owner: another process (PID %d)\n", status.SocketPID)
+		fmt.Fprintf(out, "hand back to systemd with: systemctl --user restart %s\n", cfg.SystemdUnitName)
 	}
-	fmt.Fprintf(out, "socket owner: another process (PID %d)\n", status.SocketPID)
-	fmt.Fprintf(out, "hand back to systemd with: systemctl --user restart %s\n", cfg.SystemdUnitName)
+	printServerUptimeAndVersion(out, srv)
 }
 
-func localServerPID(ctx context.Context, cfg server.Config, socket string) int {
-	if pid, err := socketPeerPID(socket); err == nil {
-		return pid
+func printServerUptimeAndVersion(out io.Writer, srv localServerStatusResponse) {
+	if srv.PID <= 0 {
+		return
+	}
+	if srv.StartedAt.IsZero() {
+		fmt.Fprintln(out, "uptime: unknown")
+	} else {
+		uptime := time.Since(srv.StartedAt).Truncate(time.Second)
+		if uptime < 0 {
+			uptime = 0
+		}
+		fmt.Fprintf(out, "uptime: %s\n", uptime)
+	}
+	if srv.Version != "" {
+		if srv.Version != harnez.Version {
+			fmt.Fprintf(out, "version: %s (restart to update to %s)\n", srv.Version, harnez.Version)
+		} else {
+			fmt.Fprintf(out, "version: %s\n", srv.Version)
+		}
+	}
+}
+
+func queryLocalServerStatus(ctx context.Context, cfg server.Config, socket string) localServerStatusResponse {
+	var resp localServerStatusResponse
+	if pid, err := socketPeerPID(socket); err == nil && pid > 0 {
+		resp.PID = pid
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/status", nil)
 	if err != nil {
-		return 0
+		return resp
 	}
 	response, err := server.UnixHTTPClient(socket, cfg.HTTPClientTimeout).Do(request)
 	if err != nil {
-		return 0
+		return resp
 	}
 	defer response.Body.Close()
-	var status struct {
-		Server string `json:"server"`
-		PID    int    `json:"pid"`
+	if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&resp) != nil || resp.Server != "harnez" {
+		return resp
 	}
-	if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&status) != nil || status.Server != "harnez" {
-		return 0
-	}
-	return status.PID
+	return resp
+}
+
+func localServerPID(ctx context.Context, cfg server.Config, socket string) int {
+	return queryLocalServerStatus(ctx, cfg, socket).PID
 }
 
 func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) error {

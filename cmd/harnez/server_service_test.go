@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/server"
 )
 
@@ -20,7 +21,7 @@ func TestPrintServerSystemdStatusShowsOwnerAndHandoff(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	printServerSystemdStatus(&output, cfg, server.SystemdStatus{Available: true, Installed: true, Active: true, MainPID: 100, SocketPID: 200})
+	printServerSystemdStatus(&output, cfg, server.SystemdStatus{Available: true, Installed: true, Active: true, MainPID: 100, SocketPID: 200}, localServerStatusResponse{PID: 200})
 	for _, want := range []string{"MainPID=100", "socket owner: another process (PID 200)", "systemctl --user restart " + cfg.SystemdUnitName} {
 		if !strings.Contains(output.String(), want) {
 			t.Errorf("status output missing %q:\n%s", want, output.String())
@@ -109,7 +110,7 @@ func TestPrintServerSystemdStatusSuggestsInstallWhenUnitIsMissing(t *testing.T) 
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	printServerSystemdStatus(&output, cfg, server.SystemdStatus{Available: true, MainPID: 0, SocketPID: 200})
+	printServerSystemdStatus(&output, cfg, server.SystemdStatus{Available: true, MainPID: 0, SocketPID: 200}, localServerStatusResponse{PID: 200})
 	if !strings.Contains(output.String(), "harnez server install") {
 		t.Fatalf("missing install suggestion: %q", output.String())
 	}
@@ -120,9 +121,56 @@ func TestPrintServerSystemdStatusSuggestsInstallWhenUnitIsMissing(t *testing.T) 
 
 func TestPrintServerSystemdStatusExplainsUsageFallback(t *testing.T) {
 	var output bytes.Buffer
-	printServerSystemdStatus(&output, server.Config{}, server.SystemdStatus{SocketPID: 200})
+	printServerSystemdStatus(&output, server.Config{}, server.SystemdStatus{SocketPID: 200}, localServerStatusResponse{PID: 200})
 	if !strings.Contains(output.String(), "harnez usage -w") || !strings.Contains(output.String(), "PID 200") {
 		t.Fatalf("unsupported status output = %q", output.String())
+	}
+}
+
+func TestPrintServerUptimeAndVersion(t *testing.T) {
+	// Matching version with uptime
+	var buf1 bytes.Buffer
+	start := time.Now().Add(-15 * time.Minute)
+	printServerUptimeAndVersion(&buf1, localServerStatusResponse{
+		PID:       123,
+		Version:   harnez.Version,
+		StartedAt: start,
+	})
+	if !strings.Contains(buf1.String(), "uptime: 15m0s") || !strings.Contains(buf1.String(), "version: "+harnez.Version) {
+		t.Errorf("matching version output = %q", buf1.String())
+	}
+	if strings.Contains(buf1.String(), "restart to update") {
+		t.Errorf("matching version shouldn't suggest restart: %q", buf1.String())
+	}
+
+	// Mismatched dev version
+	var buf2 bytes.Buffer
+	printServerUptimeAndVersion(&buf2, localServerStatusResponse{
+		PID:       123,
+		Version:   "0.1.23-dev",
+		StartedAt: start,
+	})
+	if !strings.Contains(buf2.String(), "version: 0.1.23-dev (restart to update to "+harnez.Version+")") {
+		t.Errorf("mismatch output = %q", buf2.String())
+	}
+
+	// Unknown uptime (empty StartedAt from older server)
+	var buf3 bytes.Buffer
+	printServerUptimeAndVersion(&buf3, localServerStatusResponse{
+		PID:     123,
+		Version: harnez.Version,
+	})
+	if !strings.Contains(buf3.String(), "uptime: unknown") {
+		t.Errorf("unknown uptime output = %q", buf3.String())
+	}
+
+	// Server not running (PID 0)
+	var buf4 bytes.Buffer
+	printServerUptimeAndVersion(&buf4, localServerStatusResponse{
+		PID: 0,
+	})
+	if buf4.Len() != 0 {
+		t.Errorf("not running output = %q, want empty", buf4.String())
 	}
 }
 

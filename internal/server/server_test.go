@@ -28,12 +28,13 @@ func testConfig(t *testing.T) Config {
 
 func TestStatusEndpointReportsVersionAndBuildIdentity(t *testing.T) {
 	response := httptest.NewRecorder()
-	writeStatus(response, "1.2.3", "build-a", true)
+	now := time.Now().UTC().Truncate(time.Second)
+	writeStatusWithStart(response, "1.2.3", "build-a", true, now)
 	var got statusInfo
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != http.StatusOK || got.Health != "ok" || got.Server != "harnez" || got.Version != "1.2.3" || got.BuildIdentity != "build-a" || got.PID != os.Getpid() {
+	if response.Code != http.StatusOK || got.Health != "ok" || got.Server != "harnez" || got.Version != "1.2.3" || got.BuildIdentity != "build-a" || got.PID != os.Getpid() || !got.StartedAt.Equal(now) {
 		t.Fatalf("status = %d %+v", response.Code, got)
 	}
 }
