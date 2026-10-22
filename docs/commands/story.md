@@ -9,8 +9,9 @@ A **Story** is an engineering case study that captures the reality of a developm
 
 ## Output Location & Naming
 - Path: `docs/studies/<YYYY-MM-DD>-<kebab-case-title>.md`
-- Create `docs/studies/` if it does not exist.
-- Link the new document in `docs/README.md` (or `docs/index.md`) under the case studies / studies section.
+- Create `docs/studies/` if it does not exist and indexed studies are enabled.
+- If `.harnez/repo.yaml` sets `docs.studies: false`, follow `.harnez/rules/Index.md` for the local-docs/session fallback.
+- Link the document in `docs/README.md` (or `docs/index.md`) only when `.harnez/repo.yaml` enables indexed studies.
 
 ---
 

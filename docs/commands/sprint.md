@@ -51,7 +51,7 @@ Follow these 5 phases sequentially:
 3. Follow Test-Driven Development (TDD):
    - Add or update unit tests alongside or before modifying implementation code.
    - Run tests (`go test -count=1 ./...`, `make test`) to verify each milestone before moving to the next.
-   - Under a one-run test budget (`make test-q1`), write the full output to a file and grep it for `--- FAIL`; piping into `tail` loses the failing test's name and the rerun needs a code change first.
+   - Under a one-run test budget, use `make test-q1` when available; otherwise run `harnez exec --quota-1 -- <repo-test-command>`. Write full output to a file and grep for `--- FAIL`; piping into `tail` loses the failing test's name and the rerun needs a code change first.
    - A failure in a test the milestone didn't touch gets its own ticket (with the failing output and a hypothesis); never loosen the assertion or retry until it passes.
    - Maintain codebase stability, ensuring clean compilation at every step.
    - For defect-shaped tickets: establish a concrete reproduction baseline *before* coding the fix (see `@docs/AgenticLoop.md` Phase 2, "Repro-before-fix").
@@ -62,7 +62,7 @@ Follow these 5 phases sequentially:
 1. Spawn an independent reviewer subagent (via `harnez agent start --role reviewer --model sol "Review diff HEAD~1"` or dedicated review pass).
 2. The reviewer audits the full git diff (`git diff`, `git status`) and verifies:
    - **Test Assertion Rigor**: Are assertions meaningful, robust, and verifying real behaviors?
-   - **Documentation & Tracker Sync**: Are `issues/*.md` statuses, `issues/README.md`, `docs/README.md`, and `AGENTS.md` updated?
+   - **Documentation & Tracker Sync**: When enabled in `.harnez/repo.yaml`, are tracker/studies indexes and `AGENTS.md` updated? If disabled, follow `.harnez/rules/Index.md`.
    - **Invariants & CLI Design**: Are command boundaries (`apply` vs `init`) and architectural rules respected?
    - **Media & Demo Verification**: If reels, WebM files, or UI screenshots were produced, has explicit user confirmation been obtained before publishing?
    - **Code Cleanliness**: Is the code token-efficient, idiomatic, and minimal?
@@ -86,7 +86,7 @@ For hung or killed quota-1 test runs, use `harnez clean procs q1 --kill`; it rel
 1. Record session flow learnings, tooling friction, or agent harness feedback:
    - Add retrospective notes to `docs/feedback/<YYYY-MM-DD>-<topic>.md` or run `/story` if a major case study was produced.
    - Record how each model did in its role in the project's model doc (harnez: `docs/Models.md`), and update the `roles`/`use` guidance behind `harnez agent models` when evidence shows a model fits another role.
-2. Synchronize the issue tracker:
+2. Synchronize the Harnez tracker when enabled; if `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md` for the local-tracker/session fallback.
    - Update issue status in `issues/*.md` (e.g. `Status: Closed`).
    - Update `issues/README.md` table.
    - Run `harnez status` to ensure all issue statuses are clean and validated.

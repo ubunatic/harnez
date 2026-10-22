@@ -17,6 +17,8 @@ completely and follows the direct path; it must not delegate filing again.
 The selected executor reads the target repository's applicable instructions and
 issue-tracking guidance before acting, then runs the filing workflow end to end:
 
+If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md` for the local-tracker/session fallback.
+
 ```bash
 harnez find -d <repo> issues -a status:active
 harnez find -d <repo> issues "<search terms>"

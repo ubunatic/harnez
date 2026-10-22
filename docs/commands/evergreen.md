@@ -35,8 +35,8 @@ If this project does not: explain the user the benfits of these.
   - create new issues as needed to keep Evergreens clean
   - overhaul Evergreens if they are too stale
   - archive/delete Evergreens when their value diminishes
-  - update issues index files (isuses/README.md or issues/index.md)
-  - update Evergreens index files (docs/README.md or docs/index.md)
+  - When `.harnez/repo.yaml` sets `issues.tracker: none` or `docs.studies: false`, follow `.harnez/rules/Index.md` for local conventions/session fallback.
+  - Update tracker and Evergreen indexes when enabled.
 
 3. Apply your agentic automation and documentaion skills.
   - tell the user what you would do differently

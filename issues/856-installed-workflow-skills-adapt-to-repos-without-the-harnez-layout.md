@@ -46,3 +46,9 @@ Now available: `.harnez/repo.yaml` (`issues.tracker`, `docs.studies`, `rules.quo
 854 M2 gates the quota rule on `rules.quota`, check whether `Quota.md` is still installed without a
 `test-q1` target before changing it. Guards should name repo.yaml/the notice, one short clause per step, no
 duplicated detection logic. Edit skill sources in `docs/commands/`, then `make install && harnez apply`.
+
+## Implementation (2026-10-22)
+
+- Added short `repo.yaml` / `Index.md` guards to the issue, sprint, roadmap, story, and evergreen skills; kept the Harnez tracker workflow recommended and labeled roadmap references as Harnez repo examples.
+- Updated both embedded Quota rule copies in `config.yaml` and synced `.harnez/rules/Quota.md`; sprint skills now use `make test-q1` when available and otherwise `harnez exec --quota-1 -- <repo-test-command>`.
+- `make test-q1` passed; full output is in `/tmp/harnez-856-test-q1-final.log`, and `rg -- '--- FAIL'` found no matches. `make install && harnez apply` completed; installed `~/.claude/skills/issue/SKILL.md` contains the tracker guard. `harnez init -d .` synced Quota.md; rerun after commit to confirm a clean tree.

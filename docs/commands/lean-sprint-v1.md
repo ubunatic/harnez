@@ -55,6 +55,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - Tests already known to fail and why, so the worker neither fixes nor blames them.
   - Edge and negative cases to test (ambiguous input, near-miss values).
   - Test requirements (reproduction test first for bugs, unit tests for features).
+  - If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md` for the local-tracker/session fallback.
   - The exact close command with a written reason: `harnez issues close N "<real outcome>"`; no placeholders.
 - **Plan First (read-only)**: Recommended: start the worker's initial prompt with a read-only planning step ("read-only: plan ..."; no edits until the host has seen the plan), then `resume` to grant write authority. Give no wording template for the prompt beyond the checklist above: agents have their own best practices, and the stored first prompts (telemetry DB) are how we observe and compare them. In one-shot mode a plan request alone is not enforced, so a plan-only first prompt is the reliable form. Codex workers often end the plan turn right after `CONFIRM:` without inspecting (seen twice on 2026-09-30): ask for "inspect now and reply with the concrete plan (files, schema, checks, commits) in this turn", and if the reply is only a plan-to-plan, resume once with that request.
 - **Trust the Base Framework**: Do not duplicate system prompts or micromanage formatting conventions.
@@ -64,7 +65,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 ### 2. Autonomous Milestone Execution & Commit
 - The developer agent implements the milestone autonomously.
 - Follows Test-Driven Development (TDD) and executes repo-native verification (`go test ./...`, `make test`).
-- Under a one-run test budget (`make test-q1`), writes the full output to a file and greps it for `--- FAIL`; never pipes it into `tail`. A failure in an untouched test gets its own ticket instead of a loosened assertion.
+- Under a one-run test budget, use `make test-q1` when available; otherwise run `harnez exec --quota-1 -- <repo-test-command>`. Write full output to a file and grep for `--- FAIL`; never pipe it into `tail`. A failure in an untouched test gets its own ticket instead of a loosened assertion.
 - Immediately commits the verified milestone at the boundary (`git commit -m "... (issue XXX MX)"`).
 - Reports completion back to the Host Orchestrator. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).
 
@@ -100,5 +101,5 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 
 ### 5. Teardown & Status Sync
 - Terminate the developer subagent and every research or probe helper (`harnez agent delete --name <session_id>` or `manage_subagents kill`) and drain background jobs; `harnez agent list` should show none left.
-- Update ticket status in `issues/*.md` (e.g. `Status: Closed`) and refresh `issues/README.md` (`harnez index -d .`).
+- If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md`; otherwise update ticket status and refresh the Harnez index.
 - Output a brief, high-level summary of delivered milestones and verification status. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).

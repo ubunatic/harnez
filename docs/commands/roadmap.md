@@ -4,9 +4,8 @@ Synthesize (or reconcile) a roadmap document from the open issue backlog, acting
 manager whose sequencing decisions are justified by value delivered to the product's actual use
 cases — not ticket volume, not "what's easiest," not a fixed priority-field sort.
 
-Reference Ticket: `issues/234-add-a-roadmap-skill-product-manager-style-roadmap-creation-update-from-open-issues.md`
-Reference Precedent: `docs/Roadmap.md` in this repo (hand-built example of the exact output shape
-this skill should produce), `commands/harnez-sync.md` (closest structural precedent — autonomous,
+Harnez repo examples (optional): `issues/234-add-a-roadmap-skill-product-manager-style-roadmap-creation-update-from-open-issues.md` and `docs/Roadmap.md` in this repo (hand-built example of the output shape
+this skill should produce); `commands/harnez-sync.md` is a structural precedent (autonomous,
 dispatches a fresh subagent, drives existing CLI commands rather than reimplementing logic inline).
 
 ---
@@ -29,7 +28,7 @@ result unless the user explicitly asked to wait.
 
 ### Step 1 — Check open issues
 
-- Run `harnez find -d <repo> issues -a status:active` for the active-ticket overview (Open, In Progress, Blocked, Draft). The generated `issues/README.md` links to Backlog and Closed indexes. Use `-r` or `--json` when scripting programmatic extractions. Add `-I/--image` only when the user explicitly requests image output.
+- If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md` for the repo's issue source; otherwise run `harnez find -d <repo> issues -a status:active` for the active-ticket overview (Open, In Progress, Blocked, Draft). The generated `issues/README.md` links to Backlog and Closed indexes. Use `-r` or `--json` when scripting programmatic extractions. Add `-I/--image` only when the user explicitly requests image output.
 - Read each open ticket as text with `harnez issues show -d <repo> <n>` or targeted range reads. Most tickets carry an appended `## Implementation Plan` section
   from a prior planning pass — if present, use it for scope, dependencies, and blockers rather
   than re-deriving them from scratch. Fall back to the ticket's own problem statement and

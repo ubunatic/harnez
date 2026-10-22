@@ -62,7 +62,7 @@ You execute all coding, testing, and ticket management directly while maintainin
 - Implement the scoped changes using Test-Driven Development (TDD).
 - Run repo-native verification commands (`go test ./...`, `make test`, `make check`).
 - Ensure all tests pass with robust assertions.
-- Under a one-run test budget (`make test-q1`), write the full output to a file and grep it for `--- FAIL`; never pipe it into `tail`. A failure in an untouched test gets its own ticket instead of a loosened assertion or a retry loop.
+- Under a one-run test budget, use `make test-q1` when available; otherwise run `harnez exec --quota-1 -- <repo-test-command>`. Write full output to a file and grep for `--- FAIL`; never pipe it into `tail`. A failure in an untouched test gets its own ticket instead of a loosened assertion or a retry loop.
 
 ### 3. Milestone Review Gate (Reviewer Tier)
 - Invoke a reviewer subagent on a `reviewer` model from `harnez agent models`, from another vendor than yours (e.g. `harnez agent start --role reviewer --model sol -d <dir> "Review diff HEAD~1 against ticket criteria"`).
@@ -85,6 +85,6 @@ You execute all coding, testing, and ticket management directly while maintainin
 
 ### 6. Teardown & Status Sync
 - Terminate all child reviewer/advisor subagents (`harnez agent delete --name <session_id>` or `harnez agent stop --all` / `manage_subagents kill`).
-- Update ticket status in `issues/*.md` (e.g. `Status: Closed — resolved`) and resync tracker (`harnez index`).
+- If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md`; otherwise update ticket status and resync the Harnez tracker.
 - Commit the ticket update and tracker sync immediately.
 - Summarize delivered results and verification status. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).
