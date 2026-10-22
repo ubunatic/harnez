@@ -502,7 +502,7 @@ func isRulesHeaderLine(line string) bool {
 		strings.Contains(line, ".harnez/rules/")
 }
 
-func writeRules(dir string, rules RulesConfig, quota bool) (int, error) {
+func writeRules(dir string, rules RulesConfig, quota bool, repoConfigs ...*RepoConfig) (int, error) {
 	if rules.Index == "" {
 		return 0, nil
 	}
@@ -518,6 +518,15 @@ func writeRules(dir string, rules RulesConfig, quota bool) (int, error) {
 		files = append(files, file)
 	}
 	index := rules.Index
+	if len(repoConfigs) > 0 && repoConfigs[0] != nil {
+		repo := repoConfigs[0]
+		if repo.Issues.Tracker == "none" {
+			index += "\n> This repo does not use file-based issues; skip those steps and use the repo's own tracker.\n"
+		}
+		if !repo.Docs.Studies {
+			index += "\n> This repo does not use indexed studies; skip those steps.\n"
+		}
+	}
 	for _, file := range files {
 		index += "- [" + file.Name + "](" + file.Name + ")\n"
 	}
@@ -1136,14 +1145,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 		}
 	}
 	agentsPath := filepath.Join(dir, "AGENTS.md")
-	quota1Active := opts.Quota1
-	if !quota1Active {
-		quota1Active = markdown.ContainsSection(agentsPath, quota1SectionName)
-	}
-	if !quota1Active {
-		_, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md"))
-		quota1Active = err == nil
-	}
+	quota1Active := repoConfig.Rules.Quota
 	warnDirtyInitFiles(dir, cfg, docs, quota1Active)
 	for _, w := range CheckProjectDrift(dir) {
 		fmt.Printf("  ⚠️  drift: %s\n", w)
@@ -1189,13 +1191,15 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 		if err := initCopyDocs(ir, assumeYes, cfg, dir, docs, docVariants); err != nil {
 			return err
 		}
-		if err := initContainerTestTarget(ir, assumeYes, cfg, dir); err != nil {
-			return err
+		if repoConfig.Make.ContainerTest {
+			if err := initContainerTestTarget(ir, assumeYes, cfg, dir); err != nil {
+				return err
+			}
 		}
 	}
 
 	if cfg != nil {
-		ruleChanges, err := writeRules(dir, cfg.AgentsMD.Rules, quota1Active)
+		ruleChanges, err := writeRules(dir, cfg.AgentsMD.Rules, quota1Active, repoConfig)
 		if err != nil {
 			return fmt.Errorf("write .harnez/rules: %w", err)
 		}
@@ -1206,7 +1210,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 			fmt.Printf("  ⚠️  .harnez/rules is ignored by Git; generated rule files may not be tracked\n")
 		}
 	}
-	if opts.Quota1 && agentBlocksSafe {
+	if opts.Quota1 && repoConfig.Rules.Quota && agentBlocksSafe {
 		if err := initQuotaRules(ir, cfg, dir, agentsPath, assumeYes); err != nil {
 			return err
 		}

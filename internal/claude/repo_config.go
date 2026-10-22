@@ -89,9 +89,29 @@ func detectRepoConfig(dir string, cfg *Config) *RepoConfig {
 			}
 		}
 	}
-	r.Rules.Quota = markdown.ContainsSection(filepath.Join(dir, "AGENTS.md"), quota1SectionName) || fileExists(filepath.Join(dir, ".harnez", "rules", "Quota.md"))
-	r.Make.ContainerTest = fileExists(filepath.Join(dir, "Makefile"))
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	agents, _ := os.ReadFile(agentsPath)
+	r.Rules.Quota = markdown.ContainsSection(agentsPath, quota1SectionName) || strings.Contains(string(agents), "harnez:begin "+quota1SectionName) || makeTargetExists(dir, "test-q1")
+	r.Make.ContainerTest = makeTargetExists(dir, "container-test")
 	return r
+}
+
+func makeTargetExists(dir, name string) bool {
+	data, err := os.ReadFile(filepath.Join(dir, "Makefile"))
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		colon := strings.IndexByte(line, ':')
+		if colon > 0 && strings.TrimSpace(line[:colon]) == name {
+			return true
+		}
+	}
+	return false
 }
 
 func writeRepoConfig(dir string, cfg *RepoConfig) error {
