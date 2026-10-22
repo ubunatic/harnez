@@ -124,3 +124,11 @@ hundreds of identical `telemetry: no tool call found for session ...` lines. So 
 but never logged. Way forward, in addition to the above: log every fetch failure with provider, command,
 elapsed time against its timeout, and who sent the signal (our context timeout vs. external); show it in
 the debug box; rate-limit the repeated telemetry line. Then find whether the AGY fetch hits its timeout.
+
+## Sprint (2026-10-22, dev-714 flash38:low)
+
+- M1 delivered `d7a372c2` (stale grace): reuses `cache_staleness_multiplier` (now 2) for display staleness;
+  `stale`/`stale_reason` in `--json`; host reran usage and cmd tests (green) and saw `"stale": false` for all 3
+  agents live. Note: the same key also widens the client cache freshness window to 2 intervals (intended).
+- Next: M2 (fetch-failure logging, telemetry line rate-limit, bad spool entry skipped), M3 (heartbeat +
+  catch-up, keys in `spec/usage.yaml`), M4 (debug box), M5 (AGY statusline drop count).
