@@ -1,6 +1,6 @@
 # 745 — agent start/resume failures show no reason: read the provider session log for the real error
 
-**Status**: Open
+**Status**: Closed — Claude agent start/resume failures now surface the CLI final error line, preserve the original error as fallback, and have recorded usage-limit coverage.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
