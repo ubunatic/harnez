@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harnez per-repository config",
+  "type": "object",
+  "required": ["version", "issues", "docs", "rules", "make"],
+  "properties": {
+    "version": {"type": "integer", "const": 1},
+    "issues": {
+      "type": "object",
+      "required": ["tracker", "merge_driver"],
+      "properties": {
+        "tracker": {"type": "string", "enum": ["harnez", "none"]},
+        "merge_driver": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "docs": {
+      "type": "object",
+      "required": ["studies", "copies"],
+      "properties": {
+        "studies": {"type": "boolean"},
+        "copies": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "type": "object",
+      "required": ["quota"],
+      "properties": {"quota": {"type": "boolean"}},
+      "additionalProperties": false
+    },
+    "make": {
+      "type": "object",
+      "required": ["container_test"],
+      "properties": {"container_test": {"type": "boolean"}},
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -7,6 +7,7 @@
 /issues/README.md.lock
 *.lock
 .harnez/*
+!.harnez/repo.yaml
 !.harnez/rules/
 .harnez/rules/*
 !.harnez/rules/*.md

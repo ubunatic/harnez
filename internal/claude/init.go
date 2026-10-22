@@ -1103,6 +1103,29 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 	if err := ValidateInitTarget(dir, force); err != nil {
 		return err
 	}
+	repoConfigPath := repoConfigPath(dir)
+	repoConfig, repoErr := LoadRepoConfig(dir)
+	if os.IsNotExist(repoErr) {
+		repoConfig = detectRepoConfig(dir, cfg)
+	} else if repoErr != nil {
+		return repoErr
+	}
+	if opts.IssuesGit != nil {
+		repoConfig.Issues.MergeDriver = *opts.IssuesGit
+	}
+	if opts.Quota1 {
+		repoConfig.Rules.Quota = true
+	}
+	for _, name := range opts.Docs {
+		if !containsRepoDoc(repoConfig.Docs.Copies, name) {
+			repoConfig.Docs.Copies = append(repoConfig.Docs.Copies, name)
+		}
+	}
+	if os.IsNotExist(repoErr) || opts.IssuesGit != nil || opts.Quota1 || len(opts.Docs) > 0 {
+		if err := writeRepoConfig(dir, repoConfig); err != nil {
+			return fmt.Errorf("write %s: %w", repoConfigPath, err)
+		}
+	}
 	if cfg != nil {
 		docs = expandDocNames(cfg, docs)
 		if err := validateDocNames(cfg, docs); err != nil {
