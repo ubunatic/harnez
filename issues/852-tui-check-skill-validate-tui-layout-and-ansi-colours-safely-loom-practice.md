@@ -42,8 +42,7 @@ not picks at layout boundaries.
 - Shift+arrow keys do not reach the app through tmux `send-keys`; cover them in PTY tests.
 - Raw ANSI in agent output can corrupt the terminal; convert escapes to text before printing.
 
-## Open questions
+## Decided (user, 2026-10-22)
 
-- Is `loom` a hard dependency, or does the skill fall back to generic tools (`tmux`, `script`, a small
-  harnez ANSI-to-cells dumper) for non-loom TUIs such as `harnez tui`?
-- Should harnez ship a cell-diff helper (sketch vs. capture, reporting cells whose glyph/FG/BG differ)?
+- The skill recommends `loom` and assumes it is installed; no fallback tooling.
+- A sketch-vs-capture cell diff is a loom feature (loom ticket 362), not harnez; the skill uses it once it exists.
