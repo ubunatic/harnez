@@ -198,6 +198,9 @@ func (d ClaudeStreamDriver) RunStream(ctx context.Context, o RunOptions, fn Even
 	start := time.Now()
 	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeRunArgs(o.Model, o.Prompt)...)
 	if err != nil {
+		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
+			return nil, parseErr
+		}
 		return nil, fmt.Errorf("claude: %w", err)
 	}
 	r, err := parseClaude(b)
@@ -212,6 +215,9 @@ func (d ClaudeStreamDriver) RunStream(ctx context.Context, o RunOptions, fn Even
 func (d ClaudeStreamDriver) ResumeStream(ctx context.Context, id, prompt string, model Model, fn EventFunc) (*TurnResult, error) {
 	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeResumeArgs(id, prompt, model)...)
 	if err != nil {
+		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
+			return nil, parseErr
+		}
 		return nil, fmt.Errorf("claude resume: %w", err)
 	}
 	return parseClaude(b)

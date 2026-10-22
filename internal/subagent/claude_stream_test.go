@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +11,17 @@ import (
 	"testing"
 	"time"
 )
+
+func TestClaudeResumeStreamSurfacesFinalErrorLine(t *testing.T) {
+	const final = `{"type":"result","subtype":"error","is_error":true,"result":"You've hit your session limit · resets 12:20am"}`
+	d := ClaudeStreamDriver{ClaudeDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
+		return []byte(final + "\n"), errors.New("exit status 1")
+	}}}
+	_, err := d.ResumeStream(context.Background(), "session", "continue", Model{}, nil)
+	if err == nil || !strings.Contains(err.Error(), "session limit") {
+		t.Fatalf("error = %v, want final provider limit reason", err)
+	}
+}
 
 // fakeClaudeStream is realistic `claude -p --output-format stream-json
 // --verbose` output, with one malformed line. The script holds the result
