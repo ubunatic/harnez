@@ -85,3 +85,9 @@ Way forward: stale only after a grace beyond the cadence (e.g. 2 intervals, valu
 collect all providers in the first cycle after a server start; expose `stale`/`reason` in `--json`;
 skip or quarantine the invalid spool entry instead of failing the drain. Test that a snapshot exactly one
 interval old renders normal, not gray.
+
+Statusline feed (checked 15:45): both statuslines are wired (`harnez statusline`, `harnez statusline --agent agy`
+in `~/.gemini/antigravity-cli/settings.json`) and post to `/usage/passive`. Live: one Claude statusline render
+moved the Claude row from "1m ago" to "just now". Yet AGY stayed 9m old with an AGY session open, so either the
+AGY payload carries no quota fields (`passiveWindows` then drops it silently) or AGY renders only on activity.
+Check: log or count dropped statusline observations per provider; capture one real AGY payload.
