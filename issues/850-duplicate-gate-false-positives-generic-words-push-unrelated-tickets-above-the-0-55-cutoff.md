@@ -1,6 +1,6 @@
 # 850 — Duplicate gate false positives: generic words push unrelated tickets above the 0.55 cutoff
 
-**Status**: Closed — Smoothed IDF shipped; live scores: 119 0.594 remains above 0.55, 355 0.504, 716 0.549; true probes 714 0.904, 845 0.831, 698 0.683; unrelated 0.194. Stopped further tuning.
+**Status**: Open — M2: raise cutoff to 0.65 after IDF measurement
 **Priority**: P2 (Medium) — the gate blocks `issues new` on strong matches
 **Severity**: Minor
 **Category**: Bug
@@ -39,3 +39,10 @@ True matches from 843 M2: the usage-error text → 714 (0.571), the lean-sprint 
   match); 845 probe 0.643; 697/698 0.833/0.667; unrelated max 0.278.
 - Way forward: IDF over the scanned corpus (`Similar` already gets all issue files), smoothed, applied to
   numerator and denominator. The fix should also lift the 714 true match back above the cutoff.
+
+## Reopened (2026-10-22): M2 pre-work, raise cutoff after measuring
+
+M1 (IDF, d2986cd6) left 119 at 0.594 > 0.55, so the acceptance was not met. Measured with IDF: true matches
+714 0.904, 845 0.831, 698 0.683; false 119 0.594, 716 0.549, 355 0.504; unrelated 0.23. Set
+`spec/issues.yaml` threshold to 0.65, update tests/docs that state 0.55, re-run the live probes and close
+with the table.
