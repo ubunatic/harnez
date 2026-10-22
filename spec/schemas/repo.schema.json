@@ -32,7 +32,10 @@
     "make": {
       "type": "object",
       "required": ["container_test"],
-      "properties": {"container_test": {"type": "boolean"}},
+      "properties": {
+        "scaffold": {"type": "boolean"},
+        "container_test": {"type": "boolean"}
+      },
       "additionalProperties": false
     }
   },

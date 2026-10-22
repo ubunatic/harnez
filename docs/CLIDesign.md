@@ -162,17 +162,18 @@ harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [--force]
         ├── install issue-index attributes, local merge driver, and hook only when
         │   repo.yaml says issues.tracker: harnez and issues.merge_driver: true;
         │   otherwise remove only Harnez-managed attributes, config, and hook blocks
-        ├── auto-detect docs from config.yaml and record the initial layout in repo.yaml
+        ├── auto-detect docs from config.yaml and record the initial layout in repo.yaml;
+        │   later runs copy recorded optional docs and hint about newly detected ones
         ├── apply cfg.AgentsMD.Local sections (Language Conventions, etc.)
         ├── add container-test only when repo.yaml make.container_test is true
         ├── include quota rules only when repo.yaml rules.quota is true (or --quota-1 enables it)
         ├── add tracker/studies notices to .harnez/rules/Index.md when those features are disabled
         └── resolve explicit hard doc dependencies transitively
             (project-local only; never expands apply's global scope)
-            └── for each --docs <name> (explicit + auto-detected + dependencies):
+            └── for each selected doc (recorded + explicit + baseline + dependencies):
                 ├── copy docs/<name>.md locally  (for @docs/ refs)
-                ├── scaffold Makefile from template  (if no Makefile)
-                └── inject targets block into existing Makefile
+                ├── scaffold Makefile from template when make.scaffold is true
+                └── inject Make targets when make.scaffold is true
 ```
 
 All steps are idempotent. Running `init --docs golang` twice is safe. Running in non-coding repositories or `$HOME` is rejected unless `--force` (`-f`) is explicitly passed.
@@ -180,8 +181,11 @@ All steps are idempotent. Running `init --docs golang` twice is safe. Running in
 `.harnez/repo.yaml` is project-local configuration, separate from the embedded/global
 `config.yaml` used by `apply`. On first init, Harnez detects the existing tracker format,
 studies directory, installed Make targets, quota section, and language files, then writes
-the result once. Later runs respect the file; schema errors, including unknown keys, stop
-init before project changes. Explicit setup flags update the corresponding recorded choices.
+the result once. Later runs respect `docs.copies` for optional detected docs and print an
+`init --docs <name>` hint for newly detected docs that are not recorded. Schema errors,
+including unknown keys, stop init before project changes. Explicit setup flags update the
+corresponding recorded choices. `make.scaffold` defaults to true when omitted for compatibility
+with existing files; set it to false to copy the Make doc without editing or creating a Makefile.
 The file-first Harnez issue tracker remains the recommended default. A repo detected without
 that tracker or indexed studies gets a notice in `.harnez/rules/Index.md`, which the generated
 rules header asks agents to read. `harnez index` regenerates issue indexes only when

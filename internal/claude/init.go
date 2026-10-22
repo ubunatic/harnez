@@ -1136,6 +1136,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 		}
 	}
 	if cfg != nil {
+		docs = mergeDocs(repoConfig.Docs.Copies, docs)
 		docs = expandDocNames(cfg, docs)
 		if err := validateDocNames(cfg, docs); err != nil {
 			return err
@@ -1173,8 +1174,14 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 	}
 
 	if cfg != nil {
-		docs = append(docs, existingLangDocs(agentsPath, cfg)...)
-		docs = append(docs, autoDetectDocs(dir, cfg, docs)...)
+		for _, name := range docNamesInOrder(cfg) {
+			if cfg.AgentsMD.Languages[name].Default == "true" && !containsRepoDoc(docs, name) {
+				docs = append(docs, name)
+			}
+		}
+		for _, name := range autoDetectDocs(dir, cfg, docs) {
+			fmt.Printf("  detected %s docs; add with harnez init --docs %s\n", name, name)
+		}
 		docs, err = resolveDocDependencies(cfg, docs)
 		if err != nil {
 			return err
@@ -1188,7 +1195,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 			return err
 		}
 
-		if err := initCopyDocs(ir, assumeYes, cfg, dir, docs, docVariants); err != nil {
+		if err := initCopyDocs(ir, assumeYes, cfg, dir, docs, docVariants, repoConfig.Make.Scaffold); err != nil {
 			return err
 		}
 		if repoConfig.Make.ContainerTest {

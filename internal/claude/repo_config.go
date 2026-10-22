@@ -29,6 +29,7 @@ type RepoConfig struct {
 		Quota bool `yaml:"quota"`
 	} `yaml:"rules"`
 	Make struct {
+		Scaffold      bool `yaml:"scaffold"`
 		ContainerTest bool `yaml:"container_test"`
 	} `yaml:"make"`
 }
@@ -65,6 +66,11 @@ func LoadRepoConfig(dir string) (*RepoConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
+	if makeConfig, ok := doc["make"].(map[string]any); ok {
+		if _, exists := makeConfig["scaffold"]; !exists {
+			cfg.Make.Scaffold = true
+		}
+	}
 	return &cfg, nil
 }
 
@@ -82,6 +88,7 @@ func detectRepoConfig(dir string, cfg *Config) *RepoConfig {
 	}
 	r.Issues.MergeDriver = r.Issues.Tracker == "harnez"
 	r.Docs.Studies = fileExists(filepath.Join(dir, "docs", "studies"))
+	r.Make.Scaffold = fileExists(filepath.Join(dir, "Makefile"))
 	if cfg != nil {
 		for _, name := range docNamesInOrder(cfg) {
 			if detectDoc(dir, name) {

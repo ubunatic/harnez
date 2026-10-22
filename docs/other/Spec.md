@@ -38,15 +38,22 @@ docs:
 rules:
   quota: false
 make:
+  scaffold: true
   container_test: false
 ```
 
 `init` writes the file on first initialization after detecting the repo's issue
 format, existing studies directory, copied language docs, quota section or
-`test-q1` target, and existing `container-test` target. It validates later reads
-against the schema and leaves an existing file unchanged unless a setup flag
-records an override. `issues.tracker` keeps the file-first Harnez tracker as the
-recommended default; `none` records that this repo uses another approach or has
+`test-q1` target, existing `container-test` target, and existing Makefile. It validates
+later reads against the schema and leaves an existing file unchanged unless a setup
+flag records an override. `docs.copies` records optional detected or explicitly selected
+docs; later runs copy only recorded choices and print an `init --docs <name>` hint for
+newly detected optional docs. Docs marked `default: true` in `config.yaml` remain part of
+the baseline. `make.scaffold` gates Makefile creation and Harnez target injection. It is
+optional in the schema so existing repo.yaml files stay valid; when omitted it defaults
+to true, and initial detection sets it true when a Makefile exists. `issues.tracker` keeps
+the file-first Harnez tracker as the recommended default; `none` records that this repo
+uses another approach or has
 no file-based tracker. `make.container_test` and `rules.quota` gate the respective
 init behavior. When the tracker is `none` or `docs.studies` is false, init writes
 a reminder into `.harnez/rules/Index.md`, which the generated AGENTS.md rules

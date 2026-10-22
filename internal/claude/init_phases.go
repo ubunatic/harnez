@@ -77,7 +77,7 @@ func initLocalSections(ir *initReport, cfg *Config, docs []string, repoMode stri
 }
 
 // initCopyDocs copies the selected language docs into the project and injects their Makefile targets.
-func initCopyDocs(ir *initReport, assumeYes bool, cfg *Config, dir string, docs []string, docVariants map[string]string) error {
+func initCopyDocs(ir *initReport, assumeYes bool, cfg *Config, dir string, docs []string, docVariants map[string]string, scaffoldMake bool) error {
 	// Copy language docs locally and inject Makefile targets.
 	for _, name := range docs {
 		lang, ok := cfg.AgentsMD.Languages[name]
@@ -99,8 +99,9 @@ func initCopyDocs(ir *initReport, assumeYes bool, cfg *Config, dir string, docs 
 			fmt.Printf("  copied %s → %s\n", lang.SourceFor(docVariants[name]), localDoc)
 		}
 
+		makeScaffoldEnabled := name != "make" || scaffoldMake
 		justScaffolded := false
-		if lang.Template != "" {
+		if lang.Template != "" && makeScaffoldEnabled {
 			dest := localPath(dir, filepath.Base(lang.Template))
 			if _, err := os.Stat(dest); os.IsNotExist(err) {
 				data, err := fs.ReadFile(cfg.FS, lang.Template)
@@ -116,7 +117,7 @@ func initCopyDocs(ir *initReport, assumeYes bool, cfg *Config, dir string, docs 
 			}
 		}
 
-		if lang.Targets != "" && !justScaffolded {
+		if lang.Targets != "" && !justScaffolded && makeScaffoldEnabled {
 			dest := localPath(dir, filepath.Base(lang.Template))
 			if lang.Template == "" {
 				dest = localPath(dir, "Makefile")

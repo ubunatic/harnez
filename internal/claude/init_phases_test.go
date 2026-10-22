@@ -94,7 +94,7 @@ func TestInitCopyDocsTemplateAndManagedTail(t *testing.T) {
 	}}}
 	r := &initReport{}
 	// A newly scaffolded template already has its targets; do not read Targets.
-	if err := initCopyDocs(r, true, cfg, dir, []string{"doc"}, nil); err != nil || r.changes != 2 {
+	if err := initCopyDocs(r, true, cfg, dir, []string{"doc"}, nil, true); err != nil || r.changes != 2 {
 		t.Fatalf("copy and template: changes=%d err=%v", r.changes, err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "Makefile"))
@@ -114,7 +114,7 @@ func TestInitCopyDocsTemplateAndManagedTail(t *testing.T) {
 	lang.Targets = ""
 	cfg.AgentsMD.Languages["doc"] = lang
 	again := &initReport{}
-	if err := initCopyDocs(again, true, cfg, dir, []string{"doc"}, nil); err != nil || again.changes != 0 {
+	if err := initCopyDocs(again, true, cfg, dir, []string{"doc"}, nil, true); err != nil || again.changes != 0 {
 		t.Fatalf("repeat: changes=%d err=%v", again.changes, err)
 	}
 	got, err := os.ReadFile(path)
