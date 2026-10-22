@@ -843,6 +843,76 @@ func TestRunPublishStepFiltersStaleVersionedArchive(t *testing.T) {
 	}
 }
 
+func TestRunPublishStepWithoutArtifactsCreatesBareRelease(t *testing.T) {
+	for _, withDist := range []bool{false, true} {
+		name := "missing-dist"
+		if withDist {
+			name = "empty-dist"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if withDist {
+				if err := os.Mkdir(filepath.Join(dir, "dist"), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			binDir := filepath.Join(dir, "bin")
+			if err := os.Mkdir(binDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			callsPath := filepath.Join(dir, "fj-calls")
+			fj := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FJ_CALLS\"\ncase \"$*\" in\n  *\"release view\"*) echo \"could not find release $5\"; exit 1 ;;\nesac\nexit 0\n"
+			if err := os.WriteFile(filepath.Join(binDir, "fj"), []byte(fj), 0755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("FJ_CALLS", callsPath)
+
+			var out bytes.Buffer
+			if err := runPublishStep(Options{Dir: dir, Out: &out}, "loom", "v1.0.0", nil); err != nil {
+				t.Fatalf("runPublishStep error: %v", err)
+			}
+			if !strings.Contains(strings.ToLower(out.String()), "warning") {
+				t.Fatalf("missing warning for bare release, output: %s", out.String())
+			}
+			calls, err := os.ReadFile(callsPath)
+			if err != nil {
+				t.Fatalf("read fake fj calls: %v", err)
+			}
+			if !strings.Contains(string(calls), "release create") {
+				t.Fatalf("bare release was not created, fj calls: %s", calls)
+			}
+			if strings.Contains(string(calls), "release asset create") {
+				t.Fatalf("bare release unexpectedly uploaded assets, fj calls: %s", calls)
+			}
+		})
+	}
+}
+
+func TestRunPublishStepWithoutArtifactsDryRun(t *testing.T) {
+	for _, withDist := range []bool{false, true} {
+		name := "missing-dist"
+		if withDist {
+			name = "empty-dist"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if withDist {
+				if err := os.Mkdir(filepath.Join(dir, "dist"), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var out bytes.Buffer
+			if err := runPublishStep(Options{Dir: dir, DryRun: true, Out: &out}, "loom", "v1.0.0", nil); err != nil {
+				t.Fatalf("runPublishStep dry-run error: %v", err)
+			}
+			if !strings.Contains(strings.ToLower(out.String()), "warning") || !strings.Contains(out.String(), "[dry-run]") {
+				t.Fatalf("dry-run should warn and report the bare release, output: %s", out.String())
+			}
+		})
+	}
+}
+
 func TestRunBuildStepCleansDistBeforeSkippingBuild(t *testing.T) {
 	tmpDir := t.TempDir()
 	distDir := filepath.Join(tmpDir, "dist")

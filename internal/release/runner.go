@@ -502,17 +502,13 @@ func runSigningStep(opt Options, projectName, version, keyPath string) error {
 
 func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) error {
 	distDir := filepath.Join(opt.Dir, "dist")
-	if !fileExists(distDir) {
-		if opt.DryRun {
-			fmt.Fprintf(opt.Out, "  [dry-run]   Would publish release %s via fj release\n", tagName)
-			return nil
+	var entries []os.DirEntry
+	if fileExists(distDir) {
+		var err error
+		entries, err = os.ReadDir(distDir)
+		if err != nil {
+			return fmt.Errorf("read dist directory: %w", err)
 		}
-		return fmt.Errorf("dist directory %s does not exist; cannot publish", distDir)
-	}
-
-	entries, err := os.ReadDir(distDir)
-	if err != nil {
-		return fmt.Errorf("read dist directory: %w", err)
 	}
 
 	var attachments []string
@@ -543,15 +539,19 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 	}
 
 	if len(attachments) == 0 {
+		fmt.Fprintf(opt.Out, "  [publish]   Warning: no release artifacts in dist/; publishing without attachments\n")
 		if opt.DryRun {
 			fmt.Fprintf(opt.Out, "  [dry-run]   Would publish release %s via fj release\n", tagName)
 			return nil
 		}
-		return fmt.Errorf("no release artifacts found in dist/")
 	}
 
 	title := fmt.Sprintf("%s %s", projectName, tagName)
-	fmt.Fprintf(opt.Out, "  [publish]   Publishing %d asset(s) via fj release to %s\n", len(attachments), tagName)
+	if len(attachments) == 0 {
+		fmt.Fprintf(opt.Out, "  [publish]   Creating bare release via fj release: %s\n", tagName)
+	} else {
+		fmt.Fprintf(opt.Out, "  [publish]   Publishing %d asset(s) via fj release to %s\n", len(attachments), tagName)
+	}
 	for _, a := range attachments {
 		fmt.Fprintf(opt.Out, "              - %s\n", a)
 	}

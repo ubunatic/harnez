@@ -1,6 +1,6 @@
 # 734 — harnez release publishes without artifacts when there is no dist dir
 
-**Status**: Open
+**Status**: Closed — Missing and empty dist now warn and publish a bare Forgejo release; dry-run cases pass. Fake fj confirms release create with no asset uploads; no real release run.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
