@@ -30,7 +30,10 @@ repo without `issues/` or `docs/`, or stop and report when blocked on 854's conf
 
 ## Way forward
 
-- One shared "detect the tracker and docs layout" step that skills reference, not copied prose per skill.
+- Skills keep recommending the harnez tracker (core concept, see 854 scope decision); they must only not
+  fail without it.
+- Rely on 854's safety notice in the always-loaded rules instead of per-skill detection prose; skills only
+  need short "when the repo uses the harnez tracker" guards where a step would otherwise fail.
 - Tracker steps run only for a harnez tracker (853's opt-in); else follow the repo's tracker or keep the
   handoff in the session and say so.
 - Quota rule: use `make test-q1` when the target exists, else `harnez exec --quota-1 <repo test command>`.

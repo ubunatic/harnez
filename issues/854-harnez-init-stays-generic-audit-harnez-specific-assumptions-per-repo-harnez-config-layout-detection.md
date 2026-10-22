@@ -27,6 +27,16 @@ quota rules). Some of these may now be applied to any repo. 853 is one confirmed
 3. **Detection on first init**: infer the setup from what exists (issues/ format, docs/ layout, Makefile,
    language files) and record it in the config, so later runs don't guess again.
 4. Follow-up tickets for each divergence; 853 already covers index files and the merge driver.
+5. **Safety notice**: when the config says the repo has no harnez tracker or no indexed studies, init writes a
+   short notice into a core file that AGENTS.md always loads (e.g. `.harnez/rules/Index.md` or the managed
+   AGENTS.md section): "this repo does not use file-based issues / indexed studies; skip those steps and use
+   the repo's own tracker". Skills then need no per-skill detection prose (856).
+
+## Scope decision (user, 2026-10-22)
+
+The file-first tracker stays the recommended default and a core concept; this work does not de-emphasize
+it. Scope is: gate what can be gated now behind `.harnez/` config, never fail in a repo that doesn't use
+it, and tell agents so via the notice above. Other issue providers are out of scope (857).
 
 ## Audit seed (research pass 2026-10-22, re-verify before use)
 

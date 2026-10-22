@@ -213,7 +213,7 @@ installs for Claude and Prime Agent, and project copies
 
 ## Issue Tracking & Priority Standards
 
-`harnez` offers an optional, in-repository issue tracking convention (`issues/NNN-*.md`). Repos that keep their own tracker are not required to adopt it; opt-in through per-repo `.harnez/` config is tracked in issues 853 and 854.
+`harnez` recommends a file-first, in-repository issue tracker (`issues/NNN-*.md`); it is a core part of how its agents work. Repos that use another tracker still work: harnez gates its tracker features behind per-repo `.harnez/` config instead of failing (issues 853, 854).
 
 ### Issue Priority Schema
 
