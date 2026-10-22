@@ -1,6 +1,6 @@
 # 728 — Installed skills get two frontmatter blocks when the source has its own
 
-**Status**: Open
+**Status**: Closed — genSkillContent now emits one merged frontmatter block; source keys win and generated name/description are defaults. make test-q1 passes.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
