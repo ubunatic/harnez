@@ -1,6 +1,6 @@
 # 847 — Mark harnez-index generated files with a top-of-file "managed by harnez index, do not edit" header
 
-**Status**: Open — reopened: merge commit drops incoming rows
+**Status**: Closed — M4 fixes merge commits to union generated rows from ancestor/ours/theirs and preserve hand-written docs conflicts; E2E checks git show HEAD blobs and clean status. Commits: M1 66b8387b, M2 27503f72, M3 fa6a7493, M4 2039af9f. Gates: make lint, make test-short, make install passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
