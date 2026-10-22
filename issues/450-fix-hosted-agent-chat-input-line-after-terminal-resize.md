@@ -83,3 +83,9 @@ alternate-screen and redraw logic in Harnez.
   redraw/input-line recovery, including at least one height change.
 
 > **Note (620):** `agent chat` was replaced by `agent start -i` / `agent resume -i`; this bug applies to those paths now.
+
+## Live check (2026-10-22, lean sprint): still current
+
+`internal/subagent/interactive.go:240` sets the PTY size once at start; no SIGWINCH propagation. Way forward
+for this ticket: forward resizes to the child PTY (SIGWINCH → resize from the host terminal) with a
+deterministic PTY test. Moving hosting into Loom stays a separate, larger step.

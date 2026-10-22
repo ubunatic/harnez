@@ -27,3 +27,11 @@ The cause is unconfirmed. Check whether quota refresh is failing, stale fallback
 User reports rows "often" turning gray in the live `harnez usage` view, together with the
 `unavailable (signal: killed)` errors tracked in 714. Likely the same root cause (collector
 killed → stale snapshot → gray); fix 714 first and re-check this one.
+
+## Live check (2026-10-22, lean sprint): not reproducible today
+
+`harnez usage --raw` showed fresh Claude, Codex and both AGY pools. Gray comes from either a `QuotaFetchError`
+(`internal/usage/types.go:160`) or snapshot age (`internal/usage/freshness.go:5`); the display does not say
+which. Way forward: show the reason on a gray row (fetch error text or age), keep the last good quota on a
+failed refresh, test fresh/stale/failed rendering. Then park until the next live occurrence, which the reason
+text will explain.

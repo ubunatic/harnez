@@ -36,3 +36,12 @@ decision or a denied permission.
 
 - Fixture tests from the two real cases above (trimmed, no private text).
 - When done, shorten the two pitfall rows in `docs/OrchestratedAgentFlow.md` and close or merge 595.
+
+## Live check (2026-10-22, lean sprint): partly current, fixed together with 595/745
+
+Codex: `internal/subagent/codex.go:391` returns the wait error without reading turn errors from the JSONL
+stream/rollout (stderr wrapping was fixed earlier). Claude: `internal/subagent/claude.go:32` returns the CLI
+exit error without its final error line. `cmd/harnez/agent_run.go:618` stores the raw error and `shortCause`
+truncates it. Way forward: one provider error-enrichment step for failed start/resume (Codex rollout/stream
+errors, Claude final error line), original error kept as fallback; fixtures for auth, overload and limit.
+Docs: `docs/OrchestratedAgentFlow.md`.

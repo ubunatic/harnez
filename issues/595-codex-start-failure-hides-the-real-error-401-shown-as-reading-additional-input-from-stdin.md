@@ -32,3 +32,12 @@ in the Codex rollout JSONL (`~/.codex/sessions/.../rollout-*-<session>.jsonl`), 
 completion event: `"error":{"message":"Selected model is at capacity. Please try a different
 model.","codex_error_info":"server_overloaded"}`. That event is a likely source for the real
 message; a transient overload like this one should also say that a retry may work.
+
+## Live check (2026-10-22, lean sprint): partly current, fixed together with 595/745
+
+Codex: `internal/subagent/codex.go:391` returns the wait error without reading turn errors from the JSONL
+stream/rollout (stderr wrapping was fixed earlier). Claude: `internal/subagent/claude.go:32` returns the CLI
+exit error without its final error line. `cmd/harnez/agent_run.go:618` stores the raw error and `shortCause`
+truncates it. Way forward: one provider error-enrichment step for failed start/resume (Codex rollout/stream
+errors, Claude final error line), original error kept as fallback; fixtures for auth, overload and limit.
+Docs: `docs/OrchestratedAgentFlow.md`.

@@ -56,3 +56,11 @@ Since the original report, collection moved to `harnez server` with a 5-minute s
 cadence (828-830, 837, 839), so the killer may now be the server collector's timeout or socket
 takeover (837) rather than a client. Check that path first. Rows also go gray often in the same
 view; see 710.
+
+## Live check (2026-10-22, lean sprint): not reproducible today
+
+`harnez usage --raw` showed fresh Claude, Codex and both AGY pools. Gray comes from either a `QuotaFetchError`
+(`internal/usage/types.go:160`) or snapshot age (`internal/usage/freshness.go:5`); the display does not say
+which. Way forward: show the reason on a gray row (fetch error text or age), keep the last good quota on a
+failed refresh, test fresh/stale/failed rendering. Then park until the next live occurrence, which the reason
+text will explain.
