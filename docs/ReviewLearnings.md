@@ -20,6 +20,10 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   Write a temp file and rename (`FileSessionStore.Save`, CI run 39011231816).
 - **Tests that write tracked files**: a fixture generator in a test rewrites `testdata/` (cati 101).
   Tests read fixtures only; regenerate behind `-update`. A read-only container mount catches it.
+- **Git integration tested beside the real flow**: green tests called the driver directly and
+  asserted on the tree after hooks repaired it; real `init` installed nothing and the merge commit
+  lacked rows. E2E through the real CLI in a scratch repo, assert on `git show HEAD:<file>` and a
+  clean `git status`. Issue 847.
 - **Package-level test hooks**: a test swapping a package var while an earlier test's goroutine
   still reads it is a data race (cati mediabrowse). Inject hooks per instance; join background
   work in `t.Cleanup`.
