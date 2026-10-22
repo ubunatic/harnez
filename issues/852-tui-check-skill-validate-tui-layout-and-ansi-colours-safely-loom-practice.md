@@ -29,7 +29,8 @@ not picks at layout boundaries.
    locate text by rune column / display width, never byte offset.
 3. **PTY tests** for key paths (styled output through a real pseudo-terminal), in the full test tier.
 4. **Live tmux check by the host**: private socket (`tmux -L tNNN`), fixed size, wait helper instead of
-   `sleep` (e.g. loop `timeout 0.1 true`), dump colours with
+   `sleep` (`timeout 0.8 tail -f /dev/null` waits 0.8 s; `timeout 0.1 true` does not wait at all, which
+   hid the real cause of loom 354), dump colours with
    `capture-pane -pe | perl -pe 's/\e\[([0-9;]*)m/<$1>/g'`, compare per cell; kill only that socket.
 5. **Gallery renders**: `loom widgets --show <Name>` and saved `docs/progress/<Widget>.ansi` as a diffable
    golden.
