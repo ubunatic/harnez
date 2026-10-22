@@ -40,10 +40,9 @@ def test_swallowed_stderr():
 
 
 def test_interactive_fingerprint(timeout=15):
-    print("\n--- Phase 2: Live Biometric Confirmation (No Stdin) ---")
+    print("--- Phase 2: Live Biometric Confirmation (No Stdin) ---")
     subprocess.run(["sudo", "-k"], check=True)
-    print("Executing `sudo true` with stdin=DEVNULL (no keyboard input can be received).")
-    print(f"Streaming stderr live... You have {timeout}s to touch the fingerprint reader:\n")
+    print(f"Executing `sudo true` with stdin=DEVNULL (streaming stderr, {timeout}s timeout):")
     sys.stdout.flush()
 
     start = time.time()
@@ -57,14 +56,14 @@ def test_interactive_fingerprint(timeout=15):
         )
         elapsed = time.time() - start
         if proc.returncode == 0:
-            print(f"\n[PASS] SUCCESS in {elapsed:.2f}s! Authenticated via fingerprint with zero stdin interaction.")
+            print(f"[PASS] SUCCESS in {elapsed:.2f}s! Authenticated via fingerprint with zero stdin interaction.")
             return True
         else:
-            print(f"\n[FAIL] Process exited with code {proc.returncode} in {elapsed:.2f}s.")
+            print(f"[FAIL] Process exited with code {proc.returncode} in {elapsed:.2f}s.")
             return False
     except subprocess.TimeoutExpired:
         elapsed = time.time() - start
-        print(f"\n[TIMEOUT] Timed out after {elapsed:.2f}s waiting for biometric input.")
+        print(f"[TIMEOUT] Timed out after {elapsed:.2f}s waiting for biometric input.")
         return False
 
 
@@ -85,7 +84,6 @@ def main():
 
     # Full run
     test_swallowed_stderr()
-    print("\nReady for live confirmation test.")
     success = test_interactive_fingerprint(args.timeout)
     sys.exit(0 if success else 1)
 
