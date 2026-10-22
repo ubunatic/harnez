@@ -1,6 +1,6 @@
 # 850 — Duplicate gate false positives: generic words push unrelated tickets above the 0.55 cutoff
 
-**Status**: Open
+**Status**: Closed — Smoothed IDF shipped; live scores: 119 0.594 remains above 0.55, 355 0.504, 716 0.549; true probes 714 0.904, 845 0.831, 698 0.683; unrelated 0.194. Stopped further tuning.
 **Priority**: P2 (Medium) — the gate blocks `issues new` on strong matches
 **Severity**: Minor
 **Category**: Bug
