@@ -102,3 +102,15 @@ The fixes above are approved, with this amendment to "collect all providers in t
   minute are left alone.
 - Open design point: how the server learns a consumer connected. Today the UI reads the store files; it would
   need to announce itself on the socket (e.g. a request on connect), which the server treats as the trigger.
+
+## Decision (user, 2026-10-22, second amendment)
+
+- **Client heartbeat:** consumers (`harnez usage -w` and other viewers) send a periodic heartbeat to the server
+  over the socket, although they read the data from the store directly. The server thereby knows how many
+  clients are watching; the first heartbeat after none triggers the catch-up fetch above. Interval and
+  client timeout in `spec/usage.yaml`; `harnez server status` (and `--json`) shows the client count.
+- **Staleness reason in the UI, not only JSON:** the `!` key, which today shows the per-provider fetch
+  spinner, also opens a debug box below it with each provider's last fetch time, stale reason and error
+  message.
+- **General debug box:** the usage UI gets one debug box that collects these messages, toggled by its own key
+  (a free letter or digit; pick one that no view uses and list it in the help line).
