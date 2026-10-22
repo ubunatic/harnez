@@ -69,7 +69,14 @@ func diffSkills(cfg *Config, selection Set) (bool, error) {
 					continue
 				}
 				if _, err := os.Lstat(skillDir); err == nil && !isManagedSkill(skillDir) {
-					continue // an unmarked directory is user-owned
+					adopt, reason := skillAdoptionStatus(skillDir, skill.Name)
+					if !adopt {
+						reportUnmanagedSkill(skillDir, reason)
+						anyChanged = true
+						continue
+					}
+					fmt.Printf("  would adopt %s\n", skillDir)
+					anyChanged = true
 				} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 					return false, fmt.Errorf("skill %s dir: %w", skill.Name, err)
 				}

@@ -136,11 +136,17 @@ func applySkills(r *applyReport, cfg *Config, selection Set, disableRateFeedback
 			}
 			for _, skillsRoot := range targets {
 				skillDir := filepath.Join(skillsRoot, skill.Name)
+				adopted := false
 				if externalSkillClash(skillDir) {
 					continue
 				}
 				if _, err := os.Lstat(skillDir); err == nil && !isManagedSkill(skillDir) {
-					continue // never overwrite a skill directory harnez does not own
+					adopt, reason := skillAdoptionStatus(skillDir, skill.Name)
+					if !adopt {
+						reportUnmanagedSkill(skillDir, reason)
+						continue
+					}
+					adopted = true
 				} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 					return fmt.Errorf("skill %s dir: %w", skill.Name, err)
 				}
@@ -158,6 +164,9 @@ func applySkills(r *applyReport, cfg *Config, selection Set, disableRateFeedback
 				}
 				if markerResult.changed {
 					r.changes++
+				}
+				if adopted {
+					fmt.Printf("  adopted %s\n", skillDir)
 				}
 				oldContent, _ := os.ReadFile(path)
 				cr := applyResult{changed: string(oldContent) != content}
