@@ -645,32 +645,44 @@ func runIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPa
 		return fmt.Errorf("issues merge-driver: invalid target path %q", targetPath)
 	}
 	issuesDir := filepath.Join(root, "issues")
+	var ancestor, other string
+	if ancestorPath != "" && otherPath != "" {
+		ancestorBytes, readErr := os.ReadFile(ancestorPath)
+		if readErr != nil {
+			return fmt.Errorf("issues merge-driver: common ancestor %s: %w", ancestorPath, readErr)
+		}
+		otherBytes, readErr := os.ReadFile(otherPath)
+		if readErr != nil {
+			return fmt.Errorf("issues merge-driver: other version %s: %w", otherPath, readErr)
+		}
+		ancestor, other = string(ancestorBytes), string(otherBytes)
+	}
 	var generated string
 	switch target {
 	case "issues/README.md":
 		if index.HasConflictOutsideManagedBlock(string(orig), "issues-active-index") {
 			return fmt.Errorf("issues merge-driver: unresolved conflict outside generated block in %s", target)
 		}
-		generated, err = index.RenderIssuesReadme(string(orig), issuesDir, target)
+		if ancestorPath != "" && otherPath != "" {
+			generated, err = index.MergeIssuesReadme(ancestor, string(orig), other)
+		} else {
+			generated, err = index.RenderIssuesReadme(string(orig), issuesDir, target)
+		}
 	case "issues/BACKLOG.md":
 		fallthrough
 	case "issues/CLOSED.md":
-		var indexes map[string]string
-		indexes, err = index.IssueIndexFiles(issuesDir)
-		generated = indexes[filepath.Base(target)]
+		if ancestorPath != "" && otherPath != "" {
+			generated, err = index.MergeFullIssueIndex(ancestor, string(orig), other, filepath.Base(target))
+		} else {
+			var indexes map[string]string
+			indexes, err = index.IssueIndexFiles(issuesDir)
+			generated = indexes[filepath.Base(target)]
+		}
 	case "docs/README.md":
 		if ancestorPath != "" && otherPath != "" {
-			ancestor, readErr := os.ReadFile(ancestorPath)
-			if readErr != nil {
-				return fmt.Errorf("issues merge-driver: common ancestor %s: %w", ancestorPath, readErr)
-			}
-			other, readErr := os.ReadFile(otherPath)
-			if readErr != nil {
-				return fmt.Errorf("issues merge-driver: other version %s: %w", otherPath, readErr)
-			}
-			if index.HasConcurrentEditsOutsideManagedBlock(string(ancestor), string(orig), string(other), "docs-studies-index") {
+			if index.HasConcurrentEditsOutsideManagedBlock(ancestor, string(orig), other, "docs-studies-index") {
 				if !index.HasConflictOutsideManagedBlock(string(orig), "docs-studies-index") {
-					if writeErr := writeMergeConflictMarkers(currentPath, string(orig), string(other)); writeErr != nil {
+					if writeErr := writeMergeConflictMarkers(currentPath, string(orig), other); writeErr != nil {
 						return fmt.Errorf("issues merge-driver: preserve hand-written conflict in %s: %w", target, writeErr)
 					}
 				}
@@ -680,7 +692,11 @@ func runIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPa
 		if index.HasConflictOutsideManagedBlock(string(orig), "docs-studies-index") {
 			return fmt.Errorf("issues merge-driver: unresolved conflict outside generated block in %s", target)
 		}
-		generated, err = index.RenderDocsReadme(string(orig), filepath.Join(root, "docs"), target)
+		if ancestorPath != "" && otherPath != "" {
+			generated, err = index.MergeDocsReadme(ancestor, string(orig), other, filepath.Join(root, "docs"), target)
+		} else {
+			generated, err = index.RenderDocsReadme(string(orig), filepath.Join(root, "docs"), target)
+		}
 	default:
 		return fmt.Errorf("issues merge-driver: unsupported generated path %q", target)
 	}

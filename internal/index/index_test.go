@@ -483,6 +483,59 @@ func TestHasConcurrentEditsOutsideManagedBlock(t *testing.T) {
 	}
 }
 
+func TestMergeGeneratedIndexesUnionsIndependentRowsAndKeepsNewline(t *testing.T) {
+	issueTable := "| # | File | Title | Status |\n|---|------|-------|--------|\n| 001 | [base.md](base.md) | base | Open |\n"
+	baseIssues := managedDocument("# Issues\n\n"+issueTable, "issues-active-index", issuesActiveNotice)
+	oursIssues := managedDocument("# Issues\n\n"+issueTable+"| 003 | [main.md](main.md) | main | Open |\n", "issues-active-index", issuesActiveNotice)
+	theirsIssues := managedDocument("# Issues\n\n"+issueTable+"| 002 | [side.md](side.md) | side | Open |\n", "issues-active-index", issuesActiveNotice)
+	mergedIssues, err := MergeIssuesReadme(baseIssues, oursIssues, theirsIssues)
+	if err != nil {
+		t.Fatalf("MergeIssuesReadme: %v", err)
+	}
+	for _, want := range []string{"base.md", "main.md", "side.md"} {
+		if !strings.Contains(mergedIssues, want) {
+			t.Errorf("merged active index missing %q:\n%s", want, mergedIssues)
+		}
+	}
+	if !strings.HasSuffix(mergedIssues, "\n") {
+		t.Error("merged active index is missing a trailing newline")
+	}
+
+	baseDocs := docsIndexFixture("")
+	oursDocs := docsIndexFixture("| [studies/main.md](studies/main.md) | main study |\n")
+	theirsDocs := docsIndexFixture("| [studies/side.md](studies/side.md) | side study |\n")
+	docsDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(docsDir, "studies"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mergedDocs, err := MergeDocsReadme(baseDocs, oursDocs, theirsDocs, docsDir, "docs/README.md")
+	if err != nil {
+		t.Fatalf("MergeDocsReadme: %v", err)
+	}
+	for _, want := range []string{"main.md", "side.md", "Hand-written intro."} {
+		if !strings.Contains(mergedDocs, want) {
+			t.Errorf("merged docs index missing %q:\n%s", want, mergedDocs)
+		}
+	}
+	if !strings.HasSuffix(mergedDocs, "\n") {
+		t.Error("merged docs README is missing a trailing newline")
+	}
+
+	backlogHeader := "| # | File | Title | Status |\n|---|------|-------|--------|\n"
+	baseBacklog := managedDocument("# Backlog\n\n"+backlogHeader, "issues-backlog-index", issuesFullNotice)
+	oursBacklog := managedDocument("# Backlog\n\n"+backlogHeader+"| 004 | [main-backlog.md](main-backlog.md) | main backlog | Backlog |\n", "issues-backlog-index", issuesFullNotice)
+	theirsBacklog := managedDocument("# Backlog\n\n"+backlogHeader+"| 005 | [side-backlog.md](side-backlog.md) | side backlog | Backlog |\n", "issues-backlog-index", issuesFullNotice)
+	mergedBacklog, err := MergeFullIssueIndex(baseBacklog, oursBacklog, theirsBacklog, "BACKLOG.md")
+	if err != nil || !strings.Contains(mergedBacklog, "main-backlog.md") || !strings.Contains(mergedBacklog, "side-backlog.md") {
+		t.Fatalf("MergeFullIssueIndex = %q, %v", mergedBacklog, err)
+	}
+}
+
+func docsIndexFixture(extraRow string) string {
+	return docsStudiesNotice + "\n# Docs\n\nHand-written intro.\n\n**`docs/studies/`** — case studies\n\n" +
+		"<!-- harnez:begin docs-studies-index -->\n| File | Topic |\n|------|-------|\n| [studies/base.md](studies/base.md) | base study |\n" + extraRow + "<!-- harnez:end docs-studies-index -->\n"
+}
+
 func TestRenderDocsReadmeReplacesConflictedMarkedSectionAndPreservesOutsideBytes(t *testing.T) {
 	dir := t.TempDir()
 	docsDir := filepath.Join(dir, "docs")
@@ -565,7 +618,7 @@ func TestUpdateDocsReadmeStudiesTableAtEOF(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := docsStudiesNotice + "\n# Docs\n\n**`docs/studies/`** — case studies\n\n<!-- harnez:begin docs-studies-index -->\n| File | Topic |\n|------|-------|\n| [studies/example.md](studies/example.md) | Generated topic |\n<!-- harnez:end docs-studies-index -->" + ending
+			want := docsStudiesNotice + "\n# Docs\n\n**`docs/studies/`** — case studies\n\n<!-- harnez:begin docs-studies-index -->\n| File | Topic |\n|------|-------|\n| [studies/example.md](studies/example.md) | Generated topic |\n<!-- harnez:end docs-studies-index -->\n"
 			if !changed || string(got) != want {
 				t.Fatalf("UpdateDocsReadme() = changed %v, content %q; want changed true, content %q", changed, got, want)
 			}

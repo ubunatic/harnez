@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -124,6 +125,123 @@ func HasConcurrentEditsOutsideManagedBlock(ancestor, ours, theirs, id string) bo
 	return oursOutside != baseOutside && theirsOutside != baseOutside && oursOutside != theirsOutside
 }
 
+// MergeIssuesReadme merges generated active-ticket rows from the three index
+// versions while preserving the current branch's hand-written content.
+func MergeIssuesReadme(ancestor, ours, theirs string) (string, error) {
+	table, err := mergeGeneratedTableRows(ancestor, ours, theirs, "issues-active-index", issuesTableHeader, "|---|------|-------|--------|")
+	if err != nil {
+		return "", err
+	}
+	return replaceManagedBlock(ours, "issues-active-index", table, -1, -1)
+}
+
+// MergeFullIssueIndex merges a generated Backlog or Closed index. The full
+// document is managed, so the current branch's title and notice remain the
+// document shell around the merged rows.
+func MergeFullIssueIndex(ancestor, ours, theirs, name string) (string, error) {
+	id, title := "issues-backlog-index", "# Backlog"
+	if name == "CLOSED.md" {
+		id, title = "issues-closed-index", "# Closed"
+	} else if name != "BACKLOG.md" {
+		return "", fmt.Errorf("unsupported full issue index %q", name)
+	}
+	table, err := mergeGeneratedTableRows(ancestor, ours, theirs, id, issuesTableHeader, "|---|------|-------|--------|")
+	if err != nil {
+		return "", err
+	}
+	content := managedDocument(title+"\n\n"+table, id, issuesFullNotice)
+	return content, nil
+}
+
+// MergeDocsReadme merges generated study rows from the three index versions
+// while preserving the current branch's hand-written content byte-for-byte.
+func MergeDocsReadme(ancestor, ours, theirs, docsDir, readmePath string) (string, error) {
+	table, err := mergeGeneratedTableRows(ancestor, ours, theirs, "docs-studies-index", "| File | Topic |", "|------|-------|")
+	if err != nil {
+		return "", err
+	}
+	canonical, err := RenderDocsReadme(ours, docsDir, readmePath)
+	if err != nil {
+		return "", err
+	}
+	return replaceManagedBlock(canonical, "docs-studies-index", table, -1, -1)
+}
+
+func mergeGeneratedTableRows(ancestor, ours, theirs, id, header, separator string) (string, error) {
+	baseRows := generatedTableRows(ancestor, id)
+	ourRows := generatedTableRows(ours, id)
+	theirRows := generatedTableRows(theirs, id)
+	keys := make(map[string]struct{}, len(baseRows)+len(ourRows)+len(theirRows))
+	for key := range baseRows {
+		keys[key] = struct{}{}
+	}
+	for key := range ourRows {
+		keys[key] = struct{}{}
+	}
+	for key := range theirRows {
+		keys[key] = struct{}{}
+	}
+	ordered := make([]string, 0, len(keys))
+	for key := range keys {
+		ordered = append(ordered, key)
+	}
+	sort.Strings(ordered)
+	var table strings.Builder
+	table.WriteString(header + "\n" + separator + "\n")
+	for _, key := range ordered {
+		base, oursRow, theirsRow := baseRows[key], ourRows[key], theirRows[key]
+		merged := ""
+		switch {
+		case oursRow == theirsRow:
+			merged = oursRow
+		case oursRow == base:
+			merged = theirsRow
+		case theirsRow == base:
+			merged = oursRow
+		case base == "":
+			return "", fmt.Errorf("conflicting generated rows for %s in managed block %q", key, id)
+		default:
+			return "", fmt.Errorf("conflicting edits to generated row %s in managed block %q", key, id)
+		}
+		if merged != "" {
+			table.WriteString(merged + "\n")
+		}
+	}
+	return table.String(), nil
+}
+
+func generatedTableRows(document, id string) map[string]string {
+	rows := make(map[string]string)
+	start, end, found := markdown.SectionBounds(document, markdown.MDMarkers.Begin(id), markdown.MDMarkers.End(id))
+	if !found {
+		return rows
+	}
+	block := document[start:end]
+	for _, line := range strings.Split(block, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "|") {
+			continue
+		}
+		cellEnd := strings.Index(line[1:], "|")
+		if cellEnd < 0 {
+			continue
+		}
+		firstCell := strings.TrimSpace(line[1 : cellEnd+1])
+		key := firstCell
+		if strings.HasPrefix(firstCell, "[") {
+			linkEnd := strings.Index(firstCell, "](")
+			if linkEnd < 0 {
+				continue
+			}
+			key = strings.TrimSuffix(firstCell[linkEnd+2:], ")")
+		} else if _, err := strconv.Atoi(firstCell); err != nil {
+			continue
+		}
+		rows[key] = line
+	}
+	return rows
+}
+
 func ensureManagedNotice(content, notice string) string {
 	if strings.HasPrefix(content, "<!-- managed by harnez index:") {
 		if end := strings.IndexByte(content, '\n'); end >= 0 {
@@ -149,7 +267,10 @@ func replaceManagedBlock(content, id, generated string, legacyStart, legacyEnd i
 			return "", fmt.Errorf("generated block %q markers must occupy complete lines", id)
 		}
 		blockEnd := len(content)
-		blockSuffix := ""
+		blockSuffix := "\n"
+		if strings.Contains(content, "\r\n") {
+			blockSuffix = "\r\n"
+		}
 		if lineEnd >= 0 {
 			blockEnd = endAt + len(end) + lineEnd + 1
 			blockSuffix = "\n"
@@ -163,7 +284,7 @@ func replaceManagedBlock(content, id, generated string, legacyStart, legacyEnd i
 	if legacyStart < 0 || legacyEnd < legacyStart || legacyEnd > len(content) {
 		return "", fmt.Errorf("cannot locate legacy generated section %q", id)
 	}
-	block := begin + "\n" + strings.TrimRight(generated, "\n") + "\n" + end
+	block := begin + "\n" + strings.TrimRight(generated, "\n") + "\n" + end + "\n"
 	return content[:legacyStart] + block + content[legacyEnd:], nil
 }
 
@@ -531,10 +652,6 @@ func RenderDocsReadme(content, docsDir, readmePath string) (string, error) {
 	blockEnd := len(content)
 	if endRel >= 0 {
 		blockEnd = headerIdx + endRel
-	} else if strings.HasSuffix(rest, "\n") {
-		// The studies table may be the final section. Keep an existing final
-		// newline while treating EOF as the end of the table.
-		blockEnd--
 	}
 
 	newContent, err := replaceManagedBlock(content, "docs-studies-index", table, headerIdx, blockEnd)

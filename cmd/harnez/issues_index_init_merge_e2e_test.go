@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,7 +31,7 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 	writeMergeFixture(t, root, "issues/001-base.md", "# 001 — base\n\n**Status**: Open\n")
 	writeMergeFixture(t, root, "issues/README.md", "# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n")
 	writeMergeFixture(t, root, "docs/README.md", "<!-- managed by harnez index: generated sections are overwritten; only the studies table is generated; other docs tables and prose are hand-written -->\n# Docs\n\nHandwritten preface.\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n")
-	writeMergeFixture(t, root, "docs/studies/2026-01-01-base.md", "# Base study\n\n**Scope**: base study\n")
+	writeMergeFixture(t, root, "docs/studies/a.md", "# Base study\n\n**Scope**: base study\n")
 
 	gitRunE2E(t, root, nil, "init", "-q", "-b", "main")
 	gitRunE2E(t, root, nil, "config", "user.name", "Harnez E2E")
@@ -71,14 +70,16 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 
 	gitRunE2E(t, root, nil, "switch", "-c", "side")
 	writeMergeFixture(t, root, "issues/002-side.md", "# 002 — side ticket\n\n**Status**: Open\n")
-	writeMergeFixture(t, root, "docs/studies/2026-01-02-side.md", "# Side study\n\n**Scope**: side study\n")
+	writeMergeFixture(t, root, "issues/004-backlog.md", "# 004 — backlog ticket\n\n**Status**: Backlog\n")
+	writeMergeFixture(t, root, "docs/studies/b.md", "# Side study\n\n**Scope**: side study\n")
 	cli("index", "-d", ".")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "side sources")
 
 	gitRunE2E(t, root, nil, "switch", "main")
 	writeMergeFixture(t, root, "issues/003-main.md", "# 003 — main ticket\n\n**Status**: Open\n")
-	writeMergeFixture(t, root, "docs/studies/2026-01-03-main.md", "# Main study\n\n**Scope**: main study\n")
+	writeMergeFixture(t, root, "issues/005-closed.md", "# 005 — closed ticket\n\n**Status**: Closed\n")
+	writeMergeFixture(t, root, "docs/studies/c.md", "# Main study\n\n**Scope**: main study\n")
 	cli("index", "-d", ".")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "main sources")
@@ -90,30 +91,30 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 		"issues/CLOSED.md":  true,
 		"docs/README.md":    true,
 	} {
-		data, err := os.ReadFile(filepath.Join(root, path))
-		if err != nil {
-			t.Fatalf("read %s after merge: %v", path, err)
-		}
+		data := gitShowE2E(t, root, "HEAD:"+path)
 		if strings.Contains(string(data), "<<<<<<<") || strings.Contains(string(data), ">>>>>>>") || strings.Contains(string(data), "=======") {
-			t.Errorf("%s retains conflict markers after source merge:\n%s", path, data)
+			t.Errorf("merge commit %s retains conflict markers:\n%s", path, data)
 		}
 	}
 	for path, want := range map[string][]string{
-		"issues/README.md": {"side ticket", "main ticket"},
-		"docs/README.md":   {"2026-01-02-side.md", "2026-01-03-main.md"},
+		"issues/README.md":  {"side ticket", "main ticket"},
+		"issues/BACKLOG.md": {"backlog ticket"},
+		"issues/CLOSED.md":  {"closed ticket"},
+		"docs/README.md":    {"studies/b.md", "studies/c.md"},
 	} {
-		data, _ := os.ReadFile(filepath.Join(root, path))
+		data := gitShowE2E(t, root, "HEAD:"+path)
 		for _, value := range want {
 			if !strings.Contains(string(data), value) {
-				t.Errorf("%s missing merged source %q", path, value)
+				t.Errorf("merge commit %s missing merged source %q", path, value)
 			}
 		}
 	}
-	cli("index", "--check", "-d", ".")
-	// The post-merge hook refreshes working-tree indexes after Git has checked
-	// out all merged source files; stage that refreshed snapshot before testing
-	// later commits with the installed cached-index lint hook.
-	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "issues/README.md", "issues/BACKLOG.md", "issues/CLOSED.md", "docs/README.md")
+	if data := gitShowE2E(t, root, "HEAD:issues/README.md"); len(data) == 0 || data[len(data)-1] != '\n' {
+		t.Error("merge commit issues/README.md is missing a trailing newline")
+	}
+	if status := gitRunE2E(t, root, nil, "status", "--porcelain"); status != "" {
+		t.Fatalf("post-merge tree is dirty: %s", status)
+	}
 
 	// Conflicts in docs/README.md's hand-written area must remain unresolved.
 	gitRunE2E(t, root, nil, "switch", "-c", "handwritten")
@@ -121,8 +122,6 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "docs/README.md")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "side handwritten edit")
 	gitRunE2E(t, root, nil, "switch", "main")
-	cli("index", "-d", ".")
-	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "issues/README.md", "issues/BACKLOG.md", "issues/CLOSED.md", "docs/README.md")
 	editPreface(t, root, "main handwritten edit")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "docs/README.md")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "main handwritten edit")
@@ -212,5 +211,16 @@ func gitRunE2E(t *testing.T, root string, env []string, args ...string) string {
 	if err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
-	return strings.TrimSpace(fmt.Sprintf("%s", out))
+	return strings.TrimSpace(string(out))
+}
+
+func gitShowE2E(t *testing.T, root, revision string) []byte {
+	t.Helper()
+	cmd := exec.Command("git", "show", revision)
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git show %s: %v\n%s", revision, err, out)
+	}
+	return out
 }
