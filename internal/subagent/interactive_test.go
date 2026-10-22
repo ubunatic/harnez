@@ -4,17 +4,21 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/creack/pty"
+	"golang.org/x/term"
 	"ubunatic.com/harnez/internal/claude"
 )
 
@@ -58,7 +62,12 @@ func TestForwardPTYResizeUpdatesChildTerminal(t *testing.T) {
 	}
 	defer hostMaster.Close()
 	defer hostSlave.Close()
-	childCmd := exec.Command("sh", "-c", `trap 'printf "SIZE:%s\n" "$(stty size)"' WINCH; printf 'READY\n'; while read line; do :; done`)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	childCmd := exec.Command(executable, "-test.run=TestPTYResizeChildHelper")
+	childCmd.Env = append(os.Environ(), "HARNEZ_PTY_RESIZE_CHILD=1")
 	child, err := pty.Start(childCmd)
 	if err != nil {
 		t.Fatal(err)
@@ -101,6 +110,23 @@ func TestForwardPTYResizeUpdatesChildTerminal(t *testing.T) {
 	case <-done:
 		t.Fatal("child exited before reporting resized terminal size")
 	}
+}
+
+func TestPTYResizeChildHelper(t *testing.T) {
+	if os.Getenv("HARNEZ_PTY_RESIZE_CHILD") != "1" {
+		return
+	}
+	resize := make(chan os.Signal, 1)
+	signal.Notify(resize, syscall.SIGWINCH)
+	defer signal.Stop(resize)
+	fmt.Fprintln(os.Stdout, "READY")
+	<-resize
+	rows, cols, err := term.GetSize(int(os.Stdin.Fd()))
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "ERROR:%v\n", err)
+		return
+	}
+	fmt.Fprintf(os.Stdout, "SIZE:%d %d\n", rows, cols)
 }
 
 func withInteractivePrompt(opts InteractiveOptions, prompt string) InteractiveOptions {
