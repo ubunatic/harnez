@@ -29,3 +29,13 @@ three unrelated closed tickets at 0.583, above the 0.55 cutoff: 119 (telemetry h
 
 True matches from 843 M2: the usage-error text → 714 (0.571), the lean-sprint paths text → 845 (0.733),
 697/698. The fix must keep these, drop the three above, and keep an unrelated title (≤0.40) low.
+
+## Searcher findings (2026-10-22, lean sprint)
+
+- Score: `internal/find/similar.go:34`; each query token adds title_weight (title hit) or body_weight; divided
+  by tokens × title_weight. `issues new` uses it via `cmd/harnez/issues_duplicates.go:9`. Cutoff and stopwords
+  in `spec/issues.yaml:53` (decoded in `internal/issues/status_spec.go:33`).
+- Live today: probe → 849 0.917; 119/355/716 0.583 (false); 714 probe **0.458** (was 0.571, now a missed true
+  match); 845 probe 0.643; 697/698 0.833/0.667; unrelated max 0.278.
+- Way forward: IDF over the scanned corpus (`Similar` already gets all issue files), smoothed, applied to
+  numerator and denominator. The fix should also lift the 714 true match back above the cutoff.
