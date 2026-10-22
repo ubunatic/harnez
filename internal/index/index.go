@@ -189,16 +189,18 @@ func mergeGeneratedTableRows(ancestor, ours, theirs, id, header, separator strin
 	var table strings.Builder
 	table.WriteString(header + "\n" + separator + "\n")
 	for _, key := range ordered {
-		base, oursRow, theirsRow := baseRows[key], ourRows[key], theirRows[key]
+		base, baseExists := baseRows[key]
+		oursRow, oursExists := ourRows[key]
+		theirsRow, theirsExists := theirRows[key]
 		merged := ""
 		switch {
-		case oursRow == theirsRow:
+		case sameGeneratedRow(oursRow, oursExists, theirsRow, theirsExists):
 			merged = oursRow
-		case oursRow == base:
+		case sameGeneratedRow(oursRow, oursExists, base, baseExists):
 			merged = theirsRow
-		case theirsRow == base:
+		case sameGeneratedRow(theirsRow, theirsExists, base, baseExists):
 			merged = oursRow
-		case base == "":
+		case !baseExists:
 			return "", fmt.Errorf("conflicting generated rows for %s in managed block %q", key, id)
 		default:
 			return "", fmt.Errorf("conflicting edits to generated row %s in managed block %q", key, id)
@@ -208,6 +210,10 @@ func mergeGeneratedTableRows(ancestor, ours, theirs, id, header, separator strin
 		}
 	}
 	return table.String(), nil
+}
+
+func sameGeneratedRow(a string, aExists bool, b string, bExists bool) bool {
+	return aExists == bExists && (!aExists || a == b)
 }
 
 func generatedTableRows(document, id string) map[string]string {

@@ -116,6 +116,35 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 		t.Fatalf("post-merge tree is dirty: %s", status)
 	}
 
+	gitRunE2E(t, root, nil, "switch", "-c", "rename-delete")
+	cli("issues", "mv", "001", "006")
+	if err := os.Remove(filepath.Join(root, "issues/002-side.md")); err != nil {
+		t.Fatal(err)
+	}
+	cli("index", "-d", ".")
+	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
+	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "delete another ticket")
+	gitRunE2E(t, root, nil, "switch", "main")
+	writeMergeFixture(t, root, "issues/007-added.md", "# 007 — added ticket\n\n**Status**: Open\n")
+	cli("index", "-d", ".")
+	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
+	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "add another ticket")
+	gitRunE2E(t, root, nil, "merge", "--no-edit", "rename-delete")
+	mergedReadme := string(gitShowE2E(t, root, "HEAD:issues/README.md"))
+	for _, stale := range []string{"001-base.md", "002-side.md"} {
+		if strings.Contains(mergedReadme, stale) {
+			t.Errorf("merge commit issues/README.md retains stale row %q:\n%s", stale, mergedReadme)
+		}
+	}
+	for _, want := range []string{"006-base.md", "007-added.md"} {
+		if !strings.Contains(mergedReadme, want) {
+			t.Errorf("merge commit issues/README.md is missing %q:\n%s", want, mergedReadme)
+		}
+	}
+	if status := gitRunE2E(t, root, nil, "status", "--porcelain"); status != "" {
+		t.Fatalf("post-delete-and-rename merge tree is dirty: %s", status)
+	}
+
 	// Conflicts in docs/README.md's hand-written area must remain unresolved.
 	gitRunE2E(t, root, nil, "switch", "-c", "handwritten")
 	editPreface(t, root, "side handwritten edit")

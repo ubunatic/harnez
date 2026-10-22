@@ -175,6 +175,9 @@ in `harnez:begin/end` markers; edit the source ticket or study, never the rows. 
 installs a `harnez-issues-index` git merge driver (`.gitattributes` + local git config) that merges
 these files by rebuilding their generated blocks from both branches; conflicts in hand-written parts
 of a partly generated file stay normal git conflicts.
+For generated rows, a deletion on one branch wins when the other branch left the row unchanged from
+the common ancestor. A rename is a deletion of the old key and an addition of the new key; competing
+edits to the same row remain conflicts.
 
 The active index `issues/README.md` and generated `BACKLOG.md` and `CLOSED.md` maintain a
 synchronized inventory of all tickets. Run `harnez index` (issue 148) to regenerate all three

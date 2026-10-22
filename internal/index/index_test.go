@@ -531,6 +531,38 @@ func TestMergeGeneratedIndexesUnionsIndependentRowsAndKeepsNewline(t *testing.T)
 	}
 }
 
+func TestMergeGeneratedIndexesDropsOneSidedDeletionAndKeepsIndependentAddition(t *testing.T) {
+	header := "| # | File | Title | Status |\n|---|------|-------|--------|\n"
+	base := managedDocument("# Issues\n\n"+header+"| 001 | [old.md](old.md) | old | Open |\n| 002 | [deleted.md](deleted.md) | deleted | Open |\n", "issues-active-index", issuesActiveNotice)
+	ours := managedDocument("# Issues\n\n"+header+"| 004 | [renamed.md](renamed.md) | renamed | Open |\n", "issues-active-index", issuesActiveNotice)
+	theirs := managedDocument("# Issues\n\n"+header+"| 001 | [old.md](old.md) | old | Open |\n| 002 | [deleted.md](deleted.md) | deleted | Open |\n| 003 | [added.md](added.md) | added | Open |\n", "issues-active-index", issuesActiveNotice)
+
+	merged, err := MergeIssuesReadme(base, ours, theirs)
+	if err != nil {
+		t.Fatalf("MergeIssuesReadme: %v", err)
+	}
+	for _, stale := range []string{"old.md", "deleted.md"} {
+		if strings.Contains(merged, stale) {
+			t.Errorf("merged active index retained deleted row %q:\n%s", stale, merged)
+		}
+	}
+	for _, want := range []string{"renamed.md", "added.md"} {
+		if !strings.Contains(merged, want) {
+			t.Errorf("merged active index omitted %q:\n%s", want, merged)
+		}
+	}
+}
+
+func TestMergeGeneratedIndexesConflictsOnCompetingRowEdits(t *testing.T) {
+	header := "| # | File | Title | Status |\n|---|------|-------|--------|\n"
+	base := managedDocument("# Issues\n\n"+header+"| 001 | [base.md](base.md) | base | Open |\n", "issues-active-index", issuesActiveNotice)
+	ours := managedDocument("# Issues\n\n"+header+"| 001 | [ours.md](ours.md) | ours | Open |\n", "issues-active-index", issuesActiveNotice)
+	theirs := managedDocument("# Issues\n\n"+header+"| 001 | [theirs.md](theirs.md) | theirs | Open |\n", "issues-active-index", issuesActiveNotice)
+	if _, err := MergeIssuesReadme(base, ours, theirs); err == nil || !strings.Contains(err.Error(), "conflicting edits") {
+		t.Fatalf("competing row edits error = %v, want conflict", err)
+	}
+}
+
 func docsIndexFixture(extraRow string) string {
 	return docsStudiesNotice + "\n# Docs\n\nHand-written intro.\n\n**`docs/studies/`** — case studies\n\n" +
 		"<!-- harnez:begin docs-studies-index -->\n| File | Topic |\n|------|-------|\n| [studies/base.md](studies/base.md) | base study |\n" + extraRow + "<!-- harnez:end docs-studies-index -->\n"

@@ -62,7 +62,7 @@ In-repo tracker in `issues/`, one file per ticket (`issues/NNN-kebab-case-title.
 - `harnez find -d <repo> issues -a status:active` searches the active set. `harnez issues lint` and `harnez issues status` warn above the active cap configured in `spec/issues.yaml`.
 - **Backlog**: defer with `harnez issues backlog <n…> [reason]`, return with `promote <n…>`; `is:open` excludes Backlog, `status:unresolved` includes it.
 - **Duplicates**: `harnez issues new` refuses when `find issues similar` finds a strong match in any status; reopen/promote it, or pass `--force`.
-- **Generated files** carry a `managed by harnez index` top line and `harnez:begin/end` blocks; the `harnez init` merge driver rebuilds them on merge.
+- **Generated files** carry a `managed by harnez index` top line and `harnez:begin/end` blocks; the `harnez init` merge driver rebuilds them on merge. A one-sided deletion wins over an unchanged row; renames are delete+add, and competing row edits conflict.
 - **Archiving**: Closed tickets may move to `issues/archive/NNN-kebab-case.md`; `harnez index` keeps them listed in `issues/CLOSED.md`.
 
 ## 5. Lifecycle Invariants
