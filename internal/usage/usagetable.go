@@ -99,11 +99,15 @@ func usageTableRows(agents []AgentUsage, rates map[string]agentRate, now time.Ti
 			}
 		}
 		first.updated = "-"
-		if !agent.LastRefreshed.IsZero() {
+		if agent.QuotaFetchError != "" {
+			first.updated = "fetch failed: " + agent.QuotaFetchError
+		} else if !agent.LastRefreshed.IsZero() {
 			first.updated = FormatAgo(agent.LastRefreshed)
 			if stale {
 				first.updated += " · stale"
 			}
+		} else if stale {
+			first.updated = "age unknown · stale"
 		}
 
 		windows := usageTableWindows(agent, now)

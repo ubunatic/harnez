@@ -81,6 +81,41 @@ func TestUsageTableDimsStaleAgent(t *testing.T) {
 	}
 }
 
+func TestUsageTableExplainsGrayQuotaRows(t *testing.T) {
+	now := time.Now()
+	agents := []AgentUsage{
+		{AgentID: "fresh", Name: "Fresh", Installed: true, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 10}, LastRefreshed: now},
+		{AgentID: "stale", Name: "Stale", Installed: true, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 20}, LastRefreshed: now.Add(-2 * time.Hour)},
+		{AgentID: "failed", Name: "Failed", Installed: true, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 30}, QuotaFetchError: "HTTP 429 rate limit", LastRefreshed: now},
+	}
+	lines := usageTableLines(agents, nil, false, now)
+	joined := stripANSI(strings.Join(lines, "\n"))
+	if !strings.Contains(joined, "Fresh weekly 10%") {
+		t.Fatalf("fresh row missing:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Stale weekly 20%") || !strings.Contains(joined, "2h ago · stale") {
+		t.Fatalf("stale row should explain snapshot age:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Failed weekly 30%") || !strings.Contains(joined, "HTTP 429 rate limit") {
+		t.Fatalf("failed refresh should retain and explain last quota:\n%s", joined)
+	}
+}
+
+func TestFailedUsageRefreshKeepsLastGoodQuota(t *testing.T) {
+	previous := UsageSummary{Agents: []AgentUsage{{
+		AgentID: "agy", Name: "AGY", Installed: true,
+		ModelGroups: []ModelGroup{{Name: "Gemini", Windows: []QuotaWindow{{Name: "Weekly", UsedPercent: 42}}}},
+	}}}
+	fresh := UsageSummary{Agents: []AgentUsage{{AgentID: "agy", Name: "AGY", Installed: true, QuotaFetchError: "timeout"}}}
+	got := applyStaleQuota(fresh, previous)
+	if len(got.Agents) != 1 || len(got.Agents[0].ModelGroups) != 1 || got.Agents[0].ModelGroups[0].Windows[0].UsedPercent != 42 {
+		t.Fatalf("failed refresh lost last good quota: %+v", got.Agents)
+	}
+	if got.Agents[0].QuotaFetchError != "timeout" {
+		t.Fatalf("failed refresh reason = %q", got.Agents[0].QuotaFetchError)
+	}
+}
+
 func TestNormalModeShowsTableWithoutBoxes(t *testing.T) {
 	summary := UsageSummary{Timestamp: testTime, Agents: usageTableFixture()}
 	opt := WatchOptions{Mode: "normal"}
