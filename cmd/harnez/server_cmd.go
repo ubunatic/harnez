@@ -98,7 +98,8 @@ func newServerUninstallCmd() *cobra.Command {
 }
 
 func newServerStatusCmd() *cobra.Command {
-	return &cobra.Command{Use: "status", Short: "Show the local server and systemd service owner", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	var jsonOutput bool
+	cmd := &cobra.Command{Use: "status", Short: "Show the local server and systemd service owner", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg, err := server.LoadConfig()
 		if err != nil {
 			return err
@@ -112,9 +113,14 @@ func newServerStatusCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		if jsonOutput {
+			return printServerStatusJSON(cmd.OutOrStdout(), cfg, status, srvStatus)
+		}
 		printServerSystemdStatus(cmd.OutOrStdout(), cfg, status, srvStatus)
 		return nil
 	}}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "output status as JSON")
+	return cmd
 }
 
 func newServerStopCmd() *cobra.Command {
@@ -257,6 +263,65 @@ type localServerStatusResponse struct {
 	BuildIdentity string    `json:"build_identity"`
 	PID           int       `json:"pid"`
 	StartedAt     time.Time `json:"started_at"`
+}
+
+type serverStatusJSON struct {
+	Running         bool                  `json:"running"`
+	Unit            *serverUnitStatusJSON `json:"unit,omitempty"`
+	SocketOwner     string                `json:"socket_owner"`
+	PID             int                   `json:"pid"`
+	Version         string                `json:"version,omitempty"`
+	CLIVersion      string                `json:"cli_version,omitempty"`
+	UptimeSeconds   *int64                `json:"uptime_seconds,omitempty"`
+	VersionMismatch bool                  `json:"version_mismatch"`
+}
+
+type serverUnitStatusJSON struct {
+	Name      string `json:"name"`
+	Available bool   `json:"available"`
+	Installed bool   `json:"installed"`
+	Active    bool   `json:"active"`
+	MainPID   int    `json:"main_pid"`
+}
+
+func printServerStatusJSON(out io.Writer, cfg server.Config, status server.SystemdStatus, srv localServerStatusResponse) error {
+	owner := "none"
+	if status.SocketPID > 0 {
+		if status.Available && status.Installed && status.SocketPID == status.MainPID {
+			owner = "systemd"
+		} else {
+			owner = "another process"
+		}
+	}
+	sj := serverStatusJSON{
+		Running:         srv.PID > 0,
+		SocketOwner:     owner,
+		PID:             srv.PID,
+		CLIVersion:      harnez.Version,
+		VersionMismatch: srv.PID > 0 && srv.Version != "" && srv.Version != harnez.Version,
+	}
+	if status.Available || status.Installed {
+		sj.Unit = &serverUnitStatusJSON{
+			Name:      cfg.SystemdUnitName,
+			Available: status.Available,
+			Installed: status.Installed,
+			Active:    status.Active,
+			MainPID:   status.MainPID,
+		}
+	}
+	if srv.PID > 0 {
+		sj.Version = srv.Version
+		if !srv.StartedAt.IsZero() {
+			secs := int64(time.Since(srv.StartedAt).Seconds())
+			if secs < 0 {
+				secs = 0
+			}
+			sj.UptimeSeconds = &secs
+		}
+	}
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(sj)
 }
 
 func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.SystemdStatus, srv localServerStatusResponse) {

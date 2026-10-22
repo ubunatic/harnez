@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"os"
@@ -171,6 +172,61 @@ func TestPrintServerUptimeAndVersion(t *testing.T) {
 	})
 	if buf4.Len() != 0 {
 		t.Errorf("not running output = %q, want empty", buf4.String())
+	}
+}
+
+func TestPrintServerStatusJSON(t *testing.T) {
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Running under systemd with matching version
+	start := time.Now().Add(-100 * time.Second)
+	var buf1 bytes.Buffer
+	err = printServerStatusJSON(&buf1, cfg, server.SystemdStatus{
+		Available: true,
+		Installed: true,
+		Active:    true,
+		MainPID:   500,
+		SocketPID: 500,
+	}, localServerStatusResponse{
+		PID:       500,
+		Version:   harnez.Version,
+		StartedAt: start,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sj1 serverStatusJSON
+	if err := json.Unmarshal(buf1.Bytes(), &sj1); err != nil {
+		t.Fatalf("unmarshal json: %v\n%s", err, buf1.String())
+	}
+	if !sj1.Running || sj1.PID != 500 || sj1.SocketOwner != "systemd" || sj1.Version != harnez.Version || sj1.VersionMismatch || sj1.UptimeSeconds == nil || *sj1.UptimeSeconds < 90 {
+		t.Fatalf("unexpected running json: %+v", sj1)
+	}
+	if sj1.Unit == nil || !sj1.Unit.Active || sj1.Unit.MainPID != 500 {
+		t.Fatalf("unexpected unit json: %+v", sj1.Unit)
+	}
+
+	// Not running (exit 0, valid JSON with running=false)
+	var buf2 bytes.Buffer
+	err = printServerStatusJSON(&buf2, cfg, server.SystemdStatus{
+		Available: true,
+		Installed: true,
+		Active:    false,
+		MainPID:   0,
+		SocketPID: 0,
+	}, localServerStatusResponse{PID: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sj2 serverStatusJSON
+	if err := json.Unmarshal(buf2.Bytes(), &sj2); err != nil {
+		t.Fatalf("unmarshal json: %v\n%s", err, buf2.String())
+	}
+	if sj2.Running || sj2.PID != 0 || sj2.SocketOwner != "none" || sj2.VersionMismatch {
+		t.Fatalf("unexpected stopped json: %+v", sj2)
 	}
 }
 

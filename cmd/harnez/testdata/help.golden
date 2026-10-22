@@ -2210,6 +2210,7 @@ Usage:
 
 Flags:
   -h, --help   help for status
+      --json   output status as JSON
 
 === harnez server stop
 Stop the local server

@@ -40,7 +40,7 @@ asks the old process to shut down; the old process exits successfully, so system
 `Restart=on-failure` does not race the takeover. `harnez server status` compares the socket
 owner PID with the service's `MainPID`. If an auto-started process owns the socket instead, it
 prints `systemctl --user restart harnez-agent-collector.service` to hand ownership back.
-`harnez server status` also displays the server's uptime and version, flagging any mismatch with the CLI binary.
+`harnez server status` also displays the server's uptime and version, flagging any mismatch with the CLI binary (`--json` outputs machine-readable JSON).
 
 Statuslines and other passive usage observers POST normalized windows to the server's local HTTP
 endpoint. They never open the store or start the server. A missing or failing server drops a usage
