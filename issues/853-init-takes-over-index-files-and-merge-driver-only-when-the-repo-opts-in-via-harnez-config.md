@@ -57,6 +57,20 @@ Host repro (854 M2): scratch repo with a plain Makefile and a foreign `issues/RE
 - `make test-q1`: passed; full output saved to `/tmp/harnez-853-test-q1-final.log`; `rg -- '--- FAIL'`
   found no matches.
 
+## Host review (2026-10-22): adoption path missing
+
+Foreign-tracker case verified by the host (README unchanged, no driver, `harnez index` no-op). But a fresh
+repo cannot adopt the recommended tracker: `git init`, `harnez init` (→ `tracker: none`), then
+`harnez issues new "first ticket"` creates `issues/` with README/BACKLOG/CLOSED, while `harnez index` says
+"nothing to do" and the rules notice still tells agents not to use file-based issues.
+
+**Pre-Work / Required Refinements**:
+- When `harnez issues new` creates `issues/` itself (no folder before), it records `issues.tracker: harnez`
+  (and `merge_driver: true`) in repo.yaml and says so in one line; the next `harnez init` then installs the
+  integration and drops the notice. Never switch a repo whose existing `issues/` is foreign.
+- Test the fresh-repo flow end to end: init → issues new → repo.yaml says harnez → index refreshes → init
+  installs driver, notice gone.
+
 ## Implementation (2026-10-22)
 
 - Init installs issue-index Git integration only when `issues.tracker: harnez` and
