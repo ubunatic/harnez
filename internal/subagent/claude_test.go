@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -102,6 +103,17 @@ func TestParseClaudeCompactIgnoresZeroUsageAssistantEvents(t *testing.T) {
 func TestParseClaudeErrorResult(t *testing.T) {
 	if _, err := parseClaude([]byte(`{"type":"result","is_error":true,"result":"boom"}`)); err == nil {
 		t.Fatal("want error")
+	}
+}
+
+func TestClaudeFailureSurfacesFinalLimitLine(t *testing.T) {
+	const final = `{"type":"result","subtype":"error","is_error":true,"result":"You've hit your session limit · resets 12:20am"}`
+	d := ClaudeDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
+		return []byte(final + "\n"), errors.New("exit status 1")
+	}}
+	_, err := d.Resume(context.Background(), "session", "continue", Model{})
+	if err == nil || !strings.Contains(err.Error(), "session limit") {
+		t.Fatalf("error = %v, want final provider limit reason", err)
 	}
 }
 

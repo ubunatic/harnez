@@ -508,6 +508,42 @@ func TestParseCodexKeepsAllAgentMessages(t *testing.T) {
 	}
 }
 
+func TestCodexFailureSurfacesRecordedTurnErrors(t *testing.T) {
+	fixtures := []struct {
+		name, stream, want string
+	}{
+		{"auth", `{"type":"event_msg","payload":{"type":"task_complete","error":{"message":"unexpected status 401 Unauthorized"}}}`, "401 Unauthorized"},
+		{"overload", `{"type":"turn.failed","error":{"message":"Selected model is at capacity. Please try a different model."}}`, "at capacity"},
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			d := CodexDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
+				return []byte(fixture.stream + "\n"), errors.New("Reading additional input from stdin")
+			}}
+			_, err := d.Run(context.Background(), RunOptions{Model: Model{Name: "fixture"}, Prompt: "test"})
+			if err == nil || !strings.Contains(err.Error(), fixture.want) {
+				t.Fatalf("error = %v, want recorded turn reason %q", err, fixture.want)
+			}
+		})
+	}
+}
+
+func TestCodexRolloutTurnError(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	dir := filepath.Join(home, "sessions", "2026", "10", "22")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "rollout-fixture-thread.jsonl")
+	if err := os.WriteFile(path, []byte(`{"type":"event_msg","payload":{"type":"task_complete","error":{"message":"Selected model is at capacity."}}}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := codexRolloutTurnError("thread"); got != "Selected model is at capacity." {
+		t.Fatalf("rollout error = %q", got)
+	}
+}
+
 func TestCodexStreamEmitsEventsInOrder(t *testing.T) {
 	lines := `{"type":"thread.started","thread_id":"t1"}
 {"type":"item.completed","item":{"type":"agent_message","text":"hi"}}

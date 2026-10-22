@@ -100,6 +100,9 @@ func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error)
 	args := codexRunArgs(o.Model, o.Prompt)
 	b, err := d.command(ctx, args...)
 	if err != nil {
+		if turnErr := codexTurnErrorFrom(b); turnErr != nil {
+			return nil, turnErr
+		}
 		return nil, fmt.Errorf("codex exec: %w", err)
 	}
 	r, err := parseCodex(b)
@@ -149,6 +152,9 @@ func (d CodexDriver) runResume(ctx context.Context, id, prompt string, model Mod
 	beforeCompactions, beforeErr := codexRolloutCompactions(id)
 	b, err := d.command(ctx, codexResumeArgs(id, prompt, model)...)
 	if err != nil {
+		if turnErr := codexTurnErrorFrom(b); turnErr != nil {
+			return nil, turnErr
+		}
 		return nil, fmt.Errorf("codex resume: %w", err)
 	}
 	r, err := parseCodex(b)
@@ -316,15 +322,19 @@ type StreamingDriver interface {
 
 // codexParser folds Codex JSONL lines into a TurnResult and live events.
 type codexParser struct {
-	r TurnResult
+	r         TurnResult
+	turnError string
 }
 
 func (p *codexParser) feed(line []byte) (Event, bool) {
 	var e struct {
-		Type     string                               `json:"type"`
-		ThreadID string                               `json:"thread_id"`
-		Item     struct{ Type, Text, Command string } `json:"item"`
-		Usage    struct {
+		Type     string `json:"type"`
+		ThreadID string `json:"thread_id"`
+		Error    struct {
+			Message string `json:"message"`
+		} `json:"error"`
+		Item  struct{ Type, Text, Command string } `json:"item"`
+		Usage struct {
 			Input     int  `json:"input_tokens"`
 			Output    int  `json:"output_tokens"`
 			Cached    int  `json:"cached_input_tokens"`
@@ -334,7 +344,10 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 			} `json:"input_token_details"`
 		} `json:"usage"`
 		Payload struct {
-			Type string `json:"type"`
+			Type  string `json:"type"`
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
 			Info struct {
 				LastTokenUsage struct {
 					Input int `json:"input_tokens"`
@@ -344,6 +357,12 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 	}
 	if json.Unmarshal(line, &e) != nil {
 		return Event{}, false
+	}
+	if e.Error.Message != "" {
+		p.turnError = e.Error.Message
+	}
+	if e.Payload.Error.Message != "" {
+		p.turnError = e.Payload.Error.Message
 	}
 	ev := Event{Kind: "other", Bytes: len(line)}
 	if e.ThreadID != "" {
@@ -379,12 +398,35 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 }
 
 func (p *codexParser) result() (*TurnResult, error) {
+	if p.turnError != "" {
+		return nil, codexTurnFailure(p.turnError)
+	}
 	if p.r.Response == "" {
 		return nil, fmt.Errorf("codex output has no agent_message")
 	}
 	p.r.TokensTurn = p.r.InputTokens + p.r.OutputTokens
 	p.r.TokensCumulative = p.r.TokensTurn
 	return &p.r, nil
+}
+
+func codexTurnFailure(message string) error {
+	if strings.Contains(strings.ToLower(message), "401") || strings.Contains(strings.ToLower(message), "unauthorized") {
+		return fmt.Errorf("Codex login rejected; run `codex login` (%s)", message)
+	}
+	return fmt.Errorf("codex turn failed: %s", message)
+}
+
+func codexTurnErrorFrom(data []byte) error {
+	parser := &codexParser{}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 4096), 8<<20)
+	for scanner.Scan() {
+		parser.feed(scanner.Bytes())
+	}
+	if parser.turnError == "" {
+		return nil
+	}
+	return codexTurnFailure(parser.turnError)
 }
 
 func parseCodexStream(rd io.Reader, fn EventFunc) (*TurnResult, error) {
@@ -416,11 +458,48 @@ func (d CodexDriver) stream(ctx context.Context, fn EventFunc, args ...string) (
 	if err != nil {
 		return nil, err
 	}
-	r, perr := parseCodexStream(rd, fn)
+	var providerID string
+	forward := func(event Event) {
+		if event.Kind == "session" {
+			providerID = event.Text
+		}
+		if fn != nil {
+			fn(event)
+		}
+	}
+	r, perr := parseCodexStream(rd, forward)
 	if werr := wait(); werr != nil {
+		if perr != nil && (strings.HasPrefix(perr.Error(), "codex turn failed:") || strings.HasPrefix(perr.Error(), "Codex login rejected;")) {
+			return nil, perr
+		}
+		if message := codexRolloutTurnError(providerID); message != "" {
+			return nil, codexTurnFailure(message)
+		}
 		return nil, werr
 	}
 	return r, perr
+}
+
+func codexRolloutTurnError(providerID string) string {
+	if providerID == "" {
+		return ""
+	}
+	path, err := codexRolloutPath(providerID)
+	if err != nil {
+		return ""
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	parser := &codexParser{}
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 4096), 8<<20)
+	for scanner.Scan() {
+		parser.feed(scanner.Bytes())
+	}
+	return parser.turnError
 }
 
 // startProcessIn returns a process starter whose children run in dir.

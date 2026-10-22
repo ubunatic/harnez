@@ -26,6 +26,9 @@ func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error
 	start := time.Now()
 	b, err := d.command(ctx, claudeRunArgs(o.Model, o.Prompt)...)
 	if err != nil {
+		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
+			return nil, parseErr
+		}
 		return nil, fmt.Errorf("claude: %w", err)
 	}
 	r, err := parseClaude(b)
@@ -38,6 +41,9 @@ func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error
 func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
 	b, err := d.command(ctx, claudeResumeArgs(id, prompt, model)...)
 	if err != nil {
+		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
+			return nil, parseErr
+		}
 		return nil, fmt.Errorf("claude resume: %w", err)
 	}
 	return parseClaude(b)
