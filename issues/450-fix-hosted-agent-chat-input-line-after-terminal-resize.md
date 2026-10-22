@@ -1,6 +1,6 @@
 # 450 — Fix hosted agent chat input line after terminal resize
 
-**Status**: Open
+**Status**: Closed — Interactive PTY resize events now reach the child and the deterministic PTY test verifies the new size; Loom hosting remains the separate larger step.
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Reliability
