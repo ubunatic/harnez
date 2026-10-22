@@ -1,6 +1,6 @@
 # 853 — init takes over index files and merge driver only when the repo opts in via .harnez config
 
-**Status**: Open
+**Status**: Closed — init and index read issues.* from repo.yaml; foreign issues/ untouched (host cmp, no driver/hook); first issues new in a fresh repo adopts tracker: harnez and next init installs the driver
 **Priority**: P2 (Medium) — init can claim files in repos that use a different tracker
 **Severity**: Major
 **Category**: Bug
