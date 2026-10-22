@@ -1,6 +1,6 @@
 # 714 — harnez usage shows Claude/GPT and Gemini unavailable after collectors are killed
 
-**Status**: Blocked — waiting for a live repro; gray rows now show their reason
+**Status**: Open — live repro 2026-10-22: stale threshold equals the 5m collector interval
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
@@ -64,3 +64,24 @@ view; see 710.
 which. Way forward: show the reason on a gray row (fetch error text or age), keep the last good quota on a
 failed refresh, test fresh/stale/failed rendering. Then park until the next live occurrence, which the reason
 text will explain.
+
+## Live repro (2026-10-22 15:30, v0.2.0, user screenshot of `harnez usage -w`)
+
+Claude Code and all AGY rows gray, Codex white. `harnez usage` at 15:30:34: Claude "5m ago", AGY "9m ago",
+Codex "4m ago". No fetch errors: `--json` has no error field, AGY refreshed fine at 15:33:38.
+
+Root cause (gray without a failure): `internal/usage/freshness.go` marks a snapshot stale at
+`age >= DefaultCollectorInterval()` (5m), the same 5m cadence the server collects at. Every provider goes gray
+for a moment before each refresh, and longer when a cycle runs late or is skipped. AGY at 9m means one missed
+cycle: the server was restarted at 15:25:22 (v0.2.0 install) and the first cycle after the restart did not
+refresh AGY.
+
+Also seen: the gray row in `-w` showed no reason (the 714 reason text didn't appear in the cropped view;
+`--json` carries no staleness field), and every cycle logs
+`drain telemetry spool: ... CHECK constraint failed: score ... BETWEEN 1 AND 5 (275)`, so one bad spool
+entry fails each drain.
+
+Way forward: stale only after a grace beyond the cadence (e.g. 2 intervals, value in `spec/usage.yaml`);
+collect all providers in the first cycle after a server start; expose `stale`/`reason` in `--json`;
+skip or quarantine the invalid spool entry instead of failing the drain. Test that a snapshot exactly one
+interval old renders normal, not gray.
