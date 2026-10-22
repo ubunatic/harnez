@@ -10,8 +10,8 @@
 ---
 
 /goal Harnez guidance (AgenticLoop Phase 5, the evergreen and wrap commands, and the shared output rules)
-tells agents not to promise behaviour for later sessions ("in future I will", "next time I won't"), scopes
-any commitment to this session or the next steps, and turns each lesson into a durable safeguard (test,
+tells agents not to promise behaviour for later sessions ("in future I will", "next time I won't"), limits
+any promise to this session or the next steps, and turns each lesson into a durable safeguard (test,
 command, make target, hook, check script, or at least a prompt/rule line) or a ticket for one; verified by
 one retro run whose report contains no cross-session promise; or stop and report when blocked on a user
 decision.
@@ -32,6 +32,8 @@ Example (loom /evergreen, 2026-10-22): "In future I'll time a wait helper once b
   non-LLM checks (test, lint, make target, script, hook, CLI check) > rule/prompt line > ticket to build one.
 - Rephrase the evergreen prompt "tell the user what you would do differently" so it asks for the
   safeguard (done or proposed), not a resolution.
+
+- Wording: say "promise" or "plan", not "commit"/"commitment", which readers take for git commits.
 
 ## Open question
 
