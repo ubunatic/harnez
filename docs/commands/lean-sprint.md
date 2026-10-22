@@ -94,6 +94,11 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
     variant itself (dark scheme, phone width), and variants come from the real user setting (the
     browser's color scheme), not one forced inside the page. (harnez.org 028 M2.4: a dev reported 32
     screenshots fine; every "dark" one was light because only a forced `data-theme` was ever tested.)
+  - When the change touches generated, rendered or git-integration files, the host runs
+    `make install && harnez init -d .` and requires a clean `git status`; for git integration it
+    also runs the real flow in a scratch repo and checks `git show HEAD:<file>`. (Sprints 843/847:
+    init reverted M3's rules edit; green tests hid a driver that init never installed and merge
+    commits missing rows.)
 - **Strictly No Direct Fixes & No Micro-Task Rounds**:
   - The host does **NOT** modify code files.
   - The host updates the ticket: records milestone $N$ delivery summary, naming the milestone ("M2 delivered: flag and schema gating").
