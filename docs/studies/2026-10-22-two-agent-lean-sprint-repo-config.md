@@ -21,3 +21,13 @@ surface in the same session; their findings are in 853, 854, 856.
   or that every repo has; otherwise "detect once" records today's over-reach as the repo's choice.
 - The host scratch run found two divergences the developer's own scratch check missed, because it used a
   foreign `issues/README.md` and a plain Makefile rather than an empty repo.
+
+## Follow-up sprint: 853 (tracker gating), dev-853 (luna:high)
+
+| Step | Commit | Review outcome |
+|---|---|---|
+| Gating by `issues.*`, index no-op note | `08f92875` | Host scratch: foreign README untouched, no driver; but a fresh repo could no longer adopt the tracker |
+| Adoption on first `issues new` | `b14ac743` | Host fresh-repo flow: repo.yaml switches to harnez, next init installs driver, notice removed |
+
+Learning: when gating a recommended default, test the adoption path (empty repo → first use), not only the
+foreign-repo path.
