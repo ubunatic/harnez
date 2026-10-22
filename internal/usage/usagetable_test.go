@@ -93,7 +93,8 @@ func TestUsageTableExplainsGrayQuotaRows(t *testing.T) {
 	if !strings.Contains(strings.Join(strings.Fields(joined), " "), "Fresh weekly 10%") {
 		t.Fatalf("fresh row missing:\n%s", joined)
 	}
-	if !strings.Contains(joined, "Stale weekly 20%") || !strings.Contains(joined, "2h ago · stale") {
+	normalized := strings.Join(strings.Fields(joined), " ")
+	if !strings.Contains(normalized, "Stale weekly 20%") || !strings.Contains(normalized, "2h ago · stale") {
 		t.Fatalf("stale row should explain snapshot age:\n%s", joined)
 	}
 	if !strings.Contains(joined, "Failed weekly 30%") || !strings.Contains(joined, "HTTP 429 rate limit") {

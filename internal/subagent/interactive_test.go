@@ -121,7 +121,7 @@ func TestPTYResizeChildHelper(t *testing.T) {
 	defer signal.Stop(resize)
 	fmt.Fprintln(os.Stdout, "READY")
 	<-resize
-	rows, cols, err := term.GetSize(int(os.Stdin.Fd()))
+	cols, rows, err := term.GetSize(int(os.Stdin.Fd()))
 	if err != nil {
 		fmt.Fprintf(os.Stdout, "ERROR:%v\n", err)
 		return
