@@ -55,6 +55,7 @@ func newServerCmdWithOptions(interval time.Duration, offline bool) *cobra.Comman
 		},
 	}
 	cmd.AddCommand(newServerInstallCmd(), newServerUninstallCmd(), newServerStatusCmd())
+	cmd.AddCommand(newServerStopCmd())
 	return cmd
 }
 
@@ -114,6 +115,80 @@ func newServerStatusCmd() *cobra.Command {
 		printServerSystemdStatus(cmd.OutOrStdout(), cfg, status)
 		return nil
 	}}
+}
+
+func newServerStopCmd() *cobra.Command {
+	return &cobra.Command{Use: "stop", Short: "Stop the local server", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		cfg, err := server.LoadConfig()
+		if err != nil {
+			return err
+		}
+		socket, err := cfg.Socket()
+		if err != nil {
+			return err
+		}
+		socketPID := localServerPID(cmd.Context(), cfg, socket)
+		status, err := server.NewSystemdService(cfg).Status(cmd.Context(), socketPID)
+		if err != nil {
+			return err
+		}
+		message, err := stopLocalServer(cmd.Context(), cfg, socket, socketPID, status, server.NewSystemdService(cfg).Stop)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), message)
+		return nil
+	}}
+}
+
+func stopLocalServer(ctx context.Context, cfg server.Config, socket string, socketPID int, status server.SystemdStatus, stopUnit func(context.Context) (bool, error)) (string, error) {
+	if socketPID == 0 {
+		return "server not running", nil
+	}
+	if status.Available && status.Installed && status.MainPID == socketPID {
+		available, err := stopUnit(ctx)
+		if err != nil {
+			return "", err
+		}
+		if !available {
+			return "", fmt.Errorf("systemd user service became unavailable while stopping %s", cfg.SystemdUnitName)
+		}
+		return "stopped " + cfg.SystemdUnitName, nil
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://unix/shutdown", nil)
+	if err != nil {
+		return "", err
+	}
+	response, err := server.UnixHTTPClient(socket, cfg.HTTPClientTimeout).Do(request)
+	if err != nil {
+		return "", fmt.Errorf("request server shutdown: %w", err)
+	}
+	response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return "", fmt.Errorf("server shutdown returned %s", response.Status)
+	}
+	deadline := time.NewTimer(cfg.ShutdownTimeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(cfg.StartupPoll)
+	defer ticker.Stop()
+	for {
+		probe, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/status", nil)
+		if err != nil {
+			return "", err
+		}
+		resp, err := server.UnixHTTPClient(socket, cfg.HTTPClientTimeout).Do(probe)
+		if err != nil {
+			return "shutdown requested", nil
+		}
+		resp.Body.Close()
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-deadline.C:
+			return "", fmt.Errorf("timed out waiting for server socket to stop answering")
+		case <-ticker.C:
+		}
+	}
 }
 
 func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.SystemdStatus) {

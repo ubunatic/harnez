@@ -141,6 +141,18 @@ func (s SystemdService) Uninstall(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// Stop stops the systemd user service without disabling it or removing its unit.
+func (s SystemdService) Stop(ctx context.Context) (bool, error) {
+	s, systemctl, available, err := s.available(ctx)
+	if err != nil || !available {
+		return available, err
+	}
+	if _, err := s.Run(ctx, systemctl, "--user", "stop", s.Config.SystemdUnitName); err != nil {
+		return true, fmt.Errorf("stop systemd user service: %w", err)
+	}
+	return true, nil
+}
+
 // HandOver points the unit at this executable and restarts it when the unit's
 // MainPID is oldPID, so a newer build replaces the server under systemd instead
 // of taking the socket outside it.

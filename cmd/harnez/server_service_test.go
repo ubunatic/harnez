@@ -2,8 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"ubunatic.com/harnez/internal/server"
 )
@@ -20,6 +26,81 @@ func TestPrintServerSystemdStatusShowsOwnerAndHandoff(t *testing.T) {
 			t.Errorf("status output missing %q:\n%s", want, output.String())
 		}
 	}
+}
+
+func TestStopLocalServerChoosesSystemdOwner(t *testing.T) {
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	message, err := stopLocalServer(context.Background(), cfg, "", 42, server.SystemdStatus{Available: true, Installed: true, MainPID: 42}, func(context.Context) (bool, error) {
+		called = true
+		return true, nil
+	})
+	if err != nil || !called || !strings.Contains(message, "stopped "+cfg.SystemdUnitName) {
+		t.Fatalf("stopLocalServer() = %q, %v; systemd called=%t", message, err, called)
+	}
+}
+
+func TestStopLocalServerForegroundAndNotRunning(t *testing.T) {
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(t.TempDir(), "server.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shutdown := make(chan struct{})
+	httpServer := &http.Server{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		close(shutdown)
+		go func() { _ = httpServer.Shutdown(context.Background()) }()
+	})
+	httpServer.Handler = mux
+	go func() { _ = httpServer.Serve(listener) }()
+	message, err := stopLocalServer(context.Background(), cfg, socket, 99, server.SystemdStatus{}, nil)
+	if err != nil || !strings.Contains(message, "shutdown requested") {
+		t.Fatalf("foreground stop = %q, %v", message, err)
+	}
+	select {
+	case <-shutdown:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown request was not received")
+	}
+	_ = httpServer.Close()
+
+	message, err = stopLocalServer(context.Background(), cfg, socket+"-missing", 0, server.SystemdStatus{}, nil)
+	if err != nil || message != "server not running" {
+		t.Fatalf("idle stop = %q, %v", message, err)
+	}
+}
+
+func TestStopLocalServerReportsWaitTimeout(t *testing.T) {
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ShutdownTimeout = 2 * time.Millisecond
+	cfg.StartupPoll = time.Millisecond
+	socket := filepath.Join(t.TempDir(), "server.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusAccepted) })
+	go func() { _ = http.Serve(listener, mux) }()
+	_, err = stopLocalServer(context.Background(), cfg, socket, 99, server.SystemdStatus{}, nil)
+	if err == nil || !strings.Contains(err.Error(), "timed out waiting for server socket") {
+		t.Fatalf("timeout error = %v", err)
+	}
+	_ = os.Remove(socket)
 }
 
 func TestPrintServerSystemdStatusSuggestsInstallWhenUnitIsMissing(t *testing.T) {

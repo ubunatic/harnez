@@ -2175,6 +2175,7 @@ Usage:
 Available Commands:
   install     Install and start the systemd user service
   status      Show the local server and systemd service owner
+  stop        Stop the local server
   uninstall   Stop and remove the systemd user service
 
 Flags:
@@ -2199,6 +2200,15 @@ Usage:
 
 Flags:
   -h, --help   help for status
+
+=== harnez server stop
+Stop the local server
+
+Usage:
+  harnez server stop [flags]
+
+Flags:
+  -h, --help   help for stop
 
 === harnez server uninstall
 Stop and remove the systemd user service

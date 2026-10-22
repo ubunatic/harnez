@@ -92,6 +92,37 @@ func TestSystemdUninstallAndStatusUseFakeSystemctl(t *testing.T) {
 	}
 }
 
+func TestSystemdStopStopsWithoutDisablingOrRemovingUnit(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unitDir := t.TempDir()
+	unitPath := filepath.Join(unitDir, cfg.SystemdUnitName)
+	if err := os.WriteFile(unitPath, []byte("unit"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var calls []string
+	service := SystemdService{
+		Config: cfg, UnitDir: unitDir, GOOS: "linux",
+		LookPath: func(string) (string, error) { return "/fake/systemctl", nil },
+		Run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			calls = append(calls, strings.Join(args, " "))
+			return nil, nil
+		},
+	}
+	available, err := service.Stop(context.Background())
+	if err != nil || !available {
+		t.Fatalf("Stop() = available %t, error %v", available, err)
+	}
+	if got, want := strings.Join(calls, "\n"), "--user show-environment\n--user stop "+cfg.SystemdUnitName; got != want {
+		t.Fatalf("systemctl calls = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(unitPath); err != nil {
+		t.Fatalf("unit removed by Stop: %v", err)
+	}
+}
+
 func TestSystemdHandOverRestartsOnlyWhenUnitOwnsOldServer(t *testing.T) {
 	cfg, err := LoadConfig()
 	if err != nil {
