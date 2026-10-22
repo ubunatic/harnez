@@ -157,7 +157,7 @@ harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [--force]
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
         ├── ignore /issues/README.md.lock in .git/info/exclude when issues/ exists
-        ├── enable issue-index attributes, local merge driver, and hook only with --issues-git
+        ├── enable issue-index attributes, local merge driver, and hook by default (847)
         │   └── --issues-git=false narrowly removes only the harnez-managed integration
         ├── auto-detect docs (default:auto/true entries in config.yaml)
         ├── apply cfg.AgentsMD.Local sections (Language Conventions, etc.)
@@ -198,6 +198,10 @@ harnez apply [-t <dir>] [-d <name|profile>...] [--clean-docs] [--force-docs] [--
         ├── merge [hooks.harnez] into Codex config.toml when configured
         ├── write each skill's SKILL.md and declared resources to ~/.claude/skills/<name>/ (real Agent Skills, auto-loaded)
         ├── write ~/.prime/agent/prompts/<name>.md and skills/<name>/SKILL.md
+        │   └── skill dirs: apply owns dirs with a .harnez-managed marker and rewrites them on every run;
+        │       an unmarked dir holding only a SKILL.md with the same frontmatter name is adopted (849);
+        │       any other unmarked dir is kept and reported by apply and diff with a takeover hint;
+        │       SKILL.md gets one frontmatter block, source keys win over generated name/description (728)
         ├── install opt-in docs to ~/.claude/docs/ and ~/.prime/agent/docs/ if specified via -d/--docs (default: 0 global docs; profiles: core, dev, full)
         ├── if --clean-docs / --no-docs: prune unmanaged docs from ~/.claude/docs/ and ~/.prime/agent/docs/
         └── if --debloat: merge the Claude preset and spec-listed Codex features
