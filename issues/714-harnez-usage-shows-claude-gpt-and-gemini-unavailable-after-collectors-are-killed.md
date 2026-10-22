@@ -114,3 +114,13 @@ The fixes above are approved, with this amendment to "collect all providers in t
   message.
 - **General debug box:** the usage UI gets one debug box that collects these messages, toggled by its own key
   (a free letter or digit; pick one that no view uses and list it in the help line).
+
+## Recurrence (2026-10-22 15:50, v0.2.0): "signal: killed" on all three AGY rows
+
+`harnez usage --json` at 15:50: AGY `quota_fetch_error: "signal: killed"`, `last_refreshed`
+13:42:37Z (15:42 local); the last good quota (6m old) is still shown, so the cached values survive.
+`harnez server logs -n 300` has no line about the kill, timeout or AGY at all, while the same window holds
+hundreds of identical `telemetry: no tool call found for session ...` lines. So the fetch error is stored
+but never logged. Way forward, in addition to the above: log every fetch failure with provider, command,
+elapsed time against its timeout, and who sent the signal (our context timeout vs. external); show it in
+the debug box; rate-limit the repeated telemetry line. Then find whether the AGY fetch hits its timeout.
