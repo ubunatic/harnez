@@ -91,3 +91,14 @@ in `~/.gemini/antigravity-cli/settings.json`) and post to `/usage/passive`. Live
 moved the Claude row from "1m ago" to "just now". Yet AGY stayed 9m old with an AGY session open, so either the
 AGY payload carries no quota fields (`passiveWindows` then drops it silently) or AGY renders only on activity.
 Check: log or count dropped statusline observations per provider; capture one real AGY payload.
+
+## Decision (user, 2026-10-22): demand-driven catch-up fetch
+
+The fixes above are approved, with this amendment to "collect all providers in the first cycle after a start":
+
+- On server start with no consumer connected, skip the extra initial fetch; keep only the regular 5m cadence.
+- When a consumer connects (usually `harnez usage -w`), run one extra fetch at once for every provider whose
+  last successful fetch is older than 1 minute (value in `spec/usage.yaml`); providers fetched within that
+  minute are left alone.
+- Open design point: how the server learns a consumer connected. Today the UI reads the store files; it would
+  need to announce itself on the socket (e.g. a request on connect), which the server treats as the trigger.
