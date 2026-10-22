@@ -63,6 +63,11 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - Edge and negative cases to test (ambiguous input, near-miss values).
   - Test requirements (reproduction test first for bugs, unit tests for features).
   - The exact close command with a written reason: `harnez issues close N "<real outcome>"`; no placeholders.
+    Close only after the ticket's acceptance check passes; the reason states the decisive evidence (the
+    key numbers or check result), not a pasted log. When acceptance is not met, leave the ticket open and
+    report. (Sprint 850: closed with a false match still above the cutoff.)
+  - Never amend, autosquash or rebase commits; fix with new commits. Other sessions push to the same main.
+    (Bug-hunt 2026-10-22: an autosquash rewrote pushed commits and blocked every ticket commit.)
 - **Plan First (read-only)**: Recommended: start the worker's initial prompt with a read-only planning step ("read-only: plan ..."; no edits until the host has seen the plan), then `resume` to grant write authority. Give no wording template for the prompt beyond the checklist above: agents have their own best practices, and the stored first prompts (telemetry DB) are how we observe and compare them. In one-shot mode a plan request alone is not enforced, so a plan-only first prompt is the reliable form. Codex workers often end the plan turn right after `CONFIRM:` without inspecting (seen twice on 2026-09-30): ask for "inspect now and reply with the concrete plan (files, schema, checks, commits) in this turn", and if the reply is only a plan-to-plan, resume once with that request. This step is mandatory when using §1's Developer-plan discovery exception.
 - **Trust the Base Framework**: Do not duplicate system prompts or micromanage formatting conventions.
 - **Reading Discipline**: Instruct the developer to use line-bounded reads (`harnez read -L <range>` / `-n`) for medium/large files (`harnez read -I` is paused until issue 543, a memory blow-up, is fixed).
@@ -77,6 +82,8 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 
 ### 4. Concise Milestone Review & In-Ticket Pre-Work Embedding
 - Upon developer milestone completion, the Host Orchestrator performs a rapid, diff-only inspection:
+  - Run `git fetch` and `git status -sb` first: a local main that diverged from origin means history was
+    rewritten or another session pushed; resolve that before reviewing.
   - Check `git log -n 1 --stat`, `git diff HEAD~1`, and run verification tests.
   - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions directly against the diff.
   - **Plausibility check for measurements**: when the milestone produces numbers (reports, stats,
