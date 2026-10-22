@@ -14,7 +14,10 @@ import (
 	"time"
 )
 
-const claudeUsageCmdTimeout = 20 * time.Second
+const (
+	claudeUsageCmdTimeout = 20 * time.Second
+	ClaudeOAuthUsageURL   = "https://api.anthropic.com/api/oauth/usage"
+)
 
 var runClaudeUsageCmdFn = runClaudeUsageCmd
 
@@ -96,7 +99,7 @@ type claudeQuotaFetch struct {
 }
 
 func fetchClaudeQuota(ctx context.Context, client *http.Client, oauth ClaudeCredentials) (claudeQuotaFetch, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.anthropic.com/api/oauth/usage", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ClaudeOAuthUsageURL, nil)
 	if err != nil {
 		return claudeQuotaFetch{}, 0, fmt.Errorf("request build error: %v", err)
 	}

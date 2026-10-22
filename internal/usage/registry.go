@@ -111,6 +111,7 @@ func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diag
 		collector Collector
 		usage     AgentUsage
 		err       error
+		ctxErr    error
 		started   time.Time
 		duration  time.Duration
 	}
@@ -128,10 +129,11 @@ func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diag
 			cctx, cancel := context.WithTimeout(ctx, collector.Timeout)
 			defer cancel()
 			u, err := collector.Collect(cctx)
+			ctxErr := cctx.Err()
 			if err == nil && u.QuotaFetchError != "" {
 				err = fmt.Errorf("%s", u.QuotaFetchError)
 			}
-			results <- result{collector: collector, usage: u, err: err, started: started, duration: time.Since(started)}
+			results <- result{collector: collector, usage: u, err: err, ctxErr: ctxErr, started: started, duration: time.Since(started)}
 		}()
 	}
 	wg.Wait()
@@ -159,7 +161,7 @@ func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diag
 				forEachQuotaWindow(&u, func(w *QuotaWindow) { w.Name = staleName(w.Name) })
 			}
 			u.QuotaFetchError = item.err.Error()
-			r.logFetchFailureDetails(item.collector, item.duration, item.err)
+			r.logFetchFailureDetails(item.collector, item.duration, item.err, item.ctxErr)
 		}
 		if progress != nil {
 			stage := FetchDone
@@ -194,21 +196,31 @@ func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diag
 	return out
 }
 
-func (r *Registry) logFetchFailureDetails(c Collector, elapsed time.Duration, err error) {
+func (r *Registry) logFetchFailureDetails(c Collector, elapsed time.Duration, err, ctxErr error) {
 	if c.Provider == "" || err == nil {
 		return
 	}
 	cause := "unknown"
 	errMsg := strings.ToLower(err.Error())
 	switch {
-	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(errMsg, "deadline exceeded") || strings.Contains(errMsg, "context deadline"):
+	case errors.Is(ctxErr, context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) || elapsed >= c.Timeout:
 		cause = "our context timeout"
 	case strings.Contains(errMsg, "signal: killed"):
-		cause = "external signal (signal: killed)"
+		if ctxErr == nil {
+			cause = "external signal (signal: killed)"
+		} else {
+			cause = "our context timeout"
+		}
 	case strings.Contains(errMsg, "signal:"):
-		cause = fmt.Sprintf("external signal (%s)", err.Error())
-	case errors.Is(err, context.Canceled) || strings.Contains(errMsg, "canceled"):
+		if ctxErr == nil {
+			cause = fmt.Sprintf("external signal (%s)", err.Error())
+		} else {
+			cause = "our context timeout"
+		}
+	case errors.Is(ctxErr, context.Canceled) || errors.Is(err, context.Canceled) || strings.Contains(errMsg, "canceled"):
 		cause = "context canceled"
+	case strings.Contains(errMsg, "deadline exceeded") || strings.Contains(errMsg, "context deadline"):
+		cause = "our context timeout"
 	default:
 		cause = err.Error()
 	}
@@ -326,10 +338,10 @@ func newUsageRegistry(homeDir string, client *http.Client, live bool) (*Registry
 		}
 	}
 	registry, err := NewRegistry(
-		Collector{ID: "claude", Provider: "claude", Command: "https://api.anthropic.com/api/oauth/usage", Capabilities: []string{"quota", "tokens", "metadata"}, Cadence: cadence, Timeout: timeout, Collect: collect("claude", func(ctx context.Context) AgentUsage {
+		Collector{ID: "claude", Provider: "claude", Command: ClaudeOAuthUsageURL, Capabilities: []string{"quota", "tokens", "metadata"}, Cadence: cadence, Timeout: timeout, Collect: collect("claude", func(ctx context.Context) AgentUsage {
 			return CollectClaude(ctx, filepath.Join(homeDir, ".claude"), client)
 		})},
-		Collector{ID: "agy", Provider: "agy", Command: `agy -p "/usage"`, Capabilities: []string{"quota", "tokens", "metadata", "agy-meter"}, Cadence: cadence, Timeout: timeout, Collect: collect("agy", func(ctx context.Context) AgentUsage {
+		Collector{ID: "agy", Provider: "agy", Command: AGYUsageCommand, Capabilities: []string{"quota", "tokens", "metadata", "agy-meter"}, Cadence: cadence, Timeout: timeout, Collect: collect("agy", func(ctx context.Context) AgentUsage {
 			return collectAGYWithHome(ctx, filepath.Join(homeDir, ".gemini", "antigravity-cli"), homeDir, client)
 		})},
 		Collector{ID: "agy-meter", Provider: "agy", Command: "internal/agymeter", Capabilities: []string{"quota", "passive", "proxy"}, Cadence: cadence, Timeout: timeout, Collect: func(context.Context) (AgentUsage, error) {
@@ -339,7 +351,7 @@ func newUsageRegistry(homeDir string, client *http.Client, live bool) (*Registry
 			}
 			return u, nil
 		}},
-		Collector{ID: "codex", Provider: "codex", Command: "https://chatgpt.com/backend-api/wham/usage", Capabilities: []string{"quota", "tokens", "metadata"}, Cadence: cadence, Timeout: timeout, Collect: collect("codex", func(ctx context.Context) AgentUsage {
+		Collector{ID: "codex", Provider: "codex", Command: CodexWhamUsageURL, Capabilities: []string{"quota", "tokens", "metadata"}, Cadence: cadence, Timeout: timeout, Collect: collect("codex", func(ctx context.Context) AgentUsage {
 			return CollectCodex(ctx, filepath.Join(homeDir, ".codex"), client)
 		})},
 	)

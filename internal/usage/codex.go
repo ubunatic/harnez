@@ -47,6 +47,8 @@ func decodeJWTPayload(token string) (map[string]any, error) {
 	return claims, nil
 }
 
+const CodexWhamUsageURL = "https://chatgpt.com/backend-api/wham/usage"
+
 // CodexRateWindow models one rate-limit window (primary or secondary) in the
 // wham/usage response. Codex reports a short session window (typically
 // 5-hour) as primary and a rolling weekly window as secondary, but the
@@ -334,7 +336,7 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 			defer unlockLiveFetchCache(lockFile)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://chatgpt.com/backend-api/wham/usage", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, CodexWhamUsageURL, nil)
 		if err == nil {
 			req.Header.Set("Authorization", "Bearer "+accessToken)
 			if accountID, ok := auth.Tokens["account_id"]; ok && accountID != "" {

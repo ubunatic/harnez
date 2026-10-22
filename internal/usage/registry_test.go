@@ -155,11 +155,11 @@ func TestUsageRegistryLogsFetchFailureWithDetails(t *testing.T) {
 		logged = append(logged, msg)
 	}
 
-	// Case 1: context deadline exceeded (our context timeout)
+	// Case 1: context deadline exceeded (our context timeout via sleep exceeding timeout)
 	r1, err := NewRegistry(Collector{
 		ID:       "agy",
 		Provider: "agy",
-		Command:  `agy -p "/usage"`,
+		Command:  AGYUsageCommand,
 		Cadence:  time.Minute,
 		Timeout:  10 * time.Millisecond,
 		Collect: func(ctx context.Context) (AgentUsage, error) {
@@ -182,15 +182,17 @@ func TestUsageRegistryLogsFetchFailureWithDetails(t *testing.T) {
 		t.Fatalf("logged[0] = %q, want provider, command, and context timeout cause", logged[0])
 	}
 
-	// Case 2: external signal (e.g. signal: killed)
+	// Case 2: exec.CommandContext killed child with SIGKILL due to context timeout ("signal: killed" + expired ctx)
 	logged = nil
 	r2, err := NewRegistry(Collector{
 		ID:       "agy",
 		Provider: "agy",
-		Command:  `agy -p "/usage"`,
+		Command:  AGYUsageCommand,
 		Cadence:  time.Minute,
-		Timeout:  2 * time.Minute,
+		Timeout:  10 * time.Millisecond,
 		Collect: func(ctx context.Context) (AgentUsage, error) {
+			time.Sleep(30 * time.Millisecond)
+			// simulate exec.CommandContext returning "signal: killed" when ctx expired
 			return AgentUsage{QuotaFetchError: "signal: killed"}, nil
 		},
 	})
@@ -204,7 +206,60 @@ func TestUsageRegistryLogsFetchFailureWithDetails(t *testing.T) {
 		t.Fatalf("logged count = %d, want 1", len(logged))
 	}
 	if !strings.Contains(logged[0], "provider: agy") ||
+		!strings.Contains(logged[0], "our context timeout") {
+		t.Fatalf("logged[0] = %q, want provider and our context timeout cause", logged[0])
+	}
+
+	// Case 3: external signal while context is still live
+	logged = nil
+	r3, err := NewRegistry(Collector{
+		ID:       "agy",
+		Provider: "agy",
+		Command:  AGYUsageCommand,
+		Cadence:  time.Minute,
+		Timeout:  2 * time.Minute,
+		Collect: func(ctx context.Context) (AgentUsage, error) {
+			return AgentUsage{QuotaFetchError: "signal: killed"}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r3.logFetchFailure = logFn
+	r3.Collect(context.Background(), nil, nil)
+
+	if len(logged) != 1 {
+		t.Fatalf("logged count = %d, want 1", len(logged))
+	}
+	if !strings.Contains(logged[0], "provider: agy") ||
 		!strings.Contains(logged[0], "external signal (signal: killed)") {
 		t.Fatalf("logged[0] = %q, want provider and external signal cause", logged[0])
+	}
+
+	// Case 4: collector returning AgentUsage with QuotaFetchError and nil error
+	logged = nil
+	r4, err := NewRegistry(Collector{
+		ID:       "claude",
+		Provider: "claude",
+		Command:  ClaudeOAuthUsageURL,
+		Cadence:  time.Minute,
+		Timeout:  time.Minute,
+		Collect: func(ctx context.Context) (AgentUsage, error) {
+			return AgentUsage{AgentID: "claude", QuotaFetchError: "HTTP 429"}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r4.logFetchFailure = logFn
+	r4.Collect(context.Background(), nil, nil)
+
+	if len(logged) != 1 {
+		t.Fatalf("logged count = %d, want 1", len(logged))
+	}
+	if !strings.Contains(logged[0], "provider: claude") ||
+		!strings.Contains(logged[0], ClaudeOAuthUsageURL) ||
+		!strings.Contains(logged[0], "HTTP 429") {
+		t.Fatalf("logged[0] = %q, want provider, command, and HTTP 429 cause", logged[0])
 	}
 }

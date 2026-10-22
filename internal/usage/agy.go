@@ -45,7 +45,10 @@ type agyQuotaPayload struct {
 // model quota is exhausted — so it should return quickly, but the exec
 // must never be allowed to block a harnez poll indefinitely if the agy CLI
 // hangs (e.g. on an unexpected prompt or a cold start).
-const agyUsageCmdTimeout = 15 * time.Second
+const (
+	agyUsageCmdTimeout = 15 * time.Second
+	AGYUsageCommand    = `agy -p "/usage"`
+)
 
 // runAGYUsageCmdFn is runAGYUsageCmd behind a package-level variable so
 // tests can stub the exec call without a real `agy` binary on PATH.
