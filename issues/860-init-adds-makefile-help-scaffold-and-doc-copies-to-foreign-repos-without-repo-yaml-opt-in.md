@@ -1,6 +1,6 @@
 # 860 — Makefile scaffold and Make doc stay the default, with an opt-out in repo.yaml
 
-**Status**: Open
+**Status**: Closed — make.scaffold opt-out (default true, optional key); scaffold false keeps the Makefile byte-identical (host check); docs.copies authoritative with a hint for newly detected docs
 **Priority**: P3 (Low) — current behavior is the intended default; only the opt-out is missing
 **Severity**: Minor
 **Category**: Feature

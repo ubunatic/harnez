@@ -25,5 +25,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 855 | [855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md](855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md) | harnez init wizard: user picks which harnez features a repo gets | Open |
 | 858 | [858-retros-must-not-promise-future-session-behaviour-codify-safeguards-instead.md](858-retros-must-not-promise-future-session-behaviour-codify-safeguards-instead.md) | Retros must not promise future-session behaviour; codify safeguards instead | Open |
 | 859 | [859-issues-open-close-commit-commits-every-staged-file-not-only-the-ticket-and-index.md](859-issues-open-close-commit-commits-every-staged-file-not-only-the-ticket-and-index.md) | issues open/close --commit commits every staged file, not only the ticket and index | Open |
-| 860 | [860-init-adds-makefile-help-scaffold-and-doc-copies-to-foreign-repos-without-repo-yaml-opt-in.md](860-init-adds-makefile-help-scaffold-and-doc-copies-to-foreign-repos-without-repo-yaml-opt-in.md) | Makefile scaffold and Make doc stay the default, with an opt-out in repo.yaml | Open |
 <!-- harnez:end issues-active-index -->
