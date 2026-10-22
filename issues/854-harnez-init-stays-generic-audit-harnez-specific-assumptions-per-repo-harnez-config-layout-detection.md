@@ -60,7 +60,8 @@ Skills: 856.
 
 No per-repo config exists yet (2026-10-22). Today there is only the embedded `config.yaml` with
 `spec/schemas/config.schema.json` and the user's global `~/.harnez/config.yaml`; both are flat, mixed-concern
-and global. M1 delivers the per-repo file with its own JSON schema in `spec/schemas/`, a `version` key,
+and global. M1 delivers the per-repo file `.harnez/repo.yaml` (name decided by the user, 2026-10-22; avoids confusion
+with the global `config.yaml`) with its own JSON schema in `spec/schemas/`, a `version` key,
 one top-level key per feature area so each area can grow without reshaping the file, and only the keys the
 gating needs. Draft:
 
