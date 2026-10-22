@@ -1,6 +1,6 @@
 # 848 — Generated-index merge driver: verify ticket delete or rename on one branch
 
-**Status**: Open
+**Status**: Closed — Generated row presence is merged three-way; one-sided delete/rename with independent addition is covered by unit and real-CLI merge tests, and the merge commit leaves a clean worktree.
 **Priority**: P2 (Medium) — a stale row fails pre-commit lint, which blocks every later commit
 **Severity**: Major
 **Category**: Bug
