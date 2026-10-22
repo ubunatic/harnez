@@ -1,6 +1,6 @@
 # 658 — issues new slug mangles German umlauts
 
-**Status**: Open
+**Status**: Closed — Slugify transliterates German umlauts and ß, strips accented Latin diacritics, and table tests pass; existing ticket slugs were untouched. Lock ignore already present.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

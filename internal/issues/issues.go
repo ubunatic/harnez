@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 )
 
 // IssueFile represents an individual issue markdown file on disk.
@@ -615,11 +616,38 @@ func NextNumberFromFiles(files []IssueFile) string {
 }
 
 var nonAlphanumericSlugRe = regexp.MustCompile(`[^a-z0-9]+`)
+var slugDiacriticsReplacer = strings.NewReplacer(
+	"ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss",
+	"à", "a", "á", "a", "â", "a", "ã", "a", "å", "a", "ā", "a", "ă", "a", "ą", "a",
+	"æ", "ae", "ç", "c", "ć", "c", "ĉ", "c", "ċ", "c", "č", "c",
+	"ď", "d", "đ", "d",
+	"è", "e", "é", "e", "ê", "e", "ë", "e", "ē", "e", "ĕ", "e", "ė", "e", "ę", "e", "ě", "e",
+	"ĝ", "g", "ğ", "g", "ġ", "g", "ģ", "g",
+	"ĥ", "h", "ħ", "h",
+	"ì", "i", "í", "i", "î", "i", "ï", "i", "ĩ", "i", "ī", "i", "ĭ", "i", "į", "i", "ı", "i",
+	"ĵ", "j", "ķ", "k",
+	"ĺ", "l", "ļ", "l", "ľ", "l", "ŀ", "l", "ł", "l",
+	"ñ", "n", "ń", "n", "ņ", "n", "ň", "n", "ŋ", "n",
+	"ò", "o", "ó", "o", "ô", "o", "õ", "o", "ō", "o", "ŏ", "o", "ő", "o", "ø", "o",
+	"ŕ", "r", "ŗ", "r", "ř", "r",
+	"ś", "s", "ŝ", "s", "ş", "s", "š", "s",
+	"ţ", "t", "ť", "t", "ŧ", "t",
+	"ù", "u", "ú", "u", "û", "u", "ũ", "u", "ū", "u", "ŭ", "u", "ů", "u", "ű", "u", "ų", "u",
+	"ŵ", "w", "ý", "y", "ÿ", "y", "ŷ", "y",
+	"ź", "z", "ż", "z", "ž", "z",
+)
 
 // Slugify converts a raw title into a lowercase kebab-case slug for filenames.
 func Slugify(s string) string {
 	s = strings.ToLower(s)
-	s = nonAlphanumericSlugRe.ReplaceAllString(s, "-")
+	s = slugDiacriticsReplacer.Replace(s)
+	var normalized strings.Builder
+	for _, r := range s {
+		if !unicode.Is(unicode.Mn, r) {
+			normalized.WriteRune(r)
+		}
+	}
+	s = nonAlphanumericSlugRe.ReplaceAllString(normalized.String(), "-")
 	s = strings.Trim(s, "-")
 	return s
 }

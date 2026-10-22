@@ -525,6 +525,11 @@ func TestSlugify(t *testing.T) {
 		{"`harnez find` Issues: Next & Reserve!", "harnez-find-issues-next-reserve"},
 		{"---Already-Kebab---", "already-kebab"},
 		{"Multiple   Spaces   and --- dashes", "multiple-spaces-and-dashes"},
+		{"Liegestühle", "liegestuehle"},
+		{"Anträge", "antraege"},
+		{"Größe", "groesse"},
+		{"ÄÖÜ äöü ß", "aeoeue-aeoeue-ss"},
+		{"café", "cafe"},
 	}
 
 	for _, tt := range tests {
