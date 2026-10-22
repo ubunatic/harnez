@@ -192,6 +192,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-21-ticket-hygiene-opus.md](studies/2026-10-21-ticket-hygiene-opus.md) | read-only research; three solutions within the file-based `issues/*.md` tracker. No code. |
 | [studies/2026-10-21-ticket-hygiene-sol.md](studies/2026-10-21-ticket-hygiene-sol.md) | Ticket hygiene: three file-based approaches (sol) |
 | [studies/2026-10-21-two-agent-lean-sprint-usage-freshness.md](studies/2026-10-21-two-agent-lean-sprint-usage-freshness.md) | Two-Agent Lean Sprint: usage freshness (issue 839) |
+| [studies/2026-10-22-two-agent-lean-sprint-bug-hunt.md](studies/2026-10-22-two-agent-lean-sprint-bug-hunt.md) | Two-agent lean sprint: P1/P2 bug hunt (2026-10-22) |
 | [studies/2026-10-22-two-agent-lean-sprint-generated-file-markers.md](studies/2026-10-22-two-agent-lean-sprint-generated-file-markers.md) | Two-Agent Lean Sprint: generated-file markers and merge driver (issue 847) |
 | [studies/2026-10-22-two-agent-lean-sprint-ticket-hygiene.md](studies/2026-10-22-two-agent-lean-sprint-ticket-hygiene.md) | Two-Agent Lean Sprint: ticket hygiene (issue 843) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |

@@ -45,5 +45,8 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **Wire format by accident**: an untagged Go struct on an HTTP route makes `UsedFraction` the JSON
   key; adding tags later breaks stored JSONL (Go's case-insensitive match does not cover `_`). Tag
   wire types when the route is born. Issue 830 M3 pre-work.
+- **Rewriting shared history**: other sessions push to the same main. Never amend, autosquash or rebase
+  commits that exist on origin; fix with new commits. A rewrite made another session's pushed ticket look
+  untracked and blocked all ticket commits (bug-hunt sprint 2026-10-22).
 - **Verify before pushing**: never chain `test && push` in one command when the test output
   decides the push; read the result first.
