@@ -210,3 +210,36 @@ func TestSystemdUnavailableDoesNotWriteAndSupportsNonLinux(t *testing.T) {
 		t.Fatalf("unit directory created without user manager: %v", err)
 	}
 }
+
+func TestSystemdStartAndRestart(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls []string
+	service := SystemdService{
+		Config: cfg, GOOS: "linux",
+		LookPath: func(string) (string, error) { return "/fake/systemctl", nil },
+		Run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			calls = append(calls, strings.Join(args, " "))
+			return nil, nil
+		},
+	}
+	avail, err := service.Start(context.Background())
+	if err != nil || !avail {
+		t.Fatalf("Start() = %t, %v", avail, err)
+	}
+	avail, err = service.Restart(context.Background())
+	if err != nil || !avail {
+		t.Fatalf("Restart() = %t, %v", avail, err)
+	}
+	want := []string{
+		"--user show-environment",
+		"--user start " + cfg.SystemdUnitName,
+		"--user show-environment",
+		"--user restart " + cfg.SystemdUnitName,
+	}
+	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("calls = %q, want %q", calls, want)
+	}
+}

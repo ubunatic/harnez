@@ -153,6 +153,30 @@ func (s SystemdService) Stop(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// Start starts the systemd user service without modifying its unit file.
+func (s SystemdService) Start(ctx context.Context) (bool, error) {
+	s, systemctl, available, err := s.available(ctx)
+	if err != nil || !available {
+		return available, err
+	}
+	if _, err := s.Run(ctx, systemctl, "--user", "start", s.Config.SystemdUnitName); err != nil {
+		return true, fmt.Errorf("start systemd user service: %w", err)
+	}
+	return true, nil
+}
+
+// Restart restarts the systemd user service.
+func (s SystemdService) Restart(ctx context.Context) (bool, error) {
+	s, systemctl, available, err := s.available(ctx)
+	if err != nil || !available {
+		return available, err
+	}
+	if _, err := s.Run(ctx, systemctl, "--user", "restart", s.Config.SystemdUnitName); err != nil {
+		return true, fmt.Errorf("restart systemd user service: %w", err)
+	}
+	return true, nil
+}
+
 // HandOver points the unit at this executable and restarts it when the unit's
 // MainPID is oldPID, so a newer build replaces the server under systemd instead
 // of taking the socket outside it.

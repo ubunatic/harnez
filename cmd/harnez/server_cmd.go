@@ -55,7 +55,7 @@ func newServerCmdWithOptions(interval time.Duration, offline bool) *cobra.Comman
 		},
 	}
 	cmd.AddCommand(newServerInstallCmd(), newServerUninstallCmd(), newServerStatusCmd())
-	cmd.AddCommand(newServerStopCmd())
+	cmd.AddCommand(newServerStopCmd(), newServerRestartCmd())
 	return cmd
 }
 
@@ -139,6 +139,66 @@ func newServerStopCmd() *cobra.Command {
 		fmt.Fprintln(cmd.OutOrStdout(), message)
 		return nil
 	}}
+}
+
+func newServerRestartCmd() *cobra.Command {
+	return &cobra.Command{Use: "restart", Short: "Restart the local server", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		cfg, err := server.LoadConfig()
+		if err != nil {
+			return err
+		}
+		socket, err := cfg.Socket()
+		if err != nil {
+			return err
+		}
+		socketPID := localServerPID(cmd.Context(), cfg, socket)
+		systemd := server.NewSystemdService(cfg)
+		status, err := systemd.Status(cmd.Context(), socketPID)
+		if err != nil {
+			return err
+		}
+		message, err := restartLocalServer(cmd.Context(), cfg, socket, socketPID, status, systemd.Restart, systemd.Start, stopLocalServer)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), message)
+		return nil
+	}}
+}
+
+func restartLocalServer(ctx context.Context, cfg server.Config, socket string, socketPID int, status server.SystemdStatus, restartUnit func(context.Context) (bool, error), startUnit func(context.Context) (bool, error), stopServer func(context.Context, server.Config, string, int, server.SystemdStatus, func(context.Context) (bool, error)) (string, error)) (string, error) {
+	if status.Available && status.Installed {
+		if socketPID > 0 && status.MainPID == socketPID {
+			available, err := restartUnit(ctx)
+			if err != nil {
+				return "", err
+			}
+			if !available {
+				return "", fmt.Errorf("systemd user service became unavailable while restarting %s", cfg.SystemdUnitName)
+			}
+			return "restarted " + cfg.SystemdUnitName, nil
+		}
+		if socketPID == 0 {
+			available, err := startUnit(ctx)
+			if err != nil {
+				return "", err
+			}
+			if !available {
+				return "", fmt.Errorf("systemd user service became unavailable while starting %s", cfg.SystemdUnitName)
+			}
+			return "started " + cfg.SystemdUnitName, nil
+		}
+	}
+	if socketPID == 0 {
+		return "server not running; run 'harnez server' to start or 'harnez server install' to install systemd service", nil
+	}
+	// Foreground running server: stop it and report
+	if stopServer != nil {
+		if _, err := stopServer(ctx, cfg, socket, socketPID, status, nil); err != nil {
+			return "", err
+		}
+	}
+	return fmt.Sprintf("stopped foreground server (PID %d); no detached background runner configured, run 'harnez server' in a terminal or install systemd service with 'harnez server install'", socketPID), nil
 }
 
 func stopLocalServer(ctx context.Context, cfg server.Config, socket string, socketPID int, status server.SystemdStatus, stopUnit func(context.Context) (bool, error)) (string, error) {

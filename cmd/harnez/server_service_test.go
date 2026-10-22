@@ -125,3 +125,46 @@ func TestPrintServerSystemdStatusExplainsUsageFallback(t *testing.T) {
 		t.Fatalf("unsupported status output = %q", output.String())
 	}
 }
+
+func TestRestartLocalServerCases(t *testing.T) {
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Case 1: Systemd-owned running server -> restarts unit
+	restartedUnit := false
+	msg, err := restartLocalServer(context.Background(), cfg, "", 42, server.SystemdStatus{Available: true, Installed: true, MainPID: 42}, func(context.Context) (bool, error) {
+		restartedUnit = true
+		return true, nil
+	}, nil, nil)
+	if err != nil || !restartedUnit || !strings.Contains(msg, "restarted "+cfg.SystemdUnitName) {
+		t.Fatalf("case 1 failed: msg=%q, err=%v, restarted=%t", msg, err, restartedUnit)
+	}
+
+	// Case 2: Server not running but unit installed -> starts unit
+	startedUnit := false
+	msg, err = restartLocalServer(context.Background(), cfg, "", 0, server.SystemdStatus{Available: true, Installed: true, MainPID: 0}, nil, func(context.Context) (bool, error) {
+		startedUnit = true
+		return true, nil
+	}, nil)
+	if err != nil || !startedUnit || !strings.Contains(msg, "started "+cfg.SystemdUnitName) {
+		t.Fatalf("case 2 failed: msg=%q, err=%v, started=%t", msg, err, startedUnit)
+	}
+
+	// Case 3: Server running foreground -> stops it, reports no detached start
+	stopped := false
+	msg, err = restartLocalServer(context.Background(), cfg, "", 99, server.SystemdStatus{Available: true, Installed: false}, nil, nil, func(context.Context, server.Config, string, int, server.SystemdStatus, func(context.Context) (bool, error)) (string, error) {
+		stopped = true
+		return "shutdown requested", nil
+	})
+	if err != nil || !stopped || !strings.Contains(msg, "stopped foreground server (PID 99)") || !strings.Contains(msg, "harnez server") {
+		t.Fatalf("case 3 failed: msg=%q, err=%v, stopped=%t", msg, err, stopped)
+	}
+
+	// Case 4: Not running, unit not installed -> reports server not running
+	msg, err = restartLocalServer(context.Background(), cfg, "", 0, server.SystemdStatus{Available: true, Installed: false}, nil, nil, nil)
+	if err != nil || !strings.Contains(msg, "server not running") || !strings.Contains(msg, "harnez server") {
+		t.Fatalf("case 4 failed: msg=%q, err=%v", msg, err)
+	}
+}

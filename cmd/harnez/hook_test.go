@@ -16,6 +16,7 @@ import (
 )
 
 func TestRunAgyToolHook_AllowOutput(t *testing.T) {
+	t.Setenv("HARNEZ_AGY_METER_SESSION_ID", "")
 	in := bytes.NewBufferString(`{
 		"conversationId": "test-conv-123",
 		"toolCall": {
@@ -359,6 +360,7 @@ func TestRunAgyToolHook_EmptyOrInvalidStdinReturnsAllow(t *testing.T) {
 }
 
 func TestRunAgyToolHook_DBIntegration(t *testing.T) {
+	t.Setenv("HARNEZ_AGY_METER_SESSION_ID", "")
 	dir := t.TempDir()
 	dbPath := dir + "/test.sqlite"
 
@@ -405,6 +407,7 @@ func TestRunAgyToolHook_DBIntegration(t *testing.T) {
 }
 
 func TestRunAgyPostToolHookUpdatesPreToolCall(t *testing.T) {
+	t.Setenv("HARNEZ_AGY_METER_SESSION_ID", "")
 	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
 	var preOut bytes.Buffer
 	if err := runAgyToolHook(bytes.NewBufferString(`{"conversationId":"post-session","toolCall":{"name":"run_command","args":{}}}`), &preOut, agyHookOptions{DBPath: dbPath}); err != nil {
@@ -435,6 +438,7 @@ func TestRunAgyPostToolHookUpdatesPreToolCall(t *testing.T) {
 }
 
 func TestRunAgyPostToolHookEstimatesNativeReadSavings(t *testing.T) {
+	t.Setenv("HARNEZ_AGY_METER_SESSION_ID", "")
 	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
 	var preOut bytes.Buffer
 	pre := `{"conversationId":"read-savings","toolCall":{"name":"view_file","args":{}}}`
@@ -488,6 +492,7 @@ func TestRunAgyPostToolHook_FailOpenResiliency(t *testing.T) {
 }
 
 func TestRunAgyPostToolHook_TranscriptFallback(t *testing.T) {
+	t.Setenv("HARNEZ_AGY_METER_SESSION_ID", "")
 	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
 	var preOut bytes.Buffer
 	pre := `{"conversationId":"transcript-sess","toolCall":{"name":"view_file","args":{}}}`

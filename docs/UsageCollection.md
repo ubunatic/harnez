@@ -32,7 +32,7 @@ retaining compatible snapshots and archives until their consumers have moved.
 schema setup, migrations, passive deduplication, and persistence. A single server runs per host on
 the Unix socket from `spec/server.yaml`; the systemd unit installed by issue 831
 starts that same command. On Linux with a systemd user manager, install, inspect and remove it
-with `harnez server install`, `harnez server status`, `harnez server stop` and `harnez server uninstall`. On other hosts,
+with `harnez server install`, `harnez server status`, `harnez server restart`, `harnez server stop` and `harnez server uninstall`. On other hosts,
 `harnez usage -w` keeps the auto-started server available while the view runs.
 
 `harnez usage` can auto-start the server detached. A newer binary takes over the socket owner and
