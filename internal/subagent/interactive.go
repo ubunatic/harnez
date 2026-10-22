@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -235,11 +236,24 @@ func runInteractivePTY(ctx context.Context, command string, args []string, opts 
 	}
 	terminalMu := &sync.Mutex{}
 	var restore func()
+	var resizeStop func()
+	var resizeDone chan struct{}
 	if input, ok := opts.Stdin.(*os.File); ok && term.IsTerminal(int(input.Fd())) {
 		if state, rawErr := term.MakeRaw(int(input.Fd())); rawErr == nil {
 			restore = func() { _ = term.Restore(int(input.Fd()), state) }
 			defer restore()
 			_ = pty.InheritSize(input, ptmx)
+			resizeSignals := make(chan os.Signal, 1)
+			signal.Notify(resizeSignals, syscall.SIGWINCH)
+			resizeDone = make(chan struct{})
+			resizeStop = func() { signal.Stop(resizeSignals); close(resizeSignals); <-resizeDone }
+			go func() {
+				defer close(resizeDone)
+				for range resizeSignals {
+					_ = forwardPTYResize(input, ptmx, cmd.Process)
+				}
+			}()
+			defer resizeStop()
 		}
 	}
 	go func() {
@@ -275,6 +289,13 @@ func runInteractivePTY(ctx context.Context, command string, args []string, opts 
 		return fmt.Errorf("%s interactive session: %w", command, err)
 	}
 	return nil
+}
+
+func forwardPTYResize(host, child *os.File, process *os.Process) error {
+	if err := pty.InheritSize(host, child); err != nil {
+		return err
+	}
+	return process.Signal(syscall.SIGWINCH)
 }
 
 func watchInteractiveProviderID(ctx context.Context, command, home string, pid int, dir string, started time.Time, found func(string) error) {

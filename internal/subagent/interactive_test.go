@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"io"
@@ -44,6 +45,61 @@ func TestInteractiveCommand(t *testing.T) {
 				t.Fatalf("interactiveCommand = %q %#v, %v; want %q %#v", command, args, err, tc.command, tc.args)
 			}
 		})
+	}
+}
+
+func TestForwardPTYResizeUpdatesChildTerminal(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real PTY: full test tier")
+	}
+	hostMaster, hostSlave, err := pty.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hostMaster.Close()
+	defer hostSlave.Close()
+	childCmd := exec.Command("sh", "-c", `trap 'printf "SIZE:%s\n" "$(stty size)"' WINCH; printf 'READY\n'; while read line; do :; done`)
+	child, err := pty.Start(childCmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { _ = childCmd.Wait(); close(done) }()
+	defer func() {
+		_ = childCmd.Process.Kill()
+		<-done
+		_ = child.Close()
+	}()
+
+	lines := make(chan string, 4)
+	go func() {
+		scanner := bufio.NewScanner(child)
+		for scanner.Scan() {
+			lines <- scanner.Text()
+		}
+		close(lines)
+	}()
+	select {
+	case line := <-lines:
+		if line != "READY" {
+			t.Fatalf("child handshake = %q, want READY", line)
+		}
+	case <-done:
+		t.Fatal("child exited before resize handshake")
+	}
+	if err := pty.Setsize(hostSlave, &pty.Winsize{Rows: 41, Cols: 123}); err != nil {
+		t.Fatal(err)
+	}
+	if err := forwardPTYResize(hostSlave, child, childCmd.Process); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case line := <-lines:
+		if line != "SIZE:41 123" {
+			t.Fatalf("child terminal size = %q, want SIZE:41 123", line)
+		}
+	case <-done:
+		t.Fatal("child exited before reporting resized terminal size")
 	}
 }
 
