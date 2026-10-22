@@ -34,4 +34,9 @@ blocked; verified by one real run on this repo, or stop and report when blocked 
 
 - Own skill or a `/lean-sprint bugs` mode? The steps reuse lean-sprint roles; the differences are the
   selection, the read-only re-verify pass over many tickets, and the obsolete/blocked outcomes.
-- Parallel searchers while one developer works proved fine; state that explicitly.
+
+## Decided
+
+- Parallel research is allowed: read-only searchers may run in parallel with each other and with the one active
+  developer (worked on 2026-10-22). Only writers (developer, host ticket commits) are serialized; the host commits
+  only the files it staged.
