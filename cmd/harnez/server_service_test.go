@@ -272,3 +272,30 @@ func TestRestartLocalServerCases(t *testing.T) {
 		t.Fatalf("case 4 failed: msg=%q, err=%v", msg, err)
 	}
 }
+
+func TestRunServerLogs(t *testing.T) {
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Case 1: Systemd installed & available -> calls logsFn
+	var buf1 bytes.Buffer
+	calledWithLines := 0
+	calledWithFollow := false
+	err = runServerLogs(context.Background(), &buf1, cfg, server.SystemdStatus{Available: true, Installed: true}, true, 20, func(_ context.Context, follow bool, lines int) ([]byte, bool, error) {
+		calledWithFollow = follow
+		calledWithLines = lines
+		return []byte("sample log lines\n"), true, nil
+	})
+	if err != nil || !calledWithFollow || calledWithLines != 20 || buf1.String() != "sample log lines\n" {
+		t.Fatalf("case 1 failed: err=%v, follow=%t, lines=%d, out=%q", err, calledWithFollow, calledWithLines, buf1.String())
+	}
+
+	// Case 2: Systemd not installed / unavailable -> prints fallback message, exit 0
+	var buf2 bytes.Buffer
+	err = runServerLogs(context.Background(), &buf2, cfg, server.SystemdStatus{Available: false, Installed: false}, false, 50, nil)
+	if err != nil || !strings.Contains(buf2.String(), "foreground server logs are printed to its terminal") {
+		t.Fatalf("case 2 failed: err=%v, out=%q", err, buf2.String())
+	}
+}

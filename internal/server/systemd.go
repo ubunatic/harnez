@@ -219,3 +219,24 @@ func (s SystemdService) Status(ctx context.Context, socketPID int) (SystemdStatu
 	status.Active = err == nil && strings.TrimSpace(string(active)) == "active"
 	return status, nil
 }
+
+// Logs invokes journalctl for the configured unit.
+func (s SystemdService) Logs(ctx context.Context, follow bool, lines int) ([]byte, bool, error) {
+	s, _, available, err := s.available(ctx)
+	if err != nil || !available {
+		return nil, available, err
+	}
+	journalctl, err := s.LookPath("journalctl")
+	if err != nil {
+		return nil, false, nil
+	}
+	args := []string{"--user", "-u", s.Config.SystemdUnitName}
+	if lines > 0 {
+		args = append(args, "-n", strconv.Itoa(lines))
+	}
+	if follow {
+		args = append(args, "-f")
+	}
+	out, err := s.Run(ctx, journalctl, args...)
+	return out, true, err
+}

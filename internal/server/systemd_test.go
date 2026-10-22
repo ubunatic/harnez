@@ -242,4 +242,14 @@ func TestSystemdStartAndRestart(t *testing.T) {
 	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("calls = %q, want %q", calls, want)
 	}
+
+	out, avail, err := service.Logs(context.Background(), true, 50)
+	if err != nil || !avail {
+		t.Fatalf("Logs() = %t, %v", avail, err)
+	}
+	_ = out
+	wantLogs := append(want, "--user show-environment", "--user -u "+cfg.SystemdUnitName+" -n 50 -f")
+	if strings.Join(calls, "\n") != strings.Join(wantLogs, "\n") {
+		t.Fatalf("calls with logs = %q, want %q", calls, wantLogs)
+	}
 }

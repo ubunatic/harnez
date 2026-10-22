@@ -29,6 +29,7 @@ type Config struct {
 	SystemdUnitSource      string
 	SystemdRestartPolicy   string
 	SystemdRestartDelay    time.Duration
+	DefaultLogLines        int
 }
 
 type specConfig struct {
@@ -48,6 +49,7 @@ type specConfig struct {
 	SystemdUnitSource      string `yaml:"systemd_unit_source"`
 	SystemdRestartPolicy   string `yaml:"systemd_restart_policy"`
 	SystemdRestartDelay    string `yaml:"systemd_restart_delay"`
+	DefaultLogLines        int    `yaml:"default_log_lines"`
 }
 
 func LoadConfig() (Config, error) {
@@ -62,9 +64,12 @@ func LoadConfig() (Config, error) {
 	if raw.SocketPath == "" || filepath.IsAbs(raw.SocketPath) || strings.Contains(raw.SocketPath, "..") || filepath.Base(raw.SocketPath) != raw.SocketPath {
 		return Config{}, fmt.Errorf("spec/server.yaml: socket_path must be a filename")
 	}
-	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes, TelemetryPath: raw.TelemetryPath, TelemetrySpoolPath: raw.TelemetrySpoolPath, TelemetrySpoolMaxBytes: raw.TelemetrySpoolMaxBytes, SystemdUnitName: raw.SystemdUnitName, SystemdUnitSource: raw.SystemdUnitSource, SystemdRestartPolicy: raw.SystemdRestartPolicy}
+	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes, TelemetryPath: raw.TelemetryPath, TelemetrySpoolPath: raw.TelemetrySpoolPath, TelemetrySpoolMaxBytes: raw.TelemetrySpoolMaxBytes, SystemdUnitName: raw.SystemdUnitName, SystemdUnitSource: raw.SystemdUnitSource, SystemdRestartPolicy: raw.SystemdRestartPolicy, DefaultLogLines: raw.DefaultLogLines}
 	if cfg.UpdateMaxBodyBytes <= 0 {
 		return Config{}, fmt.Errorf("spec/server.yaml: update_max_body_bytes must be positive")
+	}
+	if cfg.DefaultLogLines <= 0 {
+		return Config{}, fmt.Errorf("spec/server.yaml: default_log_lines must be positive")
 	}
 	if !strings.HasPrefix(cfg.TelemetryPath, "/") || strings.ContainsAny(cfg.TelemetryPath, "?#") {
 		return Config{}, fmt.Errorf("spec/server.yaml: telemetry_update_path must be an absolute route path")

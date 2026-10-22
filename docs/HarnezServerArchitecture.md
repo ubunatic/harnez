@@ -113,7 +113,7 @@ newer semver or equal-version newer build identity shuts down the old process be
 Services register their own routes. `harnez usage` starts/probes the server; statusline and hooks
 POST updates: usage readings are dropped when no server answers, telemetry records go to a bounded
 spool the server drains (830). A boundary test fails on any writable `telemetry.sqlite` open outside
-the server. On Linux, `harnez server install|status|restart|stop|uninstall` manages the systemd user service.
+the server. On Linux, `harnez server install|status|restart|stop|logs|uninstall` manages the systemd user service.
 The unit restarts on failure. When a newer build finds that the old server is the unit's `MainPID`,
 it rewrites the unit's `ExecStart` to its own executable and runs `systemctl --user restart`
 instead of taking the socket, so any install path (`go install`, `make install`, a release) keeps

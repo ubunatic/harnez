@@ -15,3 +15,5 @@ systemd_unit_name: harnez-agent-collector.service
 systemd_unit_source: systemd/harnez-agent-collector.service
 systemd_restart_policy: on-failure
 systemd_restart_delay: 5s
+default_log_lines: 50
+

@@ -55,7 +55,7 @@ func newServerCmdWithOptions(interval time.Duration, offline bool) *cobra.Comman
 		},
 	}
 	cmd.AddCommand(newServerInstallCmd(), newServerUninstallCmd(), newServerStatusCmd())
-	cmd.AddCommand(newServerStopCmd(), newServerRestartCmd())
+	cmd.AddCommand(newServerStopCmd(), newServerRestartCmd(), newServerLogsCmd())
 	return cmd
 }
 
@@ -145,6 +145,49 @@ func newServerStopCmd() *cobra.Command {
 		fmt.Fprintln(cmd.OutOrStdout(), message)
 		return nil
 	}}
+}
+
+func newServerLogsCmd() *cobra.Command {
+	var follow bool
+	var lines int
+	cmd := &cobra.Command{Use: "logs", Short: "Show logs from the local server", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		cfg, err := server.LoadConfig()
+		if err != nil {
+			return err
+		}
+		if cmd.Flags().Changed("lines") && lines <= 0 {
+			return fmt.Errorf("invalid line count: %d (must be > 0)", lines)
+		}
+		if lines <= 0 {
+			lines = cfg.DefaultLogLines
+		}
+		systemd := server.NewSystemdService(cfg)
+		status, err := systemd.Status(cmd.Context(), 0)
+		if err != nil {
+			return err
+		}
+		return runServerLogs(cmd.Context(), cmd.OutOrStdout(), cfg, status, follow, lines, systemd.Logs)
+	}}
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "follow log output")
+	cmd.Flags().IntVarP(&lines, "lines", "n", 0, "number of lines to show (default from spec)")
+	return cmd
+}
+
+func runServerLogs(ctx context.Context, out io.Writer, cfg server.Config, status server.SystemdStatus, follow bool, lines int, logsFn func(context.Context, bool, int) ([]byte, bool, error)) error {
+	if status.Available && status.Installed {
+		if logsFn != nil {
+			data, available, err := logsFn(ctx, follow, lines)
+			if err != nil {
+				return err
+			}
+			if available {
+				fmt.Fprint(out, string(data))
+				return nil
+			}
+		}
+	}
+	fmt.Fprintln(out, "systemd user service is not installed or unavailable; foreground server logs are printed to its terminal standard output/error")
+	return nil
 }
 
 func newServerRestartCmd() *cobra.Command {
