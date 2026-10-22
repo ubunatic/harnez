@@ -126,6 +126,21 @@ func writeRepoConfig(dir string, cfg *RepoConfig) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
+// AdoptRepoIssuesTracker records the file-based Harnez tracker after
+// `harnez issues new` creates the issues/ directory in a repo that did not
+// have one. Callers must establish that the directory was absent beforehand.
+func AdoptRepoIssuesTracker(dir string) error {
+	cfg, err := LoadRepoConfig(dir)
+	if os.IsNotExist(err) {
+		cfg = &RepoConfig{Version: 1}
+	} else if err != nil {
+		return err
+	}
+	cfg.Issues.Tracker = "harnez"
+	cfg.Issues.MergeDriver = true
+	return writeRepoConfig(dir, cfg)
+}
+
 func containsRepoDoc(docs []string, name string) bool {
 	for _, item := range docs {
 		if item == name {

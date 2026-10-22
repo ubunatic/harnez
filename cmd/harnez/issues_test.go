@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/issues"
 )
 
@@ -715,6 +716,98 @@ func TestRunIssuesNew_DoesNotRequireExistingTicketFile(t *testing.T) {
 	want := "001\tissues/001-first-ticket.md\n"
 	if out.String() != want {
 		t.Errorf("got %q, want %q", out.String(), want)
+	}
+	config, err := claude.LoadRepoConfig(dir)
+	if err != nil {
+		t.Fatalf("LoadRepoConfig after adoption: %v", err)
+	}
+	if config.Issues.Tracker != "harnez" || !config.Issues.MergeDriver {
+		t.Fatalf("new tracker was not adopted: %+v", config.Issues)
+	}
+}
+
+func TestRunIssuesNewAdoptsOnlyNewIssuesDirectory(t *testing.T) {
+	t.Run("new directory opts in", func(t *testing.T) {
+		dir := repoInit(t)
+		cfg, err := claude.LoadConfigEmbedded()
+		if err != nil {
+			t.Fatalf("LoadConfigEmbedded: %v", err)
+		}
+		if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true, Force: true}); err != nil {
+			t.Fatalf("initial init: %v", err)
+		}
+		var out bytes.Buffer
+		if err := runIssuesNew(&out, dir, "First Ticket", false); err != nil {
+			t.Fatalf("runIssuesNew: %v", err)
+		}
+		config, err := claude.LoadRepoConfig(dir)
+		if err != nil {
+			t.Fatalf("LoadRepoConfig: %v", err)
+		}
+		if config.Issues.Tracker != "harnez" || !config.Issues.MergeDriver {
+			t.Fatalf("new tracker was not adopted: %+v", config.Issues)
+		}
+		var indexOutput bytes.Buffer
+		if err := runIndex(&indexOutput, indexOptions{Dir: dir, DBPath: filepath.Join(t.TempDir(), "telemetry.sqlite")}); err != nil {
+			t.Fatalf("index after adoption: %v", err)
+		}
+		if !strings.Contains(indexOutput.String(), "/issues/README.md") {
+			t.Fatalf("index did not refresh issue index: %q", indexOutput.String())
+		}
+		if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true, Force: true}); err != nil {
+			t.Fatalf("init after adoption: %v", err)
+		}
+		gitAttributes, err := os.ReadFile(filepath.Join(dir, ".gitattributes"))
+		if err != nil || !strings.Contains(string(gitAttributes), "merge=harnez-issues-index") {
+			t.Fatalf("issue merge driver not installed: attributes=%q err=%v", gitAttributes, err)
+		}
+		if driver := repoRunGitOutput(t, dir, "config", "--get", "merge.harnez-issues-index.driver"); !strings.Contains(driver, "harnez issues merge-driver") {
+			t.Fatalf("merge driver command not configured: %q", driver)
+		}
+		hook, err := os.ReadFile(filepath.Join(dir, ".git", "hooks", "pre-commit"))
+		if err != nil || !strings.Contains(string(hook), "harnez issues lint --cached") {
+			t.Fatalf("issue index hook not installed: hook=%q err=%v", hook, err)
+		}
+		indexRules, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Index.md"))
+		if err != nil || strings.Contains(string(indexRules), "This repo does not use file-based issues") {
+			t.Fatalf("file-tracker notice not removed: rules=%q err=%v", indexRules, err)
+		}
+	})
+
+	t.Run("existing directory stays foreign", func(t *testing.T) {
+		dir := repoInit(t)
+		writeIssuesNewRepoConfig(t, dir)
+		issuesDir := filepath.Join(dir, "issues")
+		if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		foreignReadme := "# Foreign tracker\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"
+		if err := os.WriteFile(filepath.Join(issuesDir, "README.md"), []byte(foreignReadme), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := runIssuesNew(&out, dir, "First Ticket", false); err != nil {
+			t.Fatalf("runIssuesNew: %v", err)
+		}
+		config, err := claude.LoadRepoConfig(dir)
+		if err != nil {
+			t.Fatalf("LoadRepoConfig: %v", err)
+		}
+		if config.Issues.Tracker != "none" || config.Issues.MergeDriver {
+			t.Fatalf("foreign tracker was adopted: %+v", config.Issues)
+		}
+	})
+}
+
+func writeIssuesNewRepoConfig(t *testing.T, dir string) {
+	t.Helper()
+	path := filepath.Join(dir, ".harnez", "repo.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := []byte("version: 1\nissues:\n  tracker: none\n  merge_driver: false\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\n")
+	if err := os.WriteFile(path, config, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

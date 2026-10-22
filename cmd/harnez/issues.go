@@ -32,6 +32,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/readcard"
@@ -721,15 +722,22 @@ func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
 }
 
 func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force bool) error {
+	issuesDir := filepath.Join(dir, "issues")
+	adoptTracker := !dirExists(issuesDir)
 	if !force {
-		if err := checkIssueDuplicates(filepath.Join(dir, "issues"), title); err != nil {
+		if err := checkIssueDuplicates(issuesDir, title); err != nil {
 			return err
 		}
 	}
-	issuesDir := filepath.Join(dir, "issues")
 	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: title})
 	if err != nil {
 		return fmt.Errorf("issues new: %w", err)
+	}
+	if adoptTracker {
+		if err := claude.AdoptRepoIssuesTracker(dir); err != nil {
+			return fmt.Errorf("issues new: record tracker adoption: %w", err)
+		}
+		fmt.Fprintln(os.Stderr, "issues new: adopted file-based tracker (tracker: harnez)")
 	}
 	return finishIssuesNew(w, dir, num, filename, jsonOutput)
 }

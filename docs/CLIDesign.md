@@ -187,7 +187,9 @@ that tracker or indexed studies gets a notice in `.harnez/rules/Index.md`, which
 rules header asks agents to read. `harnez index` regenerates issue indexes only when
 `issues.tracker` is `harnez`, and regenerates the studies table only when `docs.studies` is
 true. Those gates are independent. With neither enabled index available, it prints a note
-and exits successfully without rewriting either index.
+and exits successfully without rewriting either index. In a fresh repo, `harnez issues new`
+creates the `issues/` directory and records the Harnez tracker opt-in; the next `harnez init`
+installs its Git integration and removes the disabled-tracker notice.
 
 ## Copyable-doc contract
 

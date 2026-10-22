@@ -79,3 +79,10 @@ repo cannot adopt the recommended tracker: `git init`, `harnez init` (→ `track
 - `harnez index` gates issues and studies indexes independently and prints a successful no-op note when
   neither enabled index is present.
 - The file-first tracker remains the recommended default. This ticket remains open for the host to close.
+- When `harnez issues new` creates a previously absent `issues/` directory, it opts the repo into
+  `issues.tracker: harnez` and `issues.merge_driver: true`, with a one-line adoption notice. An existing
+  directory retains its current tracker choice. The regression test covers init → issues new → index → init,
+  including generated indexes, Git merge integration, and removal of the tracker notice.
+- README and CLI design docs now explain the fresh-repo adoption step. `make test-q1` passed with full output
+  in `/tmp/harnez-853-adoption-test-q1.log`; the installed-binary scratch flow output is in the session
+  scratchpad's `853-adoption-flow-20261022.log`.
