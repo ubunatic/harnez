@@ -25,4 +25,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 855 | [855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md](855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md) | harnez init wizard: user picks which harnez features a repo gets | Open |
 | 858 | [858-retros-must-not-promise-future-session-behaviour-codify-safeguards-instead.md](858-retros-must-not-promise-future-session-behaviour-codify-safeguards-instead.md) | Retros must not promise future-session behaviour; codify safeguards instead | Open |
 | 859 | [859-issues-open-close-commit-commits-every-staged-file-not-only-the-ticket-and-index.md](859-issues-open-close-commit-commits-every-staged-file-not-only-the-ticket-and-index.md) | issues open/close --commit commits every staged file, not only the ticket and index | Open |
+| 863 | [863-harnez-release-asset-upload-races-release-creation-continue-looks-for-unversioned-files.md](863-harnez-release-asset-upload-races-release-creation-continue-looks-for-unversioned-files.md) | harnez release: asset upload races release creation, --continue looks for unversioned files | Open |
 <!-- harnez:end issues-active-index -->
