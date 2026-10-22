@@ -130,5 +130,18 @@ the debug box; rate-limit the repeated telemetry line. Then find whether the AGY
 - M1 delivered `d7a372c2` (stale grace): reuses `cache_staleness_multiplier` (now 2) for display staleness;
   `stale`/`stale_reason` in `--json`; host reran usage and cmd tests (green) and saw `"stale": false` for all 3
   agents live. Note: the same key also widens the client cache freshness window to 2 intervals (intended).
+- M2 delivered `b6ed79ba` (fetch-failure log, telemetry warning rate limit `telemetry_warning_rate_limit: 1m`,
+  invalid spool entries moved to `quarantine/`); host reran `./internal/... ./cmd/harnez` tests: green.
+
+### Pre-Work for M3 (from M2 review)
+
+1. Cause is misclassified: `exec.CommandContext` kills the child with SIGKILL when *our* context deadline
+   passes, so "signal: killed" is usually our own timeout, not an external signal. Decide the cause from the
+   context (`ctx.Err()` is `DeadlineExceeded`, or elapsed >= timeout), not from the error text; only a kill
+   with a live context counts as external. Test both cases.
+2. Prove the log fires for the real failure path: a collector that returns an `AgentUsage` with
+   `QuotaFetchError` set (and a nil error), as AGY did at 15:42, must also produce the log line. Test it.
+3. The `Command` strings in `registry.go` duplicate endpoint URLs and the agy command; take them from where the
+   fetchers already define them (or spec), not new literals.
 - Next: M2 (fetch-failure logging, telemetry line rate-limit, bad spool entry skipped), M3 (heartbeat +
   catch-up, keys in `spec/usage.yaml`), M4 (debug box), M5 (AGY statusline drop count).
