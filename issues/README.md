@@ -26,4 +26,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 854 | [854-harnez-init-stays-generic-audit-harnez-specific-assumptions-per-repo-harnez-config-layout-detection.md](854-harnez-init-stays-generic-audit-harnez-specific-assumptions-per-repo-harnez-config-layout-detection.md) | harnez init stays generic: audit harnez-specific assumptions, per-repo .harnez config, layout detection | Open |
 | 855 | [855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md](855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md) | harnez init wizard: user picks which harnez features a repo gets | Open |
 | 856 | [856-installed-workflow-skills-adapt-to-repos-without-the-harnez-layout.md](856-installed-workflow-skills-adapt-to-repos-without-the-harnez-layout.md) | Installed workflow skills adapt to repos without the harnez layout | Open |
+| 858 | [858-retros-must-not-promise-future-session-behaviour-codify-safeguards-instead.md](858-retros-must-not-promise-future-session-behaviour-codify-safeguards-instead.md) | Retros must not promise future-session behaviour; codify safeguards instead | Open |
 <!-- harnez:end issues-active-index -->
