@@ -56,6 +56,30 @@ Related backlog: 494 (component selection in init, overlaps; reconcile here), 56
 IssueTracking/AgenticLoop docs into generic practice + harnez rules; the prose side of this ticket).
 Skills: 856.
 
+## Per-repo config design (M1, before any gating)
+
+No per-repo config exists yet (2026-10-22). Today there is only the embedded `config.yaml` with
+`spec/schemas/config.schema.json` and the user's global `~/.harnez/config.yaml`; both are flat, mixed-concern
+and global. M1 delivers the per-repo file with its own JSON schema in `spec/schemas/`, a `version` key,
+one top-level key per feature area so each area can grow without reshaping the file, and only the keys the
+gating needs. Draft:
+
+```yaml
+version: 1
+issues:            # file-first tracker (recommended default)
+  tracker: harnez  # harnez | none
+  merge_driver: true
+docs:
+  studies: true    # docs/studies/ + generated docs/README.md index
+  copies: [Go, Bash]
+rules:
+  quota: false
+make:
+  container_test: false
+```
+
+Absent file = today's detection, written once on first init. Unknown keys fail schema validation.
+
 ## Open questions
 
 - Config format and name (`.harnez/config.yaml` vs extending an existing file); schema in `spec/`.
