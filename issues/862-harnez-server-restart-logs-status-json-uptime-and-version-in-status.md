@@ -1,6 +1,6 @@
 # 862 — harnez server restart, logs, status --json, uptime and version in status
 
-**Status**: Open
+**Status**: Closed — restart (systemd restart/start, foreground stop with guidance), status uptime+version with mismatch flag, status --json (valid JSON, verified), logs -n/-f via journalctl with default_log_lines spec key; host live run passed (80e2f4ee..a368ce31). Known nit: status shows 'uptime: unknown' for ~10s until the restarted server is ready
 **Priority**: P2 (Medium) — after `make install` the server keeps running the old binary and nothing shows it
 **Severity**: Minor
 **Category**: Feature
