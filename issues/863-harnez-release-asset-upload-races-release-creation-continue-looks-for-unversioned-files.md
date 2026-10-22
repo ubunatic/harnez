@@ -29,3 +29,22 @@ stop and report when blocked.
 - Retry uploads that fail with "could not find release" (bounded, values in spec).
 - `--continue`: read the asset list from the forge, upload only missing files, with names from the
   same source the first run uses (`dist/artifacts.json`).
+
+## Delivered: `0a4d4d80` (retry + manifest names); host review found an asset-set regression
+
+- Retry and spec (`spec/release.yaml`) fine; release tests pass.
+- `harnez release --continue -n --skip-build` (v0.2.0) lists 10 assets: the 8 published ones plus the bare
+  binaries `harnez-aarch64-linux`, `harnez-x86_64-linux` (from `dist/harnez-linux_linux_*/harnez`). The
+  first run never uploads bare binaries.
+- `harnez release -n --skip-build` with a stale 0.2.0 `dist/` would publish v0.2.1 with only those 2 bare
+  binaries (previously: "no release artifacts; publishing without attachments").
+
+### Pre-Work / Required Refinements
+
+1. One function decides the asset set, used by both the first run and `--continue`: versioned archives and
+   packages for the release version, `SHA256SUMS`, `SHA256SUMS.minisig`; never bare binaries. Test: both
+   paths yield the same 8 names for the v0.2.0 `dist/` layout.
+2. Artifacts not matching the release version are never uploaded (stale `dist/`). Test it.
+3. Rerun `make test-q1` after the last change (the previous run predates the final edit).
+4. Note in the ticket, not code: `SHA256SUMS` lists the bare binaries although they are not attached;
+   say whether that is intended or file nothing and leave it as a remark.
