@@ -27,4 +27,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 855 | [855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md](855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md) | harnez init wizard: user picks which harnez features a repo gets | Open |
 | 856 | [856-installed-workflow-skills-adapt-to-repos-without-the-harnez-layout.md](856-installed-workflow-skills-adapt-to-repos-without-the-harnez-layout.md) | Installed workflow skills adapt to repos without the harnez layout | Open |
 | 858 | [858-retros-must-not-promise-future-session-behaviour-codify-safeguards-instead.md](858-retros-must-not-promise-future-session-behaviour-codify-safeguards-instead.md) | Retros must not promise future-session behaviour; codify safeguards instead | Open |
+| 859 | [859-issues-open-close-commit-commits-every-staged-file-not-only-the-ticket-and-index.md](859-issues-open-close-commit-commits-every-staged-file-not-only-the-ticket-and-index.md) | issues open/close --commit commits every staged file, not only the ticket and index | Open |
 <!-- harnez:end issues-active-index -->
