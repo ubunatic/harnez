@@ -1,6 +1,6 @@
 # 849 — harnez apply does not refresh an existing installed skill after its source changes
 
-**Status**: Open
+**Status**: Closed — Apply adopts matching legacy skills across all five targets; unsafe unmarked directories are preserved and reported by apply/diff with takeover instructions. make test-q1 passes.
 **Priority**: P2 (Medium) — skill edits silently never reach agents
 **Severity**: Major
 **Category**: Bug
