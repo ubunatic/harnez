@@ -91,7 +91,7 @@ func TestIssueTrackerDiscoveryConfigEntry(t *testing.T) {
 	var found *RuleFile
 	for i := range cfg.AgentsMD.Rules.Files {
 		s := &cfg.AgentsMD.Rules.Files[i]
-		if strings.Contains(s.Content, "harnez find -d <repo> issues -a status:open") {
+		if strings.Contains(s.Content, "harnez find -d <repo> issues -a status:active") {
 			found = s
 			break
 		}

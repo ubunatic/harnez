@@ -162,6 +162,20 @@ three files; `harnez issues lint` checks their completeness and generated conten
 ticket cap lives in `spec/issues.yaml`; `harnez issues lint` and `harnez issues status` warn when
 the active count exceeds it.
 
+Deferred work goes to the **Backlog** lifecycle (`Status: Backlog — <reason>`) with
+`harnez issues backlog <n…> [reason]`; `harnez issues promote <n…>` returns it to Open. `is:open`
+excludes Backlog; `status:backlog` and `status:unresolved` reach it. Closed tickets cannot be
+backlogged. Before filing, `harnez issues new` runs `harnez find issues similar "<title>"` over all
+tickets (including Backlog, Closed and `issues/archive/`) and refuses on a strong match (threshold in
+`spec/issues.yaml`), printing `issues open|promote <n>` hints; reopen or promote the match instead,
+or pass `--force` for a genuinely new ticket.
+
+Generated files start with a `<!-- managed by harnez index: … -->` line and wrap generated tables
+in `harnez:begin/end` markers; edit the source ticket or study, never the rows. `harnez init`
+installs a `harnez-issues-index` git merge driver (`.gitattributes` + local git config) that merges
+these files by rebuilding their generated blocks from both branches; conflicts in hand-written parts
+of a partly generated file stay normal git conflicts.
+
 The active index `issues/README.md` and generated `BACKLOG.md` and `CLOSED.md` maintain a
 synchronized inventory of all tickets. Run `harnez index` (issue 148) to regenerate all three
 tables from `issues/*.md` + `issues/archive/*.md` metadata instead of hand-editing rows — it is idempotent (a
@@ -169,9 +183,9 @@ second run against unchanged tickets makes no further change) and has a `--check
 flag that exits 1 on drift without writing, for CI/pre-commit use — and prints a
 unified diff of exactly what would change, so running it directly in an agent
 session surfaces specific drift the agent can act on immediately, without a
-separate diff step. For `issues/README.md`, only the consecutive Markdown
-table lines beginning at the exact `| # | File | Title | Status |` header are
-managed: prose before or after that table is preserved verbatim. A customized
+separate diff step. For `issues/README.md`, only the table inside its
+`harnez:begin/end` markers is managed (a file without markers is migrated once from the exact
+`| # | File | Title | Status |` header): prose before or after that table is preserved verbatim. A customized
 table header (for example, one with an added Priority or Target column) is
 refused without writing the file, because harnez cannot regenerate values for
 project-specific columns; reconcile that schema manually before adopting the

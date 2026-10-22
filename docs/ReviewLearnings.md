@@ -24,6 +24,9 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   asserted on the tree after hooks repaired it; real `init` installed nothing and the merge commit
   lacked rows. E2E through the real CLI in a scratch repo, assert on `git show HEAD:<file>` and a
   clean `git status`. Issue 847.
+- **Edits to rendered files**: `.harnez/rules/*.md` are rendered from `config.yaml`, root docs from
+  `docs/practices/` etc. via the installed binary. Edit the source, `make install`, then `harnez init -d .`
+  and check that it leaves the edit in place. Issue 843 M3 edited only the rules output; the next init reverted it.
 - **Package-level test hooks**: a test swapping a package var while an earlier test's goroutine
   still reads it is a data race (cati mediabrowse). Inject hooks per instance; join background
   work in `t.Cleanup`.

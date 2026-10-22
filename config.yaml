@@ -659,7 +659,8 @@ agents_md:
           Applies when this project has an `issues/` tracker. To search existing issues,
           compute the next ticket number, or allocate one, use `harnez find` / `harnez issues`
           instead of `ls issues/`, `find`, or raw grep:
-          - `harnez find -d <repo> issues -a status:open` — list active open issues as text.
+          - `harnez find -d <repo> issues -a status:active` — list active tickets (Open, In Progress, Blocked, Draft) as text.
+          - `issues/README.md` is the generated active index; follow its links to `issues/BACKLOG.md` and `issues/CLOSED.md` for other lifecycle groups.
           - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text.
           - `harnez issues show -d <repo> <n>` — read a single issue as text.
           - Use text for routine issue discovery and document reads. Render PNG cards with
@@ -722,7 +723,8 @@ agents_md:
 
           When this project has an `issues/` tracker, use `harnez find` / `harnez issues` to search, allocate, and update tickets.
 
-          - `harnez find -d <repo> issues -a status:open` lists active tickets.
+          - `harnez find -d <repo> issues -a status:active` lists active tickets (Open, In Progress, Blocked, Draft).
+          - `issues/README.md` is the generated active index; follow its links to `issues/BACKLOG.md` and `issues/CLOSED.md` for the other lifecycle groups.
           - `harnez find -d <repo> issues next` reports the next free ticket number.
           - `harnez issues new -d <repo> "<title>"` reserves a number; fill the printed file, run `harnez index -d <repo>`, and commit ticket/index changes.
           - Cloud agents use `harnez issues new --remote -d <repo> "<title>"` (automatic when `CLAUDE_CODE_REMOTE` is set): authenticated gh on the github remote allocates permanent GH IDs. No host reservation or local fallback; local numbering ignores GH IDs.
