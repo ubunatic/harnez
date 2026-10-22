@@ -1,6 +1,6 @@
 # 836 — Stop asking to push other repos mid-session; check unpushed repos in wrap
 
-**Status**: Open
+**Status**: Backlog — lower priority than the active 20; parked to keep the cap
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

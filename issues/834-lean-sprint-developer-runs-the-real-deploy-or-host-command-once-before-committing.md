@@ -1,6 +1,6 @@
 # 834 — lean-sprint: developer runs the real deploy or host command once before committing
 
-**Status**: Open
+**Status**: Backlog — lower priority than the active 20; parked to keep the cap
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
