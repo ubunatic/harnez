@@ -147,7 +147,137 @@ func indexSnapshotFixtureDir(t *testing.T) string {
 		[]byte("# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	writeIndexRepoConfig(t, repoDir, "harnez", false)
 	return repoDir
+}
+
+func writeIndexRepoConfig(t *testing.T, dir, tracker string, studies bool) {
+	t.Helper()
+	config := fmt.Sprintf(`version: 1
+issues:
+  tracker: %s
+  merge_driver: %t
+docs:
+  studies: %t
+  copies: []
+rules:
+  quota: false
+make:
+  container_test: false
+`, tracker, tracker == "harnez", studies)
+	path := filepath.Join(dir, ".harnez", "repo.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunIndexSkipsForeignIssueTracker(t *testing.T) {
+	repoDir := t.TempDir()
+	issuesDir := filepath.Join(repoDir, "issues")
+	if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	readme := filepath.Join(issuesDir, "README.md")
+	original := []byte("# Foreign tracker\n\nOwner-maintained index.\n")
+	if err := os.WriteFile(readme, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(issuesDir, "001-ticket.md"), []byte("# 001 — Ticket\n\n**Status**: Open\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeIndexRepoConfig(t, repoDir, "none", false)
+
+	var out bytes.Buffer
+	if err := runIndex(&out, indexOptions{Dir: repoDir}); err != nil {
+		t.Fatalf("runIndex: %v", err)
+	}
+	got, err := os.ReadFile(readme)
+	if err != nil || !bytes.Equal(got, original) {
+		t.Fatalf("foreign issue index changed: got=%q err=%v", got, err)
+	}
+	if !strings.Contains(out.String(), "nothing to do") {
+		t.Fatalf("missing no-op note: %q", out.String())
+	}
+}
+
+func TestRunIndexGatesIssuesAndStudiesIndependently(t *testing.T) {
+	t.Run("studies only", func(t *testing.T) {
+		repoDir := t.TempDir()
+		issuesDir := filepath.Join(repoDir, "issues")
+		studiesDir := filepath.Join(repoDir, "docs", "studies")
+		if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(studiesDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		issuesReadme := []byte("# Foreign tracker\n\nKeep me.\n")
+		if err := os.WriteFile(filepath.Join(issuesDir, "README.md"), issuesReadme, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(issuesDir, "001-ticket.md"), []byte("# 001 — Ticket\n\n**Status**: Open\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(studiesDir, "fresh.md"), []byte("# Fresh study\n\n**Scope**: new topic\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		docsReadme := filepath.Join(repoDir, "docs", "README.md")
+		if err := os.WriteFile(docsReadme, []byte("# Docs\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		writeIndexRepoConfig(t, repoDir, "none", true)
+
+		var out bytes.Buffer
+		if err := runIndex(&out, indexOptions{Dir: repoDir}); err != nil {
+			t.Fatalf("runIndex: %v", err)
+		}
+		gotIssues, err := os.ReadFile(filepath.Join(issuesDir, "README.md"))
+		if err != nil || !bytes.Equal(gotIssues, issuesReadme) {
+			t.Errorf("issues index changed with tracker none: got=%q err=%v", gotIssues, err)
+		}
+		gotDocs, err := os.ReadFile(docsReadme)
+		if err != nil || !strings.Contains(string(gotDocs), "studies/fresh.md") {
+			t.Errorf("studies index was not updated: got=%q err=%v", gotDocs, err)
+		}
+	})
+
+	t.Run("issues only", func(t *testing.T) {
+		repoDir := indexSnapshotFixtureDir(t)
+		docsReadme := filepath.Join(repoDir, "docs", "README.md")
+		if err := os.MkdirAll(filepath.Dir(docsReadme), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		docsOriginal := []byte("# Owner docs index\n\nDo not rewrite.\n")
+		if err := os.WriteFile(docsReadme, docsOriginal, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		var out bytes.Buffer
+		if err := runIndex(&out, indexOptions{Dir: repoDir, DBPath: filepath.Join(t.TempDir(), "telemetry.sqlite")}); err != nil {
+			t.Fatalf("runIndex: %v", err)
+		}
+		gotDocs, err := os.ReadFile(docsReadme)
+		if err != nil || !bytes.Equal(gotDocs, docsOriginal) {
+			t.Errorf("docs index changed with studies disabled: got=%q err=%v", gotDocs, err)
+		}
+		gotIssues, err := os.ReadFile(filepath.Join(repoDir, "issues", "README.md"))
+		if err != nil || !strings.Contains(string(gotIssues), "First") {
+			t.Errorf("issue index was not updated: got=%q err=%v", gotIssues, err)
+		}
+	})
+}
+
+func TestRunIndexWithoutEnabledIndexesPrintsNote(t *testing.T) {
+	var out bytes.Buffer
+	if err := runIndex(&out, indexOptions{Dir: t.TempDir()}); err != nil {
+		t.Fatalf("runIndex: %v", err)
+	}
+	if !strings.Contains(out.String(), "nothing to do") {
+		t.Fatalf("missing no-op note: %q", out.String())
+	}
 }
 
 // TestRunIndex_RecordsIssueSnapshotAcrossTwoPoints verifies that 'harnez
@@ -248,6 +378,7 @@ func TestRunIndex_RefusesCustomizedIssuesTableWithoutWriting(t *testing.T) {
 	if err := os.WriteFile(readme, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	writeIndexRepoConfig(t, repoDir, "harnez", false)
 
 	var out bytes.Buffer
 	err := runIndex(&out, indexOptions{Dir: repoDir, DBPath: filepath.Join(t.TempDir(), "telemetry.sqlite")})

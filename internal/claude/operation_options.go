@@ -12,7 +12,8 @@ type ApplyOptions struct {
 }
 
 // InitOptions selects project initialization behavior. IssuesGit is tri-state:
-// nil preserves the integration, true installs it, and false removes it.
+// nil preserves the recorded setting, true enables it, and false disables it;
+// integration is installed only when the repo selects the Harnez tracker.
 // An omitted Variant preserves each installed doc's variant.
 type InitOptions struct {
 	Docs        []string

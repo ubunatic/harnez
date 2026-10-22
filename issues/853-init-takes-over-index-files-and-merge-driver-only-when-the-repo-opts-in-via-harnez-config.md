@@ -50,6 +50,18 @@ Host repro (854 M2): scratch repo with a plain Makefile and a foreign `issues/RE
 
 ## Checks
 
-- Scratch repo with a foreign `issues/README.md` (no marker, no config): init changes nothing there and
-  installs no driver.
-- This repo: behavior unchanged, `git status` clean after init.
+- Scratch repo with a foreign `issues/README.md` (no marker): init records `tracker: none`; no
+  `.gitattributes`, merge config, or active hook is installed. `cmp` confirms the README is unchanged
+  after init and `harnez index`.
+- This repo: `make install` and `harnez init -d .` report no changes.
+- `make test-q1`: passed; full output saved to `/tmp/harnez-853-test-q1-final.log`; `rg -- '--- FAIL'`
+  found no matches.
+
+## Implementation (2026-10-22)
+
+- Init installs issue-index Git integration only when `issues.tracker: harnez` and
+  `issues.merge_driver: true`; disabled config removes only Harnez-managed attributes, merge settings,
+  and hook blocks. `--issues-git` choices persist in `repo.yaml`.
+- `harnez index` gates issues and studies indexes independently and prints a successful no-op note when
+  neither enabled index is present.
+- The file-first tracker remains the recommended default. This ticket remains open for the host to close.

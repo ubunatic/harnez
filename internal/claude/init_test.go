@@ -351,6 +351,10 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	issuesReadme := []byte("# Foreign tracker\n\nKeep this file byte-for-byte.\n")
+	if err := os.WriteFile(filepath.Join(dir, "issues", "README.md"), issuesReadme, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	gitignore := "dist/\n# project-specific rules\n"
 	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(gitignore), 0o644); err != nil {
 		t.Fatal(err)
@@ -402,19 +406,27 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 		t.Errorf("existing local exclude content was lost:\n%s", exclude)
 	}
 	attributes, err := os.ReadFile(filepath.Join(dir, ".gitattributes"))
-	if err != nil || !strings.Contains(string(attributes), "issues/README.md merge=harnez-issues-index") {
-		t.Errorf("plain init did not install issue merge attributes: %v (%q)", err, attributes)
+	if err == nil && strings.Contains(string(attributes), "harnez-issues-index") {
+		t.Errorf("foreign tracker init installed issue merge attributes: %q", attributes)
+	} else if err != nil && !os.IsNotExist(err) {
+		t.Errorf("read .gitattributes: %v", err)
 	}
-	driver, err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Output()
-	if err != nil || strings.TrimSpace(string(driver)) != "harnez issues merge-driver %O %A %B %P" {
-		t.Errorf("plain init did not configure merge driver: %v (%q)", err, driver)
+	if err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Run(); err == nil {
+		t.Error("foreign tracker init configured issue merge driver")
 	}
 	hook, err := os.ReadFile(hookPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(hook), "echo user-hook") || !strings.Contains(string(hook), "harnez issues lint --cached") {
-		t.Errorf("plain init did not preserve and extend pre-commit hook:\n%s", hook)
+	if string(hook) != "#!/bin/sh\necho user-hook\n" {
+		t.Errorf("foreign tracker init changed pre-commit hook:\n%s", hook)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "hooks", "post-merge")); !os.IsNotExist(err) {
+		t.Errorf("foreign tracker init installed post-merge hook: %v", err)
+	}
+	gotReadme, err := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+	if err != nil || string(gotReadme) != string(issuesReadme) {
+		t.Errorf("foreign issues/README.md changed: err=%v got=%q want=%q", err, gotReadme, issuesReadme)
 	}
 }
 
@@ -427,6 +439,9 @@ func TestRunInit_IssuesGitDefaultsOnAndIsRemovable(t *testing.T) {
 		t.Fatalf("git config core.hooksPath: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "issues", "README.md"), []byte("<!-- managed by harnez index -->\n# Issues\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	hookPath := filepath.Join(dir, ".git", "hooks", "pre-commit")
@@ -484,6 +499,10 @@ func TestRunInit_IssuesGitDefaultsOnAndIsRemovable(t *testing.T) {
 	if err != nil || strings.TrimSpace(string(driver)) != "harnez issues merge-driver %O %A %B %P" {
 		t.Fatalf("enable did not configure merge driver: %v (%q)", err, driver)
 	}
+	repoConfig, err := claude.LoadRepoConfig(dir)
+	if err != nil || !repoConfig.Issues.MergeDriver {
+		t.Fatalf("enable was not recorded in repo.yaml: config=%+v err=%v", repoConfig, err)
+	}
 	hook, _ = os.ReadFile(hookPath)
 	if strings.Count(string(hook), "# harnez:begin issues-index-lint") != 1 || !strings.Contains(string(hook), "echo user-hook") {
 		t.Fatalf("enable did not install one managed hook block: %q", hook)
@@ -501,6 +520,10 @@ func TestRunInit_IssuesGitDefaultsOnAndIsRemovable(t *testing.T) {
 	}
 	if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{IssuesGit: &disabled}); err != nil {
 		t.Fatalf("repeat disable without issues directory: %v", err)
+	}
+	repoConfig, err = claude.LoadRepoConfig(dir)
+	if err != nil || repoConfig.Issues.MergeDriver {
+		t.Fatalf("disable was not recorded in repo.yaml: config=%+v err=%v", repoConfig, err)
 	}
 	attributes, _ = os.ReadFile(filepath.Join(dir, ".gitattributes"))
 	if string(attributes) != "*.bin binary\n" {

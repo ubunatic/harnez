@@ -72,7 +72,7 @@ func initAgentFile(ir *initReport, dir string, cfg *Config, replace bool) (bool,
 }
 
 // initGitIntegration maintains local excludes and issue-index Git integration.
-func initGitIntegration(ir *initReport, dir string, issuesGit *bool) error {
+func initGitIntegration(ir *initReport, dir string, repoConfig *RepoConfig) error {
 	var err error
 	_, _ = fsutil.EnsureGitExclude(dir, "AGENTS.local.md")
 	if ignored, err := fsutil.EnsureGitExclude(dir, ".harnez/rules/Local.md"); err != nil {
@@ -94,17 +94,15 @@ func initGitIntegration(ir *initReport, dir string, issuesGit *bool) error {
 			}
 		}
 	}
-	if issuesGit != nil || fileExists(filepath.Join(dir, "issues")) {
-		var gitChanges int
-		if issuesGit == nil || *issuesGit {
-			gitChanges, err = installIssuesGitIntegration(dir)
-		} else {
-			gitChanges, err = removeIssuesGitIntegration(dir)
-		}
-		if err != nil {
-			return err
-		}
-		ir.changes += gitChanges
+	var gitChanges int
+	if repoConfig != nil && repoConfig.Issues.Tracker == "harnez" && repoConfig.Issues.MergeDriver {
+		gitChanges, err = installIssuesGitIntegration(dir)
+	} else {
+		gitChanges, err = removeIssuesGitIntegration(dir)
 	}
+	if err != nil {
+		return err
+	}
+	ir.changes += gitChanges
 	return nil
 }

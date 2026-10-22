@@ -20,6 +20,18 @@ func duplicateRepo(t *testing.T, count int) string {
 		writeDuplicateFile(t, dir, "issues/096-"+name+".md", "# 096 — "+name+"\n\n**Status**: Open\n")
 	}
 	writeDuplicateFile(t, dir, "issues/README.md", "# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n")
+	writeDuplicateFile(t, dir, ".harnez/repo.yaml", `version: 1
+issues:
+  tracker: harnez
+  merge_driver: true
+docs:
+  studies: false
+  copies: []
+rules:
+  quota: false
+make:
+  container_test: false
+`)
 	repoRunGit(t, dir, "add", ".")
 	repoRunGit(t, dir, "commit", "-qm", "fixture")
 	return dir
@@ -27,7 +39,11 @@ func duplicateRepo(t *testing.T, count int) string {
 
 func writeDuplicateFile(t *testing.T, dir, path, content string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, path), []byte(content), 0o644); err != nil {
+	fullPath := filepath.Join(dir, path)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

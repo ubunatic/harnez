@@ -1506,7 +1506,10 @@ their actual source of truth, so they stop drifting:
   issues/CLOSED.md   <- Closed tickets, including archived tickets
   docs/README.md      <- docs/studies/*.md (docs/studies/ table only)
 
-It is idempotent: run against unchanged sources, it reports no changes.
+It is idempotent: unchanged sources report no changes. Issue indexes run only
+when issues.tracker: harnez is set in .harnez/repo.yaml; docs.studies: true
+enables the studies index independently. If neither configured index is
+present, it prints a note and exits successfully.
 Pass --check to fail (exit 1) instead of writing, for CI/pre-commit use --
 mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
 diff of the drift, so the output is self-contained enough for an agent
@@ -1542,7 +1545,7 @@ Flags:
   -f, --force              allow initializing home directory, root, or non-coding directory
       --gowork             set up or migrate Go workspace (go.work.example + untracked local go.work symlink)
   -h, --help               help for init
-      --issues-git         enable issue-index Git integration (use --issues-git=false to remove it)
+      --issues-git         record issue-index Git integration for a Harnez tracker (use --issues-git=false to remove it)
       --json               output RAMP report in JSON format
       --quota-1            scaffold Quota-1 single-test guardrails in AGENTS.md and Makefile
       --ramp               report RAMP maturity profile and projected init changes (offline, read-only)

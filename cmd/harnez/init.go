@@ -70,7 +70,7 @@ func newInitCmd() *cobra.Command {
 	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")
 	initCmd.Flags().BoolVar(&initUpdate, "update", false, "re-fetch and refresh the project summary (implies --summary)")
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")
-	initCmd.Flags().BoolVar(&initIssuesGit, "issues-git", false, "enable issue-index Git integration (use --issues-git=false to remove it)")
+	initCmd.Flags().BoolVar(&initIssuesGit, "issues-git", false, "record issue-index Git integration for a Harnez tracker (use --issues-git=false to remove it)")
 	initCmd.Flags().BoolVar(&initGoWork, "gowork", false, "set up or migrate Go workspace (go.work.example + untracked local go.work symlink)")
 	initCmd.Flags().BoolVar(&initQuota1, "quota-1", false, "scaffold Quota-1 single-test guardrails in AGENTS.md and Makefile")
 	initCmd.Flags().BoolVar(&initRAMP, "ramp", false, "report RAMP maturity profile and projected init changes (offline, read-only)")

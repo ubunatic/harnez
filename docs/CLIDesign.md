@@ -159,9 +159,9 @@ harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [--force]
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
         ├── ignore /issues/README.md.lock in .git/info/exclude when issues/ exists
-        ├── enable issue-index attributes, local merge driver, and hook (847);
-        │   issue-git integration is still triggered by issues/ or --issues-git and is being
-        │   gated by repo config in 853; --issues-git=false removes only the Harnez integration
+        ├── install issue-index attributes, local merge driver, and hook only when
+        │   repo.yaml says issues.tracker: harnez and issues.merge_driver: true;
+        │   otherwise remove only Harnez-managed attributes, config, and hook blocks
         ├── auto-detect docs from config.yaml and record the initial layout in repo.yaml
         ├── apply cfg.AgentsMD.Local sections (Language Conventions, etc.)
         ├── add container-test only when repo.yaml make.container_test is true
@@ -184,7 +184,10 @@ the result once. Later runs respect the file; schema errors, including unknown k
 init before project changes. Explicit setup flags update the corresponding recorded choices.
 The file-first Harnez issue tracker remains the recommended default. A repo detected without
 that tracker or indexed studies gets a notice in `.harnez/rules/Index.md`, which the generated
-rules header asks agents to read.
+rules header asks agents to read. `harnez index` regenerates issue indexes only when
+`issues.tracker` is `harnez`, and regenerates the studies table only when `docs.studies` is
+true. Those gates are independent. With neither enabled index available, it prints a note
+and exits successfully without rewriting either index.
 
 ## Copyable-doc contract
 

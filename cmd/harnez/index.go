@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/server"
@@ -49,7 +50,10 @@ their actual source of truth, so they stop drifting:
   issues/CLOSED.md   <- Closed tickets, including archived tickets
   docs/README.md      <- docs/studies/*.md (docs/studies/ table only)
 
-It is idempotent: run against unchanged sources, it reports no changes.
+It is idempotent: unchanged sources report no changes. Issue indexes run only
+when issues.tracker: harnez is set in .harnez/repo.yaml; docs.studies: true
+enables the studies index independently. If neither configured index is
+present, it prints a note and exits successfully.
 Pass --check to fail (exit 1) instead of writing, for CI/pre-commit use --
 mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
 diff of the drift, so the output is self-contained enough for an agent
@@ -104,8 +108,15 @@ func runIndex(w io.Writer, opts indexOptions) error {
 	docsReadme := filepath.Join(dir, "docs", "README.md")
 	docsDir := filepath.Join(dir, "docs")
 
-	hasIssues := dirExists(issuesDir) || pathExists(issuesReadme)
-	hasDocs := pathExists(docsReadme)
+	repoConfig, err := loadIndexRepoConfig(dir)
+	if err != nil {
+		return fmt.Errorf("index: load repo config: %w", err)
+	}
+	// Keep the tracker and studies switches independent; a foreign issues/
+	// directory by itself never makes its indexes ours to rewrite.
+	hasIssues := repoConfig.Issues.Tracker == "harnez" && dirExists(issuesDir)
+	hasDocs := repoConfig.Docs.Studies &&
+		dirExists(filepath.Join(docsDir, "studies")) && pathExists(docsReadme)
 
 	if hasIssues {
 		if err := issues.CheckDuplicateNumbers(issuesDir); err != nil {
@@ -114,7 +125,8 @@ func runIndex(w io.Writer, opts indexOptions) error {
 	}
 
 	if !hasIssues && !hasDocs {
-		return fmt.Errorf("index: no issues/ or docs/studies/ found in %s", dir)
+		fmt.Fprintf(w, "index: no enabled issue or studies indexes in %s; nothing to do\n", dir)
+		return nil
 	}
 
 	if opts.Check {
@@ -139,6 +151,31 @@ func runIndex(w io.Writer, opts indexOptions) error {
 		printIndexResult(w, docsReadme, docsChanged)
 	}
 	return nil
+}
+
+func loadIndexRepoConfig(dir string) (*claude.RepoConfig, error) {
+	config, err := claude.LoadRepoConfig(dir)
+	if err == nil {
+		return config, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	// Older initialized repositories may not have repo.yaml yet. Detect only
+	// clearly Harnez-owned issue indexes, while retaining the legacy studies
+	// layout detection until init records the project config.
+	config = &claude.RepoConfig{Version: 1}
+	readme, readErr := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+	if readErr == nil && (strings.Contains(string(readme), "managed by harnez index") ||
+		strings.Contains(string(readme), "harnez:begin")) {
+		config.Issues.Tracker = "harnez"
+		config.Issues.MergeDriver = true
+	} else {
+		config.Issues.Tracker = "none"
+	}
+	config.Docs.Studies = dirExists(filepath.Join(dir, "docs", "studies"))
+	return config, nil
 }
 
 // recordIssueSnapshot computes the current open/closed/draft/unknown ticket

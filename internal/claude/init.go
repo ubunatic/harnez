@@ -1108,7 +1108,7 @@ func canonicalPath(path string) string {
 func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 	docs, repoMode := opts.Docs, opts.RepoMode
 	assumeYes, withSummary, update, replace := opts.AssumeYes, opts.WithSummary, opts.Update, opts.Replace
-	issuesGit, gowork, force, variant := opts.IssuesGit, opts.GoWork, opts.Force, opts.Variant
+	gowork, force, variant := opts.GoWork, opts.Force, opts.Variant
 	if err := ValidateInitTarget(dir, force); err != nil {
 		return err
 	}
@@ -1160,7 +1160,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 		return err
 	}
 
-	if err := initGitIntegration(ir, dir, issuesGit); err != nil {
+	if err := initGitIntegration(ir, dir, repoConfig); err != nil {
 		return err
 	}
 

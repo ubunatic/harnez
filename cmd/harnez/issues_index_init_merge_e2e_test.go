@@ -29,7 +29,7 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 	writeMergeFixture(t, root, "go.mod", "module fixture\n\ngo 1.24\n")
 	writeMergeFixture(t, root, "AGENTS.md", "# Fixture\n")
 	writeMergeFixture(t, root, "issues/001-base.md", "# 001 — base\n\n**Status**: Open\n")
-	writeMergeFixture(t, root, "issues/README.md", "# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n")
+	writeMergeFixture(t, root, "issues/README.md", "<!-- managed by harnez index -->\n# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n")
 	writeMergeFixture(t, root, "docs/README.md", "<!-- managed by harnez index: generated sections are overwritten; only the studies table is generated; other docs tables and prose are hand-written -->\n# Docs\n\nHandwritten preface.\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n")
 	writeMergeFixture(t, root, "docs/studies/a.md", "# Base study\n\n**Scope**: base study\n")
 
