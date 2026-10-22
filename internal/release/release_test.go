@@ -2,6 +2,8 @@ package release
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -843,6 +845,99 @@ func TestRunPublishStepFiltersStaleVersionedArchive(t *testing.T) {
 	}
 }
 
+func TestRunPublishUsesSameVersionedAssetSetForFirstAndContinue(t *testing.T) {
+	dir := t.TempDir()
+	dist := filepath.Join(dir, "dist")
+	if err := os.MkdirAll(dist, 0755); err != nil {
+		t.Fatal(err)
+	}
+	assetData := map[string]string{
+		"harnez-0.2.0-aarch64-linux.deb":    "deb arm",
+		"harnez-0.2.0-aarch64-linux.rpm":    "rpm arm",
+		"harnez-0.2.0-aarch64-linux.tar.gz": "archive arm",
+		"harnez-0.2.0-x86_64-linux.deb":     "deb amd",
+		"harnez-0.2.0-x86_64-linux.rpm":     "rpm amd",
+		"harnez-0.2.0-x86_64-linux.tar.gz":  "archive amd",
+		"harnez-aarch64-linux":              "bare arm",
+		"harnez-x86_64-linux":               "bare amd",
+		"harnez-0.2.1-x86_64-linux.tar.gz":  "stale archive",
+	}
+	var manifest strings.Builder
+	manifest.WriteByte('[')
+	var checksums strings.Builder
+	manifestNames := []string{
+		"harnez-0.2.0-aarch64-linux.deb", "harnez-0.2.0-aarch64-linux.rpm", "harnez-0.2.0-aarch64-linux.tar.gz",
+		"harnez-0.2.0-x86_64-linux.deb", "harnez-0.2.0-x86_64-linux.rpm", "harnez-0.2.0-x86_64-linux.tar.gz",
+		"harnez-aarch64-linux", "harnez-x86_64-linux", "harnez-0.2.1-x86_64-linux.tar.gz",
+	}
+	for i, name := range manifestNames {
+		data := assetData[name]
+		if err := os.WriteFile(filepath.Join(dist, name), []byte(data), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if i > 0 {
+			manifest.WriteByte(',')
+		}
+		fmt.Fprintf(&manifest, `{"name":%q,"path":%q}`, name, filepath.ToSlash(filepath.Join("dist", name)))
+		if !strings.Contains(name, "0.2.1") {
+			fmt.Fprintf(&checksums, "%x  %s\n", sha256.Sum256([]byte(data)), name)
+		}
+	}
+	manifest.WriteByte(']')
+	if err := os.WriteFile(filepath.Join(dist, "artifacts.json"), []byte(manifest.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dist, "SHA256SUMS"), []byte(checksums.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dist, "SHA256SUMS.minisig"), []byte("signature"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{
+		"harnez-0.2.0-aarch64-linux.deb", "harnez-0.2.0-aarch64-linux.rpm", "harnez-0.2.0-aarch64-linux.tar.gz",
+		"harnez-0.2.0-x86_64-linux.deb", "harnez-0.2.0-x86_64-linux.rpm", "harnez-0.2.0-x86_64-linux.tar.gz",
+		"SHA256SUMS", "SHA256SUMS.minisig",
+	}
+	var firstRun, continuedRun []string
+	var firstOutput, continuedOutput string
+	for _, continued := range []bool{false, true} {
+		var out bytes.Buffer
+		opt := Options{Dir: dir, DryRun: true, Continue: continued, Out: &out}
+		if err := runPublishStep(opt, "harnez", "v0.2.0", nil); err != nil {
+			t.Fatalf("runPublishStep(continue=%t): %v", continued, err)
+		}
+		var got []string
+		for _, name := range want {
+			if !strings.Contains(out.String(), "- "+name+" (dist/") {
+				t.Errorf("continue=%t output missing %s:\n%s", continued, name, out.String())
+			}
+			got = append(got, name)
+		}
+		for _, excluded := range []string{"harnez-aarch64-linux", "harnez-x86_64-linux", "0.2.1"} {
+			if strings.Contains(out.String(), excluded) {
+				t.Errorf("continue=%t output includes excluded %s:\n%s", continued, excluded, out.String())
+			}
+		}
+		if got := strings.Count(out.String(), "\n              - "); got != 8 {
+			t.Errorf("continue=%t listed %d assets, want exactly 8:\n%s", continued, got, out.String())
+		}
+		if continued {
+			continuedRun = got
+			continuedOutput = out.String()
+		} else {
+			firstRun = got
+			firstOutput = out.String()
+		}
+	}
+	if strings.Join(firstRun, "\n") != strings.Join(continuedRun, "\n") {
+		t.Fatalf("first-run asset set %v differs from continue asset set %v", firstRun, continuedRun)
+	}
+	if firstOutput != continuedOutput {
+		t.Fatalf("first-run publish output differs from continue output:\nfirst:\n%s\ncontinue:\n%s", firstOutput, continuedOutput)
+	}
+}
+
 func TestRunPublishStepWithoutArtifactsCreatesBareRelease(t *testing.T) {
 	for _, withDist := range []bool{false, true} {
 		name := "missing-dist"
@@ -1022,8 +1117,6 @@ func TestRunSigningAndPublishGoReleaserArtifacts(t *testing.T) {
 		"harnez-0.1.17-aarch64-linux.rpm",
 		"harnez-0.1.17-x86_64-linux.deb",
 		"harnez-0.1.17-aarch64-linux.deb",
-		"harnez-aarch64-linux",
-		"harnez-x86_64-linux",
 	}
 	var checksums strings.Builder
 	for _, name := range artifacts {
@@ -1054,6 +1147,11 @@ func TestRunSigningAndPublishGoReleaserArtifacts(t *testing.T) {
 	for _, name := range append(append([]string{}, artifacts...), "SHA256SUMS", "SHA256SUMS.minisig") {
 		if !strings.Contains(out.String(), filepath.Join("dist", name)) {
 			t.Errorf("expected %s to be published, output: %s", name, out.String())
+		}
+	}
+	for _, name := range []string{"harnez-aarch64-linux", "harnez-x86_64-linux"} {
+		if strings.Contains(out.String(), name) {
+			t.Errorf("bare binary %s must not be published, output: %s", name, out.String())
 		}
 	}
 }

@@ -132,15 +132,17 @@ network/forge error — `--continue` resumes safely.
 
 `--continue` skips build and signing when `dist/SHA256SUMS`, its `.minisig`, and all
 listed archives for this version exist and their hashes verify. Missing files rebuild;
-checksum corruption fails. Before upload, fj lists existing assets and downloads
-published `SHA256SUMS`: existing names print `exists, skipped`; differing checksum
-sets fail for manual recovery without deleting remote assets. Uploads reporting that a
-new release is not visible retry according to `upload_retry_attempts` and
-`upload_retry_delay` in the embedded `spec/release.yaml`. Asset names and paths come
-from `dist/artifacts.json` when available. If listing fails, Harnez tries every upload
-and treats `already exists` as success. A nonempty release without `SHA256SUMS` also
-stops. Runtime errors suppress usage; auth failures suggest `fj auth login`, followed
-by `harnez release --continue`.
+checksum corruption fails. First publish and continue use one resolver: only versioned
+archives and packages for the release, `SHA256SUMS`, and its `.minisig` are uploaded.
+Bare binaries and artifacts for another version are excluded, including entries in
+`dist/artifacts.json`. Before upload, fj lists existing assets and downloads published
+`SHA256SUMS`: existing names print `exists, skipped`; differing checksum sets fail for
+manual recovery without deleting remote assets. Uploads reporting that a new release is
+not visible retry according to `upload_retry_attempts` and `upload_retry_delay` in the
+embedded `spec/release.yaml`. If listing fails, Harnez tries every selected upload and
+treats `already exists` as success. A nonempty release without `SHA256SUMS` also stops.
+Runtime errors suppress usage; auth failures suggest `fj auth login`, followed by
+`harnez release --continue`.
 
 ### 4.1 `go.work` and local co-development
 
@@ -224,9 +226,10 @@ harnez release --build-cmd "make dist"
   `~/.minisign/minisign.key`. Prefer a dedicated per-project key over the shared fallback;
   rotating from shared to per-project leaves already-published releases verifiable only with
   the old public key — commit the new `minisign.pub` and say so in the commit message.
-- **Published assets**: publish attaches everything in `dist/` matching `*.tar.gz`, `*.zip`,
-  `*.minisig`, `SHA256SUMS`, `<project>-*`. A scripted project ends up with the same three
-  assets as a Go one: tarball, `SHA256SUMS`, `SHA256SUMS.minisig`.
+- **Published assets**: first publish and `--continue` attach the same set: versioned archives
+  and packages for the release, `SHA256SUMS`, and `SHA256SUMS.minisig`. Bare binaries and
+  artifacts for another version are excluded. A scripted project with a tarball ends up with
+  three assets: tarball, `SHA256SUMS`, and `SHA256SUMS.minisig`.
 - **Pitfall**: publish still fails when `dist/` is missing or has no matching file, so a
   repo without artifacts cannot be released yet (harnez issue 734).
 

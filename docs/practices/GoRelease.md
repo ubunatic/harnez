@@ -192,12 +192,14 @@ harnez release --continue
 archive hashes verify. Missing files trigger a rebuild; checksum corruption fails.
 Uploads that report the release is not yet visible are retried using the bounded
 `upload_retry_attempts` and `upload_retry_delay` values in the embedded
-`spec/release.yaml`. The asset names and paths come from `dist/artifacts.json` when
-available, so renamed binaries upload under their published names. Before uploading,
+`spec/release.yaml`. The same asset resolver is used for a first publish and
+`--continue`: it selects only versioned archives and packages for the release, plus
+`SHA256SUMS` and its `.minisig`. Bare binaries and artifacts for another version are
+excluded, even when listed in `dist/artifacts.json`. Before uploading,
 fj lists existing release assets and downloads published `SHA256SUMS`. Existing names
 print `exists, skipped`; local files must match the published checksum set. A mismatch
 stops publication for manual recovery and never deletes remote assets. If listing fails,
-Harnez attempts every local upload and treats an `already exists` response as success.
+Harnez attempts every selected upload and treats an `already exists` response as success.
 An existing nonempty release without `SHA256SUMS` also stops.
 Runtime errors suppress usage; token/auth failures suggest `fj auth login`. After
 renewing authentication, retry with `harnez release --continue`.

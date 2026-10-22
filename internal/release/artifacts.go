@@ -112,20 +112,38 @@ func releaseAssetsFromDist(dir, projectName, tagName string) ([]releaseAsset, er
 }
 
 func releaseArtifactMatches(name, projectName, tagName, distDir string) bool {
-	if !artifactMatchesVersion(name, tagName) {
+	if name == "SHA256SUMS" {
+		return checksumMatchesVersion(filepath.Join(distDir, name), "", tagName)
+	}
+	if name == "SHA256SUMS.minisig" {
+		return checksumMatchesVersion(filepath.Join(distDir, "SHA256SUMS"), "", tagName)
+	}
+	if !strings.HasPrefix(name, projectName+"-") || !releaseArtifactHasVersion(name, tagName) {
 		return false
 	}
-	if name == "SHA256SUMS" && !checksumMatchesVersion(filepath.Join(distDir, name), "", tagName) {
+	for _, suffix := range []string{".tar.gz", ".zip", ".deb", ".rpm", ".apk", ".pkg", ".dmg", ".msi"} {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func releaseArtifactHasVersion(name, tagName string) bool {
+	want := strings.TrimPrefix(artifactVersionCorePattern.FindString(tagName), "v")
+	if want == "" {
 		return false
 	}
-	if name == "SHA256SUMS.minisig" && !checksumMatchesVersion(filepath.Join(distDir, "SHA256SUMS"), "", tagName) {
+	versions := artifactVersionCorePattern.FindAllString(name, -1)
+	if len(versions) == 0 {
 		return false
 	}
-	return strings.HasSuffix(name, ".tar.gz") ||
-		strings.HasSuffix(name, ".zip") ||
-		strings.HasSuffix(name, ".minisig") ||
-		name == "SHA256SUMS" ||
-		strings.HasPrefix(name, projectName+"-")
+	for _, version := range versions {
+		if strings.TrimPrefix(version, "v") != want {
+			return false
+		}
+	}
+	return true
 }
 
 func parseChecksums(data []byte) (map[string]string, error) {

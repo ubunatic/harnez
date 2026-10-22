@@ -285,7 +285,6 @@ func TestPublishAssetListUsesManifestPathAndName(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]string{
-		"harnez-aarch64-linux":              "dist/harnez-linux_linux_arm64_v8.0/harnez",
 		"harnez-0.2.0-aarch64-linux.tar.gz": "dist/harnez-0.2.0-aarch64-linux.tar.gz",
 	}
 	if len(got) != len(want) {

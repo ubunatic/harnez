@@ -39,12 +39,16 @@ stop and report when blocked.
 - `harnez release -n --skip-build` with a stale 0.2.0 `dist/` would publish v0.2.1 with only those 2 bare
   binaries (previously: "no release artifacts; publishing without attachments").
 
-### Pre-Work / Required Refinements
+### Refinements delivered
 
-1. One function decides the asset set, used by both the first run and `--continue`: versioned archives and
-   packages for the release version, `SHA256SUMS`, `SHA256SUMS.minisig`; never bare binaries. Test: both
-   paths yield the same 8 names for the v0.2.0 `dist/` layout.
-2. Artifacts not matching the release version are never uploaded (stale `dist/`). Test it.
-3. Rerun `make test-q1` after the last change (the previous run predates the final edit).
-4. Note in the ticket, not code: `SHA256SUMS` lists the bare binaries although they are not attached;
-   say whether that is intended or file nothing and leave it as a remark.
+1. First publish and `--continue` share one resolver for versioned archives/packages plus
+   `SHA256SUMS` and its signature. A test confirms both paths list the same eight v0.2.0 names
+   and exclude the bare binaries.
+2. The resolver excludes artifacts for other versions. Tests cover stale versioned artifacts;
+   `harnez release -n --skip-build` with the stale v0.2.0 dist previews v0.2.1 with no assets.
+3. `make test-q1` passes after the final changes; `grep -- '--- FAIL'` returns no matches.
+4. The checksum coverage note below is intentional and remains a ticket remark.
+
+Remark: This is intentional. GoReleaser's `SHA256SUMS` covers every built artifact, including the
+bare binaries; the published release asset set contains only versioned archives/packages and the
+checksum files.
