@@ -38,3 +38,11 @@ repo without `issues/` or `docs/`, or stop and report when blocked on 854's conf
   handoff in the session and say so.
 - Quota rule: use `make test-q1` when the target exists, else `harnez exec --quota-1 <repo test command>`.
 - Remove or label the harnez-repo pointers in `roadmap.md`.
+
+## Sprint 2026-10-22 (after 853/854)
+
+Now available: `.harnez/repo.yaml` (`issues.tracker`, `docs.studies`, `rules.quota`) and notices in
+`.harnez/rules/Index.md` when tracker/studies are off; a first `harnez issues new` adopts the tracker. Since
+854 M2 gates the quota rule on `rules.quota`, check whether `Quota.md` is still installed without a
+`test-q1` target before changing it. Guards should name repo.yaml/the notice, one short clause per step, no
+duplicated detection logic. Edit skill sources in `docs/commands/`, then `make install && harnez apply`.
