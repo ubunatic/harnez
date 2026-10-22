@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
-"""Canary for Issue 865: Privileged subprocess PAM prompts and stderr visibility.
+"""Canary for Harnez Issue 865: Privileged subprocess PAM prompts and stderr visibility.
 
-Proves:
+Context:
+CLI tools, installers, and autonomous agents often execute privileged commands
+(such as `sudo`, `pkexec`, or package managers) in subprocesses. When wrappers
+suppress or discard `stderr` with `stdin=/dev/null`, biometric PAM modules
+(e.g. `pam_fprintd`, TouchID, or FIDO2/U2F security keys) become completely blind:
+the prompt ("Place your finger on the fingerprint reader") is swallowed, leaving
+the user with no indication to touch the sensor, causing inevitable timeouts
+reported as generic `exit status 1`.
+
+What this canary proves:
 1. Phase 1 (Swallowed Stderr): Discarding/capturing stderr conceals the PAM prompt
-   ("Place your finger on the fingerprint reader"), leaving the user blind.
+   and stalls the process until timeout without user feedback.
 2. Phase 2 (Confirmation without Stdin): Running sudo with stdin=DEVNULL and
    streaming stderr allows seamless fingerprint authentication with ZERO keystrokes.
+
+Usage:
+  ./scripts/canary-865-pam-fingerprint.py --probe-only    # Automated non-interactive test
+  ./scripts/canary-865-pam-fingerprint.py --confirm-only  # Live sensor hardware confirmation
+  ./scripts/canary-865-pam-fingerprint.py                 # Full 2-phase suite
 """
 
 import argparse
