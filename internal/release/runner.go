@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // Options configures the release workflow.
@@ -501,41 +502,9 @@ func runSigningStep(opt Options, projectName, version, keyPath string) error {
 }
 
 func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) error {
-	distDir := filepath.Join(opt.Dir, "dist")
-	var entries []os.DirEntry
-	if fileExists(distDir) {
-		var err error
-		entries, err = os.ReadDir(distDir)
-		if err != nil {
-			return fmt.Errorf("read dist directory: %w", err)
-		}
-	}
-
-	var attachments []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if !artifactMatchesVersion(name, tagName) {
-			continue
-		}
-		if strings.HasSuffix(name, ".minisig") {
-			signedName := strings.TrimSuffix(name, ".minisig")
-			if signedName == "SHA256SUMS" && !checksumMatchesVersion(filepath.Join(distDir, signedName), "", tagName) {
-				continue
-			}
-		}
-		if name == "SHA256SUMS" && !checksumMatchesVersion(filepath.Join(distDir, name), "", tagName) {
-			continue
-		}
-		if strings.HasSuffix(name, ".tar.gz") ||
-			strings.HasSuffix(name, ".zip") ||
-			strings.HasSuffix(name, ".minisig") ||
-			name == "SHA256SUMS" ||
-			strings.HasPrefix(name, projectName+"-") {
-			attachments = append(attachments, filepath.Join("dist", name))
-		}
+	attachments, err := releaseAssetsFromDist(opt.Dir, projectName, tagName)
+	if err != nil {
+		return err
 	}
 
 	if len(attachments) == 0 {
@@ -552,8 +521,8 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 	} else {
 		fmt.Fprintf(opt.Out, "  [publish]   Publishing %d asset(s) via fj release to %s\n", len(attachments), tagName)
 	}
-	for _, a := range attachments {
-		fmt.Fprintf(opt.Out, "              - %s\n", a)
+	for _, asset := range attachments {
+		fmt.Fprintf(opt.Out, "              - %s (%s)\n", asset.Name, asset.Path)
 	}
 
 	if !opt.DryRun {
@@ -561,7 +530,11 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 		if forge != nil {
 			remoteName = forge.RemoteName
 		}
-		if err := publishForgejoRelease(opt.Dir, tagName, title, attachments, opt.Out, fjCommand(opt.Dir, remoteName)); err != nil {
+		cfg, err := loadPublishConfig()
+		if err != nil {
+			return err
+		}
+		if err := publishForgejoAssetsWithConfig(opt.Dir, tagName, title, attachments, opt.Out, fjCommand(opt.Dir, remoteName), cfg, time.Sleep); err != nil {
 			return err
 		}
 	}

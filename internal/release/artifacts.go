@@ -10,6 +10,124 @@ import (
 	"strings"
 )
 
+type releaseAsset struct {
+	Name string
+	Path string
+}
+
+type releaseArtifact struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+func readArtifactManifest(dir string) ([]releaseArtifact, bool, error) {
+	manifestPath := filepath.Join(dir, "dist", "artifacts.json")
+	data, err := os.ReadFile(manifestPath)
+	if os.IsNotExist(err) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	var artifacts []releaseArtifact
+	if err := json.Unmarshal(data, &artifacts); err != nil {
+		return nil, true, fmt.Errorf("parse %s: %w", manifestPath, err)
+	}
+	return artifacts, true, nil
+}
+
+func artifactPath(dir string, artifact releaseArtifact) (string, error) {
+	if artifact.Path == "" {
+		return "", fmt.Errorf("artifact %s has an empty path", artifact.Name)
+	}
+	path := filepath.Clean(filepath.FromSlash(artifact.Path))
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
+	}
+	rel, err := filepath.Rel(dir, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("artifact %s path %q escapes project directory", artifact.Name, artifact.Path)
+	}
+	return path, nil
+}
+
+func releaseAssetsFromDist(dir, projectName, tagName string) ([]releaseAsset, error) {
+	distDir := filepath.Join(dir, "dist")
+	artifacts, hasManifest, err := readArtifactManifest(dir)
+	if err != nil {
+		return nil, err
+	}
+	var candidates []releaseAsset
+	if hasManifest {
+		for _, artifact := range artifacts {
+			if filepath.Base(artifact.Name) != artifact.Name || artifact.Name == "." || artifact.Name == ".." {
+				return nil, fmt.Errorf("invalid artifact name %q in dist/artifacts.json", artifact.Name)
+			}
+			if !releaseArtifactMatches(artifact.Name, projectName, tagName, distDir) {
+				continue
+			}
+			path, err := artifactPath(dir, artifact)
+			if err != nil {
+				return nil, err
+			}
+			rel, err := filepath.Rel(dir, path)
+			if err != nil {
+				return nil, err
+			}
+			candidates = append(candidates, releaseAsset{Name: artifact.Name, Path: rel})
+		}
+	} else {
+		entries, err := os.ReadDir(distDir)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("read dist directory: %w", err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !releaseArtifactMatches(entry.Name(), projectName, tagName, distDir) {
+				continue
+			}
+			candidates = append(candidates, releaseAsset{Name: entry.Name(), Path: filepath.Join("dist", entry.Name())})
+		}
+	}
+	seen := make(map[string]bool, len(candidates))
+	assets := make([]releaseAsset, 0, len(candidates)+2)
+	for _, asset := range candidates {
+		if !seen[asset.Name] {
+			seen[asset.Name] = true
+			assets = append(assets, asset)
+		}
+	}
+	for _, name := range []string{"SHA256SUMS", "SHA256SUMS.minisig"} {
+		path := filepath.Join(distDir, name)
+		if !fileExists(path) || seen[name] {
+			continue
+		}
+		if name == "SHA256SUMS" && !checksumMatchesVersion(path, "", tagName) ||
+			name == "SHA256SUMS.minisig" && !checksumMatchesVersion(filepath.Join(distDir, "SHA256SUMS"), "", tagName) {
+			continue
+		}
+		assets = append(assets, releaseAsset{Name: name, Path: filepath.Join("dist", name)})
+		seen[name] = true
+	}
+	return assets, nil
+}
+
+func releaseArtifactMatches(name, projectName, tagName, distDir string) bool {
+	if !artifactMatchesVersion(name, tagName) {
+		return false
+	}
+	if name == "SHA256SUMS" && !checksumMatchesVersion(filepath.Join(distDir, name), "", tagName) {
+		return false
+	}
+	if name == "SHA256SUMS.minisig" && !checksumMatchesVersion(filepath.Join(distDir, "SHA256SUMS"), "", tagName) {
+		return false
+	}
+	return strings.HasSuffix(name, ".tar.gz") ||
+		strings.HasSuffix(name, ".zip") ||
+		strings.HasSuffix(name, ".minisig") ||
+		name == "SHA256SUMS" ||
+		strings.HasPrefix(name, projectName+"-")
+}
+
 func parseChecksums(data []byte) (map[string]string, error) {
 	sums := make(map[string]string)
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
@@ -43,32 +161,16 @@ func verifyChecksum(path, want string) error {
 }
 
 func checksumArtifactPath(dir, name string) (string, error) {
-	manifestPath := filepath.Join(dir, "dist", "artifacts.json")
-	data, err := os.ReadFile(manifestPath)
-	if err != nil && !os.IsNotExist(err) {
+	artifacts, exists, err := readArtifactManifest(dir)
+	if err != nil {
 		return "", err
 	}
-	if err == nil {
-		var artifacts []struct {
-			Name string `json:"name"`
-			Path string `json:"path"`
-		}
-		if err := json.Unmarshal(data, &artifacts); err != nil {
-			return "", fmt.Errorf("parse %s: %w", manifestPath, err)
-		}
+	if exists {
 		for _, artifact := range artifacts {
-			if artifact.Name != name || artifact.Path == "" {
+			if artifact.Name != name {
 				continue
 			}
-			path := filepath.Clean(filepath.FromSlash(artifact.Path))
-			if !filepath.IsAbs(path) {
-				path = filepath.Join(dir, path)
-			}
-			rel, err := filepath.Rel(dir, path)
-			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				return "", fmt.Errorf("artifact %s path %q escapes project directory", name, artifact.Path)
-			}
-			return path, nil
+			return artifactPath(dir, artifact)
 		}
 	}
 	return filepath.Join(dir, "dist", name), nil

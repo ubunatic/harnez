@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func signedDist(t *testing.T) (string, string, []string) {
@@ -136,6 +137,12 @@ func TestPublishAssetResume(t *testing.T) {
 					return []byte(fmt.Sprintf("release header\n\n%d assets\n- %s\n- source.zip\n- source.tar.gz\n", len(names)+2, strings.Join(names, "\n- "))), nil
 				case args[1] == "create":
 					creates++
+					if scenario == "auth" {
+						return []byte("api error: token was already used"), fmt.Errorf("exit 1")
+					}
+					if scenario == "network" {
+						return []byte("connection refused"), fmt.Errorf("exit 1")
+					}
 					return nil, nil
 				case args[2] == "download":
 					data := sums
@@ -154,7 +161,11 @@ func TestPublishAssetResume(t *testing.T) {
 			var out bytes.Buffer
 			err := publishForgejoRelease(dir, "v1.2.3", "app v1.2.3", files, &out, fake)
 			if scenario == "mismatch" || scenario == "local mismatch" || scenario == "auth" || scenario == "network" || scenario == "missing sums" {
-				if err == nil || len(uploads) != 0 || creates != 0 {
+				wantCreates := 0
+				if scenario == "auth" || scenario == "network" {
+					wantCreates = 1
+				}
+				if err == nil || len(uploads) != 0 || creates != wantCreates {
 					t.Fatalf("error=%v uploads=%v creates=%d", err, uploads, creates)
 				}
 				if scenario == "auth" && !strings.Contains(err.Error(), "fj auth login") {
@@ -172,12 +183,117 @@ func TestPublishAssetResume(t *testing.T) {
 			if len(uploads) != want {
 				t.Fatalf("uploads = %v, want %d", uploads, want)
 			}
-			if (creates == 1) != (scenario == "absent") {
+			wantCreates := scenario == "absent" || scenario == "auth" || scenario == "network"
+			if (creates == 1) != wantCreates {
 				t.Fatalf("creates = %d", creates)
 			}
 			if scenario != "absent" && !strings.Contains(out.String(), "exists, skipped") {
 				t.Fatal(out.String())
 			}
 		})
+	}
+}
+
+func TestPublishRetriesUntilReleaseIsVisible(t *testing.T) {
+	dir, _, files := signedDist(t)
+	var uploads []string
+	var waits []time.Duration
+	assetAttempts := 0
+	fake := func(args ...string) ([]byte, error) {
+		switch {
+		case args[0] == "--style":
+			return []byte("could not find release app v1.2.3"), fmt.Errorf("exit 1")
+		case args[1] == "create":
+			return nil, nil
+		case args[2] == "create":
+			assetAttempts++
+			if len(uploads) == 0 && assetAttempts < 3 {
+				return []byte("Error: could not find release app v1.2.3"), fmt.Errorf("exit 1")
+			}
+			uploads = append(uploads, filepath.Base(args[len(args)-2]))
+			return nil, nil
+		default:
+			t.Fatalf("unexpected command %q", args)
+			return nil, nil
+		}
+	}
+	var out bytes.Buffer
+	cfg, err := loadPublishConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.UploadRetryAttempts = 3
+	cfg.UploadRetryDelay = time.Second
+	err = publishForgejoReleaseWithConfig(dir, "v1.2.3", "app v1.2.3", files, &out, fake, cfg, func(delay time.Duration) { waits = append(waits, delay) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assetAttempts != len(files)+2 || len(uploads) != 3 || len(waits) != 2 {
+		t.Fatalf("attempts=%d uploads=%v waits=%v", assetAttempts, uploads, waits)
+	}
+}
+
+func TestPublishIgnoresListingFailureAndExistingAssetConflict(t *testing.T) {
+	dir, _, files := signedDist(t)
+	var uploaded []string
+	fake := func(args ...string) ([]byte, error) {
+		switch {
+		case args[0] == "--style":
+			return []byte("temporary listing failure"), fmt.Errorf("exit 1")
+		case args[1] == "create":
+			return []byte("release already exists"), fmt.Errorf("exit 1")
+		case args[2] == "create":
+			name := args[len(args)-1]
+			uploaded = append(uploaded, name)
+			if name == filepath.Base(files[0]) {
+				return []byte("asset already exists"), fmt.Errorf("exit 1")
+			}
+			return nil, nil
+		default:
+			t.Fatalf("unexpected command %q", args)
+			return nil, nil
+		}
+	}
+	var out bytes.Buffer
+	err := publishForgejoReleaseWithConfig(dir, "v1.2.3", "app v1.2.3", files, &out, fake, PublishConfig{UploadRetryAttempts: 2, UploadRetryDelay: time.Second}, func(time.Duration) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(uploaded) != len(files) {
+		t.Fatalf("uploaded=%v, want every asset after failed listing", uploaded)
+	}
+}
+
+func TestPublishAssetListUsesManifestPathAndName(t *testing.T) {
+	dir := t.TempDir()
+	dist := filepath.Join(dir, "dist")
+	if err := os.MkdirAll(filepath.Join(dist, "harnez-linux_linux_arm64_v8.0"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dist, "harnez-linux_linux_arm64_v8.0", "harnez"), []byte("binary"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dist, "harnez-0.2.0-aarch64-linux.tar.gz"), []byte("archive"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `[{"name":"harnez-aarch64-linux","path":"dist/harnez-linux_linux_arm64_v8.0/harnez"},{"name":"harnez-0.2.0-aarch64-linux.tar.gz","path":"dist/harnez-0.2.0-aarch64-linux.tar.gz"}]`
+	if err := os.WriteFile(filepath.Join(dist, "artifacts.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := releaseAssetsFromDist(dir, "harnez", "v0.2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"harnez-aarch64-linux":              "dist/harnez-linux_linux_arm64_v8.0/harnez",
+		"harnez-0.2.0-aarch64-linux.tar.gz": "dist/harnez-0.2.0-aarch64-linux.tar.gz",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("assets=%+v, want %v", got, want)
+	}
+	for _, asset := range got {
+		if want[asset.Name] != asset.Path {
+			t.Errorf("asset %q path=%q, want %q", asset.Name, asset.Path, want[asset.Name])
+		}
 	}
 }

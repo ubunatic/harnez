@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schemas/release.schema.json
+upload_retry_attempts: 4
+upload_retry_delay: 2s
+release_not_found_pattern: '^Error: could not find release\b'

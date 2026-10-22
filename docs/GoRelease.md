@@ -134,9 +134,13 @@ network/forge error — `--continue` resumes safely.
 listed archives for this version exist and their hashes verify. Missing files rebuild;
 checksum corruption fails. Before upload, fj lists existing assets and downloads
 published `SHA256SUMS`: existing names print `exists, skipped`; differing checksum
-sets fail for manual recovery without deleting remote assets. A nonempty release
-without `SHA256SUMS` also stops. Runtime errors suppress usage; auth failures suggest
-`fj auth login`, followed by `harnez release --continue`.
+sets fail for manual recovery without deleting remote assets. Uploads reporting that a
+new release is not visible retry according to `upload_retry_attempts` and
+`upload_retry_delay` in the embedded `spec/release.yaml`. Asset names and paths come
+from `dist/artifacts.json` when available. If listing fails, Harnez tries every upload
+and treats `already exists` as success. A nonempty release without `SHA256SUMS` also
+stops. Runtime errors suppress usage; auth failures suggest `fj auth login`, followed
+by `harnez release --continue`.
 
 ### 4.1 `go.work` and local co-development
 

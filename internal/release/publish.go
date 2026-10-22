@@ -1,6 +1,7 @@
 package release
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type forgeCommand func(...string) ([]byte, error)
@@ -20,7 +22,14 @@ func fjCommand(dir, remote string) forgeCommand {
 		cmd := exec.Command("fj", args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), "LANG=en_US.UTF-8", "LANGUAGE=en_US")
-		return cmd.CombinedOutput()
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		if err != nil {
+			return stderr.Bytes(), err
+		}
+		return stdout.Bytes(), nil
 	}
 }
 
@@ -65,19 +74,35 @@ func releaseAssets(out []byte) (map[string]bool, error) {
 }
 
 func publishForgejoRelease(dir, tag, title string, attachments []string, out io.Writer, run forgeCommand) error {
+	cfg, err := loadPublishConfig()
+	if err != nil {
+		return err
+	}
+	return publishForgejoReleaseWithConfig(dir, tag, title, attachments, out, run, cfg, time.Sleep)
+}
+
+func publishForgejoReleaseWithConfig(dir, tag, title string, attachments []string, out io.Writer, run forgeCommand, cfg PublishConfig, wait func(time.Duration)) error {
+	assets := make([]releaseAsset, 0, len(attachments))
+	for _, path := range attachments {
+		assets = append(assets, releaseAsset{Name: filepath.Base(path), Path: path})
+	}
+	return publishForgejoAssetsWithConfig(dir, tag, title, assets, out, run, cfg, wait)
+}
+
+func publishForgejoAssetsWithConfig(dir, tag, title string, attachments []releaseAsset, out io.Writer, run forgeCommand, cfg PublishConfig, wait func(time.Duration)) error {
 	// Use the same release name as creation/attachment. fj's title lookup
 	// reports an explicit absence after listing releases; auth/network errors
-	// must never be mistaken for a missing release.
+	// are followed by create/upload attempts so already-existing assets can be
+	// recognized from fj's conflict response.
 	view, err := run("--style", "minimal", "release", "view", title)
 	exists := err == nil
-	if err != nil && !strings.Contains(string(view), "could not find release "+title) {
-		return forgeError("list release assets", view, err)
-	}
 	assets := make(map[string]bool)
 	if exists {
-		assets, err = releaseAssets(view)
-		if err != nil {
-			return err
+		listed, listErr := releaseAssets(view)
+		if listErr == nil {
+			assets = listed
+		} else {
+			exists = false
 		}
 	}
 	if assets["SHA256SUMS"] {
@@ -103,26 +128,39 @@ func publishForgejoRelease(dir, tag, title string, attachments []string, out io.
 	}
 	if !exists {
 		data, err := run("release", "create", title, "--tag", tag, "-b", title)
-		if err != nil {
+		if err != nil && !isAlreadyExists(data) {
 			return forgeError("create release", data, err)
 		}
 	}
-	for _, path := range attachments {
-		name := filepath.Base(path)
-		if assets[name] {
-			fmt.Fprintf(out, "  [publish]   %s exists, skipped\n", name)
+	for _, asset := range attachments {
+		if assets[asset.Name] {
+			fmt.Fprintf(out, "  [publish]   %s exists, skipped\n", asset.Name)
 			continue
 		}
-		data, err := run("release", "asset", "create", title, path)
-		if err != nil {
-			return forgeError("upload "+name, data, err)
+		var data []byte
+		for attempt := 0; attempt < cfg.UploadRetryAttempts; attempt++ {
+			data, err = run("release", "asset", "create", title, asset.Path, asset.Name)
+			if err == nil || isAlreadyExists(data) {
+				break
+			}
+			if cfg.ReleaseNotFound == nil || !cfg.ReleaseNotFound.Match(data) || attempt+1 == cfg.UploadRetryAttempts {
+				return forgeError("upload "+asset.Name, data, err)
+			}
+			wait(cfg.UploadRetryDelay)
 		}
-		assets[name] = true
+		if err != nil && !isAlreadyExists(data) {
+			return forgeError("upload "+asset.Name, data, err)
+		}
+		assets[asset.Name] = true
 	}
 	return nil
 }
 
-func verifyPublishedSet(dir string, attachments []string, published []byte) error {
+func isAlreadyExists(output []byte) bool {
+	return strings.Contains(strings.ToLower(string(output)), "already exists")
+}
+
+func verifyPublishedSet(dir string, attachments []releaseAsset, published []byte) error {
 	sums, err := parseChecksums(published)
 	if err != nil {
 		return fmt.Errorf("published SHA256SUMS: %w", err)
@@ -142,12 +180,16 @@ func verifyPublishedSet(dir string, attachments []string, published []byte) erro
 		if local[name] != sum {
 			return fmt.Errorf("checksum mismatch for %s against published SHA256SUMS; resolve manually", name)
 		}
-		if err := verifyChecksum(filepath.Join(dir, "dist", name), sum); err != nil {
+		path, err := checksumArtifactPath(dir, name)
+		if err != nil {
+			return err
+		}
+		if err := verifyChecksum(path, sum); err != nil {
 			return err
 		}
 	}
-	for _, path := range attachments {
-		name := filepath.Base(path)
+	for _, asset := range attachments {
+		name := asset.Name
 		if name == "SHA256SUMS" || strings.HasSuffix(name, ".minisig") {
 			continue
 		}

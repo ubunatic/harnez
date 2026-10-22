@@ -190,10 +190,15 @@ harnez release --continue
 `--continue` reuses `dist/` without rebuilding or re-signing when `SHA256SUMS`,
 `SHA256SUMS.minisig`, and every archive listed for this version are present and the
 archive hashes verify. Missing files trigger a rebuild; checksum corruption fails.
-Before uploading, fj lists existing release assets and downloads published
-`SHA256SUMS`. Existing names print `exists, skipped`; local files must match the
-published checksum set. A mismatch stops publication for manual recovery and never
-deletes remote assets. An existing nonempty release without `SHA256SUMS` also stops.
+Uploads that report the release is not yet visible are retried using the bounded
+`upload_retry_attempts` and `upload_retry_delay` values in the embedded
+`spec/release.yaml`. The asset names and paths come from `dist/artifacts.json` when
+available, so renamed binaries upload under their published names. Before uploading,
+fj lists existing release assets and downloads published `SHA256SUMS`. Existing names
+print `exists, skipped`; local files must match the published checksum set. A mismatch
+stops publication for manual recovery and never deletes remote assets. If listing fails,
+Harnez attempts every local upload and treats an `already exists` response as success.
+An existing nonempty release without `SHA256SUMS` also stops.
 Runtime errors suppress usage; token/auth failures suggest `fj auth login`. After
 renewing authentication, retry with `harnez release --continue`.
 
