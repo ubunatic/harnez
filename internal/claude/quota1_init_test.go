@@ -163,3 +163,53 @@ func TestRunInitWithVariant_LiteQuota1_ContentGuidance(t *testing.T) {
 		t.Errorf("IssueTracking.md must state accepted goal formats and new-ticket-only scope")
 	}
 }
+
+func TestRunInitWithVariant_Quota1_MergesMigratedSectionOnce(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/q1merge\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := claude.LoadTestConfig(t)
+	opts := claude.InitOptions{AssumeYes: true, Quota1: true}
+	if err := claude.RunInitWithVariant(dir, cfg, opts); err != nil {
+		t.Fatalf("initial RunInitWithVariant failed: %v", err)
+	}
+
+	agents := "<!-- harnez:begin Quota-1 Guardrails -->\n## Quota-1 Guardrails\n- **Single-Test Boundary**: run the test suite once.\n- Local quota note.\n<!-- harnez:end Quota-1 Guardrails -->\n"
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(agents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := claude.RunInitWithVariant(dir, cfg, opts); err != nil {
+		t.Fatalf("migration RunInitWithVariant failed: %v", err)
+	}
+
+	quotaPath := filepath.Join(dir, ".harnez", "rules", "Quota.md")
+	quota, err := os.ReadFile(quotaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, line := range strings.Split(string(quota), "\n") {
+		if strings.TrimSpace(strings.TrimLeft(line, "#")) == "Quota-1 Guardrails" && strings.HasPrefix(strings.TrimSpace(line), "#") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("Quota.md has %d Quota-1 Guardrails headings, want 1:\n%s", count, quota)
+	}
+	if !strings.Contains(string(quota), "Local quota note.") {
+		t.Fatalf("migrated local text was lost:\n%s", quota)
+	}
+
+	before := string(quota)
+	if err := claude.RunInitWithVariant(dir, cfg, opts); err != nil {
+		t.Fatalf("second migration RunInitWithVariant failed: %v", err)
+	}
+	after, err := os.ReadFile(quotaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != before {
+		t.Fatalf("second init changed Quota.md:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}

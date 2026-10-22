@@ -528,6 +528,15 @@ func writeRules(dir string, rules RulesConfig, quota bool) (int, error) {
 		path := filepath.Join(rulesDir, file.Name)
 		existing, err := os.ReadFile(path)
 		if err == nil && file.Quota {
+			merged := mergeManagedSection(string(existing), quota1SectionName, content)
+			if string(existing) == merged {
+				continue
+			}
+			if err := os.WriteFile(path, []byte(merged), 0o644); err != nil {
+				return changes, err
+			}
+			changes++
+			fmt.Printf("  updated %s\n", path)
 			continue
 		}
 		if err == nil && string(existing) == content {
@@ -650,7 +659,11 @@ func migrateManagedBlocksFormatted(path string, names []string, destination func
 				}
 				payload += markdown.MDMarkers.End(block.name) + "\n"
 			}
-			if err := os.WriteFile(target, []byte(prefix+payload), 0o644); err != nil {
+			merged := prefix + payload
+			if block.name == quota1SectionName && !wrap {
+				merged = mergeManagedSection(string(existing), block.name, block.body)
+			}
+			if err := os.WriteFile(target, []byte(merged), 0o644); err != nil {
 				return false, err
 			}
 		}
@@ -660,6 +673,73 @@ func migrateManagedBlocksFormatted(path string, names []string, destination func
 		return false, err
 	}
 	return true, nil
+}
+
+func mergeManagedSection(existing, name, incoming string) string {
+	lines := strings.Split(existing, "\n")
+	hasSection := false
+	for _, line := range lines {
+		if isManagedHeading(line, name) {
+			hasSection = true
+			break
+		}
+	}
+	if !hasSection {
+		if existing == "" {
+			return incoming
+		}
+		return strings.TrimRight(existing, "\n") + "\n\n" + incoming
+	}
+
+	seen := make(map[string]struct{}, len(lines))
+	var merged []string
+	headingSeen := false
+	appendUnique := func(line string) {
+		if isManagedHeading(line, name) {
+			if headingSeen {
+				return
+			}
+			headingSeen = true
+			merged = append(merged, line)
+			return
+		}
+		if line == "" {
+			if len(merged) > 0 && merged[len(merged)-1] != "" {
+				merged = append(merged, line)
+			}
+			return
+		}
+		if _, exists := seen[line]; exists {
+			return
+		}
+		seen[line] = struct{}{}
+		merged = append(merged, line)
+	}
+	for _, line := range lines {
+		appendUnique(line)
+	}
+	var additions []string
+	for _, line := range strings.Split(incoming, "\n") {
+		if isManagedHeading(line, name) {
+			continue
+		}
+		if _, exists := seen[line]; exists {
+			continue
+		}
+		seen[line] = struct{}{}
+		additions = append(additions, line)
+	}
+	merged = append(merged, additions...)
+	result := strings.TrimRight(strings.Join(merged, "\n"), "\n") + "\n"
+	if len(additions) == 0 && result == existing {
+		return existing
+	}
+	return result
+}
+
+func isManagedHeading(line, name string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "#") && strings.TrimSpace(strings.TrimLeft(trimmed, "#")) == name
 }
 
 func migrateInitRules(dir, agentsPath string) (int, error) {

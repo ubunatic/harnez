@@ -3,12 +3,20 @@ package claude
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // initQuotaRules reconciles the opt-in quota section and test-q1 Make target.
 func initQuotaRules(ir *initReport, cfg *Config, dir, agentsPath string, assumeYes bool) error {
 	if cfg == nil || cfg.AgentsMD.Rules.QuotaSection == "" {
 		return fmt.Errorf("quota-1 rules are not configured")
+	}
+	if migrated, err := migrateManagedBlocks(agentsPath, []string{quota1SectionName}, func(string) string {
+		return localPath(dir, filepath.Join(".harnez", "rules", "Quota.md"))
+	}); err != nil {
+		return fmt.Errorf("migrate existing quota rules: %w", err)
+	} else if migrated {
+		ir.changes++
 	}
 	r, err := applySectionMD(agentsPath, quota1SectionName, cfg.AgentsMD.Rules.QuotaSection)
 	if err != nil {

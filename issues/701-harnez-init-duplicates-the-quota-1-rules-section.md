@@ -1,6 +1,6 @@
 # 701 — harnez init duplicates the Quota-1 rules section
 
-**Status**: Open
+**Status**: Closed — Init now merges migrated Quota-1 text into one section; quota1_init_test.go verifies local text and second-init stability. In-repo init leaves one heading.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
