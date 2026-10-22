@@ -210,31 +210,6 @@ func genCommandContent(cmd Command, fsys fs.FS) (string, error) {
 	return sb.String(), nil
 }
 
-func genSkillContent(cmd Command, fsys fs.FS) (string, error) {
-	body := cmd.Content
-	if cmd.File != "" {
-		data, err := fs.ReadFile(fsys, cmd.File)
-		if err != nil {
-			return "", fmt.Errorf("skill %s: %w", cmd.Name, err)
-		}
-		body = string(data)
-	}
-	body, err := renderSkillBody(cmd.Name, body, fsys)
-	if err != nil {
-		return "", err
-	}
-	var sb strings.Builder
-	sb.WriteString("---\n")
-	fmt.Fprintf(&sb, "name: %q\n", cmd.Name)
-	if cmd.Description != "" {
-		fmt.Fprintf(&sb, "description: %q\n", cmd.Description)
-	}
-	sb.WriteString("---\n")
-	sb.WriteString(strings.TrimRight(body, "\n"))
-	sb.WriteString("\n")
-	return sb.String(), nil
-}
-
 type skillResourceContent struct {
 	target string
 	data   []byte
