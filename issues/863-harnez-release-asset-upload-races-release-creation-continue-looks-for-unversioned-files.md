@@ -1,6 +1,6 @@
 # 863 — harnez release: asset upload races release creation, --continue looks for unversioned files
 
-**Status**: Open
+**Status**: Closed — retry on 'could not find release' (spec/release.yaml) and one version-filtered asset set for publish and --continue; host dry runs: --continue v0.2.0 lists exactly the 8 published assets, stale dist gives v0.2.1 no assets; make test-q1 green (0a4d4d80, 619dbc3f)
 **Priority**: P2 (Medium) — every release can stop half-published and the documented resume path fails
 **Severity**: Major
 **Category**: Bug
