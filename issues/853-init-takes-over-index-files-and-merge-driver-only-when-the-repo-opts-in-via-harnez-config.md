@@ -36,6 +36,18 @@ on a design decision.
   file that lacks it unless the repo config opts in.
 - `--issues-git` stays as an explicit override and updates the repo config.
 
+## Sprint 2026-10-22 (after 854)
+
+854 delivered `.harnez/repo.yaml` (`issues.tracker`, `issues.merge_driver`) and the agent notice in
+`.harnez/rules/Index.md`. This ticket now means: init and `harnez index` read those keys instead of "any
+`issues/` dir"; `--issues-git` updates `issues.merge_driver`; a repo with `tracker: none` gets no
+attributes, driver, hook or index rewrite, and an existing harnez-installed integration is removed when the
+config turns it off. Fix the `operation_options.go:14` comment. `harnez index` in a repo with neither
+`issues/` nor `docs/README.md` exits 0 with a short note instead of failing (hook safety).
+
+Host repro (854 M2): scratch repo with a plain Makefile and a foreign `issues/README.md` → repo.yaml says
+`merge_driver: false`, yet `.gitattributes` and `merge.harnez-issues-index.*` were installed.
+
 ## Checks
 
 - Scratch repo with a foreign `issues/README.md` (no marker, no config): init changes nothing there and
