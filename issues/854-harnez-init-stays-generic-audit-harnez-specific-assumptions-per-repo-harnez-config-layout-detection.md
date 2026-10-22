@@ -28,6 +28,24 @@ quota rules). Some of these may now be applied to any repo. 853 is one confirmed
    language files) and record it in the config, so later runs don't guess again.
 4. Follow-up tickets for each divergence; 853 already covers index files and the merge driver.
 
+## Audit seed (research pass 2026-10-22, re-verify before use)
+
+| Location | What init does | Trigger | Divergence |
+|---|---|---|---|
+| `internal/claude/init_agent_file.go:62` | AGENTS.md + CLAUDE.md symlink | default | ok (core), list in config |
+| `internal/claude/init_agent_file.go:96` | merge driver, hook, excludes | any `issues/` dir | yes → 853 |
+| `internal/claude/init.go:1115` | `.harnez/rules` + managed AGENTS.md sections | default | yes: rule categories ungated |
+| `internal/claude/init_phases.go:147` | adds container-test target to any existing Makefile | default | yes: should be opt-in |
+| `internal/claude/init_phases.go:80` | language docs, templates, Makefile targets | `--docs` / detection | check detection defaults |
+| `internal/claude/init.go:1186`, `init_quota.go:16` | quota rules + `test-q1` target | `--quota-1` | ok (flag), record in config |
+| `internal/claude/init.go:1142` | go.work | `--gowork` | ok (flag) |
+| `internal/claude/init.go:798,865` | `--all` eligibility, doc detection by markers (Makefile, issues/, spec/) | detection | feed into config detection |
+| `cmd/harnez/issues.go:351` | issue verbs | invocation | misread a foreign `issues/` format; detect format |
+
+Related backlog: 494 (component selection in init, overlaps; reconcile here), 568 (split copyable
+IssueTracking/AgenticLoop docs into generic practice + harnez rules; the prose side of this ticket).
+Skills: 856.
+
 ## Open questions
 
 - Config format and name (`.harnez/config.yaml` vs extending an existing file); schema in `spec/`.

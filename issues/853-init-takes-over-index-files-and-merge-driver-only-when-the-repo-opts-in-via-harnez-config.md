@@ -20,6 +20,13 @@ on a design decision.
   `issues/` dir exists. Any `issues/` folder qualifies, even a different tracker format.
 - `internal/claude/operation_options.go:14` says "nil preserves the integration"; the code installs it.
   Comment and behavior disagree.
+- Research pass (2026-10-22): the installed rules use the same weak gate. `.harnez/rules/Issues.md:3-9` and
+  `.harnez/rules/Tools.md:39,51-55` apply harnez tracker conventions to any `issues/` dir. Gate them on the
+  same opt-in, else defer to the repo's own tracker rules.
+- The post-merge hook runs `harnez index`, which errors when neither `issues/` nor `docs/README.md` exists
+  (`cmd/harnez/index.go:100`).
+- On fix, update `docs/CLIDesign.md` init flow (marked "to become opt-in (853)") and README's issue-tracking
+  intro.
 
 ## Way forward
 
