@@ -1,6 +1,6 @@
 # 856 — Installed workflow skills adapt to repos without the harnez layout
 
-**Status**: Open
+**Status**: Closed — 8 skills and the quota rule guard tracker/studies/test-q1 steps by repo.yaml exceptions and the Index.md notice; installed skills verified after apply; tests green
 **Priority**: P2 (Medium) — skills are installed globally and run in every repo
 **Severity**: Minor
 **Category**: Bug
