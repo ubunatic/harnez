@@ -97,7 +97,7 @@ func TestUsageTableExplainsGrayQuotaRows(t *testing.T) {
 	if !strings.Contains(normalized, "Stale weekly 20%") || !strings.Contains(normalized, "2h ago · stale") {
 		t.Fatalf("stale row should explain snapshot age:\n%s", joined)
 	}
-	if !strings.Contains(joined, "Failed weekly 30%") || !strings.Contains(joined, "HTTP 429 rate limit") {
+	if !strings.Contains(normalized, "Failed weekly 30%") || !strings.Contains(normalized, "HTTP 429 rate limit") {
 		t.Fatalf("failed refresh should retain and explain last quota:\n%s", joined)
 	}
 }
