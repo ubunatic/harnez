@@ -1,6 +1,6 @@
 # 595 — Codex start failure hides the real error (401 shown as 'Reading additional input from stdin')
 
-**Status**: Open
+**Status**: Closed — Codex agent start/resume failures now surface turn errors from the rollout stream, with the original error retained as fallback and recorded auth/overload fixtures.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
