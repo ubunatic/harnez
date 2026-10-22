@@ -1,6 +1,6 @@
 # 714 — harnez usage shows Claude/GPT and Gemini unavailable after collectors are killed
 
-**Status**: Open
+**Status**: Blocked — waiting for a live repro; gray rows now show their reason
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
