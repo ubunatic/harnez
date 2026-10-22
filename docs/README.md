@@ -192,6 +192,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-21-ticket-hygiene-opus.md](studies/2026-10-21-ticket-hygiene-opus.md) | read-only research; three solutions within the file-based `issues/*.md` tracker. No code. |
 | [studies/2026-10-21-ticket-hygiene-sol.md](studies/2026-10-21-ticket-hygiene-sol.md) | Ticket hygiene: three file-based approaches (sol) |
 | [studies/2026-10-21-two-agent-lean-sprint-usage-freshness.md](studies/2026-10-21-two-agent-lean-sprint-usage-freshness.md) | Two-Agent Lean Sprint: usage freshness (issue 839) |
+| [studies/2026-10-22-generic-init-repo-yaml-story.md](studies/2026-10-22-generic-init-repo-yaml-story.md) | Generic init: from "any issues/ folder" to `.harnez/repo.yaml` |
 | [studies/2026-10-22-two-agent-lean-sprint-bug-hunt.md](studies/2026-10-22-two-agent-lean-sprint-bug-hunt.md) | Two-agent lean sprint: P1/P2 bug hunt (2026-10-22) |
 | [studies/2026-10-22-two-agent-lean-sprint-generated-file-markers.md](studies/2026-10-22-two-agent-lean-sprint-generated-file-markers.md) | Two-Agent Lean Sprint: generated-file markers and merge driver (issue 847) |
 | [studies/2026-10-22-two-agent-lean-sprint-repo-config.md](studies/2026-10-22-two-agent-lean-sprint-repo-config.md) | Two-agent lean sprint: per-repo config (854) |
