@@ -95,11 +95,16 @@ func TestFreshnessGauge(t *testing.T) {
 
 func TestUsageSnapshotAgeMarksCollectorCadenceAsStale(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	// At 4m and 5m (one collector interval old), snapshot is still fresh (within 2-interval grace)
 	if got := usageSnapshotAgeLabel(now.Add(-4*time.Minute), now); strings.Contains(got, "stale") {
-		t.Fatalf("fresh label = %q", got)
+		t.Fatalf("fresh label at 4m = %q", got)
 	}
-	if got := usageSnapshotAgeLabel(now.Add(-5*time.Minute), now); !strings.Contains(got, "5m ago · stale") {
-		t.Fatalf("stale label = %q", got)
+	if got := usageSnapshotAgeLabel(now.Add(-5*time.Minute), now); strings.Contains(got, "stale") {
+		t.Fatalf("fresh label at 5m (one cadence old) = %q", got)
+	}
+	// At 10m (2 intervals = DefaultCacheStaleness), snapshot is marked stale
+	if got := usageSnapshotAgeLabel(now.Add(-10*time.Minute), now); !strings.Contains(got, "10m ago · stale") {
+		t.Fatalf("stale label at 10m = %q", got)
 	}
 }
 

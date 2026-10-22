@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -78,6 +79,11 @@ type AgentUsage struct {
 	// renderers can distinguish "fetch failed" from "no quota windows apply."
 	QuotaFetchError      string `json:"quota_fetch_error,omitempty"`
 	QuotaFetchDurationMS int64  `json:"-"`
+	// Stale reports whether this agent's currently-displayed quota values
+	// should be treated as stale / not-reliably-live (issue 714 M1).
+	Stale bool `json:"stale"`
+	// StaleReason explains why the agent is stale when Stale is true.
+	StaleReason string `json:"stale_reason,omitempty"`
 	// LastRefreshed is when this AgentUsage's data was actually last known to
 	// be current — the collector-daemon cache snapshot's FetchedAt time when
 	// served from cache, or "now" when freshly live-collected. It is the
@@ -180,6 +186,56 @@ func (a AgentUsage) IsValueStale() bool {
 		}
 	}
 	return a.IsStale(DefaultCacheStaleness())
+}
+
+// StaleReasonText returns a human-readable explanation of why this agent's
+// data is considered stale, or empty if it is fresh (issue 714 M1).
+func (a AgentUsage) StaleReasonText() string {
+	if a.QuotaFetchError != "" {
+		return "fetch failed: " + a.QuotaFetchError
+	}
+	for _, s := range a.Sources {
+		if strings.Contains(s, "stale") {
+			return "source marked stale: " + s
+		}
+	}
+	now := time.Now()
+	for _, w := range []*QuotaWindow{a.Session, a.Weekly} {
+		if w != nil && w.ExpiredAt(now) {
+			return fmt.Sprintf("window expired: %s", w.Name)
+		}
+	}
+	for _, group := range a.ModelGroups {
+		for _, w := range group.Windows {
+			if w.ExpiredAt(now) {
+				return fmt.Sprintf("window expired: %s (%s)", w.Name, group.Name)
+			}
+		}
+	}
+	stalenessLimit := DefaultCacheStaleness()
+	if a.IsStale(stalenessLimit) {
+		age := now.Sub(a.LastRefreshed)
+		if age < 0 {
+			age = 0
+		}
+		return fmt.Sprintf("snapshot age %s exceeds stale threshold %s", FormatCompactDuration(age), FormatCompactDuration(stalenessLimit))
+	}
+	return ""
+}
+
+// PopulateStaleness computes and sets Stale and StaleReason on this AgentUsage.
+func (a *AgentUsage) PopulateStaleness() {
+	if a.IsValueStale() {
+		a.Stale = true
+		reason := a.StaleReasonText()
+		if reason == "" {
+			reason = "snapshot stale"
+		}
+		a.StaleReason = reason
+	} else {
+		a.Stale = false
+		a.StaleReason = ""
+	}
 }
 
 // HasUsageData reports whether a collector actually found real local or

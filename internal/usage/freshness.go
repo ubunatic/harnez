@@ -11,7 +11,7 @@ func usageSnapshotAgeLabel(at, now time.Time) string {
 		age = 0
 	}
 	label := FormatCompactDuration(age) + " ago"
-	if age >= DefaultCollectorInterval() {
+	if age >= DefaultCacheStaleness() {
 		label += " · stale"
 	}
 	return label

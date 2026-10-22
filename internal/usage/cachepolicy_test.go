@@ -54,8 +54,8 @@ func TestEmbeddedCacheFreshnessPolicy(t *testing.T) {
 	if cadence != 5*time.Minute {
 		t.Fatalf("collector cadence = %s, want five minutes", cadence)
 	}
-	if cacheAge > cadence {
-		t.Fatalf("cache freshness age = %s, must not exceed collector cadence %s", cacheAge, cadence)
+	if cacheAge > 2*cadence {
+		t.Fatalf("cache freshness age = %s, must not exceed twice collector cadence %s", cacheAge, 2*cadence)
 	}
 	if MinWatchInterval >= cadence {
 		t.Fatalf("MinWatchInterval = %s, must be shorter than collector cadence %s", MinWatchInterval, cadence)

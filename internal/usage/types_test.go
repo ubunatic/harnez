@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -108,5 +109,64 @@ func TestAgentUsage_HasUsageData(t *testing.T) {
 				t.Errorf("HasUsageData() = %v, want %v (agent: %+v)", got, tc.want, tc.agent)
 			}
 		})
+	}
+}
+
+func TestAgentUsageStaleReasonAndJSON(t *testing.T) {
+	now := time.Now()
+	// Fresh: 5m old with multiplier 2 (threshold 10m) is fresh
+	fresh := AgentUsage{
+		AgentID:       "claude",
+		LastRefreshed: now.Add(-5 * time.Minute),
+	}
+	fresh.PopulateStaleness()
+	if fresh.Stale {
+		t.Errorf("expected fresh agent at 5m old to not be stale, got reason %q", fresh.StaleReason)
+	}
+	if fresh.StaleReason != "" {
+		t.Errorf("expected empty stale reason for fresh agent, got %q", fresh.StaleReason)
+	}
+
+	// Stale by age: 11m old exceeds 10m threshold
+	staleAge := AgentUsage{
+		AgentID:       "claude",
+		LastRefreshed: now.Add(-11 * time.Minute),
+	}
+	staleAge.PopulateStaleness()
+	if !staleAge.Stale {
+		t.Errorf("expected agent at 11m old to be stale")
+	}
+	if !strings.Contains(staleAge.StaleReason, "exceeds stale threshold") {
+		t.Errorf("expected age reason, got %q", staleAge.StaleReason)
+	}
+
+	// Stale by QuotaFetchError
+	staleErr := AgentUsage{
+		AgentID:         "agy",
+		LastRefreshed:   now.Add(-1 * time.Minute),
+		QuotaFetchError: "signal: killed",
+	}
+	staleErr.PopulateStaleness()
+	if !staleErr.Stale {
+		t.Errorf("expected agent with QuotaFetchError to be stale")
+	}
+	if staleErr.StaleReason != "fetch failed: signal: killed" {
+		t.Errorf("expected fetch failed reason, got %q", staleErr.StaleReason)
+	}
+
+	// Verify RenderJSON populates stale and stale_reason
+	summary := UsageSummary{
+		Timestamp: now,
+		Agents:    []AgentUsage{fresh, staleAge, staleErr},
+	}
+	jsonOut, err := RenderJSON(summary)
+	if err != nil {
+		t.Fatalf("RenderJSON failed: %v", err)
+	}
+	if !strings.Contains(jsonOut, `"stale": true`) {
+		t.Errorf("expected JSON to contain '\"stale\": true', got:\n%s", jsonOut)
+	}
+	if !strings.Contains(jsonOut, `"stale_reason": "fetch failed: signal: killed"`) {
+		t.Errorf("expected JSON to contain '\"stale_reason\": \"fetch failed: signal: killed\"', got:\n%s", jsonOut)
 	}
 }

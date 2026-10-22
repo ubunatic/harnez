@@ -149,6 +149,9 @@ func collectAllWithDiagnostics(ctx context.Context, homeDir string, client *http
 
 // RenderJSON serializes the UsageSummary to a formatted JSON string.
 func RenderJSON(summary UsageSummary) (string, error) {
+	for i := range summary.Agents {
+		summary.Agents[i].PopulateStaleness()
+	}
 	data, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("marshal usage summary: %w", err)

@@ -16,7 +16,7 @@ agy_quota:
     - {bucket: 3p-5h, group: Claude and GPT models, window: Five Hour Limit Remaining}
 collector_cadence: 5m
 # Recollect after this many collector ticks; availability uses the same age.
-cache_staleness_multiplier: 1
+cache_staleness_multiplier: 2
 # Keep last-known usage visible through temporary collector outages.
 display_staleness: 168h
 # Before agent start/resume: inclusive warning threshold, per-window reading age.
