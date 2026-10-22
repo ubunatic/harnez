@@ -1,6 +1,6 @@
 # 710 — AGY usage quota rows remain gray while AGY is active
 
-**Status**: Open
+**Status**: Blocked — waiting for a live repro; gray rows now show their reason
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
