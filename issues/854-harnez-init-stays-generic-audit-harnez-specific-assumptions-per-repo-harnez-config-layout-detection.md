@@ -81,6 +81,20 @@ make:
 
 Absent file = today's detection, written once on first init. Unknown keys fail schema validation.
 
+## Milestones (sprint 2026-10-22)
+
+- **M1 (repo.yaml)**: schema in `spec/schemas/`, loader, first-init detection writes the file once, later runs
+  read it; flags override and are recorded. This repo gets a committed `repo.yaml` matching today's behavior.
+- **M2 (gating + notice)**: `make.container_test` gates `init_phases.go:147`; `rules.quota` gates the quota
+  rule; when `issues.tracker: none` or `docs.studies: false`, init writes the safety notice into
+  `.harnez/rules/Index.md`. Issue-git gating itself stays in 853 but must read `issues.*` from this file.
+- **M3 (docs)**: `docs/CLIDesign.md` init flow and `docs/Spec.md`/schema docs describe repo.yaml; audit table
+  above updated with what is now gated.
+
+Checks: scratch repo with a Makefile and no `issues/`/`docs/`: init adds no container-test target, writes
+repo.yaml with `tracker: none`, writes the notice; this repo: `make install && harnez init -d .` leaves a
+clean `git status`.
+
 ## Open questions
 
 - Config format and name (`.harnez/config.yaml` vs extending an existing file); schema in `spec/`.
