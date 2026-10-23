@@ -1,6 +1,6 @@
 # 710 — AGY usage quota rows remain gray while AGY is active
 
-**Status**: Open — agy statusline payloads carry quota in a shape passiveWindows drops (24 drops live)
+**Status**: Open — agy statusline drops counted (40), cause unproven: likely payloads without quota
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -40,8 +40,11 @@ text will explain.
 
 `harnez server status --json` shows `passive_dropped.agy: 24` (since server start) while the user's AGY
 sessions display quota in their status line: `45k/1049k (95% cached) · 5h 31% left · argon-wtu-weekly 43.3%
-left · weekly 19.6% left`. harnez code does not render that text (no "% left" in cmd/ or internal/), so agy
-has the quota, but every payload sent to `harnez statusline --agent agy` is dropped: `passiveWindows`
-(`internal/usage/passive.go:108-120`) reads only `quota.<model>.remainingFraction`, so agy most likely sends
-quota in another shape. Next: capture one real payload (e.g. an env-gated dump of stdin in
-`harnez statusline --agent agy` to the state dir), map its fields, and test with the captured JSON.
+left · weekly 19.6% left`.
+
+Correction (same day): harnez renders that text itself (`spec/statusline.yaml`, `.Quotas` from
+`quotaText`, `internal/statusline/statusline.go:162`), from the payload's `quota.<name>.remaining_fraction`,
+the same field and JSON tag `passiveWindows` reads (`internal/usage/passive.go:25-29,108`). So payloads that
+show quota should be accepted; the drops (40 by 14:15) are likely renders without a `quota` field. There is no
+accepted counter, so this is unproven. Next: count accepted observations next to `passive_dropped`, and
+capture one dropped payload (env-gated stdin dump) to see what it carries.
