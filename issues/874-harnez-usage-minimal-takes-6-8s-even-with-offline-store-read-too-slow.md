@@ -1,6 +1,6 @@
 # 874 — harnez usage --minimal takes 6-8s even with --offline: store read too slow
 
-**Status**: Open
+**Status**: Backlog — re-measure on an idle host after reboot first; promote if still over 1s
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
