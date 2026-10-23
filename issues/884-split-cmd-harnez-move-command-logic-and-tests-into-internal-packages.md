@@ -29,3 +29,36 @@ test; measured before/after; or stop and report when blocked on a user decision.
 2. Move one feature per milestone (for example issues, exec, hook, agent) with its tests; behaviour
    unchanged; record `cmd/harnez` test time and the tested packages for a typical change.
 3. Keep a few end-to-end binary tests in the larger, occasional tier (881).
+
+## M1 delivered: mechanical moves (98d1f6d4, 8a431215, 9e567c93)
+
+find → `internal/find`, part of issues → `internal/issues/maintenance`, part of usage → `internal/usage`.
+`cmd/harnez` 182 → 179 files, ~45.9k → 43.7k lines. The rest mixes Cobra setup with logic and shares
+main-package helpers, so it cannot move without boundary changes. `TestAgentWaitFailedWorkerIsNotOrphaned`
+failed once in a loaded 206s run and passes alone before and after the moves (timing, not the move).
+
+## Boundaries (advisor adv-884, 2026-10-23)
+
+Order keeps `go build ./...` green after each step: **exec → stats → hook → issues core → usage → agent**.
+Every area keeps its Cobra command, flags, argument parsing and exit handling in `cmd/harnez`; logic takes
+context, writers and dependencies as parameters, no `*cobra.Command` in internal packages.
+
+| Area → package | Moves | Est. logic lines touched | Risk |
+|---|---|---|---|
+| exec → `internal/exec` | options, wrapper, timeout/sandbox/quota, telemetry, buffers, hook rewriting (`exec.go`) | 250–450 | medium-high |
+| stats → `internal/stats` | options, queries, calculations, renderers (`stats*.go`, `statsmergelegacy.go`) | 120–250 | medium |
+| hook → `internal/hook` (+ `internal/sound`) | payload handling, read discipline, pre-edit/pre-exec, skills (`hook.go`, `hookskill.go`) | 200–350 | medium |
+| issues → existing `internal/issues` | status, reserve, duplicate, reference, ticket-file logic; index/snapshot ops injected | 300–600 | medium-high |
+| usage → `internal/usage` + new `internal/usagecli` (adapters) | `usage_client.go`, `usage_timeline.go`, non-Cobra parts of `usage_cmd.go`, export/archive | 350–700 | high |
+| agent → new `internal/agent` on `internal/subagent` | run/resume, lifecycle, stream, quota, send, self-test (`agent_run/async/interactive/send/stop/stream/quota/selftest.go`) | 900–1,500 | high |
+
+Shared helpers: `exec.go:1372 debugLog` (also used by index.go) → small `internal/logging` or injected
+logger; `exec.go:59 defaultExecTimeout` (used by stats_agents.go) → exported from `internal/exec`;
+`index.go:85 dirExists` → `internal/fsutil` or a callback; `agent.go:507 newTimeline`,
+`agent_run.go:123 agentCommandContext/withAgentTimeout` → pass context and writers.
+
+Cycles: `internal/issues` must not import `internal/index`, `internal/find` or `internal/issues/maintenance`
+(they import it); `internal/usage` must not import `internal/usagecli`; nothing imports `cmd/harnez`.
+
+Binary tests stay in `cmd/harnez` or go to the occasional tier: `exec_test.go:969`,
+`issues_index_init_merge_e2e_test.go:16`, `usage_binary_test.go`.
