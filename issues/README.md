@@ -35,4 +35,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 880 | [880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md](880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md) | jam skill: competing implementations by several agents, owner picks, phased adoption | Open |
 | 881 | [881-test-suite-catalog-cmd-harnez-dominates-the-run-lighter-and-bounded-tests.md](881-test-suite-catalog-cmd-harnez-dominates-the-run-lighter-and-bounded-tests.md) | Test suite catalog: cmd/harnez dominates the run, lighter and bounded tests | Open |
 | 883 | [883-teststopprovidertreeandwrapper-fails-provider-tree-not-ready-within-5s.md](883-teststopprovidertreeandwrapper-fails-provider-tree-not-ready-within-5s.md) | TestStopProviderTreeAndWrapper fails: provider tree not ready within 5s | Open |
+| 884 | [884-split-cmd-harnez-move-command-logic-and-tests-into-internal-packages.md](884-split-cmd-harnez-move-command-logic-and-tests-into-internal-packages.md) | Split cmd/harnez: move command logic and tests into internal packages | Open |
 <!-- harnez:end issues-active-index -->
