@@ -37,4 +37,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 883 | [883-teststopprovidertreeandwrapper-fails-provider-tree-not-ready-within-5s.md](883-teststopprovidertreeandwrapper-fails-provider-tree-not-ready-within-5s.md) | TestStopProviderTreeAndWrapper fails: provider tree not ready within 5s | Open |
 | 884 | [884-split-cmd-harnez-move-command-logic-and-tests-into-internal-packages.md](884-split-cmd-harnez-move-command-logic-and-tests-into-internal-packages.md) | Split cmd/harnez: move command logic and tests into internal packages | Open |
 | 885 | [885-add-optional-disk-swap-backstop-for-zram-only-systems-so-tmpfs-tmp-can-spill.md](885-add-optional-disk-swap-backstop-for-zram-only-systems-so-tmpfs-tmp-can-spill.md) | Add optional disk swap backstop for zram-only systems so tmpfs /tmp can spill | Open |
+| 886 | [886-collector-unit-fails-at-boot-runtime-dir-missing-226-namespace.md](886-collector-unit-fails-at-boot-runtime-dir-missing-226-namespace.md) | Collector unit fails at boot: runtime dir missing (226/NAMESPACE) | Open |
 <!-- harnez:end issues-active-index -->
