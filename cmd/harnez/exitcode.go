@@ -26,6 +26,7 @@ import (
 	"errors"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/find"
 )
 
 // exitCodeError is a RunE return value meaning "exit with Code, and don't
@@ -51,6 +52,10 @@ func exitCodeFromRunError(err error) int {
 	if errors.As(err, &ec) {
 		return ec.Code
 	}
+	var findEC *find.ExitCodeError
+	if errors.As(err, &findEC) {
+		return findEC.Code
+	}
 	return 1
 }
 
@@ -67,6 +72,11 @@ func exitCodeFromRunError(err error) int {
 func silenceIfExitCode(cmd *cobra.Command, err error) error {
 	var ec *exitCodeError
 	if errors.As(err, &ec) {
+		cmd.SilenceErrors = true
+		cmd.SilenceUsage = true
+	}
+	var findEC *find.ExitCodeError
+	if errors.As(err, &findEC) {
 		cmd.SilenceErrors = true
 		cmd.SilenceUsage = true
 	}

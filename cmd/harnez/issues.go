@@ -33,6 +33,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/readcard"
@@ -422,7 +423,7 @@ func runIssuesShow(w io.Writer, dir, ticketArg string, jsonOutput, rawOutput, te
 		return nil
 	}
 
-	useVisualCard := imageOutput || (!rawOutput && !textOutput && isTerminalWriter(w))
+	useVisualCard := imageOutput || (!rawOutput && !textOutput && find.IsTerminalWriter(w))
 	if useVisualCard {
 		lines := strings.Split(string(content), "\n")
 		renderRes, err := readcard.RenderFileToCards(lines, filepath.Base(f.RelPath), readcard.RenderOptions{
@@ -454,10 +455,10 @@ func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutpu
 	if filter == "" {
 		filter = "is:open"
 	}
-	if !jsonOutput && !rawOutput && !textOutput && !imageOutput && isTerminalWriter(w) {
+	if !jsonOutput && !rawOutput && !textOutput && !imageOutput && find.IsTerminalWriter(w) {
 		textOutput = true
 	}
-	return runFindWithOptions(w, errW, []string{"issues", filter}, findRunOptions{
+	return find.RunFindWithOptions(w, errW, []string{"issues", filter}, find.FindRunOptions{
 		Dir:   dir,
 		JSON:  jsonOutput,
 		Raw:   rawOutput,
@@ -750,7 +751,7 @@ func finishIssuesNew(w io.Writer, dir, num, filename string, jsonOutput bool) er
 	}
 	relPath := filepath.ToSlash(filepath.Join("issues", filename))
 	if jsonOutput {
-		data, err := json.Marshal(nextResultJSON{
+		data, err := json.Marshal(find.NextResultJSON{
 			Number:   num,
 			Reserved: true,
 			File:     filename,

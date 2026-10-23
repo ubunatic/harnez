@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ubunatic.com/harnez/internal/find"
 )
 
 func TestFindFinderExitStatus(t *testing.T) {
@@ -114,7 +116,7 @@ func TestFindMixedFinderFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 				var out, errOut bytes.Buffer
-				err := runFindWithOptions(&out, &errOut, []string{scope, "needle"}, findRunOptions{Dir: dir})
+				err := find.RunFindWithOptions(&out, &errOut, []string{scope, "needle"}, find.FindRunOptions{Dir: dir})
 				want := 2
 				if hasResults {
 					want = 0
