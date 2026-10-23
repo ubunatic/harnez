@@ -37,3 +37,11 @@ a recorded agy result and one live resume, or stop and report when agy offers no
    resumed session; do not report earlier errors (quota, 503) as current unless they recur in this turn."
    Keep it to that one line in spec; no new rule docs or AGENTS.md text.
 3. Live check: resume an agy session whose last turn errored; expect success plus the warning.
+
+## Delivered (2026-10-23, dev-868 sol:med)
+
+`af752f24` (`known_error_checks` in `spec/agent.yaml`, `parseAgyWithQuota` in `internal/subagent/agy.go`)
+and `adc1bbc6` (`resume_note`, idle over 30m). Host reran subagent and cmd tests: green. Not done: the live
+check (no errored agy session at hand); closed on user decision, reopen if the stale error recurs.
+Side effect, not requested: an agy run that exits non-zero but reports `SUCCESS` in its JSON now counts as
+success (before: error). Revisit if that hides a real failure.
