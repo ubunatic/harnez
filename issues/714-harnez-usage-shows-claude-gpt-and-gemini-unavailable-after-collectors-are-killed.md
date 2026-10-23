@@ -1,6 +1,6 @@
 # 714 — harnez usage shows Claude/GPT and Gemini unavailable after collectors are killed
 
-**Status**: Open — live repro 2026-10-22: stale threshold equals the 5m collector interval
+**Status**: Closed — stale only after 2 intervals with stale/stale_reason in --json (M1); fetch failures logged with cause, bad spool entries quarantined (M2); client heartbeat, clients: in server status, logged catch-up fetch (M3); [b] debug box and ! with last fetch, stale reason, error (M4); passive_dropped counters (M5). Host: tests green, live clients 1->0, debug box frame, passive_dropped agy:1. Real AGY statusline payload moved to 710
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
