@@ -1,6 +1,6 @@
 # 886 — Collector unit fails at boot: runtime dir missing (226/NAMESPACE)
 
-**Status**: Open
+**Status**: Closed — Added RuntimeDirectory=harnez and RuntimeDirectoryPreserve=yes to the embedded unit; regression test failed before fix and go test ./internal/server plus make install passed. Reinstalled via harnez server install; daemon-reload, restart and stop/start succeeded, active with NRestarts=0 and no 226/NAMESPACE in the verification journal. Missing-directory boot simulation skipped because runtime/procs contains live process records used by the active Harnez session; directory preserved.
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
