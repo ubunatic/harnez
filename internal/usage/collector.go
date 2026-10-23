@@ -196,6 +196,9 @@ type fetchResult struct {
 }
 
 func runStoreWriter(ctx context.Context, homeDir, dbPath, stateDir string, out io.Writer, offline bool, requests <-chan PassiveRequest, results <-chan fetchResult, ready func()) error {
+	// Ready once the writer runs, not after the first fetch: without clients the
+	// first fetch waits for a heartbeat, which clients send only after ready.
+	ready()
 	for {
 		select {
 		case <-ctx.Done():
@@ -219,7 +222,6 @@ func runStoreWriter(ctx context.Context, homeDir, dbPath, stateDir string, out i
 			if err := persistUsage(ctx, homeDir, dbPath, stateDir, out, offline, result.summary); err != nil {
 				return err
 			}
-			ready()
 		}
 	}
 }

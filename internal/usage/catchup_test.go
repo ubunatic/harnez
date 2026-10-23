@@ -94,10 +94,41 @@ func TestCollectorSkipsInitialFetchWhenNoClients(t *testing.T) {
 	}
 
 	// Trigger a client heartbeat: now it should trigger an immediate catch-up fetch
+	// (the client sends it only after the server reports ready, see
+	// TestCollectorReadyBeforeFirstFetch).
 	tracker.Heartbeat("client-1")
 	time.Sleep(25 * time.Millisecond)
 	if got := fetched.Load(); got != 1 {
 		t.Fatalf("expected 1 fetch after client heartbeat, got %d", got)
+	}
+
+	cancel()
+	<-done
+}
+
+// TestCollectorReadyBeforeFirstFetch guards the startup deadlock: clients wait
+// for ready before their first heartbeat, and without clients the collector
+// defers its first fetch, so ready must not wait for that fetch.
+func TestCollectorReadyBeforeFirstFetch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	home := t.TempDir()
+	dbPath := filepath.Join(home, "usage.sqlite")
+	tracker := NewClientTracker(time.Second)
+	ready := make(chan struct{})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- RunCollectorWithClientTracker(ctx, home, dbPath, time.Hour, io.Discard, false, func(ctx context.Context) (UsageSummary, error) {
+			return UsageSummary{Timestamp: time.Now()}, nil
+		}, func() { close(ready) }, nil, tracker)
+	}()
+
+	select {
+	case <-ready:
+	case <-time.After(5 * time.Second):
+		t.Fatal("collector not ready without a fetch: clients would wait for the first interval")
 	}
 
 	cancel()
