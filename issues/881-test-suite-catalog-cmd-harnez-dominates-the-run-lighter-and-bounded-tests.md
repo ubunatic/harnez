@@ -35,3 +35,20 @@ report when blocked on a user decision.
    packages (877), host + user review first; measure cache hits per typical change before and after.
 4. **Sleeps:** replace with event waits or move to the full tier.
 5. **Importance:** tag slow tests key / regression / redundant; merge or drop redundant ones after review.
+
+## Baseline (host, 2026-10-23, `gotester report ./...`)
+
+Step 1 needs no new target: `gotester report` runs each package alone and writes `testreport/report.md`
+(git-ignored).
+
+- Clean run (load low): 59 packages, 151.8s wall; `cmd/harnez` 88.8s wall, 183s CPU, 736 MiB; next
+  `internal/usage` 12.1s, `internal/subagent` 10.2s, `internal/claude` 7.1s, all others under 3.5s.
+- Process tests dominate `cmd/harnez` and scale with load (clean run → load 13 on 12 cores):
+  `TestAgentWaitFailedWorkerIsNotOrphaned` 19s → 60s (fails under load),
+  `TestForegroundStartAndResumeDetachIntoWaitableWorkers` 2.6s → 51s,
+  `TestStopProviderTreeAndWrapper` 20s both (fails, 883). Under load `cmd/harnez` took 200s.
+- Tests leak temp dirs: 153 stale `/tmp/harnez-test-*`/`go-build*` dirs filled the user's 9.5 GB `/tmp`
+  quota and made the build fail ("disk quota exceeded"). Tests must use `t.TempDir()` or clean up.
+
+Next (owner decision pending): fix these three process tests (ready signal instead of fixed waits, temp
+cleanup) before or in parallel with 884 steps 1–3 (exec, stats, hook).
