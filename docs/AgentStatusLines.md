@@ -36,6 +36,14 @@ The AGY status-line payload can include:
 Some fields are optional or session-dependent. In particular, current context
 usage may be unavailable before the first API call.
 
+`quota` is sent on some renders only (agy 1.4.6, measured 2026-10-23): renders
+around a prompt carry it, idle refreshes (`agent_state: "idle"`, roughly every
+1-2 minutes) omit the key. Harnez keeps the last quota and counts quota-less
+payloads per provider as `passive_no_quota` next to `passive_accepted` in
+`harnez server status --json`; that counter rising is normal. To see a skipped
+payload, run the status-line command with `HARNEZ_CAPTURE_PASSIVE_DROPS=1`; it
+writes `passive-last-no-quota.json` to the harnez state dir. Issue 710.
+
 ### Claude Code
 
 - **Context**: `context_window.total_input_tokens`,

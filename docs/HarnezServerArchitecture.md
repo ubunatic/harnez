@@ -122,6 +122,13 @@ avoiding a systemd restart race; status reports when the socket owner differs fr
 `MainPID` and prints the restart command that returns ownership to systemd. Other hosts can keep the server
 available with `harnez usage -w`.
 
+Viewers send a heartbeat; the first heartbeat after none triggers a catch-up fetch of stale providers,
+and without viewers the collector only fetches on its regular cadence (714). Readiness rule: `/status`
+reports `ok` as soon as the services run, never after work that a client triggers. In 714 the server
+reported ready only after its first fetch, which waited for a heartbeat, which clients sent only after
+ready: every `harnez usage` hung up to 30s after each restart (fixed in `b47b1263`, test
+`TestCollectorReadyBeforeFirstFetch`). Clients must still not block on a slow server; see 873.
+
 The built command remains `harnez server` and these local routes remain HTTP over the Unix socket.
 JSON-RPC remains the target for the later agent-session API (roadmap step 4), behind transport
 adapters; it is not required for usage collection.

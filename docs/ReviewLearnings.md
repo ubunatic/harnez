@@ -2,6 +2,8 @@
 
 Defects that reviewers caught repeatedly. Check these before asking for review.
 
+- **Circular readiness**: when a client waits for "ready" before it sends anything, readiness must not
+  depend on work that client's message triggers. Test the cold start with no clients. Issue 714/873.
 - **Untrusted text to a terminal**: model and tool output may carry escapes. Keep SGR only, and test
   controls hidden behind grapheme joiners (`a‍\x1b[2J`). Issues 779, loom 322.
 - **Error-text matching**: match only the provider's own stderr, at line start, with CLI-verified
