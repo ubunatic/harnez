@@ -32,4 +32,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 876 | [876-host-review-reruns-only-touched-packages-after-a-developer-s-green-full-run.md](876-host-review-reruns-only-touched-packages-after-a-developer-s-green-full-run.md) | host review reruns only touched packages after a developer's green full run | Open |
 | 877 | [877-practice-new-features-go-into-sub-packages-not-the-main-command-or-root-package.md](877-practice-new-features-go-into-sub-packages-not-the-main-command-or-root-package.md) | practice: new features go into sub-packages, not the main command or root package | Open |
 | 878 | [878-retro-skill-session-report-from-compaction-summaries-and-key-user-messages.md](878-retro-skill-session-report-from-compaction-summaries-and-key-user-messages.md) | retro skill: session report from compaction summaries and key user messages | Open |
+| 879 | [879-remote-load-recovers-when-the-host-comes-back-also-for-one-shot-usage.md](879-remote-load-recovers-when-the-host-comes-back-also-for-one-shot-usage.md) | Remote load recovers when the host comes back, also for one-shot usage | Open |
 <!-- harnez:end issues-active-index -->
