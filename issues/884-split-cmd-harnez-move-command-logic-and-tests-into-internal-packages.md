@@ -1,6 +1,6 @@
 # 884 — Split cmd/harnez: move command logic and tests into internal packages
 
-**Status**: Closed — M9 delivered: Cobra-free role/quota/resume-selector/protocol policy core and focused tests live in internal/agent; provider/session/process execution remains in internal/subagent, CLI orchestration and process/binary regressions remain in cmd/harnez. Stats and hook moves are parked per Plan v3. Per-package tests and make test-q1 passed; cmd measured 16.066s before and 17.537s after (load-sensitive), internal/agent 0.014s; q1 cmd 17.294s with no --- FAIL output.
+**Status**: Closed — Partly delivered: exec, issues core, usage CLI and agent policy core moved to internal packages; cmd/harnez tests 88.8s -> ~17s. M9 moved 157 of ~5k planned lines; run/resume orchestration remains in cmd/harnez and is parked as 888; stats/hook moves parked per Plan v3.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Refactor
