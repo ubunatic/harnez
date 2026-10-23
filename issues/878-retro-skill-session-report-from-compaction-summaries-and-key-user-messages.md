@@ -66,6 +66,37 @@ of the story template.
   (canary first).
 - Pasted images are not in the transcript text; a retro cannot judge visual feedback it never saw.
 
+### Second run: loom session (2026-10-23, loom-8m45)
+
+Retro `loom/docs/studies/2026-10-23-session-retro-editor-colorpicker-session.md` (loom 3e7280c),
+written from the recipe above, with feedback for this ticket:
+
+- Input: 19.5 MB transcript, 9 summaries (76.5 KB), about 110 owner messages (19 KB). Read all
+  owner messages (about 5k tokens) and only the "Errors and fixes" sections (about 3k tokens);
+  about 10k tokens in all. The raw transcript was never opened; the errors sections sufficed for
+  the post-mortem.
+- The host skipped re-reading summaries its live context already held (the last summary, an
+  earlier story).
+- Format drift: section headings appear as `4. Errors` and `**4. Errors**`; later summaries say
+  "as in the prior summary", so content repeats.
+- Noise in the owner extract: `/compact`, `/evergreen`, bash-input echoes, tool-rejection
+  boilerplate. Signal worth keeping: `[Request interrupted…]` markers and `[Image #N]`
+  placeholders (with the owner text after them, the only clue to what an image showed).
+- Not in the extract: ticket type counts and per-ticket timings; taken from the tracker, gap stated.
+- Commit pitfall: `git commit -- <path>` fails for a new file until it is `git add`ed.
+
+Requirements derived from both runs:
+
+- Extract command options: `--user`, `--summaries`, `--section errors` (heading-format
+  tolerant), `--since`; drop slash-command noise and bash echoes but keep slash-command arguments,
+  interrupts and image placeholders.
+- Output header: session file, size, message count, time span, so the right session is provable.
+- Dedupe summaries (later ones carry earlier errors forward).
+- Skill text: skip what the live context already holds; extend or cross-link an existing story
+  instead of duplicating it; a mandatory "method and gaps" section; `git add` new files before
+  committing by explicit path; evergreen changes to harnez-managed docs stay proposals.
+- Providers: only Claude tested so far.
+
 ## 5. Acceptance
 
 - The extract of the ubunatic.com session `13d4828e-…` reproduces the manual numbers (17
