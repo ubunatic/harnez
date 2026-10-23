@@ -12,6 +12,7 @@ import (
 )
 
 type PassiveUpdateServer struct {
+	Drops        *PassiveDropTracker
 	Path         string
 	Requests     chan<- PassiveRequest
 	Timeout      time.Duration
@@ -25,7 +26,8 @@ func (s PassiveUpdateServer) RegisterRoutes(mux *http.ServeMux) {
 func (s PassiveUpdateServer) handlePassive(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, s.MaxBodyBytes)
 	var payload struct {
-		Windows []usagestore.Window `json:"windows"`
+		Windows         []usagestore.Window `json:"windows"`
+		DroppedProvider string              `json:"dropped_provider"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
@@ -40,6 +42,15 @@ func (s PassiveUpdateServer) handlePassive(w http.ResponseWriter, r *http.Reques
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if payload.DroppedProvider != "" {
+		if len(payload.Windows) != 0 || (payload.DroppedProvider != "claude" && payload.DroppedProvider != "agy") {
+			http.Error(w, "invalid dropped provider", http.StatusBadRequest)
+			return
+		}
+		s.Drops.record(payload.DroppedProvider)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if len(payload.Windows) == 0 {

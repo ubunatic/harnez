@@ -52,6 +52,9 @@ func loadLocalUsage(ctx context.Context, offline bool) (usage.UsageSummary, erro
 	if err != nil && os.IsNotExist(err) && offline {
 		return usage.UsageSummary{}, fmt.Errorf("usage store does not exist; start harnez server first (or run usage without --offline)")
 	}
+	if err == nil && !offline {
+		summary.PassiveDropped = usage.ReadPassiveDropCounts(ctx)
+	}
 	return summary, err
 }
 

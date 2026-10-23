@@ -52,7 +52,16 @@ func ObserveStatuslineTo(parent context.Context, provider string, payload []byte
 		return server.UpdateDropped
 	}
 	windows, err := passiveWindows(provider, payload, time.Now())
-	if err != nil || len(windows) == 0 {
+	if err != nil {
+		return server.UpdateDropped
+	}
+	if len(windows) == 0 {
+		// Report a valid observation with no usable quota to the long-lived
+		// server; statusline processes themselves exit after each render.
+		body, _ := json.Marshal(struct {
+			Provider string `json:"dropped_provider"`
+		}{provider})
+		_ = server.PostUpdate(parent, address, path, body, timeout)
 		return server.UpdateDropped
 	}
 	body, err := json.Marshal(struct {

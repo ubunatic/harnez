@@ -191,9 +191,10 @@ func TestPrintServerStatusJSON(t *testing.T) {
 		MainPID:   500,
 		SocketPID: 500,
 	}, localServerStatusResponse{
-		PID:       500,
-		Version:   harnez.Version,
-		StartedAt: start,
+		PID:            500,
+		Version:        harnez.Version,
+		StartedAt:      start,
+		PassiveDropped: map[string]uint64{"agy": 12, "claude": 3},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -204,6 +205,9 @@ func TestPrintServerStatusJSON(t *testing.T) {
 	}
 	if !sj1.Running || sj1.PID != 500 || sj1.SocketOwner != "systemd" || sj1.Version != harnez.Version || sj1.VersionMismatch || sj1.UptimeSeconds == nil || *sj1.UptimeSeconds < 90 {
 		t.Fatalf("unexpected running json: %+v", sj1)
+	}
+	if sj1.PassiveDropped["agy"] != 12 || sj1.PassiveDropped["claude"] != 3 {
+		t.Fatalf("missing passive counters: %s", buf1.String())
 	}
 	if sj1.Unit == nil || !sj1.Unit.Active || sj1.Unit.MainPID != 500 {
 		t.Fatalf("unexpected unit json: %+v", sj1.Unit)

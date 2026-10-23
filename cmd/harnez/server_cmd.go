@@ -43,6 +43,10 @@ func (s *usageCollectorService) RegisterRoutes(mux *http.ServeMux) {
 
 func (s *usageCollectorService) Ready() bool { return s.ready.Load() }
 
+func (s *usageCollectorService) DroppedStatuslineObservations() map[string]uint64 {
+	return s.updateServer.Drops.Snapshot()
+}
+
 func (s *usageCollectorService) ActiveClients() int {
 	if s.tracker != nil {
 		return s.tracker.Count()
@@ -311,12 +315,13 @@ func stopLocalServer(ctx context.Context, cfg server.Config, socket string, sock
 }
 
 type localServerStatusResponse struct {
-	Server        string    `json:"server"`
-	Version       string    `json:"version"`
-	BuildIdentity string    `json:"build_identity"`
-	PID           int       `json:"pid"`
-	StartedAt     time.Time `json:"started_at"`
-	Clients       *int      `json:"clients,omitempty"`
+	Server         string            `json:"server"`
+	Version        string            `json:"version"`
+	BuildIdentity  string            `json:"build_identity"`
+	PID            int               `json:"pid"`
+	StartedAt      time.Time         `json:"started_at"`
+	Clients        *int              `json:"clients,omitempty"`
+	PassiveDropped map[string]uint64 `json:"passive_dropped,omitempty"`
 }
 
 type serverStatusJSON struct {
@@ -328,6 +333,7 @@ type serverStatusJSON struct {
 	CLIVersion      string                `json:"cli_version,omitempty"`
 	UptimeSeconds   *int64                `json:"uptime_seconds,omitempty"`
 	Clients         *int                  `json:"clients,omitempty"`
+	PassiveDropped  map[string]uint64     `json:"passive_dropped,omitempty"`
 	VersionMismatch bool                  `json:"version_mismatch"`
 }
 
@@ -367,6 +373,7 @@ func printServerStatusJSON(out io.Writer, cfg server.Config, status server.Syste
 	if srv.PID > 0 {
 		sj.Version = srv.Version
 		sj.Clients = srv.Clients
+		sj.PassiveDropped = srv.PassiveDropped
 		if !srv.StartedAt.IsZero() {
 			secs := int64(time.Since(srv.StartedAt).Seconds())
 			if secs < 0 {
@@ -498,7 +505,7 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 		client:          client,
 		offline:         offline,
 		requests:        requests,
-		updateServer:    usage.PassiveUpdateServer{Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes},
+		updateServer:    usage.PassiveUpdateServer{Drops: &usage.PassiveDropTracker{}, Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes},
 		tracker:         tracker,
 		heartbeatServer: heartbeatServer,
 	}

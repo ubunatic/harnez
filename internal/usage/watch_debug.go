@@ -13,12 +13,13 @@ import (
 )
 
 type usageDebugLabels struct {
-	LastFetch   string `yaml:"last_fetch"`
-	StaleReason string `yaml:"stale_reason"`
-	FetchError  string `yaml:"fetch_error"`
-	Cause       string `yaml:"cause"`
-	None        string `yaml:"none"`
-	Unknown     string `yaml:"unknown"`
+	PassiveDropped string `yaml:"passive_dropped"`
+	LastFetch      string `yaml:"last_fetch"`
+	StaleReason    string `yaml:"stale_reason"`
+	FetchError     string `yaml:"fetch_error"`
+	Cause          string `yaml:"cause"`
+	None           string `yaml:"none"`
+	Unknown        string `yaml:"unknown"`
 }
 
 var debugLabelsOnce = sync.OnceValues(func() (usageDebugLabels, error) {
@@ -70,6 +71,11 @@ func buildUsageDebugBox(summary UsageSummary, width int, now time.Time) wbox {
 			fmt.Sprintf("  %s: %s", labels.StaleReason, value(reason)),
 			fmt.Sprintf("  %s: %s; %s: %s", labels.FetchError, value(agent.QuotaFetchError), labels.Cause, value(cause)),
 		)
+		count := labels.Unknown
+		if n, ok := summary.PassiveDropped[agent.AgentID]; ok {
+			count = fmt.Sprint(n)
+		}
+		lines = append(lines, fmt.Sprintf("  %s: %s", labels.PassiveDropped, count))
 	}
 	action := mustWatchActions().spec.Actions["toggle_debug_box"]
 	return wbox{title: "[" + action.Symbol + "] " + action.Title, lines: lines, width: width}
