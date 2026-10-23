@@ -1,6 +1,6 @@
 # 710 — AGY usage quota rows remain gray while AGY is active
 
-**Status**: Blocked — waiting for a live repro; gray rows now show their reason
+**Status**: Blocked — waiting for a real AGY statusline payload: does it carry quota fields? passive_dropped (714 M5) counts payloads without them
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
