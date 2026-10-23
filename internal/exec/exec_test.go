@@ -306,11 +306,21 @@ func TestRunExecWrapper_TelemetryWriteNeverBlocksCommand(t *testing.T) {
 	opts := testExecOptions(t)
 	opts.InsertTimeout = 30 * time.Millisecond
 	slowStarted := make(chan struct{}, 1)
+	releaseSlow := make(chan struct{})
+	slowDone := make(chan struct{})
 	opts.Insert = func(dbPath string, call telemetry.ToolCall) error {
 		slowStarted <- struct{}{}
-		time.Sleep(10 * time.Second) // deliberately far past InsertTimeout and past the test's own deadline
+		<-releaseSlow
+		close(slowDone)
 		return errors.New("should never be observed by the wrapper")
 	}
+	t.Cleanup(func() {
+		select {
+		case <-releaseSlow:
+		default:
+			close(releaseSlow)
+		}
+	})
 
 	var out, errOut bytes.Buffer
 	start := time.Now()
@@ -338,8 +348,15 @@ func TestRunExecWrapper_TelemetryWriteNeverBlocksCommand(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("injected slow Insert was never invoked")
 	}
+	close(releaseSlow)
+	select {
+	case <-slowDone:
+	case <-time.After(time.Second):
+		t.Fatal("injected slow Insert did not exit after release")
+	}
 }
 func TestRunExecWrapper_TimeoutKillsAndRecordsDistinctTelemetry(t *testing.T) {
+	skipShort(t, "asserts real subprocess timeout and termination")
 	opts := testExecOptions(t)
 	opts.Timeout = 80 * time.Millisecond
 	opts.InsertTimeout = 2 * time.Second
@@ -563,6 +580,7 @@ func TestRunExecHookPreservesInputAndForwardsNativeIntent(t *testing.T) {
 	}
 }
 func TestRunExecWrapper_TimeoutKillsProcessGroupDescendant(t *testing.T) {
+	skipShort(t, "asserts real descendant termination after timeout")
 	opts := testExecOptions(t)
 	opts.Timeout = 80 * time.Millisecond
 	pidFile := filepath.Join(t.TempDir(), "child.pid")

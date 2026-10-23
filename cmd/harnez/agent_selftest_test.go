@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -98,6 +99,12 @@ func TestAgentSelftestNoArgsNonTTY(t *testing.T) {
 
 func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
 	skipShort(t, "runs a 1s background selftest step")
+	oldWait := selftestBackgroundWait
+	started, finish := make(chan struct{}, 1), make(chan struct{})
+	var finishOnce sync.Once
+	release := func() { finishOnce.Do(func() { close(finish) }) }
+	selftestBackgroundWait = func(time.Duration) { started <- struct{}{}; <-finish }
+	t.Cleanup(func() { release(); selftestBackgroundWait = oldWait })
 	t.Setenv("HTO", "0")
 	tempDir := t.TempDir()
 	sessionID := "test-session-123"
@@ -127,18 +134,10 @@ func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
 	}()
 
 	// Wait for background to record started state
-	statePath := filepath.Join(tempDir, "harnez-selftest-"+sessionID+".json")
-	var started bool
-	for i := 0; i < 50; i++ {
-		time.Sleep(20 * time.Millisecond)
-		st, err := loadSelftestState(statePath)
-		if err == nil && st.BackgroundStartedAt != nil {
-			started = true
-			break
-		}
-	}
-	if !started {
-		t.Fatal("background task did not record started state in time")
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second * raceFactor):
+		t.Fatal("background task did not reach its start event")
 	}
 
 	// 3. Run --step confirm while background is running
@@ -168,6 +167,7 @@ func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
 			t.Errorf("unexpected confirm-running output: %s", out.String())
 		}
 	}
+	release()
 
 	// Wait for background task goroutine to finish
 	select {
@@ -195,12 +195,19 @@ func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
 }
 
 func TestAgentSelftestVerifyMissingHTOFails(t *testing.T) {
+	oldWait := selftestBackgroundWait
+	started, finish := make(chan struct{}, 1), make(chan struct{})
+	var finishOnce sync.Once
+	release := func() { finishOnce.Do(func() { close(finish) }) }
+	selftestBackgroundWait = func(time.Duration) { started <- struct{}{}; <-finish }
+	t.Cleanup(func() { release(); selftestBackgroundWait = oldWait })
 	// Ensure HTO is unset
 	t.Setenv("HTO", "")
 	_ = os.Unsetenv("HTO")
 
 	tempDir := t.TempDir()
 	sessionID := "test-missing-hto"
+	statePath := filepath.Join(tempDir, "harnez-selftest-"+sessionID+".json")
 
 	// 1. Hello
 	cmd := newAgentSelftestCmd()
@@ -217,13 +224,10 @@ func TestAgentSelftestVerifyMissingHTOFails(t *testing.T) {
 		bgDone <- cmd.Execute()
 	}()
 
-	statePath := filepath.Join(tempDir, "harnez-selftest-"+sessionID+".json")
-	for i := 0; i < 50; i++ {
-		time.Sleep(10 * time.Millisecond)
-		st, err := loadSelftestState(statePath)
-		if err == nil && st.BackgroundStartedAt != nil {
-			break
-		}
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second * raceFactor):
+		t.Fatal("background task did not reach its start event")
 	}
 
 	// 3. Confirm
@@ -235,6 +239,7 @@ func TestAgentSelftestVerifyMissingHTOFails(t *testing.T) {
 	cmd = newAgentSelftestCmd()
 	cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "confirm-running"})
 	_ = cmd.Execute()
+	release()
 
 	_ = <-bgDone
 

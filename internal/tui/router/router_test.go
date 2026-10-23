@@ -14,6 +14,13 @@ import (
 	"ubunatic.com/harnez/internal/subagent"
 )
 
+func skipShort(t *testing.T, why string) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("full test tier: " + why)
+	}
+}
+
 // batchDriver is a fake non-streaming driver that records its calls.
 type batchDriver struct {
 	subagent.UnsupportedDriver
@@ -138,24 +145,28 @@ func TestTurnFallsBackToNewSessionWhenResumeFails(t *testing.T) {
 }
 
 // cancelStream reports its session, then blocks until the turn is cancelled.
-type cancelStream struct{ streamDriver }
+type cancelStream struct {
+	streamDriver
+	reported chan struct{}
+}
 
-func (cancelStream) RunStream(ctx context.Context, _ subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+func (d cancelStream) RunStream(ctx context.Context, _ subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	fn(subagent.Event{Kind: "session", Text: "th-cancel"})
+	close(d.reported)
 	<-ctx.Done()
 	return nil, ctx.Err()
 }
 
 func TestTurnKeepsSessionAfterCancel(t *testing.T) {
-	r := &Router{Driver: func(subagent.Model, string) subagent.Driver { return cancelStream{} }}
+	reported := make(chan struct{})
+	r := &Router{Driver: func(subagent.Model, string) subagent.Driver { return cancelStream{reported: reported} }}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- r.Turn(ctx, "codex:luna", "p", func(Chunk) {}) }()
-	for deadline := time.Now().Add(5 * time.Second); r.Session("codex:luna") == ""; {
-		if time.Now().After(deadline) {
-			t.Fatal("session never reported")
-		}
-		time.Sleep(5 * time.Millisecond)
+	select {
+	case <-reported:
+	case <-time.After(5 * time.Second):
+		t.Fatal("session never reported")
 	}
 	cancel()
 	if err := <-done; !errors.Is(err, context.Canceled) {
@@ -233,6 +244,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
 // Cancelling a turn kills the provider's whole process tree, including a
 // grandchild that would otherwise keep stdout open.
 func TestTurnCancelKillsProviderTree(t *testing.T) {
+	skipShort(t, "starts and cancels a real fake-provider process tree")
 	dir := fakeCLI(t, "claude", `sleep 300 &
 echo $! > "$(dirname "$0")/child.pid"
 wait
@@ -319,6 +331,7 @@ echo '{"type":"result","subtype":"success","session_id":"cs-1","result":"beta","
 // A claude turn cancelled after its init event keeps the session for the
 // next prompt.
 func TestTurnCancelMidClaudeStreamKeepsSession(t *testing.T) {
+	skipShort(t, "starts and cancels a fake Claude provider process")
 	fakeCLI(t, "claude", `echo '{"type":"system","subtype":"init","session_id":"cs-2"}'
 sleep 300 &
 wait

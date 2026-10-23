@@ -69,6 +69,7 @@ func (d *streamDriver) ResumeStream(_ context.Context, _, _ string, _ subagent.M
 }
 
 func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
+	skipShort(t, "waits for a heartbeat in the real stream watchdog")
 	old, oldSched, oldRepeat := agentDriver, heartbeatSchedule, heartbeatRepeat
 	agentDriver = func(subagent.Model, string) subagent.Driver { return &streamDriver{} }
 	heartbeatSchedule, heartbeatRepeat = []time.Duration{20 * time.Millisecond}, 20*time.Millisecond
@@ -129,6 +130,7 @@ func TestHeartbeatSchedule(t *testing.T) {
 }
 
 func TestAgentStartStatsModeShowsOnlyHeartbeatsAndReply(t *testing.T) {
+	skipShort(t, "waits for a heartbeat in the real stream watchdog")
 	old, oldSched, oldRepeat := agentDriver, heartbeatSchedule, heartbeatRepeat
 	agentDriver = func(subagent.Model, string) subagent.Driver { return &streamDriver{} }
 	heartbeatSchedule, heartbeatRepeat = []time.Duration{20 * time.Millisecond}, 20*time.Millisecond

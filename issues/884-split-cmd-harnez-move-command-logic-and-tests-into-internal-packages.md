@@ -222,3 +222,22 @@ developer runs, with full and race coverage retained in CI, not silently dropped
    timer/matrix fixes: cmd full **roughly 18–25s before further relocations**, short lower;
    this is a target, not a measured result. Pure moves may reduce cmd further while leaving
    uncached full-suite work unchanged. No new reporting target is needed (881 has gotester).
+
+## M5 delivered: deterministic readiness and tiered timer tests
+
+The detached worker helper now waits on the existing parent-release socket event after the
+parent confirms the worker PID is registered; it no longer polls session state every 10ms.
+Self-test start/completion coordination uses test-controlled channels instead of polling and
+sleeping for the configured demonstration duration. Client heartbeat expiry tests use an
+injected clock. The jobs UI-loop helper wakes on posted callbacks rather than polling; tests
+whose assertions require real process trees, elapsed time, or rate-limit timers are explicitly
+full-tier. The slow telemetry test releases and joins its deliberately blocked writer instead
+of leaving a 10-second sleeper behind.
+
+Measured `go test ./cmd/harnez -count=1`: **41.384s before**, **44.326s after**. Both runs
+failed in the untouched `TestAgentQuotaNoticeBeforeStartAndResumeJSON/start`, which did not
+observe its quota warning before the provider turn. Touched-package verification passed:
+`internal/usage` **14.063s**, `internal/tui/router` **0.122s**, `internal/tui/jobs` **4.103s
+(-count=3)**, and `internal/exec` **8.357s**. The post-M5 targeted cmd tests passed in **0.231s**
+(-count=3). `make lint` passed. Remaining real-time process and heartbeat/watchdog assertions
+stay in full tier by design.

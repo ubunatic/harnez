@@ -13,14 +13,30 @@ import (
 
 // uiLoop stands in for loom's event loop: post never blocks, run drains.
 type uiLoop struct {
-	mu sync.Mutex
-	q  []func()
+	mu   sync.Mutex
+	q    []func()
+	wake chan struct{}
+}
+
+func skipShort(t *testing.T, why string) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("full test tier: " + why)
+	}
 }
 
 func (l *uiLoop) post(fn func()) {
 	l.mu.Lock()
 	l.q = append(l.q, fn)
+	if l.wake == nil {
+		l.wake = make(chan struct{}, 1)
+	}
+	wake := l.wake
 	l.mu.Unlock()
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
 }
 
 func (l *uiLoop) runOnce() int {
@@ -37,12 +53,22 @@ func (l *uiLoop) runOnce() int {
 // until drains callbacks on the test goroutine until cond holds.
 func (l *uiLoop) until(t *testing.T, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	l.mu.Lock()
+	if l.wake == nil {
+		l.wake = make(chan struct{}, 1)
+	}
+	wake := l.wake
+	l.mu.Unlock()
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
 	for !cond() {
-		if l.runOnce() == 0 {
-			time.Sleep(5 * time.Millisecond)
+		l.runOnce()
+		if cond() {
+			return
 		}
-		if time.Now().After(deadline) {
+		select {
+		case <-wake:
+		case <-timer.C:
 			t.Fatal("condition not reached")
 		}
 	}
@@ -163,6 +189,7 @@ func TestJobOutputBounded(t *testing.T) {
 }
 
 func TestCancelKillsWholeTree(t *testing.T) {
+	skipShort(t, "checks real child process group membership")
 	m, l := newTestManager(t)
 	j, err := m.Start("sleep 30 & sleep 30")
 	if err != nil {
@@ -191,6 +218,7 @@ func TestCancelKillsWholeTree(t *testing.T) {
 }
 
 func TestCancelEscalatesToKill(t *testing.T) {
+	skipShort(t, "asserts the real SIGTERM-to-SIGKILL grace interval")
 	m, l := newTestManager(t)
 	j, err := m.Start("trap '' TERM; echo ready; while :; do sleep 0.05; done")
 	if err != nil {
@@ -224,6 +252,7 @@ func TestLeaderExitReapsBackgroundChildren(t *testing.T) {
 }
 
 func TestShutdownLeavesNoProcesses(t *testing.T) {
+	skipShort(t, "starts and verifies real child process groups")
 	l := &uiLoop{}
 	m := NewManager(Options{Shell: "sh", Dir: t.TempDir(), LogBytes: 1024, CancelGrace: 300 * time.Millisecond, MaxFinished: 50}, l.post)
 	var pids []int
@@ -269,6 +298,7 @@ func (l *uiLoop) queued() int {
 // While the UI loop is paused (e.g. Pane.Suspend for Ctrl+G), a fast
 // producer must neither grow the Post queue nor buffer unbounded output.
 func TestFastProducerCoalescesPosts(t *testing.T) {
+	skipShort(t, "measures producer coalescing over a real 300ms interval")
 	m, l := newTestManager(t)
 	j, err := m.Start("yes")
 	if err != nil {

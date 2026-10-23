@@ -9,8 +9,26 @@ import (
 	"time"
 )
 
+func skipShort(t *testing.T, why string) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("full test tier: " + why)
+	}
+}
+
+type heartbeatClock struct{ now time.Time }
+
+func (c *heartbeatClock) advance(d time.Duration) { c.now = c.now.Add(d) }
+
+func testClientTracker(timeout time.Duration, onFirst ...func()) (*ClientTracker, *heartbeatClock) {
+	tracker := NewClientTracker(timeout, onFirst...)
+	clock := &heartbeatClock{now: time.Unix(1, 0)}
+	tracker.now = func() time.Time { return clock.now }
+	return tracker, clock
+}
+
 func TestClientTrackerCountsActiveClients(t *testing.T) {
-	tracker := NewClientTracker(50 * time.Millisecond)
+	tracker, clock := testClientTracker(50 * time.Millisecond)
 
 	if got := tracker.Count(); got != 0 {
 		t.Fatalf("expected 0 clients initially, got %d", got)
@@ -24,15 +42,15 @@ func TestClientTrackerCountsActiveClients(t *testing.T) {
 	}
 
 	// Refresh client-1, let client-2 expire
-	time.Sleep(30 * time.Millisecond)
+	clock.advance(30 * time.Millisecond)
 	tracker.Heartbeat("client-1")
 
-	time.Sleep(30 * time.Millisecond)
+	clock.advance(30 * time.Millisecond)
 	if got := tracker.Count(); got != 1 {
 		t.Fatalf("expected 1 active client after timeout, got %d", got)
 	}
 
-	time.Sleep(30 * time.Millisecond)
+	clock.advance(30 * time.Millisecond)
 	if got := tracker.Count(); got != 0 {
 		t.Fatalf("expected 0 active clients after all timed out, got %d", got)
 	}
@@ -40,7 +58,7 @@ func TestClientTrackerCountsActiveClients(t *testing.T) {
 
 func TestClientTrackerOnFirstClientCallback(t *testing.T) {
 	var triggered atomic.Int32
-	tracker := NewClientTracker(50*time.Millisecond, func() {
+	tracker, clock := testClientTracker(50*time.Millisecond, func() {
 		triggered.Add(1)
 	})
 
@@ -58,7 +76,7 @@ func TestClientTrackerOnFirstClientCallback(t *testing.T) {
 	}
 
 	// Wait for expiry back to 0
-	time.Sleep(60 * time.Millisecond)
+	clock.advance(60 * time.Millisecond)
 	if got := tracker.Count(); got != 0 {
 		t.Fatalf("expected 0 clients, got %d", got)
 	}
@@ -108,7 +126,7 @@ func TestHeartbeatServerHTTPRoute(t *testing.T) {
 func TestClientRestartWithinTimeoutDoesNotTriggerCatchup(t *testing.T) {
 	var triggered atomic.Int32
 	// client timeout is 100ms
-	tracker := NewClientTracker(100*time.Millisecond, func() {
+	tracker, clock := testClientTracker(100*time.Millisecond, func() {
 		triggered.Add(1)
 	})
 
@@ -121,7 +139,7 @@ func TestClientRestartWithinTimeoutDoesNotTriggerCatchup(t *testing.T) {
 	// Viewer restarts 30ms later with a new client ID (viewer-2).
 	// Since 30ms < 100ms, viewer-1 has not timed out, active client count is >= 1,
 	// so count never dropped to 0.
-	time.Sleep(30 * time.Millisecond)
+	clock.advance(30 * time.Millisecond)
 	tracker.Heartbeat("viewer-2")
 
 	// Verify callback did not fire again
@@ -130,11 +148,11 @@ func TestClientRestartWithinTimeoutDoesNotTriggerCatchup(t *testing.T) {
 	}
 
 	// Wait another 30ms (60ms from start). viewer-2 sends heartbeat again.
-	time.Sleep(30 * time.Millisecond)
+	clock.advance(30 * time.Millisecond)
 	tracker.Heartbeat("viewer-2")
 
 	// Wait until viewer-1 has expired (>100ms since start, e.g. 50ms more)
-	time.Sleep(50 * time.Millisecond)
+	clock.advance(50 * time.Millisecond)
 	// viewer-2 is still active because it sent a heartbeat at 60ms
 	if got := tracker.Count(); got != 1 {
 		t.Fatalf("expected exactly 1 active client (viewer-2), got %d", got)

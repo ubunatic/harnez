@@ -2905,6 +2905,7 @@ func TestMicActivityTracker(t *testing.T) {
 }
 
 func TestRedrawThrottlerCoalescingAndRateLimit(t *testing.T) {
+	skipShort(t, "asserts real redraw rate-limit timers")
 	var count atomic.Int32
 	throttler := newRedrawThrottler(50*time.Millisecond, func() {
 		count.Add(1)
@@ -2958,6 +2959,7 @@ func TestRedrawThrottlerCoalescingAndRateLimit(t *testing.T) {
 }
 
 func TestRedrawThrottlerMarkDrawn(t *testing.T) {
+	skipShort(t, "asserts real redraw rate-limit timers")
 	var count atomic.Int32
 	throttler := newRedrawThrottler(50*time.Millisecond, func() {
 		count.Add(1)
@@ -2980,6 +2982,7 @@ func TestRedrawThrottlerMarkDrawn(t *testing.T) {
 }
 
 func TestRedrawThrottlerStop(t *testing.T) {
+	skipShort(t, "asserts a stopped real redraw timer does not fire")
 	var count atomic.Int32
 	throttler := newRedrawThrottler(50*time.Millisecond, func() {
 		count.Add(1)

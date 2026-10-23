@@ -100,6 +100,7 @@ func TestToolBeforeConfirmationIsAViolation(t *testing.T) {
 }
 
 func TestSilentAgentGetsWarning(t *testing.T) {
+	skipShort(t, "tests the real confirmation timeout")
 	d := &scriptDriver{steps: []step{{100 * time.Millisecond, msg("late reply")}}}
 	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w")
 	if !strings.Contains(got, "[warning: no confirmation after 0s; caller may stop the agent: harnez agent stop w]") || strings.Count(got, "[warning:") != 1 {

@@ -30,6 +30,10 @@ type selftestState struct {
 	StepTimes            map[string]time.Time `json:"step_times,omitempty"`
 }
 
+// selftestBackgroundWait is replaceable so tests can coordinate the background
+// step with an event instead of sleeping for the configured demonstration time.
+var selftestBackgroundWait = time.Sleep
+
 func sanitizeSelftestID(id string) string {
 	if id == "" {
 		return "default"
@@ -196,7 +200,7 @@ func newAgentSelftestCmd() *cobra.Command {
 				if dur <= 0 {
 					dur = 10 * time.Second
 				}
-				time.Sleep(dur)
+				selftestBackgroundWait(dur)
 
 				// Re-load in case confirm / confirm-running updated state during sleep
 				if reloaded, err := loadSelftestState(statePath); err == nil {

@@ -177,6 +177,8 @@ func TestWaitWorkerCrashHelper(t *testing.T) {
 
 func TestAgentDetachedSpawnAndWait(t *testing.T) {
 	installUnclassifiedNeus(t)
+	gate := processTestListener(t)
+	t.Setenv("HARNEZ_TEST_PROCESS_GATE", gate.Addr().String())
 	storeDir := t.TempDir()
 	helperBinary, err := os.Executable()
 	if err != nil {
@@ -206,6 +208,10 @@ func TestAgentDetachedSpawnAndWait(t *testing.T) {
 	if created.Status != "running" || created.ProcessPID == 0 || created.StdoutLog == "" || created.StderrLog == "" {
 		t.Fatalf("created session = %#v", created)
 	}
+	// The launcher blocks until the parent confirms the session has been
+	// registered with its worker PID. This makes readiness deterministic and
+	// avoids polling the store while the child races startup.
+	releaseProcessTestChild(t, gate)
 	store, _ := subagent.NewSessionStore(storeDir)
 	finished, err := waitForAgent(context.Background(), store, created.ID, 2*time.Second)
 	if err != nil {
@@ -457,23 +463,20 @@ func TestDetachedLaunchHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 100; i++ {
-		sess, err := store.Get(id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if sess.ProcessPID == os.Getpid() {
-			sess.Status = "completed"
-			sess.ProcessPID = 0
-			sess.Response = "helper done"
-			if err := store.Save(sess); err != nil {
-				t.Fatal(err)
-			}
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
+	awaitProcessTestRelease(t)
+	sess, err := store.Get(id)
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Fatal("parent did not register worker PID")
+	if sess.ProcessPID != os.Getpid() {
+		t.Fatalf("parent registered worker PID %d, helper PID is %d", sess.ProcessPID, os.Getpid())
+	}
+	sess.Status = "completed"
+	sess.ProcessPID = 0
+	sess.Response = "helper done"
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestReattachStepsUseHostVocabulary(t *testing.T) {

@@ -18,6 +18,7 @@ type ClientTracker struct {
 	timeout       time.Duration
 	clients       map[string]time.Time
 	onFirstClient func()
+	now           func() time.Time
 }
 
 // NewClientTracker creates a new ClientTracker. onFirstClient (optional) is called
@@ -31,6 +32,7 @@ func NewClientTracker(timeout time.Duration, onFirstClient ...func()) *ClientTra
 		timeout:       timeout,
 		clients:       make(map[string]time.Time),
 		onFirstClient: cb,
+		now:           time.Now,
 	}
 }
 
@@ -48,7 +50,7 @@ func (ct *ClientTracker) Heartbeat(clientID string) {
 	}
 	ct.mu.Lock()
 
-	now := time.Now()
+	now := ct.now()
 	ct.pruneExpiredLocked(now)
 
 	prevCount := len(ct.clients)
@@ -68,7 +70,7 @@ func (ct *ClientTracker) Heartbeat(clientID string) {
 func (ct *ClientTracker) Count() int {
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
-	ct.pruneExpiredLocked(time.Now())
+	ct.pruneExpiredLocked(ct.now())
 	return len(ct.clients)
 }
 
