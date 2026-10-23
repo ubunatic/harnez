@@ -1,6 +1,6 @@
 # 859 — issues open/close --commit commits every staged file, not only the ticket and index
 
-**Status**: Open
+**Status**: Closed — explicit-path commits preserve unrelated staged work across open, close, and mv tests; absent indexes skipped
 **Priority**: P1 (High) — silently mixes another agent's work into a tracker commit
 **Severity**: Major
 **Category**: Bug
