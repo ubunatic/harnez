@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
+	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/sessionstate"
 	"ubunatic.com/harnez/internal/usage"
@@ -150,6 +154,32 @@ func TestHostCommandGuardsAndXDGIsolation(t *testing.T) {
 		if err != nil || got == "" || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 			t.Fatalf("%s=%q escapes isolated HOME %q (relative %q, err %v)", name, got, testIsolatedHome, rel, err)
 		}
+	}
+}
+
+func TestEmbeddedTestRunnerSpecMatchesSchema(t *testing.T) {
+	data, err := harnez.DefaultFS.ReadFile("spec/testing.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	schemaData, err := harnez.DefaultFS.ReadFile("spec/schemas/testing.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(schemaData, &schema); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resolved.Validate(document); err != nil {
+		t.Fatalf("spec/testing.yaml does not match its schema: %v", err)
 	}
 }
 

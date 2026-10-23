@@ -1,0 +1,5 @@
+# yaml-language-server: $schema=schemas/testing.schema.json
+# Bound package fanout on developer and CI hosts; child-process tests use their
+# own shorter context deadlines (see cmd/harnez/usage_binary_test.go).
+go_test_parallelism: 4
+go_test_timeout: 3m

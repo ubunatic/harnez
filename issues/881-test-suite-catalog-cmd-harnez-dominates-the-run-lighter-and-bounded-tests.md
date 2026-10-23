@@ -118,9 +118,9 @@ in CI. Raw profile: `/tmp/harnez-adv-884b-tests.json` (local, untracked).
 
 1. **Report — complete.** `gotester report` covers per-package wall/CPU/RSS; the recorded
    `go test ./cmd/harnez -count=1 -json` profile ranks top-level test parents.
-2. **Bound the load — partial.** 320cceed replaced selected polling with events and marked
-   real process/timer assertions full-tier. Finish cmd TestMain XDG isolation, the remaining
-   silent-agent fake-clock case, and ensure process helpers join on failure.
+2. **Bound the load — complete.** Package fanout and suite timeout are sourced from
+   `spec/testing.yaml`; test, test-short, test-pkg, test-dot8 and test-q1 apply them. Real
+   binary/PTY tests retain short child watchdogs; M7 isolated HOME/XDG and joined its worker.
 3. **Split cmd/harnez — in progress.** exec and issues core now live internally; next do
    usage/usagecli then bounded agent core. Stats/hook are parked because their measured tests
    total only 0.31s; see [884 Plan v3](884-split-cmd-harnez-move-command-logic-and-tests-into-internal-packages.md#plan-v3-advisor-adv-884b).
@@ -167,3 +167,16 @@ Only #2 was consolidated, with its replacement named above. The other tests cove
 boundaries or behaviors; none was dropped or merged. M7 isolates these tests from host HOME,
 XDG state, and provider binaries and removes the warning test's real delay. This completes
 roadmap step 5; the remaining 881 work is still open.
+
+## Roadmap step 2: bounded test execution
+
+`spec/testing.yaml` now owns Go's package parallelism (**4**) and package timeout (**3m**),
+with a strict JSON Schema. Make test targets read these values from the spec; `make test-q1`
+delegates to `make test` and therefore uses the same limits. `make -n test-q1` confirms the
+effective command is `go test -p 4 -timeout 3m ./...`.
+
+Binary and PTY tests already have per-child context deadlines: the usage one-shot uses **2s**,
+the binary deadline and PTY watch use **9s** and **8s**, and server-stop subprocess uses **2s**.
+These watchdogs preserve the child-failure assertions and are separate from the suite-level
+package timeout. The spec/schema test passes. This completes roadmap step 2; roadmap steps 3
+and 4 are still open, so 881 remains open.

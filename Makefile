@@ -15,6 +15,8 @@ ENGINE   ?= $(shell command -v podman || command -v docker)
 TEST_IMG ?= harnez-test
 TEST_OUT ?= /tmp/harnez-container-test
 TESTFLAGS ?=
+TEST_PARALLELISM ?= $(shell awk '$$1 == "go_test_parallelism:" {print $$2}' spec/testing.yaml)
+TEST_TIMEOUT ?= $(shell awk '$$1 == "go_test_timeout:" {print $$2}' spec/testing.yaml)
 # rootless podman: map the caller's UID onto the image's tester user.
 USERNS   := $(if $(findstring podman,$(ENGINE)),--userns=keep-id)
 
@@ -99,17 +101,17 @@ macos-ci: ⚙️  # trigger and watch macos-hello CI workflow on the GitHub mirr
 check: ⚙️  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
 	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
-	GOWORK=off go test $(TESTFLAGS) ./...
+	GOWORK=off go test $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) ./...
 
 check-fast: ⚙️  # fast local feedback loop
 	go test ./...
 
 test-short: ⚙️  # fast unit tier: go test -short (skips PTY/media/integration tests)
-	GOWORK=off go test -short $(TESTFLAGS) ./...
+	GOWORK=off go test -short $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) ./...
 
 test-pkg: ⚙️  # one package with -race, uncached: make test-pkg PKG=./internal/lint/...
 	@test -n "$(PKG)" || (echo "❌ usage: make test-pkg PKG=./path/..." && exit 1)
-	GOWORK=off go test -race -count=1 $(TESTFLAGS) $(PKG)
+	GOWORK=off go test -race -count=1 $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) $(PKG)
 
 smoke: ⚙️ build  # live smoke: apply/diff/repair + usage bar-alignment against real binary
 	bash scripts/smoke-test.sh
@@ -120,7 +122,7 @@ smoke-container: ⚙️  # build both agent images and run the in-pod Pi/Codex s
 test: ⚙️ check  # full tier: alias for check (gofmt, vet, all tests)
 
 test-dot8: ⚙️  # run tests with dot8 build tag
-	GOWORK=off go test -tags dot8 ./...
+	GOWORK=off go test -tags dot8 -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) ./...
 
 
 format: ⚙️  # format source code
