@@ -102,6 +102,8 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
     variant itself (dark scheme, phone width), and variants come from the real user setting (the
     browser's color scheme), not one forced inside the page. (harnez.org 028 M2.4: a dev reported 32
     screenshots fine; every "dark" one was light because only a forced `data-theme` was ever tested.)
+  - Test services the first minute after start to surface readiness, catch-up, and heartbeat bugs.
+    (Sprint 714: `harnez usage` hung after every server restart; tests always started with data.)
   - When the change touches generated, rendered or git-integration files, the host runs
     `make install && harnez init -d .` and requires a clean `git status`; for git integration it
     also runs the real flow in a scratch repo and checks `git show HEAD:<file>`. (Sprints 843/847:
