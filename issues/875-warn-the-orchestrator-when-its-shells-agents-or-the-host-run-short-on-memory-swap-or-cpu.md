@@ -1,6 +1,6 @@
 # 875 — warn the orchestrator when its shells, agents or the host run short on memory, swap or CPU
 
-**Status**: Open
+**Status**: Backlog — waits for 870's hook answers; promote with 870
 **Priority**: P2 (Medium) — resource trouble surfaced only when the user noticed it
 **Severity**: Minor
 **Category**: Feature
