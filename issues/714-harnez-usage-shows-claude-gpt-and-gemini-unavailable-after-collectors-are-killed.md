@@ -151,5 +151,11 @@ the debug box; rate-limit the repeated telemetry line. Then find whether the AGY
 
 1. Log one line when a catch-up fetch fires (client count 0→1, which providers, which were skipped as
    fresh); today it is silent, so the live check can only infer it from `last_refreshed`.
+- M4 handover (2026-10-23 13:30): dev-714 (agy flash) stalled after 467 steps and was stopped with
+  uncommitted, untested M4 work; dev-714b (sol:med) took over the tree. dev-714's own status report (13:12):
+  catch-up log line `harnez server: catch-up fetch triggered: clients 0->1, fetching: <providers>, fresh
+  (skipped): <providers>`; `!` toggles the countdown overlay and a debug box below "All Usage" (last_refreshed,
+  stale_reason, fetch error/cause); general toggle `toggle_debug` on key `d`/`D` (category box), shown as
+  `[d]ebug` in the footer and the `?` reference. Its `make test-q1` run never reported.
 - Next: M2 (fetch-failure logging, telemetry line rate-limit, bad spool entry skipped), M3 (heartbeat +
   catch-up, keys in `spec/usage.yaml`), M4 (debug box), M5 (AGY statusline drop count).
