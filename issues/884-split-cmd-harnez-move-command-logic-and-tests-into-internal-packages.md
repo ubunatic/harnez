@@ -288,3 +288,66 @@ performance regression. The 21.3s M4 observation and current 36–53s observatio
 not reproducible as a branch regression; run/build variance dominates this comparison.
 After the assertion correction, `make test-q1` passed once (**cmd/harnez 41.187s**);
 `grep -- '--- FAIL'` found no failures. No `/tmp/harnez-test-*` directories remained.
+
+## Plan v3 (advisor adv-884b)
+
+### Review and host-state audit
+
+- `320cceed`: event gates replace polling/sleeps while preserving readiness, worker-PID,
+  telemetry-timeout, cancellation, and expiry assertions. Real process/timing checks are
+  explicitly full-tier. Failure cleanup in the self-test and blocked telemetry tests releases
+  their workers; the normal-path join is asserted, though a failure before that join can still
+  leave a goroutine briefly running until release. No material product behavior change found.
+- `42b8b618`: status transitions, close/amend behavior, reference rewriting, duplicate formatting,
+  and `--check` restoration moved into `internal/issues`; moved table cases remain and injection
+  tests add restoration coverage. No loosened assertion found. No Cobra type or cmd import is
+  introduced in `internal/issues`; callback boundaries preserve index/Git effects.
+- `67f8b396`: explicitly sets `Role: "advisor"` and asserts the inferred-role notice is absent
+  and the quota notice precedes the provider call. This isolates the intended ordering assertion.
+- Successful `start` tests with omitted `--role` can reach `ResolveRoleDynamic` and execute host
+  `neus`: review `agent_protocol_test.go`, `agent_stream_test.go`, `agent_spec_test.go`,
+  `agent_test.go`, `agent_wait_test.go`, `agent_quota_test.go`,
+  `agent_quota_lifecycle_test.go`, `agent_resume_test.go`, `agent_root_test.go`, and the blank-role
+  branch of `agent_role_test.go`. Set canonical roles or inject a deterministic classifier; retain
+  the dedicated fake-`neus` inference tests. `cmd/harnez` TestMain isolates HOME/runtime but leaves
+  inherited `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_STATE_HOME`, and `XDG_CONFIG_HOME`; set all four
+  to temp paths and ensure agent quota-cache tests use them. No default test directly executes
+  host `codex`/`claude`; the `claude` sanitizer CLI test is build-tagged integration-only. The two
+  `internal/claude` home-refusal tests inspect real HOME only to verify refusal; usage storage guard
+  tests also point at real-home paths only to assert rejection.
+
+### Finish scope and closure milestones
+
+1. **M7 — deterministic environment and remaining clock cleanup.** Isolate XDG roots in cmd
+   TestMain; make every successful role-less start test use an explicit role/fake classifier; retain
+   dedicated inference coverage behind fake PATH. Replace `TestSilentAgentGetsWarning`'s delayed
+   fake reply with a controllable clock/event and join test workers on all exits. Acceptance: no
+   default `cmd/harnez` test can resolve host `neus`, write/read host XDG or `~/.cache/harnez`, or
+   leave a worker; ordering assertions remain intact. Expected saving **~0.1–0.2s** plus isolation
+   and flake reduction; the 1s self-test and polling loops were already changed in M5.
+2. **M8 — usage/usagecli extraction, do now.** Move read/probe/render/export orchestration and
+   CLI-independent status logic into `internal/usage` / Cobra-free `internal/usagecli`; leave flag
+   parsing, output/exit wiring, and the small binary/socket/PTY regressions in cmd. Acceptance:
+   internal packages import no Cobra/cmd; focused usage logic tests run without binaries; preserved
+   one full-tier binary deadline/PTY check; record package timings and cache scope. Expected **~1–3s
+   less cmd test time and ~1–2k lines less cmd context**, mostly cache/context gain rather than total
+   suite reduction.
+3. **M9 — bounded agent extraction, do after usage.** Move lifecycle/stream/quota/self-test core
+   onto `internal/subagent` in Cobra-free `internal/agent`; keep command construction and help in
+   cmd. Acceptance: role, quota boundary, resume/session identity, process-tree termination, and
+   event-order assertions pass in focused internal tests; subprocess regressions stay full-tier;
+   no global test hooks or host classifier calls. Expected **~3–4s cmd test relocation and ~5k lines
+   less cmd context**; total uncached suite work is not expected to fall materially.
+4. **Park stats and hook moves.** Their measured tests are **0.25s** and **0.06s** respectively;
+   extraction has little runtime value and can follow only when a feature change needs narrower
+   cache/context. Keep Cobra adapters and current tests in cmd; before revisiting, replace hook
+   sound's log polling and detached `sleep 10` with ready/release events and joined cleanup.
+   Acceptance to close 884: M7–M9 boundaries and focused tests pass, dependency checks show no
+   internal Cobra/cmd imports or cycles, and the small stats/hook work is explicitly parked rather
+   than left as an implicit prerequisite.
+5. **881 importance tagging:** tag only the measured top-20 test parents as key, regression, or
+   redundant, with one sentence on unique coverage. Mark redundant only after a reviewer identifies
+   the overlapping assertion; merge/drop then. Acceptance: every top-20 parent has one justified
+   tag and short/full/occasional placement; all process-tree, binary deadline, PTY and merge-driver
+   regressions remain in full/CI. Do not add a new reporting target; `gotester report` and the saved
+   `-json` profile provide the baseline.

@@ -113,3 +113,20 @@ then fake clocks/events (**~1.5–2s**). Stats/hook moves save little execution 
 (current tests **0.25s/0.06s**); usage/issues and agent moves improve cache/context scope.
 Estimates overlap and need comparable before/after runs; full process regressions remain
 in CI. Raw profile: `/tmp/harnez-adv-884b-tests.json` (local, untracked).
+
+## Roadmap status (advisor adv-884b, 2026-10-23)
+
+1. **Report — complete.** `gotester report` covers per-package wall/CPU/RSS; the recorded
+   `go test ./cmd/harnez -count=1 -json` profile ranks top-level test parents.
+2. **Bound the load — partial.** 320cceed replaced selected polling with events and marked
+   real process/timer assertions full-tier. Finish cmd TestMain XDG isolation, the remaining
+   silent-agent fake-clock case, and ensure process helpers join on failure.
+3. **Split cmd/harnez — in progress.** exec and issues core now live internally; next do
+   usage/usagecli then bounded agent core. Stats/hook are parked because their measured tests
+   total only 0.31s; see [884 Plan v3](884-split-cmd-harnez-move-command-logic-and-tests-into-internal-packages.md#plan-v3-advisor-adv-884b).
+4. **Sleeps — mostly complete for measured slow tests.** M5 changed self-test, heartbeat,
+   jobs-loop and worker readiness to events/fake time. Keep real process grace, PTY and deadline
+   checks in full; replace the remaining silent-agent delayed reply with an event.
+5. **Importance — next.** Apply key/regression/redundant tags to the measured top 20 only;
+   mark redundant only after confirming duplicated coverage. Preserve process, binary, PTY,
+   and merge regressions in full/CI. Close 881 when M7 isolation and this reviewed catalog pass.
