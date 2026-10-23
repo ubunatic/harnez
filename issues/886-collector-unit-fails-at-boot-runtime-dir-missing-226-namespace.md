@@ -40,3 +40,16 @@ Observed on 2026-10-23 (journal for the current boot):
 - Extend `internal/server/systemd_test.go` to assert both directives.
 - `make install`, reinstall the unit, reboot (or remove `/run/user/$UID/harnez` and restart
   the service) and confirm the journal shows one clean start.
+
+## Boot simulation (host, 2026-10-24)
+
+The live `/run/user/1000/harnez` holds process records of running sessions, so it was not removed.
+Instead a transient `systemd-run --user` unit used the collector's sandbox settings (`PrivateTmp`,
+`ProtectSystem=strict`, `ProtectHome=read-only`) with `ReadWritePaths=/run/user/1000/harnez-boottest`,
+a folder that did not exist:
+
+- without `RuntimeDirectory`: `status=226/NAMESPACE`, the same failure as at boot;
+- with `RuntimeDirectory=harnez-boottest` + `RuntimeDirectoryPreserve=yes`: `status=0/SUCCESS`, systemd
+  created the folder and the service wrote to it.
+
+The test folder was removed afterwards. No reboot is needed to confirm the fix.
