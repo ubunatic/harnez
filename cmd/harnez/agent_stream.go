@@ -23,6 +23,10 @@ const (
 // the early confirmation is missing.
 var confirmTimeout = 10 * time.Second
 
+// confirmTimer is replaceable in tests so warning order can be asserted with
+// an event instead of delaying a fake provider reply.
+var confirmTimer = func(d time.Duration) <-chan time.Time { return time.After(d) }
+
 // protocolPreamble is prepended to every streamed turn so the agent confirms
 // before working and marks its plan; harnez maps the tags to labels.
 const protocolPreamble = "Harnez dispatch protocol: before any tool call, file read or other work, your very first message must be one line starting with `CONFIRM:` that states what you will do. " +
@@ -195,7 +199,7 @@ func (t *turnStream) watchConfirmation() {
 		select {
 		case <-t.stop:
 			return
-		case <-time.After(confirmTimeout):
+		case <-confirmTimer(confirmTimeout):
 		}
 		t.mu.Lock()
 		defer t.mu.Unlock()

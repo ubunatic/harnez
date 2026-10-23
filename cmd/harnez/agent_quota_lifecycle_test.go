@@ -70,7 +70,7 @@ func TestAgentEarlyReturnJoinsQuotaCapture(t *testing.T) {
 			cmd.SetErr(new(bytes.Buffer))
 			wantError := "crossed live token threshold"
 			if path == "start watchdog" {
-				err = runStart(ctx, cmd, deps, startRequest{Prompt: "prompt", ModelSpec: "codex:luna", Name: "new-worker", Dir: ".", StreamMode: streamFull})
+				err = runStart(ctx, cmd, deps, startRequest{Role: "advisor", Prompt: "prompt", ModelSpec: "codex:luna", Name: "new-worker", Dir: ".", StreamMode: streamFull})
 			} else {
 				json := path == "resume compaction"
 				if json {

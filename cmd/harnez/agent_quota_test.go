@@ -50,7 +50,7 @@ func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	err = runStart(t.Context(), cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture, dbPath: dbPath}, startRequest{Prompt: "p", StoredPrompt: "p", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull, JSON: true})
+	err = runStart(t.Context(), cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture, dbPath: dbPath}, startRequest{Role: "advisor", Prompt: "p", StoredPrompt: "p", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull, JSON: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
 			cmd.SetErr(&stderr)
 			deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}
 			if mode == "start" {
-				err = runStart(t.Context(), cmd, deps, startRequest{Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna", Dir: repoDir, StreamMode: streamFull, JSON: true})
+				err = runStart(t.Context(), cmd, deps, startRequest{Role: "advisor", Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna", Dir: repoDir, StreamMode: streamFull, JSON: true})
 			} else {
 				if err := store.Save(&subagent.Session{ID: "resume-id", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: repoDir, Status: "completed", ContextTokens: 100}); err != nil {
 					t.Fatal(err)

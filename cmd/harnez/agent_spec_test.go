@@ -224,7 +224,7 @@ func TestAgentStartRejectsKnownExhaustedQuotaAndNamesOverrideAndAlternatives(t *
 	err := runStart(t.Context(), cmd, agentDeps{
 		store:        func() (*subagent.FileSessionStore, error) { storeCalled = true; return nil, nil },
 		availability: availability,
-	}, startRequest{Prompt: "task", ModelSpec: "agy:flash38", Dir: ".", StreamMode: streamFull})
+	}, startRequest{Role: "advisor", Prompt: "task", ModelSpec: "agy:flash38", Dir: ".", StreamMode: streamFull})
 	if err == nil || !strings.Contains(err.Error(), "--allow-exhausted-quota") || !strings.Contains(err.Error(), "available cheaper alternatives:") {
 		t.Fatalf("runStart error = %v, want override and alternatives", err)
 	}

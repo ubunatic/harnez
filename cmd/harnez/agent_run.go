@@ -61,7 +61,7 @@ func recordTurnQuota(dbPath string, capture func(context.Context, string, bool) 
 	if capture != nil {
 		reading = capture(ctx, provider, force)
 	} else {
-		reading = usage.CaptureTurnQuotaSinceCache(ctx, provider, force, turnStarted, baselineCacheAt)
+		reading = agentTurnQuotaReader(ctx, provider, force, turnStarted, baselineCacheAt)
 	}
 	stored := usage.TurnQuotaBoundaryFromReading(sessionID, provider, turn, boundary, reading)
 	if dbPath != "" {
@@ -78,7 +78,7 @@ func captureTurnQuota(parent context.Context, capture func(context.Context, stri
 	if capture != nil {
 		return capture(ctx, provider, force)
 	}
-	return usage.CaptureTurnQuotaSince(ctx, provider, force, turnStarted)
+	return agentTurnQuotaReader(ctx, provider, force, turnStarted, time.Time{})
 }
 
 func storeTurnQuota(dbPath, sessionID, provider string, turn int, boundary string, reading usage.TurnQuotaReading) {

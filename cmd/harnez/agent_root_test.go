@@ -16,7 +16,7 @@ import (
 
 func TestAgentRootPromptStartsGeneratedSession(t *testing.T) {
 	d := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "root"}}, {ev: msg("CONFIRM: ok")}, {ev: msg("done")}}}
-	out, err := runWithStore(t, d, t.TempDir(), "-p", "hello")
+	out, err := runWithStore(t, d, t.TempDir(), "--role", "advisor", "-p", "hello")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestAgentRootPromptStartsGeneratedSession(t *testing.T) {
 
 func TestAgentRootPromptModelAlias(t *testing.T) {
 	d := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "root"}}, {ev: msg("ok")}}}
-	if _, err := runWithStore(t, d, t.TempDir(), "--model", "luna", "-p", "hello"); err != nil {
+	if _, err := runWithStore(t, d, t.TempDir(), "--role", "advisor", "--model", "luna", "-p", "hello"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(d.prompt, "\n\nhello") {
@@ -43,7 +43,7 @@ func TestAgentRootNameUpsert(t *testing.T) {
 			if exists {
 				saveSessions(t, dir, &subagent.Session{ID: "named", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: "."})
 			}
-			args := []string{"--name", "worker", "--", "words"}
+			args := []string{"--role", "advisor", "--name", "worker", "--", "words"}
 			out, err := runWithStore(t, d, dir, args...)
 			if err != nil {
 				t.Fatal(err)
@@ -62,7 +62,7 @@ func TestAgentRootNameUpsert(t *testing.T) {
 func TestAgentRootContinueStartOrResumeMostRecent(t *testing.T) {
 	t.Run("start", func(t *testing.T) {
 		d := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "new"}}, {ev: msg("ok")}}}
-		out, err := runWithStore(t, d, t.TempDir(), "-c", "-p", "hello")
+		out, err := runWithStore(t, d, t.TempDir(), "--role", "advisor", "-c", "-p", "hello")
 		if err != nil || !strings.Contains(out, "resolved=new") {
 			t.Fatalf("out=%q err=%v", out, err)
 		}
@@ -91,7 +91,7 @@ func TestAgentRootPromptInputs(t *testing.T) {
 	if err := os.WriteFile(file, []byte("from file"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, args := range [][]string{{"-f", file}, {"--", "/x"}} {
+	for _, args := range [][]string{{"--role", "advisor", "-f", file}, {"--role", "advisor", "--", "/x"}} {
 		d := &scriptDriver{steps: []step{{ev: msg("ok")}}}
 		if _, err := runWithStore(t, d, t.TempDir(), args...); err != nil {
 			t.Fatal(err)
@@ -181,7 +181,7 @@ func TestAgentRootSlashErrorsAndLiteral(t *testing.T) {
 	}
 	dir := t.TempDir()
 	d := &scriptDriver{steps: []step{{ev: msg("ok")}}}
-	if _, err := runWithStore(t, d, dir, "--", "/x"); err != nil {
+	if _, err := runWithStore(t, d, dir, "--role", "advisor", "--", "/x"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(d.prompt, "/x") {

@@ -277,7 +277,7 @@ func TestForegroundStartAndResumeDetachIntoWaitableWorkers(t *testing.T) {
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
 			if verb == "start" {
-				err = runStart(t.Context(), cmd, deps, startRequest{Name: name, Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
+				err = runStart(t.Context(), cmd, deps, startRequest{Name: name, Role: "advisor", Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
 			} else {
 				if err := store.Save(&subagent.Session{ID: "resume-id", Name: name, Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: t.TempDir(), Status: "completed", ContextTokens: 10}); err != nil {
 					t.Fatal(err)

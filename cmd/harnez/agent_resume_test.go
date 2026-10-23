@@ -892,7 +892,7 @@ func TestAgentStartFailureKeepsSessionAndResumeSelector(t *testing.T) {
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}
-	err = runStart(t.Context(), cmd, deps, startRequest{Name: "crashed", Prompt: "do work", StoredPrompt: "do work", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
+	err = runStart(t.Context(), cmd, deps, startRequest{Name: "crashed", Role: "advisor", Prompt: "do work", StoredPrompt: "do work", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
 	if err == nil || !strings.Contains(err.Error(), "temporary provider failure") {
 		t.Fatalf("start error = %v, want provider failure", err)
 	}

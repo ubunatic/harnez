@@ -197,6 +197,7 @@ func TestLeafRolesCannotStartOrManageAgents(t *testing.T) {
 func TestOrchestratorMayStartHelpersButNotOrchestrators(t *testing.T) {
 	t.Setenv(agentRoleEnv, "orchestrator")
 	t.Setenv(agentSessionEnv, "boss")
+	installUnclassifiedNeus(t)
 	storeDir := t.TempDir()
 	for _, role := range []string{"", "developer", "reviewer", "advisor"} {
 		d := &scriptDriver{sid: "thread-" + role, steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}

@@ -351,3 +351,18 @@ After the assertion correction, `make test-q1` passed once (**cmd/harnez 41.187s
    tag and short/full/occasional placement; all process-tree, binary deadline, PTY and merge-driver
    regressions remain in full/CI. Do not add a new reporting target; `gotester report` and the saved
    `-json` profile provide the baseline.
+
+## M7 delivered: isolated agent test environment and event-driven warning
+
+TestMain now isolates HOME and all XDG roots, preserves the caller's Go caches, and places
+deterministic `neus`, `claude`, and `codex` shims first on PATH. The guard test asserts all
+three commands resolve to those shims, so test processes cannot reach host provider binaries.
+Agent-start tests that do not test role inference now supply `advisor`; the inference tests
+retain their dedicated fake classifier. The session quota reader is inert by default in tests.
+`TestSilentAgentGetsWarning` now gates the provider reply and fake timeout on explicit events,
+and joins the command worker on normal and failure exits.
+
+Measured `go test ./cmd/harnez -count=1`: **36.299s at M6 follow-up**, **17.289s after M7**
+(single host runs; timings include Go test package wall time and are load/cache sensitive).
+The focused M7 selection passed in **0.418s**; the full package passed with the host-command
+shim guard active. No behavioral assertions were weakened.

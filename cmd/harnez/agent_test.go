@@ -284,9 +284,9 @@ func TestAgentOldModelSpecGuard(t *testing.T) {
 			var errOut bytes.Buffer
 			cmd.SetOut(new(bytes.Buffer))
 			cmd.SetErr(&errOut)
-			args := []string{"start", tt.first, "prompt", "--store-dir", t.TempDir()}
+			args := []string{"start", "--role", "advisor", tt.first, "prompt", "--store-dir", t.TempDir()}
 			if tt.first == "codex:luna:low" {
-				args = []string{"start", "--model", tt.first, "prompt", "--store-dir", t.TempDir()}
+				args = []string{"start", "--role", "advisor", "--model", tt.first, "prompt", "--store-dir", t.TempDir()}
 			}
 			cmd.SetArgs(args)
 			err := cmd.Execute()
@@ -329,7 +329,7 @@ func TestAgentStartFileOnlyAndNameCollision(t *testing.T) {
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"start", "--model", "codex:luna", "--name", "named", "-f", file, "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "--role", "advisor", "--model", "codex:luna", "--name", "named", "-f", file, "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +341,7 @@ func TestAgentStartFileOnlyAndNameCollision(t *testing.T) {
 	cmd = newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "--model", "codex:luna", "--name", "named", "again", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "--role", "advisor", "--model", "codex:luna", "--name", "named", "again", "--store-dir", storeDir})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "recorded") || !strings.Contains(err.Error(), sess.WorkingDir) {
 		t.Fatalf("collision error = %v", err)
 	}
@@ -458,7 +458,7 @@ func TestAgentStartStoresCanonicalWorkingDir(t *testing.T) {
 	storeDir := t.TempDir()
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "--model", "codex:luna", "prompt", "-d", ".", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "--role", "advisor", "--model", "codex:luna", "prompt", "-d", ".", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +499,7 @@ func TestAgentStartGeneratesMemorableUniqueNames(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		sid := fmt.Sprintf("thread-%d", i)
 		d := &scriptDriver{sid: sid, steps: []step{{0, subagent.Event{Kind: "session", Text: sid}}, {0, msg("CONFIRM: ok")}, {0, msg("done")}}}
-		out, err := runWithStore(t, d, storeDir, "start", "task")
+		out, err := runWithStore(t, d, storeDir, "start", "--role", "advisor", "task")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -530,7 +530,7 @@ func TestRunStartWithoutCobraFlags(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	err = runStart(t.Context(), cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}, startRequest{Prompt: "direct", StoredPrompt: "direct", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull})
+	err = runStart(t.Context(), cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}, startRequest{Role: "advisor", Prompt: "direct", StoredPrompt: "direct", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull})
 	if err != nil {
 		t.Fatal(err)
 	}

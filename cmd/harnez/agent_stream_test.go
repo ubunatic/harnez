@@ -78,7 +78,7 @@ func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "--model", "codex:luna", "prompt", "--name", "w", "--store-dir", t.TempDir()})
+	cmd.SetArgs([]string{"start", "--role", "advisor", "--model", "codex:luna", "prompt", "--name", "w", "--store-dir", t.TempDir()})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestAgentStartStatsModeShowsOnlyHeartbeatsAndReply(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "--model", "codex:luna", "prompt", "--stream", "stats", "--store-dir", t.TempDir()})
+	cmd.SetArgs([]string{"start", "--role", "advisor", "--model", "codex:luna", "prompt", "--stream", "stats", "--store-dir", t.TempDir()})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestAgentRejectsUnknownStreamMode(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "--model", "codex:luna", "prompt", "--stream", "loud", "--store-dir", t.TempDir()})
+	cmd.SetArgs([]string{"start", "--role", "advisor", "--model", "codex:luna", "prompt", "--stream", "loud", "--store-dir", t.TempDir()})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "invalid --stream") {
 		t.Fatalf("err = %v", err)
 	}

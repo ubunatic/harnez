@@ -1,15 +1,24 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/sessionstate"
+	"ubunatic.com/harnez/internal/usage"
+)
+
+var (
+	testIsolatedHome    string
+	testCommandGuardDir string
+	testCommandGuardLog string
 )
 
 // TestMain isolates the tests from the agent environment harnez exports to the
@@ -54,6 +63,20 @@ func runIsolatedTests(m *testing.M) int {
 	if err := os.Setenv("HOME", tmpHome); err != nil {
 		panic(fmt.Sprintf("failed to set HOME: %v", err))
 	}
+	testIsolatedHome = tmpHome
+	for name, dir := range map[string]string{
+		"XDG_DATA_HOME":   "xdg-data",
+		"XDG_CACHE_HOME":  "xdg-cache",
+		"XDG_STATE_HOME":  "xdg-state",
+		"XDG_CONFIG_HOME": "xdg-config",
+	} {
+		if err := os.Setenv(name, filepath.Join(tmpHome, dir)); err != nil {
+			panic(fmt.Sprintf("failed to set isolated %s: %v", name, err))
+		}
+	}
+	if err := installTestCommandGuards(tmpHome); err != nil {
+		panic(fmt.Sprintf("install host command guards: %v", err))
+	}
 	tmpRuntime, err := os.MkdirTemp("", "harnez-runtime-test-*")
 	if err != nil {
 		panic(fmt.Sprintf("failed to create temp XDG_RUNTIME_DIR: %v", err))
@@ -69,7 +92,15 @@ func runIsolatedTests(m *testing.M) int {
 	sessionTipSessionOptions = func() resolve.SessionOptions {
 		return resolve.SessionOptions{DisableFallback: true}
 	}
+	oldQuotaReader := agentTurnQuotaReader
+	agentTurnQuotaReader = func(context.Context, string, bool, time.Time, time.Time) usage.TurnQuotaReading {
+		return usage.TurnQuotaReading{}
+	}
 	code := m.Run()
+	agentTurnQuotaReader = oldQuotaReader
+	// Calls to these stubs are safe: they prove a test reached a deterministic
+	// failure shim instead of a host provider binary. TestHostCommandGuardsAndXDGIsolation
+	// verifies normal PATH lookup cannot resolve to the host tools.
 
 	if hadHome {
 		os.Setenv("HOME", oldHome)
@@ -78,6 +109,48 @@ func runIsolatedTests(m *testing.M) int {
 	}
 
 	return code
+}
+
+func installTestCommandGuards(home string) error {
+	testCommandGuardDir = filepath.Join(home, "test-bin")
+	if err := os.MkdirAll(testCommandGuardDir, 0700); err != nil {
+		return err
+	}
+	testCommandGuardLog = filepath.Join(home, "guarded-host-commands.log")
+	if err := os.Setenv("HARNEZ_TEST_COMMAND_GUARD_LOG", testCommandGuardLog); err != nil {
+		return err
+	}
+	for _, name := range []string{"neus", "claude", "codex"} {
+		script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' '%s' >> \"$HARNEZ_TEST_COMMAND_GUARD_LOG\"\nprintf 'blocked host command: %%s\\n' '%s' >&2\nexit 97\n", name, name)
+		if err := os.WriteFile(filepath.Join(testCommandGuardDir, name), []byte(script), 0700); err != nil {
+			return err
+		}
+	}
+	path := testCommandGuardDir
+	if inherited := os.Getenv("PATH"); inherited != "" {
+		path += string(os.PathListSeparator) + inherited
+	}
+	return os.Setenv("PATH", path)
+}
+
+func TestHostCommandGuardsAndXDGIsolation(t *testing.T) {
+	if got := os.Getenv("HOME"); got != testIsolatedHome {
+		t.Fatalf("HOME=%q, want isolated HOME %q", got, testIsolatedHome)
+	}
+	for _, name := range []string{"neus", "claude", "codex"} {
+		got, err := exec.LookPath(name)
+		want := filepath.Join(testCommandGuardDir, name)
+		if err != nil || filepath.Clean(got) != filepath.Clean(want) {
+			t.Fatalf("%s resolves to %q, %v; want guard %q", name, got, err, want)
+		}
+	}
+	for _, name := range []string{"XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_CONFIG_HOME"} {
+		got := os.Getenv(name)
+		rel, err := filepath.Rel(testIsolatedHome, got)
+		if err != nil || got == "" || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			t.Fatalf("%s=%q escapes isolated HOME %q (relative %q, err %v)", name, got, testIsolatedHome, rel, err)
+		}
+	}
 }
 
 func preserveGoCaches() error {

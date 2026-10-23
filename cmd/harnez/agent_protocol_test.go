@@ -5,10 +5,13 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/subagent"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 // step is one scripted event, emitted after wait.
@@ -25,6 +28,51 @@ type scriptDriver struct {
 	resumed []string // provider ids passed to ResumeStream
 	// environment the provider process would inherit during the turn
 	envRole, envSession string
+}
+
+type warningGateDriver struct {
+	recordingAgentDriver
+	started chan<- struct{}
+	release <-chan struct{}
+}
+
+func (d *warningGateDriver) RunStream(ctx context.Context, _ subagent.RunOptions, emit subagent.EventFunc) (*subagent.TurnResult, error) {
+	d.started <- struct{}{}
+	select {
+	case <-d.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	emit(msg("late reply"))
+	return &subagent.TurnResult{SessionID: "thread-1", Response: "late reply", Messages: []string{"late reply"}}, nil
+}
+
+func (d *warningGateDriver) ResumeStream(ctx context.Context, _ string, _ string, _ subagent.Model, emit subagent.EventFunc) (*subagent.TurnResult, error) {
+	return d.RunStream(ctx, subagent.RunOptions{}, emit)
+}
+
+type warningEventWriter struct {
+	mu       sync.Mutex
+	out      bytes.Buffer
+	warned   chan struct{}
+	signaled bool
+}
+
+func (w *warningEventWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	n, err := w.out.Write(p)
+	if !w.signaled && bytes.Contains(w.out.Bytes(), []byte("[warning: no confirmation")) {
+		w.signaled = true
+		close(w.warned)
+	}
+	return n, err
+}
+
+func (w *warningEventWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.out.String()
 }
 
 func (d *scriptDriver) play(fn subagent.EventFunc) *subagent.TurnResult {
@@ -66,6 +114,9 @@ func runScripted(t *testing.T, d *scriptDriver, args ...string) string {
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(new(bytes.Buffer))
+	if len(args) > 0 && args[0] == "start" {
+		args = append(args[:1], append([]string{"--role", "advisor"}, args[1:]...)...)
+	}
 	cmd.SetArgs(append(args, "--store-dir", t.TempDir()))
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
@@ -100,11 +151,73 @@ func TestToolBeforeConfirmationIsAViolation(t *testing.T) {
 }
 
 func TestSilentAgentGetsWarning(t *testing.T) {
-	skipShort(t, "tests the real confirmation timeout")
-	d := &scriptDriver{steps: []step{{100 * time.Millisecond, msg("late reply")}}}
-	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w")
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldDriver, oldTimeout, oldTimer := agentDriver, confirmTimeout, confirmTimer
+	started, release, timer := make(chan struct{}, 1), make(chan struct{}), make(chan time.Time, 1)
+	d := &warningGateDriver{started: started, release: release}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
+	confirmTimeout = 30 * time.Millisecond
+	confirmTimer = func(time.Duration) <-chan time.Time { return timer }
+	out := &warningEventWriter{warned: make(chan struct{})}
+	cmd := &cobra.Command{}
+	cmd.SetOut(out)
+	cmd.SetErr(new(bytes.Buffer))
+	deps := agentDeps{
+		store:  func() (*subagent.FileSessionStore, error) { return store, nil },
+		parent: func() string { return "" },
+		quota:  func(context.Context, string, bool) usage.TurnQuotaReading { return usage.TurnQuotaReading{} },
+		availability: func(string, string) usage.ProviderQuotaAvailability {
+			return usage.ProviderQuotaAvailability{}
+		},
+	}
+	releaseOnce := sync.Once{}
+	releaseDriver := func() { releaseOnce.Do(func() { close(release) }) }
+	done := make(chan error, 1)
+	joined := false
+	t.Cleanup(func() {
+		releaseDriver()
+		if !joined {
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Error("silent warning test command did not join")
+			}
+		}
+		agentDriver, confirmTimeout, confirmTimer = oldDriver, oldTimeout, oldTimer
+	})
+	go func() {
+		done <- runStart(t.Context(), cmd, deps, startRequest{Name: "w", Role: "advisor", Prompt: "task", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull})
+	}()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("fake provider did not start")
+	}
+	timer <- time.Now()
+	select {
+	case <-out.warned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("confirmation watchdog did not emit warning")
+	}
+	releaseDriver()
+	select {
+	case err := <-done:
+		joined = true
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("silent warning test command did not finish")
+	}
+	got := out.String()
 	if !strings.Contains(got, "[warning: no confirmation after 0s; caller may stop the agent: harnez agent stop w]") || strings.Count(got, "[warning:") != 1 {
 		t.Fatalf("stdout:\n%s", got)
+	}
+	if !strings.Contains(got, "late reply") {
+		t.Fatalf("provider reply missing after warning:\n%s", got)
 	}
 }
 
@@ -117,7 +230,7 @@ func TestPromptGetsProtocolButStoredPromptStaysOriginal(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "--model", "codex:luna", "orig task", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "--role", "advisor", "--model", "codex:luna", "orig task", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +280,7 @@ func TestAgentPlanFlagValidationAndCompatibility(t *testing.T) {
 func TestAgentPlanNoEqualsDefault(t *testing.T) {
 	for _, args := range [][]string{{"task"}, {"--plan", "no", "task"}} {
 		d := &scriptDriver{steps: []step{{ev: msg("ok")}}}
-		if _, err := runWithStore(t, d, t.TempDir(), append([]string{"start", "--model", "luna"}, args...)...); err != nil {
+		if _, err := runWithStore(t, d, t.TempDir(), append([]string{"start", "--role", "advisor", "--model", "luna"}, args...)...); err != nil {
 			t.Fatal(err)
 		}
 		if strings.Contains(d.prompt, "plan-first") {
