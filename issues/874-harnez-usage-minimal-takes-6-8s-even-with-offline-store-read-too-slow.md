@@ -1,6 +1,6 @@
 # 874 — harnez usage --minimal takes 6-8s even with --offline: store read too slow
 
-**Status**: Open
+**Status**: Closed — one-shot usage 0.09s on the real store (was 6-8s): no SSH in one-shot/offline (79204705), no load history seed (56fe737f); guard test TestOneShotUsageDoesNotInvokeSSH; host-verified 3 runs + offline
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
