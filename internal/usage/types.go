@@ -78,6 +78,7 @@ type AgentUsage struct {
 	// attempted but failed (transport error, non-2xx, decode error), so
 	// renderers can distinguish "fetch failed" from "no quota windows apply."
 	QuotaFetchError      string `json:"quota_fetch_error,omitempty"`
+	QuotaFetchCause      string `json:"quota_fetch_cause,omitempty"`
 	QuotaFetchDurationMS int64  `json:"-"`
 	// Stale reports whether this agent's currently-displayed quota values
 	// should be treated as stale / not-reliably-live (issue 714 M1).

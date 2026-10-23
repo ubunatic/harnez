@@ -73,6 +73,8 @@ type WatchOptions struct {
 	// text. The usage table ignores it. Display-only, in-process, never
 	// persisted.
 	DebugOverlay bool
+	// DebugBox shows provider fetch metadata below the usage panels.
+	DebugBox bool
 }
 
 func compactUsageView(opts WatchOptions) bool {
@@ -116,7 +118,8 @@ func controlsOverlayLines() []string {
 	l = append(l, bold("Session"))
 	l = append(l, fmt.Sprintf("  [%s]              toggle remote/local host (when a host is configured)", sym("toggle_remote")))
 	l = append(l, fmt.Sprintf("  [%s]              open/close fetch diagnostics", sym("toggle_diagnostics")))
-	l = append(l, fmt.Sprintf("  [%s]              toggle per-agent freshness countdown gauge (All Usage panel)", sym("toggle_debug_overlay")))
+	l = append(l, fmt.Sprintf("  [%s]              toggle freshness gauge and debug box", sym("toggle_debug_overlay")))
+	l = append(l, fmt.Sprintf("  [%s]              toggle debug box", sym("toggle_debug_box")))
 	l = append(l, fmt.Sprintf("  [%s/Q] / Ctrl-C   quit", sym("quit")))
 	l = append(l, "")
 	l = append(l, dim("[a] is a compat alias for All Usage's [1]. The footer only shows the"))
@@ -330,8 +333,8 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		wa := mustWatchActions()
 		footer = []string{
 			"",
-			fmt.Sprintf("refresh every %s   %s[%s]controls  [%s]ode  [%s]emote  [%s/Q]uit\x1b[0m",
-				interval, ansiDimGrey, wa.symbol("toggle_controls"), wa.symbol("cycle_preset"), wa.symbol("toggle_remote"), wa.symbol("quit")),
+			fmt.Sprintf("refresh every %s   %s[%s]controls  [%s]ode  [%s]emote  [%s]debug  [%s/Q]uit\x1b[0m",
+				interval, ansiDimGrey, wa.symbol("toggle_controls"), wa.symbol("cycle_preset"), wa.symbol("toggle_remote"), wa.symbol("toggle_debug_box"), wa.symbol("quit")),
 		}
 	}
 
@@ -340,6 +343,15 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	budget := rows - len(header) - len(footer)
 	if budget < 1 {
 		budget = 1
+	}
+	// Reserve space so opening Debug works even in short/minimal views.
+	if opt.DebugBox {
+		debug := renderWBox(buildUsageDebugBox(summary, usable, now))
+		if len(debug) > budget {
+			debug = debug[:budget]
+		}
+		footer = append(debug, footer...)
+		budget -= len(debug)
 	}
 
 	var body []string

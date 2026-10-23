@@ -62,6 +62,7 @@ type watchKeyState struct {
 	// overlay: in-process only, never persisted, independent of overlayOpen
 	// (the [?] Controls reference overlay).
 	debugOverlay bool
+	debugBox     bool
 }
 
 // watchKeyEffect reports what the caller should do in response to one
@@ -145,6 +146,11 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 
 	case action == "toggle_debug_overlay":
 		st.debugOverlay = !st.debugOverlay
+		st.debugBox = st.debugOverlay
+		return st, watchKeyEffect{redraw: true}
+
+	case action == "toggle_debug_box":
+		st.debugBox = !st.debugBox
 		return st, watchKeyEffect{redraw: true}
 
 	case applyWatchSectionKey(&st.sec, key):

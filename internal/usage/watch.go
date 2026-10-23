@@ -442,6 +442,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	diagnosticsOffset := 0
 	presetIdx := 0
 	debugOverlay := false
+	debugBox := false
 	if compactUsageView(opts) {
 		presetIdx = 1
 	}
@@ -562,8 +563,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 					configuredHost:    configuredHost,
 					activeHost:        activeHost,
 					debugOverlay:      debugOverlay,
+					debugBox:          debugBox,
 				}
 				newSt, eff := dispatchWatchKey(st, key, opts.ShowProcesses)
+				debugBox = newSt.debugBox
 				sec, overlayOpen, diagnosticsOpen, presetIdx, activeHost, debugOverlay, diagnosticsOffset = newSt.sec, newSt.overlayOpen, newSt.diagnosticsOpen, newSt.presetIdx, newSt.activeHost, newSt.debugOverlay, newSt.diagnosticsOffset
 
 				if eff.quit {
@@ -662,6 +665,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		showControls := overlayOpen
 		showDiagnostics := diagnosticsOpen
 		activeDebugOverlay := debugOverlay
+		activeDebugBox := debugBox
 		activeDiagnosticsOffset := diagnosticsOffset
 		secLock.Unlock()
 		diagnosticsMu.Lock()
@@ -709,6 +713,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			RemoteLoadSnapshot:  remoteSnap,
 			RemoteLoadStreaming: remoteStreaming,
 			DebugOverlay:        activeDebugOverlay,
+			DebugBox:            activeDebugBox,
 			MicLiveLevel:        micLive.Level,
 			MicLiveAvailable:    micLive.Available,
 		})

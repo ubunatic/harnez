@@ -68,3 +68,12 @@ view_modes:
       status_bar: false
       hidden_list: false
       overflow_hint: false
+
+# Provider diagnostics in the watch debug box (issue 714 M4).
+debug_labels:
+  last_fetch: last_fetch
+  stale_reason: stale_reason
+  fetch_error: fetch_error
+  cause: cause
+  none: none
+  unknown: unknown

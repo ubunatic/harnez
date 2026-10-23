@@ -59,8 +59,19 @@ func RunCollectorWithRequests(ctx context.Context, homeDir string, client *http.
 }
 
 func RunCollectorWithRequestsAndTracker(ctx context.Context, homeDir string, client *http.Client, interval time.Duration, out io.Writer, offline bool, requests <-chan PassiveRequest, ready func(), tracker *ClientTracker) error {
-	return runCollectorWithRequestsAndTracker(ctx, homeDir, "", interval, out, offline, func(ctx context.Context) (UsageSummary, error) { return CollectAllLive(ctx, homeDir, client), nil }, ready, requests, tracker)
+	return runCollectorWithRequestsAndTracker(ctx, homeDir, "", interval, out, offline, func(ctx context.Context) (UsageSummary, error) {
+		if catchup, _ := ctx.Value(catchupFetchKey{}).(bool); catchup {
+			_, _, threshold, err := ClientHeartbeatPolicy()
+			if err != nil {
+				return UsageSummary{}, err
+			}
+			return CollectRegisteredCatchup(ctx, homeDir, client, threshold, nil, nil), nil
+		}
+		return CollectAllLive(ctx, homeDir, client), nil
+	}, ready, requests, tracker)
 }
+
+type catchupFetchKey struct{}
 
 func RunCollectorWithClientTracker(ctx context.Context, homeDir, dbPath string, interval time.Duration, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error), ready func(), requests <-chan PassiveRequest, tracker *ClientTracker) error {
 	return runCollectorWithRequestsAndTracker(ctx, homeDir, dbPath, interval, out, offline, fetch, ready, requests, tracker)
@@ -122,6 +133,7 @@ func runCollectorWithRequestsAndTracker(ctx context.Context, homeDir, dbPath str
 
 	go func() {
 		initial := true
+		catchup := false
 		for {
 			if initial {
 				initial = false
@@ -135,12 +147,15 @@ func runCollectorWithRequestsAndTracker(ctx context.Context, homeDir, dbPath str
 						return
 					case <-triggerCatchup:
 						timer.Stop()
+						catchup = true
 					case <-timer.C:
 					}
 				}
 			}
 
-			summary, err := fetch(ctx)
+			fetchCtx := context.WithValue(ctx, catchupFetchKey{}, catchup)
+			summary, err := fetch(fetchCtx)
+			catchup = false
 			select {
 			case fetchResults <- fetchResult{summary: summary, err: err}:
 			case <-ctx.Done():
@@ -156,6 +171,7 @@ func runCollectorWithRequestsAndTracker(ctx context.Context, homeDir, dbPath str
 				return
 			case <-triggerCatchup:
 				timer.Stop()
+				catchup = true
 			case <-timer.C:
 			}
 		}

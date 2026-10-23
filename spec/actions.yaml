@@ -91,7 +91,13 @@ actions:
     category: session
   toggle_debug_overlay:
     title: "Debug overlay"
-    description: "Toggle the per-agent freshness countdown gauge overlay (in-process, not persisted)"
+    description: "Toggle the freshness gauge and debug box (in-process, not persisted)"
     keys: ["!"]
     symbol: "!"
+    category: session
+  toggle_debug_box:
+    title: "Debug"
+    description: "Toggle provider fetch times, staleness reasons and errors"
+    keys: ["b"]
+    symbol: "b"
     category: session

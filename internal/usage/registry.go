@@ -110,16 +110,29 @@ func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diag
 // CollectCatchup fetches only providers whose last successful fetch is older than threshold (issue 714 M3).
 func (r *Registry) CollectCatchup(ctx context.Context, threshold time.Duration, progress FetchProgressFunc, diagnostic func(CollectorDiagnostic)) []AgentUsage {
 	now := time.Now()
-	shouldFetch := func(c Collector) bool {
-		r.mu.Lock()
-		last, ok := r.lastGood[c.ID]
-		r.mu.Unlock()
-		if !ok || last.LastRefreshed.IsZero() {
-			return true
+	selected := map[string]bool{}
+	var fetched, fresh []string
+	r.mu.Lock()
+	for _, c := range r.collectors {
+		if c.Collect == nil {
+			continue
 		}
-		return now.Sub(last.LastRefreshed) >= threshold
+		last, ok := r.lastGood[c.ID]
+		selected[c.ID] = !ok || last.LastRefreshed.IsZero() || now.Sub(last.LastRefreshed) >= threshold
+		if selected[c.ID] {
+			fetched = append(fetched, c.Provider)
+		} else {
+			fresh = append(fresh, c.Provider)
+		}
 	}
-	return r.collectWithFilter(ctx, progress, diagnostic, shouldFetch)
+	r.mu.Unlock()
+	line := fmt.Sprintf("harnez server: catch-up fetch (clients 0->1): providers fetched: %v; providers skipped as fresh: %v", fetched, fresh)
+	if r.logFetchFailure != nil {
+		r.logFetchFailure(line)
+	} else {
+		fmt.Fprintln(os.Stderr, line)
+	}
+	return r.collectWithFilter(ctx, progress, diagnostic, func(c Collector) bool { return selected[c.ID] })
 }
 
 func (r *Registry) collectWithFilter(ctx context.Context, progress FetchProgressFunc, diagnostic func(CollectorDiagnostic), filter func(Collector) bool) []AgentUsage {
@@ -194,6 +207,7 @@ func (r *Registry) collectWithFilter(ctx context.Context, progress FetchProgress
 				forEachQuotaWindow(&u, func(w *QuotaWindow) { w.Name = staleName(w.Name) })
 			}
 			u.QuotaFetchError = item.err.Error()
+			u.QuotaFetchCause = fetchFailureCause(item.collector, item.duration, item.err, item.ctxErr)
 			r.logFetchFailureDetails(item.collector, item.duration, item.err, item.ctxErr)
 		}
 		if progress != nil {
@@ -233,6 +247,20 @@ func (r *Registry) logFetchFailureDetails(c Collector, elapsed time.Duration, er
 	if c.Provider == "" || err == nil {
 		return
 	}
+	cause := fetchFailureCause(c, elapsed, err, ctxErr)
+	cmd := c.Command
+	if cmd == "" {
+		cmd = c.ID
+	}
+	msg := fmt.Sprintf("harnez server: provider %s fetch failed: provider: %s, command: %q, elapsed: %s vs timeout: %s, cause: %s\n", c.Provider, c.Provider, cmd, elapsed.Round(time.Millisecond), c.Timeout, cause)
+	if r != nil && r.logFetchFailure != nil {
+		r.logFetchFailure(strings.TrimRight(msg, "\n"))
+		return
+	}
+	_, _ = io.WriteString(os.Stderr, msg)
+}
+
+func fetchFailureCause(c Collector, elapsed time.Duration, err, ctxErr error) string {
 	cause := "unknown"
 	errMsg := strings.ToLower(err.Error())
 	switch {
@@ -257,16 +285,7 @@ func (r *Registry) logFetchFailureDetails(c Collector, elapsed time.Duration, er
 	default:
 		cause = err.Error()
 	}
-	cmd := c.Command
-	if cmd == "" {
-		cmd = c.ID
-	}
-	msg := fmt.Sprintf("harnez server: provider %s fetch failed: provider: %s, command: %q, elapsed: %s vs timeout: %s, cause: %s\n", c.Provider, c.Provider, cmd, elapsed.Round(time.Millisecond), c.Timeout, cause)
-	if r != nil && r.logFetchFailure != nil {
-		r.logFetchFailure(strings.TrimRight(msg, "\n"))
-		return
-	}
-	_, _ = io.WriteString(os.Stderr, msg)
+	return cause
 }
 
 func mergeCollectorUsage(primary, additional AgentUsage) AgentUsage {

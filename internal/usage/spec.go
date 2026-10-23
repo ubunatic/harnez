@@ -16,6 +16,7 @@ import (
 const usageSpecPath = "spec/usage.yaml"
 
 type usageSpec struct {
+	DebugLabels              usageDebugLabels   `yaml:"debug_labels"`
 	AGYQuota                 agyQuotaSpec       `yaml:"agy_quota"`
 	WatchLoadingLabel        string             `yaml:"watch_loading_label"`
 	AGYMeterMaxAge           string             `yaml:"agy_meter_max_age"`
