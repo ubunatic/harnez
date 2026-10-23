@@ -862,13 +862,42 @@ func defaultCommitMessage(verb, ticketNumber, reason string) string {
 // used by any agent or human caller, and attribution is a caller-session
 // concern, not something baked into the command (issue 232).
 func gitAddAndCommit(dir string, paths []string, message string) (string, error) {
-	addCmd := exec.Command("git", append([]string{"add"}, paths...)...)
+	trackedCmd := exec.Command("git", append([]string{"ls-files", "--cached", "--"}, paths...)...)
+	trackedCmd.Dir = dir
+	trackedOut, err := trackedCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git ls-files: %w", err)
+	}
+	tracked := make(map[string]bool)
+	for _, path := range strings.Split(strings.TrimSpace(string(trackedOut)), "\n") {
+		if path != "" {
+			tracked[path] = true
+		}
+	}
+	commitPaths := make([]string, 0, len(paths))
+	seen := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(path))); err == nil || tracked[path] {
+			commitPaths = append(commitPaths, path)
+		} else if !os.IsNotExist(err) {
+			return "", fmt.Errorf("stat %s: %w", path, err)
+		}
+	}
+	if len(commitPaths) == 0 {
+		return "", fmt.Errorf("git commit: no requested paths exist")
+	}
+	addCmd := exec.Command("git", append([]string{"add", "--"}, commitPaths...)...)
 	addCmd.Dir = dir
 	if out, err := addCmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("git add %s: %w: %s", strings.Join(paths, " "), err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("git add %s: %w: %s", strings.Join(commitPaths, " "), err, strings.TrimSpace(string(out)))
 	}
 
-	commitCmd := exec.Command("git", "commit", "-m", message)
+	commitCmd := exec.Command("git", "commit", "-m", message, "--")
+	commitCmd.Args = append(commitCmd.Args, commitPaths...)
 	commitCmd.Dir = dir
 	if out, err := commitCmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("git commit: %w: %s", err, strings.TrimSpace(string(out)))

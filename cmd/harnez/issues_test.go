@@ -91,6 +91,39 @@ func TestRunIssuesVerb_CloseRewritesStatusAndPreservesRestOfFile(t *testing.T) {
 	}
 }
 
+func TestIssuesCommitsLeaveUnrelatedStagedChanges(t *testing.T) {
+	for _, verb := range []string{"open", "close", "mv"} {
+		t.Run(verb, func(t *testing.T) {
+			ticket := sampleTicket
+			if verb == "open" {
+				ticket = strings.Replace(ticket, "**Status**: Open", "**Status**: Closed — prior", 1)
+			}
+			dir, _ := issuesFixtureRepo(t, ticket)
+			unrelated := filepath.Join(dir, "work.txt")
+			if err := os.WriteFile(unrelated, []byte("staged work\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			repoRunGit(t, dir, "add", "work.txt")
+			var out bytes.Buffer
+			var err error
+			if verb == "mv" {
+				_, _, err = runIssuesMv(&out, "42", "268", issuesRunOptions{Dir: dir})
+			} else {
+				_, _, err = runIssuesVerb(&out, verb, "42", nil, issuesRunOptions{Dir: dir})
+			}
+			if err != nil {
+				t.Fatalf("run %s: %v", verb, err)
+			}
+			if got := repoRunGitOutput(t, dir, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"); strings.Contains(got, "work.txt") {
+				t.Fatalf("unrelated staged file entered tracker commit: %s", got)
+			}
+			if got := repoRunGitOutput(t, dir, "diff", "--cached", "--name-only"); !strings.Contains(got, "work.txt") {
+				t.Fatalf("unrelated file no longer staged: %s", got)
+			}
+		})
+	}
+}
+
 func TestIssuesCmd_BatchUpdatesThreeTicketsInOneCommit(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	for _, num := range []string{"043", "044"} {
