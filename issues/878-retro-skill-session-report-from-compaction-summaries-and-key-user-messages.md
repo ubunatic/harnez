@@ -97,6 +97,37 @@ Requirements derived from both runs:
   committing by explicit path; evergreen changes to harnez-managed docs stay proposals.
 - Providers: only Claude tested so far.
 
+### Third run: harnez host session (2026-10-23, harnez-bjbi)
+
+Retro `docs/studies/2026-10-23-session-retro-harnez-host-two-days.md` (6bf5f306). Input: 18.3 MB
+transcript, 7 summaries (77 KB), 91 owner messages (20 KB); about 15–20k tokens including writing;
+raw transcript never opened. Existing per-sprint studies were linked, not retold (cheapest run).
+
+- **Lost start:** the first extracted owner message came 2h15m after session start because the
+  opening slash command was filtered (same loss as run 1).
+- **Shared repo:** about 200 commits and the close list include other sessions' work; nothing in
+  the extract attributes commits to this session.
+- **Owner-side noise:** voice-input duplicates arrive as separate messages; bash-input/stdout
+  echoes are noise but once held the key clue (the owner's own `time` output for an open bug).
+- **Cutting messages to 300 characters lost decisions;** two long messages had to be inferred from
+  summaries. No hard cut, or at least 1000 characters.
+- Heading drift again (`4. Errors and fixes:` with a colon); errors sections again sufficed.
+
+Implementation advice from the harnez host:
+
+- Command `harnez session extract` (or `harnez transcript extract`) in a new package
+  `internal/transcript`, one provider adapter per agent, Claude first.
+- **Do not reuse 635's `internal/decide/compact.go`:** `ParseJSONLTranscript` expects a top-level
+  role/content shape, not Claude Code's nested `message.content` with `isCompactSummary`, keeps
+  every line as `map[string]any` and caps lines at 10 MB, risky on 18–94 MB files. Use a streaming
+  decoder that emits only summaries and owner text.
+- Reuse transcript-path discovery from `internal/usage` (`history.go`, `project.go`) and the
+  subagent session store for "agents started" instead of parsing the `harnez agent list` footer.
+- `--since`/`--until`; attribute commits to the session (session-id trailer, or the commit time
+  ranges of this session's tool calls).
+- Header adds the first owner message's timestamp; a large gap after session start flags dropped
+  messages. Heading regex `^\s*(\*\*)?4\.\s*(\*\*)?Errors`; dedupe repeated summary sections.
+
 ## 5. Acceptance
 
 - The extract of the ubunatic.com session `13d4828e-…` reproduces the manual numbers (17
