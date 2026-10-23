@@ -258,3 +258,25 @@ quota warning was not observed before the provider turn. Focused verification pa
 `internal/issues` **0.020s**, issue-focused `cmd/harnez` tests **2.074s**. Dependency check and
 `make lint` passed. The remaining command parsing, Cobra output/exit handling, index wiring,
 and the end-to-end Git test stay in `cmd/harnez`.
+
+## M6 follow-up: quota test and timing
+
+`TestAgentQuotaNoticeBeforeStartAndResumeJSON/start` failed on both M4 (`3542d535`)
+and HEAD with identical output: a legitimate inferred-role notice preceded the
+injected `quota: codex 5h 86%` warning. The assertion incorrectly required the quota
+warning to be the first stderr line. This was a test assertion defect, not host quota
+state or an M5/M6 behavior change; the test now checks that the injected warning is
+present at the provider-call boundary, preserving its ordering guarantee. Focused test
+passes (**0.843s**), and full `cmd/harnez` passes after the fix (**36.299s**).
+
+Back-to-back pre-fix package timings, with `uptime` immediately before each run:
+
+- HEAD `42b8b618`: **37.755s** package / **38.41s** wall; load average **2.16, 3.37, 4.14**.
+- M4 `3542d535`: **52.447s** package / **53.12s** wall; load average **2.21, 3.25, 4.07**.
+- Post-fix HEAD: **36.299s** package / **36.96s** wall; load average **2.73, 3.14, 3.96**.
+
+The comparable load averages and faster HEAD run provide no evidence of an M5/M6
+performance regression. The 21.3s M4 observation and current 36–53s observations are
+not reproducible as a branch regression; run/build variance dominates this comparison.
+After the assertion correction, `make test-q1` passed once (**cmd/harnez 41.187s**);
+`grep -- '--- FAIL'` found no failures. No `/tmp/harnez-test-*` directories remained.

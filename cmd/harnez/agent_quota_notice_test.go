@@ -43,7 +43,7 @@ func TestAgentQuotaNoticeBeforeStartAndResumeJSON(t *testing.T) {
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 			driver := &quotaNoticeDriver{before: func() {
-				if !strings.HasPrefix(stderr.String(), "quota: codex 5h 86% (read ") {
+				if !strings.Contains(stderr.String(), "quota: codex 5h 86% (read ") {
 					t.Errorf("warning missing before provider turn: %q", stderr.String())
 				}
 			}}
