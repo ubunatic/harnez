@@ -1,6 +1,6 @@
 # 874 — harnez usage --minimal takes 6-8s even with --offline: store read too slow
 
-**Status**: Backlog — re-measure on an idle host after reboot first; promote if still over 1s
+**Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -18,6 +18,15 @@ cannot be fixed inside harnez.
   0.08s. So the time goes into reading and building the summary locally (`loadLocalUsage` ->
   `usage.ReadStoredSummary`, `cmd/harnez/usage_client.go`), not the server.
 - Load average was 4-5 (another session running heavy tests); measure again on an idle host before blaming code.
+
+## Findings (2026-10-23, after 873, load ~2%)
+
+- `harnez usage --minimal`: 8.2s and 6.1s wall with 0.1s user+sys; `--minimal --offline`: 8.2s wall,
+  1% CPU. The command waits, it does not compute; the store-read theory above is likely wrong.
+- Suspect: the Remote Load panel (`@x600 · batch`), which printed "remote load unavailable" in the same
+  `--offline` run, i.e. an SSH call running into a timeout. Developer test data (no remote host) took 2.0s.
+- Required: `--offline` makes no network or SSH call; online, remote load is bounded and never delays the
+  local output (fills in later in `-w`, shows "remote load unavailable" at once in one-shot modes).
 
 ## Plan
 
