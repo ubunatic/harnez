@@ -30,6 +30,9 @@ type usageSpec struct {
 	UsageStoreBusyTimeout    string             `yaml:"usage_store_busy_timeout"`
 	HistorySnapshotEvery     string             `yaml:"history_snapshot_interval"`
 	ExportHostKey            string             `yaml:"export_host_key"`
+	ClientHeartbeatInterval  string             `yaml:"client_heartbeat_interval"`
+	ClientTimeout            string             `yaml:"client_timeout"`
+	CatchupFetchThreshold    string             `yaml:"catchup_fetch_threshold"`
 	NVIDIASMITimeout         string             `yaml:"nvidia_smi_timeout"`
 	NVIDIASMICacheTTL        string             `yaml:"nvidia_smi_cache_ttl"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
@@ -95,6 +98,9 @@ var (
 	usageSpecLoadingLabel     string
 	usageSpecHistoryEvery     time.Duration
 	usageSpecHostKey          string
+	usageSpecHeartbeatEvery   time.Duration
+	usageSpecClientTimeout    time.Duration
+	usageSpecCatchupThreshold time.Duration
 	usageSpecViewModes        usageViewModesSpec
 	usageSpecNVTimeout        time.Duration
 	usageSpecNVCacheTTL       time.Duration
@@ -184,6 +190,13 @@ func UsageStoreBusyTimeout() (time.Duration, error) {
 	return usageSpecStoreBusyTimeout, err
 }
 
+// ClientHeartbeatPolicy returns the client heartbeat interval, client expiry timeout,
+// and catch-up fetch threshold from spec/usage.yaml (issue 714 M3).
+func ClientHeartbeatPolicy() (time.Duration, time.Duration, time.Duration, error) {
+	_, _, _, _, _, err := usageDurations()
+	return usageSpecHeartbeatEvery, usageSpecClientTimeout, usageSpecCatchupThreshold, err
+}
+
 func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duration, time.Duration, error) {
 	usageSpecOnce.Do(func() {
 		data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
@@ -202,6 +215,9 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 			usageSpecLoadingLabel = spec.WatchLoadingLabel
 			usageSpecHistoryEvery, _ = time.ParseDuration(spec.HistorySnapshotEvery)
 			usageSpecHostKey = spec.ExportHostKey
+			usageSpecHeartbeatEvery, _ = time.ParseDuration(spec.ClientHeartbeatInterval)
+			usageSpecClientTimeout, _ = time.ParseDuration(spec.ClientTimeout)
+			usageSpecCatchupThreshold, _ = time.ParseDuration(spec.CatchupFetchThreshold)
 			usageSpecViewModes = spec.ViewModes
 			usageSpecNVTimeout, _ = time.ParseDuration(spec.NVIDIASMITimeout)
 			usageSpecNVCacheTTL, _ = time.ParseDuration(spec.NVIDIASMICacheTTL)
@@ -256,6 +272,15 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	}
 	if nvTTL, err := time.ParseDuration(spec.NVIDIASMICacheTTL); err != nil || nvTTL <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: nvidia_smi_cache_ttl must be a positive duration", usageSpecPath)
+	}
+	if hbInterval, err := time.ParseDuration(spec.ClientHeartbeatInterval); err != nil || hbInterval <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: client_heartbeat_interval must be a positive duration", usageSpecPath)
+	}
+	if clientTimeout, err := time.ParseDuration(spec.ClientTimeout); err != nil || clientTimeout <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: client_timeout must be a positive duration", usageSpecPath)
+	}
+	if catchup, err := time.ParseDuration(spec.CatchupFetchThreshold); err != nil || catchup <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: catchup_fetch_threshold must be a positive duration", usageSpecPath)
 	}
 	storeBusy, err := time.ParseDuration(spec.UsageStoreBusyTimeout)
 	if err != nil || storeBusy <= 0 || storeBusy > time.Second {

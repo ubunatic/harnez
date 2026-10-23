@@ -18,6 +18,7 @@ import (
 type Service interface{ Run(context.Context) error }
 type readiness interface{ Ready() bool }
 type RouteRegistrar interface{ RegisterRoutes(*http.ServeMux) }
+type ClientCounter interface{ ActiveClients() int }
 
 type Server struct {
 	Config        Config
@@ -37,6 +38,7 @@ type statusInfo struct {
 	BuildIdentity string    `json:"build_identity"`
 	PID           int       `json:"pid"`
 	StartedAt     time.Time `json:"started_at,omitempty"`
+	Clients       *int      `json:"clients,omitempty"`
 }
 
 func CaptureBuildIdentity() string {
@@ -83,9 +85,18 @@ func (s Server) Run(ctx context.Context) error {
 		}
 		return true
 	}
+	countClients := func() *int {
+		for _, service := range s.Services {
+			if counter, ok := service.(ClientCounter); ok {
+				c := counter.ActiveClients()
+				return &c
+			}
+		}
+		return nil
+	}
 	startedAt := time.Now().UTC()
 	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) {
-		writeStatusWithStart(w, s.Version, identity, ready(), startedAt)
+		writeStatusWithStartAndClients(w, s.Version, identity, ready(), startedAt, countClients())
 	})
 	shutdown := make(chan struct{}, 1)
 	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, _ *http.Request) {
@@ -231,13 +242,17 @@ func writeStatus(w http.ResponseWriter, version, identity string, ready bool) {
 }
 
 func writeStatusWithStart(w http.ResponseWriter, version, identity string, ready bool, startedAt time.Time) {
+	writeStatusWithStartAndClients(w, version, identity, ready, startedAt, nil)
+}
+
+func writeStatusWithStartAndClients(w http.ResponseWriter, version, identity string, ready bool, startedAt time.Time, clients *int) {
 	w.Header().Set("Content-Type", "application/json")
 	code, health := http.StatusOK, "ok"
 	if !ready {
 		code, health = http.StatusServiceUnavailable, "starting"
 	}
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid(), StartedAt: startedAt})
+	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid(), StartedAt: startedAt, Clients: clients})
 }
 
 func statusHandler(version string) http.HandlerFunc { return statusHandlerReady(version, true) }

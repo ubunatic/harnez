@@ -104,6 +104,25 @@ func writeLoadObservation(ctx context.Context, provider string, observedAt time.
 }
 
 func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diagnostic func(CollectorDiagnostic)) []AgentUsage {
+	return r.collectWithFilter(ctx, progress, diagnostic, nil)
+}
+
+// CollectCatchup fetches only providers whose last successful fetch is older than threshold (issue 714 M3).
+func (r *Registry) CollectCatchup(ctx context.Context, threshold time.Duration, progress FetchProgressFunc, diagnostic func(CollectorDiagnostic)) []AgentUsage {
+	now := time.Now()
+	shouldFetch := func(c Collector) bool {
+		r.mu.Lock()
+		last, ok := r.lastGood[c.ID]
+		r.mu.Unlock()
+		if !ok || last.LastRefreshed.IsZero() {
+			return true
+		}
+		return now.Sub(last.LastRefreshed) >= threshold
+	}
+	return r.collectWithFilter(ctx, progress, diagnostic, shouldFetch)
+}
+
+func (r *Registry) collectWithFilter(ctx context.Context, progress FetchProgressFunc, diagnostic func(CollectorDiagnostic), filter func(Collector) bool) []AgentUsage {
 	if r == nil {
 		return nil
 	}
@@ -114,11 +133,21 @@ func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diag
 		ctxErr    error
 		started   time.Time
 		duration  time.Duration
+		skipped   bool
 	}
 	results := make(chan result, len(r.collectors))
 	var wg sync.WaitGroup
 	for _, collector := range r.collectors {
 		collector := collector
+		if filter != nil && !filter(collector) {
+			r.mu.Lock()
+			cached, ok := r.lastGood[collector.ID]
+			r.mu.Unlock()
+			if ok {
+				results <- result{collector: collector, usage: cached, skipped: true}
+				continue
+			}
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -140,6 +169,10 @@ func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diag
 	close(results)
 	byID := make(map[string]AgentUsage, len(r.collectors))
 	for item := range results {
+		if item.skipped {
+			byID[item.collector.ID] = item.usage
+			continue
+		}
 		u := item.usage
 		if u.AgentID == "" {
 			u.AgentID = item.collector.Provider
@@ -377,6 +410,35 @@ func CollectRegistered(ctx context.Context, homeDir string, client *http.Client,
 		return UsageSummary{Timestamp: time.Now()}
 	}
 	agents := registry.Collect(ctx, progress, diagnostic)
+	now := time.Now()
+	for i := range agents {
+		if agents[i].LastRefreshed.IsZero() {
+			agents[i].LastRefreshed = now
+		}
+	}
+	_ = publishAgentObservations(ctx, agents)
+	return UsageSummary{Timestamp: now, Agents: agents}
+}
+
+// CollectRegisteredCatchup runs the provider registry in catch-up mode, fetching only
+// providers whose last successful fetch is older than threshold (issue 714 M3).
+func CollectRegisteredCatchup(ctx context.Context, homeDir string, client *http.Client, threshold time.Duration, progress FetchProgressFunc, diagnostic func(CollectorDiagnostic)) UsageSummary {
+	registry, err := newUsageRegistry(homeDir, client, true)
+	if err != nil {
+		return UsageSummary{Timestamp: time.Now()}
+	}
+	stateDir := StateDir(homeDir)
+	for _, c := range registry.collectors {
+		if c.Collect == nil {
+			continue
+		}
+		if snapshot, err := readAgentSnapshotContext(ctx, stateDir, c.Provider); err == nil && snapshot != nil {
+			registry.mu.Lock()
+			registry.lastGood[c.ID] = snapshot.Usage
+			registry.mu.Unlock()
+		}
+	}
+	agents := registry.CollectCatchup(ctx, threshold, progress, diagnostic)
 	now := time.Now()
 	for i := range agents {
 		if agents[i].LastRefreshed.IsZero() {

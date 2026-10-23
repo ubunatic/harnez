@@ -32,6 +32,10 @@ history_snapshot_interval: 15m
 export_host_key: export-host-key
 # Compact projection does not wait long to persist freshly collected readings.
 usage_store_busy_timeout: 25ms
+# Client heartbeat and catch-up fetch parameters (issue 714 M3).
+client_heartbeat_interval: 10s
+client_timeout: 30s
+catchup_fetch_threshold: 1m
 # NVIDIA GPUs are read via nvidia-smi (issue 765). One call costs ~123ms, and
 # the Load box redraws every 100ms, so each reading is reused for the TTL and
 # a hung call is cut off at the timeout.

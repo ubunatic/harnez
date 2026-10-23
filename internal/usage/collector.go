@@ -55,10 +55,22 @@ func RunCollectorWithFetchReady(ctx context.Context, homeDir, dbPath string, int
 }
 
 func RunCollectorWithRequests(ctx context.Context, homeDir string, client *http.Client, interval time.Duration, out io.Writer, offline bool, requests <-chan PassiveRequest, ready func()) error {
-	return runCollectorWithRequests(ctx, homeDir, "", interval, out, offline, func(ctx context.Context) (UsageSummary, error) { return CollectAllLive(ctx, homeDir, client), nil }, ready, requests)
+	return RunCollectorWithRequestsAndTracker(ctx, homeDir, client, interval, out, offline, requests, ready, nil)
+}
+
+func RunCollectorWithRequestsAndTracker(ctx context.Context, homeDir string, client *http.Client, interval time.Duration, out io.Writer, offline bool, requests <-chan PassiveRequest, ready func(), tracker *ClientTracker) error {
+	return runCollectorWithRequestsAndTracker(ctx, homeDir, "", interval, out, offline, func(ctx context.Context) (UsageSummary, error) { return CollectAllLive(ctx, homeDir, client), nil }, ready, requests, tracker)
+}
+
+func RunCollectorWithClientTracker(ctx context.Context, homeDir, dbPath string, interval time.Duration, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error), ready func(), requests <-chan PassiveRequest, tracker *ClientTracker) error {
+	return runCollectorWithRequestsAndTracker(ctx, homeDir, dbPath, interval, out, offline, fetch, ready, requests, tracker)
 }
 
 func runCollectorWithRequests(ctx context.Context, homeDir, dbPath string, interval time.Duration, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error), ready func(), requests <-chan PassiveRequest) error {
+	return runCollectorWithRequestsAndTracker(ctx, homeDir, dbPath, interval, out, offline, fetch, ready, requests, nil)
+}
+
+func runCollectorWithRequestsAndTracker(ctx context.Context, homeDir, dbPath string, interval time.Duration, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error), ready func(), requests <-chan PassiveRequest, tracker *ClientTracker) error {
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
@@ -98,8 +110,36 @@ func runCollectorWithRequests(ctx context.Context, homeDir, dbPath string, inter
 	go func() {
 		writerDone <- runStoreWriter(ctx, homeDir, dbPath, stateDir, out, offline, requests, fetchResults, writerReady)
 	}()
+	triggerCatchup := make(chan struct{}, 1)
+	if tracker != nil {
+		tracker.SetOnFirstClient(func() {
+			select {
+			case triggerCatchup <- struct{}{}:
+			default:
+			}
+		})
+	}
+
 	go func() {
+		initial := true
 		for {
+			if initial {
+				initial = false
+				// If a tracker is present and has no active clients at startup,
+				// skip the immediate initial fetch per issue 714 M3.
+				if tracker != nil && tracker.Count() == 0 {
+					timer := time.NewTimer(interval)
+					select {
+					case <-ctx.Done():
+						timer.Stop()
+						return
+					case <-triggerCatchup:
+						timer.Stop()
+					case <-timer.C:
+					}
+				}
+			}
+
 			summary, err := fetch(ctx)
 			select {
 			case fetchResults <- fetchResult{summary: summary, err: err}:
@@ -114,6 +154,8 @@ func runCollectorWithRequests(ctx context.Context, homeDir, dbPath string, inter
 			case <-ctx.Done():
 				timer.Stop()
 				return
+			case <-triggerCatchup:
+				timer.Stop()
 			case <-timer.C:
 			}
 		}

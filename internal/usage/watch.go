@@ -792,6 +792,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		}
 	}()
 	startFetch()
+	StartClientHeartbeat(sigCtx)
 
 	if opts.Splash {
 		splashStart := time.Now()

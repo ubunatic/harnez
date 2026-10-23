@@ -20,25 +20,35 @@ import (
 )
 
 type usageCollectorService struct {
-	interval     time.Duration
-	client       *http.Client
-	offline      bool
-	ready        atomic.Bool
-	requests     chan usage.PassiveRequest
-	updateServer usage.PassiveUpdateServer
+	interval        time.Duration
+	client          *http.Client
+	offline         bool
+	ready           atomic.Bool
+	requests        chan usage.PassiveRequest
+	updateServer    usage.PassiveUpdateServer
+	tracker         *usage.ClientTracker
+	heartbeatServer usage.HeartbeatServer
 }
 
 var serverBuildIdentity = server.CaptureBuildIdentity()
 
 func (s *usageCollectorService) Run(ctx context.Context) error {
-	return usage.RunCollectorWithRequests(ctx, "", s.client, s.interval, os.Stdout, s.offline, s.requests, func() { s.ready.Store(true) })
+	return usage.RunCollectorWithRequestsAndTracker(ctx, "", s.client, s.interval, os.Stdout, s.offline, s.requests, func() { s.ready.Store(true) }, s.tracker)
 }
 
 func (s *usageCollectorService) RegisterRoutes(mux *http.ServeMux) {
 	s.updateServer.RegisterRoutes(mux)
+	s.heartbeatServer.RegisterRoutes(mux)
 }
 
 func (s *usageCollectorService) Ready() bool { return s.ready.Load() }
+
+func (s *usageCollectorService) ActiveClients() int {
+	if s.tracker != nil {
+		return s.tracker.Count()
+	}
+	return 0
+}
 
 func newServerCmd() *cobra.Command {
 	return newServerCmdWithOptions(0, false)
@@ -306,6 +316,7 @@ type localServerStatusResponse struct {
 	BuildIdentity string    `json:"build_identity"`
 	PID           int       `json:"pid"`
 	StartedAt     time.Time `json:"started_at"`
+	Clients       *int      `json:"clients,omitempty"`
 }
 
 type serverStatusJSON struct {
@@ -316,6 +327,7 @@ type serverStatusJSON struct {
 	Version         string                `json:"version,omitempty"`
 	CLIVersion      string                `json:"cli_version,omitempty"`
 	UptimeSeconds   *int64                `json:"uptime_seconds,omitempty"`
+	Clients         *int                  `json:"clients,omitempty"`
 	VersionMismatch bool                  `json:"version_mismatch"`
 }
 
@@ -354,6 +366,7 @@ func printServerStatusJSON(out io.Writer, cfg server.Config, status server.Syste
 	}
 	if srv.PID > 0 {
 		sj.Version = srv.Version
+		sj.Clients = srv.Clients
 		if !srv.StartedAt.IsZero() {
 			secs := int64(time.Since(srv.StartedAt).Seconds())
 			if secs < 0 {
@@ -413,6 +426,9 @@ func printServerUptimeAndVersion(out io.Writer, srv localServerStatusResponse) {
 		}
 		fmt.Fprintf(out, "uptime: %s\n", uptime)
 	}
+	if srv.Clients != nil {
+		fmt.Fprintf(out, "clients: %d\n", *srv.Clients)
+	}
 	if srv.Version != "" {
 		if srv.Version != harnez.Version {
 			fmt.Fprintf(out, "version: %s (restart to update to %s)\n", srv.Version, harnez.Version)
@@ -467,7 +483,25 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 		client = &http.Client{Timeout: cfg.HTTPClientTimeout}
 	}
 	requests := make(chan usage.PassiveRequest)
-	collector := &usageCollectorService{interval: interval, client: client, offline: offline, requests: requests, updateServer: usage.PassiveUpdateServer{Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}}
+	_, clientTimeout, _, err := usage.ClientHeartbeatPolicy()
+	if err != nil {
+		return err
+	}
+	tracker := usage.NewClientTracker(clientTimeout)
+	heartbeatServer := usage.HeartbeatServer{
+		Path:    "/usage/heartbeat",
+		Tracker: tracker,
+		Timeout: cfg.UpdateTimeout,
+	}
+	collector := &usageCollectorService{
+		interval:        interval,
+		client:          client,
+		offline:         offline,
+		requests:        requests,
+		updateServer:    usage.PassiveUpdateServer{Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes},
+		tracker:         tracker,
+		heartbeatServer: heartbeatServer,
+	}
 	telemetryService := &telemetryCollectorService{config: cfg, path: dbPath, interval: interval}
 	return (server.Server{Config: cfg, Version: harnez.Version, BuildIdentity: serverBuildIdentity, Services: []server.Service{collector, telemetryService}, HandOver: server.NewSystemdService(cfg).HandOver}).Run(ctx)
 }

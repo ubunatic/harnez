@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez usage settings and view modes",
   "type": "object",
-  "required": ["agy_quota", "agy_meter_max_age", "collector_cadence", "cache_staleness_multiplier", "display_staleness", "collector_timeout", "passive_dedupe_interval", "passive_update_path", "history_snapshot_interval", "usage_store_busy_timeout", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl", "agent_quota_warn_percent", "agent_quota_max_reading_age"],
+  "required": ["agy_quota", "agy_meter_max_age", "collector_cadence", "cache_staleness_multiplier", "display_staleness", "collector_timeout", "passive_dedupe_interval", "passive_update_path", "history_snapshot_interval", "usage_store_busy_timeout", "client_heartbeat_interval", "client_timeout", "catchup_fetch_threshold", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl", "agent_quota_warn_percent", "agent_quota_max_reading_age"],
   "properties": {
     "agent_quota_warn_percent": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
     "agent_quota_max_reading_age": { "type": "string", "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$" },
@@ -92,6 +92,18 @@
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
     },
     "usage_store_busy_timeout": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
+    },
+    "client_heartbeat_interval": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
+    },
+    "client_timeout": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
+    },
+    "catchup_fetch_threshold": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
     },
