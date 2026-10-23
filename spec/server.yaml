@@ -3,6 +3,8 @@ socket_path: server.sock
 read_header_timeout: 5s
 shutdown_timeout: 5s
 http_client_timeout: 5s
+probe_timeout: 1s
+usage_deadline: 10s
 update_timeout: 100ms
 update_max_body_bytes: 65536
 telemetry_update_path: /telemetry/record

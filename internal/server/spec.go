@@ -17,6 +17,8 @@ type Config struct {
 	ReadHeaderTimeout         time.Duration
 	ShutdownTimeout           time.Duration
 	HTTPClientTimeout         time.Duration
+	ProbeTimeout              time.Duration
+	UsageDeadline             time.Duration
 	UpdateTimeout             time.Duration
 	UpdateMaxBodyBytes        int64
 	TelemetryPath             string
@@ -38,6 +40,8 @@ type specConfig struct {
 	ReadHeaderTimeout         string `yaml:"read_header_timeout"`
 	ShutdownTimeout           string `yaml:"shutdown_timeout"`
 	HTTPClientTimeout         string `yaml:"http_client_timeout"`
+	ProbeTimeout              string `yaml:"probe_timeout"`
+	UsageDeadline             string `yaml:"usage_deadline"`
 	UpdateTimeout             string `yaml:"update_timeout"`
 	UpdateMaxBodyBytes        int64  `yaml:"update_max_body_bytes"`
 	TelemetryPath             string `yaml:"telemetry_update_path"`
@@ -92,7 +96,7 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("spec/server.yaml: systemd_restart_policy must be on-failure")
 	}
 	for _, item := range []struct{ name, value string }{
-		{"read_header_timeout", raw.ReadHeaderTimeout}, {"shutdown_timeout", raw.ShutdownTimeout}, {"http_client_timeout", raw.HTTPClientTimeout},
+		{"read_header_timeout", raw.ReadHeaderTimeout}, {"shutdown_timeout", raw.ShutdownTimeout}, {"http_client_timeout", raw.HTTPClientTimeout}, {"probe_timeout", raw.ProbeTimeout}, {"usage_deadline", raw.UsageDeadline},
 		{"update_timeout", raw.UpdateTimeout}, {"startup_timeout", raw.StartupTimeout}, {"startup_poll_interval", raw.StartupPoll}, {"takeover_timeout", raw.TakeoverTimeout}, {"systemd_restart_delay", raw.SystemdRestartDelay}, {"telemetry_warning_rate_limit", raw.TelemetryWarningRateLimit},
 	} {
 		d, err := time.ParseDuration(item.value)
@@ -106,6 +110,10 @@ func LoadConfig() (Config, error) {
 			cfg.ShutdownTimeout = d
 		case "http_client_timeout":
 			cfg.HTTPClientTimeout = d
+		case "probe_timeout":
+			cfg.ProbeTimeout = d
+		case "usage_deadline":
+			cfg.UsageDeadline = d
 		case "update_timeout":
 			cfg.UpdateTimeout = d
 		case "startup_timeout":

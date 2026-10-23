@@ -12,8 +12,15 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
 )
+
+func reportUsageServerStatus(cmd *cobra.Command, status string) {
+	if status != "" {
+		fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %s\n", status)
+	}
+}
 
 // newUsageCmd builds `harnez usage` with its history, export and archive subcommands.
 func newUsageCmd() *cobra.Command {
@@ -38,10 +45,19 @@ func newUsageCmd() *cobra.Command {
 		Aliases: []string{"quota", "tokens"},
 		Short:   "Show unified token, session, and quota status across AI coding agents",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			serverCfg, err := server.LoadConfig()
+			if err != nil {
+				return err
+			}
 			ctx := cmd.Context()
+			if !usageWatch && !usageLoom {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, serverCfg.UsageDeadline)
+				defer cancel()
+			}
 			var client *http.Client
 			if !usageOffline {
-				client = &http.Client{Timeout: 5 * time.Second}
+				client = &http.Client{Timeout: serverCfg.HTTPClientTimeout}
 			}
 
 			selectedMode, explicitMode, err := selectUsageViewMode(usageNormal, usageCompact, usageMinimal)
@@ -81,8 +97,9 @@ func newUsageCmd() *cobra.Command {
 			if usageLoom {
 				var cached usage.UsageSummary
 				if usageHost == "" {
-					var err error
-					cached, err = loadLocalUsage(ctx, usageOffline)
+					var status string
+					cached, status, err = loadLocalUsageWithStatus(ctx, usageOffline)
+					reportUsageServerStatus(cmd, status)
 					if err != nil {
 						return fmt.Errorf("read usage store: %w", err)
 					}
@@ -107,9 +124,12 @@ func newUsageCmd() *cobra.Command {
 				// 110 Decision §2/§3), the same way it owns fetching
 				// summary/rates/procs internally rather than the caller
 				// pre-fetching a single snapshot up front.
+				var cached usage.UsageSummary
 				var storedLoader func(context.Context) usage.UsageSummary
 				if usageHost == "" {
-					cached, err := loadLocalUsage(ctx, usageOffline)
+					var status string
+					cached, status, err = loadLocalUsageWithStatus(ctx, usageOffline)
+					reportUsageServerStatus(cmd, status)
 					if err != nil {
 						return fmt.Errorf("read usage store: %w", err)
 					}
@@ -157,7 +177,9 @@ func newUsageCmd() *cobra.Command {
 					}
 					summary = s
 				} else {
-					summary, err = loadLocalUsage(ctx, usageOffline)
+					var status string
+					summary, status, err = loadLocalUsageWithStatus(ctx, usageOffline)
+					reportUsageServerStatus(cmd, status)
 					if err != nil {
 						return fmt.Errorf("read usage store: %w", err)
 					}
@@ -208,7 +230,9 @@ func newUsageCmd() *cobra.Command {
 			if usageHost != "" {
 				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			} else {
-				summary, err := loadLocalUsage(ctx, usageOffline)
+				var status string
+				summary, status, err := loadLocalUsageWithStatus(ctx, usageOffline)
+				reportUsageServerStatus(cmd, status)
 				if err != nil {
 					return fmt.Errorf("read usage store: %w", err)
 				}

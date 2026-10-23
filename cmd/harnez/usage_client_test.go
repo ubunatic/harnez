@@ -9,30 +9,33 @@ import (
 	"ubunatic.com/harnez/internal/server"
 )
 
-func TestEnsureLocalServerStartsOnceAndWaitsForReady(t *testing.T) {
-	probes, starts, waits := 0, 0, 0
-	starter := serverStarter{
-		probe: func(context.Context, server.Config) bool { probes++; return probes >= 3 },
-		start: func() error { starts++; return nil },
-		wait:  func(context.Context, time.Duration) error { waits++; return nil },
+func TestEnsureLocalServerStartsOnlyWithoutAListener(t *testing.T) {
+	tests := []struct {
+		name     string
+		probe    serverProbeResult
+		wantText string
+		wantRuns int
+	}{
+		{name: "no listener", wantText: "server starting", wantRuns: 1},
+		{name: "starting", probe: serverProbeResult{listening: true, starting: true}, wantText: "server starting"},
+		{name: "hung", probe: serverProbeResult{listening: true}, wantText: "server not answering"},
+		{name: "healthy", probe: serverProbeResult{ready: true, listening: true}},
 	}
-	cfg := server.Config{StartupTimeout: time.Second, StartupPoll: time.Millisecond}
-	if err := starter.ensure(context.Background(), cfg); err != nil {
-		t.Fatal(err)
-	}
-	if starts != 1 || probes != 3 || waits != 2 {
-		t.Fatalf("starts=%d probes=%d waits=%d", starts, probes, waits)
-	}
-}
-
-func TestEnsureLocalServerChecksAndKeepsHealthyServer(t *testing.T) {
-	starts := 0
-	starter := serverStarter{probe: func(context.Context, server.Config) bool { return true }, start: func() error { starts++; return nil }}
-	if err := starter.ensure(context.Background(), server.Config{}); err != nil {
-		t.Fatal(err)
-	}
-	if starts != 1 {
-		t.Fatalf("start called %d times, want one version check", starts)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			probes, starts := 0, 0
+			starter := serverStarter{
+				probe: func(context.Context, server.Config) serverProbeResult { probes++; return tt.probe },
+				start: func() error { starts++; return nil },
+			}
+			check := starter.ensure(context.Background(), server.Config{ProbeTimeout: time.Second})
+			if check.status != tt.wantText {
+				t.Fatalf("status=%q, want %q", check.status, tt.wantText)
+			}
+			if starts != tt.wantRuns || probes != 1 {
+				t.Fatalf("starts=%d probes=%d, want starts=%d probes=1", starts, probes, tt.wantRuns)
+			}
+		})
 	}
 }
 
