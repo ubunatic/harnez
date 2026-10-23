@@ -48,3 +48,34 @@ the same field and JSON tag `passiveWindows` reads (`internal/usage/passive.go:2
 show quota should be accepted; the drops (40 by 14:15) are likely renders without a `quota` field. There is no
 accepted counter, so this is unproven. Next: count accepted observations next to `passive_dropped`, and
 capture one dropped payload (env-gated stdin dump) to see what it carries.
+
+## Passive-path findings (2026-10-23)
+
+- No Harnez quota parsing defect reproduced. `cmd/harnez/statusline.go:46` observes the
+  original stdin bytes with provider `agy`. `internal/usage/passive.go:63` posts
+  `{"dropped_provider":"agy"}` only when there are zero usable quota windows;
+  `internal/usage/passive_endpoint.go:52` is the sole drop-counter increment.
+  Transport/HTTP errors return `UpdateDropped` locally but do not increment that counter.
+  Passive parsing has no active-model filter; the renderer does. Source precedence can
+  also keep API readings visible after accepted statusline observations.
+- A realistic Gemini payload with `gemini-5h`, `gemini-weekly`, and
+  `gemini-argon-wtu-weekly` fractions renders the reported text and forwards three
+  windows: zero drops, one accepted observation. The live cause remains unproven;
+  capture is needed to establish what the dropped renders contain.
+- Commits: `e496aa17` adds opt-in capture and `passive_accepted` per-provider counts
+  beside `passive_dropped`; `2da01455` adds the command-to-Unix-HTTP AGY regression.
+  Acceptance is counted once per provider/request after successful collector completion,
+  including deduplicated successful writes; both counters reset at server start.
+- Capture: export `HARNEZ_CAPTURE_PASSIVE_DROPS=1` before launching AGY, or prefix its
+  configured command with `HARNEZ_CAPTURE_PASSIVE_DROPS=1 harnez statusline --agent agy`.
+  The variable belongs in the **statusline process** environment. The latest drop is
+  atomically saved with mode 0600 to `$XDG_STATE_HOME/harnez/passive-last-dropped.json`
+  (fallback `~/.local/state/harnez/passive-last-dropped.json`). Fields: `provider`,
+  `reason`, original stdin as the JSON string `payload`, and `captured_at`.
+  Parse, missing/invalid quota, configuration, transport, and HTTP errors are captured.
+  Unset the variable to stop capture; accepted renders leave the last drop untouched.
+- Verification: `go test ./internal/usage/... ./internal/statusline/... ./cmd/harnez/...
+  ./internal/server/...` passed; `make install` passed; installed-binary capture canary
+  passed with an isolated missing socket. No live daemon restart performed: the host
+  must restart onto the installed build for acceptance counts and verify live AGY data.
+  Ticket remains open.
