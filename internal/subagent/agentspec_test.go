@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
 )
@@ -98,6 +99,39 @@ func TestEmbeddedAgentSpecLoadsAndResolves(t *testing.T) {
 	}
 	if spec.CompactThreshold != 200000 {
 		t.Fatalf("compact threshold = %d, want spec/agent.yaml compact_threshold_tokens 200000", spec.CompactThreshold)
+	}
+}
+
+func TestKnownErrorChecksMatchAgentSchema(t *testing.T) {
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/agent.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	schemaData, err := fs.ReadFile(harnez.DefaultFS, "spec/schemas/agent.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(schemaData, &schema); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resolved.Validate(document); err != nil {
+		t.Fatalf("agent spec does not match schema: %v", err)
+	}
+	checks, err := KnownErrorChecks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(checks) == 0 || checks[0].Provider != "agy" || checks[0].MatchText != "Individual quota reached" {
+		t.Fatalf("first known error check = %#v", checks)
 	}
 }
 

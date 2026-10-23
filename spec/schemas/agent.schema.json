@@ -11,6 +11,20 @@
       "description": "Per provider: verified CLI stderr line prefixes that mean the resumed session is gone.",
       "additionalProperties": { "type": "array", "items": { "type": "string", "minLength": 1 } }
     },
+    "known_error_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["provider", "match_text", "check", "warning"],
+        "properties": {
+          "provider": { "type": "string", "minLength": 1 },
+          "match_text": { "type": "string", "minLength": 1 },
+          "check": { "type": "string", "enum": ["quota_available"] },
+          "warning": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
     "stop": {
       "type": "object",
       "required": ["grace_ms", "kill_wait_ms", "poll_ms"],

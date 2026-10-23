@@ -14,6 +14,7 @@ import (
 
 	"ubunatic.com/harnez/internal/agymeter"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 // AgyDriver runs agy (Antigravity CLI) in print mode, pinned to Dir.
@@ -115,12 +116,16 @@ func (d AgyDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 	}
 	args = append(args, "--output-format", "json", "-p", o.Prompt)
 	b, err := d.command(ctx, args...)
+	r, parseErr := parseAgyWithQuota(ctx, b, o.Model.Name, cachedAgyQuotaAvailable)
 	if err != nil {
+		if parseErr == nil {
+			r.DurationMS = time.Since(start).Milliseconds()
+			return r, nil
+		}
 		return nil, agyRunError("agy", b, err)
 	}
-	r, err := parseAgy(b)
-	if err != nil {
-		return nil, err
+	if parseErr != nil {
+		return nil, parseErr
 	}
 	r.DurationMS = time.Since(start).Milliseconds()
 	return r, nil
@@ -139,10 +144,14 @@ func (d AgyDriver) Resume(ctx context.Context, id, prompt string, model Model) (
 	}
 	args = append(args, "--output-format", "json", "-p", prompt)
 	b, err := d.command(ctx, args...)
+	r, parseErr := parseAgyWithQuota(ctx, b, model.Name, cachedAgyQuotaAvailable)
 	if err != nil {
+		if parseErr == nil {
+			return r, nil
+		}
 		return nil, agyRunError("agy resume", b, err)
 	}
-	return parseAgy(b)
+	return r, parseErr
 }
 
 // Compact invokes agy's native slash command (1.3.5+), inheriting the saved
@@ -219,6 +228,52 @@ func parseAgy(data []byte) (*TurnResult, error) {
 	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens
 	r.TokensCumulative = r.TokensTurn
 	return r, nil
+}
+
+type agyQuotaCheck func(context.Context, string) (bool, error)
+
+func cachedAgyQuotaAvailable(_ context.Context, model string) (bool, error) {
+	state := usage.CachedProviderQuotaAvailability("agy", model, time.Now())
+	return state.State == "available", nil
+}
+
+func parseAgyWithQuota(ctx context.Context, data []byte, model string, check agyQuotaCheck) (*TurnResult, error) {
+	var v agyResult
+	if err := json.Unmarshal(data, &v); err != nil {
+		return nil, fmt.Errorf("parse agy json: %w", err)
+	}
+	if v.Status == "SUCCESS" {
+		return parseAgy(data)
+	}
+	message := v.Error
+	if message == "" {
+		message = v.Response
+	}
+	checks, err := KnownErrorChecks()
+	if err != nil {
+		return nil, fmt.Errorf("agy reported status %q: %s", v.Status, message)
+	}
+	for _, known := range checks {
+		if known.Provider != "agy" || !strings.Contains(message, known.MatchText) || known.Check != "quota_available" {
+			continue
+		}
+		if check == nil {
+			check = cachedAgyQuotaAvailable
+		}
+		available, err := check(ctx, model)
+		if err != nil || !available {
+			break
+		}
+		v.Status = "SUCCESS"
+		data, _ = json.Marshal(v)
+		result, err := parseAgy(data)
+		if err != nil {
+			return nil, err
+		}
+		result.Warnings = []string{known.Warning}
+		return result, nil
+	}
+	return nil, fmt.Errorf("agy reported status %q: %s", v.Status, message)
 }
 
 func valueOrZero(value *int) int {

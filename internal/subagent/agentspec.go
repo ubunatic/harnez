@@ -31,6 +31,16 @@ type agentSpec struct {
 	ReplyHistoryLimit     int                            `yaml:"reply_history_limit"`
 	CompactThreshold      int                            `yaml:"compact_threshold_tokens"`
 	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
+	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
+}
+
+// KnownErrorCheckSpec describes a fixed-text provider error and its single
+// configured verification check.
+type KnownErrorCheckSpec struct {
+	Provider  string `yaml:"provider"`
+	MatchText string `yaml:"match_text"`
+	Check     string `yaml:"check"`
+	Warning   string `yaml:"warning"`
 }
 
 // ExternalSessionSpec describes provider-owned local session metadata.
@@ -395,6 +405,15 @@ func RoleRules(role string) (string, error) {
 	}
 	r := spec.Roles[canonical]
 	return strings.TrimSpace(r.Rules), nil
+}
+
+// KnownErrorChecks returns the ordered error checks from the agent spec.
+func KnownErrorChecks() ([]KnownErrorCheckSpec, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return nil, err
+	}
+	return append([]KnownErrorCheckSpec(nil), spec.KnownErrorChecks...), nil
 }
 
 // CheckSpawn reports whether a caller in callerRole may start a session of

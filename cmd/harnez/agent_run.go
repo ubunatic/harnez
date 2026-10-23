@@ -903,6 +903,9 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		}
 		return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
 	}
+	for _, warning := range r.Warnings {
+		fmt.Fprintln(cmd.ErrOrStderr(), warning)
+	}
 	if sess.Provider == "codex" && contextTokens >= threshold && (!r.CompactionObserved || r.ContextTokens < 0 || r.ContextTokens >= threshold) {
 		context := fmt.Sprintf("%d", r.ContextTokens)
 		if r.ContextTokens < 0 {

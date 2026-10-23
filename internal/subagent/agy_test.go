@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -248,6 +249,61 @@ func TestAgyNonSuccessStatusIsError(t *testing.T) {
 	_, err := d.Run(context.Background(), RunOptions{Prompt: "p", Model: Model{Name: "m"}})
 	if err == nil || !strings.Contains(err.Error(), "tool call failed") {
 		t.Fatalf("error = %v, want status/response included", err)
+	}
+}
+
+func TestParseAgyKnownQuotaError(t *testing.T) {
+	quotaErr, err := os.ReadFile(filepath.Join("testdata", "agy_quota_error.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherErr, err := os.ReadFile(filepath.Join("testdata", "agy_unlisted_error.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name      string
+		data      []byte
+		available bool
+		checkErr  bool
+		wantErr   bool
+		wantWarn  bool
+	}{
+		{name: "listed error with quota left", data: quotaErr, available: true, wantWarn: true},
+		{name: "listed error with no quota", data: quotaErr, wantErr: true},
+		{name: "listed error with failed check", data: quotaErr, checkErr: true, wantErr: true},
+		{name: "unlisted error", data: otherErr, available: true, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := 0
+			result, err := parseAgyWithQuota(context.Background(), tt.data, "gemini-3.8-flash", func(_ context.Context, model string) (bool, error) {
+				called++
+				if model != "gemini-3.8-flash" {
+					t.Fatalf("quota check model = %q", model)
+				}
+				if tt.checkErr {
+					return false, errors.New("quota check failed")
+				}
+				return tt.available, nil
+			})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, wantErr %t", err, tt.wantErr)
+			}
+			if (result != nil && len(result.Warnings) > 0) != tt.wantWarn {
+				t.Fatalf("result = %#v, want warning %t", result, tt.wantWarn)
+			}
+			if tt.wantWarn && (len(result.Warnings) != 1 || result.Warnings[0] != "agy reported an earlier quota error; quota is available now") {
+				t.Fatalf("warnings = %#v", result.Warnings)
+			}
+			wantCalls := 0
+			if strings.Contains(string(tt.data), "Individual quota reached") {
+				wantCalls = 1
+			}
+			if called != wantCalls {
+				t.Fatalf("quota check calls = %d, want %d", called, wantCalls)
+			}
+		})
 	}
 }
 
