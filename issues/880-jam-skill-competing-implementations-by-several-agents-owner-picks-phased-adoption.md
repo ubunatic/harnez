@@ -71,5 +71,6 @@ comparing changes.
   `lean-sprint` for adoption.
 - Entry location is not fixed (owner, 2026-10-23): it depends on the type of work and language.
   `jam/<name>/` plus staging-only publishing fit a static website; a Go or other code project may
-  need branches, worktrees, separate modules or a scratch dir. The skill asks or derives the
-  location per jam (part of the brief) instead of prescribing `jam/`.
+  need separate dirs or modules on main, or a scratch dir. We usually avoid branches and
+  worktrees (work on the default branch, docs/Git.md), so entries stay as dirs on main. The skill
+  asks or derives the location per jam (part of the brief) instead of prescribing `jam/`.
