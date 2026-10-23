@@ -1,6 +1,6 @@
 # 647 — Document foreground waiting for long-running Codex tasks
 
-**Status**: Open
+**Status**: Backlog — grooming 2026-10-23: active cap 20; no work planned this week
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
