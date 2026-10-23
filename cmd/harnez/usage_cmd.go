@@ -86,13 +86,17 @@ func newUsageCmd() *cobra.Command {
 			// load.watch_host (issue 110) is independent of usage.host and
 			// needed regardless of how usageHost was set.
 			localCfg, _, _ := usage.LoadLocalConfig("")
-			if usageHost == "" {
+			if usageOffline && usageHost != "" {
+				return fmt.Errorf("--offline cannot be combined with --host")
+			}
+			if usageHost == "" && !usageOffline {
 				usageHost = resolveUsageHost(usageHost, localCfg)
 			}
 			loadWatchHost := ""
 			if localCfg != nil {
 				loadWatchHost = strings.TrimSpace(localCfg.Load.WatchHost)
 			}
+			cachedRemoteLoad := usage.ReadCachedRemoteLoad(loadWatchHost)
 
 			if usageLoom {
 				var cached usage.UsageSummary
@@ -105,11 +109,13 @@ func newUsageCmd() *cobra.Command {
 					}
 				}
 				loadOpt := usage.WatchOptions{
-					Compact:        true,
-					ShowProcesses:  usageProcesses,
-					ShowMic:        usageMic,
-					RemoteLoadHost: loadWatchHost,
-					Host:           usageHost,
+					Compact:            true,
+					ShowProcesses:      usageProcesses,
+					ShowMic:            usageMic,
+					RemoteLoadHost:     loadWatchHost,
+					RemoteLoadSnapshot: cachedRemoteLoad,
+					DisableRemoteLoad:  usageOffline,
+					Host:               usageHost,
 				}
 				if usageHost == "" {
 					loadOpt.StoredUsageLoader = func(context.Context) usage.UsageSummary { return cached }
@@ -149,6 +155,8 @@ func newUsageCmd() *cobra.Command {
 					ShowMic:                   usageMic,
 					Splash:                    usageSplash,
 					RemoteLoadHost:            loadWatchHost,
+					RemoteLoadSnapshot:        cachedRemoteLoad,
+					DisableRemoteLoad:         usageOffline,
 				})
 			}
 
@@ -207,11 +215,7 @@ func newUsageCmd() *cobra.Command {
 				// usageRaw: the detailed per-field text report that used to
 				// be `harnez usage`'s only output before the compact
 				// dashboard (formerly --summary) became the default.
-				var remoteLoadSnap *usage.LoadSnapshot
-				if loadWatchHost != "" {
-					remoteLoadSnap, _ = usage.CollectRemoteLoadSnapshot(ctx, loadWatchHost)
-				}
-				out, err := renderUsageOutput(summary, false, true, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap})
+				out, err := renderUsageOutput(summary, false, true, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: cachedRemoteLoad})
 				if err != nil {
 					return err
 				}
@@ -221,13 +225,7 @@ func newUsageCmd() *cobra.Command {
 
 			// The selected spec-defined view is printed once. --watch enters
 			// this same view in the interactive redraw loop.
-			var remoteLoadSnap *usage.LoadSnapshot
-			if loadWatchHost != "" {
-				// This is a one-shot print (Decision §2 of issue 110): always
-				// a single plain batch SSH call, independent of usageHost.
-				remoteLoadSnap, _ = usage.CollectRemoteLoadSnapshot(ctx, loadWatchHost)
-			}
-			loadOpt := usage.WatchOptions{Mode: selectedMode, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}
+			loadOpt := usage.WatchOptions{Mode: selectedMode, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: cachedRemoteLoad}
 			if usageHost != "" {
 				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			} else {

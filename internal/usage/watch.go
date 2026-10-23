@@ -506,10 +506,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	// it after the process may already be exiting.
 	remoteLoadHost := strings.TrimSpace(opts.RemoteLoadHost)
 	var remoteLoadMu sync.Mutex
-	var lastRemoteLoad *LoadSnapshot
+	lastRemoteLoad := opts.RemoteLoadSnapshot
 	var remoteLoadStreaming bool
 	var remoteStreamStop func()
-	if remoteLoadHost != "" {
+	if remoteLoadCollectionEnabled(remoteLoadHost, opts.DisableRemoteLoad) {
 		setRemoteStreamStop := func(f func()) {
 			remoteLoadMu.Lock()
 			remoteStreamStop = f

@@ -165,9 +165,8 @@ func RenderJSON(summary UsageSummary) (string, error) {
 // opts is optional; when its RemoteLoadHost is set (issue 110's
 // load.watch_host), a separate remote Load box (same box style the --watch
 // grid uses) is appended after the agent boxes, using RemoteLoadSnapshot as
-// its data — plain one-shot output has no polling loop of its own, so the
-// caller must have already fetched that snapshot via one batch CollectRemote
-// call (Decision §2).
+// its data. One-shot callers supply the most recently cached snapshot, if any;
+// rendering never starts an SSH request.
 func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 	opt := firstOpt(opts)
 	now := time.Now()

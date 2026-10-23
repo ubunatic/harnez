@@ -32,3 +32,16 @@ cannot be fixed inside harnez.
 
 Profile one `--offline` run (pprof or timing per step), fix the dominant step (store queries, file scans,
 subprocesses), add a test or benchmark that fails when the read gets slow again.
+
+## Findings (2026-10-23, remote load isolated)
+
+- One-shot modes now read the last remote-load cache entry and never collect remotely; offline watch
+  disables the remote-load manager while retaining the panel. Interactive watch continues to start
+  the manager in the background.
+- A separate local-load panel delay remains: collecting the initial CPU/GPU sparkline history seeds
+  samples at 50ms intervals. This was observed in offline output after removing the remote SSH wait;
+  it is parked here and was not changed in this milestone. After install, real-store timings were
+  2.064s, 2.067s, 2.064s for `--minimal` and 2.062s, 2.062s, 2.063s for
+  `--minimal --offline`.
+- The hardcoded SSH `ConnectTimeout` and command timeout now come from `spec/usage.yaml` with schema
+  validation.

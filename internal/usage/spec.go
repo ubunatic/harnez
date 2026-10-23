@@ -36,6 +36,8 @@ type usageSpec struct {
 	CatchupFetchThreshold    string             `yaml:"catchup_fetch_threshold"`
 	NVIDIASMITimeout         string             `yaml:"nvidia_smi_timeout"`
 	NVIDIASMICacheTTL        string             `yaml:"nvidia_smi_cache_ttl"`
+	RemoteCommandTimeout     string             `yaml:"remote_command_timeout"`
+	SSHConnectTimeout        string             `yaml:"ssh_connect_timeout"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
 }
 
@@ -88,24 +90,26 @@ func (s usageViewModeSpec) hiddenList() bool   { return s.HiddenList != nil && *
 func (s usageViewModeSpec) overflowHint() bool { return s.OverflowHint != nil && *s.OverflowHint }
 
 var (
-	usageSpecOnce             sync.Once
-	usageSpecAge              time.Duration
-	usageSpecCadence          time.Duration
-	usageSpecTimeout          time.Duration
-	usageSpecDedupe           time.Duration
-	usageSpecPassivePath      string
-	usageSpecStoreBusyTimeout time.Duration
-	usageSpecErr              error
-	usageSpecLoadingLabel     string
-	usageSpecHistoryEvery     time.Duration
-	usageSpecHostKey          string
-	usageSpecHeartbeatEvery   time.Duration
-	usageSpecClientTimeout    time.Duration
-	usageSpecCatchupThreshold time.Duration
-	usageSpecViewModes        usageViewModesSpec
-	usageSpecNVTimeout        time.Duration
-	usageSpecNVCacheTTL       time.Duration
-	usageSpecCachePolicy      cacheFreshnessPolicy
+	usageSpecOnce                 sync.Once
+	usageSpecAge                  time.Duration
+	usageSpecCadence              time.Duration
+	usageSpecTimeout              time.Duration
+	usageSpecDedupe               time.Duration
+	usageSpecPassivePath          string
+	usageSpecStoreBusyTimeout     time.Duration
+	usageSpecErr                  error
+	usageSpecLoadingLabel         string
+	usageSpecHistoryEvery         time.Duration
+	usageSpecHostKey              string
+	usageSpecHeartbeatEvery       time.Duration
+	usageSpecClientTimeout        time.Duration
+	usageSpecCatchupThreshold     time.Duration
+	usageSpecViewModes            usageViewModesSpec
+	usageSpecNVTimeout            time.Duration
+	usageSpecNVCacheTTL           time.Duration
+	usageSpecRemoteCommandTimeout time.Duration
+	usageSpecSSHConnectTimeout    time.Duration
+	usageSpecCachePolicy          cacheFreshnessPolicy
 )
 
 type cacheFreshnessPolicy struct {
@@ -198,6 +202,13 @@ func ClientHeartbeatPolicy() (time.Duration, time.Duration, time.Duration, error
 	return usageSpecHeartbeatEvery, usageSpecClientTimeout, usageSpecCatchupThreshold, err
 }
 
+// RemoteCommandTimeouts returns the maximum remote command duration and SSH
+// connection timeout from spec/usage.yaml.
+func RemoteCommandTimeouts() (time.Duration, time.Duration, error) {
+	_, _, _, _, _, err := usageDurations()
+	return usageSpecRemoteCommandTimeout, usageSpecSSHConnectTimeout, err
+}
+
 func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duration, time.Duration, error) {
 	usageSpecOnce.Do(func() {
 		data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
@@ -222,6 +233,8 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 			usageSpecViewModes = spec.ViewModes
 			usageSpecNVTimeout, _ = time.ParseDuration(spec.NVIDIASMITimeout)
 			usageSpecNVCacheTTL, _ = time.ParseDuration(spec.NVIDIASMICacheTTL)
+			usageSpecRemoteCommandTimeout, _ = time.ParseDuration(spec.RemoteCommandTimeout)
+			usageSpecSSHConnectTimeout, _ = time.ParseDuration(spec.SSHConnectTimeout)
 		}
 	})
 	return usageSpecAge, usageSpecCadence, usageSpecTimeout, usageSpecDedupe, usageSpecStoreBusyTimeout, usageSpecErr
@@ -273,6 +286,12 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	}
 	if nvTTL, err := time.ParseDuration(spec.NVIDIASMICacheTTL); err != nil || nvTTL <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: nvidia_smi_cache_ttl must be a positive duration", usageSpecPath)
+	}
+	if remoteTimeout, err := time.ParseDuration(spec.RemoteCommandTimeout); err != nil || remoteTimeout <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: remote_command_timeout must be a positive duration", usageSpecPath)
+	}
+	if connectTimeout, err := time.ParseDuration(spec.SSHConnectTimeout); err != nil || connectTimeout <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: ssh_connect_timeout must be a positive duration", usageSpecPath)
 	}
 	if hbInterval, err := time.ParseDuration(spec.ClientHeartbeatInterval); err != nil || hbInterval <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: client_heartbeat_interval must be a positive duration", usageSpecPath)

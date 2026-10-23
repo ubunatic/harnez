@@ -65,8 +65,13 @@ func doCollectRemote(ctx context.Context, host string, includeProcs bool) (Usage
 		remoteCmd += ` --proc`
 	}
 
-	// ssh -q -o BatchMode=yes -o ConnectTimeout=5 <host> <command>
-	cmd := exec.CommandContext(ctx, "ssh", "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", host, remoteCmd)
+	commandTimeout, _, err := RemoteCommandTimeouts()
+	if err != nil {
+		return makeRemoteFallbackSummary(host, err), nil, err
+	}
+	remoteCtx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(remoteCtx, "ssh", "-q", "-o", "BatchMode=yes", "-o", sshConnectTimeoutOption(), host, remoteCmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -89,13 +94,10 @@ func doCollectRemote(ctx context.Context, host string, includeProcs bool) (Usage
 	return summary, procCounts, nil
 }
 
-// CollectRemoteLoadSnapshot fetches just the CPU/GPU load reading for host
-// via one plain batch SSH call (issue 110 Decision §2: every mode other
-// than `--watch` always uses a single stateless `ssh host "harnez usage
-// --json"`-style call, no ControlMaster, no persistence). It's the
-// --summary/plain-mode counterpart of StartRemoteLoadStream's --watch-only
-// streaming path — both ultimately feed the same "[R] Remote Load" panel
-// (buildRemoteLoadBox), just via different collection mechanisms.
+// CollectRemoteLoadSnapshot fetches the CPU/GPU load reading for a host via
+// one bounded batch SSH call. --watch uses it only as the background fallback
+// when the persistent stream is unavailable; one-shot views read the last
+// locally cached snapshot instead.
 //
 // A nil snapshot (with the underlying error, for callers that want it) is
 // returned on any failure — the panel already renders an explicit "remote
@@ -119,6 +121,15 @@ func collectRemoteLoadSnapshotRaw(ctx context.Context, host string) (*LoadSnapsh
 		return nil, err
 	}
 	return summary.Load, nil
+}
+
+func sshConnectTimeoutOption() string {
+	_, timeout, err := RemoteCommandTimeouts()
+	if err != nil {
+		panic(err)
+	}
+	seconds := (timeout + time.Second - 1) / time.Second
+	return fmt.Sprintf("ConnectTimeout=%d", seconds)
 }
 
 // parseRemoteJSON parses raw JSON output from `harnez usage --json [--proc]`.

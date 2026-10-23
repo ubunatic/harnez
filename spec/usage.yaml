@@ -41,6 +41,8 @@ catchup_fetch_threshold: 1m
 # a hung call is cut off at the timeout.
 nvidia_smi_timeout: 1s
 nvidia_smi_cache_ttl: 2s
+remote_command_timeout: 10s
+ssh_connect_timeout: 5s
 
 watch_loading_label: Collecting usage…
 view_modes:

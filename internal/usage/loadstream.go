@@ -91,7 +91,7 @@ var (
 		return exec.Command("ssh",
 			"-M", "-S", ctlPath,
 			"-o", "ControlPersist=60",
-			"-o", "ConnectTimeout=5",
+			"-o", sshConnectTimeoutOption(),
 			"-o", "BatchMode=yes",
 			"-fN", host)
 	}

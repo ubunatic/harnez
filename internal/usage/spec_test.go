@@ -32,6 +32,13 @@ func TestEmbeddedUsageSpec(t *testing.T) {
 	if storeBusy != 25*time.Millisecond {
 		t.Fatalf("usage store busy timeout = %s, want 25ms from embedded spec", storeBusy)
 	}
+	commandTimeout, connectTimeout, err := RemoteCommandTimeouts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commandTimeout <= 0 || connectTimeout <= 0 {
+		t.Fatalf("remote timeouts = %s/%s, want positive durations from embedded spec", commandTimeout, connectTimeout)
+	}
 }
 
 func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
@@ -51,7 +58,7 @@ func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatal(err)
 	}
-	if len(schema.Required) != 21 || schema.Properties["debug_labels"] == nil || schema.Properties["agent_quota_warn_percent"] == nil || schema.Properties["agent_quota_max_reading_age"] == nil || schema.Properties["agy_quota"] == nil || schema.Properties["cache_staleness_multiplier"] == nil || schema.Properties["display_staleness"] == nil || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["usage_store_busy_timeout"] == nil || schema.Properties["client_heartbeat_interval"] == nil || schema.Properties["client_timeout"] == nil || schema.Properties["catchup_fetch_threshold"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["passive_update_path"] == nil || schema.Properties["view_modes"] == nil {
+	if len(schema.Required) != 23 || schema.Properties["debug_labels"] == nil || schema.Properties["agent_quota_warn_percent"] == nil || schema.Properties["agent_quota_max_reading_age"] == nil || schema.Properties["agy_quota"] == nil || schema.Properties["cache_staleness_multiplier"] == nil || schema.Properties["display_staleness"] == nil || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["remote_command_timeout"] == nil || schema.Properties["ssh_connect_timeout"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["usage_store_busy_timeout"] == nil || schema.Properties["client_heartbeat_interval"] == nil || schema.Properties["client_timeout"] == nil || schema.Properties["catchup_fetch_threshold"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["passive_update_path"] == nil || schema.Properties["view_modes"] == nil {
 		t.Fatalf("usage schema does not define required agy_meter_max_age: %+v", schema)
 	}
 	if schema.Definitions["viewMode"].Properties["panels"].MinItems != 1 {
@@ -77,6 +84,8 @@ client_timeout: 30s
 catchup_fetch_threshold: 1m
 nvidia_smi_timeout: 1s
 nvidia_smi_cache_ttl: 2s
+remote_command_timeout: 10s
+ssh_connect_timeout: 5s
 watch_loading_label: Collecting usage
 view_modes:
   default: normal
@@ -104,6 +113,8 @@ view_modes:
 		{name: "empty export host key", data: strings.Replace(valid, "export_host_key: export-host-key", "export_host_key: ''", 1)},
 		{name: "zero history snapshot interval", data: strings.Replace(valid, "history_snapshot_interval: 15m", "history_snapshot_interval: 0s", 1)},
 		{name: "zero cadence", data: strings.Replace(valid, "collector_cadence: 5m", "collector_cadence: 0s", 1)},
+		{name: "zero remote command timeout", data: strings.Replace(valid, "remote_command_timeout: 10s", "remote_command_timeout: 0s", 1)},
+		{name: "invalid ssh connect timeout", data: strings.Replace(valid, "ssh_connect_timeout: 5s", "ssh_connect_timeout: invalid", 1)},
 		{name: "missing cadence", data: strings.Replace(valid, "collector_cadence: 5m\n", "", 1)},
 		{name: "missing multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 1\n", "", 1)},
 		{name: "zero multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 1", "cache_staleness_multiplier: 0", 1)},

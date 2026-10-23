@@ -12,6 +12,10 @@ import (
 // this is all an internal implementation detail, no user-facing flag).
 var remoteLoadRetryInterval = 10 * time.Second
 
+func remoteLoadCollectionEnabled(host string, disabled bool) bool {
+	return host != "" && !disabled
+}
+
 // runRemoteLoadManager owns the full lifecycle of --watch's remote Load
 // data source for one configured host: it keeps trying to establish the
 // streaming channel (StartRemoteLoadStream), and whenever that's down —
@@ -34,6 +38,7 @@ var remoteLoadRetryInterval = 10 * time.Second
 // influences the fetch logic itself.
 func runRemoteLoadManager(ctx context.Context, host string, mu *sync.Mutex, last **LoadSnapshot, redraw func(), setStop func(func()), setStreaming func(bool)) {
 	setLast := func(snap *LoadSnapshot) {
+		_ = WriteCachedRemoteLoad(host, snap)
 		mu.Lock()
 		*last = snap
 		mu.Unlock()

@@ -58,16 +58,18 @@ type WatchOptions struct {
 	// is shown alongside the existing local [L] Load box. Empty means no
 	// such panel at all (today's behavior, unchanged).
 	RemoteLoadHost string
+	// DisableRemoteLoad keeps the panel visible but suppresses SSH collection,
+	// as required by --offline.
+	DisableRemoteLoad bool
 	// RemoteLoadSnapshot is the last known CPU/GPU reading for
-	// RemoteLoadHost — from the streaming channel in --watch, or one plain
-	// CollectRemote batch call in --summary/plain mode (Decision §2). Nil
+	// RemoteLoadHost — from cache at startup and the watch stream or fallback
+	// batch poll while running. Nil
 	// renders the same "remote load unavailable" placeholder buildLoadBox
 	// already uses for a stale/missing --host snapshot.
 	RemoteLoadSnapshot *LoadSnapshot
 	// RemoteLoadStreaming reports whether RemoteLoadSnapshot is currently
 	// arriving over the --watch-only streaming channel (issue 110 §2) as
-	// opposed to a plain batch poll — either the fallback path while
-	// streaming is down, or the only path --summary/plain ever use. Always
+	// opposed to a plain batch poll fallback. Always
 	// false outside --watch. Purely a UI label; it never changes how the
 	// data itself is fetched.
 	RemoteLoadStreaming bool

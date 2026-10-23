@@ -717,12 +717,20 @@ func FetchRemoteHistory(ctx context.Context, sshHost string, localDir string, ou
 	// 1. Proactively attempt to trigger a fresh remote snapshot over SSH.
 	// We run non-blocking snapshot collection ignoring errors (remote may not have harnez in PATH or installed).
 	remoteCmd := `PATH="$PATH:$HOME/go/bin:$HOME/bin" harnez usage history record 2>/dev/null || true`
-	cmdSnapshot := exec.CommandContext(ctx, "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", sshHost, remoteCmd)
+	commandTimeout, _, err := RemoteCommandTimeouts()
+	if err != nil {
+		return nil, err
+	}
+	snapshotCtx, cancelSnapshot := context.WithTimeout(ctx, commandTimeout)
+	cmdSnapshot := exec.CommandContext(snapshotCtx, "ssh", "-o", "BatchMode=yes", "-o", sshConnectTimeoutOption(), sshHost, remoteCmd)
 	_ = cmdSnapshot.Run()
+	cancelSnapshot()
 
 	// 2. Copy remote *.jsonl files into localDir via scp
 	remoteSrc := fmt.Sprintf("%s:~/.local/share/harnez/usage-history/*.jsonl", sshHost)
-	cmdScp := exec.CommandContext(ctx, "scp", "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", remoteSrc, localDir+"/")
+	scpCtx, cancelSCP := context.WithTimeout(ctx, commandTimeout)
+	defer cancelSCP()
+	cmdScp := exec.CommandContext(scpCtx, "scp", "-q", "-o", "BatchMode=yes", "-o", sshConnectTimeoutOption(), remoteSrc, localDir+"/")
 	var errBuf strings.Builder
 	cmdScp.Stderr = &errBuf
 	if err := cmdScp.Run(); err != nil {

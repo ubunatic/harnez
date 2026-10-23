@@ -1887,6 +1887,25 @@ func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
 	}
 }
 
+func TestOfflineWatchKeepsRemoteLoadPanelWithoutCollection(t *testing.T) {
+	if remoteLoadCollectionEnabled("phoenix", true) {
+		t.Fatal("offline watch enabled remote collection")
+	}
+	if !remoteLoadCollectionEnabled("phoenix", false) {
+		t.Fatal("watch did not enable remote collection for a configured host")
+	}
+	if remoteLoadCollectionEnabled("", false) {
+		t.Fatal("watch enabled remote collection without a configured host")
+	}
+
+	opts := WatchOptions{Mode: "compact", RemoteLoadHost: "phoenix", DisableRemoteLoad: true}
+	frame := buildWatchFrame(UsageSummary{Timestamp: testTime}, nil, time.Minute, compactWatchSections(), 100, 30, true, opts)
+	frameText := strings.Join(frame.lines, "\n")
+	if !strings.Contains(frameText, "Remote Load") || !strings.Contains(frameText, "remote load unavailable") {
+		t.Fatalf("offline watch should render the unavailable panel without collecting:\n%s", frameText)
+	}
+}
+
 func TestDispatchWatchKeyDiagnosticsOverlay(t *testing.T) {
 	state, effect := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'l', false)
 	if !state.diagnosticsOpen || !effect.redraw {
