@@ -33,7 +33,14 @@ func TestSystemdInstallUsesTempUnitDirAndStartsConfiguredUnit(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := string(unit)
-	for _, want := range []string{"ExecStart=/tmp/harnez server", "Restart=on-failure", "RestartSec=5s", "ReadWritePaths=%t/harnez"} {
+	for _, want := range []string{
+		"ExecStart=/tmp/harnez server",
+		"Restart=on-failure",
+		"RestartSec=5s",
+		"RuntimeDirectory=harnez",
+		"RuntimeDirectoryPreserve=yes",
+		"ReadWritePaths=%t/harnez",
+	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("unit missing %q:\n%s", want, content)
 		}
