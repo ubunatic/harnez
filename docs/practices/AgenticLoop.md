@@ -305,12 +305,12 @@ For focused, day-to-day tickets and milestone iterations, `/lean-sprint` uses tw
    - *No Exploratory Repo Digging*: The host does not browse files, grep broadly, trace call graphs, or explore APIs/specs. It asks the Searcher and relies on the bounded response.
    - *Diff-First Review*: The host reviews the developer's commit diff, test output, and target ticket; it investigates further only when evidence identifies a specific gap.
    - *Single-Ticket Medium*: Keep decisions and refinements in the target issue. Do not create secondary refinement tickets.
-2. **Cheap Searcher (`luna:low` / `luna-search`)**:
+2. **Cheap Searcher (`luna:low` / `luna-search` / `argon:low`)**:
    - Performs bounded read-only audits, answers targeted questions, and explores relevant APIs/specs.
    - Returns concise findings with exact file paths and line ranges; no edits, tests that mutate state, or commits.
    - Run search before implementation and pass only relevant findings into the developer handoff.
 3. **Focused Developer (`luna:high` / `sol:low`)**:
-   - Prefer `luna` first; use `sol` when stronger judgment is needed; avoid `agy` models for developer work.
+   - Prefer `luna` first; use `sol` when stronger judgment is needed; avoid `agy` models for developer work, except `argon:low`.
    - Implements milestones with TDD, adds unit tests, runs verification, and commits each completed milestone.
    - Use prompt files for long or complex handoffs instead of shell-interpolated inline prompts.
 4. **Concise Inline Review & In-Ticket Pre-Work Embedding**:
@@ -354,7 +354,7 @@ The **Reverse Sprint** (`/reverse-sprint`) inverts the top-down orchestrator arc
 3. **Milestone Review Gates**:
    - Dispatches a reviewer subagent (`sol:low`, `sonnet:low`, `gemini3.8flash:low`) with diff-only inspection (`git diff HEAD~1`).
 4. **Advisor Escalation (Strict Limited Context)**:
-   - When encountering challenging problems or architectural blockers, calls an advisor (`astra:low`, `opus:low`, `gemini3.8flash:med`).
+   - When encountering challenging problems or architectural blockers, calls an advisor (`astra:low`, `opus:low`, `gemini3.8flash:med`, `argon:low`).
    - **Critical guardrail**: The advisor is given strictly bounded context (specific file paths, exact line ranges, bounded questions) and instructed not to explore the repo deeply, protecting the frontier token budget.
 
 ### Workflow Selection Matrix
