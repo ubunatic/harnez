@@ -62,3 +62,24 @@ Cycles: `internal/issues` must not import `internal/index`, `internal/find` or `
 
 Binary tests stay in `cmd/harnez` or go to the occasional tier: `exec_test.go:969`,
 `issues_index_init_merge_e2e_test.go:16`, `usage_binary_test.go`.
+
+## M2 delivered: exec move
+
+Code commit: `2df4d74d` (`refactor(exec): move wrapper logic into internal package (issue 884)`).
+The execution wrapper, timeout/sandbox/quota behavior, telemetry, buffers, hook rewriting, stopped
+process-group helpers, and their unit tests now live in `internal/exec`. Cobra command construction,
+flags, and exit handling stay in `cmd/harnez`; the three command/binary tests remain there. The
+package boundary has no Cobra import. Shared `debugLog` now delegates to `internal/logging`, and
+`DefaultExecTimeout` is exported for the upcoming stats move.
+
+Measured with `go test -count=1` on 2026-10-23:
+
+- Before: `cmd/harnez` **56.485s**.
+- After: `cmd/harnez` **64.063s**; `internal/exec` **5.006s**. The cmd package was under host load,
+  so this run does not show an immediate wall-time reduction; ordinary changes in moved logic can
+  now test only `internal/exec`.
+- `HTO=0 make test-q1` passed once; `grep -- '--- FAIL' /tmp/harnez-884-test-q1.log` found no failures.
+- `make lint` passed. No boundary violations found. `stats_agents.go` can consume the exported
+  timeout in the stats milestone; no `*cobra.Command` entered the internal package.
+
+The preceding issue 881 temp-leak documentation commit is `b4980a1b`.
