@@ -1,6 +1,6 @@
 # 882 — Per-repo active ticket cap in .harnez/repo.yaml (harnez: 30)
 
-**Status**: Open
+**Status**: Closed — issues.active_cap in .harnez/repo.yaml (harnez 30), spec fallback 20; TestActiveIssueCapForRepo covers override, fallback, 0, negative; harnez issues status 25 open, no cap warning (09d92b5e)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
