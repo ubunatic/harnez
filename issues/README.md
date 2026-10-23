@@ -35,4 +35,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 879 | [879-remote-load-recovers-when-the-host-comes-back-also-for-one-shot-usage.md](879-remote-load-recovers-when-the-host-comes-back-also-for-one-shot-usage.md) | Remote load recovers when the host comes back, also for one-shot usage | Open |
 | 880 | [880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md](880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md) | jam skill: competing implementations by several agents, owner picks, phased adoption | Open |
 | 881 | [881-test-suite-catalog-cmd-harnez-dominates-the-run-lighter-and-bounded-tests.md](881-test-suite-catalog-cmd-harnez-dominates-the-run-lighter-and-bounded-tests.md) | Test suite catalog: cmd/harnez dominates the run, lighter and bounded tests | Open |
+| 882 | [882-per-repo-active-ticket-cap-in-harnez-repo-yaml-harnez-30.md](882-per-repo-active-ticket-cap-in-harnez-repo-yaml-harnez-30.md) | Per-repo active ticket cap in .harnez/repo.yaml (harnez: 30) | Open |
 <!-- harnez:end issues-active-index -->
