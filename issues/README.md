@@ -34,4 +34,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 879 | [879-remote-load-recovers-when-the-host-comes-back-also-for-one-shot-usage.md](879-remote-load-recovers-when-the-host-comes-back-also-for-one-shot-usage.md) | Remote load recovers when the host comes back, also for one-shot usage | Open |
 | 880 | [880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md](880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md) | jam skill: competing implementations by several agents, owner picks, phased adoption | Open |
 | 881 | [881-test-suite-catalog-cmd-harnez-dominates-the-run-lighter-and-bounded-tests.md](881-test-suite-catalog-cmd-harnez-dominates-the-run-lighter-and-bounded-tests.md) | Test suite catalog: cmd/harnez dominates the run, lighter and bounded tests | Open |
+| 883 | [883-teststopprovidertreeandwrapper-fails-provider-tree-not-ready-within-5s.md](883-teststopprovidertreeandwrapper-fails-provider-tree-not-ready-within-5s.md) | TestStopProviderTreeAndWrapper fails: provider tree not ready within 5s | Open |
 <!-- harnez:end issues-active-index -->
