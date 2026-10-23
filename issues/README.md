@@ -36,4 +36,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 881 | [881-test-suite-catalog-cmd-harnez-dominates-the-run-lighter-and-bounded-tests.md](881-test-suite-catalog-cmd-harnez-dominates-the-run-lighter-and-bounded-tests.md) | Test suite catalog: cmd/harnez dominates the run, lighter and bounded tests | Open |
 | 883 | [883-teststopprovidertreeandwrapper-fails-provider-tree-not-ready-within-5s.md](883-teststopprovidertreeandwrapper-fails-provider-tree-not-ready-within-5s.md) | TestStopProviderTreeAndWrapper fails: provider tree not ready within 5s | Open |
 | 884 | [884-split-cmd-harnez-move-command-logic-and-tests-into-internal-packages.md](884-split-cmd-harnez-move-command-logic-and-tests-into-internal-packages.md) | Split cmd/harnez: move command logic and tests into internal packages | Open |
+| 885 | [885-add-optional-disk-swap-backstop-for-zram-only-systems-so-tmpfs-tmp-can-spill.md](885-add-optional-disk-swap-backstop-for-zram-only-systems-so-tmpfs-tmp-can-spill.md) | Add optional disk swap backstop for zram-only systems so tmpfs /tmp can spill | Open |
 <!-- harnez:end issues-active-index -->
