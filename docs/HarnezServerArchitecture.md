@@ -114,7 +114,9 @@ Services register their own routes. `harnez usage` starts/probes the server; sta
 POST updates: usage readings are dropped when no server answers, telemetry records go to a bounded
 spool the server drains (830). A boundary test fails on any writable `telemetry.sqlite` open outside
 the server. On Linux, `harnez server install|status|restart|stop|logs|uninstall` manages the systemd user service.
-The unit restarts on failure. When a newer build finds that the old server is the unit's `MainPID`,
+The unit restarts on failure. It sets `RuntimeDirectory=harnez` (preserved on stop): `/run/user/<uid>`
+is empty after boot, and a missing `ReadWritePaths` entry makes systemd fail every start with
+`226/NAMESPACE` (886). When a newer build finds that the old server is the unit's `MainPID`,
 it rewrites the unit's `ExecStart` to its own executable and runs `systemctl --user restart`
 instead of taking the socket, so any install path (`go install`, `make install`, a release) keeps
 the server under systemd. Otherwise a successful takeover exits the old server with status 0,

@@ -52,3 +52,8 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   untracked and blocked all ticket commits (bug-hunt sprint 2026-10-22).
 - **Verify before pushing**: never chain `test && push` in one command when the test output
   decides the push; read the result first.
+- **Loosened assertions**: a "fixed the failing test" report can hide a weaker check (`HasPrefix` →
+  `Contains` dropped the ordering the test name promises). Read every changed assertion line; find why
+  the output changed (here a host `neus` call) instead. Issue 884, `4789aff4` → `67f8b396`.
+- **Closed scope vs. goal**: compare what a milestone moved with its plan and the ticket's `/goal` before
+  closing; 884 M9 moved 157 of ~5k planned lines and was first closed as delivered. Park the rest (888).
