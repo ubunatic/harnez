@@ -7,13 +7,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"ubunatic.com/harnez/internal/agent"
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/subagent"
@@ -179,34 +179,11 @@ func providerAvailability(provider, model string) usage.ProviderQuotaAvailabilit
 }
 
 func quotaAgeLabel(age time.Duration) string {
-	if age < time.Minute {
-		return age.Round(time.Second).String()
-	}
-	if age >= 24*time.Hour {
-		return fmt.Sprintf("%dd", int(age/(24*time.Hour)))
-	}
-	if age < time.Hour {
-		return fmt.Sprintf("%dm", int(age/time.Minute))
-	}
-	return fmt.Sprintf("%dh%dm", int(age/time.Hour), int(age/time.Minute)%60)
+	return agent.QuotaAgeLabel(age)
 }
 
 func rejectExhaustedQuota(spec string, model subagent.Model, override bool, availability func(string, string) usage.ProviderQuotaAvailability) error {
-	if override {
-		return nil
-	}
-	if availability == nil {
-		availability = providerAvailability
-	}
-	quota := availability(model.Provider, model.Name)
-	if quota.State != "exhausted" {
-		return nil
-	}
-	message := fmt.Sprintf("agent start %q refused: provider %s quota is exhausted (snapshot %s old); pass --allow-exhausted-quota to override", spec, model.Provider, quotaAgeLabel(quota.Age))
-	if alternatives := quotaAlternatives(model, availability); len(alternatives) > 0 {
-		message += "; available cheaper alternatives: " + strings.Join(alternatives, ", ")
-	}
-	return fmt.Errorf("%s", message)
+	return agent.RejectExhaustedQuota(spec, model, override, availability)
 }
 
 func isCodexUsageLimitError(err error) bool {
@@ -259,38 +236,7 @@ func firstNonEmpty(values ...string) string {
 }
 
 func quotaAlternatives(selected subagent.Model, availability func(string, string) usage.ProviderQuotaAvailability) []string {
-	if availability == nil {
-		availability = providerAvailability
-	}
-	type candidate struct {
-		spec string
-		cost int
-	}
-	var candidates []candidate
-	seen := map[string]bool{}
-	for _, entry := range subagent.KnownModelEntries() {
-		if entry.Model.Provider == selected.Provider || entry.Cost >= quotaModelCost(selected) || seen[entry.Model.Spec()] {
-			continue
-		}
-		if availability(entry.Model.Provider, entry.Model.Name).State == "available" {
-			seen[entry.Model.Spec()] = true
-			candidates = append(candidates, candidate{spec: entry.Model.Spec(), cost: entry.Cost})
-		}
-	}
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].cost == candidates[j].cost {
-			return candidates[i].spec < candidates[j].spec
-		}
-		return candidates[i].cost < candidates[j].cost
-	})
-	if len(candidates) > 3 {
-		candidates = candidates[:3]
-	}
-	out := make([]string, len(candidates))
-	for i := range candidates {
-		out[i] = candidates[i].spec
-	}
-	return out
+	return agent.QuotaAlternatives(selected, availability)
 }
 
 func quotaModelCost(model subagent.Model) int {
@@ -339,42 +285,7 @@ func resolveResumeSession(cmd *cobra.Command, d agentDeps, s *subagent.FileSessi
 }
 
 func findResumeSelector(sessions []*subagent.Session, selector string) (*subagent.Session, bool, error) {
-	var exact *subagent.Session
-	exactMatches := 0
-	for _, sess := range sessions {
-		if sess.ID == selector || sess.Name == selector || sess.ProviderSessionID == selector {
-			exact = sess
-			exactMatches++
-		}
-	}
-	if exactMatches == 1 {
-		return exact, true, nil
-	}
-	if exactMatches > 1 {
-		return nil, false, fmt.Errorf("ambiguous agent session %q", selector)
-	}
-	var matches []*subagent.Session
-	if len(selector) >= 8 {
-		for _, sess := range sessions {
-			if strings.HasPrefix(sess.ID, selector) || strings.HasPrefix(sess.ProviderSessionID, selector) {
-				matches = append(matches, sess)
-			}
-		}
-	}
-	if len(matches) == 0 && len([]rune(selector)) >= 4 {
-		for _, sess := range sessions {
-			if strings.Contains(strings.ToLower(sess.Name), strings.ToLower(selector)) {
-				matches = append(matches, sess)
-			}
-		}
-	}
-	if len(matches) == 1 {
-		return matches[0], true, nil
-	}
-	if len(matches) > 1 {
-		return nil, false, nil
-	}
-	return nil, false, nil
+	return agent.FindResumeSelector(sessions, selector)
 }
 
 // runStart starts a new session, streams or prints the turn and saves the session.
@@ -1085,71 +996,17 @@ const (
 // startRole picks the role of a new session and checks that the caller's own
 // role (from the environment harnez gave it) may start it.
 func startRole(requested, prompt string, errOut io.Writer) (string, error) {
-	role := requested
-	if role != "" {
-		resolved, classified, err := subagent.ResolveRoleDynamic(role)
-		if err != nil {
-			return "", err
-		}
-		if classified {
-			fmt.Fprintf(errOut, "harnez: resolved --role %q to %q\n", role, resolved)
-		}
-		role = resolved
-	} else if sentence := firstPromptSentence(prompt); sentence != "" {
-		if inferred, _, err := subagent.ResolveRoleDynamic(sentence); err == nil {
-			role = inferred
-			fmt.Fprintf(errOut, "harnez: inferred role %q from prompt\n", role)
-		}
-	}
-	if role == "" {
-		var err error
-		if role, err = subagent.DefaultRole(); err != nil {
-			return "", err
-		}
-	}
-	if err := subagent.CheckSpawn(os.Getenv(agentRoleEnv), role); err != nil {
-		return "", err
-	}
-	return role, nil
+	return agent.StartRole(requested, prompt, os.Getenv(agentRoleEnv), errOut)
 }
 
 func firstPromptSentence(prompt string) string {
-	prompt = strings.TrimSpace(prompt)
-	if prompt == "" {
-		return ""
-	}
-	if end := strings.IndexAny(prompt, "\r\n"); end >= 0 {
-		prompt = strings.TrimSpace(prompt[:end])
-	}
-	if end := strings.IndexAny(prompt, ".?!"); end >= 0 {
-		prompt = strings.TrimSpace(prompt[:end+1])
-	}
-	return prompt
+	return agent.FirstPromptSentence(prompt)
 }
 
 // resumeRole returns the stored role of sess (default role for old records),
 // rejects a conflicting --role and checks the caller may manage that role.
 func resumeRole(requested string, sess *subagent.Session) (string, error) {
-	role := sess.Role
-	if role == "" {
-		var err error
-		if role, err = subagent.DefaultRole(); err != nil {
-			return "", err
-		}
-	}
-	if requested != "" {
-		canonical, err := subagent.ResolveRole(requested)
-		if err != nil {
-			return "", err
-		}
-		if canonical != role {
-			return "", fmt.Errorf("--role %q conflicts with session %q role %s", requested, sess.Name, role)
-		}
-	}
-	if err := subagent.CheckSpawn(os.Getenv(agentRoleEnv), role); err != nil {
-		return "", err
-	}
-	return role, nil
+	return agent.ResumeRole(requested, sess, os.Getenv(agentRoleEnv))
 }
 
 // setAgentEnv gives the provider process it is about to spawn its role and its

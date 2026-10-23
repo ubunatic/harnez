@@ -384,3 +384,22 @@ was not changed (a separate full run was **10.832s**). Verification: full cmd an
 packages passed, plus focused usage command checks. The real binary deadline and PTY tests
 remain in cmd. Export command flag and output wiring remains Cobra-only, while its core
 export orchestration was already in `internal/usage`.
+
+## M9 delivered: agent policy core extracted
+
+Added Cobra-free `internal/agent` for role selection and caller-role checks, quota rejection
+and alternatives, resume selector resolution, prompt protocol composition, stream mode
+validation, and heartbeat schedule calculation. The cmd adapters supply caller role, error
+writer, quota availability, and the test-controlled heartbeat schedule. Unit coverage for
+role boundaries, quota override, selector ambiguity, and stream mode lives in the new
+package. `internal/subagent` continues to own session persistence, provider execution,
+interactive lifecycle, and process identity; cmd retains Cobra command construction,
+process launch, output/exit wiring, and the actual-binary/process regressions.
+
+Measured `go test -count=1`: `cmd/harnez` **16.066s before**, **17.537s after**; `internal/agent`
+**0.014s**. All tracked `cmd/harnez/*.go` lines changed from **39,502** before to **39,345**
+after (157 fewer). These are single host runs, with no controlled claim of wall-time improvement.
+Focused internal and cmd integration tests passed. Dependency checks found no Cobra or
+`cmd/harnez` imports under `internal/agent`, and `go list -deps ./cmd/harnez` passed. Lifecycle
+orchestration that still requires CLI/process adapters remains in cmd; process and binary
+regression tests remain there as required.

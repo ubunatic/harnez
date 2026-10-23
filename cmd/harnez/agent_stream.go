@@ -9,14 +9,15 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"ubunatic.com/harnez/internal/agent"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
 // Stream modes: "full" prints every agent message as it arrives, "stats"
 // prints only heartbeats and the final reply.
 const (
-	streamFull  = "full"
-	streamStats = "stats"
+	streamFull  = agent.StreamFull
+	streamStats = agent.StreamStats
 )
 
 // confirmTimeout is how long an agent may stay silent before harnez warns that
@@ -26,6 +27,13 @@ var confirmTimeout = 10 * time.Second
 // confirmTimer is replaceable in tests so warning order can be asserted with
 // an event instead of delaying a fake provider reply.
 var confirmTimer = func(d time.Duration) <-chan time.Time { return time.After(d) }
+
+// heartbeatSchedule lists the elapsed times of the first heartbeats; after the
+// last one a heartbeat follows every heartbeatRepeat.
+var (
+	heartbeatSchedule = []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 6 * time.Minute, 10 * time.Minute}
+	heartbeatRepeat   = 5 * time.Minute
+)
 
 // protocolPreamble is prepended to every streamed turn so the agent confirms
 // before working and marks its plan; harnez maps the tags to labels.
@@ -40,44 +48,22 @@ const planFirstPreamble = "This is a plan-first turn: after your `CONFIRM:` mess
 // withProtocol prepends the dispatch protocol, the rules of the session's role
 // (spec/agent.yaml) and, for plan-first turns, the review gate to the prompt.
 func withProtocol(prompt string, planFirst bool, role string) string {
-	pre := protocolPreamble
-	if rules, err := subagent.RoleRules(role); err == nil && rules != "" {
-		pre += "Harnez role: " + role + ". " + rules + "\n\n"
-	}
-	if planFirst {
-		pre += planFirstPreamble
-	}
-	return pre + prompt
+	return agent.WithProtocol(prompt, planFirst, role)
 }
 
 func withResumeNote(prompt string, idle time.Duration) string {
-	threshold, note, err := subagent.ResumeNote()
-	if err != nil || idle <= threshold {
-		return prompt
-	}
-	return note + "\n\n" + prompt
+	return agent.WithResumeNote(prompt, idle)
 }
 
 // heartbeatSchedule lists the elapsed times of the first heartbeats; after the
 // last one a heartbeat follows every heartbeatRepeat.
-var (
-	heartbeatSchedule = []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 6 * time.Minute, 10 * time.Minute}
-	heartbeatRepeat   = 5 * time.Minute
-)
-
 // heartbeatAt returns the elapsed time of heartbeat i (0-based).
 func heartbeatAt(i int) time.Duration {
-	if i < len(heartbeatSchedule) {
-		return heartbeatSchedule[i]
-	}
-	return heartbeatSchedule[len(heartbeatSchedule)-1] + time.Duration(i-len(heartbeatSchedule)+1)*heartbeatRepeat
+	return agent.HeartbeatAt(i, heartbeatSchedule, heartbeatRepeat)
 }
 
 func checkStreamMode(mode string) error {
-	if mode != streamFull && mode != streamStats {
-		return fmt.Errorf("invalid --stream %q: want %q or %q", mode, streamFull, streamStats)
-	}
-	return nil
+	return agent.CheckStreamMode(mode)
 }
 
 // turnStream prints a running turn to stdout as labeled blocks:
