@@ -10,7 +10,8 @@
       "required": ["tracker", "merge_driver"],
       "properties": {
         "tracker": {"type": "string", "enum": ["harnez", "none"]},
-        "merge_driver": {"type": "boolean"}
+        "merge_driver": {"type": "boolean"},
+        "active_cap": {"type": "integer", "minimum": 1}
       },
       "additionalProperties": false
     },

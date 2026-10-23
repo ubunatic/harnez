@@ -10,6 +10,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/markdown"
 )
 
@@ -20,6 +21,7 @@ type RepoConfig struct {
 	Issues  struct {
 		Tracker     string `yaml:"tracker"`
 		MergeDriver bool   `yaml:"merge_driver"`
+		ActiveCap   int    `yaml:"active_cap,omitempty"`
 	} `yaml:"issues"`
 	Docs struct {
 		Studies bool     `yaml:"studies"`
@@ -72,6 +74,23 @@ func LoadRepoConfig(dir string) (*RepoConfig, error) {
 		}
 	}
 	return &cfg, nil
+}
+
+// ActiveIssueCapForRepo returns the per-repo override when configured, or the
+// embedded spec default otherwise. The source is suitable for user-facing diagnostics.
+func ActiveIssueCapForRepo(dir string) (int, string, error) {
+	cfg, err := LoadRepoConfig(dir)
+	if err == nil && cfg.Issues.ActiveCap > 0 {
+		return cfg.Issues.ActiveCap, ".harnez/repo.yaml", nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return 0, "", err
+	}
+	cap, err := issues.ActiveIssueCap()
+	if err != nil {
+		return 0, "", err
+	}
+	return cap, "spec/issues.yaml", nil
 }
 
 func detectRepoConfig(dir string, cfg *Config) *RepoConfig {

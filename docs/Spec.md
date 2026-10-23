@@ -54,8 +54,9 @@ optional in the schema so existing repo.yaml files stay valid; when omitted it d
 to true, and initial detection sets it true when a Makefile exists. `issues.tracker` keeps
 the file-first Harnez tracker as the recommended default; `none` records that this repo
 uses another approach or has
-no file-based tracker. `make.container_test` and `rules.quota` gate the respective
-init behavior. When the tracker is `none` or `docs.studies` is false, init writes
+no file-based tracker. `issues.active_cap` optionally sets this repository's active
+ticket warning threshold; when omitted, the value in `spec/issues.yaml` applies.
+`make.container_test` and `rules.quota` gate the respective init behavior. When the tracker is `none` or `docs.studies` is false, init writes
 a reminder into `.harnez/rules/Index.md`, which the generated AGENTS.md rules
 header directs agents to read.
 

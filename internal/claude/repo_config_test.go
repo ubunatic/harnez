@@ -51,6 +51,46 @@ func TestRepoConfigDetectionAndValidation(t *testing.T) {
 	}
 }
 
+func TestActiveIssueCapForRepo(t *testing.T) {
+	writeRepoConfig := func(t *testing.T, dir, cap string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(dir, ".harnez"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		content := "version: 1\nissues:\n  tracker: harnez\n  merge_driver: true\n"
+		if cap != "" {
+			content += "  active_cap: " + cap + "\n"
+		}
+		content += "docs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\n"
+		if err := os.WriteFile(filepath.Join(dir, ".harnez", "repo.yaml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Run("repo override", func(t *testing.T) {
+		dir := t.TempDir()
+		writeRepoConfig(t, dir, "37")
+		got, source, err := ActiveIssueCapForRepo(dir)
+		if err != nil || got != 37 || source != ".harnez/repo.yaml" {
+			t.Fatalf("ActiveIssueCapForRepo = (%d, %q, %v), want (37, repo config, nil)", got, source, err)
+		}
+	})
+	t.Run("spec fallback", func(t *testing.T) {
+		got, source, err := ActiveIssueCapForRepo(t.TempDir())
+		if err != nil || got != 20 || source != "spec/issues.yaml" {
+			t.Fatalf("ActiveIssueCapForRepo = (%d, %q, %v), want (20, spec, nil)", got, source, err)
+		}
+	})
+	for _, invalid := range []string{"0", "-1"} {
+		t.Run("invalid "+invalid, func(t *testing.T) {
+			dir := t.TempDir()
+			writeRepoConfig(t, dir, invalid)
+			if _, _, err := ActiveIssueCapForRepo(dir); err == nil {
+				t.Fatalf("ActiveIssueCapForRepo accepted active_cap %s", invalid)
+			}
+		})
+	}
+}
+
 func TestRunInitGatesContainerTargetAndWritesNotices(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "Makefile"), []byte("all:\n\t@true\n"), 0o644); err != nil {

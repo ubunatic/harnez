@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
 )
@@ -575,7 +576,7 @@ func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []
 }
 
 func warnActiveTicketCap(w io.Writer, issuesDir string) error {
-	cap, err := issues.ActiveIssueCap()
+	cap, source, err := claude.ActiveIssueCapForRepo(filepath.Dir(issuesDir))
 	if err != nil {
 		return err
 	}
@@ -585,7 +586,7 @@ func warnActiveTicketCap(w io.Writer, issuesDir string) error {
 	}
 	active := open + draft
 	if active > cap {
-		fmt.Fprintf(w, "warning: %d active tickets exceeds configured cap %d\n", active, cap)
+		fmt.Fprintf(w, "warning: %d active tickets exceeds configured cap %d (%s)\n", active, cap, source)
 	}
 	return nil
 }
