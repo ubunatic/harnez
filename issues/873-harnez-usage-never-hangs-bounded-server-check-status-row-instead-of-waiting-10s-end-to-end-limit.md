@@ -1,6 +1,6 @@
 # 873 — harnez usage never hangs: bounded server check, status row instead of waiting, 10s end-to-end limit
 
-**Status**: Open
+**Status**: Closed — usage answers within 10s in all four server states (binary tests 2-3s), deadline error on slow store (270ms test), -w status row via pty test; live --minimal 5.7-8.2s incl. after restart (1834d3af, d04d7673). Store read budget stays in 874
 **Priority**: P1 (High) — a hang blocks the user's main usage view and loops
 **Severity**: Major
 **Category**: Bug
