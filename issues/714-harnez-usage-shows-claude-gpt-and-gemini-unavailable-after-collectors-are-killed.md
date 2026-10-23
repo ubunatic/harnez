@@ -143,5 +143,13 @@ the debug box; rate-limit the repeated telemetry line. Then find whether the AGY
    `QuotaFetchError` set (and a nil error), as AGY did at 15:42, must also produce the log line. Test it.
 3. The `Command` strings in `registry.go` duplicate endpoint URLs and the agy command; take them from where the
    fetchers already define them (or spec), not new literals.
+- M2 follow-up `2432aa10` (cause from context, reused endpoints), M3 `9e247bf8` + `829a4af7` (heartbeat,
+  `clients:` in server status, catch-up). Host check 2026-10-23: tests green; a pty viewer showed
+  `clients: 1` for 20s, `0` after 40s; all three providers refreshed within 4s of the viewer start.
+
+### Pre-Work for M4 (from M3 review)
+
+1. Log one line when a catch-up fetch fires (client count 0→1, which providers, which were skipped as
+   fresh); today it is silent, so the live check can only infer it from `last_refreshed`.
 - Next: M2 (fetch-failure logging, telemetry line rate-limit, bad spool entry skipped), M3 (heartbeat +
   catch-up, keys in `spec/usage.yaml`), M4 (debug box), M5 (AGY statusline drop count).
