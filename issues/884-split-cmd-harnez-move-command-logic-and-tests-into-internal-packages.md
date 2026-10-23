@@ -87,12 +87,26 @@ The preceding issue 881 temp-leak documentation commit is `b4980a1b`.
 ## M3 delivered: reuse built binaries and Go caches
 
 `cmd/harnez` test baseline on 2026-10-23 was **48.758s**; after M3 it was **25.906s**,
-a **22.852s** reduction. Commit: recorded after verification.
+a **22.852s** reduction. Commit: `7c6a5e0a`.
 
 `TestGearMulticallExecution` and issue-merge E2E now share one lazily built test binary, preserving
 their real process, argv[0], exit-code, and Git-merge assertions. TestMain resolves and preserves
 absolute `GOCACHE`/`GOMODCACHE` paths before isolating HOME, and short-tier runs no longer build a
 binary eagerly. `make lint` passed; only the repository's existing warning summary remains.
+
+## M4 delivered: usage test tiers and in-process status matrix
+
+The post-M3 `cmd/harnez` baseline was **25.066s**; after M4 it was **21.349s**, a **3.717s**
+reduction. The six usage-server status cases now use injected probe decisions and assert status
+writer routing in-process. The FIFO overlay build was replaced with a bounded store-read test
+using an injected reader and controllable context cancellation. `TestUsageBinaryReturnsWithinDeadline`
+retains one real-binary hung-server watchdog; the SSH safety and PTY lifecycle subprocess tests also
+remain. All usage binary tests are full-tier, and TestMain builds lazily, so short runs do not build
+the CLI.
+
+Verification on 2026-10-23: `go test -short ./cmd/harnez -count=1` passed in **10.347s**; `make lint`
+passed; the single `make test-q1` passed (`cmd/harnez` **21.224s**) and `grep -- '--- FAIL'`
+found no failures. No `/tmp/harnez-test-*` directories remained after the run.
 
 ## Plan v2 (advisor adv-884b)
 

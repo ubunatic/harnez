@@ -77,9 +77,15 @@ type storedSummaryResult struct {
 // readStoredSummaryBounded lets the caller honor its deadline even if the
 // database driver blocks while opening a damaged or unusual store file.
 func readStoredSummaryBounded(ctx context.Context, path string) (usage.UsageSummary, error) {
+	return readStoredSummaryBoundedWith(ctx, func(ctx context.Context) (usage.UsageSummary, error) {
+		return usage.ReadStoredSummary(ctx, path)
+	})
+}
+
+func readStoredSummaryBoundedWith(ctx context.Context, read func(context.Context) (usage.UsageSummary, error)) (usage.UsageSummary, error) {
 	result := make(chan storedSummaryResult, 1)
 	go func() {
-		summary, err := usage.ReadStoredSummary(ctx, path)
+		summary, err := read(ctx)
 		result <- storedSummaryResult{summary: summary, err: err}
 	}()
 	select {

@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -116,117 +115,34 @@ func TestOneShotUsageDoesNotInvokeSSH(t *testing.T) {
 func TestUsageBinaryReturnsWithinDeadline(t *testing.T) {
 	skipShort(t, "builds and runs the harnez binary")
 	bin := buildUsageTestBinary(t)
-	tests := []struct {
-		name       string
-		serverMode string
-		wantStatus string
-	}{
-		{name: "no server", wantStatus: "server starting"},
-		{name: "starting", serverMode: "starting", wantStatus: "server starting"},
-		{name: "accept never answers", serverMode: "hung", wantStatus: "server not answering"},
-		{name: "healthy", serverMode: "healthy"},
-		{name: "slow response after probe timeout", serverMode: "slow", wantStatus: "server not answering"},
-		{name: "stale socket", serverMode: "stale", wantStatus: "server starting"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			home, runtimeDir := usageTestDirs(t)
-			env := usageTestEnv(home, runtimeDir)
-			seedUsageTestStore(t, home)
-			var release chan struct{}
-			var accepted <-chan struct{}
-			if tt.serverMode == "starting" || tt.serverMode == "hung" || tt.serverMode == "healthy" || tt.serverMode == "slow" {
-				var listener net.Listener
-				listener, accepted, release = startUsageTestServer(t, runtimeDir, tt.serverMode)
-				defer listener.Close()
-			}
-			if tt.serverMode == "stale" {
-				listener, err := net.Listen("unix", usageTestSocketPath(runtimeDir))
-				if err != nil {
-					t.Fatal(err)
-				}
-				listener.(*net.UnixListener).SetUnlinkOnClose(false)
-				if err := listener.Close(); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if tt.serverMode == "no server" || tt.serverMode == "stale" {
-				t.Cleanup(func() { stopUsageTestServer(t, bin, env) })
-			}
-
-			const processLimit = 9 * time.Second
-			ctx, cancel := context.WithTimeout(context.Background(), processLimit)
-			defer cancel()
-			cmd := exec.CommandContext(ctx, bin, "usage", "--minimal")
-			cmd.Env = env
-			var stdout, stderr strings.Builder
-			cmd.Stdout, cmd.Stderr = &stdout, &stderr
-			start := time.Now()
-			runErr := cmd.Run()
-			elapsed := time.Since(start)
-			t.Logf("usage subprocess elapsed: %s", elapsed)
-			if runErr != nil {
-				t.Fatalf("usage did not return successfully in %s (elapsed %s): %v\nstdout:\n%s\nstderr:\n%s", processLimit, elapsed, runErr, stdout.String(), stderr.String())
-			}
-			if elapsed >= 10*time.Second {
-				t.Fatalf("usage took %s, want under 10s", elapsed)
-			}
-			if tt.wantStatus != "" && !strings.Contains(stderr.String(), tt.wantStatus) {
-				t.Fatalf("stderr lacks status %q:\n%s", tt.wantStatus, stderr.String())
-			}
-			if tt.wantStatus != "" && strings.Contains(stdout.String(), tt.wantStatus) {
-				t.Fatalf("status leaked to parseable stdout:\n%s", stdout.String())
-			}
-			if accepted != nil {
-				select {
-				case <-accepted:
-				default:
-					t.Fatal("usage did not connect to the fake server")
-				}
-			}
-			if release != nil {
-				close(release)
-			}
-		})
-	}
-}
-
-func TestUsageBinaryStoreReadDeadlinePrintsError(t *testing.T) {
-	skipShort(t, "builds and runs the harnez binary")
-	const usageDeadline = "250ms"
-	bin := buildUsageTestBinaryWithDeadline(t, usageDeadline)
 	home, runtimeDir := usageTestDirs(t)
-	storePath := filepath.Join(home, "data", "harnez", "telemetry.sqlite")
-	if err := os.MkdirAll(filepath.Dir(storePath), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := syscall.Mkfifo(storePath, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*raceFactor)
+	env := usageTestEnv(home, runtimeDir)
+	seedUsageTestStore(t, home)
+	listener, accepted, release := startUsageTestServer(t, runtimeDir, "hung")
+	defer listener.Close()
+	defer close(release)
+	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "usage", "--minimal", "--offline")
-	cmd.Env = usageTestEnv(home, runtimeDir)
+	cmd := exec.CommandContext(ctx, bin, "usage", "--minimal")
+	cmd.Env = env
 	var stdout, stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	start := time.Now()
-	err := cmd.Run()
-	elapsed := time.Since(start)
-	t.Logf("slow-store binary elapsed: %s", elapsed)
-	if err == nil {
-		t.Fatal("usage unexpectedly succeeded with a blocked store open")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("usage watchdog subprocess did not exit successfully: %v\nstdout:\n%s\nstderr:\n%s", err, stdout.String(), stderr.String())
 	}
 	if ctx.Err() != nil {
-		t.Fatalf("usage process exceeded its test limit (%s): %v", elapsed, err)
+		t.Fatalf("usage exceeded binary watchdog: %v", ctx.Err())
 	}
-	if elapsed >= time.Second*raceFactor {
-		t.Fatalf("usage returned after %s, want under %s", elapsed, time.Second*raceFactor)
+	if !strings.Contains(stderr.String(), "server not answering") {
+		t.Fatalf("stderr lacks hung-server status:\n%s", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "context deadline exceeded") {
-		t.Fatalf("stderr lacks store deadline error:\n%s", stderr.String())
+	if strings.Contains(stdout.String(), "server not answering") {
+		t.Fatalf("status leaked to parseable stdout:\n%s", stdout.String())
 	}
-	if stdout.Len() != 0 {
-		t.Fatalf("stdout should not contain a partial dashboard after store failure:\n%s", stdout.String())
+	select {
+	case <-accepted:
+	default:
+		t.Fatal("usage did not connect to the hung fake server")
 	}
 }
 
@@ -292,43 +208,6 @@ func TestUsageWatchShowsHungServerStatusPTY(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("watch did not exit after q")
 	}
-}
-
-func buildUsageTestBinaryWithDeadline(t *testing.T, deadline string) string {
-	t.Helper()
-	serverSpec, err := filepath.Abs("../../spec/server.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(serverSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	updated := strings.Replace(string(data), "usage_deadline: 10s", "usage_deadline: "+deadline, 1)
-	if updated == string(data) {
-		t.Fatal("server spec usage_deadline was not replaced")
-	}
-	root := t.TempDir()
-	override := filepath.Join(root, "server.yaml")
-	if err := os.WriteFile(override, []byte(updated), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	overlayPath := filepath.Join(root, "overlay.json")
-	overlay, err := json.Marshal(struct {
-		Replace map[string]string `json:"Replace"`
-	}{Replace: map[string]string{serverSpec: override}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(overlayPath, overlay, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	bin := filepath.Join(root, "harnez")
-	cmd := exec.Command("go", "build", "-overlay", overlayPath, "-o", bin, ".")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build deadline-test binary: %v\n%s", err, output)
-	}
-	return bin
 }
 
 func buildUsageTestBinary(t *testing.T) string {
