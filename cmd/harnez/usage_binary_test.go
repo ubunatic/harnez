@@ -20,6 +20,92 @@ import (
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
+var (
+	usageTestBinaryDir  string
+	usageTestBinaryPath string
+)
+
+func prepareUsageTestBinary() error {
+	if supplied := os.Getenv("HARNEZ_TEST_BINARY"); supplied != "" {
+		usageTestBinaryPath = supplied
+		return nil
+	}
+	var err error
+	usageTestBinaryDir, err = os.MkdirTemp("", "harnez-usage-test-bin-")
+	if err != nil {
+		return err
+	}
+	usageTestBinaryPath = filepath.Join(usageTestBinaryDir, "harnez")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", usageTestBinaryPath, ".")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		_ = os.RemoveAll(usageTestBinaryDir)
+		return fmt.Errorf("build harnez test binary: %w\n%s", err, output)
+	}
+	return nil
+}
+
+func TestOneShotUsageDoesNotInvokeSSH(t *testing.T) {
+	root := t.TempDir()
+	bin := buildUsageTestBinary(t)
+
+	home, runtimeDir := usageTestDirs(t)
+	seedUsageTestStore(t, home)
+	sshDir := filepath.Join(root, "bin")
+	if err := os.MkdirAll(sshDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(root, "ssh-called")
+	sshStub := filepath.Join(sshDir, "ssh")
+	if err := os.WriteFile(sshStub, []byte(fmt.Sprintf("#!/bin/sh\nprintf called > %q\n", marker)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "config", "harnez"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "config", "harnez", "local.yaml"), []byte("load:\n  watch_host: x600\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := usageTestEnv(home, runtimeDir)
+	for i := range env {
+		if strings.HasPrefix(env[i], "PATH=") {
+			env[i] = "PATH=" + sshDir + string(os.PathListSeparator) + os.Getenv("PATH")
+		}
+	}
+
+	for _, args := range [][]string{{"--minimal"}, {"--minimal", "--offline"}} {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		cmd := exec.CommandContext(ctx, bin, append([]string{"usage"}, args...)...)
+		cmd.Env = env
+		t.Cleanup(func() {
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+		})
+		started := time.Now()
+		output, err := cmd.CombinedOutput()
+		elapsed := time.Since(started)
+		cancel()
+		t.Logf("usage %v elapsed: %s", args, elapsed)
+		if err != nil {
+			t.Fatalf("usage %v failed or exceeded 2s: %v\n%s", args, err, output)
+		}
+		if elapsed >= 2*time.Second {
+			t.Fatalf("usage %v took %s, want under 2s", args, elapsed)
+		}
+		if elapsed >= time.Second {
+			t.Fatalf("usage %v took %s, want under 1s", args, elapsed)
+		}
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatalf("usage %v invoked the ssh stub", args)
+		} else if !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestUsageBinaryReturnsWithinDeadline(t *testing.T) {
 	skipShort(t, "builds and runs the harnez binary")
 	bin := buildUsageTestBinary(t)
@@ -240,12 +326,10 @@ func buildUsageTestBinaryWithDeadline(t *testing.T, deadline string) string {
 
 func buildUsageTestBinary(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "harnez")
-	cmd := exec.Command("go", "build", "-o", bin, ".")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build harnez binary: %v\n%s", err, output)
+	if usageTestBinaryPath == "" {
+		t.Fatal("shared usage test binary was not built")
 	}
-	return bin
+	return usageTestBinaryPath
 }
 
 func startUsageTestServer(t *testing.T, runtimeDir, mode string) (net.Listener, <-chan struct{}, chan struct{}) {

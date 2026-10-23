@@ -398,9 +398,9 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		case summary.Load != nil:
 			loadSnapshot = summary.Load
 		case opt.Host == "":
-			// Interactive timelines grow on each tick. Cold burst sampling
-			// deliberately sleeps ~2s and must not stall the UI's first frame.
-			snap := LoadSnapshot{CPU: currentCPULoad(!live), GPUs: currentGPUs(!live)}
+			// Read the current sample for this frame. History grows naturally
+			// during watch redraws; one-shot output must not block to seed it.
+			snap := LoadSnapshot{CPU: currentCPULoad(false), GPUs: currentGPUs(false)}
 			loadSnapshot = &snap
 		}
 	}

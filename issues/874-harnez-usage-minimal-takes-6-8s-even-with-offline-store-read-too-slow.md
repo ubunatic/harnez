@@ -60,3 +60,15 @@ Pre-Work: the removed binary test left no guard that one-shot runs never start s
 Then: the ~2s CPU/GPU sparkline seed (samples at 50ms) must not delay one-shot output: one-shot needs only
 the current sample (or the stored history), `-w` may seed in the background. Target: installed binary
 `--minimal` and `--minimal --offline` under 1s on the real store, 3 runs each.
+
+### M2 delivered
+
+- Static frames now take one current CPU/GPU sample without burst-seeding history; watch history grows
+  across redraws instead of delaying initial output.
+- Added `TestOneShotUsageDoesNotInvokeSSH`: an exiting marker-writing ssh stub on `PATH`, isolated
+  HOME/XDG directories, 2s deadlines and cleanup kills; both one-shot variants assert no invocation
+  and return in under 1s. The CLI test binary is shared per package.
+- Focused test: 0.10s test time / 0.114s package test time (3.34s command wall including Go test
+  compilation). `make test-q1` passed with no failures; `make install` succeeded.
+- Installed real-store wall times: `--minimal` 0.088s, 0.085s, 0.083s;
+  `--minimal --offline` 0.081s, 0.082s, 0.080s.

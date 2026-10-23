@@ -49,9 +49,13 @@ func TestMain(m *testing.M) {
 	sessionTipSessionOptions = func() resolve.SessionOptions {
 		return resolve.SessionOptions{DisableFallback: true}
 	}
+	if err := prepareUsageTestBinary(); err != nil {
+		panic(fmt.Sprintf("prepare shared usage test binary: %v", err))
+	}
 
 	code := m.Run()
 
+	os.RemoveAll(usageTestBinaryDir)
 	os.RemoveAll(tmpHome)
 	os.RemoveAll(tmpRuntime)
 	if hadHome {
