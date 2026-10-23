@@ -452,7 +452,7 @@ func queryLocalServerStatus(ctx context.Context, cfg server.Config, socket strin
 		return resp
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&resp) != nil || resp.Server != "harnez" {
+	if (response.StatusCode != http.StatusOK && response.StatusCode != http.StatusServiceUnavailable) || json.NewDecoder(response.Body).Decode(&resp) != nil || resp.Server != "harnez" {
 		return resp
 	}
 	return resp
