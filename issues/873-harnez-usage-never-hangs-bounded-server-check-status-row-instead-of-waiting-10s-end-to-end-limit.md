@@ -53,5 +53,14 @@ server stuck in "starting", a socket that accepts but never answers, and a healt
   one bounded probe; when not ok, start the server in the background (no wait), read the store and print with a
   status line; whole-command deadline prints what it has plus an error and exits non-zero. Built-binary tests
   for the four server states (no server, stuck starting, accept-never-answer socket, healthy), each < 10s.
-- **M2 (watch status row + health reason):** `-w` shows "server starting" / "server not answering since
+- **M1 delivered (`1834d3af`):** one probe bounded by `probe_timeout` 1s, start only when nobody listens,
+  status to stderr, `usage_deadline` 10s; passive counters come from the same probe. Binary tests: no server
+  2.0s, starting 2.1s, hung 3.1s, healthy 2.1s, plus slow-response and stale socket. Host live run on the
+  real store: 6.0-8.2s per `--minimal`, also right after a server restart (no hang). The 10s budget is
+  mostly the store read (874).
+- **M2 (watch status row + health reason):**
+  Pre-Work: (a) when the deadline hits during the store read, the user must still get the error line on
+  stderr and a non-zero exit within 10s, never a silent hang: add a binary test with a store read slowed past
+  the deadline (test hook or big fixture). (b) State in the report how much of the 6-8s is store read vs
+  process start, measured with the installed binary (input for 874; do not fix 874 here). `-w` shows "server starting" / "server not answering since
   HH:MM" and clears it on recovery; `/status` adds a `reason` while not ready; pty test against a hung socket.
