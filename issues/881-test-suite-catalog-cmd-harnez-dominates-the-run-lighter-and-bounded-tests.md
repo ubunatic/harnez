@@ -87,3 +87,16 @@ Verification:
   `grep -- '--- FAIL' /tmp/harnez-883-test-q1.log` found no failures. No untouched test was loosened.
 - Logs: `/tmp/harnez-883-before.log`, `/tmp/harnez-883-final-repeat.log`,
   `/tmp/harnez-883-loaded.log`, `/tmp/harnez-883-test-q1.log` (local, not tracked).
+
+## Temp directory leak found during 883 runs
+
+Five `/tmp/harnez-test-*` directories created at 20:01:40–20:02:00 each contained a Go build
+cache under the isolated HOME. The four provider-wrapper subprocesses were killed during stop-test
+cleanup; the fifth crash-worker subprocess called `os.Exit`. Each subprocess had entered package
+`TestMain`, which built the CLI into its fresh HOME before either termination path could run cleanup.
+
+Fix: 883 commit `0ce47afc` makes the known subprocess helpers bypass isolated `TestMain` setup, builds
+the shared binary before changing HOME, and defers cleanup for the parent test process. Its crash test
+sets a private TMPDIR and asserts that the helper leaves it empty. Verified with
+`go test ./cmd/harnez -run '^TestAgentWaitFailedWorkerIsNotOrphaned$' -count=1`: pass in 1.086s;
+the enclosing TMPDIR was empty afterward.
