@@ -35,4 +35,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 880 | [880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md](880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md) | jam skill: competing implementations by several agents, owner picks, phased adoption | Open |
 | 885 | [885-add-optional-disk-swap-backstop-for-zram-only-systems-so-tmpfs-tmp-can-spill.md](885-add-optional-disk-swap-backstop-for-zram-only-systems-so-tmpfs-tmp-can-spill.md) | Add optional disk swap backstop for zram-only systems so tmpfs /tmp can spill | Open |
 | 886 | [886-collector-unit-fails-at-boot-runtime-dir-missing-226-namespace.md](886-collector-unit-fails-at-boot-runtime-dir-missing-226-namespace.md) | Collector unit fails at boot: runtime dir missing (226/NAMESPACE) | Open |
+| 887 | [887-signal-kill-diagnostics-attach-quick-cause-hints-and-keep-a-rotating-kill-log.md](887-signal-kill-diagnostics-attach-quick-cause-hints-and-keep-a-rotating-kill-log.md) | Signal-kill diagnostics: attach quick cause hints and keep a rotating kill log | Open |
 <!-- harnez:end issues-active-index -->
