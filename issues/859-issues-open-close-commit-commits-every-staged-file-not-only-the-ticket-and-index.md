@@ -23,3 +23,11 @@ ticket is filed while a developer is between `git add` and `git commit`.
 ## Fix direction
 
 Commit with explicit paths (`git commit -m ... -- <ticket> <index>`), which ignores the rest of the index.
+
+## Sprint findings (2026-10-24, searcher argon:low)
+
+- `gitAddAndCommit` (`cmd/harnez/issues.go:864-884`) runs `git commit -m <msg>` without pathspec (`:871`).
+  Callers already pass exact paths: status verbs (`internal/issues/status_action.go:97-100, 167-170, 292-300`),
+  `issues mv` (`cmd/harnez/issues.go:767-775`, incl. cross-repo reference edits).
+- Caveat: `issues/BACKLOG.md` / `issues/CLOSED.md` may not exist; `git commit -- <path>` fails on an unknown pathspec.
+- Tests: `cmd/harnez/issues_test.go`, `issues_close_test.go`, `issues_duplicates_test.go`.

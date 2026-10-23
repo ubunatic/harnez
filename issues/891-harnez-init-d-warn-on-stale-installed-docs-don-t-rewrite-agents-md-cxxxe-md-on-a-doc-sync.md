@@ -28,3 +28,14 @@ or stop and report when a CLI-design decision (`init` vs `apply` scope) is neede
 - A doc-only sync (a flag or the default for `-d .` with `--docs`) leaves `AGENTS.md` and the instruction
   files alone, or `init` explains why it changes them.
 - Read `docs/CLIDesign.md` first: `init` and `apply` stay separate.
+
+## Sprint findings (2026-10-24, searcher argon:low)
+
+- Stale docs: `warnStaleEmbeddedDoc` (`internal/claude/managed_doc.go:55-62`, called `init_phases.go:91`) already
+  compares the on-disk source with the embedded bytes, but only warns (and no warning was noticed in the session).
+- AGENTS.md rewrite: `RunInitWithVariant` (`internal/claude/init.go:1139-1196`) selects docs from
+  `.harnez/repo.yaml` `docs.copies` + `default: true` docs only, so the 4 opt-in docs listed in AGENTS.md
+  (concise-mode, containerfile, prototyping-features, website = the 9 lines) are dropped by
+  `initLocalSections`. CLIDesign.md:166-185 makes `docs.copies` authoritative, so the likely fix is the
+  repo's own `docs.copies`, not new detection.
+- No docs-only flag exists (`cmd/harnez/init.go:61-79`).
