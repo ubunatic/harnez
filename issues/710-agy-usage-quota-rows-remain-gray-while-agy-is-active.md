@@ -1,6 +1,6 @@
 # 710 — AGY usage quota rows remain gray while AGY is active
 
-**Status**: Open — agy statusline drops counted (40), cause unproven: likely payloads without quota
+**Status**: Closed — gray rows fixed by 714 staleness grace; agy statusline drops were quota-less renders (11 accepted, 9 without quota live), counter renamed passive_no_quota
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
