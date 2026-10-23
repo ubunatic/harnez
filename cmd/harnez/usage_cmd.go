@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,12 +13,11 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
+	"ubunatic.com/harnez/internal/usagecli"
 )
 
 func reportUsageServerStatus(cmd *cobra.Command, status string) {
-	if status != "" {
-		fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %s\n", status)
-	}
+	fmt.Fprint(cmd.ErrOrStderr(), usagecli.ServerStatusMessage(status))
 }
 
 // newUsageCmd builds `harnez usage` with its history, export and archive subcommands.
@@ -60,11 +58,11 @@ func newUsageCmd() *cobra.Command {
 				client = &http.Client{Timeout: serverCfg.HTTPClientTimeout}
 			}
 
-			selectedMode, explicitMode, err := selectUsageViewMode(usageNormal, usageCompact, usageMinimal)
+			selectedMode, explicitMode, err := usagecli.SelectUsageViewMode(usageNormal, usageCompact, usageMinimal)
 			if err != nil {
 				return err
 			}
-			if err := validateUsageModeFlags(explicitMode, usageRaw, usageJSON, usageLoom); err != nil {
+			if err := usagecli.ValidateUsageModeFlags(explicitMode, usageRaw, usageJSON, usageLoom); err != nil {
 				return err
 			}
 			if !explicitMode {
@@ -74,7 +72,7 @@ func newUsageCmd() *cobra.Command {
 				}
 			}
 			usageCompactMode := selectedMode == "compact" || selectedMode == "minimal"
-			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, explicitMode && usageCompactMode, usageLoom, usageSplash); err != nil {
+			if err := usagecli.ValidateUsageFlags(usageWatch, usageRaw, usageJSON, explicitMode && usageCompactMode, usageLoom, usageSplash); err != nil {
 				return err
 			}
 			_ = usageShared // retained as a compatibility flag; all local views use the collector store.
@@ -90,7 +88,7 @@ func newUsageCmd() *cobra.Command {
 				return fmt.Errorf("--offline cannot be combined with --host")
 			}
 			if usageHost == "" && !usageOffline {
-				usageHost = resolveUsageHost(usageHost, localCfg)
+				usageHost = usagecli.ResolveUsageHost(usageHost, localCfg)
 			}
 			loadWatchHost := ""
 			if localCfg != nil {
@@ -102,7 +100,7 @@ func newUsageCmd() *cobra.Command {
 				var cached usage.UsageSummary
 				if usageHost == "" {
 					var status string
-					cached, status, err = loadLocalUsageWithStatus(ctx, usageOffline)
+					cached, status, err = usagecli.LoadLocalUsageWithStatus(ctx, usageOffline)
 					reportUsageServerStatus(cmd, status)
 					if err != nil {
 						return fmt.Errorf("read usage store: %w", err)
@@ -134,12 +132,12 @@ func newUsageCmd() *cobra.Command {
 				var storedLoader func(context.Context) (usage.UsageSummary, string)
 				var status string
 				if usageHost == "" {
-					cached, status, err = loadLocalUsageWithStatus(ctx, usageOffline)
+					cached, status, err = usagecli.LoadLocalUsageWithStatus(ctx, usageOffline)
 					if err != nil {
 						return fmt.Errorf("read usage store: %w", err)
 					}
 					storedLoader = func(ctx context.Context) (usage.UsageSummary, string) {
-						latest, latestStatus, err := loadLocalUsageWithStatus(ctx, usageOffline)
+						latest, latestStatus, err := usagecli.LoadLocalUsageWithStatus(ctx, usageOffline)
 						if err == nil {
 							cached = latest
 						}
@@ -165,15 +163,18 @@ func newUsageCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("project usage: %w", err)
 				}
-				if usageJSON {
-					data, err := json.MarshalIndent(res, "", "  ")
-					if err != nil {
+				out, err := usagecli.RenderProjectUsage(res, usageJSON)
+				if err != nil {
+					if usageJSON {
 						return fmt.Errorf("render json: %w", err)
 					}
-					fmt.Println(string(data))
-					return nil
+					return err
 				}
-				fmt.Print(usage.RenderProjectUsageCard(res))
+				if usageJSON {
+					fmt.Println(out)
+				} else {
+					fmt.Print(out)
+				}
 				return nil
 			}
 
@@ -187,24 +188,16 @@ func newUsageCmd() *cobra.Command {
 					summary = s
 				} else {
 					var status string
-					summary, status, err = loadLocalUsageWithStatus(ctx, usageOffline)
+					summary, status, err = usagecli.LoadLocalUsageWithStatus(ctx, usageOffline)
 					reportUsageServerStatus(cmd, status)
 					if err != nil {
 						return fmt.Errorf("read usage store: %w", err)
 					}
 				}
-				if usageAgent != "" {
-					var filtered []usage.AgentUsage
-					for _, a := range summary.Agents {
-						if strings.EqualFold(a.AgentID, usageAgent) {
-							filtered = append(filtered, a)
-						}
-					}
-					summary.Agents = filtered
-				}
+				summary = usagecli.FilterSummaryByAgent(summary, usageAgent)
 
 				if usageJSON {
-					out, err := renderUsageOutput(summary, true, false)
+					out, err := usagecli.RenderUsageOutput(summary, true, false)
 					if err != nil {
 						return err
 					}
@@ -215,7 +208,7 @@ func newUsageCmd() *cobra.Command {
 				// usageRaw: the detailed per-field text report that used to
 				// be `harnez usage`'s only output before the compact
 				// dashboard (formerly --summary) became the default.
-				out, err := renderUsageOutput(summary, false, true, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: cachedRemoteLoad})
+				out, err := usagecli.RenderUsageOutput(summary, false, true, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: cachedRemoteLoad})
 				if err != nil {
 					return err
 				}
@@ -230,7 +223,7 @@ func newUsageCmd() *cobra.Command {
 				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			} else {
 				var status string
-				summary, status, err := loadLocalUsageWithStatus(ctx, usageOffline)
+				summary, status, err := usagecli.LoadLocalUsageWithStatus(ctx, usageOffline)
 				reportUsageServerStatus(cmd, status)
 				if err != nil {
 					return fmt.Errorf("read usage store: %w", err)
@@ -274,7 +267,7 @@ func newUsageHistoryCmd(offline, shared *bool) *cobra.Command {
 		Aliases: []string{"timeline"},
 		Short:   "Inspect and manage recorded usage history and timelines",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			out, err := renderUsageTimeline(usage.HistoryDir(""), historyJSON)
+			out, err := usagecli.RenderUsageTimeline(usage.HistoryDir(""), historyJSON)
 			if err != nil {
 				return err
 			}
@@ -288,7 +281,7 @@ func newUsageHistoryCmd(offline, shared *bool) *cobra.Command {
 		Use:   "timeline",
 		Short: "Display snapshot and quota history across all recorded machine logs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			out, err := renderUsageTimeline(usage.HistoryDir(""), historyJSON)
+			out, err := usagecli.RenderUsageTimeline(usage.HistoryDir(""), historyJSON)
 			if err != nil {
 				return err
 			}
@@ -317,7 +310,7 @@ func newUsageHistoryCmd(offline, shared *bool) *cobra.Command {
 		Short:   "Collect and record a usage snapshot to the local machine history log",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			summary, err := loadLocalUsage(ctx, *offline)
+			summary, err := usagecli.LoadLocalUsage(ctx, *offline)
 			if err != nil {
 				return fmt.Errorf("read usage store: %w", err)
 			}

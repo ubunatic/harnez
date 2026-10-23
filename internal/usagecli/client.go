@@ -1,4 +1,4 @@
-package main
+package usagecli
 
 import (
 	"context"
@@ -15,37 +15,37 @@ import (
 	"ubunatic.com/harnez/internal/usage"
 )
 
-type serverStarter struct {
-	probe func(context.Context, server.Config) serverProbeResult
+type ServerStarter struct {
+	probe func(context.Context, server.Config) ServerProbeResult
 	start func() error
 }
 
-type serverProbeResult struct {
+type ServerProbeResult struct {
 	ready          bool
 	listening      bool
 	starting       bool
 	passiveNoQuota map[string]uint64
 }
 
-type serverCheckResult struct {
+type ServerCheckResult struct {
 	status         string
 	passiveNoQuota map[string]uint64
 }
 
-func ensureLocalServer(ctx context.Context, cfg server.Config) serverCheckResult {
-	starter := serverStarter{
+func EnsureLocalServer(ctx context.Context, cfg server.Config) ServerCheckResult {
+	starter := ServerStarter{
 		probe: probeHarnezServer,
 		start: startDetachedServer,
 	}
-	return starter.ensure(ctx, cfg)
+	return starter.Ensure(ctx, cfg)
 }
 
-func loadLocalUsage(ctx context.Context, offline bool) (usage.UsageSummary, error) {
-	summary, _, err := loadLocalUsageWithStatus(ctx, offline)
+func LoadLocalUsage(ctx context.Context, offline bool) (usage.UsageSummary, error) {
+	summary, _, err := LoadLocalUsageWithStatus(ctx, offline)
 	return summary, err
 }
 
-func loadLocalUsageWithStatus(ctx context.Context, offline bool) (usage.UsageSummary, string, error) {
+func LoadLocalUsageWithStatus(ctx context.Context, offline bool) (usage.UsageSummary, string, error) {
 	status := ""
 	var passiveNoQuota map[string]uint64
 	cfg, err := server.LoadConfig()
@@ -55,11 +55,11 @@ func loadLocalUsageWithStatus(ctx context.Context, offline bool) (usage.UsageSum
 	ctx, cancel := context.WithTimeout(ctx, cfg.UsageDeadline)
 	defer cancel()
 	if !offline {
-		check := ensureLocalServer(ctx, cfg)
+		check := EnsureLocalServer(ctx, cfg)
 		status = check.status
 		passiveNoQuota = check.passiveNoQuota
 	}
-	summary, err := readStoredSummaryBounded(ctx, usage.UsageStorePath())
+	summary, err := ReadStoredSummaryBounded(ctx, usage.UsageStorePath())
 	if err != nil && os.IsNotExist(err) && offline {
 		return usage.UsageSummary{}, status, fmt.Errorf("usage store does not exist; start harnez server first (or run usage without --offline)")
 	}
@@ -76,13 +76,13 @@ type storedSummaryResult struct {
 
 // readStoredSummaryBounded lets the caller honor its deadline even if the
 // database driver blocks while opening a damaged or unusual store file.
-func readStoredSummaryBounded(ctx context.Context, path string) (usage.UsageSummary, error) {
-	return readStoredSummaryBoundedWith(ctx, func(ctx context.Context) (usage.UsageSummary, error) {
+func ReadStoredSummaryBounded(ctx context.Context, path string) (usage.UsageSummary, error) {
+	return ReadStoredSummaryBoundedWith(ctx, func(ctx context.Context) (usage.UsageSummary, error) {
 		return usage.ReadStoredSummary(ctx, path)
 	})
 }
 
-func readStoredSummaryBoundedWith(ctx context.Context, read func(context.Context) (usage.UsageSummary, error)) (usage.UsageSummary, error) {
+func ReadStoredSummaryBoundedWith(ctx context.Context, read func(context.Context) (usage.UsageSummary, error)) (usage.UsageSummary, error) {
 	result := make(chan storedSummaryResult, 1)
 	go func() {
 		summary, err := read(ctx)
@@ -96,38 +96,46 @@ func readStoredSummaryBoundedWith(ctx context.Context, read func(context.Context
 	}
 }
 
-func (s serverStarter) ensure(ctx context.Context, cfg server.Config) serverCheckResult {
+func (s ServerStarter) Ensure(ctx context.Context, cfg server.Config) ServerCheckResult {
 	probeCtx, cancel := context.WithTimeout(ctx, cfg.ProbeTimeout)
 	result := s.probe(probeCtx, cfg)
 	cancel()
 	if result.ready {
-		return serverCheckResult{passiveNoQuota: result.passiveNoQuota}
+		return ServerCheckResult{passiveNoQuota: result.passiveNoQuota}
 	}
 	if !result.listening {
 		if err := s.start(); err != nil {
-			return serverCheckResult{status: "server not answering (could not start: " + err.Error() + ")"}
+			return ServerCheckResult{status: "server not answering (could not start: " + err.Error() + ")"}
 		}
-		return serverCheckResult{status: "server starting"}
+		return ServerCheckResult{status: "server starting"}
 	}
 	if result.starting {
-		return serverCheckResult{status: "server starting", passiveNoQuota: result.passiveNoQuota}
+		return ServerCheckResult{status: "server starting", passiveNoQuota: result.passiveNoQuota}
 	}
-	return serverCheckResult{status: "server not answering", passiveNoQuota: result.passiveNoQuota}
+	return ServerCheckResult{status: "server not answering", passiveNoQuota: result.passiveNoQuota}
 }
 
-func probeHarnezServer(ctx context.Context, cfg server.Config) serverProbeResult {
+// ServerStatusMessage returns the diagnostic line written to stderr by the CLI.
+func ServerStatusMessage(status string) string {
+	if status == "" {
+		return ""
+	}
+	return "harnez: " + status + "\n"
+}
+
+func probeHarnezServer(ctx context.Context, cfg server.Config) ServerProbeResult {
 	socket, err := cfg.Socket()
 	if err != nil {
-		return serverProbeResult{listening: true}
+		return ServerProbeResult{listening: true}
 	}
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", socket)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED) {
-			return serverProbeResult{}
+			return ServerProbeResult{}
 		}
 		// Unknown connection errors are not proof that the socket has no
 		// listener. Avoid starting a second server or taking over the socket.
-		return serverProbeResult{listening: true}
+		return ServerProbeResult{listening: true}
 	}
 	defer conn.Close()
 	transport := &http.Transport{DialContext: func(context.Context, string, string) (net.Conn, error) {
@@ -137,11 +145,11 @@ func probeHarnezServer(ctx context.Context, cfg server.Config) serverProbeResult
 	client := &http.Client{Transport: transport, Timeout: cfg.ProbeTimeout}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/status", nil)
 	if err != nil {
-		return serverProbeResult{listening: true}
+		return ServerProbeResult{listening: true}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return serverProbeResult{listening: true}
+		return ServerProbeResult{listening: true}
 	}
 	defer resp.Body.Close()
 	var status struct {
@@ -153,10 +161,10 @@ func probeHarnezServer(ctx context.Context, cfg server.Config) serverProbeResult
 	}
 	decodeErr := json.NewDecoder(resp.Body).Decode(&status)
 	if resp.StatusCode == http.StatusServiceUnavailable {
-		return serverProbeResult{listening: true, starting: true, passiveNoQuota: status.PassiveNoQuota}
+		return ServerProbeResult{listening: true, starting: true, passiveNoQuota: status.PassiveNoQuota}
 	}
 	ready := resp.StatusCode == http.StatusOK && decodeErr == nil && status.Health == "ok" && status.Server == "harnez" && status.Version != "" && status.BuildIdentity != ""
-	return serverProbeResult{ready: ready, listening: true, passiveNoQuota: status.PassiveNoQuota}
+	return ServerProbeResult{ready: ready, listening: true, passiveNoQuota: status.PassiveNoQuota}
 }
 
 func startDetachedServer() error {

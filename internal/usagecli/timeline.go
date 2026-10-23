@@ -1,4 +1,4 @@
-package main
+package usagecli
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ type usageTimelineJSON struct {
 	QuotaWindow []usage.QuotaHistoryEntry `json:"quota_windows"`
 }
 
-func renderUsageTimeline(dir string, jsonOutput bool) (string, error) {
+func RenderUsageTimeline(dir string, jsonOutput bool) (string, error) {
 	snapshots, err := usage.ReadHistory(dir)
 	if err != nil {
 		return "", err

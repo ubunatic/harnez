@@ -1,4 +1,4 @@
-package main
+package usagecli
 
 import (
 	"encoding/json"
@@ -22,7 +22,7 @@ func TestRenderUsageTimelineIncludesQuotaHistory(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	text, err := renderUsageTimeline(dir, false)
+	text, err := RenderUsageTimeline(dir, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestRenderUsageTimelineIncludesQuotaHistory(t *testing.T) {
 			t.Errorf("text timeline missing %q: %s", want, text)
 		}
 	}
-	encoded, err := renderUsageTimeline(dir, true)
+	encoded, err := RenderUsageTimeline(dir, true)
 	if err != nil {
 		t.Fatal(err)
 	}

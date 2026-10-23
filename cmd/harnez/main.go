@@ -15,7 +15,6 @@ import (
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/sessionstate"
 	"ubunatic.com/harnez/internal/telemetry"
-	"ubunatic.com/harnez/internal/usage"
 )
 
 // sessionTipHook is `harnez`'s CLI-dispatch hook point for issue 183's
@@ -116,82 +115,6 @@ func resolveComponentSelection(cfg *claude.Config, flag []string) (claude.Set, e
 		return nil, err
 	}
 	return claude.Resolve(flag, cfg.ComponentNames, nil)
-}
-
-// resolveUsageHost decides the effective --host value for `harnez usage`:
-// the explicit flag always wins (issue 109 acceptance criterion 3); when the
-// flag is omitted and cfg (loaded from ~/.config/harnez/local.yaml) carries
-// a non-empty usage.default_host, that value is used as a convenience
-// default. cfg may be nil (file absent or failed to load), in which case the
-// flag value (possibly empty) is returned unchanged.
-func resolveUsageHost(flagHost string, cfg *usage.LocalConfig) string {
-	if flagHost != "" {
-		return flagHost
-	}
-	if cfg == nil {
-		return flagHost
-	}
-	return cfg.Usage.DefaultHost
-}
-
-// validateUsageFlags rejects `harnez usage` flag combinations that don't
-// make sense together, ahead of any collection or rendering work.
-//
-// The spec-declared usage view is the default rendering for a bare
-// `harnez usage`; --raw opts into the detailed per-field text report, and --json
-// opts into machine-readable output. --watch/--raw/--json conflicts and
-// --splash's watch requirement are rejected here.
-func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom, usageSplash bool) error {
-	if usageWatch && usageJSON {
-		return fmt.Errorf("--watch and --json cannot be combined")
-	}
-	if usageWatch && usageRaw {
-		return fmt.Errorf("--watch and --raw cannot be combined")
-	}
-	if usageRaw && usageJSON {
-		return fmt.Errorf("--raw and --json cannot be combined")
-	}
-	if usageCompact && usageRaw {
-		return fmt.Errorf("--compact has no effect with --raw")
-	}
-	if usageLoom && usageRaw {
-		return fmt.Errorf("--loom has no effect with --raw")
-	}
-	if usageLoom && usageJSON {
-		return fmt.Errorf("--loom and --json cannot be combined")
-	}
-	if usageSplash && !usageWatch {
-		return fmt.Errorf("--splash requires --watch")
-	}
-	return nil
-}
-
-func validateUsageModeFlags(explicitMode, usageRaw, usageJSON, usageLoom bool) error {
-	if explicitMode && (usageRaw || usageJSON || usageLoom) {
-		return fmt.Errorf("usage view mode flags cannot be combined with --raw, --json, or --loom")
-	}
-	return nil
-}
-
-func selectUsageViewMode(normal, compact, minimal bool) (string, bool, error) {
-	selected := 0
-	mode := ""
-	if normal {
-		selected++
-		mode = "normal"
-	}
-	if compact {
-		selected++
-		mode = "compact"
-	}
-	if minimal {
-		selected++
-		mode = "minimal"
-	}
-	if selected > 1 {
-		return "", true, fmt.Errorf("--normal, --compact, and --minimal are mutually exclusive")
-	}
-	return mode, selected == 1, nil
 }
 
 func main() {

@@ -366,3 +366,21 @@ Measured `go test ./cmd/harnez -count=1`: **36.299s at M6 follow-up**, **17.289s
 (single host runs; timings include Go test package wall time and are load/cache sensitive).
 The focused M7 selection passed in **0.418s**; the full package passed with the host-command
 shim guard active. No behavioral assertions were weakened.
+
+## M8 delivered: usage orchestration and adapters moved
+
+Added Cobra-free `internal/usagecli` for bounded local usage reads, server probe/start
+status, host and view validation, snapshot adapters, shared-client coordination, text/JSON
+rendering, project rendering/filtering, and history timeline formatting. The unit tests for
+these helpers moved with the package. `internal/usage` continues to own collectors, store,
+rendering primitives, and export/archive logic; `cmd/harnez` retains Cobra flags, command
+construction, output/exit wiring, and the actual-binary usage deadline and PTY tests.
+Direct dependency inspection found no Cobra or `cmd/harnez` import in `internal/usagecli`.
+
+Measured per-package `go test -count=1`: `cmd/harnez` **16.751s before**, **20.652s after**;
+new `internal/usagecli` **0.026s**. The cmd timing is slower in this single run, so it shows
+no runtime improvement; the before/after timings are host/load-sensitive. `internal/usage`
+was not changed (a separate full run was **10.832s**). Verification: full cmd and usagecli
+packages passed, plus focused usage command checks. The real binary deadline and PTY tests
+remain in cmd. Export command flag and output wiring remains Cobra-only, while its core
+export orchestration was already in `internal/usage`.

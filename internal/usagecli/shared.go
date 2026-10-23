@@ -1,4 +1,4 @@
-package main
+package usagecli
 
 import (
 	"context"
@@ -14,25 +14,25 @@ import (
 	sharedusage "ubunatic.com/harnez/usage"
 )
 
-type realUsageCollector struct{ client *http.Client }
+type RealUsageCollector struct{ Client *http.Client }
 
-func (c realUsageCollector) CollectUsage(ctx context.Context, provider sharedusage.ProviderID) (sharedusage.Snapshot, error) {
+func (c RealUsageCollector) CollectUsage(ctx context.Context, provider sharedusage.ProviderID) (sharedusage.Snapshot, error) {
 	home, _ := os.UserHomeDir()
 	var got internalusage.AgentUsage
 	switch provider {
 	case sharedusage.ProviderClaude:
-		got = internalusage.CollectClaude(ctx, filepath.Join(home, ".claude"), c.client)
+		got = internalusage.CollectClaude(ctx, filepath.Join(home, ".claude"), c.Client)
 	case sharedusage.ProviderAGY:
-		got = internalusage.CollectAGY(ctx, filepath.Join(home, ".gemini", "antigravity-cli"), c.client)
+		got = internalusage.CollectAGY(ctx, filepath.Join(home, ".gemini", "antigravity-cli"), c.Client)
 	case sharedusage.ProviderCodex:
-		got = internalusage.CollectCodex(ctx, filepath.Join(home, ".codex"), c.client)
+		got = internalusage.CollectCodex(ctx, filepath.Join(home, ".codex"), c.Client)
 	default:
 		return sharedusage.Snapshot{}, fmt.Errorf("unsupported usage provider %q", provider)
 	}
-	return publicSnapshot(got), nil
+	return PublicSnapshot(got), nil
 }
 
-func publicSnapshot(a internalusage.AgentUsage) sharedusage.Snapshot {
+func PublicSnapshot(a internalusage.AgentUsage) sharedusage.Snapshot {
 	u := sharedusage.UsageData{
 		Name: a.Name, Installed: a.Installed, Authenticated: a.Authenticated,
 		Account: a.Account, PlanTier: a.PlanTier, ActiveModel: a.ActiveModel,
@@ -93,7 +93,7 @@ func safeSources(sources []string) []string {
 	return result
 }
 
-func agentUsageFromSnapshot(s sharedusage.Snapshot) internalusage.AgentUsage {
+func AgentUsageFromSnapshot(s sharedusage.Snapshot) internalusage.AgentUsage {
 	u := s.Usage
 	a := internalusage.AgentUsage{
 		AgentID: string(s.ProviderID), Name: u.Name, Installed: u.Installed, Authenticated: u.Authenticated,
@@ -131,15 +131,15 @@ func internalWindow(w *sharedusage.QuotaWindow) *internalusage.QuotaWindow {
 	return &internalusage.QuotaWindow{Name: w.Name, Source: w.Source, UsedPercent: w.UsedPercent, RemainingPercent: w.RemainingPercent, ResetAt: w.ResetAt, DurationLeft: time.Duration(w.DurationLeftMS) * time.Millisecond, IsActive: w.IsActive, Severity: w.Severity}
 }
 
-func summaryFromSnapshots(snapshots []sharedusage.Snapshot) internalusage.UsageSummary {
+func SummaryFromSnapshots(snapshots []sharedusage.Snapshot) internalusage.UsageSummary {
 	summary := internalusage.UsageSummary{Timestamp: time.Now().UTC()}
 	for _, snapshot := range snapshots {
-		summary.Agents = append(summary.Agents, agentUsageFromSnapshot(snapshot))
+		summary.Agents = append(summary.Agents, AgentUsageFromSnapshot(snapshot))
 	}
 	return summary
 }
 
-func collectSharedUsage(ctx context.Context, client sharedusage.Client, refresh bool) internalusage.UsageSummary {
+func CollectSharedUsage(ctx context.Context, client sharedusage.Client, refresh bool) internalusage.UsageSummary {
 	var snapshots []sharedusage.Snapshot
 	if refresh {
 		var err error
@@ -155,10 +155,10 @@ func collectSharedUsage(ctx context.Context, client sharedusage.Client, refresh 
 			}
 		}
 	}
-	return summaryFromSnapshots(snapshots)
+	return SummaryFromSnapshots(snapshots)
 }
 
-func renderUsageOutput(summary internalusage.UsageSummary, jsonOutput, raw bool, opts ...internalusage.WatchOptions) (string, error) {
+func RenderUsageOutput(summary internalusage.UsageSummary, jsonOutput, raw bool, opts ...internalusage.WatchOptions) (string, error) {
 	if jsonOutput {
 		return internalusage.RenderJSON(summary)
 	}
@@ -168,7 +168,7 @@ func renderUsageOutput(summary internalusage.UsageSummary, jsonOutput, raw bool,
 	return "", fmt.Errorf("usage output requires --json or --raw")
 }
 
-func pinSharedClient(ctx context.Context, client sharedusage.Client) (func(), error) {
+func PinSharedClient(ctx context.Context, client sharedusage.Client) (func(), error) {
 	if client.ControllerInfo().State == sharedusage.ControllerUnavailable {
 		return func() {}, nil
 	}
