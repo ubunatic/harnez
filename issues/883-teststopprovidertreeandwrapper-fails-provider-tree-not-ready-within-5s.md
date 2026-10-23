@@ -1,6 +1,6 @@
 # 883 — TestStopProviderTreeAndWrapper fails: provider tree not ready within 5s
 
-**Status**: Open
+**Status**: Closed — Provider fixtures had not started: helper TestMain rebuilt the CLI in a cold isolated HOME. Reused parent isolation, added socket readiness/release events and bounded watchdogs, prevented abrupt-helper temp leaks; repeated, loaded and full test-q1 runs pass.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Testing
