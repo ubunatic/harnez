@@ -50,5 +50,40 @@ Step 1 needs no new target: `gotester report` runs each package alone and writes
 - Tests leak temp dirs: 153 stale `/tmp/harnez-test-*`/`go-build*` dirs filled the user's 9.5 GB `/tmp`
   quota and made the build fail ("disk quota exceeded"). Tests must use `t.TempDir()` or clean up.
 
-Next (owner decision pending): fix these three process tests (ready signal instead of fixed waits, temp
-cleanup) before or in parallel with 884 steps 1–3 (exec, stats, hook).
+The three process tests and their temp cleanup are fixed below; the remaining roadmap stays open.
+
+## Process tests fixed
+
+Measured on 2026-10-23, before/after in the same checkout session (seconds, Go test's per-test wall time):
+
+- `TestStopProviderTreeAndWrapper`: before **20.08, failed all four variants**; after
+  **3.06–3.20** across three repetitions; **5.73** with 12 CPU stress workers.
+- `TestAgentWaitFailedWorkerIsNotOrphaned`: before **60.29, failed**; after **0.04–0.05**;
+  **0.14** with stress.
+- `TestForegroundStartAndResumeDetachIntoWaitableWorkers`: before **50.29**; after
+  **0.29–0.33**; **0.47** with stress.
+
+Cause: each re-executed test helper entered `TestMain`, created another isolated HOME/runtime,
+and built the shared CLI again. Changing HOME also selected a cold Go cache. Providers had not
+started when readiness expired: the empty PID list was not a tree-lookup miss. Killing wrappers
+left their nested builds alive; the crash helper's `os.Exit` skipped all temp cleanup. Production
+stop logic passed its existing wrapper/descendant/new-session assertions unchanged.
+
+Fix: known helpers reuse their parent's isolated environment without allocating directories or
+building binaries. The parent builds once using the caller's Go cache, and defers directory cleanup
+so setup errors also clean up. Provider processes send readiness PIDs over sockets; worker helpers
+wait for the parent's release after PID registration and detach assertions, replacing polling and
+the completion sleep. Readiness and worker completion retain five-second watchdogs (race-scaled).
+
+Verification:
+
+- `go test ./cmd/harnez -run '^(TestStopProviderTreeAndWrapper|TestAgentWaitFailedWorkerIsNotOrphaned|TestForegroundStartAndResumeDetachIntoWaitableWorkers)$' -count=3 -v` passed.
+  An enclosing private TMPDIR had **zero entries** after the run; the crash test also asserts
+  that its abrupt helper creates no temporary directories.
+- Same selection with `-count=1 -cpu=1` passed while 12 bounded CPU stress processes ran;
+  all stress workers were terminated and joined afterward.
+- Withholding the worker release deliberately failed in **5.06s**, with no helper temp directories.
+- `make lint` passed. Single `make test-q1` passed, `cmd/harnez` **60.263s**;
+  `grep -- '--- FAIL' /tmp/harnez-883-test-q1.log` found no failures. No untouched test was loosened.
+- Logs: `/tmp/harnez-883-before.log`, `/tmp/harnez-883-final-repeat.log`,
+  `/tmp/harnez-883-loaded.log`, `/tmp/harnez-883-test-q1.log` (local, not tracked).
