@@ -17,6 +17,7 @@ import (
 
 type Service interface{ Run(context.Context) error }
 type readiness interface{ Ready() bool }
+type readinessReason interface{ ReadyReason() string }
 type RouteRegistrar interface{ RegisterRoutes(*http.ServeMux) }
 type ClientCounter interface{ ActiveClients() int }
 
@@ -46,6 +47,7 @@ type statusInfo struct {
 	Clients         *int              `json:"clients,omitempty"`
 	PassiveNoQuota  map[string]uint64 `json:"passive_no_quota,omitempty"`
 	PassiveAccepted map[string]uint64 `json:"passive_accepted,omitempty"`
+	Reason          string            `json:"reason,omitempty"`
 }
 
 func CaptureBuildIdentity() string {
@@ -112,7 +114,20 @@ func (s Server) Run(ctx context.Context) error {
 				accepted = counter.AcceptedStatuslineObservations()
 			}
 		}
-		writeStatusWithDiagnostics(w, s.Version, identity, ready(), startedAt, countClients(), noQuota, accepted)
+		isReady := ready()
+		reason := ""
+		if !isReady {
+			reason = "service is not ready"
+			for _, service := range s.Services {
+				if check, ok := service.(readiness); ok && !check.Ready() {
+					if explain, ok := service.(readinessReason); ok && explain.ReadyReason() != "" {
+						reason = explain.ReadyReason()
+					}
+					break
+				}
+			}
+		}
+		writeStatusWithReasonAndDiagnostics(w, s.Version, identity, isReady, reason, startedAt, countClients(), noQuota, accepted)
 	})
 	shutdown := make(chan struct{}, 1)
 	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, _ *http.Request) {
@@ -266,13 +281,17 @@ func writeStatusWithStartAndClients(w http.ResponseWriter, version, identity str
 }
 
 func writeStatusWithDiagnostics(w http.ResponseWriter, version, identity string, ready bool, startedAt time.Time, clients *int, noQuota, accepted map[string]uint64) {
+	writeStatusWithReasonAndDiagnostics(w, version, identity, ready, "", startedAt, clients, noQuota, accepted)
+}
+
+func writeStatusWithReasonAndDiagnostics(w http.ResponseWriter, version, identity string, ready bool, reason string, startedAt time.Time, clients *int, noQuota, accepted map[string]uint64) {
 	w.Header().Set("Content-Type", "application/json")
 	code, health := http.StatusOK, "ok"
 	if !ready {
 		code, health = http.StatusServiceUnavailable, "starting"
 	}
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid(), StartedAt: startedAt, Clients: clients, PassiveNoQuota: noQuota, PassiveAccepted: accepted})
+	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid(), StartedAt: startedAt, Clients: clients, PassiveNoQuota: noQuota, PassiveAccepted: accepted, Reason: reason})
 }
 
 func statusHandler(version string) http.HandlerFunc { return statusHandlerReady(version, true) }

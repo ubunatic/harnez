@@ -55,6 +55,25 @@ const maxPanelContentWidth = 80
 // content, not an accidental truncation artifact.
 const measureWidth = 200
 
+func watchServerStatusLine(status string, since *time.Time, now time.Time) string {
+	switch status {
+	case "":
+		*since = time.Time{}
+		return ""
+	case "server starting":
+		*since = time.Time{}
+		return status
+	case "server not answering":
+		if since.IsZero() {
+			*since = now
+		}
+		return "server not answering since " + since.Local().Format("15:04")
+	default:
+		*since = time.Time{}
+		return status
+	}
+}
+
 const watchEscapeSequenceTimeout = 50 * time.Millisecond
 
 type watchReadDeadliner interface {
@@ -609,6 +628,8 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 
 	lastSummary := UsageSummary{Timestamp: time.Now()}
 	loading := true
+	serverStatusSince := time.Time{}
+	serverStatus := watchServerStatusLine(opts.ServerStatus, &serverStatusSince, time.Now())
 	var lastRates map[string]agentRate
 	var lastProcs *AgentProcessCount
 	currentHost := configuredHost
@@ -716,6 +737,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			DebugBox:            activeDebugBox,
 			MicLiveLevel:        micLive.Level,
 			MicLiveAvailable:    micLive.Available,
+			ServerStatus:        serverStatus,
 		})
 		frame := buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, frameOpts)
 		err := frame.paint(out)
@@ -753,6 +775,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		summary UsageSummary
 		procs   *AgentProcessCount
 		host    string
+		status  string
 	}
 	results := make(chan fetchResult, 1)
 	var fetchDone chan struct{}
@@ -771,7 +794,9 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			if targetHost != "" {
 				result.summary, result.procs, _ = CollectRemoteProgress(sigCtx, targetHost, procRequested, reportFetchStage)
 			} else {
-				if opts.StoredUsageLoader != nil {
+				if opts.StoredUsageLoadWithStatus != nil {
+					result.summary, result.status = opts.StoredUsageLoadWithStatus(sigCtx)
+				} else if opts.StoredUsageLoader != nil {
 					result.summary = opts.StoredUsageLoader(sigCtx)
 				} else {
 					result.summary = storedSummaryOrError(sigCtx)
@@ -816,6 +841,9 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				<-fetchDone
 				fetchDone = nil
 				currentHost, lastProcs = result.host, result.procs
+				if opts.StoredUsageLoadWithStatus != nil {
+					serverStatus = watchServerStatusLine(result.status, &serverStatusSince, time.Now())
+				}
 				lastSummary = applyStaleQuota(result.summary, lastSummary)
 				lastRates = tracker.update(lastSummary)
 				loading = false
@@ -845,6 +873,9 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 					<-fetchDone
 					fetchDone = nil
 					currentHost, lastProcs = result.host, result.procs
+					if opts.StoredUsageLoadWithStatus != nil {
+						serverStatus = watchServerStatusLine(result.status, &serverStatusSince, time.Now())
+					}
 					lastSummary = applyStaleQuota(result.summary, lastSummary)
 					lastRates = tracker.update(lastSummary)
 					loading = false
@@ -895,6 +926,9 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			<-fetchDone
 			fetchDone = nil
 			currentHost, lastProcs = result.host, result.procs
+			if opts.StoredUsageLoadWithStatus != nil {
+				serverStatus = watchServerStatusLine(result.status, &serverStatusSince, time.Now())
+			}
 			lastSummary = applyStaleQuota(result.summary, lastSummary)
 			lastRates = tracker.update(lastSummary)
 			loading = false

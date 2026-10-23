@@ -39,6 +39,18 @@ func TestStatusEndpointReportsVersionAndBuildIdentity(t *testing.T) {
 	}
 }
 
+func TestStatusEndpointReportsReasonWhileNotReady(t *testing.T) {
+	response := httptest.NewRecorder()
+	writeStatusWithReasonAndDiagnostics(response, "1.2.3", "build-a", false, "usage collector is initializing", time.Time{}, nil, nil, nil)
+	var got statusInfo
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusServiceUnavailable || got.Health != "starting" || got.Reason != "usage collector is initializing" {
+		t.Fatalf("status = %d %+v", response.Code, got)
+	}
+}
+
 func TestPostUpdateDropsWhenServerDoesNotAnswer(t *testing.T) {
 	if got := PostUpdate(context.Background(), filepath.Join(t.TempDir(), "server.sock"), "/usage/passive", []byte(`{"windows":[]}`), time.Second); got != UpdateDropped {
 		t.Fatalf("result = %q, want dropped", got)

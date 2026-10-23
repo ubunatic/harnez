@@ -43,6 +43,13 @@ func (s *usageCollectorService) RegisterRoutes(mux *http.ServeMux) {
 
 func (s *usageCollectorService) Ready() bool { return s.ready.Load() }
 
+func (s *usageCollectorService) ReadyReason() string {
+	if s.ready.Load() {
+		return ""
+	}
+	return "usage collector is initializing"
+}
+
 func (s *usageCollectorService) NoQuotaStatuslineObservations() map[string]uint64 {
 	return s.updateServer.NoQuota.NoQuotaSnapshot()
 }

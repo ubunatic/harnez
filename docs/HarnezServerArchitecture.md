@@ -124,14 +124,17 @@ available with `harnez usage -w`.
 
 Viewers send a heartbeat; the first heartbeat after none triggers a catch-up fetch of stale providers,
 and without viewers the collector only fetches on its regular cadence (714). Readiness rule: `/status`
-reports `ok` as soon as the services run, never after work that a client triggers. In 714 the server
+reports `ok` as soon as the services run, never after work that a client triggers; while not ready it
+includes a reason such as `usage collector is initializing`. In 714 the server
 reported ready only after its first fetch, which waited for a heartbeat, which clients sent only after
 ready: every `harnez usage` hung up to 30s after each restart (fixed in `b47b1263`, test
 `TestCollectorReadyBeforeFirstFetch`). A usage client probes once with a bounded timeout and never
 waits for readiness. It starts the server only when no listener owns the socket, then displays the
 stored snapshot and reports server status on stderr. A listening server that is starting or not
-answering is left alone; the client does not take over its socket. The whole one-shot usage command
-has a spec-defined deadline (873).
+answering is left alone; the client does not take over its socket. The store read also returns on the
+spec-defined command deadline if the database driver blocks while opening the store. In `usage -w`,
+the footer shows `server starting` or `server not answering since HH:MM`; it clears when a later probe
+finds the server ready. The whole one-shot usage command has a spec-defined deadline (873).
 
 The built command remains `harnez server` and these local routes remain HTTP over the Unix socket.
 JSON-RPC remains the target for the later agent-session API (roadmap step 4), behind transport

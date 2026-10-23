@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creack/pty"
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
@@ -94,6 +96,146 @@ func TestUsageBinaryReturnsWithinDeadline(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUsageBinaryStoreReadDeadlinePrintsError(t *testing.T) {
+	skipShort(t, "builds and runs the harnez binary")
+	const usageDeadline = "250ms"
+	bin := buildUsageTestBinaryWithDeadline(t, usageDeadline)
+	home, runtimeDir := usageTestDirs(t)
+	storePath := filepath.Join(home, "data", "harnez", "telemetry.sqlite")
+	if err := os.MkdirAll(filepath.Dir(storePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(storePath, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*raceFactor)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "usage", "--minimal", "--offline")
+	cmd.Env = usageTestEnv(home, runtimeDir)
+	var stdout, stderr strings.Builder
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	start := time.Now()
+	err := cmd.Run()
+	elapsed := time.Since(start)
+	t.Logf("slow-store binary elapsed: %s", elapsed)
+	if err == nil {
+		t.Fatal("usage unexpectedly succeeded with a blocked store open")
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("usage process exceeded its test limit (%s): %v", elapsed, err)
+	}
+	if elapsed >= time.Second*raceFactor {
+		t.Fatalf("usage returned after %s, want under %s", elapsed, time.Second*raceFactor)
+	}
+	if !strings.Contains(stderr.String(), "context deadline exceeded") {
+		t.Fatalf("stderr lacks store deadline error:\n%s", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout should not contain a partial dashboard after store failure:\n%s", stdout.String())
+	}
+}
+
+func TestUsageWatchShowsHungServerStatusPTY(t *testing.T) {
+	skipShort(t, "runs harnez usage --watch in a PTY")
+	bin := buildUsageTestBinary(t)
+	home, runtimeDir := usageTestDirs(t)
+	env := usageTestEnv(home, runtimeDir)
+	seedUsageTestStore(t, home)
+	listener, accepted, release := startUsageTestServer(t, runtimeDir, "hung")
+	defer listener.Close()
+	defer close(release)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "usage", "--watch")
+	cmd.Env = env
+	master, err := pty.Start(cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer master.Close()
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	chunks := make(chan string, 32)
+	go func() {
+		defer close(chunks)
+		buf := make([]byte, 4096)
+		for {
+			n, err := master.Read(buf)
+			if n > 0 {
+				chunks <- string(buf[:n])
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	var transcript strings.Builder
+	for !strings.Contains(transcript.String(), "server not answering since ") {
+		select {
+		case chunk, ok := <-chunks:
+			if !ok {
+				t.Fatalf("PTY closed before status row appeared:\n%s", transcript.String())
+			}
+			transcript.WriteString(chunk)
+		case <-ctx.Done():
+			t.Fatalf("watch did not show hung-server status:\n%s", transcript.String())
+		}
+	}
+	select {
+	case <-accepted:
+	default:
+		t.Fatal("watch did not connect to the hung server")
+	}
+	if _, err := master.Write([]byte{'q'}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("watch exited with error: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("watch did not exit after q")
+	}
+}
+
+func buildUsageTestBinaryWithDeadline(t *testing.T, deadline string) string {
+	t.Helper()
+	serverSpec, err := filepath.Abs("../../spec/server.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(serverSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := strings.Replace(string(data), "usage_deadline: 10s", "usage_deadline: "+deadline, 1)
+	if updated == string(data) {
+		t.Fatal("server spec usage_deadline was not replaced")
+	}
+	root := t.TempDir()
+	override := filepath.Join(root, "server.yaml")
+	if err := os.WriteFile(override, []byte(updated), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	overlayPath := filepath.Join(root, "overlay.json")
+	overlay, err := json.Marshal(struct {
+		Replace map[string]string `json:"Replace"`
+	}{Replace: map[string]string{serverSpec: override}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(overlayPath, overlay, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(root, "harnez")
+	cmd := exec.Command("go", "build", "-overlay", overlayPath, "-o", bin, ".")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build deadline-test binary: %v\n%s", err, output)
+	}
+	return bin
 }
 
 func buildUsageTestBinary(t *testing.T) string {

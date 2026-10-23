@@ -125,29 +125,30 @@ func newUsageCmd() *cobra.Command {
 				// summary/rates/procs internally rather than the caller
 				// pre-fetching a single snapshot up front.
 				var cached usage.UsageSummary
-				var storedLoader func(context.Context) usage.UsageSummary
+				var storedLoader func(context.Context) (usage.UsageSummary, string)
+				var status string
 				if usageHost == "" {
-					var status string
 					cached, status, err = loadLocalUsageWithStatus(ctx, usageOffline)
-					reportUsageServerStatus(cmd, status)
 					if err != nil {
 						return fmt.Errorf("read usage store: %w", err)
 					}
-					storedLoader = func(ctx context.Context) usage.UsageSummary {
-						if latest, err := loadLocalUsage(ctx, usageOffline); err == nil {
+					storedLoader = func(ctx context.Context) (usage.UsageSummary, string) {
+						latest, latestStatus, err := loadLocalUsageWithStatus(ctx, usageOffline)
+						if err == nil {
 							cached = latest
 						}
-						return cached
+						return cached, latestStatus
 					}
 				}
 				return usage.RunWatchWithOptions(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", usage.WatchOptions{
-					Host:              usageHost,
-					StoredUsageLoader: storedLoader,
-					Mode:              selectedMode,
-					ShowProcesses:     usageProcesses,
-					ShowMic:           usageMic,
-					Splash:            usageSplash,
-					RemoteLoadHost:    loadWatchHost,
+					Host:                      usageHost,
+					StoredUsageLoadWithStatus: storedLoader,
+					ServerStatus:              status,
+					Mode:                      selectedMode,
+					ShowProcesses:             usageProcesses,
+					ShowMic:                   usageMic,
+					Splash:                    usageSplash,
+					RemoteLoadHost:            loadWatchHost,
 				})
 			}
 

@@ -59,7 +59,7 @@ func loadLocalUsageWithStatus(ctx context.Context, offline bool) (usage.UsageSum
 		status = check.status
 		passiveNoQuota = check.passiveNoQuota
 	}
-	summary, err := usage.ReadStoredSummary(ctx, usage.UsageStorePath())
+	summary, err := readStoredSummaryBounded(ctx, usage.UsageStorePath())
 	if err != nil && os.IsNotExist(err) && offline {
 		return usage.UsageSummary{}, status, fmt.Errorf("usage store does not exist; start harnez server first (or run usage without --offline)")
 	}
@@ -67,6 +67,27 @@ func loadLocalUsageWithStatus(ctx context.Context, offline bool) (usage.UsageSum
 		summary.PassiveNoQuota = passiveNoQuota
 	}
 	return summary, status, err
+}
+
+type storedSummaryResult struct {
+	summary usage.UsageSummary
+	err     error
+}
+
+// readStoredSummaryBounded lets the caller honor its deadline even if the
+// database driver blocks while opening a damaged or unusual store file.
+func readStoredSummaryBounded(ctx context.Context, path string) (usage.UsageSummary, error) {
+	result := make(chan storedSummaryResult, 1)
+	go func() {
+		summary, err := usage.ReadStoredSummary(ctx, path)
+		result <- storedSummaryResult{summary: summary, err: err}
+	}()
+	select {
+	case got := <-result:
+		return got.summary, got.err
+	case <-ctx.Done():
+		return usage.UsageSummary{}, ctx.Err()
+	}
 }
 
 func (s serverStarter) ensure(ctx context.Context, cfg server.Config) serverCheckResult {

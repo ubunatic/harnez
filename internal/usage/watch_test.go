@@ -2360,6 +2360,25 @@ func TestSplashStatusLineFormatsEachStage(t *testing.T) {
 	}
 }
 
+func TestWatchServerStatusRowPersistsUntilRecovery(t *testing.T) {
+	now := time.Date(2026, time.October, 23, 14, 52, 0, 0, time.Local)
+	since := time.Time{}
+	first := watchServerStatusLine("server not answering", &since, now)
+	repeated := watchServerStatusLine("server not answering", &since, now.Add(time.Minute))
+	if first != "server not answering since 14:52" || repeated != first {
+		t.Fatalf("status lines = %q then %q, want stable start time", first, repeated)
+	}
+	frameOpts := WatchOptions{Mode: "minimal", ServerStatus: first}
+	frame := buildWatchFrameAt(UsageSummary{}, nil, MinWatchInterval, initialWatchSections(frameOpts), 90, 24, true, now, frameOpts)
+	if text := strings.Join(frame.lines, "\n"); !strings.Contains(stripANSI(text), first) {
+		t.Fatalf("watch frame lacks server status row:\n%s", stripANSI(text))
+	}
+	cleared := watchServerStatusLine("", &since, now.Add(2*time.Minute))
+	if cleared != "" || !since.IsZero() {
+		t.Fatalf("recovered server status = %q, since=%s; want cleared", cleared, since)
+	}
+}
+
 // TestSplashSourceGlyph checks issue 254 brand glyph mapping.
 func TestSplashSourceGlyph(t *testing.T) {
 	tests := []struct {

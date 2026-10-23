@@ -16,6 +16,11 @@ type WatchOptions struct {
 	Host string
 	// StoredUsageLoader reads the most recent collector snapshot for local views.
 	StoredUsageLoader func(context.Context) UsageSummary
+	// StoredUsageLoadWithStatus reloads the local snapshot and server status
+	// together so watch can clear its status row as soon as the server recovers.
+	StoredUsageLoadWithStatus func(context.Context) (UsageSummary, string)
+	// ServerStatus is the current local collector state shown in the watch footer.
+	ServerStatus string
 	// Loading distinguishes the first interactive frame from an empty result.
 	Loading    bool
 	ProcCounts *AgentProcessCount
@@ -329,12 +334,15 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		}
 	}
 	var footer []string
-	if live && usageStatusFooterFits(rows, opt) {
+	if live && (usageStatusFooterFits(rows, opt) || opt.ServerStatus != "") {
 		wa := mustWatchActions()
 		footer = []string{
 			"",
 			fmt.Sprintf("refresh every %s   %s[%s]controls  [%s]ode  [%s]emote  [%s]debug  [%s/Q]uit\x1b[0m",
 				interval, ansiDimGrey, wa.symbol("toggle_controls"), wa.symbol("cycle_preset"), wa.symbol("toggle_remote"), wa.symbol("toggle_debug_box"), wa.symbol("quit")),
+		}
+		if opt.ServerStatus != "" {
+			footer = append(footer, ansiDimGrey+opt.ServerStatus+"\x1b[0m")
 		}
 	}
 
@@ -570,7 +578,10 @@ func renderSummaryWithUsageAt(summary UsageSummary, out io.Writer, showProcesses
 
 func staticUsageViewRows(rows int, opts WatchOptions) int {
 	if usageStatusFooterFits(rows, opts) {
-		rows -= 2 // the interactive footer is two rows: a blank and the controls line.
+		rows -= 2 // the interactive footer is a blank and the controls line.
+		if opts.ServerStatus != "" {
+			rows--
+		}
 	}
 	if rows < 1 {
 		return 1
@@ -583,14 +594,18 @@ func staticUsageViewRows(rows int, opts WatchOptions) int {
 // rows so one-shot and watch retain identical panel and overflow detail.
 func usageStatusFooterFits(rows int, opts WatchOptions) bool {
 	mode := usageViewMode(opts.Mode, opts.Compact, opts.Minimal)
-	if !mode.statusBar() {
+	if !mode.statusBar() && opts.ServerStatus == "" {
 		return false
 	}
 	headerRows := 0
 	if mode.titleBar() {
 		headerRows = 2
 	}
-	return rows >= headerRows+3
+	footerRows := 3
+	if opts.ServerStatus == "" {
+		footerRows = 2
+	}
+	return rows >= headerRows+1+footerRows
 }
 
 // RenderSummaryRemote prints one static frame of the spec-selected grid using remote host collection.
