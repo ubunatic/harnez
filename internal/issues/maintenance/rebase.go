@@ -1,4 +1,4 @@
-package main
+package maintenance
 
 import (
 	"crypto/sha256"
@@ -13,7 +13,7 @@ import (
 
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/index"
-	"ubunatic.com/harnez/internal/issues"
+	issuecore "ubunatic.com/harnez/internal/issues"
 )
 
 type rebaseOwnedTicket struct {
@@ -45,6 +45,9 @@ func gitOutput(dir string, args ...string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+// GitOutput runs git in dir and returns trimmed standard output.
+func GitOutput(dir string, args ...string) (string, error) { return gitOutput(dir, args...) }
 
 func rebaseStatePath(dir string) (string, error) {
 	common, err := gitOutput(dir, "rev-parse", "--git-path", "harnez/issues-rebase.json")
@@ -266,7 +269,7 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 }
 
 func plannedCollisions(dir, upstream string, state rebaseState) (int, []rebaseOwnedTicket, error) {
-	files, err := issues.Scan(filepath.Join(dir, "issues"))
+	files, err := issuecore.Scan(filepath.Join(dir, "issues"))
 	if err != nil {
 		return 0, nil, err
 	}
@@ -332,7 +335,7 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath 
 		if err != nil {
 			return err
 		}
-		rewritten, err := issues.RewriteHeaderNumber(string(content), repair.NewNumber)
+		rewritten, err := issuecore.RewriteHeaderNumber(string(content), repair.NewNumber)
 		if err != nil {
 			return fmt.Errorf("%s: %w", repair.OldPath, err)
 		}
@@ -458,11 +461,15 @@ func runIssuesLint(w io.Writer, dir string) error {
 	return runIssuesLintMode(w, dir, false, nil)
 }
 
-type issueIndexSnapshot map[string]fileSnapshot
+type issueIndexSnapshot map[string]FileSnapshot
 
-type fileSnapshot struct {
-	content []byte
-	existed bool
+// IssueIndexSnapshot captures generated issue indexes for rollback.
+type IssueIndexSnapshot = issueIndexSnapshot
+
+// FileSnapshot holds the saved content and existence state of one index file.
+type FileSnapshot struct {
+	Content []byte
+	Existed bool
 }
 
 func issueIndexRelPaths() []string {
@@ -476,7 +483,7 @@ func snapshotIssueIndexes(issuesDir string) (issueIndexSnapshot, error) {
 		if err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
-		snapshot[name] = fileSnapshot{content: content, existed: err == nil}
+		snapshot[name] = FileSnapshot{Content: content, Existed: err == nil}
 	}
 	return snapshot, nil
 }
@@ -484,8 +491,8 @@ func snapshotIssueIndexes(issuesDir string) (issueIndexSnapshot, error) {
 func restoreIssueIndexes(issuesDir string, snapshot issueIndexSnapshot) error {
 	for name, file := range snapshot {
 		path := filepath.Join(issuesDir, name)
-		if file.existed {
-			if err := os.WriteFile(path, file.content, 0o644); err != nil {
+		if file.Existed {
+			if err := os.WriteFile(path, file.Content, 0o644); err != nil {
 				return err
 			}
 		} else if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -495,15 +502,28 @@ func restoreIssueIndexes(issuesDir string, snapshot issueIndexSnapshot) error {
 	return nil
 }
 
+// IssueIndexRelPaths returns the generated issue index paths staged with updates.
+func IssueIndexRelPaths() []string { return issueIndexRelPaths() }
+
+// SnapshotIssueIndexes captures the current issue index files.
+func SnapshotIssueIndexes(issuesDir string) (IssueIndexSnapshot, error) {
+	return snapshotIssueIndexes(issuesDir)
+}
+
+// RestoreIssueIndexes restores a snapshot of issue index files.
+func RestoreIssueIndexes(issuesDir string, snapshot IssueIndexSnapshot) error {
+	return restoreIssueIndexes(issuesDir, snapshot)
+}
+
 func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []string) error {
 	issuesDir := filepath.Join(dir, "issues")
-	files, err := issues.Scan(issuesDir)
+	files, err := issuecore.Scan(issuesDir)
 	if err != nil {
 		return fmt.Errorf("issues lint: %w", err)
 	}
 	seen := map[string]string{}
 	for _, f := range files {
-		if f.Canonical == issues.StatusUnknown {
+		if f.Canonical == issuecore.StatusUnknown {
 			return fmt.Errorf("issues lint: %s has unknown status %q and cannot appear in the three lifecycle indexes", f.RelPath, f.RawStatus)
 		}
 		if prior := seen[f.Number]; prior != "" {
@@ -514,10 +534,10 @@ func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []
 		if err != nil {
 			return err
 		}
-		title, _, _ := issues.ParseIssueFile(string(content))
+		title, _, _ := issuecore.ParseIssueFile(string(content))
 		fields := strings.Fields(title)
 		if len(fields) > 0 {
-			_, parseErr := issues.NormalizeID(fields[0])
+			_, parseErr := issuecore.NormalizeID(fields[0])
 			if parseErr == nil && fields[0] != f.Number {
 				return fmt.Errorf("issues lint: filename/header mismatch in issues/%s (header %q)", f.RelPath, title)
 			}
@@ -713,4 +733,28 @@ func runIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPa
 func writeMergeConflictMarkers(path, ours, theirs string) error {
 	conflict := "<<<<<<< ours\n" + strings.TrimRight(ours, "\r\n") + "\n=======\n" + strings.TrimRight(theirs, "\r\n") + "\n>>>>>>> theirs\n"
 	return os.WriteFile(path, []byte(conflict), 0o644)
+}
+
+// RunIssuesRebase repairs ticket-number collisions after a rebase.
+func RunIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
+	return runIssuesRebase(w, dir, upstream, dryRun)
+}
+
+// RunIssuesLint validates issue files and their generated indexes.
+func RunIssuesLint(w io.Writer, dir string) error { return runIssuesLint(w, dir) }
+
+// RunIssuesLintCached validates the cached issue tree before a commit.
+func RunIssuesLintCached(w io.Writer, dir string) error { return runIssuesLintCached(w, dir) }
+
+// RunIssuesStatus prints issue tracker status and active-ticket warnings.
+func RunIssuesStatus(w io.Writer, dir string) error { return runIssuesStatus(w, dir) }
+
+// RunIssuesMergeDriver regenerates a generated index from its source files.
+func RunIssuesMergeDriver(currentPath, targetPath string) error {
+	return runIssuesMergeDriver(currentPath, targetPath)
+}
+
+// RunIssuesMergeDriverVersions merges versions of a generated index.
+func RunIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPath string) error {
+	return runIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPath)
 }

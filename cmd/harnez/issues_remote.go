@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"ubunatic.com/harnez/internal/issues"
+	issuesmaintenance "ubunatic.com/harnez/internal/issues/maintenance"
 )
 
 type ghRunner func(dir string, args ...string) ([]byte, error)
@@ -37,7 +38,7 @@ func runIssuesNewRemoteWithForce(w io.Writer, dir, title string, jsonOutput, for
 			return err
 		}
 	}
-	remote, err := gitOutput(dir, "remote", "get-url", "github")
+	remote, err := issuesmaintenance.GitOutput(dir, "remote", "get-url", "github")
 	if err != nil {
 		return fmt.Errorf("issues new --remote: requires the repository's github remote: %w", err)
 	}

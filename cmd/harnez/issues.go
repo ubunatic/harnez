@@ -36,6 +36,7 @@ import (
 	"ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
+	issuesmaintenance "ubunatic.com/harnez/internal/issues/maintenance"
 	"ubunatic.com/harnez/internal/readcard"
 )
 
@@ -244,28 +245,28 @@ valid, exit-0 answer.`,
 			if args[0] == "merge-driver" {
 				target := "issues/README.md"
 				if len(args) == 4 {
-					return runIssuesMergeDriverVersions(args[1], args[2], args[3], target)
+					return issuesmaintenance.RunIssuesMergeDriverVersions(args[1], args[2], args[3], target)
 				}
 				if len(args) == 5 {
 					target = args[4]
 				}
-				return runIssuesMergeDriverVersions(args[1], args[2], args[3], target)
+				return issuesmaintenance.RunIssuesMergeDriverVersions(args[1], args[2], args[3], target)
 			}
 			if args[0] == "rebase" {
 				upstream := "@{upstream}"
 				if len(args) == 2 {
 					upstream = args[1]
 				}
-				return runIssuesRebase(cmd.OutOrStdout(), dir, upstream, checkFlag || dryRunFlag)
+				return issuesmaintenance.RunIssuesRebase(cmd.OutOrStdout(), dir, upstream, checkFlag || dryRunFlag)
 			}
 			if args[0] == "lint" {
 				if cachedFlag {
-					return runIssuesLintCached(cmd.OutOrStdout(), dir)
+					return issuesmaintenance.RunIssuesLintCached(cmd.OutOrStdout(), dir)
 				}
-				return runIssuesLint(cmd.OutOrStdout(), dir)
+				return issuesmaintenance.RunIssuesLint(cmd.OutOrStdout(), dir)
 			}
 			if args[0] == "status" {
-				return runIssuesStatus(cmd.OutOrStdout(), dir)
+				return issuesmaintenance.RunIssuesStatus(cmd.OutOrStdout(), dir)
 			}
 			if args[0] == "new" {
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
@@ -545,7 +546,7 @@ func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issue
 	}
 
 	readmePath := filepath.Join(issuesDir, "README.md")
-	indexSnapshot, snapshotErr := snapshotIssueIndexes(issuesDir)
+	indexSnapshot, snapshotErr := issuesmaintenance.SnapshotIssueIndexes(issuesDir)
 	if snapshotErr != nil {
 		return nil, false, fmt.Errorf("issues: snapshot indexes: %w", snapshotErr)
 	}
@@ -553,7 +554,7 @@ func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issue
 		for _, i := range changed {
 			_ = os.WriteFile(targets[i].path, targets[i].old, 0o644)
 		}
-		_ = restoreIssueIndexes(issuesDir, indexSnapshot)
+		_ = issuesmaintenance.RestoreIssueIndexes(issuesDir, indexSnapshot)
 	}
 	for _, i := range changed {
 		if err := os.WriteFile(targets[i].path, targets[i].updated, 0o644); err != nil {
@@ -586,7 +587,7 @@ func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issue
 			paths = append(paths, targets[i].relPath)
 			numbers = append(numbers, targets[i].result.Number)
 		}
-		paths = append(paths, issueIndexRelPaths()...)
+		paths = append(paths, issuesmaintenance.IssueIndexRelPaths()...)
 		msg := opts.CommitMsg
 		if msg == "" {
 			commitVerb := verb
@@ -921,7 +922,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		if _, err := os.Stat(newPath); err == nil {
 			return issuesResult{}, false, fmt.Errorf("issues mv --check: destination file %s already exists", newGitRelPath)
 		}
-		indexSnapshot, snapshotErr := snapshotIssueIndexes(issuesDir)
+		indexSnapshot, snapshotErr := issuesmaintenance.SnapshotIssueIndexes(issuesDir)
 		if snapshotErr != nil {
 			return issuesResult{}, false, fmt.Errorf("issues mv --check: snapshot indexes: %w", snapshotErr)
 		}
@@ -936,7 +937,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		// Always restore
 		_ = os.WriteFile(oldPath, content, 0o644)
 		_ = os.Remove(newPath)
-		_ = restoreIssueIndexes(issuesDir, indexSnapshot)
+		_ = issuesmaintenance.RestoreIssueIndexes(issuesDir, indexSnapshot)
 
 		if updErr != nil {
 			return issuesResult{}, false, fmt.Errorf("issues mv --check: %w", updErr)
@@ -988,7 +989,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		if msg == "" {
 			msg = fmt.Sprintf("docs(issues): renumber %s to %s", f.Number, newNum)
 		}
-		paths := append([]string{oldGitRelPath, newGitRelPath}, issueIndexRelPaths()...)
+		paths := append([]string{oldGitRelPath, newGitRelPath}, issuesmaintenance.IssueIndexRelPaths()...)
 		for _, edit := range referenceEdits {
 			rel, err := filepath.Rel(opts.Dir, edit.path)
 			if err != nil {
@@ -1132,7 +1133,7 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
 		}
 		result.ReadmeUpdated = readmeChanged
-		paths := append([]string{relPath}, issueIndexRelPaths()...)
+		paths := append([]string{relPath}, issuesmaintenance.IssueIndexRelPaths()...)
 		changed, err := gitPathsChanged(opts.Dir, paths)
 		if err != nil {
 			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
@@ -1161,7 +1162,7 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 	}
 
 	if opts.Check {
-		indexSnapshot, snapshotErr := snapshotIssueIndexes(issuesDir)
+		indexSnapshot, snapshotErr := issuesmaintenance.SnapshotIssueIndexes(issuesDir)
 		if snapshotErr != nil {
 			return issuesResult{}, false, fmt.Errorf("issues --check: snapshot indexes: %w", snapshotErr)
 		}
@@ -1176,7 +1177,7 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 		if werr := os.WriteFile(filePath, content, 0o644); werr != nil {
 			return issuesResult{}, false, fmt.Errorf("issues --check: restore %s: %w", filePath, werr)
 		}
-		if restoreErr := restoreIssueIndexes(issuesDir, indexSnapshot); restoreErr != nil {
+		if restoreErr := issuesmaintenance.RestoreIssueIndexes(issuesDir, indexSnapshot); restoreErr != nil {
 			return issuesResult{}, false, fmt.Errorf("issues --check: restore indexes: %w", restoreErr)
 		}
 		if updErr != nil {
@@ -1201,7 +1202,7 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 		if msg == "" {
 			msg = defaultCommitMessage(verb, f.Number, reason)
 		}
-		sha, err := gitAddAndCommit(opts.Dir, append([]string{relPath}, issueIndexRelPaths()...), msg)
+		sha, err := gitAddAndCommit(opts.Dir, append([]string{relPath}, issuesmaintenance.IssueIndexRelPaths()...), msg)
 		if err != nil {
 			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
 		}

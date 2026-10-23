@@ -11,6 +11,7 @@ import (
 	findpkg "ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
+	issuesmaintenance "ubunatic.com/harnez/internal/issues/maintenance"
 )
 
 func TestIssuesRemoteAllocation(t *testing.T) {
@@ -143,7 +144,7 @@ func TestGHTicketLifecycle(t *testing.T) {
 	if err := runIndex(&bytes.Buffer{}, indexOptions{Dir: dir}); err != nil {
 		t.Fatalf("index: %v", err)
 	}
-	if err := runIssuesLint(&bytes.Buffer{}, dir); err != nil {
+	if err := issuesmaintenance.RunIssuesLint(&bytes.Buffer{}, dir); err != nil {
 		t.Fatalf("lint: %v", err)
 	}
 	writeDuplicateFile(t, dir, "issues/GH42-duplicate.md", "# GH42 — Duplicate\n\n**Status**: Open\n")
@@ -153,7 +154,7 @@ func TestGHTicketLifecycle(t *testing.T) {
 	if err := runIndex(&bytes.Buffer{}, indexOptions{Dir: dir}); err == nil {
 		t.Fatal("index accepted duplicate GH id")
 	}
-	if err := runIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "duplicate ticket number GH42") {
+	if err := issuesmaintenance.RunIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "duplicate ticket number GH42") {
 		t.Fatalf("duplicate lint: %v", err)
 	}
 }
@@ -263,7 +264,7 @@ func TestIssuesNewLocalModeAndRemoteJSON(t *testing.T) {
 func TestGHLintHeaderMismatch(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	writeDuplicateFile(t, dir, "issues/GH42-cloud.md", "# GH43 — Cloud\n\n**Status**: Open\n")
-	if err := runIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "filename/header mismatch") {
+	if err := issuesmaintenance.RunIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "filename/header mismatch") {
 		t.Fatalf("GH header mismatch: %v", err)
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
+	issuesmaintenance "ubunatic.com/harnez/internal/issues/maintenance"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 )
@@ -257,34 +258,34 @@ func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir str
 	}()
 
 	if hasIssues {
-		snapshot, err := snapshotIssueIndexes(issuesDir)
+		snapshot, err := issuesmaintenance.SnapshotIssueIndexes(issuesDir)
 		if err != nil {
 			return fmt.Errorf("index --check: snapshot issue indexes: %w", err)
 		}
 		if _, err := index.UpdateIssuesReadme(issuesReadme, issuesDir); err != nil {
-			_ = restoreIssueIndexes(issuesDir, snapshot)
+			_ = issuesmaintenance.RestoreIssueIndexes(issuesDir, snapshot)
 			return fmt.Errorf("index --check: %w", err)
 		}
 		for _, name := range []string{"README.md", "BACKLOG.md", "CLOSED.md"} {
 			path := filepath.Join(issuesDir, name)
 			generated, err := os.ReadFile(path)
 			if err != nil {
-				_ = restoreIssueIndexes(issuesDir, snapshot)
+				_ = issuesmaintenance.RestoreIssueIndexes(issuesDir, snapshot)
 				return fmt.Errorf("index --check: read regenerated %s: %w", path, err)
 			}
 			old := snapshot[name]
-			if !old.existed || !bytes.Equal(old.content, generated) {
+			if !old.Existed || !bytes.Equal(old.Content, generated) {
 				drift = true
 				fmt.Fprintf(w, "would update %s\n", path)
-				if err := printUnifiedDiff(w, path, old.content, generated); err != nil {
-					_ = restoreIssueIndexes(issuesDir, snapshot)
+				if err := printUnifiedDiff(w, path, old.Content, generated); err != nil {
+					_ = issuesmaintenance.RestoreIssueIndexes(issuesDir, snapshot)
 					return fmt.Errorf("index --check: %w", err)
 				}
 			} else {
 				fmt.Fprintf(w, "%s up to date\n", path)
 			}
 		}
-		if err := restoreIssueIndexes(issuesDir, snapshot); err != nil {
+		if err := issuesmaintenance.RestoreIssueIndexes(issuesDir, snapshot); err != nil {
 			return fmt.Errorf("index --check: restore issue indexes: %w", err)
 		}
 	}

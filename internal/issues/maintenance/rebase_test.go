@@ -1,4 +1,4 @@
-package main
+package maintenance
 
 import (
 	"bytes"
@@ -251,7 +251,7 @@ func TestIssuesRebaseMissingIntegrationShowsExactSetupCommand(t *testing.T) {
 
 func TestIssuesMergeDriverRegeneratesCurrentVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "current")
-	readme, err := os.ReadFile(filepath.Join("..", "..", "issues", "README.md"))
+	readme, err := os.ReadFile(filepath.Join("..", "..", "..", "issues", "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +267,7 @@ func TestIssuesMergeDriverRegeneratesCurrentVersion(t *testing.T) {
 }
 
 func TestIssuesMergeDriverReplacesConflictInsideDocsBlock(t *testing.T) {
-	original, err := os.ReadFile(filepath.Join("..", "..", "docs", "README.md"))
+	original, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestIssuesMergeDriverReplacesConflictInsideDocsBlock(t *testing.T) {
 }
 
 func TestIssuesMergeDriverRejectsConflictOutsideDocsBlock(t *testing.T) {
-	original, err := os.ReadFile(filepath.Join("..", "..", "docs", "README.md"))
+	original, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
