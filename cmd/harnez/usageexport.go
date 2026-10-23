@@ -18,33 +18,12 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"time"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/privacy"
-	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
 )
-
-// usageExportFormatVersion is the format_version written to every export
-// file (issue 720). Bump it with any breaking change to the envelope,
-// telemetry.ExportToolCall or usage.ExportPoint; see docs/Telemetry.md
-// "Usage Export Format" for what counts as breaking.
-const usageExportFormatVersion = 2
-
-// usageExportEnvelope is the top-level JSON shape written to --out: both
-// exporters stay independently testable (see their own export_test.go
-// files); this envelope is only assembled here at the CLI layer.
-type usageExportEnvelope struct {
-	FormatVersion int               `json:"format_version"`
-	GeneratedAt   time.Time         `json:"generated_at"`
-	Telemetry     telemetry.Export  `json:"telemetry"`
-	Usage         usage.UsageExport `json:"usage"`
-}
 
 func newUsageExportCmd() *cobra.Command {
 	var out string
@@ -103,7 +82,7 @@ yet implemented.
 			if err != nil {
 				return err
 			}
-			return runUsageExportFull(out, dbPath, historyDir, level, classify)
+			return usage.RunUsageExportFull(out, dbPath, historyDir, level, classify)
 		},
 	}
 	cmd.Flags().StringVar(&out, "out", "", "output file path for the sanitized JSON export (required)")
@@ -112,92 +91,4 @@ yet implemented.
 	cmd.Flags().StringVar(&privacyFlag, "privacy", "public", "privacy level: public|agent-sanitized|internal|raw")
 	cmd.Flags().BoolVar(&classify, "classify", false, "opt-in batch classification of notes using local model runner (issue 212)")
 	return cmd
-}
-
-// runUsageExport preserves the original 3-arg signature at
-// privacy.LevelPublic — the pre-issue-204-v2-privacy-levels default
-// behavior. Existing callers/tests are unaffected by the addition of
-// privacy levels.
-func runUsageExport(out, dbPath, historyDir string) error {
-	return runUsageExportLevel(out, dbPath, historyDir, privacy.LevelPublic)
-}
-
-// runUsageExportLevel is runUsageExport's privacy-level-aware form. A
-// privacy.NoteSanitizer (the real ClaudeCLISanitizer) is only constructed
-// when level is privacy.LevelAgentSanitized — every other level never
-// shells out to the claude CLI.
-func runUsageExportLevel(out, dbPath, historyDir string, level privacy.Level) error {
-	return runUsageExportFull(out, dbPath, historyDir, level, false)
-}
-
-// runUsageExportFull supports both privacy levels and the --classify option.
-func runUsageExportFull(out, dbPath, historyDir string, level privacy.Level, classify bool) error {
-	envelope, err := buildUsageExport(context.Background(), dbPath, historyDir, level, classify, time.Now())
-	if err != nil {
-		return err
-	}
-	return writeUsageExport(out, envelope)
-}
-
-// buildUsageExport assembles the envelope at a given now, so tests can pin
-// its exact output (see the golden test).
-func buildUsageExport(ctx context.Context, dbPath, historyDir string, level privacy.Level, classify bool, now time.Time) (usageExportEnvelope, error) {
-	if dbPath == "" {
-		p, err := telemetry.DefaultDBPath()
-		if err != nil {
-			return usageExportEnvelope{}, fmt.Errorf("resolve telemetry db path: %w", err)
-		}
-		dbPath = p
-	}
-	var sanitizer privacy.NoteSanitizer
-	if level == privacy.LevelAgentSanitized {
-		sanitizer = privacy.NewClaudeCLISanitizer()
-	}
-
-	var classifier telemetry.NoteBatchClassifier
-	if classify {
-		classifier = &telemetry.DefaultLocalClassifier{}
-	}
-
-	var telExport telemetry.Export
-	if _, statErr := os.Stat(dbPath); os.IsNotExist(statErr) {
-		telExport = telemetry.BuildExportLevel(nil, now, level, nil)
-	} else {
-		db, err := telemetry.OpenReadOnly(dbPath)
-		if err != nil {
-			return usageExportEnvelope{}, fmt.Errorf("open telemetry db: %w", err)
-		}
-		telExport, err = telemetry.ExportAllWithClassifier(ctx, db, now, level, sanitizer, classifier)
-		_ = db.Close()
-		if err != nil {
-			return usageExportEnvelope{}, fmt.Errorf("export telemetry: %w", err)
-		}
-	}
-
-	if historyDir == "" {
-		historyDir = usage.HistoryDir("")
-	}
-	usageExport, err := usage.ExportHistoryLevel(historyDir, now, level)
-	if err != nil {
-		return usageExportEnvelope{}, fmt.Errorf("export usage history: %w", err)
-	}
-
-	return usageExportEnvelope{
-		FormatVersion: usageExportFormatVersion,
-		GeneratedAt:   now,
-		Telemetry:     telExport,
-		Usage:         usageExport,
-	}, nil
-}
-
-// writeUsageExport writes envelope as indented JSON to out.
-func writeUsageExport(out string, envelope usageExportEnvelope) error {
-	data, err := json.MarshalIndent(envelope, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal export envelope: %w", err)
-	}
-	if err := os.WriteFile(out, data, 0o644); err != nil {
-		return fmt.Errorf("write export file %s: %w", out, err)
-	}
-	return nil
 }

@@ -1,4 +1,4 @@
-package main
+package usage
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 
 	"ubunatic.com/harnez/internal/privacy"
 	"ubunatic.com/harnez/internal/telemetry"
-	"ubunatic.com/harnez/internal/usage"
 )
 
 var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
@@ -56,12 +55,12 @@ func TestRunUsageExport_EndToEndScrubsRawPII(t *testing.T) {
 	if err := os.MkdirAll(historyDir, 0o700); err != nil {
 		t.Fatalf("mkdir history dir: %v", err)
 	}
-	entry := usage.HistoryEntry{
+	entry := HistoryEntry{
 		Hostname: rawHost,
-		UsageSummary: usage.UsageSummary{
+		UsageSummary: UsageSummary{
 			Timestamp: time.Now(),
-			Agents: []usage.AgentUsage{
-				{AgentID: "claude", Account: rawEmail, Tokens: &usage.TokenBreakdown{TotalTokens: 500}},
+			Agents: []AgentUsage{
+				{AgentID: "claude", Account: rawEmail, Tokens: &TokenBreakdown{TotalTokens: 500}},
 			},
 		},
 	}
