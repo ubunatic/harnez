@@ -1,4 +1,4 @@
-package main
+package issues
 
 import (
 	"bytes"
@@ -10,16 +10,16 @@ import (
 	"unicode/utf8"
 )
 
-type issueReferenceEdit struct {
-	path          string
-	before, after []byte
-	mode          fs.FileMode
+type ReferenceEdit struct {
+	Path          string
+	Before, After []byte
+	Mode          fs.FileMode
 }
 
 // Plan exact filename references only: bare ticket numbers and longer filenames
 // are ambiguous and must survive renumbering unchanged. Do not follow symlinks.
-func planIssueReferences(dir, oldPath, newPath string) ([]issueReferenceEdit, error) {
-	var edits []issueReferenceEdit
+func PlanReferences(dir, oldPath, newPath string) ([]ReferenceEdit, error) {
+	var edits []ReferenceEdit
 	for _, sub := range []string{"issues", "docs"} {
 		root := filepath.Join(dir, sub)
 		if _, err := os.Stat(root); os.IsNotExist(err) {
@@ -48,7 +48,7 @@ func planIssueReferences(dir, oldPath, newPath string) ([]issueReferenceEdit, er
 			if !utf8.Valid(before) || bytes.ContainsRune(before, 0) {
 				return nil
 			}
-			after := rewriteIssueReferences(string(before), oldPath, newPath)
+			after := RewriteReferences(string(before), oldPath, newPath)
 			if after == string(before) {
 				return nil
 			}
@@ -56,7 +56,7 @@ func planIssueReferences(dir, oldPath, newPath string) ([]issueReferenceEdit, er
 			if err != nil {
 				return err
 			}
-			edits = append(edits, issueReferenceEdit{path, before, []byte(after), info.Mode().Perm()})
+			edits = append(edits, ReferenceEdit{path, before, []byte(after), info.Mode().Perm()})
 			return nil
 		})
 		if err != nil {
@@ -66,7 +66,7 @@ func planIssueReferences(dir, oldPath, newPath string) ([]issueReferenceEdit, er
 	return edits, nil
 }
 
-func rewriteIssueReferences(content, oldPath, newPath string) string {
+func RewriteReferences(content, oldPath, newPath string) string {
 	token := regexp.MustCompile(`[\pL\pN_./-]+`)
 	return token.ReplaceAllStringFunc(content, func(match string) string {
 		// A sentence's trailing period is punctuation, not a filename suffix.
@@ -87,13 +87,13 @@ func rewriteIssueReferences(content, oldPath, newPath string) string {
 	})
 }
 
-func writeIssueReferences(edits []issueReferenceEdit, restore bool) error {
+func WriteReferences(edits []ReferenceEdit, restore bool) error {
 	for _, edit := range edits {
-		data := edit.after
+		data := edit.After
 		if restore {
-			data = edit.before
+			data = edit.Before
 		}
-		if err := os.WriteFile(edit.path, data, edit.mode); err != nil {
+		if err := os.WriteFile(edit.Path, data, edit.Mode); err != nil {
 			return err
 		}
 	}

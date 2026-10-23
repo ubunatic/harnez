@@ -43,17 +43,7 @@ import (
 // issuesResult is the structured shape `harnez issues <verb>` reports, both
 // as --json output and as the basis of its single deterministic text line,
 // matching the exact field shape issue 232 §3 specifies.
-type issuesResult struct {
-	Number        string `json:"number"`
-	File          string `json:"file"`
-	OldStatus     string `json:"old_status"`
-	NewStatus     string `json:"new_status"`
-	ReadmeUpdated bool   `json:"readme_updated"`
-	Committed     bool   `json:"committed"`
-	CommitSHA     string `json:"commit_sha"`
-	Noop          bool   `json:"noop"`
-	OldNumber     string `json:"old_number,omitempty"`
-}
+type issuesResult = issues.StatusResult
 
 // issuesRunOptions bundles runIssuesVerb's inputs.
 type issuesRunOptions struct {
@@ -397,7 +387,7 @@ type issueShowJSON struct {
 // runIssuesShow implements `harnez issues show <ticket-number>`.
 func runIssuesShow(w io.Writer, dir, ticketArg string, jsonOutput, rawOutput, textOutput, imageOutput bool) error {
 	issuesDir := filepath.Join(dir, "issues")
-	f, err := findTicketFile(issuesDir, ticketArg)
+	f, err := issues.FindTicketFile(issuesDir, ticketArg)
 	if err != nil {
 		return err
 	}
@@ -472,143 +462,36 @@ func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutpu
 
 // runIssuesVerbBatch validates every target before writing, then updates all
 // changed tickets, regenerates the README once, and makes at most one commit.
+func issuesStatusDependencies(opts issuesRunOptions) issues.StatusBatchOptions {
+	return issues.StatusBatchOptions{
+		Dir: opts.Dir, Check: opts.Check, NoCommit: opts.NoCommit, AmendReason: opts.AmendReason,
+		CommitMsg: opts.CommitMsg, Stderr: opts.Stderr,
+		UpdateIndexes: func(issuesDir string) (bool, error) {
+			return index.UpdateIssuesReadme(filepath.Join(issuesDir, "README.md"), issuesDir)
+		},
+		SnapshotIndexes: func(issuesDir string) (any, error) {
+			return issuesmaintenance.SnapshotIssueIndexes(issuesDir)
+		},
+		RestoreIndexes: func(issuesDir string, snapshot any) error {
+			indexSnapshot, ok := snapshot.(issuesmaintenance.IssueIndexSnapshot)
+			if !ok {
+				return fmt.Errorf("issues: invalid index snapshot %T", snapshot)
+			}
+			return issuesmaintenance.RestoreIssueIndexes(issuesDir, indexSnapshot)
+		},
+		IndexPaths:                      issuesmaintenance.IssueIndexRelPaths,
+		Commit:                          gitAddAndCommit,
+		PathsChanged:                    gitPathsChanged,
+		DefaultMessage:                  defaultCommitMessage,
+		WarnHeaderMismatch:              warnIssueHeaderMismatch,
+		WarnMissingImplementationCommit: warnMissingImplementationCommit,
+	}
+}
+
+// runIssuesVerbBatch keeps CLI concerns in cmd/harnez and injects index,
+// snapshot, commit and warning effects into the issues core.
 func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issuesRunOptions) ([]issuesResult, bool, error) {
-	reason := strings.TrimSpace(strings.Join(reasonArgs, " "))
-	newStatus, err := composeNewStatus(verb, reason)
-	if err != nil {
-		return nil, false, err
-	}
-	type target struct {
-		path    string
-		relPath string
-		old     []byte
-		updated []byte
-		result  issuesResult
-	}
-	targets := make([]target, 0, len(ticketArgs))
-	seen := make(map[string]bool, len(ticketArgs))
-	issuesDir := filepath.Join(opts.Dir, "issues")
-	for _, ticketArg := range ticketArgs {
-		f, err := findTicketFile(issuesDir, ticketArg)
-		if err != nil {
-			return nil, false, err
-		}
-		if seen[f.Number] {
-			continue
-		}
-		seen[f.Number] = true
-		filePath := filepath.Join(issuesDir, f.RelPath)
-		relPath := filepath.ToSlash(filepath.Join("issues", f.RelPath))
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, false, fmt.Errorf("issues: read %s: %w", filePath, err)
-		}
-		warnIssueHeaderMismatch(opts.Stderr, relPath, f.Number, issues.ParseHeaderNumber(string(content)))
-		_, oldStatus, hasStatus := issues.ParseIssueFile(string(content))
-		if !hasStatus {
-			return nil, false, fmt.Errorf("issues: %s has no '**Status**:' line to update", relPath)
-		}
-		if err := validateLifecycleTransition(verb, oldStatus); err != nil {
-			return nil, false, fmt.Errorf("issues: %s: %w", relPath, err)
-		}
-		targetStatus, err := issuesCloseStatus(verb, oldStatus, newStatus, opts.AmendReason)
-		if err != nil {
-			return nil, false, fmt.Errorf("issues: %s: %w", relPath, err)
-		}
-		updated, _, err := issues.RewriteStatus(string(content), targetStatus)
-		if err != nil {
-			return nil, false, fmt.Errorf("issues: %w", err)
-		}
-		result := issuesResult{Number: f.Number, File: relPath, OldStatus: oldStatus, NewStatus: targetStatus, Noop: oldStatus == targetStatus}
-		targets = append(targets, target{path: filePath, relPath: relPath, old: content, updated: []byte(updated), result: result})
-	}
-
-	var changed []int
-	for i := range targets {
-		if !targets[i].result.Noop {
-			changed = append(changed, i)
-		}
-	}
-	if verb == "close" || verb == "done" {
-		for _, i := range changed {
-			warnMissingImplementationCommit(opts.Stderr, opts.Dir, targets[i].result.Number)
-		}
-	}
-	results := func() []issuesResult {
-		out := make([]issuesResult, len(targets))
-		for i := range targets {
-			out[i] = targets[i].result
-		}
-		return out
-	}
-	if len(changed) == 0 {
-		return results(), false, nil
-	}
-
-	readmePath := filepath.Join(issuesDir, "README.md")
-	indexSnapshot, snapshotErr := issuesmaintenance.SnapshotIssueIndexes(issuesDir)
-	if snapshotErr != nil {
-		return nil, false, fmt.Errorf("issues: snapshot indexes: %w", snapshotErr)
-	}
-	restore := func() {
-		for _, i := range changed {
-			_ = os.WriteFile(targets[i].path, targets[i].old, 0o644)
-		}
-		_ = issuesmaintenance.RestoreIssueIndexes(issuesDir, indexSnapshot)
-	}
-	for _, i := range changed {
-		if err := os.WriteFile(targets[i].path, targets[i].updated, 0o644); err != nil {
-			restore()
-			return nil, false, fmt.Errorf("issues: write %s: %w", targets[i].path, err)
-		}
-	}
-	readmeChanged, err := index.UpdateIssuesReadme(readmePath, issuesDir)
-	if err != nil {
-		restore()
-		return nil, false, fmt.Errorf("issues: update README: %w", err)
-	}
-	if opts.Check {
-		restore()
-		for _, i := range changed {
-			targets[i].result.ReadmeUpdated = readmeChanged
-			break
-		}
-		return results(), true, nil
-	}
-
-	for _, i := range changed {
-		targets[i].result.ReadmeUpdated = readmeChanged
-		break
-	}
-	if !opts.NoCommit {
-		paths := make([]string, 0, len(changed)+1)
-		numbers := make([]string, 0, len(changed))
-		for _, i := range changed {
-			paths = append(paths, targets[i].relPath)
-			numbers = append(numbers, targets[i].result.Number)
-		}
-		paths = append(paths, issuesmaintenance.IssueIndexRelPaths()...)
-		msg := opts.CommitMsg
-		if msg == "" {
-			commitVerb := verb
-			if commitVerb == "done" {
-				commitVerb = "close"
-			}
-			msg = fmt.Sprintf("feat(issues): %s %s", commitVerb, strings.Join(numbers, ", "))
-			if reason != "" {
-				msg += ", " + reason
-			}
-		}
-		sha, err := gitAddAndCommit(opts.Dir, paths, msg)
-		if err != nil {
-			return nil, false, fmt.Errorf("issues: commit: %w", err)
-		}
-		for _, i := range changed {
-			targets[i].result.Committed = true
-			targets[i].result.CommitSHA = sha
-		}
-	}
-	return results(), false, nil
+	return issues.ApplyStatusBatch(verb, ticketArgs, reasonArgs, issuesStatusDependencies(opts))
 }
 
 func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -651,63 +534,6 @@ func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]s
 		completions = append(completions, f.Number+"\t"+issues.PlainTitle(f.Title))
 	}
 	return completions, cobra.ShellCompDirectiveNoFileComp
-}
-
-// composeNewStatus renders the "**Status**:" value a verb+reason pair
-// should produce, per docs/IssueTracking.md's Allowed Values and issue
-// 232 §2's verb table. It intentionally never fabricates a reason (e.g.
-// "resolved" for a bare 'close', or a commit sha) -- reason text always
-// comes verbatim from the caller.
-func composeNewStatus(verb, reason string) (string, error) {
-	reason = strings.TrimSpace(reason)
-	statusFor := func(key string) (string, error) {
-		label, ok := issues.StatusLabel(key)
-		if !ok {
-			return "", fmt.Errorf("issues: missing lifecycle label for %q", key)
-		}
-		if reason == "" {
-			return label, nil
-		}
-		return label + " — " + reason, nil
-	}
-	switch verb {
-	case "open":
-		return statusFor("open")
-	case "start":
-		return statusFor("in-progress")
-	case "block":
-		if reason == "" {
-			return "", fmt.Errorf(`issues block: reason is required, e.g. 'harnez issues block <number> "waiting on upstream fix"'`)
-		}
-		return statusFor("blocked")
-	case "close", "done":
-		return statusFor("closed")
-	case "draft":
-		return statusFor("draft")
-	case "backlog":
-		return statusFor("backlog")
-	case "promote":
-		if reason != "" {
-			return "", fmt.Errorf("issues promote: does not accept a reason")
-		}
-		return statusFor("open")
-	default:
-		return "", fmt.Errorf("issues: unknown verb %q (expected one of: open, start, block, close, done, draft, backlog, promote)", verb)
-	}
-}
-
-func validateLifecycleTransition(verb, oldStatus string) error {
-	switch verb {
-	case "backlog":
-		if issues.CanonicalizeStatus(oldStatus) == issues.StatusClosed {
-			return fmt.Errorf("issues backlog: cannot move a Closed ticket to Backlog")
-		}
-	case "promote":
-		if issues.CanonicalizeStatus(oldStatus) != issues.StatusBacklog {
-			return fmt.Errorf("issues promote: ticket must be Backlog")
-		}
-	}
-	return nil
 }
 
 // runIssuesNew implements `harnez issues new [title]`: atomically reserve
@@ -776,57 +602,6 @@ func finishIssuesNew(w io.Writer, dir, num, filename string, jsonOutput bool) er
 // resolve by path, filename, or slug to support disambiguating colliding
 // numbers. A nonexistent or ambiguous number is a caller-bug error, per
 // issue 232 §3's "fail loudly, unlike find's zero-matches-is-valid convention".
-func findTicketFile(issuesDir, ticketArg string) (issues.IssueFile, error) {
-	ticketArg = strings.TrimSpace(ticketArg)
-	files, err := issues.Scan(issuesDir)
-	if err != nil {
-		return issues.IssueFile{}, fmt.Errorf("issues: %w", err)
-	}
-
-	ticketNum, idErr := issues.NormalizeID(ticketArg)
-	if idErr == nil {
-		var matches []issues.IssueFile
-		for _, f := range files {
-			if f.Number == ticketNum {
-				matches = append(matches, f)
-			}
-		}
-		switch len(matches) {
-		case 0:
-			return issues.IssueFile{}, fmt.Errorf("issues: no ticket found for number %q under %s (checked issues/*.md and issues/archive/*.md)", ticketNum, issuesDir)
-		case 1:
-			return matches[0], nil
-		default:
-			var paths []string
-			for _, m := range matches {
-				paths = append(paths, m.RelPath)
-			}
-			return issues.IssueFile{}, fmt.Errorf("issues: ambiguous ticket number %q matches multiple files: %s", ticketNum, strings.Join(paths, ", "))
-		}
-	}
-
-	cleaned := strings.TrimPrefix(filepath.ToSlash(ticketArg), "issues/")
-	var matches []issues.IssueFile
-	for _, f := range files {
-		base := filepath.Base(f.RelPath)
-		slug := strings.TrimSuffix(base, ".md")
-		if f.RelPath == cleaned || base == cleaned || slug == cleaned {
-			matches = append(matches, f)
-		}
-	}
-	switch len(matches) {
-	case 0:
-		return issues.IssueFile{}, fmt.Errorf("issues: no ticket found for %q under %s (checked issues/*.md and issues/archive/*.md)", ticketArg, issuesDir)
-	case 1:
-		return matches[0], nil
-	default:
-		var paths []string
-		for _, m := range matches {
-			paths = append(paths, m.RelPath)
-		}
-		return issues.IssueFile{}, fmt.Errorf("issues: ambiguous ticket %q matches multiple files: %s", ticketArg, strings.Join(paths, ", "))
-	}
-}
 
 // runIssuesMv implements `harnez issues mv <old> [new]`:
 // 1. Resolve old ticket with findTicketFile.
@@ -838,7 +613,7 @@ func findTicketFile(issuesDir, ticketArg string) (issues.IssueFile, error) {
 // 7. Commit changes via git staging if not --no-commit.
 func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (issuesResult, bool, error) {
 	issuesDir := filepath.Join(opts.Dir, "issues")
-	f, err := findTicketFile(issuesDir, oldArg)
+	f, err := issues.FindTicketFile(issuesDir, oldArg)
 	if err != nil {
 		return issuesResult{}, false, err
 	}
@@ -910,8 +685,8 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 	if err != nil {
 		return issuesResult{}, false, fmt.Errorf("issues mv: %s: %w; add a '# %s — Title' header and retry", oldGitRelPath, err, f.Number)
 	}
-	newContent = rewriteIssueReferences(newContent, oldGitRelPath, newGitRelPath)
-	referenceEdits, err := planIssueReferences(opts.Dir, oldGitRelPath, newGitRelPath)
+	newContent = issues.RewriteReferences(newContent, oldGitRelPath, newGitRelPath)
+	referenceEdits, err := issues.PlanReferences(opts.Dir, oldGitRelPath, newGitRelPath)
 	if err != nil {
 		return issuesResult{}, false, fmt.Errorf("issues mv: scan references: %w", err)
 	}
@@ -969,15 +744,15 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		return issuesResult{}, false, fmt.Errorf("issues mv: remove old file %s: %w", oldPath, err)
 	}
 
-	if err := writeIssueReferences(referenceEdits, false); err != nil {
-		_ = writeIssueReferences(referenceEdits, true)
+	if err := issues.WriteReferences(referenceEdits, false); err != nil {
+		_ = issues.WriteReferences(referenceEdits, true)
 		_ = os.WriteFile(oldPath, content, 0o644)
 		_ = os.Remove(newPath)
 		return issuesResult{}, false, fmt.Errorf("issues mv: rewrite references: %w", err)
 	}
 	readmeChanged, err := index.UpdateIssuesReadme(readmePath, issuesDir)
 	if err != nil {
-		_ = writeIssueReferences(referenceEdits, true)
+		_ = issues.WriteReferences(referenceEdits, true)
 		_ = os.WriteFile(oldPath, content, 0o644)
 		_ = os.Remove(newPath)
 		return issuesResult{}, false, fmt.Errorf("issues mv: update README: %w", err)
@@ -991,7 +766,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		}
 		paths := append([]string{oldGitRelPath, newGitRelPath}, issuesmaintenance.IssueIndexRelPaths()...)
 		for _, edit := range referenceEdits {
-			rel, err := filepath.Rel(opts.Dir, edit.path)
+			rel, err := filepath.Rel(opts.Dir, edit.Path)
 			if err != nil {
 				return issuesResult{}, false, err
 			}
@@ -1024,7 +799,7 @@ func warnMissingImplementationCommit(w io.Writer, dir, ticketNumber string) {
 	}
 	for _, commit := range strings.Split(string(logData), "\x00") {
 		fields := strings.SplitN(strings.TrimSpace(commit), "\t", 2)
-		if len(fields) < 2 || !messageReferencesTicket(fields[1], ticketNumber) {
+		if len(fields) < 2 || !issues.MessageReferencesTicket(fields[1], ticketNumber) {
 			continue
 		}
 		pathsCmd := exec.Command("git", "diff-tree", "--no-commit-id", "--name-only", "-r", fields[0])
@@ -1043,30 +818,6 @@ func warnMissingImplementationCommit(w io.Writer, dir, ticketNumber string) {
 	fmt.Fprintf(w, "warning: ticket %s has no commit referencing it with changes outside issues/\n", ticketNumber)
 }
 
-func messageReferencesTicket(message, ticketNumber string) bool {
-	for _, field := range strings.FieldsFunc(message, func(r rune) bool {
-		return r < '0' || r > '9'
-	}) {
-		if strings.TrimLeft(field, "0") == strings.TrimLeft(ticketNumber, "0") {
-			return true
-		}
-	}
-	return false
-}
-
-// issuesCloseStatus preserves an existing closure unless explicitly amended.
-func issuesCloseStatus(verb, oldStatus, newStatus string, amend bool) (string, error) {
-	closing := verb == "close" || verb == "done"
-	closed := issues.CanonicalizeStatus(oldStatus) == issues.StatusClosed
-	if amend && (!closing || !closed) {
-		return "", fmt.Errorf("--amend-reason requires close/done on an already Closed ticket")
-	}
-	if closing && closed && !amend {
-		return oldStatus, nil
-	}
-	return newStatus, nil
-}
-
 // runIssuesVerb performs the full status-change: locate the ticket,
 // compose the new Status line, rewrite the file (or simulate the rewrite
 // under --check), resync issues/README.md, and commit (unless --no-commit
@@ -1075,142 +826,9 @@ func issuesCloseStatus(verb, oldStatus, newStatus string, amend bool) (string, e
 // meaningful for --check; the caller decides the process exit code on it,
 // since this function is also exercised directly by tests).
 func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opts issuesRunOptions) (issuesResult, bool, error) {
-	reason := strings.TrimSpace(strings.Join(reasonArgs, " "))
-	newStatus, err := composeNewStatus(verb, reason)
-	if err != nil {
-		return issuesResult{}, false, err
-	}
-
-	issuesDir := filepath.Join(opts.Dir, "issues")
-	f, err := findTicketFile(issuesDir, ticketArg)
-	if err != nil {
-		return issuesResult{}, false, err
-	}
-	filePath := filepath.Join(issuesDir, f.RelPath)
-	relPath := filepath.ToSlash(filepath.Join("issues", f.RelPath))
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return issuesResult{}, false, fmt.Errorf("issues: read %s: %w", filePath, err)
-	}
-	warnIssueHeaderMismatch(opts.Stderr, relPath, f.Number, issues.ParseHeaderNumber(string(content)))
-	_, oldStatus, hasStatus := issues.ParseIssueFile(string(content))
-	if !hasStatus {
-		return issuesResult{}, false, fmt.Errorf("issues: %s has no '**Status**:' line to update", relPath)
-	}
-	if err := validateLifecycleTransition(verb, oldStatus); err != nil {
-		return issuesResult{}, false, fmt.Errorf("issues: %s: %w", relPath, err)
-	}
-
-	newStatus, err = issuesCloseStatus(verb, oldStatus, newStatus, opts.AmendReason)
-	if err != nil {
-		return issuesResult{}, false, fmt.Errorf("issues: %s: %w", relPath, err)
-	}
-	result := issuesResult{
-		Number:    f.Number,
-		File:      relPath,
-		OldStatus: oldStatus,
-		NewStatus: newStatus,
-	}
-	if (verb == "close" || verb == "done") && oldStatus == newStatus {
-		result.Noop = true
-		return result, false, nil
-	}
-	if verb == "close" || verb == "done" {
-		warnMissingImplementationCommit(opts.Stderr, opts.Dir, result.Number)
-	}
-
-	if oldStatus == newStatus {
-		// A newly created ticket is already Open, but --commit still needs to
-		// publish its filled-in file and regenerated README.
-		if opts.Check || opts.NoCommit {
-			result.Noop = true
-			return result, false, nil
-		}
-		readmePath := filepath.Join(issuesDir, "README.md")
-		readmeChanged, err := index.UpdateIssuesReadme(readmePath, issuesDir)
-		if err != nil {
-			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
-		}
-		result.ReadmeUpdated = readmeChanged
-		paths := append([]string{relPath}, issuesmaintenance.IssueIndexRelPaths()...)
-		changed, err := gitPathsChanged(opts.Dir, paths)
-		if err != nil {
-			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
-		}
-		if !changed {
-			result.Noop = true
-			return result, false, nil
-		}
-		msg := opts.CommitMsg
-		if msg == "" {
-			msg = defaultCommitMessage(verb, f.Number, reason)
-		}
-		sha, err := gitAddAndCommit(opts.Dir, paths, msg)
-		if err != nil {
-			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
-		}
-		result.Committed = true
-		result.CommitSHA = sha
-		return result, false, nil
-	}
-
-	readmePath := filepath.Join(issuesDir, "README.md")
-	newContent, _, err := issues.RewriteStatus(string(content), newStatus)
-	if err != nil {
-		return issuesResult{}, false, fmt.Errorf("issues: %w", err)
-	}
-
-	if opts.Check {
-		indexSnapshot, snapshotErr := issuesmaintenance.SnapshotIssueIndexes(issuesDir)
-		if snapshotErr != nil {
-			return issuesResult{}, false, fmt.Errorf("issues --check: snapshot indexes: %w", snapshotErr)
-		}
-
-		if err := os.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
-			return issuesResult{}, false, fmt.Errorf("issues --check: write %s: %w", filePath, err)
-		}
-		readmeChanged, updErr := index.UpdateIssuesReadme(readmePath, issuesDir)
-
-		// Always restore, regardless of updErr, so --check never leaves a
-		// side effect on disk (mirrors runIndexCheck's restore pattern).
-		if werr := os.WriteFile(filePath, content, 0o644); werr != nil {
-			return issuesResult{}, false, fmt.Errorf("issues --check: restore %s: %w", filePath, werr)
-		}
-		if restoreErr := issuesmaintenance.RestoreIssueIndexes(issuesDir, indexSnapshot); restoreErr != nil {
-			return issuesResult{}, false, fmt.Errorf("issues --check: restore indexes: %w", restoreErr)
-		}
-		if updErr != nil {
-			return issuesResult{}, false, fmt.Errorf("issues --check: %w", updErr)
-		}
-
-		result.ReadmeUpdated = readmeChanged
-		return result, true, nil
-	}
-
-	if err := os.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
-		return issuesResult{}, false, fmt.Errorf("issues: write %s: %w", filePath, err)
-	}
-	readmeChanged, err := index.UpdateIssuesReadme(readmePath, issuesDir)
-	if err != nil {
-		return issuesResult{}, false, fmt.Errorf("issues: %w", err)
-	}
-	result.ReadmeUpdated = readmeChanged
-
-	if !opts.NoCommit {
-		msg := opts.CommitMsg
-		if msg == "" {
-			msg = defaultCommitMessage(verb, f.Number, reason)
-		}
-		sha, err := gitAddAndCommit(opts.Dir, append([]string{relPath}, issuesmaintenance.IssueIndexRelPaths()...), msg)
-		if err != nil {
-			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
-		}
-		result.Committed = true
-		result.CommitSHA = sha
-	}
-
-	return result, false, nil
+	deps := issuesStatusDependencies(opts)
+	deps.Stderr = opts.Stderr
+	return issues.ApplyStatus(verb, ticketArg, strings.Join(reasonArgs, " "), deps)
 }
 
 func warnIssueHeaderMismatch(w io.Writer, relPath, fileNumber, headerNumber string) {

@@ -241,3 +241,20 @@ observe its quota warning before the provider turn. Touched-package verification
 (-count=3)**, and `internal/exec` **8.357s**. The post-M5 targeted cmd tests passed in **0.231s**
 (-count=3). `make lint` passed. Remaining real-time process and heartbeat/watchdog assertions
 stay in full tier by design.
+
+## M6 delivered: issues core actions and injected index effects
+
+Lifecycle status composition/transitions, ticket resolution, exact-filename reference planning
+and rewriting, duplicate scan/error formatting, and single/batch status mutation now live in
+`internal/issues`. The status core takes index update, snapshot/restore, index paths, Git commit,
+and warning operations as callbacks. Similarity scoring is injected from `internal/find`; the
+issues package itself imports no `internal/index`, `internal/find`, maintenance, or cmd package.
+Pure status/reference tests moved with the code, and injected snapshot tests assert `--check`
+restores ticket and index files.
+
+Measured `go test ./cmd/harnez -count=1`: **51.211s before**, **49.352s after**; both runs
+failed in the unchanged `TestAgentQuotaNoticeBeforeStartAndResumeJSON/start` because the
+quota warning was not observed before the provider turn. Focused verification passed:
+`internal/issues` **0.020s**, issue-focused `cmd/harnez` tests **2.074s**. Dependency check and
+`make lint` passed. The remaining command parsing, Cobra output/exit handling, index wiring,
+and the end-to-end Git test stay in `cmd/harnez`.

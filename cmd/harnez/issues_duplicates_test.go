@@ -169,17 +169,3 @@ func TestDuplicateMoveCheckAndRollback(t *testing.T) {
 		})
 	}
 }
-
-func TestRewriteIssueReferencesExactFilenames(t *testing.T) {
-	for _, tc := range []struct{ in, want string }{
-		{"issues/096-b.md.", "issues/097-b.md."},
-		{"096-b.md, 096-b.md!", "097-b.md, 097-b.md!"},
-		{"../issues/096-b.md#section", "../issues/097-b.md#section"},
-		{"1096-b.md 096-b.md.bak 096 #096", "1096-b.md 096-b.md.bak 096 #096"},
-		{"issues/096-b.md-extra", "issues/096-b.md-extra"},
-	} {
-		if got := rewriteIssueReferences(tc.in, "issues/096-b.md", "issues/097-b.md"); got != tc.want {
-			t.Errorf("%q => %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}

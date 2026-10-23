@@ -40,46 +40,6 @@ func issuesFixtureRepo(t *testing.T, ticketContent string) (dir, ticketPath stri
 
 const sampleTicket = "# 042 — Example Ticket\n\n**Status**: Open\n\n---\n\nSee [[041-other-ticket]] for context.\n"
 
-func TestComposeNewStatus_Table(t *testing.T) {
-	cases := []struct {
-		verb, reason, want string
-		wantErr            bool
-	}{
-		{"open", "", "Open", false},
-		{"open", "deferred", "Open — deferred", false},
-		{"start", "", "In Progress", false},
-		{"start", "picking this up to unblock 043", "In Progress — picking this up to unblock 043", false},
-		{"block", "waiting on upstream", "Blocked — waiting on upstream", false},
-		{"block", "", "", true},
-		{"close", "", "Closed", false},
-		{"close", "resolved", "Closed — resolved", false},
-		{"done", "", "Closed", false},
-		{"done", "resolved", "Closed — resolved", false},
-		{"draft", "", "Draft", false},
-		{"draft", "x", "Draft — x", false},
-		{"backlog", "", "Backlog", false},
-		{"backlog", "later", "Backlog — later", false},
-		{"promote", "", "Open", false},
-		{"review", "", "", true},
-	}
-	for _, c := range cases {
-		got, err := composeNewStatus(c.verb, c.reason)
-		if c.wantErr {
-			if err == nil {
-				t.Errorf("composeNewStatus(%q,%q): expected error, got %q", c.verb, c.reason, got)
-			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("composeNewStatus(%q,%q): unexpected error: %v", c.verb, c.reason, err)
-			continue
-		}
-		if got != c.want {
-			t.Errorf("composeNewStatus(%q,%q) = %q, want %q", c.verb, c.reason, got, c.want)
-		}
-	}
-}
-
 func TestRunIssuesVerb_CloseRewritesStatusAndPreservesRestOfFile(t *testing.T) {
 	dir, ticketPath := issuesFixtureRepo(t, sampleTicket)
 

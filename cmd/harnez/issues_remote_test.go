@@ -94,7 +94,7 @@ func TestGHTicketLifecycle(t *testing.T) {
 		writeDuplicateFile(t, dir, "issues/"+id+"-cloud.md", "# "+id+" — Cloud task\n\n**Status**: Open\n")
 	}
 	for arg, want := range map[string]string{"GH42": "GH42", "gh42": "GH42", "42": "042"} {
-		f, err := findTicketFile(filepath.Join(dir, "issues"), arg)
+		f, err := issues.FindTicketFile(filepath.Join(dir, "issues"), arg)
 		if err != nil || f.Number != want {
 			t.Fatalf("%s: %v %v", arg, f, err)
 		}
