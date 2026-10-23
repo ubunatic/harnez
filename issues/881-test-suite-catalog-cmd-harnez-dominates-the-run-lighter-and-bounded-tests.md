@@ -1,6 +1,6 @@
 # 881 — Test suite catalog: cmd/harnez dominates the run, lighter and bounded tests
 
-**Status**: Open
+**Status**: Closed — Roadmap delivered: baseline gotester report was cmd/harnez 88.8s and 151.8s total; current M9 cmd test was 17.294s during make test-q1, whose bounded parallel run completed in 25.656s wall, with no --- FAIL lines. Tests are tiered, bounded, event-driven for the measured slow cases, top-20 classifications are recorded, and binary/process regressions remain. Stats/hooks are intentionally parked per issue 884 Plan v3.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Testing
