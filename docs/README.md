@@ -208,6 +208,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/PureGoSound.md](studies/PureGoSound.md) | Pure-Go Audio Playback Assessment for CLI Notifications |
 | [studies/Quota1Approach.md](studies/Quota1Approach.md) | Research Study: Quota-1 Guardrails for LLM Agent Loops |
 | [studies/RTKShellWrapperHandling.md](studies/RTKShellWrapperHandling.md) | RTK: Shell-Wrapper and Pipe Handling in Command-Rewrite Hooks |
+| [studies/TestSuiteSprintSession.md](studies/TestSuiteSprintSession.md) | Test-Suite Sprint Session (2026-10-23) |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees — learnings & TODOs |
 <!-- harnez:end docs-studies-index -->
 
