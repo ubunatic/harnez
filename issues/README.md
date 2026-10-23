@@ -29,4 +29,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 865 | [865-privileged-subprocesses-pam-fingerprint-prompts-and-stderr-visibility.md](865-privileged-subprocesses-pam-fingerprint-prompts-and-stderr-visibility.md) | Privileged subprocesses, PAM biometric prompts, and stderr visibility | Open |
 | 866 | [866-release-refuse-while-the-breaking-changes-table-still-has-unreleased-rows.md](866-release-refuse-while-the-breaking-changes-table-still-has-unreleased-rows.md) | release: refuse while the breaking-changes table still has Unreleased rows | Open |
 | 867 | [867-issues-close-refuse-when-no-commit-outside-issues-names-the-ticket.md](867-issues-close-refuse-when-no-commit-outside-issues-names-the-ticket.md) | issues close: refuse when no commit outside issues/ names the ticket | Open |
+| 868 | [868-agy-resume-reports-the-conversation-s-old-quota-error-after-a-successful-turn.md](868-agy-resume-reports-the-conversation-s-old-quota-error-after-a-successful-turn.md) | agy resume reports the conversation's old quota error after a successful turn | Open |
 <!-- harnez:end issues-active-index -->
