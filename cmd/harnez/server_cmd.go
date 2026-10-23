@@ -43,12 +43,12 @@ func (s *usageCollectorService) RegisterRoutes(mux *http.ServeMux) {
 
 func (s *usageCollectorService) Ready() bool { return s.ready.Load() }
 
-func (s *usageCollectorService) DroppedStatuslineObservations() map[string]uint64 {
-	return s.updateServer.Drops.Snapshot()
+func (s *usageCollectorService) NoQuotaStatuslineObservations() map[string]uint64 {
+	return s.updateServer.NoQuota.NoQuotaSnapshot()
 }
 
 func (s *usageCollectorService) AcceptedStatuslineObservations() map[string]uint64 {
-	return s.updateServer.Drops.AcceptedSnapshot()
+	return s.updateServer.NoQuota.AcceptedSnapshot()
 }
 
 func (s *usageCollectorService) ActiveClients() int {
@@ -325,7 +325,7 @@ type localServerStatusResponse struct {
 	PID             int               `json:"pid"`
 	StartedAt       time.Time         `json:"started_at"`
 	Clients         *int              `json:"clients,omitempty"`
-	PassiveDropped  map[string]uint64 `json:"passive_dropped,omitempty"`
+	PassiveNoQuota  map[string]uint64 `json:"passive_no_quota,omitempty"`
 	PassiveAccepted map[string]uint64 `json:"passive_accepted,omitempty"`
 }
 
@@ -338,7 +338,7 @@ type serverStatusJSON struct {
 	CLIVersion      string                `json:"cli_version,omitempty"`
 	UptimeSeconds   *int64                `json:"uptime_seconds,omitempty"`
 	Clients         *int                  `json:"clients,omitempty"`
-	PassiveDropped  map[string]uint64     `json:"passive_dropped,omitempty"`
+	PassiveNoQuota  map[string]uint64     `json:"passive_no_quota,omitempty"`
 	PassiveAccepted map[string]uint64     `json:"passive_accepted,omitempty"`
 	VersionMismatch bool                  `json:"version_mismatch"`
 }
@@ -379,7 +379,7 @@ func printServerStatusJSON(out io.Writer, cfg server.Config, status server.Syste
 	if srv.PID > 0 {
 		sj.Version = srv.Version
 		sj.Clients = srv.Clients
-		sj.PassiveDropped = srv.PassiveDropped
+		sj.PassiveNoQuota = srv.PassiveNoQuota
 		sj.PassiveAccepted = srv.PassiveAccepted
 		if !srv.StartedAt.IsZero() {
 			secs := int64(time.Since(srv.StartedAt).Seconds())
@@ -512,7 +512,7 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 		client:          client,
 		offline:         offline,
 		requests:        requests,
-		updateServer:    usage.PassiveUpdateServer{Drops: &usage.PassiveDropTracker{}, Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes},
+		updateServer:    usage.PassiveUpdateServer{NoQuota: &usage.PassiveNoQuotaTracker{}, Path: passivePath, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes},
 		tracker:         tracker,
 		heartbeatServer: heartbeatServer,
 	}

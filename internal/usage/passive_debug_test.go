@@ -13,14 +13,14 @@ import (
 	"ubunatic.com/harnez/internal/server"
 )
 
-func TestStatuslineDropsReachServerAcrossProcesses(t *testing.T) {
+func TestStatuslineNoQuotaCountsReachServerAcrossProcesses(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Unix HTTP endpoint: full tier")
 	}
-	drops := &PassiveDropTracker{}
+	drops := &PassiveNoQuotaTracker{}
 	requests := make(chan PassiveRequest, 1)
 	mux := http.NewServeMux()
-	(PassiveUpdateServer{Path: "/passive", Drops: drops, Requests: requests, Timeout: time.Second, MaxBodyBytes: 4096}).RegisterRoutes(mux)
+	(PassiveUpdateServer{Path: "/passive", NoQuota: drops, Requests: requests, Timeout: time.Second, MaxBodyBytes: 4096}).RegisterRoutes(mux)
 	listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "server.sock"))
 	if err != nil {
 		t.Fatal(err)
@@ -41,12 +41,12 @@ func TestStatuslineDropsReachServerAcrossProcesses(t *testing.T) {
 			t.Fatalf("result = %v", got)
 		}
 	}
-	if got := drops.Snapshot(); got["agy"] != 2 || got["claude"] != 1 || len(got) != 2 {
+	if got := drops.NoQuotaSnapshot(); got["agy"] != 2 || got["claude"] != 1 || len(got) != 2 {
 		t.Fatalf("counts = %v", got)
 	}
-	copy := drops.Snapshot()
+	copy := drops.NoQuotaSnapshot()
 	copy["agy"] = 100
-	if drops.Snapshot()["agy"] != 2 {
+	if drops.NoQuotaSnapshot()["agy"] != 2 {
 		t.Fatal("snapshot aliases mutable state")
 	}
 	done := make(chan struct{})
@@ -61,14 +61,14 @@ func TestStatuslineDropsReachServerAcrossProcesses(t *testing.T) {
 		}
 	}()
 	got := ObserveStatuslineTo(context.Background(), "agy", []byte(`{"quota":{"gemini-weekly":{"remaining_fraction":0.5}}}`), listener.Addr().String(), "/passive", time.Second)
-	if got != server.UpdateDelivered || drops.Snapshot()["agy"] != 2 {
-		t.Fatalf("quota result=%v counts=%v", got, drops.Snapshot())
+	if got != server.UpdateDelivered || drops.NoQuotaSnapshot()["agy"] != 2 {
+		t.Fatalf("quota result=%v counts=%v", got, drops.NoQuotaSnapshot())
 	}
 }
 
-func TestPassiveDropMarkersRejectInvalidProvidersAndMixedWindows(t *testing.T) {
-	drops := &PassiveDropTracker{}
-	handler := PassiveUpdateServer{Drops: drops, MaxBodyBytes: 4096}
+func TestPassiveNoQuotaMarkersRejectInvalidProvidersAndMixedWindows(t *testing.T) {
+	drops := &PassiveNoQuotaTracker{}
+	handler := PassiveUpdateServer{NoQuota: drops, MaxBodyBytes: 4096}
 	for _, body := range []string{`{"dropped_provider":"unknown"}`, `{"dropped_provider":"agy","windows":[{}]}`} {
 		response := httptest.NewRecorder()
 		handler.handlePassive(response, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
@@ -76,16 +76,16 @@ func TestPassiveDropMarkersRejectInvalidProvidersAndMixedWindows(t *testing.T) {
 			t.Fatalf("response=%d", response.Code)
 		}
 	}
-	if drops.Snapshot()["agy"] != 0 {
+	if drops.NoQuotaSnapshot()["agy"] != 0 {
 		t.Fatal("invalid marker counted")
 	}
 }
 
-func TestDebugBoxShowsPassiveDropsAndUnavailableCounts(t *testing.T) {
+func TestDebugBoxShowsPassiveNoQuotaAndUnavailableCounts(t *testing.T) {
 	now := time.Now()
-	summary := UsageSummary{Agents: []AgentUsage{{AgentID: "agy"}, {AgentID: "claude"}}, PassiveDropped: map[string]uint64{"agy": 17}}
+	summary := UsageSummary{Agents: []AgentUsage{{AgentID: "agy"}, {AgentID: "claude"}}, PassiveNoQuota: map[string]uint64{"agy": 17}}
 	text := strings.Join(buildUsageDebugBox(summary, 120, now).lines, "\n")
-	for _, want := range []string{"passive_dropped (since server start): 17", "passive_dropped (since server start): unknown"} {
+	for _, want := range []string{"passive_no_quota (since server start): 17", "passive_no_quota (since server start): unknown"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q in %s", want, text)
 		}

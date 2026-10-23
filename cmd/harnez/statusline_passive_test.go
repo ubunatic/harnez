@@ -19,10 +19,10 @@ import (
 
 func TestAGYRenderedQuotaReachesPassiveCollector(t *testing.T) {
 	const payload = `{"model":{"id":"gemini-3.1-pro"},"context_window":{"context_window_size":1048576,"current_usage":{"input_tokens":46000}},"quota":{"gemini-5h":{"remaining_fraction":0.296},"gemini-weekly":{"remaining_fraction":0.192},"gemini-argon-wtu-weekly":{"remaining_fraction":0.433}}}`
-	tracker := &usage.PassiveDropTracker{}
+	tracker := &usage.PassiveNoQuotaTracker{}
 	requests := make(chan usage.PassiveRequest)
 	mux := http.NewServeMux()
-	(usage.PassiveUpdateServer{Drops: tracker, Path: "/passive", Requests: requests, Timeout: time.Second, MaxBodyBytes: 8192}).RegisterRoutes(mux)
+	(usage.PassiveUpdateServer{NoQuota: tracker, Path: "/passive", Requests: requests, Timeout: time.Second, MaxBodyBytes: 8192}).RegisterRoutes(mux)
 	listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "server.sock"))
 	if err != nil {
 		t.Fatal(err)
@@ -80,8 +80,8 @@ func TestAGYRenderedQuotaReachesPassiveCollector(t *testing.T) {
 			t.Errorf("missing %q in %q", text, out.String())
 		}
 	}
-	if result != server.UpdateDelivered || tracker.Snapshot()["agy"] != 0 || tracker.AcceptedSnapshot()["agy"] != 1 {
-		t.Fatalf("result=%v dropped=%v accepted=%v", result, tracker.Snapshot(), tracker.AcceptedSnapshot())
+	if result != server.UpdateDelivered || tracker.NoQuotaSnapshot()["agy"] != 0 || tracker.AcceptedSnapshot()["agy"] != 1 {
+		t.Fatalf("result=%v no_quota=%v accepted=%v", result, tracker.NoQuotaSnapshot(), tracker.AcceptedSnapshot())
 	}
 	snapshot := tracker.AcceptedSnapshot()
 	snapshot["agy"] = 99

@@ -7,7 +7,7 @@
     "debug_labels": {
       "type": "object",
       "required": [
-        "passive_dropped",
+        "passive_no_quota",
         "last_fetch",
         "stale_reason",
         "fetch_error",
@@ -16,7 +16,7 @@
         "unknown"
       ],
       "properties": {
-        "passive_dropped": { "type": "string", "minLength": 1 },
+        "passive_no_quota": { "type": "string", "minLength": 1 },
         "last_fetch": {
           "type": "string",
           "minLength": 1

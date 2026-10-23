@@ -71,7 +71,7 @@ view_modes:
 
 # Provider diagnostics in the watch debug box (issue 714 M4).
 debug_labels:
-  passive_dropped: passive_dropped (since server start)
+  passive_no_quota: passive_no_quota (since server start)
   last_fetch: last_fetch
   stale_reason: stale_reason
   fetch_error: fetch_error

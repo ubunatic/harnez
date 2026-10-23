@@ -50,7 +50,7 @@ func ReadStoredSummary(ctx context.Context, dbPath string) (UsageSummary, error)
 func storedSummaryOrError(ctx context.Context) UsageSummary {
 	summary, err := ReadStoredSummary(ctx, "")
 	if err == nil {
-		summary.PassiveDropped = ReadPassiveDropCounts(ctx)
+		summary.PassiveNoQuota = ReadPassiveNoQuotaCounts(ctx)
 		return summary
 	}
 	message := fmt.Sprintf("stored usage unavailable: %v", err)

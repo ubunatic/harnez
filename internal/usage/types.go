@@ -299,7 +299,7 @@ type LoadSnapshot struct {
 
 // UsageSummary is the top-level container for multi-agent usage queries.
 type UsageSummary struct {
-	PassiveDropped map[string]uint64 `json:"passive_dropped,omitempty"`
+	PassiveNoQuota map[string]uint64 `json:"passive_no_quota,omitempty"`
 	Timestamp      time.Time         `json:"timestamp"`
 	Agents         []AgentUsage      `json:"agents"`
 	Load           *LoadSnapshot     `json:"load,omitempty"`

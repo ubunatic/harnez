@@ -13,21 +13,21 @@ import (
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
-// PassiveDropTracker counts dropped and successfully persisted observations.
+// PassiveNoQuotaTracker counts quota-less and successfully persisted observations.
 // Counts span statusline processes and reset when the server restarts.
-type PassiveDropTracker struct {
+type PassiveNoQuotaTracker struct {
 	mu       sync.Mutex
 	counts   map[string]uint64
 	accepted map[string]uint64
 }
 
 // No environment-variable registry exists for passive usage diagnostics.
-const passiveDropCaptureEnv = "HARNEZ_CAPTURE_PASSIVE_DROPS"
+const passiveNoQuotaCaptureEnv = "HARNEZ_CAPTURE_PASSIVE_DROPS"
 
-// capturePassiveDrop is best-effort and never affects statusline output. Store
+// capturePassiveNoQuota is best-effort and never affects statusline output. Store
 // payload as a string so even malformed JSON is preserved byte-for-byte.
-func capturePassiveDrop(provider string, payload []byte, reason string) {
-	if os.Getenv(passiveDropCaptureEnv) == "" {
+func capturePassiveNoQuota(provider string, payload []byte, reason string) {
+	if os.Getenv(passiveNoQuotaCaptureEnv) == "" {
 		return
 	}
 	base := os.Getenv("XDG_STATE_HOME")
@@ -44,14 +44,14 @@ func capturePassiveDrop(provider string, payload []byte, reason string) {
 	}
 	data, err := json.Marshal(struct {
 		Provider   string    `json:"provider"`
-		Reason     string    `json:"reason"`
+		Reason     string    `json:"no_quota_reason"`
 		Payload    string    `json:"payload"`
 		CapturedAt time.Time `json:"captured_at"`
 	}{provider, reason, string(payload), time.Now().UTC()})
 	if err != nil {
 		return
 	}
-	f, err := os.CreateTemp(dir, ".passive-drop-*")
+	f, err := os.CreateTemp(dir, ".passive-no-quota-*")
 	if err != nil {
 		return
 	}
@@ -59,11 +59,11 @@ func capturePassiveDrop(provider string, payload []byte, reason string) {
 	_, writeErr := f.Write(data)
 	closeErr := f.Close()
 	if writeErr == nil && closeErr == nil {
-		_ = os.Rename(f.Name(), filepath.Join(dir, "passive-last-dropped.json"))
+		_ = os.Rename(f.Name(), filepath.Join(dir, "passive-last-no-quota.json"))
 	}
 }
 
-func (t *PassiveDropTracker) recordAccepted(windows []usagestore.Window) {
+func (t *PassiveNoQuotaTracker) recordAccepted(windows []usagestore.Window) {
 	if t == nil {
 		return
 	}
@@ -81,7 +81,7 @@ func (t *PassiveDropTracker) recordAccepted(windows []usagestore.Window) {
 	}
 }
 
-func (t *PassiveDropTracker) AcceptedSnapshot() map[string]uint64 {
+func (t *PassiveNoQuotaTracker) AcceptedSnapshot() map[string]uint64 {
 	counts := map[string]uint64{"claude": 0, "agy": 0}
 	if t == nil {
 		return counts
@@ -94,7 +94,7 @@ func (t *PassiveDropTracker) AcceptedSnapshot() map[string]uint64 {
 	return counts
 }
 
-func (t *PassiveDropTracker) record(provider string) {
+func (t *PassiveNoQuotaTracker) record(provider string) {
 	if t == nil {
 		return
 	}
@@ -106,8 +106,8 @@ func (t *PassiveDropTracker) record(provider string) {
 	t.counts[provider]++
 }
 
-// Snapshot returns an independent copy of the server's counters.
-func (t *PassiveDropTracker) Snapshot() map[string]uint64 {
+// NoQuotaSnapshot returns an independent copy of the server's counters.
+func (t *PassiveNoQuotaTracker) NoQuotaSnapshot() map[string]uint64 {
 	counts := map[string]uint64{"claude": 0, "agy": 0}
 	if t == nil {
 		return counts
@@ -120,8 +120,8 @@ func (t *PassiveDropTracker) Snapshot() map[string]uint64 {
 	return counts
 }
 
-// ReadPassiveDropCounts reads the current server counters, or nil if unavailable.
-func ReadPassiveDropCounts(ctx context.Context) map[string]uint64 {
+// ReadPassiveNoQuotaCounts reads the current server counters, or nil if unavailable.
+func ReadPassiveNoQuotaCounts(ctx context.Context) map[string]uint64 {
 	cfg, err := server.LoadConfig()
 	if err != nil {
 		return nil
@@ -140,7 +140,7 @@ func ReadPassiveDropCounts(ctx context.Context) map[string]uint64 {
 	}
 	defer resp.Body.Close()
 	var status struct {
-		Drops map[string]uint64 `json:"passive_dropped"`
+		NoQuota map[string]uint64 `json:"passive_no_quota"`
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusServiceUnavailable {
 		return nil
@@ -148,5 +148,5 @@ func ReadPassiveDropCounts(ctx context.Context) map[string]uint64 {
 	if json.NewDecoder(resp.Body).Decode(&status) != nil {
 		return nil
 	}
-	return status.Drops
+	return status.NoQuota
 }

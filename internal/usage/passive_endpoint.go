@@ -12,7 +12,7 @@ import (
 )
 
 type PassiveUpdateServer struct {
-	Drops        *PassiveDropTracker
+	NoQuota      *PassiveNoQuotaTracker
 	Path         string
 	Requests     chan<- PassiveRequest
 	Timeout      time.Duration
@@ -27,7 +27,7 @@ func (s PassiveUpdateServer) handlePassive(w http.ResponseWriter, r *http.Reques
 	r.Body = http.MaxBytesReader(w, r.Body, s.MaxBodyBytes)
 	var payload struct {
 		Windows         []usagestore.Window `json:"windows"`
-		DroppedProvider string              `json:"dropped_provider"`
+		NoQuotaProvider string              `json:"dropped_provider"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
@@ -44,12 +44,12 @@ func (s PassiveUpdateServer) handlePassive(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-	if payload.DroppedProvider != "" {
-		if len(payload.Windows) != 0 || (payload.DroppedProvider != "claude" && payload.DroppedProvider != "agy") {
-			http.Error(w, "invalid dropped provider", http.StatusBadRequest)
+	if payload.NoQuotaProvider != "" {
+		if len(payload.Windows) != 0 || (payload.NoQuotaProvider != "claude" && payload.NoQuotaProvider != "agy") {
+			http.Error(w, "invalid no-quota provider", http.StatusBadRequest)
 			return
 		}
-		s.Drops.record(payload.DroppedProvider)
+		s.NoQuota.record(payload.NoQuotaProvider)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -79,7 +79,7 @@ func (s PassiveUpdateServer) handlePassive(w http.ResponseWriter, r *http.Reques
 			http.Error(w, "collector write failed", http.StatusServiceUnavailable)
 			return
 		}
-		s.Drops.recordAccepted(payload.Windows)
+		s.NoQuota.recordAccepted(payload.Windows)
 		w.WriteHeader(http.StatusNoContent)
 	case <-ctx.Done():
 		http.Error(w, "collector unavailable", http.StatusServiceUnavailable)

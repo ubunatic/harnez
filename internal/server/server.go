@@ -20,8 +20,8 @@ type readiness interface{ Ready() bool }
 type RouteRegistrar interface{ RegisterRoutes(*http.ServeMux) }
 type ClientCounter interface{ ActiveClients() int }
 
-// PassiveDropCounter exposes statusline observations without usable quota fields.
-type PassiveDropCounter interface{ DroppedStatuslineObservations() map[string]uint64 }
+// PassiveNoQuotaCounter exposes statusline observations without usable quota fields.
+type PassiveNoQuotaCounter interface{ NoQuotaStatuslineObservations() map[string]uint64 }
 
 type PassiveAcceptedCounter interface{ AcceptedStatuslineObservations() map[string]uint64 }
 
@@ -44,7 +44,7 @@ type statusInfo struct {
 	PID             int               `json:"pid"`
 	StartedAt       time.Time         `json:"started_at,omitempty"`
 	Clients         *int              `json:"clients,omitempty"`
-	PassiveDropped  map[string]uint64 `json:"passive_dropped,omitempty"`
+	PassiveNoQuota  map[string]uint64 `json:"passive_no_quota,omitempty"`
 	PassiveAccepted map[string]uint64 `json:"passive_accepted,omitempty"`
 }
 
@@ -103,16 +103,16 @@ func (s Server) Run(ctx context.Context) error {
 	}
 	startedAt := time.Now().UTC()
 	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) {
-		var drops, accepted map[string]uint64
+		var noQuota, accepted map[string]uint64
 		for _, service := range s.Services {
-			if counter, ok := service.(PassiveDropCounter); ok {
-				drops = counter.DroppedStatuslineObservations()
+			if counter, ok := service.(PassiveNoQuotaCounter); ok {
+				noQuota = counter.NoQuotaStatuslineObservations()
 			}
 			if counter, ok := service.(PassiveAcceptedCounter); ok {
 				accepted = counter.AcceptedStatuslineObservations()
 			}
 		}
-		writeStatusWithDiagnostics(w, s.Version, identity, ready(), startedAt, countClients(), drops, accepted)
+		writeStatusWithDiagnostics(w, s.Version, identity, ready(), startedAt, countClients(), noQuota, accepted)
 	})
 	shutdown := make(chan struct{}, 1)
 	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, _ *http.Request) {
@@ -265,14 +265,14 @@ func writeStatusWithStartAndClients(w http.ResponseWriter, version, identity str
 	writeStatusWithDiagnostics(w, version, identity, ready, startedAt, clients, nil, nil)
 }
 
-func writeStatusWithDiagnostics(w http.ResponseWriter, version, identity string, ready bool, startedAt time.Time, clients *int, drops, accepted map[string]uint64) {
+func writeStatusWithDiagnostics(w http.ResponseWriter, version, identity string, ready bool, startedAt time.Time, clients *int, noQuota, accepted map[string]uint64) {
 	w.Header().Set("Content-Type", "application/json")
 	code, health := http.StatusOK, "ok"
 	if !ready {
 		code, health = http.StatusServiceUnavailable, "starting"
 	}
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid(), StartedAt: startedAt, Clients: clients, PassiveDropped: drops, PassiveAccepted: accepted})
+	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid(), StartedAt: startedAt, Clients: clients, PassiveNoQuota: noQuota, PassiveAccepted: accepted})
 }
 
 func statusHandler(version string) http.HandlerFunc { return statusHandlerReady(version, true) }

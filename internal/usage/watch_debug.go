@@ -13,7 +13,7 @@ import (
 )
 
 type usageDebugLabels struct {
-	PassiveDropped string `yaml:"passive_dropped"`
+	PassiveNoQuota string `yaml:"passive_no_quota"`
 	LastFetch      string `yaml:"last_fetch"`
 	StaleReason    string `yaml:"stale_reason"`
 	FetchError     string `yaml:"fetch_error"`
@@ -72,10 +72,10 @@ func buildUsageDebugBox(summary UsageSummary, width int, now time.Time) wbox {
 			fmt.Sprintf("  %s: %s; %s: %s", labels.FetchError, value(agent.QuotaFetchError), labels.Cause, value(cause)),
 		)
 		count := labels.Unknown
-		if n, ok := summary.PassiveDropped[agent.AgentID]; ok {
+		if n, ok := summary.PassiveNoQuota[agent.AgentID]; ok {
 			count = fmt.Sprint(n)
 		}
-		lines = append(lines, fmt.Sprintf("  %s: %s", labels.PassiveDropped, count))
+		lines = append(lines, fmt.Sprintf("  %s: %s", labels.PassiveNoQuota, count))
 	}
 	action := mustWatchActions().spec.Actions["toggle_debug_box"]
 	return wbox{title: "[" + action.Symbol + "] " + action.Title, lines: lines, width: width}

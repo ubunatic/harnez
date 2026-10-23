@@ -34,17 +34,17 @@ type passivePayload struct {
 func ObserveStatusline(parent context.Context, provider string, payload []byte) {
 	cfg, err := server.LoadConfig()
 	if err != nil {
-		capturePassiveDrop(provider, payload, "load server config: "+err.Error())
+		capturePassiveNoQuota(provider, payload, "load server config: "+err.Error())
 		return
 	}
 	path, err := PassiveUpdatePath()
 	if err != nil {
-		capturePassiveDrop(provider, payload, "load passive path: "+err.Error())
+		capturePassiveNoQuota(provider, payload, "load passive path: "+err.Error())
 		return
 	}
 	socket, err := cfg.Socket()
 	if err != nil {
-		capturePassiveDrop(provider, payload, "resolve socket: "+err.Error())
+		capturePassiveNoQuota(provider, payload, "resolve socket: "+err.Error())
 		return
 	}
 	_ = ObserveStatuslineTo(parent, provider, payload, socket, path, cfg.UpdateTimeout)
@@ -52,12 +52,12 @@ func ObserveStatusline(parent context.Context, provider string, payload []byte) 
 
 func ObserveStatuslineTo(parent context.Context, provider string, payload []byte, address, path string, timeout time.Duration) server.UpdateResult {
 	if provider != "claude" && provider != "agy" {
-		capturePassiveDrop(provider, payload, "unsupported provider")
+		capturePassiveNoQuota(provider, payload, "unsupported provider")
 		return server.UpdateDropped
 	}
 	windows, err := passiveWindows(provider, payload, time.Now())
 	if err != nil {
-		capturePassiveDrop(provider, payload, err.Error())
+		capturePassiveNoQuota(provider, payload, err.Error())
 		return server.UpdateDropped
 	}
 	if len(windows) == 0 {
@@ -66,22 +66,22 @@ func ObserveStatuslineTo(parent context.Context, provider string, payload []byte
 		body, _ := json.Marshal(struct {
 			Provider string `json:"dropped_provider"`
 		}{provider})
-		reason := "no usable quota windows (missing, null, or out-of-range fractions)"
+		reason := "no quota in payload (missing, null, or out-of-range fractions)"
 		if _, err := server.PostTelemetryCommand(parent, address, path, body, timeout); err != nil {
 			reason += "; report drop: " + err.Error()
 		}
-		capturePassiveDrop(provider, payload, reason)
+		capturePassiveNoQuota(provider, payload, reason)
 		return server.UpdateDropped
 	}
 	body, err := json.Marshal(struct {
 		Windows []usagestore.Window `json:"windows"`
 	}{windows})
 	if err != nil {
-		capturePassiveDrop(provider, payload, "encode windows: "+err.Error())
+		capturePassiveNoQuota(provider, payload, "encode windows: "+err.Error())
 		return server.UpdateDropped
 	}
 	if _, err := server.PostTelemetryCommand(parent, address, path, body, timeout); err != nil {
-		capturePassiveDrop(provider, payload, "post windows: "+err.Error())
+		capturePassiveNoQuota(provider, payload, "post windows: "+err.Error())
 		return server.UpdateDropped
 	}
 	return server.UpdateDelivered

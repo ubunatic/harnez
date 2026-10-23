@@ -14,18 +14,18 @@ import (
 	"ubunatic.com/harnez/internal/server"
 )
 
-func TestPassiveDropCapture(t *testing.T) {
+func TestPassiveNoQuotaCapture(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", state)
-	t.Setenv(passiveDropCaptureEnv, "")
-	path := filepath.Join(state, "harnez", "passive-last-dropped.json")
-	capturePassiveDrop("agy", []byte(`{}`), "disabled")
+	t.Setenv(passiveNoQuotaCaptureEnv, "")
+	path := filepath.Join(state, "harnez", "passive-last-no-quota.json")
+	capturePassiveNoQuota("agy", []byte(`{}`), "disabled")
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("disabled capture: %v", err)
 	}
-	t.Setenv(passiveDropCaptureEnv, "1")
+	t.Setenv(passiveNoQuotaCaptureEnv, "1")
 	for _, tc := range []struct{ payload, reason string }{
-		{`{"quota":{}}`, "no usable quota windows"},
+		{`{"quota":{}}`, "no quota in payload"},
 		{`{`, "decode passive usage"},
 		{`{"quota":{"gemini-5h":{"remaining_fraction":0.296}}}`, "post windows"},
 	} {
@@ -37,7 +37,11 @@ func TestPassiveDropCapture(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var capture struct{ Provider, Reason, Payload string }
+		var capture struct {
+			Provider string `json:"provider"`
+			Reason   string `json:"no_quota_reason"`
+			Payload  string `json:"payload"`
+		}
 		if err := json.Unmarshal(data, &capture); err != nil {
 			t.Fatal(err)
 		}
@@ -52,14 +56,14 @@ func TestPassiveDropCapture(t *testing.T) {
 }
 
 func TestPassiveFailedWriteDoesNotCountAccepted(t *testing.T) {
-	tracker := &PassiveDropTracker{}
+	tracker := &PassiveNoQuotaTracker{}
 	requests := make(chan PassiveRequest, 1)
 	body := `{"windows":[{"provider":"agy","key":"gemini:5h","source":"statusline","observed_at":"2026-10-23T12:00:00Z","used_fraction":0.704}]}`
 	// A buffered request plus cancelled context exercises the unavailable path
 	// without a worker or timer delay.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	handler := PassiveUpdateServer{Drops: tracker, Requests: requests, Timeout: time.Second, MaxBodyBytes: 4096}
+	handler := PassiveUpdateServer{NoQuota: tracker, Requests: requests, Timeout: time.Second, MaxBodyBytes: 4096}
 	recorder := httptest.NewRecorder()
 	handler.handlePassive(recorder, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)).WithContext(ctx))
 	if recorder.Code != http.StatusServiceUnavailable || tracker.AcceptedSnapshot()["agy"] != 0 {

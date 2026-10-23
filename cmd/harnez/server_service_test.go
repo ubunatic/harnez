@@ -194,7 +194,7 @@ func TestPrintServerStatusJSON(t *testing.T) {
 		PID:             500,
 		Version:         harnez.Version,
 		StartedAt:       start,
-		PassiveDropped:  map[string]uint64{"agy": 12, "claude": 3},
+		PassiveNoQuota:  map[string]uint64{"agy": 12, "claude": 3},
 		PassiveAccepted: map[string]uint64{"agy": 5, "claude": 2},
 	})
 	if err != nil {
@@ -207,7 +207,7 @@ func TestPrintServerStatusJSON(t *testing.T) {
 	if !sj1.Running || sj1.PID != 500 || sj1.SocketOwner != "systemd" || sj1.Version != harnez.Version || sj1.VersionMismatch || sj1.UptimeSeconds == nil || *sj1.UptimeSeconds < 90 {
 		t.Fatalf("unexpected running json: %+v", sj1)
 	}
-	if sj1.PassiveDropped["agy"] != 12 || sj1.PassiveDropped["claude"] != 3 {
+	if sj1.PassiveNoQuota["agy"] != 12 || sj1.PassiveNoQuota["claude"] != 3 {
 		t.Fatalf("missing passive counters: %s", buf1.String())
 	}
 	if sj1.PassiveAccepted["agy"] != 5 || sj1.PassiveAccepted["claude"] != 2 {
