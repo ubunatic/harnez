@@ -130,3 +130,40 @@ in CI. Raw profile: `/tmp/harnez-adv-884b-tests.json` (local, untracked).
 5. **Importance — next.** Apply key/regression/redundant tags to the measured top 20 only;
    mark redundant only after confirming duplicated coverage. Preserve process, binary, PTY,
    and merge regressions in full/CI. Close 881 when M7 isolation and this reviewed catalog pass.
+
+## Roadmap step 5: measured top-20 classification
+
+The tags below classify the top-level tests in the saved adv-884b profile (historical
+baseline; later steps changed the timing of some tests). “Regression” identifies assertions
+that protect a costly or failure-prone boundary. “Key” is unique core behavior coverage.
+“Redundant” is used only for the old overlay-build test, whose bounded store-read assertion
+is now covered by the named injected-reader test. Process, binary, PTY, and merge-driver
+regressions remain full-tier.
+
+| # | Test (baseline seconds) | Tag | Tier | Unique coverage / covering test |
+|---:|---|---|---|---|
+| 1 | `TestGearMulticallExecution` (24.68) | regression | full | Real argv[0] multicall dispatch and exit behavior. |
+| 2 | `TestUsageBinaryStoreReadDeadlinePrintsError` (4.28) | redundant | short | Bounded injected store cancellation is covered by `TestReadStoredSummaryBoundedUsesInjectedStoreUntilContextEnds`; binary deadline remains covered by #4. |
+| 3 | `TestStopProviderTreeAndWrapper` (2.98) | regression | full | Stops wrapper plus provider descendants across sessions/providers. |
+| 4 | `TestUsageBinaryReturnsWithinDeadline` (2.73) | regression | full | Real usage binary socket deadline and bounded exit. |
+| 5 | `TestInitInstallsIssueMergeDriverEndToEnd` (1.75) | regression | full | Git installation and execution of the merge driver. |
+| 6 | `TestUsageWatchShowsHungServerStatusPTY` (1.24) | regression | full | PTY status while a usage server hangs. |
+| 7 | `TestAgentSelftestFullSequenceSuccess` (1.00) | key | short | Successful self-test protocol sequence and state transitions. |
+| 8 | `TestBenchRunCardModeForcesImageRead` (0.29) | key | short | Card mode's required image read with a fake driver. |
+| 9 | `TestForegroundStartAndResumeDetachIntoWaitableWorkers` (0.28) | regression | full | Detached start/resume workers remain waitable. |
+| 10 | `TestBenchRunModelReadMatrixAndLiteDefault` (0.28) | key | short | Model/read matrix and default lite behavior. |
+| 11 | `TestIssuesCloseAlreadyClosed` (0.25) | key | short | Idempotent close of an already-closed issue. |
+| 12 | `TestAgentResumeWithoutNameResolution` (0.21) | key | short | Resume uses the stored identity without resolving a display name. |
+| 13 | `TestAgentSelftestVerifyMissingHTOFails` (0.20) | key | short | Missing required HTO is rejected during verification. |
+| 14 | `TestIssuesCloseBatchPreservesClosure` (0.19) | key | short | Batch close preserves already-closed issue state. |
+| 15 | `TestLeafRolesCannotStartOrManageAgents` (0.17) | key | short | Leaf role restrictions on agent operations. |
+| 16 | `TestDocsCardsCmd_BuildAndCheck` (0.17) | key | short | Documentation card build/check command behavior. |
+| 17 | `TestDuplicateNumbersRejectIndexAndStatus` (0.14) | key | short | Duplicate issue numbers reject index/status operations. |
+| 18 | `TestIssuesRemoteAllocation` (0.14) | key | short | Remote issue-number allocation with fake `gh`. |
+| 19 | `TestSilentAgentGetsWarning` (0.13) | key | short | Warning-before-provider-reply ordering with a fake clock/event. |
+| 20 | `TestOrchestratorMayStartHelpersButNotOrchestrators` (0.12) | key | short | Orchestrator spawn permissions with a fake classifier. |
+
+Only #2 was consolidated, with its replacement named above. The other tests cover distinct
+boundaries or behaviors; none was dropped or merged. M7 isolates these tests from host HOME,
+XDG state, and provider binaries and removes the warning test's real delay. This completes
+roadmap step 5; the remaining 881 work is still open.
