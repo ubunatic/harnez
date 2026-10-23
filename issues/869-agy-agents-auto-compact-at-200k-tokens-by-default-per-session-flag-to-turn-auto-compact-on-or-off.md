@@ -24,6 +24,16 @@ resume that compacts, or stop and report if agy exposes no usable context size.
 - Live: dev-714 ran on one conversation from M1 to M4 and grew to 4,100+ steps; the M4 turn read code for
   15+ minutes without an edit. The user ran `/compact` by hand.
 
+## Research (2026-10-23, luna:med advisor, read-only)
+
+- agy 1.4.6: no flag, help text or `settings.json` key for an auto-compact threshold. `agy changelog` says
+  automatic compaction exists but documents no threshold or default; logs show manual `/compact` only.
+  So harnez cannot configure it natively; the harnez gate (send `/compact` above the spec threshold) stays
+  the way.
+- Context size: the advisor guessed `input_tokens`, but the dev-714 transcript shows per-call
+  `input_tokens` ~2.2k with `cache_read_tokens` ~106k, so `input_tokens` alone is only the uncached part.
+  Use `input_tokens + cache_read_tokens` of the last call; confirm in the canary (step 1).
+
 ## Way forward
 
 1. Canary: confirm which agy usage field equals the context size (compare before/after a manual `/compact`).
