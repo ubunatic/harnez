@@ -1,6 +1,6 @@
 # 868 — agy resume reports the conversation's old quota error after a successful turn
 
-**Status**: Open
+**Status**: Closed — known agy quota error rechecked against fresh pool quota (af752f24), resume note after 30m idle (adc1bbc6); tests green. No live errored agy session at hand; reopen if the stale quota error recurs
 **Priority**: P2 (Medium) — a working agent looks dead; the host pauses sprints and asks the user to switch models
 **Severity**: Minor
 **Category**: Bug
