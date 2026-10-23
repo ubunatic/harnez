@@ -74,3 +74,7 @@ comparing changes.
   need separate dirs or modules on main, or a scratch dir. We usually avoid branches and
   worktrees (work on the default branch, docs/Git.md), so entries stay as dirs on main. The skill
   asks or derives the location per jam (part of the brief) instead of prescribing `jam/`.
+- Worktrees are allowed where they proved useful (owner, 2026-10-23): ubunatic.com promotes from
+  a short-lived detached worktree while developer work is uncommitted. The problem seen elsewhere
+  was agents running `make install` and similar from worktrees, replacing installed binaries with
+  builds from a temporary tree; the skill forbids installs outside the main tree.
