@@ -79,3 +79,10 @@ capture one dropped payload (env-gated stdin dump) to see what it carries.
   passed with an isolated missing socket. No live daemon restart performed: the host
   must restart onto the installed build for acceptance counts and verify live AGY data.
   Ticket remains open.
+
+## Live capture (2026-10-23 14:39, after e496aa17)
+
+After a server restart and one fresh agy session with one prompt: `passive_accepted.agy: 11`,
+`passive_dropped.agy: 9`. The captured dropped payload (agy 1.4.6, `agent_state: "idle"`) has no `quota` key
+at all; reason "no usable quota windows". So agy sends quota on some renders only, harnez accepts those, and
+the drops are quota-less renders: harmless. Capture switch removed from the agy settings again.
