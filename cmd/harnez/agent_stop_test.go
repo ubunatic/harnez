@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -60,18 +59,19 @@ func TestStopProviderTreeAndWrapper(t *testing.T) {
 			t.Setenv("HARNEZ_AGENT_ROLE", "")
 			t.Setenv("HARNEZ_SESSION_ID", "")
 			dir := t.TempDir()
-			pidFile := filepath.Join(dir, "pids")
+			ready := processTestListener(t)
 			// Descendants include a new session: group-only killing is insufficient.
-			script := "#!" + python + "\n" + `import os, sys, signal, subprocess, time
+			script := "#!" + python + "\n" + `import os, sys, signal, subprocess, socket
 depth = int(sys.argv[1]) if len(sys.argv) == 2 and sys.argv[1].isdigit() else 2
 if os.environ['HARNEZ_STOP_IGNORE_TERM'] == '1':
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
-with open(os.environ['HARNEZ_STOP_PIDS'], 'a') as f:
-    f.write(str(os.getpid())+'\n')
 if depth:
     subprocess.Popen([sys.executable, __file__, str(depth-1)], start_new_session=(depth == 2))
+host, port = os.environ['HARNEZ_STOP_READY'].split(':')
+with socket.create_connection((host, int(port)), timeout=5) as ready:
+    ready.sendall((str(os.getpid())+'\n').encode())
 while True:
-    time.sleep(.02)
+    signal.pause()
 `
 			if err := os.WriteFile(filepath.Join(dir, variant.provider), []byte(script), 0700); err != nil {
 				t.Fatal(err)
@@ -82,7 +82,7 @@ while True:
 			}
 			wrapper := exec.Command(os.Args[0], "-test.run=^TestStopFakeProviderWrapper$")
 			wrapper.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-			wrapper.Env = append(os.Environ(), "HARNEZ_STOP_FIXTURE=1", "HARNEZ_STOP_STORE="+dir, "HARNEZ_STOP_PROVIDER="+variant.provider, "HARNEZ_STOP_STREAM="+variant.stream, "HARNEZ_STOP_IGNORE_TERM="+variant.ignore, "HARNEZ_STOP_PIDS="+pidFile, "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			wrapper.Env = append(os.Environ(), "HARNEZ_STOP_FIXTURE=1", "HARNEZ_STOP_STORE="+dir, "HARNEZ_STOP_PROVIDER="+variant.provider, "HARNEZ_STOP_STREAM="+variant.stream, "HARNEZ_STOP_IGNORE_TERM="+variant.ignore, "HARNEZ_STOP_READY="+ready.Addr().String(), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 			var log bytes.Buffer
 			wrapper.Stdout, wrapper.Stderr = &log, &log
 			if err := wrapper.Start(); err != nil {
@@ -90,27 +90,29 @@ while True:
 			}
 			var pids []int
 			defer func() {
+				// Include descendants even if readiness fails before all PIDs arrive.
+				members, _ := procs.TreeMembers([]procs.TreeRoot{{PID: wrapper.Process.Pid}}, make(map[int]procs.ProcInfo), nil)
+				for _, member := range members {
+					_ = syscall.Kill(member.PID, syscall.SIGKILL)
+				}
 				for _, pid := range pids {
 					_ = syscall.Kill(pid, syscall.SIGKILL)
 				}
 				_ = wrapper.Process.Kill()
 				_ = wrapper.Wait()
+				if t.Failed() {
+					t.Logf("provider wrapper output: %s", log.String())
+				}
 			}()
-			deadline := time.Now().Add(5 * time.Second)
-			for time.Now().Before(deadline) {
-				data, _ := os.ReadFile(pidFile)
-				pids = nil
-				for _, field := range strings.Fields(string(data)) {
-					pid, _ := strconv.Atoi(field)
-					pids = append(pids, pid)
+			for range 3 {
+				conn := acceptProcessTestEvent(t, ready)
+				var pid int
+				_, err := fmt.Fscanln(conn, &pid)
+				_ = conn.Close()
+				if err != nil || pid <= 0 {
+					t.Fatalf("provider readiness PID = %d, %v", pid, err)
 				}
-				if len(pids) == 3 {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
-			if len(pids) != 3 {
-				t.Fatalf("provider tree not ready: %v", pids)
+				pids = append(pids, pid)
 			}
 			sess, err := store.Get("fixture")
 			if err != nil || sess.ProviderPID == 0 || sess.ProviderStarttime == 0 {

@@ -17,6 +17,23 @@ import (
 // Tests that need them use t.Setenv. It also isolates tests from the real store
 // (~/.harnez) by setting HOME to a temp dir, preventing session leaks.
 func TestMain(m *testing.M) {
+	os.Exit(runIsolatedTests(m))
+}
+
+func runIsolatedTests(m *testing.M) int {
+	// Helpers inherit the parent's isolated HOME/runtime and own no temporary
+	// directories. In particular, killed wrappers and os.Exit crash fixtures
+	// cannot clean up a second TestMain's directories or a nested Go build.
+	if os.Getenv("HARNEZ_STOP_FIXTURE") == "1" || os.Getenv("HARNEZ_WAIT_CRASH_HELPER") == "1" ||
+		os.Getenv("HARNEZ_TEST_FOREGROUND_ID") != "" || os.Getenv("HARNEZ_TEST_WORKER_ID") != "" {
+		return m.Run()
+	}
+	// Build with the caller's Go cache, before isolating HOME. The build only
+	// compiles the CLI; it does not run it or access its application store.
+	defer func() { _ = os.RemoveAll(usageTestBinaryDir) }()
+	if err := prepareUsageTestBinary(); err != nil {
+		panic(fmt.Sprintf("prepare shared usage test binary: %v", err))
+	}
 	os.Unsetenv(agentRoleEnv)
 	os.Unsetenv(agentSessionEnv)
 	for _, name := range resolve.SessionEnvVars {
@@ -32,6 +49,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to create temp HOME: %v", err))
 	}
+	defer os.RemoveAll(tmpHome)
 	if err := os.Setenv("HOME", tmpHome); err != nil {
 		panic(fmt.Sprintf("failed to set HOME: %v", err))
 	}
@@ -39,6 +57,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to create temp XDG_RUNTIME_DIR: %v", err))
 	}
+	defer os.RemoveAll(tmpRuntime)
 	if err := os.Setenv("XDG_RUNTIME_DIR", tmpRuntime); err != nil {
 		panic(fmt.Sprintf("failed to set temp XDG_RUNTIME_DIR: %v", err))
 	}
@@ -49,22 +68,15 @@ func TestMain(m *testing.M) {
 	sessionTipSessionOptions = func() resolve.SessionOptions {
 		return resolve.SessionOptions{DisableFallback: true}
 	}
-	if err := prepareUsageTestBinary(); err != nil {
-		panic(fmt.Sprintf("prepare shared usage test binary: %v", err))
-	}
-
 	code := m.Run()
 
-	os.RemoveAll(usageTestBinaryDir)
-	os.RemoveAll(tmpHome)
-	os.RemoveAll(tmpRuntime)
 	if hadHome {
 		os.Setenv("HOME", oldHome)
 	} else {
 		os.Unsetenv("HOME")
 	}
 
-	os.Exit(code)
+	return code
 }
 
 func TestSessionTipHookSilentByDefault(t *testing.T) {

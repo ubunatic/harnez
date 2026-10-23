@@ -127,21 +127,37 @@ func TestAgentWaitCancellation(t *testing.T) {
 func TestAgentWaitFailedWorkerIsNotOrphaned(t *testing.T) {
 	t.Setenv("HARNEZ_AGENT_ROLE", "")
 	t.Setenv("HARNEZ_SESSION_ID", "")
+	// An abruptly exiting helper must not allocate its own TestMain HOME,
+	// runtime directory, binary or Go cache: none could be cleaned on exit.
+	helperTemps := t.TempDir()
+	t.Setenv("TMPDIR", helperTemps)
 	store, err := subagent.NewSessionStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker := exec.Command(os.Args[0], "-test.run=^TestWaitWorkerCrashHelper$")
-	worker.Env = append(os.Environ(), "HARNEZ_WAIT_CRASH_HELPER=1")
+	gate := processTestListener(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second*raceFactor)
+	defer cancel()
+	worker := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWaitWorkerCrashHelper$")
+	worker.Env = append(os.Environ(), "HARNEZ_WAIT_CRASH_HELPER=1", "HARNEZ_TEST_PROCESS_GATE="+gate.Addr().String())
 	if err := worker.Start(); err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		_ = worker.Process.Kill()
+		_ = worker.Wait()
+	}()
 	if err := store.Save(&subagent.Session{ID: "crashed-worker", Name: "crashed-worker", Status: "running", ProcessPID: worker.Process.Pid}); err != nil {
 		_ = worker.Process.Kill()
 		t.Fatal(err)
 	}
+	releaseProcessTestChild(t, gate)
 	if err := worker.Wait(); err != nil {
 		t.Fatalf("crash helper: %v", err)
+	}
+	entries, err := os.ReadDir(helperTemps)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("crash helper leaked temporary directories: %v, %v", entries, err)
 	}
 	sess, err := waitForAgent(context.Background(), store, "crashed-worker", time.Second)
 	if err != nil {
@@ -154,6 +170,7 @@ func TestAgentWaitFailedWorkerIsNotOrphaned(t *testing.T) {
 
 func TestWaitWorkerCrashHelper(t *testing.T) {
 	if os.Getenv("HARNEZ_WAIT_CRASH_HELPER") == "1" {
+		awaitProcessTestRelease(t)
 		os.Exit(0)
 	}
 }
@@ -214,6 +231,8 @@ func TestForegroundStartAndResumeDetachIntoWaitableWorkers(t *testing.T) {
 	oldGrace := foregroundDetachGrace
 	foregroundDetachGrace = time.Millisecond
 	defer func() { foregroundDetachGrace = oldGrace }()
+	gate := processTestListener(t)
+	t.Setenv("HARNEZ_TEST_PROCESS_GATE", gate.Addr().String())
 
 	helperBinary, err := os.Executable()
 	if err != nil {
@@ -274,12 +293,17 @@ func TestForegroundStartAndResumeDetachIntoWaitableWorkers(t *testing.T) {
 			if sess.Status != "running" || sess.ProcessPID <= 0 || sess.StdoutLog == "" || sess.StderrLog == "" {
 				t.Fatalf("detached session = %#v", sess)
 			}
+			t.Cleanup(func() { _ = syscall.Kill(sess.ProcessPID, syscall.SIGKILL) })
 			pgid, err := syscall.Getpgid(sess.ProcessPID)
 			if err != nil || pgid != sess.ProcessPID {
 				t.Fatalf("worker process group = %d, err=%v; want independent group %d", pgid, err, sess.ProcessPID)
 			}
 
+			releaseProcessTestChild(t, gate)
+			waitCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second*raceFactor)
+			defer cancel()
 			waitCmd := newAgentCmd()
+			waitCmd.SetContext(waitCtx)
 			var waitOut bytes.Buffer
 			waitCmd.SetOut(&waitOut)
 			waitCmd.SetArgs([]string{"--store-dir", storeDir, "wait", name})
@@ -402,21 +426,16 @@ func TestForegroundWorkerHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var sess *subagent.Session
-	for i := 0; i < 100; i++ {
-		sess, err = store.Get(sessionID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if sess.ProcessPID == os.Getpid() {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	// The parent releases us only after registering the PID and asserting
+	// that the foreground call detached with a live, waitable worker.
+	awaitProcessTestRelease(t)
+	sess, err := store.Get(sessionID)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if sess.ProcessPID != os.Getpid() {
 		t.Fatal("parent did not register foreground worker PID")
 	}
-	time.Sleep(300 * time.Millisecond)
 	sess.Status = "completed"
 	sess.ProcessPID = 0
 	sess.Response = "finished " + sess.Name
