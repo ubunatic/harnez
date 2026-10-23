@@ -34,7 +34,8 @@ comparing changes.
 ## 3. Proposed steps
 
 1. **Brief:** goal, audience, hard rules (data must be real, no lorem ipsum), owner decisions
-   known up front, where entries live (`jam/<name>/`, never in production), budget and models.
+   known up front, where entries live (chosen per type of work, see §6; never in production),
+   budget and models.
 2. **Research (optional):** cheap agents gather input; each writes a study.
 3. **Build:** N agents on different models get the same brief and data, work independently, and
    each writes a study of what it did and learned.
@@ -68,5 +69,7 @@ comparing changes.
 
 - Where the skill lives (harnez-managed skills vs `~/.claude/skills`) and how it hands off to
   `lean-sprint` for adoption.
-- Whether `jam/<name>/` plus staging-only publishing becomes a harnez convention or stays a
-  per-repo rule.
+- Entry location is not fixed (owner, 2026-10-23): it depends on the type of work and language.
+  `jam/<name>/` plus staging-only publishing fit a static website; a Go or other code project may
+  need branches, worktrees, separate modules or a scratch dir. The skill asks or derives the
+  location per jam (part of the brief) instead of prescribing `jam/`.
