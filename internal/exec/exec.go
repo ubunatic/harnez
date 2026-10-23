@@ -1,0 +1,1283 @@
+// exec implements `harnez exec`, a shell/CLI execution interceptor that
+// runs an arbitrary command, proxies its stdio unbuffered, preserves its
+// exit code, and records a call_type='shell' telemetry row. See
+// issues/118-harnez-exec-shell-interceptor.md.
+//
+// Issue 226: a command prefixed with HARNEZ_EXPECT_FAILURE=1 (see
+// expectFailureEnv/detectExpectFailure below) records call_type
+// telemetry.ExpectedFailureCallType instead of "shell" — its real exit
+// code is still preserved and stored, only the failure-signal
+// classification changes.
+//
+// Two-stage split per docs/HookRewritePattern.md (mirroring
+// distill.go's newDistillHookCmd/runDistillHook vs runDistillWrapper):
+//
+//   - `harnez exec --tool <tool_name> [--ticket <ticket_id>] -- <cmd...>`
+//     is the execution stage: it spawns the real subprocess, proxies its
+//     stdio, and writes telemetry. This is what a rewritten Bash command
+//     (or manual/scripted use) actually runs as.
+//   - `harnez exec hook` is the PreToolUse handshake stage: stdin JSON in,
+//     rewrite JSON out, no side effects. It never spawns the child or
+//     writes telemetry itself — see docs/HookRewritePattern.md for why
+//     the two can't be merged.
+package exec
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"time"
+
+	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/distill"
+	"ubunatic.com/harnez/internal/logging"
+	"ubunatic.com/harnez/internal/procs"
+	"ubunatic.com/harnez/internal/quota1"
+	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/telemetry"
+)
+
+// defaultExecInsertTimeout bounds how long the wrapper will wait for the
+// best-effort telemetry write before giving up and returning the child's
+// exit code anyway. See execOptions.InsertTimeout and runExecWrapper's doc
+// comment: the wrapped command's own execution/exit must never be at the
+// mercy of a slow or hung DB write.
+const defaultExecInsertTimeout = 200 * time.Millisecond
+const defaultExecTimeout = 60 * time.Second
+const distillAutopipeEnv = "HARNEZ_DISTILL_AUTOPIPE"
+const execTimeoutEnv = "HARNEZ_TIMEOUT"
+const execTimeoutShortEnv = "HTO"
+const execTimeoutExplicitEnv = "HARNEZ_EXEC_TIMEOUT_EXPLICIT"
+const execTimeoutEffectiveEnv = "HARNEZ_EXEC_EFFECTIVE_TIMEOUT"
+
+var execTimeoutPrefixRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:` + execTimeoutEnv + `|` + execTimeoutShortEnv + `)=(\S+)\s+`)
+
+// expectFailureEnv is issue 226's direction-2 convention: an agent that
+// runs a shell command it deliberately expects to fail (probing whether a
+// server is down, reproducing a bug to observe its exact failure mode)
+// prefixes the command with this var so the resulting tool_calls row is
+// recorded with call_type=telemetry.ExpectedFailureCallType instead of
+// "shell" — excluded from GroupStats.FailureCount/UnratedFailureCount,
+// but never with a faked or swallowed exit code; see detectExpectFailure
+// and runExecWrapper's use of it below.
+//
+//	HARNEZ_EXPECT_FAILURE=1 curl -sf http://maybe-down-host/health
+const expectFailureEnv = "HARNEZ_EXPECT_FAILURE"
+
+// expectFailureCmdRE matches a leading HARNEZ_EXPECT_FAILURE=1 (or =true,
+// any case) shell-style assignment at the start of a command string,
+// optionally preceded by other leading VAR=value assignments — the shape
+// the PreToolUse hook's rewritten `bash -c '<original command>'` carries
+// when an agent types `HARNEZ_EXPECT_FAILURE=1 <command>` directly.
+var expectFailureCmdRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*` + expectFailureEnv + `=(1|[Tt][Rr][Uu][Ee])\b`)
+
+// detectExpectFailure reports whether args (the command runExecWrapper is
+// about to spawn) should be recorded as an intentionally-expected failure
+// per issue 226's direction 2. It checks two independent signals, since
+// this command never reaches this process's own environment the same way
+// twice depending on how it was invoked:
+//
+//   - opts.Getenv(expectFailureEnv): covers direct/manual `harnez exec`
+//     use, where the caller's own process environment already carries the
+//     var (e.g. a scripted `HARNEZ_EXPECT_FAILURE=1 harnez exec --tool
+//     ... --` invocation).
+//   - expectFailureCmdRE against each arg: covers the normal agent path.
+//     The agent never invokes `harnez exec` directly — the PreToolUse hook
+//     (runExecHook, below) has already rewritten the Bash tool call into
+//     `harnez exec ... -- bash -c '<original command>'` before this
+//     process starts, so an env-var assignment the agent typed at the
+//     front of their command lives inside args (the wrapped script text),
+//     not in this process's own os.Environ().
+//
+// This never changes the child's actual exit code — see runExecWrapper's
+// doc comment: only how the resulting telemetry row is classified.
+func detectExpectFailure(opts execOptions, args []string) bool {
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if v := getenv(expectFailureEnv); v == "1" || strings.EqualFold(v, "true") {
+		return true
+	}
+	for _, a := range args {
+		if expectFailureCmdRE.MatchString(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// quota1Env is the environment variable that triggers Quota-1 enforcement.
+const quota1Env = "HARNEZ_QUOTA_1"
+
+const quota1SandboxMarkerEnv = "HARNEZ_SANDBOX"
+const quota1SandboxMarkerValue = "quota1"
+
+func isQuota1SandboxMarker(value string) bool {
+	return value == quota1SandboxMarkerValue
+}
+
+// quota1CmdRE matches a leading HARNEZ_QUOTA_1=1 command prefix.
+var quota1CmdRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*` + quota1Env + `=(1|[Tt][Rr][Uu][Ee])\b`)
+
+// detectQuota1 reports whether args should be run under Quota-1 single-test enforcement.
+func detectQuota1(opts execOptions, args []string) bool {
+	if opts.Quota1 {
+		return true
+	}
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if v := getenv(quota1Env); v == "1" || strings.EqualFold(v, "true") {
+		return true
+	}
+	for _, a := range unwrapShellCommand(args) {
+		if quota1CmdRE.MatchString(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// unwrapShellCommand returns the script argument for shell -c invocations,
+// recognizing shell paths and short option groups such as -lc. Other argv is
+// returned unchanged.
+func unwrapShellCommand(args []string) []string {
+	if len(args) < 3 {
+		return args
+	}
+	shell := filepath.Base(args[0])
+	if shell != "bash" && shell != "sh" {
+		return args
+	}
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		if len(arg) > 1 && arg[0] == '-' && !strings.HasPrefix(arg, "--") {
+			if strings.Contains(arg[1:], "c") {
+				if i+1 >= len(args) {
+					return args
+				}
+				return []string{args[i+1]}
+			}
+			continue
+		}
+		return args
+	}
+	return args
+}
+
+// isHarnezAgentWait reports whether args invoke `harnez agent wait`, either
+// directly or as a shell -c script. It intentionally recognizes command words
+// rather than searching for a substring, so references in unrelated text do
+// not disable the exec timeout.
+func isHarnezAgentWait(args []string) bool {
+	tokens := unwrapShellCommand(args)
+	if len(tokens) == 1 && tokens[0] != args[0] {
+		tokens = strings.Fields(tokens[0])
+	}
+	for i := 0; i+2 < len(tokens); i++ {
+		if strings.Contains(tokens[i], "=") && !strings.HasPrefix(tokens[i], "-") {
+			continue
+		}
+		if filepath.Base(tokens[i]) == "harnez" && tokens[i+1] == "agent" && tokens[i+2] == "wait" {
+			return true
+		}
+	}
+	return false
+}
+
+func harnezAgentTimeoutArg(args []string) (string, bool) {
+	tokens := unwrapShellCommand(args)
+	if len(tokens) == 1 && len(args) > 0 && tokens[0] != args[0] {
+		tokens = strings.Fields(tokens[0])
+	}
+	for i := 0; i+1 < len(tokens); i++ {
+		if filepath.Base(tokens[i]) != "harnez" || tokens[i+1] != "agent" {
+			continue
+		}
+		for j := i + 2; j < len(tokens); j++ {
+			if tokens[j] == "--" {
+				break
+			}
+			if strings.HasPrefix(tokens[j], "--timeout=") {
+				return strings.TrimPrefix(tokens[j], "--timeout="), true
+			}
+			if tokens[j] == "--timeout" && j+1 < len(tokens) {
+				return tokens[j+1], true
+			}
+		}
+	}
+	return "", false
+}
+
+func hasExplicitExecTimeout(opts execOptions, args []string) bool {
+	if opts.TimeoutSet || opts.Timeout > 0 || explicitTimeoutPrefix(args) != "" {
+		return true
+	}
+	if _, ok := harnezAgentTimeoutArg(args); ok {
+		return true
+	}
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	return getenv(execTimeoutShortEnv) != "" || getenv(execTimeoutEnv) != ""
+}
+
+// quota1SandboxArgs builds bwrap argv for a Quota-1 child. Empty cache paths
+// are omitted; the filesystem remains read-only outside the explicit binds.
+func quota1SandboxArgs(args []string, cwd, goCache, goModCache, runtimeDir string) []string {
+	bwrapArgs := []string{"--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"}
+	if cwd != "" {
+		bwrapArgs = append(bwrapArgs, "--bind", cwd, cwd)
+	}
+	for _, cache := range []string{goCache, goModCache} {
+		if cache != "" {
+			bwrapArgs = append(bwrapArgs, "--bind", cache, cache)
+		}
+	}
+	if runtimeDir != "" {
+		bwrapArgs = append(bwrapArgs, "--tmpfs", runtimeDir)
+	}
+	bwrapArgs = append(bwrapArgs, "--chdir", cwd, "--")
+	return append(bwrapArgs, args...)
+}
+
+func quota1SandboxCommand(args []string, cwd string) (string, []string, bool) {
+	bwrap, err := exec.LookPath("bwrap")
+	if err != nil {
+		return "", args, false
+	}
+	var goCache, goModCache string
+	if goPath, err := exec.LookPath("go"); err == nil {
+		if output, err := exec.Command(goPath, "env", "GOCACHE", "GOMODCACHE").Output(); err == nil {
+			paths := strings.Fields(string(output))
+			if len(paths) > 0 {
+				goCache = paths[0]
+			}
+			if len(paths) > 1 {
+				goModCache = paths[1]
+			}
+		}
+	}
+	return bwrap, quota1SandboxArgs(args, cwd, goCache, goModCache, os.Getenv("XDG_RUNTIME_DIR")), true
+}
+
+// validateToolName rejects an explicit --tool value at the point it's
+// accepted, before any telemetry row is ever written. Root-cause fix for
+// issue 344's follow-up: ad hoc manual `harnez exec --tool "<label>"`
+// invocations across several projects used --tool as a free-text label
+// (a filename, a version tag, a username) instead of a real tool
+// identifier, fragmenting tool_stats. CanonicalToolName (toolname.go)
+// cleans up historical rows at export time, but that is a read-time
+// backstop only — this stops new garbage from being inserted at all,
+// reusing the same "does this look like a command word" check.
+func validateToolName(tool string) error {
+	trimmed := strings.TrimSpace(tool)
+	if trimmed == "" {
+		return fmt.Errorf("exec: --tool must not be blank")
+	}
+	if len(strings.Fields(trimmed)) > 1 {
+		return fmt.Errorf("exec: --tool %q looks like a full command, not a tool identifier — pass a plain name like git, npm, or Bash", trimmed)
+	}
+	for _, meta := range telemetry.ShellMetacharacters {
+		if strings.Contains(trimmed, meta) {
+			return fmt.Errorf("exec: --tool %q contains a shell metacharacter, not a tool identifier", trimmed)
+		}
+	}
+	if telemetry.LooksLikeDataFile(trimmed) {
+		return fmt.Errorf("exec: --tool %q looks like a filename, version tag, or argument value, not a tool identifier", trimmed)
+	}
+	return nil
+}
+
+// execOptions bundles runExecWrapper's inputs. The zero value plus a real
+// Tool matches production behavior (real env, real cwd, default DB path,
+// default bounded insert); tests override the remaining fields to isolate
+// from the caller's real environment/DB and to inject slow/failing
+// writers for the non-blocking-telemetry acceptance criterion.
+type execOptions struct {
+	Tool             string
+	Ticket           string
+	Distill          string
+	ExpectFailure    bool
+	Quota1           bool
+	Quota1Dir        string
+	ProcessRecordDir string
+	DisableSandbox   bool // test seam; production always enables Quota-1 sandboxing
+
+	Getenv              func(string) string                                // nil means os.Getenv
+	StateDir            string                                             // resolve.Session/Ticket state/lock dir override
+	DBPath              string                                             // telemetry DB path override; empty means telemetry.DefaultDBPath()
+	InsertTimeout       time.Duration                                      // bound on waiting for the telemetry write; <=0 means defaultExecInsertTimeout
+	Insert              func(dbPath string, call telemetry.ToolCall) error // nil means defaultInsertExecRow
+	Timeout             time.Duration
+	TimeoutSet          bool
+	ConfigPath          string
+	AgentID             string
+	SendTelemetryRecord func(kind string, payload any) server.UpdateResult
+}
+
+// maxExecHeadBytes and maxExecTailBytes bound in-memory capture for telemetry scoring,
+// Quota-1 failure logs, and distillation. Streams are proxied to stdout/stderr unbuffered
+// and uncapped; only in-memory post-run inspection buffers are bounded.
+const (
+	maxExecHeadBytes = 256 * 1024  // 256 KB head cap for distillation
+	maxExecTailBytes = 1024 * 1024 // 1 MB tail cap for telemetry scoring and distillation
+)
+
+// headTailBuffer is a thread-safe io.Writer that retains a bounded head and a bounded tail
+// of the stream, inserting an omission indicator if total bytes written exceeds head+tail.
+type headTailBuffer struct {
+	mu         sync.Mutex
+	head       []byte
+	tail       []byte
+	headLimit  int
+	tailLimit  int
+	totalBytes int64
+}
+
+func newHeadTailBuffer(headLimit, tailLimit int) *headTailBuffer {
+	return &headTailBuffer{
+		headLimit: headLimit,
+		tailLimit: tailLimit,
+	}
+}
+
+func (b *headTailBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	n := len(p)
+	b.totalBytes += int64(n)
+
+	// Fill head buffer up to headLimit
+	if len(b.head) < b.headLimit {
+		needed := b.headLimit - len(b.head)
+		if n <= needed {
+			b.head = append(b.head, p...)
+		} else {
+			b.head = append(b.head, p[:needed]...)
+		}
+	}
+
+	// Maintain tail rolling buffer
+	if b.tailLimit > 0 {
+		if n >= b.tailLimit {
+			b.tail = append(b.tail[:0], p[n-b.tailLimit:]...)
+		} else {
+			overflow := len(b.tail) + n - b.tailLimit
+			if overflow > 0 {
+				copy(b.tail, b.tail[overflow:])
+				b.tail = b.tail[:len(b.tail)-overflow]
+			}
+			b.tail = append(b.tail, p...)
+		}
+	}
+
+	return n, nil
+}
+
+func (b *headTailBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.totalBytes <= int64(b.headLimit) {
+		return string(b.head)
+	}
+	if b.totalBytes <= int64(len(b.head)+len(b.tail)) {
+		if b.totalBytes <= int64(len(b.head)) {
+			return string(b.head[:b.totalBytes])
+		}
+		overlap := int64(len(b.head)) + int64(len(b.tail)) - b.totalBytes
+		if overlap > 0 && overlap <= int64(len(b.tail)) {
+			return string(b.head) + string(b.tail[overlap:])
+		}
+		return string(b.head) + string(b.tail)
+	}
+
+	omitted := b.totalBytes - int64(len(b.head)) - int64(len(b.tail))
+	return string(b.head) + fmt.Sprintf("\n… [%d bytes omitted] …\n", omitted) + string(b.tail)
+}
+
+func (b *headTailBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.head) + len(b.tail)
+}
+
+// tailBuffer is a thread-safe io.Writer that retains only the last limit bytes written.
+type tailBuffer struct {
+	mu    sync.Mutex
+	buf   []byte
+	limit int
+}
+
+func newTailBuffer(limit int) *tailBuffer {
+	return &tailBuffer{limit: limit}
+}
+
+func (b *tailBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	n := len(p)
+	if b.limit <= 0 {
+		return n, nil
+	}
+	if len(p) >= b.limit {
+		b.buf = append(b.buf[:0], p[len(p)-b.limit:]...)
+		return n, nil
+	}
+
+	overflow := len(b.buf) + len(p) - b.limit
+	if overflow > 0 {
+		copy(b.buf, b.buf[overflow:])
+		b.buf = b.buf[:len(b.buf)-overflow]
+	}
+	b.buf = append(b.buf, p...)
+	return n, nil
+}
+
+func (b *tailBuffer) Bytes() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]byte, len(b.buf))
+	copy(out, b.buf)
+	return out
+}
+
+func (b *tailBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return string(b.buf)
+}
+
+func (b *tailBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.buf)
+}
+
+// byteCounter is an io.Writer that only counts bytes written to it,
+// safe for concurrent use since exec.Cmd copies a non-*os.File Stdout and
+// Stderr on separate goroutines.
+type byteCounter struct{ n int64 }
+
+func (c *byteCounter) Write(p []byte) (int, error) {
+	atomic.AddInt64(&c.n, int64(len(p)))
+	return len(p), nil
+}
+
+func (c *byteCounter) total() int64 {
+	return atomic.LoadInt64(&c.n)
+}
+
+// inferToolFromArgs extracts the effective tool name from args when --tool is not explicitly provided.
+func inferToolFromArgs(args []string, defaultTool string) string {
+	fallback := "Bash"
+	if defaultTool != "" && defaultTool != "Bash" {
+		return defaultTool
+	}
+	if len(args) == 0 {
+		return fallback
+	}
+	tokens := unwrapShellCommand(args)
+	if len(tokens) == 1 && tokens[0] != args[0] {
+		tokens = strings.Fields(tokens[0])
+	}
+
+	skipNext := false
+	for _, tok := range tokens {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		if strings.Contains(tok, "=") && !strings.HasPrefix(tok, "-") {
+			continue // skip VAR=val
+		}
+		if strings.HasPrefix(tok, "-") {
+			if tok == "-u" || tok == "-g" || tok == "-C" || tok == "-w" || tok == "--user" || tok == "--group" || tok == "--directory" {
+				skipNext = true
+			}
+			continue
+		}
+		// A token carrying a shell metacharacter (a redirect like
+		// "2>/dev/null", an operator like "&&") is never a real command
+		// word — stop instead of returning it or scanning past it, since
+		// we can no longer trust later tokens to be a plain command either.
+		for _, meta := range telemetry.ShellMetacharacters {
+			if strings.Contains(tok, meta) {
+				return fallback
+			}
+		}
+		if telemetry.ShellKeywords[tok] {
+			return fallback
+		}
+		base := filepath.Base(tok)
+		if base == "" || base == "bash" || base == "sh" || base == "sudo" || base == "env" || base == "doas" || base == "nohup" {
+			continue
+		}
+		// A bare positional argument (a data filename/glob, not a command)
+		// with no leading command word before it isn't a tool either.
+		if telemetry.LooksLikeDataFile(base) {
+			return fallback
+		}
+		return base
+	}
+	return fallback
+}
+
+// runExecWrapper spawns args as a subprocess, proxying stdin/stdout/stderr
+// to in/out/errOut with no added buffering latency (canary-verified: see
+// issues/118's Canary section — Stdin passed through as the underlying
+// *os.File directly, Stdout/Stderr tee'd through io.MultiWriter to a byte
+// counter without introducing timer-based delay). It returns the child's
+// exit code (including the 128+signal convention for signal-terminated
+// children) and preserves it exactly; a non-nil error here means the
+// command itself could not be spawned at all (e.g. not found), not that
+// the child exited non-zero.
+//
+// After the child exits, it makes one best-effort, bounded attempt to
+// write a call_type='shell' telemetry row: the write runs on its own
+// goroutine and the wrapper waits at most opts.InsertTimeout (default
+// defaultExecInsertTimeout) for it before giving up and returning anyway
+// — a slow or hung DB write can delay the wrapper's own return by at most
+// that bound, but never by the writer's actual (possibly unbounded) delay.
+func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut io.Writer) (int, error) {
+	logging.Debugf("exec wrapper: invoked, tool=%q ticket=%q distill=%q args=%v", opts.Tool, opts.Ticket, opts.Distill, args)
+	if len(args) == 0 {
+		return 0, fmt.Errorf("exec: no command given (usage: harnez exec -- <command...>)")
+	}
+	if opts.Tool == "" {
+		opts.Tool = inferToolFromArgs(args, "Bash")
+	}
+
+	quota1Active := detectQuota1(opts, args)
+	quotaStateFile := ""
+	if quota1Active {
+		res, err := quota1.CheckAndRecord(quota1.CheckOptions{
+			Dir:    opts.Quota1Dir,
+			Getenv: opts.Getenv,
+		})
+		if err != nil {
+			return 1, fmt.Errorf("exec: %w", err)
+		}
+		if !res.Allowed {
+			fmt.Fprintln(errOut, res.Message)
+			return 1, nil
+		}
+		quotaStateFile = res.StateFile
+	}
+
+	counter := &byteCounter{}
+	capturedOutput := newHeadTailBuffer(maxExecHeadBytes, maxExecTailBytes)
+	quotaLogPath := ""
+	var quotaLogFile *os.File
+	if quota1Active {
+		var pathErr error
+		quotaLogPath, pathErr = quota1LogPath(opts.Quota1Dir)
+		if pathErr != nil {
+			return 1, fmt.Errorf("exec: resolve Quota-1 test log: %w", pathErr)
+		}
+		if err := os.MkdirAll(filepath.Dir(quotaLogPath), 0755); err != nil {
+			return 1, fmt.Errorf("exec: create Quota-1 log directory: %w", err)
+		}
+		f, err := os.Create(quotaLogPath)
+		if err != nil {
+			return 1, fmt.Errorf("exec: create Quota-1 test log: %w", err)
+		}
+		quotaLogFile = f
+		defer quotaLogFile.Close()
+	}
+
+	timeout := resolveExecTimeout(opts, args)
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		cancel = func() {}
+	}
+	defer cancel()
+	c := exec.Command(args[0], args[1:]...)
+	quota1Sandboxed := false
+	if quota1Active && !opts.DisableSandbox {
+		cwd, _ := os.Getwd()
+		if bwrap, wrappedArgs, ok := quota1SandboxCommand(args, cwd); ok {
+			c = exec.Command(bwrap, wrappedArgs...)
+			quota1Sandboxed = true
+			// Keep the wrapped command in the process group recorded by harnez.
+			c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		} else {
+			fmt.Fprintln(errOut, "harnez exec: warning: bwrap not found; running Quota-1 command unsandboxed")
+		}
+	}
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	c.Env = append(os.Environ(), execTimeoutEffectiveEnv+"="+timeout.String())
+	if quota1Sandboxed {
+		c.Env = append(c.Env, quota1SandboxMarkerEnv+"="+quota1SandboxMarkerValue)
+	}
+	c.Env = append(c.Env, execTimeoutExplicitEnv+"=0")
+	if hasExplicitExecTimeout(opts, args) {
+		c.Env[len(c.Env)-1] = execTimeoutExplicitEnv + "=1"
+	}
+	c.Stdin = in
+
+	var distOpts distill.Options
+	distillActive := opts.Distill != ""
+	if distillActive {
+		mode := distill.Mode(opts.Distill)
+		if mode == "true" || mode == "1" || mode == distill.ModeAuto {
+			mode = distill.DetectModeFromArgs(args)
+		}
+		distOpts = distill.Options{Mode: mode, MaxLines: 300}
+	}
+
+	var stdoutWriters []io.Writer
+	var stderrWriters []io.Writer
+	if distillActive {
+		stdoutWriters = []io.Writer{capturedOutput, counter}
+		stderrWriters = []io.Writer{capturedOutput, counter}
+	} else {
+		stdoutWriters = []io.Writer{out, counter, capturedOutput}
+		stderrWriters = []io.Writer{errOut, counter, capturedOutput}
+	}
+	if quotaLogFile != nil {
+		stdoutWriters = append(stdoutWriters, quotaLogFile)
+		stderrWriters = append(stderrWriters, quotaLogFile)
+	}
+	c.Stdout = io.MultiWriter(stdoutWriters...)
+	c.Stderr = io.MultiWriter(stderrWriters...)
+
+	start := time.Now()
+	if err := c.Start(); err != nil {
+		return 1, fmt.Errorf("exec: run %v: %w", args, err)
+	}
+	processRecordDir := opts.ProcessRecordDir
+	if processRecordDir == "" {
+		var err error
+		processRecordDir, err = procs.RecordDir()
+		if err != nil {
+			fmt.Fprintf(errOut, "harnez exec: resolve process record directory: %v\n", err)
+		}
+	}
+	processRecordPath := ""
+	if processRecordDir != "" {
+		cwd, _ := os.Getwd()
+		var err error
+		processRecordPath, err = procs.WriteRecord(processRecordDir, procs.Record{
+			PGID: c.Process.Pid, PIDStarttime: quota1.ProcStarttime(c.Process.Pid), Argv: append([]string(nil), args...),
+			CWD: cwd, OwnerPID: os.Getpid(), OwnerStarttime: quota1.ProcStarttime(os.Getpid()), Quota1: quota1Active, Started: start.UTC(),
+		})
+		if err != nil {
+			fmt.Fprintf(errOut, "harnez exec: record process group: %v\n", err)
+		}
+	}
+	if quota1Active {
+		if err := quota1.UpdateProcess(quotaStateFile, c.Process.Pid, c.Process.Pid); err != nil {
+			fmt.Fprintf(errOut, "harnez exec: record quota-1 process: %v\n", err)
+		}
+	}
+	groupDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+		case <-groupDone:
+		}
+	}()
+	stoppedDone := make(chan struct{})
+	stoppedResult := make(chan stoppedGroupOutcome, 1)
+	go func() {
+		stoppedResult <- monitorStoppedGroup(stoppedDone, c.Process.Pid, stoppedGroupGrace, stoppedPollInterval,
+			processGroupStopped, signalProcessGroup)
+	}()
+	runErr := c.Wait()
+	close(groupDone)
+	close(stoppedDone)
+	stopped := <-stoppedResult
+	if stopped.Detected {
+		if stopped.Killed {
+			fmt.Fprintln(errOut, "harnez exec: process group remained stopped after SIGCONT; sent SIGKILL (exit 125); quota-1 run marked incomplete")
+		} else {
+			fmt.Fprintln(errOut, "harnez exec: stopped process group detected; sent SIGCONT (exit 125); quota-1 run marked incomplete")
+		}
+	}
+	if processRecordPath != "" {
+		if err := procs.RemoveRecord(processRecordPath); err != nil {
+			fmt.Fprintf(errOut, "harnez exec: remove process record: %v\n", err)
+		}
+	}
+	timedOut := ctx.Err() == context.DeadlineExceeded
+	if timedOut {
+		_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+		fmt.Fprintf(errOut, "harnez exec: timeout kill after %s; rerun with HTO=0 to lift\n", timeout)
+	}
+	duration := time.Since(start)
+	if quota1Active {
+		var normalExit *int
+		if !stopped.Detected {
+			if runErr == nil {
+				code := 0
+				normalExit = &code
+			} else if quota1PreTestFailure(capturedOutput.String()) {
+				// make's formatting and vet gates run before go test. Preserve
+				// the existing one-retry path for failures that never reached tests.
+				normalExit = nil
+			} else {
+				var childExit *exec.ExitError
+				if errors.As(runErr, &childExit) && childExit.ProcessState != nil && childExit.ProcessState.Exited() {
+					code := childExit.ExitCode()
+					normalExit = &code
+				}
+			}
+		}
+		if err := quota1.FinishRun(quotaStateFile, time.Now(), normalExit); err != nil {
+			fmt.Fprintf(errOut, "harnez exec: record quota-1 result: %v\n", err)
+		}
+	}
+
+	var exitErr *exec.ExitError
+	if runErr != nil && !errors.As(runErr, &exitErr) {
+		// The command could not even be spawned (not found, permission
+		// denied, ...) — this is a harnez-level error, not a child exit
+		// code to preserve, so no telemetry row is written for it.
+		return 1, fmt.Errorf("exec: run %v: %w", args, runErr)
+	}
+	exitCode := exitCodeFromError(runErr)
+	if stopped.Detected {
+		exitCode = stoppedGroupExitCode
+	}
+	if quota1Active {
+		if quotaLogFile != nil {
+			_ = quotaLogFile.Close()
+		}
+		if exitCode != 0 {
+			if err := pruneQuota1Logs(filepath.Dir(quotaLogPath)); err != nil {
+				fmt.Fprintf(errOut, "harnez exec: prune Quota-1 test logs: %v\n", err)
+			}
+			fmt.Fprint(errOut, quota1FailureSummary(quotaLogPath, capturedOutput.String()))
+			if quota1PreTestFailure(capturedOutput.String()) {
+				fmt.Fprintln(errOut, "Quota-1: tests did not run; fix gofmt/vet, then rerun make test-q1.")
+			}
+		} else {
+			_ = os.Remove(quotaLogPath)
+		}
+	}
+
+	rawBytes := counter.total()
+	var distilledBytesPtr *int64
+
+	if distillActive {
+		rawStr := capturedOutput.String()
+		distilled, rBytes, dBytes := distill.DistillWithMetrics(rawStr, distOpts)
+		fmt.Fprintln(out, distilled)
+		rawBytes = rBytes
+		if distOpts.Mode != distill.ModeRaw {
+			distilledBytesPtr = &dBytes
+		}
+	}
+
+	score, note := telemetry.ScoreShell(capturedOutput.String(), exitCode)
+
+	recordExecTelemetry(opts, execCall{
+		Tool:           opts.Tool,
+		ExitCode:       exitCode,
+		DurationMs:     duration.Milliseconds(),
+		RawBytes:       rawBytes,
+		DistilledBytes: distilledBytesPtr,
+		Score:          &score,
+		Note:           note,
+		ExpectFailure:  opts.ExpectFailure || detectExpectFailure(opts, args),
+		Timeout:        timedOut,
+	})
+
+	return exitCode, nil
+}
+
+func quota1LogPath(dir string) (string, error) {
+	if dir == "" {
+		dir, _ = os.Getwd()
+	}
+	stateFile, _, err := quota1.ResolveStateFile(dir)
+	if err != nil {
+		return "", err
+	}
+	// ResolveStateFile places state below .git/harnez for Git repositories,
+	// or .harnez otherwise. Retain output next to that ignored state.
+	logDir := filepath.Join(filepath.Dir(stateFile), "quota-1-logs")
+	return filepath.Join(logDir, "test-"+time.Now().UTC().Format("20060102T150405.000000000Z")+".log"), nil
+}
+
+const quota1LogRetention = 10
+
+func pruneQuota1Logs(logDir string) error {
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return err
+	}
+	var logs []os.DirEntry
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "test-") && strings.HasSuffix(entry.Name(), ".log") {
+			logs = append(logs, entry)
+		}
+	}
+	if len(logs) <= quota1LogRetention {
+		return nil
+	}
+	sort.Slice(logs, func(i, j int) bool { return logs[i].Name() < logs[j].Name() })
+	for _, entry := range logs[:len(logs)-quota1LogRetention] {
+		if err := os.Remove(filepath.Join(logDir, entry.Name())); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeQuota1FailureLog(logPath string, output []byte) error {
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(logPath, output, 0644); err != nil {
+		return err
+	}
+	return pruneQuota1Logs(filepath.Dir(logPath))
+}
+
+func quota1FailureSummary(logPath, output string) string {
+	var failures []string
+	var diagnostic []string
+	var lines []string
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		lines = append(lines, line)
+		if strings.Contains(line, "--- FAIL") {
+			failures = append(failures, line)
+		}
+		if strings.HasPrefix(line, "FAIL ") || strings.HasPrefix(line, "panic:") || strings.Contains(line, ".go:") && strings.Contains(line, ": ") {
+			diagnostic = append(diagnostic, line)
+		}
+	}
+	var summary strings.Builder
+	fmt.Fprintf(&summary, "Quota-1 test log: %q\n", logPath)
+	if len(failures) == 0 {
+		fmt.Fprintln(&summary, "Quota-1 command failed:")
+		if len(diagnostic) == 0 {
+			if len(lines) > 10 {
+				lines = lines[len(lines)-10:]
+			}
+			diagnostic = lines
+		} else if len(diagnostic) > 5 {
+			diagnostic = diagnostic[:5]
+		}
+		for _, line := range diagnostic {
+			fmt.Fprintf(&summary, "  %s\n", line)
+		}
+	} else {
+		fmt.Fprintln(&summary, "Failing tests:")
+		for _, failure := range failures {
+			fmt.Fprintf(&summary, "  %s\n", failure)
+		}
+	}
+	return summary.String()
+}
+
+// quota1PreTestFailure reports the known make test prechecks that can fail
+// before go test starts. Their output is captured by the Quota-1 wrapper.
+func quota1PreTestFailure(output string) bool {
+	if strings.Contains(output, "go test") {
+		return false
+	}
+	return strings.Contains(output, "gofmt -l .") || strings.Contains(output, "go vet ./...")
+}
+
+func resolveExecTimeout(opts execOptions, args []string) time.Duration {
+	if value := explicitTimeoutPrefix(args); value != "" {
+		if value == "0" {
+			return 0
+		}
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	for _, name := range []string{execTimeoutShortEnv, execTimeoutEnv} {
+		if value := getenv(name); value != "" {
+			if value == "0" {
+				return 0
+			}
+			if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+				return parsed
+			}
+		}
+	}
+	if opts.Timeout > 0 {
+		return opts.Timeout
+	}
+	if value, ok := harnezAgentTimeoutArg(args); ok {
+		if value == "0" {
+			return 0
+		}
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	if isHarnezAgentWait(args) {
+		return 0
+	}
+	wd, _ := os.Getwd()
+	configPath := opts.ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(wd, "config.yaml")
+	}
+	if cfg, _, err := claude.OpenConfig(configPath); err == nil && cfg.Exec.Timeout != "" {
+		if parsed, parseErr := time.ParseDuration(cfg.Exec.Timeout); parseErr == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return defaultExecTimeout
+}
+
+func explicitTimeoutPrefix(args []string) string {
+	for _, arg := range args {
+		if match := execTimeoutPrefixRE.FindStringSubmatch(arg); len(match) == 2 {
+			return match[1]
+		}
+	}
+	return ""
+}
+
+// exitCodeFromError extracts a shell-convention exit code from the result
+// of exec.Cmd.Run(): nil is 0, a signal-terminated child reports
+// 128+signal (the same convention bash uses), a normal non-zero exit
+// reports its own code, and -1 signals a wait/status error distinct from
+// either.
+func exitCodeFromError(err error) int {
+	if err == nil {
+		return 0
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			return 128 + int(ws.Signal())
+		}
+		return exitErr.ExitCode()
+	}
+	return -1
+}
+
+// execCall carries the post-run facts recordExecTelemetry needs to build a
+// telemetry.ToolCall; kept separate from telemetry.ToolCall itself so this
+// file doesn't need to know about columns (session/ticket/agent/project)
+// it resolves itself.
+type execCall struct {
+	Tool           string
+	ExitCode       int
+	DurationMs     int64
+	RawBytes       int64
+	DistilledBytes *int64
+	Score          *int
+	Note           string
+	// ExpectFailure marks this row as an intentionally-expected failure
+	// (issue 226's HARNEZ_EXPECT_FAILURE convention, detected by
+	// detectExpectFailure) — recordExecTelemetry writes call_type
+	// telemetry.ExpectedFailureCallType instead of "shell" when true. The
+	// row's ExitCode is never altered by this flag; only the call_type
+	// classification changes.
+	ExpectFailure bool
+	Timeout       bool
+}
+
+// recordExecTelemetry makes the single best-effort, bounded attempt at
+// writing call's telemetry row described in runExecWrapper's doc comment.
+// It never returns an error: on any failure (resolve, DB open, insert, or
+// simply running out of time) the row is silently dropped, per this
+// ticket's "telemetry is best-effort, never on the command's critical
+// path" requirement.
+func recordExecTelemetry(opts execOptions, call execCall) {
+	timeout := opts.InsertTimeout
+	if timeout <= 0 {
+		timeout = defaultExecInsertTimeout
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		sessionID, err := resolve.Session(resolve.SessionOptions{
+			Getenv:  opts.Getenv,
+			LockDir: opts.StateDir,
+		})
+		if err != nil {
+			logging.Debugf("exec wrapper: resolve.Session failed, dropping telemetry row: %v", err)
+			return
+		}
+		// An unresolved ticket_id is expected, not fatal (see resolve.Ticket's
+		// doc comment): this repo's own usage never branches per ticket, and
+		// a session may start outside any git repo entirely. A resolve.Ticket
+		// error here is now only the rare writeLastTicket I/O failure case,
+		// and even that must not cost the row — ticket_id degrades to "".
+		ticketID, err := resolve.Ticket(resolve.TicketOptions{
+			Explicit:  opts.Ticket,
+			SessionID: sessionID,
+			StateDir:  opts.StateDir,
+		})
+		if err != nil {
+			logging.Debugf("exec wrapper: resolve.Ticket failed, using empty ticket_id: %v", err)
+			ticketID = ""
+		}
+
+		wd, err := os.Getwd()
+		if err != nil {
+			wd = ""
+		}
+
+		exitCode := call.ExitCode
+		callType := "shell"
+		if call.Timeout {
+			callType = "shell-timeout"
+		}
+		if call.ExpectFailure {
+			callType = telemetry.ExpectedFailureCallType
+		}
+		tc := telemetry.ToolCall{
+			SessionID:      sessionID,
+			TicketID:       ticketID,
+			ProjectName:    filepath.Base(wd),
+			WorkingDir:     wd,
+			AgentID:        opts.AgentID,
+			ToolName:       call.Tool,
+			CallType:       callType,
+			Score:          call.Score,
+			Note:           call.Note,
+			ExitCode:       &exitCode,
+			DurationMs:     call.DurationMs,
+			RawBytes:       call.RawBytes,
+			DistilledBytes: call.DistilledBytes,
+		}
+
+		insert := opts.Insert
+		if insert == nil {
+			insert = func(dbPath string, call telemetry.ToolCall) error {
+				return defaultInsertExecRow(dbPath, call, opts.SendTelemetryRecord)
+			}
+		}
+		if err := insert(opts.DBPath, tc); err != nil {
+			logging.Debugf("exec wrapper: insert failed: %v", err)
+		} else {
+			logging.Debugf("exec wrapper: inserted row tool=%q session=%q ticket=%q", tc.ToolName, tc.SessionID, tc.TicketID)
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		logging.Debugf("exec wrapper: telemetry write exceeded %s timeout, returning without waiting", timeout)
+	}
+}
+
+// defaultInsertExecRow hands one row to the server, spooling it when the
+// server is unavailable.
+func defaultInsertExecRow(dbPath string, call telemetry.ToolCall, send func(string, any) server.UpdateResult) error {
+	if dbPath != "" {
+		return server.InsertToolCallAt(dbPath, call)
+	}
+	if send == nil || send("tool_call", call) == server.UpdateDropped {
+		return fmt.Errorf("exec: telemetry server unavailable and spool write failed")
+	}
+	return nil
+}
+
+// alreadyRoutedThroughExec guard: avoid re-wrapping a command that
+// already routes through harnez exec (or the ⚙ alias/shim).
+func alreadyRoutedThroughExec(command string) bool {
+	if strings.Contains(command, "harnez exec") {
+		return true
+	}
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return false
+	}
+	fields := strings.Fields(trimmed)
+	for _, f := range fields {
+		if strings.Contains(f, "=") && !strings.HasPrefix(f, "-") {
+			continue // skip VAR=val prefixes
+		}
+		first := filepath.Base(f)
+		return isGearInvocation(first)
+	}
+	return false
+}
+
+// isSimpleShellCommand reports whether a shell command string consists of a single
+// simple command (no pipelines, boolean operators, redirects, compound statements,
+// subshells, or variable-assignment prefixes) that can be safely prefixed directly
+// with `⚙ ` without requiring `bash -c` wrapping.
+func isSimpleShellCommand(command string) bool {
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return false
+	}
+
+	// Check for shell metacharacters / control operators / variables / subshells
+	for _, char := range telemetry.ShellMetacharacters {
+		if strings.Contains(trimmed, char) {
+			return false
+		}
+	}
+
+	fields := strings.Fields(trimmed)
+	if len(fields) == 0 {
+		return false
+	}
+
+	// Avoid leading flag collisions with Cobra flags (e.g. -v, --version, -h)
+	if strings.HasPrefix(fields[0], "-") {
+		return false
+	}
+
+	// Check for variable assignment prefix (e.g. VAR=val cmd)
+	if strings.Contains(fields[0], "=") {
+		return false
+	}
+
+	// Check for shell keywords and builtins without independent binaries on PATH
+	if telemetry.ShellKeywords[fields[0]] {
+		return false
+	}
+
+	return true
+}
+
+// formatGearRewrite formats a command to be routed through ⚙.
+// For simple commands with no distill flag, it produces `⚙ <command>` directly without `bash -c`.
+// For compound/pipeline commands or when flags are present, it wraps with `⚙ ... -- bash -c <quoted>`.
+func formatGearRewrite(command string, distillFlag string) string {
+	distillFlag = strings.TrimSpace(distillFlag)
+	if distillFlag == "" && isSimpleShellCommand(command) {
+		return fmt.Sprintf("⚙ %s", strings.TrimSpace(command))
+	}
+	if distillFlag != "" {
+		return fmt.Sprintf("⚙ %s -- bash -c %s", distillFlag, shellQuote(command))
+	}
+	return fmt.Sprintf("⚙ bash -c %s", shellQuote(command))
+}
+
+func runExecHook(in io.Reader, out io.Writer) error {
+	raw, err := io.ReadAll(in)
+	if err != nil {
+		return fmt.Errorf("decode hook payload: %w", err)
+	}
+	logging.Debugf("exec hook: invoked, payload=%s", string(raw))
+
+	var payload struct {
+		ToolName  string                     `json:"tool_name"`
+		ToolInput map[string]json.RawMessage `json:"tool_input"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("decode hook payload: %w", err)
+	}
+	if payload.ToolName != "Bash" {
+		logging.Debugf("exec hook: skip, tool_name=%q != Bash", payload.ToolName)
+		return nil
+	}
+	var command string
+	commandRaw, hasCommand := payload.ToolInput["command"]
+	if !hasCommand || len(commandRaw) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(commandRaw, &command); err != nil {
+		return fmt.Errorf("decode hook command: %w", err)
+	}
+	if command == "" || alreadyRoutedThroughExec(command) {
+		logging.Debugf("exec hook: skip, command empty or already routed: %q", command)
+		return nil
+	}
+
+	effective := command
+	distillFlag := ""
+	if isDistillAutopipeEnabled() && distill.MatchesNoisy(command) {
+		distillFlag = " --distill"
+	}
+
+	wrapperFlags := ""
+	prefix := ""
+	if timeoutRaw := payload.ToolInput["timeout"]; len(timeoutRaw) > 0 {
+		var milliseconds int64
+		if err := json.Unmarshal(timeoutRaw, &milliseconds); err == nil && milliseconds > 0 {
+			wrapperFlags = fmt.Sprintf("--timeout=%s", time.Duration(milliseconds)*time.Millisecond)
+		}
+	}
+	if backgroundRaw := payload.ToolInput["run_in_background"]; len(backgroundRaw) > 0 {
+		var background bool
+		if json.Unmarshal(backgroundRaw, &background) == nil && background && wrapperFlags == "" {
+			prefix = "HTO=0 "
+		}
+	}
+	rewritten := formatGearRewrite(effective, distillFlag)
+	if wrapperFlags != "" {
+		if before, after, ok := strings.Cut(rewritten, " -- "); ok {
+			rewritten = "⚙ " + wrapperFlags + strings.TrimPrefix(before, "⚙") + " -- " + after
+		} else {
+			rewritten = "⚙ " + wrapperFlags + " -- " + strings.TrimPrefix(rewritten, "⚙ ")
+		}
+	}
+	rewritten = prefix + rewritten
+	logging.Debugf("exec hook: rewriting %q -> %q", command, rewritten)
+	updated := make(map[string]json.RawMessage, len(payload.ToolInput))
+	for key, value := range payload.ToolInput {
+		updated[key] = value
+	}
+	updated["command"], _ = json.Marshal(rewritten)
+	return json.NewEncoder(out).Encode(struct {
+		HookSpecificOutput struct {
+			HookEventName string                     `json:"hookEventName"`
+			UpdatedInput  map[string]json.RawMessage `json:"updatedInput"`
+		} `json:"hookSpecificOutput"`
+	}{HookSpecificOutput: struct {
+		HookEventName string                     `json:"hookEventName"`
+		UpdatedInput  map[string]json.RawMessage `json:"updatedInput"`
+	}{HookEventName: "PreToolUse", UpdatedInput: updated}})
+}
+
+func isDistillAutopipeEnabled() bool {
+	enabled := os.Getenv(distillAutopipeEnv)
+	return enabled == "1" || strings.EqualFold(enabled, "true")
+}
+
+// distillAutopipeRewrite applies distill's own noisy-command rewrite
+// (internal/distill.RewriteBashCommand) when HARNEZ_DISTILL_AUTOPIPE is
+// enabled, mirroring runDistillHook's (cmd/harnez/distill.go) opt-in gate
+// exactly so behavior is unchanged for users who already set that env var.
+func distillAutopipeRewrite(command string) (string, bool) {
+	enabled := os.Getenv(distillAutopipeEnv)
+	if enabled != "1" && !strings.EqualFold(enabled, "true") {
+		return command, false
+	}
+	return distill.RewriteBashCommand(command)
+}
+
+// shellQuote wraps s in single quotes for safe embedding as one argument
+// in a shell command line, escaping any embedded single quotes.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}

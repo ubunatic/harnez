@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,12 +17,6 @@ import (
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
 )
-
-// isGearInvocation reports whether the program was invoked under the ⚙ alias / multicall name.
-func isGearInvocation(arg0 string) bool {
-	base := filepath.Base(arg0)
-	return base == "⚙" || base == "⚙️" || base == "\xe2\x9a\x99" || base == "\xe2\x9a\x99\xef\xb8\x8f"
-}
 
 // sessionTipHook is `harnez`'s CLI-dispatch hook point for issue 183's
 // session-state tracking: it fires (as root's PersistentPreRunE) on every
