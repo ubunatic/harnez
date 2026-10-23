@@ -100,3 +100,16 @@ the shared binary before changing HOME, and defers cleanup for the parent test p
 sets a private TMPDIR and asserts that the helper leaves it empty. Verified with
 `go test ./cmd/harnez -run '^TestAgentWaitFailedWorkerIsNotOrphaned$' -count=1`: pass in 1.086s;
 the enclosing TMPDIR was empty afterward.
+
+## Measured follow-up (advisor adv-884b, 2026-10-23)
+
+See [884, Plan v2](884-split-cmd-harnez-move-command-logic-and-tests-into-internal-packages.md#plan-v2-advisor-adv-884b)
+for the 20 slowest tests, grouping, exec-boundary review and ordered estimates.
+One `go test ./cmd/harnez -count=1 -json` passed in **49.131s**; top six process/build
+tests cost **37.66s**. `TestGearMulticallExecution` alone cost **24.68s**, rebuilding
+after HOME isolation selected a fresh Go cache. Prioritize shared binary/cache ownership
+(estimated **22–27s** saving), effective short/full guards and in-process usage matrices,
+then fake clocks/events (**~1.5–2s**). Stats/hook moves save little execution time
+(current tests **0.25s/0.06s**); usage/issues and agent moves improve cache/context scope.
+Estimates overlap and need comparable before/after runs; full process regressions remain
+in CI. Raw profile: `/tmp/harnez-adv-884b-tests.json` (local, untracked).
