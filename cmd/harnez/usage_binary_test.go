@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -23,31 +24,37 @@ import (
 var (
 	usageTestBinaryDir  string
 	usageTestBinaryPath string
+	usageTestBinaryOnce sync.Once
+	usageTestBinaryErr  error
 )
 
 func prepareUsageTestBinary() error {
-	if supplied := os.Getenv("HARNEZ_TEST_BINARY"); supplied != "" {
-		usageTestBinaryPath = supplied
-		return nil
-	}
-	var err error
-	usageTestBinaryDir, err = os.MkdirTemp("", "harnez-usage-test-bin-")
-	if err != nil {
-		return err
-	}
-	usageTestBinaryPath = filepath.Join(usageTestBinaryDir, "harnez")
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", usageTestBinaryPath, ".")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		_ = os.RemoveAll(usageTestBinaryDir)
-		return fmt.Errorf("build harnez test binary: %w\n%s", err, output)
-	}
-	return nil
+	usageTestBinaryOnce.Do(func() {
+		if supplied := os.Getenv("HARNEZ_TEST_BINARY"); supplied != "" {
+			usageTestBinaryPath = supplied
+			return
+		}
+		var err error
+		usageTestBinaryDir, err = os.MkdirTemp("", "harnez-usage-test-bin-")
+		if err != nil {
+			usageTestBinaryErr = err
+			return
+		}
+		usageTestBinaryPath = filepath.Join(usageTestBinaryDir, "harnez")
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "go", "build", "-o", usageTestBinaryPath, ".")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			_ = os.RemoveAll(usageTestBinaryDir)
+			usageTestBinaryErr = fmt.Errorf("build harnez test binary: %w\n%s", err, output)
+		}
+	})
+	return usageTestBinaryErr
 }
 
 func TestOneShotUsageDoesNotInvokeSSH(t *testing.T) {
+	skipShort(t, "runs the harnez usage binary")
 	root := t.TempDir()
 	bin := buildUsageTestBinary(t)
 
@@ -326,6 +333,9 @@ func buildUsageTestBinaryWithDeadline(t *testing.T, deadline string) string {
 
 func buildUsageTestBinary(t *testing.T) string {
 	t.Helper()
+	if err := prepareUsageTestBinary(); err != nil {
+		t.Fatalf("prepare shared usage test binary: %v", err)
+	}
 	if usageTestBinaryPath == "" {
 		t.Fatal("shared usage test binary was not built")
 	}

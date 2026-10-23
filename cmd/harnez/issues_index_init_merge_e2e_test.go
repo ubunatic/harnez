@@ -12,11 +12,9 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 	skipShort(t, "builds the CLI and performs real Git merges")
 
 	binDir := t.TempDir()
-	bin := filepath.Join(binDir, "harnez")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/harnez")
-	build.Dir = filepath.Join("..", "..")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build harnez: %v\n%s", err, out)
+	bin := buildUsageTestBinary(t)
+	if err := os.Symlink(bin, filepath.Join(binDir, "harnez")); err != nil {
+		t.Fatalf("symlink shared harnez binary: %v", err)
 	}
 
 	root := t.TempDir()

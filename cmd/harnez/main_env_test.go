@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -28,11 +29,11 @@ func runIsolatedTests(m *testing.M) int {
 		os.Getenv("HARNEZ_TEST_FOREGROUND_ID") != "" || os.Getenv("HARNEZ_TEST_WORKER_ID") != "" {
 		return m.Run()
 	}
-	// Build with the caller's Go cache, before isolating HOME. The build only
-	// compiles the CLI; it does not run it or access its application store.
+	// A shared binary is created lazily by the tests that exercise it. Keep
+	// its directory alive until all tests, including subprocesses, finish.
 	defer func() { _ = os.RemoveAll(usageTestBinaryDir) }()
-	if err := prepareUsageTestBinary(); err != nil {
-		panic(fmt.Sprintf("prepare shared usage test binary: %v", err))
+	if err := preserveGoCaches(); err != nil {
+		panic(fmt.Sprintf("preserve Go caches: %v", err))
 	}
 	os.Unsetenv(agentRoleEnv)
 	os.Unsetenv(agentSessionEnv)
@@ -77,6 +78,22 @@ func runIsolatedTests(m *testing.M) int {
 	}
 
 	return code
+}
+
+func preserveGoCaches() error {
+	cmd := exec.Command("go", "env", "GOCACHE", "GOMODCACHE")
+	output, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+	values := strings.Fields(string(output))
+	if len(values) != 2 {
+		return fmt.Errorf("go env returned %d cache paths, want 2", len(values))
+	}
+	if err := os.Setenv("GOCACHE", values[0]); err != nil {
+		return err
+	}
+	return os.Setenv("GOMODCACHE", values[1])
 }
 
 func TestSessionTipHookSilentByDefault(t *testing.T) {

@@ -43,14 +43,10 @@ func TestExecCmd_GearAliasAndFlags(t *testing.T) {
 }
 func TestGearMulticallExecution(t *testing.T) {
 	skipShort(t, "builds and runs the harnez binary")
-	// Build a real test binary of harnez to test os.Args[0] multicall symlink dispatch
+	// Reuse TestMain's lazily built binary; the symlink still gives the child
+	// the real os.Args[0] needed to exercise multicall dispatch.
 	binDir := t.TempDir()
-	binPath := filepath.Join(binDir, "harnez")
-	buildCmd := exec.Command("go", "build", "-o", binPath, "./cmd/harnez")
-	buildCmd.Dir = filepath.Join("..", "..")
-	if out, err := buildCmd.CombinedOutput(); err != nil {
-		t.Fatalf("go build failed: %v\n%s", err, string(out))
-	}
+	binPath := buildUsageTestBinary(t)
 
 	// Create ⚙ symlink pointing to harnez binary
 	gearPath := filepath.Join(binDir, "⚙")

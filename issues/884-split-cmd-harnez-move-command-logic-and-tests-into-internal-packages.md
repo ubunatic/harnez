@@ -84,6 +84,16 @@ Measured with `go test -count=1` on 2026-10-23:
 
 The preceding issue 881 temp-leak documentation commit is `b4980a1b`.
 
+## M3 delivered: reuse built binaries and Go caches
+
+`cmd/harnez` test baseline on 2026-10-23 was **48.758s**; after M3 it was **25.906s**,
+a **22.852s** reduction. Commit: recorded after verification.
+
+`TestGearMulticallExecution` and issue-merge E2E now share one lazily built test binary, preserving
+their real process, argv[0], exit-code, and Git-merge assertions. TestMain resolves and preserves
+absolute `GOCACHE`/`GOMODCACHE` paths before isolating HOME, and short-tier runs no longer build a
+binary eagerly. `make lint` passed; only the repository's existing warning summary remains.
+
 ## Plan v2 (advisor adv-884b)
 
 ### Review and measured baseline (2026-10-23)
