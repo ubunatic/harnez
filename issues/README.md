@@ -33,4 +33,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 877 | [877-practice-new-features-go-into-sub-packages-not-the-main-command-or-root-package.md](877-practice-new-features-go-into-sub-packages-not-the-main-command-or-root-package.md) | practice: new features go into sub-packages, not the main command or root package | Open |
 | 878 | [878-retro-skill-session-report-from-compaction-summaries-and-key-user-messages.md](878-retro-skill-session-report-from-compaction-summaries-and-key-user-messages.md) | retro skill: session report from compaction summaries and key user messages | Open |
 | 879 | [879-remote-load-recovers-when-the-host-comes-back-also-for-one-shot-usage.md](879-remote-load-recovers-when-the-host-comes-back-also-for-one-shot-usage.md) | Remote load recovers when the host comes back, also for one-shot usage | Open |
+| 880 | [880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md](880-jam-skill-competing-implementations-by-several-agents-owner-picks-phased-adoption.md) | jam skill: competing implementations by several agents, owner picks, phased adoption | Open |
 <!-- harnez:end issues-active-index -->
