@@ -87,6 +87,8 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
     rewritten or another session pushed; resolve that before reviewing.
   - Check `git log -n 1 --stat`, `git diff HEAD~1`, and run verification tests.
   - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions directly against the diff.
+  - The host/reviewer reads every changed assertion line in test diffs; a "fixed the test" report can hide a
+    weaker check (884: `HasPrefix` → `Contains` dropped the ordering the test name promised).
   - **Plausibility check for measurements**: when the milestone produces numbers (reports, stats,
     benchmarks, token or quota figures), run the real command and check the values make sense, not
     only that tests pass: units and magnitudes against a known reference or hand calculation, totals
@@ -119,6 +121,9 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - The developer agent picks up the updated ticket for Milestone $N+1$ (resumed via `harnez agent resume --name <session_id> "<pre_work_and_milestone_prompt>"` or native subagent message), executes the embedded pre-work first, and then proceeds with Milestone $N+1$ implementation.
 - Repeat Steps 1–3 for each milestone.
 - Once the final milestone passes concise review and tests are 100% green, confirm completion.
+- Before a ticket closes, the host/reviewer compares what was delivered with the ticket's `/goal` and the
+  milestone plan; a shortfall is parked in its own ticket and named in the close reason (884 M9 moved 157 of
+  ~5k planned lines and was first closed as delivered).
 
 ### 6. Teardown, Study Report & Status Sync
 - Terminate the developer subagent and every research or probe helper (`harnez agent delete --name <session_id>` or `manage_subagents kill`) and drain background jobs; `harnez agent list` should show none left.
