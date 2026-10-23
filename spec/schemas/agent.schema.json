@@ -25,6 +25,15 @@
         "additionalProperties": false
       }
     },
+    "resume_note": {
+      "type": "object",
+      "required": ["idle_threshold", "text"],
+      "properties": {
+        "idle_threshold": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
     "stop": {
       "type": "object",
       "required": ["grace_ms", "kill_wait_ms", "poll_ms"],

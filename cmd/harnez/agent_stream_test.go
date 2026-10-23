@@ -19,6 +19,36 @@ var elapsedField = regexp.MustCompile(`\[([a-z ]+): [0-9hms]+([],])`)
 // second, and these tests check labels and order, not timing.
 func zeroElapsed(s string) string { return elapsedField.ReplaceAllString(s, "[$1: 0s$2") }
 
+func TestResumeNoteRequiresIdleSessionAboveSpecThreshold(t *testing.T) {
+	threshold, note, err := subagent.ResumeNote()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		idle time.Duration
+		want bool
+	}{
+		{name: "new session", idle: 0},
+		{name: "at threshold", idle: threshold},
+		{name: "above threshold", idle: threshold + time.Nanosecond, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := withResumeNote("prompt", tc.idle)
+			wantCount := 0
+			if tc.want {
+				wantCount = 1
+			}
+			if count := strings.Count(got, note); count != wantCount {
+				t.Fatalf("note count = %d, want %d in %q", count, wantCount, got)
+			}
+		})
+	}
+	if strings.Contains(withProtocol("prompt", false, "developer"), note) {
+		t.Fatal("new session protocol contains a resume note")
+	}
+}
+
 type streamDriver struct{ recordingAgentDriver }
 
 func (*streamDriver) emit(fn subagent.EventFunc) *subagent.TurnResult {

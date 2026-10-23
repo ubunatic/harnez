@@ -46,6 +46,14 @@ func withProtocol(prompt string, planFirst bool, role string) string {
 	return pre + prompt
 }
 
+func withResumeNote(prompt string, idle time.Duration) string {
+	threshold, note, err := subagent.ResumeNote()
+	if err != nil || idle <= threshold {
+		return prompt
+	}
+	return note + "\n\n" + prompt
+}
+
 // heartbeatSchedule lists the elapsed times of the first heartbeats; after the
 // last one a heartbeat follows every heartbeatRepeat.
 var (

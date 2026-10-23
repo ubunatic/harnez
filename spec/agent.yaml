@@ -29,6 +29,10 @@ known_error_checks:
     check: quota_available
     warning: agy reported an earlier quota error; quota is available now
 
+resume_note:
+  idle_threshold: 30m
+  text: "This is a resumed session; do not report earlier errors (quota, 503) as current unless they recur in this turn."
+
 # External session discovery reads Codex CLI rollout metadata only. Rollout files
 # are JSONL; only the first session_meta record is needed for identity and cwd.
 external_sessions:

@@ -32,6 +32,7 @@ type agentSpec struct {
 	CompactThreshold      int                            `yaml:"compact_threshold_tokens"`
 	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
 	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
+	ResumeNote            ResumeNoteSpec                 `yaml:"resume_note"`
 }
 
 // KnownErrorCheckSpec describes a fixed-text provider error and its single
@@ -41,6 +42,12 @@ type KnownErrorCheckSpec struct {
 	MatchText string `yaml:"match_text"`
 	Check     string `yaml:"check"`
 	Warning   string `yaml:"warning"`
+}
+
+// ResumeNoteSpec controls the idle threshold and note added to resumed turns.
+type ResumeNoteSpec struct {
+	IdleThreshold string `yaml:"idle_threshold"`
+	Text          string `yaml:"text"`
 }
 
 // ExternalSessionSpec describes provider-owned local session metadata.
@@ -414,6 +421,22 @@ func KnownErrorChecks() ([]KnownErrorCheckSpec, error) {
 		return nil, err
 	}
 	return append([]KnownErrorCheckSpec(nil), spec.KnownErrorChecks...), nil
+}
+
+// ResumeNote returns the configured idle threshold and note text.
+func ResumeNote() (time.Duration, string, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return 0, "", err
+	}
+	threshold, err := time.ParseDuration(spec.ResumeNote.IdleThreshold)
+	if err != nil || threshold <= 0 {
+		return 0, "", fmt.Errorf("agent spec: resume_note.idle_threshold must be a positive duration")
+	}
+	if strings.TrimSpace(spec.ResumeNote.Text) == "" {
+		return 0, "", fmt.Errorf("agent spec: resume_note.text is required")
+	}
+	return threshold, spec.ResumeNote.Text, nil
 }
 
 // CheckSpawn reports whether a caller in callerRole may start a session of

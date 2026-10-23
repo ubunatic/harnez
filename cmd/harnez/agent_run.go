@@ -665,6 +665,10 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	if err != nil {
 		return err
 	}
+	resumeIdle := time.Duration(0)
+	if !sess.LastActiveAt.IsZero() {
+		resumeIdle = time.Since(sess.LastActiveAt)
+	}
 	if sess.Provider == "codex" && sess.HarnessType == "harnez" {
 		modelSpec := fmt.Sprintf("%s:%s", sess.Provider, sess.Model)
 		if sess.Tier != "" {
@@ -809,7 +813,6 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			sess.StdoutLog = filepath.Join(d.storeDir, sess.ID+".resume-"+logID+".stdout.log")
 			sess.StderrLog = filepath.Join(d.storeDir, sess.ID+".resume-"+logID+".stderr.log")
 			sess.Status = "running"
-			sess.LastActiveAt = time.Now()
 			if err := s.Save(sess); err != nil {
 				return err
 			}
@@ -830,12 +833,11 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		sess.Status = "running"
 		sess.ProcessPID = os.Getpid()
 		sess.ProcessStarttime = procs.ProcessStarttime(sess.ProcessPID)
-		sess.LastActiveAt = time.Now()
 		if err := s.Save(sess); err != nil {
 			return fmt.Errorf("could not persist running state for session %q: %w", sess.Name, err)
 		}
 	}
-	resumeTurn.Opts.Prompt = req.Prompt
+	resumeTurn.Opts.Prompt = withResumeNote(req.Prompt, resumeIdle)
 	turnStarted := time.Now().UTC()
 	warnModelQuota(cmd, d.availability, sess.Provider, sess.Model, turnStarted.Local())
 	beforeCapture, stopCapture := startTurnQuotaCapture(ctx, d.quota, sess.Provider)
@@ -853,7 +855,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		watchdog := &subagent.TokenWatchdog{Threshold: threshold}
 		watchdogCrossed := false
 		observedTokens := 0
-		resumeTurn.Opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role)
+		resumeTurn.Opts.Prompt = withResumeNote(withProtocol(req.Prompt, req.PlanFirst, role), resumeIdle)
 		resumeTurn.OnFresh = func(note string) { freshNote = note; ts.printf("[%s]\n", note) }
 		resumeTurn.Events = func(ev subagent.Event) {
 			if tokens, crossed := watchdog.Observe(ev); crossed {
