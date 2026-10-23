@@ -43,7 +43,10 @@ func TestAgentQuotaNoticeBeforeStartAndResumeJSON(t *testing.T) {
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 			driver := &quotaNoticeDriver{before: func() {
-				if !strings.Contains(stderr.String(), "quota: codex 5h 86% (read ") {
+				if strings.Contains(stderr.String(), "inferred role") {
+					t.Errorf("unexpected role inference notice in quota test: %q", stderr.String())
+				}
+				if !strings.HasPrefix(stderr.String(), "quota: codex 5h 86% (read ") {
 					t.Errorf("warning missing before provider turn: %q", stderr.String())
 				}
 			}}
@@ -62,7 +65,7 @@ func TestAgentQuotaNoticeBeforeStartAndResumeJSON(t *testing.T) {
 				},
 			}
 			if mode == "start" {
-				err = runStart(t.Context(), cmd, deps, startRequest{Prompt: "task", ModelSpec: "codex:luna", Dir: repo, JSON: true, StreamMode: streamFull})
+				err = runStart(t.Context(), cmd, deps, startRequest{Prompt: "task", Role: "advisor", ModelSpec: "codex:luna", Dir: repo, JSON: true, StreamMode: streamFull})
 			} else {
 				if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: repo, Status: "completed", ContextTokens: 100}); err != nil {
 					t.Fatal(err)

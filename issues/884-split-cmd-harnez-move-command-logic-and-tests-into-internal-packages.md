@@ -263,11 +263,19 @@ and the end-to-end Git test stay in `cmd/harnez`.
 
 `TestAgentQuotaNoticeBeforeStartAndResumeJSON/start` failed on both M4 (`3542d535`)
 and HEAD with identical output: a legitimate inferred-role notice preceded the
-injected `quota: codex 5h 86%` warning. The assertion incorrectly required the quota
-warning to be the first stderr line. This was a test assertion defect, not host quota
-state or an M5/M6 behavior change; the test now checks that the injected warning is
-present at the provider-call boundary, preserving its ordering guarantee. Focused test
-passes (**0.843s**), and full `cmd/harnez` passes after the fix (**36.299s**).
+injected `quota: codex 5h 86%` warning. With an empty requested role, `startRole`
+passes the prompt to `ResolveRoleDynamic`, which may invoke the external `neus`
+classifier; that classifier resolved `task` as `advisor` in the failing runs. The M4
+green run therefore reflects environment-dependent classifier availability/result,
+not a source reorder: commits `320cceed` and `42b8b618` do not change this test or
+`startRole`. The quota warning itself was present before the fake driver's provider
+call. The test now supplies canonical role `advisor` to bypass classification,
+explicitly rejects any inferred-role notice, and restores the prefix assertion at the
+provider-call boundary, so it verifies the quota line is first and precedes provider
+output. Verification after this follow-up: focused test `-count=5` passed (**0.030s**),
+and `go test ./cmd/harnez -count=1` passed (**39.187s**). The original M4 green run
+does not identify which external classifier condition differed; a later run at the
+unchanged M4 commit reproduces the failure, while M5/M6 did not reorder these writes.
 
 Back-to-back pre-fix package timings, with `uptime` immediately before each run:
 
