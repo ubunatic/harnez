@@ -35,3 +35,23 @@ starting or hung. User: "It should never hang."
 Tests that run the installed/built binary `harnez usage --minimal` with a 10s limit against: no server, a
 server stuck in "starting", a socket that accepts but never answers, and a healthy server. Plus a pty run of
 `-w` against a hung server showing the status row.
+
+## Findings (searcher, 2026-10-23)
+
+- `loadLocalUsage` calls `ensureLocalServer` before reading the store (`cmd/harnez/usage_client.go:41`); it
+  polls `/status` up to `startup_timeout` 30s, each call `http_client_timeout` 5s (`spec/server.yaml:5`).
+  `--minimal` does not skip it; `--offline` does. `usage_cmd.go:42` has a Go-coded 5s HTTP timeout (move to spec).
+- `-w` loads initial data before the watch loop (`usage_cmd.go:109`); frames are built in
+  `internal/usage/watch.go:704` (`buildWatchFrame`), the place for a status row via `WatchOptions`.
+- `/status` returns `health: starting` (503) or `ok`, no reason (`internal/server/server.go:270`).
+- No whole-command deadline (`usage_cmd.go:38`), no built-binary usage test, no hung-socket helper.
+  Unit tests: `cmd/harnez/usage_client_test.go:15`.
+
+## Milestones
+
+- **M1 (bounded check + deadline):** spec values `probe_timeout` (~1s) and `usage_deadline` (10s) with schema;
+  one bounded probe; when not ok, start the server in the background (no wait), read the store and print with a
+  status line; whole-command deadline prints what it has plus an error and exits non-zero. Built-binary tests
+  for the four server states (no server, stuck starting, accept-never-answer socket, healthy), each < 10s.
+- **M2 (watch status row + health reason):** `-w` shows "server starting" / "server not answering since
+  HH:MM" and clears it on recovery; `/status` adds a `reason` while not ready; pty test against a hung socket.
