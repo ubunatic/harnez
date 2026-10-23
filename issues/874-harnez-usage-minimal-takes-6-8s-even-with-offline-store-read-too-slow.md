@@ -45,3 +45,18 @@ subprocesses), add a test or benchmark that fails when the read gets slow again.
   `--minimal --offline`.
 - The hardcoded SSH `ConnectTimeout` and command timeout now come from `spec/usage.yaml` with schema
   validation.
+
+## M1 delivered (`79204705`, host-verified)
+
+Remote SSH wait removed from one-shot modes; host run: `--minimal` 2.08s, 2.09s wall (was 6-8s), no ssh
+child. New tests 0.53s in total; PTY test and hanging helper removed.
+
+## M2 (local load seed under 1s)
+
+Pre-Work: the removed binary test left no guard that one-shot runs never start ssh. Add a fast one: a stub
+`ssh` on PATH that only writes a marker file and exits 0; run the built binary `usage --minimal` and
+`--minimal --offline` once each with a context deadline; assert no marker. Under 2s, no PTY.
+
+Then: the ~2s CPU/GPU sparkline seed (samples at 50ms) must not delay one-shot output: one-shot needs only
+the current sample (or the stored history), `-w` may seed in the background. Target: installed binary
+`--minimal` and `--minimal --offline` under 1s on the real store, 3 runs each.
