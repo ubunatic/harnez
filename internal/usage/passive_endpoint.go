@@ -79,6 +79,7 @@ func (s PassiveUpdateServer) handlePassive(w http.ResponseWriter, r *http.Reques
 			http.Error(w, "collector write failed", http.StatusServiceUnavailable)
 			return
 		}
+		s.Drops.recordAccepted(payload.Windows)
 		w.WriteHeader(http.StatusNoContent)
 	case <-ctx.Done():
 		http.Error(w, "collector unavailable", http.StatusServiceUnavailable)

@@ -47,6 +47,10 @@ func (s *usageCollectorService) DroppedStatuslineObservations() map[string]uint6
 	return s.updateServer.Drops.Snapshot()
 }
 
+func (s *usageCollectorService) AcceptedStatuslineObservations() map[string]uint64 {
+	return s.updateServer.Drops.AcceptedSnapshot()
+}
+
 func (s *usageCollectorService) ActiveClients() int {
 	if s.tracker != nil {
 		return s.tracker.Count()
@@ -315,13 +319,14 @@ func stopLocalServer(ctx context.Context, cfg server.Config, socket string, sock
 }
 
 type localServerStatusResponse struct {
-	Server         string            `json:"server"`
-	Version        string            `json:"version"`
-	BuildIdentity  string            `json:"build_identity"`
-	PID            int               `json:"pid"`
-	StartedAt      time.Time         `json:"started_at"`
-	Clients        *int              `json:"clients,omitempty"`
-	PassiveDropped map[string]uint64 `json:"passive_dropped,omitempty"`
+	Server          string            `json:"server"`
+	Version         string            `json:"version"`
+	BuildIdentity   string            `json:"build_identity"`
+	PID             int               `json:"pid"`
+	StartedAt       time.Time         `json:"started_at"`
+	Clients         *int              `json:"clients,omitempty"`
+	PassiveDropped  map[string]uint64 `json:"passive_dropped,omitempty"`
+	PassiveAccepted map[string]uint64 `json:"passive_accepted,omitempty"`
 }
 
 type serverStatusJSON struct {
@@ -334,6 +339,7 @@ type serverStatusJSON struct {
 	UptimeSeconds   *int64                `json:"uptime_seconds,omitempty"`
 	Clients         *int                  `json:"clients,omitempty"`
 	PassiveDropped  map[string]uint64     `json:"passive_dropped,omitempty"`
+	PassiveAccepted map[string]uint64     `json:"passive_accepted,omitempty"`
 	VersionMismatch bool                  `json:"version_mismatch"`
 }
 
@@ -374,6 +380,7 @@ func printServerStatusJSON(out io.Writer, cfg server.Config, status server.Syste
 		sj.Version = srv.Version
 		sj.Clients = srv.Clients
 		sj.PassiveDropped = srv.PassiveDropped
+		sj.PassiveAccepted = srv.PassiveAccepted
 		if !srv.StartedAt.IsZero() {
 			secs := int64(time.Since(srv.StartedAt).Seconds())
 			if secs < 0 {
