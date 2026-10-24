@@ -26,4 +26,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 911 | [911-epic-skills-first-real-runs-and-epic-retro-hygiene.md](911-epic-skills-first-real-runs-and-epic-retro-hygiene.md) | Epic: skills, first real runs and epic/retro hygiene | Open |
 | 912 | [912-usage-show-swap-in-the-load-and-remote-load-boxes.md](912-usage-show-swap-in-the-load-and-remote-load-boxes.md) | usage: show swap in the Load and Remote Load boxes | Open |
 | 913 | [913-server-install-persists-neus-indexing-so-the-installed-daemon-can-index.md](913-server-install-persists-neus-indexing-so-the-installed-daemon-can-index.md) | server install persists neus indexing so the installed daemon can index | Open |
+| 914 | [914-study-harness2-recursive-agent-harnessing-for-harnez-rule-and-skill-tuning.md](914-study-harness2-recursive-agent-harnessing-for-harnez-rule-and-skill-tuning.md) | Study Harness2 (recursive agent harnessing) for harnez rule and skill tuning | Open |
 <!-- harnez:end issues-active-index -->
