@@ -1,6 +1,6 @@
 # 840 — lean-sprint: host decides reversible, low-risk choices itself and reports them
 
-**Status**: Open
+**Status**: Closed — Host guidance now records reversible choices in ticket decisions; verified by full suite.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Workflow
