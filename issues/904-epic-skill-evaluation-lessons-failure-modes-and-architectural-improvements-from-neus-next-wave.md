@@ -1,6 +1,6 @@
 # 904 — Epic skill evaluation: lessons, failure modes, and architectural improvements from Neus Next Wave
 
-**Status**: Open
+**Status**: Closed — Delivered prose phased DAG, sibling decoupling, code/design typology, and phase gates in docs/commands/epic.md; Recommendation 5 remains in 915 (65aac99d).
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Evaluation
