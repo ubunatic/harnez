@@ -136,3 +136,21 @@ Implementation advice from the harnez host:
 
 Status check (2026-10-24): not started. No retro skill in `config.yaml`, no `session extract` command.
 Evidence base so far: manual retros (harnez study 6bf5f306, loom feedback 52f46749/1a74a670).
+
+## Delivery
+
+- M1 delivered (21beea8b): `harnez session extract`, streaming, internal/transcript; apply_test pipe deadlock fixed.
+- M2 delivered (a52d63bf): `retro` skill, user-invocable-only.
+- Review (opus:low, `e911-revD`): on session 13d4828e, 18 summaries are all real (one newer than the manual
+  count); 137 owner messages include 18 doubled `/compact` records (plain `"/compact"` plus its
+  `<command-name>/compact</command-name>` twin, ms apart), so 119 real. No other leaks.
+
+## M3 Pre-Work / Required Refinements
+
+1. Deduplicate the doubled slash command (`internal/transcript/claude.go:41,112`): drop the plain-string record
+   when its `command-name` twin follows within about 1 s. Fixture test for the pair, and a near miss (same text
+   typed again later stays).
+2. Add the source `uuid` and line number to each `Record` (`claude.go:12`) and to text/`--json` output, so the
+   retro can point back to the raw JSONL (`docs/commands/retro.md:46`).
+3. `cmd/harnez/session_test.go:43`: assert the slash-command count, not only `Contains`.
+4. Rerun on 13d4828e: expect 18 summaries, 119 owner messages.
