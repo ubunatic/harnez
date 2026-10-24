@@ -62,3 +62,12 @@ harnez release --bump major
 - **M3 (Verification & Release)**:
   - Verify rule synchronization via `harnez rules sync` / `harnez index`.
   - Validate that agents running `/lean-sprint` or `/release` properly identify and execute release steps.
+
+## Sprint findings (2026-10-24, searcher haiku:med)
+
+- `harnez release -b patch|minor|major|x.y.z` exists; default is patch.
+- Source is `docs/practices/GoRelease.md` (+ `.lite.md`), not `docs/lang/`; `.harnez/prompts/developer.md` and
+  `docs/Upgrading.md` don't exist. No when-to-release or semver guidance anywhere.
+- **Host decision (reversible, per 840):** agents release only when the user or the /goal asks; otherwise they
+  recommend a release with the proposed bump and wait. Reason: `harnez release` pushes tags and publishes, and
+  Git.md says "don't push unless asked". Section 2A's "release after feature completion" becomes "recommend".

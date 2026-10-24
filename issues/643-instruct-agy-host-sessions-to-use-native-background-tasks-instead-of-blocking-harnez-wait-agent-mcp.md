@@ -54,3 +54,12 @@ Interactive AGY host sessions must be instructed to use standard AGY background 
    - Verify `harnez mcp` schema output and rule generation.
 4. **Close / Merge Issue #608**:
    - Close issue #608 as merged into #643.
+
+## Sprint findings (2026-10-24, searcher haiku:med)
+
+- MCP descriptions (`internal/mcp/server.go:66-69`): `harnez_wait_agent` has no "don't block chat" warning;
+  `harnez_spawn_agent` still says "wait for its result"; `harnez_command` already carries the background-run text (`:64`).
+- Rule source `config.yaml` (Subagent Policy ~683-685, Background Tasks ~705) has no wait guidance;
+  `docs/practices/AgenticLoop.md:131` forbids blocking on `wait_agent` but doesn't name the background route.
+- `.harnez/rules/Local.md:19-20` (per-checkout) recommends `harnez_spawn_agent` / `harnez_wait_agent`; find its template.
+- Check 608's status (merged into 643).
