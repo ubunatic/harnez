@@ -22,4 +22,15 @@ ticket needs an owner decision. Circuit breaker: on no progress, clear the goal 
 | 4 | 905 | P2 | Epic/retro hygiene: file follow-up issues right after studies and retros | Open; overlaps 904, do together |
 | 5 | 878 | P2 | retro skill from compaction summaries and key user messages | Not started; needs `harnez session extract` |
 
-Sprint groups and worker tiers are set by `/epic 911` refinement.
+## Refinement (2026-10-24)
+
+Web fanout skipped: internal skill and process docs. Code fanout: haiku:low searcher `e911-search`.
+
+| Group | Ticket | Finding | Developer | Reviewer |
+|---|---|---|---|---|
+| A | 905, then 904 doc parts | skill sources are `docs/commands/epic.md`, `story.md`, plus `docs/AgenticLoop.md`, `docs/IssueTracking.md`; 905 first, both edit epic.md | luna:high | host diff |
+| B | 852 | loom at `../loom`, `.ansi` sketches in `docs/data/` (ColorPicker) | host runs the skill | — |
+| C | 851 | no active P1/P2 Bug ticket exists, so a run has no input | — | — |
+| D | 878 | `harnez session extract` does not exist; new `internal/transcript` package, command, skill | sol:med | opus reviewer |
+
+Open decisions are in `## Decision`.
