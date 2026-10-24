@@ -705,7 +705,7 @@ LEGACY-MANAGED-SENTINEL
 		t.Errorf("expected hand-authored custom content to survive, got:\n%s", content)
 	}
 
-	out, err := captureStdout(func() error {
+	out, err := claude.CaptureTestStdout(func() error {
 		return claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true})
 	})
 	if err != nil {

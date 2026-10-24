@@ -1,7 +1,6 @@
 package claude
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -260,7 +259,7 @@ func TestRunInitDocsCopiesIsAuthoritativeAndHintsDetectedDocs(t *testing.T) {
 				}
 			}
 			writeRepoYAML(t, dir, "version: 1\nissues:\n  tracker: none\n  merge_driver: false\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\n")
-			out, err := captureInitStdout(t, func() error {
+			out, err := CaptureTestStdout(func() error {
 				return RunInitWithVariant(dir, LoadTestConfig(t), InitOptions{AssumeYes: true})
 			})
 			if err != nil {
@@ -284,23 +283,4 @@ func writeRepoYAML(t *testing.T, dir, content string) {
 	if err := os.WriteFile(repoConfigPath(dir), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func captureInitStdout(t *testing.T, run func() error) (string, error) {
-	t.Helper()
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
-	runErr := run()
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, readErr := io.ReadAll(r)
-	_ = r.Close()
-	if readErr != nil {
-		t.Fatal(readErr)
-	}
-	return string(output), runErr
 }

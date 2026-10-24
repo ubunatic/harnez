@@ -108,7 +108,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 	}
 
 	// status must report the new target as ok.
-	statusOut, err := captureStdoutClaudeSkills(func() error {
+	statusOut, err := CaptureTestStdout(func() error {
 		return RunStatus("(embedded)", cfg, targetDir, nil)
 	})
 	if err != nil {
@@ -151,7 +151,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 	if !changed {
 		t.Errorf("expected DiffAll to report drift after hand-editing %s", docupResourcePath)
 	}
-	statusOut, err = captureStdoutClaudeSkills(func() error {
+	statusOut, err = CaptureTestStdout(func() error {
 		return RunStatus("(embedded)", cfg, targetDir, nil)
 	})
 	if err != nil {
@@ -184,33 +184,6 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 	if _, err := os.Stat(docupResourcePath); err == nil || !os.IsNotExist(err) {
 		t.Errorf("expected Docup resource %s to be removed by CleanAll, err=%v", docupResourcePath, err)
 	}
-}
-
-func captureStdoutClaudeSkills(f func() error) (string, error) {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return "", err
-	}
-	os.Stdout = w
-
-	errVal := f()
-
-	w.Close()
-	os.Stdout = oldStdout
-
-	buf := make([]byte, 0, 65536)
-	tmp := make([]byte, 4096)
-	for {
-		n, rerr := r.Read(tmp)
-		if n > 0 {
-			buf = append(buf, tmp[:n]...)
-		}
-		if rerr != nil {
-			break
-		}
-	}
-	return string(buf), errVal
 }
 
 func TestSkillResourceValidation(t *testing.T) {

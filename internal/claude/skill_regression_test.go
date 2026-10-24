@@ -68,7 +68,7 @@ func TestApplyAdoptsLegacyHarnezSkillInEveryTarget(t *testing.T) {
 		}
 	}
 
-	out, err := captureApplyOutput(t, func() error { return ApplyAll(target, cfg, nil, false, false) })
+	out, err := CaptureTestStdout(func() error { return ApplyAll(target, cfg, nil, false, false) })
 	if err != nil {
 		t.Fatalf("ApplyAll: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestApplyAndDiffReportUnmarkedUserSkillsInEveryTarget(t *testing.T) {
 		}
 	}
 
-	applyOut, err := captureApplyOutput(t, func() error { return ApplyAll(target, cfg, nil, false, false) })
+	applyOut, err := CaptureTestStdout(func() error { return ApplyAll(target, cfg, nil, false, false) })
 	if err != nil {
 		t.Fatalf("ApplyAll: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestApplyAndDiffReportUnmarkedUserSkillsInEveryTarget(t *testing.T) {
 	}
 
 	var drift bool
-	diffOut, err := captureApplyOutput(t, func() error {
+	diffOut, err := CaptureTestStdout(func() error {
 		var diffErr error
 		drift, diffErr = DiffAll(target, cfg, nil)
 		return diffErr

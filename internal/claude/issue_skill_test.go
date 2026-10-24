@@ -51,7 +51,7 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		}
 	}
 
-	out, err := captureStdoutClaudeSkills(func() error {
+	out, err := CaptureTestStdout(func() error {
 		return ApplyAll(targetDir, cfg, nil, false, false)
 	})
 	if err != nil {

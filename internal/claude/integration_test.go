@@ -1,8 +1,6 @@
 package claude_test
 
 import (
-	"bytes"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,25 +10,6 @@ import (
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/jsonc"
 )
-
-// captureStdout executes f and returns whatever was written to stdout, alongside the returned error.
-func captureStdout(f func() error) (string, error) {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return "", err
-	}
-	os.Stdout = w
-
-	errVal := f()
-
-	w.Close()
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
-	return buf.String(), errVal
-}
 
 func TestIntegrationWorkflow(t *testing.T) {
 	// 1. Setup target sandbox directory
@@ -58,7 +37,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	cfg.DistillAutopipe.OpenCodePluginTarget = openCodePluginPath
 
 	// 3. First apply: should write files and show changes
-	out, err := captureStdout(func() error {
+	out, err := claude.CaptureTestStdout(func() error {
 		return claude.ApplyAll(targetDir, cfg, nil, false, false)
 	})
 	if err != nil {
@@ -131,7 +110,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 
 	// 4. Second apply: must be idempotent and report "No changes."
-	out, err = captureStdout(func() error {
+	out, err = claude.CaptureTestStdout(func() error {
 		return claude.ApplyAll(targetDir, cfg, nil, false, false)
 	})
 	if err != nil {
@@ -143,7 +122,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 
 	// 5. Diff when aligned: must report "No changes." and changed == false
 	var diffChanged bool
-	out, err = captureStdout(func() error {
+	out, err = claude.CaptureTestStdout(func() error {
 		var dErr error
 		diffChanged, dErr = claude.DiffAll(targetDir, cfg, nil)
 		return dErr
@@ -183,7 +162,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 
 	// 7. Diff under drift: must output changes and changed == true
-	out, err = captureStdout(func() error {
+	out, err = claude.CaptureTestStdout(func() error {
 		var dErr error
 		diffChanged, dErr = claude.DiffAll(targetDir, cfg, nil)
 		return dErr
@@ -199,7 +178,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 
 	// 8. Apply after drift: must restore the dropped permission
-	out, err = captureStdout(func() error {
+	out, err = claude.CaptureTestStdout(func() error {
 		return claude.ApplyAll(targetDir, cfg, nil, false, false)
 	})
 	if err != nil {
@@ -210,7 +189,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 
 	// 9. Run status checking
-	out, err = captureStdout(func() error {
+	out, err = claude.CaptureTestStdout(func() error {
 		return claude.RunStatus("(embedded)", cfg, targetDir, nil)
 	})
 	if err != nil {
@@ -276,7 +255,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 
 	// 11. Clean command: must delete all managed configurations
-	out, err = captureStdout(func() error {
+	out, err = claude.CaptureTestStdout(func() error {
 		return claude.CleanAll(targetDir, cfg)
 	})
 	if err != nil {

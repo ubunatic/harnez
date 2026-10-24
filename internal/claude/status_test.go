@@ -4,33 +4,12 @@
 package claude
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-// captureStdoutStatus captures stdout output from f, same pattern as telemetry_hook_test.go.
-func captureStdoutStatus(f func() error) (string, error) {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return "", err
-	}
-	os.Stdout = w
-
-	errVal := f()
-
-	w.Close()
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
-	return buf.String(), errVal
-}
 
 // TestRunStatus_ChecksAllManagedSettingsKeys verifies that status reports lines for
 // every key declared in the built settings doc — not just "model". A config with only
@@ -51,7 +30,7 @@ func TestRunStatus_ChecksAllManagedSettingsKeys(t *testing.T) {
 		t.Fatalf("ApplyAll failed: %v", err)
 	}
 
-	out, err := captureStdoutStatus(func() error {
+	out, err := CaptureTestStdout(func() error {
 		return RunStatus("(test)", cfg, dir, nil)
 	})
 	if err != nil {
@@ -87,7 +66,7 @@ func TestRunStatus_ReportsRemovedManagedKey(t *testing.T) {
 	settingsPath := filepath.Join(dir, "settings.json")
 
 	// confirm hooks is present after apply
-	out, err := captureStdoutStatus(func() error {
+	out, err := CaptureTestStdout(func() error {
 		return RunStatus("(test)", cfg, dir, nil)
 	})
 	if err != nil {
@@ -116,7 +95,7 @@ func TestRunStatus_ReportsRemovedManagedKey(t *testing.T) {
 	}
 
 	// now status must report hooks as missing
-	out, err = captureStdoutStatus(func() error {
+	out, err = CaptureTestStdout(func() error {
 		return RunStatus("(test)", cfg, dir, nil)
 	})
 	if err != nil {
@@ -158,7 +137,7 @@ func TestRunStatus_BashShimCodexAndAgyHooks(t *testing.T) {
 	}
 
 	// Before apply -> missing
-	out, err := captureStdoutStatus(func() error {
+	out, err := CaptureTestStdout(func() error {
 		return RunStatus("(test)", cfg, dir, nil)
 	})
 	if err != nil {
@@ -180,7 +159,7 @@ func TestRunStatus_BashShimCodexAndAgyHooks(t *testing.T) {
 	}
 
 	// After apply -> ok
-	out, err = captureStdoutStatus(func() error {
+	out, err = CaptureTestStdout(func() error {
 		return RunStatus("(test)", cfg, dir, nil)
 	})
 	if err != nil {

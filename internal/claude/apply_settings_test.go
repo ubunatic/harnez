@@ -3,7 +3,6 @@ package claude
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,25 +13,6 @@ import (
 
 	"ubunatic.com/harnez/internal/jsonc"
 )
-
-func captureApplyOutput(t *testing.T, apply func() error) (string, error) {
-	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return "", err
-	}
-	os.Stdout = w
-	applyErr := apply()
-	_ = w.Close()
-	os.Stdout = old
-	data, readErr := io.ReadAll(r)
-	_ = r.Close()
-	if readErr != nil {
-		return "", readErr
-	}
-	return string(data), applyErr
-}
 
 func TestApplyWithJevEnvironmentIsIdempotent(t *testing.T) {
 	home := t.TempDir()
@@ -67,7 +47,7 @@ func TestApplyWithJevEnvironmentIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := captureApplyOutput(t, func() error { return ApplyAll(target, cfg, nil, false, false) })
+	out, err := CaptureTestStdout(func() error { return ApplyAll(target, cfg, nil, false, false) })
 	if err != nil {
 		t.Fatalf("second apply: %v", err)
 	}

@@ -1,8 +1,6 @@
 package claude
 
 import (
-	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,28 +8,6 @@ import (
 
 	"ubunatic.com/harnez/internal/jsonc"
 )
-
-// captureStdoutTelemetry mirrors claude_test's captureStdout helper
-// (internal/claude/integration_test.go) but lives in package claude
-// (whitebox) so this file can call ApplyAll/RunStatus/CleanAll directly
-// alongside the config-internal jsonc.Read assertions above.
-func captureStdoutTelemetry(f func() error) (string, error) {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return "", err
-	}
-	os.Stdout = w
-
-	errVal := f()
-
-	w.Close()
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
-	return buf.String(), errVal
-}
 
 func containsAll(s string, subs ...string) bool {
 	for _, sub := range subs {
@@ -122,7 +98,7 @@ func TestApplyInstallsTelemetryHook(t *testing.T) {
 
 	// status must report the hook via the same generic "hooks:" count
 	// counter it already uses for distill's hook (issue 119 AC).
-	out, err := captureStdoutTelemetry(func() error {
+	out, err := CaptureTestStdout(func() error {
 		return RunStatus("(embedded)", cfg, targetDir, nil)
 	})
 	if err != nil {
