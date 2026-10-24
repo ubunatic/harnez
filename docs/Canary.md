@@ -166,6 +166,16 @@ Canaries are intentionally distinct from full integration test suites:
 
 ---
 
+## Sandbox Copy Fixtures
+
+Some test helpers copy part of the repository into a temp module (for example, a canary that builds a curated subset of packages in a sandbox). Such a fixture must find the packages it copies by discovery, not from a hardcoded list:
+
+- **Discover, do not enumerate.** Build the copy list with a glob or walk over the package tree (for example `filepath.Glob` or `filepath.WalkDir` over `internal/*`), so a new package is copied without editing the fixture.
+- **Audit the copy pattern when you extract a package.** Splitting a package, adding a subpackage, or renaming a top-level directory is a change to every sandbox copy list. Before the extraction is done, grep the test helpers for the old and new directory names and confirm the fixture copies them.
+- **Symptom of a hardcoded list.** A canary or fixture test fails only in the new package, with the error being a missing import or a missing file in the temp module, while the source tree builds.
+
+---
+
 ## Anti-patterns
 
 **Building first, then discovering the mechanism doesn't work.** If the
