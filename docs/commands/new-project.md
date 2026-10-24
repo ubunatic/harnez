@@ -50,9 +50,8 @@ Add `containerfile` when the project ships images; drop `manpages` without a CLI
 Check `harnez docs` for the current names.
 
 Create `docs/studies/` (with a `.gitkeep`) before `harnez init` so studies are detected.
-The tracker appears with the first ticket: after step 8 files the epic, check
-`.harnez/repo.yaml`; if it still says `issues.tracker: none`, delete that file and rerun
-`harnez init -d .` (bug 901), then expect `tracker: harnez`.
+The tracker appears with the first ticket: after step 8 files the epic, `.harnez/repo.yaml`
+says `issues.tracker: harnez`; run `harnez init -d .` once more so the merge driver lands.
 
 ## 5. Make Task Runner
 
