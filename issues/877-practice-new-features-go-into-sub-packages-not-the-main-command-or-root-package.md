@@ -1,6 +1,6 @@
 # 877 — practice: new features go into sub-packages, not the main command or root package
 
-**Status**: Open
+**Status**: Closed — Bundled Go guidance directs substantive features and tests into internal sub-packages and keeps cmd thin; full suite passes.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Practice
