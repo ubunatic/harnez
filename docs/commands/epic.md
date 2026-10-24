@@ -39,6 +39,19 @@ Skip it for pure refactors or internal fixes; say so in the epic.
 Cheap searchers check the live repo for each task's premise, location and size. A task that is
 not small, or hides an owner decision, moves into its own sprint group.
 
+## 3a. Phases and Delivery
+
+For multi-group epics, organize groups as prose phases with their dependencies, child tickets,
+and exit gates; use a DAG when work can proceed independently. Start a phase only when its
+dependencies' gates pass. Keep infrastructure and integration work after the standalone work
+it depends on. An operational epic owns one repository: for sibling-repository work, file a
+planning bridge here and an anchor ticket or follow-up epic in the owning repository.
+
+Label each child `code` or `design/discovery`. Code work requires the ticket's tests, install,
+and runtime canary before closure. Design/discovery work produces a study and a decomposed
+backlog, and states that runtime delivery was not verified. A phase exits when its children
+are closed, its declared canary or design review passes, and the working tree is clean.
+
 ## 4. Refine
 
 Each task becomes a subticket (`/issue`) with acceptance, write set, and:
@@ -46,6 +59,8 @@ Each task becomes a subticket (`/issue`) with acceptance, write set, and:
 - Developer tier: haiku for well-specified, machine-checkable work; sol for judgment.
 - Architect only when the design is open (`/lean-sprint` §1.5 tiers).
 - Reviewer: opus/sol reviewer for risky work; orchestrator diff review for small work.
+- Ask each allocated worker to report the allocated ticket number and confirm that every
+  actionable study/retro follow-up was filed and linked; the study must list those numbers.
 
 Mix vendors across a sprint. Update the epic's task table with the numbers.
 
