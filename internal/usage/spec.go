@@ -38,7 +38,35 @@ type usageSpec struct {
 	NVIDIASMICacheTTL        string             `yaml:"nvidia_smi_cache_ttl"`
 	RemoteCommandTimeout     string             `yaml:"remote_command_timeout"`
 	SSHConnectTimeout        string             `yaml:"ssh_connect_timeout"`
+	UsageKillLog             usageKillLogSpec   `yaml:"usage_kill_log"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
+}
+
+type usageKillLogSpec struct {
+	Path        string `yaml:"path"`
+	MaxBytes    int64  `yaml:"max_bytes"`
+	Backups     int    `yaml:"backups"`
+	CheckBudget string `yaml:"check_budget"`
+}
+
+func usageKillLogSettings() (usageKillLogSpec, time.Duration, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
+	if err != nil {
+		return usageKillLogSpec{}, 0, err
+	}
+	var spec usageSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return usageKillLogSpec{}, 0, err
+	}
+	killLog := spec.UsageKillLog
+	if killLog.Path == "" || killLog.MaxBytes <= 0 || killLog.Backups < 0 {
+		return usageKillLogSpec{}, 0, fmt.Errorf("%s: usage_kill_log path, positive max_bytes, and non-negative backups are required", usageSpecPath)
+	}
+	budget, err := time.ParseDuration(killLog.CheckBudget)
+	if err != nil || budget <= 0 {
+		return usageKillLogSpec{}, 0, fmt.Errorf("%s: usage_kill_log.check_budget must be a positive duration", usageSpecPath)
+	}
+	return killLog, budget, nil
 }
 
 type agyQuotaSpec struct {

@@ -37,3 +37,27 @@ the signal stayed unknown. The next fetch at 22:39 succeeded.
 
 - Which checks work without root on the user's systems (journalctl `-k` access, cgroup v2 paths)?
 - Should 256's rolling log host this, or should it be a separate kill log?
+
+## Sprint 2 — M1 delivered
+
+- A bare `signal: killed` no longer identifies an external sender; unattributed signals
+  remain `unknown`, while registry context timeout/cancel evidence remains explicit.
+- Signal failures are written asynchronously to a separate rotating JSONL log under
+  `$XDG_STATE_HOME/harnez/usage-kills.jsonl` (default `$HOME/.local/state/...`). Path,
+  size, backup count, and check budget are defined by `usage_kill_log` in `spec/usage.yaml`
+  and its schema. The record includes timestamp, provider, command, elapsed time, signal,
+  cause, and findings. PID and stderr are recorded as unknown until command integration.
+- A deliberately blocked fake check verifies collection returns without waiting; tests
+  also verify rotation and that the mislabel regression fails before the fix.
+- Ticket remains open: M1 does not complete the full cross-process cause investigation.
+
+## M2 — remaining work
+
+- Integrate child-process metadata and stderr without converting structured errors to
+  strings. AGY uses `cmd.Output()`, which puts captured stderr on `*exec.ExitError.Stderr`,
+  but `CollectAGY` stores only `err.Error()` in `QuotaFetchError`, losing stderr and PID
+  before the registry. Claude uses `CombinedOutput()`, then its failure path retains the
+  API error and does not pass child output or process identity to registry diagnostics.
+- Add bounded non-root journal/cgroup OOM checks and verified provider-rejection evidence;
+  report each inaccessible or inconclusive source as unknown. Add child-process tests for
+  preserved stderr, PID, own timeout, and signal identity.

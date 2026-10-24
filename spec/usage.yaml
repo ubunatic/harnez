@@ -43,6 +43,11 @@ nvidia_smi_timeout: 1s
 nvidia_smi_cache_ttl: 2s
 remote_command_timeout: 10s
 ssh_connect_timeout: 5s
+usage_kill_log:
+  path: harnez/usage-kills.jsonl
+  max_bytes: 1048576
+  backups: 3
+  check_budget: 250ms
 
 watch_loading_label: Collecting usage…
 view_modes:

@@ -63,6 +63,7 @@ func TestUsageDebugKeysAndFrames(t *testing.T) {
 }
 
 func TestCatchupLogAndFetchCause(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	now := time.Now()
 	registry, err := NewRegistry(
 		Collector{ID: "fresh", Provider: "claude", Cadence: time.Minute, Timeout: time.Second, Collect: func(context.Context) (AgentUsage, error) {
@@ -80,10 +81,11 @@ func TestCatchupLogAndFetchCause(t *testing.T) {
 	var logs []string
 	registry.logFetchFailure = func(line string) { logs = append(logs, line) }
 	agents := registry.CollectCatchup(context.Background(), time.Minute, nil, nil)
+	registry.waitKillDiagnostics()
 	if len(logs) != 2 || !strings.Contains(logs[0], "providers fetched: [agy]; providers skipped as fresh: [claude]") {
 		t.Fatalf("catch-up log: %v", logs)
 	}
-	if agents[1].QuotaFetchCause != "external signal (signal: killed)" {
+	if agents[1].QuotaFetchCause != "unknown" {
 		t.Fatalf("missing stored cause: %+v", agents[1])
 	}
 	if got := fetchFailureCause(registry.collectors[1], time.Second, errors.New("signal: killed"), context.DeadlineExceeded); got != "our context timeout" {

@@ -2,8 +2,19 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez usage settings and view modes",
   "type": "object",
-  "required": ["agy_quota", "agy_meter_max_age", "collector_cadence", "cache_staleness_multiplier", "display_staleness", "collector_timeout", "passive_dedupe_interval", "passive_update_path", "history_snapshot_interval", "usage_store_busy_timeout", "client_heartbeat_interval", "client_timeout", "catchup_fetch_threshold", "debug_labels", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl", "remote_command_timeout", "ssh_connect_timeout", "agent_quota_warn_percent", "agent_quota_max_reading_age"],
+  "required": ["agy_quota", "agy_meter_max_age", "collector_cadence", "cache_staleness_multiplier", "display_staleness", "collector_timeout", "passive_dedupe_interval", "passive_update_path", "history_snapshot_interval", "usage_store_busy_timeout", "client_heartbeat_interval", "client_timeout", "catchup_fetch_threshold", "debug_labels", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl", "remote_command_timeout", "ssh_connect_timeout", "agent_quota_warn_percent", "agent_quota_max_reading_age", "usage_kill_log"],
   "properties": {
+    "usage_kill_log": {
+      "type": "object",
+      "required": ["path", "max_bytes", "backups", "check_budget"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "max_bytes": { "type": "integer", "minimum": 1 },
+        "backups": { "type": "integer", "minimum": 0 },
+        "check_budget": { "type": "string", "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$" }
+      },
+      "additionalProperties": false
+    },
     "debug_labels": {
       "type": "object",
       "required": [

@@ -150,6 +150,7 @@ func TestUsageNewRegistryRejectsMissingPolicyAndDuplicateIDs(t *testing.T) {
 }
 
 func TestUsageRegistryLogsFetchFailureWithDetails(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	var logged []string
 	logFn := func(msg string) {
 		logged = append(logged, msg)
@@ -201,6 +202,7 @@ func TestUsageRegistryLogsFetchFailureWithDetails(t *testing.T) {
 	}
 	r2.logFetchFailure = logFn
 	r2.Collect(context.Background(), nil, nil)
+	r2.waitKillDiagnostics()
 
 	if len(logged) != 1 {
 		t.Fatalf("logged count = %d, want 1", len(logged))
@@ -210,7 +212,7 @@ func TestUsageRegistryLogsFetchFailureWithDetails(t *testing.T) {
 		t.Fatalf("logged[0] = %q, want provider and our context timeout cause", logged[0])
 	}
 
-	// Case 3: external signal while context is still live
+	// Case 3: unattributed signal while context is still live
 	logged = nil
 	r3, err := NewRegistry(Collector{
 		ID:       "agy",
@@ -227,13 +229,14 @@ func TestUsageRegistryLogsFetchFailureWithDetails(t *testing.T) {
 	}
 	r3.logFetchFailure = logFn
 	r3.Collect(context.Background(), nil, nil)
+	r3.waitKillDiagnostics()
 
 	if len(logged) != 1 {
 		t.Fatalf("logged count = %d, want 1", len(logged))
 	}
 	if !strings.Contains(logged[0], "provider: agy") ||
-		!strings.Contains(logged[0], "external signal (signal: killed)") {
-		t.Fatalf("logged[0] = %q, want provider and external signal cause", logged[0])
+		!strings.Contains(logged[0], "cause: unknown") {
+		t.Fatalf("logged[0] = %q, want provider and unknown cause without evidence", logged[0])
 	}
 
 	// Case 4: collector returning AgentUsage with QuotaFetchError and nil error
@@ -261,5 +264,66 @@ func TestUsageRegistryLogsFetchFailureWithDetails(t *testing.T) {
 		!strings.Contains(logged[0], ClaudeOAuthUsageURL) ||
 		!strings.Contains(logged[0], "HTTP 429") {
 		t.Fatalf("logged[0] = %q, want provider, command, and HTTP 429 cause", logged[0])
+	}
+}
+
+func TestFetchFailureCauseDoesNotGuessTimeoutOrSender(t *testing.T) {
+	c := Collector{Timeout: time.Second}
+	if got := fetchFailureCause(c, 2*time.Second, errors.New("signal: killed"), nil); got != "unknown" {
+		t.Fatalf("late signal cause = %q, want unknown without context evidence", got)
+	}
+	if got := fetchFailureCause(c, 0, errors.New("signal: killed"), context.Canceled); got != "context canceled" {
+		t.Fatalf("canceled signal cause = %q, want context canceled", got)
+	}
+}
+
+func TestUsageRegistryKillCheckDoesNotDelayFetchAndLogsRotationRecord(t *testing.T) {
+	stateHome := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	r, err := NewRegistry(Collector{
+		ID: "provider", Provider: "provider", Command: "provider fetch", Cadence: time.Minute, Timeout: time.Minute,
+		Collect: func(context.Context) (AgentUsage, error) {
+			return AgentUsage{}, errors.New("signal: killed")
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.logFetchFailure = func(string) {}
+	r.killCheck = func(context.Context, Collector, error, error) map[string]string {
+		close(started)
+		<-release
+		return map[string]string{"sender": "unknown", "pid": "unknown"}
+	}
+	collected := make(chan struct{})
+	go func() {
+		r.Collect(context.Background(), nil, nil)
+		close(collected)
+	}()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second * raceFactor):
+		t.Fatal("kill check did not start")
+	}
+	select {
+	case <-collected:
+	case <-time.After(50 * time.Millisecond * raceFactor):
+		close(release)
+		r.waitKillDiagnostics()
+		t.Fatal("slow kill check delayed collector fetch")
+	}
+	close(release)
+	r.waitKillDiagnostics()
+	path := filepath.Join(stateHome, "harnez", "usage-kills.jsonl")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"command":"provider fetch"`, `"pid":null`, `"signal":"SIGKILL"`, `"cause":"unknown"`, `"sender":"unknown"`} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("kill log %q missing %s", data, want)
+		}
 	}
 }

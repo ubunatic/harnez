@@ -42,6 +42,9 @@ type Registry struct {
 	mu              sync.Mutex
 	lastGood        map[string]AgentUsage
 	logFetchFailure func(string)
+	killCheck       func(context.Context, Collector, error, error) map[string]string
+	killLogMu       sync.Mutex
+	killWG          sync.WaitGroup
 }
 
 func NewRegistry(collectors ...Collector) (*Registry, error) {
@@ -55,7 +58,11 @@ func NewRegistry(collectors ...Collector) (*Registry, error) {
 		}
 		seen[c.ID] = true
 	}
-	return &Registry{collectors: append([]Collector(nil), collectors...), lastGood: map[string]AgentUsage{}}, nil
+	return &Registry{
+		collectors: append([]Collector(nil), collectors...),
+		lastGood:   map[string]AgentUsage{},
+		killCheck:  collectKnownKillFindings,
+	}, nil
 }
 
 // CollectLoad runs one registered load collector with its declared timeout.
@@ -255,31 +262,26 @@ func (r *Registry) logFetchFailureDetails(c Collector, elapsed time.Duration, er
 	msg := fmt.Sprintf("harnez server: provider %s fetch failed: provider: %s, command: %q, elapsed: %s vs timeout: %s, cause: %s\n", c.Provider, c.Provider, cmd, elapsed.Round(time.Millisecond), c.Timeout, cause)
 	if r != nil && r.logFetchFailure != nil {
 		r.logFetchFailure(strings.TrimRight(msg, "\n"))
-		return
+	} else {
+		_, _ = io.WriteString(os.Stderr, msg)
 	}
-	_, _ = io.WriteString(os.Stderr, msg)
+	if isSignalFailure(err) {
+		r.recordKillFailure(c, elapsed, err, ctxErr)
+	}
 }
 
-func fetchFailureCause(c Collector, elapsed time.Duration, err, ctxErr error) string {
+func fetchFailureCause(_ Collector, _ time.Duration, err, ctxErr error) string {
 	cause := "unknown"
 	errMsg := strings.ToLower(err.Error())
 	switch {
-	case errors.Is(ctxErr, context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) || elapsed >= c.Timeout:
+	case errors.Is(ctxErr, context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded):
 		cause = "our context timeout"
-	case strings.Contains(errMsg, "signal: killed"):
-		if ctxErr == nil {
-			cause = "external signal (signal: killed)"
-		} else {
-			cause = "our context timeout"
-		}
-	case strings.Contains(errMsg, "signal:"):
-		if ctxErr == nil {
-			cause = fmt.Sprintf("external signal (%s)", err.Error())
-		} else {
-			cause = "our context timeout"
-		}
 	case errors.Is(ctxErr, context.Canceled) || errors.Is(err, context.Canceled) || strings.Contains(errMsg, "canceled"):
 		cause = "context canceled"
+	case strings.Contains(errMsg, "signal: killed"):
+		cause = "unknown"
+	case strings.Contains(errMsg, "signal:"):
+		cause = "unknown"
 	case strings.Contains(errMsg, "deadline exceeded") || strings.Contains(errMsg, "context deadline"):
 		cause = "our context timeout"
 	default:
