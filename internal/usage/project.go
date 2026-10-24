@@ -109,39 +109,21 @@ func scanClaudeProjectUsage(claudeDir, targetRepo string) *AgentProjectAttributi
 		ModelTokens: make(map[string]int64),
 	}
 
-	projectsDir := filepath.Join(claudeDir, "projects")
-	entries, err := os.ReadDir(projectsDir)
+	files, err := ClaudeTranscriptFiles(claudeDir)
 	if err != nil {
 		return attr
 	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		projPath := filepath.Join(projectsDir, entry.Name())
-		files, err := os.ReadDir(projPath)
-		if err != nil {
-			continue
-		}
-
-		for _, f := range files {
-			if f.IsDir() || !strings.HasSuffix(f.Name(), ".jsonl") {
-				continue
-			}
-
-			fullFile := filepath.Join(projPath, f.Name())
-			matched, breakdown, modelTokens := parseClaudeProjectFile(fullFile, targetRepo)
-			if matched {
-				attr.MatchedSessions++
-				attr.Tokens.InputTokens += breakdown.InputTokens
-				attr.Tokens.OutputTokens += breakdown.OutputTokens
-				attr.Tokens.CacheReadTokens += breakdown.CacheReadTokens
-				attr.Tokens.CacheWriteTokens += breakdown.CacheWriteTokens
-				attr.Tokens.TotalTokens += breakdown.TotalTokens
-				for m, toks := range modelTokens {
-					attr.ModelTokens[m] += toks
-				}
+	for _, fullFile := range files {
+		matched, breakdown, modelTokens := parseClaudeProjectFile(fullFile, targetRepo)
+		if matched {
+			attr.MatchedSessions++
+			attr.Tokens.InputTokens += breakdown.InputTokens
+			attr.Tokens.OutputTokens += breakdown.OutputTokens
+			attr.Tokens.CacheReadTokens += breakdown.CacheReadTokens
+			attr.Tokens.CacheWriteTokens += breakdown.CacheWriteTokens
+			attr.Tokens.TotalTokens += breakdown.TotalTokens
+			for m, toks := range modelTokens {
+				attr.ModelTokens[m] += toks
 			}
 		}
 	}

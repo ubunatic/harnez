@@ -30,6 +30,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `find`  | Local / Repo | Fast repository entity discovery with short fuzzy-filter grammar (`issues`) |
 | `read`  | Local / Agent Context | Bounded file reading and multi-column visual PNG context card rendering (`-I/--image`) |
 | `log`   | Harnez's own invocation record | Chronological `git log`-shaped stream of harnez CLI invocations (`cli_invocations`) |
+| `session extract <id\|path>` | Local Claude transcripts | Stream compaction summaries and owner messages as text or `--json`; session ID prefixes resolve under `~/.claude/projects/` |
 
 Optional Neus installation and server indexing are described in [Neus integration](NeusIntegration.md).
 

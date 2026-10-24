@@ -23,24 +23,36 @@ import (
 func captureApplyStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
-	read, write, err := os.Pipe()
+	// Apply's installed-skill list can exceed pipe capacity. Capture to disk so
+	// the writer never waits for a reader that only starts after fn returns.
+	file, err := os.CreateTemp(t.TempDir(), "apply-stdout-*")
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Stdout = write
+	os.Stdout = file
+	defer func() {
+		os.Stdout = old
+		if err := file.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	fn()
-	if err := write.Close(); err != nil {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		t.Fatal(err)
 	}
-	os.Stdout = old
-	out, err := io.ReadAll(read)
+	out, err := io.ReadAll(file)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := read.Close(); err != nil {
 		t.Fatal(err)
 	}
 	return string(out)
+}
+
+func TestCaptureApplyStdoutLargeOutput(t *testing.T) {
+	want := strings.Repeat("installed skill\n", 65536)
+	got := captureApplyStdout(t, func() { fmt.Print(want) })
+	if got != want {
+		t.Fatalf("captured %d bytes, want %d", len(got), len(want))
+	}
 }
 
 func TestEnsureTelemetrySchemaNoOpBeforeApply(t *testing.T) {

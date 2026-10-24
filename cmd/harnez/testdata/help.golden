@@ -43,6 +43,7 @@ Available Commands:
   revert          Revert managed configuration or one-off changes
   scan-docs       Scan immediate child agent projects for managed-docs drift
   server          Run Harnez local services
+  session         Extract retrospective evidence from local Claude Code sessions
   skill           Install, search, and explore external agent skills from git repositories
   skills          Inspect and export Harnez's built-in skill catalogue
   stats           Report call frequency, average score, failure rate, and byte savings from tool_calls telemetry
@@ -2264,6 +2265,39 @@ Usage:
 
 Flags:
   -h, --help   help for uninstall
+
+=== harnez session
+Extract retrospective evidence from local Claude Code sessions
+
+Usage:
+  harnez session [command]
+
+Available Commands:
+  extract     Stream compaction summaries and owner messages from a Claude transcript
+
+Flags:
+  -h, --help   help for session
+
+Use "harnez session [command] --help" for more information about a command.
+
+=== harnez session extract
+Extract all compaction summaries and real owner messages in transcript order.
+Accepts a JSONL path or unique session ID prefix under ~/.claude/projects/.
+Tool results, system reminders, task notifications and skill injections are removed.
+Slash-command names and arguments and image placeholders are preserved.
+Only Claude Code transcripts are supported. No transcript is modified.
+
+Output includes source path/size, timestamps, counts and a truncated-tail indicator.
+--json emits one JSON object with source, records and stats; default output is text.
+Redirect output to a private file before reading bounded sections for a retro.
+Check the exit status before consuming output: errors can leave a partial extract.
+
+Usage:
+  harnez session extract <id|path> [flags]
+
+Flags:
+  -h, --help   help for extract
+      --json   emit a JSON object with source, records and stats
 
 === harnez skill
 Manage external skills: SKILL.md directories from third-party git repositories.
