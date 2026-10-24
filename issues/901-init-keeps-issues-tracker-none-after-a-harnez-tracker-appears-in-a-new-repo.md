@@ -1,6 +1,6 @@
 # 901 — init keeps issues.tracker none after a harnez tracker appears in a new repo
 
-**Status**: Draft
+**Status**: Closed — resolved; TestRunIssuesNewAdoptsOnlyNewIssuesDirectory and TestRunInitAdoptsOnlyManagedIssuesReadme pass
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

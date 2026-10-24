@@ -28,5 +28,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 896 | [896-lean-sprint-one-run-q1-budget-needs-a-rerun-rule-after-a-post-run-fix.md](896-lean-sprint-one-run-q1-budget-needs-a-rerun-rule-after-a-post-run-fix.md) | lean-sprint: one-run q1 budget needs a rerun rule after a post-run fix | Draft |
 | 897 | [897-add-neus-as-optional-dependency-with-harnez-install-verb-and-server-indexer.md](897-add-neus-as-optional-dependency-with-harnez-install-verb-and-server-indexer.md) | Add neus as optional dependency with harnez install verb and server indexer | Open |
 | 898 | [898-recommend-gokay-check-before-commits-in-go-repo-agent-guidance.md](898-recommend-gokay-check-before-commits-in-go-repo-agent-guidance.md) | Recommend gokay check before commits in Go repo agent guidance | Open |
-| 901 | [901-init-keeps-issues-tracker-none-after-a-harnez-tracker-appears-in-a-new-repo.md](901-init-keeps-issues-tracker-none-after-a-harnez-tracker-appears-in-a-new-repo.md) | init keeps issues.tracker none after a harnez tracker appears in a new repo | Draft |
 <!-- harnez:end issues-active-index -->
