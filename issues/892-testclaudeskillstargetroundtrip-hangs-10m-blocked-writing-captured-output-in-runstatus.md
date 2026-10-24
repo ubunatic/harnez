@@ -1,6 +1,6 @@
 # 892 — TestClaudeSkillsTargetRoundTrip hangs 10m blocked writing captured output in RunStatus
 
-**Status**: Open
+**Status**: Closed — original 10-minute hang not reproduced; latent stdout pipe deadlock fixed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
