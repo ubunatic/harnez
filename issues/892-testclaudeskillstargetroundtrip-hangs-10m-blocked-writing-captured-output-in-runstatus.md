@@ -23,3 +23,14 @@ failed. The following `make test-q1` passed, so it is intermittent.
 
 A captured-output writer (pipe or buffer swap of stdout/stderr) that nobody drains while `RunStatus` writes more
 than the pipe buffer. Check for `os.Pipe` stdout capture in the test helpers.
+
+## Sprint findings (2026-10-24, searcher haiku:med)
+
+- `captureStdoutClaudeSkills` (`internal/claude/claudeskills_test.go:189-210`) swaps `os.Stdout` for an `os.Pipe`
+  and drains it only after `f()` returns; copies in `status_test.go:19`, `telemetry_hook_test.go:20`,
+  `apply_settings_test.go:21`, `integration_test.go:19`, `repo_config_test.go:292`. Output over the pipe
+  buffer (64 KiB) deadlocks.
+- Not reproduced: 5 solo runs, 3 `-p 4` runs, 4 concurrent processes all passed. Current output is small
+  (drift loop `status.go:316-318` only with `issues/README.md` in cwd), so the 64 KiB path is latent.
+- Fix: one shared helper that drains in a goroutine before `f()` and restores with `defer`; regression test
+  writing ~256 KiB. Close noting the original hang was not reproduced.

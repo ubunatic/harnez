@@ -31,3 +31,18 @@ should actually recover and show the host data."
 
 Test with a fake `ssh` on PATH that fails first, then returns a load snapshot: `-w` shows the panel recover; a
 later one-shot run shows the fresh value within its normal time. Live check against x600 after it is back.
+
+## Sprint findings (2026-10-24, searcher haiku:med)
+
+- 874 landed: one-shot reads only the cache (`cmd/harnez/usage_cmd.go:97`, `internal/usage/remote_load_cache.go:26`).
+- `-w` (`internal/usage/watch_remote_load.go:39`) retries stream then batch poll every 10 s (`:13`), no backoff;
+  success clears "unavailable" via `setLast`. The cache is written only by `-w`.
+- No background remote-load fetch in server/collector; 161 (Backlog) proposes registering it as a collector source.
+- No fake-ssh helper; batch poll runs bare `ssh` (`remote.go:74`), stream path uses seams (`loadstream_test.go:112-191`).
+
+### M1 (this sprint): `-w` recovery with backoff
+Fake `ssh` on PATH that fails then answers; panel recovers; backoff while down.
+
+### M2 (needs owner decision): one-shot recovery
+Option A: collector daemon fetches remote load in the background (promote 161). Option B: one-shot starts a
+detached refresh for the next run.
