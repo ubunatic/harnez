@@ -1,6 +1,6 @@
 # 895 — harnez lint: flag sandbox copy fixtures with hardcoded package lists
 
-**Status**: Draft
+**Status**: Closed — superseded by 907: owner chose to remove copy fixtures (import, sunset, or container test) instead of linting their copy lists
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
