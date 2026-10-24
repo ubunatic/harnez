@@ -43,6 +43,8 @@ Never print raw ANSI escapes into the agent output; convert them to readable tex
 
 Render the widget with `loom widgets --show <Name>` and save or update its diffable golden at `docs/progress/<Widget>.ansi`. Use the sketch-versus-capture cell diff when loom ticket 362 provides it.
 
+`loom widgets --show` opens `/dev/tty`, so run it inside the private tmux session of step 4. A sketch can be an abbreviated schematic (fewer columns than the widget); then compare the live capture cell by cell with the golden, and the sketch only for structure.
+
 ## 6. Final visual check
 
 Ask the user to inspect a screenshot for font-dependent glyph rendering, such as `▂` versus `🮂`. Treat this as the final look check after cell tests and live comparison.
