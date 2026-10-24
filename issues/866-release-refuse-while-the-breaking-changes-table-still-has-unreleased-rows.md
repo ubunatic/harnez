@@ -1,6 +1,6 @@
 # 866 — release: refuse while the breaking-changes table still has Unreleased rows
 
-**Status**: Open
+**Status**: Closed — Implemented configurable upgrade-table preflight refusal and manual relabel docs; make test-q1 passed with no failures (d5e3e492).
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
