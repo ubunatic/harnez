@@ -28,4 +28,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 896 | [896-lean-sprint-one-run-q1-budget-needs-a-rerun-rule-after-a-post-run-fix.md](896-lean-sprint-one-run-q1-budget-needs-a-rerun-rule-after-a-post-run-fix.md) | lean-sprint: one-run q1 budget needs a rerun rule after a post-run fix | Draft |
 | 897 | [897-add-neus-as-optional-dependency-with-harnez-install-verb-and-server-indexer.md](897-add-neus-as-optional-dependency-with-harnez-install-verb-and-server-indexer.md) | Add neus as optional dependency with harnez install verb and server indexer | Open |
 | 898 | [898-recommend-gokay-check-before-commits-in-go-repo-agent-guidance.md](898-recommend-gokay-check-before-commits-in-go-repo-agent-guidance.md) | Recommend gokay check before commits in Go repo agent guidance | Open |
+| 904 | [904-epic-skill-evaluation-lessons-failure-modes-and-architectural-improvements-from-neus-next-wave.md](904-epic-skill-evaluation-lessons-failure-modes-and-architectural-improvements-from-neus-next-wave.md) | Epic skill evaluation: lessons, failure modes, and architectural improvements from Neus Next Wave | Open |
 <!-- harnez:end issues-active-index -->
