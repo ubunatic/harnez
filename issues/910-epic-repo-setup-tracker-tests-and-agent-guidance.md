@@ -1,6 +1,6 @@
 # 910 — Epic: repo setup, tracker, tests and agent guidance
 
-**Status**: Open
+**Status**: Closed — all 7 tasks closed: 353 already delivered, 898, 867, 907 (no copy fixtures, doc rules), 864, 897 (daemon persistence parked in 913), 855; study docs/studies/2026-10-24-two-agent-lean-sprint-epic-910.md
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Epic
