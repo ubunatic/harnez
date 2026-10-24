@@ -47,3 +47,9 @@ not picks at layout boundaries.
 
 - The skill recommends `loom` and assumes it is installed; no fallback tooling.
 - A sketch-vs-capture cell diff is a loom feature (loom ticket 362), not harnez; the skill uses it once it exists.
+
+## Design
+
+Implemented as a `/tui-check` skill with loom as a required tool, cell-level glyph/FG/BG checks, PTY coverage, and a private-socket tmux check. Its installation is asserted by the Claude skill round-trip test.
+
+Remaining acceptance: first tui-check run on a loom widget.

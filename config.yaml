@@ -515,6 +515,11 @@ skills:
     description: "Run a bug hunt over active P1/P2 bug tickets: re-verify each against live code, close obsolete ones, fix the rest the way forward. Only on explicit /bug-hunt or 'bug hunt'."
     file: docs/commands/bug-hunt.md
 
+  - name: tui-check
+    license: AGPL-3.0-or-later
+    description: "Validate a terminal UI change cell by cell (glyph, FG, BG) against its .ansi sketch, in tests and live in tmux. Use for TUI layout or colour checks."
+    file: docs/commands/tui-check.md
+
   - name: release
     license: AGPL-3.0-or-later
     description: "Lean CLI release: commit pending code, push, run harnez release, fix issues or ask on login"
