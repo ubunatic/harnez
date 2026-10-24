@@ -57,3 +57,8 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   the output changed (here a host `neus` call) instead. Issue 884, `4789aff4` → `67f8b396`.
 - **Closed scope vs. goal**: compare what a milestone moved with its plan and the ticket's `/goal` before
   closing; 884 M9 moved 157 of ~5k planned lines and was first closed as delivered. Park the rest (888).
+- **Daemon behaviour changes**: a test that runs a CLI which auto-starts the collector also exercises the
+  collector. When the collector gains new work (879 M2: remote-load ssh polls), "the CLI never does X"
+  assertions fail. Scope them to the CLI process (record the stub's parent PID), keep the env isolated
+  (temp HOME/XDG dirs, own `local.yaml`, fake binaries first on PATH), and stop every spawned daemon in
+  `t.Cleanup`.

@@ -22,16 +22,16 @@ work with extra care (weaker than sol on terminal coding).
 
 | # | Sprint | Ticket | What | Workers (searcher → architect → developer) | Status |
 |---|---|---|---|---|---|
-| 1 | 1 easy | 893 | Haiku as searcher and simple-task developer in spec and skills | luna:low → – → haiku:high | Open |
-| 2 | 1 easy | 889 | Docs: canary and modularization guidelines for in-tree sandbox copy fixtures | same | Open |
-| 3 | 1 easy | 866 | `release` refuses while breaking-changes table has Unreleased rows | same | Open |
-| 4 | 1 easy | 871 | Pre-flight disk space check before heavy downloads and builds | same | Open |
-| 5 | 2 medium | 887 | Signal-kill diagnostics: quick cause hints, rotating kill log | haiku:low → – → sol:med | Open |
-| 6 | 3 complex | 879 M2 | One-shot `harnez usage` recovers remote load | haiku:low → sol:med → haiku:high | Owner decision pending |
-| 7 | 4 skills | 851 | bug-hunt skill | luna:low → opus:med → sol:med | Open |
-| 8 | 4 skills | 852 | tui-check skill | same | Open |
-| 9 | 4 skills | 878 | retro skill | same | Open |
-| 10 | 4 skills | 880 | jam skill (stop and ask if it needs new harnez commands) | same | Open |
+| 1 | 1 easy | 893 | Haiku as searcher and simple-task developer in spec and skills | luna:low → – → haiku:high | Closed (7e40d615) |
+| 2 | 1 easy | 889 | Docs: canary and modularization guidelines for in-tree sandbox copy fixtures | same | Closed (47b8a89d); detection parked in 895 |
+| 3 | 2 | 866 | `release` refuses while breaking-changes table has Unreleased rows | haiku:low → – → sol:med | Closed (d5e3e492); moved from Sprint 1, larger than easy |
+| 4 | 1 easy | 871 | Pre-flight disk space check before heavy downloads and builds | luna:low → – → haiku:high | Closed (f900c271), guidance only |
+| 5 | 2 medium | 887 | Signal-kill diagnostics: quick cause hints, rotating kill log | haiku:low → – → sol:med | M1 done (0ebe1cd8); open for M2 (OOM/cgroup checks, stderr at command boundary) |
+| 6 | 3 complex | 879 M2 | One-shot `harnez usage` recovers remote load | haiku:low → sol:med → haiku:high | Closed (d1044f4e, c1973990); live check pending (x600 was down) |
+| 7 | 4 skills | 851 | bug-hunt skill | luna:low → opus:med → sol:med | Skill done (be35d155); open until first real run |
+| 8 | 4 skills | 852 | tui-check skill | same | Skill done (1167ec07); open until first loom-widget run |
+| 9 | 4 skills | 878 | retro skill | same | Skipped: needs a new `harnez session extract` command |
+| 10 | 4 skills | 880 | jam skill (stop and ask if it needs new harnez commands) | same | Closed (5b32605d) |
 | 11 | end | — | `/evergreen`: curate learnings into docs/, sync issues and indexes | host | Open |
 | 12 | end | — | `/wrap`: stop helpers, sync tracker, commit, final report | host | Open |
 
@@ -40,8 +40,8 @@ Sizes are checked by each sprint's searcher; a larger ticket moves into its own 
 ## Open decisions (owner)
 
 - Architects at `:med`: decided "change skill" (2026-10-24); lean-sprint now allows `opus:med` and `sol:med`.
-- 879 M2: owner answered "ok" to the recommendation, read as option 1; host confirms before Sprint 3. (1) collector fetches remote load in the background (promote 161), (2) detached refresh per one-shot
-  run, or skip.
+- 879 M2: option 1, collector fetches remote load in the background (owner delegated decisions on 2026-10-24).
+- 866, 871: decided by host on owner delegation; see each ticket's Decision section.
 
 ## Out of scope
 
