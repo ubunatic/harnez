@@ -525,6 +525,16 @@ skills:
     description: "Run a jam: several agents on different models build the same thing independently, the owner picks a winner, and adoption runs in phases. Only on explicit /jam or 'jam'."
     file: docs/commands/jam.md
 
+  - name: epic
+    license: AGPL-3.0-or-later
+    description: "Plan, refine and run an epic: task table, optional web prior-art fanout, subtickets with worker tiers, lean sprints, close. Only on explicit /epic or 'epic'."
+    file: docs/commands/epic.md
+
+  - name: new-project
+    license: AGPL-3.0-or-later
+    description: "Bootstrap a new project: interview, git and harnez init, Makefile, remote repos, bootstrap epic and prior-art research ticket. Only on explicit /new-project."
+    file: docs/commands/new-project.md
+
   - name: release
     license: AGPL-3.0-or-later
     description: "Lean CLI release: commit pending code, push, run harnez release, fix issues or ask on login"

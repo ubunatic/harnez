@@ -263,4 +263,5 @@
 | 857 | [857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md](857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md) | Support external issue providers (GitHub, GitLab, Codeberg, Trello, Jira) | Backlog |
 | 875 | [875-warn-the-orchestrator-when-its-shells-agents-or-the-host-run-short-on-memory-swap-or-cpu.md](875-warn-the-orchestrator-when-its-shells-agents-or-the-host-run-short-on-memory-swap-or-cpu.md) | warn the orchestrator when its shells, agents or the host run short on memory, swap or CPU | Backlog — waits for 870's hook answers; promote with 870 |
 | 888 | [888-move-agent-run-resume-orchestration-out-of-cmd-harnez-884-remainder.md](888-move-agent-run-resume-orchestration-out-of-cmd-harnez-884-remainder.md) | Move agent run/resume orchestration out of cmd/harnez (884 remainder) | Backlog — parked 2026-10-24; promote when run/resume work needs a narrower scope |
+| 902 | [902-first-live-run-of-the-epic-and-new-project-skills.md](902-first-live-run-of-the-epic-and-new-project-skills.md) | first live run of the epic and new-project skills | Backlog |
 <!-- harnez:end issues-backlog-index -->

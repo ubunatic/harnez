@@ -1,0 +1,81 @@
+# Plan, Refine and Run an Epic
+
+You, the agent that received this invocation, are the Host Orchestrator. An epic is one ticket
+that owns a task table; each task becomes a subticket run as a `/lean-sprint`.
+
+Invocation: `/epic "<idea>"` drafts a new epic; `/epic <n>` refines or runs epic ticket `<n>`;
+`/epic <n> no-web` skips the web fanout.
+
+Delegate, don't restate: `/issue` (filing), `/lean-sprint` (roles, dispatch, review),
+`/story` (study shape), `/evergreen`, `/wrap`. If `.harnez/repo.yaml` sets
+`issues.tracker: none` or `docs.studies: false`, follow `.harnez/rules/Index.md`.
+
+## 1. Draft
+
+File the epic with `/issue` (direct). It contains:
+
+- `/goal` with an exit clause and the circuit breaker (step 6b).
+- Out of scope, open decisions.
+- Task table: ticket, what, sprint group, searcher → architect → developer, reviewer, status.
+- Final tasks: `/evergreen` and `/wrap`.
+
+Tasks stay placeholders until steps 2–4 have run.
+
+## 2. Prior-Art Web Fanout (optional; default on for new features)
+
+Goal: check the direction and avoid rebuilding established, stable, maintained, non-bloated tools.
+
+- Start several cheap read-only searchers in parallel (`haiku:low`, `luna:low`, `--role advisor`),
+  one angle each: existing tools, libraries to reuse, standards/specs, known pitfalls.
+- Each returns candidates with source link, last release date, activity, dependency weight,
+  license, and a fit verdict. No link, no finding.
+- The host aggregates them into one study (studies dir when present, otherwise the epic ticket)
+  and records a "build vs. reuse" decision per task in the epic.
+
+Skip it for pure refactors or internal fixes; say so in the epic.
+
+## 3. Code Fanout
+
+Cheap searchers check the live repo for each task's premise, location and size. A task that is
+not small, or hides an owner decision, moves into its own sprint group.
+
+## 4. Refine
+
+Each task becomes a subticket (`/issue`) with acceptance, write set, and:
+
+- Developer tier: haiku for well-specified, machine-checkable work; sol for judgment.
+- Architect only when the design is open (`/lean-sprint` §1.5 tiers).
+- Reviewer: opus/sol reviewer for risky work; orchestrator diff review for small work.
+
+Mix vendors across a sprint. Update the epic's task table with the numbers.
+
+## 5. Decisions
+
+Batch owner questions once, each with a recommendation. When the owner delegates, decide
+and record each choice in the subticket's `## Decision`.
+
+## 6. Run
+
+One `/lean-sprint` per sprint group; group very small tickets. Update the task table as each
+lands (commit with the ticket update).
+
+### 6b. Circuit Breaker
+
+Every `/goal` this skill writes or runs carries one. When a worker loops, an architectural or
+OS blocker is hard to solve, or the orchestrator sees no progress: clear the goal and write a
+failure report in the epic (what was tried, why it failed, resume point).
+
+## 7. Skip Rule
+
+A subticket that needs new commands, unavailable resources or an owner decision nobody can
+default is skipped and named in the epic, not forced.
+
+## 8. Close
+
+The epic closes when every task is closed, skipped with a reason, or parked in its own ticket.
+The close reason lists each. Compare delivery with the epic's `/goal` first.
+
+## 9. Evergreen and Wrap
+
+Run the final tasks: sprint study, review-learning entries, follow-up tickets (`/evergreen`),
+then `/wrap`. Report the epic number, closed/skipped/parked tasks, and the next command.

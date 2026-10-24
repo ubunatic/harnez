@@ -30,4 +30,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 898 | [898-recommend-gokay-check-before-commits-in-go-repo-agent-guidance.md](898-recommend-gokay-check-before-commits-in-go-repo-agent-guidance.md) | Recommend gokay check before commits in Go repo agent guidance | Open |
 | 899 | [899-new-project-skill-bootstrap-repo-tracker-prior-art-research-ticket-and-first-epic-draft.md](899-new-project-skill-bootstrap-repo-tracker-prior-art-research-ticket-and-first-epic-draft.md) | new-project skill: bootstrap repo, tracker, prior-art research ticket and first epic draft | Open |
 | 900 | [900-epic-skill-plan-refine-and-run-epics-with-optional-web-prior-art-fanout.md](900-epic-skill-plan-refine-and-run-epics-with-optional-web-prior-art-fanout.md) | epic skill: plan, refine and run epics with optional web prior-art fanout | Open |
+| 901 | [901-init-keeps-issues-tracker-none-after-a-harnez-tracker-appears-in-a-new-repo.md](901-init-keeps-issues-tracker-none-after-a-harnez-tracker-appears-in-a-new-repo.md) | init keeps issues.tracker none after a harnez tracker appears in a new repo | Draft |
 <!-- harnez:end issues-active-index -->
