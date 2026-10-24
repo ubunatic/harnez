@@ -20,6 +20,7 @@ For TUI layout work, use a checked-in `.ansi` mockup under `docs/data/` as the v
 7. **Media & Demo Verification Gate** — **always ask the user for explicit confirmation** of recorded output before publishing/embedding.
 8. **Deployment Transparency — 3-State Grounding (when applicable)** — **Local State**, **Deployed Artifact State**, and **Active Daemon State** are independent; local build/test proves nothing about the other two (remote-deploying projects only).
 9. **One-Level Delegation** — `harnez agent --role orchestrator|developer|reviewer|advisor`: only an orchestrator starts helpers (one writer at a time); developers, reviewers and advisors are leaf workers that never run `harnez agent`, native subagents or delegating skills. harnez enforces it. Live checks that need an agent session are run by the orchestrator. **Completion Evidence**: host verifies every worker's "done" report with `git show --stat <commit>` and the built output; ticket-closing workers cite the commit that changed non-issue files.
+Decide low-risk, reversible choices yourself; record the choice and reason in the ticket's `## Decision` and report its location.
 
 ### Multi-session peer assistance
 `/peer-assistant` uses available native session messaging for explicit peer requests; it does not imply an always-on watcher. Persist handoffs and findings in tickets/docs, keep one writer per workspace, and track/clean up helpers.

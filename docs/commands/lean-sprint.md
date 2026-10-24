@@ -24,6 +24,7 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
    - **The single target issue ticket (`issues/XXX-....md`) is the sole medium of communication between the host and developer.**
    - Do **NOT** create secondary nuance refinement tickets (`#XXX-refinements`) or splinter follow-up tickets for lean sprints.
    - Discovered nuances and fixes from milestone $N$ are written directly into the ticket under milestone $N+1$ as **Pre-Work**. Never dispatch isolated micro-tasks to the developer.
+4. **Low-Risk Decisions**: Decide simple, low-risk or reversible choices yourself; record each choice and reason under `## Decision` in the ticket and report it in one line naming that location. Ask only about destructive or irreversible actions, unauthorized outward-facing actions, breaking API changes, or security choices with real exposure; model choices remain the user's.
 
 ---
 

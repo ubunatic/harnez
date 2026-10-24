@@ -242,6 +242,7 @@ Never trade away verification for speed when applying Invariant 7.
     - **Docs & Ticket Sync**: Are all issue status tags, README indices, and docs updated in sync with code?
     - **Backward Compatibility & Invariants**: Does the change uphold project invariants and CLI design boundaries?
     - **The "What Would I Have Done Differently?" Check**: Actively evaluate whether the worker agent introduced subtle edge-case omissions, runtime overheads, or future architectural debt. Distinguish blocking issues (which mandate immediate remediation) from non-blocking nuances (which are buffered into a `#XXX-refinements` follow-up ticket to preserve milestone flow).
+    - Decide low-risk, reversible choices yourself and record the choice and reason under `## Decision` in the ticket; report it in one line naming that location. Ask only about destructive or irreversible actions, unauthorized outward-facing actions, breaking API changes, or security choices with real exposure.
     - **Token Efficiency & Code Clarity**: Is the code concise, readable, and free of redundant abstractions?
     - **Live/Real-Environment Verification for hooks & env-resolution features**: for any change that installs a live
       agent hook, writes global config (`apply`), or resolves state from the ambient environment (branch name,
