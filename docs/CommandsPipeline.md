@@ -47,6 +47,21 @@ or OS filesystem). It overrides `content` if both are set.
 `make apply` installs it. The apply summary `commands:` line is the ground truth for
 what is currently installed.
 
+## Stale-binary pitfall
+
+`harnez init` and `harnez apply` read `config.yaml`, skills and copyable docs from the
+**installed binary's embedded copy**, not the working tree. Run `make install` first after
+editing any of them; otherwise init copies, and validates, the old text (2026-10-24: the
+copyable-doc destination check kept rejecting a line already fixed on disk).
+
+## Host built-ins (`/goal` and similar)
+
+Host commands such as Claude Code's or Codex's `/goal` are not harnez skills and cannot be
+edited. Augment them with a rule line in `config.yaml`'s managed agent rules (Harnez Agent
+section); init renders it into `.harnez/rules/Tools.md`, which every agent reads. Example: the
+`/goal` exit-clause and circuit-breaker rule. Automated enforcement (loop/no-progress
+detection) is ticket 466.
+
 ## Adding a new command
 
 1. Write `commands/<name>.md` in the repo.
