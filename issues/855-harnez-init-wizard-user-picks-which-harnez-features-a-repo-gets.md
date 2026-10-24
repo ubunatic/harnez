@@ -1,6 +1,6 @@
 # 855 — harnez init wizard: user picks which harnez features a repo gets
 
-**Status**: Closed — M3 delivered in 9e60aaeb. TestRunInitWizardTrackerOptOutSurvivesAssumeYes reproduced the blocker before the fix. The one required make test-q1 run failed in TestInitWizardDefaultsAndDisable, TestInitWizardTrackerControlsMergeDriverPrompt, and TestRunInitAdoptsOnlyManagedIssuesReadme; their expectations were corrected after that run and not rerun under the one-run limit. Installed CLI smoke passed for tracker opt-out persistence across -y, merge prompt gating, and the empty-doc notice.
+**Status**: Closed — M1 9b98f6af, M2 5c2df12a, M3 9e60aaeb: TTY wizard with --wizard, -y/no-TTY unchanged; opt-outs survive later -y init (TestRunInitWizardTrackerOptOutSurvivesAssumeYes reproduced the blocker first); merge driver follows tracker; host reran internal/claude and cmd/harnez green after the dev's post-run test fixes; host live pty run passed
 **Priority**: P3 (Low) — convenience on top of 854's config and detection
 **Severity**: Minor
 **Category**: Feature
