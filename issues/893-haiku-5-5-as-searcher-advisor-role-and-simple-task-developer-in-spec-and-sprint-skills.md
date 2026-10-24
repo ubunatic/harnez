@@ -1,6 +1,6 @@
 # 893 — Haiku 5.5 as searcher (advisor role) and simple-task developer in spec and sprint skills
 
-**Status**: Open
+**Status**: Closed — Commit 7e40d615: Haiku gets advisor in spec/agent.yaml with a note that roles is a recommendation, not enforced; Haiku named as web/code searcher and simple-task developer in lean-sprint, lean-sprint-v1, AgenticLoop full+lite and ModelRoles. Host live check: agent start --role advisor --model claude:haiku:med replied OK with no warning; q1 green.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Docs
