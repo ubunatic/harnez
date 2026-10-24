@@ -6,13 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Record is one compaction summary or owner message in transcript order.
 type Record struct {
-	Kind      string `json:"kind"`
-	Timestamp string `json:"timestamp,omitempty"`
-	Text      string `json:"text"`
+	Kind              string `json:"kind"`
+	Timestamp         string `json:"timestamp,omitempty"`
+	UUID              string `json:"uuid,omitempty"`
+	Line              int    `json:"line"`
+	Text              string `json:"text"`
+	structuredCommand bool
 }
 
 // Adapter is the provider seam: decode one JSONL record into selected evidence.
@@ -29,6 +33,7 @@ func (Claude) Decode(line []byte) (*Record, error) {
 	var row struct {
 		Type             string `json:"type"`
 		Timestamp        string `json:"timestamp"`
+		UUID             string `json:"uuid"`
 		IsCompactSummary bool   `json:"isCompactSummary"`
 		IsMeta           bool   `json:"isMeta"`
 		Message          struct {
@@ -46,14 +51,36 @@ func (Claude) Decode(line []byte) (*Record, error) {
 		return nil, err
 	}
 	kind := "summary"
+	structuredCommand := false
 	if !row.IsCompactSummary {
 		kind = "user"
+		structuredCommand = strings.Contains(text, "<command-name>")
 		text = ownerText(text)
 	}
 	if strings.TrimSpace(text) == "" {
 		return nil, nil
 	}
-	return &Record{Kind: kind, Timestamp: row.Timestamp, Text: text}, nil
+	return &Record{Kind: kind, Timestamp: row.Timestamp, UUID: row.UUID, Text: text, structuredCommand: structuredCommand}, nil
+}
+
+func commandTwin(plain, structured Record) bool {
+	if plain.Kind != "user" || structured.Kind != "user" || plain.structuredCommand ||
+		!structured.structuredCommand || !strings.HasPrefix(plain.Text, "/") || plain.Text != structured.Text {
+		return false
+	}
+	first, err := time.Parse(time.RFC3339Nano, plain.Timestamp)
+	if err != nil {
+		return false
+	}
+	second, err := time.Parse(time.RFC3339Nano, structured.Timestamp)
+	if err != nil {
+		return false
+	}
+	delta := second.Sub(first)
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta <= time.Second
 }
 
 func claudeContent(raw json.RawMessage) (string, error) {

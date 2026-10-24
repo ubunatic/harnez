@@ -144,6 +144,12 @@ Evidence base so far: manual retros (harnez study 6bf5f306, loom feedback 52f467
 - Review (opus:low, `e911-revD`): on session 13d4828e, 18 summaries are all real (one newer than the manual
   count); 137 owner messages include 18 doubled `/compact` records (plain `"/compact"` plus its
   `<command-name>/compact</command-name>` twin, ms apart), so 119 real. No other leaks.
+- M3 implementation: deduplicate matching plain/structured slash-command pairs within one second, preserve
+  intervening summaries, add UUID/JSONL line provenance to text and JSON output, and assert slash-message counts.
+- Installed extract on 13d4828e reports 18 summaries and 128 owner messages. The JSONL has nine `/compact`
+  pairs (18 rows); dropping the plain row in each pair retains the structured twin, so the M3 rule reduces 137
+  to 128. The pre-work expectation of 119 would remove both rows in every pair and conflicts with retaining the
+  `command-name` twin. The owner should resolve which count/behavior to use before closing the ticket.
 
 ## M3 Pre-Work / Required Refinements
 
@@ -153,4 +159,5 @@ Evidence base so far: manual retros (harnez study 6bf5f306, loom feedback 52f467
 2. Add the source `uuid` and line number to each `Record` (`claude.go:12`) and to text/`--json` output, so the
    retro can point back to the raw JSONL (`docs/commands/retro.md:46`).
 3. `cmd/harnez/session_test.go:43`: assert the slash-command count, not only `Contains`.
-4. Rerun on 13d4828e: expect 18 summaries, 119 owner messages.
+4. Rerun on 13d4828e: observed 18 summaries, 128 owner messages after retaining one row per slash-command pair;
+   resolve the count discrepancy above.

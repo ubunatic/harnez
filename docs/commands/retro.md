@@ -17,7 +17,7 @@ retro_extract=$(mktemp)
 harnez session extract <id-or-path> --json > "$retro_extract"
 ```
 
-- JSON contains `source.path`, `source.bytes`, ordered `records` (`kind`, `timestamp`, `text`),
+- JSON contains `source.path`, `source.bytes`, ordered `records` (`kind`, `timestamp`, `uuid`, `line`, `text`),
   and `stats` (summary count, owner-message count, text bytes, first/last selected record, truncated tail).
   Default text output is also available. An error can leave a partial extract; discard it and report the error.
 - Inspect metadata first to prove the session: resolved path, source size, counts and selected time span.
@@ -25,6 +25,7 @@ harnez session extract <id-or-path> --json > "$retro_extract"
   If `truncated_tail` is true, report that the incomplete final record was omitted.
 - Read owner messages completely in bounded chunks, preserving long decisions, slash-command names and arguments,
   interruption markers and `[Image #n]` placeholders. Images themselves are absent; never infer visual quality.
+  Cite transcript evidence by source UUID and JSONL line number when a concrete decision or event needs verification.
   For example, select `.records[] | select(.kind == "user")` with a local JSON tool into another private file,
   then use line-bounded reads. Do not print the whole JSON extract into model context.
 - Read only needed summary sections first (especially errors/fixes and owner decisions). Headings vary:

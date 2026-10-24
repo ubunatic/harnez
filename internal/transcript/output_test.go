@@ -63,14 +63,15 @@ func TestWriteFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.Source.Path != path || result.Source.Bytes == 0 || len(result.Records) != 2 ||
-		result.Records[0].Text != "/issue retain arguments" || result.Stats.UserMessages != 1 || result.Stats.Summaries != 1 {
+		result.Records[0].Text != "/issue retain arguments" || result.Records[0].UUID != "fixture-uuid" || result.Records[0].Line != 1 ||
+		result.Records[1].Line != 2 || result.Stats.UserMessages != 1 || result.Stats.Summaries != 1 {
 		t.Fatalf("incorrect JSON: %s", output.String())
 	}
 	output.Reset()
 	if err := WriteFile(&output, path, false); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{path, "--- user 2026-10-20T18:00:00Z ---", "/issue retain arguments", "Summaries: 1", "User messages: 1"} {
+	for _, want := range []string{path, "--- user 2026-10-20T18:00:00Z uuid=fixture-uuid line=1 ---", "/issue retain arguments", "uuid=fixture-uuid", "line=2", "Summaries: 1", "User messages: 1"} {
 		if !strings.Contains(output.String(), want) {
 			t.Errorf("text output missing %q", want)
 		}

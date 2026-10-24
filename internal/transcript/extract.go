@@ -63,7 +63,42 @@ func Resolve(claudeDir, id string) (string, error) {
 // records. Memory is bounded by the largest line, with no scanner token limit.
 func Extract(r io.Reader, adapter Adapter, emit func(Record) error) (Stats, error) {
 	var stats Stats
+	var pending *Record
+	var deferred []Record
 	reader := bufio.NewReader(r)
+	emitRecord := func(record Record) error {
+		if err := emit(record); err != nil {
+			return err
+		}
+		if record.Kind == "summary" {
+			stats.Summaries++
+		} else {
+			stats.UserMessages++
+		}
+		stats.TextBytes += len(record.Text)
+		if stats.FirstRecord == "" {
+			stats.FirstRecord = record.Timestamp
+		}
+		stats.LastRecord = record.Timestamp
+		return nil
+	}
+	flushPending := func() error {
+		if pending == nil {
+			return nil
+		}
+		record := *pending
+		pending = nil
+		return emitRecord(record)
+	}
+	flushDeferred := func() error {
+		for _, record := range deferred {
+			if err := emitRecord(record); err != nil {
+				return err
+			}
+		}
+		deferred = nil
+		return nil
+	}
 	for number := 1; ; number++ {
 		line, readErr := reader.ReadBytes('\n')
 		if readErr != nil && !errors.Is(readErr, io.EOF) {
@@ -74,28 +109,57 @@ func Extract(r io.Reader, adapter Adapter, emit func(Record) error) (Stats, erro
 			if err != nil {
 				var syntax *json.SyntaxError
 				if errors.Is(readErr, io.EOF) && errors.As(err, &syntax) && syntax.Error() == "unexpected end of JSON input" {
+					if err := flushPending(); err != nil {
+						return stats, err
+					}
+					if err := flushDeferred(); err != nil {
+						return stats, err
+					}
 					stats.TruncatedTail = true
 					return stats, nil
 				}
 				return stats, fmt.Errorf("decode line %d: %w", number, err)
 			}
 			if record != nil {
-				if err := emit(*record); err != nil {
-					return stats, err
+				record.Line = number
+				if pending != nil {
+					if commandTwin(*pending, *record) {
+						pending = nil
+						if err := flushDeferred(); err != nil {
+							return stats, err
+						}
+						if err := emitRecord(*record); err != nil {
+							return stats, err
+						}
+						record = nil
+					} else if record.Kind == "summary" {
+						deferred = append(deferred, *record)
+						record = nil
+					} else {
+						if err := flushPending(); err != nil {
+							return stats, err
+						}
+						if err := flushDeferred(); err != nil {
+							return stats, err
+						}
+					}
 				}
-				if record.Kind == "summary" {
-					stats.Summaries++
-				} else {
-					stats.UserMessages++
+				if record != nil {
+					if record.Kind == "user" && strings.HasPrefix(record.Text, "/") && !record.structuredCommand {
+						pending = record
+					} else if err := emitRecord(*record); err != nil {
+						return stats, err
+					}
 				}
-				stats.TextBytes += len(record.Text)
-				if stats.FirstRecord == "" {
-					stats.FirstRecord = record.Timestamp
-				}
-				stats.LastRecord = record.Timestamp
 			}
 		}
 		if errors.Is(readErr, io.EOF) {
+			if err := flushPending(); err != nil {
+				return stats, err
+			}
+			if err := flushDeferred(); err != nil {
+				return stats, err
+			}
 			return stats, nil
 		}
 	}
@@ -133,7 +197,7 @@ func WriteFile(w io.Writer, path string, asJSON bool) error {
 	first := true
 	stats, err := Extract(f, Claude{}, func(record Record) error {
 		if !asJSON {
-			_, err := fmt.Fprintf(w, "\n--- %s %s ---\n%s\n", record.Kind, record.Timestamp, record.Text)
+			_, err := fmt.Fprintf(w, "\n--- %s %s uuid=%s line=%d ---\n%s\n", record.Kind, record.Timestamp, record.UUID, record.Line, record.Text)
 			return err
 		}
 		if !first {

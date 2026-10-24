@@ -13,7 +13,7 @@ import (
 
 func fixtureLine(t *testing.T, content any, extra map[string]any) string {
 	t.Helper()
-	row := map[string]any{"type": "user", "timestamp": "2026-10-20T18:00:00Z", "message": map[string]any{"content": content}}
+	row := map[string]any{"type": "user", "timestamp": "2026-10-20T18:00:00Z", "uuid": "fixture-uuid", "message": map[string]any{"content": content}}
 	for key, value := range extra {
 		row[key] = value
 	}
@@ -62,11 +62,51 @@ func TestClaudeEvidence(t *testing.T) {
 				}
 				return
 			}
-			want := &Record{Kind: tt.kind, Text: tt.text, Timestamp: "2026-10-20T18:00:00Z"}
+			want := &Record{Kind: tt.kind, Text: tt.text, Timestamp: "2026-10-20T18:00:00Z", UUID: "fixture-uuid"}
+			if text, ok := tt.content.(string); ok {
+				want.structuredCommand = strings.Contains(text, "<command-name>")
+			}
 			if !reflect.DeepEqual(record, want) {
 				t.Fatalf("got %+v; want %+v", record, want)
 			}
 		})
+	}
+}
+
+func TestExtractDeduplicatesAdjacentStructuredSlashCommand(t *testing.T) {
+	plain := `{"type":"user","timestamp":"2026-10-20T18:00:00.000Z","uuid":"plain","message":{"content":"/compact"}}`
+	twin := `{"type":"user","timestamp":"2026-10-20T18:00:00.500Z","uuid":"structured","message":{"content":"<command-name>/compact</command-name>"}}`
+	late := `{"type":"user","timestamp":"2026-10-20T18:00:02.000Z","uuid":"later","message":{"content":"/compact"}}`
+	summary := fixtureLine(t, "summary between command twins", map[string]any{"isCompactSummary": true})
+	var got []Record
+	stats, err := Extract(strings.NewReader(plain+"\n"+summary+twin+"\n"+late+"\n"), Claude{}, func(r Record) error {
+		got = append(got, r)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.UserMessages != 2 || stats.Summaries != 1 || len(got) != 3 {
+		t.Fatalf("paired command duplicate not removed or later command lost: stats=%+v records=%+v", stats, got)
+	}
+	if got[0].Kind != "summary" || got[0].Line != 2 || got[1].UUID != "structured" || got[1].Line != 3 || got[2].UUID != "later" || got[2].Line != 4 {
+		t.Fatalf("wrong source records preserved: %+v", got)
+	}
+}
+
+func TestExtractKeepsSlashCommandNearMiss(t *testing.T) {
+	plain := `{"type":"user","timestamp":"2026-10-20T18:00:00.000Z","uuid":"plain","message":{"content":"/compact"}}`
+	twin := `{"type":"user","timestamp":"2026-10-20T18:00:01.500Z","uuid":"structured","message":{"content":"<command-name>/compact</command-name>"}}`
+	var got []Record
+	stats, err := Extract(strings.NewReader(plain+"\n"+twin+"\n"), Claude{}, func(r Record) error {
+		got = append(got, r)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.UserMessages != 2 || len(got) != 2 || got[0].UUID != "plain" || got[1].UUID != "structured" {
+		t.Fatalf("near-miss command was dropped: stats=%+v records=%+v", stats, got)
 	}
 }
 
