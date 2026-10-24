@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=schemas/init-wizard.schema.json
+title: "Repository setup (detected / recorded defaults)"
+invalid: "Please answer yes or no (or press Enter for the default)."
+prompts:
+  - key: tracker
+    label: Issue tracker
+    explanation: Use the Harnez file-based issue tracker in issues/.
+  - key: studies
+    label: Studies index
+    explanation: Include docs/studies/ in Harnez index generation.
+  - key: merge_driver
+    label: Merge driver
+    explanation: Install local Git integration for Harnez issue indexes (requires the tracker).
+  - key: copies
+    label: Optional doc copies
+    explanation: Copy selected language and practice docs; required baseline docs stay enabled.
+  - key: scaffold
+    label: Makefile
+    explanation: Create or reconcile Harnez Makefile targets.
+  - key: quota
+    label: Quota rules
+    explanation: Include single-test guardrails in the generated repository rules.
