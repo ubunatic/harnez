@@ -1,6 +1,6 @@
 # 889 — Docs: Canary and modularization guidelines for in-tree sandbox copy fixtures
 
-**Status**: Open
+**Status**: Closed — Added the Sandbox Copy Fixtures section to docs/other/Canary.md (source, commit 47b8a89d) and synced docs/Canary.md: discover packages by glob or walk instead of a fixed list, and audit copy patterns when extracting packages. make test-q1 finished with 0 '--- FAIL' lines (log /tmp/harnez-test-q1-894-s1.log). Automated detection of hardcoded lists is not built; it is filed as 895 (harnez lint check).
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Documentation
