@@ -21,3 +21,8 @@ checked them; the host relabelled them by hand from `git tag --contains` of each
 
 - Where the doc path comes from (version.yaml key, default `docs/Upgrading.md`).
 - Refuse vs. relabel automatically to the new version.
+
+## Decision (owner delegated, 2026-10-24)
+
+Default path `docs/Upgrading.md`, overridable by a `version.yaml` key; no doc means no check. Release refuses
+(also in dry-run, reported) and names the rows; no auto-relabel.

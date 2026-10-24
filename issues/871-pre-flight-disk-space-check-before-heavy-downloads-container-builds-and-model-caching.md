@@ -41,3 +41,8 @@ Furthermore, agents rarely check whether a dedicated fast scratch mount or secon
 3. **Tests**:
    - Add test validating disk check logic across mocked mount points and capacity levels.
    - Verify that insufficient space triggers a clear, actionable warning or abort rather than silent failure.
+
+## Decision (owner delegated, 2026-10-24)
+
+Guidance only: a short rule (check `df -h` on the target before downloads or builds over a few GB; use the
+scratch disk or ask when short). No CLI, spec or tests; a CLI becomes its own ticket if the rule proves too weak.
