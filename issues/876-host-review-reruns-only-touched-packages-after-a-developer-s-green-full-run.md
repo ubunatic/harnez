@@ -1,6 +1,6 @@
 # 876 — host review reruns only touched packages after a developer's green full run
 
-**Status**: Open
+**Status**: Closed — Lean-sprint and AgenticLoop host guidance limits reruns after green full runs to touched packages; full suite passes.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Practice
