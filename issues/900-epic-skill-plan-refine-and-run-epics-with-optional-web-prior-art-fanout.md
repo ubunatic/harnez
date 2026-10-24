@@ -1,6 +1,6 @@
 # 900 — epic skill: plan, refine and run epics with optional web prior-art fanout
 
-**Status**: Open
+**Status**: Closed — skill docs/commands/epic.md + config entry shipped, built from the 894 run incl. circuit breaker; first live epic parked in 902
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
