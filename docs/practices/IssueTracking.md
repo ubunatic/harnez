@@ -231,11 +231,12 @@ When an issue is closed and verified, it may be moved to `issues/archive/NNN-keb
 2. **Atomic Index Synchronization**: Whenever ticket status changes in the file, immediately update `issues/README.md`.
 3. **Immediate Tracker Commit**: After creating or updating issue-tracker files, commit the ticket file and synchronized index immediately in their own small commit. Do not batch tracker metadata with unrelated code or defer it to a later feature-work checkpoint.
 4. **Traceability**: Link relevant study notes, retrospectives, ADRs, and commits in the `**Related**:` header, using the project's existing durable documentation location.
-5. **Closing Is Part Of Done**: Progress-noting a ticket to `In Progress` is disciplined for
+5. **Study Findings Become Tickets**: After a study or retro, review its failure modes, near-misses, open questions, and recommendations. File each actionable follow-up in the repository that owns it with `harnez issues new`, link the source study from the ticket, and list the allocated ticket number in the study. Record deliberate non-goals with a reason. Do not complete the study/retro phase until each finding is tracked or explicitly deferred.
+6. **Closing Is Part Of Done**: Progress-noting a ticket to `In Progress` is disciplined for
    free — closing it is not, because nothing forces the last step. The `smarthome` project
    shipped 112 commits in three days with excellent open/progress hygiene, yet four tickets
    still read `In Progress` for work that was demonstrably shipped and live-verified. A session that ends on a
    green build and a commit is not done until every ticket it touched has its `Status` flipped
    and `harnez index` has been run. Treat "did I close what I finished?" as an explicit
    end-of-session check, not an assumption that closing happens naturally alongside the code.
-6. **Goal-Centric & As-Needed Milestones**: Every ticket must define a `/goal` for the agent. Only decompose into numbered milestones (`M1`, `M2`...) when multi-step staged execution is truly needed; otherwise keep issues lean and brief. Agents picking up an issue must check live code status before beginning work.
+7. **Goal-Centric & As-Needed Milestones**: Every ticket must define a `/goal` for the agent. Only decompose into numbered milestones (`M1`, `M2`...) when multi-step staged execution is truly needed; otherwise keep issues lean and brief. Agents picking up an issue must check live code status before beginning work.

@@ -167,10 +167,13 @@ Agentic software engineering scales effectively when concurrency is structured a
 9. **Immediate Product-Issue Capture**:
    - File larger obvious product issues immediately (high priority when
      sprint-blocking); agents may fix small localized issues directly.
-
 10. **Media & Demo Verification Gate**:
    - When creating, updating, or adding media assets (e.g. reels, WebM demos, terminal recordings, screenshots) intended for documentation or websites, **always ask the user for explicit confirmation** that the recorded visual output matches their exact expectations before publishing or embedding it.
    - Never automatically publish or embed unverified recordings (guarding against invisible typing, missing UI frames, or unexpected rendering artifacts).
+
+11. **Study & Retro Ticket Extraction**: After a study or retro, file every actionable
+    follow-up as a ticket and list its allocated number in the study. The study is not
+    complete until follow-ups are tracked or explicitly justified as non-goals.
 
 8. **Deployment Transparency — 3-State Grounding (when applicable)**:
    - Remote deployment status has three independent states that must never be conflated:
@@ -273,6 +276,7 @@ Never trade away verification for speed when applying Invariant 7.
 - **Goal**: Continually refine agent workflows, document tooling friction, and persist session insights.
 - **Mechanics**:
   - Record session friction, harness observations, and process recommendations in the project's durable feedback/study location when one exists, or in a related project doc or ticket otherwise.
+  - **Ticket Extraction gate**: review failure modes, near-misses, open questions, and recommendations; file every actionable follow-up with `harnez issues new`, reference the study, and list each allocated ticket number in it. For findings owned by another repository, file there and record the repository and ticket number. Mark deliberate non-goals with a reason. The study or retro is not complete until this pass is recorded.
   - Update issue tracker status (`issues/README.md`) and run `harnez status` to ensure zero drift between issues and indices; run `harnez index` (issue 148) to regenerate `issues/README.md` and `docs/README.md`'s studies table from their source files instead of hand-editing rows.
   - **Single Status field per ticket**: When updating a ticket's status, check the *entire* file for more than one status-bearing field (a top-of-file summary line and a separate `## Status` section are both common). Update all occurrences together, or standardize on exactly one per file in the local template.
   - **Closing gate**: for every ticket touched this session whose work is now shipped and

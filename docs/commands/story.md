@@ -54,4 +54,9 @@ Every story must include the following sections:
 1. **Gather Ground Truth**: Run `git status`, `git log --oneline`, and `git diff` to collect factual session history.
 2. **Draft the Story**: Follow the required template structure above with full honesty.
 3. **Index the Study**: Add the entry to `docs/README.md` under `docs/studies/`.
-4. **Present Summary**: Provide a short recap to the user highlighting key lessons learned.
+4. **Ticket Extraction Gate**: Review failures, near-misses, open questions, and recommendations.
+   File every actionable follow-up with `harnez issues new` in its owning repository, link the
+   story from each ticket, and list each allocated ticket number in the story. Record justified
+   non-goals. Ask each allocated worker: "What ticket number was allocated, and have all
+   actionable follow-ups from this study been filed and listed here?"
+5. **Present Summary**: Provide a short recap to the user highlighting key lessons learned.
