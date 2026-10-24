@@ -24,7 +24,7 @@ Web fanout skipped: internal harnez tooling, and neus is the owner's own tool. C
 | 3 | 867 | P3 | `issues close` refuses without a code commit; `--no-code` override | A | haiku:high | host diff | Closed (d17723da) |
 | 4 | 907 | P2 | Audit copy fixtures, Canary.md three rules | B | luna:high | host diff | Closed (7ac7d7ed): no real copy fixtures found; doc rules replaced |
 | 5 | 864 | P2 | Session push consent in Git doc; release pushes every dev remote | C | sol:med | host diff + tests | Closed (96fbd10e): release preflights and pushes every `git remote` |
-| 6 | 897 | P2 | `harnez install neus`; server indexing via the neus binary | D | sol:med | opus reviewer | Open |
+| 6 | 897 | P2 | `harnez install neus`; server indexing via the neus binary | D | sol:med | opus reviewer | Closed (df568bec, b363b288, 0e85cebc); daemon persistence parked in 913 |
 | 7 | 855 | P3 | `harnez init` feature wizard | E | sol:med | opus reviewer | Open |
 | 8 | — | — | `/evergreen`, `/wrap` | — | host | — | Open |
 
