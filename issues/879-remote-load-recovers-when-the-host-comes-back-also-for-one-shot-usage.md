@@ -47,6 +47,28 @@ uses an isolated PATH/HOME/XDG setup and a fake `ssh` that fails before returnin
 backoff schedule, cap, recovery, reset, and one SSH poll per retry. The existing stream fallback test also avoids
 real host SSH. Verified with `go test ./internal/claude/ ./internal/usage/` and `make test-q1`.
 
-### M2 (needs owner decision): one-shot recovery
-Option A: collector daemon fetches remote load in the background (promote 161). Option B: one-shot starts a
-detached refresh for the next run.
+### M2: one-shot recovery via collector background poll
+
+Decision (owner, 2026-10-24): option A, the collector polls remote load; 161's ControlMaster move and
+`/metrics` stay out of scope. Architecture (sol:med architect, Sprint 3 of epic 894):
+
+- Host: existing `$XDG_CONFIG_HOME/harnez/local.yaml` `load.watch_host` (`internal/usage/localconfig.go`), read
+  at collector start; empty host or offline disables polling; config change needs a restart.
+- One goroutine started in `internal/usage/collector.go`, independent of quota ticks, readiness and client
+  count; collector-owned child context, cancelled and joined on every return. SSH must never delay quota work.
+- New `internal/usage/collector_remote_load.go` reuses `pollRemoteLoad` / `CollectRemoteLoadSnapshot` and M1
+  backoff; do not reuse `runRemoteLoadManagerWithPolicy` (it opens streams and ControlMaster sessions).
+- Cache: collector and `-w` both write via temp file + rename; last successful write wins; a failure keeps
+  the old data and timestamp. Cache-write errors are nonfatal and logged.
+
+**M2a (config and poller):** `collector.go`, `watch_remote_load.go`, `spec.go`, new poller; positive
+`remote_load_poll_interval` and `remote_load_staleness` in `spec/usage.yaml` + schema. Tests in new
+`collector_remote_load_test.go`, plus `collector_test.go`, `localconfig_test.go`, `spec_test.go`: startup
+poll, absent/invalid config, offline, no clients, own cadence, cancel/join, invalid spec values.
+
+**M2b (freshness):** expose cache `updated_at` beside the snapshot (keep the reader API), thread it through
+`cmd/harnez/usage_cmd.go` and `internal/usage/{watch_frame.go,watch_load_box.go,watch.go}`; `freshness.go`
+takes the remote staleness threshold without changing quota freshness. Tests: `remote_load_cache_test.go`,
+`freshness_test.go`, `watch_test.go`, `cmd/harnez/usage_binary_test.go` (concurrent writers, malformed or
+legacy cache, unknown/future age, stale retention, fake ssh failing then recovering with only the collector
+running; later one-shot reads start no ssh).
