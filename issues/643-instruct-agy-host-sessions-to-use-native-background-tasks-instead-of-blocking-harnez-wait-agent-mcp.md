@@ -1,6 +1,6 @@
 # 643 — Instruct AGY host sessions to use native background tasks instead of blocking harnez_wait_agent MCP
 
-**Status**: Open
+**Status**: Closed — MCP descriptions (wait/spawn/command), config.yaml rules, AgenticLoop sources and the agentpolicy Local.md template now route interactive hosts to host background start/wait and forbid blocking chat on MCP (ea7198a1); new server_test asserts the descriptions; Local.md re-rendered and verified; make test-q1 green
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Architecture
