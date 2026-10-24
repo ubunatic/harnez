@@ -1,6 +1,6 @@
 # 894 — Epic: lean-sprint sweep of P1/P2 and value-add tickets (vendor-mixed workers), evergreen and wrap
 
-**Status**: Open
+**Status**: Closed — All 10 tickets handled: 893, 889, 871, 866, 879, 880 closed; 887 M1 done (open for M2); 851, 852 skills shipped, open until a first real run; 878 skipped (needs harnez session extract). Evergreen fad54a12, follow-up 896.
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Epic
@@ -32,8 +32,8 @@ work with extra care (weaker than sol on terminal coding).
 | 8 | 4 skills | 852 | tui-check skill | same | Skill done (1167ec07); open until first loom-widget run |
 | 9 | 4 skills | 878 | retro skill | same | Skipped: needs a new `harnez session extract` command |
 | 10 | 4 skills | 880 | jam skill (stop and ask if it needs new harnez commands) | same | Closed (5b32605d) |
-| 11 | end | — | `/evergreen`: curate learnings into docs/, sync issues and indexes | host | Open |
-| 12 | end | — | `/wrap`: stop helpers, sync tracker, commit, final report | host | Open |
+| 11 | end | — | `/evergreen`: curate learnings into docs/, sync issues and indexes | host | Done (fad54a12: study, ReviewLearnings, filed 896) |
+| 12 | end | — | `/wrap`: stop helpers, sync tracker, commit, final report | host | Done |
 
 Sizes are checked by each sprint's searcher; a larger ticket moves into its own sprint.
 
