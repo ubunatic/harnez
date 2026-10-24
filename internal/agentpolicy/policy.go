@@ -24,8 +24,8 @@ const policyBody = `# subagent_mode: %s
   or after start rejects the name.
 - native: spawn subagents of your own vendor natively; this mode governs only your own subagent choice.
 - harnez: dispatch every subagent through ` + "`harnez agent`" + `.
-- When Harnez MCP tools are exposed, use ` + "`harnez_spawn_agent`" + ` for a structured result and
-  lifecycle, or ` + "`harnez_command`" + ` when the host should run the returned command in Bash.
+- When Harnez MCP tools are exposed, non-interactive clients may use ` + "`harnez_spawn_agent`" + ` for structured results.
+  Interactive hosts run ` + "`harnez_command`" + ` start/wait in the host background runner; never block chat on MCP.
   Otherwise use ` + "`harnez agent --model <spec> --role advisor -p <prompt>`" + ` via Bash.
 - Supported lifecycle tools include ` + "`harnez_wait_agent`" + `, ` + "`harnez_list_agents`" + `,
   ` + "`harnez_agent_status`" + `, ` + "`harnez_resume_agent`" + `, and ` + "`harnez_stop_agent`" + `.

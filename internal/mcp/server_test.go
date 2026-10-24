@@ -224,3 +224,26 @@ func TestSpawnToolHidesAsync(t *testing.T) {
 	}
 	t.Fatal("harnez_spawn_agent not found")
 }
+
+func TestInteractiveAgentToolsRecommendHostBackgroundRunner(t *testing.T) {
+	want := map[string][]string{
+		"harnez_spawn_agent": {"interactive hosts", "host's background runner", "do not synchronously spawn"},
+		"harnez_command":     {"host's own background runner", "canonical for start and wait", "Do not use synchronous MCP"},
+		"harnez_wait_agent":  {"Do NOT call from interactive chat sessions", "blocks chat", "harnez_command wait"},
+	}
+	for _, tool := range tools {
+		phrases, ok := want[tool.Name]
+		if !ok {
+			continue
+		}
+		for _, phrase := range phrases {
+			if !strings.Contains(tool.Description, phrase) {
+				t.Errorf("%s description missing %q: %s", tool.Name, phrase, tool.Description)
+			}
+		}
+		delete(want, tool.Name)
+	}
+	for name := range want {
+		t.Errorf("tool %s not found", name)
+	}
+}

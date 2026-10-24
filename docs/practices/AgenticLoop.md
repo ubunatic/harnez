@@ -128,6 +128,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 
 4. **Responsive Host Orchestrator**:
    - The host remains the user's always-available coordination surface while child agents work.
+   - Interactive hosts should run `harnez agent start` and `wait` via the host background runner; synchronous MCP spawn/wait blocks chat.
    - A user request to "hand this to a subagent" means delegate and keep the main chat responsive; it does not imply permission to block on `wait_agent`, `manage_subagents wait`, or equivalent.
    - Wait for a child only when the user explicitly asks to wait, or when the next user-visible integration step truly cannot proceed without that result.
    - After dispatch, report the handoff and continue with non-overlapping local work or return control to the user instead of occupying the host turn with an idle wait.
