@@ -78,3 +78,7 @@ comparing changes.
   a short-lived detached worktree while developer work is uncommitted. The problem seen elsewhere
   was agents running `make install` and similar from worktrees, replacing installed binaries with
   builds from a temporary tree; the skill forbids installs outside the main tree.
+
+## Design
+
+Implemented as a harnez-managed `/jam` skill with a common brief, optional research, independent entries, sourced pre-assessment, owner choice, one improvement round, and phased `lean-sprint` adoption. The Claude skill round-trip test asserts its configured description and installed workflow.

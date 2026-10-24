@@ -520,6 +520,11 @@ skills:
     description: "Validate a terminal UI change cell by cell (glyph, FG, BG) against its .ansi sketch, in tests and live in tmux. Use for TUI layout or colour checks."
     file: docs/commands/tui-check.md
 
+  - name: jam
+    license: AGPL-3.0-or-later
+    description: "Run a jam: several agents on different models build the same thing independently, the owner picks a winner, and adoption runs in phases. Only on explicit /jam or 'jam'."
+    file: docs/commands/jam.md
+
   - name: release
     license: AGPL-3.0-or-later
     description: "Lean CLI release: commit pending code, push, run harnez release, fix issues or ask on login"
