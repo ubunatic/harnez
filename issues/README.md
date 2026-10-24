@@ -28,4 +28,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 910 | [910-epic-repo-setup-tracker-tests-and-agent-guidance.md](910-epic-repo-setup-tracker-tests-and-agent-guidance.md) | Epic: repo setup, tracker, tests and agent guidance | Open |
 | 911 | [911-epic-skills-first-real-runs-and-epic-retro-hygiene.md](911-epic-skills-first-real-runs-and-epic-retro-hygiene.md) | Epic: skills, first real runs and epic/retro hygiene | Open |
 | 912 | [912-usage-show-swap-in-the-load-and-remote-load-boxes.md](912-usage-show-swap-in-the-load-and-remote-load-boxes.md) | usage: show swap in the Load and Remote Load boxes | Open |
+| 913 | [913-server-install-persists-neus-indexing-so-the-installed-daemon-can-index.md](913-server-install-persists-neus-indexing-so-the-installed-daemon-can-index.md) | server install persists neus indexing so the installed daemon can index | Open |
 <!-- harnez:end issues-active-index -->

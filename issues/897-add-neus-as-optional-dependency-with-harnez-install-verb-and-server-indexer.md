@@ -41,3 +41,20 @@ Because `harnez server` is a daemon that routinely runs while a user is working 
 - **Verification**:
   - Run `harnez install neus` in a test environment.
   - Verify `harnez server` performs background indexing of active repositories without locking conflicts.
+
+## Milestone M3 — Pre-Work / Required Refinements (opus review of df568bec, b363b288)
+
+M1 (install verb) and M2 (opt-in server indexing) delivered. Review verdict: ship. Fix first:
+
+1. `internal/server/neus_index.go:72`: stdout/stderr set to `io.Discard` create copy goroutines; a neus child
+   holding the pipes can hang `cmd.Run()` after the timeout kill. Leave them `nil` or set `cmd.WaitDelay`;
+   add a test with a fake neus that backgrounds a sleeper holding stdout.
+2. `cmd/harnez/server_cmd.go:492`: replace the variadic `indexing ...server.NeusIndexConfig` with a plain
+   parameter; load the spec once.
+3. `internal/server/server.go:176-181`: comment why returning on service-wait timeout leaks nothing.
+4. `internal/server/neus_index.go:35,77`: handle or comment the ignored `time.ParseDuration` errors; same for
+   the never-failing `TryLock` at :61.
+5. `internal/dependency/install_test.go`: the "dry" case and the second dry run in `TestUnknownDependency…`
+   must assert the printed commands / error output.
+
+Parked: daemon cannot index because `server install` does not persist the flags → 913.
