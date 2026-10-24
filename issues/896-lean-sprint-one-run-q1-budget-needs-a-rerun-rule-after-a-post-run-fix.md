@@ -1,6 +1,6 @@
 # 896 — lean-sprint: one-run q1 budget needs a rerun rule after a post-run fix
 
-**Status**: Draft
+**Status**: Closed — rule added to lean-sprint and lean-sprint-v1 step 3: developer reruns touched packages after a fix and reports the owed full run; host runs it before review; installed skill shows it
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Docs
