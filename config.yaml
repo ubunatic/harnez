@@ -752,6 +752,7 @@ agents_md:
           # Harnez Output
 
           Use `/mode` to switch ConciseMode terseness level (lite, std, ultra, off). Preserve code, diffs, tool parameters, and command syntax verbatim at every level.
+          Do not promise behaviour in future sessions; name a durable safeguard added or proposed and where it lives.
 
   # available language docs — always installed to ~/.claude/docs/ on apply
   # use --docs <name>,<name> to copy into a project and update its AGENTS.md

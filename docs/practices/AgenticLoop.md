@@ -277,6 +277,7 @@ Never trade away verification for speed when applying Invariant 7.
   - Run `git status` before writing the retro or session story — uncommitted reviewed work is itself a retro finding, not a background condition.
   - **Evergreen trigger**: after a long-running goal, or once 5+ tickets were closed in the session, run `/evergreen` (or propose it before declaring the goal done) unless the user already requested an evergreen or comparable broader doc update this session. Learnings otherwise stay in tickets and the roadmap and never reach the evergreen docs.
   - Prepare clean, conventional commit messages.
+  - Limit plans or promises to this session or its next steps; turn lasting lessons into a check, rule/prompt line, or ticket, and name the safeguard and its location.
 
 ---
 

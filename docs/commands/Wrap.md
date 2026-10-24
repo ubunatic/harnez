@@ -26,6 +26,7 @@ an explicit, user-invoked workflow; do not commit merely because work happened.
    learnings and related issue/index state; `/wrap` closes the session, checks
    lifecycle hygiene, and prepares the repository handoff. Invoke `/evergreen`
    when that broader curation is needed.
+   Retrospective reports must not promise behaviour in future sessions; name a durable safeguard added or proposed (check, rule/prompt line, or ticket) and where it lives.
 5. Preserve repository state in a commit. Review `git status` and the diff;
    commit work you authored and any stray documentation or issue changes after
    a quick sanity check. If work is partial or broken, first file or update a

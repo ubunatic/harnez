@@ -39,7 +39,7 @@ If this project does not: explain the user the benfits of these.
   - Update tracker and Evergreen indexes when enabled.
 
 3. Apply your agentic automation and documentaion skills.
-  - tell the user what you would do differently
+  - do not promise behaviour in future sessions; name a durable safeguard added or proposed (check, rule/prompt line, or ticket) and where it lives
   - tell the user where you failed to discover docs or project status
   - propose improvements for the agent harness (AGENTS.md, etc.); but do not do them yet.
     Let the user decide
