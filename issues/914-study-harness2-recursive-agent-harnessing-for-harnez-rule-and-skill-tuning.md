@@ -19,6 +19,7 @@ Video "Google's Harness² Is This the End of Harness Engineering?" (Kai, 2026-10
 https://www.youtube.com/watch?v=yCgfyQmqhPM. Its description cites:
 
 - Paper: Harness²: Recursive Agent Harnessing for an Open World (Xu et al., 2026), https://arxiv.org/abs/2610.14224
+- Project page (owner addendum): https://harness2.github.io/
 - Code (Apache 2.0): https://github.com/google-research/harness2, experiments doc `docs/EXPERIMENTS.md`
 - Spend-limit request: https://github.com/google-research/harness2/issues/4
 
