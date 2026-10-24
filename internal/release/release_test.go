@@ -69,8 +69,9 @@ func TestVersionSpecLoadSave(t *testing.T) {
 	specPath := filepath.Join(tmpDir, "version.yaml")
 
 	spec := &VersionSpec{
-		Version: "1.2.3",
-		Files:   []string{"version.go", "build.zig.zon"},
+		Version:    "1.2.3",
+		UpgradeDoc: "docs/Changes.md",
+		Files:      []string{"version.go", "build.zig.zon"},
 	}
 
 	if err := SaveVersionSpec(specPath, spec); err != nil {
@@ -88,8 +89,73 @@ func TestVersionSpecLoadSave(t *testing.T) {
 	if loaded.Version != "1.2.3" {
 		t.Errorf("loaded.Version = %q, want 1.2.3", loaded.Version)
 	}
+	if loaded.UpgradeDoc != "docs/Changes.md" {
+		t.Errorf("loaded.UpgradeDoc = %q, want docs/Changes.md", loaded.UpgradeDoc)
+	}
 	if len(loaded.Files) != 2 {
 		t.Errorf("loaded.Files len = %d, want 2", len(loaded.Files))
+	}
+}
+
+func TestUnreleasedUpgradeRows(t *testing.T) {
+	doc := "" +
+		"Unreleased changes are documented below. `Unreleased` is a status label.\n" +
+		"| Version | Changes |\n|---|---|\n| Unreleased | One |\n| 1.2.0 | Old |\n" +
+		"```md\n| Unreleased | example code |\n```\n"
+	rows := unreleasedUpgradeRows(doc)
+	if len(rows) != 1 || rows[0] != 4 {
+		t.Fatalf("unreleasedUpgradeRows() = %v, want [4]", rows)
+	}
+	if got := unreleasedUpgradeRows("prose Unreleased\n`Unreleased`\n"); len(got) != 0 {
+		t.Fatalf("prose/code spans matched: %v", got)
+	}
+}
+
+func TestReleaseRefusesUnreleasedRows(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		continueRelease bool
+	}{
+		{name: "dry-run"},
+		{name: "continue", continueRelease: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "version.yaml"), []byte("version: 0.1.0\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(dir, "docs"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "docs", "Upgrading.md"), []byte("| Version | Changes |\n|---|---|\n| Unreleased | Change A |\n| Unreleased | Change B |\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			var out bytes.Buffer
+			err := Run(Options{Dir: dir, DryRun: true, Continue: tc.continueRelease, SkipSign: true, SkipBuild: true, SkipPublish: true, SkipPush: true, Out: &out})
+			if err == nil || !strings.Contains(err.Error(), "docs/Upgrading.md") || !strings.Contains(err.Error(), "2 Unreleased rows") {
+				t.Fatalf("Run() error = %v, want refusal naming file and row count (output %q)", err, out.String())
+			}
+		})
+	}
+}
+
+func TestReleaseUsesUpgradeDocOverride(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "version.yaml"), []byte("version: 0.1.0\nupgrade_doc: docs/UpgradeNotes.md\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "docs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "Upgrading.md"), []byte("| Version |\n|---|\n| Unreleased |\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "UpgradeNotes.md"), []byte("| Version |\n|---|\n| 0.1.0 |\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	err := Run(Options{Dir: dir, DryRun: true, SkipSign: true, SkipBuild: true, SkipPublish: true, SkipPush: true})
+	if err != nil {
+		t.Fatalf("Run() with clean override document error: %v", err)
 	}
 }
 

@@ -51,6 +51,14 @@ source of truth, and the sync step is a no-op. Commit `version.yaml` (and, if th
 runs `reuse lint`, add it to `REUSE.toml`) so the first automated bump does not trip
 license linting.
 
+Projects with a breaking-changes table in `docs/Upgrading.md` may set
+`upgrade_doc: docs/Upgrading.md` in `version.yaml` to select another path. The default
+is `docs/Upgrading.md`; if that file is absent, the check is skipped. Before release,
+`harnez release` (including `--dry-run` and `--continue`) refuses while a table row has
+an `Unreleased` cell. Relabel each shipped row manually: find the commit that added the
+change, inspect `git tag --contains <commit>`, and replace `Unreleased` with the earliest
+release version that contains it. Review ambiguous history before assigning a version.
+
 ### 2. Cobra Root Command Wiring (Go)
 In `cmd/<binary>/main.go`, wire the Cobra root command version:
 ```go

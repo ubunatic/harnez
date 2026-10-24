@@ -278,6 +278,10 @@ func Run(opt Options) error {
 }
 
 func runPreflight(opt Options) error {
+	if err := checkUnreleasedUpgradeRows(opt); err != nil {
+		return err
+	}
+
 	if !opt.SkipPush || !opt.SkipPublish {
 		if _, err := DetectForgeInfo(opt.Dir); err != nil {
 			return err
@@ -311,6 +315,65 @@ func runPreflight(opt Options) error {
 	}
 
 	return nil
+}
+
+func checkUnreleasedUpgradeRows(opt Options) error {
+	spec, _, _ := LoadVersionSpec(opt.Dir)
+	path := "docs/Upgrading.md"
+	if spec != nil && spec.UpgradeDoc != "" {
+		path = spec.UpgradeDoc
+	}
+	fullPath := path
+	if !filepath.IsAbs(fullPath) {
+		fullPath = filepath.Join(opt.Dir, fullPath)
+	}
+	data, err := os.ReadFile(fullPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read upgrade document %s: %w", path, err)
+	}
+	rows := unreleasedUpgradeRows(string(data))
+	if len(rows) == 0 {
+		return nil
+	}
+	return fmt.Errorf("release refused: %s has %d Unreleased rows in its breaking changes table (lines %s); assign each row a released version first", path, len(rows), formatRowLines(rows))
+}
+
+func unreleasedUpgradeRows(doc string) []int {
+	var rows []int
+	inFence := false
+	for lineNo, line := range strings.Split(doc, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			inFence = !inFence
+			continue
+		}
+		if inFence || !strings.Contains(trimmed, "|") {
+			continue
+		}
+		cells := strings.Split(trimmed, "|")
+		matched := false
+		for _, cell := range cells {
+			if strings.TrimSpace(cell) == "Unreleased" {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			rows = append(rows, lineNo+1)
+		}
+	}
+	return rows
+}
+
+func formatRowLines(rows []int) string {
+	parts := make([]string, len(rows))
+	for i, row := range rows {
+		parts[i] = fmt.Sprint(row)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func isGitClean(dir string) (bool, error) {

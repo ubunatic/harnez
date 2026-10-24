@@ -14,6 +14,7 @@ import (
 // VersionSpec represents the version.yaml specification format.
 type VersionSpec struct {
 	Version    string   `yaml:"version,omitempty" json:"version,omitempty"`
+	UpgradeDoc string   `yaml:"upgrade_doc,omitempty" json:"upgrade_doc,omitempty"`
 	TagPrefix  *string  `yaml:"tag_prefix,omitempty" json:"tag_prefix,omitempty"`
 	BuildCmd   string   `yaml:"build_cmd,omitempty" json:"build_cmd,omitempty"`
 	Major      *int     `yaml:"major,omitempty" json:"major,omitempty"`

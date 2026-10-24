@@ -31,6 +31,12 @@ DO commit `version.yaml` (and add it to `REUSE.toml` if the repo runs `reuse lin
 first automated bump doesn't trip license linting. A project with none of the native files is
 valid — sync is then a no-op.
 
+Projects with a breaking-changes table can set `upgrade_doc: docs/Upgrading.md` in
+`version.yaml` (default: `docs/Upgrading.md`). Release, including `--dry-run` and
+`--continue`, refuses table rows marked `Unreleased`; a missing doc skips the check.
+Relabel shipped rows manually: find the change's commit, inspect `git tag --contains
+<commit>`, and assign the earliest containing release version. Review ambiguous history.
+
 ### 2.2 Cobra root wiring (Go), in `cmd/<binary>/main.go`
 
 ```go
