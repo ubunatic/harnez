@@ -46,3 +46,5 @@ Furthermore, agents rarely check whether a dedicated fast scratch mount or secon
 
 Guidance only: a short rule (check `df -h` on the target before downloads or builds over a few GB; use the
 scratch disk or ask when short). No CLI, spec or tests; a CLI becomes its own ticket if the rule proves too weak.
+
+Location: `docs/practices/AgenticLoop.md`, subsection "Disk headroom before heavy downloads and builds", and invariant 10 in `docs/practices/AgenticLoop.lite.md` (root copy `docs/AgenticLoop.md` synced). Chosen over `.harnez/rules/Tools.md` because that file is harnez-only and the rule applies to any project's agents.

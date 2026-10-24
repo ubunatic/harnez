@@ -20,6 +20,7 @@ For TUI layout work, use a checked-in `.ansi` mockup under `docs/data/` as the v
 7. **Media & Demo Verification Gate** — **always ask the user for explicit confirmation** of recorded output before publishing/embedding.
 8. **Deployment Transparency — 3-State Grounding (when applicable)** — **Local State**, **Deployed Artifact State**, and **Active Daemon State** are independent; local build/test proves nothing about the other two (remote-deploying projects only).
 9. **One-Level Delegation** — `harnez agent --role orchestrator|developer|reviewer|advisor`: only an orchestrator starts helpers (one writer at a time); developers, reviewers and advisors are leaf workers that never run `harnez agent`, native subagents or delegating skills. harnez enforces it. Live checks that need an agent session are run by the orchestrator. **Completion Evidence**: host verifies every worker's "done" report with `git show --stat <commit>` and the built output; ticket-closing workers cite the commit that changed non-issue files.
+10. **Disk Headroom Before Heavy Work** — before downloads or builds over a few GB, check `df -h` on the target and keep at least 10 GiB free; if short, use a named scratch disk or ask the user first.
 Decide low-risk, reversible choices yourself; record the choice and reason in the ticket's `## Decision` and report its location.
 Limit plans to this session; turn lasting lessons into a check, rule/prompt line, or ticket and name the safeguard and its location.
 

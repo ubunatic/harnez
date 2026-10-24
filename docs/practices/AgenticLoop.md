@@ -42,6 +42,10 @@ until the exit code. Never check status or logs in a loop while the job runs; us
 `harnez agent wait <session>` only to recover a lost job. `harnez agent selftest
 --step hello` walks a host through this flow and verifies it.
 
+### Disk headroom before heavy downloads and builds
+
+Before a download or build of a few GB or more (model weights, container images, datasets, caches), run `df -h <target dir>` and check the free space on the partition that will hold it. Keep at least 10 GiB free. If the space is short, use a scratch disk the project or user names (for example a `/mnt/<disk>/scratch` mount, when it is mounted) or ask the user before filling the primary disk. After a failed attempt with `ENOSPC`, delete only the partial files that attempt created before retrying.
+
 ### Roles and delegation depth
 
 Delegation is exactly one level deep. Every `harnez agent` session has a role
