@@ -1,6 +1,6 @@
 # 698 — teach agents when and how to release repos (harnez release guidance and rules)
 
-**Status**: Open
+**Status**: Closed — release decision, bump guidance, and Makefile-backed checks documented
 **Priority**: P1 (High)
 **Severity**: Normal
 **Category**: Feature
@@ -15,22 +15,19 @@ Autonomous coding agents (orchestrators and developers) frequently complete feat
 2. **Don't know how to release properly**: They attempt custom bash git tagging, manual `goreleaser` invocations, or ad-hoc file edits instead of using `harnez release`.
 3. **Don't choose the right semver bump**: Confusion around patch (`0.x.Y+1`) vs minor (`0.X+1.0` or `X.Y+1.0` for new features/widgets) vs major bumps.
 
-We need clear rules and guidance embedded in Harnez prompts, rules (`.harnez/rules/`), and evergreen documentation (`docs/GoRelease.md`, `docs/AgenticLoop.md`) that teach agents the exact release criteria, lifecycle triggers, and command usage.
+We need clear release guidance in `config.yaml` and the canonical docs `docs/practices/GoRelease.md` plus its lite variant, so agents know the bump criteria, lifecycle trigger, and release checks.
 
 ## 2. Technical Specification & Guidance
 
 ### A. When an Agent Should Release
-- **Feature Completion / Milestone Sprints**: When a new feature, widget, or significant capability is completed, tested green, and ticket(s) are closed.
-- **Breaking Changes or Upgrades**: When public APIs or module paths change (accompanied by `docs/Upgrading.md` updates).
-- **Explicit Instruction**: When requested by the user or when a sprint/goal specifies release delivery upon green tests.
+- **Explicit Instruction**: Release only when the user or active `/goal` asks; otherwise recommend a release and proposed bump, then wait.
 - **Pre-Conditions for Release**:
   - `git status` is clean (no unstaged/uncommitted files).
-  - All tests and linters pass (`make test-q1` or `harnez exec --quota-1 -- make test`).
-  - Spec validation passes (`cmd/validate-spec`).
+  - `make lint` and `make test-q1` pass. `make release` depends on `check`, which runs gofmt, vet, and Go tests.
   - Documentation and issue tickets are committed and indexed.
 
 ### B. How an Agent Should Release
-Agents must use the standardized release CLI:
+When a release is requested, agents use the standardized release CLI:
 ```bash
 # For feature additions, new widgets, or major capability additions:
 harnez release --bump minor
@@ -54,11 +51,10 @@ harnez release --bump major
 ## 3. Implementation & Verification Plan
 
 - **M1 (Rule & Prompt Updates)**:
-  - Add release lifecycle guidance to `.harnez/rules/Tools.md` and `.harnez/prompts/developer.md` / orchestrator instructions.
+  - Add the release pointer to the Tools rule source in `config.yaml`.
   - Clarify bump strategy: patch for bug fixes, minor for features/widgets, major for breaking changes.
 - **M2 (Evergreen Documentation)**:
-  - Update `docs/GoRelease.md` with an "Agentic Release Guide" section detailing pre-flight checks, command syntax, and post-release validation.
-  - Cross-reference from `docs/AgenticLoop.md` under the Hygiene/Closeout phase.
+  - Update `docs/practices/GoRelease.md` and `.lite.md` with bump guidance, pre-release checks, and the ask-first rule.
 - **M3 (Verification & Release)**:
   - Verify rule synchronization via `harnez rules sync` / `harnez index`.
   - Validate that agents running `/lean-sprint` or `/release` properly identify and execute release steps.

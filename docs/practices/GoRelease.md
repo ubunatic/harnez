@@ -164,6 +164,10 @@ is broken.
 
 ## 4. Releasing & Recovery
 
+### When to Release, Which Bump
+
+Release only when the user or active `/goal` asks for a release; otherwise recommend the release and proposed bump, then wait. Releases push commits and tags and publish artifacts. Before releasing, ensure the tree is clean and docs/tickets are committed and indexed, then pass `make lint` and `make test-q1` (`make release` itself depends on `check`, which runs gofmt, vet, and all Go tests). Use **patch** for compatible fixes, docs, and refactors; **minor** for new backward-compatible capabilities; **major** for breaking public APIs.
+
 ### Standard Release (Bumps Patch by default)
 ```bash
 make release
