@@ -62,3 +62,7 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   assertions fail. Scope them to the CLI process (record the stub's parent PID), keep the env isolated
   (temp HOME/XDG dirs, own `local.yaml`, fake binaries first on PATH), and stop every spawned daemon in
   `t.Cleanup`.
+- **Developer "open points" are goal checks**: a limitation the developer reports can be a goal violation.
+  855 M2 listed "a later non-interactive run can re-enable a tracker disabled in the wizard" as an open
+  point; the reviewer rated it a blocker (the goal says init keeps working from config). Check each
+  reported open point against the ticket's `/goal` before closing.

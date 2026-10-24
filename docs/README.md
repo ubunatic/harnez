@@ -201,6 +201,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-23-session-retro-harnez-host-two-days.md](studies/2026-10-23-session-retro-harnez-host-two-days.md) | Session retro: harnez host session, 2026-10-21 to 2026-10-23 |
 | [studies/2026-10-23-two-agent-lean-sprint-usage-never-hangs.md](studies/2026-10-23-two-agent-lean-sprint-usage-never-hangs.md) | Two-agent lean sprint: usage never hangs (issue 873) |
 | [studies/2026-10-24-two-agent-lean-sprint-epic-894-vendor-mixed.md](studies/2026-10-24-two-agent-lean-sprint-epic-894-vendor-mixed.md) | Two-agent lean sprint: epic 894, vendor-mixed workers (2026-10-24) |
+| [studies/2026-10-24-two-agent-lean-sprint-epic-910.md](studies/2026-10-24-two-agent-lean-sprint-epic-910.md) | Epic 910 — repo setup, tracker, tests and agent guidance (2026-10-24) |
 | [studies/2026-10-24-two-agent-lean-sprint-p1-p2-sweep.md](studies/2026-10-24-two-agent-lean-sprint-p1-p2-sweep.md) | Two-agent lean sprint: P1/P2 sweep (2026-10-24) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
