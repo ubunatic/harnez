@@ -729,9 +729,23 @@ func TestRunIssuesNewAdoptsOnlyNewIssuesDirectory(t *testing.T) {
 		if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true, Force: true}); err != nil {
 			t.Fatalf("initial init: %v", err)
 		}
-		var out bytes.Buffer
-		if err := runIssuesNew(&out, dir, "First Ticket", false); err != nil {
-			t.Fatalf("runIssuesNew: %v", err)
+		if _, err := os.Stat(filepath.Join(dir, "issues")); !os.IsNotExist(err) {
+			t.Fatalf("initial init created issues/: stat err=%v", err)
+		}
+		t.Setenv("CLAUDE_CODE_REMOTE", "")
+		if err := os.Unsetenv("CLAUDE_CODE_REMOTE"); err != nil {
+			t.Fatal(err)
+		}
+		var out, stderr bytes.Buffer
+		cmd := newIssuesCmd()
+		cmd.SetArgs([]string{"new", "-d", dir, "First Ticket"})
+		cmd.SetOut(&out)
+		cmd.SetErr(&stderr)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("issues new: %v (stderr: %s)", err, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "local mode") {
+			t.Fatalf("issues new did not select local mode: %q", stderr.String())
 		}
 		config, err := claude.LoadRepoConfig(dir)
 		if err != nil {

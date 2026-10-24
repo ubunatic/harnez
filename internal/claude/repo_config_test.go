@@ -151,6 +151,59 @@ func TestRunInitPreservesExistingRepoConfig(t *testing.T) {
 	}
 }
 
+func TestRunInitAdoptsOnlyManagedIssuesReadme(t *testing.T) {
+	tests := []struct {
+		name        string
+		readme      string
+		wantTracker string
+		wantDriver  bool
+	}{
+		{
+			name:        "managed README upgrades stale none config",
+			readme:      "<!-- managed by harnez index -->\n",
+			wantTracker: "harnez",
+			wantDriver:  true,
+		},
+		{
+			name:        "foreign README preserves none config",
+			readme:      "# Foreign tracker\n",
+			wantTracker: "none",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeRepoYAML(t, dir, "version: 1\nissues:\n  tracker: none\n  merge_driver: false\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\n")
+			issuesDir := filepath.Join(dir, "issues")
+			if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			readmePath := filepath.Join(issuesDir, "README.md")
+			if err := os.WriteFile(readmePath, []byte(tc.readme), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := RunInitWithVariant(dir, LoadTestConfig(t), InitOptions{AssumeYes: true}); err != nil {
+				t.Fatalf("RunInitWithVariant: %v", err)
+			}
+			got, err := LoadRepoConfig(dir)
+			if err != nil {
+				t.Fatalf("LoadRepoConfig: %v", err)
+			}
+			if got.Issues.Tracker != tc.wantTracker || got.Issues.MergeDriver != tc.wantDriver {
+				t.Fatalf("issues config = (%q, %t), want (%q, %t)", got.Issues.Tracker, got.Issues.MergeDriver, tc.wantTracker, tc.wantDriver)
+			}
+			readmeAfter, err := os.ReadFile(readmePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(readmeAfter) != tc.readme {
+				t.Fatalf("init changed issues/README.md: %q", readmeAfter)
+			}
+		})
+	}
+}
+
 func TestRepoConfigRecognizesHarnezTracker(t *testing.T) {
 	dir := t.TempDir()
 	issues := filepath.Join(dir, "issues")

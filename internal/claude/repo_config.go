@@ -98,8 +98,7 @@ func detectRepoConfig(dir string, cfg *Config) *RepoConfig {
 	issuesPath := filepath.Join(dir, "issues")
 	if fileExists(issuesPath) {
 		r.Issues.Tracker = "none"
-		if data, err := os.ReadFile(filepath.Join(issuesPath, "README.md")); err == nil &&
-			(len(data) > 0) && (strings.Contains(string(data), "managed by harnez index") || strings.Contains(string(data), "harnez:begin")) {
+		if hasHarnezIssuesIndex(dir) {
 			r.Issues.Tracker = "harnez"
 		}
 	} else {
@@ -120,6 +119,11 @@ func detectRepoConfig(dir string, cfg *Config) *RepoConfig {
 	r.Rules.Quota = markdown.ContainsSection(agentsPath, quota1SectionName) || strings.Contains(string(agents), "harnez:begin "+quota1SectionName) || makeTargetExists(dir, "test-q1")
 	r.Make.ContainerTest = makeTargetExists(dir, "container-test")
 	return r
+}
+
+func hasHarnezIssuesIndex(dir string) bool {
+	data, err := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+	return err == nil && (strings.Contains(string(data), "managed by harnez index") || strings.Contains(string(data), "harnez:begin"))
 }
 
 func makeTargetExists(dir, name string) bool {

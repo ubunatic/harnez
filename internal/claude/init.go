@@ -1119,6 +1119,12 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 	} else if repoErr != nil {
 		return repoErr
 	}
+	trackerAdopted := false
+	if repoConfig.Issues.Tracker == "none" && hasHarnezIssuesIndex(dir) {
+		repoConfig.Issues.Tracker = "harnez"
+		repoConfig.Issues.MergeDriver = true
+		trackerAdopted = true
+	}
 	if opts.IssuesGit != nil {
 		repoConfig.Issues.MergeDriver = *opts.IssuesGit
 	}
@@ -1130,7 +1136,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 			repoConfig.Docs.Copies = append(repoConfig.Docs.Copies, name)
 		}
 	}
-	if os.IsNotExist(repoErr) || opts.IssuesGit != nil || opts.Quota1 || len(opts.Docs) > 0 {
+	if os.IsNotExist(repoErr) || trackerAdopted || opts.IssuesGit != nil || opts.Quota1 || len(opts.Docs) > 0 {
 		if err := writeRepoConfig(dir, repoConfig); err != nil {
 			return fmt.Errorf("write %s: %w", repoConfigPath, err)
 		}
