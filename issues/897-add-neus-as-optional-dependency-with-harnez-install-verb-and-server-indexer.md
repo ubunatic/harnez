@@ -1,6 +1,6 @@
 # 897 — Add neus as optional dependency with harnez install verb and server indexer
 
-**Status**: Open
+**Status**: Closed — M1 install verb, M2 opt-in indexing, M3 fixes verified by TestNeusIndexerBackgroundChildHoldingStdoutDoesNotBlock and TestUnknownDependencyAndDryRunWithoutTools; daemon persistence parked in 913
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Feature
