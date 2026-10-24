@@ -2,10 +2,21 @@ package usagecli
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"ubunatic.com/harnez/internal/usage"
 )
+
+func RenderUsageOutput(summary usage.UsageSummary, jsonOutput, raw bool, opts ...usage.WatchOptions) (string, error) {
+	if jsonOutput {
+		return usage.RenderJSON(summary)
+	}
+	if raw {
+		return usage.RenderText(summary, opts...), nil
+	}
+	return "", fmt.Errorf("usage output requires --json or --raw")
+}
 
 // FilterSummaryByAgent applies the usage command's case-insensitive provider filter.
 func FilterSummaryByAgent(summary usage.UsageSummary, agentID string) usage.UsageSummary {
