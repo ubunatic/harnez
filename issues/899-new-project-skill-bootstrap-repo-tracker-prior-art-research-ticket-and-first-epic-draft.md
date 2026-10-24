@@ -1,6 +1,6 @@
 # 899 — new-project skill: bootstrap repo, tracker, prior-art research ticket and first epic draft
 
-**Status**: Open
+**Status**: Closed — skill docs/commands/new-project.md + config entry shipped; scratch dry run of local steps clean, found tracker bug 901 (workaround in step 4); live run parked in 902
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
