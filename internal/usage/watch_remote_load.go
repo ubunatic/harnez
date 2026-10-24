@@ -69,7 +69,7 @@ func runRemoteLoadManagerWithPolicy(ctx context.Context, host string, mu *sync.M
 			}
 			wait(ctx, retryDelay)
 			if ctx.Err() == nil && !pollSucceeded && retryDelay < max {
-				retryDelay = min(retryDelay*2, max)
+				retryDelay = nextRemoteLoadRetryDelay(retryDelay, max)
 			}
 			continue
 		}
@@ -94,9 +94,15 @@ func runRemoteLoadManagerWithPolicy(ctx context.Context, host string, mu *sync.M
 		}
 		wait(ctx, retryDelay)
 		if ctx.Err() == nil && !pollSucceeded && retryDelay < max {
-			retryDelay = min(retryDelay*2, max)
+			retryDelay = nextRemoteLoadRetryDelay(retryDelay, max)
 		}
 	}
+}
+
+// nextRemoteLoadRetryDelay doubles a failed poll's retry delay up to max. The
+// `-w` manager and the collector poll share this rule (issue 879 M2).
+func nextRemoteLoadRetryDelay(delay, max time.Duration) time.Duration {
+	return min(delay*2, max)
 }
 
 // drainRemoteLoadStream reads every sample off ch, applying each via

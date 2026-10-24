@@ -274,6 +274,7 @@ func TestReadStoredSummaryUsesChmodReadOnlyStore(t *testing.T) {
 // cancelled, so the daemon shuts down cleanly on SIGTERM/SIGINT.
 func TestRunCollectorStopsOnContextCancel(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // no real load.watch_host poll
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan error, 1)

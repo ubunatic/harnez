@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,9 +64,11 @@ func TestOneShotUsageDoesNotInvokeSSH(t *testing.T) {
 	if err := os.MkdirAll(sshDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	marker := filepath.Join(root, "ssh-called")
+	// The stub records the PID of the process that ran it. The one-shot usage
+	// process must never be that process; the auto-started collector may be.
+	marker := filepath.Join(root, "ssh-parent-pids")
 	sshStub := filepath.Join(sshDir, "ssh")
-	if err := os.WriteFile(sshStub, []byte(fmt.Sprintf("#!/bin/sh\nprintf called > %q\n", marker)), 0o700); err != nil {
+	if err := os.WriteFile(sshStub, []byte(fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$PPID\" >> %q\n", marker)), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(home, "config", "harnez"), 0o700); err != nil {
@@ -80,6 +83,10 @@ func TestOneShotUsageDoesNotInvokeSSH(t *testing.T) {
 			env[i] = "PATH=" + sshDir + string(os.PathListSeparator) + os.Getenv("PATH")
 		}
 	}
+
+	// The first run auto-starts a detached collector that inherits env, so it
+	// polls the fake host through the stub. Stop and wait for it on every exit.
+	t.Cleanup(func() { stopUsageTestServer(t, bin, env) })
 
 	for _, args := range [][]string{{"--minimal"}, {"--minimal", "--offline"}} {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -104,10 +111,12 @@ func TestOneShotUsageDoesNotInvokeSSH(t *testing.T) {
 		if elapsed >= time.Second {
 			t.Fatalf("usage %v took %s, want under 1s", args, elapsed)
 		}
-		if _, err := os.Stat(marker); err == nil {
-			t.Fatalf("usage %v invoked the ssh stub", args)
-		} else if !os.IsNotExist(err) {
+		parents, err := os.ReadFile(marker)
+		if err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
+		}
+		if slices.Contains(strings.Fields(string(parents)), strconv.Itoa(cmd.Process.Pid)) {
+			t.Fatalf("usage %v ran ssh itself (stub parent PID %d is the usage process)", args, cmd.Process.Pid)
 		}
 	}
 }
@@ -300,6 +309,7 @@ func terminateUsageTestServerProcess(t *testing.T, bin string, env []string) {
 	if err != nil || runtimeValue == "" {
 		return
 	}
+	var pids []int
 	for _, entry := range entries {
 		pid, err := strconv.Atoi(entry.Name())
 		if err != nil {
@@ -321,7 +331,43 @@ func terminateUsageTestServerProcess(t *testing.T, bin string, env []string) {
 		if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && err != syscall.ESRCH {
 			t.Logf("terminate isolated server PID %d: %v", pid, err)
 		}
+		pids = append(pids, pid)
 	}
+	waitForUsageTestProcessExit(t, pids)
+}
+
+// waitForUsageTestProcessExit blocks until every PID has exited or become a
+// zombie, failing the test if one is still running after usageTestExitWait.
+// The servers are detached (setsid, released), so they cannot be Wait()ed on.
+func waitForUsageTestProcessExit(t *testing.T, pids []int) {
+	t.Helper()
+	deadline := time.NewTimer(usageTestExitWait)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for _, pid := range pids {
+		for usageTestProcessRunning(pid) {
+			select {
+			case <-deadline.C:
+				t.Fatalf("isolated server PID %d still running %s after SIGTERM", pid, usageTestExitWait)
+			case <-ticker.C:
+			}
+		}
+	}
+}
+
+const usageTestExitWait = 10 * time.Second
+
+// usageTestProcessRunning reports whether pid exists and is not a zombie. The
+// state is the field after the parenthesised command name in /proc/<pid>/stat.
+func usageTestProcessRunning(pid int) bool {
+	stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return false
+	}
+	text := string(stat)
+	fields := strings.Fields(text[strings.LastIndex(text, ")")+1:])
+	return len(fields) > 0 && fields[0] != "Z"
 }
 
 func usageTestDirs(t *testing.T) (string, string) {

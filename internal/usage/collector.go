@@ -82,6 +82,17 @@ func runCollectorWithRequests(ctx context.Context, homeDir, dbPath string, inter
 }
 
 func runCollectorWithRequestsAndTracker(ctx context.Context, homeDir, dbPath string, interval time.Duration, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error), ready func(), requests <-chan PassiveRequest, tracker *ClientTracker) error {
+	return runCollectorWithDeps(ctx, homeDir, dbPath, interval, out, offline, fetch, ready, requests, tracker, collectorDeps{})
+}
+
+// collectorDeps holds the optional collaborators of the collector loop. A nil
+// remote poll means: read load.watch_host from local.yaml and the cadence from
+// spec/usage.yaml (issue 879 M2).
+type collectorDeps struct {
+	remote *remoteLoadPollOptions
+}
+
+func runCollectorWithDeps(ctx context.Context, homeDir, dbPath string, interval time.Duration, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error), ready func(), requests <-chan PassiveRequest, tracker *ClientTracker, deps collectorDeps) error {
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
@@ -106,6 +117,27 @@ func runCollectorWithRequestsAndTracker(ctx context.Context, homeDir, dbPath str
 		return fmt.Errorf("create state dir %s: %w", stateDir, err)
 	}
 	fmt.Fprintf(out, "harnez server: collecting usage to %s every %s\n", stateDir, interval)
+
+	// The remote load poll (issue 879) runs beside the quota loop: clients,
+	// readiness and quota ticks do not gate it. Every return path cancels and
+	// joins it, so no SSH child outlives the collector.
+	pollCtx, stopPoll := context.WithCancel(ctx)
+	var polls sync.WaitGroup
+	defer func() {
+		stopPoll()
+		polls.Wait()
+	}()
+	remote := deps.remote
+	if remote == nil {
+		remote = configuredRemoteLoadPoll(homeDir, out)
+	}
+	if remote != nil {
+		polls.Add(1)
+		go func() {
+			defer polls.Done()
+			runRemoteLoadPoller(pollCtx, *remote)
+		}()
+	}
 
 	if requests == nil {
 		requests = make(chan PassiveRequest)

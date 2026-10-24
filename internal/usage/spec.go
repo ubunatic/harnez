@@ -38,6 +38,8 @@ type usageSpec struct {
 	NVIDIASMICacheTTL        string             `yaml:"nvidia_smi_cache_ttl"`
 	RemoteCommandTimeout     string             `yaml:"remote_command_timeout"`
 	SSHConnectTimeout        string             `yaml:"ssh_connect_timeout"`
+	RemoteLoadPollInterval   string             `yaml:"remote_load_poll_interval"`
+	RemoteLoadStaleness      string             `yaml:"remote_load_staleness"`
 	UsageKillLog             usageKillLogSpec   `yaml:"usage_kill_log"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
 }
@@ -137,6 +139,8 @@ var (
 	usageSpecNVCacheTTL           time.Duration
 	usageSpecRemoteCommandTimeout time.Duration
 	usageSpecSSHConnectTimeout    time.Duration
+	usageSpecRemotePoll           time.Duration
+	usageSpecRemoteStaleness      time.Duration
 	usageSpecCachePolicy          cacheFreshnessPolicy
 )
 
@@ -237,6 +241,14 @@ func RemoteCommandTimeouts() (time.Duration, time.Duration, error) {
 	return usageSpecRemoteCommandTimeout, usageSpecSSHConnectTimeout, err
 }
 
+// RemoteLoadPolicy returns how often the collector polls the remote load host
+// while it answers, and how old a cached remote load reading may be before it
+// is shown as stale (issue 879).
+func RemoteLoadPolicy() (time.Duration, time.Duration, error) {
+	_, _, _, _, _, err := usageDurations()
+	return usageSpecRemotePoll, usageSpecRemoteStaleness, err
+}
+
 func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duration, time.Duration, error) {
 	usageSpecOnce.Do(func() {
 		data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
@@ -263,6 +275,8 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 			usageSpecNVCacheTTL, _ = time.ParseDuration(spec.NVIDIASMICacheTTL)
 			usageSpecRemoteCommandTimeout, _ = time.ParseDuration(spec.RemoteCommandTimeout)
 			usageSpecSSHConnectTimeout, _ = time.ParseDuration(spec.SSHConnectTimeout)
+			usageSpecRemotePoll, _ = time.ParseDuration(spec.RemoteLoadPollInterval)
+			usageSpecRemoteStaleness, _ = time.ParseDuration(spec.RemoteLoadStaleness)
 		}
 	})
 	return usageSpecAge, usageSpecCadence, usageSpecTimeout, usageSpecDedupe, usageSpecStoreBusyTimeout, usageSpecErr
@@ -320,6 +334,14 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	}
 	if connectTimeout, err := time.ParseDuration(spec.SSHConnectTimeout); err != nil || connectTimeout <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: ssh_connect_timeout must be a positive duration", usageSpecPath)
+	}
+	remotePoll, err := time.ParseDuration(spec.RemoteLoadPollInterval)
+	if err != nil || remotePoll <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: remote_load_poll_interval must be a positive duration", usageSpecPath)
+	}
+	remoteStaleness, err := time.ParseDuration(spec.RemoteLoadStaleness)
+	if err != nil || remoteStaleness <= remotePoll {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: remote_load_staleness must be a duration longer than remote_load_poll_interval", usageSpecPath)
 	}
 	if hbInterval, err := time.ParseDuration(spec.ClientHeartbeatInterval); err != nil || hbInterval <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: client_heartbeat_interval must be a positive duration", usageSpecPath)

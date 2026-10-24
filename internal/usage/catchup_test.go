@@ -76,6 +76,7 @@ func TestCollectorSkipsInitialFetchWhenNoClients(t *testing.T) {
 	defer cancel()
 
 	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // no real load.watch_host poll
 	dbPath := filepath.Join(home, "usage.sqlite")
 	tracker := NewClientTracker(time.Second)
 
@@ -114,6 +115,7 @@ func TestCollectorReadyBeforeFirstFetch(t *testing.T) {
 	defer cancel()
 
 	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // no real load.watch_host poll
 	dbPath := filepath.Join(home, "usage.sqlite")
 	tracker := NewClientTracker(time.Second)
 	ready := make(chan struct{})

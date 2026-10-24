@@ -43,6 +43,10 @@ nvidia_smi_timeout: 1s
 nvidia_smi_cache_ttl: 2s
 remote_command_timeout: 10s
 ssh_connect_timeout: 5s
+# Remote load (issue 879): the collector polls load.watch_host this often while it
+# answers; a cached reading older than remote_load_staleness is shown as stale.
+remote_load_poll_interval: 1m
+remote_load_staleness: 5m
 usage_kill_log:
   path: harnez/usage-kills.jsonl
   max_bytes: 1048576
