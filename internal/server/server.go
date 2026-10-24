@@ -148,6 +148,7 @@ func (s Server) Run(ctx context.Context) error {
 	serviceCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	serviceErr := make(chan error, len(s.Services))
+	remainingServices := len(s.Services)
 	for _, service := range s.Services {
 		go func(service Service) { serviceErr <- service.Run(serviceCtx) }(service)
 	}
@@ -160,6 +161,7 @@ func (s Server) Run(ctx context.Context) error {
 			result = err
 		}
 	case err := <-serviceErr:
+		remainingServices--
 		if err != nil {
 			result = err
 		}
@@ -167,6 +169,17 @@ func (s Server) Run(ctx context.Context) error {
 	cancel()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), s.Config.ShutdownTimeout)
 	defer shutdownCancel()
+	// Join services before releasing the socket so a replacement server cannot
+	// start a scan while the old index command is still being canceled.
+	for remainingServices > 0 {
+		select {
+		case <-serviceErr:
+			remainingServices--
+		case <-shutdownCtx.Done():
+			_ = httpServer.Close()
+			return errors.Join(result, fmt.Errorf("wait for server services: %w", shutdownCtx.Err()))
+		}
+	}
 	if err := httpServer.Shutdown(shutdownCtx); err != nil && result == nil {
 		result = err
 	}

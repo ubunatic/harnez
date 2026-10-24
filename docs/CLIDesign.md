@@ -31,6 +31,8 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `read`  | Local / Agent Context | Bounded file reading and multi-column visual PNG context card rendering (`-I/--image`) |
 | `log`   | Harnez's own invocation record | Chronological `git log`-shaped stream of harnez CLI invocations (`cli_invocations`) |
 
+Optional Neus installation and server indexing are described in [Neus integration](NeusIntegration.md).
+
 `log` is a third axis alongside `find` and `stats`, not a synonym for either: `find`
 reads **repository entities** (tickets, docs), `stats` and `dochistory` render
 **aggregates** over tool calls and managed docs, and `log` replays **harnez's own

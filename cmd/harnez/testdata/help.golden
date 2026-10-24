@@ -2200,7 +2200,9 @@ Available Commands:
   uninstall   Stop and remove the systemd user service
 
 Flags:
-  -h, --help   help for server
+  -h, --help                help for server
+      --neus-index          Enable periodic neus indexing of registered repositories
+      --neus-repo strings   Repository paths to index (repeat or comma-separate)
 
 Use "harnez server [command] --help" for more information about a command.
 

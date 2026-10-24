@@ -19,4 +19,11 @@ systemd_restart_policy: on-failure
 systemd_restart_delay: 5s
 telemetry_warning_rate_limit: 1m
 default_log_lines: 50
+neus_indexing:
+  enabled: false
+  interval: 5m
+  timeout: 10m
+  command: [neus, index]
+  service_name: neus-indexer.service
+  repos: []
 

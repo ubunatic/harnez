@@ -70,15 +70,21 @@ func newServerCmd() *cobra.Command {
 }
 
 func newServerCmdWithOptions(interval time.Duration, offline bool) *cobra.Command {
+	indexConfig, indexErr := server.LoadNeusIndexConfig()
 	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Run Harnez local services",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if indexErr != nil {
+				return indexErr
+			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return runHarnezServer(ctx, interval, offline)
+			return runHarnezServer(ctx, interval, offline, indexConfig)
 		},
 	}
+	cmd.Flags().BoolVar(&indexConfig.Enabled, "neus-index", indexConfig.Enabled, "Enable periodic neus indexing of registered repositories")
+	cmd.Flags().StringSliceVar(&indexConfig.Repos, "neus-repo", indexConfig.Repos, "Repository paths to index (repeat or comma-separate)")
 	cmd.AddCommand(newServerInstallCmd(), newServerUninstallCmd(), newServerStatusCmd())
 	cmd.AddCommand(newServerStopCmd(), newServerRestartCmd(), newServerLogsCmd())
 	return cmd
@@ -483,9 +489,19 @@ func localServerPID(ctx context.Context, cfg server.Config, socket string) int {
 	return queryLocalServerStatus(ctx, cfg, socket).PID
 }
 
-func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) error {
+func runHarnezServer(ctx context.Context, interval time.Duration, offline bool, indexing ...server.NeusIndexConfig) error {
 	cfg, err := server.LoadConfig()
 	if err != nil {
+		return err
+	}
+	indexConfig, err := server.LoadNeusIndexConfig()
+	if err != nil {
+		return err
+	}
+	if len(indexing) > 0 {
+		indexConfig = indexing[0]
+	}
+	if err := indexConfig.Validate(); err != nil {
 		return err
 	}
 	passivePath, err := usage.PassiveUpdatePath()
@@ -524,5 +540,9 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool) 
 		heartbeatServer: heartbeatServer,
 	}
 	telemetryService := &telemetryCollectorService{config: cfg, path: dbPath, interval: interval}
-	return (server.Server{Config: cfg, Version: harnez.Version, BuildIdentity: serverBuildIdentity, Services: []server.Service{collector, telemetryService}, HandOver: server.NewSystemdService(cfg).HandOver}).Run(ctx)
+	services := []server.Service{collector, telemetryService}
+	if indexConfig.Enabled {
+		services = append(services, &server.NeusIndexer{Config: indexConfig})
+	}
+	return (server.Server{Config: cfg, Version: harnez.Version, BuildIdentity: serverBuildIdentity, Services: services, HandOver: server.NewSystemdService(cfg).HandOver}).Run(ctx)
 }
