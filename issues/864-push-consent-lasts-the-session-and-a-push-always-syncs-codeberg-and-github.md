@@ -1,6 +1,6 @@
 # 864 — push consent lasts the session, and a push always syncs Codeberg and GitHub
 
-**Status**: Open
+**Status**: Closed — Session push consent documented and Git root copy synced; release preflights every configured Git remote and pushes branch plus tag atomically per remote. TestReleasePushAllRemotes (two-remotes, single-remote, diverged-branch, conflicting-tag) and TestRootDocCopiesMatchSources passed in make test-q1; make install passed. uman push defaults to upstream unless default_remotes is configured, and does not synchronize tags or preflight all destinations.
 **Priority**: P2 (Medium) — agents ask "push where?" after the user already said push, and remotes drift
 **Severity**: Minor
 **Category**: Feature
