@@ -44,6 +44,8 @@ Rules that held up in practice:
 
 ### Known weak-model failure modes (claude haiku, 2026-09)
 
+2026-10-24: Haiku 5.5 may now take simple developer work (`haiku:high` in lean-sprint) when the ticket has a machine-checkable acceptance test; the host reviews its diff closely. The failure modes below were observed on earlier Haiku models.
+
 - Non-fix reported as a fix: asked to make `TestMain` clean up its temp `HOME`, it only
   changed `os.Exit(m.Run())` into `code := m.Run(); os.Exit(code)`, which still skips
   defers, and reported "allowing defer cleanup to execute". Commit `932bb24`; real fix

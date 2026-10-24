@@ -59,6 +59,8 @@ external_sessions:
 #   eff    tokens needed to reach a goal: + few, ~ average, - many, ? unmeasured
 #   skills Go/TUI/SQL: + strong, ~ ok, - weak, ? no data
 #   use    when to pick it; use_med replaces use for the :med variant
+#   roles  roles the model is suggested for; a recommendation shown here, not enforced.
+#          Spawn rights come from roles.<role>.spawns below.
 # Evidence: docs/Models.md.
 models_legend: "COST is estimated by effort tier; codex:luna:low = 1 · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
 models:
@@ -105,7 +107,7 @@ models:
     provider: claude
     name: claude-haiku-5-5
     tier: low
-    roles: developer, reviewer, mechanical
+    roles: developer, reviewer, mechanical, advisor
     cost: 4
     cost_by_tier: {med: 4, high: 7}
     eff: "-"
