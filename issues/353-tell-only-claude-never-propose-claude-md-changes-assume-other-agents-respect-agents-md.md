@@ -1,6 +1,6 @@
 # 353 — Tell only Claude: never propose CLAUDE.md changes; check repo docs/AGENTS.md before any instruction-file change
 
-**Status**: Open
+**Status**: Closed — delivered: harnez hook claude-instructions (cmd/harnez/hook.go:97-111) prints both rules at session start, wired in config.yaml:274, tested in cmd/harnez/claude_instructions_test.go; roadmap row removed (epic 910)
 **Priority**: P3
 **Severity**: Minor
 **Category**: Docs
