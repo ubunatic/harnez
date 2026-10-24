@@ -39,9 +39,8 @@ Sizes are checked by each sprint's searcher; a larger ticket moves into its own 
 
 ## Open decisions (owner)
 
-- Architects at `:med`: lean-sprint allows only `opus:low`, `sol:low`, `argon:low`. Change the skill or override
-  for this epic.
-- 879 M2: (1) collector fetches remote load in the background (promote 161), (2) detached refresh per one-shot
+- Architects at `:med`: decided "change skill" (2026-10-24); lean-sprint now allows `opus:med` and `sol:med`.
+- 879 M2: owner answered "ok" to the recommendation, read as option 1; host confirms before Sprint 3. (1) collector fetches remote load in the background (promote 161), (2) detached refresh per one-shot
   run, or skip.
 
 ## Out of scope

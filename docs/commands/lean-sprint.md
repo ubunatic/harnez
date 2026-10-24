@@ -50,7 +50,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 ### 1.5. Optional Architect Refinement
 - When the user asks for a lean sprint "with an advisor", they mean this architect step, not the Searcher (both run as `--role advisor`).
 - Run this step when the user explicitly requests refinement or confirms the host's proactive suggestion. If refinement was not requested, suggest it when Searcher findings show complex architecture such as multi-system boundaries, API/schema redesign, or non-trivial component trade-offs.
-- The architect tier must be exactly one of `opus:low`, `sol:low`, or `argon:low`. Normalize bare `opus`, `sol`, or `argon` to the matching `:low` tier. If refinement is requested without a valid tier, stop immediately, list the three supported tiers, and ask the user to choose before starting any agents.
+- The architect tier must be one of `opus:low`, `opus:med`, `sol:low`, `sol:med`, or `argon:low`. Normalize bare `opus`, `sol`, or `argon` to the matching `:low` tier. If refinement is requested without a valid tier, stop immediately, list the supported tiers, and ask the user to choose before starting any agents.
 - Dispatch the architect as `--role advisor` with read-only instructions. It returns a structured architecture, milestones (`M1`, `M2`, ...), boundary constraints, edge cases, and pre-work requirements; it does not implement, edit files, or run mutating commands.
 - The host records the architect's milestones, boundaries, edge cases, and pre-work in the target ticket before handing it to the Developer. The host remains subject to the Zero Coding invariant above.
 
