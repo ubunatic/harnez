@@ -4,41 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 )
 
-// withShortRemoteLoadRetry shrinks remoteLoadRetryInterval for the duration
-// of a test, restoring it afterward, so tests exercise the manager's
-// fallback/retry loop in milliseconds instead of the real 10s cadence.
-func withShortRemoteLoadRetry(t *testing.T, d time.Duration) {
-	t.Helper()
-	orig := remoteLoadRetryInterval
-	remoteLoadRetryInterval = d
-	t.Cleanup(func() { remoteLoadRetryInterval = orig })
-}
-
 // TestRunRemoteLoadManager_InvalidHostFallsBackWithoutLeakingStop exercises
 // the manager's control flow when both the streaming and batch paths fail
 // immediately (an invalid/empty host, so neither ever spawns a real ssh
-// process) — it must keep retrying on remoteLoadRetryInterval, never call
+// process) — it must keep retrying on its injected policy, never call
 // setStop with a non-nil func (nothing to clean up, since nothing ever
 // connected), and return promptly once ctx is cancelled.
 func TestRunRemoteLoadManager_InvalidHostFallsBackWithoutLeakingStop(t *testing.T) {
-	withShortRemoteLoadRetry(t, 5*time.Millisecond)
-
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var mu sync.Mutex
 	var last *LoadSnapshot
 	redraws := 0
 	var stopCalls []func()
+	streamAttempts := make(chan struct{}, 10)
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runRemoteLoadManager(ctx, "", &mu, &last, func() {
+		runRemoteLoadManagerWithPolicy(ctx, "", &mu, &last, func() {
 			mu.Lock()
 			redraws++
 			mu.Unlock()
@@ -46,10 +38,21 @@ func TestRunRemoteLoadManager_InvalidHostFallsBackWithoutLeakingStop(t *testing.
 			mu.Lock()
 			stopCalls = append(stopCalls, f)
 			mu.Unlock()
-		}, func(bool) {})
+		}, func(bool) {
+			select {
+			case streamAttempts <- struct{}{}:
+			default:
+			}
+		}, 5*time.Millisecond, 5*time.Millisecond, waitOrDone, CollectRemoteLoadSnapshot)
 	}()
 
-	time.Sleep(40 * time.Millisecond)
+	for range 2 {
+		select {
+		case <-streamAttempts:
+		case <-time.After(2 * time.Second):
+			t.Fatal("manager did not retry stream setup")
+		}
+	}
 	cancel()
 
 	select {
@@ -79,8 +82,6 @@ func TestRunRemoteLoadManager_InvalidHostFallsBackWithoutLeakingStop(t *testing.
 // one ssh -O exit per stream instance — no leaked master across the
 // fallback-then-retry cycle.
 func TestRunRemoteLoadManager_StreamSamplesDeliveredThenFallback(t *testing.T) {
-	withShortRemoteLoadRetry(t, 20*time.Millisecond)
-
 	origStart := sshControlMasterStartCmd
 	origExit := sshControlMasterExitCmd
 	origChild := sshLoadStreamChildCmd
@@ -111,13 +112,14 @@ func TestRunRemoteLoadManager_StreamSamplesDeliveredThenFallback(t *testing.T) {
 	var mu sync.Mutex
 	var last *LoadSnapshot
 	gotSample := make(chan struct{}, 1)
-	var stopSeen, nilStopSeen bool
+	fallbackSeen := make(chan struct{}, 1)
+	var stopSeen bool
 	var streamingTrueSeen, streamingFalseAfterTrueSeen bool
 
 	managerDone := make(chan struct{})
 	go func() {
 		defer close(managerDone)
-		runRemoteLoadManager(ctx, "um760", &mu, &last, func() {
+		runRemoteLoadManagerWithPolicy(ctx, "isolated-host", &mu, &last, func() {
 			mu.Lock()
 			if last != nil {
 				select {
@@ -131,7 +133,10 @@ func TestRunRemoteLoadManager_StreamSamplesDeliveredThenFallback(t *testing.T) {
 			if f != nil {
 				stopSeen = true
 			} else if stopSeen {
-				nilStopSeen = true
+				select {
+				case fallbackSeen <- struct{}{}:
+				default:
+				}
 			}
 			mu.Unlock()
 		}, func(streaming bool) {
@@ -142,6 +147,8 @@ func TestRunRemoteLoadManager_StreamSamplesDeliveredThenFallback(t *testing.T) {
 				streamingFalseAfterTrueSeen = true
 			}
 			mu.Unlock()
+		}, 20*time.Millisecond, 20*time.Millisecond, waitOrDone, func(context.Context, string) (*LoadSnapshot, error) {
+			return nil, fmt.Errorf("test poll failure")
 		})
 	}()
 
@@ -160,19 +167,10 @@ func TestRunRemoteLoadManager_StreamSamplesDeliveredThenFallback(t *testing.T) {
 	// Give the manager time to notice the child exited (one-line script,
 	// no further output) and cycle through setStop(nil) + one fallback
 	// poll/retry.
-	deadline := time.After(3 * time.Second)
-	for {
-		mu.Lock()
-		ok := stopSeen && nilStopSeen
-		mu.Unlock()
-		if ok {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Fatal("timed out waiting for setStop(nil) after stream end")
-		case <-time.After(10 * time.Millisecond):
-		}
+	select {
+	case <-fallbackSeen:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for setStop(nil) after stream end")
 	}
 
 	cancel()
@@ -196,5 +194,99 @@ func TestRunRemoteLoadManager_StreamSamplesDeliveredThenFallback(t *testing.T) {
 	}
 	if !streamingFalseAfterTrueSeen {
 		t.Error("expected setStreaming(false) to be called once the stream ended (fallback mode)")
+	}
+}
+
+func TestRunRemoteLoadManager_FakeSSHRecoversWithBackoff(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	countFile := filepath.Join(t.TempDir(), "ssh-count")
+	ssh := filepath.Join(bin, "ssh")
+	script := `#!/bin/sh
+if test "$1" = "-M"; then exit 255; fi
+count=0
+if test -f "$HARNEZ_SSH_COUNT"; then read count < "$HARNEZ_SSH_COUNT"; fi
+count=$((count + 1))
+printf '%s\n' "$count" > "$HARNEZ_SSH_COUNT"
+if test "$count" -lt 5; then exit 255; fi
+printf '%s\n' '{"load":{"cpu":{"NumCPU":23,"Ok":true}}}'
+`
+	if err := os.WriteFile(ssh, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "xdg-data"))
+	t.Setenv("PATH", bin)
+	t.Setenv("HARNEZ_SSH_COUNT", countFile)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var mu sync.Mutex
+	var last *LoadSnapshot
+	var pollErr error
+	var pollSnapshot *LoadSnapshot
+	delays := make(chan time.Duration)
+	release := make(chan struct{}, 1)
+	wait := func(ctx context.Context, d time.Duration) {
+		select {
+		case delays <- d:
+		case <-ctx.Done():
+			return
+		}
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+	}
+	managerDone := make(chan struct{})
+	collect := func(ctx context.Context, host string) (*LoadSnapshot, error) {
+		snap, err := CollectRemoteLoadSnapshot(ctx, host)
+		pollErr = err
+		pollSnapshot = snap
+		return snap, err
+	}
+	go func() {
+		defer close(managerDone)
+		runRemoteLoadManagerWithPolicy(ctx, "fake-host", &mu, &last, func() {}, func(func()) {}, func(bool) {},
+			10*time.Millisecond, 40*time.Millisecond, wait, collect)
+	}()
+
+	wantDelays := []time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 40 * time.Millisecond, 40 * time.Millisecond, 10 * time.Millisecond}
+	for i, want := range wantDelays {
+		select {
+		case got := <-delays:
+			if got != want {
+				t.Fatalf("retry delay %d = %v, want %v", i+1, got, want)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("timed out waiting for retry delay %d", i+1)
+		}
+		data, err := os.ReadFile(countFile)
+		got := 0
+		if err == nil {
+			_, _ = fmt.Sscanf(string(data), "%d", &got)
+		}
+		wantCalls := i + 1
+		if got != wantCalls {
+			t.Fatalf("batch ssh call count at retry %d = %d, want %d", i+1, got, wantCalls)
+		}
+		if i == 4 {
+			mu.Lock()
+			recovered := last != nil && last.CPU.NumCPU == 23
+			mu.Unlock()
+			if !recovered {
+				t.Fatalf("expected remote load snapshot after fake ssh recovered; poll snapshot: %+v, error: %v", pollSnapshot, pollErr)
+			}
+			cancel()
+		}
+		release <- struct{}{}
+	}
+	select {
+	case <-managerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("manager did not stop after context cancellation")
 	}
 }

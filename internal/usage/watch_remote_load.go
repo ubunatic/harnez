@@ -6,11 +6,15 @@ import (
 	"time"
 )
 
-// remoteLoadRetryInterval is both the fallback batch-polling cadence and
-// the delay between attempts to (re-)establish the streaming channel, while
-// `--watch`'s remote Load box has no live stream (issue 110 Decision §2/§3:
-// this is all an internal implementation detail, no user-facing flag).
-var remoteLoadRetryInterval = 10 * time.Second
+// Remote load retry backoff is an internal policy rather than a user-facing
+// setting, so keep it as constants instead of duplicating it in spec/.
+const (
+	remoteLoadRetryInitial = 10 * time.Second
+	remoteLoadRetryMax     = 2 * time.Minute
+)
+
+type remoteLoadWaitFunc func(context.Context, time.Duration)
+type remoteLoadCollectFunc func(context.Context, string) (*LoadSnapshot, error)
 
 func remoteLoadCollectionEnabled(host string, disabled bool) bool {
 	return host != "" && !disabled
@@ -37,6 +41,11 @@ func remoteLoadCollectionEnabled(host string, disabled bool) bool {
 // fallback (issue 110 follow-up) — it is purely a display signal and never
 // influences the fetch logic itself.
 func runRemoteLoadManager(ctx context.Context, host string, mu *sync.Mutex, last **LoadSnapshot, redraw func(), setStop func(func()), setStreaming func(bool)) {
+	runRemoteLoadManagerWithPolicy(ctx, host, mu, last, redraw, setStop, setStreaming,
+		remoteLoadRetryInitial, remoteLoadRetryMax, waitOrDone, CollectRemoteLoadSnapshot)
+}
+
+func runRemoteLoadManagerWithPolicy(ctx context.Context, host string, mu *sync.Mutex, last **LoadSnapshot, redraw func(), setStop func(func()), setStreaming func(bool), initial, max time.Duration, wait remoteLoadWaitFunc, collect remoteLoadCollectFunc) {
 	setLast := func(snap *LoadSnapshot) {
 		_ = WriteCachedRemoteLoad(host, snap)
 		mu.Lock()
@@ -45,19 +54,27 @@ func runRemoteLoadManager(ctx context.Context, host string, mu *sync.Mutex, last
 		redraw()
 	}
 
+	retryDelay := initial
 	for ctx.Err() == nil {
 		ch, stop, err := StartRemoteLoadStream(ctx, host)
 		if err != nil {
 			// Streaming unavailable right now (stale remote harnez binary
 			// predating `load-stream`, network blip, etc.) — fall back to
 			// one batch poll now and retry establishing the stream after
-			// remoteLoadRetryInterval.
+			// the current backoff delay.
 			setStreaming(false)
-			pollOnce(ctx, host, setLast)
-			waitOrDone(ctx, remoteLoadRetryInterval)
+			pollSucceeded := pollRemoteLoad(ctx, host, setLast, collect)
+			if pollSucceeded {
+				retryDelay = initial
+			}
+			wait(ctx, retryDelay)
+			if ctx.Err() == nil && !pollSucceeded && retryDelay < max {
+				retryDelay = min(retryDelay*2, max)
+			}
 			continue
 		}
 
+		retryDelay = initial
 		setStop(stop)
 		setStreaming(true)
 		drainRemoteLoadStream(ctx, ch, setLast)
@@ -71,8 +88,14 @@ func runRemoteLoadManager(ctx context.Context, host string, mu *sync.Mutex, last
 		// The stream ended (remote load-stream process died, connection
 		// dropped, etc.) rather than this manager shutting down — same
 		// fallback-then-retry behavior as a failed initial connect.
-		pollOnce(ctx, host, setLast)
-		waitOrDone(ctx, remoteLoadRetryInterval)
+		pollSucceeded := pollRemoteLoad(ctx, host, setLast, collect)
+		if pollSucceeded {
+			retryDelay = initial
+		}
+		wait(ctx, retryDelay)
+		if ctx.Err() == nil && !pollSucceeded && retryDelay < max {
+			retryDelay = min(retryDelay*2, max)
+		}
 	}
 }
 
@@ -97,11 +120,13 @@ func drainRemoteLoadStream(ctx context.Context, ch <-chan LoadSnapshot, setLast 
 // applies it via setLast — a failed poll leaves the last-known snapshot in
 // place (stale-but-present) rather than blanking the box, matching how a
 // failed --host fetch elsewhere in this file already degrades.
-func pollOnce(ctx context.Context, host string, setLast func(*LoadSnapshot)) {
-	snap, err := CollectRemoteLoadSnapshot(ctx, host)
+func pollRemoteLoad(ctx context.Context, host string, setLast func(*LoadSnapshot), collect remoteLoadCollectFunc) bool {
+	snap, err := collect(ctx, host)
 	if err == nil && snap != nil {
 		setLast(snap)
+		return true
 	}
+	return false
 }
 
 // waitOrDone blocks for d or until ctx is done, whichever comes first.
