@@ -161,3 +161,7 @@ Evidence base so far: manual retros (harnez study 6bf5f306, loom feedback 52f467
 3. `cmd/harnez/session_test.go:43`: assert the slash-command count, not only `Contains`.
 4. Rerun on 13d4828e: observed 18 summaries, 128 owner messages after retaining one row per slash-command pair;
    resolve the count discrepancy above.
+
+Host resolution (2026-10-24): 128 is right, the pre-work's 119 was wrong. The raw JSONL has 9 plain `"/compact"`
+rows; the reviewer counted both rows of each pair. The other 9 compactions were automatic (no command). Host
+reran `go test ./internal/transcript/ ./cmd/harnez/`: green. M1–M3 accepted; only the owner-reviewed retro remains.
