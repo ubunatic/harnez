@@ -289,7 +289,7 @@ Never trade away verification for speed when applying Invariant 7.
           |
    (1) Bounded read-only questions / audit
           v
-     [Cheap Searcher: luna:low / luna-search]
+     [Cheap Searcher: luna:low / luna-search / haiku:low]
           |
    (2) Findings with paths, line ranges, answers
           v
@@ -309,7 +309,7 @@ For focused, day-to-day tickets and milestone iterations, `/lean-sprint` uses tw
    - *No Exploratory Repo Digging*: The host does not browse files, grep broadly, trace call graphs, or explore APIs/specs. It asks the Searcher and relies on the bounded response.
    - *Diff-First Review*: The host reviews the developer's commit diff, test output, and target ticket; it investigates further only when evidence identifies a specific gap.
    - *Single-Ticket Medium*: Keep decisions and refinements in the target issue. Do not create secondary refinement tickets.
-2. **Cheap Searcher (`luna:low` / `luna-search` / `argon:low`)**:
+2. **Cheap Searcher (`luna:low` / `luna-search` / `haiku:low`)**:
    - Performs bounded read-only audits, answers targeted questions, and explores relevant APIs/specs.
    - Returns concise findings with exact file paths and line ranges; no edits, tests that mutate state, or commits.
    - Run search before implementation and pass only relevant findings into the developer handoff.

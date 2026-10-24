@@ -32,7 +32,7 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 
 - `/lean-sprint <ticket-numbers>` (e.g. `/lean-sprint 064` or `/lean-sprint 042, 043`)
 - `/lean-sprint "<scoped-task-or-bug-description>"`
-- `/lean-sprint <ticket> refined <tier>` (or `with architect`, `with sol:low`, `using opus:low`)
+- `/lean-sprint <ticket> refined <tier>` (or `with architect`, `with advisor`, `with sol:low`, `using opus:low`)
 - The legacy single-developer workflow is available as `/lean-sprint-v1 <ticket-or-task>`.
 
 ---
@@ -42,14 +42,15 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 For focused, milestone-based tasks, execute this fast-path, token-efficient loop:
 
 ### 1. Bounded Discovery with the Cheap Searcher
-- Start with the ticket and dispatch a read-only Searcher (`luna:low` / `luna-search` / `argon:low`, `--role advisor`) for a bounded audit: verify the ticket premise, locate relevant files and exact line ranges, answer specific questions, or explore APIs/specs. Give a small question list and return format; do not ask it to implement, edit files, run mutating commands, or commit. Use a prompt file for longer questions.
+- Start with the ticket and dispatch a read-only Searcher (`luna:low` / `luna-search` / `haiku:low`, `--role advisor`) for a bounded audit: verify the ticket premise, locate relevant files and exact line ranges, answer specific questions, or explore APIs/specs. Give a small question list and return format; do not ask it to implement, edit files, run mutating commands, or commit. Use a prompt file for longer questions.
 - Skip the Searcher when the ticket was just refined against live code in this sprint and already cites exact file:line causes; say so in the sprint report.
 - Also skip the Searcher for a narrowly scoped ticket that identifies the exact file and function, documents the complete expected write set (including tests/docs), and leaves no unresolved premise, scope, or architecture questions. Require a plan-only first Developer turn that inspects live code, verifies the premise and current locations, and confirms the write set; file:line citations alone do not qualify. The host must review the concrete findings before granting writes and reconsider developer/model choice. If inspection reveals stale assumptions, missing files, or scope uncertainty, run the Searcher before implementation. Record the skip and findings in the sprint report.
 - When used, run the Searcher sequentially before the Developer. The host reads its concise findings and decides what the Developer needs; the host does not repeat discovery by browsing the repository.
 
 ### 1.5. Optional Architect Refinement
+- When the user asks for a lean sprint "with an advisor", they mean this architect step, not the Searcher (both run as `--role advisor`).
 - Run this step when the user explicitly requests refinement or confirms the host's proactive suggestion. If refinement was not requested, suggest it when Searcher findings show complex architecture such as multi-system boundaries, API/schema redesign, or non-trivial component trade-offs.
-- The architect tier must be exactly one of `opus:low`, `flash38:low`, or `sol:low`. Normalize bare `opus`, `flash38`, or `sol` to the matching `:low` tier. If refinement is requested without a valid tier, stop immediately, list the three supported tiers, and ask the user to choose before starting any agents.
+- The architect tier must be exactly one of `opus:low`, `sol:low`, or `argon:low`. Normalize bare `opus`, `sol`, or `argon` to the matching `:low` tier. If refinement is requested without a valid tier, stop immediately, list the three supported tiers, and ask the user to choose before starting any agents.
 - Dispatch the architect as `--role advisor` with read-only instructions. It returns a structured architecture, milestones (`M1`, `M2`, ...), boundary constraints, edge cases, and pre-work requirements; it does not implement, edit files, or run mutating commands.
 - The host records the architect's milestones, boundaries, edge cases, and pre-work in the target ticket before handing it to the Developer. The host remains subject to the Zero Coding invariant above.
 
