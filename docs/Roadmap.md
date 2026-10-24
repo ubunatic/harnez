@@ -216,7 +216,6 @@ loom work; re-sort them when M3 is planned.
 | 567 — move harnez-only rules into `.harnez/rules/`, tool-neutral AGENTS.md | M/L — P1, new. Supersedes 494's layout half; 351–353, 015, 413 become rule files instead of AGENTS.md blocks. Needs 355 (prune) so the old blocks can be removed | **Next** (high; after 355) |
 | 568 — split IssueTracking, AgenticLoop, GoRelease into generic docs + harnez rules | M — follows 567 | **Next** (after 567) |
 | 471 (+505, 323, 324) — root doc copies drift from sources | S/M — still P2 and still hit by every `harnez init` here; do before 568 so the split starts from reconciled sources | **Next** (high) |
-| 353 — Claude-only instruction-file rule | S — P1 per 544; M1 committed (746418b). Finish and close | **Now** (finish) |
 | 545 — lean-sprint guardrails (history preflight, CPU check, `agent start --dry-run`, host-only close) | S/M — P2, new; each item came from a real incident in the 2026-09-24 retro | **Next** |
 | 546 — `harnez init` toggles the `read -I` recommendation | S/M — P2, new; 543 bounded the OOM, so re-enabling is now a per-project choice | **Next** |
 | 176 (+465, 502, 510) → 499 → 145 | report contract → orchestration assessment → orchestrator skill | **Next** |
