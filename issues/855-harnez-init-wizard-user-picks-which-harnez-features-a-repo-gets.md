@@ -1,6 +1,6 @@
 # 855 — harnez init wizard: user picks which harnez features a repo gets
 
-**Status**: Open
+**Status**: Closed — M3 delivered in 9e60aaeb. TestRunInitWizardTrackerOptOutSurvivesAssumeYes reproduced the blocker before the fix. The one required make test-q1 run failed in TestInitWizardDefaultsAndDisable, TestInitWizardTrackerControlsMergeDriverPrompt, and TestRunInitAdoptsOnlyManagedIssuesReadme; their expectations were corrected after that run and not rerun under the one-run limit. Installed CLI smoke passed for tracker opt-out persistence across -y, merge prompt gating, and the empty-doc notice.
 **Priority**: P3 (Low) — convenience on top of 854's config and detection
 **Severity**: Minor
 **Category**: Feature
@@ -15,10 +15,11 @@ report if 854's config design is not settled yet.
 
 ## Notes
 
-- Depends on 854: the wizard only edits the config that 854 defines. 854 is closed
-  (`.harnez/repo.yaml` exists); the wizard itself is not built yet (status check 2026-10-24).
+- Depends on 854: the wizard edits the settled `.harnez/repo.yaml` config; 854 is closed.
 - Defaults come from detection; the wizard explains each feature in one line.
 - Must not block agents: without a TTY, or with `-y`, it uses detection plus existing config.
+- M1/M2 delivered in `9b98f6af` and `5c2df12a`; M3 fixes tracker opt-out adoption, ties
+  merge-driver selection to the tracker, and clarifies empty optional-doc choices.
 
 ## Milestone M3 — Pre-Work / Required Refinements (opus review of 9b98f6af, 5c2df12a)
 
@@ -35,3 +36,11 @@ passed (invalid answer re-asked, choices in `.harnez/repo.yaml`). Fix first:
    say so in the output.
 4. Nit: one line in `docs/CLIDesign.md` that the wizard rewrites `repo.yaml` without its comments.
 5. Update this ticket's Notes (wizard now built).
+
+M3 implementation complete: adoption now occurs only on first init without
+`.harnez/repo.yaml`; tracker opt-outs persist across later `-y` runs. The merge
+driver follows the tracker choice, empty optional-doc selection is explained,
+and the CLI design docs cover comment loss and first-init adoption. The required
+M3 quota run exposed three stale assertions; they were updated after the one
+allowed full run, so the final test edits were not rerun. The installed CLI smoke
+passed for opt-out persistence, skipped merge-driver prompt, and empty docs notice.
