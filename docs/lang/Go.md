@@ -107,3 +107,6 @@ weight: 60
 - Put tests in the same package (e.g. `package main`) to test unexported components easily.
 - Helpers: `t.Helper()`, `t.Fatalf` for setup failures, `t.Errorf` for assertion failures.
 - Standard library `testing` only — no external testing frameworks or mock generators.
+
+## Before Committing
+- Before committing Go changes, run `gokay check` (add `--base <branch>` without `origin/HEAD`) when `gokay` is on PATH; otherwise the repo's `make test` tiers apply.
