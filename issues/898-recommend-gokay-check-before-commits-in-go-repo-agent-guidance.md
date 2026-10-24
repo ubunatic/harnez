@@ -1,6 +1,6 @@
 # 898 — Recommend gokay check before commits in Go repo agent guidance
 
-**Status**: Open
+**Status**: Closed — docs/lang/Go.md and root copy recommend gokay check when on PATH; TestRootDocCopiesMatchSources green
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Docs
