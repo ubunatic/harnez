@@ -1,6 +1,6 @@
 # 890 — agent rule: put new features in internal sub-packages earlier to preserve test caching
 
-**Status**: Open
+**Status**: Closed — duplicate of 877, delivered there (f0430be5)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Practice
