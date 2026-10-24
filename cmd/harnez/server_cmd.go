@@ -489,17 +489,10 @@ func localServerPID(ctx context.Context, cfg server.Config, socket string) int {
 	return queryLocalServerStatus(ctx, cfg, socket).PID
 }
 
-func runHarnezServer(ctx context.Context, interval time.Duration, offline bool, indexing ...server.NeusIndexConfig) error {
+func runHarnezServer(ctx context.Context, interval time.Duration, offline bool, indexConfig server.NeusIndexConfig) error {
 	cfg, err := server.LoadConfig()
 	if err != nil {
 		return err
-	}
-	indexConfig, err := server.LoadNeusIndexConfig()
-	if err != nil {
-		return err
-	}
-	if len(indexing) > 0 {
-		indexConfig = indexing[0]
 	}
 	if err := indexConfig.Validate(); err != nil {
 		return err

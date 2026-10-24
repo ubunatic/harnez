@@ -22,7 +22,7 @@ func TestInstall(t *testing.T) {
 		wantErr, wantCalls string
 	}{
 		{name: "success", wantCalls: "go install ubunatic.com/neus/cmd/neus@latest\nneus install\n"},
-		{name: "dry", dry: true},
+		{name: "dry", dry: true, wantCalls: ""},
 		{name: "go failure", failGo: true, wantErr: "go install", wantCalls: "go install ubunatic.com/neus/cmd/neus@latest\n"},
 		{name: "bootstrap failure", failNeus: true, wantErr: "neus install", wantCalls: "go install ubunatic.com/neus/cmd/neus@latest\nneus install\n"},
 	} {
@@ -52,8 +52,12 @@ func TestInstall(t *testing.T) {
 			if string(data) != tc.wantCalls {
 				t.Fatalf("calls = %q, want %q", data, tc.wantCalls)
 			}
-			if tc.dry && out.String() != "go install ubunatic.com/neus/cmd/neus@latest\nneus install\n" {
-				t.Fatalf("dry run = %q", out.String())
+			wantOutput := "go install ubunatic.com/neus/cmd/neus@latest\nneus install\n"
+			if tc.dry && out.String() != wantOutput {
+				t.Fatalf("dry run output = %q, want %q", out.String(), wantOutput)
+			}
+			if tc.wantErr != "" && !strings.Contains(out.String(), tc.wantCalls) {
+				t.Fatalf("failure output = %q, want attempted command %q", out.String(), tc.wantCalls)
 			}
 		})
 	}
@@ -68,6 +72,10 @@ func TestUnknownDependencyAndDryRunWithoutTools(t *testing.T) {
 	}
 	if err := Install(context.Background(), "neus", true, nil, &out, &out); err != nil {
 		t.Fatal(err)
+	}
+	want := "go install ubunatic.com/neus/cmd/neus@latest\nneus install\n"
+	if out.String() != want {
+		t.Fatalf("dry run output = %q, want %q", out.String(), want)
 	}
 }
 

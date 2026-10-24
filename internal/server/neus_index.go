@@ -31,7 +31,10 @@ func (s *NeusIndexer) Run(ctx context.Context) error {
 		<-ctx.Done()
 		return nil
 	}
-	interval, _ := time.ParseDuration(s.Config.Interval)
+	interval, err := time.ParseDuration(s.Config.Interval)
+	if err != nil {
+		return fmt.Errorf("neus indexing interval: %w", err)
+	}
 	newTicker := s.Ticker
 	if newTicker == nil {
 		newTicker = func(d time.Duration) (<-chan time.Time, func()) { t := time.NewTicker(d); return t.C, t.Stop }
@@ -59,6 +62,7 @@ func (s *NeusIndexer) Run(ctx context.Context) error {
 
 func (s *NeusIndexer) cycle(ctx context.Context) error {
 	if !s.mu.TryLock() {
+		// A tick that arrives during a scan is coalesced; the active scan owns the slot.
 		return nil
 	}
 	defer s.mu.Unlock()
@@ -69,12 +73,14 @@ func (s *NeusIndexer) cycle(ctx context.Context) error {
 	if run == nil {
 		run = func(ctx context.Context, name string, args ...string) error {
 			cmd := exec.CommandContext(ctx, name, args...)
-			// No unbounded output buffering and no inherited terminal input.
-			cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+			// Nil streams avoid copy goroutines and pipes inherited by grandchildren.
 			return cmd.Run()
 		}
 	}
-	timeout, _ := time.ParseDuration(s.Config.Timeout)
+	timeout, err := time.ParseDuration(s.Config.Timeout)
+	if err != nil {
+		return fmt.Errorf("neus indexing timeout: %w", err)
+	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	active, err := neusServiceActive(ctx, run, s.Config.ServiceName)

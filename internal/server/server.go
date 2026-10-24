@@ -177,6 +177,8 @@ func (s Server) Run(ctx context.Context) error {
 			remainingServices--
 		case <-shutdownCtx.Done():
 			_ = httpServer.Close()
+			// CLI callers return this error to main, which exits the process and
+			// terminates any service that ignored cancellation.
 			return errors.Join(result, fmt.Errorf("wait for server services: %w", shutdownCtx.Err()))
 		}
 	}

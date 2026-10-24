@@ -401,7 +401,11 @@ func newCollectorCmd() *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return runHarnezServer(ctx, collectorInterval, collectorOffline)
+			indexConfig, err := server.LoadNeusIndexConfig()
+			if err != nil {
+				return err
+			}
+			return runHarnezServer(ctx, collectorInterval, collectorOffline, indexConfig)
 		},
 	}
 	collectorCmd.Flags().DurationVar(&collectorInterval, "interval", usage.DefaultCollectorInterval(),

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -143,6 +144,44 @@ func TestNeusIndexerDoesNotOverlapAndJoinsCancellation(t *testing.T) {
 	cancel()
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestNeusIndexerBackgroundChildHoldingStdoutDoesNotBlock(t *testing.T) {
+	cfg := indexConfig(t)
+	cfg.Timeout = "100ms"
+	log := fakeIndexerTools(t, "exit 3", "exit 0")
+	dir := filepath.Dir(log)
+	pidFile := filepath.Join(dir, "sleeper.pid")
+	t.Setenv("NEUS_SLEEP_PID", pidFile)
+	if err := os.WriteFile(filepath.Join(dir, "neus"), []byte("#!/bin/sh\n/bin/sleep 30 &\nprintf '%s\\n' \"$!\" > \"$NEUS_SLEEP_PID\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	watchdog, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- (&NeusIndexer{Config: cfg}).cycle(watchdog) }()
+	stopSleeper := func() {
+		data, err := os.ReadFile(pidFile)
+		if err == nil {
+			pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data)))
+			if parseErr == nil {
+				if process, findErr := os.FindProcess(pid); findErr == nil {
+					_ = process.Kill()
+				}
+			}
+		}
+	}
+	select {
+	case err := <-done:
+		stopSleeper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-watchdog.Done():
+		stopSleeper()
+		<-done
+		t.Fatal("neus child holding stdout blocked command completion")
 	}
 }
 
