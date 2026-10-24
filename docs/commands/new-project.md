@@ -30,8 +30,9 @@ public, on the chosen forges.
 ## 3. Repository
 
 - `git init` on the default branch.
-- `.gitignore` for the stack, a short README with a Why section, LICENSE (AGPL-3.0-or-later
-  unless the interview says otherwise).
+- `.gitignore` for the stack, a short README with a Why section, and REUSE licensing:
+  `LICENSES/<SPDX-id>.txt` plus a `REUSE.toml` (copy from a sibling project such as `../neus`),
+  AGPL-3.0-or-later unless the interview says otherwise. `make reuse` must pass.
 
 ## 4. Harnez Init
 
@@ -52,6 +53,8 @@ Check `harnez docs` for the current names.
 Create `docs/studies/` (with a `.gitkeep`) before `harnez init` so studies are detected.
 The tracker appears with the first ticket: after step 8 files the epic, `.harnez/repo.yaml`
 says `issues.tracker: harnez`; run `harnez init -d .` once more so the merge driver lands.
+`harnez issues new` writes a Draft/Bug template: set Status, Priority and Category (Epic,
+Research) by hand, then run `harnez index` before committing, or the pre-commit lint rejects it.
 
 ## 5. Make Task Runner
 
