@@ -62,6 +62,16 @@ section); init renders it into `.harnez/rules/Tools.md`, which every agent reads
 `/goal` exit-clause and circuit-breaker rule. Automated enforcement (loop/no-progress
 detection) is ticket 466.
 
+## Workflow skills (`/new-project`, `/epic`)
+
+Sources: `docs/commands/new-project.md` and `docs/commands/epic.md`. First live run: snapdex
+(2026-10-24, ticket 902). It went from idea to repo, remotes, a prior-art study, 7 work tickets and 3
+lmcoder tickets in one session. Lessons now in the skills: REUSE licensing instead of a bare LICENSE,
+`fj --host codeberg.org` before a remote exists, and `harnez index` after hand-editing a ticket
+header. Research fanout used four parallel native subagents, one per question group (~40 s each), and
+each one marked claims it had not checked with a search as "(unverified)". The study keeps that mark,
+so unmeasured speeds stay labelled as estimates.
+
 ## Adding a new command
 
 1. Write `commands/<name>.md` in the repo.

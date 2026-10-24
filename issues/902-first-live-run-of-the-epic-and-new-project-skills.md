@@ -23,5 +23,6 @@ run. 900 is built from the 894 run; no new epic was run with it yet. Record what
 Local steps ran end to end (snapdex ff24880, c2a705b); the 901 fix held (`tracker: harnez` after the first
 ticket, merge driver on re-init). Folded into new-project.md: REUSE licensing (`LICENSES/` + `REUSE.toml`)
 instead of a bare LICENSE so `make reuse` passes; set Status/Category on the Draft/Bug template and run
-`harnez index` before committing. Open, not fixed: `issues new` prints "local mode" in the same run that
-adopts the harnez tracker (misleading). Forge steps and `/epic 1` refinement are still pending.
+`harnez index` before committing. The misleading "local mode" message is ticket 906. Later in the run:
+forge steps worked (`fj --host` fix folded in), and `/epic 1` refined the epic into snapdex 003-009.
+Remaining for this ticket: an `/epic` run on an existing project.

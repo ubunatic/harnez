@@ -265,4 +265,5 @@
 | 888 | [888-move-agent-run-resume-orchestration-out-of-cmd-harnez-884-remainder.md](888-move-agent-run-resume-orchestration-out-of-cmd-harnez-884-remainder.md) | Move agent run/resume orchestration out of cmd/harnez (884 remainder) | Backlog — parked 2026-10-24; promote when run/resume work needs a narrower scope |
 | 902 | [902-first-live-run-of-the-epic-and-new-project-skills.md](902-first-live-run-of-the-epic-and-new-project-skills.md) | first live run of the epic and new-project skills | Backlog |
 | 903 | [903-init-validates-copyable-docs-from-a-stale-binary-before-its-stale-docs-warning.md](903-init-validates-copyable-docs-from-a-stale-binary-before-its-stale-docs-warning.md) | init validates copyable docs from a stale binary before its stale-docs warning | Backlog |
+| 906 | [906-issues-new-prints-local-mode-while-adopting-the-harnez-tracker.md](906-issues-new-prints-local-mode-while-adopting-the-harnez-tracker.md) | issues new prints local mode while adopting the harnez tracker | Backlog |
 <!-- harnez:end issues-backlog-index -->
