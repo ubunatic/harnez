@@ -95,3 +95,9 @@ The user can run this canary directly on their host to confirm the biometric beh
 3. **Agent Practice / Tooling**:
    - Agent command runners and background jobs should ensure PAM/sudo cues are not hidden in a background pipe
      without notifying the orchestrator or user.
+
+## Status check (2026-10-24)
+
+The canary exists (`scripts/canary-865-pam-fingerprint.py`, 9879553b, 112527d2); no host run result is
+recorded here. Still open: run it on the host (does fingerprint auth work with stdin closed?), then write the
+rules into `docs/lang/Go.md` and `docs/lang/Bash.md` (sources first, then root copies).

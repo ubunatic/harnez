@@ -41,3 +41,6 @@ resume that compacts, or stop and report if agy exposes no usable context size.
 3. Flag on `harnez agent start` and `resume` (name per `docs/CLIDesign.md`, e.g. `--auto-compact=false`),
    saved in the session record so later resumes keep it; `harnez agent list`/status shows it. Tests for on,
    off, and default.
+
+Status check (2026-10-24): nothing built yet. `cmd/harnez/agent_run.go` still skips automatic compaction
+for agy; the context measure (`input_tokens + cache_read_tokens` of the last call) has no canary yet.

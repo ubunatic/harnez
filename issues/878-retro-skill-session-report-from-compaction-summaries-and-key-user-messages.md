@@ -133,3 +133,6 @@ Implementation advice from the harnez host:
 - The extract of the ubunatic.com session `13d4828e-…` reproduces the manual numbers (17
   summaries, about 100 owner messages) and keeps slash-command arguments.
 - One retro written with the skill on another long session, reviewed by the owner.
+
+Status check (2026-10-24): not started. No retro skill in `config.yaml`, no `session extract` command.
+Evidence base so far: manual retros (harnez study 6bf5f306, loom feedback 52f46749/1a74a670).

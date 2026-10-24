@@ -292,3 +292,8 @@ collects usage itself (828-830 client/server split, 837 socket takeover, 839 5-m
 Before any further work: compare M2 (library Unix controller) and M4 (`--shared`) with the
 server's collector, decide what is superseded (likely revert or remove `--shared` and the
 library controller), and reduce 560 to the remaining library/API goal or close it.
+
+Status check (2026-10-24): M4 is superseded. `usage_shared.go` is gone; `--shared` is a no-op
+"deprecated compatibility flag" (`cmd/harnez/usage_cmd.go`) since 4de0d881 (829 M2). The library
+(`usage/controller*.go`, `usage/snapshot.go`, `examples/usage/`) still exists; open decision: keep it
+next to `harnez server`, or remove it and close 560.

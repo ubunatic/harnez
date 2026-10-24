@@ -15,6 +15,7 @@ report if 854's config design is not settled yet.
 
 ## Notes
 
-- Depends on 854: the wizard only edits the config that 854 defines.
+- Depends on 854: the wizard only edits the config that 854 defines. 854 is closed
+  (`.harnez/repo.yaml` exists); the wizard itself is not built yet (status check 2026-10-24).
 - Defaults come from detection; the wizard explains each feature in one line.
 - Must not block agents: without a TTY, or with `-y`, it uses detection plus existing config.
