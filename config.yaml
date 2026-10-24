@@ -169,6 +169,7 @@ debloat:
     sprinter: user-invocable-only
     standup: user-invocable-only
     story: user-invocable-only
+    retro: user-invocable-only
     harnez-status: user-invocable-only
     harnez-selftest: user-invocable-only
     harnez-init: user-invocable-only
@@ -439,6 +440,11 @@ skills:
     license: AGPL-3.0-or-later
     description: "Write a candid engineering retrospective and case study in docs/studies/"
     file: docs/commands/story.md
+
+  - name: retro
+    license: AGPL-3.0-or-later
+    description: "Extract Claude session summaries and owner messages to ground a retrospective and evergreen handoff"
+    file: docs/commands/retro.md
 
   - name: sprint
     license: AGPL-3.0-or-later

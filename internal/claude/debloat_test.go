@@ -119,8 +119,11 @@ func TestApplyDebloat_MinimalSkillOverrides(t *testing.T) {
 
 	settings := readSettings(t, dir)
 	overrides, _ := settings["skillOverrides"].(map[string]any)
-	if got, want := len(overrides), 19; got != want {
+	if got, want := len(overrides), 20; got != want {
 		t.Fatalf("minimal skill override count = %d, want %d: %v", got, want, overrides)
+	}
+	if got := overrides["retro"]; got != "user-invocable-only" {
+		t.Fatalf("retro override = %v, want user-invocable-only", got)
 	}
 	if got := overrides["commit"]; got != "user-invocable-only" {
 		t.Fatalf("commit override = %v, want user-invocable-only", got)
@@ -153,8 +156,11 @@ func TestApplyDebloat_AggressiveSkillOverrides(t *testing.T) {
 
 	settings := readSettings(t, dir)
 	overrides, _ := settings["skillOverrides"].(map[string]any)
-	if got, want := len(overrides), 21; got != want {
+	if got, want := len(overrides), 22; got != want {
 		t.Fatalf("aggressive skill override count = %d, want %d: %v", got, want, overrides)
+	}
+	if got := overrides["retro"]; got != "user-invocable-only" {
+		t.Fatalf("retro override = %v, want user-invocable-only", got)
 	}
 	for _, name := range []string{"evergreen", "lmcoder"} {
 		if got := overrides[name]; got != "user-invocable-only" {
