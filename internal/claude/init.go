@@ -1119,8 +1119,9 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 	} else if repoErr != nil {
 		return repoErr
 	}
+	wizardActive := opts.WizardInput != nil && !assumeYes
 	trackerAdopted := false
-	if repoConfig.Issues.Tracker == "none" && hasHarnezIssuesIndex(dir) {
+	if !wizardActive && repoConfig.Issues.Tracker == "none" && hasHarnezIssuesIndex(dir) {
 		repoConfig.Issues.Tracker = "harnez"
 		repoConfig.Issues.MergeDriver = true
 		trackerAdopted = true
@@ -1136,7 +1137,22 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 			repoConfig.Docs.Copies = append(repoConfig.Docs.Copies, name)
 		}
 	}
-	if os.IsNotExist(repoErr) || trackerAdopted || opts.IssuesGit != nil || opts.Quota1 || len(opts.Docs) > 0 {
+	if wizardActive {
+		output := opts.WizardOutput
+		if output == nil {
+			output = os.Stdout
+		}
+		var detectedDocs []string
+		if cfg != nil {
+			detectedDocs = detectRepoConfig(dir, cfg).Docs.Copies
+		}
+		var err error
+		repoConfig, err = writeInitWizardConfig(dir, repoConfig, detectedDocs, opts.WizardInput, output)
+		if err != nil {
+			return fmt.Errorf("init wizard: %w", err)
+		}
+		docs = nil // The wizard's final choices replace explicit-doc defaults.
+	} else if os.IsNotExist(repoErr) || trackerAdopted || opts.IssuesGit != nil || opts.Quota1 || len(opts.Docs) > 0 {
 		if err := writeRepoConfig(dir, repoConfig); err != nil {
 			return fmt.Errorf("write %s: %w", repoConfigPath, err)
 		}

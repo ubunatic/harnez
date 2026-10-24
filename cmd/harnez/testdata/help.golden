@@ -1548,6 +1548,7 @@ Flags:
   -h, --help               help for init
       --issues-git         record issue-index Git integration for a Harnez tracker (use --issues-git=false to remove it)
       --json               output RAMP report in JSON format
+      --no-wizard          skip repository feature prompts
       --quota-1            scaffold Quota-1 single-test guardrails in AGENTS.md and Makefile
       --ramp               report RAMP maturity profile and projected init changes (offline, read-only)
       --ramp-report        alias for --ramp
@@ -1556,7 +1557,8 @@ Flags:
       --summary            run claude -p to generate a project summary and add it to AGENTS.md
       --update             re-fetch and refresh the project summary (implies --summary)
       --variant string     doc variant to install: lite or full (default: keep each existing doc variant, else full)
-  -y, --yes                assume yes when reconciling Makefile targets (no prompt)
+      --wizard             prompt for repository features even without a terminal (EOF keeps defaults)
+  -y, --yes                use detected/recorded setup and reconcile Makefile targets without prompts
 
 === harnez install
 Install an optional dependency and run its bootstrap

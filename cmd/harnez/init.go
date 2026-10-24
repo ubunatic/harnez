@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"ubunatic.com/harnez/internal/assess"
 	"ubunatic.com/harnez/internal/claude"
 )
@@ -16,6 +18,7 @@ func newInitCmd() *cobra.Command {
 	var initVariant string
 	var initSummary, initUpdate, initReplace, initYes, initAll, initIssuesGit, initGoWork, initForce, initQuota1 bool
 	var initRAMP, initRAMPReport, initJSON bool
+	var initWizard, initNoWizard bool
 
 	initCmd := &cobra.Command{
 		Use:   "init",
@@ -52,6 +55,10 @@ func newInitCmd() *cobra.Command {
 				IssuesGit: issuesGit, GoWork: initGoWork, Force: initForce,
 				Variant: initVariant, Quota1: initQuota1,
 			}
+			input, output := cmd.InOrStdin(), cmd.OutOrStdout()
+			if initWizardEnabled(initWizard, initNoWizard, initYes, initAll, os.Getenv("CI") != "", initStreamTTY(input), initStreamTTY(output)) {
+				opts.WizardInput, opts.WizardOutput = input, output
+			}
 			if initAll {
 				return claude.RunInitAllWithVariant(initDir, cfg, opts)
 			}
@@ -66,7 +73,10 @@ func newInitCmd() *cobra.Command {
 	initCmd.Flags().StringSliceVar(&initDocs, "docs", nil, "docs to set up in the project, comma-separated or repeated (e.g. golang,canary)")
 	initCmd.Flags().StringVar(&initVariant, "variant", "", "doc variant to install: lite or full (default: keep each existing doc variant, else full)")
 	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git setup to note in AGENTS.md (solo, fork, team)")
-	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "assume yes when reconciling Makefile targets (no prompt)")
+	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "use detected/recorded setup and reconcile Makefile targets without prompts")
+	initCmd.Flags().BoolVar(&initWizard, "wizard", false, "prompt for repository features even without a terminal (EOF keeps defaults)")
+	initCmd.Flags().BoolVar(&initNoWizard, "no-wizard", false, "skip repository feature prompts")
+	initCmd.MarkFlagsMutuallyExclusive("wizard", "no-wizard")
 	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")
 	initCmd.Flags().BoolVar(&initUpdate, "update", false, "re-fetch and refresh the project summary (implies --summary)")
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")
@@ -78,4 +88,13 @@ func newInitCmd() *cobra.Command {
 	initCmd.Flags().BoolVar(&initJSON, "json", false, "output RAMP report in JSON format")
 
 	return initCmd
+}
+
+func initWizardEnabled(force, disabled, yes, all, ci, inputTTY, outputTTY bool) bool {
+	return !disabled && !yes && !all && (force || (!ci && inputTTY && outputTTY))
+}
+
+func initStreamTTY(stream any) bool {
+	file, ok := stream.(*os.File)
+	return ok && term.IsTerminal(int(file.Fd()))
 }

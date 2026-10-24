@@ -1,5 +1,7 @@
 package claude
 
+import "io"
+
 // ApplyOptions selects components and optional installations for a global apply.
 // A nil Selection means all components; an omitted DocVariant uses full sources.
 type ApplyOptions struct {
@@ -27,4 +29,8 @@ type InitOptions struct {
 	Force       bool
 	Variant     string
 	Quota1      bool
+	// WizardInput opts into interactive configuration; nil keeps the legacy path.
+	// AssumeYes always bypasses it. WizardOutput defaults to stdout when omitted.
+	WizardInput  io.Reader
+	WizardOutput io.Writer
 }

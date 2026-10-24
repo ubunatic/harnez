@@ -181,6 +181,20 @@ harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [--force]
 
 All steps are idempotent. Running `init --docs golang` twice is safe. Running in non-coding repositories or `$HOME` is rejected unless `--force` (`-f`) is explicitly passed.
 
+When stdin and stdout are terminals, `init` prompts for repository features with
+detected/recorded defaults and saves the choices to `.harnez/repo.yaml` before
+continuing. Enter or EOF keeps each default; invalid answers are asked again.
+`-y`/`--yes`, `--no-wizard`, `--all`, CI (`CI` set to a nonempty value), or a
+redirected stream skips automatic prompting. `--wizard` forces the prompts even
+with redirected streams or CI; `-y` and `--all` still take precedence.
+`--wizard` and `--no-wizard` are mutually exclusive. Explicit setup flags supply
+wizard defaults; the answers are final for that invocation. Choices cover the
+tracker, studies index, merge driver, optional doc copies, Makefile scaffolding,
+and quota rules. Baseline docs remain enabled; general rules have no config toggle
+and are omitted. Disabling a feature records its existing config opt-out; it does
+not delete existing user docs, Makefiles, or tracker files. The noninteractive
+path retains its existing managed-tracker adoption behavior.
+
 `.harnez/repo.yaml` is project-local configuration, separate from the embedded/global
 `config.yaml` used by `apply`. On first init, Harnez detects the existing tracker format,
 studies directory, installed Make targets, quota section, and language files, then writes
