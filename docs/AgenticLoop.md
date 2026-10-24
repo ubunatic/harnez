@@ -78,3 +78,5 @@ For a single focused ticket: Host Orchestrator (**zero coding, no exploratory re
 - **Buffered Long-Running Output** — piping a long command through `tail`/`grep`/`sort`/`wc`/`head`, which shows nothing until it exits; run plain or `tee` to a log.
 - **`cd`-scoped commands** — bare `cd` leaking into later unrelated calls in a shared shell; use `-C`/`--prefix`/`--manifest-path` or a subshell `(cd dir && cmd)`.
 - **Chatty Watch Wrappers** — wrapping a poll-and-redraw CLI (`gh run watch`, `docker logs -f`) in a routine agent-called target without quieting it; poll the tool's own status query on a matched interval and print one summary line on completion instead.
+
+<!-- harnez:stop -->
