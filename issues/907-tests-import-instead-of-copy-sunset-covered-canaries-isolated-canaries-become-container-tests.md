@@ -37,3 +37,22 @@ symptom. Owner decision (2026-10-24): avoid copying code at all.
    (candidates from a grep for copy/sandbox helpers; verify each actually copies repo code).
 3. Convert per verdict, one milestone per verdict group. Verify with `make test-q1` and, for container
    tests, `make container-test`.
+
+## 4. Audit Results
+
+No real copy fixture was found, so no import/sunset/container conversion is needed.
+
+- **Clean:** `internal/claude/integration_test.go`, `internal/claude/init_phases_test.go`,
+  `internal/subagent/driver_test.go`, `internal/finder/search_test.go`, and
+  `internal/exec/exec_test.go` (the five files named in the plan); their temporary files are
+  test inputs or outputs, not copies of repository code.
+- **Clean:** `internal/claude/lite_doc_structural_gate_test.go:71-95` reads full/lite docs as
+  input; it does not copy or build code. `cmd/harnez/telemetry_writer_boundary_test.go:12-76`
+  walks and parses repository Go files in place; it does not copy them.
+- **Clean:** `internal/exec/stopped_test.go:48-57` reads `stopped.go` to check a source constraint
+  in place. `scripts/gotest-summary/main_test.go:12-30` writes synthetic Go test input, not
+  repository source.
+- A repository-wide `*_test.go` scan for temp directories, file reads/writes, copy helpers,
+  package walks, and `go.mod` creation found no other test copying repository code into a
+  temporary module/directory. No fixture fits the three conversion verdicts because there are
+  no real fixtures.
