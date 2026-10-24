@@ -48,6 +48,9 @@ func initDocPreflight(cfg *Config, dir string, docs []string, variant string) (m
 		if err != nil {
 			return nil, fmt.Errorf("language %s: read source: %w", name, err)
 		}
+		if err := staleEmbeddedDocError(dir, lang.SourceFor(docVariants[name]), data); err != nil {
+			return nil, err
+		}
 		if _, _, err := prepareManagedDoc(localPath(dir, lang.Local), data); err != nil {
 			return nil, fmt.Errorf("language %s: copy: %w", name, err)
 		}

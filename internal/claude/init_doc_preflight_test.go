@@ -71,3 +71,30 @@ func TestInitDocPreflightChecksEveryDocWithoutWriting(t *testing.T) {
 		})
 	}
 }
+
+func TestInitDocPreflightStaleSourceOnlyInHarnezCheckout(t *testing.T) {
+	for _, staleSource := range []bool{false, true} {
+		t.Run(map[bool]string{false: "project without sources", true: "stale checkout source"}[staleSource], func(t *testing.T) {
+			dir := t.TempDir()
+			source := "docs/lang/Git.md"
+			if staleSource {
+				if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, source)), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, source), []byte("new source\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cfg := &Config{FS: fstest.MapFS{source: {Data: []byte("bundled source\n")}},
+				AgentsMD: AgentsMD{Languages: map[string]Language{"git": {Source: source, Local: "docs/Git.md"}}}}
+			_, err := initDocPreflight(cfg, dir, []string{"git"}, "")
+			if staleSource {
+				if err == nil || !strings.Contains(err.Error(), "run make install") {
+					t.Fatalf("expected actionable stale-source error, got %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("project without copyable source failed preflight: %v", err)
+			}
+		})
+	}
+}

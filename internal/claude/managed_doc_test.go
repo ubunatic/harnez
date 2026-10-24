@@ -112,9 +112,8 @@ func TestInitSpecMarkerlessLocalSectionBothVariants(t *testing.T) {
 
 func TestWarnStaleEmbeddedDoc(t *testing.T) {
 	dir := t.TempDir()
-	var out bytes.Buffer
-	if warnStaleEmbeddedDoc(&out, dir, "docs/lang/Git.md", []byte("bundled\n")) || out.Len() > 0 {
-		t.Fatalf("warned without an on-disk source: %q", out.String())
+	if err := staleEmbeddedDocError(dir, "docs/lang/Git.md", []byte("bundled\n")); err != nil {
+		t.Fatalf("unexpected stale-source error in project without sources: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "docs", "lang"), 0o755); err != nil {
 		t.Fatal(err)
@@ -123,16 +122,13 @@ func TestWarnStaleEmbeddedDoc(t *testing.T) {
 	if err := os.WriteFile(src, []byte("bundled\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if warnStaleEmbeddedDoc(&out, dir, "docs/lang/Git.md", []byte("bundled\n")) || out.Len() > 0 {
-		t.Fatalf("warned for a matching source: %q", out.String())
+	if err := staleEmbeddedDocError(dir, "docs/lang/Git.md", []byte("bundled\n")); err != nil {
+		t.Fatalf("unexpected error for matching source: %v", err)
 	}
 	if err := os.WriteFile(src, []byte("edited\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if !warnStaleEmbeddedDoc(&out, dir, "docs/lang/Git.md", []byte("bundled\n")) {
-		t.Fatal("no warning for a source newer than the binary")
-	}
-	if want := "warning: docs/lang/Git.md differs from the doc bundled in this harnez binary; run make install, then rerun init\n"; out.String() != want {
-		t.Fatalf("warning = %q, want %q", out.String(), want)
+	if err := staleEmbeddedDocError(dir, "docs/lang/Git.md", []byte("bundled\n")); err == nil || !strings.Contains(err.Error(), "run make install") {
+		t.Fatalf("expected actionable stale-source error, got %v", err)
 	}
 }

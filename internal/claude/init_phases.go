@@ -88,7 +88,6 @@ func initCopyDocs(ir *initReport, assumeYes bool, cfg *Config, dir string, docs 
 		if err != nil {
 			return fmt.Errorf("language %s: read source: %w", name, err)
 		}
-		warnStaleEmbeddedDoc(os.Stderr, dir, lang.SourceFor(docVariants[name]), data)
 		localDoc := localPath(dir, lang.Local)
 		cr, err := writeManagedDoc(localDoc, data)
 		if err != nil {

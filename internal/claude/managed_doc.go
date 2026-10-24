@@ -3,7 +3,6 @@ package claude
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -49,16 +48,20 @@ func prepareManagedDoc(dst string, bundled []byte) ([]byte, string, error) {
 	return withDocStopMarker(bundled), "", nil
 }
 
-// warnStaleEmbeddedDoc warns when dir holds the doc's copyable source (the
-// harnez checkout itself) and it differs from the bundled copy: the binary
-// predates the edit, so init would refresh to the old text (issue 790).
-func warnStaleEmbeddedDoc(w io.Writer, dir, source string, bundled []byte) bool {
+// staleEmbeddedDocError rejects stale bundled docs when init runs in a source
+// checkout. Projects without that source file continue to use embedded docs.
+func staleEmbeddedDocError(dir, source string, bundled []byte) error {
 	onDisk, err := os.ReadFile(filepath.Join(dir, source))
-	if err != nil || bytes.Equal(onDisk, bundled) {
-		return false
+	if os.IsNotExist(err) {
+		return nil
 	}
-	fmt.Fprintf(w, "warning: %s differs from the doc bundled in this harnez binary; run make install, then rerun init\n", source)
-	return true
+	if err != nil {
+		return fmt.Errorf("read source %s: %w", source, err)
+	}
+	if !bytes.Equal(onDisk, bundled) {
+		return fmt.Errorf("%s differs from the doc bundled in this harnez binary; run make install, then rerun init", source)
+	}
+	return nil
 }
 
 func withDocStopMarker(bundled []byte) []byte {

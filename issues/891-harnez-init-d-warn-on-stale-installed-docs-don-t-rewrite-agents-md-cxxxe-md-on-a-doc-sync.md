@@ -1,6 +1,6 @@
 # 891 — harnez init -d .: warn on stale installed docs, don't rewrite AGENTS.md/CxxxE.md on a doc sync
 
-**Status**: Open
+**Status**: Closed — repo config retains all four opt-in docs; stale embedded docs require an on-disk source and name make install; installed init reports no changes
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

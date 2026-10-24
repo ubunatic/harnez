@@ -7,10 +7,14 @@ docs:
     studies: true
     copies:
         - bash
+        - concise-mode
+        - containerfile
         - golang
         - gorelease
         - make
         - manpages
+        - prototyping-features
+        - website
 rules:
     quota: true
 make:
