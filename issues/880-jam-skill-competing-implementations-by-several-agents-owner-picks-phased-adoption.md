@@ -1,6 +1,6 @@
 # 880 — jam skill: competing implementations by several agents, owner picks, phased adoption
 
-**Status**: Open
+**Status**: Closed — Harnez-managed jam skill installed; covers independent builds, sourced comparison, owner selection, improvement round, and phased lean-sprint adoption; test-q1 passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
