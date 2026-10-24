@@ -245,24 +245,8 @@ func Run(opt Options) error {
 
 	// 8. Remote Git Push
 	if !opt.SkipPush {
-		remoteName := "origin"
-		if forge != nil && forge.RemoteName != "" {
-			remoteName = forge.RemoteName
-		}
-		if !opt.DryRun {
-			branch, err := getGitCurrentBranch(opt.Dir)
-			if err != nil {
-				return fmt.Errorf("get current branch: %w", err)
-			}
-			fmt.Fprintf(opt.Out, "  [git]       Pushing branch %s and tag %s to %s...\n", branch, tagName, remoteName)
-			if err := runCmd(opt.Dir, "git", "push", remoteName, branch); err != nil {
-				return fmt.Errorf("git push branch %s to %s: %w", branch, remoteName, err)
-			}
-			if err := runCmd(opt.Dir, "git", "push", remoteName, tagName); err != nil {
-				return fmt.Errorf("git push tag %s to %s: %w", tagName, remoteName, err)
-			}
-		} else {
-			fmt.Fprintf(opt.Out, "  [dry-run]   Would push branch and tag %s to %s\n", tagName, remoteName)
+		if err := pushRelease(opt, tagName, forge); err != nil {
+			return err
 		}
 	}
 

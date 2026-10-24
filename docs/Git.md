@@ -19,7 +19,10 @@ commonly stored in an `AGENTS.md` file at the repository root.
 - Review before commit:
   - small fixes: commit directly if all tests pass and existing test assertions remain intact
   - non-trivial changes / features: perform a dedicated review pass (host orchestration or a fresh reviewer subagent) before committing to verify test rigor, doc/ticket accuracy, and codebase clarity
-- Do not push unless asked.
+- Do not push until the user confirms pushing. One confirmation covers the session:
+  push later finished work without asking again, unless the user narrows or revokes consent.
+- "Push" means `main` and tags to both dev remotes. Ask again only for force pushes,
+  new remote branches, or a remote that diverged.
 - Do not create remote branches or PRs unless asked.
 
 ## Commit messages
@@ -38,6 +41,13 @@ commonly stored in an `AGENTS.md` file at the repository root.
 - Codeberg is canonical for releases: `go get` resolves there, so tags go to Codeberg first.
 - Keep both `main` branches equal: every `main` update fast-forwards and goes to both remotes.
   Never force either `main`; never set a push mirror (it overwrites the other side).
+- Check every destination for divergence before pushing anything. `harnez release` uses
+  all Git remotes configured in the repo, checks branch and release tag updates first,
+  then pushes both atomically per remote. A later connection failure or concurrent remote
+  update can still interrupt synchronization; resolve the error and retry with `--continue`.
+- `uman push` uses the upstream by default. It pushes multiple remotes only when
+  `push.default_remotes` lists them in `.uman.toml`; it does not sync tags or check all
+  destinations before the first push. Do not assume an unconfigured `uman push` syncs both.
 
 ### Branches from either remote
 Cloud agents (Claude Code web, Jules, Codex) usually work on GitHub branches.
@@ -46,6 +56,9 @@ Cloud agents (Claude Code web, Jules, Codex) usually work on GitHub branches.
 - Reserve ticket numbers after that fetch; on a clash, renumber yours.
 - Integrate by fast-forward, then push `main` (and tags) to both remotes
   (`<cb>`/`<gh>` = your remote names, e.g. `origin`/`github`):
-  `git merge --ff-only <branch> && git push <cb> main && git push <gh> main`.
+  `git merge --ff-only <branch>`, then check both destinations before any actual push:
+  `git push --dry-run --atomic <cb> main --tags && git push --dry-run --atomic <gh> main --tags`.
+  After both checks succeed:
+  `git push --atomic <cb> main --tags && git push --atomic <gh> main --tags`.
 
 <!-- harnez:stop -->
