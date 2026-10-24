@@ -28,14 +28,22 @@ sol) and reviewer (opus/sol vs orchestrator only).
    website/app shape, + non-goals, + hard constraints (offline, no deps, platforms), + public or private,
    + which remotes. Record answers in the first ticket, not only in chat.
 2. + **Name check**: the name is free locally (`~/projects/<name>`, `uman info`) and, if public, on the forges.
-3. `git init` on the default branch; + `.gitignore` for the stack, LICENSE, a short README with a Why section.
-4. `harnez init -d .`; + confirm `.harnez/repo.yaml` detection (tracker, docs, studies) and a `make help`
-   that works; + `make install` only if the Makefile provides it.
-5. + First commit (conventional message) before anything else, so later steps diff cleanly.
+3. `git init` on the default branch; + `.gitignore` for the stack, a short README with a Why section;
+   LICENSE defaults to AGPL-3.0-or-later (owner default) unless the interview says otherwise.
+4. `harnez init` with flags chosen per stack. Owner default (Go CLI):
+   `harnez init --quota-1 --variant lite --docs make,golang,bash,manpages`. Other stacks swap the `--docs`
+   list (e.g. rust, zig, cpp, website, containerfile) and drop `manpages` when there is no CLI; the skill keeps
+   a small stack → flags table and states the chosen command before running it. + Confirm `.harnez/repo.yaml`
+   detection (tracker, docs, studies).
+5. **Make task runner**: a Makefile (docs/Make.md conventions, self-documenting `make help`) with at least
+   `make build`, `make install` and `make reuse` (REUSE/SPDX license check); each may start as a no-op that
+   says so, and gets real recipes as the stack lands.
+5b. + First commit (conventional message) before anything else, so later steps diff cleanly.
 6. **Create repos** (outward-facing: confirm first): Codeberg canonical, GitHub dev mirror per docs/Git.md;
    add remotes; push only when the owner says so.
-7. **First tickets**: a project-goal ticket (from the interview), + a "walking skeleton" ticket (build, one
-   test, `make test` green), + a release/CI ticket only if wanted.
+7. **First ticket = bootstrap epic** (via `/epic`, 900): its tasks are steps 8–10 below (research ticket,
+   epic refinement into work subtickets), plus the project-goal record from the interview, + a "walking
+   skeleton" task (build, one test, `make test` green), + a release/CI task only if wanted.
 8. **Prior-art research ticket**: web-search fanout (several cheap searchers, distinct angles: existing tools,
    libraries to reuse, standards/specs, known pitfalls) → aggregate → study in `docs/studies/`. + Each finding
    cites its source; + rate maintenance (last release, activity), size/bloat, license fit.
