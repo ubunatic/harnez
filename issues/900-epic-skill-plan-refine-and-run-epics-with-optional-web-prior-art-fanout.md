@@ -36,6 +36,9 @@ the direction and avoid reinventing well-established, stable, modern, non-bloate
 5. + **Decisions**: batch owner questions once with a recommendation each; when the owner delegates, record
    each decision in the subticket's `## Decision`.
 6. **Run**: one `/lean-sprint` per sprint group; group very small tickets; update the task table as each lands.
+6b. **Circuit breaker** (owner, 2026-10-24): every `/goal` the skill writes or runs carries one. On a loop, a
+   hard architectural or OS blocker, or no progress seen by the orchestrator, clear the goal and write a
+   failure report in the epic (what was tried, why it failed, resume point).
 7. + **Skip rule**: a subticket that needs new commands or unavailable resources is skipped and named, not forced.
 8. + **Close**: the epic closes when every task is closed, skipped with a reason, or parked in its own ticket;
    the close reason lists each.

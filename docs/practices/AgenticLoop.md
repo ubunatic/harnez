@@ -417,7 +417,7 @@ review, integration, and termination. Keep the verbs distinct: spawn creates
 the child/entry, message updates an existing child, and terminate ends it.
 
 ### Anti-Patterns to Avoid
-- ❌ **Goals Without Exit Clauses**: A `/goal` without an exit clause deadlocks the Stop hook when progress needs user input.
+- ❌ **Goals Without Exit Clauses**: A `/goal` without an exit clause deadlocks the Stop hook when progress needs user input. Every `/goal` also carries a circuit breaker: clear the goal and write a failure report (what was tried, why it failed, the resume point) in the ticket (or a study doc, when the project keeps one) when a worker loops, an architectural or OS blocker is hard to solve, or the orchestrator sees no progress.
 - ❌ **Parallel Writing**: Spawning multiple subagents with write permissions on the same workspace simultaneously.
 - ❌ **Blocking Handoff Waits**: Treating "hand this to a subagent" as permission to block the main chat while waiting for the child. The host is always the responsive orchestrator.
 - ❌ **Silent Verification**: Assuming a fix works without running test commands or canary scripts.

@@ -15,7 +15,7 @@ For TUI layout work, use a checked-in `.ansi` mockup under `docs/data/` as the v
 2. **Canary & Test-Driven Verification** — verify with real test runs before declaring done; never assume an edit works.
 3. **Zero Zombie Guarantee & Background Task Hygiene** — track and terminate every background process, timer, and subagent before ending a session; always set `HTO=0` for background tasks/jobs; rely on reactive completion notifications instead of polling or `sleep` loops.
 4. **Responsive Host Orchestrator** — stay available; interactive hosts run agent start/wait in the host background runner, never synchronously through MCP.
-5. **In-Repository Single Source of Truth** — tickets/decisions/retros live in git (`issues/`, `docs/feedback/`, `docs/studies/`), not just chat.
+5. **In-Repository Single Source of Truth** — tickets/decisions/retros live in git (`issues/`, `docs/feedback/`, `docs/studies/` when present, otherwise a ticket), not just chat.
 6. **Context Discipline & Range-Bounded Ingestion** — never whole-file-read `AGENTS.md`/active system rules; avoid native tool slices on >100 line files; use `harnez read -L`/`-n` via CLI (`harnez read -I` is paused until issue 543, a memory blow-up, is fixed).
 7. **Media & Demo Verification Gate** — **always ask the user for explicit confirmation** of recorded output before publishing/embedding.
 8. **Deployment Transparency — 3-State Grounding (when applicable)** — **Local State**, **Deployed Artifact State**, and **Active Daemon State** are independent; local build/test proves nothing about the other two (remote-deploying projects only).
@@ -53,7 +53,7 @@ For a single focused ticket: Host Orchestrator (**zero coding, no exploratory re
 | Independent Reviewer | Read-only + diff | Audits diff vs. acceptance criteria | Spawned in Phase 3 |
 
 ## 6. Anti-Patterns to Avoid
-- **Goals Without Exit Clauses** — a `/goal` without an exit clause deadlocks the Stop hook when progress needs user input.
+- **Goals Without Exit Clauses** — a `/goal` without an exit clause deadlocks the Stop hook when progress needs user input. Circuit breaker: on a loop, a hard architectural/OS blocker, or no progress, clear the goal and write a failure report (tried, why it failed, resume point).
 - **Parallel Writing** — multiple write-permitted subagents on one workspace at once.
 - **Blocking Handoff Waits** — treating a handoff as license to block the main chat.
 - **Silent Verification** — assuming a fix works without running tests/canaries.

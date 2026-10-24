@@ -58,5 +58,6 @@ sol) and reviewer (opus/sol vs orchestrator only).
 
 ## Notes
 
+- Every `/goal` (bootstrap epic, research ticket) carries the circuit breaker from 900 step 6b.
 - Delegate, don't restate: HarnezInit (re-sync), story (study shape), epic (900), lean-sprint (execution).
 - `uman` auto-discovers repos under `~/projects`; no `.uman.toml` entry is needed (website projects excepted).
