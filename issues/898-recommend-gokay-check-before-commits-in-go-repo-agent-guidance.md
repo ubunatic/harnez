@@ -4,7 +4,7 @@
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Docs
-**Related**: 177 (lean post-edit build check); `../gotester/docs/Gokay.md`
+**Related**: 177 (lean post-edit build check); `../gokay/docs/Gokay.md`
 
 ---
 
@@ -12,7 +12,7 @@
 
 ## 1. Problem & Motivation
 Agents in Go repos either run repo-wide `gofmt`/`go vet`/`go test ./...` (slow, noisy with legacy
-drift) or skip checks. `gokay` (repo `~/projects/gotester`, formerly gotester) checks only the
+drift) or skip checks. `gokay` (repo `~/projects/gokay`, formerly gotester) checks only the
 agent's own change: `gokay check` runs fmt (check only), vet, golangci-lint on changed lines and
 tests of changed packages, and prints a four-row summary with a meaningful exit code.
 
