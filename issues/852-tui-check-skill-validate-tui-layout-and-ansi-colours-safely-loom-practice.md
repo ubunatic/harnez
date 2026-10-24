@@ -1,6 +1,6 @@
 # 852 — tui-check skill: validate TUI layout and ANSI colours safely (loom practice)
 
-**Status**: Open
+**Status**: Closed — First real run on loom ColorPicker (loom 5195466): sketch ColorPicker-b2 passes eval/measure/check-box (schematic, 12 cols); live tmux capture at 80x24 matches docs/progress/ColorPicker.ansi glyph, FG and BG per cell, incl. FG marker 24 over idx 4 and BG marker over idx 15 matching Preview fg4/bg15; loom ColorPicker tests green with 100 FG/BG assertions. Skill gained two notes (widgets --show needs a tty; schematic sketches).
 **Priority**: P2 (Medium) — turns a proven loom review practice into a reusable workflow
 **Severity**: Minor
 **Category**: Workflow
