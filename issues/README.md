@@ -29,4 +29,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 909 | [909-epic-system-robustness-privileged-prompts-swap-and-kill-diagnostics.md](909-epic-system-robustness-privileged-prompts-swap-and-kill-diagnostics.md) | Epic: system robustness, privileged prompts, swap and kill diagnostics | Open |
 | 910 | [910-epic-repo-setup-tracker-tests-and-agent-guidance.md](910-epic-repo-setup-tracker-tests-and-agent-guidance.md) | Epic: repo setup, tracker, tests and agent guidance | Open |
 | 911 | [911-epic-skills-first-real-runs-and-epic-retro-hygiene.md](911-epic-skills-first-real-runs-and-epic-retro-hygiene.md) | Epic: skills, first real runs and epic/retro hygiene | Open |
+| 912 | [912-usage-show-swap-in-the-load-and-remote-load-boxes.md](912-usage-show-swap-in-the-load-and-remote-load-boxes.md) | usage: show swap in the Load and Remote Load boxes | Open |
 <!-- harnez:end issues-active-index -->
