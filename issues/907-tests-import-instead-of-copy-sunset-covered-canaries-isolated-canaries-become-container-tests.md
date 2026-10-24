@@ -1,6 +1,6 @@
 # 907 — tests: import instead of copy, sunset covered canaries, isolated canaries become container tests
 
-**Status**: Open
+**Status**: Closed — No real repository-code copy fixtures found: five planned tests, both candidates, stopped_test.go and gotest-summary synthetic inputs audited clean. Canary source/root docs now state import, sunset covered canaries, and container isolation; make test-q1 passed with TestRootDocCopiesMatchSources.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Testing
