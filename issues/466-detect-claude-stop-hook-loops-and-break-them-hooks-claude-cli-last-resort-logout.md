@@ -33,3 +33,7 @@ developers. The judge failed the condition after every turn, the agent replied e
 5. Prevention: warn when the developer set or plan changes while a `/goal` is active.
 
 Record findings here before building anything.
+
+## Owner note (2026-10-24)
+
+Also covers the `/goal` circuit breaker: besides Stop-hook loops, detect "no progress" (no new commits or file changes across N turns) and nudge the agent to run `/goal clear` and write the failure report. The text rule is in config.yaml (Harnez Agent section); this ticket is the automated backstop.
