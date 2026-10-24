@@ -1,6 +1,6 @@
 # 871 — Pre-flight disk space check before heavy downloads, container builds, and model caching
 
-**Status**: Open
+**Status**: Closed — Added the disk-headroom rule to docs/practices/AgenticLoop.md (section 'Disk headroom before heavy downloads and builds') and invariant 10 in AgenticLoop.lite.md, synced to root docs/AgenticLoop.md (commit f900c271). Guidance only, as decided: df -h check on the target, 10 GiB headroom, named scratch disk or ask. make test-q1 finished with 0 '--- FAIL' lines (log /tmp/harnez-test-q1-871.log).
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
