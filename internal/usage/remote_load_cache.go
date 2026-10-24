@@ -22,21 +22,35 @@ func remoteLoadCachePath(host string) string {
 	return filepath.Join(StateDir(""), "remote-load-"+hex.EncodeToString(digest[:])[:16]+".json")
 }
 
-// ReadCachedRemoteLoad returns the last successful remote load snapshot for host.
-func ReadCachedRemoteLoad(host string) *LoadSnapshot {
+// RemoteLoadCache is the last successful remote load snapshot for one host and
+// the time it was written. A zero UpdatedAt is an entry with no recorded time
+// (a legacy cache file); a nil Snapshot means there is no usable cache at all.
+type RemoteLoadCache struct {
+	Snapshot  *LoadSnapshot
+	UpdatedAt time.Time
+}
+
+// ReadCachedRemoteLoadEntry returns the cached snapshot for host with its
+// write time. A missing, malformed, or other-host file yields the zero value.
+func ReadCachedRemoteLoadEntry(host string) RemoteLoadCache {
 	host = strings.TrimSpace(host)
 	if host == "" {
-		return nil
+		return RemoteLoadCache{}
 	}
 	data, err := os.ReadFile(remoteLoadCachePath(host))
 	if err != nil {
-		return nil
+		return RemoteLoadCache{}
 	}
 	var entry remoteLoadCacheEntry
 	if json.Unmarshal(data, &entry) != nil || entry.Host != host {
-		return nil
+		return RemoteLoadCache{}
 	}
-	return &entry.Snapshot
+	return RemoteLoadCache{Snapshot: &entry.Snapshot, UpdatedAt: entry.UpdatedAt}
+}
+
+// ReadCachedRemoteLoad returns the last successful remote load snapshot for host.
+func ReadCachedRemoteLoad(host string) *LoadSnapshot {
+	return ReadCachedRemoteLoadEntry(host).Snapshot
 }
 
 // WriteCachedRemoteLoad atomically persists the last successful snapshot for host.

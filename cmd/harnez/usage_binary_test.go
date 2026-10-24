@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"ubunatic.com/harnez/internal/usage"
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
@@ -423,5 +424,112 @@ func usageTestEnv(home, runtimeDir string) []string {
 		"XDG_STATE_HOME=" + filepath.Join(home, "state"),
 		"XDG_CONFIG_HOME=" + filepath.Join(home, "config"),
 		"HARNEZ_DISABLE_RATE_FEEDBACK=1",
+	}
+}
+
+// usageTestRecoveryWait bounds the wait for the collector's first retry: the
+// M1 backoff starts at 10s, so recovery needs slightly more than that.
+const usageTestRecoveryWait = 30 * time.Second
+
+// TestCollectorRecoversRemoteLoadForOneShot is issue 879 M2b end to end: a
+// running collector polls a fake host that is down, then up. A later one-shot
+// usage shows the cached snapshot, and the one-shot process never runs ssh.
+func TestCollectorRecoversRemoteLoadForOneShot(t *testing.T) {
+	skipShort(t, "runs the harnez server and usage binaries and waits for the 10s retry")
+	bin := buildUsageTestBinary(t)
+	home, runtimeDir := usageTestDirs(t)
+	seedUsageTestStore(t, home)
+	root := t.TempDir()
+	sshDir := filepath.Join(root, "bin")
+	if err := os.MkdirAll(sshDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(root, "ssh-parent-pids")
+	failed := filepath.Join(root, "ssh-failed")
+	recovered := filepath.Join(root, "ssh-recovered")
+	const snapshot = `{"timestamp":"2026-10-24T12:00:00Z","load":{"cpu":{"NumCPU":8,"CPUPercent":42,"CPUPercentOk":true,"Ok":true}}}`
+	// The fake host refuses connections until the test creates recovered. The
+	// failed marker is written only on a refused call, so the test can tell the
+	// collector has seen the outage before it recovers the host.
+	stub := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$PPID\" >> %q\nif test -e %q; then\n  printf '%%s' '%s'\n  exit 0\nfi\n: > %q\necho 'fake host down' >&2\nexit 255\n", marker, recovered, snapshot, failed)
+	if err := os.WriteFile(filepath.Join(sshDir, "ssh"), []byte(stub), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "config", "harnez"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "config", "harnez", "local.yaml"), []byte("load:\n  watch_host: x600\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := usageTestEnv(home, runtimeDir)
+	for i := range env {
+		if strings.HasPrefix(env[i], "PATH=") {
+			env[i] = "PATH=" + sshDir + string(os.PathListSeparator) + os.Getenv("PATH")
+		}
+	}
+
+	server := exec.Command(bin, "server")
+	server.Env = env
+	var serverLog strings.Builder
+	server.Stdout, server.Stderr = &serverLog, &serverLog
+	if err := server.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Wait() })
+	t.Cleanup(func() { stopUsageTestServer(t, bin, env) })
+
+	waitForUsageTestCondition(t, "the collector's first failed poll", func() bool {
+		_, err := os.Stat(failed)
+		return err == nil
+	})
+	if err := os.WriteFile(recovered, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	waitForUsageTestCondition(t, "the collector's retry to cache the snapshot", func() bool {
+		return usage.ReadCachedRemoteLoadEntry("x600").Snapshot != nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "usage", "--minimal")
+	cmd.Env = env
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("usage failed: %v\n%s", err, output)
+	}
+	text := string(output)
+	if !strings.Contains(text, "Remote Load") || !strings.Contains(text, "updated ") {
+		t.Fatalf("one-shot usage lacks the recovered remote load box:\n%s", text)
+	}
+	if strings.Contains(text, "remote load unavailable") {
+		t.Fatalf("one-shot usage still shows the unavailable placeholder:\n%s", text)
+	}
+	if !strings.Contains(text, "42%") {
+		t.Fatalf("one-shot usage lacks the fake host's 42%% CPU reading:\n%s", text)
+	}
+	parents, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(strings.Fields(string(parents)), strconv.Itoa(cmd.Process.Pid)) {
+		t.Fatalf("one-shot usage ran ssh itself (stub parent PID %d)", cmd.Process.Pid)
+	}
+}
+
+// waitForUsageTestCondition polls ok until it holds or usageTestRecoveryWait
+// passes. It waits on an external process's effects, so it cannot be a channel.
+func waitForUsageTestCondition(t *testing.T, what string, ok func() bool) {
+	t.Helper()
+	deadline := time.NewTimer(usageTestRecoveryWait)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for !ok() {
+		select {
+		case <-deadline.C:
+			t.Fatalf("timed out after %s waiting for %s", usageTestRecoveryWait, what)
+		case <-ticker.C:
+		}
 	}
 }

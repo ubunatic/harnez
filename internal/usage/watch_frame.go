@@ -67,6 +67,10 @@ type WatchOptions struct {
 	// renders the same "remote load unavailable" placeholder buildLoadBox
 	// already uses for a stale/missing --host snapshot.
 	RemoteLoadSnapshot *LoadSnapshot
+	// RemoteLoadUpdatedAt is when RemoteLoadSnapshot was written: the cache's
+	// updated_at at startup, then the time the watch loop received a newer
+	// snapshot. Zero means unknown (for example a legacy cache file).
+	RemoteLoadUpdatedAt time.Time
 	// RemoteLoadStreaming reports whether RemoteLoadSnapshot is currently
 	// arriving over the --watch-only streaming channel (issue 110 §2) as
 	// opposed to a plain batch poll fallback. Always
@@ -451,8 +455,10 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		panels = append(panels, panel{"M", func(w int) wbox { return buildMicBox(w, micStatus) }})
 	}
 	if sec.RemoteLoad && opt.RemoteLoadHost != "" {
-		remoteHost, remoteSnap, remoteStreaming := opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadStreaming
-		panels = append(panels, panel{"R", func(w int) wbox { return buildRemoteLoadBox(w, remoteHost, remoteSnap, remoteStreaming) }})
+		remoteHost, remoteSnap, remoteStreaming, remoteUpdated := opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadStreaming, opt.RemoteLoadUpdatedAt
+		panels = append(panels, panel{"R", func(w int) wbox {
+			return buildRemoteLoadBox(w, remoteHost, remoteSnap, remoteStreaming, remoteUpdated, now)
+		}})
 	}
 
 	if len(panels) == 0 && sec.Table {

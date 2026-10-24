@@ -94,7 +94,7 @@ func newUsageCmd() *cobra.Command {
 			if localCfg != nil {
 				loadWatchHost = strings.TrimSpace(localCfg.Load.WatchHost)
 			}
-			cachedRemoteLoad := usage.ReadCachedRemoteLoad(loadWatchHost)
+			cachedRemote := usage.ReadCachedRemoteLoadEntry(loadWatchHost)
 
 			if usageLoom {
 				var cached usage.UsageSummary
@@ -107,13 +107,14 @@ func newUsageCmd() *cobra.Command {
 					}
 				}
 				loadOpt := usage.WatchOptions{
-					Compact:            true,
-					ShowProcesses:      usageProcesses,
-					ShowMic:            usageMic,
-					RemoteLoadHost:     loadWatchHost,
-					RemoteLoadSnapshot: cachedRemoteLoad,
-					DisableRemoteLoad:  usageOffline,
-					Host:               usageHost,
+					Compact:             true,
+					ShowProcesses:       usageProcesses,
+					ShowMic:             usageMic,
+					RemoteLoadHost:      loadWatchHost,
+					RemoteLoadSnapshot:  cachedRemote.Snapshot,
+					RemoteLoadUpdatedAt: cachedRemote.UpdatedAt,
+					DisableRemoteLoad:   usageOffline,
+					Host:                usageHost,
 				}
 				if usageHost == "" {
 					loadOpt.StoredUsageLoader = func(context.Context) usage.UsageSummary { return cached }
@@ -153,7 +154,8 @@ func newUsageCmd() *cobra.Command {
 					ShowMic:                   usageMic,
 					Splash:                    usageSplash,
 					RemoteLoadHost:            loadWatchHost,
-					RemoteLoadSnapshot:        cachedRemoteLoad,
+					RemoteLoadSnapshot:        cachedRemote.Snapshot,
+					RemoteLoadUpdatedAt:       cachedRemote.UpdatedAt,
 					DisableRemoteLoad:         usageOffline,
 				})
 			}
@@ -208,7 +210,7 @@ func newUsageCmd() *cobra.Command {
 				// usageRaw: the detailed per-field text report that used to
 				// be `harnez usage`'s only output before the compact
 				// dashboard (formerly --summary) became the default.
-				out, err := usagecli.RenderUsageOutput(summary, false, true, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: cachedRemoteLoad})
+				out, err := usagecli.RenderUsageOutput(summary, false, true, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: cachedRemote.Snapshot, RemoteLoadUpdatedAt: cachedRemote.UpdatedAt})
 				if err != nil {
 					return err
 				}
@@ -218,7 +220,7 @@ func newUsageCmd() *cobra.Command {
 
 			// The selected spec-defined view is printed once. --watch enters
 			// this same view in the interactive redraw loop.
-			loadOpt := usage.WatchOptions{Mode: selectedMode, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: cachedRemoteLoad}
+			loadOpt := usage.WatchOptions{Mode: selectedMode, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: cachedRemote.Snapshot, RemoteLoadUpdatedAt: cachedRemote.UpdatedAt}
 			if usageHost != "" {
 				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			} else {

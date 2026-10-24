@@ -3,6 +3,29 @@ package usage
 import "time"
 
 func usageSnapshotAgeLabel(at, now time.Time) string {
+	return snapshotAgeLabel(at, now, DefaultCacheStaleness())
+}
+
+// remoteLoadAgeLabel labels when a remote load snapshot was written, marking it
+// stale once it is at least the remote staleness threshold old (issue 879 M2b).
+// Quota freshness keeps its own threshold; only the remote box uses this one.
+func remoteLoadAgeLabel(updatedAt, now time.Time) string {
+	return snapshotAgeLabel(updatedAt, now, remoteLoadStaleness())
+}
+
+// remoteLoadStaleness is the remote load age after which the box is marked
+// stale. It panics on an invalid spec, like DefaultCacheStaleness does.
+func remoteLoadStaleness() time.Duration {
+	_, staleness, err := RemoteLoadPolicy()
+	if err != nil {
+		panic(err)
+	}
+	return staleness
+}
+
+// snapshotAgeLabel renders "<age> ago", with " · stale" at or past staleness.
+// A zero time has no known age; a future time (clock skew) reads as just now.
+func snapshotAgeLabel(at, now time.Time, staleness time.Duration) string {
 	if at.IsZero() {
 		return "age unknown"
 	}
@@ -11,7 +34,7 @@ func usageSnapshotAgeLabel(at, now time.Time) string {
 		age = 0
 	}
 	label := FormatCompactDuration(age) + " ago"
-	if age >= DefaultCacheStaleness() {
+	if age >= staleness {
 		label += " · stale"
 	}
 	return label

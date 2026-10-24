@@ -1397,7 +1397,7 @@ func TestIssue218RemoteLoadBrailleWidthParity(t *testing.T) {
 				}
 
 				localBox := buildLoadBox(width, "", local)
-				remoteBox := buildRemoteLoadBox(width, "phoenix", remote, true)
+				remoteBox := buildRemoteLoadBox(width, "phoenix", remote, true, time.Now(), time.Now())
 				for row := range 2 {
 					localStart, localEnd := bracketColumns(stripANSI(localBox.lines[row]))
 					remoteStart, remoteEnd := bracketColumns(stripANSI(remoteBox.lines[row]))
@@ -1430,6 +1430,36 @@ func TestIssue218RemoteLoadBrailleWidthParity(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestRemoteLoadBoxShowsCacheAge covers issue 879 M2b: a snapshot is shown
+// with its write time, even when stale; with no snapshot there is no time line.
+func TestRemoteLoadBoxShowsCacheAge(t *testing.T) {
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	staleness := remoteLoadStaleness()
+	snapshot := &LoadSnapshot{CPU: CPULoad{NumCPU: 8, CPUPercent: 42, CPUPercentOk: true}}
+	cases := []struct {
+		name      string
+		snapshot  *LoadSnapshot
+		updatedAt time.Time
+		want      string
+	}{
+		{"fresh", snapshot, now.Add(-10 * time.Second), "updated " + FormatCompactDuration(10*time.Second) + " ago"},
+		{"stale kept", snapshot, now.Add(-staleness), "updated " + FormatCompactDuration(staleness) + " ago · stale"},
+		{"no snapshot", nil, time.Time{}, "remote load unavailable"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			box := buildRemoteLoadBox(48, "phoenix", tc.snapshot, false, tc.updatedAt, now)
+			text := stripANSI(strings.Join(box.lines, "\n"))
+			if !strings.Contains(text, tc.want) {
+				t.Fatalf("box lacks %q:\n%s", tc.want, text)
+			}
+			if tc.snapshot == nil && strings.Contains(text, "updated ") {
+				t.Fatalf("box without snapshot shows a time line:\n%s", text)
+			}
+		})
 	}
 }
 

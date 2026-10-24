@@ -2,6 +2,7 @@ package usage
 
 import (
 	"fmt"
+	"time"
 
 	"ubunatic.com/harnez/internal/rograph"
 )
@@ -37,13 +38,21 @@ func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
 // whether the current data arrived over the persistent --watch-only stream
 // or a one-shot poll (issue 110's follow-up UI request) — never hidden
 // state the user has to infer from update cadence.
-func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot, streaming bool) wbox {
+//
+// A snapshot is shown even when stale, with its write time on the last line
+// ("· stale" past the remote staleness threshold, issue 879 M2b). A nil
+// snapshot has no time to show and keeps the "remote load unavailable" line.
+func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot, streaming bool, updatedAt, now time.Time) wbox {
 	mode := "batch"
 	if streaming {
 		mode = "streaming"
 	}
 	title := fmt.Sprintf("%s[R]\x1b[0m Remote Load %s(@%s · %s)\x1b[0m", ansiBold, ansiDimGrey, host, mode)
-	return wbox{title: title, lines: buildLoadBoxLines(host, snapshot), width: width}
+	lines := buildLoadBoxLines(host, snapshot)
+	if snapshot != nil {
+		lines = append(lines, ansiDimGrey+"updated "+remoteLoadAgeLabel(updatedAt, now)+"\x1b[0m")
+	}
+	return wbox{title: title, lines: lines, width: width}
 }
 
 // buildLoadBoxLines renders the shared CPU/GPU row content for both

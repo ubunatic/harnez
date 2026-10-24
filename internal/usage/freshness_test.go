@@ -175,3 +175,29 @@ func TestStyleTimeGaugeGlyphAllowsAbsentBackground(t *testing.T) {
 		}
 	}
 }
+
+// TestRemoteLoadAgeLabel covers issue 879 M2b's remote box age: unknown for a
+// legacy cache with no write time, stale from the remote staleness threshold
+// on (not before), and a future write time (clock skew) reads as just now.
+func TestRemoteLoadAgeLabel(t *testing.T) {
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	staleness := remoteLoadStaleness()
+	cases := []struct {
+		name      string
+		updatedAt time.Time
+		want      string
+	}{
+		{"unknown", time.Time{}, "age unknown"},
+		{"fresh", now.Add(-30 * time.Second), FormatCompactDuration(30*time.Second) + " ago"},
+		{"just under stale", now.Add(-staleness + time.Second), FormatCompactDuration(staleness-time.Second) + " ago"},
+		{"at stale", now.Add(-staleness), FormatCompactDuration(staleness) + " ago · stale"},
+		{"future", now.Add(time.Minute), FormatCompactDuration(0) + " ago"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := remoteLoadAgeLabel(tc.updatedAt, now); got != tc.want {
+				t.Fatalf("remoteLoadAgeLabel = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

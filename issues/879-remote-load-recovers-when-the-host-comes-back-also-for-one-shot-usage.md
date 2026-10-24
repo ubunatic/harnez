@@ -82,3 +82,5 @@ takes the remote staleness threshold without changing quota freshness. Tests: `r
 `freshness_test.go`, `watch_test.go`, `cmd/harnez/usage_binary_test.go` (concurrent writers, malformed or
 legacy cache, unknown/future age, stale retention, fake ssh failing then recovering with only the collector
 running; later one-shot reads start no ssh).
+
+**M2b delivered (2026-10-24):** the cache reader returns `updated_at` beside the snapshot (`ReadCachedRemoteLoadEntry`; legacy files show "age unknown"). The remote box shows "updated <age> ago" under the snapshot, with "· stale" at or past `remote_load_staleness` (5 m); a stale snapshot is still shown. The watch loop times a new snapshot when it arrives. Tests: concurrent writers leave one readable file, legacy and malformed cache, age label, box age line, and `TestCollectorRecoversRemoteLoadForOneShot` (a running collector, fake host down then up, the one-shot run shows 42% and never runs ssh itself; about 10 s, the M1 first retry). `make test-q1` log `/tmp/harnez-test-q1-879-M2b.log`: 0 `--- FAIL` lines, exit 0.

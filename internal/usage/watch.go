@@ -507,6 +507,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	remoteLoadHost := strings.TrimSpace(opts.RemoteLoadHost)
 	var remoteLoadMu sync.Mutex
 	lastRemoteLoad := opts.RemoteLoadSnapshot
+	// remoteLoadUpdatedAt times lastRemoteLoad: the cache time at startup, then
+	// the first frame that sees a newer pointer from the manager (issue 879 M2b).
+	remoteLoadUpdatedAt := opts.RemoteLoadUpdatedAt
+	remoteLoadSeen := opts.RemoteLoadSnapshot
 	var remoteLoadStreaming bool
 	var remoteStreamStop func()
 	if remoteLoadCollectionEnabled(remoteLoadHost, opts.DisableRemoteLoad) {
@@ -699,6 +703,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			remoteLoadMu.Lock()
 			remoteSnap = lastRemoteLoad
 			remoteStreaming = remoteLoadStreaming
+			if remoteSnap != remoteLoadSeen {
+				remoteLoadSeen = remoteSnap
+				remoteLoadUpdatedAt = time.Now()
+			}
 			remoteLoadMu.Unlock()
 		}
 
@@ -732,6 +740,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			DiagnosticsOffset:   activeDiagnosticsOffset,
 			RemoteLoadHost:      remoteLoadHost,
 			RemoteLoadSnapshot:  remoteSnap,
+			RemoteLoadUpdatedAt: remoteLoadUpdatedAt,
 			RemoteLoadStreaming: remoteStreaming,
 			DebugOverlay:        activeDebugOverlay,
 			DebugBox:            activeDebugBox,
