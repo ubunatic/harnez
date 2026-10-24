@@ -1,6 +1,6 @@
 # 560 — Consolidate Usage Collection into a Reusable Usage System and Go Library
 
-**Status**: In Progress
+**Status**: Closed — superseded by harnez server's collector (829 M2); removed usage/, examples/usage/ and the usagecli shared adapter; go test cmd/harnez, internal/usage, internal/usagecli green
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Architecture

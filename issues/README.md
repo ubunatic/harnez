@@ -11,7 +11,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | # | File | Title | Status |
 |---|------|-------|--------|
 | 353 | [353-tell-only-claude-never-propose-claude-md-changes-assume-other-agents-respect-agents-md.md](353-tell-only-claude-never-propose-claude-md-changes-assume-other-agents-respect-agents-md.md) | Tell only Claude: never propose CLAUDE.md changes; check repo docs/AGENTS.md before any instruction-file change | Open |
-| 560 | [560-consolidate-usage-collection-into-a-reusable-usage-system-and-go-library.md](560-consolidate-usage-collection-into-a-reusable-usage-system-and-go-library.md) | Consolidate Usage Collection into a Reusable Usage System and Go Library | In Progress |
 | 851 | [851-bug-hunt-skill-pick-p1-p2-bugs-re-verify-close-obsolete-ones-fix-the-rest-the-way-forward.md](851-bug-hunt-skill-pick-p1-p2-bugs-re-verify-close-obsolete-ones-fix-the-rest-the-way-forward.md) | bug-hunt skill: pick P1/P2 bugs, re-verify, close obsolete ones, fix the rest the way forward | Open |
 | 852 | [852-tui-check-skill-validate-tui-layout-and-ansi-colours-safely-loom-practice.md](852-tui-check-skill-validate-tui-layout-and-ansi-colours-safely-loom-practice.md) | tui-check skill: validate TUI layout and ANSI colours safely (loom practice) | Open |
 | 855 | [855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md](855-harnez-init-wizard-user-picks-which-harnez-features-a-repo-gets.md) | harnez init wizard: user picks which harnez features a repo gets | Open |
