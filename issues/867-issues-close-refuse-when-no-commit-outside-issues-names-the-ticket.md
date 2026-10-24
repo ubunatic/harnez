@@ -1,6 +1,6 @@
 # 867 — issues close: refuse when no commit outside issues/ names the ticket
 
-**Status**: Open
+**Status**: Closed — close refuses without a code commit (TestIssuesCloseRequiresCodeCommit, TestIssuesCloseBatchRefusesWithoutCodeCommit); --no-code records the override in the close commit (TestIssuesCloseNoCodeStatesItInCommit); non-close verbs unaffected (TestIssuesNonCloseVerbsIgnoreCodeGate); make test-q1 green
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
