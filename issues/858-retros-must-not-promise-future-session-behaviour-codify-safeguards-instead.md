@@ -1,6 +1,6 @@
 # 858 — Retros must not promise future-session behaviour; codify safeguards instead
 
-**Status**: Open
+**Status**: Closed — Retros now name durable safeguards and forbid future-session promises; package tests and full suite pass.
 **Priority**: P2 (Medium) — false promises hide that nothing was fixed
 **Severity**: Minor
 **Category**: Workflow
