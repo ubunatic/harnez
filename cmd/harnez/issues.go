@@ -52,6 +52,7 @@ type issuesRunOptions struct {
 	JSON        bool
 	NoCommit    bool
 	AmendReason bool
+	NoCode      bool
 	CommitMsg   string // explicit --commit override; empty means "compose the default"
 	Stderr      io.Writer
 }
@@ -72,6 +73,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var imageFlag bool
 	var noCommitFlag bool
 	var amendReasonFlag bool
+	var noCodeFlag bool
 	var commitMsgFlag string
 	var cachedFlag bool
 	var limitFlag int
@@ -150,6 +152,13 @@ not guess which the caller means. It also never guesses a commit sha for a
 "resolved in <sha>" reason (that sha does not exist until this command's own
 commit is made) -- supply it explicitly, or correct it with --amend-reason.
 
+Close gate: close and done refuse unless a commit with changes outside issues/
+references the ticket number, such as a subject ending in "(issue 42)". Commits
+that touch only issues/ do not count, and a near-miss number does not match (86
+does not match 867). For a ticket that needed no code, pass --no-code: the close
+goes through and its commit body says so. Batch targets are checked before any
+file is written.
+
 Idempotency: re-running a verb that would produce the exact same Status
 line text already on disk is a no-op -- exit 0, no file/README/commit
 changes. Closing an already-Closed ticket is always a no-op, regardless of
@@ -165,6 +174,9 @@ A nonexistent or ambiguous ticket number is a caller-bug error (non-zero
 exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
 valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
+			if noCodeFlag && (listFlag || len(args) == 0 || (args[0] != "close" && args[0] != "done")) {
+				return fmt.Errorf("issues: --no-code requires close or done")
+			}
 			if amendReasonFlag && (listFlag || len(args) == 0 || (args[0] != "close" && args[0] != "done")) {
 				return fmt.Errorf("issues: --amend-reason requires close or done")
 			}
@@ -286,6 +298,7 @@ valid, exit-0 answer.`,
 				JSON:        jsonFlag,
 				NoCommit:    noCommitFlag,
 				AmendReason: amendReasonFlag,
+				NoCode:      noCodeFlag,
 				CommitMsg:   commitMsgFlag,
 				Stderr:      cmd.ErrOrStderr(),
 			}
@@ -351,6 +364,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVarP(&imageFlag, "image", "I", false, "render visual PNG card context")
 	cmd.Flags().BoolVar(&noCommitFlag, "no-commit", false, "rewrite the ticket file and README but do not git add/commit")
 	cmd.Flags().BoolVar(&amendReasonFlag, "amend-reason", false, "with close/done: amend the reason of an already-Closed ticket")
+	cmd.Flags().BoolVar(&noCodeFlag, "no-code", false, "with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit")
 	cmd.Flags().StringVar(&commitMsgFlag, "commit", "", `override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")`)
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 10, "with 'list': limit results (default: newest 10)")
 	cmd.Flags().BoolVarP(&allFlag, "all", "a", false, "with 'list': show all matching results")
@@ -464,7 +478,7 @@ func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutpu
 // changed tickets, regenerates the README once, and makes at most one commit.
 func issuesStatusDependencies(opts issuesRunOptions) issues.StatusBatchOptions {
 	return issues.StatusBatchOptions{
-		Dir: opts.Dir, Check: opts.Check, NoCommit: opts.NoCommit, AmendReason: opts.AmendReason,
+		Dir: opts.Dir, Check: opts.Check, NoCommit: opts.NoCommit, AmendReason: opts.AmendReason, NoCode: opts.NoCode,
 		CommitMsg: opts.CommitMsg, Stderr: opts.Stderr,
 		UpdateIndexes: func(issuesDir string) (bool, error) {
 			return index.UpdateIssuesReadme(filepath.Join(issuesDir, "README.md"), issuesDir)
@@ -479,12 +493,12 @@ func issuesStatusDependencies(opts issuesRunOptions) issues.StatusBatchOptions {
 			}
 			return issuesmaintenance.RestoreIssueIndexes(issuesDir, indexSnapshot)
 		},
-		IndexPaths:                      issuesmaintenance.IssueIndexRelPaths,
-		Commit:                          gitAddAndCommit,
-		PathsChanged:                    gitPathsChanged,
-		DefaultMessage:                  defaultCommitMessage,
-		WarnHeaderMismatch:              warnIssueHeaderMismatch,
-		WarnMissingImplementationCommit: warnMissingImplementationCommit,
+		IndexPaths:              issuesmaintenance.IssueIndexRelPaths,
+		Commit:                  gitAddAndCommit,
+		PathsChanged:            gitPathsChanged,
+		DefaultMessage:          defaultCommitMessage,
+		WarnHeaderMismatch:      warnIssueHeaderMismatch,
+		HasImplementationCommit: hasImplementationCommit,
 	}
 }
 
@@ -783,19 +797,15 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 	return result, false, nil
 }
 
-// warnMissingImplementationCommit reports a soft traceability warning when
-// no commit references this exact ticket number and changes a path outside
-// issues/. Ticket status and index commits alone therefore do not count.
-func warnMissingImplementationCommit(w io.Writer, dir, ticketNumber string) {
-	if w == nil {
-		w = os.Stderr
-	}
+// hasImplementationCommit reports whether a commit that changes a path outside
+// issues/ references this exact ticket number. Ticket status and index commits
+// alone therefore do not count. A git error is returned, not treated as absent.
+func hasImplementationCommit(dir, ticketNumber string) (bool, error) {
 	cmd := exec.Command("git", "log", "--all", "--format=%H%x09%B%x00")
 	cmd.Dir = dir
 	logData, err := cmd.Output()
 	if err != nil {
-		fmt.Fprintf(w, "warning: ticket %s has no commit with implementation changes outside issues/ (could not inspect git history: %v)\n", ticketNumber, err)
-		return
+		return false, fmt.Errorf("git log: %w", err)
 	}
 	for _, commit := range strings.Split(string(logData), "\x00") {
 		fields := strings.SplitN(strings.TrimSpace(commit), "\t", 2)
@@ -811,11 +821,11 @@ func warnMissingImplementationCommit(w io.Writer, dir, ticketNumber string) {
 		for _, path := range strings.Split(string(paths), "\n") {
 			path = strings.TrimSpace(path)
 			if path != "" && !strings.HasPrefix(filepath.ToSlash(path), "issues/") {
-				return
+				return true, nil
 			}
 		}
 	}
-	fmt.Fprintf(w, "warning: ticket %s has no commit referencing it with changes outside issues/\n", ticketNumber)
+	return false, nil
 }
 
 // runIssuesVerb performs the full status-change: locate the ticket,

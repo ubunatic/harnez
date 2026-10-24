@@ -21,21 +21,49 @@ type StatusResult struct {
 	OldNumber     string `json:"old_number,omitempty"`
 }
 
-// StatusBatchOptions supplies index, snapshot, commit, and warning operations
-// from the CLI layer without making the issue core depend on those packages.
+// StatusBatchOptions supplies index, snapshot, commit, and implementation-commit
+// operations from the CLI layer without making the issue core depend on those packages.
 type StatusBatchOptions struct {
-	Dir, CommitMsg                  string
-	Check, NoCommit, AmendReason    bool
-	Stderr                          io.Writer
-	UpdateIndexes                   func(issuesDir string) (bool, error)
-	SnapshotIndexes                 func(issuesDir string) (any, error)
-	RestoreIndexes                  func(issuesDir string, snapshot any) error
-	IndexPaths                      func() []string
-	Commit                          func(dir string, paths []string, message string) (string, error)
-	PathsChanged                    func(dir string, paths []string) (bool, error)
-	DefaultMessage                  func(verb, number, reason string) string
-	WarnHeaderMismatch              func(io.Writer, string, string, string)
-	WarnMissingImplementationCommit func(io.Writer, string, string)
+	Dir, CommitMsg               string
+	Check, NoCommit, AmendReason bool
+	NoCode                       bool
+	Stderr                       io.Writer
+	UpdateIndexes                func(issuesDir string) (bool, error)
+	SnapshotIndexes              func(issuesDir string) (any, error)
+	RestoreIndexes               func(issuesDir string, snapshot any) error
+	IndexPaths                   func() []string
+	Commit                       func(dir string, paths []string, message string) (string, error)
+	PathsChanged                 func(dir string, paths []string) (bool, error)
+	DefaultMessage               func(verb, number, reason string) string
+	WarnHeaderMismatch           func(io.Writer, string, string, string)
+	HasImplementationCommit      func(dir, ticketNumber string) (bool, error)
+}
+
+// requireImplementationCommit refuses to close a ticket unless a commit with
+// changes outside issues/ references it. NoCode skips the check: the caller
+// states that the ticket needed no code.
+func requireImplementationCommit(opts StatusBatchOptions, number string) error {
+	if opts.NoCode || opts.HasImplementationCommit == nil {
+		return nil
+	}
+	found, err := opts.HasImplementationCommit(opts.Dir, number)
+	if err != nil {
+		return fmt.Errorf("issues: ticket %s: could not check git history for an implementation commit: %w (close with --no-code if the ticket needed no code)", number, err)
+	}
+	if !found {
+		return fmt.Errorf("issues: ticket %s has no commit referencing it with changes outside issues/; reference it in a code commit, or close with --no-code if the ticket needed no code", number)
+	}
+	return nil
+}
+
+// noCodeNote is the commit-body line that keeps a --no-code close visible in
+// git history. It stays empty unless --no-code is set and no --commit message
+// replaces the composed one.
+func noCodeNote(opts StatusBatchOptions, numbers ...string) string {
+	if !opts.NoCode || opts.CommitMsg != "" {
+		return ""
+	}
+	return fmt.Sprintf("\n\nNo code change: ticket(s) %s needed no implementation commit (--no-code).", strings.Join(numbers, ", "))
 }
 
 // ApplyStatus changes one ticket status, refreshing the injected issue index
@@ -77,8 +105,8 @@ func ApplyStatus(verb, ticketArg, reason string, opts StatusBatchOptions) (Statu
 		return result, false, nil
 	}
 	if verb == "close" || verb == "done" {
-		if opts.WarnMissingImplementationCommit != nil {
-			opts.WarnMissingImplementationCommit(opts.Stderr, opts.Dir, result.Number)
+		if err := requireImplementationCommit(opts, result.Number); err != nil {
+			return StatusResult{}, false, err
 		}
 	}
 	if oldStatus == newStatus {
@@ -164,6 +192,9 @@ func ApplyStatus(verb, ticketArg, reason string, opts StatusBatchOptions) (Statu
 		if msg == "" && opts.DefaultMessage != nil {
 			msg = opts.DefaultMessage(verb, f.Number, reason)
 		}
+		if verb == "close" || verb == "done" {
+			msg += noCodeNote(opts, f.Number)
+		}
 		paths := []string{relPath}
 		if opts.IndexPaths != nil {
 			paths = append(paths, opts.IndexPaths()...)
@@ -237,8 +268,8 @@ func ApplyStatusBatch(verb string, ticketArgs, reasonArgs []string, opts StatusB
 	}
 	if verb == "close" || verb == "done" {
 		for _, i := range changed {
-			if opts.WarnMissingImplementationCommit != nil {
-				opts.WarnMissingImplementationCommit(opts.Stderr, opts.Dir, targets[i].result.Number)
+			if err := requireImplementationCommit(opts, targets[i].result.Number); err != nil {
+				return nil, false, err
 			}
 		}
 	}
@@ -308,6 +339,9 @@ func ApplyStatusBatch(verb string, ticketArgs, reasonArgs []string, opts StatusB
 			if reason != "" {
 				msg += ", " + reason
 			}
+		}
+		if verb == "close" || verb == "done" {
+			msg += noCodeNote(opts, numbers...)
 		}
 		if opts.Commit == nil {
 			return nil, false, fmt.Errorf("issues: status batch commit operation is not configured")

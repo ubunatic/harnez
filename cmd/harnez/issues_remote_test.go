@@ -102,7 +102,7 @@ func TestGHTicketLifecycle(t *testing.T) {
 	if leadingIssueNumberCount([]string{"GH42", "gh9", "42", "reason"}) != 3 {
 		t.Fatal("GH batch parsing")
 	}
-	result, _, err := runIssuesVerb(&bytes.Buffer{}, "close", "gh42", []string{"shipped"}, issuesRunOptions{Dir: dir, NoCommit: true})
+	result, _, err := runIssuesVerb(&bytes.Buffer{}, "close", "gh42", []string{"shipped"}, issuesRunOptions{Dir: dir, NoCommit: true, NoCode: true})
 	if err != nil || result.Number != "GH42" {
 		t.Fatalf("close: %+v %v", result, err)
 	}

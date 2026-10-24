@@ -14,7 +14,7 @@ func TestIssuesCloseAlreadyClosed(t *testing.T) {
 			t.Run(verb+"/"+reason, func(t *testing.T) {
 				dir, ticket := issuesFixtureRepo(t, sampleTicket)
 				cmd := newIssuesCmd()
-				cmd.SetArgs([]string{"close", "42", "resolved", "-d", dir})
+				cmd.SetArgs([]string{"close", "42", "resolved", "--no-code", "-d", dir})
 				if err := cmd.Execute(); err != nil {
 					t.Fatal(err)
 				}
@@ -69,7 +69,7 @@ func TestIssuesCloseAmendReason(t *testing.T) {
 			dir, ticket := issuesFixtureRepo(t, content)
 			head := strings.TrimSpace(repoRunGitOutput(t, dir, "rev-parse", "HEAD"))
 			cmd := newIssuesCmd()
-			cmd.SetArgs([]string{"close", "42", "new outcome", "--amend-reason", "-d", dir})
+			cmd.SetArgs([]string{"close", "42", "new outcome", "--amend-reason", "--no-code", "-d", dir})
 			err := cmd.Execute()
 			if !closed {
 				if err == nil || !strings.Contains(err.Error(), "already Closed") {
@@ -116,7 +116,7 @@ func TestIssuesCloseBatchPreservesClosure(t *testing.T) {
 			repoRunGit(t, dir, "add", "issues")
 			repoRunGit(t, dir, "commit", "-qm", "second ticket")
 			head := strings.TrimSpace(repoRunGitOutput(t, dir, "rev-parse", "HEAD"))
-			args := []string{"close", "42", "43", "new reason", "-d", dir}
+			args := []string{"close", "42", "43", "new reason", "--no-code", "-d", dir}
 			if mode == "amend" || mode == "invalid-amend" {
 				args = append(args, "--amend-reason")
 			}

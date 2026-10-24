@@ -99,6 +99,11 @@ notice preserves the existing reason. To correct it explicitly, use
 `harnez issues close <n> "<corrected resolution>" --amend-reason`; this updates
 the reason in one commit and errors without writing if the ticket is not Closed.
 
+Closing (`close` or `done`) refuses unless a commit with changes outside `issues/` references the
+ticket number, for example a subject ending in `(issue 42)`. Commits that touch only `issues/` do not
+count. For a ticket that needed no code, pass `--no-code`; the refusal names it, and the close commit
+records that no code change was needed.
+
 The top of each ticket MUST contain the standardized metadata block:
 
 ```markdown

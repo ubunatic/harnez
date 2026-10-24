@@ -36,6 +36,7 @@ root prompts for leaf callers. A new session without `--role` is a developer.
 3. Review the commit against the ticket's acceptance points and against the current code.
 4. Follow-ups: at most two precise `resume` turns per ticket, then stop and escalate.
 5. `harnez issues close N "<written outcome>"` (several tickets: `harnez issues close N M "..."`),
+   the close refuses unless the dev's commit names the ticket (`--no-code` only for a ticket that needed no code);
    with `--amend-reason` only to correct an existing closure; repeated closes otherwise do nothing,
    then `harnez agent rate --name dev-N <1-5> "reason"` and `harnez agent delete --name dev-N`.
    Delete refuses unrated sessions without `--force`; `delete --all` skips them (ticket 526).

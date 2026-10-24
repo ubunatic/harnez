@@ -65,7 +65,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - Edge and negative cases to test (ambiguous input, near-miss values).
   - Test requirements (reproduction test first for bugs, unit tests for features).
   - If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md` for the local-tracker/session fallback.
-  - The exact close command with a written reason: `harnez issues close N "<real outcome>"`; no placeholders.
+  - The exact close command with a written reason: `harnez issues close N "<real outcome>"`; no placeholders. The close refuses until a commit outside `issues/` names N; `--no-code` only for a ticket that needed no code.
     Close only after the ticket's acceptance check passes; the reason states the decisive evidence (the
     key numbers or check result), not a pasted log. When acceptance is not met, leave the ticket open and
     report. (Sprint 850: closed with a false match still above the cutoff.)

@@ -44,7 +44,7 @@ func TestRunIssuesVerb_CloseRewritesStatusAndPreservesRestOfFile(t *testing.T) {
 	dir, ticketPath := issuesFixtureRepo(t, sampleTicket)
 
 	var out bytes.Buffer
-	result, drift, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir})
+	result, drift, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir, NoCode: true})
 	if err != nil {
 		t.Fatalf("runIssuesVerb: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestIssuesCommitsLeaveUnrelatedStagedChanges(t *testing.T) {
 			if verb == "mv" {
 				_, _, err = runIssuesMv(&out, "42", "268", issuesRunOptions{Dir: dir})
 			} else {
-				_, _, err = runIssuesVerb(&out, verb, "42", nil, issuesRunOptions{Dir: dir})
+				_, _, err = runIssuesVerb(&out, verb, "42", nil, issuesRunOptions{Dir: dir, NoCode: true})
 			}
 			if err != nil {
 				t.Fatalf("run %s: %v", verb, err)
@@ -144,7 +144,7 @@ func TestIssuesCmd_BatchUpdatesThreeTicketsInOneCommit(t *testing.T) {
 	if err := cmd.Flags().Set("dir", dir); err != nil {
 		t.Fatal(err)
 	}
-	cmd.SetArgs([]string{"close", "42", "043", "044", "resolved"})
+	cmd.SetArgs([]string{"close", "42", "043", "044", "resolved", "--no-code"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute: %v (stderr: %s)", err, errOut.String())
 	}
@@ -309,7 +309,7 @@ func TestRunIssuesVerb_BareCloseDoesNotFabricateReason(t *testing.T) {
 	dir, ticketPath := issuesFixtureRepo(t, sampleTicket)
 
 	var out bytes.Buffer
-	result, _, err := runIssuesVerb(&out, "close", "42", nil, issuesRunOptions{Dir: dir})
+	result, _, err := runIssuesVerb(&out, "close", "42", nil, issuesRunOptions{Dir: dir, NoCode: true})
 	if err != nil {
 		t.Fatalf("runIssuesVerb: %v", err)
 	}
@@ -322,19 +322,16 @@ func TestRunIssuesVerb_BareCloseDoesNotFabricateReason(t *testing.T) {
 	}
 }
 
-func TestRunIssuesVerb_CloseWarnsWithoutImplementationCommit(t *testing.T) {
+func TestRunIssuesVerb_CloseRefusesWithoutImplementationCommit(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	var out, stderr bytes.Buffer
 	_, _, err := runIssuesVerb(&out, "close", "42", nil, issuesRunOptions{Dir: dir, Stderr: &stderr})
-	if err != nil {
-		t.Fatalf("runIssuesVerb: %v", err)
-	}
-	if !strings.Contains(stderr.String(), "warning:") || !strings.Contains(stderr.String(), "42") || !strings.Contains(stderr.String(), "no commit") {
-		t.Fatalf("expected missing implementation commit warning, got %q", stderr.String())
+	if err == nil || !strings.Contains(err.Error(), "--no-code") || !strings.Contains(err.Error(), "42") {
+		t.Fatalf("expected refusal naming ticket 42 and --no-code, got %v", err)
 	}
 }
 
-func TestRunIssuesVerb_CloseDoesNotWarnWithImplementationCommit(t *testing.T) {
+func TestRunIssuesVerb_CloseAllowsImplementationCommit(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -347,7 +344,7 @@ func TestRunIssuesVerb_CloseDoesNotWarnWithImplementationCommit(t *testing.T) {
 		t.Fatalf("runIssuesVerb: %v", err)
 	}
 	if strings.Contains(stderr.String(), "no commit") {
-		t.Fatalf("unexpected missing implementation commit warning: %q", stderr.String())
+		t.Fatalf("unexpected missing implementation commit notice: %q", stderr.String())
 	}
 }
 
@@ -355,7 +352,7 @@ func TestRunIssuesVerb_DoneAliasForClose(t *testing.T) {
 	dir, ticketPath := issuesFixtureRepo(t, sampleTicket)
 
 	var out bytes.Buffer
-	result, drift, err := runIssuesVerb(&out, "done", "42", []string{"completed"}, issuesRunOptions{Dir: dir})
+	result, drift, err := runIssuesVerb(&out, "done", "42", []string{"completed"}, issuesRunOptions{Dir: dir, NoCode: true})
 	if err != nil {
 		t.Fatalf("runIssuesVerb: %v", err)
 	}
@@ -384,7 +381,7 @@ func TestRunIssuesVerb_IdempotentNoopSkipsWriteReadmeAndCommit(t *testing.T) {
 
 	// First call: Open -> Closed — resolved.
 	var out bytes.Buffer
-	first, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir})
+	first, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir, NoCode: true})
 	if err != nil {
 		t.Fatalf("first runIssuesVerb: %v", err)
 	}
@@ -465,11 +462,11 @@ func TestRunIssuesVerb_OpenCommitsNewTicketAlreadyOpen(t *testing.T) {
 func TestRunIssuesVerb_ReasonChangeOnAlreadyClosedIsNotIdempotent(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	var out bytes.Buffer
-	if _, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir}); err != nil {
+	if _, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir, NoCode: true}); err != nil {
 		t.Fatalf("first close: %v", err)
 	}
 
-	result, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved in abc1234"}, issuesRunOptions{Dir: dir, AmendReason: true})
+	result, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved in abc1234"}, issuesRunOptions{Dir: dir, AmendReason: true, NoCode: true})
 	if err != nil {
 		t.Fatalf("reason-correcting close: %v", err)
 	}
@@ -491,7 +488,7 @@ func TestRunIssuesVerb_CheckReportsDriftAndDoesNotWriteOrCommit(t *testing.T) {
 	beforeHead := repoRunGitOutput(t, dir, "rev-parse", "--short", "HEAD")
 
 	var out bytes.Buffer
-	result, drift, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir, Check: true})
+	result, drift, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir, Check: true, NoCode: true})
 	if err != nil {
 		t.Fatalf("runIssuesVerb --check: %v", err)
 	}
@@ -541,7 +538,7 @@ func TestRunIssuesVerb_NoCommitSkipsGit(t *testing.T) {
 	beforeHead := repoRunGitOutput(t, dir, "rev-parse", "--short", "HEAD")
 
 	var out bytes.Buffer
-	result, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir, NoCommit: true})
+	result, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir, NoCommit: true, NoCode: true})
 	if err != nil {
 		t.Fatalf("runIssuesVerb: %v", err)
 	}
@@ -582,7 +579,7 @@ func TestRunIssuesVerb_WarnsOnMismatchedHeaderOnStderrOnly(t *testing.T) {
 func TestRunIssuesVerb_CustomCommitMessage(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	var out bytes.Buffer
-	_, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir, CommitMsg: "custom message here"})
+	_, _, err := runIssuesVerb(&out, "close", "42", []string{"resolved"}, issuesRunOptions{Dir: dir, CommitMsg: "custom message here", NoCode: true})
 	if err != nil {
 		t.Fatalf("runIssuesVerb: %v", err)
 	}

@@ -52,6 +52,7 @@ instead of `ls issues/`, `find`, or raw grep:
   `issues/README.md`, and commit, in one call
 - Closing an already-Closed ticket is a no-op regardless of reason; use
   `harnez issues close --amend-reason` to explicitly correct its reason.
+- `harnez issues close` refuses unless a commit outside `issues/` references the ticket number; pass `--no-code` when the ticket needed no code.
 - Commit documentation and `issues/*.md` changes immediately; don't batch them behind
   pending code work.
 
