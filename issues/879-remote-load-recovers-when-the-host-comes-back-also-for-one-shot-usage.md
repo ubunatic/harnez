@@ -1,6 +1,6 @@
 # 879 — Remote load recovers when the host comes back, also for one-shot usage
 
-**Status**: Open
+**Status**: Closed — M2a (d1044f4e) and M2b (c1973990) delivered. TestCollectorRecoversRemoteLoadForOneShot passes: a running collector retries a fake host that was down, caches the snapshot after recovery, and a later one-shot usage shows 42% with no ssh run by the one-shot process. make test-q1 for M2a and M2b: 0 --- FAIL lines, exit 0 (logs /tmp/harnez-test-q1-879-M2a.log, /tmp/harnez-test-q1-879-M2b.log).
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
