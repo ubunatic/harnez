@@ -155,25 +155,35 @@ func TestRunInitAdoptsOnlyManagedIssuesReadme(t *testing.T) {
 	tests := []struct {
 		name        string
 		readme      string
+		config      bool
 		wantTracker string
 		wantDriver  bool
 	}{
 		{
-			name:        "managed README upgrades stale none config",
+			name:        "managed README preserves recorded none config",
 			readme:      "<!-- managed by harnez index -->\n",
-			wantTracker: "harnez",
-			wantDriver:  true,
+			config:      true,
+			wantTracker: "none",
 		},
 		{
 			name:        "foreign README preserves none config",
 			readme:      "# Foreign tracker\n",
+			config:      true,
 			wantTracker: "none",
+		},
+		{
+			name:        "first init adopts managed README",
+			readme:      "<!-- managed by harnez index -->\n",
+			wantTracker: "harnez",
+			wantDriver:  true,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			writeRepoYAML(t, dir, "version: 1\nissues:\n  tracker: none\n  merge_driver: false\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\n")
+			if tc.config {
+				writeRepoYAML(t, dir, "version: 1\nissues:\n  tracker: none\n  merge_driver: false\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\n")
+			}
 			issuesDir := filepath.Join(dir, "issues")
 			if err := os.MkdirAll(issuesDir, 0o755); err != nil {
 				t.Fatal(err)

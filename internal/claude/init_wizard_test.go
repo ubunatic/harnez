@@ -68,6 +68,52 @@ func TestInitWizardDefaultsAndDisable(t *testing.T) {
 	}
 }
 
+func TestInitWizardTrackerControlsMergeDriverPrompt(t *testing.T) {
+	current := detectRepoConfig(t.TempDir(), nil)
+	current.Issues.Tracker = "none"
+	current.Issues.MergeDriver = true
+	var output bytes.Buffer
+	got, err := promptInitConfig(current, nil, strings.NewReader("\n\nyes\n\n\n"), &output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Issues.MergeDriver {
+		t.Fatal("merge driver enabled without tracker")
+	}
+	if strings.Contains(output.String(), "Merge driver —") {
+		t.Fatal("merge driver prompt shown while tracker is disabled")
+	}
+
+	current.Issues.Tracker = "harnez"
+	current.Issues.MergeDriver = false
+	output.Reset()
+	got, err = promptInitConfig(current, nil, strings.NewReader("\n\n\n\n\n\n"), &output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Issues.MergeDriver {
+		t.Fatal("enabled tracker did not default merge driver on")
+	}
+	if !strings.Contains(output.String(), "Merge driver —") {
+		t.Fatal("merge driver prompt missing while tracker is enabled")
+	}
+}
+
+func TestInitWizardEmptyOptionalCopiesExplainsNoEffect(t *testing.T) {
+	current := detectRepoConfig(t.TempDir(), nil)
+	var output bytes.Buffer
+	got, err := promptInitConfig(current, nil, strings.NewReader("\n\nyes\n\n\n"), &output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Docs.Copies) != 0 {
+		t.Fatalf("unexpected docs copies: %v", got.Docs.Copies)
+	}
+	if !strings.Contains(output.String(), "No optional docs are detected or recorded") {
+		t.Fatalf("empty choice was not explained: %s", &output)
+	}
+}
+
 type wizardFailReader struct{}
 
 func (wizardFailReader) Read([]byte) (int, error) { return 0, errors.New("input failed") }

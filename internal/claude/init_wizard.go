@@ -33,12 +33,17 @@ func promptInitConfig(current *RepoConfig, detectedDocs []string, input io.Reade
 	}
 	next := *current
 	next.Docs.Copies = append([]string{}, current.Docs.Copies...)
+	next.Issues.MergeDriver = next.Issues.Tracker == "harnez"
 	candidates := mergeDocs(next.Docs.Copies, detectedDocs)
 	if _, err := fmt.Fprintln(output, spec.Title); err != nil {
 		return nil, err
 	}
 	reader := bufio.NewReader(input)
 	for _, prompt := range spec.Prompts {
+		if prompt.Key == "merge_driver" && next.Issues.Tracker != "harnez" {
+			next.Issues.MergeDriver = false
+			continue
+		}
 		var enabled bool
 		switch prompt.Key {
 		case "tracker":
@@ -88,6 +93,7 @@ func promptInitConfig(current *RepoConfig, detectedDocs []string, input io.Reade
 			if enabled {
 				next.Issues.Tracker = "harnez"
 			}
+			next.Issues.MergeDriver = enabled
 		case "studies":
 			next.Docs.Studies = enabled
 		case "merge_driver":
@@ -100,6 +106,11 @@ func promptInitConfig(current *RepoConfig, detectedDocs []string, input io.Reade
 					selected = candidates
 				}
 				next.Docs.Copies = append(next.Docs.Copies, selected...)
+				if len(next.Docs.Copies) == 0 {
+					if _, err := fmt.Fprintln(output, "No optional docs are detected or recorded; add one with --docs <name>."); err != nil {
+						return nil, err
+					}
+				}
 			}
 		case "scaffold":
 			next.Make.Scaffold = enabled

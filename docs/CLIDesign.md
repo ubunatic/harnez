@@ -189,11 +189,16 @@ redirected stream skips automatic prompting. `--wizard` forces the prompts even
 with redirected streams or CI; `-y` and `--all` still take precedence.
 `--wizard` and `--no-wizard` are mutually exclusive. Explicit setup flags supply
 wizard defaults; the answers are final for that invocation. Choices cover the
-tracker, studies index, merge driver, optional doc copies, Makefile scaffolding,
-and quota rules. Baseline docs remain enabled; general rules have no config toggle
-and are omitted. Disabling a feature records its existing config opt-out; it does
-not delete existing user docs, Makefiles, or tracker files. The noninteractive
-path retains its existing managed-tracker adoption behavior.
+tracker, studies index, merge driver (available only when the Harnez tracker is on),
+optional doc copies, Makefile scaffolding, and quota rules. Baseline docs remain
+enabled; general rules have no config toggle
+and are omitted. Answering yes to optional doc copies with no detected or recorded
+copies leaves `docs.copies` empty; add a copy later with `init --docs <name>`.
+The wizard rewrites `.harnez/repo.yaml`, so YAML comments are not preserved.
+Disabling a feature records its existing config opt-out; it does
+not delete existing user docs, Makefiles, or tracker files. Tracker adoption from a
+managed issues index occurs only when `.harnez/repo.yaml` is absent; recorded opt-outs
+remain in force on later noninteractive runs.
 
 `.harnez/repo.yaml` is project-local configuration, separate from the embedded/global
 `config.yaml` used by `apply`. On first init, Harnez detects the existing tracker format,

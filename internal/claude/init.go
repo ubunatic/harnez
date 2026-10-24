@@ -1121,7 +1121,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 	}
 	wizardActive := opts.WizardInput != nil && !assumeYes
 	trackerAdopted := false
-	if !wizardActive && repoConfig.Issues.Tracker == "none" && hasHarnezIssuesIndex(dir) {
+	if os.IsNotExist(repoErr) && repoConfig.Issues.Tracker == "none" && hasHarnezIssuesIndex(dir) {
 		repoConfig.Issues.Tracker = "harnez"
 		repoConfig.Issues.MergeDriver = true
 		trackerAdopted = true
