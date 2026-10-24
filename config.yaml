@@ -510,6 +510,11 @@ skills:
     description: "Local LLM server lifecycle management, fast interactive prompt streaming with session continuity, and sandboxed coding agent execution"
     file: docs/commands/lmcoder.md
 
+  - name: bug-hunt
+    license: AGPL-3.0-or-later
+    description: "Run a bug hunt over active P1/P2 bug tickets: re-verify each against live code, close obsolete ones, fix the rest the way forward. Only on explicit /bug-hunt or 'bug hunt'."
+    file: docs/commands/bug-hunt.md
+
   - name: release
     license: AGPL-3.0-or-later
     description: "Lean CLI release: commit pending code, push, run harnez release, fix issues or ask on login"

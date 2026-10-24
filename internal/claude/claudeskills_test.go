@@ -72,6 +72,40 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		t.Errorf("expected %s to carry Agent Skills frontmatter (name/description), got:\n%s", publishPath, pubContent)
 	}
 
+	for _, expected := range []struct {
+		name        string
+		description string
+		body        string
+	}{
+		{"bug-hunt", "Run a bug hunt over active P1/P2 bug tickets", "## 2. Re-verify (read-only)"},
+		{"tui-check", "Validate a terminal UI change cell by cell", "## 4. Live tmux check"},
+		{"jam", "Run a jam: several agents on different models", "## 5. Pre-assess"},
+	} {
+		var configured *Command
+		for i := range cfg.Skills {
+			if cfg.Skills[i].Name == expected.name {
+				configured = &cfg.Skills[i]
+				break
+			}
+		}
+		if configured == nil {
+			t.Errorf("skill %q is missing from config", expected.name)
+			continue
+		}
+		if !strings.Contains(configured.Description, expected.description) {
+			t.Errorf("skill %q description = %q, want it to contain %q", expected.name, configured.Description, expected.description)
+		}
+		installedPath := filepath.Join(claudeSkillsDir, expected.name, "SKILL.md")
+		installed, err := os.ReadFile(installedPath)
+		if err != nil {
+			t.Errorf("expected %s to be installed: %v", installedPath, err)
+			continue
+		}
+		if !strings.Contains(string(installed), expected.body) || !strings.Contains(string(installed), expected.description) {
+			t.Errorf("installed skill %q is missing its expected description or workflow body", expected.name)
+		}
+	}
+
 	docupSkillPath := filepath.Join(claudeSkillsDir, "docup", "SKILL.md")
 	docupResourcePath := filepath.Join(claudeSkillsDir, "docup", "references", "DocupTesting.md")
 	docupSkill, err := os.ReadFile(docupSkillPath)

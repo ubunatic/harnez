@@ -40,3 +40,9 @@ blocked; verified by one real run on this repo, or stop and report when blocked 
 - Parallel research is allowed: read-only searchers may run in parallel with each other and with the one active
   developer (worked on 2026-10-22). Only writers (developer, host ticket commits) are serialized; the host commits
   only the files it staged.
+
+## Design
+
+Implemented as a dedicated `/bug-hunt` skill: ticket selection and verification outcomes are specific to bug hunts, while fix mechanics delegate to `lean-sprint`. Installation is asserted by the Claude skill round-trip test.
+
+Remaining acceptance: first real `/bug-hunt` run by a host.
