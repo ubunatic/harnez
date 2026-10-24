@@ -761,7 +761,7 @@ agents_md:
     golang:
       name: "Go/Golang"
       ref: "@docs/Go.md"
-      hint: "Modern Go, avoid deps but use Cobra, add tests; use runes and display width for terminal layout"
+      hint: "Modern Go; substantive features and tests in internal/<feature>, thin cmd/<app> for test caching; avoid deps, use runes and display width"
       source: docs/lang/Go.md
       target: ~/.claude/docs/Go.md
       local: ./docs/Go.md
