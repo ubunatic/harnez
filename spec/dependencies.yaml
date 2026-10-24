@@ -1,0 +1,5 @@
+# yaml-language-server: $schema=schemas/dependencies.schema.json
+packages:
+  neus:
+    module: ubunatic.com/neus/cmd/neus@latest
+    bootstrap: [neus, install]

@@ -28,6 +28,7 @@ Available Commands:
   help            Help about any command
   index           Regenerate issue indexes and docs/README.md's studies table from source files
   init            Set up a project directory with AGENTS.md, language docs, and Makefile targets
+  install         Install an optional dependency and run its bootstrap
   issues          Change a ticket's Status line, resync issue indexes, and commit -- in one call
   lint            Check files against harnez repository rules and conventions
   log             Show harnez's own CLI invocation history, newest first (git log for harnez)
@@ -1556,6 +1557,16 @@ Flags:
       --update             re-fetch and refresh the project summary (implies --summary)
       --variant string     doc variant to install: lite or full (default: keep each existing doc variant, else full)
   -y, --yes                assume yes when reconciling Makefile targets (no prompt)
+
+=== harnez install
+Install an optional dependency and run its bootstrap
+
+Usage:
+  harnez install <name> [flags]
+
+Flags:
+      --dry-run   Print commands without installing
+  -h, --help      help for install
 
 === harnez issues
 issues collapses today's four-step ticket-status-change dance (hand-edit the
