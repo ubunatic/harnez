@@ -70,7 +70,8 @@ Commit everything so far (`chore: bootstrap <name>`), before any further step.
 
 After the user confirms:
 
-- Codeberg/Forgejo: `fj repo create <name> --private`
+- Codeberg/Forgejo: `fj --host codeberg.org repo create <name> --private` (without `--host`, fj
+  fails in a repo with no remote yet)
 - GitHub: `gh repo create <name> --private`
 
 Drop `--private` only when the interview said public. Add the remotes; push only when asked.
