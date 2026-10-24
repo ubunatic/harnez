@@ -1,6 +1,6 @@
 # 905 — epic and retro hygiene: mandate immediate follow-up issue filing after studies and retros
 
-**Status**: Open
+**Status**: Closed — Added study/retro ticket extraction gate to AgenticLoop and IssueTracking full/lite sources and root copies, plus story workflow (826496f1).
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Workflow
