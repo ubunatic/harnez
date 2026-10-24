@@ -33,4 +33,12 @@ Web fanout skipped: internal skill and process docs. Code fanout: haiku:low sear
 | C | 851 | no active P1/P2 Bug ticket exists, so a run has no input | — | — |
 | D | 878 | `harnez session extract` does not exist; new `internal/transcript` package, command, skill | sol:med | opus reviewer |
 
-Open decisions are in `## Decision`.
+## Decision
+
+Owner said "go" to the host's recommendations (2026-10-24):
+
+- 851: parked until an active P1/P2 Bug ticket exists; the epic does not wait for it.
+- 852: the host runs tui-check on loom's ColorPicker widget.
+- 905 first, then 904's doc parts (phased DAG, sibling decoupling, delivery typology); 904's
+  `issues close --model/--session` flags move to their own ticket.
+- 878: `retro` is its own skill, not a `story` mode; Claude transcripts only.
