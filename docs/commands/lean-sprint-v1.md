@@ -73,6 +73,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 ### 3. Concise Milestone Review & In-Ticket Pre-Work Embedding
 - Upon developer milestone completion, the Host Orchestrator performs a rapid, diff-only inspection:
   - Check `git log -n 1 --stat`, `git diff HEAD~1`, and run verification tests.
+  - After the developer's green full run, rerun only touched packages (`go test <pkgs>`); run a full suite only if the developer did not run one, at release, or with the user's authorization.
   - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions directly against the diff.
   - The host/reviewer reads every changed assertion line in test diffs; a "fixed the test" report can hide a
     weaker check (884: `HasPrefix` → `Contains` dropped the ordering the test name promised).

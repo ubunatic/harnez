@@ -239,6 +239,7 @@ Never trade away verification for speed when applying Invariant 7.
   - The Reviewer audits the working tree diff (`git diff`) against requirements.
   - Review Checklist:
     - **Test Assertion Rigor**: Are tests asserting specific outcomes or merely executing code without assertions?
+    - After a developer's green full run, rerun only touched packages (`go test <pkgs>`); run a full suite only if the developer did not run one, at release, or with the user's authorization.
     - **Docs & Ticket Sync**: Are all issue status tags, README indices, and docs updated in sync with code?
     - **Backward Compatibility & Invariants**: Does the change uphold project invariants and CLI design boundaries?
     - **The "What Would I Have Done Differently?" Check**: Actively evaluate whether the worker agent introduced subtle edge-case omissions, runtime overheads, or future architectural debt. Distinguish blocking issues (which mandate immediate remediation) from non-blocking nuances (which are buffered into a `#XXX-refinements` follow-up ticket to preserve milestone flow).

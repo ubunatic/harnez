@@ -87,6 +87,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - Run `git fetch` and `git status -sb` first: a local main that diverged from origin means history was
     rewritten or another session pushed; resolve that before reviewing.
   - Check `git log -n 1 --stat`, `git diff HEAD~1`, and run verification tests.
+  - After the developer's green full run, rerun only touched packages (`go test <pkgs>`); run a full suite only if the developer did not run one, at release, or with the user's authorization.
   - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions directly against the diff.
   - The host/reviewer reads every changed assertion line in test diffs; a "fixed the test" report can hide a
     weaker check (884: `HasPrefix` → `Contains` dropped the ordering the test name promised).
