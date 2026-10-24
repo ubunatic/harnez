@@ -39,8 +39,10 @@ sol) and reviewer (opus/sol vs orchestrator only).
    `make build`, `make install` and `make reuse` (REUSE/SPDX license check); each may start as a no-op that
    says so, and gets real recipes as the stack lands.
 5b. + First commit (conventional message) before anything else, so later steps diff cleanly.
-6. **Create repos** (outward-facing: confirm first): Codeberg canonical, GitHub dev mirror per docs/Git.md;
-   add remotes; push only when the owner says so.
+6. **Create repos** (outward-facing: confirm first) with the forge CLIs: `fj repo create <name> --private`
+   (Codeberg/Forgejo) and `gh repo create <name> --private` (GitHub). The agent picks the forges from what it
+   knows about the user (this owner: Codeberg canonical + GitHub dev mirror, docs/Git.md); private unless the
+   interview says public. Add remotes; push only when the owner says so.
 7. **First ticket = bootstrap epic** (via `/epic`, 900): its tasks are steps 8–10 below (research ticket,
    epic refinement into work subtickets), plus the project-goal record from the interview, + a "walking
    skeleton" task (build, one test, `make test` green), + a release/CI task only if wanted.
