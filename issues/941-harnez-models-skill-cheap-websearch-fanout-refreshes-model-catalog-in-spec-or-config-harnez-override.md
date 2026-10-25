@@ -117,6 +117,36 @@ pin mismatch, unchanged behaviour without policy.
   cover valid and invalid IDs. Runtime tests prove an exact Pi ID is enabled and a case-changed ID is denied.
 - `docs/other/Spec.md` and its root copy document the provider prefix, exact model-ID casing, allowed `/` and
   uppercase characters, and invalid whitespace.
+- Host: developer `make test-q1` green on the final source.
+
+## Decision (host, review r941, 2026-10-25; reversible)
+
+- Resume/send of a session whose model the policy now disables: warn on stderr and continue (in-flight work is
+  not cut off); new starts stay blocked.
+- A disabled default model: the error names the model and says to pass `--model` or enable it in `models.yaml`.
+- Access observations for an unknown identity are kept as evidence only; they never create catalog models.
+- Policy `fields:` that the loader does not apply are rejected (schema and loader), not silently ignored.
+- Typed facts are 947's job, a serialized catalog form is 948's; M4 only makes the exported catalog read-only
+  (copies or accessors) and keeps per-observation `observed_at`.
+
+## M4 — Pre-Work / Required Refinements (reviewer r941, opus:med)
+
+1. Test isolation: `TestMain` (or shared helper) setting temp `HOME`/`XDG_CONFIG_HOME`/`XDG_STATE_HOME` in
+   `internal/subagent`, `internal/tui/router`, `internal/bench` and any other package that loads the catalog.
+2. One enablement rule: remove `Model.Enabled` or derive it from `IsEnabled` (`catalog.go:298-310` vs `:404`);
+   fix tests at `catalog_test.go:24,87,93`.
+3. Resume/send policy check per Decision (`agent_run.go:641`, `agent_interactive.go:190`, `agent_send.go:498`),
+   with a test.
+4. Disabled default model message per Decision (`agentspec.go:226`), with a test.
+5. `catalog.go:237-238`: unknown-identity observations do not add models; test with status `denied`.
+6. Reject unapplied policy fields (only `aliases`, `purpose`, `tier` are applied today), with an invalid fixture.
+7. Assertions: `catalog_test.go:87` use an unlisted model with `default_enabled: true` and status
+   `unknown`/`denied`; `:90` use `_, ok :=`; `:171` write a conflicting `$HOME/.config/harnez/models.yaml` and
+   assert it is ignored; drop unused `HARNEZ_*` at `:153`; disable-all-but-N asserts which three and calls
+   `KnownModelEntriesE`/`KnownModelSpecsE`.
+8. Edge cases: `enabled:` list vs `models.X.enabled: false`; golden `KnownModelSpecs` unchanged without policy;
+   tier-less vs tiered alias conflict (test + Spec.md); pin on a custom entry's own identity.
+9. Read-only exported catalog and per-observation `observed_at` (Decision).
 
 ## Acceptance
 
