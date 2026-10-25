@@ -54,6 +54,9 @@ type SystemMemory struct {
 	UsedMiB        float64
 	TotalMiB       float64
 	AvailableMiB   float64
+	SwapUsedMiB    float64
+	SwapTotalMiB   float64
+	SwapKnown      bool
 	Ok             bool
 	Geometry       string
 	PercentHistory []float64
@@ -410,10 +413,20 @@ func parseMeminfo(text string) (SystemMemory, error) {
 	if available > total {
 		available = total
 	}
+	swapTotal, haveSwapTotal := values["SwapTotal"]
+	swapFree, haveSwapFree := values["SwapFree"]
+	swapKnown := haveSwapTotal && haveSwapFree
+	swapUsed := uint64(0)
+	if swapKnown && swapFree < swapTotal {
+		swapUsed = swapTotal - swapFree
+	}
 	return SystemMemory{
 		UsedMiB:      float64(total-available) / 1024,
 		TotalMiB:     float64(total) / 1024,
 		AvailableMiB: float64(available) / 1024,
+		SwapUsedMiB:  float64(swapUsed) / 1024,
+		SwapTotalMiB: float64(swapTotal) / 1024,
+		SwapKnown:    swapKnown,
 		Ok:           true,
 		Geometry:     fallbackRAMGeometry(float64(total) / 1024),
 	}, nil

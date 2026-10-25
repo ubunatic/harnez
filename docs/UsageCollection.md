@@ -203,6 +203,16 @@ footer reservation changes, since roomy-terminal tests will not expose clipping 
   (`unknown`) keeps the pre-765 `vram/gtt` rendering.
 - Histories are keyed by PCI address, since `cardN` numbers shift when an eGPU is attached.
 
+## Swap in the Load boxes (issue 912 M1)
+
+- The local Load and Remote Load boxes show a `swap` row below RAM when `/proc/meminfo`
+  provides both `SwapTotal` and `SwapFree`. Used and total include zram and disk swap reported by
+  the kernel.
+- `SwapTotal: 0` renders `no swap`; absent swap keys render no row. Older remote JSON remains valid
+  and omits the row because the swap state is unknown, rather than treating it as zero.
+- Swap fields are additive to the existing `SystemMemory` JSON shape, so stored snapshots retain
+  their existing field names and continue to decode.
+
 ## Related work
 
 This plan consolidates the architecture intent in issues 034, 085, 111, 113, 146, 152, 160, 161,

@@ -52,6 +52,53 @@ Shmem:           256000 kB
 	}
 }
 
+func TestParseMeminfoSwap(t *testing.T) {
+	tests := []struct {
+		name     string
+		meminfo  string
+		known    bool
+		usedMiB  float64
+		totalMiB float64
+	}{
+		{
+			name: "swap present",
+			meminfo: `MemTotal: 8192000 kB
+MemAvailable: 4096000 kB
+SwapTotal: 8388608 kB
+SwapFree: 3145728 kB
+`,
+			known: true, usedMiB: 5120, totalMiB: 8192,
+		},
+		{
+			name: "no swap",
+			meminfo: `MemTotal: 8192000 kB
+MemAvailable: 4096000 kB
+SwapTotal: 0 kB
+SwapFree: 0 kB
+`,
+			known: true,
+		},
+		{
+			name: "swap keys absent",
+			meminfo: `MemTotal: 8192000 kB
+MemAvailable: 4096000 kB
+`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mem, err := parseMeminfo(tc.meminfo)
+			if err != nil {
+				t.Fatalf("parseMeminfo returned error: %v", err)
+			}
+			if mem.SwapKnown != tc.known || mem.SwapUsedMiB != tc.usedMiB || mem.SwapTotalMiB != tc.totalMiB {
+				t.Errorf("swap = known:%v used:%.1f total:%.1f, want known:%v used:%.1f total:%.1f",
+					mem.SwapKnown, mem.SwapUsedMiB, mem.SwapTotalMiB, tc.known, tc.usedMiB, tc.totalMiB)
+			}
+		})
+	}
+}
+
 func TestReadAMDGPUMemoryAggregatesVRAMAndGTT(t *testing.T) {
 	deviceDir := t.TempDir()
 	writeSysfsUint(t, deviceDir, "mem_info_vram_used", 5*1024*1024*1024)

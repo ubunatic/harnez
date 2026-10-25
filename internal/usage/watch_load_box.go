@@ -88,6 +88,9 @@ func buildLoadBoxLines(remoteHost string, snapshot *LoadSnapshot) []string {
 	}
 	if load.Memory.Ok {
 		lines = append(lines, formatSystemMemoryLine(load.Memory))
+		if load.Memory.SwapKnown {
+			lines = append(lines, formatSystemSwapLine(load.Memory))
+		}
 	}
 
 	if len(gpus) == 0 {
@@ -187,6 +190,15 @@ func formatSystemMemoryLine(mem SystemMemory) string {
 	}
 
 	return fmt.Sprintf("%s %s %s/%sG %s", label, chart, formatGiB(mem.UsedMiB), formatGiB(mem.TotalMiB), watchLoadPercent(pct))
+}
+
+func formatSystemSwapLine(mem SystemMemory) string {
+	label := padLoadLabel("swap")
+	if mem.SwapTotalMiB <= 0 {
+		return label + " no swap"
+	}
+	pct := percent(mem.SwapUsedMiB, mem.SwapTotalMiB)
+	return fmt.Sprintf("%s %s/%sG %s", label, formatGiB(mem.SwapUsedMiB), formatGiB(mem.SwapTotalMiB), watchLoadPercent(pct))
 }
 
 // formatGPULine renders the "gpu (name) [<chart>] avg% (temp)" line. The

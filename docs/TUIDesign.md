@@ -60,6 +60,16 @@ not start at `⣿` or finish at a particular blank glyph.
   style after padding/positioning; permit foreground-only rendering when no
   background SGR is configured.
 
+## Load panel memory rows
+
+- Show RAM first and a `swap` row immediately below it when swap is known. Keep
+  the same row order in local Load and Remote Load panels.
+- Render swap as used/total plus percent; show `no swap` when total is zero,
+  and omit the row when the source does not report swap. Older remote snapshots
+  therefore remain visually distinct from hosts with no swap.
+- Pass the row through the normal box width fitting so narrow panels clip it
+  consistently with RAM and GPU memory rows.
+
 ## .ansi visual mockups
 
 For a new or substantially revised terminal layout, use a checked-in `.ansi`

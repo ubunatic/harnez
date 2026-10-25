@@ -131,6 +131,52 @@ func TestFormatMemoryLines(t *testing.T) {
 	}
 }
 
+func TestSwapLinesInLocalAndRemoteLoadBoxes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mem  SystemMemory
+		want string
+		omit bool
+	}{
+		{name: "swap", mem: SystemMemory{SwapKnown: true, SwapUsedMiB: 2048, SwapTotalMiB: 8192}, want: "swap             2.0/8.0G 25%"},
+		{name: "no swap", mem: SystemMemory{SwapKnown: true}, want: "swap             no swap"},
+		{name: "unknown", mem: SystemMemory{}, omit: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := &LoadSnapshot{CPU: CPULoad{NumCPU: 4, Memory: SystemMemory{Ok: true, SwapKnown: tc.mem.SwapKnown, SwapUsedMiB: tc.mem.SwapUsedMiB, SwapTotalMiB: tc.mem.SwapTotalMiB}}}
+			for _, remote := range []bool{false, true} {
+				host := ""
+				if remote {
+					host = "worker"
+				}
+				lines := buildLoadBoxLines(host, snapshot)
+				text := stripANSI(strings.Join(lines, "\n"))
+				if tc.omit && strings.Contains(text, "swap") {
+					t.Errorf("remote=%v: unknown swap was rendered: %s", remote, text)
+				}
+				if !tc.omit && !strings.Contains(text, tc.want) {
+					t.Errorf("remote=%v: missing %q in load box:\n%s", remote, tc.want, text)
+				}
+			}
+		})
+	}
+}
+
+func TestOlderRemoteJSONWithoutSwapRendersNoSwapRow(t *testing.T) {
+	data := `{"timestamp":"2026-10-25T00:00:00Z","agents":[],"load":{"cpu":{"NumCPU":4,"Memory":{"UsedMiB":1024,"TotalMiB":4096,"Ok":true}}}}`
+	summary, _, err := parseRemoteJSON([]byte(data))
+	if err != nil {
+		t.Fatalf("parseRemoteJSON: %v", err)
+	}
+	if summary.Load == nil {
+		t.Fatal("expected load snapshot")
+	}
+	lines := buildLoadBoxLines("worker", summary.Load)
+	if text := stripANSI(strings.Join(lines, "\n")); strings.Contains(text, "swap") {
+		t.Errorf("older remote JSON rendered an unknown swap value:\n%s", text)
+	}
+}
+
 func TestLoadBoxMemoryLineClipsToWidth(t *testing.T) {
 	b := wbox{
 		title: "\x1b[1m[L]\x1b[0m Load",
