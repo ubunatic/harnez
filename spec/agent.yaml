@@ -79,8 +79,8 @@ models:
     cost_by_tier: {med: 4, high: 6}
     eff: "~"
     skills: Go~ TUI- SQL?
-    use: Owner guidance: background and mechanical work, including log compaction; not Go development.
-    use_med: Owner guidance: background and mechanical work; not Go development.
+    use: Owner guidance — background and mechanical work, including log compaction; not Go development.
+    use_med: Owner guidance — background and mechanical work; not Go development.
   codex:sol:
     aliases: [sol, sol:low]
     preferred: true
@@ -92,7 +92,7 @@ models:
     cost_by_tier: {med: 47, high: 71}
     eff: "~"
     skills: Go~ TUI~ SQL?
-    use: Owner guidance: use sol:low for judgment, orchestration, and resolving compiler failures; reserve higher effort for harder work.
+    use: Owner guidance — use sol:low for judgment, orchestration, and resolving compiler failures; reserve higher effort for harder work.
   codex:astra:
     aliases: [astra, astra:low]
     preferred: true
@@ -116,7 +116,7 @@ models:
     cost_by_tier: {med: 4, high: 7}
     eff: "-"
     skills: Go~ TUI~ SQL~
-    use: Owner guidance: default worker at haiku:high for well-specified implementation and tests. Haiku 5.5 requests above 100k prompt tokens cost more per token; see guidance_source_url.
+    use: Owner guidance — default worker at haiku:high for well-specified implementation and tests. Haiku 5.5 requests above 100k prompt tokens cost more per token; see guidance_source_url.
     guidance_source_url: https://code.claude.com/docs/en/model-config#haiku-55-context-window-and-pricing
   claude:sonnet:
     aliases: [sonnet, sonnet:low]
@@ -160,8 +160,8 @@ models:
     cost: 4
     eff: "~"
     skills: Go~ TUI~ SQL~
-    use: Owner guidance: use flash38:med for routing and preprocessing, especially wide-context inputs.
-    use_med: Owner guidance: route and preprocess wide-context inputs.
+    use: Owner guidance — use flash38:med for routing and preprocessing, especially wide-context inputs.
+    use_med: Owner guidance — route and preprocess wide-context inputs.
   agy:argon:
     aliases: [argon, argon:low]
     provider: agy
