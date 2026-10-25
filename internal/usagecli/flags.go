@@ -68,7 +68,21 @@ func SelectUsageViewMode(normal, compact, minimal bool) (string, bool, error) {
 		mode = "minimal"
 	}
 	if selected > 1 {
-		return "", true, fmt.Errorf("--normal, --compact, and --minimal are mutually exclusive")
+		return "", true, fmt.Errorf("--table (alias --normal), --compact, and --minimal are mutually exclusive")
 	}
 	return mode, selected == 1, nil
+}
+
+// UsageStartMode resolves explicit flags before the watch or one-shot default.
+func UsageStartMode(watch, table, compact, minimal bool) (string, bool, error) {
+	mode, explicit, err := SelectUsageViewMode(table, compact, minimal)
+	if err != nil || explicit {
+		return mode, explicit, err
+	}
+	if watch {
+		mode, err = usage.DefaultUsageWatchViewMode()
+	} else {
+		mode, err = usage.DefaultUsageViewMode()
+	}
+	return mode, false, err
 }

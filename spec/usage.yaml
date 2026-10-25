@@ -57,6 +57,7 @@ usage_kill_log:
 watch_loading_label: Collecting usage…
 view_modes:
   default: normal
+  watch_default: minimal
   modes:
     # normal is the plain usage table: one row per quota window, no boxes.
     normal:

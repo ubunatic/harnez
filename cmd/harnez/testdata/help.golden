@@ -2673,8 +2673,7 @@ Flags:
       --json                output usage in JSON format
       --loom                start usage monitor as loom app (compact view)
       --mic                 show the microphone level/recording panel in --watch (hidden if no audio interface is found)
-      --minimal             show compact panels without title/status bars or hidden-panel and overflow hints
-      --normal              show the usage table (the default view)
+      --minimal             show compact panels without title/status bars or hints (the default with --watch)
       --offline             read stored usage without starting the collector
   -p, --proc                show running agent processes panel in the default view / --watch
       --processes           show running agent processes panel in the default view / --watch
@@ -2682,6 +2681,7 @@ Flags:
   -r, --raw                 print the detailed per-field usage report instead of the selected view
       --shared              deprecated compatibility flag; local usage reads the collector store
       --splash              render startup splash while the first stored frame loads (--watch only)
+      --table               show the usage table (the default for one-shot output)
   -w, --watch               refresh the stored view in place with collector age markers
 
 Use "harnez usage [command] --help" for more information about a command.

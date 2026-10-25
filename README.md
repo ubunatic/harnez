@@ -314,8 +314,8 @@ records the measured input-token effect.
 - `--json` — output usage metrics in JSON format
 - `--agent <name>` — filter to a specific agent (`claude`, `agy`, `codex`)
 - `--offline` — disable live network queries and use local caches only
-- `-w, --watch` — live-refresh the selected view in place with a tokens/min velocity trend
-- `--normal` — show the usage table, one row per quota window (the default view)
+- `-w, --watch` — live-refresh in the minimal view by default, with a tokens/min velocity trend
+- `--table` — show the usage table, one row per quota window (the one-shot default; `--normal` remains a hidden alias)
 - `--compact` / `--minimal` — show the compact All Usage and Load panels (`--minimal` drops the title and status bars)
 - `--interval <duration>` — refresh interval for `--watch` (default `15s`, minimum `10s`)
 

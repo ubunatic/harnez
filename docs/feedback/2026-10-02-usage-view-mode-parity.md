@@ -7,6 +7,10 @@ Issue 678 made `normal`, `compact`, and `minimal` spec-defined presentation mode
 presentation, while `--watch` independently enables repeated rendering and interaction. The mode
 schema, loader, CLI, static renderer, watch renderer, and ANSI mockup now describe the same feature.
 
+Update (issue 932): `--watch` now starts in `minimal`; one-shot output retains the table.
+`--table` selects the table, with `--normal` retained as a hidden alias. Explicit mode
+rendering and the mode key cycle remain unchanged.
+
 ## What worked
 
 - **The user clarified the behavioral axis.** The key correction was that PTY detection must not

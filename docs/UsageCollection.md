@@ -168,14 +168,17 @@ deleted automatically. The first archive holds the original files; later data li
 ## Usage view modes (2026-10-02)
 
 `spec/usage.yaml` is the source of truth for the usage presentation modes. It defines the `normal`,
-`compact`, and `minimal` panel sets and display details, plus the default (`normal`). `normal` is a
+`compact`, and `minimal` panel sets and display details. One-shot output defaults to `normal`;
+`--watch` defaults to `minimal` via `view_modes.watch_default` (issue 932). `--table` selects
+`normal`; `--normal` remains a hidden compatibility alias. `--minimal` remains accepted.
+The `[m]ode` key cycle is unchanged. `normal` is a
 plain table with one row per quota window (agent, quota, used, resets, tokens, tok/min, updated,
 model, account); the per-agent detail boxes and the history totals were removed. All modes read the
 usage store, so the table, `--compact` and `--minimal` show the same readings.
 The JSON Schema and Go loader validate that contract; renderer code should consume the loaded mode instead
 of maintaining parallel hardcoded mode defaults.
 
-The view selector controls presentation. `--watch` controls the refresh loop and interaction only,
+The view selector controls presentation. `--watch` enables the refresh loop and interaction,
 so one-shot and watch frames for a selected mode retain the same panels and detail. Keep layout
 budgeting shared as well: title and status chrome, hidden-panel summaries, and overflow hints must
 follow the selected mode, including when a terminal is too short to show every line. In particular,
@@ -183,7 +186,7 @@ reserve status-footer rows for static frames only when the live footer itself fi
 header and body; otherwise one-shot and watch can disagree about whether panel content or the
 overflow hint is visible.
 
-Parity tests should exercise the no-flag default and each explicit mode, comparing one-shot and
+Tests should exercise the distinct no-flag defaults and each explicit mode, comparing one-shot and
 watch output at ordinary and constrained terminal heights. Include the minimum heights where
 footer reservation changes, since roomy-terminal tests will not expose clipping differences.
 

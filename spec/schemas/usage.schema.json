@@ -100,6 +100,7 @@
       "required": ["default", "modes"],
       "properties": {
         "default": { "type": "string", "enum": ["normal", "compact", "minimal"], "default": "normal" },
+        "watch_default": { "type": "string", "enum": ["normal", "compact", "minimal"] },
         "modes": {
           "type": "object",
           "required": ["normal", "compact", "minimal"],

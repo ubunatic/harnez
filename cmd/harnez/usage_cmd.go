@@ -58,18 +58,12 @@ func newUsageCmd() *cobra.Command {
 				client = &http.Client{Timeout: serverCfg.HTTPClientTimeout}
 			}
 
-			selectedMode, explicitMode, err := usagecli.SelectUsageViewMode(usageNormal, usageCompact, usageMinimal)
+			selectedMode, explicitMode, err := usagecli.UsageStartMode(usageWatch, usageNormal, usageCompact, usageMinimal)
 			if err != nil {
 				return err
 			}
 			if err := usagecli.ValidateUsageModeFlags(explicitMode, usageRaw, usageJSON, usageLoom); err != nil {
 				return err
-			}
-			if !explicitMode {
-				selectedMode, err = usage.DefaultUsageViewMode()
-				if err != nil {
-					return err
-				}
 			}
 			usageCompactMode := selectedMode == "compact" || selectedMode == "minimal"
 			if err := usagecli.ValidateUsageFlags(usageWatch, usageRaw, usageJSON, explicitMode && usageCompactMode, usageLoom, usageSplash); err != nil {
@@ -210,8 +204,7 @@ func newUsageCmd() *cobra.Command {
 				return nil
 			}
 
-			// The selected spec-defined view is printed once. --watch enters
-			// this same view in the interactive redraw loop.
+			// One-shot output keeps the table unless a view was explicitly selected.
 			loadOpt := usage.WatchOptions{Mode: selectedMode, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: cachedRemote.Snapshot, RemoteLoadUpdatedAt: cachedRemote.UpdatedAt}
 			if usageHost != "" {
 				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
@@ -236,9 +229,11 @@ func newUsageCmd() *cobra.Command {
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "read stored usage without starting the collector")
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "refresh the stored view in place with collector age markers")
 	usageCmd.Flags().BoolVar(&usageSplash, "splash", false, "render startup splash while the first stored frame loads (--watch only)")
-	usageCmd.Flags().BoolVar(&usageNormal, "normal", false, "show the usage table (the default view)")
+	usageCmd.Flags().BoolVar(&usageNormal, "table", false, "show the usage table (the default for one-shot output)")
+	usageCmd.Flags().BoolVar(&usageNormal, "normal", false, "alias for --table")
+	_ = usageCmd.Flags().MarkHidden("normal")
 	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show the compact all-usage and load panels")
-	usageCmd.Flags().BoolVar(&usageMinimal, "minimal", false, "show compact panels without title/status bars or hidden-panel and overflow hints")
+	usageCmd.Flags().BoolVar(&usageMinimal, "minimal", false, "show compact panels without title/status bars or hints (the default with --watch)")
 	usageCmd.Flags().BoolVar(&usageLoom, "loom", false, "start usage monitor as loom app (compact view)")
 	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the selected view")
 	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in the default view / --watch")

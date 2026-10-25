@@ -25,6 +25,9 @@ func TestEmbeddedUsageSpec(t *testing.T) {
 	if mode != "normal" {
 		t.Fatalf("default usage view = %q, want normal from embedded spec", mode)
 	}
+	if watchMode, err := DefaultUsageWatchViewMode(); err != nil || watchMode != "minimal" {
+		t.Fatalf("watch default = %q, %v; want minimal", watchMode, err)
+	}
 	storeBusy, err := UsageStoreBusyTimeout()
 	if err != nil {
 		t.Fatal(err)

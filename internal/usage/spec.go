@@ -101,8 +101,9 @@ func agyQuotaSettings() (agyQuotaSpec, error) {
 }
 
 type usageViewModesSpec struct {
-	Default string                       `yaml:"default"`
-	Modes   map[string]usageViewModeSpec `yaml:"modes"`
+	Default      string                       `yaml:"default"`
+	WatchDefault string                       `yaml:"watch_default"`
+	Modes        map[string]usageViewModeSpec `yaml:"modes"`
 }
 
 type usageViewModeSpec struct {
@@ -366,6 +367,9 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 }
 
 func (s usageViewModesSpec) validate() error {
+	if s.WatchDefault != "" && s.WatchDefault != "normal" && s.WatchDefault != "compact" && s.WatchDefault != "minimal" {
+		return fmt.Errorf("view_modes.watch_default must be normal, compact, or minimal")
+	}
 	if s.Default != "normal" && s.Default != "compact" && s.Default != "minimal" {
 		return fmt.Errorf("view_modes.default must be normal, compact, or minimal")
 	}
@@ -435,4 +439,16 @@ func DefaultUsageViewMode() (string, error) {
 		return "", err
 	}
 	return usageSpecViewModes.Default, nil
+}
+
+// DefaultUsageWatchViewMode returns the interactive start mode from the spec.
+func DefaultUsageWatchViewMode() (string, error) {
+	mode, err := DefaultUsageViewMode()
+	if err != nil {
+		return "", err
+	}
+	if usageSpecViewModes.WatchDefault == "" {
+		return mode, nil
+	}
+	return usageSpecViewModes.WatchDefault, nil
 }

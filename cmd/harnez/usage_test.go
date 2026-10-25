@@ -3,12 +3,65 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"ubunatic.com/harnez/internal/usage"
+	"ubunatic.com/harnez/internal/usagecli"
 )
+
+func TestUsageStartModes(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{nil, "normal"},
+		{[]string{"--watch"}, "minimal"},
+		{[]string{"--watch", "--minimal"}, "minimal"},
+		{[]string{"--watch", "--compact"}, "compact"},
+		{[]string{"--watch", "--table"}, "normal"},
+		{[]string{"--watch", "--normal"}, "normal"},
+		{[]string{"--table"}, "normal"},
+		{[]string{"--normal"}, "normal"},
+	} {
+		t.Run(fmt.Sprint(tc.args), func(t *testing.T) {
+			cmd := newUsageCmd()
+			if err := cmd.ParseFlags(tc.args); err != nil {
+				t.Fatal(err)
+			}
+			flag := func(name string) bool {
+				value, err := cmd.Flags().GetBool(name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return value
+			}
+			mode, _, err := usagecli.UsageStartMode(flag("watch"), flag("table"), flag("compact"), flag("minimal"))
+			if err != nil || mode != tc.want {
+				t.Fatalf("start mode = %q, %v; want %q", mode, err, tc.want)
+			}
+			if !cmd.Flags().Lookup("normal").Hidden || cmd.Flags().Lookup("table").Hidden {
+				t.Fatal("only the legacy alias should be hidden")
+			}
+		})
+	}
+}
+
+func TestUsageOneShotDefaultsToTable(t *testing.T) {
+	seedUsageStore(t)
+	cmd := newUsageCmd()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"--offline"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("Claude")) || bytes.Contains(buf.Bytes(), []byte("╭")) {
+		t.Fatalf("expected plain usage table, got %s", buf.String())
+	}
+}
 
 func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
 	root := newRootCmd()
