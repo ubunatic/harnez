@@ -27,7 +27,8 @@ var (
 
 // TestMain isolates the tests from the agent environment harnez exports to the
 // workers it starts: a developer, reviewer or advisor runs this suite with
-// HARNEZ_AGENT_ROLE and HARNEZ_SESSION_ID set, and those must not change results.
+// HARNEZ_AGENT_ROLE, HARNEZ_AGENT_MODEL and HARNEZ_SESSION_ID set, and those
+// must not change results.
 // Tests that need them use t.Setenv. It also isolates tests from the real store
 // (~/.harnez) by setting HOME to a temp dir, preventing session leaks.
 func TestMain(m *testing.M) {
@@ -49,6 +50,7 @@ func runIsolatedTests(m *testing.M) int {
 		panic(fmt.Sprintf("preserve Go caches: %v", err))
 	}
 	os.Unsetenv(agentRoleEnv)
+	os.Unsetenv(agentModelEnv)
 	os.Unsetenv(agentSessionEnv)
 	for _, name := range resolve.SessionEnvVars {
 		os.Unsetenv(name)

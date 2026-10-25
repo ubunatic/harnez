@@ -150,11 +150,15 @@ func ApplyStatus(verb, ticketArg, reason string, opts StatusBatchOptions) (Statu
 	if err != nil {
 		return StatusResult{}, false, fmt.Errorf("issues: %w", err)
 	}
+	// Only a close records attribution; any other verb (reopen, start, ...)
+	// drops the stale Closed-By line so an open ticket never carries one.
 	if verb == "close" || verb == "done" {
 		newContent, _, err = RewriteClosedBy(newContent, opts.ClosedByModel, opts.ClosedBySession)
-		if err != nil {
-			return StatusResult{}, false, fmt.Errorf("issues: %w", err)
-		}
+	} else {
+		newContent, _, err = RewriteClosedBy(newContent, "", "")
+	}
+	if err != nil {
+		return StatusResult{}, false, fmt.Errorf("issues: %w", err)
 	}
 	if opts.Check {
 		if opts.SnapshotIndexes == nil || opts.RestoreIndexes == nil || opts.UpdateIndexes == nil {
@@ -264,11 +268,15 @@ func ApplyStatusBatch(verb string, ticketArgs, reasonArgs []string, opts StatusB
 		if err != nil {
 			return nil, false, fmt.Errorf("issues: %w", err)
 		}
+		// Only a close records attribution; any other verb (reopen, start, ...)
+		// drops the stale Closed-By line so an open ticket never carries one.
 		if verb == "close" || verb == "done" {
 			updated, _, err = RewriteClosedBy(updated, opts.ClosedByModel, opts.ClosedBySession)
-			if err != nil {
-				return nil, false, fmt.Errorf("issues: %w", err)
-			}
+		} else {
+			updated, _, err = RewriteClosedBy(updated, "", "")
+		}
+		if err != nil {
+			return nil, false, fmt.Errorf("issues: %w", err)
 		}
 		result := StatusResult{Number: f.Number, File: relPath, OldStatus: oldStatus, NewStatus: targetStatus, Noop: oldStatus == targetStatus}
 		targets = append(targets, target{path: filePath, relPath: relPath, old: content, updated: []byte(updated), result: result})

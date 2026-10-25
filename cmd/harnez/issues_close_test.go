@@ -85,6 +85,56 @@ func TestIssuesCloseAttributionRecloseReplacesLine(t *testing.T) {
 	}
 }
 
+// TestIssuesOpenDropsClosedBy covers reopening a ticket that was closed with
+// attribution: the open ticket must not keep the Closed-By line. Both the batch
+// CLI path and the single-ticket path rewrite the file, so both are checked.
+func TestIssuesOpenDropsClosedBy(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_MODEL", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	reopens := []struct {
+		name   string
+		reopen func(dir string) error
+	}{
+		{name: "batch", reopen: func(dir string) error {
+			cmd := newIssuesCmd()
+			cmd.SetArgs([]string{"open", "42", "--no-commit", "-d", dir})
+			return cmd.Execute()
+		}},
+		{name: "single", reopen: func(dir string) error {
+			var out bytes.Buffer
+			_, _, err := runIssuesVerb(&out, "open", "42", nil, issuesRunOptions{Dir: dir, NoCommit: true})
+			return err
+		}},
+	}
+	for _, tc := range reopens {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, ticket := issuesFixtureRepo(t, sampleTicket)
+			cmd := newIssuesCmd()
+			cmd.SetArgs([]string{"close", "42", "--no-code", "--no-commit", "-d", dir, "--model", "first:model", "--session", "first-session"})
+			if err := cmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			closed, err := os.ReadFile(ticket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(closed), "**Closed-By**: first:model, session first-session\n") {
+				t.Fatalf("close did not record attribution:\n%s", closed)
+			}
+			if err := tc.reopen(dir); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(ticket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != sampleTicket {
+				t.Errorf("reopened ticket = %q, want original %q", got, sampleTicket)
+			}
+		})
+	}
+}
+
 func TestIssuesCloseAlreadyClosed(t *testing.T) {
 	for _, verb := range []string{"close", "done"} {
 		for _, reason := range []string{"resolved", "different outcome", ""} {
