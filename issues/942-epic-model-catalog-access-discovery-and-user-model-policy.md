@@ -85,10 +85,10 @@ overrides an assumed capability, cost fields (subscription vs. API).
 | — | Architecture: layers, schema, sources, snapshot diff | 2 | — → sol:med → — | host + owner | Done (cdfb4b71) |
 | 945 | A: formats and schemas | 3 | — → — → sol:low (M1-M2), sol:med (M3) | opus:low | Closed |
 | 941 | B: merged loader + policy enforcement (needs 945) | 4 | — → plan → sol:med | opus:med | Closed |
-| 946 | C1: one bare probe for one model, prints result + input tokens | 5 | — → plan → luna:high | host | Open |
-| 954 | C2: `models discover` (listings) → access.yaml, ACCESS column in `agent models` | 6 | — → plan → luna:high | host | Open |
-| 955 | C3: bounded batch probes (confirm, budget, stop on quota/auth) | 7 | — → plan → luna:high | sol:low | Open |
-| 948 | F1: snapshot + text change report (added/removed/access); JSON and other categories later | 8 | — → plan → luna:high | host | Open |
+| 946 | C1: one bare probe for one model, prints result + input tokens | 5 | — → plan → sol:low | host | Open |
+| 954 | C2: `models discover` (listings) → access.yaml, ACCESS column in `agent models` | 6 | — → plan → haiku:high | host | Open |
+| 955 | C3: bounded batch probes (confirm, budget, stop on quota/auth) | 7 | — → plan → haiku:high | sol:low | Open |
+| 948 | F1: snapshot + text change report (added/removed/access); JSON and other categories later | 8 | — → plan → haiku:high | host | Open |
 | 949 | D: `harnez-models update` web-refresh skill (needs 948 F1) | 9 | — → plan → sol:low | host | Open |
 | 947 | E: capability evidence | — | — | — | Backlog: no attributable test source yet (its own exit clause) |
 
