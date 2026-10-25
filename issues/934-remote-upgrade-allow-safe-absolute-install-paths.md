@@ -1,6 +1,6 @@
 # 934 — remote upgrade: allow safe absolute install paths
 
-**Status**: Open
+**Status**: Closed — 973e342a, b722e0cb (+ M2 dot fix): install_path accepts ~/ and safe absolute paths, rejects /tmp, /var/tmp, '.', '..', unsafe chars (runtime and schema); failures name path and reason. Live restart: 'installed 0.2.1+3758 on x600', no temp file left; make test-q1 green (dev run)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
