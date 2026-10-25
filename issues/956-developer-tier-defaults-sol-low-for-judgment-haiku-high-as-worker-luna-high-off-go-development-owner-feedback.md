@@ -1,6 +1,7 @@
 # 956 — Developer tier defaults: sol:low for judgment, haiku:high as worker, luna:high off Go development (owner feedback)
 
-**Status**: Open
+**Status**: Closed — M1 skill tiers (5c19dfde), M2 model guides with source URL (b6c40ce2, 93100fd5), M3 test update; item 4 parked: single-turn -p canary showed no compaction at 100k/10%, not proven
+**Closed-By**: codex:sol:low, session d956
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Docs
