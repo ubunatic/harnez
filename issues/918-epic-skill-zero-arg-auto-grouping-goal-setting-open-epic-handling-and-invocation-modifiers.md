@@ -33,14 +33,11 @@ The desired user experience allows flexible, natural invocations where the orche
 
 ## 2. Milestones
 
-### M1: Dev & Advisor Design Review & User Challenge
-- Review parameterization syntax and natural-language prefix variations (`file new /epic`, `run new /epic`, `next /epic`, bare `/epic`).
-- Investigate feasibility and mechanism of programmatic `/goal` adoption across harnesses (Antigravity slash command vs harness state vs goal prompt convention).
-- Analyze risks and define guardrails:
-  - Ticket grouping heuristics (how to avoid grouping unrelated high-prio bugs into an incoherent epic).
-  - Autonomous decision boundaries (when should automode ask vs decide).
-  - Open epic disambiguation prompts (interactive TTY vs script/headless environments).
-- Formulate concrete challenges and alternative proposals for user alignment.
+### M1: Dev & Advisor Design Review & User Challenge (Done)
+- **Harness /goal adoption**: Slash commands cannot be executed directly by agents in chat UIs; the agent will set an internal durable goal in context and advise the user if a harness-level `/goal` command is desired.
+- **Grouping heuristics**: Tickets must be grouped by thematic affinity (subsystem/component/session context), never pure blind priority concatenation. If affinity is ambiguous, propose and confirm.
+- **Prefix & argument flexibility**: Support both leading modifiers (`file new /epic`, `run new /epic`, `next /epic`) and trailing subcommands (`/epic file`, `/epic run`, `/epic next`).
+- **Autonomous safety boundaries**: Automode makes implementation decisions autonomously, but stops for user confirmation on irreversible destructive operations (deletions, breaking changes, canary bypasses).
 
 ### M2: Update Specification & Skill Definitions
 - Update canonical documentation in `docs/commands/epic.md`.
