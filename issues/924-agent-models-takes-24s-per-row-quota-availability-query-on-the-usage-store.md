@@ -1,6 +1,6 @@
 # 924 — agent models takes 24s: per-row quota availability query on the usage store
 
-**Status**: Open
+**Status**: Closed — 7f4d55cb: agent models 0.81s (was 24.1s), memoized provider availability and streamed currentFor through the provider/window index
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
