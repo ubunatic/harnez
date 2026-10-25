@@ -32,6 +32,34 @@ Three layers, each fact carrying its source: public catalog (shipped spec, refre
 (discovered per machine), user policy (`~/.config/harnez/models.yaml`). Sources: spec default, web finding with
 link, discovered, measured (telemetry / `harnez rate`), user-declared. The change report diffs two snapshots.
 
+## Architecture (a942, sol:med, 2026-10-25)
+
+- Identity: harness + upstream provider + exact model/version + tier; aliases kept separate. Each fact is
+  `{value, source, observed_at, evidence}` with source `spec-default`, `web`+URL, `discovered`+method/time/account,
+  `measured`+evidence IDs, or `user-declared`; conflicting evidence is kept.
+- Merge: catalog facts, then access annotation, then policy. Policy (`$XDG_CONFIG_HOME/harnez/models.yaml`):
+  field-level patches, custom entries, version pins, `default_enabled: false` + explicit enabled IDs; arrays
+  replace; explicit clearing. Enforced after alias resolution, incl. the Pi direct-ID path
+  (`internal/subagent/driver.go:385`). Denied, unknown and stale access shown separately; unknown access does not
+  disable subscription defaults.
+- Costs: existing `cost` stays a relative estimate (`spec/agent.yaml:57`); new subscription facts
+  (plan/currency/period/quota) and API rates (per-million input/output/cache, effective date). Unknown is null.
+- Files: defaults in `spec/agent.yaml` + schema (`spec/schemas/agent.schema.json:91`); refreshed public facts,
+  access, evidence and immutable snapshots in `$XDG_STATE_HOME/harnez/models/`. Nothing machine- or
+  account-specific in git.
+- Loading: one immutable merged catalog replaces `loadModelAliases/loadModelGuides`
+  (`internal/subagent/agentspec.go:179`) and feeds `KnownModelEntries`, `ResolveModel` (`driver.go:201,245`),
+  `agent models` (`cmd/harnez/agent_cmds.go:123`), completion and TUI. Quota "availability" stays separate.
+- Discovery (explicit `update` only): parse `agy models`; claude `-p "/model"` for aliases (owner find, after
+  the design was written), then bounded probe calls for claude/codex; API listing opt-in. Probe consent and
+  spec limits; stop on quota/auth errors. Listing proves advertisement, a successful call proves access;
+  ambiguous errors stay unknown; an incomplete run never removes a model.
+- Measured capabilities: today telemetry `ToolCall` and `rate` carry no model capability; new capability
+  observations tied to version/harness/tier and a test definition. Only attributable tests prove or disprove;
+  contradictions become disputed; a new version resets them.
+- Change report: diff of two snapshots; rows and JSON `{category, model, field, before, after, sources, evidence,
+  severity}`; proposed vs. applied kept apart; defaults and pins never change silently.
+
 ## Out of scope
 
 Automatic model selection changes without owner confirmation; billing integration.
