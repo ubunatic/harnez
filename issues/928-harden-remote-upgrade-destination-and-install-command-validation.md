@@ -22,4 +22,10 @@ Automatic server-start upgrades accept load.watch_host without the validation us
 - Define shared accepted host syntax, rejecting option-like destinations and controls before every upgrade subprocess.
 - Define safe home-relative install paths; quote shell operands while preserving intentional home expansion, or reject unsupported syntax consistently in runtime and schema.
 - Table-driven tests for leading-dash hosts, ProxyCommand payloads, newlines, whitespace and shell syntax; assert no subprocess for invalid inputs and exact arguments for valid aliases/user@host.
+## Decision (host, 2026-10-25)
+
+- One host validator in `internal/sshutil`, used by the upgrader and by usage remote/loadstream/history.
+- Install path: `~/` plus safe ASCII components; reject traversal, whitespace, controls, shell syntax, globs
+  (reject rather than quote; default `~/...` keeps working). Schema and runtime share the rule.
+
 - Acceptance: probes, copy and install all use validated destinations and safe path handling; existing valid defaults work. Exit when tests pass, or report the owner decision needed.
