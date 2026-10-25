@@ -1,6 +1,7 @@
 # 945 — 942 A: model catalog contract, provenance, policy and snapshot schemas
 
-**Status**: Open
+**Status**: Closed — M1 7bd68231 schemas+fixtures, M2 ed17b565 provenance/conflicts/access/snapshot/change report, M3 3cd14dca review fixes (rule-specific fixtures, 0-vs-null rule, ValidatePolicyPins in production, disputed and report formats documented). Host make test-q1 green after M3.
+**Closed-By**: claude:opus-5-5, session 9ec5fca3
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

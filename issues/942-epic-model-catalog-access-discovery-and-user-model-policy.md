@@ -83,7 +83,7 @@ overrides an assumed capability, cost fields (subscription vs. API).
 |---|---|---|---|---|---|
 | 943 | Canary: what claude/codex/agy report about available models and access errors | 1 | luna:low advisor | host | Closed (65511a42) |
 | — | Architecture: layers, schema, sources, snapshot diff | 2 | — → sol:med → — | host + owner | Done (cdfb4b71) |
-| 945 | A: formats and schemas | 3 | — → — → sol:low | opus:low | Open |
+| 945 | A: formats and schemas | 3 | — → — → sol:low (M1-M2), sol:med (M3) | opus:low | Closed |
 | 941 | B: merged loader + policy enforcement (needs 945) | 4 | tbd | opus/sol | Open |
 | 946 | C: access discovery, bare probes (needs 945, 941) | 5 | tbd | opus/sol | Open |
 | 949 | D: `harnez-models update` web-refresh skill (needs 941) | 5 | tbd | host | Open |
