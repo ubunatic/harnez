@@ -21,7 +21,7 @@ failure report here.
 | 2 | 920 | P2 | server collects remote load over ssh; slow polling without viewers | Open |
 | 3 | 922 | P3 | Load box hotkey `L` instead of `7` | Closed (47b8967b) |
 | 4 | 917 | P3 | server-driven boxes and items from spec | Open, after 920 |
-| 5 | — | — | live check of 912's swap row on x600 (after 919) | Pending |
+| 5 | — | — | live check of 912's swap row on x600 (after 919) | Done: Remote Load swap 0.0/4.0G 1% |
 
 ## Code fanout (searcher e921-search, haiku:low, 2026-10-25)
 
