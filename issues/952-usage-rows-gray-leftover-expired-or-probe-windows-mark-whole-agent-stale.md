@@ -1,6 +1,7 @@
 # 952 — usage rows gray: leftover expired or probe windows mark whole agent stale
 
-**Status**: Open
+**Status**: Closed — 2810485a: staleness per window (an expired leftover window no longer dims fresh siblings), probe-sourced windows blocked at store write; 18 leaked probe rows purged after backup (telemetry.sqlite.issue-952-20261025.bak). make test-q1 green. Host live: harnez usage table and --watch in tmux show all Claude/Codex/AGY rows coloured, none dimmed. Probe writer not found in repo (likely a past manual run).
+**Closed-By**: claude:opus-5-5, session 9ec5fca3
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
