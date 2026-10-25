@@ -1,6 +1,6 @@
 # 920 — usage: server collects remote load over ssh, slow polling without viewers
 
-**Status**: Open
+**Status**: Closed — b0c32ecd, 612c2927, 6d07b130: server polls x600 load (10s with a UI heartbeat, 5m without; spec keys remote_load_poll_interval_attached/_detached), watch renders the server cache ('@x600 · server cache', swap 0.0/4.0G 1% live), watch-side ssh removed; make test-q1 green. Override parked in 925
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
