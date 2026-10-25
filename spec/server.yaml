@@ -19,6 +19,11 @@ systemd_restart_policy: on-failure
 systemd_restart_delay: 5s
 telemetry_warning_rate_limit: 1m
 default_log_lines: 50
+remote_upgrade:
+  install_path: ~/go/bin/harnez
+  connect_timeout: 5s
+  command_timeout: 15s
+  transfer_timeout: 60s
 neus_indexing:
   enabled: false
   interval: 5m

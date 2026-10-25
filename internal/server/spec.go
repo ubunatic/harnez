@@ -33,6 +33,15 @@ type Config struct {
 	SystemdRestartDelay       time.Duration
 	TelemetryWarningRateLimit time.Duration
 	DefaultLogLines           int
+	RemoteUpgrade             RemoteUpgradeConfig
+}
+
+// RemoteUpgradeConfig controls best-effort replacement of an older remote binary.
+type RemoteUpgradeConfig struct {
+	InstallPath     string
+	ConnectTimeout  time.Duration
+	CommandTimeout  time.Duration
+	TransferTimeout time.Duration
 }
 
 type specConfig struct {
@@ -56,6 +65,12 @@ type specConfig struct {
 	SystemdRestartDelay       string `yaml:"systemd_restart_delay"`
 	TelemetryWarningRateLimit string `yaml:"telemetry_warning_rate_limit"`
 	DefaultLogLines           int    `yaml:"default_log_lines"`
+	RemoteUpgrade             struct {
+		InstallPath     string `yaml:"install_path"`
+		ConnectTimeout  string `yaml:"connect_timeout"`
+		CommandTimeout  string `yaml:"command_timeout"`
+		TransferTimeout string `yaml:"transfer_timeout"`
+	} `yaml:"remote_upgrade"`
 }
 
 func LoadConfig() (Config, error) {
@@ -71,6 +86,25 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("spec/server.yaml: socket_path must be a filename")
 	}
 	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes, TelemetryPath: raw.TelemetryPath, TelemetrySpoolPath: raw.TelemetrySpoolPath, TelemetrySpoolMaxBytes: raw.TelemetrySpoolMaxBytes, SystemdUnitName: raw.SystemdUnitName, SystemdUnitSource: raw.SystemdUnitSource, SystemdRestartPolicy: raw.SystemdRestartPolicy, DefaultLogLines: raw.DefaultLogLines}
+	if !strings.HasPrefix(raw.RemoteUpgrade.InstallPath, "~/") || strings.Contains(raw.RemoteUpgrade.InstallPath, "..") || strings.ContainsAny(raw.RemoteUpgrade.InstallPath, "'\"`$;|&<>\\") {
+		return Config{}, fmt.Errorf("spec/server.yaml: remote_upgrade.install_path must be a safe path under the remote home directory")
+	}
+	cfg.RemoteUpgrade.InstallPath = raw.RemoteUpgrade.InstallPath
+	for _, item := range []struct {
+		name   string
+		value  string
+		target *time.Duration
+	}{
+		{"connect_timeout", raw.RemoteUpgrade.ConnectTimeout, &cfg.RemoteUpgrade.ConnectTimeout},
+		{"command_timeout", raw.RemoteUpgrade.CommandTimeout, &cfg.RemoteUpgrade.CommandTimeout},
+		{"transfer_timeout", raw.RemoteUpgrade.TransferTimeout, &cfg.RemoteUpgrade.TransferTimeout},
+	} {
+		d, err := time.ParseDuration(item.value)
+		if err != nil || d <= 0 {
+			return Config{}, fmt.Errorf("spec/server.yaml: remote_upgrade.%s must be a positive duration", item.name)
+		}
+		*item.target = d
+	}
 	if cfg.UpdateMaxBodyBytes <= 0 {
 		return Config{}, fmt.Errorf("spec/server.yaml: update_max_body_bytes must be positive")
 	}

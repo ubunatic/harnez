@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez local server settings",
   "type": "object",
-  "required": ["socket_path", "read_header_timeout", "shutdown_timeout", "http_client_timeout", "probe_timeout", "usage_deadline", "update_timeout", "update_max_body_bytes", "telemetry_update_path", "telemetry_spool_path", "telemetry_spool_max_bytes", "startup_timeout", "startup_poll_interval", "takeover_timeout", "systemd_unit_name", "systemd_unit_source", "systemd_restart_policy", "systemd_restart_delay", "telemetry_warning_rate_limit", "default_log_lines", "neus_indexing"],
+  "required": ["socket_path", "read_header_timeout", "shutdown_timeout", "http_client_timeout", "probe_timeout", "usage_deadline", "update_timeout", "update_max_body_bytes", "telemetry_update_path", "telemetry_spool_path", "telemetry_spool_max_bytes", "startup_timeout", "startup_poll_interval", "takeover_timeout", "systemd_unit_name", "systemd_unit_source", "systemd_restart_policy", "systemd_restart_delay", "telemetry_warning_rate_limit", "default_log_lines", "remote_upgrade", "neus_indexing"],
   "properties": {
     "socket_path": { "type": "string", "minLength": 1 },
     "read_header_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
@@ -24,6 +24,17 @@
     "systemd_restart_delay": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "telemetry_warning_rate_limit": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
     "default_log_lines": { "type": "integer", "minimum": 1 },
+    "remote_upgrade": {
+      "type": "object",
+      "required": ["install_path", "connect_timeout", "command_timeout", "transfer_timeout"],
+      "properties": {
+        "install_path": { "type": "string", "pattern": "^~/[A-Za-z0-9_./-]+$" },
+        "connect_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
+        "command_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
+        "transfer_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" }
+      },
+      "additionalProperties": false
+    },
     "neus_indexing": {
       "type": "object",
       "additionalProperties": false,
