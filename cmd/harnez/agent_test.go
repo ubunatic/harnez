@@ -207,6 +207,9 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 	if !strings.Contains(med, "background and mechanical work") || !strings.Contains(med, "not Go development") {
 		t.Fatalf("luna:med row must use use_med: %q", med)
 	}
+	if strings.Contains(med, "including log compaction") {
+		t.Fatalf("luna:med row must use use_med instead of use: %q", med)
+	}
 	if !strings.Contains(med, " 4 ") || !strings.Contains(high, " 6 ") {
 		t.Fatalf("tier costs not shown: med=%q high=%q", med, high)
 	}
