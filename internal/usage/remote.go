@@ -95,9 +95,8 @@ func doCollectRemote(ctx context.Context, host string, includeProcs bool) (Usage
 }
 
 // CollectRemoteLoadSnapshot fetches the CPU/GPU load reading for a host via
-// one bounded batch SSH call. --watch uses it only as the background fallback
-// when the persistent stream is unavailable; one-shot views read the last
-// locally cached snapshot instead.
+// one bounded batch SSH call. The server collector stores successful results
+// in the local cache; watch and one-shot views render that cache.
 //
 // A nil snapshot (with the underlying error, for callers that want it) is
 // returned on any failure — the panel already renders an explicit "remote

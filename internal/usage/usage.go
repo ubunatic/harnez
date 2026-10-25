@@ -427,7 +427,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 	}
 
 	if opt.RemoteLoadHost != "" {
-		box := buildRemoteLoadBox(remoteLoadBoxWidth, opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadStreaming, opt.RemoteLoadUpdatedAt, time.Now())
+		box := buildRemoteLoadBox(remoteLoadBoxWidth, opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadSource, opt.RemoteLoadUpdatedAt, time.Now())
 		for _, l := range renderWBox(box) {
 			sb.WriteString(l + "\n")
 		}

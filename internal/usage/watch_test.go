@@ -1443,7 +1443,7 @@ func TestIssue218RemoteLoadBrailleWidthParity(t *testing.T) {
 				}
 
 				localBox := buildLoadBox(width, "", local)
-				remoteBox := buildRemoteLoadBox(width, "phoenix", remote, true, time.Now(), time.Now())
+				remoteBox := buildRemoteLoadBox(width, "phoenix", remote, "server cache", time.Now(), time.Now())
 				for row := range 2 {
 					localStart, localEnd := bracketColumns(stripANSI(localBox.lines[row]))
 					remoteStart, remoteEnd := bracketColumns(stripANSI(remoteBox.lines[row]))
@@ -1497,7 +1497,7 @@ func TestRemoteLoadBoxShowsCacheAge(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			box := buildRemoteLoadBox(48, "phoenix", tc.snapshot, false, tc.updatedAt, now)
+			box := buildRemoteLoadBox(48, "phoenix", tc.snapshot, "server cache", tc.updatedAt, now)
 			text := stripANSI(strings.Join(box.lines, "\n"))
 			if !strings.Contains(text, tc.want) {
 				t.Fatalf("box lacks %q:\n%s", tc.want, text)
@@ -1950,6 +1950,9 @@ func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
 	if !strings.Contains(frameText, "Remote Load") {
 		t.Fatalf("expected Remote Load box in frame, got:\n%s", frameText)
 	}
+	if !strings.Contains(frameText, "@phoenix · server cache") {
+		t.Fatalf("expected server cache source label in frame, got:\n%s", frameText)
+	}
 
 	// Toggled off
 	sec.RemoteLoad = false
@@ -1963,22 +1966,18 @@ func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
 	}
 }
 
-func TestOfflineWatchKeepsRemoteLoadPanelWithoutCollection(t *testing.T) {
-	if remoteLoadCollectionEnabled("phoenix", true) {
-		t.Fatal("offline watch enabled remote collection")
+func TestRemoteLoadPanelLabelsServerCache(t *testing.T) {
+	opts := WatchOptions{
+		Mode:                "compact",
+		RemoteLoadHost:      "phoenix",
+		RemoteLoadSnapshot:  &LoadSnapshot{CPU: CPULoad{NumCPU: 8}},
+		RemoteLoadSource:    "server cache",
+		RemoteLoadUpdatedAt: testTime,
 	}
-	if !remoteLoadCollectionEnabled("phoenix", false) {
-		t.Fatal("watch did not enable remote collection for a configured host")
-	}
-	if remoteLoadCollectionEnabled("", false) {
-		t.Fatal("watch enabled remote collection without a configured host")
-	}
-
-	opts := WatchOptions{Mode: "compact", RemoteLoadHost: "phoenix", DisableRemoteLoad: true}
 	frame := buildWatchFrame(UsageSummary{Timestamp: testTime}, nil, time.Minute, compactWatchSections(), 100, 30, true, opts)
 	frameText := strings.Join(frame.lines, "\n")
-	if !strings.Contains(frameText, "Remote Load") || !strings.Contains(frameText, "remote load unavailable") {
-		t.Fatalf("offline watch should render the unavailable panel without collecting:\n%s", frameText)
+	if !strings.Contains(frameText, "Remote Load") || !strings.Contains(frameText, "@phoenix · server cache") {
+		t.Fatalf("watch should render the server cache panel and source label:\n%s", frameText)
 	}
 }
 

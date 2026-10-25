@@ -428,14 +428,14 @@ func usageTestEnv(home, runtimeDir string) []string {
 }
 
 // usageTestRecoveryWait bounds the wait for the collector's first retry: the
-// M1 backoff starts at 10s, so recovery needs slightly more than that.
+// attached-viewer cadence starts at 10s, so recovery needs slightly more.
 const usageTestRecoveryWait = 30 * time.Second
 
 // TestCollectorRecoversRemoteLoadForOneShot is issue 879 M2b end to end: a
 // running collector polls a fake host that is down, then up. A later one-shot
 // usage shows the cached snapshot, and the one-shot process never runs ssh.
 func TestCollectorRecoversRemoteLoadForOneShot(t *testing.T) {
-	skipShort(t, "runs the harnez server and usage binaries and waits for the 10s retry")
+	skipShort(t, "runs the harnez server and usage binaries and waits for the attached-viewer retry")
 	bin := buildUsageTestBinary(t)
 	home, runtimeDir := usageTestDirs(t)
 	seedUsageTestStore(t, home)
@@ -485,7 +485,13 @@ func TestCollectorRecoversRemoteLoadForOneShot(t *testing.T) {
 	if err := os.WriteFile(recovered, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	usage.StartClientHeartbeat(ctx)
 	waitForUsageTestCondition(t, "the collector's retry to cache the snapshot", func() bool {
 		return usage.ReadCachedRemoteLoadEntry("x600").Snapshot != nil
 	})

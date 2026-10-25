@@ -96,7 +96,7 @@ func TestRemoteLoadPollerResetsBackoffAfterSuccess(t *testing.T) {
 
 	runRemoteLoadPoller(ctx, opt)
 
-	want := []time.Duration{10 * time.Second, 20 * time.Second, 10 * time.Second, 20 * time.Second, 10 * time.Second}
+	want := []time.Duration{10 * time.Second, 20 * time.Second, 10 * time.Second, 10 * time.Second, 10 * time.Second}
 	if !equalDurations(script.waits, want) {
 		t.Fatalf("poll waits = %v, want %v", script.waits, want)
 	}

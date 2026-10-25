@@ -493,54 +493,8 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		throttler.Request()
 	}
 
-	// remote Load streaming (issue 110): started here, alongside this
-	// function's other lifecycle-owned resources (stty restore above, tty/
-	// SIGWINCH/alt-screen-buffer below), and torn down via the same defer-
-	// based cleanup path on every exit from this function, Ctrl-C included
-	// — Decision §4's ControlMaster lifetime is 1:1 with this --watch
-	// process. remoteStreamStop is read by the deferred cleanup below and
-	// written by the manager goroutine each time it (re)establishes a
-	// stream, so cleanup can synchronously tear down whichever ssh
-	// ControlMaster/child happens to be live at the moment this function
-	// returns, instead of trusting a background goroutine to get around to
-	// it after the process may already be exiting.
+	// The server owns SSH collection; the watch loop only reads its cache.
 	remoteLoadHost := strings.TrimSpace(opts.RemoteLoadHost)
-	var remoteLoadMu sync.Mutex
-	lastRemoteLoad := opts.RemoteLoadSnapshot
-	// remoteLoadUpdatedAt times lastRemoteLoad: the cache time at startup, then
-	// the first frame that sees a newer pointer from the manager (issue 879 M2b).
-	remoteLoadUpdatedAt := opts.RemoteLoadUpdatedAt
-	remoteLoadSeen := opts.RemoteLoadSnapshot
-	var remoteLoadStreaming bool
-	var remoteStreamStop func()
-	if remoteLoadCollectionEnabled(remoteLoadHost, opts.DisableRemoteLoad) {
-		setRemoteStreamStop := func(f func()) {
-			remoteLoadMu.Lock()
-			remoteStreamStop = f
-			remoteLoadMu.Unlock()
-		}
-		setRemoteLoadStreaming := func(streaming bool) {
-			remoteLoadMu.Lock()
-			remoteLoadStreaming = streaming
-			remoteLoadMu.Unlock()
-			requestRedraw()
-		}
-		remoteDone := make(chan struct{})
-		defer func() {
-			stop()
-			<-remoteDone
-			remoteLoadMu.Lock()
-			stopFn := remoteStreamStop
-			remoteLoadMu.Unlock()
-			if stopFn != nil {
-				stopFn()
-			}
-		}()
-		go func() {
-			defer close(remoteDone)
-			runRemoteLoadManager(sigCtx, remoteLoadHost, &remoteLoadMu, &lastRemoteLoad, requestRedraw, setRemoteStreamStop, setRemoteLoadStreaming)
-		}()
-	}
 
 	var splashActive atomic.Bool
 	splashActive.Store(opts.Splash)
@@ -697,17 +651,9 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		diagnosticSnapshot := append([]string(nil), diagnostics...)
 		diagnosticsMu.Unlock()
 
-		var remoteSnap *LoadSnapshot
-		var remoteStreaming bool
+		var remoteCache RemoteLoadCache
 		if remoteLoadHost != "" {
-			remoteLoadMu.Lock()
-			remoteSnap = lastRemoteLoad
-			remoteStreaming = remoteLoadStreaming
-			if remoteSnap != remoteLoadSeen {
-				remoteLoadSeen = remoteSnap
-				remoteLoadUpdatedAt = time.Now()
-			}
-			remoteLoadMu.Unlock()
+			remoteCache = ReadCachedRemoteLoadEntry(remoteLoadHost)
 		}
 
 		wantMicLive := activeSec.Mic && currentHost == ""
@@ -739,9 +685,9 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			Diagnostics:         diagnosticSnapshot,
 			DiagnosticsOffset:   activeDiagnosticsOffset,
 			RemoteLoadHost:      remoteLoadHost,
-			RemoteLoadSnapshot:  remoteSnap,
-			RemoteLoadUpdatedAt: remoteLoadUpdatedAt,
-			RemoteLoadStreaming: remoteStreaming,
+			RemoteLoadSnapshot:  remoteCache.Snapshot,
+			RemoteLoadUpdatedAt: remoteCache.UpdatedAt,
+			RemoteLoadSource:    "server cache",
 			DebugOverlay:        activeDebugOverlay,
 			DebugBox:            activeDebugBox,
 			MicLiveLevel:        micLive.Level,

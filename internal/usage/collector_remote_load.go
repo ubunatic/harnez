@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+// Retry backoff is an internal policy, separate from the configured cadence.
+const (
+	remoteLoadRetryInitial = 10 * time.Second
+	remoteLoadRetryMax     = 2 * time.Minute
+)
+
+type remoteLoadCollectFunc func(context.Context, string) (*LoadSnapshot, error)
+
 // remoteLoadPollOptions configures the server-owned remote load poll. Collect
 // and Wait are injected so tests drive the schedule without sleeping.
 type remoteLoadPollWaitFunc func(context.Context, time.Duration, <-chan struct{})
@@ -104,4 +112,8 @@ func waitRemoteLoadPoll(ctx context.Context, delay time.Duration, wakeOnAttach <
 	case <-timer.C:
 	case <-wakeOnAttach:
 	}
+}
+
+func nextRemoteLoadRetryDelay(delay, max time.Duration) time.Duration {
+	return min(delay*2, max)
 }

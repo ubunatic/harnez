@@ -64,7 +64,7 @@ these telemetry writes.
 | Client usage files | Providers write Claude `stats-cache.json`, Codex rollout JSONL, AGY logs/conversation data. | provider collectors and project usage. These are sources, not Harnez stores. |
 | Statuslines | Claude and AGY statusline commands render client information and POST fractional quota windows on refresh. | Server deduplicates and stores windows; statuslines drop an update when the server is unavailable. |
 | `$XDG_DATA_HOME/harnez/telemetry.sqlite` (legacy `~/.harnez/tool_catalog.sqlite`) | `harnez server`; observer events arrive over its Unix socket route or via the bounded spool. | `stats`, export, session analytics. It stores tool calls, provider token snapshots, session boundaries and economics, but quota/history readers bypass it. |
-| Remote load stream/snapshots | watch-side stream/remote fetch. | watch only; separate from quota collection and should join the registry as a non-provider collector. |
+| Remote load cache | `harnez server` polls `load.watch_host` over SSH; cadence is 10s with active UI heartbeats and 5m without viewers. | Watch reads the server cache and renders it; it opens no SSH connection. |
 
 ## Target flow
 

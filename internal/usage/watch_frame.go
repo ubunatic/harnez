@@ -58,25 +58,17 @@ type WatchOptions struct {
 	// is shown alongside the existing local [L] Load box. Empty means no
 	// such panel at all (today's behavior, unchanged).
 	RemoteLoadHost string
-	// DisableRemoteLoad keeps the panel visible but suppresses SSH collection,
-	// as required by --offline.
-	DisableRemoteLoad bool
 	// RemoteLoadSnapshot is the last known CPU/GPU reading for
-	// RemoteLoadHost — from cache at startup and the watch stream or fallback
-	// batch poll while running. Nil
+	// RemoteLoadHost. Watch reads the server-owned cache; non-watch views receive
+	// the cache entry from their caller. Nil
 	// renders the same "remote load unavailable" placeholder buildLoadBox
 	// already uses for a stale/missing --host snapshot.
 	RemoteLoadSnapshot *LoadSnapshot
-	// RemoteLoadUpdatedAt is when RemoteLoadSnapshot was written: the cache's
-	// updated_at at startup, then the time the watch loop received a newer
-	// snapshot. Zero means unknown (for example a legacy cache file).
+	// RemoteLoadUpdatedAt is the cache's updated_at. Zero means unknown (for
+	// example a legacy cache file).
 	RemoteLoadUpdatedAt time.Time
-	// RemoteLoadStreaming reports whether RemoteLoadSnapshot is currently
-	// arriving over the --watch-only streaming channel (issue 110 §2) as
-	// opposed to a plain batch poll fallback. Always
-	// false outside --watch. Purely a UI label; it never changes how the
-	// data itself is fetched.
-	RemoteLoadStreaming bool
+	// RemoteLoadSource labels where the displayed snapshot comes from.
+	RemoteLoadSource string
 
 	// DebugOverlay is issue 131's `!`-toggled per-agent freshness countdown
 	// overlay: when true, each All Usage row label has its last 3
@@ -463,9 +455,9 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		panels = append(panels, panel{"M", func(w int) wbox { return buildMicBox(w, micStatus) }})
 	}
 	if sec.RemoteLoad && opt.RemoteLoadHost != "" {
-		remoteHost, remoteSnap, remoteStreaming, remoteUpdated := opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadStreaming, opt.RemoteLoadUpdatedAt
+		remoteHost, remoteSnap, remoteSource, remoteUpdated := opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadSource, opt.RemoteLoadUpdatedAt
 		panels = append(panels, panel{"R", func(w int) wbox {
-			return buildRemoteLoadBox(w, remoteHost, remoteSnap, remoteStreaming, remoteUpdated, now)
+			return buildRemoteLoadBox(w, remoteHost, remoteSnap, remoteSource, remoteUpdated, now)
 		}})
 	}
 

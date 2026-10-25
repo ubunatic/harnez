@@ -113,7 +113,6 @@ func newUsageCmd() *cobra.Command {
 					RemoteLoadHost:      loadWatchHost,
 					RemoteLoadSnapshot:  cachedRemote.Snapshot,
 					RemoteLoadUpdatedAt: cachedRemote.UpdatedAt,
-					DisableRemoteLoad:   usageOffline,
 					Host:                usageHost,
 				}
 				if usageHost == "" {
@@ -123,12 +122,8 @@ func newUsageCmd() *cobra.Command {
 			}
 
 			if usageWatch {
-				// RemoteLoadSnapshot is intentionally left nil here:
-				// RunWatchWithOptions owns fetching it itself (streaming
-				// when possible, batch-polling fallback otherwise — issue
-				// 110 Decision §2/§3), the same way it owns fetching
-				// summary/rates/procs internally rather than the caller
-				// pre-fetching a single snapshot up front.
+				// RunWatchWithOptions reads the server-owned remote-load cache
+				// while drawing; the UI does no SSH collection.
 				var cached usage.UsageSummary
 				var storedLoader func(context.Context) (usage.UsageSummary, string)
 				var status string
@@ -154,9 +149,6 @@ func newUsageCmd() *cobra.Command {
 					ShowMic:                   usageMic,
 					Splash:                    usageSplash,
 					RemoteLoadHost:            loadWatchHost,
-					RemoteLoadSnapshot:        cachedRemote.Snapshot,
-					RemoteLoadUpdatedAt:       cachedRemote.UpdatedAt,
-					DisableRemoteLoad:         usageOffline,
 				})
 			}
 

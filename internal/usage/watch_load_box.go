@@ -34,20 +34,17 @@ func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
 // title/panel key differ. host must be non-empty — callers only build this
 // panel at all when load.watch_host is configured (Acceptance Criterion 1).
 //
-// The title also carries a "streaming"/"batch" label so it's always visible
-// whether the current data arrived over the persistent --watch-only stream
-// or a one-shot poll (issue 110's follow-up UI request) — never hidden
-// state the user has to infer from update cadence.
+// The title names the server cache as the source, making the UI's read-only
+// role clear while the server owns SSH collection.
 //
 // A snapshot is shown even when stale, with its write time on the last line
 // ("· stale" past the remote staleness threshold, issue 879 M2b). A nil
 // snapshot has no time to show and keeps the "remote load unavailable" line.
-func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot, streaming bool, updatedAt, now time.Time) wbox {
-	mode := "batch"
-	if streaming {
-		mode = "streaming"
+func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot, source string, updatedAt, now time.Time) wbox {
+	if source == "" {
+		source = "server cache"
 	}
-	title := fmt.Sprintf("%s[R]\x1b[0m Remote Load %s(@%s · %s)\x1b[0m", ansiBold, ansiDimGrey, host, mode)
+	title := fmt.Sprintf("%s[R]\x1b[0m Remote Load %s(@%s · %s)\x1b[0m", ansiBold, ansiDimGrey, host, source)
 	lines := buildLoadBoxLines(host, snapshot)
 	if snapshot != nil {
 		lines = append(lines, ansiDimGrey+"updated "+remoteLoadAgeLabel(updatedAt, now)+"\x1b[0m")
