@@ -15,10 +15,10 @@ goal and write a failure report here.
 
 Seen several times in sessions 2026-10-23 to 2026-10-25: the first study commit fails on `docs/README.md` index
 drift, the host runs `harnez index`, stages and recommits. Check first what the lint message says today.
-</content>
-</invoke>
-<invoke name="Bash">
-<parameter name="command">cd /home/uwe/projects/harnez && make install >/dev/null 2>&1; harnez index >/dev/null 2>&1; harnez issues open 916 >/dev/null 2>&1; git add docs/studies/2026-10-25-session-retro-harnez-epics-910-911.md docs/README.md docs/ReviewLearnings.md docs/commands/lean-sprint.md issues/ && git commit -q -m "docs(studies): session retro epics 910/911 (issue 878 first retro run); review learning, lean-sprint rules; file 916
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01W6ALZ4ME2pGQPv8B7sbQn5"; git log --oneline -2; git status -s
+## Decision (host, epic 939, 2026-10-25)
+
+Lint already names `harnez index` (`internal/issues/maintenance/rebase.go:586`); the cost is the extra
+stage-and-recommit round. Add an explicit `harnez index --stage` that regenerates and `git add`s only the index
+files it rewrote, and make the lint message name that one command. No auto-staging pre-commit hook (hidden side
+effects). Reversible.

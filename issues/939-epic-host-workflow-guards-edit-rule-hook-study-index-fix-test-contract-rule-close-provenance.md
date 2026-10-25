@@ -38,10 +38,15 @@ Skipped: internal harness guards and doc rules; no external tool to reuse.
 
 | Ticket | What | Group | Searcher → architect → developer | Reviewer | Status |
 |---|---|---|---|---|---|
-| 937 | PreToolUse hook warns on shell edits, asks for feedback, escalates to token-count proof | A | luna:low → — → sol:low | opus:low | Open |
-| 916 | study commit: one-call index fix | B | luna:low → — → haiku:high | host diff | Open |
-| 936 | practice rule: external-contract tests | B | luna:low → — → haiku:high | host diff | Open |
-| 915 | `issues close` records model and session | C | luna:low → — → luna:high | host diff | Open |
+| 937 | PreToolUse hook warns on shell edits, asks for feedback, escalates to token-count proof | A | s939 → — → sol:low | opus:low | Open |
+| 916 | `harnez index --stage`, lint names it | B | s939 → — → luna:high | host diff | Open |
+| 936 | practice rule: external-contract tests (AgenticLoop full+lite, lean-sprint checklist) | B | s939 → — → haiku:high | host diff | Open |
+| 915 | `issues close` records model and session (env defaults) | C | s939 → — → luna:high | host diff | Open |
+
+Code fanout (s939, luna:low): 937 is medium: extend the single existing PreToolUse/Bash hook (`config.yaml:279`
+forbids a second one), new per-session counter state, threshold and wording in `spec/`. 916 lint at
+`internal/issues/maintenance/rebase.go:586`. 936 fits AgenticLoop (`docs/practices/AgenticLoop.md:123`). 915 close
+in `internal/issues/status_action.go:98-148`. Decisions in 916 and 915. Stray tool-call text removed from 915/916.
 | — | sprint study, `/evergreen` | final | host | — | Open |
 | — | `/wrap` | final | host | — | Open |
 
