@@ -200,8 +200,39 @@ func ProviderSnapshotFromStoreAt(ctx context.Context, dbPath, provider string) (
 		return time.Time{}, AgentUsage{}, err
 	}
 	usage := AgentUsage{AgentID: provider, LastRefreshed: at}
+	applyStoredAgentMetadata(ctx, store, provider, &usage)
 	applyStoredWindows(&usage, windows, time.Now())
 	return at, usage, nil
+}
+
+// applyStoredAgentMetadata restores fields that are not represented by the
+// normalized quota-window rows. The collector's current summary is the
+// authoritative snapshot for those fields; quota windows are still rebuilt
+// from usagestore so their freshness and values remain normalized.
+func applyStoredAgentMetadata(ctx context.Context, store *usagestore.Store, agentID string, agent *AgentUsage) {
+	record, err := store.LatestUsageSummary(ctx)
+	if err != nil {
+		return
+	}
+	var summary UsageSummary
+	if err := json.Unmarshal(record.Payload, &summary); err != nil {
+		return
+	}
+	for _, stored := range summary.Agents {
+		if stored.AgentID != agentID {
+			continue
+		}
+		agent.Name = stored.Name
+		agent.Installed = stored.Installed
+		agent.Authenticated = stored.Authenticated
+		agent.Account = stored.Account
+		agent.PlanTier = stored.PlanTier
+		agent.ActiveModel = stored.ActiveModel
+		agent.Details = stored.Details
+		agent.Sources = stored.Sources
+		agent.QuotaFetchError = stored.QuotaFetchError
+		return
+	}
 }
 
 func storeProviderSnapshot(ctx context.Context, provider string, at time.Time, usage AgentUsage) error {

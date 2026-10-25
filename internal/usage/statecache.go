@@ -412,6 +412,7 @@ func agentSnapshotFromStore(ctx context.Context, store *usagestore.Store, agentI
 		}
 	}
 	agent := AgentUsage{AgentID: agentID, LastRefreshed: latest}
+	applyStoredAgentMetadata(ctx, store, agentID, &agent)
 	applyStoredWindows(&agent, windows, latest)
 	return &AgentSnapshot{FetchedAt: latest, Usage: agent}, nil
 }

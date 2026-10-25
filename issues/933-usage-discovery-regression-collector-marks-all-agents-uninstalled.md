@@ -38,6 +38,12 @@ f0031376, and 20213dac. Bisect using an executable regression predicate.
   applyStoredWindows deliberately preserves its incoming metadata, so Installed,
   Authenticated, Name and other metadata stay at zero values. The snapshot writer
   also serializes this reduced object into the compatibility JSON mirrors.
+- Commit 7f4d55cb rewrote `usagestore.CurrentFor` row selection and added memoized
+  provider availability in `statecache.go`; CurrentFor still returns normalized
+  quota windows only. `agentSnapshotFromStore` and `ProviderSnapshotFromStoreAt`
+  build AgentUsage values from those rows without restoring metadata. The
+  metadata-dropping snapshot path therefore runs in the 924-era code, while its
+  constructor first appeared in eb26fbae.
 - `CollectRegisteredCatchup` seeds lastGood from this SQLite reconstruction;
   CollectCatchup skips live collection for fresh entries and persists the reduced
   objects as a complete summary. This explains why daemon catch-up can hide agents
@@ -59,7 +65,7 @@ only collector live-state changes. Diagnose and report before source edits.
 Acceptance: agents installed in the shell remain discovered in service snapshots,
 quota data remains visible, and a targeted regression check identifies the culprit.
 
-### Proposed fix (awaiting host authorization)
+### Fix
 
 Preserve full agent metadata when combining normalized quota windows with agent
 snapshots, and retain it when writing mirrors and seeding catch-up. Cover both
@@ -69,5 +75,6 @@ Use the latest complete summary as metadata when repairing already-reduced mirro
 or perform local discovery when no trustworthy metadata survives. Add regression
 coverage for live collection -> persistence -> cached read -> fresh catch-up ->
 stored summary, including installed/name/authentication/account/model and quota
-preservation. Then run the required test tier and make install, and verify both
-shell and sandbox collection plus a daemon catch-up. No source edits this turn.
+preservation. The regression test exercises collector persistence, server catch-up
+and the persisted read path. Run the touched package tests, `go vet ./...`,
+`make lint`, and `make install`; the host restarts the unit and verifies the UI.

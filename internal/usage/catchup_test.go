@@ -70,6 +70,57 @@ func TestCollectCatchupFetchesOnlyProvidersOlderThanThreshold(t *testing.T) {
 	}
 }
 
+func TestCollectorCatchupRetainsAgentMetadataFromStore(t *testing.T) {
+	home := t.TempDir()
+	dataHome := filepath.Join(home, "data")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", dataHome)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+
+	now := time.Now().UTC()
+	window := func(name string, used float64) *QuotaWindow {
+		return &QuotaWindow{Name: name, UsedPercent: used, RemainingPercent: 100 - used}
+	}
+	want := []AgentUsage{
+		{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true, Account: "claude@example.test", PlanTier: "Max", Session: window("5-hour", 31)},
+		{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true, Account: "codex@example.test", PlanTier: "Plus", Session: window("5-hour", 42)},
+		{AgentID: "agy", Name: "Antigravity (AGY)", Installed: true, Authenticated: true, Account: "agy@example.test", PlanTier: "Pro", Session: window("session", 53)},
+	}
+	summary := UsageSummary{Timestamp: now, Agents: want}
+	dbPath := filepath.Join(dataHome, "harnez", "telemetry.sqlite")
+	if err := InitializeUsageStore(context.Background(), home, dbPath); err != nil {
+		t.Fatalf("initialize collector store: %v", err)
+	}
+	if err := persistUsage(context.Background(), home, dbPath, StateDir(home), io.Discard, false, summary); err != nil {
+		t.Fatalf("persist collector summary: %v", err)
+	}
+
+	caughtUp := CollectRegisteredCatchup(context.Background(), home, nil, time.Hour, nil, nil)
+	if len(caughtUp.Agents) != len(want) {
+		t.Fatalf("catch-up agents = %d, want %d", len(caughtUp.Agents), len(want))
+	}
+
+	wantByID := make(map[string]AgentUsage, len(want))
+	for _, agent := range want {
+		wantByID[agent.AgentID] = agent
+	}
+	for _, agentID := range []string{"claude", "codex", "agy"} {
+		snapshot, err := ReadAgentSnapshot(StateDir(home), agentID)
+		if err != nil || snapshot == nil {
+			t.Fatalf("read %s snapshot after catch-up: snapshot=%+v err=%v", agentID, snapshot, err)
+		}
+		got, expected := snapshot.Usage, wantByID[agentID]
+		if got.AgentID != expected.AgentID || got.Name != expected.Name || !got.Installed || !got.Authenticated || got.Account != expected.Account || got.PlanTier != expected.PlanTier {
+			t.Errorf("%s metadata after catch-up = %+v, want installed/authenticated metadata from %+v", agentID, got, expected)
+		}
+		if got.Session == nil || got.Session.Name != expected.Session.Name || got.Session.UsedPercent != expected.Session.UsedPercent {
+			t.Errorf("%s quota after catch-up = %+v, want %+v", agentID, got.Session, expected.Session)
+		}
+	}
+}
+
 func TestCollectorSkipsInitialFetchWhenNoClients(t *testing.T) {
 	var fetched atomic.Int32
 	ctx, cancel := context.WithCancel(context.Background())
