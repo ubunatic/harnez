@@ -1,6 +1,6 @@
 # 932 — usage: --watch defaults to the minimal view; rename --normal to --table
 
-**Status**: Open
+**Status**: Closed — 20213dac, ce2e9e93, 6f8873da: --watch starts minimal, --table selects the table; Remote Load title shows '@x600 · live' with no 'updated' row. Live tmux 160x50: box visible at start as '(@x600 · live)', r toggles it; make test-q1 green (dev run)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
