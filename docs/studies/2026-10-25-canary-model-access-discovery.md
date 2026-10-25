@@ -11,7 +11,7 @@ except one tiny call per CLI with the made-up model `no-such-model-x`.
 
 | CLI | Version | List command | Stored choice | Error for an unknown or inaccessible model | Verdict |
 |---|---|---|---|---|---|
-| claude | 2.1.310 | none (`--model <name>`, aliases `opus`, `sonnet`) | `~/.claude/settings.json` `"model": "haiku"` | `[claude-code:unrecognized_model] {"model":"no-such-model-x",...}` then "It may not exist or you may not have access to it." | probe-only |
+| claude | 2.1.310 | `claude -p "/model"` (found by the owner after the probe): "Current model: `Haiku 5.5` (effort: low)"; "Available: sonnet, opus, haiku, fable, best, sonnet[1m], opus[1m], fable[1m], opusplan, default, or a full model ID" (aliases, not account entitlement) | `~/.claude/settings.json` `"model": "haiku"` | `[claude-code:unrecognized_model] {"model":"no-such-model-x",...}` then "It may not exist or you may not have access to it." | partly (alias list + probe) |
 | codex | 0.162.1 | `codex models` exists, needs a TTY; under `script -qc` it printed control sequences and no list | `~/.codex/config.toml` `model = "gpt-6-luna"` | HTTP 400 `model_not_found`: "The 'no-such-model-x' model is not supported when using Codex with a ChatGPT account." | partly (probe; list unusable so far) |
 | agy | 1.4.7 | `agy models` lists IDs: `gemini-4-argon-{low,medium,high}`, `gemini-3.8-flash-*`, Claude Opus/Sonnet 5.5 tiers, `gpt-oss-120b-medium` | not found in `~/.agy` | "model no-such-model-x is not recognized as a known model or custom model in settings", then the available list | discoverable |
 
@@ -22,8 +22,10 @@ Anthropic's list endpoint was not confirmed by the probe; treat as unverified.
 
 ## Verdict for the design
 
-- Discovery has three methods, best first: list command (agy), API list (needs keys, opt-in), probe call per
-  candidate model (claude, codex). Each access fact records its method and time.
+- Discovery has three methods, best first: list command (agy; claude `-p "/model"` gives aliases and the current
+  model, which resolve to versions only by a probe), API list (needs keys, opt-in), probe call per candidate model
+  (claude, codex). The probe missed `/model` because it only read `--help`: slash commands in `-p` mode are a
+  discovery source too. Each access fact records its method and time.
 - Probe errors are distinguishable: claude `unrecognized_model`, codex `model_not_found` (names the account
   type), agy "not recognized". Claude does not separate "does not exist" from "no access".
 - agy knows "custom model in settings": a user-declared model is a first-class case, matching the policy layer.
