@@ -34,3 +34,16 @@ report here.
   (today only the hand-set `version.go:3` `0.2.1`). Compare that; never downgrade; unknown remote version → log, skip.
 - Delivery: scp of the server's own binary (`os.Executable()`) to the remote's `~/go/bin/harnez`, only when the
   remote reports the same OS and arch (`uname -sm`); otherwise skip and log why. Write to a temp name, then rename.
+
+## Plan (d919, sol:low) and host pre-work
+
+M1 build identity (ldflags commit count in `make build`/`make install`/GoReleaser, `--version` prints
+`release+count`); M2 `internal/server/remote_upgrade.go` with injected runner, spec keys
+`remote_upgrade.{install_path,connect_timeout,command_timeout,transfer_timeout}` in `spec/server.yaml`;
+M3 async wiring in `cmd/harnez/server_cmd.go`.
+
+Host corrections:
+- A legacy remote that prints a plain release (`0.2.1`, no count) counts as older when its release is less than
+  or equal to the local release, so it is upgraded; a higher plain release is kept. Otherwise x600, which runs
+  a legacy build today, would never be upgraded. Unparsable output stays unknown → skip.
+- Tests: TDD runs of touched packages are fine; one `make test-q1` at the end of M3 only.
