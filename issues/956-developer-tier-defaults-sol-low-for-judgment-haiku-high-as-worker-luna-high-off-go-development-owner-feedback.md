@@ -31,6 +31,15 @@ Cited sources were named only as sites (Anthropic, Command Code, Miraflow AI, Op
 
 Probed installed Claude Code 2.1.310 with the exact print-mode invocation shape (`claude -p --model haiku --effort low --dangerously-skip-permissions --allowedTools Bash --output-format json`) and child environment `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=10`. The prompt asked Haiku to generate 50,000 tokens locally through one Bash call. Claude completed without a `compact_boundary`; usage reported `contextWindow: 1000000` and about 52,649 input/cache tokens. At a 100k window with 10% override, compaction should have occurred near 10k, so this probe does not show `-p` honoring the requested settings. Stop item 4; no Claude driver env changes or per-model compact values are planned on this evidence. The probe cost was about $0.006.
 
+## M3 Pre-Work (host review, 2026-10-25)
+
+- Host `make test-q1` after 93100fd5: one failure, `TestAgentModelsTableShowsRolesAndUse`
+  (`cmd/harnez/agent_test.go:205`): the luna:low row no longer contains "clear bounded tickets" because M2
+  rewrote the luna guide. Update the test to the new guidance; keep its other checks (source, role, cost,
+  capability column) and keep or extend the med/high and use_med checks. Do not weaken them.
+- Item 4 is parked: the canary was a single `-p` turn, and Claude may compact only between turns. Leave it
+  open in the close reason as "not proven for -p"; no driver change.
+
 ## Counter-evidence to weigh (this session)
 
 luna:high (codex) delivered 952 (usage staleness, 12 Go files) in one round with a green full run; sol:med
