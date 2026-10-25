@@ -20,3 +20,25 @@ clear the goal and write a failure report here.
   so check how remote metrics are collected (879) before adding the row.
 - Show nothing extra, or "no swap", when a host has no swap; never a silent 0%.
 - Check the row against its `.ansi` sketch with the tui-check skill.
+
+## Discovery (searcher s912, haiku:low, 2026-10-25)
+
+- Local: `parseMeminfo` (`internal/usage/load.go:379`) reads only MemTotal/MemAvailable; `SystemMemory`
+  (`load.go:53`) has no swap fields; nothing reads SwapTotal/SwapFree yet.
+- Render: `buildLoadBoxLines` (`watch_load_box.go:70`), RAM line `formatSystemMemoryLine` (`:176`); remote box
+  `buildRemoteLoadBox` (`:45`) uses the same lines.
+- Remote: ssh runs `harnez usage --json` (`remote.go:63-74`), parsed by `parseRemoteJSON` (`:136`) into
+  `LoadSnapshot` (`types.go:295`). `CPULoad`/`SystemMemory` carry no json tags, so new fields reach the remote
+  box with no ssh or cache change. An older remote binary omits them: absent must render differently from 0.
+- Tests: `load_test.go:13,37` (meminfo), `watch_test.go:86,134` (memory lines), `:1349,1438,1482` (remote).
+- Sketch: `docs/data/harnez-usage.ansi` (Load at :3, Remote Load at :9).
+
+## M1 (swap row, local and remote)
+
+- Parse SwapTotal/SwapFree (zram and disk swap together are what /proc/meminfo reports); add swap fields to
+  `SystemMemory` with an explicit "known" flag so a missing value is not 0. Add json tags to the new fields only
+  if it does not rename existing keys (stored caches must keep reading).
+- Render a swap line under the RAM line in both boxes: used/total; "no swap" when SwapTotal is 0; nothing when
+  unknown (old remote binary). Clip to width like the RAM line.
+- Update the sketch `docs/data/harnez-usage.ansi` and the relevant lines in `docs/UsageCollection.md`/`docs/TUIDesign.md`.
+- Tests: meminfo with swap, with SwapTotal 0, without swap keys; render for each; remote JSON without swap fields.
