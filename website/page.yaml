@@ -49,6 +49,12 @@ sections:
         alt: harnez usage live terminal dashboard showing All Usage, CPU/RAM/GPU load, Mic level meter,
           and Remote Load streaming
   - gallery:
+    - caption: Quota windows next to local and remote hardware load (CPU, RAM, swap, GPU, VRAM).
+      images:
+      - src: assets/usage-load.png
+        alt: harnez usage showing All Usage quota bars for five providers, local Load with CPU at 100
+          percent and RAM at 83 percent, and Remote Load of an ssh node with two GPUs
+  - gallery:
     - caption: Provider and microphone readiness at startup.
       images:
       - src: assets/usage-splash.png
