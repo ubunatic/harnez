@@ -27,6 +27,33 @@ func TestAgentDefaultModelIsMarkedOnce(t *testing.T) {
 	}
 }
 
+func TestAgentModelsLoadsAvailabilityOncePerProvider(t *testing.T) {
+	entries := []subagent.ModelEntry{
+		{Model: subagent.Model{Provider: "codex", Name: "luna"}},
+		{Model: subagent.Model{Provider: "codex", Name: "luna"}},
+		{Model: subagent.Model{Provider: "codex", Name: "opus"}},
+		{Model: subagent.Model{Provider: "agy", Name: "flash37"}},
+		{Model: subagent.Model{Provider: "agy", Name: "argon"}},
+	}
+	lookupCounts := make(map[string]int)
+	got := modelProviderAvailabilities(entries, func(provider string, models []string, _ time.Time) map[string]usage.ProviderQuotaAvailability {
+		lookupCounts[provider]++
+		availabilities := make(map[string]usage.ProviderQuotaAvailability, len(models))
+		for _, model := range models {
+			availabilities[model] = usage.ProviderQuotaAvailability{State: provider + ":" + model}
+		}
+		return availabilities
+	})
+	if lookupCounts["codex"] != 1 || lookupCounts["agy"] != 1 || len(lookupCounts) != 2 {
+		t.Fatalf("provider availability lookup counts = %#v, want one per provider", lookupCounts)
+	}
+	for _, key := range []string{"codex\x00luna", "codex\x00opus", "agy\x00flash37", "agy\x00argon"} {
+		if got[key].State == "" {
+			t.Errorf("availability missing for %q: %#v", key, got)
+		}
+	}
+}
+
 func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
 	cacheHome := t.TempDir()
 	home := t.TempDir()

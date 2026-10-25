@@ -64,90 +64,110 @@ type ProviderQuotaAvailability struct {
 // unknown from live provider quota evidence. AGY prefers the same meter
 // snapshot used by harnez usage; missing quota data stays unknown.
 func CachedProviderQuotaAvailability(provider, model string, now time.Time) ProviderQuotaAvailability {
-	state := ProviderQuotaAvailability{State: "unknown"}
+	return CachedProviderQuotaAvailabilities(provider, []string{model}, now)[model]
+}
+
+// CachedProviderQuotaAvailabilities reports quota evidence for several models
+// from one provider-store lookup.
+func CachedProviderQuotaAvailabilities(provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
+	states := unknownProviderQuotaAvailabilities(models)
 	dbPath, err := telemetry.DefaultDBPath()
 	if err != nil {
-		return state
+		return states
 	}
-	return ProviderQuotaAvailabilityFromStore(context.Background(), dbPath, provider, model, now)
+	return ProviderQuotaAvailabilitiesFromStore(context.Background(), dbPath, provider, models, now)
 }
 
 // ProviderQuotaAvailabilityFromStore reads normalized quota rows from the
 // shared store, keeping model/start checks independent of provider caches.
 func ProviderQuotaAvailabilityFromStore(ctx context.Context, dbPath, provider, model string, now time.Time) ProviderQuotaAvailability {
-	state := ProviderQuotaAvailability{State: "unknown"}
+	return ProviderQuotaAvailabilitiesFromStore(ctx, dbPath, provider, []string{model}, now)[model]
+}
+
+// ProviderQuotaAvailabilitiesFromStore reads provider quota rows once and
+// applies model-specific pool selection to each requested model.
+func ProviderQuotaAvailabilitiesFromStore(ctx context.Context, dbPath, provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
+	states := unknownProviderQuotaAvailabilities(models)
 	store, err := usagestore.Open(dbPath)
 	if err != nil {
-		return state
+		return states
 	}
 	defer store.Close()
 	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
-		return state
+		return states
 	}
 	windows, err := store.CurrentFor(ctx, provider)
 	if err != nil {
-		return state
+		return states
 	}
-	wantPool := ""
+	wantPools := make(map[string]string, len(models))
 	if provider == "agy" {
 		quota, err := agyQuotaSettings()
 		if err != nil {
-			return state
+			return states
 		}
-		wantPool = quota.DefaultPool
-		lowerModel := strings.ToLower(model)
-	modelPool:
-		for _, rule := range quota.ModelPools {
-			for _, match := range rule.Contains {
-				if strings.Contains(lowerModel, match) {
-					wantPool = rule.Pool
-					break modelPool
+		for _, model := range models {
+			wantPool := quota.DefaultPool
+			lowerModel := strings.ToLower(model)
+		modelPool:
+			for _, rule := range quota.ModelPools {
+				for _, match := range rule.Contains {
+					if strings.Contains(lowerModel, match) {
+						wantPool = rule.Pool
+						break modelPool
+					}
 				}
 			}
+			wantPools[model] = wantPool
 		}
 	}
-	seen := false
-	freshSeen := false
-	var latestAt time.Time
-	for _, window := range windows {
-		if provider == "agy" && !strings.EqualFold(window.Pool, wantPool) {
-			continue
-		}
-		if !seen || window.ObservedAt.After(latestAt) {
-			latestAt = window.ObservedAt
-		}
-		state.Windows = append(state.Windows, window)
-		seen = true
-		freshSeen = freshSeen || window.Freshness == "fresh"
-		if window.UsedFraction >= 1 && window.ResetAt != nil && window.ResetAt.After(now) {
-			resetIn := window.ResetAt.Sub(now)
-			if !state.Exhausted || resetIn < state.ResetIn {
-				state.ResetIn = resetIn
+	for _, model := range models {
+		state := ProviderQuotaAvailability{State: "unknown"}
+		seen := false
+		freshSeen := false
+		var latestAt time.Time
+		for _, window := range windows {
+			if provider == "agy" && !strings.EqualFold(window.Pool, wantPools[model]) {
+				continue
 			}
-			state.Exhausted = true
+			if !seen || window.ObservedAt.After(latestAt) {
+				latestAt = window.ObservedAt
+			}
+			state.Windows = append(state.Windows, window)
+			seen = true
+			freshSeen = freshSeen || window.Freshness == "fresh"
+			if window.UsedFraction >= 1 && window.ResetAt != nil && window.ResetAt.After(now) {
+				resetIn := window.ResetAt.Sub(now)
+				if !state.Exhausted || resetIn < state.ResetIn {
+					state.ResetIn = resetIn
+				}
+				state.Exhausted = true
+			}
 		}
+		if seen {
+			state.Age = now.Sub(latestAt)
+			if state.Age < 0 {
+				state.Age = 0
+			}
+			if state.Exhausted {
+				state.State = "exhausted"
+			} else if state.Age > AgentQuotaAvailabilityMaxAge() || !freshSeen {
+				state.State = "stale"
+			} else {
+				state.State = "available"
+			}
+		}
+		states[model] = state
 	}
-	if !seen {
-		return state
+	return states
+}
+
+func unknownProviderQuotaAvailabilities(models []string) map[string]ProviderQuotaAvailability {
+	states := make(map[string]ProviderQuotaAvailability, len(models))
+	for _, model := range models {
+		states[model] = ProviderQuotaAvailability{State: "unknown"}
 	}
-	state.Age = now.Sub(latestAt)
-	if state.Age < 0 {
-		state.Age = 0
-	}
-	if state.Exhausted {
-		state.State = "exhausted"
-		return state
-	}
-	if state.Age > AgentQuotaAvailabilityMaxAge() {
-		state.State = "stale"
-		return state
-	}
-	if !freshSeen {
-		state.State = "stale"
-		return state
-	}
-	state.State = "available"
-	return state
+	return states
 }
 
 // DefaultDisplayStaleness is how old an agent's last known snapshot may be

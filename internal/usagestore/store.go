@@ -994,22 +994,33 @@ func (s *Store) LatestFor(ctx context.Context, provider string) ([]Window, error
 }
 
 func (s *Store) currentFor(ctx context.Context, provider string, latest bool) ([]Window, error) {
-	order := `CASE o.freshness WHEN 'fresh' THEN 1 ELSE 0 END DESC,CASE o.source WHEN 'claude-api' THEN 4 WHEN 'codex-api' THEN 4 WHEN 'agy-api' THEN 4 WHEN 'structured-event' THEN 4 WHEN 'authenticated-cli' THEN 3 WHEN 'collect-all' THEN 3 WHEN 'registry' THEN 3 WHEN 'statusline' THEN 2 WHEN 'agy-meter' THEN 1 WHEN 'proxy' THEN 1 WHEN 'estimated' THEN 1 ELSE 0 END DESC,o.observed_at DESC,o.id DESC`
-	if latest {
-		order = `o.observed_at DESC,o.id DESC`
-	}
-	query := `SELECT provider,pool,window_key,window_name,source,freshness,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at,observed_at FROM (SELECT q.provider AS provider,q.pool AS pool,q.window_key AS window_key,q.window_name AS window_name,o.source AS source,o.freshness AS freshness,q.used_fraction AS used_fraction,q.input_tokens AS input_tokens,q.cached_input_tokens AS cached_input_tokens,q.output_tokens AS output_tokens,q.reasoning_tokens AS reasoning_tokens,q.reset_at AS reset_at,o.observed_at AS observed_at,ROW_NUMBER() OVER (PARTITION BY q.provider,q.pool,q.window_key ORDER BY ` + order + `) AS best FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=?) WHERE best=1 ORDER BY provider,pool,window_key`
+	query := `SELECT q.provider,q.pool,q.window_key,q.window_name,o.source,o.freshness,q.used_fraction,q.input_tokens,q.cached_input_tokens,q.output_tokens,q.reasoning_tokens,q.reset_at,o.observed_at,o.id FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=? ORDER BY q.provider,q.pool,q.window_key`
 	rows, err := s.db.QueryContext(ctx, query, provider)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	bestByWindow := make(map[string]Window)
+	var rawGroup string
+	var rawWinner Window
+	var rawWinnerID int64
+	var rawWinnerObserved string
+	flushRawWinner := func() {
+		if rawGroup == "" {
+			return
+		}
+		rawWinner.Key = NormalizeWindowKey(rawWinner.Provider, rawWinner.Pool, rawWinner.Name)
+		group := rawWinner.Provider + "\x00" + rawWinner.Pool + "\x00" + rawWinner.Key
+		if previous, ok := bestByWindow[group]; !ok || (latest && rawWinner.ObservedAt.After(previous.ObservedAt)) || (!latest && windowRanksHigher(rawWinner, previous)) {
+			bestByWindow[group] = rawWinner
+		}
+	}
 	for rows.Next() {
 		var w Window
 		var reset, observed sql.NullString
 		var input, cached, output, reasoning sql.NullInt64
-		if err := rows.Scan(&w.Provider, &w.Pool, &w.Key, &w.Name, &w.Source, &w.Freshness, &w.UsedFraction, &input, &cached, &output, &reasoning, &reset, &observed); err != nil {
+		var observationID int64
+		if err := rows.Scan(&w.Provider, &w.Pool, &w.Key, &w.Name, &w.Source, &w.Freshness, &w.UsedFraction, &input, &cached, &output, &reasoning, &reset, &observed, &observationID); err != nil {
 			return nil, err
 		}
 		if input.Valid {
@@ -1039,15 +1050,35 @@ func (s *Store) currentFor(ctx context.Context, provider string, latest bool) ([
 			}
 			w.ResetAt = &t
 		}
-		w.Key = NormalizeWindowKey(w.Provider, w.Pool, w.Name)
 		group := w.Provider + "\x00" + w.Pool + "\x00" + w.Key
-		if previous, ok := bestByWindow[group]; !ok || (latest && w.ObservedAt.After(previous.ObservedAt)) || (!latest && windowRanksHigher(w, previous)) {
-			bestByWindow[group] = w
+		if group != rawGroup {
+			flushRawWinner()
+			rawGroup = group
+			rawWinner = w
+			rawWinnerID = observationID
+			rawWinnerObserved = observed.String
+			continue
+		}
+		better := false
+		if latest {
+			better = observed.String > rawWinnerObserved || (observed.String == rawWinnerObserved && observationID > rawWinnerID)
+		} else {
+			freshnessHigher := (w.Freshness == "fresh") != (rawWinner.Freshness == "fresh") && w.Freshness == "fresh"
+			freshnessEqual := (w.Freshness == "fresh") == (rawWinner.Freshness == "fresh")
+			sourceHigher := sourcePriority(w.Source) > sourcePriority(rawWinner.Source)
+			sourceEqual := sourcePriority(w.Source) == sourcePriority(rawWinner.Source)
+			better = freshnessHigher || (freshnessEqual && (sourceHigher || (sourceEqual && (observed.String > rawWinnerObserved || (observed.String == rawWinnerObserved && observationID > rawWinnerID)))))
+		}
+		if better {
+			rawWinner = w
+			rawWinnerID = observationID
+			rawWinnerObserved = observed.String
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	flushRawWinner()
 	out := make([]Window, 0, len(bestByWindow))
 	for _, w := range bestByWindow {
 		out = append(out, w)

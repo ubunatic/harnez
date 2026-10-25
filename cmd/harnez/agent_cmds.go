@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/subagent"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 // agentCLI holds the `harnez agent` flag values and helpers shared by its
@@ -135,6 +137,7 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 		if ac.jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(entries)
 		}
+		availabilityByModel := modelProviderAvailabilities(entries, usage.CachedProviderQuotaAvailabilities)
 		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
 		fmt.Fprintln(tw, "SPEC\tMODEL\tAVAILABILITY\tEFFORT\tCOST\tEFF\tSKILLS\tROLES\tUSE")
 		for _, e := range entries {
@@ -149,7 +152,7 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 			if !e.Effort {
 				effort = "no"
 			}
-			availability := providerAvailability(e.Model.Provider, e.Model.Name)
+			availability := availabilityByModel[e.Model.Provider+"\x00"+e.Model.Name]
 			marker := availability.State
 			if marker == "unknown" && availability.Age > 0 {
 				marker = fmt.Sprintf("unknown (%s)", quotaAgeLabel(availability.Age))
@@ -175,6 +178,35 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 	models.Flags().BoolVar(&modelNamesOnly, "names", false, "print only the model specs, one per line")
 	models.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
 	return models
+}
+
+func modelProviderAvailabilities(entries []subagent.ModelEntry, lookup func(string, []string, time.Time) map[string]usage.ProviderQuotaAvailability) map[string]usage.ProviderQuotaAvailability {
+	modelsByProvider := make(map[string]map[string]struct{})
+	for _, entry := range entries {
+		provider := entry.Model.Provider
+		if modelsByProvider[provider] == nil {
+			modelsByProvider[provider] = make(map[string]struct{})
+		}
+		modelsByProvider[provider][entry.Model.Name] = struct{}{}
+	}
+	providers := make([]string, 0, len(modelsByProvider))
+	for provider := range modelsByProvider {
+		providers = append(providers, provider)
+	}
+	sort.Strings(providers)
+	availabilities := make(map[string]usage.ProviderQuotaAvailability)
+	now := time.Now()
+	for _, provider := range providers {
+		models := make([]string, 0, len(modelsByProvider[provider]))
+		for model := range modelsByProvider[provider] {
+			models = append(models, model)
+		}
+		sort.Strings(models)
+		for model, availability := range lookup(provider, models, now) {
+			availabilities[provider+"\x00"+model] = availability
+		}
+	}
+	return availabilities
 }
 
 func (ac *agentCLI) resumeCmd() *cobra.Command {

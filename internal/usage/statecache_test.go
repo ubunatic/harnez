@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -39,12 +40,17 @@ func TestAGYAvailabilitySelectsModelPool(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		for _, model := range []string{"gemini-4-argon", "gemini-4-argon-low", "argon", "AGY:ARGON:HIGH", "gemini-3.8-flash", "flash38"} {
+		models := []string{"gemini-4-argon", "gemini-4-argon-low", "argon", "AGY:ARGON:HIGH", "gemini-3.8-flash", "flash38"}
+		batch := ProviderQuotaAvailabilitiesFromStore(ctx, dbPath, "agy", models, now)
+		for _, model := range models {
 			wantExhausted := argonUsed == 1
 			if model == "gemini-3.8-flash" || model == "flash38" {
 				wantExhausted = !wantExhausted
 			}
 			got := ProviderQuotaAvailabilityFromStore(ctx, dbPath, "agy", model, now)
+			if !reflect.DeepEqual(batch[model], got) {
+				t.Errorf("batch %s with Argon used=%g: got %+v, single lookup %+v", model, argonUsed, batch[model], got)
+			}
 			wantState := "available"
 			if wantExhausted {
 				wantState = "exhausted"

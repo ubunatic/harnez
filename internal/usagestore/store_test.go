@@ -235,6 +235,55 @@ func TestCurrentKeepsLatestAndStaleMetadata(t *testing.T) {
 	}
 }
 
+func TestCurrentForAndLatestForKeepTheirDistinctRanking(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "ranking.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, query string) error { return s.Exec(ctx, query) }); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	for _, row := range []struct {
+		source, freshness string
+		at                time.Time
+		used              float64
+	}{
+		{source: "registry", freshness: "fresh", at: base.Add(4 * time.Minute), used: .4},
+		{source: "collect-all", freshness: "fresh", at: base.Add(4 * time.Minute), used: .5},
+		{source: "codex-api", freshness: "stale", at: base.Add(5 * time.Minute), used: .9},
+		{source: "structured-event", freshness: "stale", at: base.Add(5 * time.Minute), used: .8},
+	} {
+		observed := row.at.UTC().Format(time.RFC3339Nano)
+		if err := s.Exec(ctx, `INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES('codex',?,?,?)`, row.source, observed, row.freshness); err != nil {
+			t.Fatal(err)
+		}
+		var observationID int64
+		if err := s.QueryRow(ctx, `SELECT last_insert_rowid()`).Scan(&observationID); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Exec(ctx, `INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction) VALUES(?,'codex','','weekly','weekly',?)`, observationID, row.used); err != nil {
+			t.Fatal(err)
+		}
+	}
+	current, err := s.CurrentFor(ctx, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(current) != 1 || current[0].Source != "collect-all" || current[0].UsedFraction != .5 {
+		t.Fatalf("CurrentFor() = %+v, want fresh collect-all winner on source-priority/id tie", current)
+	}
+	latest, err := s.LatestFor(ctx, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(latest) != 1 || latest[0].Source != "structured-event" || latest[0].UsedFraction != .8 {
+		t.Fatalf("LatestFor() = %+v, want newest id on timestamp tie regardless of freshness/source", latest)
+	}
+}
+
 func TestMigrateStableWindowKeysSeparatesStalenessFromLabel(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "usage.sqlite"))
 	if err != nil {
