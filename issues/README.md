@@ -25,4 +25,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 915 | [915-issues-close-records-model-and-session-provenance.md](915-issues-close-records-model-and-session-provenance.md) | issues close records model and session provenance | Open |
 | 916 | [916-study-commits-fail-on-studies-index-drift-offer-a-one-call-fix.md](916-study-commits-fail-on-studies-index-drift-offer-a-one-call-fix.md) | Study commits fail on studies index drift; offer a one-call fix | Open |
 | 917 | [917-usage-server-driven-boxes-and-items-from-spec-label-bar-value-semantic-color.md](917-usage-server-driven-boxes-and-items-from-spec-label-bar-value-semantic-color.md) | usage: server-driven boxes and items from spec (label, bar, value, semantic color) | Open |
+| 918 | [918-epic-skill-zero-arg-auto-grouping-goal-setting-open-epic-handling-and-invocation-modifiers.md](918-epic-skill-zero-arg-auto-grouping-goal-setting-open-epic-handling-and-invocation-modifiers.md) | epic skill zero-arg auto-grouping, goal-setting, open epic handling and invocation modifiers | Open |
 <!-- harnez:end issues-active-index -->
