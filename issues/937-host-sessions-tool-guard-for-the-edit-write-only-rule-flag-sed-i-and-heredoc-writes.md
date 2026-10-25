@@ -25,3 +25,26 @@ better choice here (`harnez rate` or a one-line reason). When the guard has fire
 without any feedback, the warning escalates: it asks the agent to prove the scripted approach is better,
 with concrete token counts (shell edit vs. Edit/Write calls) and reasoning. Threshold and wording go in
 `spec/` (no Go defaults).
+
+## Sprint (epic 939)
+
+Developer `d937` (sol:low), reviewer `r937` (opus:low). M1 delivered (709df88a): guard in the single Bash hook,
+`additionalContext` warning beside the unchanged `updatedInput`, per-session counter, `harnez rate` reset,
+`spec/edit_guard.yaml` + schema. Host `make test-q1` green.
+
+Host decisions: escalate on the 6th warning (after 5 unanswered); `harnez rate --ok` does not reset (heartbeat,
+not feedback).
+
+## M2 — Pre-Work / Required Refinements (reviewer r937)
+
+1. High: absolute paths inside the repo must warn (`pathInRoot`, exec.go:1372).
+2. High: skip heredoc bodies; `git commit -F - <<EOF ... a -> b ... EOF` and apostrophes in the body must not warn.
+3. Medium: sed/perl scan stops at `&&`, `||`, `;`, `|`; `sed -n p a && grep -i x f` must not warn.
+4. Medium: targets with `$VAR` or `"$out"` are unknown → do not warn.
+5. Medium: no `session_id` → still warn, only skip the counter.
+6. Medium: both warning texts move to `spec/edit_guard.yaml` (schema required).
+7. Medium: `rate` reset uses the same state dir as the hook (no hard-coded default).
+8. Medium: test that runs the hook and asserts the output JSON has `hookSpecificOutput.additionalContext` and the
+   unchanged `updatedInput`; test cases for items 1-5; escalation test checks warnings 1-5 normal, 6 escalated.
+9. Low: atomic write of the counter file; delete expired `edit-guard-*.json`; debug log when the spec fails to
+   load. Optional: `&>file`, `cd /tmp && echo > f`.
