@@ -583,7 +583,7 @@ func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []
 			return fmt.Errorf("issues lint: %w", err)
 		}
 		if generated != string(docsContent) {
-			return fmt.Errorf("issues lint: docs/README.md is generated studies index drift; run 'harnez index'")
+			return fmt.Errorf("issues lint: docs/README.md is generated studies index drift; run 'harnez index --stage'")
 		}
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("issues lint: read docs index: %w", err)

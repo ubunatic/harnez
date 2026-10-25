@@ -1516,7 +1516,9 @@ Pass --check to fail (exit 1) instead of writing, for CI/pre-commit use --
 mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
 diff of the drift, so the output is self-contained enough for an agent
 running the command directly in-session to see exactly what changed and
-fix the offending ticket(s) without a separate diff step.
+fix the offending ticket(s) without a separate diff step. Pass --stage to
+stage only index files rewritten by this run; it requires a Git repository.
+When no index file changes, --stage stages nothing.
 
 Each run that isn't --check also appends a dated open/closed/draft/unknown
 ticket count snapshot for this repo to the shared telemetry DB (issue 228),
@@ -1532,6 +1534,7 @@ Flags:
       --check        report drift without writing; exit 1 if regeneration would change a file
   -d, --dir string   repo root containing issues/ and docs/ (default ".")
   -h, --help         help for index
+      --stage        stage only index files rewritten by this run
 
 === harnez init
 Set up a project directory with AGENTS.md, language docs, and Makefile targets

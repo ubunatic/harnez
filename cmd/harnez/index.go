@@ -32,6 +32,7 @@ import (
 type indexOptions struct {
 	Dir    string
 	Check  bool
+	Stage  bool
 	DBPath string
 	Stderr io.Writer
 }
@@ -39,6 +40,7 @@ type indexOptions struct {
 func newIndexCmd() *cobra.Command {
 	var dir string
 	var check bool
+	var stage bool
 
 	cmd := &cobra.Command{
 		Use:   "index",
@@ -59,7 +61,9 @@ Pass --check to fail (exit 1) instead of writing, for CI/pre-commit use --
 mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
 diff of the drift, so the output is self-contained enough for an agent
 running the command directly in-session to see exactly what changed and
-fix the offending ticket(s) without a separate diff step.
+fix the offending ticket(s) without a separate diff step. Pass --stage to
+stage only index files rewritten by this run; it requires a Git repository.
+When no index file changes, --stage stages nothing.
 
 Each run that isn't --check also appends a dated open/closed/draft/unknown
 ticket count snapshot for this repo to the shared telemetry DB (issue 228),
@@ -69,11 +73,12 @@ logged (DEBUG=1) and otherwise swallowed -- they never fail this command.
 View recorded snapshots with 'harnez find issues history'.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return silenceIfExitCode(cmd, runIndex(cmd.OutOrStdout(), indexOptions{Dir: dir, Check: check, Stderr: cmd.ErrOrStderr()}))
+			return silenceIfExitCode(cmd, runIndex(cmd.OutOrStdout(), indexOptions{Dir: dir, Check: check, Stage: stage, Stderr: cmd.ErrOrStderr()}))
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/ and docs/")
 	cmd.Flags().BoolVar(&check, "check", false, "report drift without writing; exit 1 if regeneration would change a file")
+	cmd.Flags().BoolVar(&stage, "stage", false, "stage only index files rewritten by this run")
 	return cmd
 }
 
@@ -113,6 +118,14 @@ func runIndex(w io.Writer, opts indexOptions) error {
 	if err != nil {
 		return fmt.Errorf("index: load repo config: %w", err)
 	}
+	if opts.Stage && opts.Check {
+		return fmt.Errorf("index: --stage cannot be used with --check")
+	}
+	if opts.Stage {
+		if _, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output(); err != nil {
+			return fmt.Errorf("index --stage: %s is not inside a Git repository", dir)
+		}
+	}
 	// Keep the tracker and studies switches independent; a foreign issues/
 	// directory by itself never makes its indexes ours to rewrite.
 	hasIssues := repoConfig.Issues.Tracker == "harnez" && dirExists(issuesDir)
@@ -135,13 +148,39 @@ func runIndex(w io.Writer, opts indexOptions) error {
 		return runIndexCheck(w, issuesReadme, issuesDir, docsReadme, docsDir, hasIssues, hasDocs)
 	}
 
+	var changedPaths []string
 	if hasIssues {
 		warnIssueHeaderMismatches(opts.Stderr, issuesDir)
+		issuePaths := []string{"README.md", "BACKLOG.md", "CLOSED.md"}
+		before := make(map[string][]byte, len(issuePaths))
+		existed := make(map[string]bool, len(issuePaths))
+		for _, name := range issuePaths {
+			path := filepath.Join(issuesDir, name)
+			content, err := os.ReadFile(path)
+			if err == nil {
+				before[name] = content
+				existed[name] = true
+			} else if !os.IsNotExist(err) {
+				return fmt.Errorf("index: read %s: %w", path, err)
+			}
+		}
 		issuesChanged, err := index.UpdateIssuesReadme(issuesReadme, issuesDir)
 		if err != nil {
 			return fmt.Errorf("index: %w", err)
 		}
 		printIndexResult(w, issuesReadme, issuesChanged)
+		if issuesChanged {
+			for _, name := range issuePaths {
+				path := filepath.Join(issuesDir, name)
+				content, err := os.ReadFile(path)
+				if err != nil {
+					return fmt.Errorf("index: read regenerated %s: %w", path, err)
+				}
+				if !existed[name] || !bytes.Equal(before[name], content) {
+					changedPaths = append(changedPaths, filepath.Join("issues", name))
+				}
+			}
+		}
 		recordIssueSnapshot(issuesDir, opts.DBPath)
 	}
 	if hasDocs {
@@ -150,6 +189,23 @@ func runIndex(w io.Writer, opts indexOptions) error {
 			return fmt.Errorf("index: %w", err)
 		}
 		printIndexResult(w, docsReadme, docsChanged)
+		if docsChanged {
+			changedPaths = append(changedPaths, filepath.Join("docs", "README.md"))
+		}
+	}
+	if opts.Stage {
+		if len(changedPaths) == 0 {
+			fmt.Fprintln(w, "index --stage: no index files changed; nothing staged")
+			return nil
+		}
+		args := append([]string{"-C", dir, "add", "--"}, changedPaths...)
+		cmd := exec.Command("git", args...)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("index --stage: git add: %w: %s", err, strings.TrimSpace(string(output)))
+		}
+		for _, path := range changedPaths {
+			fmt.Fprintf(w, "staged %s\n", path)
+		}
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -398,4 +399,122 @@ func TestRunIndex_RefusesCustomizedIssuesTableWithoutWriting(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("refused index should not report an update, got %q", out.String())
 	}
+}
+
+func TestRunIndexStageStagesOnlyRewrittenIndex(t *testing.T) {
+	dir := newStageIndexFixture(t, true)
+	if err := os.MkdirAll(filepath.Join(dir, "docs", "studies"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	study := filepath.Join(dir, "docs", "studies", "new-study.md")
+	if err := os.WriteFile(study, []byte("# New Study\n\n**Scope**: Fresh topic\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIndexTestRun(t, dir, "add", "docs/studies/new-study.md")
+
+	var out bytes.Buffer
+	if err := runIndex(&out, indexOptions{Dir: dir, Stage: true}); err != nil {
+		t.Fatalf("runIndex --stage: %v", err)
+	}
+	got := gitIndexTestRun(t, dir, "diff", "--cached", "--name-only")
+	want := "docs/README.md\ndocs/studies/new-study.md\n"
+	if got != want {
+		t.Fatalf("staged paths = %q, want %q", got, want)
+	}
+	if !strings.Contains(out.String(), "staged docs/README.md") {
+		t.Errorf("output did not report staged index: %q", out.String())
+	}
+}
+
+func TestRunIndexStagePreservesOtherStagedAndUnstagedChanges(t *testing.T) {
+	dir := newStageIndexFixture(t, true)
+	if err := os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIndexTestRun(t, dir, "add", "docs/README.md", "tracked.txt")
+	gitIndexTestRun(t, dir, "commit", "-m", "baseline")
+
+	if err := os.WriteFile(filepath.Join(dir, "docs", "studies", "new-study.md"), []byte("# New Study\n\n**Scope**: Fresh topic\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "staged.txt"), []byte("staged\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIndexTestRun(t, dir, "add", "docs/studies/new-study.md", "staged.txt")
+	if err := os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("unstaged\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runIndex(&bytes.Buffer{}, indexOptions{Dir: dir, Stage: true}); err != nil {
+		t.Fatalf("runIndex --stage: %v", err)
+	}
+	gotCached := gitIndexTestRun(t, dir, "diff", "--cached", "--name-only")
+	wantCached := "docs/README.md\ndocs/studies/new-study.md\nstaged.txt\n"
+	if gotCached != wantCached {
+		t.Fatalf("cached paths = %q, want %q", gotCached, wantCached)
+	}
+	gotUnstaged := gitIndexTestRun(t, dir, "diff", "--name-only")
+	if gotUnstaged != "tracked.txt\n" {
+		t.Fatalf("unstaged paths = %q, want tracked.txt", gotUnstaged)
+	}
+}
+
+func TestRunIndexStageNoChangesStagesNothing(t *testing.T) {
+	dir := newStageIndexFixture(t, true)
+	if err := os.WriteFile(filepath.Join(dir, "docs", "studies", "current.md"), []byte("# Current\n\n**Scope**: Existing topic\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runIndex(&bytes.Buffer{}, indexOptions{Dir: dir}); err != nil {
+		t.Fatalf("initial runIndex: %v", err)
+	}
+	var out bytes.Buffer
+	if err := runIndex(&out, indexOptions{Dir: dir, Stage: true}); err != nil {
+		t.Fatalf("no-op runIndex --stage: %v", err)
+	}
+	if !strings.Contains(out.String(), "no index files changed; nothing staged") {
+		t.Fatalf("no-op output = %q", out.String())
+	}
+	if got := gitIndexTestRun(t, dir, "diff", "--cached", "--name-only"); got != "" {
+		t.Fatalf("no-op staged paths = %q", got)
+	}
+}
+
+func TestRunIndexStageRequiresGitRepository(t *testing.T) {
+	dir := newStageIndexFixture(t, false)
+	var out bytes.Buffer
+	err := runIndex(&out, indexOptions{Dir: dir, Stage: true})
+	if err == nil || !strings.Contains(err.Error(), "is not inside a Git repository") {
+		t.Fatalf("runIndex --stage error = %v, want clear Git repository error", err)
+	}
+}
+
+func newStageIndexFixture(t *testing.T, initGit bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	docs := filepath.Join(dir, "docs")
+	studies := filepath.Join(docs, "studies")
+	if err := os.MkdirAll(studies, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	readme := "<!-- managed by harnez index: only the studies table is generated; evergreen documentation and other tables are hand-written -->\n# Docs\n\n**`docs/studies/`** — case studies\n\n<!-- harnez:begin docs-studies-index -->\n| File | Topic |\n|------|-------|\n<!-- harnez:end docs-studies-index -->\n"
+	if err := os.WriteFile(filepath.Join(docs, "README.md"), []byte(readme), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeIndexRepoConfig(t, dir, "none", true)
+	if initGit {
+		gitIndexTestRun(t, dir, "init", "-q")
+		gitIndexTestRun(t, dir, "config", "user.name", "Harnez Test")
+		gitIndexTestRun(t, dir, "config", "user.email", "harnez-test@example.invalid")
+	}
+	return dir
+}
+
+func gitIndexTestRun(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
+	}
+	return string(output)
 }

@@ -202,7 +202,9 @@ generated table. `BACKLOG.md` and `CLOSED.md` are generated as complete files.
 also regenerates the project's studies index when that convention exists; otherwise
 the issues index is updated independently. Manual edits to
 rows within either managed table will be overwritten by the next `harnez index`
-run — prefer fixing the source ticket/study file instead.
+run — prefer fixing the source ticket/study file instead. Use `harnez index --stage`
+to regenerate and stage only index files rewritten by that run; it requires a Git
+repository and stages nothing when every index is already current.
 
 ```markdown
 # Issues

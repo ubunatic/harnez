@@ -153,7 +153,7 @@ func TestIssuesLintChecksBacklogAndClosedIndexes(t *testing.T) {
 	if err := os.WriteFile(docsReadme, []byte(staleDocs), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := runIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "docs/README.md is generated studies index drift") {
+	if err := runIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "docs/README.md is generated studies index drift; run 'harnez index --stage'") {
 		t.Fatalf("runIssuesLint error = %v, want docs/README.md drift", err)
 	}
 	if _, err := indexpkg.UpdateDocsReadme(docsReadme, docsDir); err != nil {
