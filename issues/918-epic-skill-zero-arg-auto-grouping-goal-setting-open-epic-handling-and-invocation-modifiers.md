@@ -47,6 +47,16 @@ The desired user experience allows flexible, natural invocations where the orche
   - Modifier prefixes (`file new`, `run new`, `next`).
   - Automated ticket grouping logic based on priority, tags, and session context.
 
+### M2 Pre-Work (host, 2026-10-25, from plan turn d918)
+
+- Source is `docs/commands/epic.md` plus its `config.yaml` description only. The `.gemini/skills/...` path above
+  is only the filing agent's name for it (owner): the skill must reach every target harness. `make install` and
+  `harnez apply` render those copies from the source; check each rendered copy (Claude, Codex, agy) contains
+  the new rules, and report any harness that does not get the epic skill.
+- Open epics: `harnez find -d . issues -a status:active`, then keep `Category: Epic` (no category filter exists).
+- Keep `/epic "<idea>"`, `/epic <n>`, `/epic <n> no-web` unchanged. Dispatch section at most ~25 lines; delegate,
+  don't restate /issue or /lean-sprint.
+
 ### M3: Verification & Dry-Run
 - Test bare `/epic` with open epics present (verify prompt).
 - Test bare `/epic` with no open epics (verify grouping proposal and auto-run).
