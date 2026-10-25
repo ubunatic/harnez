@@ -163,7 +163,20 @@ pin mismatch, unchanged behaviour without policy.
 - `make install` succeeded. The single `make test-q1` attempt exited at its gofmt preflight before tests ran;
   `grep '--- FAIL'` had no matches. The test files were formatted afterward; no second q1 run was made.
 
-## Acceptance
+## M5 — Pre-Work (host full run after d81221d9: 3 failures)
+
+Host `make test-q1` (gofmt clean now) fails:
+
+1. `TestCustomIdentityVersionPin` (`internal/modelcatalog/catalog_test.go:265`): "models.local:private.version_pin
+   does not match identity.version \"1\"" — the custom-entry pin case the test expects to pass is rejected.
+2. `TestContractFixtures/policy-valid.yaml` (`contracts_test.go:70`): `fields` rejects `capabilities` after the
+   M4 "reject unapplied fields" change. Decide per Decision: either the fixture drops it or the loader applies it;
+   keep valid and invalid fixtures consistent.
+3. `TestForwardPTYResizeUpdatesChildTerminal` (`internal/subagent/interactive_test.go:94`): "child handshake =
+   \"PASS\", want READY", reproducible with `-count=3`. Check whether M4's subagent `TestMain` (env isolation)
+   breaks the re-exec child handshake; fix the cause, do not loosen the test.
+
+Run the full suite once after the fixes (never commit after a failed or skipped run).
 
 - Skill registered and installed; `update` dispatches the fanout and aggregates a cited table.
 - Loader merges the override over embedded spec; tests: no file, partial override, invalid file (clear error,
