@@ -1,6 +1,6 @@
 # 915 — issues close records model and session provenance
 
-**Status**: Open
+**Status**: Closed — M1 e4ffd8f5: --model/--session with env defaults, one Closed-By line, hidden from indexes. M2 c0707b28: tests isolated from HARNEZ_AGENT_MODEL (host rerun green with HARNEZ_AGENT_MODEL=x HARNEZ_SESSION_ID=y), reopen drops Closed-By.
 **Closed-By**: claude:opus-5-5, session 9ec5fca3
 **Priority**: P3 (Low)
 **Severity**: Minor
