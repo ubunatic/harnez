@@ -489,9 +489,9 @@ func TestCollectorRecoversRemoteLoadForOneShot(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	usage.StartClientHeartbeat(ctx)
+	heartbeatCtx, stopHeartbeat := context.WithCancel(context.Background())
+	defer stopHeartbeat()
+	usage.StartClientHeartbeat(heartbeatCtx)
 	waitForUsageTestCondition(t, "the collector's retry to cache the snapshot", func() bool {
 		return usage.ReadCachedRemoteLoadEntry("x600").Snapshot != nil
 	})
