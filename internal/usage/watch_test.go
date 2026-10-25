@@ -1936,8 +1936,8 @@ func TestDispatchWatchKeyToggleRemote(t *testing.T) {
 		t.Fatalf("expected 'r' to switch activeHost to empty and request fetch, got activeHost=%q eff=%+v", stRemote.activeHost, eff)
 	}
 	stRemote, eff = dispatchWatchKey(stRemote, 'r', false)
-	if stRemote.activeHost != "remote-worker-1" || !eff.fetch {
-		t.Fatalf("expected 'r' to restore activeHost to remote-worker-1 and request fetch, got activeHost=%q eff=%+v", stRemote.activeHost, eff)
+	if stRemote.activeHost != "remote-worker-1" || !eff.fetch || !stRemote.sec.RemoteLoad {
+		t.Fatalf("expected 'r' to restore activeHost, request fetch, and enable Remote Load, got state=%+v eff=%+v", stRemote, eff)
 	}
 }
 
@@ -1971,6 +1971,33 @@ func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
 	}
 	if !strings.Contains(disabledText, "hidden (press ? for controls)") {
 		t.Fatalf("expected hidden panel count in header, got:\n%s", disabledText)
+	}
+}
+
+func TestMinimalWatchStartsWithRemoteLoadAndKeepsItOnRemoteToggle(t *testing.T) {
+	mode, err := DefaultUsageWatchViewMode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec := initialWatchSections(WatchOptions{Mode: mode})
+	if !sec.RemoteLoad {
+		t.Fatalf("watch start mode %q must include Remote Load", mode)
+	}
+	opts := WatchOptions{Mode: mode, Host: "quota-host", RemoteLoadHost: "load-host"}
+	frame := buildWatchFrame(UsageSummary{Timestamp: testTime}, nil, time.Minute, sec, 160, 50, true, opts)
+	if !strings.Contains(strings.Join(frame.lines, "\n"), "Remote Load") {
+		t.Fatalf("watch start frame for mode %q lacks Remote Load:\n%s", mode, strings.Join(frame.lines, "\n"))
+	}
+
+	remoteHidden := sec
+	remoteHidden.RemoteLoad = false
+	state, effect := dispatchWatchKey(watchKeyState{sec: remoteHidden, configuredHost: "quota-host"}, 'r', false)
+	if state.activeHost != "quota-host" || !effect.fetch || !state.sec.RemoteLoad {
+		t.Fatalf("r toggle state = %+v, effect=%+v; Remote Load should be enabled", state, effect)
+	}
+	frame = buildWatchFrame(UsageSummary{Timestamp: testTime}, nil, time.Minute, state.sec, 160, 50, true, opts)
+	if !strings.Contains(strings.Join(frame.lines, "\n"), "Remote Load") {
+		t.Fatalf("Remote Load disappeared after r toggle:\n%s", strings.Join(frame.lines, "\n"))
 	}
 }
 

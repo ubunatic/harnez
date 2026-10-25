@@ -163,6 +163,7 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 			if st.configuredHost != "" {
 				if st.activeHost == "" {
 					st.activeHost = st.configuredHost
+					st.sec.RemoteLoad = true
 				} else {
 					st.activeHost = ""
 				}

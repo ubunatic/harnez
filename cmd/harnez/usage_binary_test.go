@@ -447,7 +447,9 @@ func TestCollectorRecoversRemoteLoadForOneShot(t *testing.T) {
 	marker := filepath.Join(root, "ssh-parent-pids")
 	failed := filepath.Join(root, "ssh-failed")
 	recovered := filepath.Join(root, "ssh-recovered")
-	const snapshot = `{"cpu":{"NumCPU":8,"CPUPercent":42,"CPUPercentOk":true,"Ok":true,"Memory":{"UsedMiB":1024,"TotalMiB":4096,"SwapKnown":true}},"observed_at":"2026-10-25T12:00:00Z"}`
+	// A recovered sample needs a valid observation time, and it should be fresh
+	// so the box correctly labels it live instead of showing an hour-old age.
+	snapshot := fmt.Sprintf(`{"cpu":{"NumCPU":8,"CPUPercent":42,"CPUPercentOk":true,"Ok":true,"Memory":{"UsedMiB":1024,"TotalMiB":4096,"SwapKnown":true}},"observed_at":%q}`, time.Now().UTC().Format(time.RFC3339Nano))
 	// The fake host refuses connections until the test creates recovered. The
 	// failed marker is written only on a refused call, so the test can tell the
 	// collector has seen the outage before it recovers the host.
@@ -505,7 +507,7 @@ func TestCollectorRecoversRemoteLoadForOneShot(t *testing.T) {
 		t.Fatalf("usage failed: %v\n%s", err, output)
 	}
 	text := string(output)
-	if !strings.Contains(text, "Remote Load") || !strings.Contains(text, "updated ") {
+	if !strings.Contains(text, "Remote Load") || !strings.Contains(text, "@x600 · live") {
 		t.Fatalf("one-shot usage lacks the recovered remote load box:\n%s", text)
 	}
 	if strings.Contains(text, "remote load unavailable") {
