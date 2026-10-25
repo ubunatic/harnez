@@ -1,6 +1,6 @@
 # 936 — tests: external-contract assertions must not take expected values from the code under test
 
-**Status**: Open
+**Status**: Closed — Rule added to docs/practices/AgenticLoop.md (section 2), AgenticLoop.lite.md (item 2), root copy docs/AgenticLoop.md (synced from lite), and docs/commands/lean-sprint.md (section 2 handoff bullet). TestRootDocCopiesMatchSources PASS; internal/subagent and internal/claude packages pass. Commit 68618f27.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Practice
