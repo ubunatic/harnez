@@ -72,3 +72,22 @@ schemas, probe budget in `spec/agent.yaml`, 8 fixtures and `internal/modelcatalo
 - Verification: `go test ./internal/modelcatalog ./internal/claude -count=1` passed; `make install`
   completed. The one `make test-q1` run failed at the root-doc copy check (fixed afterward) and an
   unrelated fatal map access in `internal/usage`; the full suite was not rerun.
+  Host `make test-q1` after ed17b565: green.
+
+## M3 — Pre-Work / Required Refinements (reviewer r945b, opus:low)
+
+1. `contracts_test.go:34` `discovered-without-time`: `observed_at` is required for every fact, so the case fails
+   for the general reason. Make it fail only through the discovered rule (assert `required` + the field and the
+   discovered branch path), or drop it.
+2. `agent.schema.json:38`: the `measured` evidence rule duplicates the general `minItems: 1`. Remove it, or
+   give `measured` a stricter rule that a fixture proves is needed.
+3. Add an invalid fixture for a negative `api_cost`.
+4. Settle 0 vs null: `docs/other/Spec.md:97` says zero is a valid measured value while the schema rejects 0 for
+   `relative_cost`. State one rule per cost field and make doc (source + root copy) and schema agree.
+5. Move the version-pin check (`validatePolicyPins`, `contracts_test.go:77`) into production code in
+   `internal/modelcatalog` with its own test, so 941 reuses it.
+6. Document `disputed`: who sets it, whether it applies per fact or per array, how a reader picks among
+   conflicting facts (schema `description` and Spec.md).
+7. Change report: `category` and `sources` become closed enums; document the snapshot `id`, report
+   `before`/`after` and `field` path formats (pattern or description). Add a fixture for patch semantics
+   (omitted field inherits; `enabled` vs `default_enabled`).
