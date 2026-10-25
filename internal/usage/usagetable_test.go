@@ -81,6 +81,27 @@ func TestUsageTableDimsStaleAgent(t *testing.T) {
 	}
 }
 
+func TestUsageTableDimsOnlyExpiredWindowRow(t *testing.T) {
+	now := time.Now()
+	expired, future := now.Add(-time.Hour), now.Add(time.Hour)
+	agent := AgentUsage{
+		AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+		LastRefreshed: now,
+		Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 50, ResetAt: &expired},
+		Session:       &QuotaWindow{Name: "Session", UsedPercent: 20, ResetAt: &future},
+	}
+	lines := usageTableLines([]AgentUsage{agent}, nil, false, now)
+	if len(lines) != 3 {
+		t.Fatalf("table lines = %v, want header and two quota rows", lines)
+	}
+	if !strings.Contains(lines[1], ansiDimGrey) {
+		t.Errorf("expired weekly row = %q, want dim styling", lines[1])
+	}
+	if strings.Contains(lines[2], ansiDimGrey) {
+		t.Errorf("fresh session row = %q, want normal styling", lines[2])
+	}
+}
+
 func TestUsageTableExplainsGrayQuotaRows(t *testing.T) {
 	now := time.Now()
 	agents := []AgentUsage{

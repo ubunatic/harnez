@@ -234,7 +234,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 					}
 				}
 				line := fmt.Sprintf("  %s %5.1f%% used%s", bar, agent.Session.UsedPercent, resetInfo)
-				if valueStale {
+				if valueStale || quotaWindowIsStale(*agent.Session, now) {
 					line = staleValueANSI(line)
 				}
 				lines = append(lines, line)
@@ -256,7 +256,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 					}
 				}
 				line := fmt.Sprintf("  %s %5.1f%% used%s", bar, agent.Weekly.UsedPercent, resetInfo)
-				if valueStale {
+				if valueStale || quotaWindowIsStale(*agent.Weekly, now) {
 					line = staleValueANSI(line)
 				}
 				lines = append(lines, line)
@@ -293,7 +293,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 						percent = fmt.Sprintf("%5.2f%%", w.UsedPercent)
 					}
 					line := fmt.Sprintf("  %-28s %s %s used%s", w.Name+":", bar, percent, resetInfo)
-					if valueStale {
+					if valueStale || quotaWindowIsStale(w, now) {
 						line = staleValueANSI(line)
 					}
 					lines = append(lines, line)

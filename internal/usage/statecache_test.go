@@ -451,9 +451,10 @@ func TestAgentUsageIsValueStale(t *testing.T) {
 		{"4 minutes old, within one cadence", AgentUsage{LastRefreshed: time.Now().Add(-4 * time.Minute)}, false},
 		{"3 hours old, past the live-recollect window", AgentUsage{LastRefreshed: time.Now().Add(-3 * time.Hour)}, true},
 		{"QuotaFetchError set even though just refreshed", AgentUsage{LastRefreshed: time.Now(), QuotaFetchError: "connection refused"}, true},
-		{"Sources tagged (stale)", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"~/.claude/harnez-quota-cache.json (stale)"}}, true},
-		{"Sources tagged (cached, stale)", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"/state/agy.json (cached, stale)"}}, true},
-		{"Sources tagged (usage-history, stale)", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"~/.claude/harnez/usage-history (usage-history, stale)"}}, true},
+		{"Sources tagged (stale), fresh snapshot", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"~/.claude/harnez-quota-cache.json (stale)"}}, false},
+		{"Sources tagged (cached, stale), fresh snapshot", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"/state/agy.json (cached, stale)"}}, false},
+		{"Sources tagged (usage-history, stale), fresh snapshot", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"~/.claude/harnez/usage-history (usage-history, stale)"}}, false},
+		{"expired window, fresh snapshot", AgentUsage{LastRefreshed: time.Now(), Session: &QuotaWindow{Name: "default", ResetAt: ptrTime(time.Now().Add(-time.Hour))}}, false},
 		{"Sources tagged plain (cached), not stale", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"/state/claude.json (cached)"}}, false},
 		{"Sources with a live RPC source, not stale", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"127.0.0.1 (LanguageServer RPC)"}}, false},
 	}

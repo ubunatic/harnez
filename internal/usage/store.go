@@ -533,6 +533,13 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 	if len(readings) == 0 {
 		return
 	}
+	hasModelGroups := false
+	for _, reading := range readings {
+		if reading.Pool != "" && reading.Pool != "tokens" {
+			hasModelGroups = true
+			break
+		}
+	}
 	agentName, installed, authenticated := agent.Name, agent.Installed, agent.Authenticated
 	account, planTier, activeModel := agent.Account, agent.PlanTier, agent.ActiveModel
 	details, sources, fetchError := agent.Details, agent.Sources, agent.QuotaFetchError
@@ -560,6 +567,9 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 	groups := map[string]int{}
 	for _, r := range readings {
 		if r.Pool == "tokens" {
+			continue
+		}
+		if hasModelGroups && r.Pool == "" && strings.EqualFold(r.Source, "statusline") && strings.EqualFold(cleanWindowName(r.Name), "default") {
 			continue
 		}
 		reset := r.ResetAt

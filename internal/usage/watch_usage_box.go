@@ -99,10 +99,8 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		if !agent.HasUsageData() {
 			continue
 		}
-		// Issue 107: staleness is a per-agent-row verdict (the data model has
-		// no per-QuotaWindow provenance yet — see AgentUsage.IsValueStale's
-		// doc comment), so every row this agent contributes (its model
-		// groups included) shares the one flag.
+		// Snapshot age and fetch failures affect every value; expired or
+		// explicitly stale windows affect only the row that contains them.
 		stale := agent.IsValueStale()
 		if len(agent.ModelGroups) > 0 {
 			hasWindow := false
@@ -121,7 +119,11 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 				if len(mg.Windows) > 0 {
 					hasWindow = true
 				}
-				rows = append(rows, allUsageRow{label: label, windows: currentQuotaWindows(mg.Windows, now), lastRefreshed: agent.LastRefreshed, stale: stale})
+				rowStale := stale
+				for _, window := range mg.Windows {
+					rowStale = rowStale || quotaWindowIsStale(window, now)
+				}
+				rows = append(rows, allUsageRow{label: label, windows: currentQuotaWindows(mg.Windows, now), lastRefreshed: agent.LastRefreshed, stale: rowStale})
 				if n := visLen(label); n > labelWidth {
 					labelWidth = n
 				}
@@ -148,7 +150,11 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		}
 		if len(wins) > 0 {
 			label := agent.Name
-			rows = append(rows, allUsageRow{label: label, windows: wins, lastRefreshed: agent.LastRefreshed, stale: stale})
+			rowStale := stale
+			for _, window := range wins {
+				rowStale = rowStale || quotaWindowIsStale(window, now)
+			}
+			rows = append(rows, allUsageRow{label: label, windows: wins, lastRefreshed: agent.LastRefreshed, stale: rowStale})
 			if n := visLen(label); n > labelWidth {
 				labelWidth = n
 			}

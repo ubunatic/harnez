@@ -560,6 +560,33 @@ func TestAllUsageLinesRetainOldAGYModelGroups(t *testing.T) {
 	}
 }
 
+func TestAllUsageLinesDimOnlyStaleAGYGroupAndIgnoreExpiredStatuslineSession(t *testing.T) {
+	now := time.Now()
+	expired := now.Add(-15 * 24 * time.Hour)
+	future := now.Add(2 * time.Hour)
+	summary := UsageSummary{Agents: []AgentUsage{{
+		AgentID: "agy", Name: "Antigravity (AGY)", Installed: true, Authenticated: true,
+		LastRefreshed: now,
+		Session:       &QuotaWindow{Name: "default (stale)", Source: "statusline", ResetAt: &expired},
+		ModelGroups: []ModelGroup{
+			{Name: "Gemini Models", Windows: []QuotaWindow{{Name: "Weekly Limit Remaining", UsedPercent: 72, ResetAt: &expired}}},
+			{Name: "Claude and GPT models", Windows: []QuotaWindow{{Name: "Weekly Limit Remaining", UsedPercent: 24, ResetAt: &future}}},
+		},
+	}}}
+
+	lines := allUsageLinesAt(summary, 100, false, now, time.Minute)
+	if len(lines) != 2 {
+		t.Fatalf("allUsageLinesAt returned %d rows, want both model groups: %v", len(lines), lines)
+	}
+	claudeGPT, gemini := lines[0], lines[1]
+	if !strings.HasPrefix(stripANSI(claudeGPT), "Claude/GPT") || strings.Contains(claudeGPT, ansiDimGrey) {
+		t.Errorf("fresh Claude/GPT row = %q, want undimmed row", claudeGPT)
+	}
+	if !strings.HasPrefix(stripANSI(gemini), "Gemini") || !strings.Contains(gemini, ansiDimGrey) {
+		t.Errorf("expired Gemini row = %q, want dimmed row", gemini)
+	}
+}
+
 func TestAllUsageLinesResetExpiredAGYMeterFallback(t *testing.T) {
 	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	expired := now.Add(-time.Hour)

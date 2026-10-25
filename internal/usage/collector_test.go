@@ -184,9 +184,10 @@ func TestPassiveRoutePersistsToProductionDefaultStore(t *testing.T) {
 	mux := http.NewServeMux()
 	(PassiveUpdateServer{Path: path, Requests: requests, Timeout: cfg.UpdateTimeout, MaxBodyBytes: cfg.UpdateMaxBodyBytes}).RegisterRoutes(mux)
 	window := usagestore.Window{Provider: "claude", Key: "five_hour", Name: "5-hour", Source: "statusline", Freshness: "fresh", UsedFraction: .42, ObservedAt: time.Now().UTC()}
+	probeWindow := usagestore.Window{Provider: "claude", Key: "m2_rework_live_probe", Name: "M2 rework live probe", Source: "probe", Freshness: "stale", UsedFraction: .42, ObservedAt: window.ObservedAt}
 	body, err := json.Marshal(struct {
 		Windows []usagestore.Window `json:"windows"`
-	}{[]usagestore.Window{window}})
+	}{[]usagestore.Window{window, probeWindow}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,6 +214,13 @@ func TestPassiveRoutePersistsToProductionDefaultStore(t *testing.T) {
 	}
 	if stored != window.UsedFraction {
 		t.Fatalf("stored used fraction = %v, want %v", stored, window.UsedFraction)
+	}
+	var probeRows int
+	if err := store.QueryRow(context.Background(), `SELECT count(*) FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE o.provider=? AND o.source=? AND q.window_key=?`, "claude", "probe", "m2_rework_live_probe").Scan(&probeRows); err != nil {
+		t.Fatal(err)
+	}
+	if probeRows != 0 {
+		t.Fatalf("stored probe windows = %d, want zero", probeRows)
 	}
 }
 

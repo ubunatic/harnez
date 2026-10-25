@@ -197,3 +197,20 @@ func TestUsageHistoryFromStoreImportsDuplicateDirectoriesOnce(t *testing.T) {
 		t.Fatalf("points = %d, want 2", len(exp.Points))
 	}
 }
+
+func TestApplyStoredWindowsDropsStatuslineDefaultWhenModelGroupsExist(t *testing.T) {
+	now := time.Date(2026, 10, 25, 19, 0, 0, 0, time.UTC)
+	expired := now.Add(-15 * 24 * time.Hour)
+	future := now.Add(time.Hour)
+	agent := AgentUsage{AgentID: "agy", Name: "Antigravity (AGY)"}
+	applyStoredWindows(&agent, []usagestore.Window{
+		{Provider: "agy", Key: "default", Name: "default", Source: "statusline", Freshness: "stale", UsedFraction: .95, ResetAt: &expired, ObservedAt: expired},
+		{Provider: "agy", Pool: "Gemini Models", Key: "weekly", Name: "Weekly", Source: "agy-meter", Freshness: "fresh", UsedFraction: .24, ResetAt: &future, ObservedAt: now},
+	}, now)
+	if agent.Session != nil {
+		t.Fatalf("expired statusline default session survived alongside model groups: %+v", agent.Session)
+	}
+	if len(agent.ModelGroups) != 1 || agent.ModelGroups[0].Windows[0].UsedPercent != 24 {
+		t.Fatalf("model groups = %+v, want the fresh Gemini window", agent.ModelGroups)
+	}
+}

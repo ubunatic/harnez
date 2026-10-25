@@ -18,6 +18,10 @@ import (
 
 type Store struct{ db *sql.DB }
 
+func isProbeSource(source string) bool {
+	return strings.EqualFold(strings.TrimSpace(source), "probe")
+}
+
 type Window struct {
 	Provider          string     `json:"provider"`
 	Pool              string     `json:"pool,omitempty"`
@@ -551,6 +555,9 @@ func (s *Store) WriteCurrent(ctx context.Context, observedAt time.Time, windows 
 	}
 	defer tx.Rollback()
 	for _, w := range windows {
+		if isProbeSource(w.Source) {
+			continue
+		}
 		if w.Name == "" {
 			w.Name = w.Key
 		}
@@ -635,6 +642,9 @@ func (s *Store) WriteTurnQuotaBoundary(ctx context.Context, boundary TurnQuotaBo
 	if boundary.Source == "" {
 		boundary.Source = "turn-capture"
 	}
+	if isProbeSource(boundary.Source) {
+		return 0, nil
+	}
 	if boundary.Freshness == "" {
 		boundary.Freshness = "unknown"
 	}
@@ -674,6 +684,9 @@ func (s *Store) WriteTurnQuotaBoundary(ctx context.Context, boundary TurnQuotaBo
 		}
 		if w.Source == "" {
 			w.Source = boundary.Source
+		}
+		if isProbeSource(w.Source) {
+			continue
 		}
 		if w.Freshness == "" {
 			w.Freshness = boundary.Freshness

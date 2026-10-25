@@ -34,6 +34,14 @@ Screenshot: All Usage box, Claude Code, Claude/GPT, Gemini 4 Argon and Gemini ro
 2. Nothing removes a session window whose `reset_at` passed long ago, nor a window from a non-production source
    (`probe`).
 
+## Store cleanup
+
+- Searched repository tests and scripts for the `M2 rework live probe` key and `source: probe`; no pre-existing emitter was found. The passive update/store path accepts source-tagged windows, and its integration test uses temporary HOME/XDG directories.
+- Before cleanup, backed up `/home/uwe/.local/share/harnez/telemetry.sqlite` to `/home/uwe/.local/share/harnez/telemetry.sqlite.issue-952-20261025.bak` (174182400 bytes; backup confirmed to contain 18 matches).
+- In one SQLite transaction, deleted 18 Claude `probe` observations whose window key was `m2_rework_live_probe`; each observation contained only that target window. Post-delete match count: 0.
+- After install, `harnez usage --json` reported Claude and AGY `stale: false`; Claude showed current API windows and AGY showed its model groups without the expired default session. The probe match count remained 0.
+- `make test-q1` passed.
+
 ## Plan
 
 1. Repro tests: an AGY usage with fresh model groups plus an expired `default` session window must not be stale

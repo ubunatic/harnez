@@ -117,9 +117,10 @@ func usageTableRows(agents []AgentUsage, rates map[string]agentRate, now time.Ti
 			continue
 		}
 		for i, w := range windows {
-			row := usageTableRow{agent: agent.Name, stale: stale}
+			row := usageTableRow{agent: agent.Name, stale: stale || quotaWindowIsStale(w.w, now)}
 			if i == 0 {
 				row = first
+				row.stale = stale || quotaWindowIsStale(w.w, now)
 			}
 			row.quota, row.used, row.resets = w.label, quotaWindowPercent(w.w), compactDurationText(w.w)
 			if row.resets == "" {

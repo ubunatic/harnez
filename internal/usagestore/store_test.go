@@ -36,6 +36,34 @@ func TestWriteAndCurrentIdempotentAndFractional(t *testing.T) {
 	}
 }
 
+func TestWriteCurrentDropsProbeWindows(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "probe.sqlite")
+	s, err := Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, query string) error { return s.Exec(ctx, query) }); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 10, 25, 19, 0, 0, 0, time.UTC)
+	windows := []Window{
+		{Provider: "claude", Key: "m2_rework_live_probe", Name: "M2 rework live probe", Source: "probe", Freshness: "stale", UsedFraction: .42, ObservedAt: at},
+		{Provider: "claude", Key: "five_hour", Name: "5-hour", Source: "statusline", Freshness: "fresh", UsedFraction: .17, ObservedAt: at},
+	}
+	if err := s.WriteCurrent(ctx, at, windows); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.CurrentFor(ctx, "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Source != "statusline" || got[0].Key != "five_hour" {
+		t.Fatalf("CurrentFor(claude) = %+v, want only the statusline window", got)
+	}
+}
+
 func TestWindowUnmarshalSupportsLegacyCamelCaseFractionAndTimestamp(t *testing.T) {
 	var got Window
 	if err := json.Unmarshal([]byte(`{"Provider":"claude","Key":"five_hour","Source":"legacy","Freshness":"fresh","UsedFraction":0.42,"ObservedAt":"2026-10-20T12:34:56Z"}`), &got); err != nil {
