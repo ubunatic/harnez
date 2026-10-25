@@ -185,7 +185,8 @@
           "eff": { "type": "string", "enum": ["+", "~", "-", "?"] },
           "skills": { "type": "string", "pattern": "^(Go|TUI|SQL)[-+~?]( (Go|TUI|SQL)[-+~?])*$" },
           "use": { "type": "string" },
-          "use_med": { "type": "string" }
+          "use_med": { "type": "string" },
+          "guidance_source_url": { "type": "string", "format": "uri", "description": "Source for factual claims in this model's listing guidance; owner rankings and estimates are labeled as owner guidance." }
         },
         "additionalProperties": false
       }

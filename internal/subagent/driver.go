@@ -98,13 +98,14 @@ type modelAlias struct {
 // ModelGuide is the listing guidance of a spec/agent.yaml model entry; it
 // stays out of Model so session records do not carry it.
 type ModelGuide struct {
-	Cost       int            `yaml:"cost"` // fallback relative cost when no tier override exists
-	CostByTier map[string]int `yaml:"cost_by_tier"`
-	Eff        string         `yaml:"eff"`    // tokens per goal: + ~ - ?
-	Skills     string         `yaml:"skills"` // e.g. "Go+ TUI~ SQL?"
-	Roles      string         `yaml:"roles"`
-	Use        string         `yaml:"use"`
-	UseMed     string         `yaml:"use_med"` // replaces Use for the :med variant
+	Cost              int            `yaml:"cost"` // fallback relative cost when no tier override exists
+	CostByTier        map[string]int `yaml:"cost_by_tier"`
+	Eff               string         `yaml:"eff"`    // tokens per goal: + ~ - ?
+	Skills            string         `yaml:"skills"` // e.g. "Go+ TUI~ SQL?"
+	Roles             string         `yaml:"roles"`
+	Use               string         `yaml:"use"`
+	UseMed            string         `yaml:"use_med"` // replaces Use for the :med variant
+	GuidanceSourceURL string         `yaml:"guidance_source_url"`
 }
 
 var (
@@ -156,7 +157,7 @@ func loadMergedModelCatalog() error {
 		}
 		key := provider + ":" + name
 		aliases[key] = modelAlias{Model: model, Aliases: modelAliases, Preferred: entry.Preferred}
-		guide := ModelGuide{Cost: entry.Guide.Cost, CostByTier: entry.Guide.CostByTier, Eff: entry.Guide.Eff, Skills: entry.Guide.Skills, Roles: entry.Guide.Roles, Use: entry.Guide.Use, UseMed: entry.Guide.UseMed}
+		guide := ModelGuide{Cost: entry.Guide.Cost, CostByTier: entry.Guide.CostByTier, Eff: entry.Guide.Eff, Skills: entry.Guide.Skills, Roles: entry.Guide.Roles, Use: entry.Guide.Use, UseMed: entry.Guide.UseMed, GuidanceSourceURL: entry.Guide.GuidanceSourceURL}
 		if value, ok := entry.Overrides["purpose"]; ok {
 			if value == nil {
 				guide.Use = ""

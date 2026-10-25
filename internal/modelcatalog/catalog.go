@@ -57,13 +57,14 @@ type Identity struct {
 
 // LegacyGuide preserves spec/agent.yaml listing fields until consumers migrate.
 type LegacyGuide struct {
-	Cost       int            `yaml:"cost"`
-	CostByTier map[string]int `yaml:"cost_by_tier"`
-	Eff        string         `yaml:"eff"`
-	Skills     string         `yaml:"skills"`
-	Roles      string         `yaml:"roles"`
-	Use        string         `yaml:"use"`
-	UseMed     string         `yaml:"use_med"`
+	Cost              int            `yaml:"cost"`
+	CostByTier        map[string]int `yaml:"cost_by_tier"`
+	Eff               string         `yaml:"eff"`
+	Skills            string         `yaml:"skills"`
+	Roles             string         `yaml:"roles"`
+	Use               string         `yaml:"use"`
+	UseMed            string         `yaml:"use_med"`
+	GuidanceSourceURL string         `yaml:"guidance_source_url"`
 }
 
 type legacyModel struct {

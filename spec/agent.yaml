@@ -59,14 +59,14 @@ external_sessions:
       created_at: payload.timestamp
 
 # Listing guidance for `harnez agent models` (legend printed below the table):
-#   cost   estimated relative cost by effort tier, anchored at codex:luna:low = 1
+#   cost   owner-guided relative cost estimate by effort tier, anchored at codex:luna:low = 1
 #   eff    tokens needed to reach a goal: + few, ~ average, - many, ? unmeasured
 #   skills Go/TUI/SQL: + strong, ~ ok, - weak, ? no data
 #   use    when to pick it; use_med replaces use for the :med variant
 #   roles  roles the model is suggested for; a recommendation shown here, not enforced.
 #          Spawn rights come from roles.<role>.spawns below.
 # Evidence: docs/Models.md.
-models_legend: "COST is estimated by effort tier; codex:luna:low = 1 · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
+models_legend: "COST is an owner-guided relative estimate by effort tier; codex:luna:low = 1 · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
 models:
   codex:luna:
     aliases: [luna, luna:low]
@@ -79,8 +79,8 @@ models:
     cost_by_tier: {med: 4, high: 6}
     eff: "~"
     skills: Go~ TUI- SQL?
-    use: clear bounded tickets; try first, weak on long terminal loops
-    use_med: interface or design changes; less prone to bending tests
+    use: Owner guidance: background and mechanical work, including log compaction; not Go development.
+    use_med: Owner guidance: background and mechanical work; not Go development.
   codex:sol:
     aliases: [sol, sol:low]
     preferred: true
@@ -92,7 +92,7 @@ models:
     cost_by_tier: {med: 47, high: 71}
     eff: "~"
     skills: Go~ TUI~ SQL?
-    use: capable coding and tool use; milestone reviewer; tends to over-refactor
+    use: Owner guidance: use sol:low for judgment, orchestration, and resolving compiler failures; reserve higher effort for harder work.
   codex:astra:
     aliases: [astra, astra:low]
     preferred: true
@@ -116,7 +116,8 @@ models:
     cost_by_tier: {med: 4, high: 7}
     eff: "-"
     skills: Go~ TUI~ SQL~
-    use: Claude Haiku 5.5; default go-to for cheap, fast work; strong computer use and agent tasks; weaker than sol on terminal coding
+    use: Owner guidance: default worker at haiku:high for well-specified implementation and tests. Haiku 5.5 requests above 100k prompt tokens cost more per token; see guidance_source_url.
+    guidance_source_url: https://code.claude.com/docs/en/model-config#haiku-55-context-window-and-pricing
   claude:sonnet:
     aliases: [sonnet, sonnet:low]
     preferred: true
@@ -159,8 +160,8 @@ models:
     cost: 4
     eff: "~"
     skills: Go~ TUI~ SQL~
-    use: current Gemini Flash; planned default as 3.7 is phased out
-    use_med: current Gemini Flash; planned default as 3.7 is phased out
+    use: Owner guidance: use flash38:med for routing and preprocessing, especially wide-context inputs.
+    use_med: Owner guidance: route and preprocess wide-context inputs.
   agy:argon:
     aliases: [argon, argon:low]
     provider: agy
