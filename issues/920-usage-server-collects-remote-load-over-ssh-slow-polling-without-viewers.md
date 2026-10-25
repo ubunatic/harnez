@@ -1,6 +1,6 @@
 # 920 — usage: server collects remote load over ssh, slow polling without viewers
 
-**Status**: Open
+**Status**: Closed — f993083b (M3 shared ssh options, transition logging) + 929 f0031376: live x600 load refreshes every ~10s with a UI attached ('updated 0m ago'); 5m detached cadence covered by unit test only; make test-q1 green
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
