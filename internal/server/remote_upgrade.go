@@ -103,8 +103,17 @@ type remoteBinaryUpgrader struct {
 	log    io.Writer
 }
 
-func newRemoteBinaryUpgrader(config RemoteUpgradeConfig, log io.Writer) remoteBinaryUpgrader {
-	return remoteBinaryUpgrader{config: config, run: runRemoteCommand, log: log}
+func StartRemoteBinaryUpgrade(ctx context.Context, host string, config RemoteUpgradeConfig, localVersion, goos, goarch, executable string, log io.Writer) {
+	startRemoteBinaryUpgrade(ctx, host, config, localVersion, goos, goarch, executable, log, runRemoteCommand)
+}
+
+func startRemoteBinaryUpgrade(ctx context.Context, host string, config RemoteUpgradeConfig, localVersion, goos, goarch, executable string, log io.Writer, runner remoteCommandRunner) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		remoteBinaryUpgrader{config: config, run: runner, log: log}.upgrade(ctx, host, localVersion, goos, goarch, executable)
+	}()
+	return done
 }
 
 func runRemoteCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -158,10 +167,6 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 	// the local release as well, so the first count-aware build reaches the host.
 	if remote.hasCount && cmp == 0 {
 		u.printf("remote upgrade: %s already runs %s\n", host, strings.TrimSpace(string(versionOutput)))
-		return
-	}
-	if remote.hasCount && cmp > 0 {
-		u.printf("remote upgrade: %s runs newer version; keeping it\n", host)
 		return
 	}
 	info, err := os.Stat(executable)

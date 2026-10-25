@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseRemoteBuildVersion(t *testing.T) {
@@ -47,6 +48,34 @@ func TestLoadConfigRemoteUpgradeSettings(t *testing.T) {
 	}
 	if cfg.RemoteUpgrade.InstallPath != "~/go/bin/harnez" || cfg.RemoteUpgrade.ConnectTimeout <= 0 || cfg.RemoteUpgrade.CommandTimeout <= 0 || cfg.RemoteUpgrade.TransferTimeout <= 0 {
 		t.Fatalf("remote upgrade config = %+v", cfg.RemoteUpgrade)
+	}
+}
+
+func TestStartRemoteBinaryUpgradeRunsInBackgroundAndStopsWithContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started := make(chan struct{})
+	runner := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	done := startRemoteBinaryUpgrade(ctx, "host", RemoteUpgradeConfig{CommandTimeout: time.Minute}, "1.2.3+4", "linux", "amd64", "unused", nil, runner)
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("background runner did not start")
+	}
+	select {
+	case <-done:
+		t.Fatal("background runner unexpectedly finished")
+	default:
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("background runner did not stop after cancellation")
 	}
 }
 

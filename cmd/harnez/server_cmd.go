@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -497,6 +499,7 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool, 
 	if err := indexConfig.Validate(); err != nil {
 		return err
 	}
+	startConfiguredRemoteUpgrade(ctx, cfg)
 	passivePath, err := usage.PassiveUpdatePath()
 	if err != nil {
 		return err
@@ -538,4 +541,21 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool, 
 		services = append(services, &server.NeusIndexer{Config: indexConfig})
 	}
 	return (server.Server{Config: cfg, Version: harnez.BuildVersion(), BuildIdentity: serverBuildIdentity, Services: services, HandOver: server.NewSystemdService(cfg).HandOver}).Run(ctx)
+}
+
+func startConfiguredRemoteUpgrade(ctx context.Context, cfg server.Config) {
+	local, _, err := usage.LoadLocalConfig("")
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "remote upgrade: cannot load local config: %v\n", err)
+		return
+	}
+	if local == nil || strings.TrimSpace(local.Load.WatchHost) == "" {
+		return
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "remote upgrade: cannot locate local binary: %v\n", err)
+		return
+	}
+	server.StartRemoteBinaryUpgrade(ctx, strings.TrimSpace(local.Load.WatchHost), cfg.RemoteUpgrade, harnez.BuildVersion(), runtime.GOOS, runtime.GOARCH, executable, os.Stdout)
 }
