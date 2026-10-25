@@ -110,10 +110,11 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 
 	case st.diagnosticsOpen:
 		switch key {
-		case 'q', 'Q', 3, 27, '\r', '\n', 'l', 'L', '?':
+		// d/D close the overlay through toggle_diagnostics above, not here.
+		case 'q', 'Q', 3, 27, '\r', '\n', '?':
 			st.diagnosticsOpen = false
 			return st, watchKeyEffect{redraw: true}
-		case 'j', 'd':
+		case 'j':
 			st.diagnosticsOffset++
 			return st, watchKeyEffect{redraw: true}
 		case 'k', 'u':

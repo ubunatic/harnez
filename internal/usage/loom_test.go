@@ -127,9 +127,9 @@ func TestUsageLoomWidget_RendersCorrectUI(t *testing.T) {
 		t.Errorf("expected output to contain '¹ All Usage', got:\n%s", cleanOutput)
 	}
 
-	// Verify Load box title with symbol ⁷
-	if !strings.Contains(cleanOutput, "⁷ Load") {
-		t.Errorf("expected output to contain '⁷ Load', got:\n%s", cleanOutput)
+	// Verify Load box title with symbol [L]
+	if !strings.Contains(cleanOutput, "[L] Load") {
+		t.Errorf("expected output to contain '[L] Load', got:\n%s", cleanOutput)
 	}
 
 	// Verify Agent/Model group rows in All Usage box
@@ -164,8 +164,8 @@ func TestRunLoom_NonTerminalOutput(t *testing.T) {
 	if !strings.Contains(output, "¹ All Usage") {
 		t.Errorf("expected RunLoom output to contain '¹ All Usage', got:\n%s", output)
 	}
-	if !strings.Contains(output, "⁷ Load") {
-		t.Errorf("expected RunLoom output to contain '⁷ Load', got:\n%s", output)
+	if !strings.Contains(output, "[L] Load") {
+		t.Errorf("expected RunLoom output to contain '[L] Load', got:\n%s", output)
 	}
 }
 

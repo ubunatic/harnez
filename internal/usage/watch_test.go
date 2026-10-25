@@ -1013,13 +1013,13 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	if !strings.Contains(frameText, "¹") || !strings.Contains(frameText, "All Usage") {
 		t.Fatalf("expected compact frame to show all-usage box, got:\n%s", frameText)
 	}
-	if !strings.Contains(frameText, "⁷") || !strings.Contains(frameText, "Load") {
+	if !strings.Contains(frameText, "[L]") || !strings.Contains(frameText, "Load") {
 		t.Fatalf("expected compact frame to show load box, got:\n%s", frameText)
 	}
 	foundSharedTitleRow := false
 	for _, line := range frame.lines {
 		stripped := stripANSI(line)
-		if strings.Contains(stripped, "¹ All Usage") && strings.Contains(stripped, "⁷ Load") {
+		if strings.Contains(stripped, "¹ All Usage") && strings.Contains(stripped, "[L] Load") {
 			foundSharedTitleRow = true
 			break
 		}
@@ -1693,7 +1693,7 @@ func TestBuildWatchFrameLoadOnlyDoesNotStretch(t *testing.T) {
 
 	found := false
 	for _, l := range frame.lines {
-		if !strings.Contains(stripANSI(l), "⁷ Load") {
+		if !strings.Contains(stripANSI(l), "[L] Load") {
 			continue
 		}
 		found = true
@@ -1743,7 +1743,7 @@ func TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad(t *testing.T) {
 
 	for _, l := range frame.lines {
 		stripped := stripANSI(l)
-		if !strings.Contains(stripped, "¹ All Usage") || !strings.Contains(stripped, "⁷ Load") {
+		if !strings.Contains(stripped, "¹ All Usage") || !strings.Contains(stripped, "[L] Load") {
 			continue
 		}
 		widths := boxTopBorderWidths(l)
@@ -1784,7 +1784,7 @@ func TestControlsOverlayListsAllActiveCommandsGroupedByPurpose(t *testing.T) {
 	// numbered box toggles, literal keys for everything else) so it stays
 	// the single source of truth.
 	for _, key := range []string{
-		"[¹]", "[⁶]", "[⁷]", "[A]",
+		"[¹]", "[⁶]", "[L]", "[A]",
 		"[T]", "[m]", "[r]", "[q/Q]",
 	} {
 		if !strings.Contains(plain, key) {
@@ -1983,40 +1983,83 @@ func TestOfflineWatchKeepsRemoteLoadPanelWithoutCollection(t *testing.T) {
 }
 
 func TestDispatchWatchKeyDiagnosticsOverlay(t *testing.T) {
-	state, effect := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'l', false)
+	state, effect := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'd', false)
 	if !state.diagnosticsOpen || !effect.redraw {
-		t.Fatalf("l did not open diagnostics overlay: state=%+v effect=%+v", state, effect)
+		t.Fatalf("d did not open diagnostics overlay: state=%+v effect=%+v", state, effect)
 	}
-	state, effect = dispatchWatchKey(state, 'l', false)
+	state, effect = dispatchWatchKey(state, 'd', false)
 	if state.diagnosticsOpen || !effect.redraw {
-		t.Fatalf("second l did not close diagnostics overlay: state=%+v effect=%+v", state, effect)
+		t.Fatalf("second d did not close diagnostics overlay: state=%+v effect=%+v", state, effect)
 	}
 
-	state, _ = dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'L', false)
+	state, _ = dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'D', false)
 	if !state.diagnosticsOpen {
-		t.Fatal("uppercase L did not open diagnostics overlay")
+		t.Fatal("uppercase D did not open diagnostics overlay")
 	}
-	for _, key := range []byte{'?', 'q', 27} {
+	for _, key := range []byte{'D', '?', 'q', 27} {
 		closed, effect := dispatchWatchKey(state, key, false)
 		if closed.diagnosticsOpen || !effect.redraw {
 			t.Errorf("key %q did not dismiss diagnostics overlay: state=%+v effect=%+v", key, closed, effect)
 		}
 	}
+
+	// l is Load's key since issue 922: inside the overlay it must do nothing.
+	ignored, _ := dispatchWatchKey(state, 'l', false)
+	if !ignored.diagnosticsOpen || ignored.sec.Load != state.sec.Load {
+		t.Errorf("l inside diagnostics overlay must be ignored, got %+v", ignored)
+	}
+	// d closes the overlay, so scrolling down is on j only.
+	scrolled, _ := dispatchWatchKey(state, 'j', false)
+	if scrolled.diagnosticsOffset != 1 {
+		t.Errorf("j should scroll diagnostics down, got offset %d", scrolled.diagnosticsOffset)
+	}
+
 	controls, _ := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, '?', false)
-	if _, effect := dispatchWatchKey(controls, 'l', false); !effect.redraw {
-		t.Fatal("l from Controls overlay did not request redraw")
-	} else {
-		switched, _ := dispatchWatchKey(controls, 'l', false)
-		if !switched.diagnosticsOpen || switched.overlayOpen {
-			t.Fatalf("l did not switch from Controls to diagnostics: %+v", switched)
+	if ignoredFromControls, _ := dispatchWatchKey(controls, 'l', false); ignoredFromControls.diagnosticsOpen || ignoredFromControls.sec.Load != controls.sec.Load {
+		t.Errorf("l from Controls overlay must be ignored, got %+v", ignoredFromControls)
+	}
+	switched, _ := dispatchWatchKey(controls, 'd', false)
+	if !switched.diagnosticsOpen || switched.overlayOpen {
+		t.Fatalf("d did not switch from Controls to diagnostics: %+v", switched)
+	}
+}
+
+// TestIssue922LoadOnLAndDiagnosticsOnD pins the embedded spec after issue 922:
+// Load toggles on l/L, diagnostics on d/D, and 7 no longer toggles anything.
+func TestIssue922LoadOnLAndDiagnosticsOnD(t *testing.T) {
+	wa := mustWatchActions()
+	for _, key := range []byte{'l', 'L'} {
+		if got := wa.actionForKey(key); got != "toggle_load" {
+			t.Errorf("key %q: expected toggle_load, got %q", key, got)
 		}
+	}
+	for _, key := range []byte{'d', 'D'} {
+		if got := wa.actionForKey(key); got != "toggle_diagnostics" {
+			t.Errorf("key %q: expected toggle_diagnostics, got %q", key, got)
+		}
+	}
+	if got := wa.actionForKey('7'); got != "" {
+		t.Errorf("expected 7 to be unbound, got %q", got)
+	}
+	if got := wa.boxTitleSymbol("load"); got != "[L]" {
+		t.Errorf("expected Load title symbol [L], got %q", got)
+	}
+
+	defaults := defaultWatchSections()
+	toggled, _ := dispatchWatchKey(watchKeyState{sec: defaults}, 'l', false)
+	if toggled.sec.Load == defaults.Load {
+		t.Error("l did not toggle the Load box")
+	}
+	unchanged, _ := dispatchWatchKey(watchKeyState{sec: defaults}, '7', false)
+	if unchanged.sec.Load != defaults.Load {
+		t.Error("7 must no longer toggle the Load box")
 	}
 }
 
 func TestDiagnosticsOverlayFitsAndShowsRecentEvents(t *testing.T) {
 	lines := diagnosticsOverlayLines([]string{"12:00:01 started claude", "12:00:02 failed codex"})
 	text := stripANSI(strings.Join(lines, "\n"))
-	for _, want := range []string{"Fetch diagnostics", "started claude", "failed codex"} {
+	for _, want := range []string{"Fetch diagnostics", "press d, Esc, q, or ? to close", "started claude", "failed codex"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("diagnostics overlay %q does not contain %q", text, want)
 		}
@@ -2799,14 +2842,14 @@ func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
 	var full bytes.Buffer
 	RenderSummary(ctx, home, nil, &full, false)
 	fullText := stripANSI(full.String())
-	if strings.Contains(fullText, "⁷ Load") {
+	if strings.Contains(fullText, "[L] Load") {
 		t.Fatalf("expected the default usage table to show no Load box (spec normal mode), got:\n%s", fullText)
 	}
 
 	var compact bytes.Buffer
 	RenderSummary(ctx, home, nil, &compact, false, WatchOptions{Mode: "compact"})
 	compactText := stripANSI(compact.String())
-	if !strings.Contains(compactText, "⁷ Load") {
+	if !strings.Contains(compactText, "[L] Load") {
 		t.Fatalf("expected --compact to keep the Load box, got:\n%s", compactText)
 	}
 }

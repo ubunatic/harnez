@@ -111,26 +111,34 @@ func controlsOverlayLines() []string {
 	dim := func(s string) string { return ansiWrap("dim-grey", s) }
 	wa := mustWatchActions()
 	sym := wa.symbol
+	// badge brackets a key symbol. A symbol already in brackets (the Load box's
+	// "[L]", which matches its title) is shown as is, so it is not doubled.
+	badge := func(action string) string {
+		if s := sym(action); strings.HasPrefix(s, "[") {
+			return s
+		}
+		return "[" + sym(action) + "]"
+	}
 
 	var l []string
 	l = append(l, bold("Controls")+"  "+dim("(press ?, Esc, q, or Enter to close)"))
 	l = append(l, "")
 	l = append(l, bold("View modes / presets"))
-	l = append(l, fmt.Sprintf("  [%s]  cycle mode: table -> compact -> table", sym("cycle_preset")))
-	l = append(l, fmt.Sprintf("  [%s]  reset panels to the default set", sym("reset_default")))
+	l = append(l, fmt.Sprintf("  %s  cycle mode: table -> compact -> table", badge("cycle_preset")))
+	l = append(l, fmt.Sprintf("  %s  reset panels to the default set", badge("reset_default")))
 	l = append(l, "")
 	l = append(l, bold("Panels (numbered toggles, btop-style)"))
-	l = append(l, fmt.Sprintf("  [%s]  All Usage       [%s]  Processes", sym("toggle_all_usage"), sym("toggle_processes")))
-	l = append(l, fmt.Sprintf("  [%s]  Load            [%s]  Mic", sym("toggle_load"), sym("toggle_mic")))
+	l = append(l, fmt.Sprintf("  %s  All Usage       %s  Processes", badge("toggle_all_usage"), badge("toggle_processes")))
+	l = append(l, fmt.Sprintf("  %s  Load            %s  Mic", badge("toggle_load"), badge("toggle_mic")))
 	l = append(l, "")
 	l = append(l, bold("Data rows"))
-	l = append(l, fmt.Sprintf("  [%s]  Tokens and Tok/min columns of the usage table", sym("toggle_tokens")))
+	l = append(l, fmt.Sprintf("  %s  Tokens and Tok/min columns of the usage table", badge("toggle_tokens")))
 	l = append(l, "")
 	l = append(l, bold("Session"))
-	l = append(l, fmt.Sprintf("  [%s]              toggle remote/local host (when a host is configured)", sym("toggle_remote")))
-	l = append(l, fmt.Sprintf("  [%s]              open/close fetch diagnostics", sym("toggle_diagnostics")))
-	l = append(l, fmt.Sprintf("  [%s]              toggle freshness gauge and debug box", sym("toggle_debug_overlay")))
-	l = append(l, fmt.Sprintf("  [%s]              toggle debug box", sym("toggle_debug_box")))
+	l = append(l, fmt.Sprintf("  %s              toggle remote/local host (when a host is configured)", badge("toggle_remote")))
+	l = append(l, fmt.Sprintf("  %s              open/close fetch diagnostics", badge("toggle_diagnostics")))
+	l = append(l, fmt.Sprintf("  %s              toggle freshness gauge and debug box", badge("toggle_debug_overlay")))
+	l = append(l, fmt.Sprintf("  %s              toggle debug box", badge("toggle_debug_box")))
 	l = append(l, fmt.Sprintf("  [%s/Q] / Ctrl-C   quit", sym("quit")))
 	l = append(l, "")
 	l = append(l, dim("[a] is a compat alias for All Usage's [1]. The footer only shows the"))
@@ -182,7 +190,7 @@ func initialWatchSections(opts WatchOptions) watchSections {
 
 func diagnosticsOverlayLines(entries []string, offsets ...int) []string {
 	dim := func(s string) string { return ansiWrap("dim-grey", s) }
-	lines := []string{ansiWrap("bold", "Fetch diagnostics") + "  " + dim("(press l, Esc, q, or ? to close)"), ""}
+	lines := []string{ansiWrap("bold", "Fetch diagnostics") + "  " + dim("(press d, Esc, q, or ? to close)"), ""}
 	if len(entries) == 0 {
 		lines = append(lines, dim("no collector events yet"))
 		return lines

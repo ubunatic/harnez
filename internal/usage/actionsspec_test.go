@@ -109,8 +109,8 @@ actions:
     category: session
   toggle_load:
     title: Load
-    keys: ["7"]
-    symbol: "⁷"
+    keys: ["l", "L"]
+    symbol: "[L]"
     category: box
     box: load
 `))
@@ -130,11 +130,14 @@ actions:
 	if wa.actionForKey(27) == "quit" {
 		t.Errorf("expected Esc (byte 27) not to map to quit")
 	}
-	if wa.actionForKey('7') != "toggle_load" {
-		t.Errorf("expected '7' to map to toggle_load, got %q", wa.actionForKey('7'))
+	if wa.actionForKey('l') != "toggle_load" || wa.actionForKey('L') != "toggle_load" {
+		t.Errorf("expected 'l' and 'L' to map to toggle_load, got %q and %q", wa.actionForKey('l'), wa.actionForKey('L'))
 	}
-	if got := wa.boxTitleSymbol("load"); got != "⁷" {
-		t.Errorf("expected load's title symbol to be ⁷, got %q", got)
+	if wa.actionForKey('7') != "" {
+		t.Errorf("expected '7' to be unbound after issue 922, got %q", wa.actionForKey('7'))
+	}
+	if got := wa.boxTitleSymbol("load"); got != "[L]" {
+		t.Errorf("expected load's title symbol to be [L], got %q", got)
 	}
 	if got := wa.actionForKey('z'); got != "" {
 		t.Errorf("expected an unmapped key to return \"\", got %q", got)

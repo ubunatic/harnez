@@ -4,7 +4,8 @@
 # source of truth for every interactive key that TUI recognizes: which
 # byte(s) trigger it, what it's called internally, and how it's shown to the
 # user (a superscript digit next to a box's title for the numbered box
-# toggles, or a literal key character for everything else). watch.go's
+# toggles, a bracketed key for the Load box since issue 922, or a literal key
+# character for everything else). watch.go's
 # dispatch *logic* (what each action actually does) stays Go code — only
 # this key -> action -> symbol mapping lives here. See docs/Spec.md.
 #
@@ -13,8 +14,8 @@
 #   <c-c>  - Ctrl-C (byte 3)
 #
 # category:
-#   box     - toggles one top-level panel's visibility (superscript digit
-#             symbol, "box" names the watchSections field it controls)
+#   box     - toggles one top-level panel's visibility (symbol shown in the
+#             box title, "box" names the watchSections field it controls)
 #   data    - toggles a data row shown inside other boxes, not a box itself
 #   mode    - preset/reset controls that change several box toggles at once
 #   session - global session controls (remote/local, quit, controls overlay)
@@ -36,8 +37,8 @@ actions:
   toggle_load:
     title: "Load"
     description: "Toggle the CPU/GPU Load box"
-    keys: ["7"]
-    symbol: "⁷"
+    keys: ["l", "L"]
+    symbol: "[L]"
     category: box
     box: load
   toggle_mic:
@@ -86,8 +87,8 @@ actions:
   toggle_diagnostics:
     title: "Fetch diagnostics"
     description: "Open/close the in-session collector fetch diagnostics view"
-    keys: ["l", "L"]
-    symbol: "l"
+    keys: ["d", "D"]
+    symbol: "d"
     category: session
   toggle_debug_overlay:
     title: "Debug overlay"
