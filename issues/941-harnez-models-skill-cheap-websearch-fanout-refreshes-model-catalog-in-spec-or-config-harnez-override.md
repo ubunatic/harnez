@@ -1,6 +1,7 @@
 # 941 — harnez-models skill: cheap websearch fanout refreshes model catalog in spec or ~/.config/harnez override
 
-**Status**: Open
+**Status**: Closed — Child B delivered: M1 5b998705 merged catalog loader (spec + state catalog/access + models.yaml), M2 4c33a8a1 policy after alias resolution incl. Pi IDs, M3 683f3565 consumers + Pi policy IDs, M4 d81221d9 review fixes (env isolation, one enablement rule, resume warns, default-model hint, no models from access, unapplied fields rejected), M5 98a73ebd host-run failures, M6 58b86efe negative pin test. Host make test-q1 green after M5; skill part moved to 949.
+**Closed-By**: claude:opus-5-5, session 9ec5fca3
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
