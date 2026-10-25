@@ -163,6 +163,7 @@ func runInteractiveCommand(ctx context.Context, command string, args []string, o
 			return err
 		}
 		environ = replaceEnvironmentValue(environ, "HARNEZ_SESSION_ID", opts.SessionID)
+		environ = replaceEnvironmentValue(environ, "HARNEZ_AGENT_MODEL", opts.Model.Spec())
 		environ = replaceEnvironmentValue(environ, "HARNEZ_AGY_METER_SESSION_ID", opts.SessionID)
 	}
 	runPTY := func(env []string) error {

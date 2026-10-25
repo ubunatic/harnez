@@ -30,8 +30,8 @@ func TestManCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(issuesPage), "amend-reason") || !strings.Contains(string(issuesPage), "already-Closed ticket is always a no-op") {
-		t.Error("issues man page lacks close no-op policy or --amend-reason")
+	if !strings.Contains(string(issuesPage), "amend-reason") || !strings.Contains(string(issuesPage), "already-Closed ticket is always a no-op") || !strings.Contains(string(issuesPage), "HARNEZ_AGENT_MODEL") || !strings.Contains(string(issuesPage), "--session") {
+		t.Error("issues man page lacks close no-op or attribution policy")
 	}
 }
 

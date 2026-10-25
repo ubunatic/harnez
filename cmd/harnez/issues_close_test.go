@@ -8,6 +8,83 @@ import (
 	"testing"
 )
 
+func TestIssuesCloseAttribution(t *testing.T) {
+	tests := []struct {
+		name, envModel, envSession string
+		flags                      []string
+		want                       string
+	}{
+		{name: "flags only", flags: []string{"--model", "codex:luna:low", "--session", "flag-session"}, want: "**Closed-By**: codex:luna:low, session flag-session"},
+		{name: "environment only", envModel: "agy:flash:low", envSession: "env-session", want: "**Closed-By**: agy:flash:low, session env-session"},
+		{name: "model without session", envModel: "agy:flash:low", want: "**Closed-By**: agy:flash:low"},
+		{name: "session without model", envSession: "env-session", want: "**Closed-By**: session env-session"},
+		{name: "flags override environment", envModel: "agy:flash:low", envSession: "env-session", flags: []string{"--model", "codex:luna:low", "--session", "flag-session"}, want: "**Closed-By**: codex:luna:low, session flag-session"},
+		{name: "neither", want: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HARNEZ_AGENT_MODEL", tc.envModel)
+			t.Setenv("HARNEZ_SESSION_ID", tc.envSession)
+			dir, ticket := issuesFixtureRepo(t, sampleTicket)
+			args := append([]string{"close", "42", "--no-code", "--no-commit", "-d", dir}, tc.flags...)
+			cmd := newIssuesCmd()
+			cmd.SetArgs(args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(ticket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "" {
+				if strings.Contains(string(got), "**Closed-By**:") {
+					t.Errorf("unexpected attribution line in ticket:\n%s", got)
+				}
+			} else if !strings.Contains(string(got), "**Status**: Closed\n"+tc.want+"\n") {
+				t.Errorf("ticket lacks attribution directly below Status:\n%s", got)
+			}
+			for _, index := range []string{"README.md", "CLOSED.md"} {
+				contents, err := os.ReadFile(filepath.Join(dir, "issues", index))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(contents), "Closed-By") {
+					t.Errorf("generated %s exposes close attribution:\n%s", index, contents)
+				}
+			}
+		})
+	}
+}
+
+func TestIssuesCloseAttributionRecloseReplacesLine(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_MODEL", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	dir, ticket := issuesFixtureRepo(t, sampleTicket)
+	close := func(model, session string) {
+		t.Helper()
+		args := []string{"close", "42", "--no-code", "--no-commit", "-d", dir, "--model", model, "--session", session}
+		cmd := newIssuesCmd()
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	close("first:model", "first-session")
+	cmd := newIssuesCmd()
+	cmd.SetArgs([]string{"open", "42", "--no-commit", "-d", dir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	close("second:model", "second-session")
+	contents, err := os.ReadFile(ticket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(contents), "**Closed-By**:") != 1 || !strings.Contains(string(contents), "**Closed-By**: second:model, session second-session") {
+		t.Fatalf("re-close did not replace attribution exactly once:\n%s", contents)
+	}
+}
+
 func TestIssuesCloseAlreadyClosed(t *testing.T) {
 	for _, verb := range []string{"close", "done"} {
 		for _, reason := range []string{"resolved", "different outcome", ""} {

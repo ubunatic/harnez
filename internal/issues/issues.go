@@ -76,6 +76,7 @@ type Report struct {
 var (
 	issueFileRegex        = regexp.MustCompile(`^(\d{3}|GH[1-9]\d*)-.*\.md$`)
 	statusLineRegex       = regexp.MustCompile(`(?i)^\s*[-*]?\s*(?:\*\*status:?\*\*|status):?\s*(.+)$`)
+	closedByLineRegex     = regexp.MustCompile(`^\s*\*\*Closed-By\*\*:\s*.*$`)
 	closedCommitOnlyRegex = regexp.MustCompile(`(?i)^(?:(?:in|resolved\s+in|fixed\s+in|completed\s+in|closed\s+in)\s+)?[\x60(]?[0-9a-f]{7,40}[\x60)]?[.,]?$`)
 	closedLifecycleRegex  = regexp.MustCompile(`(?i)^(closed|resolved|fixed|complete|completed|implemented|shipped)\b`)
 	// tableRowRegex splits a Markdown table row into its four cells. A cell
@@ -200,6 +201,54 @@ func RewriteStatus(content, newStatus string) (string, bool, error) {
 		return strings.Join(lines, "\n"), true, nil
 	}
 	return "", false, fmt.Errorf("no 'Status:' line found")
+}
+
+// RewriteClosedBy replaces the close attribution line directly below Status.
+// Empty attribution removes any existing line; repeated closes never add a
+// duplicate line.
+func RewriteClosedBy(content, model, session string) (string, bool, error) {
+	lines := strings.Split(content, "\n")
+	statusIndex := -1
+	closedByIndex := -1
+	for i, line := range lines {
+		if statusLineRegex.MatchString(line) {
+			statusIndex = i
+			if i+1 < len(lines) && closedByLineRegex.MatchString(lines[i+1]) {
+				closedByIndex = i + 1
+			}
+			break
+		}
+	}
+	if statusIndex < 0 {
+		return "", false, fmt.Errorf("no 'Status:' line found")
+	}
+	line := ""
+	if model != "" || session != "" {
+		parts := make([]string, 0, 2)
+		if model != "" {
+			parts = append(parts, model)
+		}
+		if session != "" {
+			parts = append(parts, "session "+session)
+		}
+		line = "**Closed-By**: " + strings.Join(parts, ", ")
+	}
+	if closedByIndex >= 0 {
+		if line == "" {
+			lines = append(lines[:closedByIndex], lines[closedByIndex+1:]...)
+			return strings.Join(lines, "\n"), true, nil
+		}
+		if lines[closedByIndex] == line {
+			return content, false, nil
+		}
+		lines[closedByIndex] = line
+		return strings.Join(lines, "\n"), true, nil
+	}
+	if line == "" {
+		return content, false, nil
+	}
+	lines = append(lines[:statusIndex+1], append([]string{line}, lines[statusIndex+1:]...)...)
+	return strings.Join(lines, "\n"), true, nil
 }
 
 // RewriteHeaderNumber replaces the ticket number in the first H1 header line

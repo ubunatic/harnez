@@ -355,7 +355,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	tl := newTimeline(cmd)
 	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir}
 	parentID := d.parent() // read before the child's environment replaces it
-	defer setAgentEnv(role, sessName)()
+	defer setAgentEnv(role, sessName, spec)()
 	initialSession := func(status string) *subagent.Session {
 		now := time.Now()
 		sessionID := id
@@ -631,7 +631,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	if err != nil {
 		return err
 	}
-	defer setAgentEnv(role, sess.Name)()
+	defer setAgentEnv(role, sess.Name, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}.Spec())()
 	interactive := sess.Status == "active" && sess.HarnessType == "interactive"
 	if sess.HarnessType == "interactive" && sess.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
@@ -991,6 +991,7 @@ func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut, showReply b
 const (
 	agentRoleEnv    = "HARNEZ_AGENT_ROLE"
 	agentSessionEnv = "HARNEZ_SESSION_ID"
+	agentModelEnv   = "HARNEZ_AGENT_MODEL"
 )
 
 // startRole picks the role of a new session and checks that the caller's own
@@ -1011,9 +1012,9 @@ func resumeRole(requested string, sess *subagent.Session) (string, error) {
 
 // setAgentEnv gives the provider process it is about to spawn its role and its
 // session name (the parent id of anything it starts) and returns a restore func.
-func setAgentEnv(role, name string) func() {
+func setAgentEnv(role, name, model string) func() {
 	prev := map[string]*string{}
-	for _, kv := range [][2]string{{agentRoleEnv, role}, {agentSessionEnv, name}} {
+	for _, kv := range [][2]string{{agentRoleEnv, role}, {agentSessionEnv, name}, {agentModelEnv, model}} {
 		if v, ok := os.LookupEnv(kv[0]); ok {
 			old := v
 			prev[kv[0]] = &old

@@ -10,6 +10,20 @@ import (
 	"ubunatic.com/harnez/internal/subagent"
 )
 
+func TestSetAgentEnvIncludesModelAndRestoresPreviousValues(t *testing.T) {
+	t.Setenv(agentRoleEnv, "old-role")
+	t.Setenv(agentSessionEnv, "old-session")
+	t.Setenv(agentModelEnv, "old-model")
+	restore := setAgentEnv("developer", "worker-915", "codex:luna:low")
+	if got := []string{os.Getenv(agentRoleEnv), os.Getenv(agentSessionEnv), os.Getenv(agentModelEnv)}; strings.Join(got, ",") != "developer,worker-915,codex:luna:low" {
+		t.Fatalf("active agent env = %v", got)
+	}
+	restore()
+	if got := []string{os.Getenv(agentRoleEnv), os.Getenv(agentSessionEnv), os.Getenv(agentModelEnv)}; strings.Join(got, ",") != "old-role,old-session,old-model" {
+		t.Fatalf("restored agent env = %v", got)
+	}
+}
+
 func TestAgentRoleStoredEnvAndPreamble(t *testing.T) {
 	t.Setenv(agentRoleEnv, "")
 	t.Setenv(agentSessionEnv, "")

@@ -89,6 +89,7 @@ Use `harnez issues <verb>` to change a ticket's status, resync `issues/README.md
 - `harnez issues block <n> <reason>` — Status: `Blocked — <reason>` (reason required)
 - `harnez issues close <n> [reason]` — Status: Closed (or `Closed — <resolution>`)
 - `harnez issues done <n> [reason]` — Alias for `close`: Status: Closed (or `Closed — <resolution>`)
+- `harnez issues close <n> [reason] --model <spec> --session <id>` — Record optional close attribution directly under Status; values default to `HARNEZ_AGENT_MODEL` and `HARNEZ_SESSION_ID`, and explicit flags override the environment.
 - `harnez issues draft <n> [reason]` — Status: Draft (or `Draft — <reason>`)
 - `harnez issues mv <old> [new]` — Renumber a ticket, rename file, rewrite title and exact filename references in issues/ and docs/, resync index, and commit.
 - `harnez issues list [filter]` — List matching tickets (e.g. `is:open`)
@@ -103,6 +104,11 @@ Closing (`close` or `done`) refuses unless a commit with changes outside `issues
 ticket number, for example a subject ending in `(issue 42)`. Commits that touch only `issues/` do not
 count. For a ticket that needed no code, pass `--no-code`; the refusal names it, and the close commit
 records that no code change was needed.
+
+Close attribution is stored as `**Closed-By**: <model>, session <id>` directly
+under Status. Either part may be omitted; if both are empty, no attribution line
+is written. The generated issue indexes omit this metadata. Re-closing after a
+reopen replaces the existing line instead of adding another.
 
 The top of each ticket MUST contain the standardized metadata block:
 

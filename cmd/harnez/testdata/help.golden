@@ -1644,6 +1644,11 @@ not guess which the caller means. It also never guesses a commit sha for a
 "resolved in <sha>" reason (that sha does not exist until this command's own
 commit is made) -- supply it explicitly, or correct it with --amend-reason.
 
+For close and done, --model and --session record optional attribution directly
+under Status as **Closed-By**. They default to HARNEZ_AGENT_MODEL and
+HARNEZ_SESSION_ID; explicit flags take precedence. Missing values are omitted,
+and generated indexes do not include attribution.
+
 Close gate: close and done refuse unless a commit with changes outside issues/
 references the ticket number, such as a subject ending in "(issue 42)". Commits
 that touch only issues/ do not count, and a near-miss number does not match (86
@@ -1670,24 +1675,26 @@ Usage:
   harnez issues <verb> <ticket-number...> [reason...] [flags]
 
 Flags:
-  -a, --all             with 'list': show all matching results
-      --amend-reason    with close/done: amend the reason of an already-Closed ticket
-      --cached          validate the staged Git snapshot (issues lint only)
-      --check           report what would change without writing or committing; exit 1 on drift
-      --commit string   override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
-  -d, --dir string      repo root containing issues/ (default ".")
-      --dry-run         alias for --check
-      --force           with new: create despite strong duplicate matches
-  -h, --help            help for issues
-  -I, --image           render visual PNG card context
-      --json            output a single JSON object instead of a text line
-  -n, --limit int       with 'list': limit results (default: newest 10) (default 10)
-  -l, --list            list open issues (alias for the list verb)
-      --no-code         with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit
-      --no-commit       rewrite the ticket file and README but do not git add/commit
-  -r, --raw             output raw text directly to stdout
-      --remote          with new: allocate a permanent GH id using authenticated gh on the github remote
-  -t, --text            output raw text directly to stdout (alias for --raw)
+  -a, --all              with 'list': show all matching results
+      --amend-reason     with close/done: amend the reason of an already-Closed ticket
+      --cached           validate the staged Git snapshot (issues lint only)
+      --check            report what would change without writing or committing; exit 1 on drift
+      --commit string    override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
+  -d, --dir string       repo root containing issues/ (default ".")
+      --dry-run          alias for --check
+      --force            with new: create despite strong duplicate matches
+  -h, --help             help for issues
+  -I, --image            render visual PNG card context
+      --json             output a single JSON object instead of a text line
+  -n, --limit int        with 'list': limit results (default: newest 10) (default 10)
+  -l, --list             list open issues (alias for the list verb)
+      --model string     with close/done: record the closing model (defaults to HARNEZ_AGENT_MODEL)
+      --no-code          with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit
+      --no-commit        rewrite the ticket file and README but do not git add/commit
+  -r, --raw              output raw text directly to stdout
+      --remote           with new: allocate a permanent GH id using authenticated gh on the github remote
+      --session string   with close/done: record the closing session (defaults to HARNEZ_SESSION_ID)
+  -t, --text             output raw text directly to stdout (alias for --raw)
 
 === harnez lint
 lint verifies source files, scripts, and documentation against harnez

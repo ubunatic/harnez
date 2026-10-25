@@ -24,19 +24,20 @@ type StatusResult struct {
 // StatusBatchOptions supplies index, snapshot, commit, and implementation-commit
 // operations from the CLI layer without making the issue core depend on those packages.
 type StatusBatchOptions struct {
-	Dir, CommitMsg               string
-	Check, NoCommit, AmendReason bool
-	NoCode                       bool
-	Stderr                       io.Writer
-	UpdateIndexes                func(issuesDir string) (bool, error)
-	SnapshotIndexes              func(issuesDir string) (any, error)
-	RestoreIndexes               func(issuesDir string, snapshot any) error
-	IndexPaths                   func() []string
-	Commit                       func(dir string, paths []string, message string) (string, error)
-	PathsChanged                 func(dir string, paths []string) (bool, error)
-	DefaultMessage               func(verb, number, reason string) string
-	WarnHeaderMismatch           func(io.Writer, string, string, string)
-	HasImplementationCommit      func(dir, ticketNumber string) (bool, error)
+	Dir, CommitMsg                 string
+	ClosedByModel, ClosedBySession string
+	Check, NoCommit, AmendReason   bool
+	NoCode                         bool
+	Stderr                         io.Writer
+	UpdateIndexes                  func(issuesDir string) (bool, error)
+	SnapshotIndexes                func(issuesDir string) (any, error)
+	RestoreIndexes                 func(issuesDir string, snapshot any) error
+	IndexPaths                     func() []string
+	Commit                         func(dir string, paths []string, message string) (string, error)
+	PathsChanged                   func(dir string, paths []string) (bool, error)
+	DefaultMessage                 func(verb, number, reason string) string
+	WarnHeaderMismatch             func(io.Writer, string, string, string)
+	HasImplementationCommit        func(dir, ticketNumber string) (bool, error)
 }
 
 // requireImplementationCommit refuses to close a ticket unless a commit with
@@ -149,6 +150,12 @@ func ApplyStatus(verb, ticketArg, reason string, opts StatusBatchOptions) (Statu
 	if err != nil {
 		return StatusResult{}, false, fmt.Errorf("issues: %w", err)
 	}
+	if verb == "close" || verb == "done" {
+		newContent, _, err = RewriteClosedBy(newContent, opts.ClosedByModel, opts.ClosedBySession)
+		if err != nil {
+			return StatusResult{}, false, fmt.Errorf("issues: %w", err)
+		}
+	}
 	if opts.Check {
 		if opts.SnapshotIndexes == nil || opts.RestoreIndexes == nil || opts.UpdateIndexes == nil {
 			return StatusResult{}, false, fmt.Errorf("issues: check index operations are not configured")
@@ -256,6 +263,12 @@ func ApplyStatusBatch(verb string, ticketArgs, reasonArgs []string, opts StatusB
 		updated, _, err := RewriteStatus(string(content), targetStatus)
 		if err != nil {
 			return nil, false, fmt.Errorf("issues: %w", err)
+		}
+		if verb == "close" || verb == "done" {
+			updated, _, err = RewriteClosedBy(updated, opts.ClosedByModel, opts.ClosedBySession)
+			if err != nil {
+				return nil, false, fmt.Errorf("issues: %w", err)
+			}
 		}
 		result := StatusResult{Number: f.Number, File: relPath, OldStatus: oldStatus, NewStatus: targetStatus, Noop: oldStatus == targetStatus}
 		targets = append(targets, target{path: filePath, relPath: relPath, old: content, updated: []byte(updated), result: result})

@@ -22,6 +22,7 @@ type AgyDriver struct {
 	Command   func(context.Context, string, ...string) ([]byte, error)
 	Dir       string
 	SessionID string
+	ModelSpec string
 }
 
 func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) {
@@ -36,6 +37,9 @@ func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) 
 		return nil, fmt.Errorf("agy: ensure bash shim: %w", err)
 	}
 	env := AgyLaunchEnv(os.Environ(), home)
+	if d.ModelSpec != "" {
+		env = replaceEnvironmentValue(env, "HARNEZ_AGENT_MODEL", d.ModelSpec)
+	}
 	if d.SessionID != "" {
 		env = replaceEnvironmentValue(env, "HARNEZ_SESSION_ID", d.SessionID)
 		env = replaceEnvironmentValue(env, "HARNEZ_AGY_METER_SESSION_ID", d.SessionID)

@@ -47,14 +47,15 @@ type issuesResult = issues.StatusResult
 
 // issuesRunOptions bundles runIssuesVerb's inputs.
 type issuesRunOptions struct {
-	Dir         string
-	Check       bool
-	JSON        bool
-	NoCommit    bool
-	AmendReason bool
-	NoCode      bool
-	CommitMsg   string // explicit --commit override; empty means "compose the default"
-	Stderr      io.Writer
+	Dir                            string
+	ClosedByModel, ClosedBySession string
+	Check                          bool
+	JSON                           bool
+	NoCommit                       bool
+	AmendReason                    bool
+	NoCode                         bool
+	CommitMsg                      string // explicit --commit override; empty means "compose the default"
+	Stderr                         io.Writer
 }
 
 func newIssuesCmd() *cobra.Command {
@@ -75,6 +76,8 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var amendReasonFlag bool
 	var noCodeFlag bool
 	var commitMsgFlag string
+	var closedByModelFlag string
+	var closedBySessionFlag string
 	var cachedFlag bool
 	var limitFlag int
 	var allFlag bool
@@ -152,6 +155,11 @@ not guess which the caller means. It also never guesses a commit sha for a
 "resolved in <sha>" reason (that sha does not exist until this command's own
 commit is made) -- supply it explicitly, or correct it with --amend-reason.
 
+For close and done, --model and --session record optional attribution directly
+under Status as **Closed-By**. They default to HARNEZ_AGENT_MODEL and
+HARNEZ_SESSION_ID; explicit flags take precedence. Missing values are omitted,
+and generated indexes do not include attribution.
+
 Close gate: close and done refuse unless a commit with changes outside issues/
 references the ticket number, such as a subject ending in "(issue 42)". Commits
 that touch only issues/ do not count, and a near-miss number does not match (86
@@ -179,6 +187,9 @@ valid, exit-0 answer.`,
 			}
 			if amendReasonFlag && (listFlag || len(args) == 0 || (args[0] != "close" && args[0] != "done")) {
 				return fmt.Errorf("issues: --amend-reason requires close or done")
+			}
+			if (cmd.Flags().Changed("model") || cmd.Flags().Changed("session")) && (listFlag || len(args) == 0 || (args[0] != "close" && args[0] != "done")) {
+				return fmt.Errorf("issues: --model and --session require close or done")
 			}
 			if remoteFlag && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --remote requires new")
@@ -293,14 +304,22 @@ valid, exit-0 answer.`,
 				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args[1:], jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}
 			opts := issuesRunOptions{
-				Dir:         dir,
-				Check:       checkFlag || dryRunFlag,
-				JSON:        jsonFlag,
-				NoCommit:    noCommitFlag,
-				AmendReason: amendReasonFlag,
-				NoCode:      noCodeFlag,
-				CommitMsg:   commitMsgFlag,
-				Stderr:      cmd.ErrOrStderr(),
+				Dir:             dir,
+				ClosedByModel:   closedByModelFlag,
+				ClosedBySession: closedBySessionFlag,
+				Check:           checkFlag || dryRunFlag,
+				JSON:            jsonFlag,
+				NoCommit:        noCommitFlag,
+				AmendReason:     amendReasonFlag,
+				NoCode:          noCodeFlag,
+				CommitMsg:       commitMsgFlag,
+				Stderr:          cmd.ErrOrStderr(),
+			}
+			if !cmd.Flags().Changed("model") {
+				opts.ClosedByModel = os.Getenv("HARNEZ_AGENT_MODEL")
+			}
+			if !cmd.Flags().Changed("session") {
+				opts.ClosedBySession = os.Getenv("HARNEZ_SESSION_ID")
 			}
 			if args[0] == "mv" {
 				oldArg := args[1]
@@ -365,6 +384,8 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVar(&noCommitFlag, "no-commit", false, "rewrite the ticket file and README but do not git add/commit")
 	cmd.Flags().BoolVar(&amendReasonFlag, "amend-reason", false, "with close/done: amend the reason of an already-Closed ticket")
 	cmd.Flags().BoolVar(&noCodeFlag, "no-code", false, "with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit")
+	cmd.Flags().StringVar(&closedByModelFlag, "model", "", "with close/done: record the closing model (defaults to HARNEZ_AGENT_MODEL)")
+	cmd.Flags().StringVar(&closedBySessionFlag, "session", "", "with close/done: record the closing session (defaults to HARNEZ_SESSION_ID)")
 	cmd.Flags().StringVar(&commitMsgFlag, "commit", "", `override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")`)
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 10, "with 'list': limit results (default: newest 10)")
 	cmd.Flags().BoolVarP(&allFlag, "all", "a", false, "with 'list': show all matching results")
@@ -479,7 +500,7 @@ func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutpu
 func issuesStatusDependencies(opts issuesRunOptions) issues.StatusBatchOptions {
 	return issues.StatusBatchOptions{
 		Dir: opts.Dir, Check: opts.Check, NoCommit: opts.NoCommit, AmendReason: opts.AmendReason, NoCode: opts.NoCode,
-		CommitMsg: opts.CommitMsg, Stderr: opts.Stderr,
+		CommitMsg: opts.CommitMsg, ClosedByModel: opts.ClosedByModel, ClosedBySession: opts.ClosedBySession, Stderr: opts.Stderr,
 		UpdateIndexes: func(issuesDir string) (bool, error) {
 			return index.UpdateIssuesReadme(filepath.Join(issuesDir, "README.md"), issuesDir)
 		},

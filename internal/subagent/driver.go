@@ -29,7 +29,7 @@ func DriverFor(m Model, dir string) Driver {
 	case "codex":
 		return CodexDriver{Dir: dir}
 	case "agy":
-		return AgyDriver{Dir: dir}
+		return AgyDriver{Dir: dir, ModelSpec: m.Spec()}
 	case "pi":
 		return PiDriver{Dir: dir}
 	default:

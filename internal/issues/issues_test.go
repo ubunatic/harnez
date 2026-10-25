@@ -309,6 +309,20 @@ func TestParseTrackerTable_PunctuationInTitle(t *testing.T) {
 }
 
 func TestLintFS_Scenarios(t *testing.T) {
+	t.Run("Closed-By metadata is accepted", func(t *testing.T) {
+		fs := fstest.MapFS{
+			"README.md":     &fstest.MapFile{Data: []byte("| # | File | Title | Status |\n|---|------|-------|--------|\n| 001 | [001-closed.md](001-closed.md) | Closed | Closed — shipped |\n")},
+			"001-closed.md": &fstest.MapFile{Data: []byte("# 001 — Closed\n\n**Status**: Closed — shipped\n**Closed-By**: codex:luna:low, session worker-915\n")},
+		}
+		report, err := LintFS(fs, ".")
+		if err != nil {
+			t.Fatalf("LintFS error: %v", err)
+		}
+		if len(report.Diagnostics) != 0 {
+			t.Fatalf("Closed-By metadata produced lint diagnostics: %+v", report.Diagnostics)
+		}
+	})
+
 	t.Run("Backlog status is accepted", func(t *testing.T) {
 		fs := fstest.MapFS{
 			"README.md":      &fstest.MapFile{Data: []byte("| # | File | Title | Status |\n|---|------|-------|--------|\n| 001 | [001-backlog.md](001-backlog.md) | Deferred | Backlog — later |\n")},
