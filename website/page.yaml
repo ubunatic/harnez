@@ -54,6 +54,11 @@ sections:
       - src: assets/usage-load.png
         alt: harnez usage showing All Usage quota bars for five providers, local Load with CPU at 100
           percent and RAM at 83 percent, and Remote Load of an ssh node with two GPUs
+    - caption: A local vision workload on the remote node's RTX 3060 and Phoenix1 iGPU, watched over ssh.
+      images:
+      - src: assets/usage-load-rtx.png
+        alt: harnez usage Remote Load panel for node x600 showing the RTX 3060 at 53 percent and the Phoenix1
+          GPU at 59 percent while a vision workload runs
   - text: |-
       `harnez usage` (aliases: `quota`, `tokens`) unifies live rate-limit quota windows, token velocity sparklines, host hardware load, remote SSH nodes, and microphone speech meters into one interactive btop-style dashboard.
 
