@@ -32,12 +32,12 @@ func TestEmbeddedUsageSpec(t *testing.T) {
 	if storeBusy != 25*time.Millisecond {
 		t.Fatalf("usage store busy timeout = %s, want 25ms from embedded spec", storeBusy)
 	}
-	poll, staleness, err := RemoteLoadPolicy()
+	attached, detached, staleness, err := RemoteLoadPolicy()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if poll != time.Minute || staleness != 5*time.Minute {
-		t.Fatalf("remote load poll/staleness = %s/%s, want 1m/5m from embedded spec", poll, staleness)
+	if attached != 10*time.Second || detached != 5*time.Minute || staleness != 5*time.Minute {
+		t.Fatalf("remote load policy = %s/%s/%s, want 10s/5m/5m from embedded spec", attached, detached, staleness)
 	}
 	commandTimeout, connectTimeout, err := RemoteCommandTimeouts()
 	if err != nil {
@@ -72,7 +72,7 @@ func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatal(err)
 	}
-	if len(schema.Required) != 26 || schema.Properties["remote_load_poll_interval"] == nil || schema.Properties["remote_load_staleness"] == nil || schema.Properties["usage_kill_log"] == nil || schema.Properties["debug_labels"] == nil || schema.Properties["agent_quota_warn_percent"] == nil || schema.Properties["agent_quota_max_reading_age"] == nil || schema.Properties["agy_quota"] == nil || schema.Properties["cache_staleness_multiplier"] == nil || schema.Properties["display_staleness"] == nil || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["remote_command_timeout"] == nil || schema.Properties["ssh_connect_timeout"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["usage_store_busy_timeout"] == nil || schema.Properties["client_heartbeat_interval"] == nil || schema.Properties["client_timeout"] == nil || schema.Properties["catchup_fetch_threshold"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["passive_update_path"] == nil || schema.Properties["view_modes"] == nil {
+	if len(schema.Required) != 27 || schema.Properties["remote_load_poll_interval_attached"] == nil || schema.Properties["remote_load_poll_interval_detached"] == nil || schema.Properties["remote_load_staleness"] == nil || schema.Properties["usage_kill_log"] == nil || schema.Properties["debug_labels"] == nil || schema.Properties["agent_quota_warn_percent"] == nil || schema.Properties["agent_quota_max_reading_age"] == nil || schema.Properties["agy_quota"] == nil || schema.Properties["cache_staleness_multiplier"] == nil || schema.Properties["display_staleness"] == nil || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["remote_command_timeout"] == nil || schema.Properties["ssh_connect_timeout"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["usage_store_busy_timeout"] == nil || schema.Properties["client_heartbeat_interval"] == nil || schema.Properties["client_timeout"] == nil || schema.Properties["catchup_fetch_threshold"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["passive_update_path"] == nil || schema.Properties["view_modes"] == nil {
 		t.Fatalf("usage schema does not define required agy_meter_max_age: %+v", schema)
 	}
 	if schema.Definitions["viewMode"].Properties["panels"].MinItems != 1 {
@@ -100,7 +100,8 @@ nvidia_smi_timeout: 1s
 nvidia_smi_cache_ttl: 2s
 remote_command_timeout: 10s
 ssh_connect_timeout: 5s
-remote_load_poll_interval: 1m
+remote_load_poll_interval_attached: 10s
+remote_load_poll_interval_detached: 5m
 remote_load_staleness: 5m
 watch_loading_label: Collecting usage
 view_modes:
@@ -131,9 +132,10 @@ view_modes:
 		{name: "zero cadence", data: strings.Replace(valid, "collector_cadence: 5m", "collector_cadence: 0s", 1)},
 		{name: "zero remote command timeout", data: strings.Replace(valid, "remote_command_timeout: 10s", "remote_command_timeout: 0s", 1)},
 		{name: "invalid ssh connect timeout", data: strings.Replace(valid, "ssh_connect_timeout: 5s", "ssh_connect_timeout: invalid", 1)},
-		{name: "zero remote load poll", data: strings.Replace(valid, "remote_load_poll_interval: 1m", "remote_load_poll_interval: 0s", 1)},
-		{name: "invalid remote load poll", data: strings.Replace(valid, "remote_load_poll_interval: 1m", "remote_load_poll_interval: soon", 1)},
-		{name: "remote load staleness not above poll", data: strings.Replace(valid, "remote_load_staleness: 5m", "remote_load_staleness: 1m", 1)},
+		{name: "zero remote load attached poll", data: strings.Replace(valid, "remote_load_poll_interval_attached: 10s", "remote_load_poll_interval_attached: 0s", 1)},
+		{name: "invalid remote load detached poll", data: strings.Replace(valid, "remote_load_poll_interval_detached: 5m", "remote_load_poll_interval_detached: soon", 1)},
+		{name: "detached poll shorter than attached", data: strings.Replace(valid, "remote_load_poll_interval_detached: 5m", "remote_load_poll_interval_detached: 5s", 1)},
+		{name: "remote load staleness not above attached poll", data: strings.Replace(valid, "remote_load_staleness: 5m", "remote_load_staleness: 5s", 1)},
 		{name: "missing remote load staleness", data: strings.Replace(valid, "remote_load_staleness: 5m\n", "", 1)},
 		{name: "missing cadence", data: strings.Replace(valid, "collector_cadence: 5m\n", "", 1)},
 		{name: "missing multiplier", data: strings.Replace(valid, "cache_staleness_multiplier: 1\n", "", 1)},

@@ -8,18 +8,21 @@ import (
 	"time"
 )
 
-// remoteLoadPollOptions configures the collector's remote load poll (issue
-// 879 M2). Collect and Wait are injected so tests drive the schedule without
-// sleeping; configuredRemoteLoadPoll fills them with the real SSH call and
-// waitOrDone.
+// remoteLoadPollOptions configures the server-owned remote load poll. Collect
+// and Wait are injected so tests drive the schedule without sleeping.
+type remoteLoadPollWaitFunc func(context.Context, time.Duration, <-chan struct{})
+
 type remoteLoadPollOptions struct {
-	Host    string
-	Poll    time.Duration // cadence after a successful poll
-	Initial time.Duration // first retry delay after a failed poll
-	Max     time.Duration // cap for the retry delay
-	Collect remoteLoadCollectFunc
-	Wait    remoteLoadWaitFunc
-	Out     io.Writer
+	Host          string
+	PollAttached  time.Duration
+	PollDetached  time.Duration
+	Initial       time.Duration // first retry delay after a failed poll
+	Max           time.Duration // cap for the retry delay
+	ActiveClients func() int
+	WakeOnAttach  <-chan struct{}
+	Collect       remoteLoadCollectFunc
+	Wait          remoteLoadPollWaitFunc
+	Out           io.Writer
 }
 
 // configuredRemoteLoadPoll returns the poll for load.watch_host from local.yaml,
@@ -35,27 +38,28 @@ func configuredRemoteLoadPoll(homeDir string, out io.Writer) *remoteLoadPollOpti
 	if local == nil || strings.TrimSpace(local.Load.WatchHost) == "" {
 		return nil
 	}
-	poll, _, err := RemoteLoadPolicy()
+	attached, detached, _, err := RemoteLoadPolicy()
 	if err != nil {
 		fmt.Fprintf(out, "harnez server: remote load poll disabled: %v\n", err)
 		return nil
 	}
 	return &remoteLoadPollOptions{
-		Host:    strings.TrimSpace(local.Load.WatchHost),
-		Poll:    poll,
-		Initial: remoteLoadRetryInitial,
-		Max:     remoteLoadRetryMax,
-		Collect: CollectRemoteLoadSnapshot,
-		Wait:    waitOrDone,
-		Out:     out,
+		Host:         strings.TrimSpace(local.Load.WatchHost),
+		PollAttached: attached,
+		PollDetached: detached,
+		Initial:      remoteLoadRetryInitial,
+		Max:          remoteLoadRetryMax,
+		Collect:      CollectRemoteLoadSnapshot,
+		Wait:         waitRemoteLoadPoll,
+		Out:          out,
 	}
 }
 
 // runRemoteLoadPoller polls the remote load host until ctx is done. It polls
 // once at startup, so the cache is filled without any client or quota tick. A
-// success is cached and followed by opt.Poll; a failure waits the retry delay,
-// which doubles up to opt.Max. So a host that is down costs one SSH call per
-// retry delay, not one per collector tick.
+// success is cached and followed by the attached or detached cadence. A new
+// client interrupts a detached wait; failures back off while attached and use
+// the detached cadence while no UI is active.
 func runRemoteLoadPoller(ctx context.Context, opt remoteLoadPollOptions) {
 	retryDelay := opt.Initial
 	for ctx.Err() == nil {
@@ -65,10 +69,39 @@ func runRemoteLoadPoller(ctx context.Context, opt remoteLoadPollOptions) {
 				fmt.Fprintf(opt.Out, "harnez server: remote load cache write failed: %v\n", writeErr)
 			}
 			retryDelay = opt.Initial
-			opt.Wait(ctx, opt.Poll)
+			opt.wait(ctx, opt.pollInterval())
 			continue
 		}
-		opt.Wait(ctx, retryDelay)
+		delay := retryDelay
+		if interval := opt.pollInterval(); interval > delay {
+			delay = interval
+		}
+		opt.wait(ctx, delay)
 		retryDelay = nextRemoteLoadRetryDelay(retryDelay, opt.Max)
+	}
+}
+
+func (opt remoteLoadPollOptions) pollInterval() time.Duration {
+	if opt.ActiveClients != nil && opt.ActiveClients() > 0 {
+		return opt.PollAttached
+	}
+	return opt.PollDetached
+}
+
+func (opt remoteLoadPollOptions) wait(ctx context.Context, delay time.Duration) {
+	wait := opt.Wait
+	if wait == nil {
+		wait = waitRemoteLoadPoll
+	}
+	wait(ctx, delay, opt.WakeOnAttach)
+}
+
+func waitRemoteLoadPoll(ctx context.Context, delay time.Duration, wakeOnAttach <-chan struct{}) {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	case <-wakeOnAttach:
 	}
 }

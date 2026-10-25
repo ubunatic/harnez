@@ -18,6 +18,7 @@ type ClientTracker struct {
 	timeout       time.Duration
 	clients       map[string]time.Time
 	onFirstClient func()
+	firstClient   chan struct{}
 	now           func() time.Time
 }
 
@@ -32,6 +33,7 @@ func NewClientTracker(timeout time.Duration, onFirstClient ...func()) *ClientTra
 		timeout:       timeout,
 		clients:       make(map[string]time.Time),
 		onFirstClient: cb,
+		firstClient:   make(chan struct{}, 1),
 		now:           time.Now,
 	}
 }
@@ -41,6 +43,12 @@ func (ct *ClientTracker) SetOnFirstClient(cb func()) {
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
 	ct.onFirstClient = cb
+}
+
+// FirstClientEvents returns a buffered notification channel for transitions
+// from no active clients to at least one active client.
+func (ct *ClientTracker) FirstClientEvents() <-chan struct{} {
+	return ct.firstClient
 }
 
 // Heartbeat registers or refreshes a client heartbeat.
@@ -56,11 +64,18 @@ func (ct *ClientTracker) Heartbeat(clientID string) {
 	prevCount := len(ct.clients)
 	ct.clients[clientID] = now
 
+	becameActive := prevCount == 0 && len(ct.clients) > 0
 	var notify func()
-	if prevCount == 0 && len(ct.clients) > 0 && ct.onFirstClient != nil {
+	if becameActive && ct.onFirstClient != nil {
 		notify = ct.onFirstClient
 	}
 	ct.mu.Unlock()
+	if becameActive {
+		select {
+		case ct.firstClient <- struct{}{}:
+		default:
+		}
+	}
 	if notify != nil {
 		notify()
 	}

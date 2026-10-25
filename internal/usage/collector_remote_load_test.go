@@ -49,7 +49,7 @@ func (s *scriptedRemoteLoad) collect(context.Context, string) (*LoadSnapshot, er
 	return &LoadSnapshot{CPU: CPULoad{NumCPU: i + 1}}, nil
 }
 
-func (s *scriptedRemoteLoad) wait(ctx context.Context, d time.Duration) {
+func (s *scriptedRemoteLoad) wait(ctx context.Context, d time.Duration, _ <-chan struct{}) {
 	if ctx.Err() == nil {
 		s.waits = append(s.waits, d)
 	}
@@ -61,13 +61,15 @@ func scriptedPoll(t *testing.T, results ...error) (*scriptedRemoteLoad, remoteLo
 	t.Cleanup(cancel)
 	script := &scriptedRemoteLoad{results: results, cancel: cancel}
 	opt := remoteLoadPollOptions{
-		Host:    "x600",
-		Poll:    time.Minute,
-		Initial: 10 * time.Second,
-		Max:     40 * time.Second,
-		Collect: script.collect,
-		Wait:    script.wait,
-		Out:     io.Discard,
+		Host:          "x600",
+		PollAttached:  10 * time.Second,
+		PollDetached:  5 * time.Minute,
+		Initial:       10 * time.Second,
+		Max:           40 * time.Second,
+		ActiveClients: func() int { return 1 },
+		Collect:       script.collect,
+		Wait:          script.wait,
+		Out:           io.Discard,
 	}
 	return script, opt, ctx
 }
@@ -78,7 +80,7 @@ func TestRemoteLoadPollerBacksOffThenRecovers(t *testing.T) {
 
 	runRemoteLoadPoller(ctx, opt)
 
-	want := []time.Duration{10 * time.Second, 20 * time.Second, 40 * time.Second, time.Minute, time.Minute}
+	want := []time.Duration{10 * time.Second, 20 * time.Second, 40 * time.Second, 10 * time.Second, 10 * time.Second}
 	if !equalDurations(script.waits, want) {
 		t.Fatalf("poll waits = %v, want %v", script.waits, want)
 	}
@@ -94,9 +96,51 @@ func TestRemoteLoadPollerResetsBackoffAfterSuccess(t *testing.T) {
 
 	runRemoteLoadPoller(ctx, opt)
 
-	want := []time.Duration{10 * time.Second, 20 * time.Second, time.Minute, 10 * time.Second, time.Minute}
+	want := []time.Duration{10 * time.Second, 20 * time.Second, 10 * time.Second, 20 * time.Second, 10 * time.Second}
 	if !equalDurations(script.waits, want) {
 		t.Fatalf("poll waits = %v, want %v", script.waits, want)
+	}
+}
+
+func TestRemoteLoadPollerSwitchesCadenceOnClientHeartbeat(t *testing.T) {
+	isolatedRemoteLoadEnv(t)
+	tracker := NewClientTracker(time.Minute)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	var waits []time.Duration
+	var calls int
+	opt := remoteLoadPollOptions{
+		Host:          "x600",
+		PollAttached:  10 * time.Second,
+		PollDetached:  5 * time.Minute,
+		Initial:       10 * time.Second,
+		Max:           time.Minute,
+		ActiveClients: tracker.Count,
+		WakeOnAttach:  tracker.FirstClientEvents(),
+		Collect: func(context.Context, string) (*LoadSnapshot, error) {
+			calls++
+			return &LoadSnapshot{CPU: CPULoad{NumCPU: calls}}, nil
+		},
+		Wait: func(_ context.Context, d time.Duration, wake <-chan struct{}) {
+			waits = append(waits, d)
+			if len(waits) == 1 {
+				tracker.Heartbeat("watcher")
+				<-wake
+				return
+			}
+			cancel()
+		},
+		Out: io.Discard,
+	}
+
+	runRemoteLoadPoller(ctx, opt)
+
+	want := []time.Duration{5 * time.Minute, 10 * time.Second}
+	if !equalDurations(waits, want) {
+		t.Fatalf("remote load poll waits = %v, want detached then attached cadence %v", waits, want)
+	}
+	if calls != 2 {
+		t.Fatalf("remote load poll calls = %d, want a second collection after client attach", calls)
 	}
 }
 
@@ -107,16 +151,17 @@ func TestRemoteLoadPollerStopsOnCancel(t *testing.T) {
 	polling := make(chan struct{})
 	done := make(chan struct{})
 	opt := remoteLoadPollOptions{
-		Host:    "x600",
-		Poll:    time.Minute,
-		Initial: time.Second,
-		Max:     time.Second,
+		Host:         "x600",
+		PollAttached: time.Minute,
+		PollDetached: 5 * time.Minute,
+		Initial:      time.Second,
+		Max:          time.Second,
 		Collect: func(ctx context.Context, _ string) (*LoadSnapshot, error) {
 			close(polling)
 			<-ctx.Done()
 			return nil, ctx.Err()
 		},
-		Wait: func(context.Context, time.Duration) {},
+		Wait: func(context.Context, time.Duration, <-chan struct{}) {},
 		Out:  io.Discard,
 	}
 	go func() {
@@ -187,8 +232,8 @@ func TestConfiguredRemoteLoadPollReadsWatchHost(t *testing.T) {
 				if got == nil {
 					t.Fatal("configuredRemoteLoadPoll() = nil, want a poll for x600")
 				}
-				if got.Host != "x600" || got.Poll != time.Minute || got.Initial != remoteLoadRetryInitial || got.Max != remoteLoadRetryMax || got.Collect == nil || got.Wait == nil {
-					t.Fatalf("configuredRemoteLoadPoll() = %+v, want host x600, poll 1m and the M1 retry policy", got)
+				if got.Host != "x600" || got.PollAttached != 10*time.Second || got.PollDetached != 5*time.Minute || got.Initial != remoteLoadRetryInitial || got.Max != remoteLoadRetryMax || got.Collect == nil || got.Wait == nil {
+					t.Fatalf("configuredRemoteLoadPoll() = %+v, want host x600, attached 10s, detached 5m and the M1 retry policy", got)
 				}
 			}
 			if tc.wantMsg != "" && !strings.Contains(out.String(), tc.wantMsg) {
@@ -208,10 +253,11 @@ func TestRunCollectorPollsRemoteLoadWithoutClientsOrQuota(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			deps := collectorDeps{remote: &remoteLoadPollOptions{
-				Host:    "x600",
-				Poll:    time.Hour,
-				Initial: time.Second,
-				Max:     time.Second,
+				Host:         "x600",
+				PollAttached: time.Hour,
+				PollDetached: time.Hour,
+				Initial:      time.Second,
+				Max:          time.Second,
 				Collect: func(context.Context, string) (*LoadSnapshot, error) {
 					select {
 					case polled <- struct{}{}:
@@ -219,7 +265,7 @@ func TestRunCollectorPollsRemoteLoadWithoutClientsOrQuota(t *testing.T) {
 					}
 					return nil, errors.New("down")
 				},
-				Wait: func(ctx context.Context, _ time.Duration) { <-ctx.Done() },
+				Wait: func(ctx context.Context, _ time.Duration, _ <-chan struct{}) { <-ctx.Done() },
 				Out:  io.Discard,
 			}}
 			done := make(chan error, 1)
@@ -250,17 +296,18 @@ func TestRunCollectorJoinsRemoteLoadPollOnCancel(t *testing.T) {
 	polling := make(chan struct{})
 	stopped := make(chan struct{})
 	deps := collectorDeps{remote: &remoteLoadPollOptions{
-		Host:    "x600",
-		Poll:    time.Hour,
-		Initial: time.Second,
-		Max:     time.Second,
+		Host:         "x600",
+		PollAttached: time.Hour,
+		PollDetached: time.Hour,
+		Initial:      time.Second,
+		Max:          time.Second,
 		Collect: func(ctx context.Context, _ string) (*LoadSnapshot, error) {
 			close(polling)
 			<-ctx.Done()
 			close(stopped)
 			return nil, ctx.Err()
 		},
-		Wait: func(ctx context.Context, _ time.Duration) { <-ctx.Done() },
+		Wait: func(ctx context.Context, _ time.Duration, _ <-chan struct{}) { <-ctx.Done() },
 		Out:  io.Discard,
 	}}
 	done := make(chan error, 1)

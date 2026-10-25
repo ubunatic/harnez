@@ -16,7 +16,7 @@ func remoteLoadAgeLabel(updatedAt, now time.Time) string {
 // remoteLoadStaleness is the remote load age after which the box is marked
 // stale. It panics on an invalid spec, like DefaultCacheStaleness does.
 func remoteLoadStaleness() time.Duration {
-	_, staleness, err := RemoteLoadPolicy()
+	_, _, staleness, err := RemoteLoadPolicy()
 	if err != nil {
 		panic(err)
 	}

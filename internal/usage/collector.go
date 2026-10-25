@@ -86,8 +86,8 @@ func runCollectorWithRequestsAndTracker(ctx context.Context, homeDir, dbPath str
 }
 
 // collectorDeps holds the optional collaborators of the collector loop. A nil
-// remote poll means: read load.watch_host from local.yaml and the cadence from
-// spec/usage.yaml (issue 879 M2).
+// remote poll means: read load.watch_host from local.yaml and its policy from
+// spec/usage.yaml.
 type collectorDeps struct {
 	remote *remoteLoadPollOptions
 }
@@ -132,6 +132,10 @@ func runCollectorWithDeps(ctx context.Context, homeDir, dbPath string, interval 
 		remote = configuredRemoteLoadPoll(homeDir, out)
 	}
 	if remote != nil {
+		if tracker != nil {
+			remote.ActiveClients = tracker.Count
+			remote.WakeOnAttach = tracker.FirstClientEvents()
+		}
 		polls.Add(1)
 		go func() {
 			defer polls.Done()
