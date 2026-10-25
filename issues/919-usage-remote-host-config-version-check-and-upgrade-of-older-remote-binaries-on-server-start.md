@@ -1,6 +1,6 @@
 # 919 — usage: remote host config, version check and upgrade of older remote binaries on server start
 
-**Status**: Open
+**Status**: Closed — ba63980d: server upgraded x600 0.1.33 -> 0.2.1+3714 on start (log: installed 0.2.1+3714 on x600); M4 fixed ssh in the unit sandbox (-F ~/.ssh/config, output in failure logs, optional SSH_AUTH_SOCK)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
