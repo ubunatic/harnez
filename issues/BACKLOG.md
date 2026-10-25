@@ -265,4 +265,5 @@
 | 902 | [902-first-live-run-of-the-epic-and-new-project-skills.md](902-first-live-run-of-the-epic-and-new-project-skills.md) | first live run of the epic and new-project skills | Backlog |
 | 903 | [903-init-validates-copyable-docs-from-a-stale-binary-before-its-stale-docs-warning.md](903-init-validates-copyable-docs-from-a-stale-binary-before-its-stale-docs-warning.md) | init validates copyable docs from a stale binary before its stale-docs warning | Backlog |
 | 906 | [906-issues-new-prints-local-mode-while-adopting-the-harnez-tracker.md](906-issues-new-prints-local-mode-while-adopting-the-harnez-tracker.md) | issues new prints local mode while adopting the harnez tracker | Backlog |
+| 947 | [947-942-e-capability-evidence-tied-to-model-version-from-attributable-tests.md](947-942-e-capability-evidence-tied-to-model-version-from-attributable-tests.md) | 942 E: capability evidence tied to model version from attributable tests | Backlog — epic 942 re-cut (2026-10-25): no attributable capability-test source yet; promote when one exists |
 <!-- harnez:end issues-backlog-index -->

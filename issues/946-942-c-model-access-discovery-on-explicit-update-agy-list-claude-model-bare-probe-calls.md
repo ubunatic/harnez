@@ -8,11 +8,11 @@
 
 ---
 
-/goal An explicit model update records, per harness CLI, which models this account can call: parse
-`agy models`, `claude -p "/model"` for aliases, then bounded probe calls for claude and codex, with method, time,
-CLI version and account fingerprint per observation, written atomically to the state dir; tests use recorded
-CLI fixtures. Or stop and report when a CLI cannot be probed bare. Circuit breaker: on a loop or no progress,
-clear the goal and write a failure report here.
+/goal (slice C1, re-cut 2026-10-25) `harnez models probe <spec>` sends one bare probe to one model on its
+harness CLI (claude, codex, agy) and prints `accessible`, `denied` or `unknown`, the error shape, and the input
+tokens the call used; tests use recorded CLI output. It writes nothing. Listings and access.yaml are 954, batches
+955. Or stop and report when a CLI cannot be probed bare. Circuit breaker: on a loop or no progress, clear the
+goal and write a failure report here.
 
 ## Rules (epic decisions)
 

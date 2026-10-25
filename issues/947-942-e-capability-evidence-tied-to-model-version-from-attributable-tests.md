@@ -1,6 +1,6 @@
 # 947 — 942 E: capability evidence tied to model version from attributable tests
 
-**Status**: Open
+**Status**: Backlog — epic 942 re-cut (2026-10-25): no attributable capability-test source yet; promote when one exists
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

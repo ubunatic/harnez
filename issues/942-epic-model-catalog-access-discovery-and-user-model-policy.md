@@ -85,9 +85,18 @@ overrides an assumed capability, cost fields (subscription vs. API).
 | — | Architecture: layers, schema, sources, snapshot diff | 2 | — → sol:med → — | host + owner | Done (cdfb4b71) |
 | 945 | A: formats and schemas | 3 | — → — → sol:low (M1-M2), sol:med (M3) | opus:low | Closed |
 | 941 | B: merged loader + policy enforcement (needs 945) | 4 | — → plan → sol:med | opus:med | Closed |
-| 946 | C: access discovery, bare probes (needs 945, 941) | 5 | tbd | opus/sol | Open |
-| 949 | D: `harnez-models update` web-refresh skill (needs 941) | 5 | tbd | host | Open |
-| 947 | E: capability evidence (needs 945, 941) | 5 | tbd | tbd | Open |
-| 948 | F: snapshots and change report (needs 946, 947, 949) | 6 | tbd | tbd | Open |
+| 946 | C1: one bare probe for one model, prints result + input tokens | 5 | — → plan → luna:high | host | Open |
+| 954 | C2: `models discover` (listings) → access.yaml, ACCESS column in `agent models` | 6 | — → plan → luna:high | host | Open |
+| 955 | C3: bounded batch probes (confirm, budget, stop on quota/auth) | 7 | — → plan → luna:high | sol:low | Open |
+| 948 | F1: snapshot + text change report (added/removed/access); JSON and other categories later | 8 | — → plan → luna:high | host | Open |
+| 949 | D: `harnez-models update` web-refresh skill (needs 948 F1) | 9 | — → plan → sol:low | host | Open |
+| 947 | E: capability evidence | — | — | — | Backlog: no attributable test source yet (its own exit clause) |
+
+## Re-cut (host + owner, 2026-10-25)
+
+945/941 took 3 and 6 review rounds: schemas were designed before any consumer and 941 bundled loader, override
+semantics, migration and enforcement on every entry point. The rest runs as thin slices, each with one visible
+result, a plan-first cheap developer and one review. 945's snapshot and change-report schemas are provisional:
+948 may change them freely.
 | — | sprint study, `/evergreen` | final | host | — | Open |
 | — | `/wrap` | final | host | — | Open |
