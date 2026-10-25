@@ -91,6 +91,8 @@ overrides an assumed capability, cost fields (subscription vs. API).
 | 948 | F1: snapshot + text change report (added/removed/access); JSON and other categories later | 8 | — → plan → haiku:high | host | Open |
 | 949 | D: `harnez-models update` web-refresh skill (needs 948 F1) | 9 | — → plan → sol:low | host | Open |
 | 947 | E: capability evidence | — | — | — | Backlog: no attributable test source yet (its own exit clause) |
+| — | sprint study, `/evergreen` | final | host | — | `/evergreen` done (ReviewLearnings); study open |
+| — | `/wrap` | final | host | — | Open |
 
 ## Re-cut (host + owner, 2026-10-25)
 
@@ -98,5 +100,3 @@ overrides an assumed capability, cost fields (subscription vs. API).
 semantics, migration and enforcement on every entry point. The rest runs as thin slices, each with one visible
 result, a plan-first cheap developer and one review. 945's snapshot and change-report schemas are provisional:
 948 may change them freely.
-| — | sprint study, `/evergreen` | final | host | — | Open |
-| — | `/wrap` | final | host | — | Open |

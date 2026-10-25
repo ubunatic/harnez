@@ -69,3 +69,10 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **Only cite numbers read in the same turn**: a commit hash, count or measurement in a report comes from a
   tool output of that turn, never from memory. 852 (2026-10-24): the host reported "commit 2f…" before the
   lookup; the real hash was 98badd77.
+- **Schemas before consumers**: 945 (formats) and 941 (loader + enforcement on every entry point) took 3 and
+  6 review rounds because schemas were designed before any code used them and one ticket bundled four
+  concerns. Cut epics into thin vertical slices with one visible result each; mark early schemas
+  provisional. Epic 942 ## Re-cut.
+- **A stopped run is not a green run**: 941 M4 committed after `make test-q1` stopped at gofmt, so the
+  suite never ran; the host's full run found 3 failures. Grep the log for the test summary, not only for
+  `--- FAIL`. In 941 M5 a "fixed" pin test was flipped from a negative to a positive case; M6 restored it.
