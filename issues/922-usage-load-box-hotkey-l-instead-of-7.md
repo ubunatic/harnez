@@ -1,6 +1,6 @@
 # 922 — usage: Load box hotkey L instead of 7
 
-**Status**: Open
+**Status**: Closed — 47b8967b: l/L toggles Load, title [L] Load; d/D toggles diagnostics; 7 unbound. Host live tmux check of installed binary: l shows then hides Load, 7 no change, d opens and closes diagnostics; go test ./internal/usage green
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

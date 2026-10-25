@@ -27,5 +27,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 919 | [919-usage-remote-host-config-version-check-and-upgrade-of-older-remote-binaries-on-server-start.md](919-usage-remote-host-config-version-check-and-upgrade-of-older-remote-binaries-on-server-start.md) | usage: remote host config, version check and upgrade of older remote binaries on server start | Open |
 | 920 | [920-usage-server-collects-remote-load-over-ssh-slow-polling-without-viewers.md](920-usage-server-collects-remote-load-over-ssh-slow-polling-without-viewers.md) | usage: server collects remote load over ssh, slow polling without viewers | Open |
 | 921 | [921-epic-harnez-server-as-monitor-for-local-and-remote-ai-hosts.md](921-epic-harnez-server-as-monitor-for-local-and-remote-ai-hosts.md) | Epic: harnez server as monitor for local and remote AI hosts | Open |
-| 922 | [922-usage-load-box-hotkey-l-instead-of-7.md](922-usage-load-box-hotkey-l-instead-of-7.md) | usage: Load box hotkey L instead of 7 | Open |
 <!-- harnez:end issues-active-index -->
