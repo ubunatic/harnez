@@ -6,6 +6,22 @@ that owns a task table; each task becomes a subticket run as a `/lean-sprint`.
 Invocation: `/epic "<idea>"` drafts a new epic; `/epic <n>` refines or runs epic ticket `<n>`;
 `/epic <n> no-web` skips the web fanout.
 
+## Dispatch
+
+- Keep the explicit forms above unchanged. Accept modifiers before `/epic` (`file new /epic`,
+  `run new /epic`, `next /epic`) or after it (`/epic file`, `/epic run`, `/epic next`).
+- `file new` drafts and files an epic only. `run new` drafts, files, and runs it. `next` selects
+  and runs the next logical epic or task in the current epic, using session context and its task table.
+- Bare `/epic` checks open epics with `harnez find -d . issues -a status:active`, then keeps tickets
+  whose metadata says `Category: Epic`. If any exist, ask whether to run one or group new work.
+- With no open epic, group relevant session and active-backlog tickets by thematic affinity
+  (shared subsystem, component, or context); use priority and tags to rank within a group, never
+  to combine unrelated tickets. If affinity is ambiguous, propose the group and ask before filing.
+- For a clear group, file the epic, adopt it as the current internal goal, then run it. Do not
+  invoke a harness `/goal`; tell the user they can use one if they want a harness-level goal.
+- Automode may make routine implementation choices; stop for owner confirmation before destructive
+  deletion, breaking changes, or bypassing a canary.
+
 Delegate, don't restate: `/issue` (filing), `/lean-sprint` (roles, dispatch, review),
 `/story` (study shape), `/evergreen`, `/wrap`. If `.harnez/repo.yaml` sets
 `issues.tracker: none` or `docs.studies: false`, follow `.harnez/rules/Index.md`.

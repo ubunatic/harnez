@@ -533,7 +533,7 @@ skills:
 
   - name: epic
     license: AGPL-3.0-or-later
-    description: "Plan, refine and run an epic: task table, optional web prior-art fanout, subtickets with worker tiers, lean sprints, close. Only on explicit /epic or 'epic'."
+    description: "Plan, refine and run epics with open-epic checks, affinity grouping, internal goal setting, and file/run/next modifiers. Only on explicit /epic or 'epic'."
     file: docs/commands/epic.md
 
   - name: new-project
