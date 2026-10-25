@@ -39,5 +39,14 @@ needed 6 milestones on 941 (scope was the cause, see 942 ## Re-cut). One data po
    well-specified work, `sol:low` for judgment; drop "prefer luna first"; mention the 100k Haiku price step.
 2. `spec/agent.yaml` model guides (`use`/cost text) for these four models; numbers only with a source URL.
 3. Epic 942 table: slice developers 954/955/948 move from luna:high to haiku:high; 946 stays sol:low.
-4. Not in scope: a Go context limiter for the 100k threshold (the paste's closing offer); file separately if
+4. Claude auto-compact limit per model (owner, 2026-10-25), like codex's `model_auto_compact_token_limit`
+   (`internal/subagent/codex.go:125`): the claude driver sets, in the child env only,
+   `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (tokens, 100,000–1,000,000, capped at the model window) and
+   `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (percent 1–100 of that window; values above the default threshold are
+   ignored). Haiku example: window 100000 + pct 85 → compacts near 85k, below the 100k price step. Values in
+   `spec/agent.yaml` per model, not Go defaults. Sources: https://code.claude.com/docs/en/env-vars#variables,
+   https://code.claude.com/docs/en/model-config#set-the-auto-compact-window. Docs do not say whether `-p`
+   honours them: canary first (installed 2.1.310), proving a compaction at the expected size; test like
+   `TestCodexExecArgsUseConfiguredAutoCompactLimit`.
+5. Not in scope: a Go context limiter for the 100k threshold (the paste's closing offer); file separately if
    wanted.
