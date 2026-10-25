@@ -32,4 +32,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 927 | [927-lint-gokay-check-fails-on-usagestore-store-test-go-errcheck-and-spec-schema-conformance.md](927-lint-gokay-check-fails-on-usagestore-store-test-go-errcheck-and-spec-schema-conformance.md) | lint: gokay check fails on usagestore store_test.go errcheck and spec schema conformance | Open |
 | 928 | [928-harden-remote-upgrade-destination-and-install-command-validation.md](928-harden-remote-upgrade-destination-and-install-command-validation.md) | Harden remote upgrade destination and install command validation | Open |
 | 931 | [931-remote-ssh-agent-socket-under-privatetmp-and-remote-load-retry-durations-in-spec.md](931-remote-ssh-agent-socket-under-privatetmp-and-remote-load-retry-durations-in-spec.md) | remote: ssh-agent socket under PrivateTmp and remote-load retry durations in spec | Open |
+| 932 | [932-usage-watch-defaults-to-the-minimal-view-rename-normal-to-table.md](932-usage-watch-defaults-to-the-minimal-view-rename-normal-to-table.md) | usage: --watch defaults to the minimal view; rename --normal to --table | Open |
 <!-- harnez:end issues-active-index -->
