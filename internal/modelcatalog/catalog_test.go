@@ -266,6 +266,14 @@ func TestCustomIdentityVersionPin(t *testing.T) {
 	}
 }
 
+func TestCustomIdentityVersionPinMismatchRejected(t *testing.T) {
+	configDir := t.TempDir()
+	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: []\nmodels:\n  local:private:\n    kind: custom\n    identity: {harness: custom, provider: local, model: private, version: \"1\"}\n    version_pin: \"2\"\n")
+	if _, err := LoadFromDirs(t.TempDir(), configDir); err == nil || !strings.Contains(err.Error(), "does not match identity.version") {
+		t.Fatalf("mismatched custom identity pin error = %v", err)
+	}
+}
+
 func writeCatalogFile(t *testing.T, filename, contents string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
