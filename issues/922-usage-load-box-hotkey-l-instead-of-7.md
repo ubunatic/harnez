@@ -19,3 +19,7 @@ Owner request (2026-10-25). Check that `L` is not bound already.
 `l`/`L` bind `toggle_diagnostics` today (`spec/actions.yaml:89`). Move diagnostics to `d`/`D` (unbound, checked)
 and give `l`/`L` to `toggle_load` (`spec/actions.yaml:39`, now `7`). Tests: `actionsspec_test.go:110-134`,
 `watch_test.go:1288,1783`; update help, superscript glyph and `docs/data/harnez-usage.ansi`.
+
+Host, from the d922 plan: no superscript L exists in the pixel font, so the title uses the same bracket form as
+Remote Load, `[L] Load` (matches `[R] Remote Load`, no font work). Inside the diagnostics overlay `d`/`D` close
+it; scrolling down stays on `j` (the old `d` scroll is dropped).
