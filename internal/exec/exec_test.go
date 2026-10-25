@@ -26,6 +26,50 @@ type hookOutput struct {
 	} `json:"hookSpecificOutput"`
 }
 
+func TestScriptedRepoWriteConservative(t *testing.T) {
+	root := t.TempDir()
+	tests := []struct {
+		command string
+		want    bool
+	}{
+		{"sed -i 's/a/b/' file.txt", true},
+		{"perl -i -pe 's/a/b/' file.txt", true},
+		{"sed -i 's/a/b/' /tmp/file.txt", false},
+		{"cat <<EOF > file.txt\nhello\nEOF", true},
+		{"echo hi >>file.txt", true},
+		{"sed -n '1,3p' file.txt", false},
+		{"echo hi >/tmp/file.txt", false},
+		{"echo hi >/dev/null", false},
+		{"echo hi 2>&1", false},
+		{"git commit -m 'use > in docs'", false},
+		{"echo '>'", false},
+	}
+	for _, tc := range tests {
+		if got := scriptedRepoWrite(tc.command, root); got != tc.want {
+			t.Errorf("scriptedRepoWrite(%q)=%v, want %v", tc.command, got, tc.want)
+		}
+	}
+}
+
+func TestEditGuardEscalatesAtSpecThresholdAndRateResetsSession(t *testing.T) {
+	dir := t.TempDir()
+	spec := editGuardSpec{EscalationAfter: 5, RetentionDays: 30}
+	now := time.Now()
+	for i := 1; i <= 5; i++ {
+		got := editGuardWarningAt("session-a", dir, spec, now.Add(time.Duration(i)*time.Second))
+		if (i == 5) != strings.Contains(got, "concrete token counts") {
+			t.Fatalf("warning %d escalation mismatch: %q", i, got)
+		}
+	}
+	resetEditGuardFeedback("session-a", dir)
+	if got := editGuardWarningAt("session-a", dir, spec, now.Add(time.Minute)); strings.Contains(got, "concrete token counts") {
+		t.Fatalf("rate feedback did not reset warning streak: %q", got)
+	}
+	if got := editGuardWarningAt("session-b", dir, spec, now.Add(time.Minute)); strings.Contains(got, "concrete token counts") {
+		t.Fatalf("warning state leaked across sessions: %q", got)
+	}
+}
+
 func skipShort(t *testing.T, why string) {
 	t.Helper()
 	if testing.Short() {

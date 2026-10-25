@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schemas/edit_guard.schema.json
+# Warning policy for shell-based repository edits (issue 937).
+escalation_after: 5
+retention_days: 30

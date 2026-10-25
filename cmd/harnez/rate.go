@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	internalexec "ubunatic.com/harnez/internal/exec"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
@@ -185,7 +186,11 @@ func runRate(args []string, opts rateOptions) error {
 		return fmt.Errorf("rate: resolve ticket: %w", err)
 	}
 
-	return insertRateRow(opts.DBPath, toolName, description, agent, sessionID, ticketID, score)
+	if err := insertRateRow(opts.DBPath, toolName, description, agent, sessionID, ticketID, score); err != nil {
+		return err
+	}
+	internalexec.RecordEditGuardFeedback(sessionID)
+	return nil
 }
 
 // runRateOk implements `harnez rate --ok`: it resolves agent/session/ticket
@@ -222,7 +227,11 @@ func runRateOk(args []string, opts rateOptions, since int) error {
 		return fmt.Errorf("rate --ok: resolve ticket: %w", err)
 	}
 
-	return insertHeartbeatRow(opts.DBPath, note, agent, sessionID, ticketID, since)
+	if err := insertHeartbeatRow(opts.DBPath, note, agent, sessionID, ticketID, since); err != nil {
+		return err
+	}
+	internalexec.RecordEditGuardFeedback(sessionID)
+	return nil
 }
 
 // rateCallPayloadBytes approximates the size of the `harnez rate` command

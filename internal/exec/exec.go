@@ -25,6 +25,8 @@ package exec
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,6 +41,9 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"gopkg.in/yaml.v3"
+	harnez "ubunatic.com/harnez"
 
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/distill"
@@ -1191,6 +1196,8 @@ func runExecHook(in io.Reader, out io.Writer) error {
 
 	var payload struct {
 		ToolName  string                     `json:"tool_name"`
+		SessionID string                     `json:"session_id"`
+		Cwd       string                     `json:"cwd"`
 		ToolInput map[string]json.RawMessage `json:"tool_input"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -1211,6 +1218,12 @@ func runExecHook(in io.Reader, out io.Writer) error {
 	if command == "" || alreadyRoutedThroughExec(command) {
 		logging.Debugf("exec hook: skip, command empty or already routed: %q", command)
 		return nil
+	}
+	warning := ""
+	if sessionID := payload.SessionID; sessionID != "" {
+		if root, ok := repoRoot(payload.Cwd); ok && scriptedRepoWrite(command, root) {
+			warning = editGuardWarning(sessionID)
+		}
 	}
 
 	effective := command
@@ -1250,13 +1263,201 @@ func runExecHook(in io.Reader, out io.Writer) error {
 	updated["command"], _ = json.Marshal(rewritten)
 	return json.NewEncoder(out).Encode(struct {
 		HookSpecificOutput struct {
-			HookEventName string                     `json:"hookEventName"`
-			UpdatedInput  map[string]json.RawMessage `json:"updatedInput"`
+			HookEventName     string                     `json:"hookEventName"`
+			UpdatedInput      map[string]json.RawMessage `json:"updatedInput"`
+			AdditionalContext string                     `json:"additionalContext,omitempty"`
 		} `json:"hookSpecificOutput"`
 	}{HookSpecificOutput: struct {
-		HookEventName string                     `json:"hookEventName"`
-		UpdatedInput  map[string]json.RawMessage `json:"updatedInput"`
-	}{HookEventName: "PreToolUse", UpdatedInput: updated}})
+		HookEventName     string                     `json:"hookEventName"`
+		UpdatedInput      map[string]json.RawMessage `json:"updatedInput"`
+		AdditionalContext string                     `json:"additionalContext,omitempty"`
+	}{HookEventName: "PreToolUse", UpdatedInput: updated, AdditionalContext: warning}})
+}
+
+type editGuardSpec struct {
+	EscalationAfter int `yaml:"escalation_after"`
+	RetentionDays   int `yaml:"retention_days"`
+}
+
+func loadEditGuardSpec() editGuardSpec {
+	b, err := harnez.DefaultFS.ReadFile("spec/edit_guard.yaml")
+	if err != nil {
+		return editGuardSpec{}
+	}
+	var s editGuardSpec
+	if yaml.Unmarshal(b, &s) != nil || s.EscalationAfter < 1 {
+		return editGuardSpec{}
+	}
+	return s
+}
+
+// scriptedRepoWrite conservatively recognizes in-place sed/perl and simple
+// shell output redirections. Ambiguous shell syntax is ignored.
+func scriptedRepoWrite(command, root string) bool {
+	if strings.Contains(command, "<<<") {
+		return false
+	}
+	words := strings.Fields(command)
+	for i, w := range words {
+		base := filepath.Base(strings.Trim(w, "'\""))
+		if (base == "sed" || base == "perl") && i+1 < len(words) {
+			inPlace := false
+			for j := i + 1; j < len(words); j++ {
+				arg := strings.Trim(words[j], "'\"")
+				if strings.HasPrefix(arg, "-") && strings.Contains(arg, "i") {
+					inPlace = true
+				}
+				if strings.Contains(arg, ";") || strings.Contains(arg, "|") {
+					break
+				}
+			}
+			if inPlace {
+				operand := strings.Trim(words[len(words)-1], "'\"")
+				if pathInRoot(operand, root) {
+					return true
+				}
+			}
+		}
+	}
+	for i := 0; i < len(command); i++ {
+		if command[i] == '\'' || command[i] == '"' {
+			q := command[i]
+			for i++; i < len(command); i++ {
+				if command[i] == '\\' && q == '"' {
+					i++
+					continue
+				}
+				if command[i] == q {
+					break
+				}
+			}
+			continue
+		}
+		if command[i] != '>' || (i > 0 && (command[i-1] == '>' || command[i-1] == '&')) || i+1 == len(command) || command[i+1] == '&' {
+			continue
+		}
+		j := i + 1
+		if command[j] == '>' {
+			j++
+		}
+		for j < len(command) && (command[j] == ' ' || command[j] == '\t') {
+			j++
+		}
+		if j < len(command) && (command[j] == '\'' || command[j] == '"') {
+			q := command[j]
+			j++
+			k := strings.IndexByte(command[j:], q)
+			if k < 0 {
+				continue
+			}
+			dest := command[j : j+k]
+			if pathInRoot(dest, root) {
+				return true
+			}
+			i = j + k
+			continue
+		}
+		k := j
+		for k < len(command) && !strings.ContainsRune(" \t\n;&|", rune(command[k])) {
+			k++
+		}
+		if k > j && pathInRoot(command[j:k], root) {
+			return true
+		}
+	}
+	return false
+}
+
+func pathInRoot(dest, root string) bool {
+	if strings.HasPrefix(dest, "/") || strings.HasPrefix(dest, "~") || strings.HasPrefix(dest, "/dev/") {
+		return false
+	}
+	full, err := filepath.Abs(filepath.Join(root, dest))
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(root, full)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func repoRoot(cwd string) (string, bool) {
+	if cwd == "" {
+		return "", false
+	}
+	p, err := filepath.Abs(cwd)
+	if err != nil {
+		return "", false
+	}
+	for {
+		if fi, e := os.Stat(filepath.Join(p, ".git")); e == nil && (fi.IsDir() || fi.Mode().IsRegular()) {
+			return p, true
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return "", false
+		}
+		p = parent
+	}
+}
+
+func editGuardWarning(session string) string {
+	spec := loadEditGuardSpec()
+	if spec.EscalationAfter < 1 {
+		return ""
+	}
+	return editGuardWarningAt(session, resolve.DefaultStateDir(), spec, time.Now())
+}
+
+func editGuardWarningAt(session, dir string, spec editGuardSpec, now time.Time) string {
+	sum := sha256.Sum256([]byte(session))
+	path := filepath.Join(dir, "edit-guard-"+hex.EncodeToString(sum[:8])+".json")
+	_ = os.MkdirAll(dir, 0700)
+	var state struct {
+		Count   int       `json:"count"`
+		Updated time.Time `json:"updated"`
+	}
+	if b, e := os.ReadFile(path); e == nil {
+		_ = json.Unmarshal(b, &state)
+	}
+	if spec.RetentionDays > 0 && now.Sub(state.Updated) > time.Duration(spec.RetentionDays)*24*time.Hour {
+		state.Count = 0
+	}
+	state.Count++
+	state.Updated = now.UTC()
+	b, _ := json.Marshal(state)
+	_ = os.WriteFile(path, b, 0600)
+	if state.Count >= spec.EscalationAfter {
+		return "You have repeatedly used a scripted edit without feedback. Prove it was better with concrete token counts for the shell edit versus Edit/Write calls, and your reasoning. Record feedback with harnez rate."
+	}
+	return "This command appears to edit a repository file from Bash. Use Edit/Write, or tell me in one line why the scripted edit is better; record feedback with harnez rate."
+}
+
+// RecordEditGuardFeedback clears this session's warning streak after harnez rate.
+func RecordEditGuardFeedback(session string) {
+	if session == "" {
+		return
+	}
+	resetEditGuardFeedback(session, resolve.DefaultStateDir())
+}
+
+func resetEditGuardFeedback(session, dir string) {
+	if session == "" {
+		return
+	}
+	sum := sha256.Sum256([]byte(session))
+	path := filepath.Join(dir, "edit-guard-"+hex.EncodeToString(sum[:8])+".json")
+	var state struct {
+		Count   int       `json:"count"`
+		Updated time.Time `json:"updated"`
+	}
+	if b, e := os.ReadFile(path); e == nil {
+		_ = json.Unmarshal(b, &state)
+	}
+	state.Count = 0
+	state.Updated = time.Now().UTC()
+	b, _ := json.Marshal(state)
+	_ = os.MkdirAll(dir, 0700)
+	_ = os.WriteFile(path, b, 0600)
 }
 
 func isDistillAutopipeEnabled() bool {
