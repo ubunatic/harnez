@@ -56,6 +56,21 @@ into `models.yaml`; an invalid `models.yaml` stops harnez with a clear error ins
 TUI; policy is enforced after alias resolution, incl. the Pi direct-ID path (`internal/subagent/driver.go:385`).
 The acceptance below reads with these changes; the skill item belongs to 949.
 
+## Decision (M1, 2026-10-25)
+
+- Machine public catalog and access files are `$XDG_STATE_HOME/harnez/models/catalog.yaml` and
+  `$XDG_STATE_HOME/harnez/models/access.yaml` (falling back to `~/.local/state/harnez/models/`);
+  policy stays `$XDG_CONFIG_HOME/harnez/models.yaml` (falling back to `~/.config/harnez/models.yaml`).
+- Legacy `spec/agent.yaml` model entries map `provider` to both `identity.harness` and
+  `identity.provider`, and `name` to both `identity.model` and `identity.version`; `tier` is retained.
+  These entries do not record upstream-provider or release-version facts, so the loader does not infer them.
+  Legacy aliases and listing guidance remain separate from provenance facts; legacy `cost` remains guidance
+  until consumers migrate.
+- Missing machine and policy files are optional. Present files are schema-validated; a malformed or invalid
+  file returns an error. Access observations are retained as evidence and unknown status leaves a model enabled.
+- A policy patch stores field values as overrides (including explicit null clearing) alongside catalog facts;
+  arrays replace. Full access enforcement is M2.
+
 ## Acceptance
 
 - Skill registered and installed; `update` dispatches the fanout and aggregates a cited table.
