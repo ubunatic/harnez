@@ -1,6 +1,6 @@
 # 911 — Epic: skills, first real runs and epic/retro hygiene
 
-**Status**: Open
+**Status**: Closed — 852 closed (first tui-check run, loom ColorPicker), 904 closed (doc parts; close flags parked in 915), 905 closed (ticket extraction gate), 878 closed (session extract + retro skill, first retro owner-reviewed), 851 parked until an active P1/P2 Bug exists; study docs/studies/2026-10-25-session-retro-harnez-epics-910-911.md
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Epic
