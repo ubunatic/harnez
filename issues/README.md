@@ -10,6 +10,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 <!-- harnez:begin issues-active-index -->
 | # | File | Title | Status |
 |---|------|-------|--------|
+| 607 | [607-adopt-loom-view-for-usage-compact-watch-behind-a-flag-strangler-from-loom-103.md](607-adopt-loom-view-for-usage-compact-watch-behind-a-flag-strangler-from-loom-103.md) | Adopt Loom view for usage --compact --watch behind a flag (strangler, from loom 103) | Open |
 | 851 | [851-bug-hunt-skill-pick-p1-p2-bugs-re-verify-close-obsolete-ones-fix-the-rest-the-way-forward.md](851-bug-hunt-skill-pick-p1-p2-bugs-re-verify-close-obsolete-ones-fix-the-rest-the-way-forward.md) | bug-hunt skill: pick P1/P2 bugs, re-verify, close obsolete ones, fix the rest the way forward | Open |
 | 865 | [865-privileged-subprocesses-pam-fingerprint-prompts-and-stderr-visibility.md](865-privileged-subprocesses-pam-fingerprint-prompts-and-stderr-visibility.md) | Privileged subprocesses, PAM biometric prompts, and stderr visibility | Open |
 | 869 | [869-agy-agents-auto-compact-at-200k-tokens-by-default-per-session-flag-to-turn-auto-compact-on-or-off.md](869-agy-agents-auto-compact-at-200k-tokens-by-default-per-session-flag-to-turn-auto-compact-on-or-off.md) | agy agents auto-compact at 200k tokens by default, per-session flag to turn auto-compact on or off | Open |
