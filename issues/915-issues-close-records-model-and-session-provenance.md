@@ -36,3 +36,5 @@ Test isolation bug found by 945's developer run: inside an agent session `HARNEZ
    `TestMain` in `cmd/harnez` and `internal/issues`, or the shared fixture helper); check other packages that
    run `issues close`.
 2. Regression check: run the failing tests with both variables exported to non-empty values; they must pass.
+3. `issues open` (reopen) removes the `**Closed-By**` line; an open ticket must not carry one (seen on 915
+   itself after reopen). Test it.
