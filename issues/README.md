@@ -29,4 +29,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 923 | [923-usage-btop-style-coloured-hotkey-char-in-box-titles-via-loom.md](923-usage-btop-style-coloured-hotkey-char-in-box-titles-via-loom.md) | usage: btop-style coloured hotkey char in box titles via loom | Open |
 | 925 | [925-spec-allow-user-overrides-of-spec-values-from-config-harnez.md](925-spec-allow-user-overrides-of-spec-values-from-config-harnez.md) | spec: allow user overrides of spec values from ~/.config/harnez | Open |
 | 926 | [926-support-installing-custom-repository-provided-skills-into-agent-environments.md](926-support-installing-custom-repository-provided-skills-into-agent-environments.md) | Support installing custom repository-provided skills into agent environments | Open |
+| 927 | [927-lint-gokay-check-fails-on-usagestore-store-test-go-errcheck-and-spec-schema-conformance.md](927-lint-gokay-check-fails-on-usagestore-store-test-go-errcheck-and-spec-schema-conformance.md) | lint: gokay check fails on usagestore store_test.go errcheck and spec schema conformance | Open |
 <!-- harnez:end issues-active-index -->
