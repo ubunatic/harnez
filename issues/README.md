@@ -24,4 +24,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 914 | [914-study-harness2-recursive-agent-harnessing-for-harnez-rule-and-skill-tuning.md](914-study-harness2-recursive-agent-harnessing-for-harnez-rule-and-skill-tuning.md) | Study Harness2 (recursive agent harnessing) for harnez rule and skill tuning | Open |
 | 915 | [915-issues-close-records-model-and-session-provenance.md](915-issues-close-records-model-and-session-provenance.md) | issues close records model and session provenance | Open |
 | 916 | [916-study-commits-fail-on-studies-index-drift-offer-a-one-call-fix.md](916-study-commits-fail-on-studies-index-drift-offer-a-one-call-fix.md) | Study commits fail on studies index drift; offer a one-call fix | Open |
+| 917 | [917-usage-server-driven-boxes-and-items-from-spec-label-bar-value-semantic-color.md](917-usage-server-driven-boxes-and-items-from-spec-label-bar-value-semantic-color.md) | usage: server-driven boxes and items from spec (label, bar, value, semantic color) | Open |
 <!-- harnez:end issues-active-index -->
