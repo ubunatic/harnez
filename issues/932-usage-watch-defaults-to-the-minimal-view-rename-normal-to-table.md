@@ -26,3 +26,18 @@ on a loop or no progress, clear the goal and write a failure report here.
 - `--minimal` stays accepted (now a no-op with `--watch`). The `[m]ode` key cycle is unchanged; the start mode
   changes only.
 - Defaults live in `spec/` if the default view is a spec value today; otherwise where the flag default is.
+
+M1 delivered: 20213dac (minimal default, `--table`, hidden `--normal`); host tmux check of all four start modes OK.
+
+## M2: Remote Load title shows freshness (owner, 2026-10-25)
+
+Owner: label `@x600 · <num>m ago`, or `@x600 · live` when within the fast threshold; remove the separate
+`updated ...` line; if that line also carries errors, show it only when there is an error.
+
+- Title: `[R] Remote Load (@x600 · live)` while the sample age is within the live threshold, else
+  `(@x600 · 12m ago)`; drop `server cache` from the title.
+- Live threshold: a spec key (e.g. `remote_load_live_threshold`, default 2x `remote_load_poll_interval_attached`,
+  i.e. 20s) with schema; no Go default.
+- The `updated ...` body line goes away; an error line (stale reason, ssh failure) is shown only when there is one.
+- Tests per cell for both titles and for the error line; update the 607 baseline golden (`remote-load-source.ansi`)
+  in the same commit and say so.
