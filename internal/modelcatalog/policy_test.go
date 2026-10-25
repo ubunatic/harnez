@@ -29,3 +29,17 @@ func TestValidatePolicyPins(t *testing.T) {
 		})
 	}
 }
+
+func TestIsEnabledPreservesExactPiModelID(t *testing.T) {
+	identity := Identity{Harness: "pi", Provider: "anthropic", Model: "anthropic/Claude-Opus-4.6", Tier: "low"}
+	model := Model{Identity: identity, Key: identity.Model}
+	policy := &Policy{DefaultEnabled: false, Enabled: []string{"pi:anthropic/Claude-Opus-4.6"}}
+	catalog := &Catalog{Models: map[string]Model{modelID(identity): model}, Policy: policy}
+
+	if !catalog.IsEnabled("pi", identity.Model, "low") {
+		t.Fatal("explicit policy ID should enable the exact case-sensitive Pi ID")
+	}
+	if catalog.IsEnabled("pi", "anthropic/claude-opus-4.6", "low") {
+		t.Fatal("policy ID must not match a Pi model ID with different case")
+	}
+}

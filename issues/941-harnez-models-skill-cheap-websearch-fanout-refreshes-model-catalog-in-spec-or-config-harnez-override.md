@@ -99,11 +99,24 @@ pin mismatch, unchanged behaviour without policy.
 
 ### M3 notes
 
-- The policy model-ID pattern in `spec/schemas/model-policy.schema.json` does not permit `/` or uppercase
-  characters. Arbitrary case-sensitive Pi IDs containing those characters cannot be individually enabled by
-  policy when `default_enabled: false`; the current gate safely denies them.
 - `agent models` currently shows a coarse source label (`spec-default`, `state`, or `user-declared`). It does
   not yet display fact-level evidence or detailed access observations.
+
+## Decision (M3, 2026-10-25)
+
+- Policy IDs keep a lowercase provider prefix and accept uppercase letters and `/` in the case-sensitive model
+  portion. Runtime policy matching preserves model-ID case while comparing provider names and tiers without
+  case sensitivity.
+
+## M3 delivered: consumers and startup
+
+- Agent-spec startup now loads the merged catalog first, so malformed policy stops agent operations with the
+  catalog error. Model resolution, listing, completion, and TUI selection continue through the merged catalog
+  and policy gate.
+- Policy ID schema and both `enabled` and `models` keys accept exact Pi IDs with uppercase and `/`; fixtures
+  cover valid and invalid IDs. Runtime tests prove an exact Pi ID is enabled and a case-changed ID is denied.
+- `docs/other/Spec.md` and its root copy document the provider prefix, exact model-ID casing, allowed `/` and
+  uppercase characters, and invalid whitespace.
 
 ## Acceptance
 

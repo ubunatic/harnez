@@ -405,7 +405,7 @@ func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
 	if c == nil || c.Policy == nil {
 		return true
 	}
-	provider, modelName, tier = strings.ToLower(provider), strings.ToLower(modelName), strings.ToLower(tier)
+	provider, tier = strings.ToLower(provider), strings.ToLower(tier)
 	var aliases []string
 	providers := []string{provider}
 	known := false
@@ -413,13 +413,13 @@ func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
 		if !strings.EqualFold(model.Identity.Harness, provider) && !strings.EqualFold(model.Identity.Provider, provider) {
 			continue
 		}
-		matches := strings.ToLower(model.Identity.Model) == modelName || strings.ToLower(model.Key) == modelName
+		matches := model.Identity.Model == modelName || model.Key == modelName
 		for _, alias := range model.Aliases {
-			base := strings.ToLower(alias)
+			base := alias
 			if index := strings.IndexByte(base, ':'); index >= 0 {
 				base = base[:index]
 			}
-			if strings.ToLower(alias) == modelName || base == modelName {
+			if alias == modelName || base == modelName {
 				matches = true
 			}
 		}
@@ -428,13 +428,13 @@ func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
 		}
 		known = true
 		providers = append(providers, strings.ToLower(model.Identity.Harness), strings.ToLower(model.Identity.Provider))
-		aliases = append(aliases, strings.ToLower(model.Key), strings.ToLower(model.Identity.Model))
+		aliases = append(aliases, model.Key, model.Identity.Model)
 		for _, alias := range model.Aliases {
-			aliases = append(aliases, strings.ToLower(alias))
+			aliases = append(aliases, alias)
 		}
 	}
 	for policyID, entry := range c.Policy.Models {
-		identityMatches := entry.Identity != nil && (strings.EqualFold(entry.Identity.Harness, provider) || strings.EqualFold(entry.Identity.Provider, provider)) && strings.EqualFold(entry.Identity.Model, modelName) && (entry.Identity.Tier == "" || strings.EqualFold(entry.Identity.Tier, tier))
+		identityMatches := entry.Identity != nil && (strings.EqualFold(entry.Identity.Harness, provider) || strings.EqualFold(entry.Identity.Provider, provider)) && entry.Identity.Model == modelName && (entry.Identity.Tier == "" || strings.EqualFold(entry.Identity.Tier, tier))
 		idMatches := false
 		for _, prefix := range providers {
 			if policyIDMatches(prefix, aliases, tier, policyID) {
@@ -449,27 +449,20 @@ func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
 			return *entry.Enabled
 		}
 	}
-	for _, alias := range aliases {
-		base := alias
-		if index := strings.IndexByte(base, ':'); index >= 0 {
-			base = base[:index]
-		}
-		for _, prefix := range providers {
-			if containsFold(c.Policy.Enabled, prefix+":"+base+":"+tier) || containsFold(c.Policy.Enabled, prefix+":"+base) {
-				return true
-			}
-		}
+	if enabledModelID(c.Policy.Enabled, providers, aliases, tier) {
+		return true
 	}
 	for policyID, entry := range c.Policy.Models {
-		if entry.Identity == nil || (!strings.EqualFold(entry.Identity.Harness, provider) && !strings.EqualFold(entry.Identity.Provider, provider)) || !strings.EqualFold(entry.Identity.Model, modelName) || (entry.Identity.Tier != "" && !strings.EqualFold(entry.Identity.Tier, tier)) {
+		if entry.Identity == nil || (!strings.EqualFold(entry.Identity.Harness, provider) && !strings.EqualFold(entry.Identity.Provider, provider)) || entry.Identity.Model != modelName || (entry.Identity.Tier != "" && !strings.EqualFold(entry.Identity.Tier, tier)) {
 			continue
 		}
-		if containsFold(c.Policy.Enabled, strings.ToLower(policyID)+":"+tier) || containsFold(c.Policy.Enabled, strings.ToLower(policyID)) {
+		policyName := strings.SplitN(policyID, ":", 2)
+		if len(policyName) == 2 && enabledModelID(c.Policy.Enabled, []string{policyName[0]}, []string{policyName[1]}, tier) {
 			return true
 		}
 	}
 	if !known {
-		if containsFold(c.Policy.Enabled, provider+":"+modelName+":"+tier) || containsFold(c.Policy.Enabled, provider+":"+modelName) {
+		if enabledModelID(c.Policy.Enabled, []string{provider}, []string{modelName}, tier) {
 			return true
 		}
 	}
@@ -477,8 +470,8 @@ func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
 }
 
 func policyIDMatches(provider string, aliases []string, tier, policyID string) bool {
-	parts := strings.Split(strings.ToLower(policyID), ":")
-	if len(parts) < 2 || parts[0] != provider || (len(parts) == 3 && parts[2] != tier) {
+	parts := strings.Split(policyID, ":")
+	if len(parts) < 2 || !strings.EqualFold(parts[0], provider) || (len(parts) == 3 && !strings.EqualFold(parts[2], tier)) {
 		return false
 	}
 	for _, alias := range aliases {
@@ -493,10 +486,30 @@ func policyIDMatches(provider string, aliases []string, tier, policyID string) b
 	return false
 }
 
-func containsFold(values []string, value string) bool {
-	for _, candidate := range values {
-		if strings.EqualFold(candidate, value) {
-			return true
+func enabledModelID(enabled, providers, aliases []string, tier string) bool {
+	for _, policyID := range enabled {
+		parts := strings.Split(policyID, ":")
+		if len(parts) < 2 || len(parts) > 3 || (len(parts) == 3 && !strings.EqualFold(parts[2], tier)) {
+			continue
+		}
+		providerMatches := false
+		for _, provider := range providers {
+			if strings.EqualFold(parts[0], provider) {
+				providerMatches = true
+				break
+			}
+		}
+		if !providerMatches {
+			continue
+		}
+		for _, alias := range aliases {
+			base := alias
+			if index := strings.IndexByte(base, ':'); index >= 0 {
+				base = base[:index]
+			}
+			if parts[1] == base {
+				return true
+			}
 		}
 	}
 	return false

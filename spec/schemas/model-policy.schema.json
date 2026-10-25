@@ -8,12 +8,12 @@
     "default_enabled": { "type": "boolean" },
     "enabled": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._:-]*$" },
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._/-]*(:(low|med|high))?$" },
       "uniqueItems": true
     },
     "models": {
       "type": "object",
-      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._:-]*$" },
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._/-]*(:(low|med|high))?$" },
       "additionalProperties": {
         "type": "object",
         "required": ["kind"],

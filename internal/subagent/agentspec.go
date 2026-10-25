@@ -177,6 +177,9 @@ func validateExternalSessions(specs map[string]ExternalSessionSpec) error {
 }
 
 func loadAgentSpec() (agentSpec, error) {
+	if err := ensureModelCatalog(); err != nil {
+		return agentSpec{}, err
+	}
 	data, err := fs.ReadFile(harnez.DefaultFS, agentSpecPath)
 	if err != nil {
 		return agentSpec{}, fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)

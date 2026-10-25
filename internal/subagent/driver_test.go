@@ -260,6 +260,16 @@ func TestModelPolicyExplicitEnablementPrecedence(t *testing.T) {
 	}
 }
 
+func TestPiDirectIDPolicyEnablementPreservesCase(t *testing.T) {
+	catalog := loadTestModelPolicy(t, "version: 1\ndefault_enabled: false\nenabled: [pi:anthropic/Claude-Opus-4.6]\nmodels: {}\n")
+	if _, err := resolveModelWithCatalog(nil, catalog, "pi:anthropic/Claude-Opus-4.6"); err != nil {
+		t.Fatalf("enabled exact Pi ID rejected: %v", err)
+	}
+	if _, err := resolveModelWithCatalog(nil, catalog, "pi:anthropic/claude-opus-4.6"); err == nil || !strings.Contains(err.Error(), "disabled by user policy") {
+		t.Fatalf("case-changed Pi ID error = %v, want policy denial", err)
+	}
+}
+
 func loadTestModelPolicy(t *testing.T, policy string) *modelcatalog.Catalog {
 	t.Helper()
 	stateDir := t.TempDir()

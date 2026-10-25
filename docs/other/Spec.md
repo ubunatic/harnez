@@ -115,6 +115,13 @@ fallback. Snapshots use opaque non-empty IDs. Change report `before` and `after`
 refer to snapshot IDs; row `before`/`after` contain field values, and `field` is a
 dotted path relative to its model entry, such as `facts.api_cost`.
 
+Policy IDs keep a lowercase harness prefix (`pi`, for example), followed by a
+case-sensitive model ID. The model portion may include uppercase letters,
+slashes, dots, underscores, and hyphens so exact Pi IDs can be enabled; an
+optional final `:low`, `:med`, or `:high` selects a tier. Whitespace and an empty
+model ID are invalid. Runtime policy matching preserves model-ID case while
+comparing harness names and tiers without case sensitivity.
+
 ---
 
 ## 3. Architecture & Data Flow

@@ -1,0 +1,7 @@
+version: 1
+default_enabled: false
+enabled: [pi:anthropic/Claude-Opus-4.6]
+models:
+  "pi:anthropic/Claude-Opus-4.6":
+    kind: patch
+    enabled: true
