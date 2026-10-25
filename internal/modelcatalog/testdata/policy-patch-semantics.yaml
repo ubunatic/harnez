@@ -1,0 +1,12 @@
+version: 1
+default_enabled: false
+enabled: [codex:luna:high]
+models:
+  codex:luna:high:
+    kind: patch
+    fields:
+      purpose: null
+  custom:private-v1:
+    kind: custom
+    identity: {harness: custom, provider: local, model: private, version: "1"}
+    enabled: true

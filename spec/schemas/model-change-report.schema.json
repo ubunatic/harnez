@@ -5,20 +5,20 @@
   "required": ["version", "before", "after", "rows"],
   "properties": {
     "version": { "const": 1 },
-    "before": { "type": ["string", "null"] },
-    "after": { "type": "string", "minLength": 1 },
+    "before": { "type": ["string", "null"], "description": "Null for an initial report; otherwise the opaque ID of the previous snapshot." },
+    "after": { "type": "string", "minLength": 1, "description": "Opaque ID of the snapshot represented by this report." },
     "rows": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["category", "model", "field", "before", "after", "sources", "evidence", "severity"],
         "properties": {
-          "category": { "type": "string", "minLength": 1 },
+          "category": { "type": "string", "enum": ["model-added", "model-removed", "version", "cost", "capability", "access", "policy", "configuration"] },
           "model": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._:-]*$" },
-          "field": { "type": "string", "minLength": 1 },
+          "field": { "type": "string", "minLength": 1, "description": "Dotted path relative to the model entry, such as facts.api_cost or identity.version." },
           "before": {},
           "after": {},
-          "sources": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "sources": { "type": "array", "items": { "type": "string", "enum": ["spec-default", "web", "discovered", "measured", "user-declared"] } },
           "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "severity": { "type": "string", "enum": ["info", "warning", "error"] }
         },

@@ -23,7 +23,7 @@
         "source": { "type": "string", "enum": ["spec-default", "web", "discovered", "measured", "user-declared"] },
         "source_url": { "type": "string", "format": "uri" },
         "method": { "type": "string", "minLength": 1 },
-        "disputed": { "type": "boolean" },
+        "disputed": { "type": "boolean", "description": "Set by the evidence producer on an individual fact when credible observations conflict; readers retain and surface all facts and do not select one by array order." },
         "observed_at": {
           "type": "string",
           "format": "date-time",
@@ -34,8 +34,7 @@
       },
       "allOf": [
         { "if": { "properties": { "source": { "const": "web" } }, "required": ["source"] }, "then": { "required": ["source_url"] } },
-        { "if": { "properties": { "source": { "const": "discovered" } }, "required": ["source"] }, "then": { "required": ["method", "account"] } },
-        { "if": { "properties": { "source": { "const": "measured" } }, "required": ["source"] }, "then": { "properties": { "evidence": { "minItems": 1 } } } }
+        { "if": { "properties": { "source": { "const": "discovered" } }, "required": ["source"] }, "then": { "required": ["method", "account"] } }
       ],
       "additionalProperties": false
     },

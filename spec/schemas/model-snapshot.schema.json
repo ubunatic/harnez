@@ -5,7 +5,7 @@
   "required": ["version", "id", "created_at", "previous", "effective_catalog", "access", "policy", "applied"],
   "properties": {
     "version": { "const": 1 },
-    "id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1, "description": "Opaque non-empty identifier for this immutable snapshot; report references use this value." },
     "created_at": { "type": "string", "format": "date-time" },
     "previous": { "type": ["string", "null"] },
     "effective_catalog": { "$ref": "models.schema.json" },

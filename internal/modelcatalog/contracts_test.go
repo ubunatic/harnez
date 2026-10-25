@@ -2,7 +2,6 @@ package modelcatalog
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/fs"
 	"net/url"
 	"os"
@@ -28,11 +27,12 @@ func TestContractFixtures(t *testing.T) {
 		{fixture: "models-unknown-key.yaml", schema: "models.schema.json", wantPath: "models.schema.json", wantKeyword: "unexpected additional properties"},
 		{fixture: "models-fact-unknown-key.yaml", schema: "models.schema.json", wantPath: "models.schema.json", wantKeyword: "unexpected additional properties"},
 		{fixture: "models-negative-price.yaml", schema: "models.schema.json", wantPath: "/properties/value", wantKeyword: "exclusiveMinimum"},
+		{fixture: "models-negative-api-price.yaml", schema: "models.schema.json", wantPath: "/properties/input_per_million", wantKeyword: "minimum"},
 		{fixture: "models-zero-relative-cost.yaml", schema: "models.schema.json", wantPath: "/properties/value", wantKeyword: "exclusiveMinimum"},
 		{fixture: "models-web-without-url.yaml", schema: "models.schema.json", wantPath: "/$defs/fact/allOf/0/then", wantKeyword: "required"},
-		{fixture: "models-discovered-incomplete.yaml", schema: "models.schema.json", wantPath: "/$defs/fact/allOf/1/then", wantKeyword: "required"},
-		{fixture: "models-discovered-without-time.yaml", schema: "models.schema.json", wantPath: "/$defs/fact", wantKeyword: "observed_at"},
-		{fixture: "models-measured-without-evidence.yaml", schema: "models.schema.json", wantPath: "/then/properties/evidence", wantKeyword: "minItems"},
+		{fixture: "models-discovered-without-method.yaml", schema: "models.schema.json", wantPath: "/$defs/fact/allOf/1/then", wantKeyword: "method"},
+		{fixture: "models-discovered-without-account.yaml", schema: "models.schema.json", wantPath: "/$defs/fact/allOf/1/then", wantKeyword: "account"},
+		{fixture: "models-measured-without-evidence.yaml", schema: "models.schema.json", wantPath: "/properties/evidence", wantKeyword: "minItems"},
 		{fixture: "models-bad-tier.yaml", schema: "models.schema.json", wantPath: "/properties/tier", wantKeyword: "enum"},
 		{fixture: "models-bad-observed-at.yaml", schema: "models.schema.json", wantPath: "/properties/observed_at", wantKeyword: "pattern"},
 		{fixture: "policy-valid.yaml", schema: "model-policy.schema.json", valid: true, checkPin: true},
@@ -45,6 +45,9 @@ func TestContractFixtures(t *testing.T) {
 		{fixture: "snapshot-valid.yaml", schema: "model-snapshot.schema.json", valid: true},
 		{fixture: "snapshot-unknown-key.yaml", schema: "model-snapshot.schema.json", wantPath: "model-snapshot.schema.json", wantKeyword: "unexpected additional properties"},
 		{fixture: "change-report-valid.yaml", schema: "model-change-report.schema.json", valid: true},
+		{fixture: "change-report-bad-category.yaml", schema: "model-change-report.schema.json", wantPath: "/properties/category", wantKeyword: "enum"},
+		{fixture: "change-report-bad-source.yaml", schema: "model-change-report.schema.json", wantPath: "/properties/sources/items", wantKeyword: "enum"},
+		{fixture: "policy-patch-semantics.yaml", schema: "model-policy.schema.json", valid: true},
 		{fixture: "change-report-unknown-key.yaml", schema: "model-change-report.schema.json", wantPath: "/properties/rows/items", wantKeyword: "unexpected additional properties"},
 	}
 	for _, tc := range tests {
@@ -59,7 +62,7 @@ func TestContractFixtures(t *testing.T) {
 			}
 			err = validate(t, tc.schema, doc)
 			if err == nil && tc.checkPin {
-				err = validatePolicyPins(doc)
+				err = ValidatePolicyPins(doc)
 			}
 			if tc.valid && err != nil {
 				t.Fatalf("valid fixture rejected: %v", err)
@@ -72,24 +75,6 @@ func TestContractFixtures(t *testing.T) {
 			}
 		})
 	}
-}
-
-func validatePolicyPins(document any) error {
-	root, ok := document.(map[string]any)
-	if !ok {
-		return fmt.Errorf("policy must be an object")
-	}
-	models, _ := root["models"].(map[string]any)
-	for modelID, raw := range models {
-		entry, _ := raw.(map[string]any)
-		pin, hasPin := entry["version_pin"].(string)
-		identity, _ := entry["identity"].(map[string]any)
-		version, hasVersion := identity["version"].(string)
-		if hasPin && hasVersion && pin != version {
-			return fmt.Errorf("models.%s.version_pin does not match identity.version %q", modelID, version)
-		}
-	}
-	return nil
 }
 
 func TestLegacyAgentCatalogStillMatchesSchemaAndProbeBudget(t *testing.T) {
