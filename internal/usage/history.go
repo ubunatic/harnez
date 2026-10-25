@@ -9,11 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"syscall"
 	"time"
+
+	"ubunatic.com/harnez/internal/sshutil"
 )
 
 // historyDirName is where per-host usage snapshots are appended. Copying
@@ -697,16 +698,13 @@ func RenderTimelineJSON(entries []HistoryEntry) (string, error) {
 	return string(data), nil
 }
 
-var validSSHHostRe = regexp.MustCompile(`^[a-zA-Z0-9_.\-@:]+$`)
-
 // FetchRemoteHistory fetches remote usage history *.jsonl files from an SSH host into localDir.
 // It triggers a fresh remote snapshot over SSH beforehand so the fetched files are up-to-date.
 func FetchRemoteHistory(ctx context.Context, sshHost string, localDir string, out io.Writer) ([]string, error) {
-	sshHost = strings.TrimSpace(sshHost)
 	if sshHost == "" {
 		return nil, fmt.Errorf("ssh host cannot be empty")
 	}
-	if !validSSHHostRe.MatchString(sshHost) || strings.HasPrefix(sshHost, "-") {
+	if !sshutil.ValidHost(sshHost) {
 		return nil, fmt.Errorf("invalid ssh host %q", sshHost)
 	}
 

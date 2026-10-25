@@ -10,6 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/sshutil"
 )
 
 type Config struct {
@@ -86,7 +87,7 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("spec/server.yaml: socket_path must be a filename")
 	}
 	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes, TelemetryPath: raw.TelemetryPath, TelemetrySpoolPath: raw.TelemetrySpoolPath, TelemetrySpoolMaxBytes: raw.TelemetrySpoolMaxBytes, SystemdUnitName: raw.SystemdUnitName, SystemdUnitSource: raw.SystemdUnitSource, SystemdRestartPolicy: raw.SystemdRestartPolicy, DefaultLogLines: raw.DefaultLogLines}
-	if !strings.HasPrefix(raw.RemoteUpgrade.InstallPath, "~/") || strings.Contains(raw.RemoteUpgrade.InstallPath, "..") || strings.ContainsAny(raw.RemoteUpgrade.InstallPath, "'\"`$;|&<>\\") {
+	if !sshutil.ValidInstallPath(raw.RemoteUpgrade.InstallPath) {
 		return Config{}, fmt.Errorf("spec/server.yaml: remote_upgrade.install_path must be a safe path under the remote home directory")
 	}
 	cfg.RemoteUpgrade.InstallPath = raw.RemoteUpgrade.InstallPath

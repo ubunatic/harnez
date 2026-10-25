@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"ubunatic.com/harnez/internal/sshutil"
 )
 
 // loadStreamInterval is the cadence at which `harnez load-stream` (the
@@ -120,11 +122,10 @@ type controlMaster struct {
 // for (Decision §4), so a unique path per call is simplest and avoids any
 // collision between concurrent --watch sessions.
 func newControlMaster(host string) (*controlMaster, error) {
-	host = strings.TrimSpace(host)
 	if host == "" {
 		return nil, fmt.Errorf("ssh host cannot be empty")
 	}
-	if !validSSHHostRe.MatchString(host) || strings.HasPrefix(host, "-") {
+	if !sshutil.ValidHost(host) {
 		return nil, fmt.Errorf("invalid ssh host %q", host)
 	}
 

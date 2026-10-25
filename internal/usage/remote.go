@@ -53,12 +53,11 @@ func collectRemote(ctx context.Context, host string, includeProcs bool, progress
 }
 
 func doCollectRemote(ctx context.Context, host string, includeProcs bool) (UsageSummary, *AgentProcessCount, error) {
-	host = strings.TrimSpace(host)
 	if host == "" {
 		err := fmt.Errorf("ssh host cannot be empty")
 		return makeRemoteFallbackSummary(host, err), nil, err
 	}
-	if !validSSHHostRe.MatchString(host) || strings.HasPrefix(host, "-") {
+	if !sshutil.ValidHost(host) {
 		err := fmt.Errorf("invalid ssh host %q", host)
 		return makeRemoteFallbackSummary(host, err), nil, err
 	}
@@ -123,8 +122,7 @@ func collectRemoteLoadSnapshotRaw(ctx context.Context, host string) (*LoadSnapsh
 }
 
 func collectRemoteLoadStreamSample(ctx context.Context, host string) (*LoadSnapshot, error) {
-	host = strings.TrimSpace(host)
-	if host == "" || !validSSHHostRe.MatchString(host) || strings.HasPrefix(host, "-") {
+	if !sshutil.ValidHost(host) {
 		return nil, fmt.Errorf("invalid ssh host %q", host)
 	}
 	commandTimeout, connectTimeout, err := RemoteCommandTimeouts()

@@ -5,8 +5,34 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 )
+
+var hostPattern = regexp.MustCompile(`^[a-zA-Z0-9_.@:-]+$`)
+
+// ValidHost accepts SSH aliases and user@host destinations while rejecting
+// option-like values and characters that can alter command parsing.
+func ValidHost(host string) bool {
+	return host != "" && !strings.HasPrefix(host, "-") && hostPattern.MatchString(host)
+}
+
+var installPathPattern = regexp.MustCompile(`^~/[A-Za-z0-9_./-]+$`)
+
+// ValidInstallPath accepts a home-relative path safe to place in remote shell
+// commands. Components may not traverse to a parent directory.
+func ValidInstallPath(path string) bool {
+	if !installPathPattern.MatchString(path) {
+		return false
+	}
+	for _, component := range strings.Split(strings.TrimPrefix(path, "~/"), "/") {
+		if component == ".." || component == "" {
+			return false
+		}
+	}
+	return true
+}
 
 // Options explicitly loads the user's config when present, including in a
 // systemd sandbox where SSH's implicit config discovery can skip it.

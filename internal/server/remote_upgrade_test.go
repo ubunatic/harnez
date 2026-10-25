@@ -52,6 +52,52 @@ func TestLoadConfigRemoteUpgradeSettings(t *testing.T) {
 	}
 }
 
+func TestRemoteUpgradeRejectsInvalidDestinationAndPathBeforeSubprocess(t *testing.T) {
+	for _, test := range []struct {
+		name, host, installPath string
+	}{
+		{"leading dash", "-oProxyCommand=touch", "~/go/bin/harnez"},
+		{"newline host", "host\ncommand", "~/go/bin/harnez"},
+		{"whitespace path", "host", "~/go/bin/my harnez"},
+		{"shell path", "host", "~/go/bin/$(id)"},
+		{"glob path", "host", "~/go/bin/*"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			runner := func(context.Context, string, ...string) ([]byte, error) {
+				calls++
+				return nil, nil
+			}
+			(remoteBinaryUpgrader{config: RemoteUpgradeConfig{InstallPath: test.installPath}, run: runner}).upgrade(context.Background(), test.host, "1.2.3+4", "linux", "amd64", "unused")
+			if calls != 0 {
+				t.Fatalf("subprocess calls = %d, want 0", calls)
+			}
+		})
+	}
+}
+
+func TestRemoteUpgradePassesValidatedDestinationAsSSHOperand(t *testing.T) {
+	for _, host := range []string{"x600", "user@host"} {
+		t.Run(host, func(t *testing.T) {
+			var got []string
+			runner := func(_ context.Context, name string, args ...string) ([]byte, error) {
+				if name != "ssh" {
+					t.Fatalf("unexpected command %q", name)
+				}
+				got = append([]string(nil), args...)
+				return []byte("Linux x86_64"), nil
+			}
+			(remoteBinaryUpgrader{config: RemoteUpgradeConfig{InstallPath: "~/go/bin/harnez"}, run: runner}).upgrade(context.Background(), host, "1.2.3+4", "linux", "amd64", "unused")
+			for i, arg := range got {
+				if arg == host && i == len(got)-2 && strings.HasSuffix(got[i+1], " --version") {
+					return
+				}
+			}
+			t.Fatalf("SSH args = %q; missing exact destination before probe", got)
+		})
+	}
+}
+
 func TestStartRemoteBinaryUpgradeRunsInBackgroundAndStopsWithContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -61,7 +107,7 @@ func TestStartRemoteBinaryUpgradeRunsInBackgroundAndStopsWithContext(t *testing.
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
-	done := startRemoteBinaryUpgrade(ctx, "host", RemoteUpgradeConfig{CommandTimeout: time.Minute}, "1.2.3+4", "linux", "amd64", "unused", nil, runner)
+	done := startRemoteBinaryUpgrade(ctx, "host", RemoteUpgradeConfig{InstallPath: "~/go/bin/harnez", CommandTimeout: time.Minute}, "1.2.3+4", "linux", "amd64", "unused", nil, runner)
 	select {
 	case <-started:
 	case <-time.After(time.Second):
@@ -198,7 +244,7 @@ func TestRemoteUpgradeUsesSSHConfigForSSHAndSCP(t *testing.T) {
 			}
 			if !hasConfig {
 				for _, call := range calls {
-					if call[0] == "ssh" && len(call) > 1 && call[len(call)-1] == "~/go/bin/harnez --version" {
+					if call[0] == "ssh" && len(call) > 1 && call[len(call)-1] == `"$HOME"/'go/bin/harnez' --version` {
 						return // A working key without an agent still reaches the version probe.
 					}
 				}
@@ -216,7 +262,7 @@ func TestRemoteUpgradeLogsClearSkipForMissingSSHAuthentication(t *testing.T) {
 		calls++
 		return []byte("Permission denied (publickey)."), errors.New("exit status 255")
 	}
-	(remoteBinaryUpgrader{config: RemoteUpgradeConfig{}, run: runner, log: &logs}).upgrade(context.Background(), "example", "0.2.1+20", "linux", "amd64", "unused")
+	(remoteBinaryUpgrader{config: RemoteUpgradeConfig{InstallPath: "~/go/bin/harnez"}, run: runner, log: &logs}).upgrade(context.Background(), "example", "0.2.1+20", "linux", "amd64", "unused")
 	if calls != 1 {
 		t.Fatalf("SSH calls = %d, want one failed probe", calls)
 	}

@@ -139,7 +139,8 @@ func sshAuthenticationFailed(output []byte) bool {
 }
 
 func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, goos, goarch, executable string) {
-	if strings.TrimSpace(host) == "" {
+	if !sshutil.ValidHost(host) || !sshutil.ValidInstallPath(u.config.InstallPath) {
+		u.printf("remote upgrade: invalid destination or install path; skipping\n")
 		return
 	}
 	local, ok := parseRemoteBuildVersion(localVersion)
@@ -165,7 +166,7 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 		return
 	}
 	remoteVersionCtx, cancel := context.WithTimeout(ctx, u.config.CommandTimeout)
-	versionOutput, err := u.run(remoteVersionCtx, "ssh", append(sshArgs, u.config.InstallPath+" --version")...)
+	versionOutput, err := u.run(remoteVersionCtx, "ssh", append(sshArgs, remoteShellPath(u.config.InstallPath)+" --version")...)
 	cancel()
 	if err != nil {
 		u.printf("remote upgrade: %s version probe failed: %s\n", host, commandFailure(versionOutput, err))
@@ -203,7 +204,7 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 		return
 	}
 	remoteDir := path.Dir(u.config.InstallPath)
-	installCmd := fmt.Sprintf("mkdir -p %s && chmod %04o %s && mv -f %s %s", remoteDir, info.Mode().Perm(), tempPath, tempPath, u.config.InstallPath)
+	installCmd := fmt.Sprintf("mkdir -p %s && chmod %04o %s && mv -f %s %s", remoteShellPath(remoteDir), info.Mode().Perm(), remoteShellPath(tempPath), remoteShellPath(tempPath), remoteShellPath(u.config.InstallPath))
 	installCtx, cancel := context.WithTimeout(ctx, u.config.CommandTimeout)
 	installOutput, installErr := u.run(installCtx, "ssh", append(sshArgs, installCmd)...)
 	cancel()
@@ -212,6 +213,10 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 		return
 	}
 	u.printf("remote upgrade: installed %s on %s\n", localVersion, host)
+}
+
+func remoteShellPath(path string) string {
+	return `"$HOME"/` + "'" + strings.TrimPrefix(path, "~/") + "'"
 }
 
 func (u remoteBinaryUpgrader) printf(format string, args ...any) {
