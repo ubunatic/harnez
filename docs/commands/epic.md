@@ -75,6 +75,10 @@ Each task becomes a subticket (`/issue`) with acceptance, write set, and:
 - Developer tier: haiku for well-specified, machine-checkable work; sol for judgment.
 - Architect only when the design is open (`/lean-sprint` §1.5 tiers).
 - Reviewer: opus/sol reviewer for risky work; orchestrator diff review for small work.
+- No schema-only tasks: a task that defines a file format, JSON schema or data model also ships the
+  first code that reads or writes it, with a visible result (a command's output or a written file).
+  A format without a user cannot be reviewed against real needs and gets redesigned later (epic 942:
+  schemas first, then a loader ticket that took 6 review rounds; re-cut into thin slices).
 - Ask each allocated worker to report the allocated ticket number and confirm that every
   actionable study/retro follow-up was filed and linked; the study must list those numbers.
 
