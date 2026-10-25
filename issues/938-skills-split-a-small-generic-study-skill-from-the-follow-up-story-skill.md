@@ -1,6 +1,6 @@
 # 938 — skills: split a small generic study skill from the follow-up story skill
 
-**Status**: Open
+**Status**: Closed — M2 refinements committed as 2428d1de; make test-q1 passed with no --- FAIL entries in /tmp/harnez-938-m2-test-q1.log, and make install && harnez apply installed and verified both skills.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
