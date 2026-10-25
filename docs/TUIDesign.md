@@ -113,6 +113,8 @@ Example worker directive: “Implement the TUI layout to match
 - **Removing a panel frees its hotkey; do not renumber the rest.** When boxes 2-5 went,
   keys 6/7/8 kept their numbers so muscle memory and docs stay valid. The hidden-panel
   count only shows in modes whose spec sets `hidden_list: true`.
+  Exception (issue 922): the Load box moved from `7` to `l`/`L` so its key matches its
+  `[L]` title. `7` is now unbound, and the fetch diagnostics overlay moved to `d`/`D`.
 
 ## References
 
