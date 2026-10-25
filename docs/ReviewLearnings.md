@@ -66,3 +66,6 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   855 M2 listed "a later non-interactive run can re-enable a tracker disabled in the wizard" as an open
   point; the reviewer rated it a blocker (the goal says init keeps working from config). Check each
   reported open point against the ticket's `/goal` before closing.
+- **Only cite numbers read in the same turn**: a commit hash, count or measurement in a report comes from a
+  tool output of that turn, never from memory. 852 (2026-10-24): the host reported "commit 2f…" before the
+  lookup; the real hash was 98badd77.

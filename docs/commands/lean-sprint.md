@@ -98,7 +98,8 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
     that add up, parts that don't exceed the whole, no field holding another field's data, no silent
     zeros for missing data, and no rows that vanish. Record implausible values as pre-work for the
     next milestone. (Sprint 519: green tests hid "new input" holding total input and a 43% drain on
-    one session.)
+    one session.) Before a reviewer's number becomes an expected value in pre-work, check it against
+    the raw source. (878 M3: pre-work said "expect 119" from a reviewer count; the raw JSONL gave 128.)
   - For user-visible output, the host runs the installed binary itself (several runs, a pty for
     interactive views) and compares every expected row. A developer's pasted output or "closed" is
     not evidence. (Sprint 657: a dev closed the ticket claiming all providers rendered; live compact
@@ -118,7 +119,9 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - The host does **NOT** modify code files.
   - The host updates the ticket: records milestone $N$ delivery summary, naming the milestone ("M2 delivered: flag and schema gating").
   - If adjustments, test hardenings, or nuances are required, the host documents them directly in the ticket under Milestone $N+1$ as **"Pre-Work / Required Refinements"**.
-  - Commit the ticket update immediately.
+  - Commit the ticket update immediately. Resume the developer only after that edit and commit
+    succeeded, in a later call, never chained in the same batch. (878: a pre-work edit on a wrong path
+    nearly sent the developer to a section that did not exist.)
 
 ### 5. Milestone Advance or Completion
 - The developer agent picks up the updated ticket for Milestone $N+1$ (resumed via `harnez agent resume --name <session_id> "<pre_work_and_milestone_prompt>"` or native subagent message), executes the embedded pre-work first, and then proceeds with Milestone $N+1$ implementation.
