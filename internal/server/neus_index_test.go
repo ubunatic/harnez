@@ -16,6 +16,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/sshutil"
 )
 
 func indexConfig(t *testing.T) NeusIndexConfig {
@@ -239,5 +240,44 @@ func TestServerSpecSchemaIncludesNeusIndexing(t *testing.T) {
 	}
 	if err := resolved.Validate(doc); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestServerInstallPathSchemaParity(t *testing.T) {
+	data, err := harnez.DefaultFS.ReadFile("spec/schemas/server.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(data, &schema); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, installPath := range []string{"/./tmp/x", "/var/./tmp/x", "~/./x", "/a/./b"} {
+		t.Run(installPath, func(t *testing.T) {
+			doc := map[string]any{
+				"socket_path":         "server.sock",
+				"read_header_timeout": "1s", "shutdown_timeout": "1s", "http_client_timeout": "1s",
+				"probe_timeout": "1s", "usage_deadline": "1s", "update_timeout": "1s", "update_max_body_bytes": 1,
+				"telemetry_update_path": "/update", "telemetry_spool_path": "spool", "telemetry_spool_max_bytes": 1,
+				"startup_timeout": "1s", "startup_poll_interval": "1s", "takeover_timeout": "1s",
+				"systemd_unit_name": "harnez.service", "systemd_unit_source": "systemd/harnez.service",
+				"systemd_restart_policy": "on-failure", "systemd_restart_delay": "1s", "telemetry_warning_rate_limit": "1s",
+				"default_log_lines": 1,
+				"remote_upgrade": map[string]any{
+					"install_path": installPath, "connect_timeout": "1s", "command_timeout": "1s", "transfer_timeout": "1s",
+				},
+				"neus_indexing": map[string]any{"enabled": false, "interval": "1s", "timeout": "1s", "command": []any{"neus"}, "service_name": "neus.service", "repos": []any{}},
+			}
+			if err := resolved.Validate(doc); err == nil {
+				t.Errorf("schema accepted invalid install_path %q", installPath)
+			}
+			if sshutil.ValidInstallPath(installPath) {
+				t.Errorf("runtime accepted invalid install_path %q", installPath)
+			}
+		})
 	}
 }

@@ -33,7 +33,7 @@ func ValidInstallPath(path string) bool {
 		components = strings.Split(strings.TrimPrefix(path, "/"), "/")
 	}
 	for _, component := range components {
-		if component == ".." || component == "" {
+		if component == ".." || component == "." || component == "" {
 			return false
 		}
 	}
