@@ -1,6 +1,6 @@
 # 928 — Harden remote upgrade destination and install command validation
 
-**Status**: Open
+**Status**: Closed — 70072b79: rejects unsafe SSH destinations and install paths; touched packages and make test-q1 passed, make install completed
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
