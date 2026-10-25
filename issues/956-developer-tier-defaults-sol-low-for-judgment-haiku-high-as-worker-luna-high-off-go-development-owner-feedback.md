@@ -27,6 +27,10 @@ progress, clear the goal and write a failure report here.
 
 Cited sources were named only as sites (Anthropic, Command Code, Miraflow AI, OpenRouter, Eigent AI), no URLs.
 
+## Canary result (2026-10-25)
+
+Probed installed Claude Code 2.1.310 with the exact print-mode invocation shape (`claude -p --model haiku --effort low --dangerously-skip-permissions --allowedTools Bash --output-format json`) and child environment `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=10`. The prompt asked Haiku to generate 50,000 tokens locally through one Bash call. Claude completed without a `compact_boundary`; usage reported `contextWindow: 1000000` and about 52,649 input/cache tokens. At a 100k window with 10% override, compaction should have occurred near 10k, so this probe does not show `-p` honoring the requested settings. Stop item 4; no Claude driver env changes or per-model compact values are planned on this evidence. The probe cost was about $0.006.
+
 ## Counter-evidence to weigh (this session)
 
 luna:high (codex) delivered 952 (usage staleness, 12 Go files) in one round with a green full run; sol:med
