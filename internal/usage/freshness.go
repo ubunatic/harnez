@@ -6,8 +6,8 @@ func usageSnapshotAgeLabel(at, now time.Time) string {
 	return snapshotAgeLabel(at, now, DefaultCacheStaleness())
 }
 
-// remoteLoadAgeLabel labels when a remote load snapshot was written, marking it
-// stale once it is at least the remote staleness threshold old (issue 879 M2b).
+// remoteLoadAgeLabel labels when a remote load snapshot was observed, marking it
+// stale once it is at least the remote staleness threshold old (issue 929).
 // Quota freshness keeps its own threshold; only the remote box uses this one.
 func remoteLoadAgeLabel(updatedAt, now time.Time) string {
 	return snapshotAgeLabel(updatedAt, now, remoteLoadStaleness())

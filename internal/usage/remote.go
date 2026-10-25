@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -118,11 +119,63 @@ func CollectRemoteLoadSnapshot(ctx context.Context, host string) (*LoadSnapshot,
 }
 
 func collectRemoteLoadSnapshotRaw(ctx context.Context, host string) (*LoadSnapshot, error) {
-	summary, _, err := CollectRemote(ctx, host, false)
+	return collectRemoteLoadStreamSample(ctx, host)
+}
+
+func collectRemoteLoadStreamSample(ctx context.Context, host string) (*LoadSnapshot, error) {
+	host = strings.TrimSpace(host)
+	if host == "" || !validSSHHostRe.MatchString(host) || strings.HasPrefix(host, "-") {
+		return nil, fmt.Errorf("invalid ssh host %q", host)
+	}
+	commandTimeout, connectTimeout, err := RemoteCommandTimeouts()
 	if err != nil {
 		return nil, err
 	}
-	return summary.Load, nil
+	commandCtx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	args := append(sshutil.Options(connectTimeout), host, remoteLoadStreamCmd)
+	cmd := exec.CommandContext(commandCtx, "ssh", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("read remote load stream from %s: %w", host, err)
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start remote load stream on %s: %w", host, err)
+	}
+	var line []byte
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	hasSample := scanner.Scan()
+	if hasSample {
+		line = append(line, scanner.Bytes()...)
+	}
+	_ = cmd.Process.Kill()
+	waitErr := cmd.Wait()
+	if !hasSample {
+		message := strings.TrimSpace(stderr.String())
+		if message == "" {
+			if scanner.Err() != nil {
+				message = scanner.Err().Error()
+			}
+		}
+		if commandCtx.Err() != nil {
+			message = commandCtx.Err().Error()
+		}
+		if message == "" && waitErr != nil {
+			message = waitErr.Error()
+		}
+		return nil, fmt.Errorf("remote load stream from %s failed: %s", host, message)
+	}
+	var snapshot LoadSnapshot
+	if err := json.Unmarshal(line, &snapshot); err != nil {
+		return nil, fmt.Errorf("parse remote load sample from %s: %w", host, err)
+	}
+	if snapshot.ObservedAt.IsZero() {
+		return nil, fmt.Errorf("remote load sample from %s has no observation time", host)
+	}
+	return &snapshot, nil
 }
 
 func sshConnectTimeoutOption() string {

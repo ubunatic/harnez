@@ -55,6 +55,7 @@ func RunLoadStream(ctx context.Context, out io.Writer, in io.Reader) error {
 
 	for {
 		snap := CollectLoadSnapshot()
+		snap.ObservedAt = time.Now().UTC()
 		data, err := json.Marshal(snap)
 		if err == nil {
 			w.Write(data)

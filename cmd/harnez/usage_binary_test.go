@@ -447,7 +447,7 @@ func TestCollectorRecoversRemoteLoadForOneShot(t *testing.T) {
 	marker := filepath.Join(root, "ssh-parent-pids")
 	failed := filepath.Join(root, "ssh-failed")
 	recovered := filepath.Join(root, "ssh-recovered")
-	const snapshot = `{"timestamp":"2026-10-24T12:00:00Z","load":{"cpu":{"NumCPU":8,"CPUPercent":42,"CPUPercentOk":true,"Ok":true}}}`
+	const snapshot = `{"cpu":{"NumCPU":8,"CPUPercent":42,"CPUPercentOk":true,"Ok":true,"Memory":{"UsedMiB":1024,"TotalMiB":4096,"SwapKnown":true}},"observed_at":"2026-10-25T12:00:00Z"}`
 	// The fake host refuses connections until the test creates recovered. The
 	// failed marker is written only on a refused call, so the test can tell the
 	// collector has seen the outage before it recovers the host.
