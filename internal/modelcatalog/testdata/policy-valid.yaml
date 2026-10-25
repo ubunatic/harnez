@@ -8,5 +8,4 @@ models:
     version_pin: "7.2"
     fields:
       aliases: []
-      capabilities: []
       tier: null

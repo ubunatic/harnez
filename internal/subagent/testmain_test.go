@@ -21,7 +21,11 @@ func TestMain(m *testing.M) {
 	_ = os.MkdirAll(filepath.Join(home, "runtime"), 0o700)
 	for _, pair := range os.Environ() {
 		if strings.HasPrefix(pair, "HARNEZ_") {
-			_ = os.Unsetenv(strings.SplitN(pair, "=", 2)[0])
+			name := strings.SplitN(pair, "=", 2)[0]
+			if name == "HARNEZ_PTY_RESIZE_CHILD" {
+				continue
+			}
+			_ = os.Unsetenv(name)
 		}
 	}
 	code := m.Run()

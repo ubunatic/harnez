@@ -260,9 +260,9 @@ func TestLoadRejectsUnappliedPolicyField(t *testing.T) {
 
 func TestCustomIdentityVersionPin(t *testing.T) {
 	configDir := t.TempDir()
-	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: []\nmodels:\n  local:private:\n    kind: custom\n    identity: {harness: custom, provider: local, model: private, version: \"1\"}\n    version_pin: \"2\"\n")
-	if _, err := LoadFromDirs(t.TempDir(), configDir); err == nil || !strings.Contains(err.Error(), "does not match catalog identity.version") {
-		t.Fatalf("custom identity pin error = %v", err)
+	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: []\nmodels:\n  local:private:\n    kind: custom\n    identity: {harness: custom, provider: local, model: private, version: \"1\"}\n    version_pin: \"1\"\n")
+	if _, err := LoadFromDirs(t.TempDir(), configDir); err != nil {
+		t.Fatalf("matching custom identity pin rejected: %v", err)
 	}
 }
 

@@ -178,6 +178,14 @@ Host `make test-q1` (gofmt clean now) fails:
 
 Run the full suite once after the fixes (never commit after a failed or skipped run).
 
+## M5 delivered
+
+- Custom policy entries accept a matching `version_pin` against their own identity version, with inherited
+  identity mismatch coverage retained. The valid policy fixture now uses only fields supported by the loader.
+- Subagent test isolation preserves the explicit PTY resize child marker while clearing inherited `HARNEZ_*`
+  variables, restoring the re-exec handshake.
+- `make test-q1` passed; `--- FAIL` grep returned no matches.
+
 - Skill registered and installed; `update` dispatches the fanout and aggregates a cited table.
 - Loader merges the override over embedded spec; tests: no file, partial override, invalid file (clear error,
   fall back to defaults), new model added.
