@@ -27,10 +27,12 @@ developed since then, not only the current session.
    retries and loops, live checks that caught what tests missed, wasted cycles, host rule slips. The expectation is
    rising smoothness as the harness and companion tools mature; say plainly when it did not rise and why.
 5. Write it with the required sections below, linking the previous story and the sub-studies it summarizes.
-6. **Second-vendor review.** A `kind: story` story gets a dedicated read-only review by a model from a different
-   vendor than the writer (e.g. a Claude writer → `sol:med` via `harnez agent start --role reviewer`). The reviewer
-   checks numbers, delivered tickets, post-mortem honesty and verdicts against git and the tracker. Apply the
-   accepted corrections and note the review (reviewer model, findings fixed) in the story's header.
+6. **Second-vendor review.** A `kind: story` story gets a dedicated read-only review
+   (`harnez agent start --role reviewer`) by a model from a different vendor than the writer, at a high tier: not a
+   low-cost tier and not the most expensive one; pick from the current lineup. The reviewer checks numbers,
+   delivered tickets, post-mortem honesty and verdicts against git and the tracker. A low-cost helper may gather
+   raw facts (counts, ticket states) first; verdicts stay with the reviewer. Apply the accepted corrections and
+   note the review (reviewer model, findings fixed) in the story's header.
 
 ## Output Location & Naming
 - Path: `docs/studies/<YYYY-MM-DD>-<kebab-case-title>.md`
