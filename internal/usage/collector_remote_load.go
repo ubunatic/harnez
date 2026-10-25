@@ -70,15 +70,31 @@ func configuredRemoteLoadPoll(homeDir string, out io.Writer) *remoteLoadPollOpti
 // the detached cadence while no UI is active.
 func runRemoteLoadPoller(ctx context.Context, opt remoteLoadPollOptions) {
 	retryDelay := opt.Initial
+	failing := false
 	for ctx.Err() == nil {
 		snap, err := opt.Collect(ctx, opt.Host)
+		if ctx.Err() != nil {
+			return
+		}
 		if err == nil && snap != nil {
+			if failing {
+				fmt.Fprintf(opt.Out, "harnez server: remote load %s recovered\n", opt.Host)
+				failing = false
+			}
 			if writeErr := WriteCachedRemoteLoad(opt.Host, snap); writeErr != nil {
 				fmt.Fprintf(opt.Out, "harnez server: remote load cache write failed: %v\n", writeErr)
 			}
 			retryDelay = opt.Initial
 			opt.wait(ctx, opt.pollInterval())
 			continue
+		}
+		if !failing {
+			message := "empty load snapshot"
+			if err != nil {
+				message = strings.TrimSpace(err.Error())
+			}
+			fmt.Fprintf(opt.Out, "harnez server: remote load %s failed: %s\n", opt.Host, message)
+			failing = true
 		}
 		delay := retryDelay
 		if interval := opt.pollInterval(); interval > delay {

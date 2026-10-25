@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/sshutil"
 )
 
 type remoteCommandRunner func(context.Context, string, ...string) ([]byte, error)
@@ -121,22 +121,6 @@ func runRemoteCommand(ctx context.Context, name string, args ...string) ([]byte,
 	return exec.CommandContext(ctx, name, args...).CombinedOutput()
 }
 
-func sshConnectTimeout(timeout time.Duration) string {
-	return strconv.Itoa(int(math.Ceil(timeout.Seconds())))
-}
-
-func sshConfigArgs() []string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-	config := filepath.Join(home, ".ssh", "config")
-	if info, err := os.Stat(config); err == nil && info.Mode().IsRegular() {
-		return []string{"-F", config}
-	}
-	return nil
-}
-
 func commandFailure(output []byte, err error) string {
 	message := strings.TrimSpace(string(output))
 	if message != "" {
@@ -163,8 +147,7 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 		u.printf("remote upgrade: local build version %q has no comparable commit count; skipping %s\n", localVersion, host)
 		return
 	}
-	connectTimeout := sshConnectTimeout(u.config.ConnectTimeout)
-	sshOptions := append(sshConfigArgs(), "-o", "BatchMode=yes", "-o", "ConnectTimeout="+connectTimeout)
+	sshOptions := sshutil.Options(u.config.ConnectTimeout)
 	sshArgs := append(append([]string(nil), sshOptions...), host)
 	commandCtx, cancel := context.WithTimeout(ctx, u.config.CommandTimeout)
 	platform, err := u.run(commandCtx, "ssh", append(sshArgs, "uname -sm")...)

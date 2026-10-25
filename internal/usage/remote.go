@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/sshutil"
 )
 
 // remoteUsagePayload represents the JSON payload returned by `harnez usage --json [--proc]`.
@@ -65,13 +67,14 @@ func doCollectRemote(ctx context.Context, host string, includeProcs bool) (Usage
 		remoteCmd += ` --proc`
 	}
 
-	commandTimeout, _, err := RemoteCommandTimeouts()
+	commandTimeout, connectTimeout, err := RemoteCommandTimeouts()
 	if err != nil {
 		return makeRemoteFallbackSummary(host, err), nil, err
 	}
 	remoteCtx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(remoteCtx, "ssh", "-q", "-o", "BatchMode=yes", "-o", sshConnectTimeoutOption(), host, remoteCmd)
+	args := append(sshutil.Options(connectTimeout), host, remoteCmd)
+	cmd := exec.CommandContext(remoteCtx, "ssh", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -127,8 +130,7 @@ func sshConnectTimeoutOption() string {
 	if err != nil {
 		panic(err)
 	}
-	seconds := (timeout + time.Second - 1) / time.Second
-	return fmt.Sprintf("ConnectTimeout=%d", seconds)
+	return sshutil.ConnectTimeoutOption(timeout)
 }
 
 // parseRemoteJSON parses raw JSON output from `harnez usage --json [--proc]`.
