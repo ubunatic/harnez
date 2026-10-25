@@ -31,6 +31,13 @@ container-host locations such as `/opt/<tool>/bin`, `/data`, `/work`. Web search
   noexec, the log names the path and that reason.
 - No sudo; a root-owned target simply fails with that message.
 
+M1 delivered: 973e342a (validator, schema, quoting, failure reasons, server doc).
+
+### M2 Pre-Work (host review of M1)
+
+- `.` components pass: `/./tmp/x` and `/var/./tmp/x` bypass the temp-tree rejection. Reject `.` components (runtime
+  and schema), add these two plus `~/./x` and `/a/./b` as invalid cases.
+
 ## Write set
 
 `internal/sshutil/options.go` (+ test), `internal/server/remote_upgrade.go` (+ test), `spec/schemas/server.schema.json`,
