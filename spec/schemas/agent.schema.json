@@ -1,11 +1,74 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
+  "$defs": {
+    "modelIdentity": {
+      "type": "object",
+      "required": ["harness", "provider", "model", "version", "tier"],
+      "properties": {
+        "harness": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "tier": { "type": "string", "enum": ["low", "med", "high"] }
+      },
+      "additionalProperties": false
+    },
+    "fact": {
+      "type": "object",
+      "required": ["value", "source", "observed_at", "evidence"],
+      "properties": {
+        "value": {},
+        "source": { "type": "string", "enum": ["spec-default", "web", "discovered", "measured", "user-declared"] },
+        "source_url": { "type": "string", "format": "uri" },
+        "method": { "type": "string", "minLength": 1 },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "allOf": [
+        { "if": { "properties": { "source": { "const": "web" } }, "required": ["source"] }, "then": { "required": ["source_url"] } },
+        { "if": { "properties": { "source": { "const": "discovered" } }, "required": ["source"] }, "then": { "required": ["method"] } }
+      ],
+      "additionalProperties": false
+    },
+    "apiCost": {
+      "type": "object",
+      "required": ["input_per_million", "output_per_million", "cache_per_million", "effective_date"],
+      "properties": {
+        "input_per_million": { "type": ["number", "null"], "minimum": 0 },
+        "output_per_million": { "type": ["number", "null"], "minimum": 0 },
+        "cache_per_million": { "type": ["number", "null"], "minimum": 0 },
+        "effective_date": { "type": "string", "format": "date" }
+      },
+      "additionalProperties": false
+    },
+    "subscriptionCost": {
+      "type": "object",
+      "required": ["plan", "currency", "period", "quota"],
+      "properties": {
+        "plan": { "type": ["string", "null"] },
+        "currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },
+        "period": { "type": ["string", "null"], "enum": ["day", "month", "year", null] },
+        "quota": { "type": ["number", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
   "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "default_role", "models", "roles", "stop", "external_sessions"],
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
     "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
+    "model_probe_budget": {
+      "type": "object",
+      "required": ["max_calls_per_update", "max_output_tokens_per_call", "timeout_seconds"],
+      "properties": {
+        "max_calls_per_update": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "max_output_tokens_per_call": { "type": "integer", "minimum": 1 },
+        "timeout_seconds": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
     "stale_session_errors": {
       "type": "object",
       "description": "Per provider: verified CLI stderr line prefixes that mean the resumed session is gone.",

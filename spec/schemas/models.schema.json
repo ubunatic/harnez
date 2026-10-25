@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "models.schema.json",
+  "type": "object",
+  "required": ["version", "models"],
+  "properties": {
+    "version": { "const": 1 },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["identity", "facts"],
+        "properties": {
+          "identity": { "$ref": "agent.schema.json#/$defs/modelIdentity" },
+          "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "facts": {
+            "type": "object",
+            "properties": {
+              "capabilities": { "type": "array", "items": { "$ref": "agent.schema.json#/$defs/fact" } },
+              "pitfalls": { "type": "array", "items": { "$ref": "agent.schema.json#/$defs/fact" } },
+              "relative_cost": { "$ref": "agent.schema.json#/$defs/fact" },
+              "api_cost": {
+                "allOf": [
+                  { "$ref": "agent.schema.json#/$defs/fact" },
+                  { "properties": { "value": { "$ref": "agent.schema.json#/$defs/apiCost" } } }
+                ]
+              },
+              "subscription_cost": {
+                "allOf": [
+                  { "$ref": "agent.schema.json#/$defs/fact" },
+                  { "properties": { "value": { "$ref": "agent.schema.json#/$defs/subscriptionCost" } } }
+                ]
+              }
+            },
+            "additionalProperties": { "$ref": "agent.schema.json#/$defs/fact" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

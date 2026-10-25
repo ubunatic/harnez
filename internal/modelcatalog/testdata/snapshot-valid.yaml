@@ -1,0 +1,5 @@
+version: 1
+created_at: "2026-10-25T10:00:00Z"
+catalog: {version: 1, models: []}
+access: {version: 1, observed_at: "2026-10-25T10:00:00Z", complete: false, observations: []}
+policy: null

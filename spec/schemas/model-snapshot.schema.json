@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "model-snapshot.schema.json",
+  "type": "object",
+  "required": ["version", "created_at", "catalog", "access", "policy"],
+  "properties": {
+    "version": { "const": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "catalog": { "$ref": "models.schema.json" },
+    "access": { "$ref": "model-access.schema.json" },
+    "policy": { "anyOf": [{ "$ref": "model-policy.schema.json" }, { "type": "null" }] }
+  },
+  "additionalProperties": false
+}

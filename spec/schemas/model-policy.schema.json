@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "model-policy.schema.json",
+  "type": "object",
+  "required": ["version", "default_enabled", "enabled", "models"],
+  "properties": {
+    "version": { "const": 1 },
+    "default_enabled": { "type": "boolean" },
+    "enabled": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "models": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "identity": { "$ref": "agent.schema.json#/$defs/modelIdentity" },
+          "version_pin": { "type": "string", "minLength": 1 },
+          "enabled": { "type": "boolean" },
+          "fields": {
+            "type": "object",
+            "properties": {
+              "tier": { "type": ["string", "null"], "enum": ["low", "med", "high", null] },
+              "aliases": { "type": ["array", "null"], "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+              "capabilities": { "type": ["array", "null"], "items": { "type": "string" } },
+              "pitfalls": { "type": ["array", "null"], "items": { "type": "string" } },
+              "api_cost": { "anyOf": [{ "$ref": "agent.schema.json#/$defs/apiCost" }, { "type": "null" }] },
+              "subscription_cost": { "anyOf": [{ "$ref": "agent.schema.json#/$defs/subscriptionCost" }, { "type": "null" }] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

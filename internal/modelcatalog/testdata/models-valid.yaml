@@ -1,0 +1,20 @@
+version: 1
+models:
+  - identity: {harness: custom, provider: local, model: internal-7b, version: "7.2", tier: med}
+    facts:
+      purpose:
+        value: internal inference
+        source: user-declared
+        observed_at: "2026-10-25T10:00:00Z"
+        evidence: [owner statement]
+      relative_cost:
+        value: null
+        source: user-declared
+        observed_at: "2026-10-25T10:00:00Z"
+        evidence: [not estimated]
+      api_cost:
+        value: {input_per_million: null, output_per_million: 0, cache_per_million: null, effective_date: "2026-10-25"}
+        source: web
+        source_url: https://example.invalid/pricing
+        observed_at: "2026-10-25T10:00:00Z"
+        evidence: [pricing page]

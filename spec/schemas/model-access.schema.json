@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "model-access.schema.json",
+  "type": "object",
+  "required": ["version", "observed_at", "complete", "observations"],
+  "properties": {
+    "version": { "const": 1 },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "complete": { "type": "boolean" },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["identity", "status", "facts"],
+        "properties": {
+          "identity": { "$ref": "agent.schema.json#/$defs/modelIdentity" },
+          "status": { "type": "string", "enum": ["available", "denied", "unknown", "stale"] },
+          "facts": { "type": "array", "items": { "$ref": "agent.schema.json#/$defs/fact" } },
+          "account": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
