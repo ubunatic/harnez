@@ -1,6 +1,6 @@
 # 933 — Usage discovery regression: collector marks all agents uninstalled
 
-**Status**: Open
+**Status**: Closed — b0356c2a: store catch-up restores agent metadata (Installed). Live after install and server restart: All Usage shows Claude, Codex and Gemini rows again. Full run's only failure is 932's remote one-shot test, unrelated
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
