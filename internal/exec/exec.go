@@ -1188,6 +1188,10 @@ func formatGearRewrite(command string, distillFlag string) string {
 }
 
 func runExecHook(in io.Reader, out io.Writer) error {
+	return runExecHookWithStateDir(in, out, resolve.DefaultStateDir())
+}
+
+func runExecHookWithStateDir(in io.Reader, out io.Writer, stateDir string) error {
 	raw, err := io.ReadAll(in)
 	if err != nil {
 		return fmt.Errorf("decode hook payload: %w", err)
@@ -1220,10 +1224,8 @@ func runExecHook(in io.Reader, out io.Writer) error {
 		return nil
 	}
 	warning := ""
-	if sessionID := payload.SessionID; sessionID != "" {
-		if root, ok := repoRoot(payload.Cwd); ok && scriptedRepoWrite(command, root) {
-			warning = editGuardWarning(sessionID)
-		}
+	if root, ok := repoRoot(payload.Cwd); ok && scriptedRepoWrite(command, root) {
+		warning = editGuardWarning(payload.SessionID, stateDir)
 	}
 
 	effective := command
@@ -1275,17 +1277,26 @@ func runExecHook(in io.Reader, out io.Writer) error {
 }
 
 type editGuardSpec struct {
-	EscalationAfter int `yaml:"escalation_after"`
-	RetentionDays   int `yaml:"retention_days"`
+	EscalationAfter  int    `yaml:"escalation_after"`
+	RetentionDays    int    `yaml:"retention_days"`
+	Warning          string `yaml:"warning"`
+	EscalatedWarning string `yaml:"escalated_warning"`
+}
+
+type editGuardState struct {
+	Count   int       `json:"count"`
+	Updated time.Time `json:"updated"`
 }
 
 func loadEditGuardSpec() editGuardSpec {
 	b, err := harnez.DefaultFS.ReadFile("spec/edit_guard.yaml")
 	if err != nil {
+		logging.Debugf("edit guard: load spec: %v", err)
 		return editGuardSpec{}
 	}
 	var s editGuardSpec
-	if yaml.Unmarshal(b, &s) != nil || s.EscalationAfter < 1 {
+	if err := yaml.Unmarshal(b, &s); err != nil || s.EscalationAfter < 1 || strings.TrimSpace(s.Warning) == "" || strings.TrimSpace(s.EscalatedWarning) == "" {
+		logging.Debugf("edit guard: invalid spec: %v", err)
 		return editGuardSpec{}
 	}
 	return s
@@ -1294,28 +1305,27 @@ func loadEditGuardSpec() editGuardSpec {
 // scriptedRepoWrite conservatively recognizes in-place sed/perl and simple
 // shell output redirections. Ambiguous shell syntax is ignored.
 func scriptedRepoWrite(command, root string) bool {
-	if strings.Contains(command, "<<<") {
-		return false
-	}
-	words := strings.Fields(command)
-	for i, w := range words {
-		base := filepath.Base(strings.Trim(w, "'\""))
-		if (base == "sed" || base == "perl") && i+1 < len(words) {
-			inPlace := false
-			for j := i + 1; j < len(words); j++ {
-				arg := strings.Trim(words[j], "'\"")
-				if strings.HasPrefix(arg, "-") && strings.Contains(arg, "i") {
-					inPlace = true
-				}
-				if strings.Contains(arg, ";") || strings.Contains(arg, "|") {
-					break
-				}
+	command = heredocCommandHeader(command)
+	for _, segment := range shellCommandSegments(command) {
+		words := strings.Fields(segment)
+		if len(words) < 3 {
+			continue
+		}
+		base := filepath.Base(strings.Trim(words[0], "'\""))
+		if base != "sed" && base != "perl" {
+			continue
+		}
+		inPlace := false
+		for _, arg := range words[1:] {
+			arg = strings.Trim(arg, "'\"")
+			if strings.HasPrefix(arg, "-") && strings.Contains(arg, "i") {
+				inPlace = true
 			}
-			if inPlace {
-				operand := strings.Trim(words[len(words)-1], "'\"")
-				if pathInRoot(operand, root) {
-					return true
-				}
+		}
+		if inPlace {
+			operand := strings.Trim(words[len(words)-1], "'\"")
+			if pathInRoot(operand, root) {
+				return true
 			}
 		}
 	}
@@ -1368,11 +1378,117 @@ func scriptedRepoWrite(command, root string) bool {
 	return false
 }
 
+// heredocCommandHeader removes content following the first here-document
+// declaration. Shell text in the body is data, not a command to inspect.
+func heredocCommandHeader(command string) string {
+	quote := byte(0)
+	for i := 0; i+1 < len(command); i++ {
+		c := command[i]
+		if quote != 0 {
+			if c == '\\' && quote == '"' {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '\'' || c == '"' {
+			quote = c
+			continue
+		}
+		if c != '<' || command[i+1] != '<' || (i+2 < len(command) && command[i+2] == '<') {
+			continue
+		}
+		i += 2
+		if i < len(command) && command[i] == '-' {
+			i++
+		}
+		for i < len(command) && (command[i] == ' ' || command[i] == '\t') {
+			i++
+		}
+		if i >= len(command) {
+			return command
+		}
+		var delimiter strings.Builder
+		if command[i] == '\'' || command[i] == '"' {
+			q := command[i]
+			i++
+			for i < len(command) && command[i] != q {
+				delimiter.WriteByte(command[i])
+				i++
+			}
+		} else {
+			for i < len(command) && !strings.ContainsRune(" \t\r\n;|&", rune(command[i])) {
+				delimiter.WriteByte(command[i])
+				i++
+			}
+		}
+		if delimiter.Len() == 0 {
+			return command
+		}
+		if end := strings.IndexByte(command[i:], '\n'); end >= 0 {
+			return command[:i+end]
+		}
+		return command
+	}
+	return command
+}
+
+// shellCommandSegments splits simple commands at control operators while
+// respecting quoted strings. Unknown shell constructs remain conservative.
+func shellCommandSegments(command string) []string {
+	var out []string
+	start, quote := 0, byte(0)
+	for i := 0; i < len(command); i++ {
+		c := command[i]
+		if quote != 0 {
+			if c == '\\' && quote == '"' {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '\'' || c == '"' {
+			quote = c
+			continue
+		}
+		boundary := c == ';' || c == '\n' || c == '|'
+		if c == '&' && (i == 0 || command[i-1] != '>') {
+			boundary = true
+		}
+		if !boundary {
+			continue
+		}
+		if c == '|' && i+1 < len(command) && command[i+1] == '>' {
+			continue
+		}
+		if c == '&' && i+1 < len(command) && command[i+1] == '>' {
+			continue
+		}
+		out = append(out, command[start:i])
+		if (c == '&' || c == '|') && i+1 < len(command) && command[i+1] == c {
+			i++
+		}
+		start = i + 1
+	}
+	out = append(out, command[start:])
+	return out
+}
+
 func pathInRoot(dest, root string) bool {
-	if strings.HasPrefix(dest, "/") || strings.HasPrefix(dest, "~") || strings.HasPrefix(dest, "/dev/") {
+	if dest == "" || strings.ContainsAny(dest, "$`*?[]") || strings.HasPrefix(dest, "~") || strings.HasPrefix(dest, "/dev/") {
 		return false
 	}
-	full, err := filepath.Abs(filepath.Join(root, dest))
+	full := dest
+	if !filepath.IsAbs(full) {
+		full = filepath.Join(root, full)
+	}
+	full, err := filepath.Abs(full)
 	if err != nil {
 		return false
 	}
@@ -1400,22 +1516,23 @@ func repoRoot(cwd string) (string, bool) {
 	}
 }
 
-func editGuardWarning(session string) string {
+func editGuardWarning(session, stateDir string) string {
 	spec := loadEditGuardSpec()
 	if spec.EscalationAfter < 1 {
 		return ""
 	}
-	return editGuardWarningAt(session, resolve.DefaultStateDir(), spec, time.Now())
+	if session == "" {
+		return spec.Warning
+	}
+	return editGuardWarningAt(session, stateDir, spec, time.Now())
 }
 
 func editGuardWarningAt(session, dir string, spec editGuardSpec, now time.Time) string {
 	sum := sha256.Sum256([]byte(session))
 	path := filepath.Join(dir, "edit-guard-"+hex.EncodeToString(sum[:8])+".json")
 	_ = os.MkdirAll(dir, 0700)
-	var state struct {
-		Count   int       `json:"count"`
-		Updated time.Time `json:"updated"`
-	}
+	cleanExpiredEditGuardFiles(dir, spec.RetentionDays, now)
+	var state editGuardState
 	if b, e := os.ReadFile(path); e == nil {
 		_ = json.Unmarshal(b, &state)
 	}
@@ -1424,20 +1541,24 @@ func editGuardWarningAt(session, dir string, spec editGuardSpec, now time.Time) 
 	}
 	state.Count++
 	state.Updated = now.UTC()
-	b, _ := json.Marshal(state)
-	_ = os.WriteFile(path, b, 0600)
-	if state.Count >= spec.EscalationAfter {
-		return "You have repeatedly used a scripted edit without feedback. Prove it was better with concrete token counts for the shell edit versus Edit/Write calls, and your reasoning. Record feedback with harnez rate."
+	if err := writeEditGuardState(path, state); err != nil {
+		logging.Debugf("edit guard: save counter: %v", err)
 	}
-	return "This command appears to edit a repository file from Bash. Use Edit/Write, or tell me in one line why the scripted edit is better; record feedback with harnez rate."
+	if state.Count > spec.EscalationAfter {
+		return spec.EscalatedWarning
+	}
+	return spec.Warning
 }
 
 // RecordEditGuardFeedback clears this session's warning streak after harnez rate.
-func RecordEditGuardFeedback(session string) {
+func RecordEditGuardFeedback(session, stateDir string) {
 	if session == "" {
 		return
 	}
-	resetEditGuardFeedback(session, resolve.DefaultStateDir())
+	if stateDir == "" {
+		stateDir = resolve.DefaultStateDir()
+	}
+	resetEditGuardFeedback(session, stateDir)
 }
 
 func resetEditGuardFeedback(session, dir string) {
@@ -1446,18 +1567,66 @@ func resetEditGuardFeedback(session, dir string) {
 	}
 	sum := sha256.Sum256([]byte(session))
 	path := filepath.Join(dir, "edit-guard-"+hex.EncodeToString(sum[:8])+".json")
-	var state struct {
-		Count   int       `json:"count"`
-		Updated time.Time `json:"updated"`
-	}
+	var state editGuardState
 	if b, e := os.ReadFile(path); e == nil {
 		_ = json.Unmarshal(b, &state)
 	}
 	state.Count = 0
 	state.Updated = time.Now().UTC()
-	b, _ := json.Marshal(state)
 	_ = os.MkdirAll(dir, 0700)
-	_ = os.WriteFile(path, b, 0600)
+	if err := writeEditGuardState(path, state); err != nil {
+		logging.Debugf("edit guard: reset counter: %v", err)
+	}
+}
+
+func writeEditGuardState(path string, state editGuardState) error {
+	b, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), ".edit-guard-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp)
+	if err := f.Chmod(0600); err != nil {
+		f.Close()
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func cleanExpiredEditGuardFiles(dir string, retentionDays int, now time.Time) {
+	if retentionDays < 1 {
+		return
+	}
+	paths, err := filepath.Glob(filepath.Join(dir, "edit-guard-*.json"))
+	if err != nil {
+		return
+	}
+	retention := time.Duration(retentionDays) * 24 * time.Hour
+	for _, path := range paths {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var state editGuardState
+		if json.Unmarshal(b, &state) == nil && !state.Updated.IsZero() && now.Sub(state.Updated) > retention {
+			_ = os.Remove(path)
+		}
+	}
 }
 
 func isDistillAutopipeEnabled() bool {

@@ -2,3 +2,5 @@
 # Warning policy for shell-based repository edits (issue 937).
 escalation_after: 5
 retention_days: 30
+warning: "This command appears to edit a repository file from Bash. Use Edit/Write, or tell me in one line why the scripted edit is better; record feedback with harnez rate."
+escalated_warning: "You have repeatedly used a scripted edit without feedback. Prove it was better with concrete token counts for the shell edit versus Edit/Write calls, and your reasoning. Record feedback with harnez rate."

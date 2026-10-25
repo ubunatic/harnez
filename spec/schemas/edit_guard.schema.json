@@ -1,10 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["escalation_after", "retention_days"],
+  "required": ["escalation_after", "retention_days", "warning", "escalated_warning"],
   "properties": {
     "escalation_after": { "type": "integer", "minimum": 1 },
-    "retention_days": { "type": "integer", "minimum": 1 }
+    "retention_days": { "type": "integer", "minimum": 1 },
+    "warning": { "type": "string", "minLength": 1 },
+    "escalated_warning": { "type": "string", "minLength": 1 }
   },
   "additionalProperties": false
 }

@@ -189,7 +189,7 @@ func runRate(args []string, opts rateOptions) error {
 	if err := insertRateRow(opts.DBPath, toolName, description, agent, sessionID, ticketID, score); err != nil {
 		return err
 	}
-	internalexec.RecordEditGuardFeedback(sessionID)
+	internalexec.RecordEditGuardFeedback(sessionID, opts.StateDir)
 	return nil
 }
 
@@ -230,7 +230,6 @@ func runRateOk(args []string, opts rateOptions, since int) error {
 	if err := insertHeartbeatRow(opts.DBPath, note, agent, sessionID, ticketID, since); err != nil {
 		return err
 	}
-	internalexec.RecordEditGuardFeedback(sessionID)
 	return nil
 }
 

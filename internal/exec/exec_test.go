@@ -53,11 +53,11 @@ func TestScriptedRepoWriteConservative(t *testing.T) {
 
 func TestEditGuardEscalatesAtSpecThresholdAndRateResetsSession(t *testing.T) {
 	dir := t.TempDir()
-	spec := editGuardSpec{EscalationAfter: 5, RetentionDays: 30}
+	spec := editGuardSpec{EscalationAfter: 5, RetentionDays: 30, Warning: "normal", EscalatedWarning: "concrete token counts"}
 	now := time.Now()
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= 6; i++ {
 		got := editGuardWarningAt("session-a", dir, spec, now.Add(time.Duration(i)*time.Second))
-		if (i == 5) != strings.Contains(got, "concrete token counts") {
+		if (i == 6) != strings.Contains(got, "concrete token counts") {
 			t.Fatalf("warning %d escalation mismatch: %q", i, got)
 		}
 	}
@@ -67,6 +67,72 @@ func TestEditGuardEscalatesAtSpecThresholdAndRateResetsSession(t *testing.T) {
 	}
 	if got := editGuardWarningAt("session-b", dir, spec, now.Add(time.Minute)); strings.Contains(got, "concrete token counts") {
 		t.Fatalf("warning state leaked across sessions: %q", got)
+	}
+}
+
+func TestExecHookEditGuardM2Cases(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	abs := filepath.Join(root, "tracked.txt")
+	cases := []struct {
+		name, command string
+		session       bool
+		warn          bool
+	}{
+		{"absolute repo path", "sed -i s/a/b/ " + abs, true, true},
+		{"heredoc body arrow", "git commit -F - <<EOF\nchange a -> b\nEOF", true, false},
+		{"heredoc body apostrophe", "git commit -F - <<EOF\nit's a change\nEOF", true, false},
+		{"compound read", "sed -n p a && grep -i x f", true, false},
+		{"variable redirect", `echo x > $VAR`, true, false},
+		{"quoted variable redirect", `echo x > "$out"`, true, false},
+		{"missing session still warns", "echo x > tracked.txt", false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := map[string]any{"cwd": root, "tool_name": "Bash", "tool_input": map[string]any{"command": tc.command, "custom": "preserved"}}
+			if tc.session {
+				payload["session_id"] = "m2-" + tc.name
+			}
+			b, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out bytes.Buffer
+			if err := runExecHookWithStateDir(bytes.NewReader(b), &out, stateDir); err != nil {
+				t.Fatal(err)
+			}
+			var got struct {
+				HookSpecificOutput struct {
+					AdditionalContext string                     `json:"additionalContext"`
+					UpdatedInput      map[string]json.RawMessage `json:"updatedInput"`
+				} `json:"hookSpecificOutput"`
+			}
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if warned := got.HookSpecificOutput.AdditionalContext != ""; warned != tc.warn {
+				t.Fatalf("warned=%v, want %v; output=%s", warned, tc.warn, out.String())
+			}
+			if string(got.HookSpecificOutput.UpdatedInput["custom"]) != `"preserved"` {
+				t.Fatalf("updatedInput custom field changed: %s", out.String())
+			}
+		})
+	}
+}
+
+func TestEditGuardEscalatesOnSixthWarning(t *testing.T) {
+	dir := t.TempDir()
+	spec := editGuardSpec{EscalationAfter: 5, RetentionDays: 30, Warning: "normal", EscalatedWarning: "concrete token counts"}
+	now := time.Now()
+	for i := 1; i <= 6; i++ {
+		got := editGuardWarningAt("six", dir, spec, now.Add(time.Duration(i)*time.Second))
+		wantEscalated := i == 6
+		if strings.Contains(got, "concrete token counts") != wantEscalated {
+			t.Fatalf("warning %d = %q", i, got)
+		}
 	}
 }
 
