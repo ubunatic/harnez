@@ -201,10 +201,10 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 			opus = line
 		}
 	}
-	if !strings.Contains(low, "spec-default") || !strings.Contains(low, "developer") || !strings.Contains(low, "clear bounded tickets") || !strings.Contains(low, " 1 ") || !strings.Contains(low, "Go~ TUI- SQL?") {
+	if !strings.Contains(low, "spec-default") || !strings.Contains(low, "developer") || !strings.Contains(low, "background and mechanical work") || !strings.Contains(low, "not Go development") || !strings.Contains(low, " 1 ") || !strings.Contains(low, "Go~ TUI- SQL?") {
 		t.Fatalf("luna:low row = %q", low)
 	}
-	if !strings.Contains(med, "interface or design changes") {
+	if !strings.Contains(med, "background and mechanical work") || !strings.Contains(med, "not Go development") {
 		t.Fatalf("luna:med row must use use_med: %q", med)
 	}
 	if !strings.Contains(med, " 4 ") || !strings.Contains(high, " 6 ") {
@@ -216,7 +216,7 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 	if !strings.Contains(haiku, " yes ") {
 		t.Fatalf("claude rows must report effort support: %q", haiku)
 	}
-	if !strings.Contains(out.String(), "\nCOST is estimated by effort tier; codex:luna:low = 1") {
+	if !strings.Contains(out.String(), "\nCOST is an owner-guided relative estimate by effort tier; codex:luna:low = 1") {
 		t.Fatalf("legend line missing: %q", out.String())
 	}
 }
