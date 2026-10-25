@@ -47,6 +47,7 @@ ssh_connect_timeout: 5s
 # otherwise retain the server-owned remote reading with a low-rate refresh.
 remote_load_poll_interval_attached: 10s
 remote_load_poll_interval_detached: 5m
+remote_load_live_threshold: 20s
 remote_load_staleness: 5m
 usage_kill_log:
   path: harnez/usage-kills.jsonl

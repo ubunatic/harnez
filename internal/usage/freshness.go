@@ -23,6 +23,14 @@ func remoteLoadStaleness() time.Duration {
 	return staleness
 }
 
+func remoteLoadLiveThreshold() time.Duration {
+	threshold, err := RemoteLoadLiveThreshold()
+	if err != nil {
+		panic(err)
+	}
+	return threshold
+}
+
 // snapshotAgeLabel renders "<age> ago", with " · stale" at or past staleness.
 // A zero time has no known age; a future time (clock skew) reads as just now.
 func snapshotAgeLabel(at, now time.Time, staleness time.Duration) string {

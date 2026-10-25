@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez usage settings and view modes",
   "type": "object",
-  "required": ["agy_quota", "agy_meter_max_age", "collector_cadence", "cache_staleness_multiplier", "display_staleness", "collector_timeout", "passive_dedupe_interval", "passive_update_path", "history_snapshot_interval", "usage_store_busy_timeout", "client_heartbeat_interval", "client_timeout", "catchup_fetch_threshold", "debug_labels", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl", "remote_command_timeout", "ssh_connect_timeout", "remote_load_poll_interval_attached", "remote_load_poll_interval_detached", "remote_load_staleness", "agent_quota_warn_percent", "agent_quota_max_reading_age", "usage_kill_log"],
+  "required": ["agy_quota", "agy_meter_max_age", "collector_cadence", "cache_staleness_multiplier", "display_staleness", "collector_timeout", "passive_dedupe_interval", "passive_update_path", "history_snapshot_interval", "usage_store_busy_timeout", "client_heartbeat_interval", "client_timeout", "catchup_fetch_threshold", "debug_labels", "watch_loading_label", "view_modes", "export_host_key", "nvidia_smi_timeout", "nvidia_smi_cache_ttl", "remote_command_timeout", "ssh_connect_timeout", "remote_load_poll_interval_attached", "remote_load_poll_interval_detached", "remote_load_live_threshold", "remote_load_staleness", "agent_quota_warn_percent", "agent_quota_max_reading_age", "usage_kill_log"],
   "properties": {
     "usage_kill_log": {
       "type": "object",
@@ -180,6 +180,10 @@
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
     },
     "remote_load_poll_interval_detached": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
+    },
+    "remote_load_live_threshold": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
     },

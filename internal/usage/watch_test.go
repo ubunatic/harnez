@@ -1479,31 +1479,39 @@ func TestIssue218RemoteLoadBrailleWidthParity(t *testing.T) {
 	}
 }
 
-// TestRemoteLoadBoxShowsCacheAge covers issue 879 M2b: a snapshot is shown
-// with its write time, even when stale; with no snapshot there is no time line.
-func TestRemoteLoadBoxShowsCacheAge(t *testing.T) {
+// TestRemoteLoadBoxFreshness covers issue 932 M2's title and stale diagnostic.
+func TestRemoteLoadBoxFreshness(t *testing.T) {
 	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
 	staleness := remoteLoadStaleness()
+	live := remoteLoadLiveThreshold()
 	snapshot := &LoadSnapshot{CPU: CPULoad{NumCPU: 8, CPUPercent: 42, CPUPercentOk: true}}
 	cases := []struct {
 		name      string
 		snapshot  *LoadSnapshot
 		updatedAt time.Time
-		want      string
+		wantTitle string
+		wantLine  string
 	}{
-		{"fresh", snapshot, now.Add(-10 * time.Second), "updated " + FormatCompactDuration(10*time.Second) + " ago"},
-		{"stale kept", snapshot, now.Add(-staleness), "updated " + FormatCompactDuration(staleness) + " ago · stale"},
-		{"no snapshot", nil, time.Time{}, "remote load unavailable"},
+		{"live", snapshot, now.Add(-live), "live", ""},
+		{"old", snapshot, now.Add(-live - time.Second), FormatCompactDuration(live+time.Second) + " ago", ""},
+		{"stale kept", snapshot, now.Add(-staleness), FormatCompactDuration(staleness) + " ago", "stale: no sample for " + FormatCompactDuration(staleness)},
+		{"no snapshot", nil, time.Time{}, "unavailable", "remote load unavailable"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			box := buildRemoteLoadBox(48, "phoenix", tc.snapshot, "server cache", tc.updatedAt, now)
 			text := stripANSI(strings.Join(box.lines, "\n"))
-			if !strings.Contains(text, tc.want) {
-				t.Fatalf("box lacks %q:\n%s", tc.want, text)
+			if !strings.Contains(stripANSI(box.title), "@phoenix · "+tc.wantTitle+")") {
+				t.Fatalf("title %q lacks freshness %q", stripANSI(box.title), tc.wantTitle)
 			}
-			if tc.snapshot == nil && strings.Contains(text, "updated ") {
-				t.Fatalf("box without snapshot shows a time line:\n%s", text)
+			if tc.wantLine != "" && !strings.Contains(text, tc.wantLine) {
+				t.Fatalf("box lacks %q:\n%s", tc.wantLine, text)
+			}
+			if tc.wantLine == "" && strings.Contains(text, "stale:") {
+				t.Fatalf("fresh box shows stale diagnostic:\n%s", text)
+			}
+			if strings.Contains(text, "updated ") {
+				t.Fatalf("box shows removed update row:\n%s", text)
 			}
 		})
 	}
@@ -1950,8 +1958,8 @@ func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
 	if !strings.Contains(frameText, "Remote Load") {
 		t.Fatalf("expected Remote Load box in frame, got:\n%s", frameText)
 	}
-	if !strings.Contains(frameText, "@phoenix · server cache") {
-		t.Fatalf("expected server cache source label in frame, got:\n%s", frameText)
+	if !strings.Contains(frameText, "@phoenix · age unknown") {
+		t.Fatalf("expected unknown sample age in frame, got:\n%s", frameText)
 	}
 
 	// Toggled off
@@ -1966,18 +1974,18 @@ func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
 	}
 }
 
-func TestRemoteLoadPanelLabelsServerCache(t *testing.T) {
+func TestRemoteLoadPanelShowsFreshness(t *testing.T) {
 	opts := WatchOptions{
 		Mode:                "compact",
 		RemoteLoadHost:      "phoenix",
 		RemoteLoadSnapshot:  &LoadSnapshot{CPU: CPULoad{NumCPU: 8}},
 		RemoteLoadSource:    "server cache",
-		RemoteLoadUpdatedAt: testTime,
+		RemoteLoadUpdatedAt: time.Now(),
 	}
 	frame := buildWatchFrame(UsageSummary{Timestamp: testTime}, nil, time.Minute, compactWatchSections(), 100, 30, true, opts)
 	frameText := strings.Join(frame.lines, "\n")
-	if !strings.Contains(frameText, "Remote Load") || !strings.Contains(frameText, "@phoenix · server cache") {
-		t.Fatalf("watch should render the server cache panel and source label:\n%s", frameText)
+	if !strings.Contains(frameText, "Remote Load") || !strings.Contains(frameText, "@phoenix · live") {
+		t.Fatalf("watch should render the remote load panel and freshness label:\n%s", frameText)
 	}
 }
 

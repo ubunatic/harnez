@@ -40,6 +40,7 @@ type usageSpec struct {
 	SSHConnectTimeout        string             `yaml:"ssh_connect_timeout"`
 	RemoteLoadPollAttached   string             `yaml:"remote_load_poll_interval_attached"`
 	RemoteLoadPollDetached   string             `yaml:"remote_load_poll_interval_detached"`
+	RemoteLoadLiveThreshold  string             `yaml:"remote_load_live_threshold"`
 	RemoteLoadStaleness      string             `yaml:"remote_load_staleness"`
 	UsageKillLog             usageKillLogSpec   `yaml:"usage_kill_log"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
@@ -143,6 +144,7 @@ var (
 	usageSpecSSHConnectTimeout    time.Duration
 	usageSpecRemotePollAttached   time.Duration
 	usageSpecRemotePollDetached   time.Duration
+	usageSpecRemoteLiveThreshold  time.Duration
 	usageSpecRemoteStaleness      time.Duration
 	usageSpecCachePolicy          cacheFreshnessPolicy
 )
@@ -251,6 +253,12 @@ func RemoteLoadPolicy() (time.Duration, time.Duration, time.Duration, error) {
 	return usageSpecRemotePollAttached, usageSpecRemotePollDetached, usageSpecRemoteStaleness, err
 }
 
+// RemoteLoadLiveThreshold returns the configured age at which a sample stops being live.
+func RemoteLoadLiveThreshold() (time.Duration, error) {
+	_, _, _, _, _, err := usageDurations()
+	return usageSpecRemoteLiveThreshold, err
+}
+
 func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duration, time.Duration, error) {
 	usageSpecOnce.Do(func() {
 		data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
@@ -279,6 +287,7 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 			usageSpecSSHConnectTimeout, _ = time.ParseDuration(spec.SSHConnectTimeout)
 			usageSpecRemotePollAttached, _ = time.ParseDuration(spec.RemoteLoadPollAttached)
 			usageSpecRemotePollDetached, _ = time.ParseDuration(spec.RemoteLoadPollDetached)
+			usageSpecRemoteLiveThreshold, _ = time.ParseDuration(spec.RemoteLoadLiveThreshold)
 			usageSpecRemoteStaleness, _ = time.ParseDuration(spec.RemoteLoadStaleness)
 		}
 	})
@@ -349,6 +358,10 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	remoteStaleness, err := time.ParseDuration(spec.RemoteLoadStaleness)
 	if err != nil || remoteStaleness <= remotePollAttached {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: remote_load_staleness must be longer than the attached poll interval", usageSpecPath)
+	}
+	remoteLiveThreshold, err := time.ParseDuration(spec.RemoteLoadLiveThreshold)
+	if err != nil || remoteLiveThreshold <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: remote_load_live_threshold must be a positive duration", usageSpecPath)
 	}
 	if hbInterval, err := time.ParseDuration(spec.ClientHeartbeatInterval); err != nil || hbInterval <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: client_heartbeat_interval must be a positive duration", usageSpecPath)

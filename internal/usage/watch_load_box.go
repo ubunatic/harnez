@@ -37,17 +37,30 @@ func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
 // The title names the server cache as the source, making the UI's read-only
 // role clear while the server owns SSH collection.
 //
-// A snapshot is shown even when stale, with its write time on the last line
-// ("· stale" past the remote staleness threshold, issue 879 M2b). A nil
-// snapshot has no time to show and keeps the "remote load unavailable" line.
+// The title carries sample freshness. A stale snapshot remains visible with a
+// short diagnostic row; a nil snapshot keeps the unavailable placeholder.
 func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot, source string, updatedAt, now time.Time) wbox {
-	if source == "" {
-		source = "server cache"
+	_ = source
+	age := "age unknown"
+	if snapshot == nil {
+		age = "unavailable"
+	} else if updatedAt.IsZero() {
+		age = "age unknown"
+	} else {
+		ageDuration := now.Sub(updatedAt)
+		if ageDuration < 0 {
+			ageDuration = 0
+		}
+		if ageDuration <= remoteLoadLiveThreshold() {
+			age = "live"
+		} else {
+			age = FormatCompactDuration(ageDuration) + " ago"
+		}
 	}
-	title := fmt.Sprintf("%s[R]\x1b[0m Remote Load %s(@%s · %s)\x1b[0m", ansiBold, ansiDimGrey, host, source)
+	title := fmt.Sprintf("%s[R]\x1b[0m Remote Load %s(@%s · %s)\x1b[0m", ansiBold, ansiDimGrey, host, age)
 	lines := buildLoadBoxLines(host, snapshot)
-	if snapshot != nil {
-		lines = append(lines, ansiDimGrey+"updated "+remoteLoadAgeLabel(updatedAt, now)+"\x1b[0m")
+	if snapshot != nil && !updatedAt.IsZero() && now.Sub(updatedAt) >= remoteLoadStaleness() {
+		lines = append(lines, ansiDimGrey+"stale: no sample for "+FormatCompactDuration(max(time.Duration(0), now.Sub(updatedAt)))+"\x1b[0m")
 	}
 	return wbox{title: title, lines: lines, width: width}
 }

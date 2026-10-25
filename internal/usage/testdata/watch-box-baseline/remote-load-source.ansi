@@ -1,3 +1,4 @@
-┌─ [1m[R][0m Remote Load [90m(@worker · server cache)[0m ─────┐
+┌─ [1m[R][0m Remote Load [90m(@worker · 12m ago)[0m ──────────┐
 │ ram (32G)        [32m⣤⣤⣤⣤[0m 47%                      │
+│ [90mstale: no sample for 12m[0m                       │
 └────────────────────────────────────────────────┘

@@ -41,8 +41,8 @@ func TestWatchBoxBaselineGoldens(t *testing.T) {
 		{
 			name: "remote-load-source",
 			box: wbox{
-				title: ansiBold + "[R]\x1b[0m Remote Load " + ansiDimGrey + "(@worker · server cache)\x1b[0m",
-				lines: []string{"ram (32G)        \x1b[32m⣤⣤⣤⣤\x1b[0m 47%"},
+				title: ansiBold + "[R]\x1b[0m Remote Load " + ansiDimGrey + "(@worker · 12m ago)\x1b[0m",
+				lines: []string{"ram (32G)        \x1b[32m⣤⣤⣤⣤\x1b[0m 47%", ansiDimGrey + "stale: no sample for 12m\x1b[0m"},
 				width: 50,
 			},
 		},
