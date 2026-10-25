@@ -71,6 +71,18 @@ The acceptance below reads with these changes; the skill item belongs to 949.
 - A policy patch stores field values as overrides (including explicit null clearing) alongside catalog facts;
   arrays replace. Full access enforcement is M2.
 
+## M1 delivered (5b998705, sol:med): merged catalog loader
+
+`internal/modelcatalog/catalog.go` loads spec defaults, state catalog/access and policy; invalid policy errors
+without fallback; pins checked against inherited identity; XDG isolated in tests. Host: package tests green
+with `-race`; developer `make test-q1` green (before the last package-only change).
+
+## M2 — Pre-Work (host)
+
+No refinements from M1. M2 per plan: replace `loadModelAliases/loadModelGuides`, enforce policy after alias
+resolution incl. Pi direct IDs; tests for disable-all-but-N, enablement precedence, alias/direct-ID bypass,
+pin mismatch, unchanged behaviour without policy.
+
 ## Acceptance
 
 - Skill registered and installed; `update` dispatches the fanout and aggregates a cited table.
