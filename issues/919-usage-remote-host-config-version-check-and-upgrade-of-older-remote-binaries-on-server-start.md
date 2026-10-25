@@ -25,3 +25,12 @@ report here.
   is a design point.
 - Prerequisite: `harnez version` does not exist on either host; the comparison needs a comparable version
   (release version plus commit/time, or build ID).
+
+## Decision (owner, 2026-10-25)
+
+- Host: `load.watch_host` in `~/.config/harnez/local.yaml` (`internal/usage/localconfig.go:59`). Hook: before
+  the collector starts in `cmd/harnez/server_cmd.go:35`.
+- Version: the build bakes in release version plus commit count (ldflags), shown by `harnez --version`
+  (today only the hand-set `version.go:3` `0.2.1`). Compare that; never downgrade; unknown remote version → log, skip.
+- Delivery: scp of the server's own binary (`os.Executable()`) to the remote's `~/go/bin/harnez`, only when the
+  remote reports the same OS and arch (`uname -sm`); otherwise skip and log why. Write to a temp name, then rename.

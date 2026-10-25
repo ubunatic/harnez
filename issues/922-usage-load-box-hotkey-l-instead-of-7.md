@@ -13,3 +13,9 @@ becomes free; set in `spec/actions.yaml`, title glyph and help updated, with a t
 Circuit breaker: on a loop or no progress, clear the goal and write a failure report here.
 
 Owner request (2026-10-25). Check that `L` is not bound already.
+
+## Decision (owner, 2026-10-25)
+
+`l`/`L` bind `toggle_diagnostics` today (`spec/actions.yaml:89`). Move diagnostics to `d`/`D` (unbound, checked)
+and give `l`/`L` to `toggle_load` (`spec/actions.yaml:39`, now `7`). Tests: `actionsspec_test.go:110-134`,
+`watch_test.go:1288,1783`; update help, superscript glyph and `docs/data/harnez-usage.ansi`.

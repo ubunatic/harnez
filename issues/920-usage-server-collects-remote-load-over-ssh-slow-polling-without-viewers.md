@@ -19,3 +19,10 @@ on an owner decision. Circuit breaker: on a loop or no progress, clear the goal 
 - Check what the UI does today (watch-side stream, `remote_load_poll_interval`, `remote_load_staleness`) and
   move it behind the collector registry (docs/UsageCollection.md §registry).
 - Slow and fast rates are configurable values: they go in `spec/` with schema (docs/Spec.md).
+
+## Decision (owner, 2026-10-25)
+
+- The server already polls (`collector_remote_load.go:54`, one rate `spec/usage.yaml:48` 1m); `ClientCounter`
+  (`server.go:22`) exists. Split into two spec keys: 10s with a UI attached, 5m with none; switch on client count.
+- Owner: "more spec is always good"; allow a user override from `~/.config/harnez` (local.yaml) for these
+  values, if the spec loader supports overrides; otherwise park the override in its own ticket.
