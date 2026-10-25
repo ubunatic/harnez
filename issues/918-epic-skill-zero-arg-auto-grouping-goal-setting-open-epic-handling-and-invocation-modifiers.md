@@ -57,6 +57,10 @@ The desired user experience allows flexible, natural invocations where the orche
 - Keep `/epic "<idea>"`, `/epic <n>`, `/epic <n> no-web` unchanged. Dispatch section at most ~25 lines; delegate,
   don't restate /issue or /lean-sprint.
 
+M2 delivered (8b2b6b64): dispatch section in `docs/commands/epic.md`, new `config.yaml` description; rendered
+copies in `~/.claude`, `~/.codex` and `~/.gemini` (agy) skills contain it; `go test ./internal/claude` and
+`make lint` green. Host reviewed the diff. Open: M3 owner run of bare `/epic`.
+
 ### M3: Verification & Dry-Run
 - Test bare `/epic` with open epics present (verify prompt).
 - Test bare `/epic` with no open epics (verify grouping proposal and auto-run).
