@@ -1,6 +1,6 @@
 # 918 — epic skill zero-arg auto-grouping, goal-setting, open epic handling and invocation modifiers
 
-**Status**: Open
+**Status**: Closed — M2 8b2b6b64: epic dispatch (bare /epic open-epic check, file/run/next modifiers, affinity grouping) rendered for Claude, Codex, agy; M3 owner run 2026-10-25: bare /epic listed open epics 908, 909, 921 by Category: Epic and asked; owner picked 921
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
