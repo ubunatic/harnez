@@ -1,3 +1,7 @@
+---
+kind: story
+---
+
 # Generic init: from "any issues/ folder" to `.harnez/repo.yaml`
 
 ## 1. Header & Context

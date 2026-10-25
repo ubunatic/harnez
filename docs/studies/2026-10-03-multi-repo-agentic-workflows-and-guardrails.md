@@ -1,3 +1,7 @@
+---
+kind: story
+---
+
 # Multi-Repo Agentic Workflows & Guardrails: A Cross-Project Lean Sprint Case Study
 
 **Date**: 2026-10-03  

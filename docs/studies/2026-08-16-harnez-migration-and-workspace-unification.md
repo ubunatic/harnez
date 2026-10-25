@@ -1,3 +1,6 @@
+---
+kind: story
+---
 <!-- SPDX-FileCopyrightText: 2026 Uwe Jugel -->
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 

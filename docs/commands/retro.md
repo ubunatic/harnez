@@ -52,6 +52,7 @@ harnez session extract <id-or-path> --json > "$retro_extract"
 - Read the installed `story` skill's required sections and output-location rules (source: `docs/commands/story.md`
   in Harnez). Follow that shared structure for context, outcome, successes, candid failures, quality, efficiency,
   learnings and file/commit evidence. Respect `docs.studies: false` and the repository's local-docs fallback.
+  Front matter `kind: retro` (see story's output-location rules).
 - Add a mandatory **Method and gaps** section: identify session/source, extraction command, counts, evidence read
   and skipped, time range, truncation, unavailable images/tool evidence and any uncertain commit attribution.
   Separate observations from inferences; do not present summary claims as independently verified facts.

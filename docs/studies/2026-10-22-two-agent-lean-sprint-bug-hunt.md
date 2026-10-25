@@ -1,3 +1,7 @@
+---
+kind: story
+---
+
 # Two-agent lean sprint: P1/P2 bug hunt (2026-10-22)
 
 Twelve active P1/P2 bugs, run without user check-ins. Template for the bug-hunt skill (issue 851).

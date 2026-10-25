@@ -12,8 +12,9 @@ A **Story** is an engineering case study that captures the reality of a developm
 Invoked without arguments, `/story` writes a follow-up to the previous overall story and covers everything
 developed since then, not only the current session.
 
-1. **Find the previous story.** Search `docs/studies/` (newest first, by date prefix and git history) for the last
-   overall story about the agentic flow and project progress. Skip sub-studies by individual agents on a single
+1. **Find the previous story.** Take the newest `docs/studies/` file with `kind: story` front matter. For files
+   without `kind`, judge from title and content: the last overall story about the agentic flow and project
+   progress. Skip sub-studies by individual agents on a single
    concern, test or benchmark reports, and per-ticket sprint reports. Name the chosen story and its date or commit;
    if none qualifies, say so and use the repository's first commit as the baseline.
 2. **Compare deliveries.** From git and the tracker since that baseline, list the features delivered, bugs fixed,
@@ -29,6 +30,10 @@ developed since then, not only the current session.
 
 ## Output Location & Naming
 - Path: `docs/studies/<YYYY-MM-DD>-<kebab-case-title>.md`
+- Front matter on the first lines states the kind, so later stories can find their predecessor:
+  `---` / `kind: story` / `---`. Kinds: `story` (overall progress and agentic-flow story, written by this skill),
+  `sprint` (per-ticket or per-epic sprint report), `retro` (transcript retro), `canary`, `benchmark`, `topic`
+  (single-concern study). Keep existing keys such as `title` and `weight`.
 - Create `docs/studies/` if it does not exist and indexed studies are enabled.
 - If `.harnez/repo.yaml` sets `docs.studies: false`, follow `.harnez/rules/Index.md` for the local-docs/session fallback.
 - Link the document in `docs/README.md` (or `docs/index.md`) only when `.harnez/repo.yaml` enables indexed studies.

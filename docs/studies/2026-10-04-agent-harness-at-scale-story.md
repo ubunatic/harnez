@@ -1,3 +1,7 @@
+---
+kind: story
+---
+
 # Harnez: Building the Harness While Using It
 
 **Date**: 2026-10-04  

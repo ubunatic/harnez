@@ -1,3 +1,7 @@
+---
+kind: story
+---
+
 # 2026-09-17 — AgenticLoop Real-Invocation Canary, and Global Doc Deactivation
 
 Session log for picking this thread back up. Two mostly-independent threads happened back to back;

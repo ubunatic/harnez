@@ -1,4 +1,5 @@
 ---
+kind: story
 title: Usage Panel Integration and the AGY Collector Cliff
 weight: 91
 ---

@@ -1,4 +1,5 @@
 ---
+kind: story
 title: A Day of Fresh Sprints
 weight: 90
 ---

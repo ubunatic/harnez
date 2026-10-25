@@ -108,5 +108,5 @@ The close reason lists each. Compare delivery with the epic's `/goal` first.
 
 ## 9. Evergreen and Wrap
 
-Run the final tasks: sprint study, review-learning entries, follow-up tickets (`/evergreen`),
+Run the final tasks: sprint study (front matter `kind: sprint`), review-learning entries, follow-up tickets (`/evergreen`),
 then `/wrap`. Report the epic number, closed/skipped/parked tasks, and the next command.
