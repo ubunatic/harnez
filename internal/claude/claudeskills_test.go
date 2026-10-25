@@ -79,7 +79,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 	}{
 		{"bug-hunt", "Run a bug hunt over active P1/P2 bug tickets", "## 2. Re-verify (read-only)"},
 		{"study", "Write a concise sprint, retrospective, or topic study", "## Required Sections"},
-		{"story", "Write a candid engineering retrospective and case study", "## Required Story Sections"},
+		{"story", "Write the overall follow-up project story", "## Required Story Sections"},
 		{"tui-check", "Validate a terminal UI change cell by cell", "## 4. Live tmux check"},
 		{"jam", "Run a jam: several agents on different models", "## 5. Pre-assess"},
 	} {
@@ -106,6 +106,15 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		if !strings.Contains(string(installed), expected.body) || !strings.Contains(string(installed), expected.description) {
 			t.Errorf("installed skill %q is missing its expected description or workflow body", expected.name)
 		}
+	}
+
+	storySkillPath := filepath.Join(claudeSkillsDir, "story", "SKILL.md")
+	storySkill, err := os.ReadFile(storySkillPath)
+	if err != nil {
+		t.Fatalf("expected %s to be written: %v", storySkillPath, err)
+	}
+	if !strings.Contains(string(storySkill), "## Shared Study Rules") {
+		t.Errorf("installed story skill does not refer to the shared study rules")
 	}
 
 	docupSkillPath := filepath.Join(claudeSkillsDir, "docup", "SKILL.md")

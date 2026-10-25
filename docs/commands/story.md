@@ -1,9 +1,10 @@
-# Write Session Case Study / Story
+# Write Overall Follow-Up Project Story
 
-Write a candid engineering retrospective and case study documenting the session's work in `docs/studies/`.
+Write the overall follow-up project story in `docs/studies/`, covering deliveries since the previous story,
+code metrics, quality, and agentic flow.
 
 ## Purpose
-A **Story** is an engineering case study that captures the reality of a development session: what was built, what worked, where mistakes or near-misses happened, code quality metrics, and velocity. It serves as primary research material for refining evergreen docs and agent harness rules.
+A **Story** tracks overall project progress across sessions and serves as primary research material for refining evergreen docs and agent harness rules.
 
 ---
 
@@ -37,7 +38,8 @@ developed since then, not only the current session.
 ## Shared Study Rules
 
 Follow the `study` skill for the shared output location and naming, front matter, indexing and fallback
-rules, and ticket extraction gate. Use `kind: story`.
+rules, and the **Ticket Extraction Gate**. Use `kind: story`. List allocated follow-up ticket numbers
+in the story document.
 
 ---
 
@@ -80,6 +82,5 @@ Every story must include the following sections:
 1. **Gather Ground Truth**: Run `git status`, `git log --oneline`, and `git diff` to collect factual session history.
 2. **Draft the Story**: Follow the required template structure above with full honesty.
 3. **Index the Study**: Follow the shared indexing rule in the `study` skill.
-4. **Ticket Extraction Gate**: Follow the shared gate in the `study` skill. Ask each allocated worker:
-   "What ticket number was allocated, and have all actionable follow-ups from this study been filed and listed here?"
+4. **Ticket Extraction Gate**: Follow the shared gate in the `study` skill.
 5. **Present Summary**: Provide a short recap to the user highlighting key lessons learned.

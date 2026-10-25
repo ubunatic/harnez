@@ -438,7 +438,7 @@ skills:
 
   - name: story
     license: AGPL-3.0-or-later
-    description: "Write a candid engineering retrospective and case study in docs/studies/"
+    description: "Write the overall follow-up project story: baseline, deliveries, LOC, quality and flow verdict, with second-vendor review"
     file: docs/commands/story.md
 
   - name: study
