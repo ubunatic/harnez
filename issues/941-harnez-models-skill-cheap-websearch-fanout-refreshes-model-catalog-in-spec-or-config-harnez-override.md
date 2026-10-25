@@ -40,6 +40,12 @@ rating), so users get fresh data only by installing a newer binary.
 4. Who applies changes: the skill shows a diff and asks before writing, or writes and reports. Recommendation:
    show the diff, write on owner confirmation; model choices belong to the owner.
 
+## Decision (owner, 2026-10-25)
+
+All four recommendations accepted: separate `~/.config/harnez/models.yaml` with the spec `models:` schema;
+field-level merge, unknown keys rejected; skill source in `docs/commands/harnez-models.md`; the skill shows the
+diff and writes only on owner confirmation.
+
 ## Acceptance
 
 - Skill registered and installed; `update` dispatches the fanout and aggregates a cited table.
