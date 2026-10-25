@@ -41,3 +41,15 @@ Owner: label `@x600 · <num>m ago`, or `@x600 · live` when within the fast thre
 - The `updated ...` body line goes away; an error line (stale reason, ssh failure) is shown only when there is one.
 - Tests per cell for both titles and for the error line; update the 607 baseline golden (`remote-load-source.ansi`)
   in the same commit and say so.
+
+M2 delivered: ce2e9e93 (title freshness, `updated` row removed, spec key `remote_load_live_threshold`).
+
+### M3 Pre-Work (host review of M2, 2026-10-25)
+
+- Host `make test-q1` after b0356c2a fails: `TestCollectorRecoversRemoteLoadForOneShot`
+  (`cmd/harnez/usage_binary_test.go:509`, "one-shot usage lacks the recovered remote load box"). The output shows
+  the box titled `(@x600 · 1h9m ago)`: the test still matches the old label, or the recovered sample's age is
+  wrong (a just-recovered sample should read `live`). Find which, fix it, rerun the package, then `make test-q1`.
+- Live, installed binary, tmux 160x50: `harnez usage --watch` shows `All Usage` and `[L] Load` but no Remote Load
+  box, also after pressing `r`. Find out why (box hidden by default in minimal mode, `r` not bound there, or no
+  cache read) and make `r` show it; report what the start state is.
