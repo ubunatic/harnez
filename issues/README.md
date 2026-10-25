@@ -28,4 +28,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 920 | [920-usage-server-collects-remote-load-over-ssh-slow-polling-without-viewers.md](920-usage-server-collects-remote-load-over-ssh-slow-polling-without-viewers.md) | usage: server collects remote load over ssh, slow polling without viewers | Open |
 | 921 | [921-epic-harnez-server-as-monitor-for-local-and-remote-ai-hosts.md](921-epic-harnez-server-as-monitor-for-local-and-remote-ai-hosts.md) | Epic: harnez server as monitor for local and remote AI hosts | Open |
 | 923 | [923-usage-btop-style-coloured-hotkey-char-in-box-titles-via-loom.md](923-usage-btop-style-coloured-hotkey-char-in-box-titles-via-loom.md) | usage: btop-style coloured hotkey char in box titles via loom | Open |
+| 924 | [924-agent-models-takes-24s-per-row-quota-availability-query-on-the-usage-store.md](924-agent-models-takes-24s-per-row-quota-availability-query-on-the-usage-store.md) | agent models takes 24s: per-row quota availability query on the usage store | Open |
 <!-- harnez:end issues-active-index -->
