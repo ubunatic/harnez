@@ -1,6 +1,7 @@
 # 943 — Canary: what claude, codex and agy report about available models
 
-**Status**: Open
+**Status**: Closed — agy lists models; claude and codex need a probe call (distinct errors unrecognized_model / model_not_found); codex models needs a TTY, unparsed; Anthropic list API unverified. Study docs/studies/2026-10-25-canary-model-access-discovery.md.
+**Closed-By**: claude:opus-5-5, session 9ec5fca3
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Research
