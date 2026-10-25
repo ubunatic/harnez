@@ -12,7 +12,7 @@ Tagline-only variant. Same rules as the full doc, no prose/case-studies. See `Ag
 For TUI layout work, use a checked-in `.ansi` mockup under `docs/data/` as the visual spec; have the host draft it and dispatch implementation against it. See `TUIDesign.md` for details.
 
 1. **Parallel Read, Sequential Write** — many may read/grep at once; one writer per workspace at a time. **Sequential dispatch is the default for every task type, not just file-overlapping code edits.** Includes read-then-write races on shared sequential resources (e.g. ticket numbers).
-2. **Canary & Test-Driven Verification** — verify with real test runs before declaring done; never assume an edit works.
+2. **Canary & Test-Driven Verification** — verify with real test runs before declaring done; never assume an edit works. External-contract tests (scp/ssh operands, sandbox behavior, sample ages, real CLI or hook JSON) take expected values from the real tool, a recorded sample, or the real clock, never from the code under test; add a canary or container check where unit tests cannot run the real tool.
 3. **Zero Zombie Guarantee & Background Task Hygiene** — track and terminate every background process, timer, and subagent before ending a session; always set `HTO=0` for background tasks/jobs; rely on reactive completion notifications instead of polling or `sleep` loops.
 4. **Responsive Host Orchestrator** — stay available; interactive hosts run agent start/wait in the host background runner, never synchronously through MCP.
 5. **In-Repository Single Source of Truth** — tickets/decisions/retros live in git (`issues/`, `docs/feedback/`, `docs/studies/` when present, otherwise a ticket), not just chat.

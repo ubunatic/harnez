@@ -64,6 +64,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - Tests already known to fail and why, so the worker neither fixes nor blames them.
   - Edge and negative cases to test (ambiguous input, near-miss values).
   - Test requirements (reproduction test first for bugs, unit tests for features).
+  - External-contract tests: expected values from the real tool, see AgenticLoop.
   - If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md` for the local-tracker/session fallback.
   - The exact close command with a written reason: `harnez issues close N "<real outcome>"`; no placeholders. The close refuses until a commit outside `issues/` names N; `--no-code` only for a ticket that needed no code.
     Close only after the ticket's acceptance check passes; the reason states the decisive evidence (the

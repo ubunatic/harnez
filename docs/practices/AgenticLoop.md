@@ -122,6 +122,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 2. **Canary & Test-Driven Verification**:
    - Every task must be verified with real test executions (`go test ./...`, `make smoke`, canary probes) before declaring completion.
    - Never assume an edit succeeds without observing passing assertions.
+   - **External-contract tests** (scp/ssh operands, systemd sandbox behavior, sample ages vs. real time, real CLI output or hook JSON) take their expected value from the real tool, a recorded real sample, or the real clock, never from the code under test. When the real tool cannot run in unit tests, add a canary or container-tier check. Evidence: 934 M1 asserted the shell-quoted scp target and the live upgrade failed; 932 M2 pinned `observed_at` an hour back in a one-shot test and asserted the old label; 919 used an injected runner, which hid the systemd sandbox ssh failure.
 
 3. **Zero Zombie Guarantee & Background Task Hygiene**:
    - Every spawned background process, schedule timer, or subagent must be tracked, accounted for, and explicitly terminated before concluding a session.
