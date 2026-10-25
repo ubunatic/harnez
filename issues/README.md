@@ -25,4 +25,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 913 | [913-server-install-persists-neus-indexing-so-the-installed-daemon-can-index.md](913-server-install-persists-neus-indexing-so-the-installed-daemon-can-index.md) | server install persists neus indexing so the installed daemon can index | Open |
 | 914 | [914-study-harness2-recursive-agent-harnessing-for-harnez-rule-and-skill-tuning.md](914-study-harness2-recursive-agent-harnessing-for-harnez-rule-and-skill-tuning.md) | Study Harness2 (recursive agent harnessing) for harnez rule and skill tuning | Open |
 | 915 | [915-issues-close-records-model-and-session-provenance.md](915-issues-close-records-model-and-session-provenance.md) | issues close records model and session provenance | Open |
+| 916 | [916-study-commits-fail-on-studies-index-drift-offer-a-one-call-fix.md](916-study-commits-fail-on-studies-index-drift-offer-a-one-call-fix.md) | Study commits fail on studies index drift; offer a one-call fix | Open |
 <!-- harnez:end issues-active-index -->
