@@ -1,6 +1,6 @@
 # 912 — usage: show swap in the Load and Remote Load boxes
 
-**Status**: Open
+**Status**: Closed — M1 6ba6af02: swap row in Load and Remote Load boxes; local live run shows swap 1.6/8.0G 20% matching free -m; tests cover swap, no swap and absent fields (older remote: no row); live x600 check moves to epic 921 after 919 upgrades the remote binary
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
