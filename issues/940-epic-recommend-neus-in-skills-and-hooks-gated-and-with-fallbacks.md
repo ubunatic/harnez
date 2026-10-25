@@ -1,6 +1,6 @@
 # 940 — Epic: recommend neus in skills and hooks, gated and with fallbacks
 
-**Status**: Draft
+**Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Epic
