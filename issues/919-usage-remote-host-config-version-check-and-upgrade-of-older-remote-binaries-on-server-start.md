@@ -52,3 +52,20 @@ M1-M3 delivered: 40c99970 (build identity `0.2.1+3710`), c95e8465 (compare and s
 (background upgrade on server start); test-q1 green. Host reviewed: legacy equal release → install, newer → keep.
 Open: live run. x600 runs `0.1.33`, `Linux x86_64`; restart `harnez-agent-collector.service` after 924 lands
 and a clean `make install` (the current install includes 924's uncommitted store edits).
+
+## M4 Pre-Work: live run failed (host, 2026-10-25)
+
+Live run (build `0.2.1+3713`): the log shows only `remote upgrade: x600 platform probe failed: exit status 255`, and x600 stays
+`0.1.33`. Cause: the unit runs with `ProtectSystem=strict`/`ProtectHome=read-only`. There, ssh rejects
+`/etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf` ("Bad owner or permissions"). Reproduced with `systemd-run --user
+-p ProtectSystem=strict -p ProtectHome=read-only -p PrivateTmp=yes ssh ...`; adding `-F ~/.ssh/config` succeeds.
+Second gap: the unit had no `SSH_AUTH_SOCK` (the host ran `systemctl --user import-environment SSH_AUTH_SOCK`, which
+does not persist).
+
+1. Pass `-F <home>/.ssh/config` to ssh and scp when that file exists (same option for both; test with the injected
+   runner, both with and without the file).
+2. On a failed command, log its trimmed combined output (first line or ~200 bytes), not only the exit status.
+3. Make the agent socket reach the server: the unit generator (wherever `harnez-agent-collector.service` is written)
+   or the server start passes `SSH_AUTH_SOCK`; pick the smallest durable fix and document it. Without an agent and
+   without a usable key, the server logs one clear skip line.
+4. Verify by restarting the installed unit; the host checks x600 itself.
