@@ -1,6 +1,7 @@
 # 939 — Epic: host workflow guards (edit-rule hook, study index fix, test contract rule, close provenance)
 
-**Status**: Open
+**Status**: Closed — All four tasks closed: 937 edit guard (709df88a, ed8dbeaf), 916 index --stage (ac726732), 936 contract-test rule (68618f27), 915 close provenance (e4ffd8f5); sprint study docs/studies/2026-10-25-epic-939-host-workflow-guards.md.
+**Closed-By**: claude:opus-5-5, session 9ec5fca3
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Epic
@@ -47,8 +48,8 @@ Code fanout (s939, luna:low): 937 is medium: extend the single existing PreToolU
 forbids a second one), new per-session counter state, threshold and wording in `spec/`. 916 lint at
 `internal/issues/maintenance/rebase.go:586`. 936 fits AgenticLoop (`docs/practices/AgenticLoop.md:123`). 915 close
 in `internal/issues/status_action.go:98-148`. Decisions in 916 and 915. Stray tool-call text removed from 915/916.
-| — | sprint study, `/evergreen` | final | host | — | Open |
-| — | `/wrap` | final | host | — | Open |
+| — | sprint study, `/evergreen` | final | host | — | Done (study 2026-10-25-epic-939; rule already in AgenticLoop via 936) |
+| — | `/wrap` | final | host | — | Done |
 
 Phases: A, B and C are independent; run them one after another (one developer at a time). The epic closes after
 the final tasks.
