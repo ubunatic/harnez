@@ -54,11 +54,6 @@ sections:
       - src: assets/usage-load.png
         alt: harnez usage showing All Usage quota bars for five providers, local Load with CPU at 100
           percent and RAM at 83 percent, and Remote Load of an ssh node with two GPUs
-  - gallery:
-    - caption: Provider and microphone readiness at startup.
-      images:
-      - src: assets/usage-splash.png
-        alt: harnez usage splash screen showing green readiness badges for Codex, Claude, AGY, and Mic
   - text: |-
       `harnez usage` (aliases: `quota`, `tokens`) unifies live rate-limit quota windows, token velocity sparklines, host hardware load, remote SSH nodes, and microphone speech meters into one interactive btop-style dashboard.
 
