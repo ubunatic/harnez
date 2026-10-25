@@ -1,18 +1,17 @@
 version: 1
 observed_at: "2026-10-25T10:00:00Z"
 complete: false
+coverage:
+  - {harness: claude, account: work, status: advertised, method: model-list}
 observations:
-  - identity: {harness: claude, provider: anthropic, model: opus, version: "4.6", tier: high}
-    status: available
+  - identity: {harness: claude, provider: anthropic, model: opus, version: "4.6"}
+    status: advertised
+    method: model-list
     account: work
     facts:
-      - value: listing and call both succeeded
+      - value: model was listed
         source: discovered
-        method: bounded-probe
+        method: model-list
+        account: work
         observed_at: "2026-10-25T10:00:00Z"
         evidence: [probe-1]
-      - value: one authentication error
-        source: discovered
-        method: bounded-probe
-        observed_at: "2026-10-25T10:01:00Z"
-        evidence: [probe-2]

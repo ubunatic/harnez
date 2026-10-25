@@ -1,0 +1,13 @@
+version: 1
+before: null
+after: snapshot-2
+rows:
+  - category: capability
+    model: codex:luna:high
+    field: capabilities
+    before: null
+    after: [vision]
+    sources: [web]
+    evidence: [release notes]
+    severity: warning
+    unexpected: true

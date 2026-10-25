@@ -1,0 +1,9 @@
+version: 1
+models:
+  - identity: {harness: custom, provider: local, model: internal-7b, version: "7.2"}
+    facts:
+      purpose:
+        - value: public service
+          source: web
+          observed_at: "2026-10-25T10:00:00Z"
+          evidence: [web source without URL]

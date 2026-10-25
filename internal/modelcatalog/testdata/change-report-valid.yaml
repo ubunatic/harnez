@@ -1,0 +1,12 @@
+version: 1
+before: snapshot-1
+after: snapshot-2
+rows:
+  - category: capability
+    model: codex:luna:high
+    field: capabilities
+    before: [tools]
+    after: [tools, vision]
+    sources: [web]
+    evidence: [release notes]
+    severity: info

@@ -91,6 +91,15 @@ statements and DDL, while its JSON Schema validates the YAML structure rather
 than SQL syntax. In another project, substitute an existing spec file or omit
 this example when absent.
 
+For the model catalog contract, legacy `spec/agent.yaml` model `cost` values map
+to `relative_cost` facts when migrating. This is a relative estimate, not a
+currency price. In catalog and policy facts, `null` means unknown or explicitly
+cleared; zero is a measured value and must never stand in for unknown. Policy
+patch arrays replace the stored array, and a `null` patch clears a field. A
+`version_pin` must equal the version in the same entry's identity when both are
+present; JSON Schema cannot compare those sibling fields, so contract validation
+checks this relationship explicitly.
+
 ---
 
 ## 3. Architecture & Data Flow

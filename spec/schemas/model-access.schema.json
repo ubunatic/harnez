@@ -1,20 +1,35 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "model-access.schema.json",
+  "$id": "https://schemas.harnez.dev/model-access.schema.json",
   "type": "object",
-  "required": ["version", "observed_at", "complete", "observations"],
+  "required": ["version", "observed_at", "complete", "coverage", "observations"],
   "properties": {
     "version": { "const": 1 },
     "observed_at": { "type": "string", "format": "date-time" },
     "complete": { "type": "boolean" },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["harness", "account", "status", "method"],
+        "properties": {
+          "harness": { "type": "string", "minLength": 1 },
+          "account": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["advertised", "accessible", "denied", "unknown", "stale"] },
+          "method": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
     "observations": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["identity", "status", "facts"],
+        "required": ["identity", "status", "method", "facts"],
         "properties": {
           "identity": { "$ref": "agent.schema.json#/$defs/modelIdentity" },
-          "status": { "type": "string", "enum": ["available", "denied", "unknown", "stale"] },
+          "status": { "type": "string", "enum": ["advertised", "accessible", "denied", "unknown", "stale"] },
+          "method": { "type": "string", "minLength": 1 },
           "facts": { "type": "array", "items": { "$ref": "agent.schema.json#/$defs/fact" } },
           "account": { "type": ["string", "null"] }
         },

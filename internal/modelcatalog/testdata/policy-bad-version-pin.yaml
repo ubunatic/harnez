@@ -1,0 +1,8 @@
+version: 1
+default_enabled: false
+enabled: [custom:internal-7b]
+models:
+  custom:internal-7b:
+    kind: custom
+    identity: {harness: custom, provider: local, model: internal-7b, version: "7.2"}
+    version_pin: "7.3"

@@ -53,3 +53,22 @@ schemas, probe budget in `spec/agent.yaml`, 8 fixtures and `internal/modelcatalo
    outside enum, bad `observed_at` format (settles whether `format` is enforced; if not, add a pattern).
    Tests assert a rejection-message substring (keyword + path), not only "invalid".
 8. Drop the `maximum: 20` duplication of the spec value from the schema (or justify it as a hard ceiling).
+
+## M2 delivered
+
+- Facts now require non-empty evidence, web URLs, and discovered method/account/time; measured facts
+  require evidence. Scalar fact keys hold arrays so conflicting observations remain available, with an
+  optional `disputed` marker; the fact-key set rejects typos.
+- Access observations distinguish advertised from accessible, require a method, and record coverage by
+  harness and account. Snapshots now carry identity, predecessor, effective catalog, and applied state;
+  change reports have a strict row schema.
+- Policy IDs use a shared pattern, custom entries require identity, tier is optional, and patches cover
+  relative cost and purpose. Tests check version-pin equality when identity is present; JSON Schema cannot
+  compare sibling values. Invalid fixtures assert both the rejection keyword and schema path.
+- `docs/Spec.md` and its source document the legacy cost mapping and null-clearing semantics. Schema IDs
+  provide stable reference bases, and the test resolver uses those IDs without a hardcoded base URI. The
+  `jsonschema-go` API still requires a loader to retrieve external embedded schema documents.
+- Removed the schema's duplicate 20-call ceiling; the probe limit remains in `spec/agent.yaml`.
+- Verification: `go test ./internal/modelcatalog ./internal/claude -count=1` passed; `make install`
+  completed. The one `make test-q1` run failed at the root-doc copy check (fixed afterward) and an
+  unrelated fatal map access in `internal/usage`; the full suite was not rerun.

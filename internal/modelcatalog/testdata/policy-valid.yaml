@@ -3,7 +3,8 @@ default_enabled: false
 enabled: [codex:luna:high, custom:internal-7b]
 models:
   custom:internal-7b:
-    identity: {harness: custom, provider: local, model: internal-7b, version: "7.2", tier: med}
+    kind: custom
+    identity: {harness: custom, provider: local, model: internal-7b, version: "7.2"}
     version_pin: "7.2"
     fields:
       aliases: []

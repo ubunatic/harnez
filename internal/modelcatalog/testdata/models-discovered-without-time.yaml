@@ -1,0 +1,10 @@
+version: 1
+models:
+  - identity: {harness: custom, provider: local, model: internal-7b, version: "7.2"}
+    facts:
+      purpose:
+        - value: discovered model
+          source: discovered
+          method: model-list
+          account: work
+          evidence: [missing observed_at]

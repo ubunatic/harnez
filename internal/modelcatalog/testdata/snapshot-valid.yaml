@@ -1,5 +1,8 @@
 version: 1
+id: snapshot-2026-10-25T10:00:00Z
 created_at: "2026-10-25T10:00:00Z"
-catalog: {version: 1, models: []}
-access: {version: 1, observed_at: "2026-10-25T10:00:00Z", complete: false, observations: []}
+previous: null
+effective_catalog: {version: 1, models: []}
+access: {version: 1, observed_at: "2026-10-25T10:00:00Z", complete: false, coverage: [], observations: []}
 policy: null
+applied: false

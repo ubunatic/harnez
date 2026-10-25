@@ -1,0 +1,6 @@
+version: 1
+default_enabled: false
+enabled: []
+models:
+  custom:internal-7b:
+    kind: custom

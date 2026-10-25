@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "models.schema.json",
+  "$id": "https://schemas.harnez.dev/models.schema.json",
   "type": "object",
   "required": ["version", "models"],
   "properties": {
@@ -16,28 +16,56 @@
           "facts": {
             "type": "object",
             "properties": {
-              "capabilities": { "type": "array", "items": { "$ref": "agent.schema.json#/$defs/fact" } },
-              "pitfalls": { "type": "array", "items": { "$ref": "agent.schema.json#/$defs/fact" } },
-              "relative_cost": { "$ref": "agent.schema.json#/$defs/fact" },
-              "api_cost": {
-                "allOf": [
-                  { "$ref": "agent.schema.json#/$defs/fact" },
-                  { "properties": { "value": { "$ref": "agent.schema.json#/$defs/apiCost" } } }
-                ]
-              },
-              "subscription_cost": {
-                "allOf": [
-                  { "$ref": "agent.schema.json#/$defs/fact" },
-                  { "properties": { "value": { "$ref": "agent.schema.json#/$defs/subscriptionCost" } } }
-                ]
-              }
+              "capabilities": { "$ref": "#/$defs/factSet" },
+              "pitfalls": { "$ref": "#/$defs/factSet" },
+              "purpose": { "$ref": "#/$defs/factSet" },
+              "relative_cost": { "$ref": "#/$defs/relativeCostFacts" },
+              "api_cost": { "$ref": "#/$defs/apiCostFacts" },
+              "subscription_cost": { "$ref": "#/$defs/subscriptionCostFacts" }
             },
-            "additionalProperties": { "$ref": "agent.schema.json#/$defs/fact" }
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
       }
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "factSet": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "agent.schema.json#/$defs/fact" }
+    },
+    "relativeCostFacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "allOf": [
+          { "$ref": "agent.schema.json#/$defs/fact" },
+          { "properties": { "value": { "type": ["number", "null"], "exclusiveMinimum": 0 } } }
+        ]
+      }
+    },
+    "apiCostFacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "allOf": [
+          { "$ref": "agent.schema.json#/$defs/fact" },
+          { "properties": { "value": { "$ref": "agent.schema.json#/$defs/apiCost" } } }
+        ]
+      }
+    },
+    "subscriptionCostFacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "allOf": [
+          { "$ref": "agent.schema.json#/$defs/fact" },
+          { "properties": { "value": { "$ref": "agent.schema.json#/$defs/subscriptionCost" } } }
+        ]
+      }
+    }
+  }
 }
