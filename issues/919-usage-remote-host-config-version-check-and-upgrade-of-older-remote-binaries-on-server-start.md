@@ -47,3 +47,8 @@ Host corrections:
   or equal to the local release, so it is upgraded; a higher plain release is kept. Otherwise x600, which runs
   a legacy build today, would never be upgraded. Unparsable output stays unknown → skip.
 - Tests: TDD runs of touched packages are fine; one `make test-q1` at the end of M3 only.
+
+M1-M3 delivered: 40c99970 (build identity `0.2.1+3710`), c95e8465 (compare and stage, spec keys), 3d369c60
+(background upgrade on server start); test-q1 green. Host reviewed: legacy equal release → install, newer → keep.
+Open: live run. x600 runs `0.1.33`, `Linux x86_64`; restart `harnez-agent-collector.service` after 924 lands
+and a clean `make install` (the current install includes 924's uncommitted store edits).
