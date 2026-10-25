@@ -1,6 +1,6 @@
 # 878 — retro skill: session report from compaction summaries and key user messages
 
-**Status**: Open
+**Status**: Closed — M1 21beea8b session extract (streaming, uuid/line pointers), M2 a52d63bf retro skill, M3 d5bbc634 slash-command dedup; session 13d4828e: 18 summaries, 128 owner messages, checked against raw JSONL (9 plain /compact rows); first retro written and owner-reviewed: docs/studies/2026-10-25-session-retro-harnez-epics-910-911.md (68782124); host make test-q1 after M3: 0 FAIL
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
