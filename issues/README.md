@@ -32,4 +32,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 926 | [926-support-installing-custom-repository-provided-skills-into-agent-environments.md](926-support-installing-custom-repository-provided-skills-into-agent-environments.md) | Support installing custom repository-provided skills into agent environments | Open |
 | 927 | [927-lint-gokay-check-fails-on-usagestore-store-test-go-errcheck-and-spec-schema-conformance.md](927-lint-gokay-check-fails-on-usagestore-store-test-go-errcheck-and-spec-schema-conformance.md) | lint: gokay check fails on usagestore store_test.go errcheck and spec schema conformance | Open |
 | 928 | [928-harden-remote-upgrade-destination-and-install-command-validation.md](928-harden-remote-upgrade-destination-and-install-command-validation.md) | Harden remote upgrade destination and install command validation | Open |
+| 929 | [929-preserve-remote-load-sample-freshness-across-ssh-polling.md](929-preserve-remote-load-sample-freshness-across-ssh-polling.md) | Preserve remote load sample freshness across SSH polling | Open |
 <!-- harnez:end issues-active-index -->
