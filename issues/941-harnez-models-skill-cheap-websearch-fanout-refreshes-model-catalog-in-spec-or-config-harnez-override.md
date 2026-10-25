@@ -46,6 +46,16 @@ All four recommendations accepted: separate `~/.config/harnez/models.yaml` with 
 field-level merge, unknown keys rejected; skill source in `docs/commands/harnez-models.md`; the skill shows the
 diff and writes only on owner confirmation.
 
+## Scope change (epic 942, owner, 2026-10-25)
+
+941 is now child B of epic 942: layered loader and policy enforcement only. The web-refresh skill moved to 949;
+formats come from 945. Two decisions above change: web refreshes write to `$XDG_STATE_HOME/harnez/models/`, not
+into `models.yaml`; an invalid `models.yaml` stops harnez with a clear error instead of falling back to defaults
+(fallback could re-enable denied models). One merged immutable catalog replaces `loadModelAliases/loadModelGuides`
+(`internal/subagent/agentspec.go:179`) and feeds `KnownModelEntries`, `ResolveModel`, `agent models`, completion and
+TUI; policy is enforced after alias resolution, incl. the Pi direct-ID path (`internal/subagent/driver.go:385`).
+The acceptance below reads with these changes; the skill item belongs to 949.
+
 ## Acceptance
 
 - Skill registered and installed; `update` dispatches the fanout and aggregates a cited table.

@@ -60,6 +60,14 @@ link, discovered, measured (telemetry / `harnez rate`), user-declared. The chang
 - Change report: diff of two snapshots; rows and JSON `{category, model, field, before, after, sources, evidence,
   severity}`; proposed vs. applied kept apart; defaults and pins never change silently.
 
+## Decision (owner, 2026-10-25)
+
+All five accepted: (1) machine data in `$XDG_STATE_HOME/harnez/models/`, policy in `models.yaml`, nothing of it
+in git; (2) invalid `models.yaml` stops harnez; (3) unknown access stays enabled, an incomplete run never
+removes a model; (4) `cost` stays relative, real subscription and API prices separate, unknown is null;
+(5) probes ask first, stop on quota/auth errors, about one tiny call per model, cap about 20, limits in spec.
+Added: probe calls run bare, with no harnez preface and minimal system prompt and context (see 946).
+
 ## Out of scope
 
 Automatic model selection changes without owner confirmation; billing integration.
@@ -73,12 +81,13 @@ overrides an assumed capability, cost fields (subscription vs. API).
 
 | Ticket | What | Group | Searcher → architect → developer | Reviewer | Status |
 |---|---|---|---|---|---|
-| 943 | Canary: what claude/codex/agy report about available models and access errors | 1 | probe advisor | host | Open |
-| — | Architecture: layers, schema, sources, snapshot diff | 2 | — → sol:med → — | host + owner | Open |
-| 941 | Layered loader + `models.yaml` policy (adjust to the design) | 3 | tbd | tbd | Open |
-| — | Access discovery per harness CLI | 3 | tbd | tbd | Open |
-| — | `harnez-models update` web-refresh skill (part of 941) | 4 | tbd | tbd | Open |
-| — | Measured capabilities from telemetry / rate data | 4 | tbd | tbd | Open |
-| — | Change report | 5 | tbd | tbd | Open |
+| 943 | Canary: what claude/codex/agy report about available models and access errors | 1 | luna:low advisor | host | Closed (65511a42) |
+| — | Architecture: layers, schema, sources, snapshot diff | 2 | — → sol:med → — | host + owner | Done (cdfb4b71) |
+| 945 | A: formats and schemas | 3 | — → — → sol:low | opus:low | Open |
+| 941 | B: merged loader + policy enforcement (needs 945) | 4 | tbd | opus/sol | Open |
+| 946 | C: access discovery, bare probes (needs 945, 941) | 5 | tbd | opus/sol | Open |
+| 949 | D: `harnez-models update` web-refresh skill (needs 941) | 5 | tbd | host | Open |
+| 947 | E: capability evidence (needs 945, 941) | 5 | tbd | tbd | Open |
+| 948 | F: snapshots and change report (needs 946, 947, 949) | 6 | tbd | tbd | Open |
 | — | sprint study, `/evergreen` | final | host | — | Open |
 | — | `/wrap` | final | host | — | Open |
