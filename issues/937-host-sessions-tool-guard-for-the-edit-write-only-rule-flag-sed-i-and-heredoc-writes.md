@@ -1,6 +1,6 @@
 # 937 — host sessions: tool guard for the Edit/Write-only rule (flag sed -i and heredoc writes)
 
-**Status**: Open
+**Status**: Closed — Warn-only edit guard in the single Bash hook (709df88a, M2 ed8dbeaf): warns on repo sed -i/perl -i/redirects incl. absolute paths, skips heredoc bodies, && chains, $VAR, /tmp; escalates on 6th unanswered warning; wording and threshold in spec/edit_guard.yaml. Host make test-q1 green after M1, developer make test-q1 green after M2; host live probe of installed hook: 4/4 expected.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
