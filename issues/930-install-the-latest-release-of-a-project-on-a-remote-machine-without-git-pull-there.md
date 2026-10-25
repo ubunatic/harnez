@@ -1,6 +1,6 @@
 # 930 — Install the latest release of a project on a remote machine without git pull there
 
-**Status**: Open
+**Status**: Closed — Filed in the wrong repo; moved to lmcoder 220
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
