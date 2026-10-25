@@ -1,6 +1,6 @@
 # 929 — Preserve remote load sample freshness across SSH polling
 
-**Status**: Open
+**Status**: Closed — f0031376: server samples x600 via 'harnez load-stream' (one timestamped record, ssh killed after it); cache/UI keep observation time. Live: box '@x600 · server cache' shows 'updated 0m ago', cache file rewritten 13:41:21, log 'remote load x600 recovered'; make test-q1 green (host run)
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
