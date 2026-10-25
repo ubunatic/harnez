@@ -36,3 +36,20 @@ follow-up tickets. The eight-section template stays in `story`. Reversible; reco
 
 Developer `d938` (sol:med), reviewer `r938` (opus:med, independent pre-close review). Searcher skipped: the
 ticket names the files; the developer's plan-only first turn verifies callers and the write set.
+
+M1 delivered (b0d0b790): study.md (40 lines, 275 words installed vs. story 760), story slimmed, six callers and
+AgenticLoop full source point to study, config.yaml registration plus install test. Host `make test-q1` green.
+IssueTracking needs no change (reviewer: it never named story).
+
+## M2 — Pre-Work / Required Refinements (reviewer r938, opus:med)
+
+1. `config.yaml:441` story description: overall follow-up project story (baseline, deliveries, LOC, quality and
+   flow verdict, second-vendor review), not "retrospective and case study"; update `claudeskills_test.go:82`.
+   Fix `story.md:1-3` heading/purpose the same way.
+2. Name the extraction gate in study.md (heading or explicit label) so "the ticket extraction gate" in
+   `story.md:40,83` and `study.md:35` resolves; say in story where allocated ticket numbers go.
+3. Restore in study.md: the worker question ("What ticket number was allocated, and have all actionable follow-ups
+   been filed and listed here?"), the literal `---` / `kind: <kind>` / `---` example with its reason (later
+   stories find their predecessor), and that `.harnez/repo.yaml` is the indexed-studies switch.
+4. Test: assert story's installed body contains its reference to study (e.g. `## Shared Study Rules`).
+Optional, skipped: AgenticLoop.md:332 and jam.md links (never linked story).
