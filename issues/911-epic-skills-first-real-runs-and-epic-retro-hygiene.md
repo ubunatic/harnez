@@ -20,7 +20,7 @@ ticket needs an owner decision. Circuit breaker: on no progress, clear the goal 
 | 2 | 852 | P2 | tui-check skill | Closed: first run on loom ColorPicker (98badd77) |
 | 3 | 904 | P2 | Epic skill evaluation: lessons from Neus Next Wave | Closed (65aac99d); close flags moved to 915 |
 | 4 | 905 | P2 | Epic/retro hygiene: file follow-up issues right after studies and retros | Closed (826496f1, 361ef481) |
-| 5 | 878 | P2 | retro skill from compaction summaries and key user messages | M1–M3 accepted (21beea8b, a52d63bf, d5bbc634); owner-reviewed retro open |
+| 5 | 878 | P2 | retro skill from compaction summaries and key user messages | Closed (21beea8b, a52d63bf, d5bbc634); owner-reviewed retro 68782124 |
 
 ## Refinement (2026-10-24)
 
