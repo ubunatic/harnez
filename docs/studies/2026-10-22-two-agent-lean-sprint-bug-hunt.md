@@ -1,5 +1,5 @@
 ---
-kind: story
+kind: sprint
 ---
 
 # Two-agent lean sprint: P1/P2 bug hunt (2026-10-22)
