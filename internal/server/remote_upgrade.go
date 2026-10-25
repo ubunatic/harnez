@@ -245,7 +245,10 @@ func remoteShellPath(path string) string {
 }
 
 func remoteSCPPath(path string) string {
-	return remoteShellPath(path)
+	if strings.HasPrefix(path, "~/") {
+		return strings.TrimPrefix(path, "~/")
+	}
+	return path
 }
 
 func (u remoteBinaryUpgrader) printf(format string, args ...any) {

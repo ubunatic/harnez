@@ -116,13 +116,33 @@ func TestRemoteUpgradeQuotesHomeAndAbsoluteInstallPathsInArgv(t *testing.T) {
 				t.Errorf("version argv = %q, want %q", got, test.quoted+" --version")
 			}
 			scpTarget := calls[2][len(calls[2])-1]
-			scpPrefix := strings.TrimSuffix(remoteSCPPath(test.path+".tmp-"), "'")
-			if !strings.HasPrefix(scpTarget, "host:"+scpPrefix) {
-				t.Errorf("scp destination argv = %q", scpTarget)
+			wantSCPPath := remoteSCPPath(test.path) + ".tmp-"
+			if !strings.HasPrefix(scpTarget, "host:"+wantSCPPath) {
+				t.Errorf("scp destination argv = %q, want host:%s<unique-suffix>", scpTarget, wantSCPPath)
+			}
+			if strings.ContainsAny(scpTarget, "'\"") {
+				t.Errorf("scp destination argv must not contain shell quoting: %q", scpTarget)
 			}
 			install := calls[3][len(calls[3])-1]
 			if !strings.Contains(install, "mkdir -p "+remoteShellPath(path.Dir(test.path))) || !strings.Contains(install, "chmod 0755 ") || !strings.Contains(install, " && mv -f ") || !strings.HasSuffix(install, " "+test.quoted) {
 				t.Errorf("install argv = %q", install)
+			}
+		})
+	}
+}
+
+func TestRemoteUpgradeSCPArgvUsesUnquotedSFTPPath(t *testing.T) {
+	for _, test := range []struct{ path, want string }{
+		{"~/go/bin/harnez", "host:go/bin/harnez.tmp-"},
+		{"/opt/harnez/bin/harnez", "host:/opt/harnez/bin/harnez.tmp-"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			got := "host:" + remoteSCPPath(test.path+".tmp-123-456")
+			if got != test.want+"123-456" {
+				t.Fatalf("SCP destination argv = %q, want %q", got, test.want+"123-456")
+			}
+			if strings.ContainsAny(got, "'\"") {
+				t.Fatalf("SCP destination argv contains shell quoting: %q", got)
 			}
 		})
 	}
