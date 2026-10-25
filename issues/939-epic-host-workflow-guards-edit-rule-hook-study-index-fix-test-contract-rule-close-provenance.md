@@ -38,8 +38,8 @@ Skipped: internal harness guards and doc rules; no external tool to reuse.
 
 | Ticket | What | Group | Searcher → architect → developer | Reviewer | Status |
 |---|---|---|---|---|---|
-| 937 | PreToolUse hook warns on shell edits, asks for feedback, escalates to token-count proof | A | s939 → — → sol:low | opus:low | Open |
-| 916 | `harnez index --stage`, lint names it | B | s939 → — → luna:high | host diff | Open |
+| 937 | PreToolUse hook warns on shell edits, asks for feedback, escalates to token-count proof | A | s939 → — → sol:low | opus:low | Closed (709df88a, ed8dbeaf) |
+| 916 | `harnez index --stage`, lint names it | B | s939 → — → luna:high | host diff | Closed (ac726732) |
 | 936 | practice rule: external-contract tests (AgenticLoop full+lite, lean-sprint checklist) | B | s939 → — → haiku:high | host diff | Open |
 | 915 | `issues close` records model and session (env defaults) | C | s939 → — → luna:high | host diff | Open |
 
