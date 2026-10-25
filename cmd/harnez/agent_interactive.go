@@ -14,10 +14,11 @@ import (
 )
 
 type interactiveDeps struct {
-	store    func() (*subagent.FileSessionStore, error)
-	parent   func() string
-	find     func(*cobra.Command, *subagent.FileSessionStore, string) (*subagent.Session, error)
-	storeDir string
+	store        func() (*subagent.FileSessionStore, error)
+	parent       func() string
+	find         func(*cobra.Command, *subagent.FileSessionStore, string) (*subagent.Session, error)
+	storeDir     string
+	modelEnabled func(string, string, string) (bool, error)
 }
 
 type interactiveStartRequest struct {
@@ -50,11 +51,11 @@ func validateInteractiveFlags(cmd *cobra.Command, detached, jsonOut bool, stream
 func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveStartRequest) error {
 	spec := req.ModelSpec
 	if spec == "" {
-		var err error
-		spec, err = subagent.DefaultModelSpec()
+		defaultModel, err := subagent.DefaultModel()
 		if err != nil {
 			return err
 		}
+		spec = defaultModel.Spec()
 	}
 	m, err := subagent.ResolveModel(spec)
 	if err != nil {
@@ -144,6 +145,9 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 	}
 	if !canManageTarget(d.parent(), sess) {
 		return fmt.Errorf("session %q is outside caller lineage", sess.ID)
+	}
+	if err := warnDisabledSessionModel(cmd, sess, d.modelEnabled); err != nil {
+		return err
 	}
 	if sess.Status == "running" {
 		return fmt.Errorf("session %q has a background turn running; use harnez agent wait %s before resuming interactively", sess.Name, sess.Name)

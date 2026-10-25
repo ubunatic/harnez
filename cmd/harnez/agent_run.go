@@ -36,6 +36,25 @@ type agentDeps struct {
 	quota        func(context.Context, string, bool) usage.TurnQuotaReading
 	availability func(string, string) usage.ProviderQuotaAvailability
 	preflight    func(context.Context) error
+	modelEnabled func(string, string, string) (bool, error)
+}
+
+func sessionModelEnabled(sess *subagent.Session, check func(string, string, string) (bool, error)) (bool, error) {
+	if check == nil {
+		check = subagent.ModelEnabled
+	}
+	return check(sess.Provider, sess.Model, sess.Tier)
+}
+
+func warnDisabledSessionModel(cmd *cobra.Command, sess *subagent.Session, check func(string, string, string) (bool, error)) error {
+	enabled, err := sessionModelEnabled(sess, check)
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: session %q uses model %s disabled by current policy; continuing the existing session.\n", sess.Name, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}.Spec())
+	}
+	return nil
 }
 
 func preflightCodex(ctx context.Context, provider string, driver subagent.Driver, check func(context.Context) error) error {
@@ -295,11 +314,11 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	quotaTurnStarted := time.Now().Add(-time.Hour)
 	spec := req.ModelSpec
 	if spec == "" {
-		var defaultErr error
-		spec, defaultErr = subagent.DefaultModelSpec()
+		defaultModel, defaultErr := subagent.DefaultModel()
 		if defaultErr != nil {
 			return defaultErr
 		}
+		spec = defaultModel.Spec()
 	}
 	if err := checkStreamMode(req.StreamMode); err != nil {
 		return err
@@ -577,6 +596,9 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return err
 	}
 	resumeIdle := time.Duration(0)
+	if err := warnDisabledSessionModel(cmd, sess, d.modelEnabled); err != nil {
+		return err
+	}
 	if !sess.LastActiveAt.IsZero() {
 		resumeIdle = time.Since(sess.LastActiveAt)
 	}
@@ -586,7 +608,11 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			modelSpec += ":" + sess.Tier
 		}
 		if _, err := subagent.ResolveModel(modelSpec); err != nil {
-			return fmt.Errorf("session %q uses unavailable model %s; start a new session with harnez agent start: %w", sess.Name, modelSpec, err)
+			if enabled, enabledErr := sessionModelEnabled(sess, d.modelEnabled); enabledErr == nil && !enabled {
+				// An in-flight session remains resumable after policy changes.
+			} else {
+				return fmt.Errorf("session %q uses unavailable model %s; start a new session with harnez agent start: %w", sess.Name, modelSpec, err)
+			}
 		}
 	}
 	if req.SessionID == "" && (sess.HarnessType != "interactive" || sess.Status != "active") {

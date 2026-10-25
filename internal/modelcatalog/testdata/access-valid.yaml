@@ -7,6 +7,7 @@ observations:
   - identity: {harness: claude, provider: anthropic, model: opus, version: "4.6"}
     status: advertised
     method: model-list
+    observed_at: "2026-10-25T10:00:00Z"
     account: work
     facts:
       - value: model was listed

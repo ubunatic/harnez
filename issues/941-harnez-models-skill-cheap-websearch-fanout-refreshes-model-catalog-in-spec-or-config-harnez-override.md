@@ -148,6 +148,21 @@ pin mismatch, unchanged behaviour without policy.
    tier-less vs tiered alias conflict (test + Spec.md); pin on a custom entry's own identity.
 9. Read-only exported catalog and per-observation `observed_at` (Decision).
 
+## M4 delivered
+
+- Catalog state is private and exposed through detached-copy accessors; `Model.Enabled` was removed so
+  `IsEnabled` is the only enablement rule. Access observations remain evidence even for unknown identities,
+  and now carry required per-observation timestamps.
+- Unapplied policy fields are rejected by both schema and loader. Added policy precedence, alias-conflict,
+  custom identity pin, unknown/denied observation, XDG-over-HOME, disabled-default, and read-only API tests.
+- Resume and send warn when current policy disables a stored session model, while continuing in-flight work;
+  new start paths still resolve through the policy gate. Added resume/send warning coverage and a no-policy
+  `KnownModelSpecsE` golden.
+- Test mains isolate HOME, XDG and HARNEZ variables in model catalog, subagent, router and bench packages.
+- Updated `docs/other/Spec.md` and its root copy for supported policy fields and access timestamps.
+- `make install` succeeded. The single `make test-q1` attempt exited at its gofmt preflight before tests ran;
+  `grep '--- FAIL'` had no matches. The test files were formatted afterward; no second q1 run was made.
+
 ## Acceptance
 
 - Skill registered and installed; `update` dispatches the fanout and aggregates a cited table.

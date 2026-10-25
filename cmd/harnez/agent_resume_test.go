@@ -1122,6 +1122,39 @@ func TestRunResumeAcceptsCurrentCodexModels(t *testing.T) {
 	}
 }
 
+func TestRunResumeWarnsAndContinuesWhenPolicyDisablesModel(t *testing.T) {
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "current-session", Name: "current", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: ".", HarnessType: "harnez", Status: "completed", ContextTokens: 100}); err != nil {
+		t.Fatal(err)
+	}
+	driver := &resumeOutcomeDriver{}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+	cmd := &cobra.Command{}
+	cmd.SetOut(new(bytes.Buffer))
+	stderr := new(bytes.Buffer)
+	cmd.SetErr(stderr)
+	deps := agentDeps{
+		store:  func() (*subagent.FileSessionStore, error) { return store, nil },
+		parent: func() string { return "" },
+		find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+			return s.Find(id)
+		},
+		modelEnabled: func(string, string, string) (bool, error) { return false, nil },
+		dbPath:       filepath.Join(t.TempDir(), "telemetry.sqlite"),
+	}
+	if err := runResume(t.Context(), cmd, deps, resumeRequest{Name: "current", Prompt: "continue", StreamMode: streamFull}); err != nil {
+		t.Fatal(err)
+	}
+	if driver.resumes != 1 || !strings.Contains(stderr.String(), "disabled by current policy") {
+		t.Fatalf("resume calls=%d stderr=%q", driver.resumes, stderr.String())
+	}
+}
+
 func TestRunResumePassesStoredAgyModelAndTier(t *testing.T) {
 	workDir := t.TempDir()
 	store, err := subagent.NewSessionStore(t.TempDir())

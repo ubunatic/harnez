@@ -223,7 +223,10 @@ func DefaultModel() (Model, error) {
 	if err != nil {
 		return Model{}, err
 	}
-	return ResolveModel(spec)
+	if err := ensureModelCatalog(); err != nil {
+		return Model{}, err
+	}
+	return resolveDefaultModelWithCatalog(modelAliases, mergedModelCatalog, spec)
 }
 
 func validateRoles(spec agentSpec) error {

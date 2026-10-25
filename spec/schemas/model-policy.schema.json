@@ -27,12 +27,7 @@
             "properties": {
               "tier": { "type": ["string", "null"], "enum": ["low", "med", "high", null] },
               "aliases": { "type": ["array", "null"], "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-              "capabilities": { "type": ["array", "null"], "items": { "type": "string" } },
-              "pitfalls": { "type": ["array", "null"], "items": { "type": "string" } },
-              "purpose": { "type": ["string", "null"] },
-              "relative_cost": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-              "api_cost": { "anyOf": [{ "$ref": "agent.schema.json#/$defs/apiCost" }, { "type": "null" }] },
-              "subscription_cost": { "anyOf": [{ "$ref": "agent.schema.json#/$defs/subscriptionCost" }, { "type": "null" }] }
+              "purpose": { "type": ["string", "null"] }
             },
             "additionalProperties": false
           }

@@ -121,16 +121,17 @@ func loadMergedModelCatalog() error {
 	if err != nil {
 		return err
 	}
-	aliases := make(map[string]modelAlias, len(catalog.Models))
-	guides := make(map[string]ModelGuide, len(catalog.Models))
-	aliasNames := make(map[string]string, len(catalog.Models))
-	ids := make([]string, 0, len(catalog.Models))
-	for id := range catalog.Models {
+	catalogModels := catalog.Models()
+	aliases := make(map[string]modelAlias, len(catalogModels))
+	guides := make(map[string]ModelGuide, len(catalogModels))
+	aliasNames := make(map[string]string, len(catalogModels))
+	ids := make([]string, 0, len(catalogModels))
+	for id := range catalogModels {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
-		entry := catalog.Models[id]
+		entry := catalogModels[id]
 		provider := entry.Identity.Harness
 		if provider == "" {
 			provider = entry.Identity.Provider
@@ -406,6 +407,22 @@ func resolveModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalo
 	return model, nil
 }
 
+func resolveDefaultModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalog.Catalog, spec string) (Model, error) {
+	model, err := resolveModelWithCatalog(aliases, catalog, spec)
+	if err != nil && strings.Contains(err.Error(), "disabled by user policy") {
+		return Model{}, fmt.Errorf("default model %q is disabled by user policy; pass --model <spec> to choose another model or enable it in models.yaml", spec)
+	}
+	return model, err
+}
+
+// ModelEnabled reports whether policy allows this resolved model variant.
+func ModelEnabled(provider, modelName, tier string) (bool, error) {
+	if err := ensureModelCatalog(); err != nil {
+		return false, err
+	}
+	return mergedModelCatalog.IsEnabled(provider, modelName, tier), nil
+}
+
 func modelEnabledAtAnyTier(catalog *modelcatalog.Catalog, model Model) bool {
 	if model.SupportsEffort() {
 		for _, tier := range []string{"low", "med", "high"} {
@@ -419,7 +436,7 @@ func modelEnabledAtAnyTier(catalog *modelcatalog.Catalog, model Model) bool {
 }
 
 func findCatalogModel(catalog *modelcatalog.Catalog, model Model) (modelcatalog.Model, bool) {
-	for _, entry := range catalog.Models {
+	for _, entry := range catalog.Models() {
 		provider := entry.Identity.Harness
 		if provider == "" {
 			provider = entry.Identity.Provider

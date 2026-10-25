@@ -14,14 +14,15 @@ func TestLoadFromDirsWithoutMachineFilesUsesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Models) == 0 {
+	models := catalog.Models()
+	if len(models) == 0 {
 		t.Fatal("embedded defaults produced no models")
 	}
-	if catalog.Policy != nil {
+	if catalog.UserPolicy() != nil {
 		t.Fatal("missing policy unexpectedly produced a policy")
 	}
-	for _, model := range catalog.Models {
-		if model.Identity.Harness == "" || model.Identity.Model == "" || !model.Enabled {
+	for _, model := range models {
+		if model.Identity.Harness == "" || model.Identity.Model == "" || !catalog.IsEnabled(model.Identity.Harness, model.Identity.Model, model.Identity.Tier) {
 			t.Fatalf("invalid default model: %#v", model)
 		}
 	}
@@ -51,6 +52,7 @@ observations:
   - identity: {harness: codex, provider: codex, model: gpt-6-luna, version: gpt-6-luna, tier: low}
     status: unknown
     method: not-probed
+    observed_at: "2026-10-25T10:00:00Z"
     facts: []`)
 	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), `version: 1
 default_enabled: false
@@ -71,7 +73,7 @@ models:
 	}
 	var luna *Model
 	var private *Model
-	for _, model := range catalog.Models {
+	for _, model := range catalog.Models() {
 		if model.Identity.Model == "gpt-6-luna" {
 			copy := model
 			luna = &copy
@@ -84,16 +86,16 @@ models:
 	if luna == nil || len(luna.Facts["capabilities"].([]any)) != 1 || !contains(luna.Aliases, "fast-luna") {
 		t.Fatalf("state facts or aliases were not merged: %#v", luna)
 	}
-	if luna == nil || len(luna.Access) != 1 || luna.Access[0].Status != "unknown" || !luna.Enabled {
+	if luna == nil || len(luna.Access) != 1 || luna.Access[0].Status != "unknown" || !catalog.IsEnabled("codex", "gpt-6-luna", "low") {
 		t.Fatalf("unknown access changed enablement: %#v", luna)
 	}
 	if luna == nil || luna.Overrides["purpose"] != nil || luna.Policy == nil {
 		t.Fatalf("policy patch was not retained: %#v", luna)
 	}
-	if private == nil || private.Policy == nil || private.Policy.Kind != "custom" || !private.Enabled {
+	if private == nil || private.Policy == nil || private.Policy.Kind != "custom" || !catalog.IsEnabled("local", "private", "low") {
 		t.Fatalf("custom policy model missing: %#v", private)
 	}
-	if catalog.AccessComplete {
+	if catalog.AccessComplete() {
 		t.Fatal("incomplete access data was reported complete")
 	}
 }
@@ -143,6 +145,19 @@ models:
 	}
 }
 
+func TestLoadRejectsTierlessTieredAliasConflict(t *testing.T) {
+	configDir := t.TempDir()
+	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), `version: 1
+default_enabled: false
+enabled: []
+models:
+  codex:luna: {kind: patch, enabled: false}
+  codex:gpt-6-luna:low: {kind: patch, enabled: true}`)
+	if _, err := LoadFromDirs(t.TempDir(), configDir); err == nil || !strings.Contains(err.Error(), "conflicting enabled values") {
+		t.Fatalf("tierless/tiered conflict error = %v", err)
+	}
+}
+
 func TestLoadUsesIsolatedXDGDirectories(t *testing.T) {
 	home := t.TempDir()
 	configHome := t.TempDir()
@@ -150,9 +165,6 @@ func TestLoadUsesIsolatedXDGDirectories(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	t.Setenv("XDG_STATE_HOME", stateHome)
-	for _, name := range []string{"HARNEZ_MODELS", "HARNEZ_MODEL_POLICY", "HARNEZ_STATE_HOME", "HARNEZ_CONFIG_HOME"} {
-		t.Setenv(name, "")
-	}
 	configDir := filepath.Join(configHome, "harnez")
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -165,11 +177,92 @@ models: {}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if catalog.Policy == nil || catalog.Policy.DefaultEnabled {
-		t.Fatalf("XDG_CONFIG_HOME policy not loaded: %#v", catalog.Policy)
+	if policy := catalog.UserPolicy(); policy == nil || policy.DefaultEnabled {
+		t.Fatalf("XDG_CONFIG_HOME policy not loaded: %#v", policy)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".config", "harnez", "models.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("loader consulted non-XDG config: stat error = %v", err)
+	writeCatalogFile(t, filepath.Join(home, ".config", "harnez", "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\n")
+	catalog, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policy := catalog.UserPolicy(); policy == nil || policy.DefaultEnabled {
+		t.Fatalf("HOME config overrode XDG_CONFIG_HOME: %#v", policy)
+	}
+}
+
+func TestUnknownAccessDoesNotCreateModelOrDenyDefaultEnabled(t *testing.T) {
+	stateDir, configDir := t.TempDir(), t.TempDir()
+	writeCatalogFile(t, filepath.Join(stateDir, "access.yaml"), `version: 1
+observed_at: "2026-10-25T10:00:00Z"
+complete: true
+coverage: []
+observations:
+  - identity: {harness: pi, provider: openai, model: Pi/Only-Unknown, version: "1", tier: low}
+    status: unknown
+    method: probe
+    observed_at: "2026-10-25T10:01:00Z"
+    facts: []
+  - identity: {harness: pi, provider: openai, model: Pi/Denied, version: "1", tier: low}
+    status: denied
+    method: probe
+    observed_at: "2026-10-25T10:02:00Z"
+    facts: []`)
+	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\n")
+	catalog, err := LoadFromDirs(stateDir, configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models := catalog.Models()
+	for _, id := range []string{"openai:Pi/Only-Unknown", "openai:Pi/Denied"} {
+		if _, ok := models[id]; ok {
+			t.Fatalf("unknown access created catalog model %q", id)
+		}
+	}
+	access := catalog.Access()
+	if len(access) != 2 || access[1].Status != "denied" || !catalog.IsEnabled("pi", "Pi/Denied", "low") {
+		t.Fatalf("unknown/denied observations lost or changed default policy: %#v", access)
+	}
+}
+
+func TestCatalogAccessorsReturnDetachedCopies(t *testing.T) {
+	configDir := t.TempDir()
+	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: [codex:luna:low]\nmodels: {}\n")
+	cat, err := LoadFromDirs(t.TempDir(), configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models := cat.Models()
+	for id, model := range models {
+		model.Aliases = append(model.Aliases, "mutated")
+		model.Facts["nested"] = map[string]any{"value": "mutated"}
+		models[id] = model
+		break
+	}
+	for _, model := range cat.Models() {
+		if contains(model.Aliases, "mutated") {
+			t.Fatal("Models returned mutable catalog state")
+		}
+	}
+	policy := cat.UserPolicy()
+	policy.Enabled[0] = "changed"
+	if cat.UserPolicy().Enabled[0] != "codex:luna:low" {
+		t.Fatal("UserPolicy returned mutable catalog state")
+	}
+}
+
+func TestLoadRejectsUnappliedPolicyField(t *testing.T) {
+	configDir := t.TempDir()
+	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: []\nmodels:\n  codex:luna:low:\n    kind: patch\n    fields: {capabilities: [tools]}\n")
+	if _, err := LoadFromDirs(t.TempDir(), configDir); err == nil || !strings.Contains(err.Error(), "not applied") {
+		t.Fatalf("unapplied policy field error = %v", err)
+	}
+}
+
+func TestCustomIdentityVersionPin(t *testing.T) {
+	configDir := t.TempDir()
+	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: []\nmodels:\n  local:private:\n    kind: custom\n    identity: {harness: custom, provider: local, model: private, version: \"1\"}\n    version_pin: \"2\"\n")
+	if _, err := LoadFromDirs(t.TempDir(), configDir); err == nil || !strings.Contains(err.Error(), "does not match catalog identity.version") {
+		t.Fatalf("custom identity pin error = %v", err)
 	}
 }
 

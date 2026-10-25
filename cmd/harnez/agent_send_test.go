@@ -41,6 +41,28 @@ func TestChannelNameResolution(t *testing.T) {
 	}
 }
 
+func TestSendWarnsWhenCurrentPolicyDisablesStoredSession(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "registry-id", ProviderSessionID: "provider-id", Provider: "claude", Model: "opus", Tier: "med", Name: "worker"}); err != nil {
+		t.Fatal(err)
+	}
+	cmd := &cobra.Command{}
+	stderr := new(bytes.Buffer)
+	cmd.SetErr(stderr)
+	target := agentSendTarget{Provider: "claude", Endpoint: channel.Endpoint{SessionID: "provider-id"}}
+	check := func(string, string, string) (bool, error) { return false, nil }
+	if err := warnStoredSendModel(cmd, storeDir, target, check); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "disabled by current policy") || !strings.Contains(stderr.String(), "claude:opus:med") {
+		t.Fatalf("send warning = %q", stderr.String())
+	}
+}
+
 func TestDefensiveClaudeMetadataAndSender(t *testing.T) {
 	cfg, err := channel.LoadConfig()
 	if err != nil {

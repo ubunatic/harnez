@@ -67,6 +67,27 @@ func channelIdentities(cfg channel.Config, storeDir string) []channelIdentity {
 	return identities
 }
 
+func warnStoredSendModel(cmd *cobra.Command, storeDir string, target agentSendTarget, check func(string, string, string) (bool, error)) error {
+	store, err := subagent.OpenSessionStore(storeDir)
+	if err != nil {
+		return nil
+	}
+	sessions, err := store.List("", true)
+	if err != nil {
+		return nil
+	}
+	for _, sess := range sessions {
+		if sess.Provider != target.Provider {
+			continue
+		}
+		if sess.ID != target.Endpoint.SessionID && sess.ProviderID() != target.Endpoint.SessionID {
+			continue
+		}
+		return warnDisabledSessionModel(cmd, sess, check)
+	}
+	return nil
+}
+
 // liveChannelNames lists the sorted names of live endpoints; unnamed sessions are left out.
 func liveChannelNames(endpoints []channel.Endpoint, identities []channelIdentity, dir string) []string {
 	wantDir, _ := filepath.Abs(dir)
@@ -495,6 +516,9 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 				}
 				registrySession, findErr := store.Find(*name)
 				if findErr == nil && registrySession.Name == *name {
+					if err := warnDisabledSessionModel(cmd, registrySession, nil); err != nil {
+						return err
+					}
 					resumeDriver := agentDriver(subagent.Model{Provider: registrySession.Provider, Name: registrySession.Model, Tier: registrySession.Tier}, registrySession.WorkingDir)
 					if checkErr := checkAgentSendResumable(registrySession, resumeDriver); checkErr != nil {
 						return checkErr
@@ -505,6 +529,9 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 					return fmt.Errorf("%w; %v", queueErr, err)
 				}
 				_, err = fmt.Fprintf(cmd.OutOrStdout(), "queued for next turn of %s\n", sess.Name)
+				return err
+			}
+			if err := warnStoredSendModel(cmd, *storeDir, target, nil); err != nil {
 				return err
 			}
 			encoder := json.NewEncoder(cmd.OutOrStdout())

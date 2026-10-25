@@ -38,6 +38,7 @@ func TestContractFixtures(t *testing.T) {
 		{fixture: "policy-valid.yaml", schema: "model-policy.schema.json", valid: true, checkPin: true},
 		{fixture: "policy-valid-pi-id.yaml", schema: "model-policy.schema.json", valid: true},
 		{fixture: "policy-unknown-key.yaml", schema: "model-policy.schema.json", wantPath: "model-policy.schema.json", wantKeyword: "unexpected additional properties"},
+		{fixture: "policy-unapplied-field.yaml", schema: "model-policy.schema.json", wantPath: "model-policy.schema.json", wantKeyword: "unexpected additional properties"},
 		{fixture: "policy-custom-without-identity.yaml", schema: "model-policy.schema.json", wantPath: "/allOf/0/then", wantKeyword: "required"},
 		{fixture: "policy-bad-enabled-id.yaml", schema: "model-policy.schema.json", wantPath: "/properties/enabled/items", wantKeyword: "pattern"},
 		{fixture: "policy-bad-version-pin.yaml", schema: "model-policy.schema.json", wantPath: "models.custom:internal-7b.version_pin", wantKeyword: "does not match identity.version", checkPin: true},

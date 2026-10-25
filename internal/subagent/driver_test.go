@@ -61,6 +61,20 @@ func TestResolveModel(t *testing.T) {
 	}
 }
 
+func TestKnownModelSpecsGoldenWithoutPolicy(t *testing.T) {
+	got, err := KnownModelSpecsE()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile("testdata/known-model-specs.golden")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, "\n")+"\n" != string(want) {
+		t.Fatalf("KnownModelSpecsE changed without policy:\n%s", strings.Join(got, "\n"))
+	}
+}
+
 func TestResolveModelThreePartProviderSpec(t *testing.T) {
 	m, err := ResolveModel("agy:flash37:low")
 	if err != nil || m.Provider != "agy" || m.Name != "gemini-3.7-flash" || m.Tier != "low" {
@@ -211,7 +225,7 @@ func TestModelPolicyDisableAllButNAndResolvedAliases(t *testing.T) {
 	policy := "version: 1\ndefault_enabled: false\nenabled: [codex:luna:high, claude:opus:low, agy:flash38:high]\nmodels: {}\n"
 	catalog := loadTestModelPolicy(t, policy)
 	allowed := 0
-	for _, entry := range catalog.Models {
+	for _, entry := range catalog.Models() {
 		tiers := []string{entry.Identity.Tier}
 		if entry.Effort == nil || *entry.Effort {
 			tiers = []string{"low", "med", "high"}
@@ -224,6 +238,34 @@ func TestModelPolicyDisableAllButNAndResolvedAliases(t *testing.T) {
 	}
 	if allowed != 3 {
 		t.Fatalf("enabled catalog model variants = %d, want exactly 3", allowed)
+	}
+	if err := ensureModelCatalog(); err != nil {
+		t.Fatal(err)
+	}
+	oldCatalog, oldInit := mergedModelCatalog, modelCatalogInit
+	mergedModelCatalog, modelCatalogInit = catalog, func() error { return nil }
+	defer func() { mergedModelCatalog, modelCatalogInit = oldCatalog, oldInit }()
+	entries, err := KnownModelEntriesE()
+	if err != nil {
+		t.Fatal(err)
+	}
+	specs, err := KnownModelSpecsE()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"codex:luna:high": true, "claude:opus:low": true, "agy:flash38:high": true}
+	if len(entries) != len(want) || len(specs) != len(want) {
+		t.Fatalf("enabled entries/specs = %v / %v, want exactly %v", entries, specs, want)
+	}
+	for _, entry := range entries {
+		if !want[entry.Spec] {
+			t.Fatalf("unexpected enabled entry %q", entry.Spec)
+		}
+	}
+	for _, spec := range specs {
+		if !want[spec] {
+			t.Fatalf("unexpected enabled spec %q", spec)
+		}
 	}
 
 	aliases := map[string]modelAlias{
@@ -246,7 +288,7 @@ func TestModelPolicyExplicitEnablementPrecedence(t *testing.T) {
 		tier    string
 		enabled bool
 	}{
-		{"entry disables despite default", "version: 1\ndefault_enabled: true\nenabled: []\nmodels:\n  codex:luna:low: {kind: patch, enabled: false}\n", "low", false},
+		{"entry disables despite enabled list", "version: 1\ndefault_enabled: true\nenabled: [codex:luna:low]\nmodels:\n  codex:luna:low: {kind: patch, enabled: false}\n", "low", false},
 		{"entry enables despite default", "version: 1\ndefault_enabled: false\nenabled: []\nmodels:\n  codex:luna:low: {kind: patch, enabled: true}\n", "low", true},
 		{"default applies to unlisted tier", "version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\n", "high", true},
 	}
@@ -257,6 +299,15 @@ func TestModelPolicyExplicitEnablementPrecedence(t *testing.T) {
 				t.Fatalf("IsEnabled() = %v, want %v", got, tc.enabled)
 			}
 		})
+	}
+}
+
+func TestDisabledDefaultModelErrorNamesRemedy(t *testing.T) {
+	catalog := loadTestModelPolicy(t, "version: 1\ndefault_enabled: false\nenabled: []\nmodels: {}\n")
+	aliases := map[string]modelAlias{"codex:luna": {Model: Model{Provider: "codex", Name: "gpt-6-luna", Tier: "low"}, Aliases: []string{"luna", "luna:low"}}}
+	_, err := resolveDefaultModelWithCatalog(aliases, catalog, "codex:luna:low")
+	if err == nil || !strings.Contains(err.Error(), "codex:luna:low") || !strings.Contains(err.Error(), "--model") || !strings.Contains(err.Error(), "enable it in models.yaml") {
+		t.Fatalf("disabled default message = %v", err)
 	}
 }
 

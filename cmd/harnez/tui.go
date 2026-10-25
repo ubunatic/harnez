@@ -68,11 +68,11 @@ select, Tab or Enter inserts, Esc closes.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if o.model == "" {
-				m, err := subagent.DefaultModelSpec()
+				m, err := subagent.DefaultModel()
 				if err != nil {
 					return fmt.Errorf("resolve default model: %w", err)
 				}
-				o.model = m
+				o.model = m.Spec()
 			}
 			resolved, err := router.ResolveSpec(o.model)
 			if err != nil {

@@ -34,7 +34,7 @@ func TestIsEnabledPreservesExactPiModelID(t *testing.T) {
 	identity := Identity{Harness: "pi", Provider: "anthropic", Model: "anthropic/Claude-Opus-4.6", Tier: "low"}
 	model := Model{Identity: identity, Key: identity.Model}
 	policy := &Policy{DefaultEnabled: false, Enabled: []string{"pi:anthropic/Claude-Opus-4.6"}}
-	catalog := &Catalog{Models: map[string]Model{modelID(identity): model}, Policy: policy}
+	catalog := &Catalog{models: map[string]Model{modelID(identity): model}, policy: policy}
 
 	if !catalog.IsEnabled("pi", identity.Model, "low") {
 		t.Fatal("explicit policy ID should enable the exact case-sensitive Pi ID")

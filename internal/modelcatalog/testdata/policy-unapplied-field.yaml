@@ -1,0 +1,8 @@
+version: 1
+default_enabled: true
+enabled: []
+models:
+  codex:luna:low:
+    kind: patch
+    fields:
+      capabilities: [tools]

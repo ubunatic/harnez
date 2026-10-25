@@ -109,6 +109,9 @@ is an explicit user choice, not a resolution of the underlying evidence.
 
 Policy patch schema fixtures prove accepted document shapes only. The 941 loader
 enforces patch behavior: omitted fields inherit, arrays replace, and null clears.
+Policy `fields` currently accepts only `aliases`, `purpose`, and `tier`; schema
+and loader reject fields with no merged-catalog behavior. Access observations
+carry their own `observed_at` timestamp in addition to the file-level timestamp.
 For enablement, a model entry's explicit `enabled` value takes precedence; absent
 that, membership in `enabled` decides, then `default_enabled` supplies the
 fallback. Snapshots use opaque non-empty IDs. Change report `before` and `after`
