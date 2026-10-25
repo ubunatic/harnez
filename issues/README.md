@@ -40,4 +40,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 947 | [947-942-e-capability-evidence-tied-to-model-version-from-attributable-tests.md](947-942-e-capability-evidence-tied-to-model-version-from-attributable-tests.md) | 942 E: capability evidence tied to model version from attributable tests | Open |
 | 948 | [948-942-f-model-snapshots-and-change-report.md](948-942-f-model-snapshots-and-change-report.md) | 942 F: model snapshots and change report | Open |
 | 949 | [949-942-d-harnez-models-update-skill-cheap-cited-web-refresh-of-public-model-facts.md](949-942-d-harnez-models-update-skill-cheap-cited-web-refresh-of-public-model-facts.md) | 942 D: harnez-models update skill, cheap cited web refresh of public model facts | Open |
+| 950 | [950-go-release-docs-vet-generated-version-go-before-tagging-lowest-go-directive-for-libraries.md](950-go-release-docs-vet-generated-version-go-before-tagging-lowest-go-directive-for-libraries.md) | Go release docs: vet generated version.go before tagging, lowest go directive for libraries | Open |
 <!-- harnez:end issues-active-index -->
