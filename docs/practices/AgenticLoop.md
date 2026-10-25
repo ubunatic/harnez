@@ -283,7 +283,7 @@ Never trade away verification for speed when applying Invariant 7.
     verified, flip its `Status` header to `Closed` before ending the session — do not let a
     green build and a commit stand in for closing the ticket. See
     [IssueTracking.md](IssueTracking.md) §5 ("Closing Is Part Of Done").
-  - Run `git status` before writing the retro or session story — uncommitted reviewed work is itself a retro finding, not a background condition.
+  - Run `git status` before writing the retro or session study — uncommitted reviewed work is itself a retro finding, not a background condition.
   - **Evergreen trigger**: after a long-running goal, or once 5+ tickets were closed in the session, run `/evergreen` (or propose it before declaring the goal done) unless the user already requested an evergreen or comparable broader doc update this session. Learnings otherwise stay in tickets and the roadmap and never reach the evergreen docs.
   - Prepare clean, conventional commit messages.
   - Limit plans or promises to this session or its next steps; turn lasting lessons into a check, rule/prompt line, or ticket, and name the safeguard and its location.
@@ -437,7 +437,7 @@ the child/entry, message updates an existing child, and terminate ends it.
   real output against the real DB.
 - ❌ **Deployment State Conflation**: In a project with remote deployment, declaring a remote binary "deployed" or a job "scheduled" based on local build/test success or a clean transfer exit code, without probing the live host.
 - ❌ **Blind Revert of Failed Work**: Running `git checkout --`, `git reset --hard`, or `git stash drop` on a failed implementation attempt without first committing it somewhere recoverable. A prose summary of what was tried is not a substitute for the actual diff — it cannot be `git diff`ed, re-applied, or independently re-verified against the gate it was tested against.
-- ❌ **Reviewed-But-Uncommitted Carryover**: Finishing a review gate and moving on (retro, story, `/compact`, next ticket) with verified work still in the working tree, waiting for the user to notice. Phase 3 is not complete until the commit is made or the user has been explicitly asked to authorize it. Recurred twice in one `weg` session — issues 044 and 046.
+- ❌ **Reviewed-But-Uncommitted Carryover**: Finishing a review gate and moving on (retro, study, `/compact`, next ticket) with verified work still in the working tree, waiting for the user to notice. Phase 3 is not complete until the commit is made or the user has been explicitly asked to authorize it. Recurred twice in one `weg` session — issues 044 and 046.
 - ❌ **Narrow String-Substitution Edits Over Structured Patches**: The existing "prefer
   `apply_patch`/whole-block replacement over narrow string substitution" rule was written from
   intuition; `smarthome`'s `harnez stats` now backs it with numbers — `Edit` failed at **11.1%**

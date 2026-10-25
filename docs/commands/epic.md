@@ -23,7 +23,7 @@ Invocation: `/epic "<idea>"` drafts a new epic; `/epic <n>` refines or runs epic
   deletion, breaking changes, or bypassing a canary.
 
 Delegate, don't restate: `/issue` (filing), `/lean-sprint` (roles, dispatch, review),
-`/story` (study shape), `/evergreen`, `/wrap`. If `.harnez/repo.yaml` sets
+`/study` (study shape), `/evergreen`, `/wrap`. If `.harnez/repo.yaml` sets
 `issues.tracker: none` or `docs.studies: false`, follow `.harnez/rules/Index.md`.
 
 ## 1. Draft

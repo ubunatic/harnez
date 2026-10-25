@@ -78,6 +78,8 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		body        string
 	}{
 		{"bug-hunt", "Run a bug hunt over active P1/P2 bug tickets", "## 2. Re-verify (read-only)"},
+		{"study", "Write a concise sprint, retrospective, or topic study", "## Required Sections"},
+		{"story", "Write a candid engineering retrospective and case study", "## Required Story Sections"},
 		{"tui-check", "Validate a terminal UI change cell by cell", "## 4. Live tmux check"},
 		{"jam", "Run a jam: several agents on different models", "## 5. Pre-assess"},
 	} {

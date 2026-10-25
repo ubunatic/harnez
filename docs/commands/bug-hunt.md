@@ -37,4 +37,4 @@ The host performs the live check itself, such as a real `harnez apply`, live pro
 
 Follow lean-sprint §6 for teardown and the study note. Stop and report if work loops or is blocked on a decision; do not check in with the user during the hunt.
 
-Delegate the fix loop to `lean-sprint`, a study to `story`, and a parked follow-up to `issue`. Follow their instructions instead of copying their mechanics here.
+Delegate the fix loop to `lean-sprint`, a study to `study`, and a parked follow-up to `issue`. Follow their instructions instead of copying their mechanics here.

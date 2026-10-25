@@ -2,7 +2,8 @@
 
 Use when the owner invokes `retro` with a Claude Code session ID/prefix or JSONL path.
 Write a candid session study from a cheap extract, then hand durable lessons to `evergreen`.
-This is a separate workflow from `story`; use story's required sections without copying its template here.
+This is a separate workflow from `story`; use the `study` skill's required sections without copying
+its template here.
 
 ## Extract first
 
@@ -49,10 +50,9 @@ harnez session extract <id-or-path> --json > "$retro_extract"
 
 ## Write and hand off
 
-- Read the installed `story` skill's required sections and output-location rules (source: `docs/commands/story.md`
-  in Harnez). Follow that shared structure for context, outcome, successes, candid failures, quality, efficiency,
-  learnings and file/commit evidence. Respect `docs.studies: false` and the repository's local-docs fallback.
-  Front matter `kind: retro` (see story's output-location rules).
+- Read the installed `study` skill's required sections and output-location rules (source:
+  `docs/commands/study.md` in Harnez). Follow those shared rules and include relevant evidence.
+  Respect `docs.studies: false` and the repository's local-docs fallback. Front matter `kind: retro`.
 - Add a mandatory **Method and gaps** section: identify session/source, extraction command, counts, evidence read
   and skipped, time range, truncation, unavailable images/tool evidence and any uncertain commit attribution.
   Separate observations from inferences; do not present summary claims as independently verified facts.

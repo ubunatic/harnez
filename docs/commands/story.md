@@ -34,15 +34,10 @@ developed since then, not only the current session.
    raw facts (counts, ticket states) first; verdicts stay with the reviewer. Apply the accepted corrections and
    note the review (reviewer model, findings fixed) in the story's header.
 
-## Output Location & Naming
-- Path: `docs/studies/<YYYY-MM-DD>-<kebab-case-title>.md`
-- Front matter on the first lines states the kind, so later stories can find their predecessor:
-  `---` / `kind: story` / `---`. Kinds: `story` (overall progress and agentic-flow story, written by this skill),
-  `sprint` (per-ticket or per-epic sprint report), `retro` (transcript retro), `canary`, `benchmark`, `topic`
-  (single-concern study). Keep existing keys such as `title` and `weight`.
-- Create `docs/studies/` if it does not exist and indexed studies are enabled.
-- If `.harnez/repo.yaml` sets `docs.studies: false`, follow `.harnez/rules/Index.md` for the local-docs/session fallback.
-- Link the document in `docs/README.md` (or `docs/index.md`) only when `.harnez/repo.yaml` enables indexed studies.
+## Shared Study Rules
+
+Follow the `study` skill for the shared output location and naming, front matter, indexing and fallback
+rules, and ticket extraction gate. Use `kind: story`.
 
 ---
 
@@ -84,10 +79,7 @@ Every story must include the following sections:
 ## Execution Workflow for the Agent
 1. **Gather Ground Truth**: Run `git status`, `git log --oneline`, and `git diff` to collect factual session history.
 2. **Draft the Story**: Follow the required template structure above with full honesty.
-3. **Index the Study**: Add the entry to `docs/README.md` under `docs/studies/`.
-4. **Ticket Extraction Gate**: Review failures, near-misses, open questions, and recommendations.
-   File every actionable follow-up with `harnez issues new` in its owning repository, link the
-   story from each ticket, and list each allocated ticket number in the story. Record justified
-   non-goals. Ask each allocated worker: "What ticket number was allocated, and have all
-   actionable follow-ups from this study been filed and listed here?"
+3. **Index the Study**: Follow the shared indexing rule in the `study` skill.
+4. **Ticket Extraction Gate**: Follow the shared gate in the `study` skill. Ask each allocated worker:
+   "What ticket number was allocated, and have all actionable follow-ups from this study been filed and listed here?"
 5. **Present Summary**: Provide a short recap to the user highlighting key lessons learned.

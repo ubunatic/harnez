@@ -6,7 +6,7 @@ You, the agent that received this invocation, run every step yourself.
 Invocation: `/new-project "<idea>"` or `/new-project <name> "<idea>"`.
 
 Delegate, don't restate: `/epic` (epic draft, fanout, refinement), `/issue` (filing),
-`/story` (study shape), `/lean-sprint` (execution). Stop and ask before any outward step
+`/study` (study shape), `/lean-sprint` (execution). Stop and ask before any outward step
 (creating remote repos, pushing) and when the answers leave the purpose unclear.
 
 ## 1. Interview (ask once, batched)

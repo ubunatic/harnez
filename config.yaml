@@ -441,6 +441,11 @@ skills:
     description: "Write a candid engineering retrospective and case study in docs/studies/"
     file: docs/commands/story.md
 
+  - name: study
+    license: AGPL-3.0-or-later
+    description: "Write a concise sprint, retrospective, or topic study in docs/studies/"
+    file: docs/commands/study.md
+
   - name: retro
     license: AGPL-3.0-or-later
     description: "Extract Claude session summaries and owner messages to ground a retrospective and evergreen handoff"

@@ -84,7 +84,7 @@ For hung or killed quota-1 test runs, use `harnez clean procs q1 --kill`; it rel
 
 ### Phase 5: Agentic Flow Quality Retrospective (Feedback & Tracker Sync)
 1. Record session flow learnings, tooling friction, or agent harness feedback:
-   - Add retrospective notes to `docs/feedback/<YYYY-MM-DD>-<topic>.md` or run `/story` if a major case study was produced.
+   - Add retrospective notes to `docs/feedback/<YYYY-MM-DD>-<topic>.md` or run `/study` if a major study was produced.
    - Record how each model did in its role in the project's model doc (harnez: `docs/Models.md`), and update the `roles`/`use` guidance behind `harnez agent models` when evidence shows a model fits another role.
 2. Synchronize the Harnez tracker when enabled; if `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md` for the local-tracker/session fallback.
    - Update issue status in `issues/*.md` (e.g. `Status: Closed`).
