@@ -41,7 +41,7 @@ Skipped: internal harness guards and doc rules; no external tool to reuse.
 | 937 | PreToolUse hook warns on shell edits, asks for feedback, escalates to token-count proof | A | s939 → — → sol:low | opus:low | Closed (709df88a, ed8dbeaf) |
 | 916 | `harnez index --stage`, lint names it | B | s939 → — → luna:high | host diff | Closed (ac726732) |
 | 936 | practice rule: external-contract tests (AgenticLoop full+lite, lean-sprint checklist) | B | s939 → — → haiku:high | host diff | Closed (68618f27) |
-| 915 | `issues close` records model and session (env defaults) | C | s939 → — → luna:high | host diff | Open |
+| 915 | `issues close` records model and session (env defaults) | C | s939 → — → luna:high | host diff | Closed (e4ffd8f5) |
 
 Code fanout (s939, luna:low): 937 is medium: extend the single existing PreToolUse/Bash hook (`config.yaml:279`
 forbids a second one), new per-session counter state, threshold and wording in `spec/`. 916 lint at
