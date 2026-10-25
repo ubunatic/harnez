@@ -18,6 +18,10 @@ Circuit breaker: on a loop or no progress, clear the goal and write a failure re
 The owner's rule is "edit files only with Edit/Write". Host sessions broke it at least four times between
 2026-10-22 and 2026-10-25 (ticket table sed, heredoc study appends), each time admitted afterwards.
 
-## Open decision (owner)
+## Decision (owner, 2026-10-25)
 
-Warn or block; which repos opt in.
+Warn, do not block. The warning is brief and asks the agent for feedback: why the shell edit was the
+better choice here (`harnez rate` or a one-line reason). When the guard has fired many times in a session
+without any feedback, the warning escalates: it asks the agent to prove the scripted approach is better,
+with concrete token counts (shell edit vs. Edit/Write calls) and reasoning. Threshold and wording go in
+`spec/` (no Go defaults).
