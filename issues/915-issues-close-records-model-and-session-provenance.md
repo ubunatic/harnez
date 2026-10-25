@@ -1,6 +1,7 @@
 # 915 — issues close records model and session provenance
 
-**Status**: Open
+**Status**: Closed — issues close --model/--session (env HARNEZ_AGENT_MODEL/HARNEZ_SESSION_ID, set by agent start) writes one Closed-By line under Status, replaced on re-close, hidden from indexes (e4ffd8f5). Developer make test-q1 green; host diff review and live close.
+**Closed-By**: claude:opus-5-5, session 9ec5fca3
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
