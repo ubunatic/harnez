@@ -1,6 +1,6 @@
 # 916 — Study commits fail on studies index drift; offer a one-call fix
 
-**Status**: Open
+**Status**: Closed — harnez index --stage regenerates and stages only index files it rewrote (ac726732); studies drift lint names it. Developer make test-q1 green and scratch-repo check (exactly study + docs/README.md staged); host diff review and live no-op check. Known limit: a file rewritten by an earlier run and left unstaged is not staged.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
