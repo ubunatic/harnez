@@ -26,4 +26,13 @@ toward the long eight-section template.
 
 - Callers of `story` today: `docs/commands/{sprint,new-project,retro,lean-sprint,epic}.md`; check docs/practices too.
 - Keep the `kind:` list in one place (`study`), not both.
-- Open question: whether small studies keep all eight sections or a shorter required set.
+
+## Decision (host, 2026-10-25)
+
+Small studies get a shorter required set: context, outcome, what went wrong (how caught, fix), learnings,
+follow-up tickets. The eight-section template stays in `story`. Reversible; recorded here.
+
+## Sprint
+
+Developer `d938` (sol:med), reviewer `r938` (opus:med, independent pre-close review). Searcher skipped: the
+ticket names the files; the developer's plan-only first turn verifies callers and the write set.
