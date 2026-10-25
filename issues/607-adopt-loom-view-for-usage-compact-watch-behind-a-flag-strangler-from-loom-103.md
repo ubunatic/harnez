@@ -23,9 +23,26 @@ Circuit breaker: on a loop or no progress, clear the goal and write a failure re
 
 ## Stages (order by gain)
 
-1. Box and title drawing through loom `Box` (needed by 923; loom 385 adds the hotkey-char style).
+1. Box and title drawing through loom `Box` (needed by 923; loom 385 adds styled title segments).
 2. Keys and the Controls overlay through loom keymap/help.
 3. Box grid layout through loom frame/grid.
 
 Older notes: the loom 103 example lacked temperature, GPU/VRAM and Braille trend; check what loom has now.
 Go before 917 (spec-driven boxes) and 923 in Epic 921.
+
+## M1 — Baseline before Box migration
+
+- Captured current `renderWBox` ANSI output in `internal/usage/testdata/watch-box-baseline/` for All Usage,
+  host Load, Remote Load host/source metadata, and Debug. Per-cell tests compare glyph, foreground, background,
+  and bold against these pre-migration goldens using loom's ANSI parser.
+- The box sample in `docs/data/harnez-usage.ansi` remains the visual reference for border/title structure and
+  colour placement; its live usage values differ from the deterministic test fixtures.
+
+## M2 pre-work — Wait for loom 385 release
+
+- loom 385 is expanded to cover ordered styled title segments: a hotkey character as one segment, bold key
+  badges, normal title text, and dim host/source metadata (`../loom`, scope commit `82a91b2`; tracker status
+  commit `ed00d86`).
+- Do not implement the Harnez Box adapter until loom 385 is implemented and a loom release containing it is
+  available. Then update Harnez's pinned loom version and migrate the two watch call sites; keep plain
+  `RenderText` on `renderWBox` during M1.
