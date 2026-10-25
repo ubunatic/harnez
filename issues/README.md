@@ -40,4 +40,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 948 | [948-942-f-model-snapshots-and-change-report.md](948-942-f-model-snapshots-and-change-report.md) | 942 F: model snapshots and change report | Open |
 | 949 | [949-942-d-harnez-models-update-skill-cheap-cited-web-refresh-of-public-model-facts.md](949-942-d-harnez-models-update-skill-cheap-cited-web-refresh-of-public-model-facts.md) | 942 D: harnez-models update skill, cheap cited web refresh of public model facts | Open |
 | 950 | [950-go-release-docs-vet-generated-version-go-before-tagging-lowest-go-directive-for-libraries.md](950-go-release-docs-vet-generated-version-go-before-tagging-lowest-go-directive-for-libraries.md) | Go release docs: vet generated version.go before tagging, lowest go directive for libraries | Open |
+| 951 | [951-usage-catchup-test-concurrent-map-writes-from-parallel-collectors-flaky-fatal.md](951-usage-catchup-test-concurrent-map-writes-from-parallel-collectors-flaky-fatal.md) | usage catchup test: concurrent map writes from parallel collectors (flaky fatal) | Open |
 <!-- harnez:end issues-active-index -->
