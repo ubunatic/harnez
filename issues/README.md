@@ -33,4 +33,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 940 | [940-epic-recommend-neus-in-skills-and-hooks-gated-and-with-fallbacks.md](940-epic-recommend-neus-in-skills-and-hooks-gated-and-with-fallbacks.md) | Epic: recommend neus in skills and hooks, gated and with fallbacks | Open |
 | 941 | [941-harnez-models-skill-cheap-websearch-fanout-refreshes-model-catalog-in-spec-or-config-harnez-override.md](941-harnez-models-skill-cheap-websearch-fanout-refreshes-model-catalog-in-spec-or-config-harnez-override.md) | harnez-models skill: cheap websearch fanout refreshes model catalog in spec or ~/.config/harnez override | Open |
 | 942 | [942-epic-model-catalog-access-discovery-and-user-model-policy.md](942-epic-model-catalog-access-discovery-and-user-model-policy.md) | Epic: model catalog, access discovery and user model policy | Open |
+| 944 | [944-quota-1-count-targeted-and-coverage-go-test-runs-toward-the-one-run-budget.md](944-quota-1-count-targeted-and-coverage-go-test-runs-toward-the-one-run-budget.md) | quota-1: count targeted and coverage go test runs toward the one-run budget | Open |
 <!-- harnez:end issues-active-index -->
