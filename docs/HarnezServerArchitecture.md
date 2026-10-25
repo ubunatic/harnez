@@ -8,6 +8,16 @@ Goal: turn harnez into an "any client" <-> "AI server harness": any client talks
 `harnez serve` process that runs, persists and resumes agent sessions across providers,
 durably (crash-safe) and optionally unattended ("level 3: out of the loop").
 
+## Remote upgrade install path
+
+The built server can upgrade older remote Harnez binaries. `remote_upgrade.install_path`
+defaults to `~/go/bin/harnez` and accepts that home-relative form or a safe absolute path
+such as `/opt/harnez/bin/harnez`. Path components use letters, digits, `_`, `.`, and `-`;
+empty components, `..`, and the `/tmp` and `/var/tmp` trees are rejected. Absolute paths
+are single-quoted in remote shell commands; home-relative paths use `"$HOME"/'...'`.
+The upgrade does not use sudo, so an unwritable destination or noexec restriction leaves
+the binary unchanged and logs the target path and detected failure reason.
+
 ## Diagram
 
 ```

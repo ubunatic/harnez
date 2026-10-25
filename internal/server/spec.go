@@ -88,7 +88,7 @@ func LoadConfig() (Config, error) {
 	}
 	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes, TelemetryPath: raw.TelemetryPath, TelemetrySpoolPath: raw.TelemetrySpoolPath, TelemetrySpoolMaxBytes: raw.TelemetrySpoolMaxBytes, SystemdUnitName: raw.SystemdUnitName, SystemdUnitSource: raw.SystemdUnitSource, SystemdRestartPolicy: raw.SystemdRestartPolicy, DefaultLogLines: raw.DefaultLogLines}
 	if !sshutil.ValidInstallPath(raw.RemoteUpgrade.InstallPath) {
-		return Config{}, fmt.Errorf("spec/server.yaml: remote_upgrade.install_path must be a safe path under the remote home directory")
+		return Config{}, fmt.Errorf("spec/server.yaml: remote_upgrade.install_path must be a safe home-relative or absolute path outside temporary directories")
 	}
 	cfg.RemoteUpgrade.InstallPath = raw.RemoteUpgrade.InstallPath
 	for _, item := range []struct {

@@ -133,6 +133,28 @@ func commandFailure(output []byte, err error) string {
 	return err.Error()
 }
 
+func installFailureReason(output []byte, err error) string {
+	message := strings.ToLower(string(output) + " " + err.Error())
+	switch {
+	case strings.Contains(message, "permission denied") || strings.Contains(message, "operation not permitted"):
+		return "permission denied"
+	case strings.Contains(message, "read-only file system") || strings.Contains(message, "filesystem is read-only"):
+		return "read-only filesystem"
+	case strings.Contains(message, "noexec") || strings.Contains(message, "cannot execute") && strings.Contains(message, "permission"):
+		return "noexec mount or execution denied"
+	default:
+		return ""
+	}
+}
+
+func installCommandFailure(path string, output []byte, err error) string {
+	message := commandFailure(output, err)
+	if reason := installFailureReason(output, err); reason != "" {
+		return fmt.Sprintf("%s: %s (%s)", path, reason, message)
+	}
+	return message
+}
+
 func sshAuthenticationFailed(output []byte) bool {
 	message := strings.ToLower(string(output))
 	return strings.Contains(message, "permission denied (publickey)") || strings.Contains(message, "no supported authentication methods available")
@@ -169,7 +191,7 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 	versionOutput, err := u.run(remoteVersionCtx, "ssh", append(sshArgs, remoteShellPath(u.config.InstallPath)+" --version")...)
 	cancel()
 	if err != nil {
-		u.printf("remote upgrade: %s version probe failed: %s\n", host, commandFailure(versionOutput, err))
+		u.printf("remote upgrade: %s version probe for %s failed: %s\n", host, u.config.InstallPath, installCommandFailure(u.config.InstallPath, versionOutput, err))
 		return
 	}
 	remote, ok := parseRemoteBuildVersion(string(versionOutput))
@@ -196,11 +218,11 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 	tempPath := fmt.Sprintf("%s.tmp-%d-%d", u.config.InstallPath, os.Getpid(), time.Now().UnixNano())
 	transferCtx, cancel := context.WithTimeout(ctx, u.config.TransferTimeout)
 	scpArgs := append([]string{"-q"}, sshOptions...)
-	scpArgs = append(scpArgs, executable, host+":"+tempPath)
+	scpArgs = append(scpArgs, executable, host+":"+remoteSCPPath(tempPath))
 	scpOutput, scpErr := u.run(transferCtx, "scp", scpArgs...)
 	cancel()
 	if scpErr != nil {
-		u.printf("remote upgrade: copying binary to %s failed: %s\n", host, commandFailure(scpOutput, scpErr))
+		u.printf("remote upgrade: copying binary to %s on %s failed: %s\n", u.config.InstallPath, host, installCommandFailure(u.config.InstallPath, scpOutput, scpErr))
 		return
 	}
 	remoteDir := path.Dir(u.config.InstallPath)
@@ -209,14 +231,21 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 	installOutput, installErr := u.run(installCtx, "ssh", append(sshArgs, installCmd)...)
 	cancel()
 	if installErr != nil {
-		u.printf("remote upgrade: installing copied binary on %s failed: %s\n", host, commandFailure(installOutput, installErr))
+		u.printf("remote upgrade: installing copied binary at %s on %s failed: %s\n", u.config.InstallPath, host, installCommandFailure(u.config.InstallPath, installOutput, installErr))
 		return
 	}
 	u.printf("remote upgrade: installed %s on %s\n", localVersion, host)
 }
 
 func remoteShellPath(path string) string {
-	return `"$HOME"/` + "'" + strings.TrimPrefix(path, "~/") + "'"
+	if strings.HasPrefix(path, "~/") {
+		return `"$HOME"/` + "'" + strings.TrimPrefix(path, "~/") + "'"
+	}
+	return "'" + path + "'"
+}
+
+func remoteSCPPath(path string) string {
+	return remoteShellPath(path)
 }
 
 func (u remoteBinaryUpgrader) printf(format string, args ...any) {

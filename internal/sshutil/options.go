@@ -18,18 +18,27 @@ func ValidHost(host string) bool {
 	return host != "" && !strings.HasPrefix(host, "-") && hostPattern.MatchString(host)
 }
 
-var installPathPattern = regexp.MustCompile(`^~/[A-Za-z0-9_./-]+$`)
+var installPathPattern = regexp.MustCompile(`^(~/|/)([A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$`)
 
-// ValidInstallPath accepts a home-relative path safe to place in remote shell
-// commands. Components may not traverse to a parent directory.
+// ValidInstallPath accepts home-relative or absolute paths safe to place in
+// remote shell commands. Components may not be empty, parent traversals, or
+// inside temporary trees.
 func ValidInstallPath(path string) bool {
 	if !installPathPattern.MatchString(path) {
 		return false
 	}
-	for _, component := range strings.Split(strings.TrimPrefix(path, "~/"), "/") {
+	absolute := strings.HasPrefix(path, "/")
+	components := strings.Split(strings.TrimPrefix(path, "~/"), "/")
+	if absolute {
+		components = strings.Split(strings.TrimPrefix(path, "/"), "/")
+	}
+	for _, component := range components {
 		if component == ".." || component == "" {
 			return false
 		}
+	}
+	if absolute && (components[0] == "tmp" || (len(components) > 1 && components[0] == "var" && components[1] == "tmp")) {
+		return false
 	}
 	return true
 }

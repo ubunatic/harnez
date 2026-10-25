@@ -28,7 +28,14 @@
       "type": "object",
       "required": ["install_path", "connect_timeout", "command_timeout", "transfer_timeout"],
       "properties": {
-        "install_path": { "type": "string", "pattern": "^~/([A-Za-z0-9_-]|[A-Za-z0-9_.-]*[A-Za-z0-9_-])(/[A-Za-z0-9_-]|/[A-Za-z0-9_.-]*[A-Za-z0-9_-])*$" },
+        "install_path": {
+          "type": "string",
+          "pattern": "^(~/|/)([A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$",
+          "allOf": [
+            { "not": { "pattern": "^/(tmp|var/tmp)(/|$)" } },
+            { "not": { "pattern": "(^|/)\\.\\.(/|$)" } }
+          ]
+        },
         "connect_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
         "command_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" },
         "transfer_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$" }

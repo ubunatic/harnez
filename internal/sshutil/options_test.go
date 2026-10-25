@@ -22,7 +22,10 @@ func TestValidInstallPath(t *testing.T) {
 		want bool
 	}{
 		{"~/go/bin/harnez", true}, {"~/x600", true}, {"~/../tmp/x", false}, {"~/a b", false},
-		{"~/a\nb", false}, {"~/a;b", false}, {"~/$(id)", false}, {"~/a*", false}, {"/tmp/harnez", false},
+		{"~/a\nb", false}, {"~/a;b", false}, {"~/$(id)", false}, {"~/a*", false},
+		{"/opt/harnez/bin/harnez", true}, {"/usr/local/bin/harnez", true}, {"/workspace/bin/harnez", true},
+		{"/tmp/x", false}, {"/tmp", false}, {"/var/tmp/x", false}, {"/var/tmp", false},
+		{"/a/../b", false}, {"/a b", false}, {"/a;b", false}, {"//x", false}, {"bin/x", false},
 	} {
 		if got := ValidInstallPath(test.path); got != test.want {
 			t.Errorf("ValidInstallPath(%q) = %v, want %v", test.path, got, test.want)

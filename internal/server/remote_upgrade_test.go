@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -61,6 +62,13 @@ func TestRemoteUpgradeRejectsInvalidDestinationAndPathBeforeSubprocess(t *testin
 		{"whitespace path", "host", "~/go/bin/my harnez"},
 		{"shell path", "host", "~/go/bin/$(id)"},
 		{"glob path", "host", "~/go/bin/*"},
+		{"tmp tree", "host", "/tmp/x"},
+		{"var tmp tree", "host", "/var/tmp/x"},
+		{"parent component", "host", "/a/../b"},
+		{"whitespace absolute", "host", "/a b"},
+		{"shell absolute", "host", "/a;b"},
+		{"double slash", "host", "//x"},
+		{"relative", "host", "bin/x"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
@@ -73,6 +81,63 @@ func TestRemoteUpgradeRejectsInvalidDestinationAndPathBeforeSubprocess(t *testin
 				t.Fatalf("subprocess calls = %d, want 0", calls)
 			}
 		})
+	}
+}
+
+func TestRemoteUpgradeQuotesHomeAndAbsoluteInstallPathsInArgv(t *testing.T) {
+	for _, test := range []struct {
+		path, quoted string
+	}{
+		{"~/go/bin/harnez", `"$HOME"/'go/bin/harnez'`},
+		{"/opt/harnez/bin/harnez", `'/opt/harnez/bin/harnez'`},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			binary := filepath.Join(t.TempDir(), "harnez")
+			if err := os.WriteFile(binary, []byte("binary"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			var calls [][]string
+			runner := func(_ context.Context, name string, args ...string) ([]byte, error) {
+				calls = append(calls, append([]string{name}, args...))
+				if name == "ssh" && args[len(args)-1] == "uname -sm" {
+					return []byte("Linux x86_64"), nil
+				}
+				if name == "ssh" && strings.HasSuffix(args[len(args)-1], " --version") {
+					return []byte("harnez version 0.2.0"), nil
+				}
+				return nil, nil
+			}
+			(remoteBinaryUpgrader{config: RemoteUpgradeConfig{InstallPath: test.path}, run: runner}).upgrade(context.Background(), "host", "0.2.1+20", "linux", "amd64", binary)
+			if len(calls) != 4 {
+				t.Fatalf("calls = %v, want platform, version, scp, install", calls)
+			}
+			if got := calls[1][len(calls[1])-1]; got != test.quoted+" --version" {
+				t.Errorf("version argv = %q, want %q", got, test.quoted+" --version")
+			}
+			scpTarget := calls[2][len(calls[2])-1]
+			scpPrefix := strings.TrimSuffix(remoteSCPPath(test.path+".tmp-"), "'")
+			if !strings.HasPrefix(scpTarget, "host:"+scpPrefix) {
+				t.Errorf("scp destination argv = %q", scpTarget)
+			}
+			install := calls[3][len(calls[3])-1]
+			if !strings.Contains(install, "mkdir -p "+remoteShellPath(path.Dir(test.path))) || !strings.Contains(install, "chmod 0755 ") || !strings.Contains(install, " && mv -f ") || !strings.HasSuffix(install, " "+test.quoted) {
+				t.Errorf("install argv = %q", install)
+			}
+		})
+	}
+}
+
+func TestRemoteUpgradeFailureReasonNamesPath(t *testing.T) {
+	for _, test := range []struct{ output, reason string }{
+		{"Permission denied", "permission denied"},
+		{"Read-only file system", "read-only filesystem"},
+		{"mount has noexec option", "noexec mount or execution denied"},
+	} {
+		got := installCommandFailure("/opt/harnez/bin/harnez", []byte(test.output), errors.New("exit status 1"))
+		if !strings.Contains(got, "/opt/harnez/bin/harnez") || !strings.Contains(got, test.reason) {
+			t.Errorf("installCommandFailure(%q) = %q", test.output, got)
+		}
 	}
 }
 
