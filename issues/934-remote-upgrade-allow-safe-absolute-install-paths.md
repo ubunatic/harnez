@@ -38,6 +38,19 @@ M1 delivered: 973e342a (validator, schema, quoting, failure reasons, server doc)
 - `.` components pass: `/./tmp/x` and `/var/./tmp/x` bypass the temp-tree rejection. Reject `.` components (runtime
   and schema), add these two plus `~/./x` and `/a/./b` as invalid cases.
 
+M2 delivered: `.` components rejected (runtime + schema).
+
+### M3 Pre-Work (host live restart, 14:41)
+
+- Regression from M1: the default upgrade now fails. Server log:
+  `copying binary to ~/go/bin/harnez on x600 failed: scp: dest open ""$HOME"/'go/bin/harnez.tmp-…'": No such file or directory`.
+  Modern scp uses SFTP and does no remote shell expansion, so shell quoting must not be applied to the scp target.
+  For `~/` paths pass the home-relative path (`go/bin/harnez.tmp-…`, relative to the login dir); absolute paths as-is
+  (already validated). Keep shell quoting only for the ssh commands.
+- The tests asserted the broken scp operand; change them to the real expected operand and add a test that fails on
+  shell quoting in the scp argv. Live acceptance: host restart logs `installed … on x600` (or keeps an equal version).
+- Owed: one `make test-q1` after M2/M3 (M2 changed files after the last full run).
+
 ## Write set
 
 `internal/sshutil/options.go` (+ test), `internal/server/remote_upgrade.go` (+ test), `spec/schemas/server.schema.json`,
