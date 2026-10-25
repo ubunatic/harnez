@@ -10,6 +10,9 @@ import (
 )
 
 func TestSystemdInstallUsesTempUnitDirAndStartsConfiguredUnit(t *testing.T) {
+	runtimeDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	t.Setenv("SSH_AUTH_SOCK", filepath.Join(runtimeDir, "agent.sock"))
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -40,6 +43,7 @@ func TestSystemdInstallUsesTempUnitDirAndStartsConfiguredUnit(t *testing.T) {
 		"RuntimeDirectory=harnez",
 		"RuntimeDirectoryPreserve=yes",
 		"ReadWritePaths=%t/harnez",
+		`Environment=SSH_AUTH_SOCK="%t/agent.sock"`,
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("unit missing %q:\n%s", want, content)

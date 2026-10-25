@@ -90,6 +90,23 @@ func (s SystemdService) available(ctx context.Context) (SystemdService, string, 
 	return s, systemctl, true, nil
 }
 
+// SystemdSSHAuthSockEnvironment renders the apply-time SSH agent socket for a
+// systemd user unit, using %t for sockets beneath XDG_RUNTIME_DIR.
+func SystemdSSHAuthSockEnvironment() string {
+	sock := os.Getenv("SSH_AUTH_SOCK")
+	if sock == "" {
+		return ""
+	}
+	value := sock
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if filepath.IsAbs(runtimeDir) && filepath.IsAbs(sock) {
+		if rel, err := filepath.Rel(runtimeDir, sock); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			value = filepath.Join("%t", rel)
+		}
+	}
+	return "Environment=SSH_AUTH_SOCK=" + strconv.Quote(filepath.ToSlash(value))
+}
+
 func (s SystemdService) Install(ctx context.Context) (bool, error) {
 	s, systemctl, available, err := s.available(ctx)
 	if err != nil || !available {
@@ -103,6 +120,7 @@ func (s SystemdService) Install(ctx context.Context) (bool, error) {
 		"{{HARNEZ_BIN}}", s.Executable,
 		"{{RESTART_POLICY}}", s.Config.SystemdRestartPolicy,
 		"{{RESTART_DELAY}}", s.Config.SystemdRestartDelay.String(),
+		"{{SSH_AUTH_SOCK_ENV}}", SystemdSSHAuthSockEnvironment(),
 	).Replace(string(data))
 	if strings.Contains(content, "{{") {
 		return true, fmt.Errorf("systemd unit template contains an unresolved placeholder")

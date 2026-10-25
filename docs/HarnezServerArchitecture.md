@@ -124,6 +124,12 @@ avoiding a systemd restart race; status reports when the socket owner differs fr
 `MainPID` and prints the restart command that returns ownership to systemd. Other hosts can keep the server
 available with `harnez usage -w`.
 
+`harnez apply` writes the current `SSH_AUTH_SOCK` into the generated unit when it is set. If the
+socket is under `XDG_RUNTIME_DIR`, the unit stores it relative to systemd's `%t` runtime directory.
+Run `harnez apply` again after the agent socket changes; with no socket set during apply, the unit
+does not define `SSH_AUTH_SOCK`. Remote SSH upgrades still probe normally and can authenticate
+with configured keys without an agent.
+
 Viewers send a heartbeat; the first heartbeat after none triggers a catch-up fetch of stale providers,
 and without viewers the collector only fetches on its regular cadence (714). Readiness rule: `/status`
 reports `ok` as soon as the services run, never after work that a client triggers; while not ready it

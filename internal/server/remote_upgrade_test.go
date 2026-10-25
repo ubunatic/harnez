@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -102,6 +103,8 @@ func TestRemoteUpgradeDecisions(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("SSH_AUTH_SOCK", "")
 			binary := t.TempDir() + "/harnez"
 			if err := os.WriteFile(binary, []byte("binary"), 0755); err != nil {
 				t.Fatal(err)
@@ -116,7 +119,7 @@ func TestRemoteUpgradeDecisions(t *testing.T) {
 				last := args[len(args)-1]
 				if last == "uname -sm" {
 					if test.probeErr {
-						return nil, errors.New("ssh failed")
+						return []byte("Bad owner or permissions\nignored detail"), errors.New("exit status 255")
 					}
 					return []byte(test.platform), nil
 				}
@@ -137,9 +140,87 @@ func TestRemoteUpgradeDecisions(t *testing.T) {
 			if test.wantMessage != "" && !strings.Contains(logs.String(), test.wantMessage) {
 				t.Errorf("log %q lacks %q", logs.String(), test.wantMessage)
 			}
+			if test.probeErr && (!strings.Contains(logs.String(), "Bad owner or permissions") || strings.Contains(logs.String(), "ignored detail")) {
+				t.Errorf("probe failure log should contain only the first output line: %q", logs.String())
+			}
 			if test.name == "no host" && len(calls) != 0 {
 				t.Errorf("no-host calls = %v", calls)
 			}
 		})
+	}
+}
+
+func TestRemoteUpgradeUsesSSHConfigForSSHAndSCP(t *testing.T) {
+	for _, hasConfig := range []bool{false, true} {
+		name := "without config"
+		if hasConfig {
+			name = "with config"
+		}
+		t.Run(name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("SSH_AUTH_SOCK", "")
+			configPath := filepath.Join(home, ".ssh", "config")
+			if hasConfig {
+				if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(configPath, []byte("Host example\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			binary := filepath.Join(t.TempDir(), "harnez")
+			if err := os.WriteFile(binary, []byte("binary"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			var calls [][]string
+			runner := func(_ context.Context, name string, args ...string) ([]byte, error) {
+				calls = append(calls, append([]string{name}, args...))
+				last := args[len(args)-1]
+				if name == "ssh" && last == "uname -sm" {
+					return []byte("Linux x86_64"), nil
+				}
+				if name == "ssh" && strings.HasSuffix(last, " --version") {
+					return []byte("harnez version 0.2.0"), nil
+				}
+				return nil, nil
+			}
+			(remoteBinaryUpgrader{config: RemoteUpgradeConfig{InstallPath: "~/go/bin/harnez"}, run: runner}).upgrade(context.Background(), "example", "0.2.1+20", "linux", "amd64", binary)
+
+			for _, call := range calls {
+				gotConfig := false
+				for i := 0; i+1 < len(call); i++ {
+					gotConfig = gotConfig || (call[i] == "-F" && call[i+1] == configPath)
+				}
+				if (call[0] == "ssh" || call[0] == "scp") && gotConfig != hasConfig {
+					t.Errorf("%s config option = %v, want %v; call=%v", call[0], gotConfig, hasConfig, call)
+				}
+			}
+			if !hasConfig {
+				for _, call := range calls {
+					if call[0] == "ssh" && len(call) > 1 && call[len(call)-1] == "~/go/bin/harnez --version" {
+						return // A working key without an agent still reaches the version probe.
+					}
+				}
+				t.Errorf("version probe did not run without SSH_AUTH_SOCK: %v", calls)
+			}
+		})
+	}
+}
+
+func TestRemoteUpgradeLogsClearSkipForMissingSSHAuthentication(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "")
+	var calls int
+	var logs bytes.Buffer
+	runner := func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+		calls++
+		return []byte("Permission denied (publickey)."), errors.New("exit status 255")
+	}
+	(remoteBinaryUpgrader{config: RemoteUpgradeConfig{}, run: runner, log: &logs}).upgrade(context.Background(), "example", "0.2.1+20", "linux", "amd64", "unused")
+	if calls != 1 {
+		t.Fatalf("SSH calls = %d, want one failed probe", calls)
+	}
+	if got := logs.String(); strings.Count(got, "skipping example") != 1 || !strings.Contains(got, "no agent socket or usable key") {
+		t.Fatalf("skip log = %q", got)
 	}
 }

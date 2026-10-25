@@ -11,6 +11,7 @@ Restart={{RESTART_POLICY}}
 RestartSec={{RESTART_DELAY}}
 RuntimeDirectory=harnez
 RuntimeDirectoryPreserve=yes
+{{SSH_AUTH_SOCK_ENV}}
 
 # Writes its Unix socket and usage data to the per-user XDG directories.
 # SQLite needs a writable temporary directory under this strict filesystem sandbox.

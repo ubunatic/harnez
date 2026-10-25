@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -124,6 +125,35 @@ func sshConnectTimeout(timeout time.Duration) string {
 	return strconv.Itoa(int(math.Ceil(timeout.Seconds())))
 }
 
+func sshConfigArgs() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	config := filepath.Join(home, ".ssh", "config")
+	if info, err := os.Stat(config); err == nil && info.Mode().IsRegular() {
+		return []string{"-F", config}
+	}
+	return nil
+}
+
+func commandFailure(output []byte, err error) string {
+	message := strings.TrimSpace(string(output))
+	if message != "" {
+		message = strings.TrimSpace(strings.SplitN(message, "\n", 2)[0])
+		if len(message) > 200 {
+			message = message[:197] + "..."
+		}
+		return fmt.Sprintf("%s (%v)", message, err)
+	}
+	return err.Error()
+}
+
+func sshAuthenticationFailed(output []byte) bool {
+	message := strings.ToLower(string(output))
+	return strings.Contains(message, "permission denied (publickey)") || strings.Contains(message, "no supported authentication methods available")
+}
+
 func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, goos, goarch, executable string) {
 	if strings.TrimSpace(host) == "" {
 		return
@@ -134,12 +164,17 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 		return
 	}
 	connectTimeout := sshConnectTimeout(u.config.ConnectTimeout)
-	sshArgs := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + connectTimeout, host}
+	sshOptions := append(sshConfigArgs(), "-o", "BatchMode=yes", "-o", "ConnectTimeout="+connectTimeout)
+	sshArgs := append(append([]string(nil), sshOptions...), host)
 	commandCtx, cancel := context.WithTimeout(ctx, u.config.CommandTimeout)
 	platform, err := u.run(commandCtx, "ssh", append(sshArgs, "uname -sm")...)
 	cancel()
 	if err != nil {
-		u.printf("remote upgrade: %s platform probe failed: %v\n", host, err)
+		if os.Getenv("SSH_AUTH_SOCK") == "" && sshAuthenticationFailed(platform) {
+			u.printf("remote upgrade: skipping %s: SSH authentication failed (no agent socket or usable key): %s\n", host, commandFailure(platform, err))
+		} else {
+			u.printf("remote upgrade: %s platform probe failed: %s\n", host, commandFailure(platform, err))
+		}
 		return
 	}
 	if !sameRemotePlatform(string(platform), goos, goarch) {
@@ -150,7 +185,7 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 	versionOutput, err := u.run(remoteVersionCtx, "ssh", append(sshArgs, u.config.InstallPath+" --version")...)
 	cancel()
 	if err != nil {
-		u.printf("remote upgrade: %s version probe failed: %v\n", host, err)
+		u.printf("remote upgrade: %s version probe failed: %s\n", host, commandFailure(versionOutput, err))
 		return
 	}
 	remote, ok := parseRemoteBuildVersion(string(versionOutput))
@@ -176,19 +211,21 @@ func (u remoteBinaryUpgrader) upgrade(ctx context.Context, host, localVersion, g
 	}
 	tempPath := fmt.Sprintf("%s.tmp-%d-%d", u.config.InstallPath, os.Getpid(), time.Now().UnixNano())
 	transferCtx, cancel := context.WithTimeout(ctx, u.config.TransferTimeout)
-	_, err = u.run(transferCtx, "scp", "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout="+connectTimeout, executable, host+":"+tempPath)
+	scpArgs := append([]string{"-q"}, sshOptions...)
+	scpArgs = append(scpArgs, executable, host+":"+tempPath)
+	scpOutput, scpErr := u.run(transferCtx, "scp", scpArgs...)
 	cancel()
-	if err != nil {
-		u.printf("remote upgrade: copying binary to %s failed: %v\n", host, err)
+	if scpErr != nil {
+		u.printf("remote upgrade: copying binary to %s failed: %s\n", host, commandFailure(scpOutput, scpErr))
 		return
 	}
 	remoteDir := path.Dir(u.config.InstallPath)
 	installCmd := fmt.Sprintf("mkdir -p %s && chmod %04o %s && mv -f %s %s", remoteDir, info.Mode().Perm(), tempPath, tempPath, u.config.InstallPath)
 	installCtx, cancel := context.WithTimeout(ctx, u.config.CommandTimeout)
-	_, err = u.run(installCtx, "ssh", append(sshArgs, installCmd)...)
+	installOutput, installErr := u.run(installCtx, "ssh", append(sshArgs, installCmd)...)
 	cancel()
-	if err != nil {
-		u.printf("remote upgrade: installing copied binary on %s failed: %v\n", host, err)
+	if installErr != nil {
+		u.printf("remote upgrade: installing copied binary on %s failed: %s\n", host, commandFailure(installOutput, installErr))
 		return
 	}
 	u.printf("remote upgrade: installed %s on %s\n", localVersion, host)

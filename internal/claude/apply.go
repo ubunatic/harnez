@@ -125,7 +125,12 @@ func installSystemdUnit(fsys fs.FS) (string, applyResult, error) {
 	if err != nil {
 		return "", applyResult{}, fmt.Errorf("read %s: %w", serverConfig.SystemdUnitSource, err)
 	}
-	content := strings.NewReplacer("{{HARNEZ_BIN}}", exe, "{{RESTART_POLICY}}", serverConfig.SystemdRestartPolicy, "{{RESTART_DELAY}}", serverConfig.SystemdRestartDelay.String()).Replace(string(tmpl))
+	content := strings.NewReplacer(
+		"{{HARNEZ_BIN}}", exe,
+		"{{RESTART_POLICY}}", serverConfig.SystemdRestartPolicy,
+		"{{RESTART_DELAY}}", serverConfig.SystemdRestartDelay.String(),
+		"{{SSH_AUTH_SOCK_ENV}}", server.SystemdSSHAuthSockEnvironment(),
+	).Replace(string(tmpl))
 	dst := filepath.Join(unitDir, serverConfig.SystemdUnitName)
 	if err := os.MkdirAll(unitDir, 0755); err != nil {
 		return "", applyResult{}, fmt.Errorf("create %s: %w", unitDir, err)
