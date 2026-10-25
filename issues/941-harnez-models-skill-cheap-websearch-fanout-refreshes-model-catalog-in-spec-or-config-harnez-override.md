@@ -190,3 +190,10 @@ Run the full suite once after the fixes (never commit after a failed or skipped 
 - Loader merges the override over embedded spec; tests: no file, partial override, invalid file (clear error,
   fall back to defaults), new model added.
 - `harnez agent models` (or the current catalog view) shows overridden values and marks their source.
+
+## M6 — Pre-Work (host diff review of 98a73ebd)
+
+`TestCustomIdentityVersionPin` was turned from "mismatched custom pin is rejected" into "matching pin is
+accepted"; the negative case is gone (the original failure was only the expected message substring). Keep the
+new positive case and restore the negative one: `version_pin: "2"` against identity version `"1"` must fail,
+asserting the actual message (`does not match identity.version`). Package test, then commit (issue 941 M6).
