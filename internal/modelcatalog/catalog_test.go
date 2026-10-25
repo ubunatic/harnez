@@ -128,6 +128,21 @@ models:
 	}
 }
 
+func TestLoadRejectsConflictingEnabledAliases(t *testing.T) {
+	stateDir := t.TempDir()
+	configDir := t.TempDir()
+	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), `version: 1
+default_enabled: true
+enabled: []
+models:
+  codex:luna:low: {kind: patch, enabled: false}
+  codex:gpt-6-luna:low: {kind: patch, enabled: true}`)
+	_, err := LoadFromDirs(stateDir, configDir)
+	if err == nil || !strings.Contains(err.Error(), "conflicting enabled values") {
+		t.Fatalf("conflicting policy error = %v", err)
+	}
+}
+
 func TestLoadUsesIsolatedXDGDirectories(t *testing.T) {
 	home := t.TempDir()
 	configHome := t.TempDir()

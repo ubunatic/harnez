@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez/internal/modelcatalog"
 )
 
 func TestCodexCheckResumable(t *testing.T) {
@@ -204,6 +205,73 @@ func TestKnownModelsAndExplicitSpecsFailClosed(t *testing.T) {
 			t.Fatalf("spec %q error = %v, want known specs", spec, err)
 		}
 	}
+}
+
+func TestModelPolicyDisableAllButNAndResolvedAliases(t *testing.T) {
+	policy := "version: 1\ndefault_enabled: false\nenabled: [codex:luna:high, claude:opus:low, agy:flash38:high]\nmodels: {}\n"
+	catalog := loadTestModelPolicy(t, policy)
+	allowed := 0
+	for _, entry := range catalog.Models {
+		tiers := []string{entry.Identity.Tier}
+		if entry.Effort == nil || *entry.Effort {
+			tiers = []string{"low", "med", "high"}
+		}
+		for _, tier := range tiers {
+			if catalog.IsEnabled(entry.Identity.Harness, entry.Identity.Model, tier) {
+				allowed++
+			}
+		}
+	}
+	if allowed != 3 {
+		t.Fatalf("enabled catalog model variants = %d, want exactly 3", allowed)
+	}
+
+	aliases := map[string]modelAlias{
+		"codex:luna": {Model: Model{Provider: "codex", Name: "gpt-6-luna", Tier: "low"}, Aliases: []string{"luna", "luna:low"}, Preferred: true},
+	}
+	if _, err := resolveModelWithCatalog(aliases, catalog, "codex:luna:high"); err != nil {
+		t.Fatalf("ResolveModel(high) error = %v", err)
+	}
+	for _, spec := range []string{"luna:low", "codex:gpt-6-luna:low", "pi:OpenAI/gpt-5.6-Sol:high"} {
+		if _, err := resolveModelWithCatalog(aliases, catalog, spec); err == nil || !strings.Contains(err.Error(), "disabled by user policy") {
+			t.Fatalf("ResolveModel(%q) error = %v, want policy denial", spec, err)
+		}
+	}
+}
+
+func TestModelPolicyExplicitEnablementPrecedence(t *testing.T) {
+	tests := []struct {
+		name    string
+		policy  string
+		tier    string
+		enabled bool
+	}{
+		{"entry disables despite default", "version: 1\ndefault_enabled: true\nenabled: []\nmodels:\n  codex:luna:low: {kind: patch, enabled: false}\n", "low", false},
+		{"entry enables despite default", "version: 1\ndefault_enabled: false\nenabled: []\nmodels:\n  codex:luna:low: {kind: patch, enabled: true}\n", "low", true},
+		{"default applies to unlisted tier", "version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\n", "high", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			catalog := loadTestModelPolicy(t, tc.policy)
+			if got := catalog.IsEnabled("codex", "gpt-6-luna", tc.tier); got != tc.enabled {
+				t.Fatalf("IsEnabled() = %v, want %v", got, tc.enabled)
+			}
+		})
+	}
+}
+
+func loadTestModelPolicy(t *testing.T, policy string) *modelcatalog.Catalog {
+	t.Helper()
+	stateDir := t.TempDir()
+	configDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "models.yaml"), []byte(policy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := modelcatalog.LoadFromDirs(stateDir, configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return catalog
 }
 
 func TestModelGuideCostByTier(t *testing.T) {

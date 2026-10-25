@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
+
+	"ubunatic.com/harnez/internal/modelcatalog"
 )
 
 // Driver executes and manages a provider session.
@@ -104,6 +107,108 @@ type ModelGuide struct {
 	UseMed     string         `yaml:"use_med"` // replaces Use for the :med variant
 }
 
+var (
+	mergedModelCatalogOnce = sync.OnceValues(modelcatalog.Load)
+	mergedModelCatalog     *modelcatalog.Catalog
+	modelAliases           map[string]modelAlias
+	modelGuides            map[string]ModelGuide
+	modelAliasNames        map[string]string
+	modelCatalogInit       = sync.OnceValue(loadMergedModelCatalog)
+)
+
+func loadMergedModelCatalog() error {
+	catalog, err := mergedModelCatalogOnce()
+	if err != nil {
+		return err
+	}
+	aliases := make(map[string]modelAlias, len(catalog.Models))
+	guides := make(map[string]ModelGuide, len(catalog.Models))
+	aliasNames := make(map[string]string, len(catalog.Models))
+	ids := make([]string, 0, len(catalog.Models))
+	for id := range catalog.Models {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		entry := catalog.Models[id]
+		provider := entry.Identity.Harness
+		if provider == "" {
+			provider = entry.Identity.Provider
+		}
+		modelAliases := append([]string(nil), entry.Aliases...)
+		if value, ok := entry.Overrides["aliases"]; ok {
+			modelAliases = stringSlice(value)
+		}
+		name := entry.Key
+		if name == "" {
+			name = entry.Identity.Model
+			if len(modelAliases) > 0 {
+				name = modelAliases[0]
+				if index := strings.IndexByte(name, ':'); index >= 0 {
+					name = name[:index]
+				}
+			}
+		}
+		model := Model{Provider: provider, Name: entry.Identity.Model, Tier: entry.Identity.Tier, Effort: entry.Effort}
+		if model.Tier == "" {
+			model.Tier = "low"
+		}
+		key := provider + ":" + name
+		aliases[key] = modelAlias{Model: model, Aliases: modelAliases, Preferred: entry.Preferred}
+		guide := ModelGuide{Cost: entry.Guide.Cost, CostByTier: entry.Guide.CostByTier, Eff: entry.Guide.Eff, Skills: entry.Guide.Skills, Roles: entry.Guide.Roles, Use: entry.Guide.Use, UseMed: entry.Guide.UseMed}
+		if value, ok := entry.Overrides["purpose"]; ok {
+			if value == nil {
+				guide.Use = ""
+			} else if purpose, isString := value.(string); isString {
+				guide.Use = purpose
+			}
+		}
+		if value, ok := entry.Overrides["tier"]; ok {
+			if tier, isString := value.(string); isString {
+				model.Tier = tier
+				aliases[key] = modelAlias{Model: model, Aliases: modelAliases, Preferred: entry.Preferred}
+			}
+		}
+		guides[key] = guide
+		aliasNames[provider+"\x00"+model.Name] = name
+	}
+	mergedModelCatalog = catalog
+	modelAliases = aliases
+	modelGuides = guides
+	modelAliasNames = aliasNames
+	return nil
+}
+
+func stringSlice(value any) []string {
+	switch values := value.(type) {
+	case []string:
+		return append([]string(nil), values...)
+	case []any:
+		out := make([]string, 0, len(values))
+		for _, item := range values {
+			if value, ok := item.(string); ok {
+				out = append(out, value)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func ensureModelCatalog() error { return modelCatalogInit() }
+
+func modelAliasMap() (map[string]modelAlias, error) {
+	if err := ensureModelCatalog(); err != nil {
+		return nil, err
+	}
+	aliases := make(map[string]modelAlias, len(modelAliases))
+	for key, value := range modelAliases {
+		aliases[key] = value
+	}
+	return aliases, nil
+}
+
 // CostForTier returns the tier override when present, falling back to Cost.
 func (g ModelGuide) CostForTier(tier string) int {
 	if cost, ok := g.CostByTier[tier]; ok {
@@ -142,12 +247,19 @@ type TurnResult struct {
 	DurationMS         int64 `json:"duration_ms"`
 }
 
-var modelAliases map[string]modelAlias
-
 // KnownModels returns the configured shorthand specifications in stable order.
 func KnownModels() []Model {
-	if err := ensureModelAliases(); err != nil {
+	models, err := KnownModelsE()
+	if err != nil {
 		panic(err)
+	}
+	return models
+}
+
+// KnownModelsE returns known models and any catalog loading error.
+func KnownModelsE() ([]Model, error) {
+	if err := ensureModelCatalog(); err != nil {
+		return nil, err
 	}
 	keys := make([]string, 0, len(modelAliases))
 	for key := range modelAliases {
@@ -156,19 +268,35 @@ func KnownModels() []Model {
 	sort.Strings(keys)
 	models := make([]Model, 0, len(keys))
 	for _, key := range keys {
-		models = append(models, modelAliases[key].Model)
+		candidate := modelAliases[key].Model
+		if modelEnabledAtAnyTier(mergedModelCatalog, candidate) {
+			models = append(models, candidate)
+		}
 	}
-	return models
+	return models, nil
 }
 
 // KnownModelSpecs lists every selectable spec: each configured model at its
 // default tier, plus :med and :high variants for effort-aware models.
 func KnownModelSpecs() []string {
-	var specs []string
-	for _, e := range KnownModelEntries() {
-		specs = append(specs, e.Spec)
+	specs, err := KnownModelSpecsE()
+	if err != nil {
+		panic(err)
 	}
 	return specs
+}
+
+// KnownModelSpecsE lists enabled selectable model specs.
+func KnownModelSpecsE() ([]string, error) {
+	var specs []string
+	entries, err := KnownModelEntriesE()
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		specs = append(specs, e.Spec)
+	}
+	return specs, nil
 }
 
 // ModelEntry is one selectable spec with its listing guidance.
@@ -184,6 +312,7 @@ type ModelEntry struct {
 	Skills string `json:"skills"`
 	Roles  string `json:"roles"`
 	Use    string `json:"use"`
+	Source string `json:"source"`
 }
 
 // ModelEntriesWithDriver marks models according to their selected batch driver.
@@ -199,30 +328,49 @@ func ModelEntriesWithDriver(entries []ModelEntry, driver func(Model) Driver) []M
 
 // KnownModelEntries backs KnownModelSpecs and `harnez agent models`.
 func KnownModelEntries() []ModelEntry {
-	guides, err := modelGuidesOnce()
+	entries, err := KnownModelEntriesE()
 	if err != nil {
 		panic(err)
 	}
+	return entries
+}
+
+// KnownModelEntriesE lists selectable models from the merged catalog.
+func KnownModelEntriesE() ([]ModelEntry, error) {
+	if err := ensureModelCatalog(); err != nil {
+		return nil, err
+	}
 	var entries []ModelEntry
-	for _, m := range KnownModels() {
-		g := guides[m.Provider+":"+modelAliasName(m)]
+	models, err := KnownModelsE()
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range models {
+		guide := modelGuides[m.Provider+":"+modelAliasName(m)]
 		effort := m.SupportsEffort()
 		alias := modelAliasName(m)
+		catalogModel, ok := findCatalogModel(mergedModelCatalog, m)
+		if !ok {
+			continue
+		}
 		tiers := []string{m.Tier}
 		if effort {
 			tiers = []string{"low", "med", "high"}
 		}
 		for _, tier := range tiers {
+			if !mergedModelCatalog.IsEnabled(m.Provider, m.Name, tier) {
+				continue
+			}
 			model := m
 			model.Tier = tier
-			use := g.Use
-			if tier == "med" && g.UseMed != "" {
-				use = g.UseMed
+			use := guide.Use
+			if tier == "med" && guide.UseMed != "" {
+				use = guide.UseMed
 			}
-			entries = append(entries, ModelEntry{Spec: m.Provider + ":" + alias + ":" + tier, Model: model, Effort: effort, Cost: g.CostForTier(tier), Eff: g.Eff, Skills: g.Skills, Roles: g.Roles, Use: use})
+			entries = append(entries, ModelEntry{Spec: m.Provider + ":" + alias + ":" + tier, Model: model, Effort: effort, Cost: guide.CostForTier(tier), Eff: guide.Eff, Skills: guide.Skills, Roles: guide.Roles, Use: use, Source: catalogModel.Source})
 		}
 	}
-	return entries
+	return entries, nil
 }
 
 func (m Model) Spec() string {
@@ -230,23 +378,57 @@ func (m Model) Spec() string {
 }
 
 func modelAliasName(m Model) string {
-	if err := ensureModelAliases(); err != nil {
+	if err := ensureModelCatalog(); err != nil {
 		panic(err)
 	}
-	for key, candidate := range modelAliases {
-		if candidate.Model == m {
-			return strings.TrimPrefix(key, m.Provider+":")
-		}
+	if name := modelAliasNames[m.Provider+"\x00"+m.Name]; name != "" {
+		return name
 	}
 	return m.Name
 }
 
 // ResolveModel expands provider:model[:tier] shorthand.
 func ResolveModel(spec string) (Model, error) {
-	if err := ensureModelAliases(); err != nil {
+	if err := ensureModelCatalog(); err != nil {
 		return Model{}, err
 	}
-	return resolveModelIn(modelAliases, spec)
+	return resolveModelWithCatalog(modelAliases, mergedModelCatalog, spec)
+}
+
+func resolveModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalog.Catalog, spec string) (Model, error) {
+	model, err := resolveModelIn(aliases, spec)
+	if err != nil {
+		return Model{}, err
+	}
+	if !catalog.IsEnabled(model.Provider, model.Name, model.Tier) {
+		return Model{}, fmt.Errorf("model %q is disabled by user policy", spec)
+	}
+	return model, nil
+}
+
+func modelEnabledAtAnyTier(catalog *modelcatalog.Catalog, model Model) bool {
+	if model.SupportsEffort() {
+		for _, tier := range []string{"low", "med", "high"} {
+			if catalog.IsEnabled(model.Provider, model.Name, tier) {
+				return true
+			}
+		}
+		return false
+	}
+	return catalog.IsEnabled(model.Provider, model.Name, model.Tier)
+}
+
+func findCatalogModel(catalog *modelcatalog.Catalog, model Model) (modelcatalog.Model, bool) {
+	for _, entry := range catalog.Models {
+		provider := entry.Identity.Harness
+		if provider == "" {
+			provider = entry.Identity.Provider
+		}
+		if provider == model.Provider && entry.Identity.Model == model.Name {
+			return entry, true
+		}
+	}
+	return modelcatalog.Model{}, false
 }
 
 func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {

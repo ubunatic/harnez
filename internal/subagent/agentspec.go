@@ -141,7 +141,7 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if len(models) == 0 {
 		var err error
-		models, err = loadModelAliases()
+		models, err = modelAliasMap()
 		if err != nil {
 			return agentSpec{}, err
 		}
@@ -176,48 +176,6 @@ func validateExternalSessions(specs map[string]ExternalSessionSpec) error {
 	return nil
 }
 
-func loadModelAliases() (map[string]modelAlias, error) {
-	data, err := fs.ReadFile(harnez.DefaultFS, agentSpecPath)
-	if err != nil {
-		return nil, fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
-	}
-	var spec struct {
-		Models map[string]modelAlias `yaml:"models"`
-	}
-	if err := yaml.Unmarshal(data, &spec); err != nil {
-		return nil, fmt.Errorf("agent spec: parse models: %w", err)
-	}
-	return spec.Models, nil
-}
-
-var modelAliasesOnce = sync.OnceValues(loadModelAliases)
-
-func loadModelGuides() (map[string]ModelGuide, error) {
-	data, err := fs.ReadFile(harnez.DefaultFS, agentSpecPath)
-	if err != nil {
-		return nil, fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
-	}
-	var spec struct {
-		Models map[string]ModelGuide `yaml:"models"`
-	}
-	if err := yaml.Unmarshal(data, &spec); err != nil {
-		return nil, fmt.Errorf("agent spec: parse model guides: %w", err)
-	}
-	return spec.Models, nil
-}
-
-var modelGuidesOnce = sync.OnceValues(loadModelGuides)
-
-// modelAliasesInit assigns modelAliases once, so concurrent resolvers (the
-// tui event loop and its turn goroutines) never race on the global.
-var modelAliasesInit = sync.OnceValue(func() error {
-	var err error
-	modelAliases, err = modelAliasesOnce()
-	return err
-})
-
-func ensureModelAliases() error { return modelAliasesInit() }
-
 func loadAgentSpec() (agentSpec, error) {
 	data, err := fs.ReadFile(harnez.DefaultFS, agentSpecPath)
 	if err != nil {
@@ -249,6 +207,9 @@ func ModelsLegend() (string, error) {
 func DefaultModelSpec() (string, error) {
 	spec, err := agentSpecOnce()
 	if err != nil {
+		return "", err
+	}
+	if err := ensureModelCatalog(); err != nil {
 		return "", err
 	}
 	return spec.DefaultModel, nil

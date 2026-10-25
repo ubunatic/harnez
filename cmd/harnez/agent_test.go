@@ -183,7 +183,7 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(out.String(), "\n")
-	if !strings.HasPrefix(lines[0], "SPEC") || !strings.Contains(lines[0], "COST") || !strings.Contains(lines[0], "EFF") || !strings.Contains(lines[0], "SKILLS") || !strings.Contains(lines[0], "ROLES") || !strings.Contains(lines[0], "USE") {
+	if !strings.HasPrefix(lines[0], "SPEC") || !strings.Contains(lines[0], "SOURCE") || !strings.Contains(lines[0], "COST") || !strings.Contains(lines[0], "EFF") || !strings.Contains(lines[0], "SKILLS") || !strings.Contains(lines[0], "ROLES") || !strings.Contains(lines[0], "USE") {
 		t.Fatalf("header = %q", lines[0])
 	}
 	var low, med, high, opus, haiku string
@@ -201,7 +201,7 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 			opus = line
 		}
 	}
-	if !strings.Contains(low, "developer") || !strings.Contains(low, "clear bounded tickets") || !strings.Contains(low, " 1 ") || !strings.Contains(low, "Go~ TUI- SQL?") {
+	if !strings.Contains(low, "spec-default") || !strings.Contains(low, "developer") || !strings.Contains(low, "clear bounded tickets") || !strings.Contains(low, " 1 ") || !strings.Contains(low, "Go~ TUI- SQL?") {
 		t.Fatalf("luna:low row = %q", low)
 	}
 	if !strings.Contains(med, "interface or design changes") {

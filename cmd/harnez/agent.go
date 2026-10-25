@@ -584,7 +584,11 @@ func agentSessionCompletion(storeDir string, parent func() string) cobra.Complet
 
 func agentModelCompletion(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	var out []string
-	for _, spec := range subagent.KnownModelSpecs() {
+	specs, err := subagent.KnownModelSpecsE()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	for _, spec := range specs {
 		if strings.HasPrefix(spec, toComplete) {
 			out = append(out, spec)
 		}

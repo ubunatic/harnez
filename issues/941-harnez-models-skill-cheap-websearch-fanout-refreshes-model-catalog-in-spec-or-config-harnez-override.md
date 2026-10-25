@@ -83,6 +83,28 @@ No refinements from M1. M2 per plan: replace `loadModelAliases/loadModelGuides`,
 resolution incl. Pi direct IDs; tests for disable-all-but-N, enablement precedence, alias/direct-ID bypass,
 pin mismatch, unchanged behaviour without policy.
 
+## M2 delivered: merged-catalog consumers and policy gate
+
+- Removed `loadModelAliases/loadModelGuides`; aliases, listing guidance, model entries, and resolution now use
+  the cached merged catalog. `agent models` shows each row's source and filters disabled variants.
+- Resolution enforces policy on the final provider/model/tier, including Pi direct IDs. Policy entries apply
+  after alias resolution, inherited version pins are checked, contradictory enablement patches for aliases of
+  the same identity fail with an error, and unknown access remains distinct from policy denial.
+- Tests cover disabling all but three variants, explicit enablement precedence, shorthand and backend-ID
+  bypasses, Pi direct-ID denial, invalid policy errors, and displayed source. CLI verification with isolated
+  HOME/XDG directories listed exactly the enabled three; an invalid policy stopped `agent models`.
+- `make test-q1` passed with no `--- FAIL` matches. The final alias-conflict validation was added afterward;
+  `go test ./internal/modelcatalog ./internal/subagent ./cmd/harnez -count=1` passed on the final code.
+  `make install` completed.
+
+### M3 notes
+
+- The policy model-ID pattern in `spec/schemas/model-policy.schema.json` does not permit `/` or uppercase
+  characters. Arbitrary case-sensitive Pi IDs containing those characters cannot be individually enabled by
+  policy when `default_enabled: false`; the current gate safely denies them.
+- `agent models` currently shows a coarse source label (`spec-default`, `state`, or `user-declared`). It does
+  not yet display fact-level evidence or detailed access observations.
+
 ## Acceptance
 
 - Skill registered and installed; `update` dispatches the fanout and aggregates a cited table.

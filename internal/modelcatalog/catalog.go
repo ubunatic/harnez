@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -33,13 +34,17 @@ type Catalog struct {
 // Model contains public catalog facts and optional legacy listing guidance.
 type Model struct {
 	Identity  Identity
+	Key       string
 	Aliases   []string
+	Preferred bool
+	Effort    *bool
 	Facts     map[string]any
 	Guide     LegacyGuide
 	Access    []AccessObservation
 	Policy    *PolicyEntry
 	Overrides map[string]any
 	Enabled   bool
+	Source    string
 }
 
 // Identity identifies one exact model variant.
@@ -65,6 +70,7 @@ type LegacyGuide struct {
 type legacyModel struct {
 	Aliases     []string `yaml:"aliases"`
 	Preferred   bool     `yaml:"preferred"`
+	Effort      *bool    `yaml:"effort"`
 	Provider    string   `yaml:"provider"`
 	Name        string   `yaml:"name"`
 	Tier        string   `yaml:"tier"`
@@ -161,7 +167,7 @@ func loadDefaults() (*Catalog, error) {
 		return nil, fmt.Errorf("model catalog: parse embedded defaults: %w", err)
 	}
 	catalog := &Catalog{Models: make(map[string]Model, len(spec.Models))}
-	for _, legacy := range spec.Models {
+	for key, legacy := range spec.Models {
 		// Legacy entries name a harness and exact backend ID, but contain no
 		// upstream-provider or release-version metadata. Keep that limitation
 		// explicit: use the harness for provider and the backend ID for version.
@@ -170,7 +176,8 @@ func loadDefaults() (*Catalog, error) {
 			identity.Tier = "low"
 		}
 		id := modelID(identity)
-		catalog.Models[id] = Model{Identity: identity, Aliases: append([]string(nil), legacy.Aliases...), Facts: map[string]any{}, Guide: legacy.LegacyGuide, Enabled: true}
+		alias := strings.TrimPrefix(key, legacy.Provider+":")
+		catalog.Models[id] = Model{Identity: identity, Key: alias, Aliases: append([]string(nil), legacy.Aliases...), Preferred: legacy.Preferred, Effort: legacy.Effort, Facts: map[string]any{}, Guide: legacy.LegacyGuide, Enabled: true, Source: "spec-default"}
 	}
 	return catalog, nil
 }
@@ -195,7 +202,9 @@ func (c *Catalog) mergeMachineFile(filename string) error {
 		id := modelID(entry.Identity)
 		current, ok := c.Models[id]
 		if !ok {
-			current = Model{Identity: entry.Identity, Facts: map[string]any{}, Enabled: true}
+			current = Model{Identity: entry.Identity, Facts: map[string]any{}, Enabled: true, Source: "state"}
+		} else {
+			current.Source = "state"
 		}
 		current.Aliases = appendUnique(current.Aliases, entry.Aliases...)
 		mergeFactMaps(current.Facts, entry.Facts)
@@ -226,7 +235,7 @@ func (c *Catalog) mergeAccessFile(filename string) error {
 		id := modelID(observation.Identity)
 		model, ok := c.Models[id]
 		if !ok {
-			model = Model{Identity: observation.Identity, Facts: map[string]any{}, Enabled: true}
+			model = Model{Identity: observation.Identity, Facts: map[string]any{}, Enabled: true, Source: "state"}
 		}
 		model.Access = append(model.Access, observation)
 		c.Models[id] = model
@@ -245,10 +254,16 @@ func (c *Catalog) mergePolicyFile(filename string) error {
 	if err := ValidatePolicyPins(doc); err != nil {
 		return fmt.Errorf("model catalog: %s: %w", filename, err)
 	}
-	data, _ := os.ReadFile(filename)
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("model catalog: read %s: %w", filename, err)
+	}
 	var policy Policy
 	if err := yaml.Unmarshal(data, &policy); err != nil {
 		return fmt.Errorf("model catalog: parse %s: %w", filename, err)
+	}
+	if err := c.validatePolicyEnablement(policy); err != nil {
+		return fmt.Errorf("model catalog: %s: %w", filename, err)
 	}
 	c.Policy = &policy
 	for policyID, entry := range policy.Models {
@@ -264,12 +279,16 @@ func (c *Catalog) mergePolicyFile(filename string) error {
 			if entry.Kind != "custom" || entry.Identity == nil {
 				return fmt.Errorf("model catalog: %s: patch %s does not identify an existing model", filename, policyID)
 			}
-			model = Model{Identity: identity, Facts: map[string]any{}, Enabled: true}
+			model = Model{Identity: identity, Facts: map[string]any{}, Enabled: true, Source: "user-declared"}
 		}
 		if entry.VersionPin != "" && entry.VersionPin != model.Identity.Version {
 			return fmt.Errorf("model catalog: %s: models.%s.version_pin does not match catalog identity.version %q", filename, policyID, model.Identity.Version)
 		}
 		model.Policy = &entry
+		if model.Key == "" && entry.Kind == "custom" {
+			model.Key = strings.TrimPrefix(policyID, strings.SplitN(policyID, ":", 2)[0]+":")
+		}
+		model.Source = "user-declared"
 		if model.Overrides == nil {
 			model.Overrides = map[string]any{}
 		}
@@ -293,18 +312,67 @@ func (c *Catalog) mergePolicyFile(filename string) error {
 	return nil
 }
 
-func findPolicyIdentity(c Catalog, policyID string) Identity {
-	for _, model := range c.Models {
-		if model.Identity.Provider+":"+model.Identity.Model == policyID || policyKey(model) == policyID {
-			return model.Identity
+func (c *Catalog) validatePolicyEnablement(policy Policy) error {
+	keys := make([]string, 0, len(policy.Models))
+	for key := range policy.Models {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for i, leftKey := range keys {
+		left := policy.Models[leftKey]
+		if left.Enabled == nil {
+			continue
 		}
-		for _, alias := range model.Aliases {
-			if model.Identity.Provider+":"+alias == policyID || model.Identity.Provider+":"+alias+":"+model.Identity.Tier == policyID {
-				return model.Identity
+		leftIdentity := findPolicyIdentity(*c, leftKey)
+		if left.Identity != nil {
+			leftIdentity = *left.Identity
+		}
+		for _, rightKey := range keys[i+1:] {
+			right := policy.Models[rightKey]
+			if right.Enabled == nil || *left.Enabled == *right.Enabled {
+				continue
+			}
+			rightIdentity := findPolicyIdentity(*c, rightKey)
+			if right.Identity != nil {
+				rightIdentity = *right.Identity
+			}
+			if modelID(leftIdentity) != modelID(rightIdentity) || modelID(leftIdentity) == modelID(Identity{}) {
+				continue
+			}
+			leftTier, rightTier := policyIDTier(leftKey), policyIDTier(rightKey)
+			if leftTier == "" || rightTier == "" || leftTier == rightTier {
+				return fmt.Errorf("conflicting enabled values in models.%s and models.%s", leftKey, rightKey)
 			}
 		}
 	}
-	return Identity{}
+	return nil
+}
+
+func policyIDTier(policyID string) string {
+	parts := strings.Split(policyID, ":")
+	if len(parts) == 3 && (parts[2] == "low" || parts[2] == "med" || parts[2] == "high") {
+		return parts[2]
+	}
+	return ""
+}
+
+func findPolicyIdentity(c Catalog, policyID string) Identity {
+	var found Identity
+	for _, model := range c.Models {
+		aliases := append(append([]string(nil), model.Aliases...), model.Key, model.Identity.Model)
+		matches := model.Identity.Harness+":"+model.Identity.Model == policyID || model.Identity.Provider+":"+model.Identity.Model == policyID || policyKey(model) == policyID ||
+			policyIDMatches(model.Identity.Harness, aliases, "low", policyID) || policyIDMatches(model.Identity.Provider, aliases, "low", policyID) ||
+			policyIDMatches(model.Identity.Harness, aliases, "med", policyID) || policyIDMatches(model.Identity.Provider, aliases, "med", policyID) ||
+			policyIDMatches(model.Identity.Harness, aliases, "high", policyID) || policyIDMatches(model.Identity.Provider, aliases, "high", policyID)
+		if !matches {
+			continue
+		}
+		if found != (Identity{}) && modelID(found) != modelID(model.Identity) {
+			return Identity{}
+		}
+		found = model.Identity
+	}
+	return found
 }
 
 func policyKey(model Model) string {
@@ -315,12 +383,119 @@ func policyKey(model Model) string {
 			alias = alias[:i]
 		}
 	}
-	return model.Identity.Provider + ":" + alias + ":" + model.Identity.Tier
+	provider := model.Identity.Harness
+	if provider == "" {
+		provider = model.Identity.Provider
+	}
+	return provider + ":" + alias + ":" + model.Identity.Tier
 }
 
 func contains(values []string, value string) bool {
 	for _, candidate := range values {
 		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
+// IsEnabled applies user policy to a fully resolved provider, model ID and
+// tier. Unknown access observations do not disable a model.
+func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
+	if c == nil || c.Policy == nil {
+		return true
+	}
+	provider, modelName, tier = strings.ToLower(provider), strings.ToLower(modelName), strings.ToLower(tier)
+	var aliases []string
+	providers := []string{provider}
+	known := false
+	for _, model := range c.Models {
+		if !strings.EqualFold(model.Identity.Harness, provider) && !strings.EqualFold(model.Identity.Provider, provider) {
+			continue
+		}
+		matches := strings.ToLower(model.Identity.Model) == modelName || strings.ToLower(model.Key) == modelName
+		for _, alias := range model.Aliases {
+			base := strings.ToLower(alias)
+			if index := strings.IndexByte(base, ':'); index >= 0 {
+				base = base[:index]
+			}
+			if strings.ToLower(alias) == modelName || base == modelName {
+				matches = true
+			}
+		}
+		if !matches {
+			continue
+		}
+		known = true
+		providers = append(providers, strings.ToLower(model.Identity.Harness), strings.ToLower(model.Identity.Provider))
+		aliases = append(aliases, strings.ToLower(model.Key), strings.ToLower(model.Identity.Model))
+		for _, alias := range model.Aliases {
+			aliases = append(aliases, strings.ToLower(alias))
+		}
+	}
+	for policyID, entry := range c.Policy.Models {
+		identityMatches := entry.Identity != nil && (strings.EqualFold(entry.Identity.Harness, provider) || strings.EqualFold(entry.Identity.Provider, provider)) && strings.EqualFold(entry.Identity.Model, modelName) && (entry.Identity.Tier == "" || strings.EqualFold(entry.Identity.Tier, tier))
+		idMatches := false
+		for _, prefix := range providers {
+			if policyIDMatches(prefix, aliases, tier, policyID) {
+				idMatches = true
+				break
+			}
+		}
+		if !identityMatches && !idMatches {
+			continue
+		}
+		if entry.Enabled != nil {
+			return *entry.Enabled
+		}
+	}
+	for _, alias := range aliases {
+		base := alias
+		if index := strings.IndexByte(base, ':'); index >= 0 {
+			base = base[:index]
+		}
+		for _, prefix := range providers {
+			if containsFold(c.Policy.Enabled, prefix+":"+base+":"+tier) || containsFold(c.Policy.Enabled, prefix+":"+base) {
+				return true
+			}
+		}
+	}
+	for policyID, entry := range c.Policy.Models {
+		if entry.Identity == nil || (!strings.EqualFold(entry.Identity.Harness, provider) && !strings.EqualFold(entry.Identity.Provider, provider)) || !strings.EqualFold(entry.Identity.Model, modelName) || (entry.Identity.Tier != "" && !strings.EqualFold(entry.Identity.Tier, tier)) {
+			continue
+		}
+		if containsFold(c.Policy.Enabled, strings.ToLower(policyID)+":"+tier) || containsFold(c.Policy.Enabled, strings.ToLower(policyID)) {
+			return true
+		}
+	}
+	if !known {
+		if containsFold(c.Policy.Enabled, provider+":"+modelName+":"+tier) || containsFold(c.Policy.Enabled, provider+":"+modelName) {
+			return true
+		}
+	}
+	return c.Policy.DefaultEnabled
+}
+
+func policyIDMatches(provider string, aliases []string, tier, policyID string) bool {
+	parts := strings.Split(strings.ToLower(policyID), ":")
+	if len(parts) < 2 || parts[0] != provider || (len(parts) == 3 && parts[2] != tier) {
+		return false
+	}
+	for _, alias := range aliases {
+		base := alias
+		if index := strings.IndexByte(base, ':'); index >= 0 {
+			base = base[:index]
+		}
+		if parts[1] == base {
+			return true
+		}
+	}
+	return false
+}
+
+func containsFold(values []string, value string) bool {
+	for _, candidate := range values {
+		if strings.EqualFold(candidate, value) {
 			return true
 		}
 	}
