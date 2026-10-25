@@ -1,6 +1,6 @@
 # 915 — issues close records model and session provenance
 
-**Status**: Closed — issues close --model/--session (env HARNEZ_AGENT_MODEL/HARNEZ_SESSION_ID, set by agent start) writes one Closed-By line under Status, replaced on re-close, hidden from indexes (e4ffd8f5). Developer make test-q1 green; host diff review and live close.
+**Status**: Open
 **Closed-By**: claude:opus-5-5, session 9ec5fca3
 **Priority**: P3 (Low)
 **Severity**: Minor
@@ -24,3 +24,15 @@ No telemetry link exists today. `--session` defaults from `HARNEZ_SESSION_ID` (s
 alongside it (add one if missing), else the flag. Both are written as one metadata line under Status
 (`**Closed-By**: <model>, session <id>`), omitted when both are empty; the generated index does not show them.
 Reversible.
+
+## M2 — Pre-Work / Required Refinements (host, 2026-10-25)
+
+Test isolation bug found by 945's developer run: inside an agent session `HARNEZ_AGENT_MODEL` is set (here
+`codex:sol:low`), so older close tests get an unexpected `**Closed-By**: codex:sol:low` line and fail:
+`TestIssuesCloseAmendReason/closed` and `TestIssuesCloseBatchPreservesClosure/{mixed,amend}`
+(`cmd/harnez/issues_close_test.go:174,233`). Host runs pass because the variables are unset there.
+
+1. Clear `HARNEZ_AGENT_MODEL` and `HARNEZ_SESSION_ID` for every test that does not set them on purpose (package
+   `TestMain` in `cmd/harnez` and `internal/issues`, or the shared fixture helper); check other packages that
+   run `issues close`.
+2. Regression check: run the failing tests with both variables exported to non-empty values; they must pass.
