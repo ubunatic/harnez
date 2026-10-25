@@ -135,7 +135,7 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:               "harnez",
 		Short:             "Manage Claude Code, Prime Agent, and other agent harnesses from a YAML definition",
-		Version:           harnez.Version,
+		Version:           harnez.BuildVersion(),
 		PersistentPreRunE: sessionTipHook,
 	}
 	root.AddCommand(newAgyMeterCmd())

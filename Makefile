@@ -17,6 +17,8 @@ TEST_OUT ?= /tmp/harnez-container-test
 TESTFLAGS ?=
 TEST_PARALLELISM ?= $(shell awk '$$1 == "go_test_parallelism:" {print $$2}' spec/testing.yaml)
 TEST_TIMEOUT ?= $(shell awk '$$1 == "go_test_timeout:" {print $$2}' spec/testing.yaml)
+COMMIT_COUNT := $(shell git rev-list --count HEAD 2>/dev/null)
+VERSION_LDFLAGS := -X ubunatic.com/harnez.CommitCount=$(COMMIT_COUNT)
 # rootless podman: map the caller's UID onto the image's tester user.
 USERNS   := $(if $(findstring podman,$(ENGINE)),--userns=keep-id)
 
@@ -28,7 +30,7 @@ preflight: ⚙️  # check toolchains and dependencies
 	@command -v go >/dev/null || (echo "❌ go is not installed" && exit 1)
 
 build: ⚙️  # build the binary
-	go build -o $(BINARY) ./cmd/harnez
+	go build -ldflags '$(VERSION_LDFLAGS)' -o $(BINARY) ./cmd/harnez
 
 run: ⚙️ build  # run the application locally
 	./$(BINARY)
@@ -37,7 +39,7 @@ man: ⚙️ build  # generate roff man pages
 	./$(BINARY) man --dir .
 
 install: ⚙️ build  # install binary to ~/go/bin (user)
-	go install ./cmd/harnez
+	go install -ldflags '$(VERSION_LDFLAGS)' ./cmd/harnez
 	./$(BINARY) man --install
 	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
 

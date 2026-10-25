@@ -377,8 +377,8 @@ func printServerStatusJSON(out io.Writer, cfg server.Config, status server.Syste
 		Running:         srv.PID > 0,
 		SocketOwner:     owner,
 		PID:             srv.PID,
-		CLIVersion:      harnez.Version,
-		VersionMismatch: srv.PID > 0 && srv.Version != "" && srv.Version != harnez.Version,
+		CLIVersion:      harnez.BuildVersion(),
+		VersionMismatch: srv.PID > 0 && srv.Version != "" && srv.Version != harnez.BuildVersion(),
 	}
 	if status.Available || status.Installed {
 		sj.Unit = &serverUnitStatusJSON{
@@ -457,8 +457,8 @@ func printServerUptimeAndVersion(out io.Writer, srv localServerStatusResponse) {
 		fmt.Fprintf(out, "clients: %d\n", *srv.Clients)
 	}
 	if srv.Version != "" {
-		if srv.Version != harnez.Version {
-			fmt.Fprintf(out, "version: %s (restart to update to %s)\n", srv.Version, harnez.Version)
+		if srv.Version != harnez.BuildVersion() {
+			fmt.Fprintf(out, "version: %s (restart to update to %s)\n", srv.Version, harnez.BuildVersion())
 		} else {
 			fmt.Fprintf(out, "version: %s\n", srv.Version)
 		}
@@ -537,5 +537,5 @@ func runHarnezServer(ctx context.Context, interval time.Duration, offline bool, 
 	if indexConfig.Enabled {
 		services = append(services, &server.NeusIndexer{Config: indexConfig})
 	}
-	return (server.Server{Config: cfg, Version: harnez.Version, BuildIdentity: serverBuildIdentity, Services: services, HandOver: server.NewSystemdService(cfg).HandOver}).Run(ctx)
+	return (server.Server{Config: cfg, Version: harnez.BuildVersion(), BuildIdentity: serverBuildIdentity, Services: services, HandOver: server.NewSystemdService(cfg).HandOver}).Run(ctx)
 }

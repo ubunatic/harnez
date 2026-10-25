@@ -650,9 +650,19 @@ func runBuildCmd(opt Options, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = opt.Dir
 	cmd.Env = buildEnv(opt.AllowWorkspace)
+	if count, err := gitCommitCount(opt.Dir); err == nil {
+		cmd.Env = append(cmd.Env, "HARNEZ_COMMIT_COUNT="+count)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func gitCommitCount(dir string) (string, error) {
+	cmd := exec.Command("git", "rev-list", "--count", "HEAD")
+	cmd.Dir = dir
+	output, err := cmd.Output()
+	return strings.TrimSpace(string(output)), err
 }
 
 func buildEnv(allowWorkspace bool) []string {
