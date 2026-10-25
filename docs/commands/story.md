@@ -7,6 +7,26 @@ A **Story** is an engineering case study that captures the reality of a developm
 
 ---
 
+## Follow-Up Story (bare `/story`)
+
+Invoked without arguments, `/story` writes a follow-up to the previous overall story and covers everything
+developed since then, not only the current session.
+
+1. **Find the previous story.** Search `docs/studies/` (newest first, by date prefix and git history) for the last
+   overall story about the agentic flow and project progress. Skip sub-studies by individual agents on a single
+   concern, test or benchmark reports, and per-ticket sprint reports. Name the chosen story and its date or commit;
+   if none qualifies, say so and use the repository's first commit as the baseline.
+2. **Compare deliveries.** From git and the tracker since that baseline, list the features delivered, bugs fixed,
+   tickets closed and opened, and releases, compared with what the previous story listed as open or planned.
+3. **Measure.** Count commits (code vs. `issues/`/`docs/`), new features, closed tickets, and lines added/removed
+   outside `issues/` (`git diff --shortstat <base>..HEAD -- . ':!issues'`); say which part is tests, docs or
+   generated files. Give an honest quality verdict: improved, stable or diverged, with evidence (test runs,
+   regressions caught live, lint state, reverts).
+4. **Assess the agentic flow.** Rate how smooth the flow was compared with the previous story: owner corrections,
+   retries and loops, live checks that caught what tests missed, wasted cycles, host rule slips. The expectation is
+   rising smoothness as the harness and companion tools mature; say plainly when it did not rise and why.
+5. Write it with the required sections below, linking the previous story and the sub-studies it summarizes.
+
 ## Output Location & Naming
 - Path: `docs/studies/<YYYY-MM-DD>-<kebab-case-title>.md`
 - Create `docs/studies/` if it does not exist and indexed studies are enabled.
