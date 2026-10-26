@@ -308,8 +308,21 @@ development build; published binaries may expose a smaller command set.
 - `-t <dir>` — Claude config directory (default: `~/.claude`)
 - `-d, --docs <name>[,<name>…]` — extra doc(s) to install globally (comma-separated or repeated)
 - `--force-docs` — overwrite existing docs with bundled versions
-- `--debloat` — apply the default Claude and Codex context preset from `config.yaml`
+- `--debloat` — apply the minimal Claude, Codex, and Antigravity context preset from `config.yaml`
+- `--debloat-preset minimal|aggressive` — explicitly select a debloat preset
 - `--codex-target <path>` — override the Codex `config.toml` target for apply, status, or revert
+
+Debloat is opt-in and global: it affects every project using the user's configured
+harness settings. Both presets disable Claude's bundled skills and claude.ai
+connectors, block the named `harnez` and `codebase-memory-mcp` servers without
+deleting their registrations, and apply the configured skill overrides. Selected
+workflows stay available by slash command; unused skills, including the listed
+synced skills, are hidden. `ToolSearch` and `tool-feedback-protocol` remain available.
+See [Claude debloat presets](docs/CLIDesign.md#claude-debloat-presets) for the keys,
+skill lists, source-frontmatter behavior, and measurement limits.
+Use `harnez status --debloat` to inspect ownership and `harnez revert --debloat`
+to restore recorded prior settings. Revert leaves source-frontmatter invocation
+gates in place.
 
 `debloat.codex_features` in `config.yaml` is the complete Codex debloat list:
 `features.apps=false` and `features.plugins=false`. Unlisted Codex settings are

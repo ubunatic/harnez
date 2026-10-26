@@ -236,7 +236,7 @@ The lock-file rule is local to each clone and leaves the project's shared
 ## apply flow
 
 ```
-harnez apply [-t <dir>] [-d <name|profile>...] [--clean-docs] [--force-docs] [--debloat] [--codex-target <file>]
+harnez apply [-t <dir>] [-d <name|profile>...] [--clean-docs] [--force-docs] [--debloat | --debloat-preset <minimal|aggressive>] [--codex-target <file>]
         │
         ├── merge managed keys into settings.json
         ├── write ~/.claude/commands/<name>.md for each command
@@ -251,13 +251,78 @@ harnez apply [-t <dir>] [-d <name|profile>...] [--clean-docs] [--force-docs] [--
         │       SKILL.md gets one frontmatter block, source keys win over generated name/description (728)
         ├── install opt-in docs to ~/.claude/docs/ and ~/.prime/agent/docs/ if specified via -d/--docs (default: 0 global docs; profiles: core, dev, full)
         ├── if --clean-docs / --no-docs: prune unmanaged docs from ~/.claude/docs/ and ~/.prime/agent/docs/
-        └── if --debloat: merge the Claude preset and spec-listed Codex features
+        └── if --debloat / --debloat-preset: merge the selected Claude and Antigravity presets and spec-listed Codex features
 ```
 
 Codex config ownership, status, revert, and the exact debloat boundary are
 documented in [CodexSettings.md](CodexSettings.md). `config.yaml`'s
 `debloat.codex_features` lists every Codex feature that debloat manages; an
 unlisted feature is outside that set.
+
+### Claude debloat presets
+
+`harnez apply --debloat` selects `minimal`; `harnez apply --debloat-preset minimal`
+or `--debloat-preset aggressive` selects the preset explicitly. This is global
+configuration, affecting **every project** using the configured Claude settings
+directory (default `~/.claude`), rather than a project-local setting. Plain `apply`
+does not select a debloat preset.
+
+The `debloat` section in `config.yaml` owns preset membership; its gating keys
+are declared in `spec/schemas/config.schema.json`:
+
+- `preset_disable_bundled_skills: true` sets `disableBundledSkills: true`.
+- `preset_disable_claude_ai_connectors: true` sets
+  `disableClaudeAiConnectors: true` under either preset. The standalone
+  `--debloat-disable-claude-ai-connectors` flag also remains available.
+- `preset_denied_mcp_servers: [harnez, codebase-memory-mcp]` adds named objects
+  to `settings.json`'s `deniedMcpServers`. Claude stops loading those servers;
+  their registrations stay intact. Harnez CLI commands remain available.
+- `preset_skill_overrides` maps skill names to `user-invocable-only` (slash
+  invocation remains available; the startup skill description is hidden) or
+  `off` (the skill is disabled). These overrides apply under either preset.
+- `aggressive_skill_overrides` adds `evergreen` and `lmcoder` as invoke-only
+  under the aggressive preset. Tool deny lists remain controlled separately by
+  `minimal_deny` and `aggressive_extra_deny`; neither preset denies `ToolSearch`.
+
+The issue 968 additions make `gokay-sweep`, `sitegen-sweep`, `reverse-sprint`,
+`epic`, `gokay`, `sitegen`, and `publish` invoke-only, alongside the existing
+`lean-sprint-v1` and other slash workflows listed in the config.
+The following skill names are `off`:
+
+- Step-1 system skills: `google-workspace`, `xlsx`, `pptx`, `computer-use`,
+  `built-in-browser`, `artifact-emulator`, `deep-research`, `mcp-builder`,
+  `slack-gif-creator`, `import-memory`, `plugin-authoring`.
+- Additional unused skills: `internal-comms`, `canvas-design`,
+  `web-artifacts-builder`, `chrome-browser`, `codebase-memory`,
+  `codebase-memory-scout`, `codebase-memory-auditor`.
+
+`tool-feedback-protocol` remains available. Skill overrides do not remove Custom
+Agents entries; the three codebase-memory agents still appeared in the live
+context check. The separate harnez-channel plugin also retains its own MCP row.
+
+`docs/commands/epic.md`, `reverse-sprint.md`, and `lean-sprint-v1.md` carry
+`disable-model-invocation: true` in source frontmatter. Every plain `apply` also
+installs these invocation gates to the configured skill targets, independently
+of debloat. The two sweep skills have no Harnez source here and use Claude
+overrides only. Edit the source frontmatter to change the three source gates.
+
+Inspect with `harnez status --debloat`; undo with `harnez revert --debloat`.
+The Claude ownership record is `~/.claude/.harnez-debloat.json` (or the selected
+target directory). Revert restores the first recorded connector and skill
+override values and removes only MCP server denials introduced by Harnez. It
+preserves pre-existing denials, including command/URL entries, and later
+unrelated entries. Revert does not remove invocation gates installed from
+source frontmatter.
+
+The live check on Claude Code 2.1.310, `claude-haiku-5-5`, removed every targeted
+skill row and the harnez, codebase-memory, and Claude Docs connector tool rows.
+Skills fell from 5.3k to 1.7k reported tokens; deferred MCP tools (11.8k) became
+absent. All targeted synced skills were hidden with overrides, so no claude.ai
+account changes were required. System tools rose from 521 to 4k while deferred
+system tools stayed at 6.7k: this is evidence of skill/MCP removal, not a claim
+of lower system-tool usage. Compare individual `/context` rows as well as totals;
+the final before/after table and command evidence are in
+[issue 968](../issues/968-skill-and-tool-gating-disable-system-skills-make-selected-skills-invoke-only-identify-system-tools.md).
 
 ### `settings.json` env is merged per key
 

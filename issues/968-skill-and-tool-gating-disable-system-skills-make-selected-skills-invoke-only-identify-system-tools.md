@@ -245,3 +245,42 @@ from the host session right after apply. Skills 5.3k → 1.7k. Undo: `harnez rev
 - Document the new keys (`preset_disable_claude_ai_connectors`, `preset_denied_mcp_servers`, new overrides) where
   the debloat preset is documented, plus the undo command and that it is global for all projects.
 - Final before/after table in this ticket; list owner-only actions (none expected: synced skills hide via overrides).
+
+## M3 delivered — Preset reference and final comparison
+
+- README documents `--debloat-preset`, global scope across projects, the skill/MCP
+  effects, status/undo commands, and links to the detailed preset reference.
+- `docs/CLIDesign.md` documents `preset_disable_claude_ai_connectors`,
+  `preset_denied_mcp_servers`, both override maps and the added skill names,
+  ownership/revert behavior, retained ToolSearch and feedback skill, separate
+  Custom Agents/channel-plugin rows, and the measurement limits.
+- Source frontmatter installs on plain apply independently of presets; reverting
+  recorded debloat settings does not remove those invocation gates. No copyable
+  doc source changed, so no root-copy synchronization was needed.
+- Owner-only actions: **none** for the targeted skills on Claude Code 2.1.310;
+  all targeted synced rows disappeared through skill overrides. No account
+  changes or manual settings edits were required.
+- Docs-only verification: whitespace and new local link/anchor checks passed;
+  no additional Go test run. M2's single full quota test run remains the code
+  verification. Ticket left Open for the host; other sessions' files untouched.
+
+Final before/after (the recorded M1 baseline versus M2 installed minimal preset,
+`claude-haiku-5-5`, 200k window; M3 changes documentation only):
+
+| Reported row | Before | After |
+| --- | --- | --- |
+| Total context | 15.5k (8%) | 14k (7%) |
+| Skills | 5.3k (2.6%) | 1.7k (0.9%) |
+| System tools | 521 (0.3%) | 4k (2.0%) |
+| System tools (deferred) | 6.7k (3.3%) | 6.7k (3.3%) |
+| MCP tools | 673 (0.3%) | absent |
+| MCP tools (deferred) | 11.8k (5.9%) | absent |
+| MCP server instructions | 979 (0.5%) | 151 (0.1%) |
+| codebase-memory-mcp tool rows | 17 | 0 |
+| harnez tool rows | 8 | 0 |
+| Claude Docs connector tool rows | 8 | 0 |
+| Channel-plugin tool rows | 1 (150 tokens) | 1 (0 tokens) |
+
+All D1/D4 invoke-only and `off` skill rows are absent, while the feedback skill
+remains; the corrected `/epic --help` canary passed. System-tool accounting did
+not show savings. The row evidence and raw output paths are recorded under M2.
