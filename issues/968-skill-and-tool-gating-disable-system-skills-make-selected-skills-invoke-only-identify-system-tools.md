@@ -139,3 +139,16 @@ Conclusions and limits:
   these runs. The displayed total stayed at 15.5k in the skill canary despite
   lower Skills usage, so individual rows are the acceptance evidence.
 - M1 only: no `make test-q1`, install, apply, M2/M3 changes, or ticket closure.
+
+## M1 delivered: canary evidence (b6dd7670)
+
+`skillOverrides` hides a claude.ai-sync skill (`xlsx` row gone), so D2 holds: synced step-1 skills go into
+`config.yaml` as `"off"`. `deniedMcpServers` + `disableClaudeAiConnectors` removed codebase-memory (17 tools),
+harnez (8) and Claude Docs (8). Print-mode System tools (521) differ from interactive (12.9k); judge by rows.
+
+### M2 Pre-Work / Required Refinements
+- Add all step-1 skills (synced and bundled) as `"off"`; record any whose row stays visible after apply.
+- M2 acceptance by `/context` rows after `harnez apply --debloat-preset minimal`: each D1/D4 invoke-only skill
+  and each `"off"` skill row is absent; MCP rows for harnez, codebase-memory, Claude Docs are absent; ToolSearch kept.
+- Check one invoke-only skill still runs by slash: `claude -p "/epic --help"` or similar, record the result.
+- `revert` must restore `deniedMcpServers` and connector values that existed before.
