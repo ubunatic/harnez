@@ -30,12 +30,14 @@ Three gaps:
 ## 2. Technical Specification / Findings
 
 - Claude's own trigger: auto-compact window minus autocompact buffer (869 Learnings). `~/.claude/settings.json` sets
-  `autoCompactWindow` to 200000, yet the 2026-10-26 session showed a 100k window, so something on the launch path sets
-  it. Unverified which (R3).
+  `autoCompactWindow` to 200000; the 2026-10-26 session's 100k window came from the owner's launch flag
+  `--autocompact 100000` (owner, 2026-10-27). Full formula: section 2a.
 - Harnez's trigger: `compact_threshold_tokens` / `agent.compact_thresholds`, sent as `/compact` by `harnez agent`
   (591, `internal/subagent/compact.go`). Separate from Claude's trigger.
-- Claude Code has a PreCompact hook but no PostCompact hook (180, `cmd/harnez/compactcheck.go`). The post-compact size
-  is only visible on the next turn's usage, both for `harnez agent` and for hooks.
+- Claude Code has a PreCompact hook (can block, matchers `manual`/`auto`). 180 recorded no PostCompact hook; current
+  docs list one, side-effect only (https://code.claude.com/docs/en/hooks#precompact). Unverified on 2.1.311 (R4).
+  In `-p` stream-json, the `compact_boundary` event carries `pre_tokens` and `post_tokens` (section 2a), but
+  `post_tokens` leaves out system prompt and tools, so the next turn's usage stays the measure.
 - Context measure: last-turn full input tokens (as in 591). Confirmed against `/context` in R3.
 - Proposed config, per model in `spec/agent.yaml` with a schema (no Go defaults, per `docs/Spec.md`):
   - `limit_tokens`: reference size, for example 100000 for Haiku.
@@ -49,6 +51,34 @@ Three gaps:
   and only if its action differs from the post-compact guard's (R1 decides).
 - User-driven sessions get a message only, no pause: the user is present and picks the next step (`/clear`,
   `/compact` with a focus, or continue). Which hook carries the message is R4.
+
+## 2a. Findings 2026-10-27 (Claude Code 2.1.311)
+
+Full write-up and sources: `docs/AutoCompaction.md`.
+
+- **Formula** (inferred; fits all 9 owner readings within rounding, interactive Haiku/Sonnet/Opus; an alternative with
+  a fixed 20k inside the percent term fits equally well, see the doc):
+  `reserve = CLAUDE_CODE_MAX_OUTPUT_TOKENS (default 20k)`, `usable = window − reserve`,
+  `trigger = min(usable − 13k, PCT_OVERRIDE × usable)`. `/context` "Autocompact buffer" = reserve + 13k (33k default;
+  23k with `CLAUDE_CODE_MAX_OUTPUT_TOKENS=10000`). `/context` free space ignores the percent; only the status line
+  ("N% until auto-compact") reflects it, and it shows no hint above about 20% left.
+  - Window 100k: percent 100/90/80/70 → 17/17/13/1% left at 56k; 50 → compacted at once.
+  - Window 120k: percent 70 → 20% left at 56k (trigger 70k); percent 80 → no hint (predicted 80k, not yet observed).
+- **R2 done:** Haiku 5.5 input above 100k tokens costs 5x ($0.10 → $0.50 per MTok, output/cache also 5x), per request
+  (https://platform.claude.com/docs/en/models/haiku-5-5/overview). No step found for Sonnet/Opus/Fable 5.5. Owner uses
+  Gemini Flash 3.8 and Gemini 4 Argon (AI Pro plan): no step on the Gemini API pricing page; owner decision: 200k.
+- **R3, `-p` canary** (`claude -p --model haiku --autocompact 120000`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=80`, four
+  resumed turns, cost about $0.27 incl. one refused attempt): turn 2 at 85.9k input did **not** compact (percent
+  predicts 80k); turn 3 auto-compacted, `compact_boundary` `trigger: auto`, `pre_tokens: 89280`, `post_tokens: 7186`,
+  9.4s. Second canary (review 2026-10-27, sol:med): percent 50, resumed turn at 85.9k, no compaction (trigger would
+  be 50k). Conclusion (two runs): `-p` honours `--autocompact` and the buffer line (87k) but **not** the percent
+  override. 956's negative result used the env window and one turn.
+- **`post_tokens` ≠ next request size:** 7,186 after compaction, next request 20,428 (system prompt, tools). The
+  post-compact guard (step 4) must use the next request's input or add that overhead.
+- **Haiku setting that follows** (predicted, not observed at the point; targets are owner decisions): interactive: `--autocompact 120000` + percent 80 → 80k (unobserved point);
+  `-p`/`harnez agent`: `--autocompact 113000` → 80k via the buffer line, or harnez's own pre-prompt `/compact` at 80k.
+- **Other tools** (luna:med web research, unverified locally): Codex `model_auto_compact_token_limit`, default and cap
+  90% of window; agy has only manual `/compact`, no documented threshold. Details in the doc.
 
 ## 3. Research Tasks
 
