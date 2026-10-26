@@ -165,7 +165,11 @@ func Search(ctx context.Context, root, scope, query, via string, k int, stderr i
 			}
 		}
 		if !found {
-			return Response{}, fmt.Errorf("unknown finder %q", via)
+			d, ok := builtinDefinition(via, scope)
+			if !ok {
+				return Response{}, fmt.Errorf("unknown finder %q for %s scope", via, scope)
+			}
+			selected = []Definition{d}
 		}
 	}
 	if scope != "code" && scope != "docs" {
@@ -184,14 +188,17 @@ func Search(ctx context.Context, root, scope, query, via string, k int, stderr i
 			return false
 		}
 		if neusAvailable && !has("neus") {
-			selected = append(selected, Definition{Name: "neus", Scope: scope, Timeout: "30s", builtin: true})
+			d, _ := builtinDefinition("neus", scope)
+			selected = append(selected, d)
 		}
 		if scope == "code" {
 			if !neusAvailable && !has("rg") {
-				selected = append(selected, Definition{Name: "rg", Scope: scope, Timeout: "10s", builtin: true})
+				d, _ := builtinDefinition("rg", scope)
+				selected = append(selected, d)
 			}
 		} else if !neusAvailable && !has("fuzzy") {
-			selected = append(selected, Definition{Name: "fuzzy", Scope: scope, Timeout: "10s", builtin: true})
+			d, _ := builtinDefinition("fuzzy", scope)
+			selected = append(selected, d)
 		}
 	}
 	resp := Response{Results: []Result{}, Finders: []Status{}}
@@ -262,6 +269,22 @@ func Search(ctx context.Context, root, scope, query, via string, k int, stderr i
 	}
 	return resp, nil
 }
+
+// Explicit selection bypasses availability checks so missing tools retain their
+// normal execution diagnostics. Configured definitions take precedence.
+func builtinDefinition(name, scope string) (Definition, bool) {
+	timeout := "10s"
+	switch {
+	case name == "neus" && (scope == "code" || scope == "docs"):
+		timeout = "30s"
+	case name == "rg" && scope == "code":
+	case name == "fuzzy" && scope == "docs":
+	default:
+		return Definition{}, false
+	}
+	return Definition{Name: name, Scope: scope, Timeout: timeout, builtin: true}, true
+}
+
 func appendStatus(dst []Status, s Status) []Status { return append(dst, s) }
 func run(parent context.Context, root string, d Definition, q string, k int) ([]Result, Status) {
 	status := Status{Name: d.Name, Status: "ok"}

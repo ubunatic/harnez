@@ -113,10 +113,69 @@ func TestSearchViaRejectsOutOfScopeAndUnknown(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "config.yaml"), []byte("finders:\n  - name: docs-only\n    scope: docs\n    command: [x]\n    timeout: 1s\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, via := range []string{"missing", "docs-only"} {
+	for _, via := range []string{"missing", "docs-only", "fuzzy"} {
 		if _, err := Search(context.Background(), root, "code", "x", via, 10, nil); err == nil {
 			t.Errorf("via %q accepted", via)
 		}
+	}
+}
+
+func TestSearchViaBuiltins(t *testing.T) {
+	for _, tc := range []struct {
+		name, scope string
+	}{
+		{"rg", "code"},
+		{"neus", "code"},
+		{"neus", "docs"},
+		{"fuzzy", "docs"},
+	} {
+		t.Run(tc.name+"/"+tc.scope, func(t *testing.T) {
+			bin, root, _ := fakeToolPath(t)
+			// Both external tools are available: explicit rg/fuzzy must still
+			// bypass the preferred neus default and run only the requested finder.
+			writeExecutable(t, bin, "rg", `printf '%s\n' 'match.go:1:needle'`)
+			writeExecutable(t, bin, "neus", `printf '%s' '[{"path":"match.go","line":1,"snippet":"needle"}]'`)
+			if err := os.WriteFile(filepath.Join(root, "match.md"), []byte("# needle\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := Search(context.Background(), root, tc.scope, "needle", tc.name, 3, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Finders) != 1 || got.Finders[0].Name != tc.name || got.Finders[0].Status != "ok" || len(got.Results) != 1 {
+				t.Fatalf("explicit %s: %+v", tc.name, got)
+			}
+		})
+	}
+}
+
+func TestSearchViaBuiltinMissingExecutable(t *testing.T) {
+	for _, name := range []string{"rg", "neus"} {
+		t.Run(name, func(t *testing.T) {
+			_, root, _ := fakeToolPath(t)
+			got, err := Search(context.Background(), root, "code", "needle", name, 3, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Finders) != 1 || got.Finders[0].Name != name || got.Finders[0].Status != "error" || !strings.Contains(got.Finders[0].Error, "executable file not found") {
+				t.Fatalf("missing %s diagnostic: %+v", name, got)
+			}
+		})
+	}
+}
+
+func TestSearchViaConfiguredBuiltinNameWins(t *testing.T) {
+	bin, root, _ := fakeToolPath(t)
+	writeExecutable(t, bin, "custom", `printf '%s' '[{"path":"custom.go","line":7}]'`)
+	if err := os.WriteFile(filepath.Join(root, "config.yaml"), []byte("finders:\n  - name: rg\n    scope: code\n    command: [custom]\n    timeout: 1s\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Search(context.Background(), root, "code", "needle", "rg", 3, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Finders) != 1 || got.Finders[0].Status != "ok" || len(got.Results) != 1 || got.Results[0].Path != "custom.go" {
+		t.Fatalf("configured rg override: %+v", got)
 	}
 }
 
