@@ -1,6 +1,7 @@
 # 957 — Docs refresh for the DecompileD talk: README, docs/, skills and commands current
 
-**Status**: Open
+**Status**: Closed — refreshed CLI commands table and evergreen docs index
+**Closed-By**: session d76b2c12-35cb-4f32-b07b-0c10d0a83fe2
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Docs
