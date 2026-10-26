@@ -272,6 +272,23 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 | `exec` | command-specific | Run a command while recording shell-call telemetry |
 | `rate` | `<tool> <score> <description>` | Record an internal tool-call quality rating |
 | `stats` | `--tool` `--agent` `--ticket` `--project` `--json` `--auto` | Analyze tool-call telemetry |
+| `compact` | `--strategy` `--json` | Verbatim transcript compaction powered by decision models |
+| `decide` | `noul\|choice\|score` | Ask a decision model typed questions |
+| `guard` | `check\|rules` | Rule enforcer and safety guardrail commands |
+| `index` | `--check` `--stage` `-d` | Regenerate issue indexes and docs studies table |
+| `log` | `-n` `--json` | Show harnez's own CLI invocation history |
+| `man` | `--install` | Generate, print, or install roff man pages |
+| `mcp` | `--stdio` | Serve Harnez agent tools over MCP stdio |
+| `read` | `[-I\|--image]` | Read bounded text or visual PNG cards |
+| `repo-history` | `--days` `--json` | Multi-track Git history evolution sparks |
+| `repo-status` | `-d` | Brief summary of git working-tree state |
+| `server` | `--port` | Run Harnez local services |
+| `session` | `--json` | Extract retrospective evidence from Claude Code sessions |
+| `skill` | `search\|install\|list` | Install and search external agent skills |
+| `skills` | `export` | Inspect and export Harnez's built-in skill catalogue |
+| `statusline` | `render\|check` | Render context and usage data for agent status lines |
+| `subagent` | `stage\|run` | Stage provider-aware subagent context and launcher |
+| `tui` | `--driver` | Interactive Loom-based terminal chat interface |
 | `find issues <query…>` | `-d` | Fuzzy search repository issues |
 | `issues` | status verb | Change a ticket’s status, resync the index, and commit |
 | `agent` | `--store-dir` | Manage subagent sessions; see the command tree below |

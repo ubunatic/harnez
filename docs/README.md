@@ -50,6 +50,10 @@ Not needed for routine coding; reach for these during investigations or design w
 | [ExternalSkills.md](ExternalSkills.md) | Third-party skills: registry installs, bundled (vendored) skills, explicit-only mode, updates with moved/gone detection | Read before touching `harnez skill`, `bundled_skills`, or onboarding a skills repo (issue 636) |
 | [Decide.md](Decide.md) | `harnez decide`: typed decisions (noul, choice, score) via Jev; backends from `spec/decide.yaml`; adding local models | Read before touching `internal/decide`, `spec/decide.yaml`, or hooks that call a decision model (issues 633-635) |
 | [Bench.md](Bench.md) | Optional `harnez bench` harness: specced agent tasks under lite/full docs and PNG cards, own DB | Read when benchmarking doc delivery across agents |
+| [EnvironmentSetup.md](EnvironmentSetup.md) | Environment setup runbook: developer/agent setup, build, test, and run runbook for harnez CLI |
+| [ExternalAgentSessions.md](ExternalAgentSessions.md) | External agent session discovery: provider session metadata discovery and spec-driven extraction |
+| [NeusIntegration.md](NeusIntegration.md) | Optional Neus integration: bootstrapping and verifying local Neus tools |
+| [PrototypingFeatures.md](PrototypingFeatures.md) | Feature prototyping practices: validating early feature implementations |
 | [Testing.md](Testing.md) | Test layers and verification entry points for package, integration, static, smoke, canary, and live checks (harnez-specific; generic tiers in [TestTiers.md](TestTiers.md)) |
 
 
