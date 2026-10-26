@@ -5,7 +5,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Epic
-**Related**: 937, 916, 936, 915, story `docs/studies/2026-10-25-four-days-of-epics-server-monitor-and-skills.md`
+**Related**: 937, 916, 936, 915, story `docs/studies/2026-10-25-four-days-of-epics-server-monitor-and-skills-story.md`
 
 ---
 

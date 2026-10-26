@@ -4,7 +4,7 @@
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
-**Related**: `docs/commands/story.md`, 905, story `docs/studies/2026-10-25-four-days-of-epics-server-monitor-and-skills.md`
+**Related**: `docs/commands/story.md`, 905, story `docs/studies/2026-10-25-four-days-of-epics-server-monitor-and-skills-story.md`
 
 ---
 

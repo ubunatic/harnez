@@ -262,10 +262,13 @@ sections:
   tag: Recent engineering
   title: Recent engineering
   blocks:
-  - text: Recent milestones include repeat-safe agent deletion and missing-session recovery (issue 688),
-      spec-driven usage view modes (678), role inference and fuzzy session resume (686, 692, 695), and
-      an Antigravity tool rejection hook (694). The [agent harness story](https://codeberg.org/ubunatic/harnez/src/branch/main/docs/studies/2026-10-04-agent-harness-at-scale-story.md)
-      connects these changes to the repository’s recorded workflow.
+  - text: >-
+      Recent milestones include server-side monitoring of local and remote hosts (epic 921, in
+      progress: `server status --json`, remote upgrade on start, remote load polling), a per-repo
+      `.harnez/repo.yaml` so `init` adapts to repos built differently (854), a merged model catalog with
+      policy enforcement (941, under epic 942) and developer tier defaults from owner feedback (956).
+      The [four days of epics story](https://codeberg.org/ubunatic/harnez/src/branch/main/docs/studies/2026-10-25-four-days-of-epics-server-monitor-and-skills-story.md)
+      records the work ticket by ticket.
 - id: install
   tag: Getting started
   title: Build and install from source

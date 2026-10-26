@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Practice
-**Related**: 919, 932, 934, story `docs/studies/2026-10-25-four-days-of-epics-server-monitor-and-skills.md`
+**Related**: 919, 932, 934, story `docs/studies/2026-10-25-four-days-of-epics-server-monitor-and-skills-story.md`
 
 ---
 
