@@ -19,6 +19,9 @@ import (
 // Codex). Only Codex, which exports a thread id but no session id, falls back
 // to the stable PPID lock, so plain terminals keep an empty id (unscoped list).
 func currentHostSession() string {
+	if id := interactiveCodexHost(); id != "" {
+		return id
+	}
 	if v := os.Getenv("HARNEZ_SESSION_ID"); v != "" {
 		return v
 	}
@@ -37,7 +40,7 @@ func currentHostSession() string {
 // empty parent and agents of other hosts (hand-off); harnez leaf workers stay
 // bound to their lineage. Bulk operations keep using subagent.CanManage.
 func canManageTarget(callerParentID string, target *subagent.Session) bool {
-	if os.Getenv(agentSessionEnv) == "" {
+	if os.Getenv(agentSessionEnv) == "" || interactiveCodexHost() != "" {
 		return true
 	}
 	return subagent.CanManage(callerParentID, target)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1015,15 +1016,16 @@ func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut, showReply b
 }
 
 const (
-	agentRoleEnv    = "HARNEZ_AGENT_ROLE"
-	agentSessionEnv = "HARNEZ_SESSION_ID"
-	agentModelEnv   = "HARNEZ_AGENT_MODEL"
+	agentRoleEnv     = "HARNEZ_AGENT_ROLE"
+	agentSessionEnv  = "HARNEZ_SESSION_ID"
+	agentModelEnv    = "HARNEZ_AGENT_MODEL"
+	agentLauncherEnv = "HARNEZ_AGENT_LAUNCHER_PID"
 )
 
 // startRole picks the role of a new session and checks that the caller's own
 // role (from the environment harnez gave it) may start it.
 func startRole(requested, prompt string, errOut io.Writer) (string, error) {
-	return agent.StartRole(requested, prompt, os.Getenv(agentRoleEnv), errOut)
+	return agent.StartRole(requested, prompt, callerAgentRole(), errOut)
 }
 
 func firstPromptSentence(prompt string) string {
@@ -1033,14 +1035,14 @@ func firstPromptSentence(prompt string) string {
 // resumeRole returns the stored role of sess (default role for old records),
 // rejects a conflicting --role and checks the caller may manage that role.
 func resumeRole(requested string, sess *subagent.Session) (string, error) {
-	return agent.ResumeRole(requested, sess, os.Getenv(agentRoleEnv))
+	return agent.ResumeRole(requested, sess, callerAgentRole())
 }
 
 // setAgentEnv gives the provider process it is about to spawn its role and its
 // session name (the parent id of anything it starts) and returns a restore func.
 func setAgentEnv(role, name, model string) func() {
 	prev := map[string]*string{}
-	for _, kv := range [][2]string{{agentRoleEnv, role}, {agentSessionEnv, name}, {agentModelEnv, model}} {
+	for _, kv := range [][2]string{{agentRoleEnv, role}, {agentSessionEnv, name}, {agentModelEnv, model}, {agentLauncherEnv, strconv.Itoa(os.Getpid())}} {
 		if v, ok := os.LookupEnv(kv[0]); ok {
 			old := v
 			prev[kv[0]] = &old
@@ -1063,7 +1065,7 @@ func setAgentEnv(role, name, model string) func() {
 // guardLeafRole refuses mutating agent verbs when the caller is a leaf worker.
 // Diagnostic verbs and channel send do not spawn or control workers.
 func guardLeafRole(verb string) error {
-	role := os.Getenv(agentRoleEnv)
+	role := callerAgentRole()
 	if !subagent.IsLeafRole(role) {
 		return nil
 	}
@@ -1071,5 +1073,5 @@ func guardLeafRole(verb string) error {
 	case "list", "status", "models", "help", "agent", "send":
 		return nil // the root form checks each start/resume/slash itself
 	}
-	return subagent.CheckSpawn(role, "developer")
+	return fmt.Errorf("%w (role source: %s; worker session: %q; Codex thread: %q; launcher PID: %q). If this is an interactive host, check inherited Harnez variables and restart the host; Harnez cannot change the host-managed sandbox or writable roots", subagent.CheckSpawn(role, "developer"), agentRoleEnv, os.Getenv(agentSessionEnv), os.Getenv("CODEX_THREAD_ID"), os.Getenv(agentLauncherEnv))
 }

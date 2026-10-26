@@ -50,6 +50,7 @@ external_sessions:
     active_match_window_seconds: 120
     name_prefix: codex
     available_status: available
+    interactive_sources: [cli, vscode]
     fields:
       id: payload.id
       provider_session_id: payload.session_id

@@ -52,6 +52,7 @@ func runIsolatedTests(m *testing.M) int {
 	os.Unsetenv(agentRoleEnv)
 	os.Unsetenv(agentModelEnv)
 	os.Unsetenv(agentSessionEnv)
+	os.Unsetenv(agentLauncherEnv)
 	for _, name := range resolve.SessionEnvVars {
 		os.Unsetenv(name)
 	}

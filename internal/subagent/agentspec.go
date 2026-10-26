@@ -61,6 +61,7 @@ type ExternalSessionSpec struct {
 	ActiveMatchWindowSeconds int                   `yaml:"active_match_window_seconds"`
 	NamePrefix               string                `yaml:"name_prefix"`
 	AvailableStatus          string                `yaml:"available_status"`
+	InteractiveSources       []string              `yaml:"interactive_sources"`
 	Fields                   ExternalSessionFields `yaml:"fields"`
 }
 

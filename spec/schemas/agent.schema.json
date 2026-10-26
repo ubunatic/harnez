@@ -138,6 +138,7 @@
           "active_match_window_seconds": { "type": "integer", "minimum": 1 },
           "name_prefix": { "type": "string", "minLength": 1 },
           "available_status": { "type": "string", "minLength": 1 },
+          "interactive_sources": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
           "fields": {
             "type": "object",
             "required": ["id", "working_dir", "model_provider", "source", "created_at"],
