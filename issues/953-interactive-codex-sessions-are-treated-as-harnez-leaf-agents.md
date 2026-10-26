@@ -1,6 +1,7 @@
 # 953 — Interactive Codex sessions are treated as Harnez leaf agents
 
-**Status**: In Progress
+**Status**: Closed — Verified interactive Codex host identity and launcher provenance; host review dispatch and self-test work while leaf guards remain enforced
+**Closed-By**: codex:luna:low, session c943
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
