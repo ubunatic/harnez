@@ -4,11 +4,53 @@
 package claude
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez"
 )
+
+func TestDebloatConfigSchema(t *testing.T) {
+	data, err := harnez.DefaultFS.ReadFile("spec/schemas/config.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(data, &schema); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		debloat string
+		valid   bool
+	}{
+		{"valid", `{"preset_disable_claude_ai_connectors":true,"preset_denied_mcp_servers":["harnez"],"preset_skill_overrides":{"epic":"user-invocable-only","xlsx":"off"}}`, true},
+		{"connector type", `{"preset_disable_claude_ai_connectors":"true"}`, false},
+		{"server type", `{"preset_denied_mcp_servers":[1]}`, false},
+		{"empty server", `{"preset_denied_mcp_servers":[""]}`, false},
+		{"blank server", `{"preset_denied_mcp_servers":[" "]}`, false},
+		{"duplicate server", `{"preset_denied_mcp_servers":["harnez","harnez"]}`, false},
+		{"override mode", `{"preset_skill_overrides":{"epic":"sometimes"}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var debloat map[string]any
+			if err := json.Unmarshal([]byte(tc.debloat), &debloat); err != nil {
+				t.Fatal(err)
+			}
+			err := resolved.Validate(map[string]any{"debloat": debloat})
+			if (err == nil) != tc.valid {
+				t.Fatalf("validation = %v, want valid=%v", err, tc.valid)
+			}
+		})
+	}
+}
 
 func TestLanguageSourceFor(t *testing.T) {
 	cases := []struct {

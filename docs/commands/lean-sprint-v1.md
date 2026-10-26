@@ -1,3 +1,6 @@
+---
+disable-model-invocation: true
+---
 # Lean Fresh-Handoff Sprint (v1)
 
 - Preflight: grep the files/strings named by the ticket, use `harnez read` and `git log -S` on what it says exists, and

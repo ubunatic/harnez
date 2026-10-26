@@ -1,3 +1,6 @@
+---
+disable-model-invocation: true
+---
 # Plan, Refine and Run an Epic
 
 You, the agent that received this invocation, are the Host Orchestrator. An epic is one ticket

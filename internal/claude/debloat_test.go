@@ -5,6 +5,7 @@ package claude
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -119,7 +120,7 @@ func TestApplyDebloat_MinimalSkillOverrides(t *testing.T) {
 
 	settings := readSettings(t, dir)
 	overrides, _ := settings["skillOverrides"].(map[string]any)
-	if got, want := len(overrides), 20; got != want {
+	if got, want := len(overrides), len(testDebloatConfig(t).PresetSkillOverrides); got != want {
 		t.Fatalf("minimal skill override count = %d, want %d: %v", got, want, overrides)
 	}
 	if got := overrides["retro"]; got != "user-invocable-only" {
@@ -156,7 +157,10 @@ func TestApplyDebloat_AggressiveSkillOverrides(t *testing.T) {
 
 	settings := readSettings(t, dir)
 	overrides, _ := settings["skillOverrides"].(map[string]any)
-	if got, want := len(overrides), 22; got != want {
+	cfg := testDebloatConfig(t)
+	wantOverrides := maps.Clone(cfg.PresetSkillOverrides)
+	maps.Copy(wantOverrides, cfg.AggressiveSkillOverrides)
+	if got, want := len(overrides), len(wantOverrides); got != want {
 		t.Fatalf("aggressive skill override count = %d, want %d: %v", got, want, overrides)
 	}
 	if got := overrides["retro"]; got != "user-invocable-only" {

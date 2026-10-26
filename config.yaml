@@ -151,6 +151,12 @@ debloat:
   # user/project skills; add lean harnez replacements only for demonstrated
   # gaps (issue 348).
   preset_disable_bundled_skills: true
+  # Verified with session-local Claude Code 2.1.310 canaries (issue 968).
+  # Keep server registrations intact; deny loading them under either preset.
+  preset_disable_claude_ai_connectors: true
+  preset_denied_mcp_servers:
+    - harnez
+    - codebase-memory-mcp
   # Slash-oriented user skills stay available explicitly without consuming
   # startup context.
   preset_skill_overrides:
@@ -174,6 +180,32 @@ debloat:
     harnez-selftest: user-invocable-only
     harnez-init: user-invocable-only
     harnez-handoff: user-invocable-only
+    gokay-sweep: user-invocable-only
+    sitegen-sweep: user-invocable-only
+    reverse-sprint: user-invocable-only
+    epic: user-invocable-only
+    gokay: user-invocable-only
+    sitegen: user-invocable-only
+    publish: user-invocable-only
+    # Unused built-in, synced, and user skills. Keep tool-feedback-protocol.
+    google-workspace: off
+    xlsx: off
+    pptx: off
+    computer-use: off
+    built-in-browser: off
+    artifact-emulator: off
+    deep-research: off
+    mcp-builder: off
+    slack-gif-creator: off
+    import-memory: off
+    plugin-authoring: off
+    internal-comms: off
+    canvas-design: off
+    web-artifacts-builder: off
+    chrome-browser: off
+    codebase-memory: off
+    codebase-memory-scout: off
+    codebase-memory-auditor: off
   # These retain prose-triggering under the minimal preset and become
   # explicit-only under the deliberately stronger aggressive preset.
   aggressive_skill_overrides:

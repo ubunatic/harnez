@@ -3,6 +3,27 @@
   "title": "Harnez apply config (managed global sections)",
   "type": "object",
   "properties": {
+    "debloat": {
+      "type": "object",
+      "properties": {
+        "preset_disable_bundled_skills": {"type": "boolean"},
+        "preset_disable_claude_ai_connectors": {"type": "boolean"},
+        "preset_denied_mcp_servers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "pattern": "\\S"}
+        },
+        "preset_skill_overrides": {
+          "type": "object",
+          "additionalProperties": {"enum": ["on", "name-only", "user-invocable-only", "off"]}
+        },
+        "aggressive_skill_overrides": {
+          "type": "object",
+          "additionalProperties": {"enum": ["on", "name-only", "user-invocable-only", "off"]}
+        }
+      },
+      "additionalProperties": true
+    },
     "global_section_targets": {
       "type": "array",
       "uniqueItems": true,

@@ -87,7 +87,7 @@ func (o DebloatOptions) boolToggles(cfg DebloatConfig) map[string]bool {
 		"disableBundledSkills":      disableBundledSkills,
 		"disableWorkflows":          o.DisableWorkflows,
 		"disableRemoteControl":      o.DisableRemoteControl,
-		"disableClaudeAiConnectors": o.DisableClaudeAiConnectors,
+		"disableClaudeAiConnectors": o.DisableClaudeAiConnectors || o.Preset != "" && cfg.PresetDisableClaudeAiConnectors,
 		"disableArtifact":           o.DisableArtifact,
 	}
 }
@@ -110,6 +110,10 @@ type debloatRecord struct {
 	// SkillOverridePrior maps each managed skill to its value before harnez
 	// first changed it. A nil value means the override was absent before.
 	SkillOverridePrior map[string]*string `json:"skillOverridePrior,omitempty"`
+	// MCPDenyAdded tracks only named server denials introduced by harnez.
+	MCPDenyAdded []string `json:"mcpDenyAdded,omitempty"`
+	// MCPDenyPresent distinguishes an originally empty array from an absent key.
+	MCPDenyPresent *bool `json:"mcpDenyPresent,omitempty"`
 }
 
 func debloatRecordPath(target string) string {
@@ -185,6 +189,11 @@ func ApplyDebloat(target string, cfg DebloatConfig, opts DebloatOptions) error {
 	settingsPath := filepath.Join(target, "settings.json")
 	settings := jsonc.Read(settingsPath)
 	rec := readDebloatRecord(target)
+	if opts.Preset != "" {
+		if err := applyMCPServerDenials(settings, &rec, cfg.PresetDeniedMCPServers); err != nil {
+			return err
+		}
+	}
 
 	perms, _ := settings["permissions"].(map[string]any)
 	if perms == nil {
@@ -322,6 +331,9 @@ func RevertDebloat(target string) error {
 			settings[key] = *prior
 		}
 	}
+	if err := revertMCPServerDenials(settings, rec); err != nil {
+		return err
+	}
 
 	if len(rec.SkillOverridePrior) > 0 {
 		existing, _ := settings["skillOverrides"].(map[string]any)
@@ -410,6 +422,7 @@ func StatusDebloat(target string, cfg DebloatConfig) error {
 		fmt.Printf("  %-26s %s\n", key, state)
 	}
 
+	statusMCPServerDenials(settings, rec, cfg.PresetDeniedMCPServers)
 	knownSkillOverrides := map[string]string{}
 	for name, mode := range cfg.PresetSkillOverrides {
 		knownSkillOverrides[name] = mode

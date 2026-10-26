@@ -75,6 +75,10 @@ type DebloatConfig struct {
 	// PresetDisableBundledSkills disables Claude Code's bundled skill
 	// catalogue under any selected preset while leaving user/project skills.
 	PresetDisableBundledSkills bool `yaml:"preset_disable_bundled_skills"`
+	// PresetDisableClaudeAiConnectors disables account connectors under either preset.
+	PresetDisableClaudeAiConnectors bool `yaml:"preset_disable_claude_ai_connectors"`
+	// PresetDeniedMCPServers blocks named servers without deleting registrations.
+	PresetDeniedMCPServers []string `yaml:"preset_denied_mcp_servers"`
 	// PresetSkillOverrides apply under either preset. AggressiveSkillOverrides
 	// are added only for the explicitly selected aggressive preset.
 	PresetSkillOverrides     map[string]string `yaml:"preset_skill_overrides"`

@@ -1,3 +1,6 @@
+---
+disable-model-invocation: true
+---
 # Reverse Sprint — Low-Cost Dev Lead with On-Demand Review & Escalation
 
 Orchestrate a bottom-up, cost-efficient sprint where a **low-cost developer agent** leads implementation, auto-compacts frequently, and selectively calls reviewer or advisor subagents on demand.

@@ -3,7 +3,39 @@ package claude
 import (
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
+
+func TestInvokeOnlySkillSources(t *testing.T) {
+	cfg := loadTestConfig(t)
+	for _, name := range []string{"epic", "reverse-sprint", "lean-sprint-v1"} {
+		t.Run(name, func(t *testing.T) {
+			for _, skill := range cfg.Skills {
+				if skill.Name != name {
+					continue
+				}
+				content, err := genSkillContent(skill, cfg.FS)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, header, _, present, err := parseSkillFrontmatter(content)
+				if err != nil || !present {
+					t.Fatalf("missing frontmatter: %v", err)
+				}
+				var fields map[string]any
+				if err := yaml.Unmarshal([]byte(header), &fields); err != nil {
+					t.Fatal(err)
+				}
+				if fields["disable-model-invocation"] != true || fields["name"] != name {
+					t.Fatalf("generated frontmatter = %v", fields)
+				}
+				return
+			}
+			t.Fatal("skill missing from embedded config")
+		})
+	}
+}
 
 func TestGenSkillContentMergesSourceFrontmatter(t *testing.T) {
 	tests := []struct {
