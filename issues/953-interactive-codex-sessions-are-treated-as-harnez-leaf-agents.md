@@ -54,3 +54,40 @@ A targeted environment read confirmed `HARNEZ_AGENT_ROLE=advisor` in this intera
 Extend acceptance verification to both commands: an actual interactive host can launch the explicitly requested reviewer and complete self-test progression, while a genuinely spawned advisor still cannot launch children. Capture host/parent identity and the role's provenance in rejection diagnostics so an inherited or incorrectly resolved role can be distinguished from an intentional leaf restriction. Do not solve this by globally allowing advisors to spawn agents.
 
 References: Cati story commit `f178232`, Cati issue 119, and the subsequent owner-requested self-test in this session. Issue 959 is a separate prompt-based role-inference failure, not a duplicate root-cause claim. Implementation and live verification remain outstanding; this issue stays Open.
+
+## 5. Resolution and verification — 2026-10-26
+
+- Baseline: the active interactive host inherited `HARNEZ_AGENT_ROLE=advisor`,
+  `HARNEZ_SESSION_ID=c943`, and `HARNEZ_AGENT_MODEL=codex:luna:low`.
+  No stored worker matched c943. `harnez agent selftest --step hello` exited 1
+  with the leaf-worker refusal. The actual Codex thread's metadata identified
+  source `vscode`; its process ancestry led to the managed Codex app server.
+- Decision: verify the exact current thread's bounded first metadata record
+  before treating inherited worker variables as stale. The spec lists accepted
+  interactive sources (`cli`, `vscode`). Unknown, missing, malformed or exec
+  metadata retains the role restriction. `HARNEZ_AGENT_LAUNCHER_PID` binds new
+  workers to their live launcher ancestry, including interactive workers;
+  matching stored provider IDs protect legacy interactive workers.
+- Shared caller-role resolution covers start, resume and the command guard.
+  Interactive host tracking and explicit target access use the real thread ID.
+  Refusals include environment provenance, thread/worker identity and launcher.
+  Architecture documentation explains host-managed sandbox/cache limitations.
+- `make test-q1` passed the complete suite, including new host/worker regression
+  cases; `make lint` passed (repository size/complexity warnings only).
+  `make install` updated the installed binary.
+- Live verification without role overrides: self-test hello, background,
+  confirm, confirm-running and verify completed successfully for
+  `--session issue953-host`. The original advisor environment remained intact.
+- Actual review dispatch succeeded: `HTO=0 harnez agent start --name
+  issue953-review --model codex:luna:high --role reviewer ...`, provider thread
+  `01a17936-00cc-7462-b839-afc5a4e7b466`, parent
+  `01a17932-4b30-70c1-a470-248960b5b8b4`. Reviewer inspected the changed files,
+  reported no findings, and its live self-test attempt exited 1 with the expected
+  reviewer leaf refusal and provenance. The review process exited successfully;
+  session status is completed and no worker remains running.
+- Code: `6d9ab6b0`; architecture/sandbox explanation: `2ae74526`.
+- Session learning: inherited role variables describe a launch context, not
+  necessarily the current interactive host. Exact metadata and launcher ancestry
+  now encode that distinction in code and regression tests. No new follow-up
+  work was identified. Sandbox restrictions were absent in this live host;
+  Harnez does not claim to reconfigure another host's permission policy.
