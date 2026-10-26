@@ -357,6 +357,21 @@ another orchestrator. A caller without a role (a human or an untracked host) is
 unrestricted. Tests must not depend on these variables (`TestMain` clears them). Operating
 guide and pitfalls: `docs/OrchestratedAgentFlow.md`.
 
+Interactive Codex hosts use their exact thread's rollout metadata (`cli`/`vscode`
+sources configured in `spec/agent.yaml`) to distinguish inherited worker variables
+from their own identity. Their thread ID wins over a stale `HARNEZ_SESSION_ID`.
+Worker launches also export `HARNEZ_AGENT_LAUNCHER_PID`; a launcher in the caller's
+process ancestry preserves worker restrictions, including interactive workers.
+Legacy interactive workers retain restrictions when their stored provider ID matches
+the thread. Unknown or unreadable metadata keeps the environment role restriction.
+Refusals report role provenance, worker/thread IDs and launcher PID.
+
+Harnez does not control the active Codex permission profile. If session state under
+`~/.harnez/sessions` or the Go cache is read-only, change the host's managed writable
+roots and start a new host session; editing user Codex configuration does not change
+an already running host's sandbox. A writable `GOCACHE` is a per-command alternative
+for Go builds, but it does not make Harnez session state writable.
+
 `--role` also accepts these aliases; sessions store the canonical role name:
 
 `agent start` also accepts a role or alias as its first positional word. When at least two words
