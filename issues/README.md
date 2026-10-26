@@ -43,4 +43,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 955 | [955-942-c3-bounded-batch-bare-probes-record-accessible-denied-per-model.md](955-942-c3-bounded-batch-bare-probes-record-accessible-denied-per-model.md) | 942 C3: bounded batch bare probes record accessible/denied per model | Open |
 | 958 | [958-agent-review-subcommand-for-second-vendor-diff-audits.md](958-agent-review-subcommand-for-second-vendor-diff-audits.md) | agent review subcommand for second-vendor diff audits | Open |
 | 959 | [959-agent-role-inference-turns-a-fix-prompt-into-a-read-only-reviewer.md](959-agent-role-inference-turns-a-fix-prompt-into-a-read-only-reviewer.md) | agent role inference turns a fix prompt into a read-only reviewer | Open |
+| 960 | [960-research-skill-iterative-web-search-fanout-where-a-reviewer-seeds-the-next-round-user-set-round-count.md](960-research-skill-iterative-web-search-fanout-where-a-reviewer-seeds-the-next-round-user-set-round-count.md) | research skill: iterative web search fanout where a reviewer seeds the next round (user-set round count) | Open |
 <!-- harnez:end issues-active-index -->
