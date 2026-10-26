@@ -30,3 +30,49 @@
 3. **System tools:** answer Q2 and record the exact setting in this ticket. Apply it only if no tool this repository relies on is removed. Check: the System tools totals in `/context` drop.
 4. **User decision items:** apply Q4's answer with the same mechanism and checks as step 2.
 5. **Compare:** rerun `/context` and record the new totals next to the baseline.
+
+## Decision (lean sprint 2026-10-26)
+
+Basis (owner note, 2026-10-26): files only (docs, issues, code, YAML spec, reports); no MCP unless really needed; no
+Google Workspace, Slack, Linear/Jira, cloud connectors; missing access becomes a `harnez <verb>` or flag; less
+preloaded context is better; tools are git, harnez, bash, minimal OS tools, Go over Python. Default: **disable**.
+
+Findings: searchers s968a/s968b (luna:med), refiner r968 (sol:med), advisor a968 (agy:argon:low).
+- Q1: `skillOverrides` in `~/.claude/settings.json` (`"off"`, `"user-invocable-only"`) hides User and Built-in skills;
+  `disableBundledSkills: true` covers bundled ones (`plugin-authoring`). claude.ai-sync skills: documented removal is
+  the claude.ai account; `skillOverrides` on them is unproven (study 2026-09-16 tested only Built-in and User).
+  harnez writes `skillOverrides` from `config.yaml` `preset_skill_overrides` (`internal/claude/debloat.go:235`), but
+  only under `harnez apply --debloat`/`--debloat-preset` (`cmd/harnez/apply_cmd.go:128`), not plain `apply`.
+- Q2: bare-name `permissions.deny` entries remove a tool definition; scoped rules only block calls. MCP tools go
+  away when the server is removed; claude.ai connectors go away with `disableClaudeAiConnectors: true` (existing
+  `--debloat-disable-claude-ai-connectors`) or `ENABLE_CLAUDEAI_MCP_SERVERS=false`. Keep `ToolSearch`.
+- Q3: `harnez apply` regenerates managed skills from `config.yaml` `skills:` and keeps source frontmatter
+  (`internal/claude/skill_content.go:25`, test `internal/claude/skill_frontmatter_test.go`).
+- Measure: `claude -p "/context"` works non-interactively (study 2026-09-16); compare Skills table rows, not only
+  totals (issue 348 accounting bug).
+
+Decisions:
+- D1 invoke-only: for harnez-sourced skills add `disable-model-invocation: true` to the source frontmatter in
+  `docs/commands/` (applies on every plain `apply`, all harnesses); also add all five to `preset_skill_overrides`
+  as `user-invocable-only`. Skills with no harnez source: override only. (Advisor changed the host's
+  override-only proposal.)
+- D2 disable step-1 skills: `"off"` overrides; synced skills enter `config.yaml` only if the M1 canary shows them
+  gone from `/context`; otherwise the owner turns them off in the claude.ai account (listed in the report).
+- D3 system tools: disable claude.ai connectors via the existing flag in the preset; bare-name deny only for
+  tools proven unused; no `--tools` allowlist; keep `ToolSearch`.
+- D4 Q4 answered by the owner note: gate `internal-comms`, `canvas-design`, `web-artifacts-builder`,
+  `chrome-browser` as `"off"`; `gokay`, `sitegen`, `publish` as `user-invocable-only`; keep
+  `tool-feedback-protocol`. codebase-memory skills and MCP: disable unless the owner says keep (asked 2026-10-26).
+  harnez MCP: disable in the preset (CLI covers it).
+- D5 debloat stays opt-in (`--debloat-preset`); changing plain `apply` is out of scope.
+
+## Milestones
+
+- **M1 evidence (no code):** record Claude version and baseline `claude -p "/context"` Skills/System tools rows in
+  this ticket; canary `claude -p --settings '{"skillOverrides":{"xlsx":"off","epic":"user-invocable-only"}}' "/context"`
+  and record whether each row disappears. Commit the ticket.
+- **M2 config + sources + tests:** `config.yaml` (`preset_skill_overrides` per D1/D2/D4, connectors, MCP), schema in
+  `spec/` if the keys change, `docs/commands/*.md` frontmatter for harnez-sourced D1 skills,
+  `internal/claude/debloat_test.go` (update hardcoded override counts, idempotency, revert), frontmatter test.
+  Run `make install`, `harnez apply --debloat-preset minimal`, then rerun the `/context` check and record it.
+- **M3 docs:** README/debloat docs for the new entries; final before/after table in this ticket.
