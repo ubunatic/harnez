@@ -234,3 +234,14 @@ No targeted skill remained visible, so no owner account removal is needed for
 these names on this version. System tools did not shrink in print-mode accounting;
 the row-level skill/MCP reductions are the evidence, not a claim of system-tool
 savings. M3 documentation remains; ticket stays Open for the host.
+
+## M2 delivered: skill and MCP gating in debloat presets (18448876, ef5b703f)
+
+Host review: diff read; `go test ./internal/claude/` ok; live `~/.claude/settings.json` has 18 `"off"` overrides,
+`deniedMcpServers` [harnez, codebase-memory-mcp], `disableClaudeAiConnectors: true`. Claude Docs connector dropped
+from the host session right after apply. Skills 5.3k → 1.7k. Undo: `harnez revert --debloat`.
+
+### M3 Pre-Work / Required Refinements
+- Document the new keys (`preset_disable_claude_ai_connectors`, `preset_denied_mcp_servers`, new overrides) where
+  the debloat preset is documented, plus the undo command and that it is global for all projects.
+- Final before/after table in this ticket; list owner-only actions (none expected: synced skills hide via overrides).
