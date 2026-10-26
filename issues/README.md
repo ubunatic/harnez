@@ -48,4 +48,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 963 | [963-teach-agents-to-ask-where-rules-belong-before-editing-agents-md.md](963-teach-agents-to-ask-where-rules-belong-before-editing-agents-md.md) | Teach agents to ask where rules belong before editing AGENTS.md | Open |
 | 964 | [964-add-harnez-selftest-extended-skill-for-quick-read-only-smoke-checks.md](964-add-harnez-selftest-extended-skill-for-quick-read-only-smoke-checks.md) | Add harnez-selftest-extended skill for quick read-only smoke checks | Open |
 | 965 | [965-issue-closure-records-stale-inherited-worker-model-and-session-in-interactive-codex-hosts.md](965-issue-closure-records-stale-inherited-worker-model-and-session-in-interactive-codex-hosts.md) | Issue closure records stale inherited worker model and session in interactive Codex hosts | Open |
+| 966 | [966-allow-short-alias-for-external-skill-sources-e-g-egm-for-harnez-skill-install.md](966-allow-short-alias-for-external-skill-sources-e-g-egm-for-harnez-skill-install.md) | Allow short alias for external skill sources, e.g. egm for harnez skill install | Open |
 <!-- harnez:end issues-active-index -->
