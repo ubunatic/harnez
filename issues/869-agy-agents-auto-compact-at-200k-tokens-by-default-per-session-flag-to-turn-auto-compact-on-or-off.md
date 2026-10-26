@@ -44,3 +44,24 @@ resume that compacts, or stop and report if agy exposes no usable context size.
 
 Status check (2026-10-24): nothing built yet. `cmd/harnez/agent_run.go` still skips automatic compaction
 for agy; the context measure (`input_tokens + cache_read_tokens` of the last call) has no canary yet.
+
+## Learnings: Claude per-session compaction (2026-10-26)
+
+Scope note: the Claude side of this topic was parked in 956 (closed, item 4). Its findings are recorded here
+because this ticket owns the per-session flag.
+
+- **Where the trigger is.** `/context` (interactive Claude Code, Haiku 5.5) shows an "Autocompact buffer" line
+  (33k in this session). Compaction starts at the auto-compact window minus that buffer: 100k − 33k = 67k, so a
+  100k window compacts at about 67k, not 100k. This is the answer to "where is the % at which compaction starts".
+- **The window did not come from settings.** `~/.claude/settings.json` sets `autoCompactWindow` to 200000
+  (top level and `claude-sonnet-5-5`), and the shell env had no `CLAUDE_CODE_AUTO_COMPACT_WINDOW` or
+  `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`. The 100k value most likely came from the launch command (a flag or env in the
+  launcher). Unverified: read the launch args of the session process to confirm.
+- **Print mode is not proof.** 956's `-p` canary (100k window, 10% override) did not compact at about 52k. That
+  does not show interactive sessions ignore the values; the interactive `/context` trigger above is the
+  evidence that they apply. Still open: a canary that sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW` and
+  `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (or `--autocompact`) in an interactive or `-p` run, checked by a
+  `compact_boundary` near the expected size.
+- **Harnez's `/compact` is a different path.** `compact_threshold_tokens` (200000 in `spec/agent.yaml`) is sent as
+  `/compact` by harnez; it does not change Claude's own trigger. The per-session setting for Claude therefore
+  belongs in the driver's child env (956 item 4), not in harnez's threshold.

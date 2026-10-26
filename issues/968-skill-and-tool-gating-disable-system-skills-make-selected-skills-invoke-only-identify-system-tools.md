@@ -1,6 +1,6 @@
 # 968 — Skill and tool gating: disable system skills, make selected skills invoke-only, identify system tools
 
-**Status**: Open
+**Status**: Closed — Delivered: debloat presets hide 18 unused skills (off) and gate 7 more as invoke-only, deny harnez and codebase-memory MCP servers, disable claude.ai connectors; live /context Skills 5.3k to 1.7k, MCP rows 33 to 0, total 15.5k to 14k (print mode); 18448876, 07f944c9
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
