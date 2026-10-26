@@ -41,4 +41,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 953 | [953-interactive-codex-sessions-are-treated-as-harnez-leaf-agents.md](953-interactive-codex-sessions-are-treated-as-harnez-leaf-agents.md) | Interactive Codex sessions are treated as Harnez leaf agents | Open |
 | 954 | [954-942-c2-harnez-models-discover-lists-advertised-models-and-shows-an-access-column.md](954-942-c2-harnez-models-discover-lists-advertised-models-and-shows-an-access-column.md) | 942 C2: harnez models discover lists advertised models and shows an access column | Open |
 | 955 | [955-942-c3-bounded-batch-bare-probes-record-accessible-denied-per-model.md](955-942-c3-bounded-batch-bare-probes-record-accessible-denied-per-model.md) | 942 C3: bounded batch bare probes record accessible/denied per model | Open |
+| 958 | [958-agent-review-subcommand-for-second-vendor-diff-audits.md](958-agent-review-subcommand-for-second-vendor-diff-audits.md) | agent review subcommand for second-vendor diff audits | Open |
 <!-- harnez:end issues-active-index -->
