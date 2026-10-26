@@ -1,6 +1,6 @@
 # 953 — Interactive Codex sessions are treated as Harnez leaf agents
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
