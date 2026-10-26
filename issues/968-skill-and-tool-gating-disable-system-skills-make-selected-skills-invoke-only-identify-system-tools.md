@@ -152,3 +152,85 @@ harnez (8) and Claude Docs (8). Print-mode System tools (521) differ from intera
   and each `"off"` skill row is absent; MCP rows for harnez, codebase-memory, Claude Docs are absent; ToolSearch kept.
 - Check one invoke-only skill still runs by slash: `claude -p "/epic --help"` or similar, record the result.
 - `revert` must restore `deniedMcpServers` and connector values that existed before.
+
+## M2 delivered — Preset configuration, sources, tests, and live apply
+
+Implementation commit: `18448876` (`feat: gate skills and MCP servers in debloat presets (issue 968 M2)`).
+
+- Completed the M2 pre-work refinements: all eleven step-1 names are `off`,
+  including synced skills; all D1 and D4 override entries are present. The
+  embedded minimal preset now owns 45 skill overrides (aggressive: 47).
+- `config.yaml` adds `preset_disable_claude_ai_connectors: true` and
+  `preset_denied_mcp_servers: [harnez, codebase-memory-mcp]`; the config struct
+  and `spec/schemas/config.schema.json` declare them. Go supplies no defaults.
+- `docs/commands/{epic,reverse-sprint,lean-sprint-v1}.md` now have
+  `disable-model-invocation: true`. The installed Claude copies all have the
+  key at line 4; apply also wrote the sources to the other configured harnesses.
+  `gokay-sweep` and `sitegen-sweep` remain override-only (no source in this repo).
+- Debloat merges named `deniedMcpServers` entries and records which it added;
+  status shows ownership, and revert preserves pre-existing command/URL/name
+  denials and later unrelated entries. It distinguishes an originally empty
+  array from an absent key. Connector values use the existing boolean prior-value
+  record. Existing sidecars remain readable. No MCP registrations were deleted.
+- Tests cover required preset membership, both preset applications, config/schema
+  types and modes, opt-in/config boundaries, standalone connector flag, generated
+  source frontmatter, repeat-apply idempotency, absent/empty/pre-existing denial
+  restoration, true/false connector restoration, preservation of later entries,
+  and refusal to overwrite a malformed existing denial value. Hardcoded override
+  counts 20/22 now derive from the spec, with explicit required-member assertions.
+
+Verification (2026-10-26):
+- Ran `HTO=0 make test-q1` exactly once, exit 0. `rg -n -- '--- FAIL'` on the
+  saved output found no matches. Touched package summary:
+  `ok  ubunatic.com/harnez/internal/claude  3.959s`.
+  Final test summary line: `ok  ubunatic.com/harnez/scripts/gotest-summary  0.304s`.
+  The final log line was `make[1]: Leaving directory '/home/uwe/projects/harnez'`.
+- Committed code, then ran `make install` (exit 0),
+  `harnez apply --debloat-preset minimal` (exit 0), and
+  `HTO=0 claude -p "/context"` (exit 0, `claude-haiku-5-5`).
+- Read-only settings inspection confirms `disableClaudeAiConnectors: true`, both
+  named server denials, and no bare `ToolSearch` denial. Installed settings have
+  54 overrides in total; unrelated existing overrides were preserved. No manual
+  edit to settings.json or claude.ai account settings was made.
+
+| Reported row | M1 baseline | M2 installed minimal preset |
+| --- | --- | --- |
+| Total context | 15.5k (8%) | 14k (7%) |
+| Skills | 5.3k (2.6%) | 1.7k (0.9%) |
+| System tools | 521 (0.3%) | 4k (2.0%) |
+| System tools (deferred) | 6.7k (3.3%) | 6.7k (3.3%) |
+| MCP tools | 673 (0.3%) | absent |
+| MCP tools (deferred) | 11.8k (5.9%) | absent |
+| MCP server instructions | 979 (0.5%) | 151 (0.1%) |
+| codebase-memory-mcp tool rows | 17 | 0 |
+| harnez tool rows | 8 | 0 |
+| Claude Docs connector tool rows | 8 | 0 |
+| Channel-plugin tool rows | 1 (150 tokens) | 1 (0 tokens) |
+
+Every D1/D4 invoke-only skill row is absent: `gokay-sweep`, `sitegen-sweep`,
+`reverse-sprint`, `epic`, `lean-sprint-v1`, `gokay`, `sitegen`, `publish`.
+Every configured `off` skill row is absent: `google-workspace`, `xlsx`, `pptx`,
+`computer-use`, `built-in-browser`, `artifact-emulator`, `deep-research`,
+`mcp-builder`, `slack-gif-creator`, `import-memory`, `plugin-authoring`,
+`internal-comms`, `canvas-design`, `web-artifacts-builder`, `chrome-browser`,
+`codebase-memory`, `codebase-memory-scout`, `codebase-memory-auditor`.
+`tool-feedback-protocol` remains visible (~130 tokens). The three codebase-memory
+Custom Agents rows remain (42/47/49 tokens): skill overrides do not remove agents.
+
+Slash invocation check: `HTO=0 claude -p --max-turns 3 --tools '' -- "/epic --help"`
+exited 0 and returned the epic-specific usage and modifiers (`file new`, `run new`,
+`next`, `no-web`); no unknown-command error. Tools were disabled only for this
+help canary to prevent executing an epic workflow, not as part of the preset.
+The first attempt omitted `--`; the variadic `--tools` option consumed the prompt
+and Claude exited 1 with an input-required error. The corrected command above
+passed. This checks slash availability, not actual epic execution or a general
+model-invocation behavior probe.
+
+All M2 outputs are in the same scratchpad as M1: `968-m2-test-q1.log`,
+`968-m2-install.log`, `968-m2-apply.log`, `968-m2-context.txt`,
+`968-m2-status.txt`, `968-m2-settings-check.json`, `968-m2-epic-help.txt`, and
+`968-m2-epic-help-retry.txt`. No code changed after the single test run.
+No targeted skill remained visible, so no owner account removal is needed for
+these names on this version. System tools did not shrink in print-mode accounting;
+the row-level skill/MCP reductions are the evidence, not a claim of system-tool
+savings. M3 documentation remains; ticket stays Open for the host.
