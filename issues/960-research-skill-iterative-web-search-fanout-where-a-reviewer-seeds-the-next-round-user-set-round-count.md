@@ -24,6 +24,11 @@ from re-finding what is known. Today `epic` (900) has only a single-round prior-
 
 ## Shape (to refine)
 
+- **Name:** `/fanout` (owner suggestion).
+- **Project-agnostic:** the skill names no project, stack or topic. The agent derives the angles and the
+  "already learned" brief from the target project (docs, Architecture, open tickets, recent commits and
+  studies) and the current session context, e.g. a just-parked ticket.
+
 - Inputs: topic, the "already learned" brief, rounds (default 1, user-set), searcher and reviewer models
   (defaults cheap / mid-tier, different vendors).
 - Each searcher: one angle, read-only, linked findings with date, license, cost and a fit verdict;
