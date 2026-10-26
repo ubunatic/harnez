@@ -76,3 +76,66 @@ Decisions:
   `internal/claude/debloat_test.go` (update hardcoded override counts, idempotency, revert), frontmatter test.
   Run `make install`, `harnez apply --debloat-preset minimal`, then rerun the `/context` check and record it.
 - **M3 docs:** README/debloat docs for the new entries; final before/after table in this ticket.
+
+## M1 — Live gating canary evidence (2026-10-26)
+
+Claude version: **2.1.310 (Claude Code)**. All three `/context` runs reported
+`claude-haiku-5-5`, a 200k window, and exited successfully (exit 0). Commands ran
+from `/home/uwe/projects/harnez`; overrides were session-local `--settings` JSON.
+No persistent settings, account settings, or repository implementation changed.
+
+Exact commands (stdout and stderr saved separately per run):
+
+```bash
+claude --version
+HTO=0 claude -p "/context"
+HTO=0 claude -p --settings '{"skillOverrides":{"xlsx":"off","epic":"user-invocable-only"}}' "/context"
+HTO=0 claude -p --settings '{"deniedMcpServers":[{"serverName":"codebase-memory-mcp"},{"serverName":"harnez"}],"disableClaudeAiConnectors":true}' "/context"
+```
+
+Raw outputs are in the owner-specified scratchpad:
+`/tmp/claude-1000/-home-uwe-projects-harnez/b9d7784c-d8ce-4f4e-b828-4764f82419e7/scratchpad/`
+as `968-m1-version.txt`, `968-m1-baseline.txt`, `968-m1-skills.txt`, and
+`968-m1-mcp.txt`. These are local evidence files, not committed artifacts.
+
+Reported category rows (values copied as displayed; absent means no category row):
+
+| Row | Baseline | Skill overrides | Named MCP denial + connectors off |
+| --- | --- | --- | --- |
+| Total context | 15.5k (8%) | 15.5k (8%) | 14k (7%) |
+| Skills | 5.3k (2.6%) | 4.9k (2.4%) | 5.3k (2.6%) |
+| System tools | 521 (0.3%) | 900 (0.4%) | 522 (0.3%) |
+| System tools (deferred) | 6.7k (3.3%) | 6.7k (3.3%) | 6.7k (3.3%) |
+| MCP tools | 673 (0.3%) | 673 (0.3%) | absent |
+| MCP tools (deferred) | 11.8k (5.9%) | 11.8k (5.9%) | absent |
+| MCP server instructions | 979 (0.5%) | 979 (0.5%) | 151 (0.1%) |
+
+Observed individual rows:
+
+| Row or server group | Baseline | Skill overrides | Named MCP denial + connectors off |
+| --- | --- | --- | --- |
+| `xlsx`, claude.ai sync | ~320 | absent | ~320 |
+| `epic`, User | ~50 | absent | ~50 |
+| `plugin-authoring`, Built-in | ~90 | ~90 | ~90 |
+| `codebase-memory`, User skill | ~160 | ~160 | ~160 |
+| `codebase-memory-mcp` tool rows | 17 | 17 | 0 |
+| `harnez` tool rows | 8 | 8 | 0 |
+| `claude_ai_Claude_Docs` tool rows | 8 | 8 | 0 |
+| `plugin_harnez-channel_harnez-channel` tool rows | 1 (~150 tokens) | 1 (~150 tokens) | 1 (0 tokens) |
+
+Conclusions and limits:
+- `xlsx: off` removes the tested claude.ai-sync skill from the Skills table;
+  `epic: user-invocable-only` removes the tested User skill from that table.
+  This proves row removal for these two names on this version, not slash-command
+  invocation behavior or removal of every other synced skill. Other synced names
+  still need evidence before adding them under D2's per-skill condition.
+- The named `deniedMcpServers` entries remove both registered servers' tool rows
+  from `/context` without deleting their registrations. Combined with
+  `disableClaudeAiConnectors: true`, the Claude Docs connector rows also vanish.
+  The channel-plugin tool remains; MCP denial does not remove the separate
+  codebase-memory skill or its three Custom Agents rows.
+- System tools (deferred) stayed at 6.7k. System tools rose to 900 in the skill
+  canary and were 522 in the MCP canary; do not infer system-tool savings from
+  these runs. The displayed total stayed at 15.5k in the skill canary despite
+  lower Skills usage, so individual rows are the acceptance evidence.
+- M1 only: no `make test-q1`, install, apply, M2/M3 changes, or ticket closure.
