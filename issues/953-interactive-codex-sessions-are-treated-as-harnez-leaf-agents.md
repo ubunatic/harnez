@@ -5,7 +5,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: #486, #581, #665, #470
+**Related**: #486, #581, #665, #470, #965; [OrchestratedAgentFlow](../docs/OrchestratedAgentFlow.md), [ReviewLearnings](../docs/ReviewLearnings.md)
 
 ---
 

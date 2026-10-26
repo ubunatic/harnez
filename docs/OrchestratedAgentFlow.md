@@ -10,7 +10,7 @@ per ticket. Read it before starting an orchestrated run, when an agent misuses
 
 | Role | Model used | Started by | May start agents |
 |------|------------|------------|------------------|
-| host (human or Claude) | - | user | any role |
+| host (human or interactive agent) | - | user | any role |
 | orchestrator | `codex:luna:med` | host, `--role orchestrator` | developer, reviewer, advisor |
 | developer | `codex:luna:low` | orchestrator, `--role developer` | nobody (leaf) |
 | reviewer, advisor | any | orchestrator or host | nobody (leaf, read-only) |
@@ -25,6 +25,32 @@ the role on the session, exports `HARNEZ_AGENT_ROLE` and `HARNEZ_SESSION_ID` (th
 session name, the parent id of anything it starts) to the provider process, adds the role
 rules to every turn, and refuses `start`, `resume`, `stop`, `delete`, `compact`, `chat` and
 root prompts for leaf callers. A new session without `--role` is a developer.
+
+### Interactive host identity
+
+An interactive Codex host may inherit another worker's `HARNEZ_AGENT_ROLE`,
+`HARNEZ_SESSION_ID` and model through a long-lived app server. The environment
+alone does not establish the current caller's identity. Harnez verifies the exact
+thread's rollout metadata, uses its thread ID for host tracking, and retains leaf
+restrictions when a live launcher is in the process ancestry or a legacy worker
+record matches the provider thread. See
+[architecture §2.10](HarnezAgentArchitecture.md#210-roles-and-delegation-depth)
+and [issue 953](../issues/953-interactive-codex-sessions-are-treated-as-harnez-leaf-agents.md).
+
+Verify both sides through the installed binary without role overrides: the host
+must complete self-test progression **and launch an actual reviewer**; the spawned
+leaf must still receive a refusal for agent management. A passing health check
+alone does not prove dispatch works. Keep the reviewer name, provider thread,
+parent identity and exit result in the ticket. Regression cases live in
+`cmd/harnez/agent_caller_test.go`.
+
+Host sandbox permissions remain a separate boundary: Harnez cannot make a
+read-only session directory writable. Reconfigure the managed host and restart
+it when necessary; a writable Go cache only addresses build-cache access.
+Issue-closure attribution still defaults to inherited environment values;
+[issue 965](../issues/965-issue-closure-records-stale-inherited-worker-model-and-session-in-interactive-codex-hosts.md)
+tracks that remaining metadata problem. Supply verified `--model`/`--session`
+values when known; do not guess a model from stale worker variables.
 
 ## 2. Loop per ticket
 
@@ -41,7 +67,9 @@ root prompts for leaf callers. A new session without `--role` is a developer.
    then `harnez agent rate --name dev-N <1-5> "reason"` and `harnez agent delete --name dev-N`.
    Delete refuses unrated sessions without `--force`; `delete --all` skips them (ticket 526).
 
-Every call blocks until the helper's turn is done; wait, never poll, never repeat a call.
+Start/resume stays attached until the helper's turn is done. Interactive hosts run
+it as a tracked session background job with `HTO=0`, then consume its completion
+signal (Codex: `write_stdin` until exit); never repeat a start or poll status/logs.
 Ask for replies of at most 10 lines with exact test results.
 
 ## 3. Review checklist

@@ -76,3 +76,18 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **A stopped run is not a green run**: 941 M4 committed after `make test-q1` stopped at gofmt, so the
   suite never ran; the host's full run found 3 failures. Grep the log for the test summary, not only for
   `--- FAIL`. In 941 M5 a "fixed" pin test was flipped from a negative to a positive case; M6 restored it.
+- **Inherited identity**: a long-lived interactive host can inherit another worker's role/model/session.
+  Verify exact thread metadata and launcher provenance; exercise actual reviewer dispatch and the
+  child's refusal through the installed binary. A host health check alone misses dispatch failures.
+  Issue 953 added `cmd/harnez/agent_caller_test.go`; 965 tracks stale issue-closure attribution.
+- **Search evidence attribution**: an answer about live index freshness needs actual index diagnostics;
+  a citation to a spec file does not support it. Keep exact questions, tool arguments, source generation,
+  backend and raw answers; separate abstentions, partial retrieval and unsupported citations. Label
+  queries run after an edit as retrospective comparisons. Session evidence is in Cati's
+  `docs/studies/2026-10-26-search-mcp-neus-comparison.md` (2026-10-26 Harnez backfill).
+- **Shared Git index**: commits in concurrent sessions can capture each other's staged paths.
+  During the 953 evergreen follow-up, the 965 tracker commit was rejected because the index
+  referenced another session's untracked 964; that session then committed both staged tickets.
+  Check `git show --stat` before retrying and preserve the other session's history. Proposed harness
+  improvement: serialize staging and commit as one cross-session operation; no AGENTS rule or lock
+  implementation was added in this session.
