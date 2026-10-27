@@ -50,20 +50,13 @@ func validateInteractiveFlags(cmd *cobra.Command, detached, jsonOut bool, stream
 
 func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveStartRequest) error {
 	spec := req.ModelSpec
-	if spec == "" {
-		defaultModel, err := subagent.DefaultModel()
-		if err != nil {
-			return err
-		}
-		spec = defaultModel.Spec()
-	}
-	m, err := subagent.ResolveModel(spec)
-	if err != nil {
-		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
-	}
 	role, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
 	if err != nil {
 		return err
+	}
+	m, err := subagent.ResolveModelForRole(role, spec)
+	if err != nil {
+		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 	}
 	canonicalDir, err := filepath.Abs(req.Dir)
 	if err != nil {

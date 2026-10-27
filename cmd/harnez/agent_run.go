@@ -314,25 +314,21 @@ func findResumeSelector(sessions []*subagent.Session, selector string) (*subagen
 func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startRequest) error {
 	quotaTurnStarted := time.Now().Add(-time.Hour)
 	spec := req.ModelSpec
-	if spec == "" {
-		defaultModel, defaultErr := subagent.DefaultModel()
-		if defaultErr != nil {
-			return defaultErr
-		}
-		spec = defaultModel.Spec()
-	}
 	if err := checkStreamMode(req.StreamMode); err != nil {
-		return err
-	}
-	m, err := subagent.ResolveModel(spec)
-	if err != nil {
-		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
-	}
-	if err := rejectExhaustedQuota(spec, m, req.AllowExhaustedQuota, d.availability); err != nil {
 		return err
 	}
 	role, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
 	if err != nil {
+		return err
+	}
+	m, err := subagent.ResolveModelForRole(role, spec)
+	if err != nil {
+		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
+	}
+	if spec == "" {
+		spec = m.Spec()
+	}
+	if err := rejectExhaustedQuota(spec, m, req.AllowExhaustedQuota, d.availability); err != nil {
 		return err
 	}
 	s, err := d.store()
@@ -648,15 +644,15 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	if !canManageTarget(d.parent(), sess) {
 		return fmt.Errorf("session %q is outside caller lineage", sess.ID)
 	}
-	if req.ModelSpec != "" {
-		m, modelErr := subagent.ResolveModel(req.ModelSpec)
-		if modelErr != nil || m.Provider != sess.Provider || m.Name != sess.Model || m.Tier != sess.Tier {
-			return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", req.ModelSpec, sess.Name, sess.Provider, sess.Model, sess.Tier)
-		}
-	}
 	role, err := resumeRole(req.Role, sess)
 	if err != nil {
 		return err
+	}
+	if req.ModelSpec != "" {
+		m, modelErr := subagent.ResolveModelForRole(role, req.ModelSpec)
+		if modelErr != nil || m.Provider != sess.Provider || m.Name != sess.Model || m.Tier != sess.Tier {
+			return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", req.ModelSpec, sess.Name, sess.Provider, sess.Model, sess.Tier)
+		}
 	}
 	defer setAgentEnv(role, sess.Name, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}.Spec())()
 	interactive := sess.Status == "active" && sess.HarnessType == "interactive"

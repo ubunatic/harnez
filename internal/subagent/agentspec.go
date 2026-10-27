@@ -20,9 +20,7 @@ import (
 const agentSpecPath = "spec/agent.yaml"
 
 type agentSpec struct {
-	PurposeAliases        map[string][]string            `yaml:"purpose_aliases"`
-	PurposeRoles          map[string]string              `yaml:"purpose_roles"`
-	PurposeTraits         map[string]string              `yaml:"purpose_traits"`
+	ModelTraits           map[string]string              `yaml:"model_traits"`
 	DefaultModel          string                         `yaml:"default_model"`
 	DefaultRole           string                         `yaml:"default_role"`
 	RoleClassifyTimeoutMS int                            `yaml:"role_classify_timeout_ms"`
@@ -143,10 +141,12 @@ func StopBounds() (time.Duration, time.Duration, time.Duration, error) {
 
 // RoleSpec is one entry of the roles table in spec/agent.yaml.
 type RoleSpec struct {
-	Description string   `yaml:"description"`
-	Aliases     []string `yaml:"aliases"`
-	Spawns      []string `yaml:"spawns"`
-	Rules       string   `yaml:"rules"`
+	DefaultModel string              `yaml:"default_model"`
+	Models       map[string][]string `yaml:"models"`
+	Description  string              `yaml:"description"`
+	Aliases      []string            `yaml:"aliases"`
+	Spawns       []string            `yaml:"spawns"`
+	Rules        string              `yaml:"rules"`
 }
 
 func parseAgentSpec(data []byte) (agentSpec, error) {
@@ -197,8 +197,8 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	if err := validateRoles(spec); err != nil {
 		return agentSpec{}, err
 	}
-	if spec.PurposeAliases != nil {
-		if err := validatePurpose(spec, models); err != nil {
+	if spec.ModelTraits != nil {
+		if err := validateRoleModels(spec, models); err != nil {
 			return agentSpec{}, err
 		}
 	}
@@ -208,83 +208,76 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	return spec, nil
 }
 
-var purposeName = regexp.MustCompile(`^(dev|search|review|arch):([a-z][a-z0-9-]*)$`)
+var purposeTraitName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
-func validatePurpose(spec agentSpec, models map[string]modelAlias) error {
-	reserved := map[string]bool{"dev": true, "search": true, "review": true, "arch": true}
-	for name, entry := range models {
-		if reserved[strings.ToLower(entry.Model.Provider)] || reserved[strings.ToLower(strings.SplitN(name, ":", 2)[0])] {
-			return fmt.Errorf("agent spec: reserved purpose role in model %q", name)
+func validateRoleModels(spec agentSpec, models map[string]modelAlias) error {
+	for trait, description := range spec.ModelTraits {
+		if !purposeTraitName.MatchString(trait) || isTier(normalizeTier(trait)) || strings.TrimSpace(description) == "" || strings.ContainsAny(description, "\r\n") {
+			return fmt.Errorf("agent spec: invalid trait %q", trait)
 		}
-		for _, alias := range entry.Aliases {
-			if reserved[strings.ToLower(alias)] {
-				return fmt.Errorf("agent spec: reserved model alias %q", alias)
+		for key, model := range models {
+			if strings.EqualFold(trait, model.Model.Provider) || strings.EqualFold(trait, strings.SplitN(key, ":", 2)[0]) || modelHasAlias(model, trait) || strings.EqualFold(trait, model.Model.Name) {
+				return fmt.Errorf("agent spec: trait %q collides with model or provider", trait)
 			}
 		}
-	}
-	for name, role := range spec.Roles {
-		if reserved[strings.ToLower(name)] {
-			return fmt.Errorf("agent spec: reserved role %q", name)
-		}
-		for _, alias := range role.Aliases {
-			if reserved[strings.ToLower(alias)] {
-				return fmt.Errorf("agent spec: reserved role alias %q", alias)
+		for name, role := range spec.Roles {
+			if strings.EqualFold(trait, name) {
+				return fmt.Errorf("agent spec: trait %q collides with role", trait)
 			}
-		}
-	}
-	for role := range reserved {
-		if strings.TrimSpace(spec.PurposeRoles[role]) == "" || strings.ContainsAny(spec.PurposeRoles[role], "\r\n") {
-			return fmt.Errorf("agent spec: missing purpose role description %q", role)
-		}
-	}
-	for name, targets := range spec.PurposeAliases {
-		parts := purposeName.FindStringSubmatch(name)
-		if parts == nil || isTier(normalizeTier(parts[2])) {
-			return fmt.Errorf("agent spec: invalid purpose alias %q", name)
-		}
-		if strings.TrimSpace(spec.PurposeTraits[parts[2]]) == "" || strings.ContainsAny(spec.PurposeTraits[parts[2]], "\r\n") {
-			return fmt.Errorf("agent spec: missing purpose trait description %q", parts[2])
-		}
-		seen := map[string]bool{}
-		for _, target := range targets {
-			if target == "" || seen[target] {
-				return fmt.Errorf("agent spec: empty or duplicate target for %q", name)
-			}
-			seen[target] = true
-		}
-	}
-	var walk func(string, map[string]bool, int) error
-	walk = func(name string, visiting map[string]bool, depth int) error {
-		if depth > 4 {
-			return fmt.Errorf("agent spec: purpose alias depth exceeds 4 at %q", name)
-		}
-		if visiting[name] {
-			return fmt.Errorf("agent spec: purpose alias cycle at %q", name)
-		}
-		visiting[name] = true
-		defer delete(visiting, name)
-		for _, target := range spec.PurposeAliases[name] {
-			if reserved[strings.ToLower(strings.SplitN(target, ":", 2)[0])] {
-				if _, ok := spec.PurposeAliases[target]; !ok {
-					return fmt.Errorf("agent spec: unknown purpose target %q", target)
+			for _, alias := range role.Aliases {
+				if strings.EqualFold(trait, alias) {
+					return fmt.Errorf("agent spec: trait %q collides with role alias", trait)
 				}
-				if err := walk(target, visiting, depth+1); err != nil {
-					return err
-				}
-			} else if _, err := resolveModelIn(models, target); err != nil {
-				return fmt.Errorf("agent spec: purpose target %q: %w", target, err)
 			}
 		}
-		return nil
 	}
-	for name := range spec.PurposeAliases {
-		if err := walk(name, map[string]bool{}, 1); err != nil {
-			return err
+	for roleName, role := range spec.Roles {
+		if role.DefaultModel != "" {
+			if _, ok := role.Models[role.DefaultModel]; !ok {
+				return fmt.Errorf("agent spec: role %q default_model %q is undefined", roleName, role.DefaultModel)
+			}
+		}
+		for trait, targets := range role.Models {
+			if _, ok := spec.ModelTraits[trait]; !ok {
+				return fmt.Errorf("agent spec: role %q has unknown trait %q", roleName, trait)
+			}
+			seen := map[string]bool{}
+			for _, target := range targets {
+				if target == "" || seen[target] {
+					return fmt.Errorf("agent spec: empty or duplicate target for %q", trait)
+				}
+				seen[target] = true
+			}
+		}
+		var walk func(string, map[string]bool, int) error
+		walk = func(trait string, visiting map[string]bool, depth int) error {
+			if depth > 4 {
+				return fmt.Errorf("agent spec: trait depth exceeds 4 at %q", trait)
+			}
+			if visiting[trait] {
+				return fmt.Errorf("agent spec: trait cycle at %q", trait)
+			}
+			visiting[trait] = true
+			defer delete(visiting, trait)
+			for _, target := range role.Models[trait] {
+				if _, ok := role.Models[target]; ok {
+					if err := walk(target, visiting, depth+1); err != nil {
+						return err
+					}
+				} else if _, err := resolveModelIn(models, target); err != nil {
+					return fmt.Errorf("agent spec: trait target %q: %w", target, err)
+				}
+			}
+			return nil
+		}
+		for trait := range role.Models {
+			if err := walk(trait, map[string]bool{}, 1); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
-
 func validateExternalSessions(specs map[string]ExternalSessionSpec) error {
 	if len(specs) == 0 {
 		return fmt.Errorf("agent spec: at least one external_sessions provider is required")

@@ -73,6 +73,42 @@ func TestAgentStartDefaultsToDeveloperRole(t *testing.T) {
 	}
 }
 
+func TestStartResolvesRoleBeforeModel(t *testing.T) {
+	t.Setenv(agentRoleEnv, "")
+	installUnclassifiedNeus(t)
+	for _, tc := range []struct {
+		args        []string
+		role, model string
+	}{
+		{[]string{"--role", "dev", "--model", "smart"}, "developer", "codex:gpt-6.1-sol:med"},
+		{[]string{"--role", "review", "--model", "smart"}, "reviewer", "codex:gpt-6.1-sol:low"},
+		{[]string{"--role", "review"}, "reviewer", "codex:gpt-6.1-sol:low"},
+		{[]string{"--model", "smart"}, "developer", "codex:gpt-6.1-sol:med"},
+	} {
+		d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+		args := append([]string{"start"}, tc.args...)
+		args = append(args, "task")
+		dir := t.TempDir()
+		if _, err := runWithStore(t, d, dir, args...); err != nil {
+			t.Fatal(err)
+		}
+		if d.envRole != tc.role {
+			t.Fatalf("role %s, want %s", d.envRole, tc.role)
+		}
+		store, err := subagent.NewSessionStore(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sess, err := store.Get("thread-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := sess.Provider + ":" + sess.Model + ":" + sess.Tier; got != tc.model {
+			t.Fatalf("model %s, want %s", got, tc.model)
+		}
+	}
+}
+
 func installUnclassifiedNeus(t *testing.T) {
 	t.Helper()
 	binDir := t.TempDir()

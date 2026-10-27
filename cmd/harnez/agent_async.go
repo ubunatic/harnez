@@ -239,14 +239,11 @@ func launchForegroundWorker(cmd *cobra.Command, store *subagent.FileSessionStore
 
 func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir, parentID string, check func(context.Context) error) error {
 	modelSpec := req.ModelSpec
-	if modelSpec == "" {
-		var err error
-		modelSpec, err = subagent.DefaultModelSpec()
-		if err != nil {
-			return err
-		}
+	role, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
+	if err != nil {
+		return err
 	}
-	model, err := subagent.ResolveModel(modelSpec)
+	model, err := subagent.ResolveModelForRole(role, modelSpec)
 	if err != nil {
 		return err
 	}
@@ -255,10 +252,6 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	}
 	if err := preflightCodex(cmd.Context(), model.Provider, nil, check); err != nil {
 		return fmt.Errorf("agent start preflight: %w", err)
-	}
-	role, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
-	if err != nil {
-		return err
 	}
 	store, err := subagent.NewSessionStore(storeDir)
 	if err != nil {

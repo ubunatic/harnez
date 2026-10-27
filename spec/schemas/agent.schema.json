@@ -61,7 +61,7 @@
       "additionalProperties": false
     }
   },
-  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "default_role", "models", "roles", "stop", "external_sessions", "purpose_aliases", "purpose_roles", "purpose_traits"],
+  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "default_role", "models", "roles", "stop", "external_sessions", "model_traits"],
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
@@ -171,18 +171,9 @@
     "default_model": { "type": "string", "minLength": 1 },
     "default_role": { "type": "string", "minLength": 1 },
     "models_legend": { "type": "string" },
-    "purpose_roles": {
-      "type": "object", "required": ["dev", "search", "review", "arch"],
-      "propertyNames": { "enum": ["dev", "search", "review", "arch"] },
-      "additionalProperties": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" }
-    },
-    "purpose_traits": {
+    "model_traits": {
       "type": "object", "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
       "additionalProperties": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" }
-    },
-    "purpose_aliases": {
-      "type": "object", "propertyNames": { "pattern": "^(dev|search|review|arch):[a-z][a-z0-9-]*$" },
-      "additionalProperties": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
     },
     "models": {
       "type": "object",
@@ -227,6 +218,11 @@
           "description": { "type": "string", "minLength": 1 },
           "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
           "spawns": { "type": "array", "items": { "type": "string" } },
+          "default_model": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "models": {
+            "type": "object", "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+            "additionalProperties": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+          },
           "rules": { "type": "string", "minLength": 1 }
         },
         "additionalProperties": false

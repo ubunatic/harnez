@@ -80,12 +80,7 @@ external_sessions:
 #          Spawn rights come from roles.<role>.spawns below.
 # Evidence: docs/Models.md.
 models_legend: "COST is an owner-guided relative estimate by effort tier; codex:luna:low = 1 · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
-purpose_roles:
-  dev: Implementation work.
-  search: Read-only discovery.
-  review: Independent review.
-  arch: Architecture and design.
-purpose_traits:
+model_traits:
   lean: Efficient standard work.
   std: Standard work.
   smart: Difficult judgment.
@@ -94,17 +89,6 @@ purpose_traits:
   cheap: Low-cost work.
   fast: Fast work.
   ai: AI-oriented work.
-purpose_aliases:
-  dev:lean: [terra:low]
-  dev:std: [terra:med, opus:low]
-  dev:smart: [sol:med, opus:med]
-  dev:tui: [dev:smart]
-  dev:gui: [dev:lean, dev:std]
-  dev:cheap: [luna:med]
-  dev:fast: [haiku:med]
-  dev:ai: []
-  search:cheap: [luna:low, haiku:low]
-  review:smart: [sol:low]
 models:
   codex:luna:
     aliases: [luna, luna:low]
@@ -269,7 +253,17 @@ roles:
       When codex has no quota, use agy:flash38 as the cross-vendor reviewer.
   developer:
     description: Implement assigned work, run checks, and commit the result.
-    aliases: [coder, worker, implementer]
+    aliases: [dev, coder, worker, implementer]
+    default_model: lean
+    models:
+      lean: [terra:low]
+      std: [terra:med, opus:low]
+      smart: [sol:med, opus:med]
+      tui: [smart]
+      gui: [lean, std]
+      cheap: [luna:med]
+      fast: [haiku:med]
+      ai: []
     spawns: []
     rules: >-
       You are a leaf worker. Do the assigned ticket or milestone yourself: read,
@@ -278,7 +272,9 @@ roles:
       lines: files changed, tests run and their result, open problems.
   reviewer:
     description: Inspect changes and report actionable findings without editing.
-    aliases: [critic, checker]
+    aliases: [review, critic, checker]
+    default_model: smart
+    models: {smart: [sol:low]}
     spawns: []
     rules: >-
       You are a leaf, read-only reviewer. Inspect the diff and test output you
@@ -286,7 +282,9 @@ roles:
       by severity in at most 15 lines.
   advisor:
     description: Research the code and return a concise read-only plan.
-    aliases: [explorer, scout, auditor, planner]
+    aliases: [search, arch, explorer, scout, auditor, planner]
+    default_model: cheap
+    models: {cheap: [luna:low, haiku:low], smart: [opus:low, opus:med, sol:low]}
     spawns: []
     rules: >-
       You are a leaf, read-only advisor. Audit the ticket and code paths you are

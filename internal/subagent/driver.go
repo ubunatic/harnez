@@ -398,19 +398,7 @@ func ResolveModel(spec string) (Model, error) {
 }
 
 func resolveModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalog.Catalog, spec string) (Model, error) {
-	modelSpec := spec
-	agent, err := agentSpecOnce()
-	if err != nil {
-		return Model{}, err
-	}
-	role := strings.ToLower(strings.SplitN(strings.TrimSpace(spec), ":", 2)[0])
-	if _, ok := agent.PurposeRoles[role]; ok {
-		modelSpec, err = resolvePurpose(agent.PurposeAliases, strings.ToLower(strings.TrimSpace(spec)), map[string]bool{}, 1)
-		if err != nil {
-			return Model{}, err
-		}
-	}
-	model, err := resolveModelIn(aliases, modelSpec)
+	model, err := resolveModelIn(aliases, spec)
 	if err != nil {
 		return Model{}, err
 	}
@@ -420,29 +408,66 @@ func resolveModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalo
 	return model, nil
 }
 
-func resolvePurpose(aliases map[string][]string, name string, visiting map[string]bool, depth int) (string, error) {
+// ResolveModelForRole resolves a role-specific trait or a concrete model.
+func ResolveModelForRole(roleName, modelSpec string) (Model, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return Model{}, err
+	}
+	if roleName == "" {
+		roleName = spec.DefaultRole
+	}
+	roleName, err = resolveRoleIn(spec, roleName)
+	if err != nil {
+		return Model{}, err
+	}
+	role := spec.Roles[roleName]
+	if modelSpec == "" {
+		modelSpec = role.DefaultModel
+		if modelSpec == "" {
+			return DefaultModel()
+		}
+	}
+	if _, ok := role.Models[modelSpec]; ok {
+		modelSpec, err = resolveRoleTrait(role.Models, modelSpec, map[string]bool{}, 1)
+		if err != nil {
+			return Model{}, err
+		}
+	} else if !strings.Contains(modelSpec, ":") {
+		if _, err := resolveModelIn(modelAliases, modelSpec); err != nil {
+			traits := make([]string, 0, len(role.Models))
+			for trait := range role.Models {
+				traits = append(traits, trait)
+			}
+			sort.Strings(traits)
+			return Model{}, fmt.Errorf("unknown trait or model %q for role %q; known traits: %s", modelSpec, roleName, strings.Join(traits, ", "))
+		}
+	}
+	return ResolveModel(modelSpec)
+}
+
+func resolveRoleTrait(models map[string][]string, trait string, visiting map[string]bool, depth int) (string, error) {
 	if depth > 4 {
-		return "", fmt.Errorf("purpose alias depth exceeds 4 at %q", name)
+		return "", fmt.Errorf("trait depth exceeds 4 at %q", trait)
 	}
-	if visiting[name] {
-		return "", fmt.Errorf("purpose alias cycle at %q", name)
+	if visiting[trait] {
+		return "", fmt.Errorf("trait cycle at %q", trait)
 	}
-	targets, ok := aliases[name]
+	targets, ok := models[trait]
 	if !ok {
-		return "", fmt.Errorf("unknown purpose alias %q", name)
+		return "", fmt.Errorf("unknown trait %q", trait)
 	}
 	if len(targets) == 0 {
-		return "", fmt.Errorf("purpose alias %q is unset", name)
+		return "", fmt.Errorf("trait %q is unset", trait)
 	}
-	visiting[name] = true
-	defer delete(visiting, name)
+	visiting[trait] = true
+	defer delete(visiting, trait)
 	target := targets[0]
-	if purposeName.MatchString(target) {
-		return resolvePurpose(aliases, target, visiting, depth+1)
+	if _, ok := models[target]; ok {
+		return resolveRoleTrait(models, target, visiting, depth+1)
 	}
 	return target, nil
 }
-
 func resolveDefaultModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalog.Catalog, spec string) (Model, error) {
 	model, err := resolveModelWithCatalog(aliases, catalog, spec)
 	if err != nil && strings.Contains(err.Error(), "disabled by user policy") {

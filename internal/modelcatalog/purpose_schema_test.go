@@ -9,12 +9,17 @@ func TestPurposeAliasSchema(t *testing.T) {
 		valid  bool
 	}{
 		{"embedded", func(map[string]any) {}, true},
-		{"unset allowed", func(d map[string]any) { d["purpose_aliases"].(map[string]any)["dev:ai"] = []any{} }, true},
+		{"unset allowed", func(d map[string]any) {
+			d["roles"].(map[string]any)["developer"].(map[string]any)["models"].(map[string]any)["ai"] = []any{}
+		}, true},
 		{"duplicate", func(d map[string]any) {
-			d["purpose_aliases"].(map[string]any)["dev:smart"] = []any{"sol:med", "sol:med"}
+			d["roles"].(map[string]any)["developer"].(map[string]any)["models"].(map[string]any)["smart"] = []any{"sol:med", "sol:med"}
 		}, false},
-		{"invalid role", func(d map[string]any) { d["purpose_aliases"].(map[string]any)["other:smart"] = []any{"sol:med"} }, false},
-		{"missing roles", func(d map[string]any) { delete(d, "purpose_roles") }, false},
+		{"invalid trait", func(d map[string]any) {
+			d["roles"].(map[string]any)["developer"].(map[string]any)["models"].(map[string]any)["Bad"] = []any{"sol:med"}
+		}, false},
+		{"old key", func(d map[string]any) { d["purpose_roles"] = map[string]any{} }, false},
+		{"missing traits", func(d map[string]any) { delete(d, "model_traits") }, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := readYAML(t, "spec/agent.yaml").(map[string]any)

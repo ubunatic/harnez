@@ -307,10 +307,11 @@ func TestAgentDefaultLiteralIsNotShadowed(t *testing.T) {
 }
 
 func TestAgentStartDefaultModelLine(t *testing.T) {
-	def, err := subagent.DefaultModelSpec()
+	model, err := subagent.ResolveModelForRole("advisor", "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	def := model.Spec()
 	d := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "thread"}}, {ev: msg("CONFIRM: ready")}, {ev: msg("done")}}}
 	out := runScripted(t, d, "start", "task")
 	if !strings.Contains(out, "model: "+def+" (default)") {

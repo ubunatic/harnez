@@ -5,87 +5,80 @@ import (
 	"testing"
 )
 
-func TestPurposeResolution(t *testing.T) {
-	for alias, target := range map[string]string{
-		"dev:lean": "terra:low", "dev:std": "terra:med", "dev:smart": "sol:med",
-		"dev:tui": "sol:med", "dev:gui": "terra:low", "dev:cheap": "luna:med",
-		"dev:fast": "haiku:med", "search:cheap": "luna:low", "review:smart": "sol:low",
+func TestRoleModelResolution(t *testing.T) {
+	for _, tc := range []struct{ role, pick, target string }{
+		{"dev", "lean", "terra:low"}, {"dev", "std", "terra:med"}, {"dev", "smart", "sol:med"},
+		{"dev", "tui", "sol:med"}, {"dev", "gui", "terra:low"}, {"dev", "cheap", "luna:med"},
+		{"dev", "fast", "haiku:med"}, {"review", "smart", "sol:low"}, {"review", "", "sol:low"},
+		{"", "smart", "sol:med"}, {"developer", "smart", "sol:med"}, {"advisor", "cheap", "luna:low"}, {"advisor", "smart", "opus:low"},
+		{"orchestrator", "", "codex:luna:high"}, {"review", "codex:sol:med", "codex:sol:med"}, {"review", "sol", "sol"},
 	} {
-		t.Run(alias, func(t *testing.T) {
-			got, err := ResolveModel(alias)
-			want, wantErr := ResolveModel(target)
+		t.Run(tc.role+"/"+tc.pick, func(t *testing.T) {
+			got, err := ResolveModelForRole(tc.role, tc.pick)
+			want, wantErr := ResolveModel(tc.target)
 			if err != nil || wantErr != nil || got != want {
-				t.Fatalf("%s = %+v, %v; want %+v, %v", alias, got, err, want, wantErr)
+				t.Fatalf("got %+v %v, want %+v %v", got, err, want, wantErr)
 			}
 		})
 	}
-	if _, err := ResolveModel("dev:ai"); err == nil || !strings.Contains(err.Error(), "unset") {
-		t.Fatalf("unset alias error = %v", err)
-	}
-	for _, name := range []string{"codex:sol:med", "sol"} {
-		if _, err := ResolveModel(name); err != nil {
-			t.Errorf("existing %s: %v", name, err)
+	for _, tc := range []struct{ role, pick, want string }{
+		{"review", "lean", "known traits"}, {"developer", "nonexistent", "known traits"}, {"developer", "ai", "unset"},
+	} {
+		if _, err := ResolveModelForRole(tc.role, tc.pick); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s/%s: %v, want %s", tc.role, tc.pick, err, tc.want)
 		}
 	}
 }
 
-func TestPurposeValidation(t *testing.T) {
+func TestRoleModelValidation(t *testing.T) {
 	base, err := agentSpecOnce()
 	if err != nil {
 		t.Fatal(err)
 	}
-	tests := []struct {
-		name   string
-		change func(*agentSpec, map[string]modelAlias)
+	for _, tc := range []struct {
+		name, want string
+		change     func(*agentSpec)
 	}{
-		{"cycle", func(s *agentSpec, _ map[string]modelAlias) {
-			s.PurposeAliases["dev:lean"] = []string{"dev:std"}
-			s.PurposeAliases["dev:std"] = []string{"dev:lean"}
-		}},
-		{"depth five", func(s *agentSpec, _ map[string]modelAlias) {
-			s.PurposeAliases["dev:lean"] = []string{"dev:std"}
-			s.PurposeAliases["dev:std"] = []string{"dev:smart"}
-			s.PurposeAliases["dev:smart"] = []string{"dev:tui"}
-			s.PurposeAliases["dev:tui"] = []string{"dev:cheap"}
-		}},
-		{"tier", func(s *agentSpec, _ map[string]modelAlias) { s.PurposeAliases["dev:low"] = []string{"sol:med"} }},
-		{"tier synonym", func(s *agentSpec, _ map[string]modelAlias) { s.PurposeAliases["dev:medium"] = []string{"sol:med"} }},
-		{"unknown", func(s *agentSpec, _ map[string]modelAlias) { s.PurposeAliases["dev:lean"] = []string{"no-such-model"} }},
-		{"duplicate", func(s *agentSpec, _ map[string]modelAlias) {
-			s.PurposeAliases["dev:lean"] = []string{"sol:med", "sol:med"}
-		}},
-		{"bad name", func(s *agentSpec, _ map[string]modelAlias) { s.PurposeAliases["dev:Bad"] = []string{"sol:med"} }},
-		{"provider collision", func(_ *agentSpec, m map[string]modelAlias) {
-			m["dev:foo"] = modelAlias{Model: Model{Provider: "dev", Name: "foo"}}
-		}},
-		{"model alias collision", func(_ *agentSpec, m map[string]modelAlias) {
-			m["codex:fake"] = modelAlias{Model: Model{Provider: "codex", Name: "fake"}, Aliases: []string{"dev"}}
-		}},
-		{"role alias collision", func(s *agentSpec, _ map[string]modelAlias) {
+		{"cycle", "cycle", func(s *agentSpec) {
 			r := s.Roles["developer"]
-			r.Aliases = append(r.Aliases, "dev")
-			s.Roles["developer"] = r
+			r.Models["lean"] = []string{"std"}
+			r.Models["std"] = []string{"lean"}
 		}},
-	}
-	for _, tc := range tests {
+		{"depth", "depth exceeds 4", func(s *agentSpec) {
+			r := s.Roles["developer"]
+			r.Models["lean"] = []string{"std"}
+			r.Models["std"] = []string{"smart"}
+			r.Models["smart"] = []string{"tui"}
+			r.Models["tui"] = []string{"cheap"}
+		}},
+		{"tier", "invalid trait", func(s *agentSpec) { s.ModelTraits["low"] = "x" }},
+		{"synonym", "invalid trait", func(s *agentSpec) { s.ModelTraits["medium"] = "x" }},
+		{"model alias", "collides", func(s *agentSpec) { s.ModelTraits["sol"] = "x" }},
+		{"provider", "collides", func(s *agentSpec) { s.ModelTraits["codex"] = "x" }},
+		{"role", "collides", func(s *agentSpec) { s.ModelTraits["developer"] = "x" }},
+		{"duplicate", "duplicate", func(s *agentSpec) { s.Roles["developer"].Models["lean"] = []string{"sol:med", "sol:med"} }},
+		{"unknown", "target", func(s *agentSpec) { s.Roles["developer"].Models["lean"] = []string{"no-such-model"} }},
+		{"missing default", "default_model", func(s *agentSpec) { r := s.Roles["developer"]; r.DefaultModel = "missing"; s.Roles["developer"] = r }},
+		{"bad name", "invalid trait", func(s *agentSpec) { s.ModelTraits["Bad"] = "x" }},
+		{"missing trait", "unknown trait", func(s *agentSpec) { s.Roles["developer"].Models["missing"] = []string{"sol:med"} }},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := base
-			s.PurposeAliases = make(map[string][]string)
-			for k, v := range base.PurposeAliases {
-				s.PurposeAliases[k] = append([]string{}, v...)
+			s.ModelTraits = map[string]string{}
+			for k, v := range base.ModelTraits {
+				s.ModelTraits[k] = v
 			}
-			s.Roles = make(map[string]RoleSpec)
+			s.Roles = map[string]RoleSpec{}
 			for k, v := range base.Roles {
-				v.Aliases = append([]string{}, v.Aliases...)
+				v.Models = map[string][]string{}
+				for n, targets := range base.Roles[k].Models {
+					v.Models[n] = append([]string{}, targets...)
+				}
 				s.Roles[k] = v
 			}
-			models := make(map[string]modelAlias)
-			for k, v := range base.Models {
-				models[k] = v
-			}
-			tc.change(&s, models)
-			if err := validatePurpose(s, models); err == nil {
-				t.Fatal("expected validation error")
+			tc.change(&s)
+			if err := validateRoleModels(s, s.Models); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error %v, want %q", err, tc.want)
 			}
 		})
 	}
