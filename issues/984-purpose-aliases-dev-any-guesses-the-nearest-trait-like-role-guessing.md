@@ -8,8 +8,14 @@
 
 ---
 
-/goal `--model <role>:<any-trait>` with a trait that is not in the spec resolves to the nearest defined purpose alias
-(e.g. `dev:clever` → `dev:smart`), the way `--role` resolves unknown role names, and says which alias it picked; or
+**Update (2026-10-27, after 983 design B):** 983 dropped `<role>:<trait>` model names. Picks live per role
+(`roles.<role>.models`), the role resolves first, then `--model <trait>` inside it. This ticket now means: an
+unknown trait (`--role dev --model clever`) guesses the nearest trait of the resolved role (`smart`), using the
+role's `model_traits` descriptions. The reverse question below (`dev:...` implying a role) is settled: the role
+always comes from `--role` or prompt inference.
+
+/goal `--model <any-trait>` with a trait the resolved role does not define resolves to that role's nearest trait
+(e.g. `--role dev --model clever` → `smart`), the way `--role` resolves unknown role names, and says which trait it picked; or
 stop and report when blocked on an owner decision or a denied permission. Circuit breaker: on a loop or no progress,
 clear the goal and write a failure report here.
 
@@ -29,9 +35,9 @@ close to a defined one; guessing like `--role` does avoids a failed start.
 
 - Is the guess printed and recorded (session `model_alias` from 983 M5 plus the guessed alias)?
 - Low-confidence guess: fail with suggestions, or fall back to a default per role (e.g. `dev:std`)?
-- Owner may also mean the reverse: `--model dev:...` implies `--role developer`. Confirm before building.
+- ~~Owner may also mean the reverse: `--model dev:...` implies `--role developer`.~~ Settled by 983 design B.
 
 ## 4. Verification
 
-Tests for exact, alias-close and decider-guessed traits and a no-match case; a live `harnez agent start --model
-dev:clever` prints the alias it picked; `make test-q1`; `make install`.
+Tests for exact, alias-close and decider-guessed traits and a no-match case; a live `harnez agent start --role dev
+--model clever` prints the trait it picked; `make test-q1`; `make install`.
