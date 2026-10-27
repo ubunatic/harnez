@@ -96,6 +96,60 @@ record and `harnez agent list`.
 - Searcher recommendation: `purpose_aliases` key, resolved before `resolveModelIn`, then enablement and quota per
   candidate, cycle/depth guard; first slice `dev:smart` resolves and `agent models` lists aliases, fallback next.
 
+## Architecture (arch-983, opus:low, 2026-10-27)
+
+- **Spec:** top-level `purpose_aliases` in `spec/agent.yaml` (map alias → ordered list), plus `purpose_roles` and
+  `purpose_traits` (one-line meaning each, used by help and generated docs). Schema property, `agentSpec` field,
+  validation in `parseAgentSpec`.
+- **Names:** `^(dev|search|review|arch):[a-z][a-z0-9-]*$`; role is a closed enum; trait must not be low/med/high or
+  any tier synonym (Go check with the resolver's synonym table). Value: ordered list, no duplicates; `[]` = unset,
+  resolving it is an error. Each entry resolves via `resolveModelIn` or is another purpose alias; spec load fails on an
+  unknown target.
+- **Resolution:** `resolvePurpose` in `resolveModelWithCatalog` (`driver.go:400`) before `resolveModelIn`, only when
+  the part before the first `:` is a role. Role names are reserved: spec load fails if a provider, model alias or role
+  alias is named dev/search/review/arch (test). Depth-first expansion with a visited set, depth limit 4, checked at
+  load and at runtime.
+- **Fallback availability:** enablement (`IsEnabled`) from M1; quota from M3 via the availability function used by
+  `RejectExhaustedQuota` (`agent_run.go:205`), skipped unless `--allow-exhausted-quota`; access observations: only
+  `denied` skips, `unknown` counts as available. Fallback taken → one stderr line
+  `dev:smart → opus:med (sol:med: quota exhausted)`; all fail → non-zero exit with one reason per entry and a hint to
+  pass `--model provider:model:tier`.
+- **User override:** `purpose_aliases:` in `~/.config/harnez/models.yaml` (`mergePolicyFile`, `catalog.go:378`,
+  `model-policy.schema.json`); a user entry replaces that alias's whole list; users may add traits, not roles.
+  Precedence: concrete `--model` > user override > embedded spec; then enablement and quota.
+- **Visibility:** session record `ModelAlias string json:"model_alias,omitempty"` (`session.go:16`); `agent models`
+  second table (alias, chain, resolved now, skip reason) incl. `--json`; `agent list` model column
+  (`dev:smart→sol:med`); start banner `model: opus:med via dev:smart (fallback 2/2)`.
+- **Prose:** skills name aliases only. `harnez agent models --aliases --md` prints the table from `purpose_roles` /
+  `purpose_traits`; docs carry a generated block `<!-- harnez:purpose-aliases:begin/end -->` filled by `harnez init`
+  with a staleness test; `TestNoModelPicksInPractice` greps `docs/commands` and `docs/practices` (full and lite) for
+  `\b(luna|sol|terra|opus|haiku|argon):(low|med|high)\b` outside generated blocks, small allow-list for model docs.
+
+## Host decisions (2026-10-27)
+
+- The section 3.4 check named `sol:low` for `dev:smart`; the owner table says `sol:med`. Table wins; 3.4 fixed.
+- `dev:gui` order lean, then std (host reading of "lean/std"), as recorded in the Decision table. Reversible.
+- `dev:cheap` (`luna:med`) is the alias for mechanical work.
+- Access gating: only `denied` skips a fallback entry (architect recommendation).
+- `arch:` aliases: none until the owner picks; the role stays in the enum.
+- Developer: `terra:med` (the owner's `dev:std`). Reviewer: `opus:low` diff review before close.
+
+## Milestones
+
+- **M1 (`dev:smart` resolves):** schema key, loader, name/value validation, reserved-role check, resolution with
+  cycle/depth guard, Decision-table aliases in the spec. Visible: `harnez agent start --model dev:smart` resolves to
+  `sol:med` (host runs it). Tests: resolution table, cycle `a→b→a`, depth 5, trait `low`, unknown target, provider
+  named `dev`, unset `dev:ai` error, existing `provider:model:tier` and bare aliases unchanged. Pre-work: confirm
+  `resolvePiModel` (first lookup in `resolveModelIn`) never claims `dev:smart`.
+- **M2 (`agent models` lists aliases):** alias table and JSON; golden test.
+- **M3 (fallback by enablement and quota):** availability function into the resolver, stderr fallback line, all-failed
+  error. Tests with fake catalog/availability: first disabled, quota exhausted, all exhausted, override flag. Keep
+  `resolveDefaultModelWithCatalog`'s "default model is disabled" message when the default is an alias.
+- **M4 (user override in models.yaml):** tests: list replaced, cycle via override, unknown model, new role rejected.
+- **M5 (alias visible):** session record field, `agent list` model column, banner. Tests: round-trip; old records load.
+- **M6 (prose migration):** generated block, `--md`, the 7 docs (full and lite) use aliases, guard test; root copies
+  via `harnez init -d .`; the 3.4 `rg` check empty.
+
 ## 3. Implementation & Verification Plan
 
 1. Design: spec shape for purpose aliases (2b), the trait list per role, and the resolver order against model
@@ -104,6 +158,6 @@ record and `harnez agent list`.
 2. Schema entry, loader and validation (unknown model or class fails), `harnez agent models` shows the picks.
 3. Replace the model names in the skills and practice docs listed in section 1 with the class reference; keep
    full and lite sources and root copies in sync (`harnez init -d .`).
-4. Verify: tests for resolution and validation; `harnez agent start --model dev:smart` resolves to `sol:low`;
+4. Verify: tests for resolution and validation; `harnez agent start --model dev:smart` resolves to `sol:med`;
    `rg 'luna:med|sol:low|haiku:high' docs/commands docs/practices` shows no task-class picks left in prose;
    `make test-q1`; `make install`.
