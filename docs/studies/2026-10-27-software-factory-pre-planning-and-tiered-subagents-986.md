@@ -77,7 +77,18 @@ Following the architect's review, the factory incorporated four structural safeg
 
 ---
 
-## 5. Next Steps for Skill Codification (`/software-factory`)
+## 6. Execution Progress & Telemetry
+
+### Milestone 1 Delivery (`87b45d83`)
+- **Searcher `search-986` (`haiku:med`)**: 47s, 177k tokens (incl. cached). Successfully located `github.com/google/jsonschema-go/jsonschema`, `gopkg.in/yaml.v3`, embedded FS rules, and repo config patterns.
+- **Architect `arch-986` (`argon:low`)**: 1m25s, 163k tokens (incl. cached). Designed full JSON Schema (`spec/schemas/glossary.schema.json`), base glossary (`spec/glossary.yaml`), Go structs & loader (`internal/glossary/glossary.go`), and locked table tests.
+- **Developer `dev-986-m1` (`haiku:med`)**: 46s, 197k tokens (incl. cached). Fresh session. Mechanically implemented all 4 files; all unit tests passed on first run (`TestLoadBaseGlossary`, `TestValidate` across 11 subtests, `TestLoadForRepoAndMerge` across 4 subtests). Zero assertion tampering.
+- **Host**: Verified `go test -v ./internal/glossary/...`, built and installed binary via `make install`, and committed `87b45d83`.
+- **Verdict**: M1 completed with zero friction. The pattern of *Searcher locates patterns -> Architect locks exact types/code -> Mechanical Dev translates* executed in ~3 minutes total subagent time without needing any mid/high-tier developer.
+
+---
+
+## 7. Next Steps for Skill Codification (`/software-factory`)
 
 This live run on Issue #986 will measure the real cost, turn counts, and failure rates of this multi-tier pipeline. Upon completion, the following steps will be abstracted into a generic skill:
 1. Automated role assignment based on task typology (Searcher -> Architect Gate -> Fresh Mechanical Dev -> Host Review).
