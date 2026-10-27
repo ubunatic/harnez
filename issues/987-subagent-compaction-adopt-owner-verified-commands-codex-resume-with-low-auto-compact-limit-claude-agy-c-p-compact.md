@@ -121,6 +121,11 @@ one ran, why, and what it changed) by session ID, and use that record for all co
   - Codex 0.164.0 binary strings contain hook events `pre_compact`, `post_compact`, `session_start`,
     `session_end` and an exec event `context_compacted` (rollout item `compacted`). Hook config location, stdin
     fields and event fields: unverified (https://github.com/openai/codex/pull/19905).
+  - Codex hook config (searcher, read 2026-10-27): `~/.codex/config.toml`, `[[hooks.<Event>]]` groups with a
+    `matcher`. Two `[[hooks.SessionStart]]` groups, both matcher `startup|resume|clear|compact`: one runs
+    `codebase-memory-mcp hook-augment`, the other `harnez codex-telemetry`. So each SessionStart trigger runs two
+    hooks; the owner run showed two such pairs (likely `resume`, then `compact`; unconfirmed). Codex
+    SessionStart's `compact` matcher is a second post-compaction signal next to `PostCompact`.
   - Open, to measure in the first read-only developer turn with a logging hook (`cat > <scratch>/<event>.json`):
     Claude `PostCompact` in print mode and its fields; Codex hook config path and Pre/Post fields; the
     `context_compacted` JSON fields; whether Codex `turn.completed` usage is per turn or cumulative (two
