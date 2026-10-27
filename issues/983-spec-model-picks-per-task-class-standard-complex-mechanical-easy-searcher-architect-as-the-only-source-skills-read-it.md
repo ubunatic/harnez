@@ -216,6 +216,10 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
 - **M3 (`agent models` lists the picks):** per-role table (role, trait, chain, resolved now) and JSON; golden test.
   - **Pre-Work (from M2 review):** `ResolveModelForRole` resolves the role again after `startRole` already did;
     pass the canonical role through without a second `resolveRoleIn` call, or document why both are needed.
+  - **Host decision (M3 plan review):** `agent models --json` stays the unchanged model array; mixing pick records
+    into it would break its consumers. Picks get `agent models --picks` (table only) and `--picks --json` (array of
+    `{role, trait, chain, resolved, error}`); the plain table output also prints the picks table below the models.
+    Reversible.
 - **M4 (fallback by enablement and quota):** availability function into the resolver, stderr fallback line, all-failed
   error. Tests with fake catalog/availability: first disabled, quota exhausted, all exhausted, override flag. Keep
   `resolveDefaultModelWithCatalog`'s "default model is disabled" message when the default is a trait.
