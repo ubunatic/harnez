@@ -9,6 +9,24 @@ import (
 	"time"
 )
 
+func TestSessionModelAliasRoundTripAndLegacy(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&Session{ID: "pick", ModelAlias: "smart", Provider: "codex", Model: "sol", Tier: "med"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Get("pick")
+	if err != nil || got.ModelAlias != "smart" || got.Model != "sol" {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	var legacy Session
+	if err := json.Unmarshal([]byte(`{"id":"old","provider":"codex","model":"sol","tier":"med"}`), &legacy); err != nil || legacy.ModelAlias != "" || legacy.Model != "sol" {
+		t.Fatalf("legacy %+v, %v", legacy, err)
+	}
+}
+
 func TestUnknownContextRemainsUnknownAndIsOmittedFromJSON(t *testing.T) {
 	s := Session{ID: "unknown", ContextTokens: -1, TurnRecords: []TurnRecord{{NewInputTokens: 4200000, CachedInputTokens: 900000}}}
 	if got := s.LastContextTokens(); got != -1 {

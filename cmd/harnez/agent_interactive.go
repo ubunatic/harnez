@@ -55,10 +55,11 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 	if err != nil {
 		return err
 	}
-	m, err := selectStartModel(role, spec, req.AllowExhaustedQuota, nil, cmd.ErrOrStderr())
+	selection, err := selectStartSelection(role, spec, req.AllowExhaustedQuota, nil, cmd.ErrOrStderr())
 	if err != nil {
 		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 	}
+	m := selection.Model
 	canonicalDir, err := filepath.Abs(req.Dir)
 	if err != nil {
 		return fmt.Errorf("resolve working directory: %w", err)
@@ -88,7 +89,7 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 			}
 		}
 		now := time.Now()
-		sess = &subagent.Session{ID: uuid.NewString(), Name: sessName, StartPrompt: req.Prompt, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalDir, ParentSessionID: d.parent(), CallerPID: os.Getpid(), HarnessType: "interactive", Status: "active", Role: role, CreatedAt: now, LastActiveAt: now}
+		sess = &subagent.Session{ID: uuid.NewString(), Name: sessName, StartPrompt: req.Prompt, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalDir, ParentSessionID: d.parent(), CallerPID: os.Getpid(), HarnessType: "interactive", Status: "active", Role: role, CreatedAt: now, LastActiveAt: now}
 		sess.ControlSocket = filepath.Join(d.storeDir, sess.ID+".sock")
 		if m.Provider == "claude" {
 			sess.ProviderSessionID = sess.ID

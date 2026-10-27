@@ -23,6 +23,7 @@ type Session struct {
 	ModelProvider     string `json:"model_provider,omitempty"`
 	Source            string `json:"source,omitempty"`
 	Model             string `json:"model"`
+	ModelAlias        string `json:"model_alias,omitempty"`
 	Tier              string `json:"tier"`
 	WorkingDir        string `json:"working_dir"`
 	ParentSessionID   string `json:"parent_session_id,omitempty"`

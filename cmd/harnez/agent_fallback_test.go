@@ -72,7 +72,7 @@ func TestInvalidRolePolicyCLI(t *testing.T) {
 			if (err != nil) != tc.fails || strings.Contains(text, "panic:") || strings.Contains(text, "goroutine") {
 				t.Fatalf("output=%s error=%v", text, err)
 			}
-			if tc.fails && (!strings.Contains(text, policyPath) || !strings.Contains(text, "reviewer/smart") || strings.Count(text, `agent spec: role "reviewer" trait "smart":`) != 1) {
+			if tc.fails && strings.Count(text, policyPath+`: role reviewer trait smart: trait cycle at "smart"`) != 1 {
 				t.Fatalf("missing or repeated error context: %s", text)
 			}
 		})

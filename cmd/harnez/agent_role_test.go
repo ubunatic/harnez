@@ -106,6 +106,53 @@ func TestStartResolvesRoleBeforeModel(t *testing.T) {
 		if got := sess.Provider + ":" + sess.Model + ":" + sess.Tier; got != tc.model {
 			t.Fatalf("model %s, want %s", got, tc.model)
 		}
+		if sess.ModelAlias != "smart" {
+			t.Fatalf("alias = %q, want smart", sess.ModelAlias)
+		}
+	}
+}
+
+func TestModelAliasListAndBanner(t *testing.T) {
+	dir := t.TempDir()
+	d := &scriptDriver{steps: []step{{0, subagent.Event{Kind: "session", Text: "thread-1"}}, {0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+	out, err := runWithStore(t, d, dir, "start", "--role", "dev", "--model", "smart", "task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "smart") || !strings.Contains(out, "gpt-6.1-sol") {
+		t.Fatalf("banner: %s", out)
+	}
+	out, err = runWithStore(t, d, dir, "list", "--dead", "--color", "never")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "MODEL") || !strings.Contains(out, "smart → codex:sol:med") {
+		t.Fatalf("list: %s", out)
+	}
+}
+
+func TestStartBannerOneModelLine(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"default", []string{"--role", "review"}, "model: smart → codex:sol:low (default)"},
+		{"trait", []string{"--role", "review", "--model", "smart"}, "model: smart → codex:sol:low"},
+		{"concrete", []string{"--role", "review", "--model", "codex:sol:low"}, "model: codex:sol:low"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := &scriptDriver{steps: []step{{0, subagent.Event{Kind: "session", Text: "thread-1"}}, {0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+			args := append([]string{"start"}, tc.args...)
+			args = append(args, "task")
+			out, err := runWithStore(t, d, t.TempDir(), args...)
+			if err != nil || strings.Count(out, "model:") != 1 || !strings.Contains(out, tc.want) {
+				t.Fatalf("output=%q error=%v", out, err)
+			}
+			if tc.name != "default" && strings.Contains(out, "(default)") {
+				t.Fatalf("output=%q", out)
+			}
+		})
 	}
 }
 

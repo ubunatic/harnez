@@ -207,21 +207,26 @@ func rejectExhaustedQuota(spec string, model subagent.Model, override bool, avai
 }
 
 func selectStartModel(role, spec string, override bool, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) (subagent.Model, error) {
+	selection, err := selectStartSelection(role, spec, override, availability, stderr)
+	return selection.Model, err
+}
+
+func selectStartSelection(role, spec string, override bool, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) (subagent.ModelSelection, error) {
 	if availability == nil {
 		availability = providerAvailability
 	}
 	selection, err := subagent.ResolveModelWithAvailability(role, spec, func(m subagent.Model) bool { return availability(m.Provider, m.Name).State == "exhausted" }, override)
 	if err != nil {
-		return subagent.Model{}, err
+		return subagent.ModelSelection{}, err
 	}
 	if selection.Trait == "" {
 		if err := rejectExhaustedQuota(spec, selection.Model, override, availability); err != nil {
-			return subagent.Model{}, err
+			return subagent.ModelSelection{}, err
 		}
 	} else if len(selection.Skipped) > 0 {
 		fmt.Fprintf(stderr, "%s → %s (%s)\n", selection.Trait, selection.Target, strings.Join(selection.Skipped, "; "))
 	}
-	return selection.Model, nil
+	return selection, nil
 }
 
 func isCodexUsageLimitError(err error) bool {
@@ -339,10 +344,11 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if err != nil {
 		return err
 	}
-	m, err := selectStartModel(role, spec, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr())
+	selection, err := selectStartSelection(role, spec, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr())
 	if err != nil {
 		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 	}
+	m := selection.Model
 	if spec == "" {
 		spec = m.Spec()
 	}
@@ -393,18 +399,22 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		if req.SessionID == "" && sessionID == "" {
 			sessionID = uuid.NewString()
 		}
-		return &subagent.Session{ID: sessionID, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: status, Role: role, CreatedAt: now, LastActiveAt: now}
+		return &subagent.Session{ID: sessionID, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: status, Role: role, CreatedAt: now, LastActiveAt: now}
 	}
 	if req.SessionID == "" && d.storeDir != "" {
 		if timeout := foregroundDetachTimeout(cmd); timeout > 0 {
 			now := time.Now()
-			sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "running", Role: role, CreatedAt: now, LastActiveAt: now}
+			sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "running", Role: role, CreatedAt: now, LastActiveAt: now}
 			sess.StdoutLog = filepath.Join(d.storeDir, id+".stdout.log")
 			sess.StderrLog = filepath.Join(d.storeDir, id+".stderr.log")
 			if err := s.Create(sess); err != nil {
 				return err
 			}
-			args := []string{"--store-dir", d.storeDir, "agent", "start", "--worker-session", id, "--json", "--model", spec, "--role", role, "--name", sessName, "--dir", canonicalWorkDir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
+			workerSpec := spec
+			if selection.Trait != "" {
+				workerSpec = selection.Trait
+			}
+			args := []string{"--store-dir", d.storeDir, "agent", "start", "--worker-session", id, "--json", "--model", workerSpec, "--role", role, "--name", sessName, "--dir", canonicalWorkDir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
 			if req.AllowExhaustedQuota {
 				args = append(args, "--allow-exhausted-quota")
 			}
@@ -473,9 +483,14 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 			}
 			if ev.Kind == "session" {
 				extra := []string{fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir)}
-				if req.ModelSpec == "" {
-					extra = append(extra, "model: "+spec+" (default)")
+				modelLine := "model: " + m.Spec()
+				if selection.Trait != "" {
+					modelLine = "model: " + selection.Trait + " → " + m.Spec()
 				}
+				if req.ModelSpec == "" {
+					modelLine += " (default)"
+				}
+				extra = append(extra, modelLine)
 				ts.info(ev.Text, m.Provider+":"+m.Name, "start", "new", append(extra, "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")...)
 			}
 			ts.onEvent(ev)
@@ -542,7 +557,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	storeTurnQuota(d.dbPath, id, m.Provider, turn, "before", before)
 	recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 	now := time.Now()
-	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
+	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
 	sess.ContextWindowSize = r.ContextWindowSize
 	persistAgentTurnTokens(d.dbPath, sess, r, now)
 	if current, getErr := s.Get(reservedID); getErr == nil {

@@ -314,7 +314,7 @@ func TestAgentStartDefaultModelLine(t *testing.T) {
 	def := model.Spec()
 	d := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "thread"}}, {ev: msg("CONFIRM: ready")}, {ev: msg("done")}}}
 	out := runScripted(t, d, "start", "task")
-	if !strings.Contains(out, "model: "+def+" (default)") {
+	if !strings.Contains(out, "→ "+def+" (default)") {
 		t.Fatalf("output=%q", out)
 	}
 	d = &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "thread"}}, {ev: msg("CONFIRM: ready")}, {ev: msg("done")}}}

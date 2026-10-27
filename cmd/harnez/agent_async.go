@@ -243,10 +243,11 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	if err != nil {
 		return err
 	}
-	model, err := selectStartModel(role, modelSpec, req.AllowExhaustedQuota, providerAvailability, cmd.ErrOrStderr())
+	selection, err := selectStartSelection(role, modelSpec, req.AllowExhaustedQuota, providerAvailability, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}
+	model := selection.Model
 	if err := preflightCodex(cmd.Context(), model.Provider, nil, check); err != nil {
 		return fmt.Errorf("agent start preflight: %w", err)
 	}
@@ -280,7 +281,7 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	stdoutPath := filepath.Join(storeDir, id+".stdout.log")
 	stderrPath := filepath.Join(storeDir, id+".stderr.log")
 	now := time.Now()
-	sess := &subagent.Session{ID: id, Name: req.Name, StartPrompt: req.StoredPrompt, Provider: model.Provider, Model: model.Name, Tier: model.Tier, WorkingDir: dir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "running", Role: role, CreatedAt: now, LastActiveAt: now, StdoutLog: stdoutPath, StderrLog: stderrPath}
+	sess := &subagent.Session{ID: id, Name: req.Name, StartPrompt: req.StoredPrompt, Provider: model.Provider, Model: model.Name, ModelAlias: selection.Trait, Tier: model.Tier, WorkingDir: dir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "running", Role: role, CreatedAt: now, LastActiveAt: now, StdoutLog: stdoutPath, StderrLog: stderrPath}
 	if err := store.Create(sess); err != nil {
 		return err
 	}

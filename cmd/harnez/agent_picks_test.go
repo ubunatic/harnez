@@ -13,7 +13,7 @@ import (
 func TestModelPicksGolden(t *testing.T) {
 	rows := []subagent.ModelPick{
 		{Role: "developer", Trait: "ai", Chain: []string{}, Error: "unset"},
-		{Role: "developer", Trait: "smart", Chain: []string{"sol:med", "opus:med"}, Resolved: "codex:sol:med"},
+		{Role: "developer", Trait: "smart", Chain: []string{"sol:med", "opus:med"}, Resolved: "codex:sol:med", Default: true},
 		{Role: "reviewer", Trait: "smart", Chain: []string{"sol:low"}, Resolved: "codex:sol:low"},
 	}
 	var out bytes.Buffer
@@ -51,19 +51,22 @@ func TestModelPicksCommand(t *testing.T) {
 	if err := json.Unmarshal([]byte(run("--picks", "--json")), &picks); err != nil {
 		t.Fatal(err)
 	}
-	var smart, ai bool
+	var smart, ai, defaultLean bool
 	for i, p := range picks {
 		if i > 0 && (p.Role < picks[i-1].Role || p.Role == picks[i-1].Role && p.Trait < picks[i-1].Trait) {
 			t.Fatal("picks are not sorted")
 		}
 		if p.Role == "developer" && p.Trait == "smart" {
-			smart = len(p.Chain) == 2 && p.Resolved == "codex:sol:med" && p.Error == ""
+			smart = len(p.Chain) == 2 && p.Resolved == "codex:sol:med" && p.Error == "" && !p.Default
 		}
 		if p.Role == "developer" && p.Trait == "ai" {
-			ai = len(p.Chain) == 0 && strings.Contains(p.Error, "unset")
+			ai = len(p.Chain) == 0 && strings.Contains(p.Error, "unset") && !p.Default
+		}
+		if p.Role == "developer" && p.Trait == "lean" {
+			defaultLean = p.Default
 		}
 	}
-	if !smart || !ai {
+	if !smart || !ai || !defaultLean {
 		t.Fatalf("missing picks: %+v", picks)
 	}
 	var models []subagent.ModelEntry

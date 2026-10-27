@@ -227,7 +227,11 @@ func writeModelPicks(out io.Writer, picks []subagent.ModelPick) error {
 		if pick.Error != "" {
 			resolved = pick.Error
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", pick.Role, pick.Trait, chain, resolved)
+		trait := pick.Trait
+		if pick.Default {
+			trait += "*"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", pick.Role, trait, chain, resolved)
 	}
 	return tw.Flush()
 }

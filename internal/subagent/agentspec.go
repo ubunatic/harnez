@@ -157,6 +157,7 @@ type ModelPick struct {
 	Chain    []string `json:"chain"`
 	Resolved string   `json:"resolved"`
 	Error    string   `json:"error"`
+	Default  bool     `json:"default"`
 }
 
 // ModelPicks reports configured picks using current model enablement.
@@ -184,7 +185,7 @@ func modelPicksIn(spec agentSpec, resolve func(string, string) (Model, error)) [
 	var picks []ModelPick
 	for name, role := range spec.Roles {
 		for trait, targets := range role.Models {
-			pick := ModelPick{Role: name, Trait: trait, Chain: append([]string{}, targets...)}
+			pick := ModelPick{Role: name, Trait: trait, Chain: append([]string{}, targets...), Default: role.DefaultModel == trait}
 			if len(targets) == 0 {
 				pick.Error = "unset"
 			} else if model, err := resolve(name, trait); err != nil {
@@ -319,10 +320,10 @@ func validateRoleModelsWithUserTraits(spec agentSpec, models map[string]modelAli
 		var walk func(string, map[string]bool, int) error
 		walk = func(trait string, visiting map[string]bool, depth int) error {
 			if depth > 4 {
-				return fmt.Errorf("agent spec: trait depth exceeds 4 at %q", trait)
+				return fmt.Errorf("trait depth exceeds 4 at %q", trait)
 			}
 			if visiting[trait] {
-				return fmt.Errorf("agent spec: trait cycle at %q", trait)
+				return fmt.Errorf("trait cycle at %q", trait)
 			}
 			visiting[trait] = true
 			defer delete(visiting, trait)
@@ -339,7 +340,7 @@ func validateRoleModelsWithUserTraits(spec agentSpec, models map[string]modelAli
 		}
 		for trait := range role.Models {
 			if err := walk(trait, map[string]bool{}, 1); err != nil {
-				return fmt.Errorf("agent spec: role %q trait %q: %w", roleName, trait, err)
+				return fmt.Errorf("role %s trait %s: %w", roleName, trait, err)
 			}
 		}
 	}
@@ -415,6 +416,9 @@ func mergeRolePolicy(spec agentSpec, policy *modelcatalog.Policy, models map[str
 	}
 	sort.Strings(contexts)
 	if err := validateRoleModelsWithUserTraits(copySpec, models, userTraits); err != nil {
+		if strings.HasPrefix(err.Error(), "role ") {
+			return agentSpec{}, fmt.Errorf("%s: %w", path, err)
+		}
 		return agentSpec{}, fmt.Errorf("%s: roles %s: %w", path, strings.Join(contexts, ", "), err)
 	}
 	return copySpec, nil

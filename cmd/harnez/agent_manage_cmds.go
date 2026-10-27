@@ -112,19 +112,23 @@ func (ac *agentCLI) listCmd() *cobra.Command {
 			return err
 		}
 		if colorEnabled {
-			fmt.Fprintln(cmd.OutOrStdout(), agentListColor("\x1b[1m", "NAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USED\tCONTEXT_SIZE\tSESSION_USED\tWORKING_DIR", true))
+			fmt.Fprintln(cmd.OutOrStdout(), agentListColor("\x1b[1m", "NAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USED\tCONTEXT_SIZE\tSESSION_USED\tWORKING_DIR\tMODEL", true))
 		} else {
-			fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USED\tCONTEXT_SIZE\tSESSION_USED\tSOURCE\tWORKING_DIR")
+			fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USED\tCONTEXT_SIZE\tSESSION_USED\tSOURCE\tWORKING_DIR\tMODEL")
 		}
 		for _, x := range xs {
+			model := subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}.Spec()
+			if x.ModelAlias != "" {
+				model = x.ModelAlias + " → " + model
+			}
 			resume := resumeState(x)
 			if x.HarnessType == "external" {
 				resume = "external"
 			}
 			if colorEnabled {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", x.Name, x.Provider, agentListStatusColor(x.Status, true), resume, formatAgentContextTokens(x.LastContextTokens()), formatAgentContextTokens(x.ContextWindowSize), formatAgentSessionUsedTokens(x.SessionUsedTokens, x.SessionUsedKnown), x.WorkingDir)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", x.Name, x.Provider, agentListStatusColor(x.Status, true), resume, formatAgentContextTokens(x.LastContextTokens()), formatAgentContextTokens(x.ContextWindowSize), formatAgentSessionUsedTokens(x.SessionUsedTokens, x.SessionUsedKnown), x.WorkingDir, model)
 			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", x.ID, x.Name, x.Provider, x.Status, resume, formatAgentContextTokens(x.LastContextTokens()), formatAgentContextTokens(x.ContextWindowSize), formatAgentSessionUsedTokens(x.SessionUsedTokens, x.SessionUsedKnown), x.Source, x.WorkingDir)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", x.ID, x.Name, x.Provider, x.Status, resume, formatAgentContextTokens(x.LastContextTokens()), formatAgentContextTokens(x.ContextWindowSize), formatAgentSessionUsedTokens(x.SessionUsedTokens, x.SessionUsedKnown), x.Source, x.WorkingDir, model)
 			}
 		}
 		return nil
