@@ -88,6 +88,27 @@ Gaps:
   works without a context count (turn count, cached re-read); keep automatic triggering off until 644/869 give a
   count.
 
+### 3b. Track every compaction through Pre/PostCompact hooks (owner direction, 2026-10-27)
+
+Owner: every supported agent should have pre- and post-compact hooks, so harnez can record each compaction (whether
+one ran, why, and what it changed) by session ID, and use that record for all compaction decisions.
+
+- Live state: harnez installs no `PreCompact`/`PostCompact` hook for any agent (no match in `internal/`, `cmd/`,
+  `spec/`, `~/.claude/settings.json`). Telemetry already stores compaction events and economics
+  (`internal/telemetry/insert.go` `InsertCompactionEvent`, `InsertCompactionEconomics`), fed from stream parsing
+  today, not hooks.
+- Hook support per agent: Codex has both (owner transcript above; `docs/AutoCompaction.md`). Claude Code has
+  `PreCompact`; whether 2.1.311 has `PostCompact` must be re-checked (180 found none at the time). agy and Pi:
+  unknown, check docs and record. Where an agent lacks a hook, fall back to the stream event (Claude
+  `compact_boundary`, Codex `context compacted`) and say so in the record.
+- The hooks write one event per compaction: session ID, agent, model, trigger (native limit, harnez threshold,
+  on-demand `agent compact`, CLI's own auto), context before/after when the payload carries it, timestamp. Pre
+  without a matching Post = failed or interrupted compaction.
+- Consumers: `agent compact` confirms the drop from the Post event instead of guessing; 985's cost check and 969's
+  re-compact and post-compact fill guards read the same records; `harnez agent list` / stats can show compaction
+  count per session.
+- Installed through `harnez apply` like the other hooks; hook commands and payload fields per agent in `spec/`.
+
 ## 4. Other options
 
 - Fresh session per milestone instead of compaction (lean-sprint policy, or a `resume --fresh` command; see 985):
@@ -100,6 +121,9 @@ Gaps:
 ## 5. Verification
 
 - The owner's commands recorded as measured per provider in `docs/AutoCompaction.md`.
+- Hook support per agent recorded there (has Pre / has Post / stream fallback).
+- Live: one compaction per agent (claude, codex, agy) leaves a Pre and a Post record with the same session ID,
+  readable by harnez; a killed compaction leaves a Pre without Post and is reported as such.
 - Tests: Codex compact args (low limit, status prompt, `-C <dir>`), acknowledgement required before the next prompt,
   per-model threshold lookup, agy on-demand path.
 - Live: `harnez agent compact --name <codex session>` prints the before/after context and the status line; a
