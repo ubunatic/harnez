@@ -179,6 +179,9 @@ func TestEmbeddedAgentSpecLoadsAndResolves(t *testing.T) {
 	if spec.CompactThreshold != 200000 {
 		t.Fatalf("compact threshold = %d, want spec/agent.yaml compact_threshold_tokens 200000", spec.CompactThreshold)
 	}
+	if spec.AutoCompact.CodexOnDemandLimitTokens != 50000 || spec.AutoCompact.CodexStatusPrompt != "summarise your known status in one line" {
+		t.Fatalf("Codex on-demand settings = %#v", spec.AutoCompact)
+	}
 }
 
 func TestKnownErrorChecksMatchAgentSchema(t *testing.T) {
@@ -212,17 +215,28 @@ func TestKnownErrorChecksMatchAgentSchema(t *testing.T) {
 		}
 	}
 	document["compact_thresholds"] = map[string]any{"claude:haiku:low": 80000}
+	validAuto := document["auto_compact"].(map[string]any)
+	for key, invalid := range map[string]any{"codex_on_demand_limit_tokens": 0, "codex_status_prompt": " "} {
+		original := validAuto[key]
+		validAuto[key] = invalid
+		if err := resolved.Validate(document); err == nil {
+			t.Errorf("schema accepted invalid %s", key)
+		}
+		validAuto[key] = original
+	}
 	for _, invalid := range []any{true, 42, "unexpected"} {
-		document["auto_compact"] = map[string]any{"default_mode": invalid, "provider_modes": map[string]any{"agy": "disabled"}, "watchdog_grace_ms": 20000, "legacy_growth_threshold_tokens": 100000}
+		validAuto["default_mode"] = invalid
 		if err := resolved.Validate(document); err == nil {
 			t.Errorf("schema accepted invalid compaction mode %#v", invalid)
 		}
 	}
-	document["auto_compact"] = map[string]any{"default_mode": "manual", "provider_modes": map[string]any{"agy": false}, "watchdog_grace_ms": 20000, "legacy_growth_threshold_tokens": 100000}
+	validAuto["default_mode"] = "manual"
+	validAuto["provider_modes"] = map[string]any{"agy": false}
 	if err := resolved.Validate(document); err == nil {
 		t.Error("schema accepted a boolean provider mode")
 	}
-	document["auto_compact"] = map[string]any{"default_mode": "manual", "provider_modes": map[string]any{}, "watchdog_grace_ms": "20000", "legacy_growth_threshold_tokens": 100000}
+	validAuto["provider_modes"] = map[string]any{}
+	validAuto["watchdog_grace_ms"] = "20000"
 	if err := resolved.Validate(document); err == nil {
 		t.Error("schema accepted a string watchdog grace")
 	}
@@ -473,7 +487,7 @@ func TestResolveRoleDynamicStaticBeforeClassifierAndGracefulFallback(t *testing.
 	}
 }
 
-const testAutoCompactYAML = "auto_compact: {default_mode: manual, provider_modes: {}, watchdog_grace_ms: 20000, legacy_growth_threshold_tokens: 100000}\n"
+const testAutoCompactYAML = "auto_compact: {default_mode: manual, provider_modes: {}, watchdog_grace_ms: 20000, legacy_growth_threshold_tokens: 100000, codex_on_demand_limit_tokens: 50000, codex_status_prompt: status}\n"
 
 func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\n" + testAutoCompactYAML + testExternalSessionSpecYAML
@@ -493,6 +507,11 @@ func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 	}
 	if _, err := parseAgentSpec([]byte(base + "default_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
 		t.Fatal(err)
+	}
+	for _, broken := range []string{strings.Replace(base, "codex_on_demand_limit_tokens: 50000", "codex_on_demand_limit_tokens: 0", 1), strings.Replace(base, "codex_status_prompt: status", "codex_status_prompt: ' '", 1)} {
+		if _, err := parseAgentSpec([]byte(broken + "default_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err == nil {
+			t.Error("accepted invalid Codex on-demand setting")
+		}
 	}
 	noThreshold := strings.Replace(base, "compact_threshold_tokens: 200000\n", "", 1)
 	if _, err := parseAgentSpec([]byte(noThreshold + "default_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err == nil || !strings.Contains(err.Error(), "compact_threshold_tokens") {

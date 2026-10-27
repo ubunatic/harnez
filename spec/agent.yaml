@@ -8,6 +8,9 @@ reply_history_limit: 20
 # and user configuration takes precedence over the spec at the same specificity.
 compact_threshold_tokens: 200000
 compact_thresholds:
+  codex:gpt-6.1-terra: 100000
+  codex:gpt-6.1-sol: 100000
+  codex:gpt-6-luna: 100000
   claude:haiku:low: 80000
   claude:haiku:med: 80000
   claude:haiku:high: 80000
@@ -19,6 +22,8 @@ auto_compact:
   watchdog_grace_ms: 20000
   # Legacy growth telemetry; dispatch uses full-context thresholds above.
   legacy_growth_threshold_tokens: 100000
+  codex_on_demand_limit_tokens: 50000
+  codex_status_prompt: "summarise your known status in one line"
 model_probe_budget:
   max_calls_per_update: 20
   max_output_tokens_per_call: 16

@@ -69,12 +69,14 @@
     "compact_thresholds": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": "Model-specific default compaction thresholds." },
     "auto_compact": {
       "type": "object",
-      "required": ["default_mode", "provider_modes", "watchdog_grace_ms", "legacy_growth_threshold_tokens"],
+      "required": ["default_mode", "provider_modes", "watchdog_grace_ms", "legacy_growth_threshold_tokens", "codex_on_demand_limit_tokens", "codex_status_prompt"],
       "properties": {
         "default_mode": { "type": "string", "enum": ["manual", "native", "disabled"] },
         "provider_modes": { "type": "object", "additionalProperties": { "type": "string", "enum": ["manual", "native", "disabled"] } },
         "watchdog_grace_ms": { "type": "integer", "minimum": 1 },
-        "legacy_growth_threshold_tokens": { "type": "integer", "minimum": 1 }
+        "legacy_growth_threshold_tokens": { "type": "integer", "minimum": 1 },
+        "codex_on_demand_limit_tokens": { "type": "integer", "minimum": 1 },
+        "codex_status_prompt": { "type": "string", "minLength": 1, "pattern": "\\S" }
       },
       "additionalProperties": false
     },

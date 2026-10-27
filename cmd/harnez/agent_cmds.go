@@ -176,7 +176,7 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 		}
 		availabilityByModel := modelProviderAvailabilities(entries, usage.CachedProviderQuotaAvailabilities)
 		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
-		fmt.Fprintln(tw, "SPEC\tMODEL\tSOURCE\tAVAILABILITY\tEFFORT\tCOST\tEFF\tSKILLS\tROLES\tUSE")
+		fmt.Fprintln(tw, "SPEC\tMODEL\tSOURCE\tAVAILABILITY\tEFFORT\tCOMPACT\tCOST\tEFF\tSKILLS\tROLES\tUSE")
 		for _, e := range entries {
 			spec := e.Spec
 			if spec == defaultSpec {
@@ -198,7 +198,11 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 			} else if marker == "stale" {
 				marker = fmt.Sprintf("stale (%s)", quotaAgeLabel(availability.Age))
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", spec, e.Model.Name, e.Source, marker, effort, e.Cost, e.Eff, e.Skills, e.Roles, e.Use)
+			threshold, err := subagent.CompactThreshold(e.Model)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n", spec, e.Model.Name, e.Source, marker, effort, threshold, e.Cost, e.Eff, e.Skills, e.Roles, e.Use)
 		}
 		if err := tw.Flush(); err != nil {
 			return err

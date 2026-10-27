@@ -40,7 +40,8 @@ func TestCompactThresholdHaikuSpecAndUserPrecedence(t *testing.T) {
 		want int
 	}{
 		{"haiku", 80000}, {"claude:haiku:low", 80000}, {"claude:haiku:med", 80000},
-		{"claude:haiku:high", 80000}, {"claude:sonnet:low", 200000}, {"codex:luna:med", 200000},
+		{"claude:haiku:high", 80000}, {"claude:sonnet:low", 200000},
+		{"codex:luna:med", 100000}, {"codex:sol:low", 100000}, {"codex:terra:high", 100000},
 	} {
 		model, err := ResolveModel(tc.name)
 		if err != nil {

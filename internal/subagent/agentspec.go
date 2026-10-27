@@ -46,6 +46,8 @@ type AutoCompactSpec struct {
 	ProviderModes               map[string]string `yaml:"provider_modes"`
 	WatchdogGraceMS             int               `yaml:"watchdog_grace_ms"`
 	LegacyGrowthThresholdTokens int               `yaml:"legacy_growth_threshold_tokens"`
+	CodexOnDemandLimitTokens    int               `yaml:"codex_on_demand_limit_tokens"`
+	CodexStatusPrompt           string            `yaml:"codex_status_prompt"`
 }
 
 func (s AutoCompactSpec) mode(provider string) string {
@@ -221,6 +223,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	validMode := func(mode string) bool { return mode == "manual" || mode == "native" || mode == "disabled" }
 	if !validMode(spec.AutoCompact.DefaultMode) || spec.AutoCompact.ProviderModes == nil || spec.AutoCompact.WatchdogGraceMS <= 0 || spec.AutoCompact.LegacyGrowthThresholdTokens <= 0 {
 		return agentSpec{}, fmt.Errorf("agent spec: auto_compact requires valid modes and positive watchdog_grace_ms")
+	}
+	if spec.AutoCompact.CodexOnDemandLimitTokens <= 0 || strings.TrimSpace(spec.AutoCompact.CodexStatusPrompt) == "" {
+		return agentSpec{}, fmt.Errorf("agent spec: auto_compact requires positive codex_on_demand_limit_tokens and nonempty codex_status_prompt")
 	}
 	for provider, mode := range spec.AutoCompact.ProviderModes {
 		if !validMode(mode) {

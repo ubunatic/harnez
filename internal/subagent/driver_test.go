@@ -148,6 +148,21 @@ func TestCodexPassesReasoningEffort(t *testing.T) {
 	}
 }
 
+func TestCodexArgsUseModelThresholds(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, name := range []string{"terra:med", "sol:low", "luna:high"} {
+		model, err := ResolveModel(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{codexRunArgs(model, "go"), codexResumeArgs("id", "go", model)} {
+			if !strings.Contains(strings.Join(args, " "), "model_auto_compact_token_limit=100000") {
+				t.Errorf("%s: args = %q", name, args)
+			}
+		}
+	}
+}
+
 func TestCodexExecArgsUseConfiguredAutoCompactLimit(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
