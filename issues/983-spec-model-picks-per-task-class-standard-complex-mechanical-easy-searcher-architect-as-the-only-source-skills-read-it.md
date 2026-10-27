@@ -141,7 +141,17 @@ record and `harnez agent list`.
   `sol:med` (host runs it). Tests: resolution table, cycle `a→b→a`, depth 5, trait `low`, unknown target, provider
   named `dev`, unset `dev:ai` error, existing `provider:model:tier` and bare aliases unchanged. Pre-work: confirm
   `resolvePiModel` (first lookup in `resolveModelIn`) never claims `dev:smart`.
+  - **M1 delivered (`f1b125b3`, `dev:smart` resolves):** spec keys, schema, `validatePurpose`, `resolvePurpose`.
+    Developer `make test-q1`: 58 `ok`, 0 `--- FAIL`. Host live: `--model dev:smart` started `codex:gpt-6.1-sol`
+    tier `med`; `dev:nonexistent` → `unknown purpose alias`; `dev:ai` → `purpose alias "dev:ai" is unset`.
 - **M2 (`agent models` lists aliases):** alias table and JSON; golden test.
+  - **Pre-Work / Required Refinements (from M1 review):**
+    1. The role set is hard-coded twice in Go: the `reserved` map in `validatePurpose` and the `purposeName` regex
+       (`agentspec.go`). Derive both from the keys of `purpose_roles` (the schema enum stays the closed set), so
+       the spec is the only source (docs/Spec.md).
+    2. `TestPurposeValidation` only asserts `err != nil`, so a case can pass for the wrong reason (e.g. a missing
+       trait description instead of the rule under test). Assert an expected message substring per case.
+    3. Add a runtime test for an unknown purpose alias (`dev:nonexistent` → `unknown purpose alias`).
 - **M3 (fallback by enablement and quota):** availability function into the resolver, stderr fallback line, all-failed
   error. Tests with fake catalog/availability: first disabled, quota exhausted, all exhausted, override flag. Keep
   `resolveDefaultModelWithCatalog`'s "default model is disabled" message when the default is an alias.
