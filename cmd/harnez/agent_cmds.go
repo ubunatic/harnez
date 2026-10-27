@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -120,7 +121,21 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 
 func (ac *agentCLI) modelsCmd() *cobra.Command {
 	var modelNamesOnly bool
+	var picksOnly bool
 	models := &cobra.Command{Use: "models", Short: "List known agent models with roles and when to use them", RunE: func(cmd *cobra.Command, _ []string) error {
+		if picksOnly {
+			if modelNamesOnly {
+				return fmt.Errorf("--picks cannot be combined with --names")
+			}
+			picks, err := subagent.ModelPicks()
+			if err != nil {
+				return err
+			}
+			if ac.jsonOut {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(picks)
+			}
+			return writeModelPicks(cmd.OutOrStdout(), picks)
+		}
 		defaultSpec, err := subagent.DefaultModelSpec()
 		if err != nil {
 			return err
@@ -181,11 +196,34 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 		if legend != "" {
 			fmt.Fprintln(cmd.OutOrStdout(), "\n"+legend)
 		}
-		return nil
+		picks, err := subagent.ModelPicks()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout())
+		return writeModelPicks(cmd.OutOrStdout(), picks)
 	}}
 	models.Flags().BoolVar(&modelNamesOnly, "names", false, "print only the model specs, one per line")
+	models.Flags().BoolVar(&picksOnly, "picks", false, "print role model picks")
 	models.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
 	return models
+}
+
+func writeModelPicks(out io.Writer, picks []subagent.ModelPick) error {
+	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "ROLE\tTRAIT\tCHAIN\tRESOLVED NOW")
+	for _, pick := range picks {
+		chain := strings.Join(pick.Chain, ", ")
+		if chain == "" {
+			chain = "-"
+		}
+		resolved := pick.Resolved
+		if pick.Error != "" {
+			resolved = pick.Error
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", pick.Role, pick.Trait, chain, resolved)
+	}
+	return tw.Flush()
 }
 
 func modelProviderAvailabilities(entries []subagent.ModelEntry, lookup func(string, []string, time.Time) map[string]usage.ProviderQuotaAvailability) map[string]usage.ProviderQuotaAvailability {

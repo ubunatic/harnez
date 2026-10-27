@@ -54,7 +54,7 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 	if err != nil {
 		return err
 	}
-	m, err := subagent.ResolveModelForRole(role, spec)
+	m, err := subagent.ResolveModelForCanonicalRole(role, spec)
 	if err != nil {
 		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 	}

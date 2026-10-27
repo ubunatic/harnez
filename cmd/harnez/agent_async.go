@@ -243,7 +243,7 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	if err != nil {
 		return err
 	}
-	model, err := subagent.ResolveModelForRole(role, modelSpec)
+	model, err := subagent.ResolveModelForCanonicalRole(role, modelSpec)
 	if err != nil {
 		return err
 	}

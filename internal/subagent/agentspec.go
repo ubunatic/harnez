@@ -149,6 +149,48 @@ type RoleSpec struct {
 	Rules        string              `yaml:"rules"`
 }
 
+// ModelPick describes one configured role and trait.
+type ModelPick struct {
+	Role     string   `json:"role"`
+	Trait    string   `json:"trait"`
+	Chain    []string `json:"chain"`
+	Resolved string   `json:"resolved"`
+	Error    string   `json:"error"`
+}
+
+// ModelPicks reports configured picks using current model enablement.
+func ModelPicks() ([]ModelPick, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return nil, err
+	}
+	return modelPicksIn(spec, ResolveModelForCanonicalRole), nil
+}
+
+func modelPicksIn(spec agentSpec, resolve func(string, string) (Model, error)) []ModelPick {
+	var picks []ModelPick
+	for name, role := range spec.Roles {
+		for trait, targets := range role.Models {
+			pick := ModelPick{Role: name, Trait: trait, Chain: append([]string{}, targets...)}
+			if len(targets) == 0 {
+				pick.Error = "unset"
+			} else if model, err := resolve(name, trait); err != nil {
+				pick.Error = err.Error()
+			} else {
+				pick.Resolved = model.Spec()
+			}
+			picks = append(picks, pick)
+		}
+	}
+	sort.Slice(picks, func(i, j int) bool {
+		if picks[i].Role != picks[j].Role {
+			return picks[i].Role < picks[j].Role
+		}
+		return picks[i].Trait < picks[j].Trait
+	})
+	return picks
+}
+
 func parseAgentSpec(data []byte) (agentSpec, error) {
 	var spec agentSpec
 	if err := yaml.Unmarshal(data, &spec); err != nil {

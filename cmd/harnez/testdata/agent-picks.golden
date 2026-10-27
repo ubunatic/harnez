@@ -1,0 +1,4 @@
+ROLE       TRAIT  CHAIN              RESOLVED NOW
+developer  ai     -                  unset
+developer  smart  sol:med, opus:med  codex:sol:med
+reviewer   smart  sol:low            codex:sol:low

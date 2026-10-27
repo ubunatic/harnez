@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -27,6 +28,25 @@ func TestRoleModelResolution(t *testing.T) {
 		if _, err := ResolveModelForRole(tc.role, tc.pick); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s/%s: %v, want %s", tc.role, tc.pick, err, tc.want)
 		}
+	}
+}
+
+func TestCanonicalRoleModelResolution(t *testing.T) {
+	got, err := ResolveModelForCanonicalRole("developer", "smart")
+	want, wantErr := ResolveModelForRole("dev", "smart")
+	if err != nil || wantErr != nil || got != want {
+		t.Fatalf("canonical=%+v %v alias=%+v %v", got, err, want, wantErr)
+	}
+	if _, err := ResolveModelForCanonicalRole("dev", "smart"); err == nil || !strings.Contains(err.Error(), "unknown") {
+		t.Fatalf("canonical rejects alias: %v", err)
+	}
+}
+
+func TestModelPickErrors(t *testing.T) {
+	spec := agentSpec{Roles: map[string]RoleSpec{"developer": {Models: map[string][]string{"ai": {}, "smart": {"sol:med"}}}}}
+	picks := modelPicksIn(spec, func(role, trait string) (Model, error) { return Model{}, fmt.Errorf("model disabled by user policy") })
+	if len(picks) != 2 || !strings.Contains(picks[0].Error, "unset") || !strings.Contains(picks[1].Error, "disabled") {
+		t.Fatalf("picks=%+v", picks)
 	}
 }
 

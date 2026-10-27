@@ -261,6 +261,7 @@ Flags:
   -h, --help    help for models
       --json    JSON output
       --names   print only the model specs, one per line
+      --picks   print role model picks
 
 Global Flags:
       --allow-exhausted-quota   start even when cached provider quota is exhausted

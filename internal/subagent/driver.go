@@ -421,7 +421,24 @@ func ResolveModelForRole(roleName, modelSpec string) (Model, error) {
 	if err != nil {
 		return Model{}, err
 	}
-	role := spec.Roles[roleName]
+	return resolveCanonicalRoleModel(spec, roleName, modelSpec)
+}
+
+// ResolveModelForCanonicalRole accepts the already resolved role of a session.
+func ResolveModelForCanonicalRole(roleName, modelSpec string) (Model, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return Model{}, err
+	}
+	return resolveCanonicalRoleModel(spec, roleName, modelSpec)
+}
+
+func resolveCanonicalRoleModel(spec agentSpec, roleName, modelSpec string) (Model, error) {
+	role, ok := spec.Roles[roleName]
+	if !ok {
+		return Model{}, fmt.Errorf("unknown canonical role %q", roleName)
+	}
+	var err error
 	if modelSpec == "" {
 		modelSpec = role.DefaultModel
 		if modelSpec == "" {

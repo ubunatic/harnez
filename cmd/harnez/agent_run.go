@@ -321,7 +321,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if err != nil {
 		return err
 	}
-	m, err := subagent.ResolveModelForRole(role, spec)
+	m, err := subagent.ResolveModelForCanonicalRole(role, spec)
 	if err != nil {
 		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 	}
@@ -649,7 +649,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return err
 	}
 	if req.ModelSpec != "" {
-		m, modelErr := subagent.ResolveModelForRole(role, req.ModelSpec)
+		m, modelErr := subagent.ResolveModelForCanonicalRole(role, req.ModelSpec)
 		if modelErr != nil || m.Provider != sess.Provider || m.Name != sess.Model || m.Tier != sess.Tier {
 			return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", req.ModelSpec, sess.Name, sess.Provider, sess.Model, sess.Tier)
 		}
