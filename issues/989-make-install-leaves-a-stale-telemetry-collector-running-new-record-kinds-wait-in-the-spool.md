@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
-**Related**: 987
+**Related**: 987; goself 006 (generic restart detection after install)
 
 ---
 
