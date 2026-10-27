@@ -260,6 +260,13 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
   round-trip; old records load.
   - **Pre-Work (from M3 review):** the picks table does not mark each role's `default_model`; add a marker
     (e.g. `smart*` or a DEFAULT column) and the matching JSON field.
+  - **M6 host check (uncommitted tree, 2026-10-27):** host `make test-q1`: 58 `ok`, 0 `--- FAIL`. Live: picks table
+    marks `cheap*`, `lean*`, `smart*`; cycle error now `<path>: role reviewer trait smart: trait cycle at "smart"`;
+    `agent list --all-sessions` MODEL column shows `codex:terra:low` for a legacy record. **Fix before commit:**
+    `--role review` without `--model` printed two banner lines, `model: smart → codex:sol:low` and
+    `model: codex:sol:low (default)`. Required: one line, `model: smart → codex:sol:low (default)` for a role
+    default, `model: smart → codex:sol:low` for an explicit trait, unchanged `model: <spec>` for a concrete model.
+    Test asserts exactly one `model:` line per case.
 - **M7 (prose migration):** generated block, `--md`, the 7 docs (full and lite) write `--role X --model <trait>`,
   guard test; root copies via `harnez init -d .`; the 3.4 `rg` check empty.
 
