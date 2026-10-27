@@ -16,6 +16,7 @@ func newAssessCmd() *cobra.Command {
 	var assessHistory bool
 	var assessRAMP bool
 	var assessHotspots bool
+	var assessGlossary bool
 	assessCmd := &cobra.Command{
 		Use:   "assess [path]",
 		Short: "Fast code/doc metrics, token estimation, and repository feasibility report",
@@ -24,6 +25,10 @@ func newAssessCmd() *cobra.Command {
 			targetPath := "."
 			if len(args) > 0 {
 				targetPath = args[0]
+			}
+
+			if assessGlossary {
+				return runAssessGlossary(cmd.OutOrStdout(), targetPath, assessJSON)
 			}
 
 			if assessHotspots {
@@ -115,5 +120,6 @@ func newAssessCmd() *cobra.Command {
 	assessCmd.Flags().BoolVar(&assessHistory, "history", false, "display multi-track repository evolution history")
 	assessCmd.Flags().BoolVar(&assessRAMP, "ramp", false, "display RAMP repository AI maturity profile and evidence inventory")
 	assessCmd.Flags().BoolVar(&assessHotspots, "hotspots", false, "list largest Go files and functions, import fan-out, and untested packages (git-tracked files)")
+	assessCmd.Flags().BoolVar(&assessGlossary, "glossary", false, "inspect repository wording against the machine-readable glossary")
 	return assessCmd
 }

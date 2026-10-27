@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"ubunatic.com/harnez/internal/glossary"
 )
 
 // Language represents a recognized target language or file format.
@@ -118,6 +120,10 @@ func DefaultLinter() (*Linter, error) {
 	if err != nil {
 		return nil, err
 	}
+	g, err := glossary.LoadForRepo(".")
+	if err != nil {
+		return nil, err
+	}
 	return NewLinter(
 		NewBashNoBracketRule(),
 		NewBashNoSemicolonRule(),
@@ -126,6 +132,7 @@ func DefaultLinter() (*Linter, error) {
 		NewBashStrictModeRule(),
 		NewMarkerIntegrityRule(),
 		NewGoQualityRule(spec.Go),
+		NewGlossaryRule(g),
 	), nil
 }
 
