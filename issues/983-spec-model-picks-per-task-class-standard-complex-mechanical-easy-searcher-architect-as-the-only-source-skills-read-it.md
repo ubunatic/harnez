@@ -220,6 +220,10 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
     into it would break its consumers. Picks get `agent models --picks` (table only) and `--picks --json` (array of
     `{role, trait, chain, resolved, error}`); the plain table output also prints the picks table below the models.
     Reversible.
+  - **M3 delivered (`c81c8fa8`, picks listed):** developer `make test-q1`: 58 `ok`, 0 `--- FAIL`. Host live:
+    `agent models --picks` shows 11 rows, each resolved to its chain's first entry (`tui` → `codex:sol:med`, `gui` →
+    `codex:terra:low`, `ai` → `unset`); `--json` model array unchanged; picks table under the plain listing.
+    Canonical-role path added (M2 pre-work).
 - **M4 (fallback by enablement and quota):** availability function into the resolver, stderr fallback line, all-failed
   error. Tests with fake catalog/availability: first disabled, quota exhausted, all exhausted, override flag. Keep
   `resolveDefaultModelWithCatalog`'s "default model is disabled" message when the default is a trait.
@@ -229,6 +233,8 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
   traits, not roles. Tests: list replaced, cycle via override, unknown model, unknown role rejected.
 - **M6 (pick visible):** session record `model_alias` (e.g. `smart`), `agent list` model column, banner. Tests:
   round-trip; old records load.
+  - **Pre-Work (from M3 review):** the picks table does not mark each role's `default_model`; add a marker
+    (e.g. `smart*` or a DEFAULT column) and the matching JSON field.
 - **M7 (prose migration):** generated block, `--md`, the 7 docs (full and lite) write `--role X --model <trait>`,
   guard test; root copies via `harnez init -d .`; the 3.4 `rg` check empty.
 
