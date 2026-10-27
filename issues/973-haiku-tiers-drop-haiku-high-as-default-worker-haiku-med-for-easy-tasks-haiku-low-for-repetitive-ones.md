@@ -94,3 +94,15 @@ direction "we should rather always use Luna medium". A head-to-head on real task
 - **M1 (guide text):** edit every location in section 2 plus any `luna`-restriction line it contradicts; sync root
   copies with `harnez init -d .` (revert unrelated rewrites); update tests that assert guide text without weakening
   other checks. Verify per section 3. One commit naming issue 973 M1.
+- **M1 delivered (51620455, guide text):** all section 2 locations reworded, root copy synced, both text tests
+  updated plus negative `haiku:high` checks. Host review: `go test ./cmd/harnez ./internal/subagent` ok; grep for
+  `haiku:high` in docs/spec finds only studies; `harnez agent models` shows the new guidance. The developer quoted
+  `make[1]: Leaving directory` instead of a test summary line; not proof of a full pass.
+- **M2 (accurate compaction claim) — Pre-Work / Required Refinements:**
+  1. "harnez compacts Haiku at 80k" (spec/agent.yaml `claude:haiku` `use`, docs/commands/lean-sprint.md §2, and
+     any other place M1 added it) is false for the shipped default: `compact_threshold_tokens` is 200000 for every
+     model; 80k exists only in the owner's `~/.harnez/config.yaml` `agent.compact_thresholds`. Reword to say Haiku
+     should compact at about 80k via `agent.compact_thresholds` (issue 969, docs/AutoCompaction.md). Update the
+     test phrase in `internal/subagent/agentspec_test.go` to match, keeping the 100k/5x checks.
+  2. Run `make test-q1` to a file, grep `--- FAIL`, and quote the actual Go test summary (an `ok`/`FAIL` package
+     line or the target's final result), not make's directory line. `make install`. One commit naming issue 973 M2.
