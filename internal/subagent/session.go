@@ -54,6 +54,7 @@ type Session struct {
 	TokensSinceCompact int `json:"tokens_since_compact,omitempty"`
 	// ContextTokens is the full input size of the last provider turn, including
 	// cached input; it is the source for pre-prompt compaction decisions.
+	CompactionCount         int              `json:"compaction_count"`
 	ContextTokens           int              `json:"context_tokens,omitempty"`
 	ContextWindowSize       int              `json:"context_window_size,omitempty"`
 	TokensTurn              int              `json:"tokens_turn"`

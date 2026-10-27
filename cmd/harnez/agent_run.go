@@ -18,6 +18,7 @@ import (
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/subagent"
+	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
 	"ubunatic.com/harnez/internal/usagestore"
 )
@@ -1011,9 +1012,23 @@ func compactSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagen
 		return err
 	}
 	if x.Provider == "codex" && result != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "Context: %d -> %d tokens\n%s\n", result.ContextTokensBeforeCompact, result.ContextTokens, result.Response)
+		if err := saveCompactResult(s, x, result); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Compacted: context usage %d -> %d tokens\nStatus: %s\n", result.ContextTokensBeforeCompact, result.ContextTokens, result.Response)
 	}
 	return nil
+}
+
+func saveCompactResult(s *subagent.FileSessionStore, x *subagent.Session, result *subagent.TurnResult) error {
+	if !result.CompactionObserved || result.ContextTokens <= 0 || result.ContextTokens >= result.ContextTokensBeforeCompact {
+		return nil
+	}
+	x.ContextTokens = result.ContextTokens
+	x.CompactionCount++
+	x.TokensSinceCompact = 0
+	x.LastActiveAt = time.Now()
+	return s.Save(x)
 }
 
 func withAgyMeterSession(driver subagent.Driver, sessionID string) subagent.Driver {
@@ -1032,7 +1047,28 @@ func withAgyMeterSession(driver subagent.Driver, sessionID string) subagent.Driv
 
 func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut, showReply bool, turn int, allReplies bool) error {
 	if jsonOut {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(x)
+		db, err := telemetry.OpenReadOnly(agentUsageDBPath())
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		pair, err := db.LatestCompactionPair(x.ProviderID())
+		if err != nil {
+			return err
+		}
+		data, err := json.Marshal(x)
+		if err != nil {
+			return err
+		}
+		var output map[string]json.RawMessage
+		if err := json.Unmarshal(data, &output); err != nil {
+			return err
+		}
+		output["compaction_pair"], err = json.Marshal(pair)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(output)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nName: %s\nStatus: %s\nProvider: %s:%s\nTokens: %d (turn %d)\nCached: %d\n", x.ID, x.Name, x.Status, x.Provider, x.Model, x.TokensCumulative, x.TokensTurn, x.CachedTokens)
 	if x.Role != "" {

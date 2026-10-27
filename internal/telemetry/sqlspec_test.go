@@ -70,7 +70,7 @@ func TestTelemetrySQLLiteralsMovedToSpec(t *testing.T) {
 func TestTelemetrySpecStatementsAreReferenced(t *testing.T) {
 	for name := range mustTelemetrySQL().Statements {
 		found := false
-		for _, source := range []string{"schema.go", "insert.go", "query.go", "legacymerge.go", "telemetry.go"} {
+		for _, source := range []string{"schema.go", "insert.go", "query.go", "legacymerge.go", "telemetry.go", "compaction_pair.go"} {
 			data, err := os.ReadFile(source)
 			if err != nil {
 				t.Fatal(err)

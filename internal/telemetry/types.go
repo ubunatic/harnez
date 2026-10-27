@@ -63,6 +63,7 @@ type CompactionEvent struct {
 	CreatedAt         time.Time
 	SessionID         string
 	EventType         string
+	Source            string
 	TurnID            string
 	Trigger           string
 	Reason            string

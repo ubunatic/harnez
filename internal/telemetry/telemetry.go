@@ -438,6 +438,7 @@ func migrateCompactionEvents(sqlDB schemaExecutor) (bool, error) {
 	defer rows.Close()
 
 	modelPresent := false
+	sourcePresent := false
 	for rows.Next() {
 		var cid, notNull, pk int
 		var name, typ string
@@ -448,20 +449,32 @@ func migrateCompactionEvents(sqlDB schemaExecutor) (bool, error) {
 		if name == "model" {
 			modelPresent = true
 		}
+		if name == "source" {
+			sourcePresent = true
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return false, err
 	}
-	if !modelPresent {
-		if _, err = sqlDB.Exec("ALTER TABLE compaction_events ADD COLUMN model TEXT NOT NULL DEFAULT ''"); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				return false, nil
-			}
-			return false, err
-		}
-		return true, nil
+	if err := rows.Close(); err != nil {
+		return false, err
 	}
-	return false, nil
+	changed := false
+	for _, column := range []struct {
+		present   bool
+		statement string
+	}{
+		{modelPresent, "ALTER TABLE compaction_events ADD COLUMN model TEXT NOT NULL DEFAULT ''"},
+		{sourcePresent, mustTelemetrySQL().Statements["compaction_events_add_source"]},
+	} {
+		if !column.present {
+			if _, err := sqlDB.Exec(column.statement); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+				return false, err
+			}
+			changed = true
+		}
+	}
+	return changed, nil
 }
 
 // Close closes the underlying database connection.

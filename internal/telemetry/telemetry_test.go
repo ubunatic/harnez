@@ -297,7 +297,7 @@ func TestOpenMigratesHistoricalTelemetrySchemas(t *testing.T) {
 		currentToolCalls[name] = true
 	}
 	currentCompaction := map[string]bool{}
-	for _, name := range []string{"id", "created_at", "session_id", "event_type", "turn_id", "trigger", "reason", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "model"} {
+	for _, name := range []string{"id", "created_at", "session_id", "event_type", "turn_id", "trigger", "reason", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "model", "source"} {
 		currentCompaction[name] = true
 	}
 	for _, version := range []int{2, 5} {
