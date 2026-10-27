@@ -6,6 +6,23 @@
   "properties": {
     "version": { "const": 1 },
     "default_enabled": { "type": "boolean" },
+    "model_traits": {
+      "type": "object", "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object", "required": ["models"],
+        "properties": {
+          "models": {
+            "type": "object", "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+            "additionalProperties": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "enabled": {
       "type": "array",
       "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._/-]*(:(low|med|high))?$" },

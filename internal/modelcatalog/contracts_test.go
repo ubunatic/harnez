@@ -90,6 +90,29 @@ func TestLegacyAgentCatalogStillMatchesSchemaAndProbeBudget(t *testing.T) {
 	}
 }
 
+func TestPolicyRolePickSchema(t *testing.T) {
+	for _, tc := range []struct {
+		name, doc string
+		valid     bool
+	}{
+		{"valid", "roles: {developer: {models: {smart: [opus:med], custom: [], extra: [luna:med]}}}\nmodel_traits: {custom: Custom work}", true},
+		{"bad list", "roles: {developer: {models: {smart: [opus:med, opus:med]}}}", false},
+		{"bad role field", "roles: {developer: {default_model: smart}}", false},
+		{"empty description", "model_traits: {smart: ''}", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var doc any
+			if err := yaml.Unmarshal([]byte("version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\n"+tc.doc+"\n"), &doc); err != nil {
+				t.Fatal(err)
+			}
+			err := validate(t, "model-policy.schema.json", doc)
+			if (err == nil) != tc.valid {
+				t.Fatalf("schema: %v", err)
+			}
+		})
+	}
+}
+
 func readYAML(t *testing.T, name string) any {
 	t.Helper()
 	data, err := fs.ReadFile(harnez.DefaultFS, name)

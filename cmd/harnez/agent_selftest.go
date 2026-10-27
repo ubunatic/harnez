@@ -118,16 +118,20 @@ func newAgentSelftestCmd() *cobra.Command {
 	var step string
 	var sessionOverride string
 	var stateDir string
-	backgroundDuration, err := subagent.SelftestBackgroundDuration()
-	if err != nil {
-		panic(err)
-	}
+	var backgroundDuration time.Duration
 
 	cmd := &cobra.Command{
 		Use:          "selftest",
 		Short:        "Run agent background task execution self-test",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if !cmd.Flags().Changed("duration") {
+				var err error
+				backgroundDuration, err = subagent.SelftestBackgroundDuration()
+				if err != nil {
+					return err
+				}
+			}
 			isTTY := isOutputTerminalFn(cmd)
 
 			sessionID := sessionOverride
@@ -342,7 +346,11 @@ func newAgentSelftestCmd() *cobra.Command {
 			fmt.Fprintln(c.OutOrStdout(), "Flags:")
 			fmt.Fprintln(c.OutOrStdout(), "      --step string       Step to execute")
 			fmt.Fprintln(c.OutOrStdout(), "      --session string    Session ID override")
-			fmt.Fprintf(c.OutOrStdout(), "      --duration duration Duration for background task (default %s)\n", backgroundDuration)
+			if duration, err := subagent.SelftestBackgroundDuration(); err == nil {
+				fmt.Fprintf(c.OutOrStdout(), "      --duration duration Duration for background task (default %s)\n", duration)
+			} else {
+				fmt.Fprintln(c.OutOrStdout(), "      --duration duration Duration for background task")
+			}
 			fmt.Fprintln(c.OutOrStdout(), "      --state-dir string  Directory for state tracking (default /tmp)")
 		} else {
 			fmt.Fprintln(c.OutOrStdout(), "Run agent background task execution self-test.")

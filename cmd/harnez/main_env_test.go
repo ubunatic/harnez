@@ -39,7 +39,7 @@ func runIsolatedTests(m *testing.M) int {
 	// Helpers inherit the parent's isolated HOME/runtime and own no temporary
 	// directories. In particular, killed wrappers and os.Exit crash fixtures
 	// cannot clean up a second TestMain's directories or a nested Go build.
-	if os.Getenv("HARNEZ_STOP_FIXTURE") == "1" || os.Getenv("HARNEZ_WAIT_CRASH_HELPER") == "1" ||
+	if os.Getenv("TEST_983_CHILD") == "1" || os.Getenv("HARNEZ_STOP_FIXTURE") == "1" || os.Getenv("HARNEZ_WAIT_CRASH_HELPER") == "1" ||
 		os.Getenv("HARNEZ_TEST_FOREGROUND_ID") != "" || os.Getenv("HARNEZ_TEST_WORKER_ID") != "" {
 		return m.Run()
 	}

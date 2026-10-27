@@ -29,6 +29,7 @@ type Catalog struct {
 	access         []AccessObservation
 	accessComplete bool
 	policy         *Policy
+	policyPath     string
 }
 
 // Model contains public catalog facts and optional legacy listing guidance.
@@ -108,6 +109,13 @@ type Policy struct {
 	DefaultEnabled bool                   `yaml:"default_enabled"`
 	Enabled        []string               `yaml:"enabled"`
 	Models         map[string]PolicyEntry `yaml:"models"`
+	Roles          map[string]RolePolicy  `yaml:"roles"`
+	ModelTraits    map[string]string      `yaml:"model_traits"`
+}
+
+// RolePolicy replaces selected model trait lists for an existing role.
+type RolePolicy struct {
+	Models map[string][]string `yaml:"models"`
 }
 
 // PolicyEntry describes a custom model or a field-level patch.
@@ -150,6 +158,14 @@ func (c *Catalog) UserPolicy() *Policy {
 	return clonePolicy(c.policy)
 }
 
+// UserPolicyPath identifies the loaded policy file.
+func (c *Catalog) UserPolicyPath() string {
+	if c == nil {
+		return ""
+	}
+	return c.policyPath
+}
+
 func cloneModel(model Model) Model {
 	if model.Effort != nil {
 		effort := *model.Effort
@@ -170,6 +186,18 @@ func clonePolicy(policy *Policy) *Policy {
 	}
 	copy := *policy
 	copy.Enabled = append([]string(nil), policy.Enabled...)
+	copy.ModelTraits = make(map[string]string, len(policy.ModelTraits))
+	for name, description := range policy.ModelTraits {
+		copy.ModelTraits[name] = description
+	}
+	copy.Roles = make(map[string]RolePolicy, len(policy.Roles))
+	for name, role := range policy.Roles {
+		roleCopy := RolePolicy{Models: make(map[string][]string, len(role.Models))}
+		for trait, targets := range role.Models {
+			roleCopy.Models[trait] = append([]string{}, targets...)
+		}
+		copy.Roles[name] = roleCopy
+	}
 	copy.Models = make(map[string]PolicyEntry, len(policy.Models))
 	for id, entry := range policy.Models {
 		copy.Models[id] = *clonePolicyEntry(&entry)
@@ -406,6 +434,7 @@ func (c *Catalog) mergePolicyFile(filename string) error {
 		return fmt.Errorf("model catalog: %s: %w", filename, err)
 	}
 	c.policy = &policy
+	c.policyPath = filename
 	for policyID, entry := range policy.Models {
 		var identity Identity
 		if entry.Identity != nil {

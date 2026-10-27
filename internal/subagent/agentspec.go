@@ -15,6 +15,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/modelcatalog"
 )
 
 const agentSpecPath = "spec/agent.yaml"
@@ -265,8 +266,20 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 var purposeTraitName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 func validateRoleModels(spec agentSpec, models map[string]modelAlias) error {
-	for trait, description := range spec.ModelTraits {
-		if !purposeTraitName.MatchString(trait) || isTier(normalizeTier(trait)) || strings.TrimSpace(description) == "" || strings.ContainsAny(description, "\r\n") {
+	return validateRoleModelsWithUserTraits(spec, models, nil)
+}
+
+func validateRoleModelsWithUserTraits(spec agentSpec, models map[string]modelAlias, userTraits map[string]bool) error {
+	traits := make(map[string]bool, len(spec.ModelTraits)+len(userTraits))
+	for trait := range spec.ModelTraits {
+		traits[trait] = true
+	}
+	for trait := range userTraits {
+		traits[trait] = true
+	}
+	for trait := range traits {
+		description, described := spec.ModelTraits[trait]
+		if !purposeTraitName.MatchString(trait) || isTier(normalizeTier(trait)) || described && (strings.TrimSpace(description) == "" || strings.ContainsAny(description, "\r\n")) {
 			return fmt.Errorf("agent spec: invalid trait %q", trait)
 		}
 		for key, model := range models {
@@ -292,13 +305,13 @@ func validateRoleModels(spec agentSpec, models map[string]modelAlias) error {
 			}
 		}
 		for trait, targets := range role.Models {
-			if _, ok := spec.ModelTraits[trait]; !ok {
+			if _, ok := traits[trait]; !ok {
 				return fmt.Errorf("agent spec: role %q has unknown trait %q", roleName, trait)
 			}
 			seen := map[string]bool{}
 			for _, target := range targets {
 				if target == "" || seen[target] {
-					return fmt.Errorf("agent spec: empty or duplicate target for %q", trait)
+					return fmt.Errorf("agent spec: role %q empty or duplicate target for %q", roleName, trait)
 				}
 				seen[target] = true
 			}
@@ -326,7 +339,7 @@ func validateRoleModels(spec agentSpec, models map[string]modelAlias) error {
 		}
 		for trait := range role.Models {
 			if err := walk(trait, map[string]bool{}, 1); err != nil {
-				return err
+				return fmt.Errorf("agent spec: role %q trait %q: %w", roleName, trait, err)
 			}
 		}
 	}
@@ -358,7 +371,53 @@ func loadAgentSpec() (agentSpec, error) {
 	if err != nil {
 		return agentSpec{}, fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
 	}
-	return parseAgentSpec(data)
+	spec, err := parseAgentSpec(data)
+	if err != nil {
+		return agentSpec{}, err
+	}
+	return mergeRolePolicy(spec, mergedModelCatalog.UserPolicy(), modelAliases, mergedModelCatalog.UserPolicyPath())
+}
+
+func mergeRolePolicy(spec agentSpec, policy *modelcatalog.Policy, models map[string]modelAlias, path string) (agentSpec, error) {
+	if policy == nil {
+		return spec, nil
+	}
+	copySpec := spec
+	copySpec.ModelTraits = make(map[string]string, len(spec.ModelTraits)+len(policy.ModelTraits))
+	for name, description := range spec.ModelTraits {
+		copySpec.ModelTraits[name] = description
+	}
+	for name, description := range policy.ModelTraits {
+		copySpec.ModelTraits[name] = description
+	}
+	copySpec.Roles = make(map[string]RoleSpec, len(spec.Roles))
+	for name, role := range spec.Roles {
+		copied := role
+		copied.Models = make(map[string][]string, len(role.Models))
+		for trait, targets := range role.Models {
+			copied.Models[trait] = append([]string{}, targets...)
+		}
+		copySpec.Roles[name] = copied
+	}
+	userTraits := map[string]bool{}
+	var contexts []string
+	for name, role := range policy.Roles {
+		current, ok := copySpec.Roles[name]
+		if !ok {
+			return agentSpec{}, fmt.Errorf("%s: unknown role %q", path, name)
+		}
+		for trait, targets := range role.Models {
+			current.Models[trait] = append([]string{}, targets...)
+			userTraits[trait] = true
+			contexts = append(contexts, name+"/"+trait)
+		}
+		copySpec.Roles[name] = current
+	}
+	sort.Strings(contexts)
+	if err := validateRoleModelsWithUserTraits(copySpec, models, userTraits); err != nil {
+		return agentSpec{}, fmt.Errorf("%s: roles %s: %w", path, strings.Join(contexts, ", "), err)
+	}
+	return copySpec, nil
 }
 
 var agentSpecOnce = sync.OnceValues(loadAgentSpec)

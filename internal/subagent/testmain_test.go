@@ -8,6 +8,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv("TEST_983_CHILD") == "1" {
+		os.Exit(m.Run())
+	}
 	home, err := os.MkdirTemp("", "harnez-subagent-home-")
 	if err != nil {
 		panic(err)

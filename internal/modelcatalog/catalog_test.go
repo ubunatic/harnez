@@ -28,6 +28,22 @@ func TestLoadFromDirsWithoutMachineFilesUsesDefaults(t *testing.T) {
 	}
 }
 
+func TestRolePolicyDetachedCopy(t *testing.T) {
+	dir := t.TempDir()
+	writeCatalogFile(t, filepath.Join(dir, "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\nroles: {developer: {models: {smart: [opus:med]}}}\nmodel_traits: {custom: Custom work}\n")
+	c, err := LoadFromDirs(t.TempDir(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.UserPolicy()
+	p.Roles["developer"].Models["smart"][0] = "changed"
+	p.ModelTraits["custom"] = "changed"
+	again := c.UserPolicy()
+	if again.Roles["developer"].Models["smart"][0] != "opus:med" || again.ModelTraits["custom"] != "Custom work" {
+		t.Fatal("policy copy mutated catalog")
+	}
+}
+
 func TestLoadFromDirsMergesStateAndPolicy(t *testing.T) {
 	stateDir := t.TempDir()
 	configDir := t.TempDir()

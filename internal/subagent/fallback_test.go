@@ -27,7 +27,7 @@ func TestTraitFallback(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := resolveTraitCandidates(models, tc.trait, resolve, func(m Model) string { return tc.reasons[m.Name] })
 			if tc.errorPart != "" {
-				if err == nil || !strings.Contains(err.Error(), tc.errorPart) {
+				if err == nil || !strings.Contains(err.Error(), tc.errorPart) || tc.name == "all" && !strings.Contains(err.Error(), "--model provider:model:tier") {
 					t.Fatalf("error %v", err)
 				}
 				return
