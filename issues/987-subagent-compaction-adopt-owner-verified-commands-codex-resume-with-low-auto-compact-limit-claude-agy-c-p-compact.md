@@ -210,6 +210,19 @@ CONTEXT_SIZE for a terra session) and the old 200k let sprint 983 re-read up to 
 compaction costs about one context read (M1, §1), so halving the limit trades a few more compactions for cheaper
 turns. Revisit per model once 985 shows per-turn numbers.
 
+### Compaction cost (searcher, 2026-10-27; owner asked whether 100k is really cheaper than 200k)
+
+- Prices (third-party, not OpenAI's own pages, rate uncertain): GPT-6.1 Sol input $2.00, cached $0.10, output
+  $10.00 per 1M (https://pricepertoken.com/pricing-page/model/openai-gpt-6.1-sol; one listing says $1.00 / $0.05).
+  Whether ChatGPT-plan quota counts cached tokens at the same ratio: no source
+  (https://inventivehq.com/blog/codex-cli-usage-rate-limits says credits follow API pricing).
+- Owner's session `01a17c6c` rollout, per model request: before 49,415 input (42,368 cached); the compacting request
+  49,464 input (49,280 cached) + 482 output (summary); after 19,759 input (12,544 cached, so 7,215 uncached).
+- One compaction ≈ 482 × $10/M + 7,215 × $2/M ≈ $0.019. Saving per later request ≈ (49,415 − 19,759) × $0.10/M ≈
+  $0.003. Break-even = C / (k × S) ≈ 0.64 turns at k = 10 tool calls per turn. The uncached rebuild is only the new
+  summary part, not the whole context, because the system prompt prefix stays cached.
+- Not priced: quality loss from the summary (the worker forgets details), and plan-quota counting.
+
 ### M2 delivered (6697c28a): per-model Codex thresholds
 
 `spec/agent.yaml` has 100000 for terra, sol, luna (astra stays at the global 200000; not in M2's list) and the
