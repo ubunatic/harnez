@@ -48,6 +48,28 @@ older-generation model; GPT-6.1 Terra is a new model, so 715's decision does not
   SWE-bench or tool-calling result.
 - List-price ratio for a 100k-input / 20k-output, half-cached turn: Luna 1x, Terra 10x, Sol 20x.
 
+## Decision (owner, 2026-10-27)
+
+1. Aliases reuse the old names: `terra`, `terra:low`, `terra:med`, `terra:high`, `codex:terra` resolve to
+   `gpt-6.1-terra`. Guard: a session recorded with the old GPT-5.6 Terra model must not resume on the new model; it
+   fails with a clear message naming the old model (715's intent kept for old sessions).
+2. Roles: developer, advisor, reviewer.
+3. Cost: owner reading of list prices, Terra is 0.5x Sol and 10x Luna (5x on cached input). The two anchors
+   disagree on the current scale (Sol low is 29, not 20x Luna), so the host picked 0.5x Sol per tier:
+   cost 15, cost_by_tier med 24 / high 36. Reversible.
+4. Use line: nearly as good as Sol at half its price. Owner-quoted Terminal-Bench scores Sol 54, Terra 48, Luna 31
+   (owner figures, source not recorded; section 2b's sourced figures differ). Guidance text:
+   "Near-Sol Codex developer and reviewer at half Sol's price; use Sol for the hardest judgment."
+   Docs cite the sourced numbers from 2b and mark the owner figures as unverified.
+
+## Milestones
+
+- **M1 (Terra entry and old-session guard):** spec entry after `codex:sol` per Decision; flip
+  `driver_test.go:57` so the aliases resolve to `gpt-6.1-terra`; add a test that a session recorded with the old
+  GPT-5.6 Terra model is refused on resume with a message naming it; update golden, `agentspec_test.go` cost and
+  guidance assertions, and the docs in 2b's write set (ModelRoles source and root copy). Verify per section 3,
+  live canary `harnez agent start --model terra:low` reporting `gpt-6.1-terra`. One commit naming issue 974 M1.
+
 ## 3. Implementation & Verification Plan
 
 1. Research: fill the remaining benchmark gaps above and verify sources and effort settings; distinguish vendor claims from independently measured results.
