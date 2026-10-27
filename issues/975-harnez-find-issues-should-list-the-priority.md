@@ -1,6 +1,7 @@
 # 975 — harnez find issues should list the Priority
 
-**Status**: Open
+**Status**: Closed — M1 added Priority as TSV column 5; live active row 607 ends in P2. make test-q1 passed: 58 ok packages, 0 --- FAIL lines. make install succeeded; commit 58ce3c60.
+**Closed-By**: codex:luna:med, session dev-975
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
