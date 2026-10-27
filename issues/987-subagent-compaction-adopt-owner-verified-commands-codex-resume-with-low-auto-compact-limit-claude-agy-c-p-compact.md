@@ -1,6 +1,6 @@
 # 987 — subagent compaction: adopt owner-verified commands (codex resume with low auto-compact limit, claude/agy -c -p /compact)
 
-**Status**: Open
+**Status**: Closed — All providers compact on demand via harnez agent compact: Codex 71705->17063 (resume with -c model_auto_compact_token_limit=50000), Claude 46570->3718, agy checkpoint confirmed (context unknown, 644). Per-model Codex threshold 100000 for terra/sol/luna in spec/agent.yaml. Every compaction recorded as a Pre/Post pair (hook or stream_fallback) shown in agent status --json. Host make test: 59 ok. Not live-verified: interrupted compaction (unit-tested).
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
