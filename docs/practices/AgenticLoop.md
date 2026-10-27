@@ -463,6 +463,8 @@ the child/entry, message updates an existing child, and terminate ends it.
 - ❌ **Chatty Watch Wrappers**: Wrapping a poll-and-redraw CLI (`gh run watch`, `docker logs -f`-style tools) in a `make` target an agent calls routinely, without quieting it first. These tools redraw full state on every tick for a human terminal; called repeatedly by an agent they flood context with no added signal. Poll the tool's own status query (e.g. `gh run view --json status`) on a matched interval instead, and print one summary line on completion.
 
 <!-- harnez:model-picks:begin -->
+These are the shipped picks. User models.yaml overrides are listed by `harnez agent models --picks`.
+
 | Role | Trait | Meaning | Chain | Default |
 |---|---|---|---|---|
 | advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |

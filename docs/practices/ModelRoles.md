@@ -137,6 +137,8 @@ catch it.
   a milestone's scope matches its model tier, not as a target to hit.
 
 <!-- harnez:model-picks:begin -->
+These are the shipped picks. User models.yaml overrides are listed by `harnez agent models --picks`.
+
 | Role | Trait | Meaning | Chain | Default |
 |---|---|---|---|---|
 | advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |

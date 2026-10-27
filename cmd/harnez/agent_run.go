@@ -217,7 +217,7 @@ func selectStartSelection(role, spec string, override bool, availability func(st
 	}
 	selection, err := subagent.ResolveModelWithAvailability(role, spec, func(m subagent.Model) bool { return availability(m.Provider, m.Name).State == "exhausted" }, override)
 	if err != nil {
-		return subagent.ModelSelection{}, err
+		return selection, err
 	}
 	if selection.Trait == "" {
 		if err := rejectExhaustedQuota(spec, selection.Model, override, availability); err != nil {
@@ -227,6 +227,29 @@ func selectStartSelection(role, spec string, override bool, availability func(st
 		fmt.Fprintf(stderr, "%s → %s (%s)\n", selection.Trait, selection.Target, strings.Join(selection.Skipped, "; "))
 	}
 	return selection, nil
+}
+
+func startModelError(spec string, selection subagent.ModelSelection, err error) error {
+	if selection.Trait != "" {
+		return fmt.Errorf("agent start %q rejected: %w", spec, err)
+	}
+	return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
+}
+
+func workerSelection(sess *subagent.Session, spec string) (subagent.ModelSelection, error) {
+	model := subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}
+	if model.Spec() != spec {
+		return subagent.ModelSelection{}, fmt.Errorf("worker model %q conflicts with recorded model %q", spec, model.Spec())
+	}
+	return subagent.ModelSelection{Model: model, Trait: sess.ModelAlias}, nil
+}
+
+func checkResumeModel(role, spec string, sess *subagent.Session, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) error {
+	selection, err := selectStartSelection(role, spec, false, availability, stderr)
+	if err != nil || selection.Model.Provider != sess.Provider || selection.Model.Name != sess.Model || selection.Model.Tier != sess.Tier {
+		return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", spec, sess.Name, sess.Provider, sess.Model, sess.Tier)
+	}
+	return nil
 }
 
 func isCodexUsageLimitError(err error) bool {
@@ -344,9 +367,22 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if err != nil {
 		return err
 	}
-	selection, err := selectStartSelection(role, spec, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr())
+	var selection subagent.ModelSelection
+	if req.SessionID != "" {
+		store, storeErr := d.store()
+		if storeErr != nil {
+			return storeErr
+		}
+		sess, storeErr := store.Get(req.SessionID)
+		if storeErr != nil {
+			return storeErr
+		}
+		selection, err = workerSelection(sess, spec)
+	} else {
+		selection, err = selectStartSelection(role, spec, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr())
+	}
 	if err != nil {
-		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
+		return startModelError(spec, selection, err)
 	}
 	m := selection.Model
 	if spec == "" {
@@ -410,10 +446,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 			if err := s.Create(sess); err != nil {
 				return err
 			}
-			workerSpec := spec
-			if selection.Trait != "" {
-				workerSpec = selection.Trait
-			}
+			workerSpec := m.Spec()
 			args := []string{"--store-dir", d.storeDir, "agent", "start", "--worker-session", id, "--json", "--model", workerSpec, "--role", role, "--name", sessName, "--dir", canonicalWorkDir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
 			if req.AllowExhaustedQuota {
 				args = append(args, "--allow-exhausted-quota")
@@ -679,9 +712,8 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return err
 	}
 	if req.ModelSpec != "" {
-		m, modelErr := subagent.ResolveModelForCanonicalRole(role, req.ModelSpec)
-		if modelErr != nil || m.Provider != sess.Provider || m.Name != sess.Model || m.Tier != sess.Tier {
-			return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", req.ModelSpec, sess.Name, sess.Provider, sess.Model, sess.Tier)
+		if err := checkResumeModel(role, req.ModelSpec, sess, d.availability, cmd.ErrOrStderr()); err != nil {
+			return err
 		}
 	}
 	defer setAgentEnv(role, sess.Name, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}.Spec())()

@@ -34,6 +34,7 @@ func Markdown(fsys fs.FS) (string, error) {
 	}
 	sort.Strings(roles)
 	var b strings.Builder
+	b.WriteString("These are the shipped picks. User models.yaml overrides are listed by `harnez agent models --picks`.\n\n")
 	b.WriteString("| Role | Trait | Meaning | Chain | Default |\n|---|---|---|---|---|\n")
 	for _, name := range roles {
 		role := spec.Roles[name]

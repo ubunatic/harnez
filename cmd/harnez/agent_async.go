@@ -292,7 +292,7 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 		_ = store.Save(sess)
 		return err
 	}
-	args := []string{"--store-dir", storeDir, "agent", "start", "--worker-session", id, "--json", "--model", modelSpec, "--role", role, "--name", req.Name, "--dir", dir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
+	args := []string{"--store-dir", storeDir, "agent", "start", "--worker-session", id, "--json", "--model", model.Spec(), "--role", role, "--name", req.Name, "--dir", dir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
 	if req.AllowExhaustedQuota {
 		args = append(args, "--allow-exhausted-quota")
 	}

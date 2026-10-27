@@ -160,15 +160,6 @@ type ModelPick struct {
 	Default  bool     `json:"default"`
 }
 
-// ModelPicks reports configured picks using current model enablement.
-func ModelPicks() ([]ModelPick, error) {
-	spec, err := agentSpecOnce()
-	if err != nil {
-		return nil, err
-	}
-	return modelPicksIn(spec, ResolveModelForCanonicalRole), nil
-}
-
 // ModelPicksWithAvailability reports picks using the caller's cached quota state.
 func ModelPicksWithAvailability(exhausted func(Model) bool) ([]ModelPick, error) {
 	spec, err := agentSpecOnce()
@@ -253,7 +244,14 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	if err := validateRoles(spec); err != nil {
 		return agentSpec{}, err
 	}
-	if spec.ModelTraits != nil {
+	hasRoleModels := false
+	for _, role := range spec.Roles {
+		if role.Models != nil {
+			hasRoleModels = true
+			break
+		}
+	}
+	if spec.ModelTraits != nil || hasRoleModels {
 		if err := validateRoleModels(spec, models); err != nil {
 			return agentSpec{}, err
 		}
@@ -319,8 +317,8 @@ func validateRoleModelsWithUserTraits(spec agentSpec, models map[string]modelAli
 		}
 		var walk func(string, map[string]bool, int) error
 		walk = func(trait string, visiting map[string]bool, depth int) error {
-			if depth > 4 {
-				return fmt.Errorf("trait depth exceeds 4 at %q", trait)
+			if depth > maxTraitDepth {
+				return fmt.Errorf("trait depth exceeds %d at %q", maxTraitDepth, trait)
 			}
 			if visiting[trait] {
 				return fmt.Errorf("trait cycle at %q", trait)
@@ -405,6 +403,9 @@ func mergeRolePolicy(spec agentSpec, policy *modelcatalog.Policy, models map[str
 	for name, role := range policy.Roles {
 		current, ok := copySpec.Roles[name]
 		if !ok {
+			if canonical, err := resolveRoleIn(spec, name); err == nil {
+				return agentSpec{}, fmt.Errorf("%s: role alias %q is not allowed; use canonical role %q", path, name, canonical)
+			}
 			return agentSpec{}, fmt.Errorf("%s: unknown role %q", path, name)
 		}
 		for trait, targets := range role.Models {

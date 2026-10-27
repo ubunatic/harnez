@@ -111,3 +111,18 @@ func TestMergeRolePolicyRejectsInvalid(t *testing.T) {
 		t.Fatalf("depth error: %v", err)
 	}
 }
+
+func TestPolicyRoleAliasNamesCanonical(t *testing.T) {
+	base, err := agentSpecOnce()
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases, err := modelAliasMap()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = mergeRolePolicy(base, &modelcatalog.Policy{Roles: map[string]modelcatalog.RolePolicy{"dev": {Models: map[string][]string{"smart": {"sol:med"}}}}}, aliases, "/tmp/models.yaml")
+	if err == nil || !strings.Contains(err.Error(), "/tmp/models.yaml") || !strings.Contains(err.Error(), "dev") || !strings.Contains(err.Error(), "developer") {
+		t.Fatalf("error=%v", err)
+	}
+}

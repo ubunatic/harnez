@@ -39,6 +39,34 @@ func TestTraitFallback(t *testing.T) {
 	}
 }
 
+func TestNestedUnsetFallsThrough(t *testing.T) {
+	traits := map[string][]string{"gui": {"ai", "lean"}, "ai": {}, "lean": {"terra:low"}}
+	got, err := resolveTraitCandidates(traits, "gui", func(s string) (Model, error) { return Model{Name: s}, nil }, func(Model) string { return "" })
+	if err != nil || got.Target != "terra:low" || !strings.Contains(strings.Join(got.Skipped, "; "), "ai: unset") {
+		t.Fatalf("selection=%+v err=%v", got, err)
+	}
+}
+
+func TestUnsetDefaultPolicyMessage(t *testing.T) {
+	base, err := agentSpecOnce()
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases, err := modelAliasMap()
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := &modelcatalog.Policy{Roles: map[string]modelcatalog.RolePolicy{"developer": {Models: map[string][]string{"lean": {}}}}}
+	merged, err := mergeRolePolicy(base, policy, aliases, "/tmp/models.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = resolveRoleSelection(merged, "developer", "", func(s string) (Model, error) { return resolveModelIn(aliases, s) }, func(Model) string { return "" })
+	if err == nil || !strings.Contains(err.Error(), "default model") || !strings.Contains(err.Error(), "disabled by user policy") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func TestFallbackAvailability(t *testing.T) {
 	for _, tc := range []struct {
 		name          string

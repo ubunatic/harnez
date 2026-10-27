@@ -11,7 +11,55 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/pickdocs"
 )
+
+func TestRoleModelsValidatedWithoutTraits(t *testing.T) {
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/agent.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec map[string]any
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	delete(spec, "model_traits")
+	data, err = yaml.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = parseAgentSpec(data)
+	if err == nil || !strings.Contains(err.Error(), "trait") {
+		t.Fatalf("missing trait validation: %v", err)
+	}
+}
+
+func TestPickDocsMatchAgentSpec(t *testing.T) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		t.Fatal(err)
+	}
+	md, err := pickdocs.Markdown(harnez.DefaultFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, role := range spec.Roles {
+		for trait, chain := range role.Models {
+			value := strings.Join(chain, ", ")
+			if value == "" {
+				value = "unset"
+			}
+			def := ""
+			if role.DefaultModel == trait {
+				def = "yes"
+			}
+			row := "| " + name + " | " + trait + " | " + spec.ModelTraits[trait] + " | " + value + " | " + def + " |"
+			if !strings.Contains(md, row) {
+				t.Errorf("missing row %q", row)
+			}
+		}
+	}
+}
 
 func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	data, err := fs.ReadFile(harnez.DefaultFS, "spec/agent.yaml")

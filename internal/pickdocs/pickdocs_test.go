@@ -18,7 +18,7 @@ func TestMarkdownAndManagedBlock(t *testing.T) {
 	if Begin != "<!-- harnez:model-picks:begin -->" || End != "<!-- harnez:model-picks:end -->" {
 		t.Fatal("wrong model picks markers")
 	}
-	for _, want := range []string{"| developer | lean |", "terra:low", "| reviewer | smart |", "sol:low", "Efficient standard work."} {
+	for _, want := range []string{"shipped picks", "models.yaml", "harnez agent models --picks", "| developer | lean |", "terra:low", "| reviewer | smart |", "sol:low", "Efficient standard work."} {
 		if !strings.Contains(md, want) {
 			t.Fatalf("missing %q in %s", want, md)
 		}

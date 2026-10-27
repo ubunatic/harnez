@@ -115,6 +115,8 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Output a brief, high-level summary of delivered milestones and verification status. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).
 
 <!-- harnez:model-picks:begin -->
+These are the shipped picks. User models.yaml overrides are listed by `harnez agent models --picks`.
+
 | Role | Trait | Meaning | Chain | Default |
 |---|---|---|---|---|
 | advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |

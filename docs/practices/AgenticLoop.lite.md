@@ -80,6 +80,8 @@ For a single focused ticket: Host Orchestrator (**zero coding, no exploratory re
 - **Chatty Watch Wrappers** — wrapping a poll-and-redraw CLI (`gh run watch`, `docker logs -f`) in a routine agent-called target without quieting it; poll the tool's own status query on a matched interval and print one summary line on completion instead.
 
 <!-- harnez:model-picks:begin -->
+These are the shipped picks. User models.yaml overrides are listed by `harnez agent models --picks`.
+
 | Role | Trait | Meaning | Chain | Default |
 |---|---|---|---|---|
 | advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |

@@ -119,6 +119,8 @@ Run the final tasks: sprint study (front matter `kind: sprint`), review-learning
 then `/wrap`. Report the epic number, closed/skipped/parked tasks, and the next command.
 
 <!-- harnez:model-picks:begin -->
+These are the shipped picks. User models.yaml overrides are listed by `harnez agent models --picks`.
+
 | Role | Trait | Meaning | Chain | Default |
 |---|---|---|---|---|
 | advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |

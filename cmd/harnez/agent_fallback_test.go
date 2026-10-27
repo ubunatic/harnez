@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
 )
 
@@ -95,5 +96,69 @@ func TestFallbackNoticeAndQuotaOverride(t *testing.T) {
 	result, err = selectStartModel("developer", "smart", true, availability, &out)
 	if err != nil || result.Provider != "codex" || out.Len() != 0 {
 		t.Fatalf("override=%+v err=%v notice=%q", result, err, out.String())
+	}
+}
+
+func TestResumeTraitFallsBackToSessionModel(t *testing.T) {
+	session := &subagent.Session{Provider: "claude", Model: "opus", Tier: "med"}
+	var notice bytes.Buffer
+	availability := func(provider, model string) usage.ProviderQuotaAvailability {
+		if provider == "codex" {
+			return usage.ProviderQuotaAvailability{State: "exhausted"}
+		}
+		return usage.ProviderQuotaAvailability{State: "available"}
+	}
+	if err := checkResumeModel("developer", "smart", session, availability, &notice); err != nil || !strings.Contains(notice.String(), "sol:med: quota exhausted") {
+		t.Fatalf("notice=%q err=%v", notice.String(), err)
+	}
+	session.Tier = "low"
+	if err := checkResumeModel("developer", "smart", session, availability, &notice); err == nil || !strings.Contains(err.Error(), "conflicts") {
+		t.Fatalf("conflict=%v", err)
+	}
+}
+
+func TestWorkerUsesRecordedSelection(t *testing.T) {
+	s := &subagent.Session{Provider: "claude", Model: "opus", Tier: "med", ModelAlias: "smart"}
+	got, err := workerSelection(s, "claude:opus:med")
+	if err != nil || got.Model.Provider != "claude" || got.Model.Name != "opus" || got.Trait != "smart" {
+		t.Fatalf("selection=%+v err=%v", got, err)
+	}
+	if _, err := workerSelection(s, "codex:sol:med"); err == nil {
+		t.Fatal("worker accepted model different from parent")
+	}
+}
+
+func TestTraitFailureDoesNotContradictHint(t *testing.T) {
+	selection := subagent.ModelSelection{Trait: "smart"}
+	err := startModelError("smart", selection, fmt.Errorf("no available model; pass --model provider:model:tier"))
+	if !strings.Contains(err.Error(), "--model provider:model:tier") || strings.Contains(err.Error(), "ask for guidance") {
+		t.Fatal(err)
+	}
+}
+
+func TestResumeDisabledCandidatePolicyProcess(t *testing.T) {
+	if os.Getenv("TEST_983_CHILD") == "1" {
+		var notice bytes.Buffer
+		s := &subagent.Session{Provider: "claude", Model: "opus", Tier: "med"}
+		err := checkResumeModel("developer", "smart", s, func(string, string) usage.ProviderQuotaAvailability {
+			return usage.ProviderQuotaAvailability{State: "unknown"}
+		}, &notice)
+		if err != nil || !strings.Contains(notice.String(), "sol:med: disabled by user policy") {
+			t.Fatalf("notice=%q err=%v", notice.String(), err)
+		}
+		return
+	}
+	config := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(config, "harnez"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	policy := "version: 1\ndefault_enabled: false\nenabled: [claude:opus:med]\nmodels: {}\n"
+	if err := os.WriteFile(filepath.Join(config, "harnez", "models.yaml"), []byte(policy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestResumeDisabledCandidatePolicyProcess$")
+	cmd.Env = append(os.Environ(), "TEST_983_CHILD=1", "XDG_CONFIG_HOME="+config, "XDG_STATE_HOME="+t.TempDir())
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("output=%s error=%v", out, err)
 	}
 }

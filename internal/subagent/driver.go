@@ -464,6 +464,8 @@ func resolveCanonicalRoleModel(spec agentSpec, roleName, modelSpec string) (Mode
 	return ResolveModel(modelSpec)
 }
 
+const maxTraitDepth = 4
+
 // ModelSelection records the chosen concrete target and skipped candidates.
 type ModelSelection struct {
 	Model   Model
@@ -542,6 +544,9 @@ func resolveRoleSelection(spec agentSpec, roleName, requested string, resolve fu
 	}
 	result, err := resolveTraitCandidates(role.Models, trait, resolve, available)
 	result.Trait = trait
+	if err != nil && isDefault && len(role.Models[trait]) == 0 {
+		return result, fmt.Errorf("default model %q is disabled by user policy; pass --model <spec> to choose another model or enable it in models.yaml: %w", trait, err)
+	}
 	if err != nil && isDefault && len(result.Skipped) > 0 {
 		allDisabled := true
 		for _, skip := range result.Skipped {
@@ -560,8 +565,8 @@ func resolveTraitCandidates(traits map[string][]string, trait string, resolve fu
 	result := ModelSelection{}
 	var walk func(string, map[string]bool, int) (bool, error)
 	walk = func(name string, visiting map[string]bool, depth int) (bool, error) {
-		if depth > 4 {
-			return false, fmt.Errorf("trait depth exceeds 4 at %q", name)
+		if depth > maxTraitDepth {
+			return false, fmt.Errorf("trait depth exceeds %d at %q", maxTraitDepth, name)
 		}
 		if visiting[name] {
 			return false, fmt.Errorf("trait cycle at %q", name)
@@ -571,6 +576,10 @@ func resolveTraitCandidates(traits map[string][]string, trait string, resolve fu
 			return false, fmt.Errorf("unknown trait %q", name)
 		}
 		if len(targets) == 0 {
+			if depth > 1 {
+				result.Skipped = append(result.Skipped, name+": unset")
+				return false, nil
+			}
 			return false, fmt.Errorf("trait %q is unset", name)
 		}
 		visiting[name] = true
@@ -612,8 +621,8 @@ func resolveTraitCandidates(traits map[string][]string, trait string, resolve fu
 }
 
 func resolveRoleTrait(models map[string][]string, trait string, visiting map[string]bool, depth int) (string, error) {
-	if depth > 4 {
-		return "", fmt.Errorf("trait depth exceeds 4 at %q", trait)
+	if depth > maxTraitDepth {
+		return "", fmt.Errorf("trait depth exceeds %d at %q", maxTraitDepth, trait)
 	}
 	if visiting[trait] {
 		return "", fmt.Errorf("trait cycle at %q", trait)

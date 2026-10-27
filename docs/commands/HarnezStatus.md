@@ -16,6 +16,8 @@ Output a compact checklist with one line per category and no conversational fill
 - **Navigation:** Find evergreen docs in `docs/*.md`, the roadmap at `docs/Roadmap.md`, issues in `issues/*.md`, and shared practices in `docs/practices/`.
 
 <!-- harnez:model-picks:begin -->
+These are the shipped picks. User models.yaml overrides are listed by `harnez agent models --picks`.
+
 | Role | Trait | Meaning | Chain | Default |
 |---|---|---|---|---|
 | advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |
