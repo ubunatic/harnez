@@ -216,6 +216,19 @@ turns. Revisit per model once 985 shows per-turn numbers.
 on-demand keys `auto_compact.codex_on_demand_limit_tokens` / `codex_status_prompt`. `harnez agent models` gained a
 COMPACT column (host checked live: haiku 80000, astra 200000, terra/sol/luna 100000). `make test-q1` passed.
 
+### M3 plan review (host, 2026-10-27)
+
+Plan accepted (Compact in `codex.go`, rollout reader fixed from `compaction` to the measured `compacted` item,
+`VerifyCompaction` accepts rollout evidence, refusal removed, 590 abort-before-prompt in `runResume`). Changes:
+
+1. Codex only compacts when the context exceeds the limit. When the session's last known context usage is at or
+   below `codex_on_demand_limit_tokens`, `Compact` returns a plain "context usage N is below the on-demand limit M;
+   nothing to compact" without calling Codex (no paid turn). Unknown usage: call Codex and rely on the rollout check.
+2. Live check context: ~70k tokens of plain text (above the 50k on-demand limit, below the 100k native limit, so the
+   start turn does not compact on its own), not a 320 KB hex file (~200k tokens, would compact natively during start).
+   Use `codex:luna:low`; the host runs it.
+3. Commit message: `feat: Codex on-demand compaction (issue 987 M3)`.
+
 ### Pre-work for M3 and M4 (from M1 findings)
 
 1. Codex `--json` emits **no** `context_compacted` event, and `turn.completed.usage` stays cumulative even across
