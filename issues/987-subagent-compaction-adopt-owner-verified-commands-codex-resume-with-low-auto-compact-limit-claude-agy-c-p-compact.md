@@ -208,7 +208,7 @@ loaded but unused until M3.
 Decision (host, reversible spec value): 100000 for all three. The live Codex window is ~475k (`agent list`
 CONTEXT_SIZE for a terra session) and the old 200k let sprint 983 re-read up to 10M cached per turn; one
 compaction costs about one context read (M1, §1), so halving the limit trades a few more compactions for cheaper
-turns. Revisit per model once 985 shows per-turn numbers.
+turns. Revisit per model once 985 shows per-turn numbers. Owner confirmed "keep 100k" after the cost numbers below.
 
 ### Compaction cost (searcher, 2026-10-27; owner asked whether 100k is really cheaper than 200k)
 
