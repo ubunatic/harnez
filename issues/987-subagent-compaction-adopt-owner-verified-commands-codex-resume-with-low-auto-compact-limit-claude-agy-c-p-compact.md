@@ -284,6 +284,30 @@ ok, no FAIL.
    still print the session with `"compaction_pair": null`; add a test with a missing DB path.
 3. `spec/telemetry.yaml` schema: the two changed lines use spaces where the block uses tabs; match the block.
 
+### M4b delivered (579d7e0c): Claude and agy compaction records
+
+Developer's `make test-q1` failed on the telemetry writer boundary (agy must write through the collector); fixed,
+touched packages rerun. Host full `make test`: exit 0, 59 packages ok, no FAIL. Host live checks (installed binary,
+throwaway sessions in `/tmp/harnez-987-m4-93xWX5`):
+
+- `harnez apply`: `~/.claude/settings.json` diff against a backup shows only the added `PreCompact`/`PostCompact`
+  entries (`harnez codex-telemetry`); a second apply is byte-identical.
+- `claude:haiku:low`: `Compacted: context usage 46570 -> 3718 tokens`; status `compaction_count: 1`, pair
+  `source: hook`, trigger `manual`, not interrupted.
+- `agy:argon:low`: `Compacted: context usage unknown` (644); pair `source: stream_fallback`, not interrupted. The
+  pair arrives through the collector; the running collector was an older build (`0.2.3+3853`) and had to be
+  restarted (`harnez server restart`) after `make install` to accept the new `agy_compaction` record kind.
+
+## Goal check (host, 2026-10-27)
+
+- On demand: Codex (M3, 71705 -> 17063), Claude (46570 -> 3718), agy (checkpoint confirmed, context unknown per 644).
+- Per-model threshold: Codex terra/sol/luna 100000 (M2, owner kept it), Haiku 80000 (969); agy has no automatic
+  trigger (no hooks, no context count; 644/869).
+- `agent compact` confirms the drop for Codex and Claude; for agy it confirms the checkpoint only.
+- Not live-verified: a killed compaction leaving Pre without Post (unit-tested in M4a), and a resumed Codex session
+  crossing 100000 compacting natively before the prompt (Codex's own `model_auto_compact_token_limit`; args
+  unit-tested in M2).
+
 ### Pre-work for M3 and M4 (from M1 findings)
 
 1. Codex `--json` emits **no** `context_compacted` event, and `turn.completed.usage` stays cumulative even across
