@@ -93,6 +93,7 @@ func TestVerifyCompactionRequiresAckAndTokenDrop(t *testing.T) {
 		wantErr string
 	}{
 		{name: "valid with cached input", result: &TurnResult{Response: "Compaction complete", InputTokens: 500, CachedTokens: 490, ContextTokens: 500}},
+		{name: "rollout evidence with status reply", result: &TurnResult{Response: "status", CompactionObserved: true, ContextTokens: 500}},
 		{name: "no acknowledgement", result: &TurnResult{InputTokens: 500}, wantErr: "acknowledgement"},
 		{name: "no token drop despite cache", result: &TurnResult{Response: "Compaction complete", InputTokens: 10, CachedTokens: 900, ContextTokens: 1200}, wantErr: "context drop"},
 		{name: "no token measurement", result: &TurnResult{Response: "Compaction complete"}, wantErr: "context drop"},

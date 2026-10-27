@@ -124,7 +124,7 @@ func (d *slashDriver) Resume(context.Context, string, string, subagent.Model) (*
 
 func (d *slashDriver) Compact(_ context.Context, id string) (*subagent.TurnResult, error) {
 	d.compacted = append(d.compacted, id)
-	return &subagent.TurnResult{}, nil
+	return &subagent.TurnResult{ContextTokensBeforeCompact: 70000, ContextTokens: 20000, Response: "status"}, nil
 }
 
 func (d *slashDriver) Stop(_ context.Context, id string) error {
@@ -141,11 +141,15 @@ func TestAgentRootSlashCompactIntercepts(t *testing.T) {
 	old := agentDriver
 	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
-	if _, err := runWithStore(t, d, dir, "-p", "/compact"); err == nil || !strings.Contains(err.Error(), "manual /compact is unsupported") {
-		t.Fatalf("compact error = %v, want unsupported Codex manual compact", err)
+	out, err := runWithStore(t, d, dir, "-p", "/compact")
+	if err != nil {
+		t.Fatalf("compact error = %v", err)
 	}
-	if len(d.compacted) != 0 {
-		t.Fatalf("manual Codex compact calls = %v, want none", d.compacted)
+	if !strings.Contains(out, "70000 -> 20000") || !strings.Contains(out, "status") {
+		t.Fatalf("compact output = %q", out)
+	}
+	if len(d.compacted) != 1 || d.compacted[0] != "sid" {
+		t.Fatalf("manual Codex compact calls = %v, want sid", d.compacted)
 	}
 }
 

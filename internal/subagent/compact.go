@@ -79,7 +79,7 @@ func VerifyCompaction(before int, result *TurnResult) error {
 	for _, message := range result.Messages {
 		ack += "\n" + message
 	}
-	if !strings.Contains(strings.ToLower(ack), "compact") {
+	if !result.CompactionObserved && !strings.Contains(strings.ToLower(ack), "compact") {
 		return fmt.Errorf("compaction completed without an acknowledgement")
 	}
 	after := result.ContextTokens

@@ -244,10 +244,11 @@ type TurnResult struct {
 	ContextTokens     int `json:"context_tokens"`
 	ContextWindowSize int `json:"context_window_size,omitempty"`
 	// CompactionObserved reports a new provider compaction record during this turn.
-	CompactionObserved bool  `json:"compaction_observed,omitempty"`
-	TokensTurn         int   `json:"tokens_turn"`
-	TokensCumulative   int   `json:"tokens_cumulative"`
-	DurationMS         int64 `json:"duration_ms"`
+	CompactionObserved         bool  `json:"compaction_observed,omitempty"`
+	ContextTokensBeforeCompact int   `json:"context_tokens_before_compact,omitempty"`
+	TokensTurn                 int   `json:"tokens_turn"`
+	TokensCumulative           int   `json:"tokens_cumulative"`
+	DurationMS                 int64 `json:"duration_ms"`
 }
 
 // KnownModels returns the configured shorthand specifications in stable order.

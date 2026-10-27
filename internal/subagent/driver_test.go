@@ -783,10 +783,75 @@ func TestCodexResumeUsesSameSandboxAsRun(t *testing.T) {
 	}
 }
 
-func TestCodexCompactDoesNotSendPrompt(t *testing.T) {
-	d := CodexDriver{}
-	if _, err := d.Compact(context.Background(), "t1"); err == nil || !strings.Contains(err.Error(), "manual /compact is unsupported") {
-		t.Fatalf("error = %v, want unsupported manual compact", err)
+func TestCodexCompactRolloutConfirmation(t *testing.T) {
+	for _, tc := range []struct{ name, suffix, wantErr string }{
+		{"confirmed", `{"type":"compacted","payload":{"latest_token_usage_record":{"usage":{"input_tokens":70000}}}}` + "\n" + `{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":20000}}}}` + "\n", ""},
+		{"no compaction", `{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":20000}}}}` + "\n", "not compacted"},
+		{"no drop", `{"type":"compacted","payload":{"latest_token_usage_record":{"usage":{"input_tokens":70000}}}}` + "\n" + `{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":70000}}}}` + "\n", "no verified context drop"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("CODEX_HOME", home)
+			path := filepath.Join(home, "sessions", "2026", "10", "27", "rollout-session.jsonl")
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			before := `{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":70000},"total_token_usage":{"input_tokens":140000}}}}` + "\n"
+			if err := os.WriteFile(path, []byte(before), 0600); err != nil {
+				t.Fatal(err)
+			}
+			d := CodexDriver{Dir: t.TempDir(), Command: func(_ context.Context, name string, args ...string) ([]byte, error) {
+				want := []string{"exec", "resume", "session", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_auto_compact_token_limit=50000", "summarise your known status in one line"}
+				if name != "codex" || !reflect.DeepEqual(args, want) {
+					t.Fatalf("command %s %q", name, args)
+				}
+				if err := os.WriteFile(path, []byte(before+tc.suffix), 0600); err != nil {
+					t.Fatal(err)
+				}
+				return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"status"}}` + "\n"), nil
+			}}
+			got, err := d.Compact(context.Background(), "session")
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("error = %v", err)
+				}
+				return
+			}
+			if err != nil || got.ContextTokensBeforeCompact != 70000 || got.ContextTokens != 20000 || !got.CompactionObserved || got.Response != "status" {
+				t.Fatalf("result = %+v, err = %v", got, err)
+			}
+		})
+	}
+}
+
+func TestCodexCompactBelowLimitDoesNotInvokeCodex(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	path := filepath.Join(home, "sessions", "2026", "10", "27", "rollout-session.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":50000}}}}`+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	d := CodexDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
+		t.Fatal("unexpected Codex call")
+		return nil, nil
+	}}
+	if _, err := d.Compact(context.Background(), "session"); err == nil || !strings.Contains(err.Error(), "nothing to compact") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestCodexMeasuredCompactionRollout(t *testing.T) {
+	path := filepath.Join("testdata", "codex-987-rollout.jsonl")
+	before, err := codexCompactionInputAtPath(path, 0)
+	if err != nil || before != 16505 {
+		t.Fatalf("compaction input = %d, %v", before, err)
+	}
+	after, _, count, err := codexRolloutMetricsAtPath(path, "measured")
+	if err != nil || count != 1 || after != 16536 {
+		t.Fatalf("rollout after=%d count=%d err=%v", after, count, err)
 	}
 }
 

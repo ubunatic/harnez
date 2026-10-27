@@ -244,7 +244,7 @@ func codexRolloutUsageAtPath(path, providerID string) (codexRolloutUsage, int, e
 			} `json:"payload"`
 		}
 		if json.Unmarshal(s.Bytes(), &event) == nil {
-			if event.Type == "compaction" {
+			if event.Type == "compacted" || event.Type == "compaction" {
 				compactions++
 			}
 			if event.Type == "event_msg" && event.Payload.Type == "token_count" {
@@ -269,7 +269,88 @@ func codexRolloutUsageAtPath(path, providerID string) (codexRolloutUsage, int, e
 	return usage, compactions, nil
 }
 func (d CodexDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
-	return nil, fmt.Errorf("codex manages context automatically during exec; manual /compact is unsupported")
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return nil, err
+	}
+	limit := spec.AutoCompact.CodexOnDemandLimitTokens
+	path, pathErr := codexRolloutPath(id)
+	before, count, beforeErr := codexRolloutState(id)
+	if beforeErr == nil && before <= limit {
+		return nil, fmt.Errorf("context usage %d is below the on-demand limit %d; nothing to compact", before, limit)
+	}
+	args := []string{"exec", "resume", id, "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", fmt.Sprintf("model_auto_compact_token_limit=%d", limit), spec.AutoCompact.CodexStatusPrompt}
+	b, err := d.command(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("codex compact: %w", err)
+	}
+	result, err := parseCodex(b)
+	if err != nil {
+		return nil, err
+	}
+	if pathErr != nil {
+		path, pathErr = codexRolloutPath(id)
+	}
+	if pathErr != nil {
+		return nil, fmt.Errorf("codex compaction not confirmed: %w", pathErr)
+	}
+	after, _, newCount, err := codexRolloutMetricsAtPath(path, id)
+	if err != nil {
+		return nil, fmt.Errorf("codex compaction not confirmed: %w", err)
+	}
+	if newCount <= count {
+		return nil, fmt.Errorf("codex session was not compacted")
+	}
+	if beforeErr != nil {
+		before, err = codexCompactionInputAtPath(path, count)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if before <= 0 || after <= 0 || after >= before {
+		return nil, fmt.Errorf("codex compaction had no verified context drop (before %d, after %d)", before, after)
+	}
+	result.ContextTokensBeforeCompact = before
+	result.ContextTokens = after
+	result.CompactionObserved = true
+	return result, nil
+}
+
+// codexCompactionInputAtPath reads the input of the first new compacted item.
+func codexCompactionInputAtPath(path string, previous int) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	s.Buffer(make([]byte, 4096), 8<<20)
+	count := 0
+	for s.Scan() {
+		var event struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Latest struct {
+					Usage struct {
+						Input int `json:"input_tokens"`
+					} `json:"usage"`
+				} `json:"latest_token_usage_record"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(s.Bytes(), &event) != nil {
+			continue
+		}
+		if event.Type == "compaction" || event.Type == "compacted" {
+			count++
+		}
+		if count > previous && event.Type == "compacted" && event.Payload.Latest.Usage.Input > 0 {
+			return event.Payload.Latest.Usage.Input, nil
+		}
+	}
+	if err := s.Err(); err != nil {
+		return 0, err
+	}
+	return 0, fmt.Errorf("codex compaction has no before context usage")
 }
 func (d CodexDriver) Stop(context.Context, string) error {
 	return nil

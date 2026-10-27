@@ -1005,12 +1005,15 @@ func compactSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagen
 	if x.HarnessType == "interactive" && x.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be compacted: %s did not expose a provider session ID", x.Name, x.Provider)
 	}
-	if x.Provider == "codex" {
-		return fmt.Errorf("codex manages context automatically during exec; manual /compact is unsupported")
-	}
 	driver := withAgyMeterSession(agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}, x.WorkingDir), x.ID)
-	_, err := driver.Compact(cmd.Context(), x.ProviderID())
-	return err
+	result, err := driver.Compact(cmd.Context(), x.ProviderID())
+	if err != nil {
+		return err
+	}
+	if x.Provider == "codex" && result != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "Context: %d -> %d tokens\n%s\n", result.ContextTokensBeforeCompact, result.ContextTokens, result.Response)
+	}
+	return nil
 }
 
 func withAgyMeterSession(driver subagent.Driver, sessionID string) subagent.Driver {
