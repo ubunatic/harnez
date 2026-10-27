@@ -629,6 +629,7 @@ Usage:
   harnez assess [path] [flags]
 
 Flags:
+      --glossary   inspect repository wording against the machine-readable glossary
   -h, --help       help for assess
       --history    display multi-track repository evolution history
       --hotspots   list largest Go files and functions, import fan-out, and untested packages (git-tracked files)

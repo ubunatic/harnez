@@ -18,6 +18,7 @@ The `spec/` directory is **application code**, not runtime user configuration. T
 - **YAML for authoring**: YAML provides concise, comment-friendly, and human/LLM-readable specification definitions without syntax noise or string escaping friction. Plain JSON files are **not** promoted for authoring due to lack of comments and strict syntax friction.
 - **JSON Schema for validation**: Every YAML file must have a companion JSON Schema (`spec/schemas/*.schema.json`) for automated IDE validation, editor auto-completion, and CI/pre-commit verification.
 - **Embedded application code**: In compiled languages, embed the `spec/` directory directly into the binary (e.g. Go `//go:embed`, Rust `include_str!`). The spec is part of the application artifact, not external config.
+- `spec/glossary.yaml` (`spec/schemas/glossary.schema.json`) — machine-readable ubiquitous-language glossary, canonical terms, and forbidden wording patterns
 
 ### Project-local Harnez configuration
 Harnez repositories may also contain `.harnez/repo.yaml`, validated by

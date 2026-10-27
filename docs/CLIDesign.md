@@ -22,7 +22,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `server` | Local / User Service | Run local services; install, inspect, and remove the systemd user collector service |
 | `install <name>` | User toolchain | Install an optional Go tool from `spec/dependencies.yaml`, then run its bootstrap; `--dry-run` prints commands |
 | `usage history` | Analytical / Logs | Timeline, remote fetch, stats & sparklines across `~/.claude/harnez/usage-history/` |
-| `assess`| Local / Repo | Fast code/doc metrics, token estimation, and feasibility report (`--json`) |
+| `assess`| Local / Repo | Fast code/doc metrics, token estimation, glossary check (`--glossary`), and feasibility report (`--json`) |
 | `dochistory` / `repo-history` | Local / Repo | Multi-track Git artifact evolution, Braille sparklines (`--tracks`), and diff breakdown (`--diff`) |
 | `mode`  | Local / Repo | Switch ConciseMode terseness level in `.harnez/rules/Local.md` (migrating legacy `AGENTS.local.md` once) |
 | `distill` | Shell / Hooks | Distill verbose command outputs for context conservation |
@@ -401,6 +401,10 @@ at a scratch directory for the whole test process, not just `-t`.
 3. **Coherence Alerts**: If higher-level artifacts exist without foundational lower levels (e.g. L3 or L4 without L2 baseline instructions), a coherence warning is emitted.
 4. **No False Promotion**: Generic documentation (`README.md`), build files (`Makefile`), CI configs (`.github/workflows`), and service units (`*.service`) do not promote RAMP levels. Ambiguous paths are marked `unknown` with low confidence.
 5. **Offline & Non-Executing**: Assessment strictly reads file content (bounded to 64KB) and inspects Git metadata without executing any project commands (`go`, `make`, tests, scripts, or service managers).
+
+### `harnez assess --glossary [path]`
+
+Scans the repository (or target file/directory) against the machine-readable glossary (`spec/glossary.yaml` and `.harnez/glossary.yaml`). Emits human-readable findings in unix diagnostic format (`file:line:col: message [glossary]`) or JSON (`--json`). Exits 0 in report mode; enforce via `harnez lint --check` in CI.
 
 ## Known gaps
 
