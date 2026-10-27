@@ -38,15 +38,29 @@ Every model change (973, 974) needed edits in all of them.
 | architect | `opus:low`, `opus:med`, `sol:low`, `sol:med`, `argon:low` | lean-sprint §1.5 |
 | reviewer | open | owner decision |
 
+## 2b. Owner direction: purpose aliases (2026-10-27)
+
+Skills reference models through purpose aliases of the form `<role>:<trait>`, for example `dev:cheap`, `dev:fast`,
+`dev:smart`, `dev:tui`, `dev:gui`, `dev:ai`, `dev:lean`. Alias names never use the effort words low/med/high; the
+effort tier is part of what the alias resolves to. Nothing like this exists today: the spec has only per-model
+aliases (`luna`, `sol:low`, `terra:med`) and role-name aliases (`coder`, `critic`), checked 2026-10-27.
+
+Constraints for the design:
+- `dev:` must not collide with the `provider:model:tier` syntax (`codex:terra:low`); `dev`, `review`, `search`,
+  `arch` are not provider names, but the resolver must check that, and a future provider must not shadow them.
+- Each alias resolves to one `provider:model:tier` from the spec; users can override it in their own config
+  (941's user model policy, 925's spec overrides).
+- Traits without evidence today (`tui`, `gui`, `ai`) need an owner pick or stay unset; `skills` ratings in the spec
+  are mostly `?`.
+
 ## 3. Implementation & Verification Plan
 
-1. Design (open): spec shape (e.g. a `picks:` map from task class to an ordered model list), and how skills use it
-   without naming models. One option: `--model` accepts a task-class reference (e.g. `@standard`), so skills say
-   `harnez agent start --model @standard` and the spec decides. Per the epic rule, the schema ships with its first
-   reader and a visible result.
+1. Design: spec shape for purpose aliases (2b), the trait list per role, and the resolver order against model
+   aliases. Per the epic rule, the schema ships with its first reader and a visible result
+   (`harnez agent start --model dev:smart` resolves; `harnez agent models` lists the purpose aliases).
 2. Schema entry, loader and validation (unknown model or class fails), `harnez agent models` shows the picks.
 3. Replace the model names in the skills and practice docs listed in section 1 with the class reference; keep
    full and lite sources and root copies in sync (`harnez init -d .`).
-4. Verify: tests for resolution and validation; `harnez agent start --model @standard` resolves to `terra:low`;
+4. Verify: tests for resolution and validation; `harnez agent start --model dev:smart` resolves to `sol:low`;
    `rg 'luna:med|sol:low|haiku:high' docs/commands docs/practices` shows no task-class picks left in prose;
    `make test-q1`; `make install`.
