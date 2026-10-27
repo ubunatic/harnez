@@ -54,9 +54,9 @@ bridge (`$.process.run`), and why a mistake registers zero hooks silently.
 - Never give a canary a fresh `CLAUDE_CONFIG_DIR`: it has no login, and credentials must not be
   copied. Use the real config with per-process flags (`--plugin-dir`, env).
 
-## Related: unknown context size (issue 644)
+## Related: unknown context usage (issue 644)
 
-agy reports only a turn total, not the context size. harnez stores `ContextTokens = -1`
+agy reports only a turn total, not the context usage. harnez stores `ContextTokens = -1`
 (unknown); auto-compaction and the threshold check skip unknown values instead of treating the
 turn total as context, and JSON output omits the field.
 
@@ -71,7 +71,7 @@ inheriting its saved model and effort.
 Verified on agy 1.4.2 with Gemini 3.8 Flash at low effort: print mode saves a
 summary step even though JSON reports an empty successful response and stderr
 warns that the run ended with no output. Usage is unchanged and provides no
-post-compaction context size or reduction. Automatic threshold compaction stays
+post-compaction context usage or reduction. Automatic threshold compaction stays
 disabled until a reliable current-context count is available. The interactive
 control path writes `/compact` to the PTY but was not verified live in this canary.
 Exact commands and saved-summary evidence are in issue 823; rerun the small probe

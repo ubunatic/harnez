@@ -27,9 +27,9 @@ report them. M2 owns mapping result and failure fields into the shared
 `tool_calls` schema; this document does not infer those values from missing
 payload fields.
 
-## Context size and compaction (pitfalls, 2026-09-26)
+## Context usage and compaction (pitfalls, 2026-09-26)
 
-- `turn.completed` usage is cumulative over the session. The real context size is
+- `turn.completed` usage is cumulative over the session. The real context usage is
   `last_token_usage.input_tokens` in the latest rollout `token_count` record
   (`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`).
 - Sending `/compact` as a prompt to `codex exec resume` does **not** compact. The model replies

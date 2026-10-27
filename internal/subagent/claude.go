@@ -120,7 +120,7 @@ type claudeEvent struct {
 
 // parseClaude reads Claude's stream-json output (one event per line) or a
 // single --output-format json object. The result's usage totals every model
-// call of the turn, so the context size comes from the last main-thread
+// call of the turn, so the context usage comes from the last main-thread
 // assistant call, or from a compact boundary's post_tokens; when neither is
 // present it is unknown (-1), as for agy (issues 644, 673).
 func parseClaude(data []byte) (*TurnResult, error) {
@@ -244,7 +244,7 @@ func claudeLineFunc(fn EventFunc) func([]byte) {
 
 // claudeStreamer maps stream-json lines to live events: the session id
 // (init or result), main-thread assistant text and tool_use blocks, local
-// command output, and context size. Malformed lines are skipped; the final
+// command output, and context usage. Malformed lines are skipped; the final
 // TurnResult still comes from parseClaude over the whole output.
 type claudeStreamer struct {
 	session string

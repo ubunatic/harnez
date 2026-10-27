@@ -90,7 +90,7 @@ the payload has no recognized active model ID, quota entries are omitted.
 
 For Claude Code and AGY, Harnez renders the effective working directory
 (showing `project → current directory` when they differ), followed by current
-context size in rounded thousands, such as `156k`. AGY also shows the context
+context usage in rounded thousands, such as `156k`. AGY also shows the context
 window capacity from `context_window.context_window_size`, for example
 `156k/200k`. Its custom output appears below the built-in status indicators.
 When cache-read token counts are

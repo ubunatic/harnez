@@ -16,9 +16,9 @@ write a failure report here.
 
 ## 1. Problem & Motivation
 
-Ambiguous terms lead agents to wrong decisions. In 985, "context size", "context length" and "context used" were
+Ambiguous terms lead agents to wrong decisions. In 985, "context size", "context length" and "context used" were <!-- harnez-lint:ignore glossary -- problem statement quote -->
 used for both the tokens a session currently uses and the model's maximum, which led to wrong compaction and
-restart calls. `agent list` still shows `CONTEXT_USED` next to `CONTEXT_SIZE`. 985 adds the rule as prose in one
+restart calls. `agent list` still shows `CONTEXT_USED` next to `CONTEXT_SIZE`. 985 adds the rule as prose in one <!-- harnez-lint:ignore glossary -- problem statement quote -->
 ticket, but prose rules spread through tickets and docs are not checkable and do not carry over between projects.
 
 The owner prefers checks in tool output over more instructions. A glossary that tools can read turns wording
@@ -41,7 +41,7 @@ Each entry in `terms:` is concept-centric (ubiquitous-language style) and binds 
 - `synonyms` (optional, `[]string`): Allowed alternative phrasings.
 - `code_names` (optional, `[]string`): Canonical Go identifiers, config keys, or CLI column headers that map to this term (e.g. `ContextTokens`, `CONTEXT_USAGE`).
 - `forbidden` (optional, `[]ForbiddenTerm`):
-  - `phrase` (required, string): Disallowed wording or identifier (e.g. `"context size"`, `"CONTEXT_SIZE"`).
+  - `phrase` (required, string): Disallowed wording or identifier (e.g. `"context size"`, `"CONTEXT_SIZE"`). <!-- harnez-lint:ignore glossary -- schema example of forbidden terms -->
   - `replacement` (required, string): Suggested rewording (e.g. `"context usage"` or `"CONTEXT_WINDOW"`).
   - `reason` (optional, string): Why the phrase is forbidden.
   - `case_sensitive` (optional, bool, default `false`): When `false`, matches case-insensitively on word boundaries; when `true`, matches exact casing on token boundaries.
@@ -54,7 +54,7 @@ Each entry in `terms:` is concept-centric (ubiquitous-language style) and binds 
 - **Language-aware extraction**:
   - `.go`: Scans only comments and string literals via `go/scanner` (never Go syntax/identifiers).
   - `.md`: Skips fenced code blocks (` ``` ` / `~~~`) for case-insensitive prose phrases; honors `<!-- harnez-lint:ignore glossary -- reason -->` and `# harnez-lint:ignore glossary -- reason`.
-- **Shared forbidden phrase deduplication**: When multiple terms forbid the same phrase (e.g. `"context size"` in both `context usage` and `context window`), the matcher emits a single finding per `file:line:col` with the combined replacement suggestion.
+- **Shared forbidden phrase deduplication**: When multiple terms forbid the same phrase (e.g. `"context size"` in both `context usage` and `context window`), the matcher emits a single finding per `file:line:col` with the combined replacement suggestion. <!-- harnez-lint:ignore glossary -- describes the glossary's own forbidden term -->
 
 ### 2.4 CLI & Agent-Facing Surfaces
 - **`harnez assess --glossary [path]`**: Runs the glossary check on `path` (default `.`), printing active glossary sources, term count, and any findings (`file:line:col: forbidden term "<match>" — use <replacement> (<reason>) [glossary]`), plus `--json` support. Report-only (exit 0) by default.

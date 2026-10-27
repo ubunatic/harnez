@@ -30,7 +30,7 @@ session record and does not rename Pi's session.
 
 Harnez requests manual compaction through Pi's documented RPC `compact`
 command, not by sending `/compact` as a prompt. Pi returns an estimated
-post-compaction context size; that is a heuristic, not an exact provider token
+post-compaction context usage; that is a heuristic, not an exact provider token
 count. Pi's own automatic compaction and overflow recovery also remain active.
 
 Pi's CLI invocation is a foreground process. Harnez's process controls bound or

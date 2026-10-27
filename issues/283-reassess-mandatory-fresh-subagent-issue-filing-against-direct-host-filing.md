@@ -76,7 +76,7 @@ host has genuinely useful concurrent work and does not need the ticket result ne
    - request-to-reservation, request-to-commit, and request-to-user-result wall time;
    - host input/output tokens, child input/output tokens, cached tokens, and billed cost where the
      runtime exposes them;
-   - handoff prompt bytes/tokens and inherited-context size;
+   - handoff prompt bytes/tokens and inherited-context size; <!-- harnez-lint:ignore glossary -- problem statement quote -->
    - spawn attempts, retries/errors, tool calls, duplicate misses, metadata/lint corrections, and
      post-filing edits;
    - whether the host served another user turn before filing completed.

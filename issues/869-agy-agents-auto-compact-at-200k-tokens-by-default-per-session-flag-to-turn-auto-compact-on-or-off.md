@@ -12,11 +12,11 @@ auto threshold left off), 714 (sprint where it hurt), `spec/agent.yaml` `compact
 /goal `harnez agent` auto-compacts agy sessions before the next prompt once context passes the spec
 threshold (200k), like the other providers, and `harnez agent start/resume` take a flag that turns
 auto-compact on or off for that session (stored with the session). Verified with tests and one live agy
-resume that compacts, or stop and report if agy exposes no usable context size.
+resume that compacts, or stop and report if agy exposes no usable context size. <!-- harnez-lint:ignore glossary -- problem statement quote -->
 
 ## Findings (2026-10-23)
 
-- The gate from 591 uses "last-turn full input tokens"; agy was excluded (644) because its context size was
+- The gate from 591 uses "last-turn full input tokens"; agy was excluded (644) because its context size was <!-- harnez-lint:ignore glossary -- problem statement quote -->
   unknown. 823 made `/compact` work for agy in print mode but left the auto threshold off.
 - agy's print-mode JSON reports per-turn `usage` (`input_tokens`, `cache_read_tokens`, `total_tokens`,
   `internal/subagent/agy.go:163-177`). Check first whether one of these is the last call's full context; if
@@ -30,13 +30,13 @@ resume that compacts, or stop and report if agy exposes no usable context size.
   automatic compaction exists but documents no threshold or default; logs show manual `/compact` only.
   So harnez cannot configure it natively; the harnez gate (send `/compact` above the spec threshold) stays
   the way.
-- Context size: the advisor guessed `input_tokens`, but the dev-714 transcript shows per-call
+- Context size: the advisor guessed <!-- harnez-lint:ignore glossary -- problem statement quote --> `input_tokens`, but the dev-714 transcript shows per-call
   `input_tokens` ~2.2k with `cache_read_tokens` ~106k, so `input_tokens` alone is only the uncached part.
   Use `input_tokens + cache_read_tokens` of the last call; confirm in the canary (step 1).
 
 ## Way forward
 
-1. Canary: confirm which agy usage field equals the context size (compare before/after a manual `/compact`).
+1. Canary: confirm which agy usage field equals the context size (compare before/after a manual `/compact`). <!-- harnez-lint:ignore glossary -- problem statement quote -->
 2. Enable the existing gate for agy with that measure; default threshold stays the spec value.
 3. Flag on `harnez agent start` and `resume` (name per `docs/CLIDesign.md`, e.g. `--auto-compact=false`),
    saved in the session record so later resumes keep it; `harnez agent list`/status shows it. Tests for on,

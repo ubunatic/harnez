@@ -89,8 +89,8 @@ Root prompt forms also provide `-p/--prompt`, repeatable `-f/--file`, `-c/--cont
 `--stream full|stats`, `--plan yes|no`, and `--json`. `--` sends following text
 literally. There are no legacy provider-first or positional-session forms.
 
-A dispatch compares the session's context size with the configured threshold. The
-context size is the full input (including cached input) of the **last model call**,
+A dispatch compares the session's context usage with the configured threshold. The
+context usage is the full input (including cached input) of the **last model call**,
 never the turn total: a turn with many tool steps sums every call and can report
 several times the real context (issue 673, Claude 441k stored vs 45k real; 644 agy,
 594 Codex). Claude reads it from `--output-format stream-json --verbose` (last
@@ -441,7 +441,7 @@ How a spec reaches the provider CLI (batch drivers):
 ## 4. Auto-Compaction & Cache-Affinity Management
 
 ### 4.1 Auto-Compaction Trigger Rules
-1. **Context Threshold**: When the session's context size (last call's full input, see §2.10; not the cumulative turn total) exceeds the configured threshold (default 80,000 for Haiku and 200,000 for other models from `spec/agent.yaml`), `harnez agent` compacts before the next resume prompt.
+1. **Context Threshold**: When the session's context usage (last call's full input, see §2.10; not the cumulative turn total) exceeds the configured threshold (default 80,000 for Haiku and 200,000 for other models from `spec/agent.yaml`), `harnez agent` compacts before the next resume prompt.
 2. **Turn-Boundary Compaction**: The agent persists its decisions and code pointers to disk/ticket, then compacts its history before accepting the next milestone prompt.
 3. **Manual Override**: Callers can disable auto-compaction per run using `--no-compact`.
 

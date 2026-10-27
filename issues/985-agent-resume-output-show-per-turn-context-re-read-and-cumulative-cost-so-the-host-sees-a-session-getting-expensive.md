@@ -60,9 +60,10 @@ Mixing these up has led to wrong compaction and restart decisions. Use exactly t
   `compact_thresholds`); usually well below the context window.
 - **cached re-read** — cached input billed across all calls of a turn; this is a *cost*, not a context measure,
   and can be many times the context usage (each tool call re-sends the context).
-- Do **not** use "context size" or "context length": both are read as either usage or window. "Context used"
+- Do **not** use "context size" or "context length": both are read as either usage or window. "Context used" <!-- harnez-lint:ignore glossary -- problem statement quote -->
   is replaced by "context usage".
 
+<!-- harnez-lint:ignore glossary -- problem statement quote -->
 Known conflict: `agent list` prints `CONTEXT_USED` (usage) next to `CONTEXT_SIZE` (window). Renaming them to
 `CONTEXT_USAGE` / `CONTEXT_WINDOW` is in scope (M3), including docs and tests that match the headers.
 
@@ -74,7 +75,7 @@ Known conflict: `agent list` prints `CONTEXT_USED` (usage) next to `CONTEXT_SIZE
   `TokenTotalsKnown`, and `TurnRecords []TurnRecord{NewInputTokens, CachedInputTokens, OutputTokens}`
   (`internal/subagent/session.go`). No new persisted field is required unless a provider's semantics differ.
 - Context usage: `TurnResult.ContextTokens` / `Session.LastContextTokens()`; `-1` means unknown (agy, failed
-  Codex rollout read). Same source as `agent list` CONTEXT_USED (to be renamed CONTEXT_USAGE).
+  Codex rollout read). Same source as `agent list` CONTEXT_USED (to be renamed CONTEXT_USAGE). <!-- harnez-lint:ignore glossary -- problem statement quote -->
 - Thresholds: `spec/agent.yaml` already holds `compact_threshold_tokens` and per-model `compact_thresholds`
   (969 groundwork). New cost-check keys go next to them, with schema in `spec/schemas/agent.schema.json`.
 
@@ -116,8 +117,8 @@ Out of scope (follow-up tickets if wanted after this lands):
   cumulative provider, per-turn provider, resume after compaction (totals drop → no negative delta; print session
   only), missing numbers → `unknown`.
 - **M3 Done line + context usage** — update `tokenSummary` and its three call sites incl. plan-first; fix its
-  comment. Rename `agent list` headers to `CONTEXT_USAGE` / `CONTEXT_WINDOW`; grep docs/specs for "context size",
-  "context length", "context used" in agent-related text and align them.
+  comment. Rename `agent list` headers to `CONTEXT_USAGE` / `CONTEXT_WINDOW`; grep docs/specs for "context size", <!-- harnez-lint:ignore glossary -- problem statement quote -->
+  "context length", "context used" in agent-related text and align them. <!-- harnez-lint:ignore glossary -- problem statement quote -->
 - **M4 Cost check** — spec keys + schema, check function in `internal/` (pure, table-tested), quota-unknown note.
 - **M5 Docs** — the agent output section in the relevant evergreen doc; `docs/AutoCompaction.md` cross-link.
 
@@ -127,7 +128,7 @@ Out of scope (follow-up tickets if wanted after this lands):
 - With thresholds lowered in `~/.harnez/config.yaml`, the `[check: ...]` line appears on the crossing turn and
   names the session's role and model; with defaults on a short session it does not appear.
 - agy prints `context usage unknown` and no ratio check based on missing values.
-- Agent output and touched docs use only the §2 terms; no "context size"/"context length" in new text.
+- Agent output and touched docs use only the §2 terms; no "context size"/"context length" in new text. <!-- harnez-lint:ignore glossary -- problem statement quote -->
 - No threshold literal in Go code; `make lint`, `make test-q1`, `make install` pass.
 
 ## 6. Open Questions for the Owner
