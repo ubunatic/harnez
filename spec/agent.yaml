@@ -117,7 +117,7 @@ models:
     cost_by_tier: {med: 4, high: 7}
     eff: "-"
     skills: Go~ TUI~ SQL~
-    use: Owner guidance — haiku:med for easy tasks and haiku:low for very simple, repetitive tasks. Haiku 5.5 input above 100k tokens costs 5x; harnez compacts Haiku at 80k (issue 969, docs/AutoCompaction.md), and high thinking effort fills that budget quickly; see guidance_source_url.
+    use: Owner guidance — haiku:med for easy tasks and haiku:low for very simple, repetitive tasks. Haiku 5.5 input above 100k tokens costs 5x; configure Haiku to compact at about 80k via agent.compact_thresholds (issue 969, docs/AutoCompaction.md), as high thinking effort fills that budget quickly; see guidance_source_url.
     guidance_source_url: https://code.claude.com/docs/en/model-config#haiku-55-context-window-and-pricing
   claude:sonnet:
     aliases: [sonnet, sonnet:low]

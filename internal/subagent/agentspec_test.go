@@ -46,7 +46,7 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 		t.Errorf("codex:sol use = %q, want judgment guidance", sol.Use)
 	}
 	haiku := spec.Models["claude:haiku"]
-	if !strings.Contains(haiku.Use, "haiku:med for easy tasks") || !strings.Contains(haiku.Use, "haiku:low for very simple, repetitive tasks") || !strings.Contains(haiku.Use, "100k") || !strings.Contains(haiku.Use, "5x") || !strings.Contains(haiku.Use, "80k") {
+	if !strings.Contains(haiku.Use, "haiku:med for easy tasks") || !strings.Contains(haiku.Use, "haiku:low for very simple, repetitive tasks") || !strings.Contains(haiku.Use, "100k") || !strings.Contains(haiku.Use, "5x") || !strings.Contains(haiku.Use, "configure Haiku to compact at about 80k via agent.compact_thresholds") {
 		t.Errorf("claude:haiku use = %q, want tier, price-step and compaction guidance", haiku.Use)
 	}
 	for name, model := range spec.Models {
@@ -64,7 +64,7 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, phrase := range []string{"`luna:med` for well-specified implementation and tests", "`sol:low` when judgment", "`haiku:med` for easy tasks", "`haiku:low` for very simple, repetitive tasks", "above 100k tokens costs 5x", "compacts Haiku at 80k"} {
+	for _, phrase := range []string{"`luna:med` for well-specified implementation and tests", "`sol:low` when judgment", "`haiku:med` for easy tasks", "`haiku:low` for very simple, repetitive tasks", "above 100k tokens costs 5x", "configure Haiku to compact at about 80k via `agent.compact_thresholds`"} {
 		if !strings.Contains(string(skill), phrase) {
 			t.Errorf("lean-sprint skill missing %q", phrase)
 		}
