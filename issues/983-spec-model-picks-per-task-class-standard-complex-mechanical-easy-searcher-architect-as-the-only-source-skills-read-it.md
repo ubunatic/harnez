@@ -241,6 +241,16 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
     `--model provider:model:tier` hint. Add one CLI test where a user override in a temp `models.yaml` disables the
     first entry, so the fallback notice is exercised end to end (host can then run it live with a temp
     `XDG_CONFIG_HOME`).
+  - **M5 host check (uncommitted tree, 2026-10-27):** host `make test-q1` after the isolation fix: 58 `ok`, 0
+    `--- FAIL`, no leftover test processes. Live with a temp `XDG_CONFIG_HOME` enabling only `claude:opus:med`:
+    picks view shows developer `smart` → `claude:opus:med`; `--role dev --model smart` printed
+    `smart → opus:med (sol:med: disabled by user policy)` and ran. **Blocker before commit:** an override
+    `roles: {reviewer: {models: {smart: [smart]}}}` makes every harnez command panic with a stack trace, because
+    `newAgentSelftestCmd` (`cmd/harnez/agent_selftest.go:123`) loads the spec while building the command tree
+    (`main.go:144`). Required: a normal error and non-zero exit, no panic, for any command that needs the spec;
+    `harnez --help` and commands that do not need the spec keep working. Also drop the repeated
+    `agent spec: role "reviewer" trait "smart":` prefix (it appears twice). Test: a CLI test with the cycle override
+    asserts no `panic:`/`goroutine` in output, the path and `reviewer/smart` in the error, and the prefix once.
 - **M6 (pick visible):** session record `model_alias` (e.g. `smart`), `agent list` model column, banner. Tests:
   round-trip; old records load.
   - **Pre-Work (from M3 review):** the picks table does not mark each role's `default_model`; add a marker
