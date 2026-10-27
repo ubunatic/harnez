@@ -277,6 +277,12 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
     `docs/ModelResearch.md` (root evergreen, not copyable, outside the guard), so the guard starts with an empty
     allow-list. (3) Installed skills and `~/.claude/docs` refresh through `harnez apply`, run by the host after
     the commit.
+  - **M7 host check (uncommitted tree, 2026-10-27), fix before commit:** (1) the generated table escapes colons as
+    `&#58;` (`luna&#58;low`) to pass the raw `rg` check; agents read raw Markdown, so write plain `luna:low`. The
+    block-aware `TestNoModelPicksInPractice` is the check; the 3.4 `rg` check now means "empty outside generated
+    blocks". (2) Rename the markers from `harnez:purpose-aliases:begin/end` (design-A name) to
+    `harnez:model-picks:begin/end`. The changed guidance assertions (`low-cost developer option`,
+    `--role dev --model <trait>` phrases) follow the new contract and are accepted.
 
 ## 3. Implementation & Verification Plan
 
