@@ -1,6 +1,6 @@
 # 986 — Per-project machine-readable glossary and harnez assess --glossary wording check
 
-**Status**: Open
+**Status**: Closed — implemented machine-readable glossary schema, loader, assess --glossary, and lint rule; make test-q1 passed and assess --glossary confirmed 0 findings
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
