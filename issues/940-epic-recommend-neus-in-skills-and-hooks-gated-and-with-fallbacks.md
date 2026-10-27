@@ -53,3 +53,8 @@ code before each milestone.
 
 All milestones are delivered, generated output is verified in a setup with neus and one without, and
 the epic is closed with that evidence.
+
+## Related tickets
+
+- 913 (P2): `harnez server install` persists neus indexing so the installed daemon can index. Grouped here on
+  2026-10-27; run it before M3, since the hook check reads `neus indexer status`.

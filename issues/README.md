@@ -58,4 +58,8 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 976 | [976-harnez-issues-help-should-state-per-verb-commit-and-staging-rules-briefly.md](976-harnez-issues-help-should-state-per-verb-commit-and-staging-rules-briefly.md) | harnez issues help should state per-verb commit and staging rules briefly | Open |
 | 977 | [977-sprint-pause-pause-unpause-skill-park-a-sprint-notes-ticket-state-resumable-agents-and-restart-it.md](977-sprint-pause-pause-unpause-skill-park-a-sprint-notes-ticket-state-resumable-agents-and-restart-it.md) | sprint-pause pause\|unpause skill: park a sprint (notes, ticket state, resumable agents) and restart it | Open |
 | 978 | [978-groom-open-issues-into-backlog-with-a-ranked-candidate-list.md](978-groom-open-issues-into-backlog-with-a-ranked-candidate-list.md) | Groom open issues into backlog with a ranked candidate list | Open |
+| 979 | [979-epic-agent-instructions-and-help-text.md](979-epic-agent-instructions-and-help-text.md) | Epic: agent instructions and help text | Open |
+| 980 | [980-epic-harnez-agent-command-fixes-review-and-isolation.md](980-epic-harnez-agent-command-fixes-review-and-isolation.md) | Epic: harnez agent command fixes, review and isolation | Open |
+| 981 | [981-epic-workflow-skills-and-skill-installation.md](981-epic-workflow-skills-and-skill-installation.md) | Epic: workflow skills and skill installation | Open |
+| 982 | [982-epic-test-and-release-hygiene.md](982-epic-test-and-release-hygiene.md) | Epic: test and release hygiene | Open |
 <!-- harnez:end issues-active-index -->

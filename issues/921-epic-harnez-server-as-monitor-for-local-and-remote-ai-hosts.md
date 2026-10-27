@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Epic
-**Related**: 912, 917, 919, 920, 922, 879
+**Related**: 912, 917, 919, 920, 922, 879, 923, 925, 927, 931
 
 ---
 
@@ -22,6 +22,10 @@ failure report here.
 | 3 | 922 | P3 | Load box hotkey `L` instead of `7` | Closed (47b8967b) |
 | 4 | 917 | P3 | server-driven boxes and items from spec | Open, after 920 |
 | 5 | — | — | live check of 912's swap row on x600 (after 919) | Done: Remote Load swap 0.0/4.0G 1% |
+| 6 | 923 | P3 | btop-style coloured hotkey char in box titles via loom | Open, needs loom 385 |
+| 7 | 925 | P3 | User overrides of spec values from `~/.config/harnez` | Open |
+| 8 | 927 | P3 | lint: gokay errcheck in usagestore storetest.go, spec schema conformance (bug) | Open |
+| 9 | 931 | P3 | ssh-agent socket under PrivateTmp, remote-load retry durations in spec (bug) | Open |
 
 ## Code fanout (searcher e921-search, haiku:low, 2026-10-25)
 
