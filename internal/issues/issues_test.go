@@ -11,22 +11,25 @@ import (
 
 func TestParseIssueFile(t *testing.T) {
 	tests := []struct {
-		name       string
-		content    string
-		wantTitle  string
-		wantStatus string
-		wantHas    bool
+		name         string
+		content      string
+		wantTitle    string
+		wantStatus   string
+		wantPriority string
+		wantHas      bool
 	}{
 		{
 			name: "standard status colon outside bold",
 			content: `# 036 — Issues Tracker Status Linter
 
 **Status**: Open
+**Priority**: P1 (High) — reason
 **Category**: Feature
 `,
-			wantTitle:  "036 — Issues Tracker Status Linter",
-			wantStatus: "Open",
-			wantHas:    true,
+			wantTitle:    "036 — Issues Tracker Status Linter",
+			wantStatus:   "Open",
+			wantPriority: "P1",
+			wantHas:      true,
 		},
 		{
 			name: "plain status header",
@@ -83,17 +86,33 @@ Status: Open
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			title, status, has := ParseIssueFile(tt.content)
+			title, status, priority, has := ParseIssueFileWithPriority(tt.content)
 			if title != tt.wantTitle {
 				t.Errorf("ParseIssueFile() title = %q, want %q", title, tt.wantTitle)
 			}
 			if status != tt.wantStatus {
 				t.Errorf("ParseIssueFile() status = %q, want %q", status, tt.wantStatus)
 			}
+			if priority != tt.wantPriority {
+				t.Errorf("ParseIssueFile() priority = %q, want %q", priority, tt.wantPriority)
+			}
 			if has != tt.wantHas {
 				t.Errorf("ParseIssueFile() has = %v, want %v", has, tt.wantHas)
 			}
 		})
+	}
+}
+
+func TestParseIssueFilePriorityMissingOrMalformed(t *testing.T) {
+	for _, content := range []string{
+		"# 001 — Example\n**Status**: Open\n",
+		"# 001 — Example\n**Priority**: High\n",
+		"# 001 — Example\n**Priority**: P9\n",
+	} {
+		_, _, priority, _ := ParseIssueFileWithPriority(content)
+		if priority != "" {
+			t.Errorf("priority for %q = %q, want empty", content, priority)
+		}
 	}
 }
 

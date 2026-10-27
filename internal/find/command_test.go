@@ -91,7 +91,7 @@ func findFixtureDir(t *testing.T) string {
 	}
 
 	files := map[string]string{
-		"issues/100-open-vram.md":             "# 100 — VRAM Load Panel\n\n**Status**: Open\n\n---\n\nDiscusses vram usage.\n",
+		"issues/100-open-vram.md":             "# 100 — VRAM Load Panel\n\n**Status**: Open\n**Priority**: P1 (High) — reason\n\n---\n\nDiscusses vram usage.\n",
 		"issues/101-closed-gtt.md":            "# 101 — GTT Memory Cleanup\n\n**Status:** Closed — resolved in abc123\n\n---\n\nHandles gtt allocation.\n",
 		"issues/archive/050-archived-vram.md": "# 050 — Archived VRAM Ticket\n\n**Status:** Closed\n\n---\n\nvram content here too.\n",
 		// Must never appear in results: it's the tracker index, not a ticket.
@@ -116,8 +116,13 @@ func TestRunFind_ExactTSVOutput(t *testing.T) {
 	if err := testRunFind(&out, dir, "issues", "vram"); err != nil {
 		t.Fatalf("runFind: %v", err)
 	}
-	want := "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\n" +
-		"100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md\n"
+	want := "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\t\n" +
+		"100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md\tP1\n"
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if len(strings.Split(line, "\t")) != 5 {
+			t.Errorf("expected five TSV columns, got %q", line)
+		}
+	}
 	if out.String() != want {
 		t.Errorf("output mismatch:\ngot:\n%q\nwant:\n%q", out.String(), want)
 	}
@@ -151,8 +156,8 @@ func TestRunFind_StatusFilterAndTextCombo(t *testing.T) {
 	if err := testRunFind(&out, dir, "issues", "status:closed", "vram|gtt"); err != nil {
 		t.Fatalf("runFind: %v", err)
 	}
-	want := "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\n" +
-		"101\tClosed — resolved in abc123\tGTT Memory Cleanup\tissues/101-closed-gtt.md\n"
+	want := "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\t\n" +
+		"101\tClosed — resolved in abc123\tGTT Memory Cleanup\tissues/101-closed-gtt.md\t\n"
 	if out.String() != want {
 		t.Errorf("output mismatch:\ngot:\n%q\nwant:\n%q", out.String(), want)
 	}
@@ -165,8 +170,8 @@ func TestRunFind_ConvenienceVerbs(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"open", []string{"issues", "open"}, "100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md\n"},
-		{"closed", []string{"issues", "closed"}, "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\n101\tClosed — resolved in abc123\tGTT Memory Cleanup\tissues/101-closed-gtt.md\n"},
+		{"open", []string{"issues", "open"}, "100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md\tP1\n"},
+		{"closed", []string{"issues", "closed"}, "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\t\n101\tClosed — resolved in abc123\tGTT Memory Cleanup\tissues/101-closed-gtt.md\t\n"},
 		{"blocked", []string{"issues", "blocked"}, ""},
 		{"draft", []string{"issues", "draft"}, ""},
 	}
@@ -189,9 +194,9 @@ func TestRunFind_LastIsDefaultListing(t *testing.T) {
 	if err := runFindWithOptions(&out, io.Discard, []string{"issues", "last"}, findRunOptions{Dir: dir, Limit: 10, Raw: true}); err != nil {
 		t.Fatal(err)
 	}
-	want := "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\n" +
-		"100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md\n" +
-		"101\tClosed — resolved in abc123\tGTT Memory Cleanup\tissues/101-closed-gtt.md\n"
+	want := "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\t\n" +
+		"100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md\tP1\n" +
+		"101\tClosed — resolved in abc123\tGTT Memory Cleanup\tissues/101-closed-gtt.md\t\n"
 	if out.String() != want {
 		t.Errorf("output = %q, want %q", out.String(), want)
 	}

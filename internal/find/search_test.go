@@ -225,7 +225,7 @@ func TestSearch_AndDoesNotRelaxToOrOnZeroResults(t *testing.T) {
 func TestFormatTSV(t *testing.T) {
 	r := Result{Number: "100", RawStatus: "Open", PlainTitle: "VRAM Load Panel", Path: "issues/100-open-vram.md"}
 	got := FormatTSV(r)
-	want := "100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md"
+	want := "100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md\t"
 	if got != want {
 		t.Errorf("FormatTSV = %q, want %q", got, want)
 	}
@@ -234,7 +234,7 @@ func TestFormatTSV(t *testing.T) {
 func TestFormatTSV_SanitizesEmbeddedTabsAndNewlines(t *testing.T) {
 	r := Result{Number: "100", RawStatus: "Open\nnote", PlainTitle: "Title\twith\ttabs", Path: "issues/100.md"}
 	got := FormatTSV(r)
-	want := "100\tOpen note\tTitle with tabs\tissues/100.md"
+	want := "100\tOpen note\tTitle with tabs\tissues/100.md\t"
 	if got != want {
 		t.Errorf("FormatTSV = %q, want %q", got, want)
 	}

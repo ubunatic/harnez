@@ -383,7 +383,8 @@ harnez find issues "status:open vram|gtt"
 Matching is fuzzy (typo-tolerant via Damerau-Levenshtein, prefix-aware, deterministic) over
 the title and body text, never a regex or full Boolean grammar; run `harnez find --help` for
 the full normalization/ranking contract. Output is tab-separated
-(`NUMBER\tRAW_STATUS\tPLAIN_TITLE\tPATH`), one match per line, with no header — zero matches
+(`NUMBER\tRAW_STATUS\tPLAIN_TITLE\tPATH\tPRIORITY`), one match per line, with no header. Priority
+is the code (`P0`–`P3`) or empty when missing or malformed — zero matches
 exits 0 silently, and an invalid entity/query exits non-zero with an actionable message. An
 AND query is never silently relaxed to OR when it finds nothing.
 

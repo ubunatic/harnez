@@ -22,6 +22,7 @@ type IssueFile struct {
 	RelPath      string         // e.g. "036-harnez-status-issues-tracker-linter.md" or "archive/001-diff-clean-wrong-path.md"
 	Title        string         // e.g. "036 — `harnez status` Issues Tracker Status Linter"
 	RawStatus    string         // exact string after "**Status:**", e.g. "Closed — fixed in 444c29f"
+	Priority     string         // priority code (P0-P3), empty if missing or malformed
 	Canonical    StatusCategory // Open, Closed, Draft, Backlog, Unknown
 	HasStatusTag bool
 	Body         string // ticket content after the first metadata-closing horizontal rule following the title; empty if none is found (see 158)
@@ -76,6 +77,7 @@ type Report struct {
 var (
 	issueFileRegex        = regexp.MustCompile(`^(\d{3}|GH[1-9]\d*)-.*\.md$`)
 	statusLineRegex       = regexp.MustCompile(`(?i)^\s*[-*]?\s*(?:\*\*status:?\*\*|status):?\s*(.+)$`)
+	priorityLineRegex     = regexp.MustCompile(`(?i)^\s*[-*]?\s*\*\*priority:?\*\*:?\s*(P[0-3])(?:\s|$|[—–-])`)
 	closedByLineRegex     = regexp.MustCompile(`^\s*\*\*Closed-By\*\*:\s*.*$`)
 	closedCommitOnlyRegex = regexp.MustCompile(`(?i)^(?:(?:in|resolved\s+in|fixed\s+in|completed\s+in|closed\s+in)\s+)?[\x60(]?[0-9a-f]{7,40}[\x60)]?[.,]?$`)
 	closedLifecycleRegex  = regexp.MustCompile(`(?i)^(closed|resolved|fixed|complete|completed|implemented|shipped)\b`)
@@ -143,6 +145,12 @@ func CanonicalizeStatus(status string) StatusCategory {
 
 // ParseIssueFile extracts the declared title and status from an issue markdown document.
 func ParseIssueFile(content string) (title string, rawStatus string, hasStatus bool) {
+	title, rawStatus, _, hasStatus = ParseIssueFileWithPriority(content)
+	return title, rawStatus, hasStatus
+}
+
+// ParseIssueFileWithPriority extracts the declared title, status, and priority.
+func ParseIssueFileWithPriority(content string) (title string, rawStatus string, priority string, hasStatus bool) {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -158,8 +166,13 @@ func ParseIssueFile(content string) (title string, rawStatus string, hasStatus b
 				rawStatus = strings.TrimSpace(matches[1])
 			}
 		}
+		if priority == "" {
+			if matches := priorityLineRegex.FindStringSubmatch(trimmed); len(matches) > 1 {
+				priority = strings.ToUpper(matches[1])
+			}
+		}
 	}
-	return title, rawStatus, hasStatus
+	return title, rawStatus, priority, hasStatus
 }
 
 // ParseHeaderNumber returns the number declared by the first numbered H1.
@@ -440,13 +453,14 @@ func ScanFS(sysFS fs.FS, root string) ([]IssueFile, error) {
 			if err != nil {
 				return err
 			}
-			title, rawStatus, hasStatus := ParseIssueFile(string(content))
+			title, rawStatus, priority, hasStatus := ParseIssueFileWithPriority(string(content))
 			issueFiles = append(issueFiles, IssueFile{
 				Number:       num,
 				HeaderNumber: ParseHeaderNumber(string(content)),
 				RelPath:      relSlash,
 				Title:        title,
 				RawStatus:    rawStatus,
+				Priority:     priority,
 				Canonical:    CanonicalizeStatus(rawStatus),
 				HasStatusTag: hasStatus,
 				Body:         ParseBody(string(content)),

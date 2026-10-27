@@ -14,6 +14,7 @@ type Result struct {
 	RawStatus  string `json:"raw_status"`
 	PlainTitle string `json:"title"`
 	Path       string `json:"path"`
+	Priority   string `json:"priority"`
 
 	worstClass int
 	sumClasses int
@@ -69,6 +70,7 @@ func Search(files []issues.IssueFile, q *Query) []Result {
 			RawStatus:  f.RawStatus,
 			PlainTitle: issues.PlainTitle(f.Title),
 			Path:       f.RelPath,
+			Priority:   f.Priority,
 			worstClass: worst,
 			sumClasses: sum,
 		})
@@ -99,12 +101,13 @@ func sanitizeField(s string) string {
 }
 
 // FormatTSV renders one result as the tab-separated output line:
-// NUMBER<TAB>RAW_STATUS<TAB>PLAIN_TITLE<TAB>PATH.
+// NUMBER<TAB>RAW_STATUS<TAB>PLAIN_TITLE<TAB>PATH<TAB>PRIORITY.
 func FormatTSV(r Result) string {
 	return strings.Join([]string{
 		sanitizeField(r.Number),
 		sanitizeField(r.RawStatus),
 		sanitizeField(r.PlainTitle),
 		sanitizeField(r.Path),
+		sanitizeField(r.Priority),
 	}, "\t")
 }
