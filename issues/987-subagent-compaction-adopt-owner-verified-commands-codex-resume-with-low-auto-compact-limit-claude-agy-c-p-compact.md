@@ -110,6 +110,21 @@ one ran, why, and what it changed) by session ID, and use that record for all co
   - Substitute (untested inference): a `PostInvocation` hook reads `transcriptPath`, logs step count and any
     compaction marker; consecutive values reveal a compaction and give before/after. First step for agy: run one
     `/compact` and see how the marker appears in the transcript file before building on it.
+- **Web/binary research (native Claude session `searcher`, 2026-10-27; web search partly failed):**
+  - Claude Code: `PreCompact` exists, matcher `manual` (`/compact`) or `auto`; common stdin fields `session_id`,
+    `transcript_path`, `cwd`, `permission_mode`, `hook_event_name` (docs snippet,
+    https://docs.anthropic.com/en/docs/claude-code/hooks). `PostCompact`: a community report lists `trigger` and
+    `compact_summary` and says interactive manual `/compact` fired Pre but not Post, marked fixed 2026-08-16
+    (unverified,
+    https://claudeissues.com/issue/78760-bug-interactive-mode-manual-compact-fires-precompact-but-never-postcompact-print).
+    Blocking or changing compaction from a hook: no source.
+  - Codex 0.164.0 binary strings contain hook events `pre_compact`, `post_compact`, `session_start`,
+    `session_end` and an exec event `context_compacted` (rollout item `compacted`). Hook config location, stdin
+    fields and event fields: unverified (https://github.com/openai/codex/pull/19905).
+  - Open, to measure in the first read-only developer turn with a logging hook (`cat > <scratch>/<event>.json`):
+    Claude `PostCompact` in print mode and its fields; Codex hook config path and Pre/Post fields; the
+    `context_compacted` JSON fields; whether Codex `turn.completed` usage is per turn or cumulative (two
+    consecutive values; also needed by 985); why `SessionStart` fires 4× after a Codex compaction.
 - The hooks write one event per compaction: session ID, agent, model, trigger (native limit, harnez threshold,
   on-demand `agent compact`, CLI's own auto), context before/after when the payload carries it, timestamp. Pre
   without a matching Post = failed or interrupted compaction.
