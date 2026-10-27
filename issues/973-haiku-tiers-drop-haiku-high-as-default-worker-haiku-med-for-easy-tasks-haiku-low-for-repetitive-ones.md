@@ -127,3 +127,15 @@ direction "we should rather always use Luna medium". A head-to-head on real task
   - Host decision (plan review): lookup order is user per-model > spec per-model > user global > spec global.
     Reason: a model-specific value wins over a generic one; a user-global value (e.g. 150k for all models) must not
     push Haiku past its 100k price step. A user who wants a different Haiku value sets a Haiku key. Test this case.
+  - Paused 2026-10-27 by the owner mid-implementation; uncommitted M3 edits in 13 files are the resume point
+    (spec `compact_thresholds`, schema, `CompactThreshold` lookup, guides, help golden). Untested.
+  - Owner, on resume: "make sure we properly put the behavior switches for that and any thresholds into the spec/
+    yamls." Pre-work before finishing M3:
+    1. Audit compaction code (`internal/subagent/compact.go`, `cmd/harnez/agent_run.go`, and callers) for
+       hard-coded switches and numbers: per-provider on/off (agy is skipped in `agent_run.go`, see 869), any
+       token or percent literal, any enable/disable condition. List each with file:line.
+    2. Move each into `spec/agent.yaml` with schema entries and a comment (e.g. a per-provider auto-compact
+       switch with agy off, so 869 later flips one spec value). Go keeps no default values; user config may
+       override where it already can. Leave out-of-scope 969 guards (re-compact, post-compact) unbuilt.
+    3. Tests: each switch read from the spec (agy off → no auto-compact; codex/claude on), and the schema rejects
+       wrong types. Report anything that cannot move and why.
