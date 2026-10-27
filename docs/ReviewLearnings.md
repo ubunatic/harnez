@@ -76,6 +76,9 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **A stopped run is not a green run**: 941 M4 committed after `make test-q1` stopped at gofmt, so the
   suite never ran; the host's full run found 3 failures. Grep the log for the test summary, not only for
   `--- FAIL`. In 941 M5 a "fixed" pin test was flipped from a negative to a positive case; M6 restored it.
+- **Live-check through the running service**: 987 M4b's new telemetry record kind passed every test but
+  showed `null` live, because the collector was the build from before `make install`. After installing a
+  change that adds a record kind, run `harnez server restart` before the live check (989 tracks a fix).
 - **Inherited identity**: a long-lived interactive host can inherit another worker's role/model/session.
   Verify exact thread metadata and launcher provenance; exercise actual reviewer dispatch and the
   child's refusal through the installed binary. A host health check alone misses dispatch failures.

@@ -59,11 +59,11 @@ https://code.claude.com/docs/en/settings-reference, https://code.claude.com/docs
 | `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | env | reply cap; also the reserve, so it moves the trigger |
 | `autoCompactEnabled`, `DISABLE_AUTO_COMPACT=1` | setting, env | auto-compaction off; `DISABLE_COMPACT=1` also blocks `/compact` |
 | `idleCompaction` | setting | idle compaction, on by default |
-| `PreCompact` hook | hook | runs before compaction, can block it; `PostCompact` runs after, side-effect only (docs; not yet tested on 2.1.311) |
+| `PreCompact` hook | hook | runs before compaction, can block it; `PostCompact` runs after, side-effect only; both fire in `-p` (measured, 987 M1) |
 
 Do not lower `CLAUDE_CODE_MAX_OUTPUT_TOKENS` to compact later: it also shrinks the reply room.
 
-## Codex CLI (**docs**/source, not measured locally)
+## Codex CLI (**docs**/source; measured behaviour in "Compaction probes" below)
 
 - `model_auto_compact_token_limit` (tokens) and `model_context_window`, in `config.toml`, a `--profile`, or `-c` on
   the command line. No compaction flag or env var. harnez passes `-c model_auto_compact_token_limit=N` (`codex.go`).
@@ -73,14 +73,15 @@ Do not lower `CLAUDE_CODE_MAX_OUTPUT_TOKENS` to compact later: it also shrinks t
   (https://github.com/openai/codex/blob/main/codex-rs/protocol/src/openai_models.rs).
 - `PreCompact` (stop with `{"continue":false}`) and `PostCompact` hooks.
 
-## Antigravity (agy) (**docs**, not measured locally)
+## Antigravity (agy) (**docs**; measured behaviour in "Compaction probes" below)
 
 - Manual `/compact` is documented; automatic behaviour is unverified. No threshold, flag, env var or compaction hook
   was found in the docs (https://github.com/google-antigravity/antigravity-cli/blob/main/CHANGELOG.md), which does not
   prove there is none.
 - **Unverified:** one issue report says agy compacts at about 25% of a 1M window and `AGY_CLI_AUTO_COMPACT_OVERRIDE`
   has no effect (https://github.com/google-antigravity/antigravity-cli/issues/1245).
-- harnez's pre-prompt compaction is skipped for agy in print mode (869), so nothing steers agy today.
+- harnez's pre-prompt compaction is skipped for agy in print mode (869), so nothing triggers it automatically;
+  `harnez agent compact` works on demand (987), but agy reports no context count (644).
 - Gemini CLI is a different product (`model.compressionThreshold`, `/compress`, `PreCompress` hook); its settings do
   not apply to agy.
 
@@ -93,7 +94,10 @@ Do not lower `CLAUDE_CODE_MAX_OUTPUT_TOKENS` to compact later: it also shrinks t
 | GPT-5.6 Sol | input above 272k costs 2x | https://developers.openai.com/api/docs/models/gpt-5.6 |
 | Gemini Flash 3.8, Gemini 4 Argon | none on the Gemini API page | https://ai.google.dev/gemini-api/docs/pricing |
 
-Targets are owner decisions, not derived limits: 200k for every model in use except Haiku, 80k for Haiku (2026-10-27).
+Targets are owner decisions, not derived limits: 200k by default, 80k for Haiku, 100k for Codex terra/sol/luna
+(2026-10-27, `spec/agent.yaml` `compact_thresholds`, user override `agent.compact_thresholds`). Codex 100k rationale
+(987): one compaction cost about $0.019 and paid back in about 0.64 turns at 10 tool calls per turn, because every
+later call re-reads less cached context.
 API pricing does not describe subscription quota (for example the AI Pro plan). Each turn's new prompt and tool
 results can overshoot a trigger; the room needed above it is still open (969 R1).
 
@@ -107,14 +111,14 @@ Predicted, not yet observed at the point: Claude interactive `--autocompact 1200
 - Prompts above 100k on Haiku are billed at the higher rate; size canaries to stay below.
 - `/context` free space ignores the percent; read the status line, or a `-p` stream's `compact_boundary`.
 
-## Compaction probes (issue 987 M1)
-
-### Compaction records
+## Compaction records
 
 Codex and Claude hooks record pre/post events in telemetry; agy records a
 `stream_fallback` pair when its compact stream reports a successful checkpoint.
 Read the latest pair for a session with `harnez agent status --name <name> --json`
-in the `compaction_pair` field.
+in the `compaction_pair` field. A Pre without a Post shows as `interrupted: true`.
+
+## Compaction probes (issue 987 M1)
 
 All measurements below are dated 2026-10-27. Probes used newly created sessions in a scratch directory; hooks were
 added per invocation, with no global hook configuration edits.

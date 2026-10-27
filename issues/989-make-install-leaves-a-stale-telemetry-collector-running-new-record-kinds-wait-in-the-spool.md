@@ -26,6 +26,8 @@ not go through the running service.
 
 - The compact command succeeded and printed its result; only the stored record was missing.
 - The spool kept the record, so no data was lost; it was written after the restart.
+- `harnez usage` already takes over from an older server (docs/UsageCollection.md), and `harnez server status`
+  flags a version mismatch; telemetry senders do neither.
 
 ## 3. Options
 

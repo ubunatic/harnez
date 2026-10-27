@@ -41,6 +41,9 @@ asks the old process to shut down; the old process exits successfully, so system
 owner PID with the service's `MainPID`. If an auto-started process owns the socket instead, it
 prints `systemctl --user restart harnez-agent-collector.service` to hand ownership back.
 `harnez server status` also displays the server's uptime and version, flagging any mismatch with the CLI binary (`--json` outputs machine-readable JSON).
+Telemetry senders (`harnez codex-telemetry` hooks, `harnez agent compact`) do not take over: after `make install`
+an older server keeps running, and a record kind it does not know waits in `~/.local/state/harnez/telemetry-spool`
+without a message until `harnez server restart` (987 M4b, 989).
 
 Statuslines and other passive usage observers POST normalized windows to the server's local HTTP
 endpoint. They never open the store or start the server. A missing or failing server drops a usage
