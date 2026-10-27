@@ -59,4 +59,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 981 | [981-epic-workflow-skills-and-skill-installation.md](981-epic-workflow-skills-and-skill-installation.md) | Epic: workflow skills and skill installation | Open |
 | 982 | [982-epic-test-and-release-hygiene.md](982-epic-test-and-release-hygiene.md) | Epic: test and release hygiene | Open |
 | 983 | [983-spec-model-picks-per-task-class-standard-complex-mechanical-easy-searcher-architect-as-the-only-source-skills-read-it.md](983-spec-model-picks-per-task-class-standard-complex-mechanical-easy-searcher-architect-as-the-only-source-skills-read-it.md) | spec: model picks per task class (standard, complex, mechanical, easy, searcher, architect) as the only source; skills read it | Open |
+| 984 | [984-purpose-aliases-dev-any-guesses-the-nearest-trait-like-role-guessing.md](984-purpose-aliases-dev-any-guesses-the-nearest-trait-like-role-guessing.md) | purpose aliases: dev:<any> guesses the nearest trait, like --role guessing | Open |
 <!-- harnez:end issues-active-index -->
