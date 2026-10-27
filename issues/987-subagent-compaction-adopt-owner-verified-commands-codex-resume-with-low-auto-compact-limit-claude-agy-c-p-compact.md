@@ -93,8 +93,10 @@ Gaps:
 Owner: every supported agent should have pre- and post-compact hooks, so harnez can record each compaction (whether
 one ran, why, and what it changed) by session ID, and use that record for all compaction decisions.
 
-- Live state: harnez installs no `PreCompact`/`PostCompact` hook for any agent (no match in `internal/`, `cmd/`,
-  `spec/`, `~/.claude/settings.json`). Telemetry already stores compaction events and economics
+- Live state (corrected 2026-10-27 after argon-987): Codex `PreCompact`/`PostCompact` (and SessionStart with
+  `compact`) are already wired to `harnez codex-telemetry` (`internal/codex/hooks.go:77-85`, present in
+  `~/.codex/config.toml`); the host's first search missed it because its output was cut off. Claude and agy
+  have no harnez compaction hook (`~/.claude/settings.json` has none). Telemetry already stores compaction events and economics
   (`internal/telemetry/insert.go` `InsertCompactionEvent`, `InsertCompactionEconomics`), fed from stream parsing
   today, not hooks.
 - Hook support per agent: Codex has both (owner transcript above; `docs/AutoCompaction.md`). Claude Code has
@@ -144,6 +146,43 @@ one ran, why, and what it changed) by session ID, and use that record for all co
   re-compact and post-compact fill guards read the same records; `harnez agent list` / stats can show compaction
   count per session.
 - Installed through `harnez apply` like the other hooks; hook commands and payload fields per agent in `spec/`.
+
+## Architecture (argon-987, agy:argon:low, 2026-10-27)
+
+- **Record:** reuse the telemetry tables (`compaction_events`, `session_boundaries`, `token_snapshots`,
+  `compaction_economics`, `internal/telemetry/insert.go`). New: a pair query `LatestCompactionPair(sessionID)`
+  joining pre/post rows; fields `Source` (`hook` | `stream_fallback`), before/after context tokens; a small summary
+  on `subagent.Session` (compaction count, last before/after, pending Pre without Post).
+- **Feeds:** Codex via the existing hooks (`harnez codex-telemetry`, `internal/server/codex_telemetry.go`) with the
+  `--json` `context_compacted` event and rollout `compaction` items as fallback. Claude: add `PreCompact` (and
+  `PostCompact` if M1 shows it fires in `-p`) through `harnez apply` (`internal/claude/apply_settings.go`), with
+  `compact_boundary` as fallback. agy: a `PostInvocation` hook (`internal/agy/hooks.go`) that reads
+  `transcriptPath` for a compaction marker or step-count drop and writes synthetic pre/post records.
+- **Consumers:** `agent compact` (`compactSession`, `cmd/harnez/agent_run.go:997`) and `VerifyCompaction`
+  (`internal/subagent/compact.go:74`) confirm from the Post record or fallback and print before/after plus the
+  status line; 985 resets its per-turn baseline at a compaction; 969's guards read the same records.
+- **Codex `Compact()`:** `codex exec resume <id> --json ... -c model_auto_compact_token_limit=<spec low limit>
+  "<spec status prompt>"`; confirmed only when a Post/`context_compacted` is seen **and** context tokens dropped;
+  the reply is the status line. 590 safety: pre-resume auto-compact blocks until confirmed and aborts before the
+  caller's prompt otherwise.
+- **Decided differently from §1:** drivers keep `--resume <id>`, never `-c` (several workers can share one dir).
+- **Deferred:** done-line format and cost thresholds → 985; gap/fill percent math and agy automatic pre-prompt
+  compaction → 969 / 869 (agy stays `auto_compact: disabled` until M4 proves counts).
+
+## Milestones
+
+- **M1 (measure, read-only for code):** a temporary logging hook (`cat > <scratch>/<event>.json`), one real
+  compaction per provider and a two-turn Codex run. Record in `docs/AutoCompaction.md` (measured, with version):
+  Claude 2.1.311 `PostCompact` in `-p` and its fields; Codex Pre/Post stdin fields; `context_compacted` fields;
+  Codex `turn.completed` per turn vs. cumulative; trigger name per SessionStart pair; agy transcript marker after
+  `/compact`; what `harnez codex-telemetry` already stores today for a Codex compaction. Only the doc changes.
+- **M2 (spec, independent of M1):** per-model Codex thresholds (terra, sol, luna), on-demand limit and status prompt
+  in `spec/agent.yaml` + schema. Visible: `harnez agent models` or a threshold test shows the per-model values.
+- **M3 (Codex on-demand compact, needs M1):** `CodexDriver.Compact`, drop the Codex refusal in `compactSession`,
+  print before/after and the status line. Visible: `harnez agent compact --name <codex session>`.
+- **M4 (Claude and agy hooks plus pair records, needs M1):** Claude `PreCompact`/`PostCompact`, agy
+  `PostInvocation` through `harnez apply` (harnez-owned entries only); Pre-without-Post reported. Visible: one
+  compaction per agent leaves a pair readable by harnez.
 
 ## 4. Other options
 
