@@ -1,6 +1,6 @@
 # 914 — Study Harness2 (recursive agent harnessing) for harnez rule and skill tuning
 
-**Status**: Open
+**Status**: Backlog — parked during 2026-10-27 epic grouping: research or waiting on loom work, low value now
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Research

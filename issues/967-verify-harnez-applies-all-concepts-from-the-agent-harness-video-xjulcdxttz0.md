@@ -1,6 +1,6 @@
 # 967 — Verify harnez applies all concepts from the agent harness video (XJuLcDxtTz0)
 
-**Status**: Open — concepts mapped by keyword search; code checks pending
+**Status**: Backlog — parked during 2026-10-27 epic grouping: research or waiting on loom work, low value now
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Research

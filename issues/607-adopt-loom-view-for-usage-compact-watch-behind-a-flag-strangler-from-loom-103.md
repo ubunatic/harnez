@@ -1,6 +1,6 @@
 # 607 — Adopt Loom view for usage --compact --watch behind a flag (strangler, from loom 103)
 
-**Status**: Open
+**Status**: Backlog — parked during 2026-10-27 epic grouping: research or waiting on loom work, low value now
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
