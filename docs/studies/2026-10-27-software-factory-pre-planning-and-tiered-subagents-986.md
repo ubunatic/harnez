@@ -86,6 +86,17 @@ Following the architect's review, the factory incorporated four structural safeg
 - **Host**: Verified `go test -v ./internal/glossary/...`, built and installed binary via `make install`, and committed `87b45d83`.
 - **Verdict**: M1 completed with zero friction. The pattern of *Searcher locates patterns -> Architect locks exact types/code -> Mechanical Dev translates* executed in ~3 minutes total subagent time without needing any mid/high-tier developer.
 
+### Milestone 2 Delivery (`b698808a`)
+- **Searcher `search-986` (`haiku:med`)**: 37s, 187k tokens (incl. cached). Confirmed zero external glob dependencies, examined `internal/lint/lint.go` (`Finding`, `dropSuppressed`), and confirmed `go/scanner` patterns.
+- **Architect `arch-986` (`argon:low`)**: 1m34s, 288k tokens (incl. cached). Provided complete `internal/glossary/glob.go` (pure-Go `**` glob compiler), `check.go` (regex compiler, Go comment/string token scanning, markdown fence tracking, closed ticket detection), and table test suites.
+- **Developer `dev-986-m2` (`haiku:med`)**: 53s initial turn, 58s fix turn.
+  - *Key observation*: `haiku:med` successfully caught a logic conflict between `argon:low`'s `hasFileLevelSuppression` (which checked line 1) and the test case (which used line 1 to suppress line 2). Instead of weakening the test assertion, `haiku:med` paused, diagnosed the root cause, and presented two concrete resolution options (A: separate `harnez-lint:ignore-file`; B: remove file check).
+  - Adopted Option A; `dev-986-m2` also independently fixed inline comment suppression so inline comments don't suppress the line below. All unit tests passed cleanly.
+- **Gokay Diagnostics & Health Verification**:
+  - `gokay check --all --json`: `fmt` ok (531ms), `vet` ok (1820ms), `test` ok (34.7s). Found **0** lint/vet/fmt issues in `internal/glossary` (all 108 report issues were pre-existing in untouched packages).
+  - `gokay assess --json`: `internal/glossary` verified at 818 code lines, 528 test lines, 65% test ratio, 0 untested packages, 0 orphan schema keys, and clean spec posture.
+- **Host**: Ran `make install` and committed `b698808a`.
+
 ---
 
 ## 7. Next Steps for Skill Codification (`/software-factory`)
