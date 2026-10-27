@@ -53,6 +53,28 @@ Constraints for the design:
 - Traits without evidence today (`tui`, `gui`, `ai`) need an owner pick or stay unset; `skills` ratings in the spec
   are mostly `?`.
 
+## Decision (owner, 2026-10-27)
+
+Initial purpose aliases. A value is an ordered list: the first available entry wins, later ones are fallbacks
+(e.g. another vendor when one has no quota). A value may name another purpose alias.
+
+| Alias | Resolves to | Note |
+|---|---|---|
+| `dev:lean` | `terra:low` | owner: the standard, a bit more efficient |
+| `dev:std` | `terra:med`, `opus:low` | owner |
+| `dev:smart` | `sol:med`, `opus:med` | owner |
+| `dev:tui` | `dev:smart` | owner |
+| `dev:gui` | `dev:lean`, `dev:std` | owner wrote "lean/std"; host reads it as lean first |
+| `dev:cheap` | `luna:med` | host default from 973 ("etc.") |
+| `dev:fast` | `haiku:med` | host default from 973 |
+| `dev:ai` | unset | no evidence yet; owner pick later |
+| `search:cheap` | `luna:low`, `haiku:low` | host default from lean-sprint §1 |
+| `review:smart` | `sol:low` | host default; owner may change |
+
+Design consequences: lists need a defined "available" test (spec availability, access, quota), alias-to-alias
+references need cycle and depth checks, and the resolved model plus the alias used should show in the session
+record and `harnez agent list`.
+
 ## 3. Implementation & Verification Plan
 
 1. Design: spec shape for purpose aliases (2b), the trait list per role, and the resolver order against model
