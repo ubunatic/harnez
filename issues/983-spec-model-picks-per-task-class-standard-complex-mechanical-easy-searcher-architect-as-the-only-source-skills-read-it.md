@@ -271,6 +271,12 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
     `--role review` prints the single line `model: smart → codex:sol:low (default)`.
 - **M7 (prose migration):** generated block, `--md`, the 7 docs (full and lite) write `--role X --model <trait>`,
   guard test; root copies via `harnez init -d .`; the 3.4 `rg` check empty.
+  - **Host decisions (M7 plan review, reversible):** (1) lean-sprint §1.5 drops its closed architect-tier list; the
+    default architect is `--role advisor --model smart`; a tier the user names (`refined opus:med`) is still
+    dispatched exactly as named. (2) Historical model findings in `docs/practices/ModelRoles.md` move to
+    `docs/ModelResearch.md` (root evergreen, not copyable, outside the guard), so the guard starts with an empty
+    allow-list. (3) Installed skills and `~/.claude/docs` refresh through `harnez apply`, run by the host after
+    the commit.
 
 ## 3. Implementation & Verification Plan
 
