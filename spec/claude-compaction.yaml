@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=schemas/claude-compaction.schema.json
+hooks:
+  - event: PreCompact
+    command: harnez codex-telemetry
+  - event: PostCompact
+    command: harnez codex-telemetry

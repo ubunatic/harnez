@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["hooks"],
+  "properties": {
+    "hooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event", "command"],
+        "properties": {
+          "event": {"enum": ["PreCompact", "PostCompact"]},
+          "command": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

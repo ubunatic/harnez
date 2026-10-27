@@ -318,21 +318,32 @@ func TestAgyMalformedJSONIsError(t *testing.T) {
 }
 
 func TestAgyCompactUsesResumeWithSlashCompact(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	var args []string
 	d := AgyDriver{Dir: "/d", Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
 		args = gotArgs
-		return []byte(`{"conversation_id":"abc","status":"SUCCESS","response":"","usage":{"input_tokens":11794,"output_tokens":1,"total_tokens":11795}}`), nil
+		return []byte("{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"e4872c5a-c04b-4f25-b654-18343245f52b\",\"step_index\":4,\"state\":\"DONE\",\"step_type\":\"checkpoint\",\"duration_seconds\":10.008097519}}\n{\"event\":\"result\",\"result\":{\"conversation_id\":\"e4872c5a-c04b-4f25-b654-18343245f52b\",\"status\":\"SUCCESS\",\"response\":\"\",\"duration_seconds\":27.059836371,\"num_turns\":2,\"usage\":{\"input_tokens\":9608,\"output_tokens\":5,\"thinking_tokens\":0,\"cache_read_tokens\":0,\"total_tokens\":9613}}}"), nil
 	}}
 	r, err := d.Compact(context.Background(), "abc")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"--conversation", "abc", "--add-dir", "/d", "--output-format", "json", "-p", "/compact"}
+	want := []string{"--conversation", "abc", "--add-dir", "/d", "--output-format", "stream-json", "-p", "/compact"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args = %#v, want %#v (inherit saved model and effort)", args, want)
 	}
-	if r.SessionID != "abc" || r.Response != "" || r.ContextTokens != -1 || r.InputTokens != 11794 {
+	if r.SessionID != "e4872c5a-c04b-4f25-b654-18343245f52b" || r.Response != "" || r.ContextTokens != -1 || r.InputTokens != 9608 || !r.CompactionObserved {
 		t.Fatalf("compact result = %+v, want empty success with unknown context and preserved usage", r)
+	}
+}
+
+func TestAgyCompactRequiresCheckpoint(t *testing.T) {
+	d := AgyDriver{Dir: "/d", Command: func(context.Context, string, ...string) ([]byte, error) {
+		return []byte(`{"event":"result","result":{"status":"SUCCESS"}}`), nil
+	}}
+	if _, err := d.Compact(context.Background(), "abc"); err == nil {
+		t.Fatal("expected missing checkpoint error")
 	}
 }
 

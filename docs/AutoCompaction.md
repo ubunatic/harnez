@@ -109,6 +109,13 @@ Predicted, not yet observed at the point: Claude interactive `--autocompact 1200
 
 ## Compaction probes (issue 987 M1)
 
+### Compaction records
+
+Codex and Claude hooks record pre/post events in telemetry; agy records a
+`stream_fallback` pair when its compact stream reports a successful checkpoint.
+Read the latest pair for a session with `harnez agent status --name <name> --json`
+in the `compaction_pair` field.
+
 All measurements below are dated 2026-10-27. Probes used newly created sessions in a scratch directory; hooks were
 added per invocation, with no global hook configuration edits.
 

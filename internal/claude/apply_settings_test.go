@@ -14,6 +14,24 @@ import (
 	"ubunatic.com/harnez/internal/jsonc"
 )
 
+func TestCompactionHooksPreserveForeignAndAreIdempotent(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := buildSettingsDoc(cfg, nil)
+	existing := map[string]any{"hooks": map[string]any{"PreCompact": []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "foreign-hook"}}}}}}
+	first := applyMerge(existing, doc)
+	second := applyMerge(first, doc)
+	if !reflect.DeepEqual(first, second) {
+		t.Fatal("second apply changed hooks")
+	}
+	hooks := first["hooks"].(map[string]any)
+	if len(hooks["PreCompact"].([]any)) != 2 || len(hooks["PostCompact"].([]any)) != 1 {
+		t.Fatalf("hooks = %#v", hooks)
+	}
+}
+
 func TestApplyWithJevEnvironmentIsIdempotent(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -14,6 +14,7 @@ import (
 
 	"ubunatic.com/harnez/internal/agymeter"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
 )
 
@@ -162,7 +163,49 @@ func (d AgyDriver) Resume(ctx context.Context, id, prompt string, model Model) (
 // conversation's model and effort. agy 1.4.2 returns an empty successful response
 // and unchanged usage; neither acknowledges a measurable context drop (issue 823).
 func (d AgyDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
-	return d.Resume(ctx, id, "/compact", Model{})
+	if d.Dir == "" {
+		return nil, errors.New("agy: refusing to compact with an empty Dir")
+	}
+	b, err := d.command(ctx, "--conversation", id, "--add-dir", d.Dir, "--output-format", "stream-json", "-p", "/compact")
+	if err != nil {
+		return nil, agyRunError("agy compact", b, err)
+	}
+	var result json.RawMessage
+	checkpoint := false
+	for _, line := range bytes.Split(b, []byte("\n")) {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		var event struct {
+			Event  string          `json:"event"`
+			Result json.RawMessage `json:"result"`
+			Step   struct {
+				Type  string `json:"step_type"`
+				State string `json:"state"`
+			} `json:"step_update"`
+		}
+		if err := json.Unmarshal(line, &event); err != nil {
+			return nil, fmt.Errorf("parse agy compact stream: %w", err)
+		}
+		if event.Event == "step_update" && event.Step.Type == "checkpoint" && event.Step.State == "DONE" {
+			checkpoint = true
+		}
+		if event.Event == "result" {
+			result = event.Result
+		}
+	}
+	r, err := parseAgy(result)
+	if err != nil {
+		return nil, err
+	}
+	if !checkpoint {
+		return nil, errors.New("agy compact: no successful checkpoint")
+	}
+	if err := server.SendCompactionPair(ctx, id); err != nil {
+		return nil, err
+	}
+	r.CompactionObserved = true
+	return r, nil
 }
 
 func (d AgyDriver) Stop(ctx context.Context, id string) error {

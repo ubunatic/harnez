@@ -1011,17 +1011,24 @@ func compactSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagen
 	if err != nil {
 		return err
 	}
-	if x.Provider == "codex" && result != nil {
+	if result != nil {
 		if err := saveCompactResult(s, x, result); err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Compacted: context usage %d -> %d tokens\nStatus: %s\n", result.ContextTokensBeforeCompact, result.ContextTokens, result.Response)
+		if result.ContextTokensBeforeCompact > 0 && result.ContextTokens > 0 {
+			fmt.Fprintf(cmd.OutOrStdout(), "Compacted: context usage %d -> %d tokens\n", result.ContextTokensBeforeCompact, result.ContextTokens)
+		} else {
+			fmt.Fprintln(cmd.OutOrStdout(), "Compacted: context usage unknown")
+		}
+		if result.Response != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Status: %s\n", result.Response)
+		}
 	}
 	return nil
 }
 
 func saveCompactResult(s *subagent.FileSessionStore, x *subagent.Session, result *subagent.TurnResult) error {
-	if !result.CompactionObserved || result.ContextTokens <= 0 || result.ContextTokens >= result.ContextTokensBeforeCompact {
+	if !result.CompactionObserved {
 		return nil
 	}
 	x.ContextTokens = result.ContextTokens
@@ -1047,13 +1054,15 @@ func withAgyMeterSession(driver subagent.Driver, sessionID string) subagent.Driv
 
 func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut, showReply bool, turn int, allReplies bool) error {
 	if jsonOut {
+		var pair *telemetry.CompactionPair
 		db, err := telemetry.OpenReadOnly(agentUsageDBPath())
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		pair, err := db.LatestCompactionPair(x.ProviderID())
-		if err != nil {
+		if err == nil {
+			defer db.Close()
+			pair, err = db.LatestCompactionPair(x.ProviderID())
+			if err != nil {
+				return err
+			}
+		} else if _, statErr := os.Stat(agentUsageDBPath()); !os.IsNotExist(statErr) {
 			return err
 		}
 		data, err := json.Marshal(x)

@@ -14,6 +14,8 @@ func TestAgentAgyOnDemandCompact(t *testing.T) {
 	for _, command := range [][]string{{"compact"}, {"-p", "/compact"}} {
 		for _, failed := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/failed=%t", strings.Join(command, " "), failed), func(t *testing.T) {
+				t.Setenv("HOME", t.TempDir())
+				t.Setenv("XDG_DATA_HOME", t.TempDir())
 				storeDir, workDir := t.TempDir(), t.TempDir()
 				saveSessions(t, storeDir, &subagent.Session{
 					ID: "registry-id", ProviderSessionID: "agy-conversation", Name: "worker",
@@ -23,14 +25,14 @@ func TestAgentAgyOnDemandCompact(t *testing.T) {
 				var calls int
 				driver := subagent.AgyDriver{Dir: workDir, Command: func(_ context.Context, exe string, args ...string) ([]byte, error) {
 					calls++
-					want := []string{"--conversation", "agy-conversation", "--add-dir", workDir, "--output-format", "json", "-p", "/compact"}
+					want := []string{"--conversation", "agy-conversation", "--add-dir", workDir, "--output-format", "stream-json", "-p", "/compact"}
 					if exe != "agy" || !reflect.DeepEqual(args, want) {
 						t.Fatalf("command = %s %q, want agy %q", exe, args, want)
 					}
 					if failed {
-						return []byte(`{"status":"ERROR","error":"summary failed"}`), nil
+						return []byte(`{"event":"result","result":{"status":"ERROR","error":"summary failed"}}`), nil
 					}
-					return []byte(`{"conversation_id":"agy-conversation","status":"SUCCESS","response":""}`), nil
+					return []byte("{\"event\":\"step_update\",\"step_update\":{\"state\":\"DONE\",\"step_type\":\"checkpoint\"}}\n{\"event\":\"result\",\"result\":{\"conversation_id\":\"agy-conversation\",\"status\":\"SUCCESS\",\"response\":\"\"}}"), nil
 				}}
 				args := append(append([]string{}, command...), "--name", "worker")
 				_, err := runWithStore(t, driver, storeDir, args...)

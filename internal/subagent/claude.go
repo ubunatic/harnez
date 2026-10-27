@@ -113,6 +113,7 @@ type claudeEvent struct {
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 	Compact struct {
+		PreTokens  int `json:"pre_tokens"`
 		PostTokens int `json:"post_tokens"`
 	} `json:"compact_metadata"`
 }
@@ -126,6 +127,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	var res *claudeEvent
 	var last *claudeUsage
 	postCompact := -1
+	preCompact := 0
 	var localOut []string
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
@@ -147,6 +149,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 			}
 		case e.Type == "system" && e.Subtype == "compact_boundary" && e.Compact.PostTokens > 0:
 			postCompact = e.Compact.PostTokens
+			preCompact = e.Compact.PreTokens
 			last = nil
 		case e.Type == "user":
 			// A local command such as /compact reports only here, not in result.
@@ -173,6 +176,8 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	}
 	v := res.Usage
 	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate}
+	r.CompactionObserved = postCompact > 0
+	r.ContextTokensBeforeCompact = preCompact
 	r.Messages = append(r.Messages, localOut...)
 	r.ContextTokens = -1
 	if last != nil {

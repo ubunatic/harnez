@@ -137,8 +137,8 @@ schema: |
   	output_tokens INTEGER,
   	reasoning_tokens INTEGER,
   	total_tokens INTEGER,
-    model TEXT NOT NULL DEFAULT '',
-    source TEXT NOT NULL DEFAULT 'hook'
+  	model TEXT NOT NULL DEFAULT '',
+  	source TEXT NOT NULL DEFAULT 'hook'
   );
   CREATE INDEX IF NOT EXISTS idx_compaction_events_session_id ON compaction_events (session_id);
   CREATE INDEX IF NOT EXISTS idx_compaction_events_created_at ON compaction_events (created_at);

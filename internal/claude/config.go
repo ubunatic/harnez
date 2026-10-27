@@ -301,6 +301,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	cfg.Dir = filepath.Dir(path)
 	cfg.FS = os.DirFS(cfg.Dir)
+	if err := addCompactionHooks(&cfg); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
 }
 
@@ -315,7 +318,25 @@ func LoadConfigEmbedded() (*Config, error) {
 	}
 	cfg.Dir = "."
 	cfg.FS = harnez.DefaultFS
+	if err := addCompactionHooks(&cfg); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
+}
+
+func addCompactionHooks(cfg *Config) error {
+	data, err := harnez.DefaultFS.ReadFile("spec/claude-compaction.yaml")
+	if err != nil {
+		return err
+	}
+	var spec struct {
+		Hooks []Hook `yaml:"hooks"`
+	}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return err
+	}
+	cfg.Hooks = append(cfg.Hooks, spec.Hooks...)
+	return nil
 }
 
 // ToolFeedbackProtocolBytes returns the combined byte size of every

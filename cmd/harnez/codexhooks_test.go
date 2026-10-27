@@ -103,6 +103,27 @@ func TestRunCodexTelemetry_PersistsCompactionAndBoundary(t *testing.T) {
 	}
 }
 
+func TestClaudeCompactHookPayload(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	for _, payload := range []string{
+		`{"session_id":"claude-session","transcript_path":"/missing","cwd":"/tmp","prompt_id":"p","hook_event_name":"PreCompact","trigger":"manual","custom_instructions":null}`,
+		`{"session_id":"claude-session","transcript_path":"/missing","cwd":"/tmp","prompt_id":"p","hook_event_name":"PostCompact","trigger":"manual","compact_summary":"summary"}`,
+	} {
+		if err := runCodexTelemetryAt(bytes.NewBufferString(payload), path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db, err := telemetry.OpenReadOnly(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	pair, err := db.LatestCompactionPair("claude-session")
+	if err != nil || pair == nil {
+		t.Fatalf("pair = %+v, error = %v", pair, err)
+	}
+}
+
 func TestRunCodexTelemetry_CompactionPayloadsArePartialAndMalformedSafe(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
 	partial := `{"hook_event_name":"PostCompact","session_id":"partial-session","reason":"unknown"}`

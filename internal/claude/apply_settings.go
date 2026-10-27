@@ -2,6 +2,7 @@ package claude
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -62,6 +63,24 @@ func applyMerge(existing, doc map[string]any) map[string]any {
 			if ep, ok := out[k].(map[string]any); ok {
 				if ip, ok := v.(map[string]any); ok {
 					out[k] = mergePermissions(ep, ip)
+					continue
+				}
+			}
+		}
+		if k == "hooks" {
+			kept, valid := removeHarnezHooks(out[k])
+			if !valid {
+				kept = map[string]any{}
+			}
+			encoded, err := json.Marshal(v)
+			if err == nil {
+				var incoming map[string][]any
+				if json.Unmarshal(encoded, &incoming) == nil {
+					for event, entries := range incoming {
+						prior, _ := kept[event].([]any)
+						kept[event] = append(prior, entries...)
+					}
+					out[k] = kept
 					continue
 				}
 			}

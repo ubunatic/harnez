@@ -141,6 +141,12 @@ func processTelemetryRecordResult(ctx context.Context, record server.TelemetryRe
 		return nil, server.ProcessAgyPostTool(dbPath, record.Payload)
 	case "codex":
 		return nil, server.ProcessCodexTelemetry(dbPath, record.Payload)
+	case "agy_compaction":
+		var sessionID string
+		if err := json.Unmarshal(record.Payload, &sessionID); err != nil {
+			return nil, err
+		}
+		return nil, server.InsertAgyCompactionPair(dbPath, sessionID)
 	case "cli_invocation":
 		var row telemetry.CLIInvocation
 		if err := json.Unmarshal(record.Payload, &row); err != nil {
