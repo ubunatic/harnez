@@ -229,8 +229,18 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
   `resolveDefaultModelWithCatalog`'s "default model is disabled" message when the default is a trait.
   - **Pre-Work (from M2 review):** `ResolveModelForRole` returns a plain `ResolveModel` error when a role's
     `default_model` points at a disabled model; it bypasses `resolveDefaultModelWithCatalog`. Test that case.
+  - **M4 delivered (`3ff833f8`, fallback):** developer `make test-q1`: 58 `ok`, 0 `--- FAIL`. Tests cover each skip
+    reason (disabled, denied, quota), nested `gui` → `lean` → `smart` order, unset, cycle, override bypassing quota
+    only, default-disabled wording, latest access observation, and the CLI notice
+    `smart → opus:med (sol:med: quota exhausted)`. Picks view reads cached quota (`CachedProviderQuotaAvailability`)
+    and stored access only. Host live: picks view and unknown-trait error unchanged; a live fallback was not forced
+    (would need a models.yaml edit or exhausted quota).
 - **M5 (user override in models.yaml):** `roles.<role>.models` entries replace that trait's list; users may add
   traits, not roles. Tests: list replaced, cycle via override, unknown model, unknown role rejected.
+  - **Pre-Work (from M4 review):** the all-failed test asserts only the reasons; also assert the
+    `--model provider:model:tier` hint. Add one CLI test where a user override in a temp `models.yaml` disables the
+    first entry, so the fallback notice is exercised end to end (host can then run it live with a temp
+    `XDG_CONFIG_HOME`).
 - **M6 (pick visible):** session record `model_alias` (e.g. `smart`), `agent list` model column, banner. Tests:
   round-trip; old records load.
   - **Pre-Work (from M3 review):** the picks table does not mark each role's `default_model`; add a marker
