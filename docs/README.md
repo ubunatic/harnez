@@ -219,6 +219,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-27-two-agent-lean-sprint-974-terra-onboarding.md](studies/2026-10-27-two-agent-lean-sprint-974-terra-onboarding.md) | Two-agent lean sprint: 974, GPT-6.1 Terra onboarding |
 | [studies/2026-10-27-two-agent-lean-sprint-975-find-priority-column.md](studies/2026-10-27-two-agent-lean-sprint-975-find-priority-column.md) | Two-agent lean sprint: 975, Priority column in `harnez find issues` |
 | [studies/2026-10-27-two-agent-lean-sprint-983-model-picks.md](studies/2026-10-27-two-agent-lean-sprint-983-model-picks.md) | Two-agent lean sprint: 983, model picks per role as the only source |
+| [studies/2026-10-27-two-agent-lean-sprint-987-subagent-compaction.md](studies/2026-10-27-two-agent-lean-sprint-987-subagent-compaction.md) | Two-agent lean sprint: 987, subagent compaction for every provider |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
