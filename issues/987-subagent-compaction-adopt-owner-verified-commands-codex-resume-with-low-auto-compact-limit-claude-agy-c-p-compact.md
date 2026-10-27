@@ -210,6 +210,12 @@ CONTEXT_SIZE for a terra session) and the old 200k let sprint 983 re-read up to 
 compaction costs about one context read (M1, §1), so halving the limit trades a few more compactions for cheaper
 turns. Revisit per model once 985 shows per-turn numbers.
 
+### M2 delivered (6697c28a): per-model Codex thresholds
+
+`spec/agent.yaml` has 100000 for terra, sol, luna (astra stays at the global 200000; not in M2's list) and the
+on-demand keys `auto_compact.codex_on_demand_limit_tokens` / `codex_status_prompt`. `harnez agent models` gained a
+COMPACT column (host checked live: haiku 80000, astra 200000, terra/sol/luna 100000). `make test-q1` passed.
+
 ### Pre-work for M3 and M4 (from M1 findings)
 
 1. Codex `--json` emits **no** `context_compacted` event, and `turn.completed.usage` stays cumulative even across
