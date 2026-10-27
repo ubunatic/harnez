@@ -106,3 +106,40 @@ Predicted, not yet observed at the point: Claude interactive `--autocompact 1200
   $0.19; use numbered lines. 4000 lines of `Row 00001: the inventory count is N units.` ≈ 77k tokens.
 - Prompts above 100k on Haiku are billed at the higher rate; size canaries to stay below.
 - `/context` free space ignores the percent; read the status line, or a `-p` stream's `compact_boundary`.
+
+## Compaction probes (issue 987 M1)
+
+All measurements below are dated 2026-10-27. Probes used newly created sessions in a scratch directory; hooks were
+added per invocation, with no global hook configuration edits.
+
+- **Measured, owner, Claude Code 2.1.311 and agy 1.4.8:** `claude -c -p "/compact"` and `agy -c -p "/compact"`
+  compacted the owner's sessions. **Measured, owner, codex-cli 0.164.0:** `codex exec -c
+  model_auto_compact_token_limit=50000 -C <dir> resume <id> "summarise your known status in one line"` compacted
+  before answering; the human-readable output said `context compacted`. These `-c` forms select the latest session;
+  use explicit IDs when multiple sessions exist.
+- **Measured, Claude Code 2.1.311:** `--settings` logging hooks both fired for `--resume <id> -p /compact`.
+  `PostCompact` stdin had `session_id`, `transcript_path`, `cwd`, `prompt_id`, `hook_event_name`, `trigger` and
+  `compact_summary`; trigger was `manual` and the summary contained the generated summary. `PreCompact` had the
+  same common fields and `trigger`, plus `custom_instructions` (null), instead of `compact_summary`.
+- **Measured, codex-cli 0.164.0:** both `PreCompact` and `PostCompact` stdin had `session_id`, `turn_id`,
+  `transcript_path`, `cwd`, `hook_event_name`, `model` and `trigger`; trigger was `auto`, and neither payload
+  included token counts. A limit of 1 on the third invocation triggered compaction of the short scratch session.
+- **Measured, codex-cli 0.164.0:** the compacting `--json` stream contained no `context_compacted` event, although
+  both hooks fired and the rollout had a `compacted` item. Its payload included `message`, `replacement_history`,
+  `replacement_history_metadata`, `retained_context`, window IDs, `compaction_response_id`,
+  `latest_token_usage_record` and `resume_metadata`. The JSON event's fields remain unmeasured.
+- **Measured, codex-cli 0.164.0:** `turn.completed.usage` was cumulative across normal turns: input 16,307 then
+  32,786, output 6 then 12. Rollout `total_token_usage` matched those values, while second-turn `last_token_usage`
+  was 16,479 input and 6 output. This is a session cumulative counter in this probe, not a per-turn counter.
+- **Measured, codex-cli 0.164.0:** logging `SessionStart` recorded `source` values `startup`, `resume`, `resume`,
+  `compact` across the three calls. On the compacting call, both resume and compact fire; multiple configured
+  handlers run for each source, explaining the owner's multiple hook lines.
+- **Measured, agy 1.4.8:** `--conversation <new id> -p /compact` produced a stream `step_update` with
+  `step_type: checkpoint` and success. The scratch conversation's SQLite `steps` row at that index had numeric
+  `step_type` 23 and a binary payload containing `<summary>`; no plain JSON transcript marker was established.
+  The CLI help exposes no per-invocation hook configuration, so this probe used stream and conversation storage.
+- **Measured, codex-cli 0.164.0 and installed harnez:** telemetry recorded pre/post compaction events with session,
+  turn, `auto` trigger and model, linked session boundaries, token snapshots and an `insufficient_data` economics
+  row. Event token fields were null; pre and post snapshots both contained the prior cumulative 32,798 total tokens,
+  so they did not establish a context drop. Two pre and two post rows appeared: the per-run telemetry handler and
+  the installed handler both ran; do not interpret this probe as one record per compaction.
