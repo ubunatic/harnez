@@ -267,6 +267,8 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
     `model: codex:sol:low (default)`. Required: one line, `model: smart → codex:sol:low (default)` for a role
     default, `model: smart → codex:sol:low` for an explicit trait, unchanged `model: <spec>` for a concrete model.
     Test asserts exactly one `model:` line per case.
+  - **M6 delivered (`3e61d153`, pick visible):** developer `make test-q1`: 58 `ok`, 0 `--- FAIL`. Host live:
+    `--role review` prints the single line `model: smart → codex:sol:low (default)`.
 - **M7 (prose migration):** generated block, `--md`, the 7 docs (full and lite) write `--role X --model <trait>`,
   guard test; root copies via `harnez init -d .`; the 3.4 `rg` check empty.
 
