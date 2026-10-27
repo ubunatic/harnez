@@ -139,3 +139,9 @@ direction "we should rather always use Luna medium". A head-to-head on real task
        override where it already can. Leave out-of-scope 969 guards (re-compact, post-compact) unbuilt.
     3. Tests: each switch read from the spec (agy off → no auto-compact; codex/claude on), and the schema rejects
        wrong types. Report anything that cannot move and why.
+- **M3 delivered (e9ea64de, spec defaults and switches):** `spec/agent.yaml` `compact_thresholds` (Haiku tiers
+  80000) and `auto_compact` (`provider_modes` claude manual, codex native, agy disabled; `watchdog_grace_ms` 20000;
+  `legacy_growth_threshold_tokens` 100000), all schema-checked; Go literals removed from `agent_run.go`,
+  `watchdog.go`, `session.go`. Host review: routing unchanged per provider; tests cover empty HOME (Haiku 80000,
+  Sonnet/Luna 200000), user global 150000 not overriding Haiku, user Haiku key winning, agy skip. Full run 58 `ok`,
+  0 `--- FAIL`; host rerun of touched packages ok. The owner's `~/.harnez/config.yaml` Haiku keys are now redundant.
