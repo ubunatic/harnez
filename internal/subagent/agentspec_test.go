@@ -45,6 +45,9 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if sol := spec.Models["codex:sol"]; !strings.Contains(sol.Use, "judgment") {
 		t.Errorf("codex:sol use = %q, want judgment guidance", sol.Use)
 	}
+	if terra := spec.Models["codex:terra"]; terra.Use != "Near-Sol Codex developer and reviewer at half Sol's price; use Sol for the hardest judgment." || terra.Roles != "developer, advisor, reviewer" {
+		t.Errorf("codex:terra guidance = %q, roles = %q", terra.Use, terra.Roles)
+	}
 	haiku := spec.Models["claude:haiku"]
 	if !strings.Contains(haiku.Use, "haiku:med for easy tasks") || !strings.Contains(haiku.Use, "haiku:low for very simple, repetitive tasks") || !strings.Contains(haiku.Use, "100k") || !strings.Contains(haiku.Use, "5x") || !strings.Contains(haiku.Use, "harnez compacts Haiku at 80k by default; override via agent.compact_thresholds") {
 		t.Errorf("claude:haiku use = %q, want tier, price-step and compaction guidance", haiku.Use)
@@ -81,6 +84,7 @@ func TestKnownModelEntriesCostByTierAndEffortRows(t *testing.T) {
 	wantCosts := map[string]int{
 		"codex:luna:low": 1, "codex:luna:med": 4, "codex:luna:high": 6,
 		"codex:sol:low": 29, "codex:sol:med": 47, "codex:sol:high": 71,
+		"codex:terra:low": 15, "codex:terra:med": 24, "codex:terra:high": 36,
 		"codex:astra:low": 182, "codex:astra:med": 342, "codex:astra:high": 384,
 	}
 	for _, entry := range KnownModelEntries() {

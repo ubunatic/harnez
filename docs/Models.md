@@ -1,5 +1,21 @@
 # Model Assessment
 
+## 2026-10-27 GPT-6.1 Terra (issue 974)
+
+The [OpenAI model page](https://developers.openai.com/api/docs/models/gpt-6.1-terra)
+lists `gpt-6.1-terra` with a 1,050,000-token context and 128,000 maximum output
+tokens. Standard API prices per million tokens are $1 input, $0.05 cached input,
+and $5 output. For 100k input and 20k output with half the input cached, the
+list-price ratios are Luna 1, Terra 10, Sol 20. These are not measured quota costs.
+Terra's listing costs 15/24/36 are owner estimates, approximately half Sol per tier.
+
+OpenAI reports [Terminal-Bench 4.0 50.3% at max effort](https://openai.com/index/introducing-gpt-6-1-terra/).
+A [secondary report](https://multiai.co/blog/gpt-6-1-terra) attributes scores of
+56% Terra, 56% Sol and 31% Luna to Artificial Analysis, and 91 tokens/s Terra
+versus 69 Sol; effort is unstated and these figures remain unverified. The owner's
+Sol 54, Terra 48 and Luna 31 scores are also unverified, with no recorded source.
+Comparable independent SWE-bench and tool-calling results remain unverified.
+
 Operational role guidance lives in `spec/agent.yaml` (`roles`, `use`, `use_med` per model)
 and prints with `harnez agent models`. This doc keeps the evidence behind it. Role
 practice: `docs/practices/ModelRoles.md`; measured sprint eval: `ModelAdvisoryEval.md`.
@@ -39,12 +55,13 @@ $0.82/$1.54/$1.73. The Astra-high chart reading was the half-hidden point near
 $1.75 / Index 51.5, distinct from xhigh near $2.3 and max near $3.26. Claude and
 Gemini retain their existing single values across listed effort tiers because
 their plan quotas differ and no matched quota data supports cross-vendor API
-ratios. The retired Terra value is omitted from the current listing.
+ratios. The retired GPT-5.6 Terra value is omitted; the new Terra estimate is above.
 
 | Spec | Low | Med | High |
 |---|---:|---:|---:|
 | `codex:luna` | 1 | 4 | 6 |
 | `codex:sol` | 29 | 47 | 71 |
+| `codex:terra` | 15 | 24 | 36 |
 | `codex:astra` | 182 | 342 | 384 |
 | `claude:haiku` | 12 | 12 | 12 |
 | `claude:sonnet` | 15 | 15 | 15 |
@@ -78,6 +95,7 @@ COST (workload 100k in / 20k out / 50% cached, list price, × luna):
 | agy:flash37, flash38 | 0.75 / 0.075 / 3.75 (flash38 introductory to 2026-12-31) | 7.5 | 4 → 8 |
 | claude:haiku | 1 / 0.10 / 5 (low confidence) | 10 | 4 → 10 |
 | codex:sol | 2 / 0.20 / 10 | 20 | 20 |
+| codex:terra | 1 / 0.05 / 5 | 10 | 15 / 24 / 36 (owner estimate by tier) |
 | claude:sonnet, agy:sonnet | 3 / 0.30 / 15 | 30 | 16 → 30 |
 | claude:opus, agy:opus | 5 / 0.50 / 25 | 45 | 32 → 60 (user-stated opus ≈ 2× sonnet wins) |
 | codex:astra | 10 / 1 / 50 | 100 | 100 (list ratio lands exactly on the anchor) |

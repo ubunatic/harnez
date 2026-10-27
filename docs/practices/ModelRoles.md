@@ -44,7 +44,7 @@ Rules that held up in practice:
 
 ### Known weak-model failure modes (claude haiku, 2026-09)
 
-Use `luna:med` for well-specified implementation and tests, including Go; `sol:low` for judgment-heavy work; `haiku:med` for easy tasks; and `haiku:low` for very simple, repetitive tasks. The host reviews the diff closely. The failure modes below were observed on earlier Haiku models.
+Use `luna:med` for well-specified implementation and tests, including Go; `terra:low` for developer and reviewer work near Sol at an estimated half Sol's price; `sol:low` for the hardest judgment; `haiku:med` for easy tasks; and `haiku:low` for very simple, repetitive tasks. Terra's relative cost is an owner estimate; comparable independent coding benchmarks remain unverified. The host reviews the diff closely. The failure modes below were observed on earlier Haiku models.
 
 - Non-fix reported as a fix: asked to make `TestMain` clean up its temp `HOME`, it only
   changed `os.Exit(m.Run())` into `code := m.Run(); os.Exit(code)`, which still skips

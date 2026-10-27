@@ -49,8 +49,7 @@ researcher repeats another's identity work, and one researcher owns each cross-m
 
 | Researcher | Rows / columns | Owns |
 |---|---|---|
-| `mr-gpt6` | luna, sol, astra | identity, effort controls, SKILLS, ROLES/USE claims |
-| `mr-gpt56` | terra | same |
+| `mr-gpt6` | luna, sol, terra, astra | identity, effort controls, SKILLS, ROLES/USE claims |
 | `mr-claude` | haiku, sonnet, opus (claude and agy routes) | same |
 | `mr-gemini` | flash37, flash38 | same |
 | `mr-price` | all in-scope models plus both anchors | COST and EFF on one scale |

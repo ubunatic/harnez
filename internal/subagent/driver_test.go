@@ -54,9 +54,10 @@ func TestResolveModel(t *testing.T) {
 			t.Fatalf("%s resolved to %#v", tc.spec, m)
 		}
 	}
-	for _, spec := range []string{"terra", "terra:low", "codex:terra"} {
-		if _, err := ResolveModel(spec); err == nil || !strings.Contains(strings.ToLower(err.Error()), "unknown") {
-			t.Errorf("ResolveModel(%q) error = %v, want clear unknown-model error", spec, err)
+	for spec, tier := range map[string]string{"terra": "low", "terra:low": "low", "terra:med": "med", "terra:high": "high", "codex:terra": "low"} {
+		m, err := ResolveModel(spec)
+		if err != nil || m.Provider != "codex" || m.Name != "gpt-6.1-terra" || m.Tier != tier {
+			t.Errorf("ResolveModel(%q) = %#v, %v; want codex:gpt-6.1-terra:%s", spec, m, err, tier)
 		}
 	}
 }

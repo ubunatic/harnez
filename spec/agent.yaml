@@ -106,6 +106,18 @@ models:
     eff: "~"
     skills: Go~ TUI~ SQL?
     use: Owner guidance — use sol:low for judgment, orchestration, and resolving compiler failures; reserve higher effort for harder work.
+  codex:terra:
+    aliases: [terra, terra:low]
+    preferred: true
+    provider: codex
+    name: gpt-6.1-terra
+    tier: low
+    roles: developer, advisor, reviewer
+    cost: 15
+    cost_by_tier: {med: 24, high: 36}
+    eff: "?"
+    skills: Go? TUI? SQL?
+    use: Near-Sol Codex developer and reviewer at half Sol's price; use Sol for the hardest judgment.
   codex:astra:
     aliases: [astra, astra:low]
     preferred: true

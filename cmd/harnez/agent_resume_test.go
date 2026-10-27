@@ -1109,7 +1109,7 @@ func TestRunResumeRejectsSessionWithRemovedModel(t *testing.T) {
 		return s.Find(id)
 	}}
 	err = runResume(t.Context(), &cobra.Command{}, deps, resumeRequest{Name: "retired", Prompt: "continue", StreamMode: streamFull})
-	if err == nil || !strings.Contains(err.Error(), "uses unavailable model") || !strings.Contains(err.Error(), "known specs") {
+	if err == nil || !strings.Contains(err.Error(), "uses unavailable model") || !strings.Contains(err.Error(), "gpt-5.6-terra") || !strings.Contains(err.Error(), "known specs") {
 		t.Fatalf("resume error = %v, want clear unavailable-model error", err)
 	}
 	if called {
@@ -1118,7 +1118,7 @@ func TestRunResumeRejectsSessionWithRemovedModel(t *testing.T) {
 }
 
 func TestRunResumeAcceptsCurrentCodexModels(t *testing.T) {
-	for _, tc := range []struct{ model, tier string }{{"gpt-6-luna", "med"}, {"gpt-6.1-sol", "low"}} {
+	for _, tc := range []struct{ model, tier string }{{"gpt-6-luna", "med"}, {"gpt-6.1-sol", "low"}, {"gpt-6.1-terra", "low"}} {
 		t.Run(tc.model+":"+tc.tier, func(t *testing.T) {
 			store, err := subagent.NewSessionStore(t.TempDir())
 			if err != nil {
