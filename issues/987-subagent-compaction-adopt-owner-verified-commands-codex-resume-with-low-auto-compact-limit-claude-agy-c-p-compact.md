@@ -256,6 +256,18 @@ truncates long command output, so a ~70k context needed three chunked reads.
    test that the stored value drops.
 2. Output wording per 985's terms: `Compacted: context usage 71705 -> 17063 tokens` then `Status: <line>`.
 
+### M4 plan review (host, 2026-10-27): split into M4a and M4b
+
+- **M4a (session state and pairing):** M3-review pre-work (store post-compaction context usage and count; wording);
+  `LatestCompactionPair` in `internal/telemetry/` with a `source` column (schema migration in
+  `spec/telemetry.yaml`), pairing by session + turn ID, duplicates deduplicated, latest Pre without Post =
+  interrupted; shown in `harnez agent status --name <n> --json`. Commit `(issue 987 M4a)`.
+- **M4b (provider feeds), fresh session:** harnez-owned Claude `PreCompact`/`PostCompact` entries via `harnez apply`
+  (foreign hooks untouched, idempotent), Claude M1 payload fields into the existing insert path; agy `Compact`
+  writes a `stream_fallback` pair from the checkpoint `step_update`. Commit `(issue 987 M4b)`.
+- Host live checks after M4b and `harnez apply`: one throwaway `claude:haiku:low` and one `agy:argon:low` session in a
+  /tmp dir: `agent start`, `agent compact`, `agent status --json`.
+
 ### Pre-work for M3 and M4 (from M1 findings)
 
 1. Codex `--json` emits **no** `context_compacted` event, and `turn.completed.usage` stays cumulative even across
