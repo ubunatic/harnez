@@ -1,0 +1,86 @@
+# harnez-lint:ignore glossary -- canonical glossary spec defines forbidden terms
+version: 1
+default_scope:
+  include:
+    - "AGENTS.md"
+    - ".harnez/rules/*.md"
+    - "docs/**/*.md"
+    - "issues/*.md"
+    - "spec/**/*.yaml"
+    - "cmd/**/*.go"
+    - "internal/**/*.go"
+  exclude:
+    - "issues/CLOSED.md"
+    - "issues/BACKLOG.md"
+    - "docs/studies/**"
+    - "docs/feedback/**"
+    - "**/*_test.go"
+    - "spec/glossary.yaml"
+    - ".harnez/glossary.yaml"
+
+terms:
+  - term: "context usage"
+    status: "preferred"
+    definition: "Tokens the model read on the last call of the turn (full input including cached tokens and system prompt)."
+    code_names:
+      - "ContextTokens"
+      - "LastContextTokens"
+      - "CONTEXT_USAGE"
+    forbidden:
+      - phrase: "context used"
+        replacement: "context usage"
+        reason: "Use 'context usage' for current session tokens."
+      - phrase: "CONTEXT_USED"
+        replacement: "CONTEXT_USAGE"
+        reason: "CLI column header for current session tokens is CONTEXT_USAGE."
+        case_sensitive: true
+      - phrase: "context size"
+        replacement: "context usage"
+        reason: "Ambiguous between current usage and model capacity."
+      - phrase: "context length"
+        replacement: "context usage"
+        reason: "Ambiguous between current usage and model capacity."
+    see_also:
+      - "context window"
+      - "compaction limit"
+      - "cached re-read"
+
+  - term: "context window"
+    status: "preferred"
+    definition: "The model's maximum input token capacity."
+    code_names:
+      - "ContextWindowSize"
+      - "CONTEXT_WINDOW"
+    forbidden:
+      - phrase: "context size"
+        replacement: "context window"
+        reason: "Ambiguous between current usage and model capacity."
+      - phrase: "context length"
+        replacement: "context window"
+        reason: "Ambiguous between current usage and model capacity."
+      - phrase: "CONTEXT_SIZE"
+        replacement: "CONTEXT_WINDOW"
+        reason: "CLI column header for model maximum capacity is CONTEXT_WINDOW."
+        case_sensitive: true
+    see_also:
+      - "context usage"
+      - "compaction limit"
+
+  - term: "compaction limit"
+    status: "preferred"
+    definition: "The Harnez token threshold on context usage that triggers compaction, usually well below the context window."
+    code_names:
+      - "compact_threshold_tokens"
+      - "compact_thresholds"
+    see_also:
+      - "context usage"
+      - "context window"
+
+  - term: "cached re-read"
+    status: "preferred"
+    definition: "Cached input tokens billed across all API calls of a turn; a cumulative turn cost rather than a context measure."
+    code_names:
+      - "CachedInputTokens"
+      - "CachedTokensTotal"
+    see_also:
+      - "context usage"
