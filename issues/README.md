@@ -60,4 +60,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 982 | [982-epic-test-and-release-hygiene.md](982-epic-test-and-release-hygiene.md) | Epic: test and release hygiene | Open |
 | 984 | [984-purpose-aliases-dev-any-guesses-the-nearest-trait-like-role-guessing.md](984-purpose-aliases-dev-any-guesses-the-nearest-trait-like-role-guessing.md) | purpose aliases: dev:<any> guesses the nearest trait, like --role guessing | Open |
 | 985 | [985-agent-resume-output-show-per-turn-context-re-read-and-cumulative-cost-so-the-host-sees-a-session-getting-expensive.md](985-agent-resume-output-show-per-turn-context-re-read-and-cumulative-cost-so-the-host-sees-a-session-getting-expensive.md) | agent resume output: show per-turn context re-read and cumulative cost so the host sees a session getting expensive | Open |
+| 986 | [986-per-project-machine-readable-glossary-and-harnez-assess-glossary-wording-check.md](986-per-project-machine-readable-glossary-and-harnez-assess-glossary-wording-check.md) | Per-project machine-readable glossary and harnez assess --glossary wording check | Open |
 <!-- harnez:end issues-active-index -->
