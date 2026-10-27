@@ -1,6 +1,6 @@
 # 973 — Haiku tiers: drop haiku:high as default worker; haiku:med for easy tasks, haiku:low for repetitive ones
 
-**Status**: Open
+**Status**: Closed — No guide recommends haiku:high; luna:med is the cheap default developer, haiku:med/low for easy/repetitive work (51620455, e863c408). Haiku compacts at 80k by spec default and compaction switches live in spec/agent.yaml (e9ea64de); full test run 58 ok, 0 FAIL; empty-HOME probe Haiku 80000, others 200000.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Docs
