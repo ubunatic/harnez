@@ -214,6 +214,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-25-session-retro-harnez-epics-910-911.md](studies/2026-10-25-session-retro-harnez-epics-910-911.md) | Session retro: harnez host session, 2026-10-23 to 2026-10-25 |
 | [studies/2026-10-25-two-agent-lean-sprint-938-study-skill-split.md](studies/2026-10-25-two-agent-lean-sprint-938-study-skill-split.md) | Two-agent lean sprint 938: split a small study skill from story (2026-10-25) |
 | [studies/2026-10-26-two-agent-lean-sprint-968-skill-and-tool-gating.md](studies/2026-10-26-two-agent-lean-sprint-968-skill-and-tool-gating.md) | Lean sprint 968: skill and tool gating |
+| [studies/2026-10-27-two-agent-lean-sprint-973-haiku-tiers-and-compaction-spec.md](studies/2026-10-27-two-agent-lean-sprint-973-haiku-tiers-and-compaction-spec.md) | Two-agent lean sprint: 973, Haiku tiers and compaction spec defaults |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
