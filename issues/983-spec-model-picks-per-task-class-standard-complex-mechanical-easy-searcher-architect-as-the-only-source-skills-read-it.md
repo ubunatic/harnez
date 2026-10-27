@@ -251,6 +251,11 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
     `harnez --help` and commands that do not need the spec keep working. Also drop the repeated
     `agent spec: role "reviewer" trait "smart":` prefix (it appears twice). Test: a CLI test with the cycle override
     asserts no `panic:`/`goroutine` in output, the path and `reviewer/smart` in the error, and the prefix once.
+  - **M5 delivered (`57f6f3a1`, user override):** host `make test-q1`: 58 `ok`, 0 `--- FAIL`. Live with the cycle
+    override: `harnez --help` works; `agent models --picks` and `agent selftest` exit with
+    `<path>: roles reviewer/smart: agent spec: role "reviewer" trait "smart": agent spec: trait cycle at "smart"`,
+    no panic. Host decision: M6 trims this to `<path>: role reviewer trait smart: trait cycle at "smart"`; the M5
+    assertion may change to the trimmed text if it still checks path, role, trait, cycle and each once.
 - **M6 (pick visible):** session record `model_alias` (e.g. `smart`), `agent list` model column, banner. Tests:
   round-trip; old records load.
   - **Pre-Work (from M3 review):** the picks table does not mark each role's `default_model`; add a marker
