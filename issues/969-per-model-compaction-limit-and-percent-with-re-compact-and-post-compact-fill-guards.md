@@ -131,3 +131,26 @@ R1–R4 are done.
    at 70% and asserts the hook prints the message and does not block.
 6. **Live.** One Haiku harnez session compacts at about 80k (±1 turn), and a forced case (large pinned context) shows
    the orchestrator warning and the user hook message. Check: both recorded in this ticket with token counts.
+
+## 5. Status 2026-10-27 (session wrap)
+
+Done:
+- R2 (price steps) and most of R3 (Claude trigger mechanism): section 2a, `docs/AutoCompaction.md` (a2f8ca09).
+- Owner decisions: default 200k for every model in use except Haiku; Haiku target 80k; Gemini Flash 3.8 and Argon
+  stay at 200k.
+- Haiku override live in `~/.harnez/config.yaml` (owner file, not in git): `agent.compact_thresholds` with
+  `claude:haiku:low|med|high: 80000`. Verified with harnez's own `CompactThreshold` against the real config: Haiku
+  80000, Sonnet and Luna 200000. All three tier keys are needed because lookup tries the exact
+  `provider:alias:tier` first and the bare `haiku` alias resolves to `claude:haiku:low`. Pitfall: tests in
+  `internal/subagent` replace HOME (`testmain_test.go`), so a live check must set HOME inside the test.
+
+Remaining, in order:
+1. Observe the predicted 80k points: interactive `--autocompact 120000` + percent 80 (status line reads 20% at about
+   64k), and a `-p` Haiku session with harnez's 80k override compacting before the next prompt.
+2. One reading with the percent active and a changed `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, to choose between the two
+   formulas in the doc.
+3. R1 (headroom of the compact turn, overshoot from large tool output in one turn) and R4 (which hook shows the
+   post-compact message; `PostCompact` untested on 2.1.311).
+4. Default percent for the new setting: owner choice open (100% keeps today's behaviour; recommended).
+5. Implementation steps 2-6 above. The post-compact guard must use the next request's input, not `post_tokens`.
+6. agy: no documented automatic threshold; measure where it compacts on Flash 3.8 and Argon (869).

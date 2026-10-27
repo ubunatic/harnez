@@ -56,7 +56,8 @@ because this ticket owns the per-session flag.
 - **The window did not come from settings.** `~/.claude/settings.json` sets `autoCompactWindow` to 200000
   (top level and `claude-sonnet-5-5`), and the shell env had no `CLAUDE_CODE_AUTO_COMPACT_WINDOW` or
   `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`. The 100k value most likely came from the launch command (a flag or env in the
-  launcher). Unverified: read the launch args of the session process to confirm.
+  launcher). Confirmed 2026-10-27: the owner launched with `--autocompact 100000` (969 §2a, `docs/AutoCompaction.md`,
+  which also has the full trigger formula and the `-p` canaries).
 - **Print mode is not proof.** 956's `-p` canary (100k window, 10% override) did not compact at about 52k. That
   does not show interactive sessions ignore the values; the interactive `/context` trigger above is the
   evidence that they apply. Still open: a canary that sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW` and

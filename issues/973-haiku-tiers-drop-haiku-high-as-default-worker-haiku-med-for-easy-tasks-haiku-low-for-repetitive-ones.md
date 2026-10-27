@@ -50,3 +50,30 @@ well-specified work: `sol:low` alone, or `haiku:med`? The goal above assumes no 
   and update their expectations without weakening the other checks.
 - Verify: `grep -rn "haiku:high" docs spec --include=*.md --include=*.yaml` finds only studies and this ticket's
   history; `harnez agent models` shows the new guidance; `make test-q1` passes; `make install`.
+
+## 4. Owner direction and research, 2026-10-27
+
+Owner: prefer Luna medium (`luna:med`) over Haiku as the worker: larger budget before a price step, and in the
+owner's view more capable at medium. Two independent web researchers (`luna:med`, `haiku:med`, same prompt) agree:
+
+| | Haiku 5.5 | GPT-6 Luna |
+|---|---|---|
+| Price in/out per MTok | $0.10 / $0.50 | $0.10 / $0.50 |
+| Price step | input > 100k: 5x | input > 272k: 2x input, 1.5x output |
+| Window / max output | 1M / 128k | 1.05M (922k input) / 128k |
+| Tool use | OSWorld 2.1 72.4%, Terminal-Bench 4.0 39.2% (max effort) | OSWorld 2.1 48.9%, Terminal-Bench 4.0 16.4% (effort not stated) |
+| Coding | FrontierCode 1.1 46.4%; SWE-Bench Pro 64.8% (max) | FrontierCode 1.1 42.4%; DeepSWE 66.6% (aggregator, unverified) |
+| Research | no comparable benchmark | no comparable benchmark |
+
+Sources: https://platform.claude.com/docs/en/models/haiku-5-5/overview, https://www.anthropic.com/claude-haiku-5-5,
+https://developers.openai.com/api/docs/models/gpt-6-luna, https://developers.openai.com/api/docs/pricing.
+
+- No benchmark was found at medium effort for both; published numbers favour Haiku but are not comparable.
+- The Haiku-high vs Opus-low study was not found by either researcher.
+- Proven Luna advantage: the price step at 272k instead of 100k. "Luna medium is more capable" is unproven.
+- Side observation: the `haiku:med` researcher used 211k tokens over one turn (largest single request 36k), against
+  37.6k new + 107.5k cached for `luna:med`, on the same prompt. One run each, not a benchmark.
+
+Open owner decision: switch the default worker to `luna:med` now (price step plus owner experience), or first run a
+head-to-head on 2-3 real harnez tasks (`luna:med` vs `haiku:med`: result quality, tool calls, tokens). The /goal
+above then changes from "haiku:med/low" to the chosen default.
