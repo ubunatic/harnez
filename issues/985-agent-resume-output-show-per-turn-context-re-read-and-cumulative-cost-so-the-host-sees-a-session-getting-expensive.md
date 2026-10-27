@@ -49,13 +49,32 @@ host already reads, are preferred.
 
 ## 2. Code Facts (refinement, 2026-10-27)
 
+### Terminology (binding for this ticket, its code, output and docs)
+
+Mixing these up has led to wrong compaction and restart decisions. Use exactly these terms:
+
+- **context usage** — tokens the model read on the last call of the turn (full input incl. cached and system
+  prompt). Matches Claude's `/context`. Code: `ContextTokens`, `LastContextTokens()`. Output label: `context usage`.
+- **context window** — the model's maximum input tokens. Code: `ContextWindowSize`. Output label: `context window`.
+- **compaction limit** — the harnez threshold that triggers compaction (`compact_threshold_tokens`,
+  `compact_thresholds`); usually well below the context window.
+- **cached re-read** — cached input billed across all calls of a turn; this is a *cost*, not a context measure,
+  and can be many times the context usage (each tool call re-sends the context).
+- Do **not** use "context size" or "context length": both are read as either usage or window. "Context used"
+  is replaced by "context usage".
+
+Known conflict: `agent list` prints `CONTEXT_USED` (usage) next to `CONTEXT_SIZE` (window). Renaming them to
+`CONTEXT_USAGE` / `CONTEXT_WINDOW` is in scope (M3), including docs and tests that match the headers.
+
+### Facts
+
 - `tokenSummary` (`cmd/harnez/agent_stream.go:249`) prints `TurnResult` fields as-is; for Codex these are the
   rollout's cumulative counters, hence session totals labelled as if per turn.
 - The store already has what a delta needs: `Session.InputTokensTotal/CachedTokensTotal/OutputTokensTotal`,
   `TokenTotalsKnown`, and `TurnRecords []TurnRecord{NewInputTokens, CachedInputTokens, OutputTokens}`
   (`internal/subagent/session.go`). No new persisted field is required unless a provider's semantics differ.
-- Context size: `TurnResult.ContextTokens` / `Session.LastContextTokens()`; `-1` means unknown (agy, failed
-  Codex rollout read). Same source as `agent list` CONTEXT_USED.
+- Context usage: `TurnResult.ContextTokens` / `Session.LastContextTokens()`; `-1` means unknown (agy, failed
+  Codex rollout read). Same source as `agent list` CONTEXT_USED (to be renamed CONTEXT_USAGE).
 - Thresholds: `spec/agent.yaml` already holds `compact_threshold_tokens` and per-model `compact_thresholds`
   (969 groundwork). New cost-check keys go next to them, with schema in `spec/schemas/agent.schema.json`.
 
@@ -67,12 +86,13 @@ In scope — make the done line a check, not a counter:
    `tokens: turn 17k new (2k out), 0.8M cached; session 538k new, 47.1M cached`.
    Per-turn values come from the `TurnRecord` written for this turn. The driver decides cumulative vs. per-turn;
    `tokenSummary` must not guess. Unknown values print `unknown`, never `0`.
-2. **Context at turn end.** Append `context 310k/400k` (or `context unknown`).
+2. **Context usage at turn end.** Append `context usage 310k of 400k window` (or `context usage unknown`); when a
+   compaction limit applies, add `, compaction limit 200k`.
 3. **Cost check line**, printed only when a threshold is crossed:
-   `[check: turn re-read 7.1M cached for 175k new (40x); context 310k; fresh start ~25k; consider: harnez agent start --role <role> --model <model> -f <ticket>]`
+   `[check: turn re-read 7.1M cached for 175k new (40x); context usage 310k; fresh start ~25k; consider: harnez agent start --role <role> --model <model> -f <ticket>]`
    Triggers (any one), values in `spec/agent.yaml` under `cost_check:`:
    - `cached_to_new_ratio` per turn (proposed 20),
-   - `context_fraction` of the model's compaction limit (proposed 0.75, reuses `compact_thresholds`),
+   - `context_usage_fraction` of the model's compaction limit (not of the context window) (proposed 0.75, reuses `compact_thresholds`),
    - `min_turns` before any check fires (proposed 3) to avoid noise on short sessions.
    The suggested command uses the session's real role and model.
 4. **Quota unknown.** When the pre-turn quota reading is `unknown`, the done line says
@@ -95,7 +115,9 @@ Out of scope (follow-up tickets if wanted after this lands):
 - **M2 Delta** — normalize per-turn usage in the driver/store layer (`internal/subagent`), unit tests: first turn,
   cumulative provider, per-turn provider, resume after compaction (totals drop → no negative delta; print session
   only), missing numbers → `unknown`.
-- **M3 Done line + context** — update `tokenSummary` and its three call sites incl. plan-first; fix its comment.
+- **M3 Done line + context usage** — update `tokenSummary` and its three call sites incl. plan-first; fix its
+  comment. Rename `agent list` headers to `CONTEXT_USAGE` / `CONTEXT_WINDOW`; grep docs/specs for "context size",
+  "context length", "context used" in agent-related text and align them.
 - **M4 Cost check** — spec keys + schema, check function in `internal/` (pure, table-tested), quota-unknown note.
 - **M5 Docs** — the agent output section in the relevant evergreen doc; `docs/AutoCompaction.md` cross-link.
 
@@ -104,7 +126,8 @@ Out of scope (follow-up tickets if wanted after this lands):
 - Over a live 3+ turn resumed Codex session, per-turn values sum to the session totals (± rounding).
 - With thresholds lowered in `~/.harnez/config.yaml`, the `[check: ...]` line appears on the crossing turn and
   names the session's role and model; with defaults on a short session it does not appear.
-- agy (context unknown) prints `context unknown` and no ratio check based on missing values.
+- agy prints `context usage unknown` and no ratio check based on missing values.
+- Agent output and touched docs use only the §2 terms; no "context size"/"context length" in new text.
 - No threshold literal in Go code; `make lint`, `make test-q1`, `make install` pass.
 
 ## 6. Open Questions for the Owner
