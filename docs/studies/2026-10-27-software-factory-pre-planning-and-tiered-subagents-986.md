@@ -97,7 +97,15 @@ Following the architect's review, the factory incorporated four structural safeg
   - `gokay assess --json`: `internal/glossary` verified at 818 code lines, 528 test lines, 65% test ratio, 0 untested packages, 0 orphan schema keys, and clean spec posture.
 - **Host**: Ran `make install` and committed `b698808a`.
 
-### Empirical Observations on `neus ask` in Searcher Workflow
+### Milestone 3 Delivery (`ad760614`, `403cab95`)
+- **Searcher `search-986` (`haiku:med`)**: 36s, 234k tokens (incl. cached). Scouted `cmd/harnez/assess_cmd.go` flag conventions and `internal/lint/lint.go` rule interfaces.
+- **Architect `arch-986` (`argon:low`)**: 1m7s, 501k tokens (incl. cached).
+  - *Key architectural discovery*: Caught that `internal/lint`'s `ruleApplies` checks `rule.Languages()` against `lang`, so returning `nil` did *not* match all files—it caused the rule to be skipped entirely! Architect corrected `Languages()` to return `[]Language{LangMarkdown, LangGo}`.
+  - Specified `AssessGlossaryReport`, `runAssessGlossary`, `--glossary` flag wiring, `GlossaryRule` in `internal/lint`, and table tests.
+- **Developer `dev-986-m3a` (`haiku:med`)**: 52s, 301k tokens (incl. cached). Cleanly implemented CLI wiring and lint rule. All unit tests passed (`ad760614`).
+- **Tool-Driven Punch List Generation**: Running the live `harnez assess --glossary` immediately discovered 36 forbidden terminology findings across 10 active docs, Go comments, and issues.
+- **Developer `dev-986-m3b` (`haiku:med`)**: 8m9s, 971k tokens (incl. cached). Mechanically aligned all 10 files using the automated punch list and added inline suppression directives for problem-statement quotes in issue tickets.
+- **Verification**: `harnez assess --glossary` confirmed **0 findings**. `make install` passed cleanly. Committed as `403cab95`.
 The searcher (`search-986`, `haiku:med`) is mandated to call `neus ask "<question>"` first before ripgrep or file reads:
 - **Turn 1 (M1 - Schema validation & embed)**: `neus ask "how does harnez embed and validate spec JSON schemas?"` returned `internal/jsonc/jsonc.go` (JSON syntax parser rather than JSON schema validation). Searcher quickly fell back to inspecting `internal/assess/ramp_spec.go` and `go.mod` to find `github.com/google/jsonschema-go/jsonschema`.
 - **Turn 2 (M2 - Glob matching & lint rules)**: `neus ask "how does harnez match glob patterns with double stars in filepath?"` returned thin results because Harnez had no existing `**` glob library. Searcher quickly confirmed lack of dependencies and located `internal/readcard/compress.go` for `go/scanner`.
