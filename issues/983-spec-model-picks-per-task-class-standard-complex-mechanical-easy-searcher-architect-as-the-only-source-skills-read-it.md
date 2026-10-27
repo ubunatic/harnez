@@ -1,6 +1,6 @@
 # 983 — spec: model picks per task class (standard, complex, mechanical, easy, searcher, architect) as the only source; skills read it
 
-**Status**: Open
+**Status**: Closed — Design B delivered in M1-M8 (f1b125b3..2bf4ab41): role-scoped picks in spec/agent.yaml with schema, ordered fallback, user overrides, picks shown in banner, agent list and agent models --picks, skills and docs use --role X --model <trait> with a generated table; opus:low review had no blockers, its fixes landed in M8; host make test 59 ok, 0 FAIL
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Feature
