@@ -1,6 +1,7 @@
 # 974 — Onboard GPT-6.1 Terra (Codex) into the model list with sourced numbers
 
-**Status**: Open
+**Status**: Closed — M1 delivered: canary codex:gpt-6.1-terra (session 01a17af6) replied OK; make test-q1 passed 58 packages with 0 FAIL lines; commit 484e2721.
+**Closed-By**: codex:luna:med, session dev-974
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
