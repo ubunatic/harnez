@@ -302,7 +302,7 @@ Never trade away verification for speed when applying Invariant 7.
           |
    (2) Findings with paths, line ranges, answers
           v
-     [Focused Developer: luna:high / haiku:high / sol:low]
+     [Focused Developer: luna:med / sol:low / haiku:med / haiku:low]
           |
    (3) TDD, unit tests, verification, milestone commits
           v
@@ -322,8 +322,8 @@ For focused, day-to-day tickets and milestone iterations, `/lean-sprint` uses tw
    - Performs bounded read-only audits, answers targeted questions, and explores relevant APIs/specs.
    - Returns concise findings with exact file paths and line ranges; no edits, tests that mutate state, or commits.
    - Run search before implementation and pass only relevant findings into the developer handoff.
-3. **Focused Developer (`luna:high` / `haiku:high` / `sol:low`)**:
-   - Prefer `luna` first; use `haiku:high` for a simple, well-specified ticket with a machine-checkable acceptance test (the host reviews its diff closely); use `sol` when stronger judgment is needed; avoid `agy` models for developer work, except `argon:low`.
+3. **Focused Developer (`luna:med` / `sol:low` / `haiku:med` / `haiku:low`)**:
+   - Use `luna:med` for well-specified implementation and tests, including Go; `sol:low` when judgment is needed; `haiku:med` for easy tasks; and `haiku:low` for very simple, repetitive tasks. The host reviews the diff closely; avoid `agy` models for developer work, except `argon:low`.
    - Implements milestones with TDD, adds unit tests, runs verification, and commits each completed milestone.
    - Use prompt files for long or complex handoffs instead of shell-interpolated inline prompts.
 4. **Concise Inline Review & In-Ticket Pre-Work Embedding**:

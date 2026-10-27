@@ -39,15 +39,20 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if sonnet := spec.Models["agy:sonnet"]; !strings.Contains(sonnet.Use, "reviewer when Claude quota is out") || strings.Contains(sonnet.Use, "developer") {
 		t.Errorf("agy:sonnet use = %q, want reviewer-only guidance when Claude quota is out", sonnet.Use)
 	}
-	if luna := spec.Models["codex:luna"]; !strings.Contains(luna.Use, "not Go development") {
-		t.Errorf("codex:luna use = %q, want background-only owner guidance", luna.Use)
+	if luna := spec.Models["codex:luna"]; !strings.Contains(luna.Use, "background and mechanical work") || !strings.Contains(luna.UseMed, "cheap default developer") || !strings.Contains(luna.UseMed, "well-specified implementation and tests") {
+		t.Errorf("codex:luna guidance = %q / %q, want background work and medium default developer guidance", luna.Use, luna.UseMed)
 	}
 	if sol := spec.Models["codex:sol"]; !strings.Contains(sol.Use, "judgment") {
 		t.Errorf("codex:sol use = %q, want judgment guidance", sol.Use)
 	}
 	haiku := spec.Models["claude:haiku"]
-	if !strings.Contains(haiku.Use, "default worker") || !strings.Contains(haiku.Use, "100k") {
-		t.Errorf("claude:haiku use = %q, want default worker and price-step guidance", haiku.Use)
+	if !strings.Contains(haiku.Use, "haiku:med for easy tasks") || !strings.Contains(haiku.Use, "haiku:low for very simple, repetitive tasks") || !strings.Contains(haiku.Use, "100k") || !strings.Contains(haiku.Use, "5x") || !strings.Contains(haiku.Use, "80k") {
+		t.Errorf("claude:haiku use = %q, want tier, price-step and compaction guidance", haiku.Use)
+	}
+	for name, model := range spec.Models {
+		if strings.Contains(model.Use, "haiku:high") || strings.Contains(model.UseMed, "haiku:high") {
+			t.Errorf("%s recommends haiku:high in model guidance", name)
+		}
 	}
 	if haiku.GuidanceSourceURL != "https://code.claude.com/docs/en/model-config#haiku-55-context-window-and-pricing" {
 		t.Errorf("claude:haiku guidance_source_url = %q, want official pricing source", haiku.GuidanceSourceURL)
@@ -59,13 +64,16 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, phrase := range []string{"`haiku:high` for well-specified implementation and tests", "`sol:low` when judgment", "Luna is for background or mechanical work, not Go development", "above 100k prompt tokens cost more per token"} {
+	for _, phrase := range []string{"`luna:med` for well-specified implementation and tests", "`sol:low` when judgment", "`haiku:med` for easy tasks", "`haiku:low` for very simple, repetitive tasks", "above 100k tokens costs 5x", "compacts Haiku at 80k"} {
 		if !strings.Contains(string(skill), phrase) {
 			t.Errorf("lean-sprint skill missing %q", phrase)
 		}
 	}
 	if strings.Contains(string(skill), "Prefer `luna` first") {
 		t.Error("lean-sprint skill still prefers Luna first")
+	}
+	if strings.Contains(string(skill), "haiku:high") {
+		t.Error("lean-sprint skill recommends haiku:high")
 	}
 }
 

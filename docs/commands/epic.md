@@ -75,7 +75,7 @@ are closed, its declared canary or design review passes, and the working tree is
 
 Each task becomes a subticket (`/issue`) with acceptance, write set, and:
 
-- Developer tier: `haiku:high` for well-specified, machine-checkable work; `sol:low` for judgment. Luna is for background or mechanical work, not Go development.
+- Developer tier: `luna:med` for well-specified implementation and tests, including Go; `sol:low` for judgment-heavy work; `haiku:med` for easy tasks; `haiku:low` for very simple, repetitive tasks.
 - Architect only when the design is open (`/lean-sprint` §1.5 tiers).
 - Reviewer: opus/sol reviewer for risky work; orchestrator diff review for small work.
 - No schema-only tasks: a task that defines a file format, JSON schema or data model also ships the

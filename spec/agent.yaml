@@ -80,8 +80,8 @@ models:
     cost_by_tier: {med: 4, high: 6}
     eff: "~"
     skills: Go~ TUI- SQL?
-    use: Owner guidance — background and mechanical work, including log compaction; not Go development.
-    use_med: Owner guidance — background and mechanical work; not Go development.
+    use: Owner guidance — background and mechanical work, including log compaction.
+    use_med: Owner guidance — cheap default developer for well-specified implementation and tests.
   codex:sol:
     aliases: [sol, sol:low]
     preferred: true
@@ -117,7 +117,7 @@ models:
     cost_by_tier: {med: 4, high: 7}
     eff: "-"
     skills: Go~ TUI~ SQL~
-    use: Owner guidance — default worker at haiku:high for well-specified implementation and tests. Haiku 5.5 requests above 100k prompt tokens cost more per token; see guidance_source_url.
+    use: Owner guidance — haiku:med for easy tasks and haiku:low for very simple, repetitive tasks. Haiku 5.5 input above 100k tokens costs 5x; harnez compacts Haiku at 80k (issue 969, docs/AutoCompaction.md), and high thinking effort fills that budget quickly; see guidance_source_url.
     guidance_source_url: https://code.claude.com/docs/en/model-config#haiku-55-context-window-and-pricing
   claude:sonnet:
     aliases: [sonnet, sonnet:low]
