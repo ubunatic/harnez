@@ -57,4 +57,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 974 | [974-onboard-gpt-6-1-terra-codex-into-the-model-list-with-sourced-numbers.md](974-onboard-gpt-6-1-terra-codex-into-the-model-list-with-sourced-numbers.md) | Onboard GPT-6.1 Terra (Codex) into the model list with sourced numbers | Open |
 | 975 | [975-harnez-find-issues-should-list-the-priority.md](975-harnez-find-issues-should-list-the-priority.md) | harnez find issues should list the Priority | Open |
 | 976 | [976-harnez-issues-help-should-state-per-verb-commit-and-staging-rules-briefly.md](976-harnez-issues-help-should-state-per-verb-commit-and-staging-rules-briefly.md) | harnez issues help should state per-verb commit and staging rules briefly | Open |
+| 977 | [977-sprint-pause-pause-unpause-skill-park-a-sprint-notes-ticket-state-resumable-agents-and-restart-it.md](977-sprint-pause-pause-unpause-skill-park-a-sprint-notes-ticket-state-resumable-agents-and-restart-it.md) | sprint-pause pause\|unpause skill: park a sprint (notes, ticket state, resumable agents) and restart it | Open |
 <!-- harnez:end issues-active-index -->
