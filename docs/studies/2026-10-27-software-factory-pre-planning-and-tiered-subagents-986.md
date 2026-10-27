@@ -97,6 +97,13 @@ Following the architect's review, the factory incorporated four structural safeg
   - `gokay assess --json`: `internal/glossary` verified at 818 code lines, 528 test lines, 65% test ratio, 0 untested packages, 0 orphan schema keys, and clean spec posture.
 - **Host**: Ran `make install` and committed `b698808a`.
 
+### Empirical Observations on `neus ask` in Searcher Workflow
+The searcher (`search-986`, `haiku:med`) is mandated to call `neus ask "<question>"` first before ripgrep or file reads:
+- **Turn 1 (M1 - Schema validation & embed)**: `neus ask "how does harnez embed and validate spec JSON schemas?"` returned `internal/jsonc/jsonc.go` (JSON syntax parser rather than JSON schema validation). Searcher quickly fell back to inspecting `internal/assess/ramp_spec.go` and `go.mod` to find `github.com/google/jsonschema-go/jsonschema`.
+- **Turn 2 (M2 - Glob matching & lint rules)**: `neus ask "how does harnez match glob patterns with double stars in filepath?"` returned thin results because Harnez had no existing `**` glob library. Searcher quickly confirmed lack of dependencies and located `internal/readcard/compress.go` for `go/scanner`.
+- **Turn 3 (M3a - CLI assess flags & DefaultLinter)**: `neus ask` returned high-level summaries; searcher supplemented with direct targeted reads of `cmd/harnez/assess_cmd.go` and `internal/lint/lint.go`.
+- **Takeaway**: `neus ask` serves well as an initial orientation check, but broad natural language questions can surface superficial keyword matches. Future prompts should test symbol-targeted queries (e.g. `neus ask "DefaultLinter Rule interface"`). We will periodically collect 1-line feedback notes from agents without interrupting the development loop.
+
 ---
 
 ## 7. Next Steps for Skill Codification (`/software-factory`)
