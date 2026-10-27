@@ -169,6 +169,17 @@ one ran, why, and what it changed) by session ID, and use that record for all co
 - **Deferred:** done-line format and cost thresholds → 985; gap/fill percent math and agy automatic pre-prompt
   compaction → 969 / 869 (agy stays `auto_compact: disabled` until M4 proves counts).
 
+## Decision (host, 2026-10-27)
+
+- Lean sprint, developer `codex:gpt-6.1-terra:med`, a fresh session per milestone (985's finding: one long session
+  cost 47M cached re-read); the ticket carries everything between milestones.
+- M1 measures on throwaway sessions it creates itself in a scratch dir. Never resume or compact the owner's
+  sessions (e.g. Codex `01a17c6c`/`01a17ab0` in `neus`, the Claude session `searcher`).
+- M1 must not edit the owner's global hook files (`~/.codex/config.toml`, `~/.claude/settings.json`,
+  `~/.gemini/config/hooks.json`): other live sessions read them. Use per-invocation config instead
+  (`claude --settings <file>`, `codex -c ...` or a copied `CODEX_HOME`); if a provider allows no per-run hook,
+  record that and measure from the stream/transcript only.
+
 ## Milestones
 
 - **M1 (measure, read-only for code):** a temporary logging hook (`cat > <scratch>/<event>.json`), one real
