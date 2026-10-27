@@ -27,8 +27,13 @@ For Issue #986, we explore an experimental **software factory pattern**:
 |---|---|---|---|
 | **Host Orchestrator** | Antigravity (Host) | Continuous | Pure delegation; never ingests raw code/doc files; runs background turns (`HTO=0`), commits verified milestone diffs, enforces [Quota.md](file:///home/uwe/projects/harnez/.harnez/rules/Quota.md). |
 | **Searcher** | `haiku:med` | Resumable | Codebase discovery; mandated to use `neus ask "<question>"` first before ripgrep/file reads. Resumed across queries to leverage prompt caching. |
-| **Architect / Decisions** | `argon:low` | Short, focused turns | High-leverage decision maker. Evaluates API shapes, JSON schemas, edge-case math, and reviews execution plans. Receives bounded inputs; turns finish in <1m (~50k tokens). |
+| **Architect / Decisions** | `argon:low` | Short, focused turns | High-leverage decision maker. Evaluates API shapes, JSON schemas, edge-case math, and reviews execution plans. Strategy: feed aggregated info in one rich prompt and get a fast, decisive single-turn reply (<1m, ~50k tokens). |
 | **Mechanical Developer** | `haiku:med` | Fresh per milestone | Pure translator of explicit specs into Go/YAML and tests. Never invents algorithms or resolves ambiguous architecture. 100k context limit (80k auto-compact); reset to 0k context each milestone to prevent prompt rot. |
+
+### Circuit Breakers & Fallback Policy (Exit Criteria)
+- **Haiku underperformance**: If `haiku:med` struggles (loops, breaks tests, weakens assertions, or fails Quota-1 twice), abort the low-tier worker and switch to **`claude:opus:low`** as developer.
+- **Argon token/latency spikes**: If `argon:low` takes too long (>2m) or consumes excessive tokens, switch brain/advisory queries to **`claude:opus:med`**.
+- **Search stability**: Searchers remain on `haiku:med` (with `neus ask`) regardless of developer fallbacks.
 
 ---
 
