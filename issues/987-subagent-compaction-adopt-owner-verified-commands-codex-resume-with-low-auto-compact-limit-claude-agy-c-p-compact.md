@@ -199,6 +199,17 @@ Plan accepted (per-run hooks: `claude --settings`, `codex -c 'hooks.<Event>=[...
 `docs/AutoCompaction.md` "Compaction probes (issue 987 M1)". Host checked the raw scratch output: Codex
 `turn.completed.usage` input 16,307 → 32,786 → 49,322 over start, plain resume, compacting resume.
 
+### M2 plan review (host, 2026-10-27)
+
+Plan accepted: `compact_thresholds` entries for `codex:gpt-6.1-terra`, `codex:gpt-6.1-sol`, `codex:gpt-6-luna`;
+`auto_compact.codex_on_demand_limit_tokens: 50000` and `auto_compact.codex_status_prompt` (required in schema),
+loaded but unused until M3.
+
+Decision (host, reversible spec value): 100000 for all three. The live Codex window is ~475k (`agent list`
+CONTEXT_SIZE for a terra session) and the old 200k let sprint 983 re-read up to 10M cached per turn; one
+compaction costs about one context read (M1, §1), so halving the limit trades a few more compactions for cheaper
+turns. Revisit per model once 985 shows per-turn numbers.
+
 ### Pre-work for M3 and M4 (from M1 findings)
 
 1. Codex `--json` emits **no** `context_compacted` event, and `turn.completed.usage` stays cumulative even across
