@@ -206,6 +206,24 @@ func rejectExhaustedQuota(spec string, model subagent.Model, override bool, avai
 	return agent.RejectExhaustedQuota(spec, model, override, availability)
 }
 
+func selectStartModel(role, spec string, override bool, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) (subagent.Model, error) {
+	if availability == nil {
+		availability = providerAvailability
+	}
+	selection, err := subagent.ResolveModelWithAvailability(role, spec, func(m subagent.Model) bool { return availability(m.Provider, m.Name).State == "exhausted" }, override)
+	if err != nil {
+		return subagent.Model{}, err
+	}
+	if selection.Trait == "" {
+		if err := rejectExhaustedQuota(spec, selection.Model, override, availability); err != nil {
+			return subagent.Model{}, err
+		}
+	} else if len(selection.Skipped) > 0 {
+		fmt.Fprintf(stderr, "%s → %s (%s)\n", selection.Trait, selection.Target, strings.Join(selection.Skipped, "; "))
+	}
+	return selection.Model, nil
+}
+
 func isCodexUsageLimitError(err error) bool {
 	if err == nil {
 		return false
@@ -321,15 +339,12 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if err != nil {
 		return err
 	}
-	m, err := subagent.ResolveModelForCanonicalRole(role, spec)
+	m, err := selectStartModel(role, spec, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr())
 	if err != nil {
 		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 	}
 	if spec == "" {
 		spec = m.Spec()
-	}
-	if err := rejectExhaustedQuota(spec, m, req.AllowExhaustedQuota, d.availability); err != nil {
-		return err
 	}
 	s, err := d.store()
 	if err != nil {

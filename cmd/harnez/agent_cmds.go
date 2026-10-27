@@ -86,7 +86,7 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 			if err := validateInteractiveFlags(cmd, ac.detach, ac.jsonOut, ac.streamMode, ac.agentTimeout, ac.workerID != ""); err != nil {
 				return err
 			}
-			return runInteractiveStart(cmd, interactiveDeps{store: ac.store, parent: ac.parent, storeDir: ac.storeDir}, interactiveStartRequest{Prompt: prompt, Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, Role: startRoleSpec})
+			return runInteractiveStart(cmd, interactiveDeps{store: ac.store, parent: ac.parent, storeDir: ac.storeDir}, interactiveStartRequest{Prompt: prompt, Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, Role: startRoleSpec, AllowExhaustedQuota: ac.allowExhaustedQuota})
 		}
 		req := startRequest{Role: startRoleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, SessionID: ac.workerID, AllowExhaustedQuota: ac.allowExhaustedQuota}
 		if ac.workerID != "" {
@@ -127,7 +127,7 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 			if modelNamesOnly {
 				return fmt.Errorf("--picks cannot be combined with --names")
 			}
-			picks, err := subagent.ModelPicks()
+			picks, err := cachedModelPicks()
 			if err != nil {
 				return err
 			}
@@ -196,7 +196,7 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 		if legend != "" {
 			fmt.Fprintln(cmd.OutOrStdout(), "\n"+legend)
 		}
-		picks, err := subagent.ModelPicks()
+		picks, err := cachedModelPicks()
 		if err != nil {
 			return err
 		}
@@ -207,6 +207,12 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 	models.Flags().BoolVar(&picksOnly, "picks", false, "print role model picks")
 	models.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
 	return models
+}
+
+func cachedModelPicks() ([]subagent.ModelPick, error) {
+	return subagent.ModelPicksWithAvailability(func(m subagent.Model) bool {
+		return providerAvailability(m.Provider, m.Name).State == "exhausted"
+	})
 }
 
 func writeModelPicks(out io.Writer, picks []subagent.ModelPick) error {

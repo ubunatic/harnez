@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"ubunatic.com/harnez/internal/modelcatalog"
 )
@@ -461,6 +462,153 @@ func resolveCanonicalRoleModel(spec agentSpec, roleName, modelSpec string) (Mode
 		}
 	}
 	return ResolveModel(modelSpec)
+}
+
+// ModelSelection records the chosen concrete target and skipped candidates.
+type ModelSelection struct {
+	Model   Model
+	Target  string
+	Trait   string
+	Skipped []string
+}
+
+// ResolveModelWithAvailability chooses a role trait using stored access and
+// the caller's cached quota check. A nil quota check treats quota as unknown.
+func ResolveModelWithAvailability(roleName, modelSpec string, exhausted func(Model) bool, override bool) (ModelSelection, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return ModelSelection{}, err
+	}
+	if err := ensureModelCatalog(); err != nil {
+		return ModelSelection{}, err
+	}
+	resolve := func(target string) (Model, error) { return resolveModelIn(modelAliases, target) }
+	available := func(m Model) string {
+		access := "unknown"
+		if entry, ok := findCatalogModel(mergedModelCatalog, m); ok {
+			access = latestAccess(entry.Access)
+		}
+		quota := "unknown"
+		if !override && exhausted != nil && exhausted(m) {
+			quota = "exhausted"
+		}
+		return candidateUnavailable(mergedModelCatalog.IsEnabled(m.Provider, m.Name, m.Tier), access, quota, override)
+	}
+	return resolveRoleSelection(spec, roleName, modelSpec, resolve, available)
+}
+
+func candidateUnavailable(enabled bool, access, quota string, override bool) string {
+	if !enabled {
+		return "disabled by user policy"
+	}
+	if access == "denied" {
+		return "access denied"
+	}
+	if !override && quota == "exhausted" {
+		return "quota exhausted"
+	}
+	return ""
+}
+
+func latestAccess(observations []modelcatalog.AccessObservation) string {
+	status := "unknown"
+	var latest time.Time
+	for _, o := range observations {
+		t, err := time.Parse(time.RFC3339Nano, o.ObservedAt)
+		if err == nil && (latest.IsZero() || t.After(latest)) {
+			latest = t
+			status = o.Status
+		}
+	}
+	return status
+}
+
+func resolveRoleSelection(spec agentSpec, roleName, requested string, resolve func(string) (Model, error), available func(Model) string) (ModelSelection, error) {
+	role, ok := spec.Roles[roleName]
+	if !ok {
+		return ModelSelection{}, fmt.Errorf("unknown canonical role %q", roleName)
+	}
+	trait := requested
+	isDefault := requested == ""
+	if isDefault {
+		trait = role.DefaultModel
+		if trait == "" {
+			trait = spec.DefaultModel
+		}
+	}
+	if _, ok := role.Models[trait]; !ok {
+		m, err := resolveCanonicalRoleModel(spec, roleName, requested)
+		return ModelSelection{Model: m}, err
+	}
+	result, err := resolveTraitCandidates(role.Models, trait, resolve, available)
+	result.Trait = trait
+	if err != nil && isDefault && len(result.Skipped) > 0 {
+		allDisabled := true
+		for _, skip := range result.Skipped {
+			if !strings.Contains(skip, "disabled by user policy") {
+				allDisabled = false
+			}
+		}
+		if allDisabled {
+			return result, fmt.Errorf("default model %q is disabled by user policy; pass --model <spec> to choose another model or enable it in models.yaml: %w", trait, err)
+		}
+	}
+	return result, err
+}
+
+func resolveTraitCandidates(traits map[string][]string, trait string, resolve func(string) (Model, error), available func(Model) string) (ModelSelection, error) {
+	result := ModelSelection{}
+	var walk func(string, map[string]bool, int) (bool, error)
+	walk = func(name string, visiting map[string]bool, depth int) (bool, error) {
+		if depth > 4 {
+			return false, fmt.Errorf("trait depth exceeds 4 at %q", name)
+		}
+		if visiting[name] {
+			return false, fmt.Errorf("trait cycle at %q", name)
+		}
+		targets, ok := traits[name]
+		if !ok {
+			return false, fmt.Errorf("unknown trait %q", name)
+		}
+		if len(targets) == 0 {
+			return false, fmt.Errorf("trait %q is unset", name)
+		}
+		visiting[name] = true
+		defer delete(visiting, name)
+		for _, target := range targets {
+			if _, ok := traits[target]; ok {
+				found, err := walk(target, visiting, depth+1)
+				if err != nil {
+					return false, err
+				}
+				if found {
+					return true, nil
+				}
+				continue
+			}
+			model, err := resolve(target)
+			if err != nil {
+				result.Skipped = append(result.Skipped, target+": "+err.Error())
+				continue
+			}
+			if reason := available(model); reason != "" {
+				result.Skipped = append(result.Skipped, target+": "+reason)
+				continue
+			}
+			result.Model = model
+			result.Target = target
+			return true, nil
+		}
+		return false, nil
+	}
+	found, err := walk(trait, map[string]bool{}, 1)
+	if err != nil {
+		return result, err
+	}
+	if !found {
+		return result, fmt.Errorf("trait %q: no available model: %s; pass --model provider:model:tier", trait, strings.Join(result.Skipped, "; "))
+	}
+	return result, nil
 }
 
 func resolveRoleTrait(models map[string][]string, trait string, visiting map[string]bool, depth int) (string, error) {

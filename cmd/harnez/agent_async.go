@@ -243,11 +243,8 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	if err != nil {
 		return err
 	}
-	model, err := subagent.ResolveModelForCanonicalRole(role, modelSpec)
+	model, err := selectStartModel(role, modelSpec, req.AllowExhaustedQuota, providerAvailability, cmd.ErrOrStderr())
 	if err != nil {
-		return err
-	}
-	if err := rejectExhaustedQuota(modelSpec, model, req.AllowExhaustedQuota, providerAvailability); err != nil {
 		return err
 	}
 	if err := preflightCodex(cmd.Context(), model.Provider, nil, check); err != nil {

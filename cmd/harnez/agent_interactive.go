@@ -23,6 +23,7 @@ type interactiveDeps struct {
 
 type interactiveStartRequest struct {
 	Prompt, Name, ModelSpec, Dir, Role string
+	AllowExhaustedQuota                bool
 }
 
 type interactiveResumeRequest struct {
@@ -54,7 +55,7 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 	if err != nil {
 		return err
 	}
-	m, err := subagent.ResolveModelForCanonicalRole(role, spec)
+	m, err := selectStartModel(role, spec, req.AllowExhaustedQuota, nil, cmd.ErrOrStderr())
 	if err != nil {
 		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 	}

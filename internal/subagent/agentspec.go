@@ -167,6 +167,18 @@ func ModelPicks() ([]ModelPick, error) {
 	return modelPicksIn(spec, ResolveModelForCanonicalRole), nil
 }
 
+// ModelPicksWithAvailability reports picks using the caller's cached quota state.
+func ModelPicksWithAvailability(exhausted func(Model) bool) ([]ModelPick, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return nil, err
+	}
+	return modelPicksIn(spec, func(role, trait string) (Model, error) {
+		selection, err := ResolveModelWithAvailability(role, trait, exhausted, false)
+		return selection.Model, err
+	}), nil
+}
+
 func modelPicksIn(spec agentSpec, resolve func(string, string) (Model, error)) []ModelPick {
 	var picks []ModelPick
 	for name, role := range spec.Roles {
