@@ -101,6 +101,15 @@ one ran, why, and what it changed) by session ID, and use that record for all co
   `PreCompact`; whether 2.1.311 has `PostCompact` must be re-checked (180 found none at the time). agy and Pi:
   unknown, check docs and record. Where an agent lacks a hook, fall back to the stream event (Claude
   `compact_boundary`, Codex `context compacted`) and say so in the record.
+- **agy finding (owner-supplied research, 2026-10-27, agy 1.4.8, read from the hook docs embedded in the binary):**
+  no `PreCompact`/`PostCompact`. The six hook events are `SessionStart`, `PreToolUse`, `PostToolUse`,
+  `PreInvocation` (before each model call), `PostInvocation` (after tool calls finish) and `Stop`; none fires at
+  compaction. Config: `~/.gemini/config/hooks.json`; each hook gets JSON on stdin with `conversationId`,
+  `transcriptPath`, `modelName`. The binary has compaction internals (`OnCompactionArgs`, `CompactionInfo`, a
+  "Compacting conversation..." label) but no user-facing hook name for them.
+  - Substitute (untested inference): a `PostInvocation` hook reads `transcriptPath`, logs step count and any
+    compaction marker; consecutive values reveal a compaction and give before/after. First step for agy: run one
+    `/compact` and see how the marker appears in the transcript file before building on it.
 - The hooks write one event per compaction: session ID, agent, model, trigger (native limit, harnez threshold,
   on-demand `agent compact`, CLI's own auto), context before/after when the payload carries it, timestamp. Pre
   without a matching Post = failed or interrupted compaction.
