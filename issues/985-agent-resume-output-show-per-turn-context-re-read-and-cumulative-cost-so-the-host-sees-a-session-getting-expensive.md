@@ -47,41 +47,67 @@ Done lines printed by `harnez agent resume` (selected):
 The owner's direction: more instructions are not always the answer; better checks in the tool output, where the
 host already reads, are preferred.
 
-## 2. Proposal (to be weighed against the options in §3)
+## 2. Code Facts (refinement, 2026-10-27)
 
-Make the done line a check, not a counter:
+- `tokenSummary` (`cmd/harnez/agent_stream.go:249`) prints `TurnResult` fields as-is; for Codex these are the
+  rollout's cumulative counters, hence session totals labelled as if per turn.
+- The store already has what a delta needs: `Session.InputTokensTotal/CachedTokensTotal/OutputTokensTotal`,
+  `TokenTotalsKnown`, and `TurnRecords []TurnRecord{NewInputTokens, CachedInputTokens, OutputTokens}`
+  (`internal/subagent/session.go`). No new persisted field is required unless a provider's semantics differ.
+- Context size: `TurnResult.ContextTokens` / `Session.LastContextTokens()`; `-1` means unknown (agy, failed
+  Codex rollout read). Same source as `agent list` CONTEXT_USED.
+- Thresholds: `spec/agent.yaml` already holds `compact_threshold_tokens` and per-model `compact_thresholds`
+  (969 groundwork). New cost-check keys go next to them, with schema in `spec/schemas/agent.schema.json`.
 
-1. Per-turn numbers. Print the turn's own delta (`turn: 17k new, 2k out, 0.8M cached`) next to, or instead of, the
-   session totals; label totals as `session:`. Needs the previous turn's totals from the session record. Verify
-   first whether each provider reports per-turn or cumulative usage (Codex looked cumulative; Claude and agy
-   unknown) — a small canary per provider.
-2. Context size at turn end, from the same source `agent list` uses for CONTEXT_USED.
-3. A cost check with a verdict line, thresholds in `spec/agent.yaml` (never Go defaults), for example:
-   `[check: session re-reads 40× what this turn added (7.1M cached vs. 175k new); context 310k; a fresh session
-   would start at ~25k — consider: harnez agent start --role developer --model <trait> -f <ticket>]`.
-   Trigger candidates: cached/new ratio per turn, context size versus the model's compaction limit (969), turn
-   count.
-4. When the provider quota reading is unknown, say so in the check (`quota unknown: cost check is the only
-   signal`) instead of staying silent.
+## 3. Scope (decided)
 
-## 3. Other options to evaluate before building
+In scope — make the done line a check, not a counter:
 
-- Policy only: lean-sprint "fresh developer per milestone or after ~3 milestones". Cheap, but another instruction
-  the host may skip; the owner prefers checks.
-- Automatic compaction before resume when the context passes a per-model limit (969). Reduces re-read but costs a
-  summary turn and keeps stale context.
-- A `harnez agent handoff` / `resume --fresh` that starts a new session with the same name, role and model and a
-  pointer to the ticket, so the fresh start is one command.
-- Per-session budget (`--budget` in tokens or quota points) that stops the session with a clear message before the
-  provider limit does.
-- Make sure quota readings for Codex are fresh enough that 819's warning fires (why was it `unknown` for an hour?).
-- Acceptance checks that cannot be gamed (M7): state the user-visible result; the host's diff review catches the
-  rest. Not part of this ticket unless a tool check fits.
+1. **Per-turn vs. session numbers.** Done line becomes
+   `tokens: turn 17k new (2k out), 0.8M cached; session 538k new, 47.1M cached`.
+   Per-turn values come from the `TurnRecord` written for this turn. The driver decides cumulative vs. per-turn;
+   `tokenSummary` must not guess. Unknown values print `unknown`, never `0`.
+2. **Context at turn end.** Append `context 310k/400k` (or `context unknown`).
+3. **Cost check line**, printed only when a threshold is crossed:
+   `[check: turn re-read 7.1M cached for 175k new (40x); context 310k; fresh start ~25k; consider: harnez agent start --role <role> --model <model> -f <ticket>]`
+   Triggers (any one), values in `spec/agent.yaml` under `cost_check:`:
+   - `cached_to_new_ratio` per turn (proposed 20),
+   - `context_fraction` of the model's compaction limit (proposed 0.75, reuses `compact_thresholds`),
+   - `min_turns` before any check fires (proposed 3) to avoid noise on short sessions.
+   The suggested command uses the session's real role and model.
+4. **Quota unknown.** When the pre-turn quota reading is `unknown`, the done line says
+   `quota unknown: cost check is the only signal`.
 
-## 4. Verification
+Out of scope (follow-up tickets if wanted after this lands):
 
-- Canary: per-turn vs. cumulative usage for codex, claude, agy, recorded here with raw event excerpts.
-- Tests for the delta computation (first turn, resumed after compaction, provider without numbers → "unknown").
-- Live: a resumed session over 3+ turns prints per-turn deltas that add up to the session totals, and the check
-  line appears once the spec threshold is crossed.
-- `make test-q1`; `make install`.
+- `agent handoff` / `resume --fresh` one-command restart.
+- Per-session `--budget` stop.
+- Why Codex 5h quota stayed `unknown` for an hour (819 freshness) — file separately; this ticket only surfaces it.
+- Auto-compaction policy changes (969).
+- Lean-sprint policy text; only add a one-line pointer to the check if the host workflow needs it.
+- Ungameable acceptance checks (sprint 983 study).
+
+## 4. Milestones
+
+- **M1 Canary** — one 2-turn session each on codex, claude, agy; record raw usage event excerpts here and state
+  per provider: per-turn or cumulative, cached field present, context known. Stop and report if a provider gives
+  neither form.
+- **M2 Delta** — normalize per-turn usage in the driver/store layer (`internal/subagent`), unit tests: first turn,
+  cumulative provider, per-turn provider, resume after compaction (totals drop → no negative delta; print session
+  only), missing numbers → `unknown`.
+- **M3 Done line + context** — update `tokenSummary` and its three call sites incl. plan-first; fix its comment.
+- **M4 Cost check** — spec keys + schema, check function in `internal/` (pure, table-tested), quota-unknown note.
+- **M5 Docs** — the agent output section in the relevant evergreen doc; `docs/AutoCompaction.md` cross-link.
+
+## 5. Acceptance
+
+- Over a live 3+ turn resumed Codex session, per-turn values sum to the session totals (± rounding).
+- With thresholds lowered in `~/.harnez/config.yaml`, the `[check: ...]` line appears on the crossing turn and
+  names the session's role and model; with defaults on a short session it does not appear.
+- agy (context unknown) prints `context unknown` and no ratio check based on missing values.
+- No threshold literal in Go code; `make lint`, `make test-q1`, `make install` pass.
+
+## 6. Open Questions for the Owner
+
+- Replace the session totals in the done line, or keep both (proposal: both, turn first)?
+- Default ratio 20 and context fraction 0.75 acceptable, or start with the check off by default?
