@@ -91,7 +91,7 @@ overrides an assumed capability, cost fields (subscription vs. API).
 | 948 | F1: snapshot + text change report (added/removed/access); JSON and other categories later | 8 | — → plan → haiku:high | host | Open |
 | 949 | D: `harnez-models update` web-refresh skill (needs 948 F1) | 9 | — → plan → sol:low | host | Open |
 | 974 | Onboard GPT-6.1 Terra (Codex) with sourced numbers; first real catalog entry after the re-cut | — | luna:low web → — → luna:med | host | Closed (484e2721) |
-| 983 | Model picks per task class in spec as the only source; skills reference them instead of naming models | — | luna:low → opus:low, argon:low → terra:med | opus:low | M1–M7 delivered (design B: picks per role); final review |
+| 983 | Model picks per task class in spec as the only source; skills reference them instead of naming models | — | luna:low → opus:low, argon:low → terra:med | opus:low | Closed (2bf4ab41, design B: picks per role) |
 | 984 | `--model <any>` guesses the nearest trait within the resolved role, like `--role` guessing (after 983) | — | — | — | Open |
 | 947 | E: capability evidence | — | — | — | Backlog: no attributable test source yet (its own exit clause) |
 | — | sprint study, `/evergreen` | final | host | — | `/evergreen` done (ReviewLearnings); study open |
