@@ -75,6 +75,27 @@ Design consequences: lists need a defined "available" test (spec availability, a
 references need cycle and depth checks, and the resolved model plus the alias used should show in the session
 record and `harnez agent list`.
 
+## Searcher findings (2026-10-27, luna:low, search-983)
+
+- Resolution: `ResolveModel` (`internal/subagent/driver.go:393`) → `resolveModelWithCatalog` → `resolveModelIn`
+  (provider:model[:tier], tier synonyms, bare aliases, `preferred` breaks bare-alias ties, `driver.go:452`, `:517`),
+  then user enablement. Called from `cmd/harnez/agent_run.go:327`. Today `dev:smart` fails with
+  `invalid model "dev:smart": expected provider:model[:tier]` (`driver.go:526`). Providers are only codex, claude,
+  agy; no provider or alias named dev, review, search or arch.
+- Catalog: `internal/modelcatalog/catalog.go:255` merges embedded spec, state catalog, access observations and
+  `~/.config/harnez/models.yaml` (user patches and custom entries, `:378`). Access (accessible/denied/unknown) is
+  stored but does not gate resolution (`:96`, `:545`). Enablement: `IsEnabled` (`:543`). Quota is a separate cached
+  check at start (`agent_run.go:197`, `:205`); the resolver sees enablement only.
+- Display: `agent models` table `cmd/harnez/agent_cmds.go:121`; session record fields provider/model/tier
+  (`internal/subagent/session.go:16`); `agent list` omits model and tier (`cmd/harnez/agent_manage_cmds.go:119`).
+- Schema: `models` at `spec/schemas/agent.schema.json:174`, top-level additional properties disallowed (`:240`);
+  new key needs schema property, `agentSpec` field and validation in `parseAgentSpec` (`agentspec.go:148`, `:220`);
+  schema helper `catalog.go:704`.
+- Prose naming model tiers: lean-sprint.md 14, lean-sprint-v1.md 5, epic.md 6, HarnezStatus.md 2, AgenticLoop.md 36,
+  AgenticLoop.lite.md 11, ModelRoles.md 10 lines.
+- Searcher recommendation: `purpose_aliases` key, resolved before `resolveModelIn`, then enablement and quota per
+  candidate, cycle/depth guard; first slice `dev:smart` resolves and `agent models` lists aliases, fallback next.
+
 ## 3. Implementation & Verification Plan
 
 1. Design: spec shape for purpose aliases (2b), the trait list per role, and the resolver order against model
