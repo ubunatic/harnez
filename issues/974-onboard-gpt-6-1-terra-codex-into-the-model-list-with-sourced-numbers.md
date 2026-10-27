@@ -20,13 +20,33 @@ older-generation model; GPT-6.1 Terra is a new model, so 715's decision does not
 
 ## 2. Findings (research snapshot 2026-10-27)
 
-- [OpenAI's model page](https://developers.openai.com/api/docs/models/gpt-6.1-terra) confirms the API ID `gpt-6.1-terra`, 1,050,000-token context, 128,000 maximum output tokens, and reasoning efforts none/low/medium/high/xhigh/max. Installed Codex availability remains unverified.
+- [OpenAI's model page](https://developers.openai.com/api/docs/models/gpt-6.1-terra) confirms the API ID `gpt-6.1-terra`, 1,050,000-token context, 128,000 maximum output tokens, and reasoning efforts none/low/medium/high/xhigh/max. Installed Codex availability: the owner uses Terra in Codex
+  (2026-10-27); the harnez canary in section 3 still confirms the ID it resolves to.
 - The same page gives standard API prices per million tokens of $1 input, $0.05 cached input, $5 output, and $1.25 for 30-minute cache writes. Above 272K input tokens, the full request is priced at 2x input/cache and 1.5x output. These are API rates, not measured Harnez or Codex task costs.
 - [Comparison study](../docs/studies/2026-10-27-codex-sol-terra-luna-comparison.md): Terra sits between Sol and Luna in the independent coding-agent comparison consulted. Comparable three-model SWE-bench scores and independent Terra throughput remain unverified. Source benchmark, effort, workload, and conditions before using them in guidance; tool-calling and research benchmarks still need review.
 - Old alias: 715 made old `terra` sessions fail clearly. Reusing `terra`/`terra:low` as aliases for the new model must
   not silently resume an old GPT-5.6 Terra session.
 - Entry shape: follow `codex:sol` in `spec/agent.yaml` (aliases, provider, name, tier, roles, cost, cost_by_tier, eff,
   skills, use, guidance source). Cost values are owner-guided relative estimates (`codex:luna:low` = 1).
+
+## 2b. Searcher findings (2026-10-27, luna:low, search-974)
+
+- Entry shape: `codex:sol` (`spec/agent.yaml:97`): aliases `sol, sol:low`, cost 29, cost_by_tier med 47 / high 71,
+  roles developer/advisor/reviewer. `codex:luna` (`:84`): cost 1, med 4 / high 6. Costs are owner estimates, not
+  API price ratios; `internal/subagent/agentspec_test.go:82` asserts them.
+- Old alias: `internal/subagent/driver_test.go:57` asserts `terra`, `terra:low`, `codex:terra` resolve as unknown
+  (715). Resume passes the resolved model to Codex (`-m`), so reusing `terra` would let a session recorded as
+  `terra` resume on GPT-6.1 Terra; that needs explicit handling, not just new aliases.
+- Write set: `docs/Models.md` (cost table :44, API price table :75, Codex family comparison ~:143),
+  `docs/ModelResearch.md` (:65, :99), `docs/practices/ModelRoles.md` (:70) plus root copy `docs/ModelRoles.md`,
+  `internal/subagent/testdata/known-model-specs.golden` (:24), `agentspec_test.go` (:42), `driver_test.go` (:57).
+- Installed Codex 0.164.0: `~/.codex/models_cache.json:272` lists `"slug": "gpt-6.1-terra"`.
+- OpenAI model page still matches section 2. Benchmarks: OpenAI claims Terminal-Bench 4.0 Terra 50.3% at max
+  ([announcement](https://openai.com/index/introducing-gpt-6-1-terra/), vendor claim). Secondary report of
+  Artificial Analysis: Terminal-Bench 4.0 Terra 56%, Sol 56%, Luna 31%; Terra 91 tokens/s vs Sol 69, effort not
+  stated ([MultiAI](https://multiai.co/blog/gpt-6-1-terra), secondary, unverified). No sourced independent
+  SWE-bench or tool-calling result.
+- List-price ratio for a 100k-input / 20k-output, half-cached turn: Luna 1x, Terra 10x, Sol 20x.
 
 ## 3. Implementation & Verification Plan
 
