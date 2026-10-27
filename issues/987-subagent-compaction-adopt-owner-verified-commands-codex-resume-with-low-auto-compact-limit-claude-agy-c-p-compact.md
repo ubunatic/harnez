@@ -27,6 +27,37 @@ Claude Code 2.1.311, agy 1.4.8). No re-test needed; record them in `docs/AutoCom
 - `codex exec -c model_auto_compact_token_limit=50000 -C <dir> resume <id> "summarise your known status in one line"`
   forces a compaction (slash commands cannot be sent to `codex exec`) and returns a cheap one-line status as a bonus.
 
+Owner transcript (codex-cli 0.164.0, `gpt-6.1-terra` medium, project `neus`, human-readable output, not `--json`):
+
+```
+codex exec -c model_auto_compact_token_limit=50000 -C ~/projects/neus resume 01a17c6c-... "summarise your known status in one line"
+user
+summarise your known status in one line
+hook: PreCompact
+hook: PreCompact Completed
+context compacted
+hook: PostCompact
+hook: PostCompact Completed
+hook: SessionStart              (x4 started, x4 completed)
+codex
+Issue 102 M3: changes committed and tests and install passed; pinned replay still misses some evidence, ...
+hook: Stop
+hook: Stop Completed
+tokens used
+107.088
+```
+
+What it shows:
+
+- Compaction runs before the prompt is answered, in the same `exec` call; the reply is a usable one-line status.
+- The marker is the line `context compacted`, between the `PreCompact` and `PostCompact` hooks. The matching
+  `--json` event is still to be read from one real run (harnez drives Codex with `--json`).
+- That call reported 107,088 tokens used (the "107.088" uses a dot as the thousands separator): the compaction
+  turn costs about one full read of the old context.
+- `SessionStart` hooks fire four times after the compaction. If harnez's own SessionStart hook re-injects its
+  preface each time, the fresh context starts fuller than needed; check during implementation (link 969's
+  post-compact fill guard).
+
 ## 2. Current state (live code, 2026-10-27)
 
 | Provider | `auto_compact` mode (`spec/agent.yaml:16`) | On-demand `Compact()` | Threshold |
