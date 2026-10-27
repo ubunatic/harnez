@@ -242,6 +242,20 @@ Plan accepted (Compact in `codex.go`, rollout reader fixed from `compaction` to 
    Use `codex:luna:low`; the host runs it.
 3. Commit message: `feat: Codex on-demand compaction (issue 987 M3)`.
 
+### M3 delivered (de8f8995): Codex on-demand compaction
+
+Host live check (installed binary, throwaway `codex:luna:low` session `m3-live` in `/tmp/harnez-987-m3-A1osab`):
+at 18,657 and 35,307 context usage `agent compact` refused without a Codex call ("below the on-demand limit
+50000"); at 71,705 it compacted and printed `Context: 71705 -> 17063 tokens` plus the status line. Codex
+truncates long command output, so a ~70k context needed three chunked reads.
+
+### Pre-work for M4 (from M3 review)
+
+1. `compactSession` does not store the result: after the compaction `agent list --dead` still shows CONTEXT_USED
+   71.7k for `m3-live`. Save the post-compaction context usage (and a compaction count) to the session record;
+   test that the stored value drops.
+2. Output wording per 985's terms: `Compacted: context usage 71705 -> 17063 tokens` then `Status: <line>`.
+
 ### Pre-work for M3 and M4 (from M1 findings)
 
 1. Codex `--json` emits **no** `context_compacted` event, and `turn.completed.usage` stays cumulative even across
