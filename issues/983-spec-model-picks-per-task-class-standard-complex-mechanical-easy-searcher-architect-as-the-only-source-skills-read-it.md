@@ -207,10 +207,20 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
   trait, concrete `provider:model:tier` and bare aliases unchanged.
   - **Pre-Work (carried from M1 review):** each validation case asserts an expected message substring, not only
     `err != nil`; a runtime test for an unknown trait. The old item 1 (derive the reserved set) is moot under B.
+  - **M2 verified (role-scoped picks):** host `make test-q1`: 58 `ok`, 0 `--- FAIL`. Live: `--role review --model
+    lean` → `unknown trait or model "lean" for role "reviewer"; known traits: smart`; `--role dev --model smart` →
+    sol `med`, developer; `--role review --model smart` → sol `low`; `--role review` → `model: codex:sol:low
+    (default)`. `--model smart` without `--role` ran as reviewer, sol `low`: the role was inferred from the prompt
+    ("Reply with exactly: ok. Do not run any command.", 686 prompt inference), so role-before-model held; the
+    ticket's "developer" expectation assumed no inference.
 - **M3 (`agent models` lists the picks):** per-role table (role, trait, chain, resolved now) and JSON; golden test.
+  - **Pre-Work (from M2 review):** `ResolveModelForRole` resolves the role again after `startRole` already did;
+    pass the canonical role through without a second `resolveRoleIn` call, or document why both are needed.
 - **M4 (fallback by enablement and quota):** availability function into the resolver, stderr fallback line, all-failed
   error. Tests with fake catalog/availability: first disabled, quota exhausted, all exhausted, override flag. Keep
   `resolveDefaultModelWithCatalog`'s "default model is disabled" message when the default is a trait.
+  - **Pre-Work (from M2 review):** `ResolveModelForRole` returns a plain `ResolveModel` error when a role's
+    `default_model` points at a disabled model; it bypasses `resolveDefaultModelWithCatalog`. Test that case.
 - **M5 (user override in models.yaml):** `roles.<role>.models` entries replace that trait's list; users may add
   traits, not roles. Tests: list replaced, cycle via override, unknown model, unknown role rejected.
 - **M6 (pick visible):** session record `model_alias` (e.g. `smart`), `agent list` model column, banner. Tests:
