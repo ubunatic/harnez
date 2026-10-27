@@ -124,3 +124,6 @@ direction "we should rather always use Luna medium". A head-to-head on real task
     status line if they describe 80k as owner-only.
   - Verify: `make test-q1` (quote the summary), `make install`, then a live check with HOME set to an empty temp dir.
     One commit naming issue 973 M3.
+  - Host decision (plan review): lookup order is user per-model > spec per-model > user global > spec global.
+    Reason: a model-specific value wins over a generic one; a user-global value (e.g. 150k for all models) must not
+    push Haiku past its 100k price step. A user who wants a different Haiku value sets a Haiku key. Test this case.
