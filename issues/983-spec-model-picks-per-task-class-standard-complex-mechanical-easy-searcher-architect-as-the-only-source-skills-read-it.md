@@ -125,6 +125,22 @@ record and `harnez agent list`.
   with a staleness test; `TestNoModelPicksInPractice` greps `docs/commands` and `docs/practices` (full and lite) for
   `\b(luna|sol|terra|opus|haiku|argon):(low|med|high)\b` outside generated blocks, small allow-list for model docs.
 
+## Redesign review (argon-983, argon:low, 2026-10-27)
+
+Owner, after M1: "We want to select a model and a role, and now we are mixing it." M2 was stopped mid-turn
+(uncommitted edits in the tree). Argon confirmed four conflicts in M1's `<role>:<trait>` model names:
+`--role reviewer --model dev:smart` gives a reviewer a developer pick; `--model search:cheap` without `--role` runs
+as the default role, developer; `purpose_roles` (dev/search/review/arch) is a second role taxonomy beside
+`roles:` (developer/reviewer/advisor); the reserved-name check forbids `dev`/`review` as natural role aliases.
+
+Recommended design B (pending owner decision): picks scoped per role,
+`roles.<role>.models: {<trait>: [ordered list]}` plus `roles.<role>.default_model: <trait>`, a top-level trait
+description map, and `dev`/`review`/`search`/`arch` as `roles.<role>.aliases`. Skills write
+`harnez agent start --role dev --model smart`; `--role review` alone uses the reviewer default. Rejected A (global
+traits): `smart`/`cheap` differ per role. About 75% of M1 survives (trait validation, tier-word ban, duplicate,
+cycle/depth walk, test structure); `purpose_roles`, the `<role>:` prefix and the reserved checks go. 984 becomes
+"guess the trait within the resolved role".
+
 ## Host decisions (2026-10-27)
 
 - The section 3.4 check named `sol:low` for `dev:smart`; the owner table says `sol:med`. Table wins; 3.4 fixed.
