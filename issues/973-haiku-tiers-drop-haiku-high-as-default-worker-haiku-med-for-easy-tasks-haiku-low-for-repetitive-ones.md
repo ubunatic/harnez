@@ -106,3 +106,21 @@ direction "we should rather always use Luna medium". A head-to-head on real task
      test phrase in `internal/subagent/agentspec_test.go` to match, keeping the 100k/5x checks.
   2. Run `make test-q1` to a file, grep `--- FAIL`, and quote the actual Go test summary (an `ok`/`FAIL` package
      line or the target's final result), not make's directory line. `make install`. One commit naming issue 973 M2.
+- **M2 delivered (e863c408):** wording now "configure Haiku to compact at about 80k via `agent.compact_thresholds`";
+  host checked the full `make test-q1` log: 58 `ok` packages, 0 `--- FAIL`.
+- **M3 (Haiku 80k as shipped default):** owner, 2026-10-27: "bake it into the default config that Haiku 5.5 gets
+  the 100k respectively the 80k limit." Today only `compact_threshold_tokens: 200000` ships in `spec/agent.yaml`;
+  the 80k lives in the owner's `~/.harnez/config.yaml`.
+  - Ship a per-model default in `spec/agent.yaml` (with its JSON schema, no Go defaults, per `docs/Spec.md`) so
+    `CompactThreshold` (`internal/subagent/compact.go`) returns 80000 for `claude:haiku:low|med|high` and the
+    bare `haiku` alias with no user config, and 200000 for every other model. User `agent.compact_thresholds` still
+    overrides the spec value. Reuse the existing key format (`provider:model[:tier]`); this is the token-only subset
+    of 969 step 2 (limit and percent come later there), so keep it compatible with that plan.
+  - Tests: no user config → Haiku tiers 80000, Sonnet/Luna 200000; user config overrides the Haiku default (higher
+    and lower values); invalid spec value rejected by the schema.
+  - Guide text: change M2's "configure Haiku to compact at about 80k via `agent.compact_thresholds`" to state the
+    shipped default (e.g. "harnez compacts Haiku at 80k by default; override via `agent.compact_thresholds`") in
+    spec/agent.yaml, lean-sprint sources and their test phrases; update docs/AutoCompaction.md and the 969 §5
+    status line if they describe 80k as owner-only.
+  - Verify: `make test-q1` (quote the summary), `make install`, then a live check with HOME set to an empty temp dir.
+    One commit naming issue 973 M3.
