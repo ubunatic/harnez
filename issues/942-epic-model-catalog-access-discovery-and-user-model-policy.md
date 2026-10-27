@@ -90,7 +90,8 @@ overrides an assumed capability, cost fields (subscription vs. API).
 | 955 | C3: bounded batch probes (confirm, budget, stop on quota/auth) | 7 | — → plan → haiku:high | sol:low | Open |
 | 948 | F1: snapshot + text change report (added/removed/access); JSON and other categories later | 8 | — → plan → haiku:high | host | Open |
 | 949 | D: `harnez-models update` web-refresh skill (needs 948 F1) | 9 | — → plan → sol:low | host | Open |
-| 974 | Onboard GPT-6.1 Terra (Codex) with sourced numbers; first real catalog entry after the re-cut | — | luna:low web → — → luna:med | host | Open |
+| 974 | Onboard GPT-6.1 Terra (Codex) with sourced numbers; first real catalog entry after the re-cut | — | luna:low web → — → luna:med | host | Closed (484e2721) |
+| 983 | Model picks per task class in spec as the only source; skills reference them instead of naming models | — | luna:low → architect → open | open | Open |
 | 947 | E: capability evidence | — | — | — | Backlog: no attributable test source yet (its own exit clause) |
 | — | sprint study, `/evergreen` | final | host | — | `/evergreen` done (ReviewLearnings); study open |
 | — | `/wrap` | final | host | — | Open |

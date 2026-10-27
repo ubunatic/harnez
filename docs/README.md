@@ -216,6 +216,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-26-two-agent-lean-sprint-968-skill-and-tool-gating.md](studies/2026-10-26-two-agent-lean-sprint-968-skill-and-tool-gating.md) | Lean sprint 968: skill and tool gating |
 | [studies/2026-10-27-codex-sol-terra-luna-comparison.md](studies/2026-10-27-codex-sol-terra-luna-comparison.md) | GPT-6.1 Sol, GPT-6.1 Terra and GPT-6 Luna comparison |
 | [studies/2026-10-27-two-agent-lean-sprint-973-haiku-tiers-and-compaction-spec.md](studies/2026-10-27-two-agent-lean-sprint-973-haiku-tiers-and-compaction-spec.md) | Two-agent lean sprint: 973, Haiku tiers and compaction spec defaults |
+| [studies/2026-10-27-two-agent-lean-sprint-974-terra-onboarding.md](studies/2026-10-27-two-agent-lean-sprint-974-terra-onboarding.md) | Two-agent lean sprint: 974, GPT-6.1 Terra onboarding |
 | [studies/2026-10-27-two-agent-lean-sprint-975-find-priority-column.md](studies/2026-10-27-two-agent-lean-sprint-975-find-priority-column.md) | Two-agent lean sprint: 975, Priority column in `harnez find issues` |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
