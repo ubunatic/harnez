@@ -133,13 +133,48 @@ Owner, after M1: "We want to select a model and a role, and now we are mixing it
 as the default role, developer; `purpose_roles` (dev/search/review/arch) is a second role taxonomy beside
 `roles:` (developer/reviewer/advisor); the reserved-name check forbids `dev`/`review` as natural role aliases.
 
-Recommended design B (pending owner decision): picks scoped per role,
+Recommended design B: picks scoped per role,
 `roles.<role>.models: {<trait>: [ordered list]}` plus `roles.<role>.default_model: <trait>`, a top-level trait
 description map, and `dev`/`review`/`search`/`arch` as `roles.<role>.aliases`. Skills write
 `harnez agent start --role dev --model smart`; `--role review` alone uses the reviewer default. Rejected A (global
 traits): `smart`/`cheap` differ per role. About 75% of M1 survives (trait validation, tier-word ban, duplicate,
 cycle/depth walk, test structure); `purpose_roles`, the `<role>:` prefix and the reserved checks go. 984 becomes
 "guess the trait within the resolved role".
+
+## Decision: design B (owner, 2026-10-27, "go B")
+
+Replaces 2b's `<role>:<trait>` names and the architecture's `purpose_*` keys. Same picks, scoped per role:
+
+```yaml
+model_traits: {lean: ..., std: ..., smart: ..., tui: ..., gui: ..., cheap: ..., fast: ..., ai: ...}
+roles:
+  developer:
+    aliases: [dev, ...]          # added to the existing role aliases
+    default_model: lean
+    models: {lean: [terra:low], std: [terra:med, opus:low], smart: [sol:med, opus:med], tui: [smart],
+             gui: [lean, std], cheap: [luna:med], fast: [haiku:med], ai: []}
+  reviewer:
+    aliases: [review, ...]
+    default_model: smart
+    models: {smart: [sol:low]}
+  advisor:
+    aliases: [search, arch, ...]
+    default_model: cheap
+    models: {cheap: [luna:low, haiku:low], smart: [opus:low, opus:med, sol:low]}
+```
+
+- Resolution order: `--role` first (existing `resolveRoleIn`, aliases, decider), then `--model` within that role.
+  A trait name looks up `roles.<role>.models`; anything else goes through today's resolver unchanged
+  (`provider:model:tier`, bare model aliases). No `--role` means the default role, developer.
+- A list entry is a model reference or another trait of the same role; cycle and depth checks as in M1.
+- Trait names: listed in `model_traits` with a description, never a tier word or synonym, never equal to a provider,
+  model alias or role name (spec load fails).
+- Host decision: `default_model` applies when `--model` is omitted, replacing the global default for that role;
+  a role without `default_model` keeps today's default. Reversible.
+- Host decision: the advisor `smart` list (`opus:low, opus:med, sol:low`) is the lean-sprint §1.5 architect set;
+  no separate `arch` trait.
+- The stopped M2 working-tree edits (`agentspec.go`, `purpose_test.go`, `cmd/harnez/agent_purpose_test.go`) are the
+  developer's to adapt or discard in M2.
 
 ## Host decisions (2026-10-27)
 
@@ -160,21 +195,28 @@ cycle/depth walk, test structure); `purpose_roles`, the `<role>:` prefix and the
   - **M1 delivered (`f1b125b3`, `dev:smart` resolves):** spec keys, schema, `validatePurpose`, `resolvePurpose`.
     Developer `make test-q1`: 58 `ok`, 0 `--- FAIL`. Host live: `--model dev:smart` started `codex:gpt-6.1-sol`
     tier `med`; `dev:nonexistent` → `unknown purpose alias`; `dev:ai` → `purpose alias "dev:ai" is unset`.
-- **M2 (`agent models` lists aliases):** alias table and JSON; golden test.
-  - **Pre-Work / Required Refinements (from M1 review):**
-    1. The role set is hard-coded twice in Go: the `reserved` map in `validatePurpose` and the `purposeName` regex
-       (`agentspec.go`). Derive both from the keys of `purpose_roles` (the schema enum stays the closed set), so
-       the spec is the only source (docs/Spec.md).
-    2. `TestPurposeValidation` only asserts `err != nil`, so a case can pass for the wrong reason (e.g. a missing
-       trait description instead of the rule under test). Assert an expected message substring per case.
-    3. Add a runtime test for an unknown purpose alias (`dev:nonexistent` → `unknown purpose alias`).
-- **M3 (fallback by enablement and quota):** availability function into the resolver, stderr fallback line, all-failed
+Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it into the roles):
+
+- **M2 (role-scoped picks, design B):** move the M1 picks into `roles.<role>.models` / `default_model`, rename
+  `purpose_traits` to `model_traits`, drop `purpose_roles`, `purpose_aliases`, the `<role>:` regex and the reserved
+  checks; add `dev`, `review`, `search`, `arch` as role aliases; resolve the role before the model
+  (`cmd/harnez/agent_run.go`). Visible (host runs): `--role dev --model smart` → `sol:med`; `--role review --model
+  smart` → `sol:low`; `--role review` alone → `sol:low`; `--model smart` alone → developer `sol:med`;
+  `--role review --model lean` → error listing the reviewer's traits. Tests: that table, trait cycle and depth 5,
+  trait `low`, trait named like a model alias (`sol`) or provider, unset `ai` error, `default_model` naming a missing
+  trait, concrete `provider:model:tier` and bare aliases unchanged.
+  - **Pre-Work (carried from M1 review):** each validation case asserts an expected message substring, not only
+    `err != nil`; a runtime test for an unknown trait. The old item 1 (derive the reserved set) is moot under B.
+- **M3 (`agent models` lists the picks):** per-role table (role, trait, chain, resolved now) and JSON; golden test.
+- **M4 (fallback by enablement and quota):** availability function into the resolver, stderr fallback line, all-failed
   error. Tests with fake catalog/availability: first disabled, quota exhausted, all exhausted, override flag. Keep
-  `resolveDefaultModelWithCatalog`'s "default model is disabled" message when the default is an alias.
-- **M4 (user override in models.yaml):** tests: list replaced, cycle via override, unknown model, new role rejected.
-- **M5 (alias visible):** session record field, `agent list` model column, banner. Tests: round-trip; old records load.
-- **M6 (prose migration):** generated block, `--md`, the 7 docs (full and lite) use aliases, guard test; root copies
-  via `harnez init -d .`; the 3.4 `rg` check empty.
+  `resolveDefaultModelWithCatalog`'s "default model is disabled" message when the default is a trait.
+- **M5 (user override in models.yaml):** `roles.<role>.models` entries replace that trait's list; users may add
+  traits, not roles. Tests: list replaced, cycle via override, unknown model, unknown role rejected.
+- **M6 (pick visible):** session record `model_alias` (e.g. `smart`), `agent list` model column, banner. Tests:
+  round-trip; old records load.
+- **M7 (prose migration):** generated block, `--md`, the 7 docs (full and lite) write `--role X --model <trait>`,
+  guard test; root copies via `harnez init -d .`; the 3.4 `rg` check empty.
 
 ## 3. Implementation & Verification Plan
 
