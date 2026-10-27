@@ -9,9 +9,9 @@
 ---
 
 /goal Every skill, practice doc and `spec/agent.yaml` guide that recommends `haiku:high` instead recommends
-`haiku:med` for easy, well-specified tasks and `haiku:low` for very simple, repetitive ones, with the reason and
-source stated, and no Haiku tier promoted as the default developer worker; or stop and report when blocked on an
-owner decision.
+`luna:med` as the cheap default developer for well-specified work, `haiku:med` for easy tasks and `haiku:low` for
+very simple, repetitive ones, with the reason and source stated, and no Haiku tier promoted as the default developer
+worker; or stop and report when blocked on an owner decision.
 
 ## 1. Problem & Motivation
 
@@ -74,6 +74,23 @@ https://developers.openai.com/api/docs/models/gpt-6-luna, https://developers.ope
 - Side observation: the `haiku:med` researcher used 211k tokens over one turn (largest single request 36k), against
   37.6k new + 107.5k cached for `luna:med`, on the same prompt. One run each, not a benchmark.
 
-Open owner decision: switch the default worker to `luna:med` now (price step plus owner experience), or first run a
-head-to-head on 2-3 real harnez tasks (`luna:med` vs `haiku:med`: result quality, tool calls, tokens). The /goal
-above then changes from "haiku:med/low" to the chosen default.
+Owner decision (2026-10-27): switch now. The owner started `/lean-sprint 973` after the research, with the
+direction "we should rather always use Luna medium". A head-to-head on real tasks stays optional, not a blocker.
+
+## Decision
+
+- Cheap default developer for well-specified work: `luna:med` (owner direction above; proven advantage: price step at
+  272k instead of 100k). `sol:low` stays the choice when judgment is needed. `haiku:med` for easy tasks,
+  `haiku:low` for very simple, repetitive ones; `haiku:high` is not recommended anywhere.
+- The existing line "Luna is for background or mechanical work, not Go development" (lean-sprint and related guides)
+  contradicts this default; it is reworded so `luna:med` may take well-specified implementation and tests, while
+  judgment-heavy Go work goes to `sol:low`. Reversible docs change; the owner can veto.
+- Searcher skipped: section 2 cites exact file:line locations found today; the developer's first turn is plan-only
+  and must re-verify them.
+- Developer: `luna:med` (owner: no Haiku in this sprint; docs-only edits).
+
+## Milestones
+
+- **M1 (guide text):** edit every location in section 2 plus any `luna`-restriction line it contradicts; sync root
+  copies with `harnez init -d .` (revert unrelated rewrites); update tests that assert guide text without weakening
+  other checks. Verify per section 3. One commit naming issue 973 M1.
