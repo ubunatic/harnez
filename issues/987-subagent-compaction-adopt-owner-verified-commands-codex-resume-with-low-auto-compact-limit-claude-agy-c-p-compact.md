@@ -20,7 +20,8 @@ re-read reached 47M tokens and the session hit the Codex usage limit before its 
 Nothing compacted it: harnez cannot compact a Codex session on demand, and Codex's own trigger sat at the global
 200k default.
 
-Owner-verified commands (2026-10-27, not yet re-measured in a canary):
+Owner-verified commands (**measured** by the owner, 2026-10-27; installed versions that day: codex-cli 0.164.0,
+Claude Code 2.1.311, agy 1.4.8). No re-test needed; record them in `docs/AutoCompaction.md` as measured:
 
 - `agy -c -p "/compact"` and `claude -c -p "/compact"` compact well.
 - `codex exec -c model_auto_compact_token_limit=50000 -C <dir> resume <id> "summarise your known status in one line"`
@@ -45,9 +46,8 @@ Gaps:
 
 ## 3. Proposal (careful; other options in §4)
 
-- **Canary first** (`docs/Canary.md`): for each provider, run the owner's command on a scratch session with known
-  context, record context before/after and the compaction event in the raw JSON, and record it in
-  `docs/AutoCompaction.md` as **measured** with the CLI version.
+- **No canary for the commands** (owner-measured, §1). The only open check is the shape of Codex's compaction event
+  in `--json` output, read from one real run during implementation, so the acknowledgement test uses real values.
 - **Codex `Compact()`:** a resume with `-c model_auto_compact_token_limit=<low>` (value in `spec/`) and the one-line
   status prompt. Confirm via Codex's compaction event (594 has the acknowledgement parsing); surface the status line
   to the host as the compaction result. Keep the replay safety from 590 (prompt sent only after the compaction is
@@ -68,7 +68,7 @@ Gaps:
 
 ## 5. Verification
 
-- Canary results per provider in `docs/AutoCompaction.md`.
+- The owner's commands recorded as measured per provider in `docs/AutoCompaction.md`.
 - Tests: Codex compact args (low limit, status prompt, `-C <dir>`), acknowledgement required before the next prompt,
   per-model threshold lookup, agy on-demand path.
 - Live: `harnez agent compact --name <codex session>` prints the before/after context and the status line; a
