@@ -180,6 +180,20 @@ one ran, why, and what it changed) by session ID, and use that record for all co
   (`claude --settings <file>`, `codex -c ...` or a copied `CODEX_HOME`); if a provider allows no per-run hook,
   record that and measure from the stream/transcript only.
 
+### M1 plan review (host, 2026-10-27)
+
+Plan accepted (per-run hooks: `claude --settings`, `codex -c 'hooks.<Event>=[...]'`; agy has none). Changes:
+
+1. agy: resume by ID (`agy --conversation <id> ... -p "/compact"`, as `internal/subagent/agy.go:142` does), not
+   `-c`: `-c` may pick the owner's latest conversation instead of the scratch one. Take the ID from the first
+   call's `conversation_id`.
+2. Codex: a `-c hooks.<Event>=` override replaces the whole event array, which drops `harnez codex-telemetry` for
+   that run. Put the logger **next to** the installed harnez entry (copy its command from `~/.codex/config.toml`,
+   read-only), so "what codex-telemetry stores today" is measured from the same run.
+3. Codex per-turn vs. cumulative needs two normal turns before the compaction: start, one plain resume, then the
+   compacting resume (3 Codex calls).
+4. The doc section also records the owner's commands from §1 as measured (owner, 2026-10-27, versions from §1).
+
 ## Milestones
 
 - **M1 (measure, read-only for code):** a temporary logging hook (`cat > <scratch>/<event>.json`), one real
