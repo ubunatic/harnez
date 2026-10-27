@@ -50,7 +50,7 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 For focused, milestone-based tasks, execute this fast-path, token-efficient loop:
 
 ### 1. Goal Handoff to Low-Cost Developer
-- The Host Orchestrator dispatches a developer worker using `harnez agent start --role developer --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method), run with `HTO=0` as one session-background job per the host table in `harnez agent start --help` (Claude Code: Bash with `run_in_background: true`). Report the job id and session name to the user; the job's exit is the only completion signal, so never promise a review without it. Use `luna:med` for well-specified implementation and tests, including Go; `sol:low` when judgment or stronger reasoning is needed; `haiku:med` for easy tasks; and `haiku:low` for very simple, repetitive tasks. Avoid agy models for developer work, except `argon:low`. Haiku 5.5 input above 100k tokens costs 5x ([Claude model configuration](https://code.claude.com/docs/en/model-config#haiku-55-context-window)); harnez compacts Haiku at 80k by default; override via `agent.compact_thresholds` (issue 969; docs/AutoCompaction.md). High thinking effort fills that budget quickly.
+- The Host Orchestrator dispatches a developer worker using `harnez agent start --role developer --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method), run with `HTO=0` as one session-background job per the host table in `harnez agent start --help` (Claude Code: Bash with `run_in_background: true`). Report the job id and session name to the user; the job's exit is the only completion signal, so never promise a review without it. Use `--role dev --model lean` for standard work, `--role dev --model std` for moderate work, `--role dev --model smart` for complex work, `--role dev --model fast` for easy work, and `--role dev --model cheap` for low-cost work. Haiku 5.5 input above 100k tokens costs 5x ([Claude model configuration](https://code.claude.com/docs/en/model-config#haiku-55-context-window)); harnez compacts Haiku at 80k by default; override via `agent.compact_thresholds` (issue 969; docs/AutoCompaction.md). High thinking effort fills that budget quickly.
 - An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
 - Provide these facts in every handoff (a required checklist, not a wording template; missing items caused most follow-up turns):
   - Ticket number and goal, with its acceptance criteria.
@@ -113,3 +113,19 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Terminate the developer subagent and every research or probe helper (`harnez agent delete --name <session_id>` or `manage_subagents kill`) and drain background jobs; `harnez agent list` should show none left.
 - If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md`; otherwise update ticket status and refresh the Harnez index.
 - Output a brief, high-level summary of delivered milestones and verification status. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).
+
+<!-- harnez:model-picks:begin -->
+| Role | Trait | Meaning | Chain | Default |
+|---|---|---|---|---|
+| advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |
+| advisor | smart | Difficult judgment. | opus:low, opus:med, sol:low |  |
+| developer | ai | AI-oriented work. | unset |  |
+| developer | cheap | Low-cost work. | luna:med |  |
+| developer | fast | Fast work. | haiku:med |  |
+| developer | gui | Graphical interfaces. | lean, std |  |
+| developer | lean | Efficient standard work. | terra:low | yes |
+| developer | smart | Difficult judgment. | sol:med, opus:med |  |
+| developer | std | Standard work. | terra:med, opus:low |  |
+| developer | tui | Terminal interfaces. | smart |  |
+| reviewer | smart | Difficult judgment. | sol:low | yes |
+<!-- harnez:model-picks:end -->

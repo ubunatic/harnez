@@ -32,7 +32,7 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 
 - `/lean-sprint <ticket-numbers>` (e.g. `/lean-sprint 064` or `/lean-sprint 042, 043`)
 - `/lean-sprint "<scoped-task-or-bug-description>"`
-- `/lean-sprint <ticket> refined <tier>` (or `with architect`, `with advisor`, `with sol:low`, `using opus:low`)
+- `/lean-sprint <ticket> refined <tier>` (or `with architect`, `with advisor`, or an explicitly named model)
 - The legacy single-developer workflow is available as `/lean-sprint-v1 <ticket-or-task>`.
 
 ---
@@ -42,7 +42,7 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 For focused, milestone-based tasks, execute this fast-path, token-efficient loop:
 
 ### 1. Bounded Discovery with the Cheap Searcher
-- Start with the ticket and dispatch a read-only Searcher (`luna:low` / `luna-search` / `haiku:low`, `--role advisor`) for a bounded audit: verify the ticket premise, locate relevant files and exact line ranges, answer specific questions, explore APIs/specs, or search the web. Give a small question list and return format; do not ask it to implement, edit files, run mutating commands, or commit. Use a prompt file for longer questions.
+- Start with the ticket and dispatch a read-only Searcher (`--role advisor --model cheap`) for a bounded audit: verify the ticket premise, locate relevant files and exact line ranges, answer specific questions, explore APIs/specs, or search the web. Give a small question list and return format; do not ask it to implement, edit files, run mutating commands, or commit. Use a prompt file for longer questions.
 - Skip the Searcher when the ticket was just refined against live code in this sprint and already cites exact file:line causes; say so in the sprint report.
 - Also skip the Searcher for a narrowly scoped ticket that identifies the exact file and function, documents the complete expected write set (including tests/docs), and leaves no unresolved premise, scope, or architecture questions. Require a plan-only first Developer turn that inspects live code, verifies the premise and current locations, and confirms the write set; file:line citations alone do not qualify. The host must review the concrete findings before granting writes and reconsider developer/model choice. If inspection reveals stale assumptions, missing files, or scope uncertainty, run the Searcher before implementation. Record the skip and findings in the sprint report.
 - When used, run the Searcher sequentially before the Developer. The host reads its concise findings and decides what the Developer needs; the host does not repeat discovery by browsing the repository.
@@ -50,12 +50,12 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 ### 1.5. Optional Architect Refinement
 - When the user asks for a lean sprint "with an advisor", they mean this architect step, not the Searcher (both run as `--role advisor`).
 - Run this step when the user explicitly requests refinement or confirms the host's proactive suggestion. If refinement was not requested, suggest it when Searcher findings show complex architecture such as multi-system boundaries, API/schema redesign, or non-trivial component trade-offs.
-- The architect tier must be one of `opus:low`, `opus:med`, `sol:low`, `sol:med`, or `argon:low`. Normalize bare `opus`, `sol`, or `argon` to the matching `:low` tier. If refinement is requested without a valid tier, stop immediately, list the supported tiers, and ask the user to choose before starting any agents.
+- Default to `--role advisor --model smart` for the architect. If the user names a model or tier, dispatch that exact choice and report failures without substituting another model.
 - Dispatch the architect as `--role advisor` with read-only instructions. It returns a structured architecture, milestones (`M1`, `M2`, ...), boundary constraints, edge cases, and pre-work requirements; it does not implement, edit files, or run mutating commands.
 - The host records the architect's milestones, boundaries, edge cases, and pre-work in the target ticket before handing it to the Developer. The host remains subject to the Zero Coding invariant above.
 
 ### 2. Goal Handoff to Focused Developer
-- The Host Orchestrator dispatches one developer worker (`luna:med` for well-specified implementation and tests, including Go; `sol:low` when judgment, orchestration, or stronger reasoning is needed; `haiku:med` for easy tasks; `haiku:low` for very simple, repetitive tasks) using `harnez agent start --role developer --name <worker> --model <model> -d <dir> -f <prompt-file>` (or the active dispatch method), run with `HTO=0` as one session-background job per the host table in `harnez agent start --help` (Claude Code: Bash with `run_in_background: true`). Use a prompt file for long or complex handoffs instead of a long inline shell argument. Report the job id and session name to the user; the job's exit is the only completion signal, so never promise a review without it. Avoid agy models for developer work, except `argon:low`. Haiku 5.5 input above 100k tokens costs 5x ([Claude model configuration](https://code.claude.com/docs/en/model-config#haiku-55-context-window)); harnez compacts Haiku at 80k by default; override via `agent.compact_thresholds` (issue 969; docs/AutoCompaction.md). High thinking effort fills that budget quickly.
+- The Host Orchestrator dispatches one developer worker (`--role dev --model lean` for standard work, `--role dev --model std` for moderate work, `--role dev --model smart` for complex work, `--role dev --model fast` for easy work, or `--role dev --model cheap` for low-cost work) using `harnez agent start --role developer --name <worker> --model <model> -d <dir> -f <prompt-file>` (or the active dispatch method), run with `HTO=0` as one session-background job per the host table in `harnez agent start --help` (Claude Code: Bash with `run_in_background: true`). Use a prompt file for long or complex handoffs instead of a long inline shell argument. Report the job id and session name to the user; the job's exit is the only completion signal, so never promise a review without it. Haiku 5.5 input above 100k tokens costs 5x ([Claude model configuration](https://code.claude.com/docs/en/model-config#haiku-55-context-window)); harnez compacts Haiku at 80k by default; override via `agent.compact_thresholds` (issue 969; docs/AutoCompaction.md). High thinking effort fills that budget quickly.
 - An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
 - Provide these facts in every handoff (a required checklist, not a wording template; missing items caused most follow-up turns):
   - Ticket number and goal, with its acceptance criteria.
@@ -137,3 +137,19 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md`; otherwise update ticket status and refresh the Harnez index.
 - Maintain a running report in `docs/studies/` when enabled by `.harnez/repo.yaml`; otherwise follow `.harnez/rules/Index.md` for the local-docs/session fallback. Use a date-prefixed `two-agent-lean-sprint` filename and short task slug, with front matter `kind: sprint` (see `/study`). The Host Orchestrator records the Searcher questions/findings, Developer milestones and commits, verification outcomes, and observed token/time efficiency as the sprint progresses; do not reconstruct it only at the end.
 - Output a brief, high-level summary of delivered milestones and verification status. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).
+
+<!-- harnez:model-picks:begin -->
+| Role | Trait | Meaning | Chain | Default |
+|---|---|---|---|---|
+| advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |
+| advisor | smart | Difficult judgment. | opus:low, opus:med, sol:low |  |
+| developer | ai | AI-oriented work. | unset |  |
+| developer | cheap | Low-cost work. | luna:med |  |
+| developer | fast | Fast work. | haiku:med |  |
+| developer | gui | Graphical interfaces. | lean, std |  |
+| developer | lean | Efficient standard work. | terra:low | yes |
+| developer | smart | Difficult judgment. | sol:med, opus:med |  |
+| developer | std | Standard work. | terra:med, opus:low |  |
+| developer | tui | Terminal interfaces. | smart |  |
+| reviewer | smart | Difficult judgment. | sol:low | yes |
+<!-- harnez:model-picks:end -->

@@ -77,3 +77,23 @@ func TestModelPicksCommand(t *testing.T) {
 		t.Fatal("--names contains picks")
 	}
 }
+
+func TestModelPicksMarkdown(t *testing.T) {
+	cmd := newAgentCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"models", "--picks", "--md"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "| developer | lean |") || !strings.Contains(out.String(), "terra:low") {
+		t.Fatalf("markdown: %s", out.String())
+	}
+	for _, args := range [][]string{{"models", "--md"}, {"models", "--picks", "--md", "--json"}, {"models", "--picks", "--md", "--names"}} {
+		c := newAgentCmd()
+		c.SetArgs(args)
+		if err := c.Execute(); err == nil {
+			t.Fatalf("accepted %v", args)
+		}
+	}
+}

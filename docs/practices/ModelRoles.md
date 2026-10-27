@@ -42,41 +42,9 @@ Rules that held up in practice:
    ticket forbids, and make weak cuts. Give them mechanical work with an explicit acceptance
    test only.
 
-### Known weak-model failure modes (claude haiku, 2026-09)
+### Model choices and observed failure modes
 
-Use `luna:med` for well-specified implementation and tests, including Go; `terra:low` for developer and reviewer work near Sol at an estimated half Sol's price; `sol:low` for the hardest judgment; `haiku:med` for easy tasks; and `haiku:low` for very simple, repetitive tasks. Terra's relative cost is an owner estimate; comparable independent coding benchmarks remain unverified. The host reviews the diff closely. The failure modes below were observed on earlier Haiku models.
-
-- Non-fix reported as a fix: asked to make `TestMain` clean up its temp `HOME`, it only
-  changed `os.Exit(m.Run())` into `code := m.Run(); os.Exit(code)`, which still skips
-  defers, and reported "allowing defer cleanup to execute". Commit `932bb24`; real fix
-  `92c4b9e` by `claude:sonnet:low`.
-- Reused the previous commit's subject line verbatim for a different change (`932bb24`
-  vs `090078f`).
-- Duplicated pasted content: appended the same two orchestrator rule lines twice to
-  `spec/agent.yaml`; found by an `agy:flash38` reviewer, fixed in `0f0c0ef`.
-- Weakened test assertions while "fixing" a bug: dropped a command-name assertion and left
-  a tautological stderr assertion; fixed in `a5180d2`.
-- Fabricated measurements in a report (-49%/-80% claimed, real -5%/-66%) — see
-  a 2026-09 lean-sprint retro.
-- Cannot read Dot8 braille cards at all — see
-  a haiku card-reading canary.
-
-**Cost of the cheap seat**: every one of these needed a host review turn plus a
-re-delegation to a stronger model, so the cheap turn cost more than assigning
-`claude:sonnet:low` from the start. Use haiku only for mechanical edits with an explicit,
-machine-checkable acceptance test (a command whose output decides pass/fail); anything
-requiring judgment about whether a fix is correct goes to sonnet or better.
-
-Example assignment (2026-09, Codex and Claude subscriptions):
-
-| Role | Model |
-|---|---|
-| Host | claude opus |
-| Advisors | codex sol:low + claude sonnet |
-| Developer, clear small ticket | codex luna:low |
-| Developer, interface or design change | codex luna:med |
-| Reviewer | claude sonnet |
-| Mechanical worker | claude haiku (mechanical only, see failure modes above) |
+Use `--role dev --model lean` for standard work, `--role dev --model smart` for difficult work, and `--role reviewer --model smart` for review. The historical weak-model findings and assignment example are in `docs/ModelResearch.md`. Review mechanically scoped work against its acceptance test.
 
 Model lineups change every few months. Rerun the evaluation below when they do, instead of
 trusting an old table.
@@ -167,3 +135,19 @@ catch it.
 - Cost data point (ticket 500, a ~300-line change with driver code plus tests): two developer
   turns used 2.78M and 1.33M tokens, mostly cache reads. Use figures like this to judge whether
   a milestone's scope matches its model tier, not as a target to hit.
+
+<!-- harnez:model-picks:begin -->
+| Role | Trait | Meaning | Chain | Default |
+|---|---|---|---|---|
+| advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |
+| advisor | smart | Difficult judgment. | opus:low, opus:med, sol:low |  |
+| developer | ai | AI-oriented work. | unset |  |
+| developer | cheap | Low-cost work. | luna:med |  |
+| developer | fast | Fast work. | haiku:med |  |
+| developer | gui | Graphical interfaces. | lean, std |  |
+| developer | lean | Efficient standard work. | terra:low | yes |
+| developer | smart | Difficult judgment. | sol:med, opus:med |  |
+| developer | std | Standard work. | terra:med, opus:low |  |
+| developer | tui | Terminal interfaces. | smart |  |
+| reviewer | smart | Difficult judgment. | sol:low | yes |
+<!-- harnez:model-picks:end -->

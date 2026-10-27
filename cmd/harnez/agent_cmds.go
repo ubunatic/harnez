@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/pickdocs"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -122,7 +124,19 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 func (ac *agentCLI) modelsCmd() *cobra.Command {
 	var modelNamesOnly bool
 	var picksOnly bool
+	var markdownOutput bool
 	models := &cobra.Command{Use: "models", Short: "List known agent models with roles and when to use them", RunE: func(cmd *cobra.Command, _ []string) error {
+		if markdownOutput {
+			if !picksOnly || modelNamesOnly || ac.jsonOut {
+				return fmt.Errorf("--md requires --picks and cannot be combined with --json or --names")
+			}
+			md, err := pickdocs.Markdown(harnez.DefaultFS)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), md)
+			return nil
+		}
 		if picksOnly {
 			if modelNamesOnly {
 				return fmt.Errorf("--picks cannot be combined with --names")
@@ -205,6 +219,7 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 	}}
 	models.Flags().BoolVar(&modelNamesOnly, "names", false, "print only the model specs, one per line")
 	models.Flags().BoolVar(&picksOnly, "picks", false, "print role model picks")
+	models.Flags().BoolVar(&markdownOutput, "md", false, "print the embedded picks as Markdown")
 	models.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
 	return models
 }

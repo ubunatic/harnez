@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"ubunatic.com/harnez/internal/handoff"
+	"ubunatic.com/harnez/internal/pickdocs"
 )
 
 // Skill bodies may hold a line `<!-- harnez:render <name> -->`; `harnez apply`
@@ -21,6 +22,11 @@ var skillRenderers = map[string]func(fs.FS) (string, error){
 }
 
 func renderSkillBody(skill, body string, fsys fs.FS) (string, error) {
+	var err error
+	body, err = pickdocs.Render(fsys, body)
+	if err != nil {
+		return "", fmt.Errorf("skill %s: render picks: %w", skill, err)
+	}
 	if !strings.Contains(body, renderMarkerPrefix) {
 		return body, nil
 	}

@@ -44,7 +44,7 @@ Tasks stay placeholders until steps 2–4 have run.
 
 Goal: check the direction and avoid rebuilding established, stable, maintained, non-bloated tools.
 
-- Start several cheap read-only searchers in parallel (`haiku:low`, `luna:low`, `--role advisor`),
+- Start several cheap read-only searchers in parallel (`--role advisor --model cheap`),
   one angle each: existing tools, libraries to reuse, standards/specs, known pitfalls.
 - Each returns candidates with source link, last release date, activity, dependency weight,
   license, and a fit verdict. No link, no finding.
@@ -75,9 +75,9 @@ are closed, its declared canary or design review passes, and the working tree is
 
 Each task becomes a subticket (`/issue`) with acceptance, write set, and:
 
-- Developer tier: `luna:med` for well-specified implementation and tests, including Go; `sol:low` for judgment-heavy work; `haiku:med` for easy tasks; `haiku:low` for very simple, repetitive tasks.
+- Developer: `--role dev --model lean` for standard work; `--role dev --model std` for moderate work; `--role dev --model smart` for complex work; `--role dev --model fast` for easy work; `--role dev --model cheap` for low-cost work.
 - Architect only when the design is open (`/lean-sprint` §1.5 tiers).
-- Reviewer: opus/sol reviewer for risky work; orchestrator diff review for small work.
+- Reviewer: `--role reviewer --model smart` for risky work; orchestrator diff review for small work.
 - No schema-only tasks: a task that defines a file format, JSON schema or data model also ships the
   first code that reads or writes it, with a visible result (a command's output or a written file).
   A format without a user cannot be reviewed against real needs and gets redesigned later (epic 942:
@@ -117,3 +117,19 @@ The close reason lists each. Compare delivery with the epic's `/goal` first.
 
 Run the final tasks: sprint study (front matter `kind: sprint`), review-learning entries, follow-up tickets (`/evergreen`),
 then `/wrap`. Report the epic number, closed/skipped/parked tasks, and the next command.
+
+<!-- harnez:model-picks:begin -->
+| Role | Trait | Meaning | Chain | Default |
+|---|---|---|---|---|
+| advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |
+| advisor | smart | Difficult judgment. | opus:low, opus:med, sol:low |  |
+| developer | ai | AI-oriented work. | unset |  |
+| developer | cheap | Low-cost work. | luna:med |  |
+| developer | fast | Fast work. | haiku:med |  |
+| developer | gui | Graphical interfaces. | lean, std |  |
+| developer | lean | Efficient standard work. | terra:low | yes |
+| developer | smart | Difficult judgment. | sol:med, opus:med |  |
+| developer | std | Standard work. | terra:med, opus:low |  |
+| developer | tui | Terminal interfaces. | smart |  |
+| reviewer | smart | Difficult judgment. | sol:low | yes |
+<!-- harnez:model-picks:end -->

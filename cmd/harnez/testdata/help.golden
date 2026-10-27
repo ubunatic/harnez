@@ -260,6 +260,7 @@ Usage:
 Flags:
   -h, --help    help for models
       --json    JSON output
+      --md      print the embedded picks as Markdown
       --names   print only the model specs, one per line
       --picks   print role model picks
 

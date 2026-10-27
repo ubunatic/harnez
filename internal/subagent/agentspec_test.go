@@ -39,8 +39,8 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if sonnet := spec.Models["agy:sonnet"]; !strings.Contains(sonnet.Use, "reviewer when Claude quota is out") || strings.Contains(sonnet.Use, "developer") {
 		t.Errorf("agy:sonnet use = %q, want reviewer-only guidance when Claude quota is out", sonnet.Use)
 	}
-	if luna := spec.Models["codex:luna"]; !strings.Contains(luna.Use, "background and mechanical work") || !strings.Contains(luna.UseMed, "cheap default developer") || !strings.Contains(luna.UseMed, "well-specified implementation and tests") {
-		t.Errorf("codex:luna guidance = %q / %q, want background work and medium default developer guidance", luna.Use, luna.UseMed)
+	if luna := spec.Models["codex:luna"]; !strings.Contains(luna.Use, "background and mechanical work") || !strings.Contains(luna.UseMed, "low-cost developer option") || !strings.Contains(luna.UseMed, "well-specified implementation and tests") {
+		t.Errorf("codex:luna guidance = %q / %q, want background work and low-cost developer guidance", luna.Use, luna.UseMed)
 	}
 	if sol := spec.Models["codex:sol"]; !strings.Contains(sol.Use, "judgment") {
 		t.Errorf("codex:sol use = %q, want judgment guidance", sol.Use)
@@ -67,7 +67,7 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, phrase := range []string{"`luna:med` for well-specified implementation and tests", "`sol:low` when judgment", "`haiku:med` for easy tasks", "`haiku:low` for very simple, repetitive tasks", "above 100k tokens costs 5x", "harnez compacts Haiku at 80k by default; override via `agent.compact_thresholds`"} {
+	for _, phrase := range []string{"`--role dev --model lean` for standard work", "`--role dev --model std` for moderate work", "`--role dev --model smart` for complex work", "`--role dev --model fast` for easy work", "`--role dev --model cheap` for low-cost work", "above 100k tokens costs 5x", "harnez compacts Haiku at 80k by default; override via `agent.compact_thresholds`"} {
 		if !strings.Contains(string(skill), phrase) {
 			t.Errorf("lean-sprint skill missing %q", phrase)
 		}

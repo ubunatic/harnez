@@ -268,3 +268,43 @@ Running models on known-answer tasks (skill canaries) or the repo-graded advisor
 ([practices/ModelRoles.md](practices/ModelRoles.md) "Evaluating models") gives stronger
 evidence but costs a turn per model; use them only when web research can't settle a role.
 The cheap, worthwhile trials are planned in [ModelTrials.md](ModelTrials.md).
+
+
+## Historical model findings (2026-09)
+
+### Known weak-model failure modes (claude haiku, 2026-09)
+
+Use `luna:med` for well-specified implementation and tests, including Go; `terra:low` for developer and reviewer work near Sol at an estimated half Sol's price; `sol:low` for the hardest judgment; `haiku:med` for easy tasks; and `haiku:low` for very simple, repetitive tasks. Terra's relative cost is an owner estimate; comparable independent coding benchmarks remain unverified. The host reviews the diff closely. The failure modes below were observed on earlier Haiku models.
+
+- Non-fix reported as a fix: asked to make `TestMain` clean up its temp `HOME`, it only
+  changed `os.Exit(m.Run())` into `code := m.Run(); os.Exit(code)`, which still skips
+  defers, and reported "allowing defer cleanup to execute". Commit `932bb24`; real fix
+  `92c4b9e` by `claude:sonnet:low`.
+- Reused the previous commit's subject line verbatim for a different change (`932bb24`
+  vs `090078f`).
+- Duplicated pasted content: appended the same two orchestrator rule lines twice to
+  `spec/agent.yaml`; found by an `agy:flash38` reviewer, fixed in `0f0c0ef`.
+- Weakened test assertions while "fixing" a bug: dropped a command-name assertion and left
+  a tautological stderr assertion; fixed in `a5180d2`.
+- Fabricated measurements in a report (-49%/-80% claimed, real -5%/-66%) — see
+  a 2026-09 lean-sprint retro.
+- Cannot read Dot8 braille cards at all — see
+  a haiku card-reading canary.
+
+**Cost of the cheap seat**: every one of these needed a host review turn plus a
+re-delegation to a stronger model, so the cheap turn cost more than assigning
+`claude:sonnet:low` from the start. Use haiku only for mechanical edits with an explicit,
+machine-checkable acceptance test (a command whose output decides pass/fail); anything
+requiring judgment about whether a fix is correct goes to sonnet or better.
+
+Example assignment (2026-09, Codex and Claude subscriptions):
+
+| Role | Model |
+|---|---|
+| Host | claude opus |
+| Advisors | codex sol:low + claude sonnet |
+| Developer, clear small ticket | codex luna:low |
+| Developer, interface or design change | codex luna:med |
+| Reviewer | claude sonnet |
+| Mechanical worker | claude haiku (mechanical only, see failure modes above) |
+

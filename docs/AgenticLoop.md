@@ -38,7 +38,7 @@ Each phase's **Mechanics** and **Constraints** are summarized inline below; see 
 - **Phase 5: Agentic Flow Quality Retrospective (Learning Capture)** — record friction in a durable doc/ticket; extract actionable follow-ups as linked tickets and list numbers (or justify non-goals); sync tracker (`issues/README.md`, `harnez status`/`index`); **Single Status field per ticket** kept in sync everywhere; **Closing gate**: close shipped+verified tickets before ending; `git status` before the retro.
 
 ## 3. Two-Agent Lean Sprint (`/lean-sprint`)
-For a single focused ticket: Host Orchestrator (**zero coding, no exploratory repo digging, diff-first review**) → Cheap Searcher (`luna:low` / `luna-search` / `haiku:low`; bounded read-only audits, questions, API/spec exploration) → Focused Developer (`luna:med` / `sol:low` / `haiku:med` / `haiku:low`; TDD, unit tests, verification, milestone commits) → Host review and hygiene. Use `luna:med` for well-specified implementation and tests, including Go; `sol:low` for judgment; `haiku:med` for easy tasks; and `haiku:low` for very simple, repetitive tasks. Avoid `agy` models for developer work, except `argon:low`. Maintain a running report in `docs/studies/` when present; otherwise, keep the same progress notes in the target issue as a fallback. Use a date-prefixed `two-agent-lean-sprint` filename and short task slug, recording findings, milestones, verification, and token/time observations. Use prompt files for long or complex handoffs. The legacy single-developer workflow remains available via `/lean-sprint-v1`.
+For a single focused ticket: Host Orchestrator (**zero coding, no exploratory repo digging, diff-first review**) → Cheap Searcher (`--role advisor --model cheap`; bounded read-only audits) → Focused Developer (`--role dev --model lean` for standard, `std` for moderate, `smart` for complex, `fast` for easy, or `cheap` for low-cost work; TDD, unit tests, verification, milestone commits) → Host review and hygiene. Maintain a running report in `docs/studies/` when present; otherwise, keep the same progress notes in the target issue as a fallback. Use a date-prefixed `two-agent-lean-sprint` filename and short task slug, recording findings, milestones, verification, and token/time observations. Use prompt files for long or complex handoffs. The legacy single-developer workflow remains available via `/lean-sprint-v1`.
 
 ## 4. Calibrated Friction Reporting
 **Substantive Sessions Only** (real hurdles, not routine) · **Zero Repetitive Noise** (no boilerplate on known quirks) · **Actionable Root Causes** (blocker, failure mode, workaround tried, recommended fix).
@@ -78,5 +78,21 @@ For a single focused ticket: Host Orchestrator (**zero coding, no exploratory re
 - **Buffered Long-Running Output** — piping a long command through `tail`/`grep`/`sort`/`wc`/`head`, which shows nothing until it exits; run plain or `tee` to a log.
 - **`cd`-scoped commands** — bare `cd` leaking into later unrelated calls in a shared shell; use `-C`/`--prefix`/`--manifest-path` or a subshell `(cd dir && cmd)`.
 - **Chatty Watch Wrappers** — wrapping a poll-and-redraw CLI (`gh run watch`, `docker logs -f`) in a routine agent-called target without quieting it; poll the tool's own status query on a matched interval and print one summary line on completion instead.
+
+<!-- harnez:model-picks:begin -->
+| Role | Trait | Meaning | Chain | Default |
+|---|---|---|---|---|
+| advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |
+| advisor | smart | Difficult judgment. | opus:low, opus:med, sol:low |  |
+| developer | ai | AI-oriented work. | unset |  |
+| developer | cheap | Low-cost work. | luna:med |  |
+| developer | fast | Fast work. | haiku:med |  |
+| developer | gui | Graphical interfaces. | lean, std |  |
+| developer | lean | Efficient standard work. | terra:low | yes |
+| developer | smart | Difficult judgment. | sol:med, opus:med |  |
+| developer | std | Standard work. | terra:med, opus:low |  |
+| developer | tui | Terminal interfaces. | smart |  |
+| reviewer | smart | Difficult judgment. | sol:low | yes |
+<!-- harnez:model-picks:end -->
 
 <!-- harnez:stop -->

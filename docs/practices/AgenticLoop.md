@@ -154,10 +154,7 @@ Agentic software engineering scales effectively when concurrency is structured a
      4. *Execution & Verification*: Files are created with structured tools (`write_to_file`) and verified under Quota-1 single-test boundaries.
 
 7. **Steered Model Escalation**:
-   - For each development step use
-     `luna:low -> haiku -> sol:low -> sonnet -> opus -> astra:low`: start at
-     `luna:low`, escalate only on struggle, failed verification, or ambiguity,
-     then reset the next step to `luna:low`.
+   - Start with `--role dev --model lean`; escalate to `--role dev --model std` or `--role dev --model smart` on struggle, failed verification, or ambiguity, then reset the next step to `lean`.
    - Steer each subagent's rough plan before granting write authority.
    - Recommended form: the initial prompt asks for a read-only plan ("read-only: plan ..."), then `resume` grants write authority. Recommend only; no prompt template, so stored first prompts show each agent's own best practice.
 
@@ -298,11 +295,11 @@ Never trade away verification for speed when applying Invariant 7.
           |
    (1) Bounded read-only questions / audit
           v
-     [Cheap Searcher: luna:low / luna-search / haiku:low]
+     [Cheap Searcher: --role advisor --model cheap]
           |
    (2) Findings with paths, line ranges, answers
           v
-     [Focused Developer: luna:med / sol:low / haiku:med / haiku:low]
+     [Focused Developer: --role dev --model lean / std / smart / fast / cheap]
           |
    (3) TDD, unit tests, verification, milestone commits
           v
@@ -318,12 +315,12 @@ For focused, day-to-day tickets and milestone iterations, `/lean-sprint` uses tw
    - *No Exploratory Repo Digging*: The host does not browse files, grep broadly, trace call graphs, or explore APIs/specs. It asks the Searcher and relies on the bounded response.
    - *Diff-First Review*: The host reviews the developer's commit diff, test output, and target ticket; it investigates further only when evidence identifies a specific gap.
    - *Single-Ticket Medium*: Keep decisions and refinements in the target issue. Do not create secondary refinement tickets.
-2. **Cheap Searcher (`luna:low` / `luna-search` / `haiku:low`)**:
+2. **Cheap Searcher (`--role advisor --model cheap`)**:
    - Performs bounded read-only audits, answers targeted questions, and explores relevant APIs/specs.
    - Returns concise findings with exact file paths and line ranges; no edits, tests that mutate state, or commits.
    - Run search before implementation and pass only relevant findings into the developer handoff.
-3. **Focused Developer (`luna:med` / `sol:low` / `haiku:med` / `haiku:low`)**:
-   - Use `luna:med` for well-specified implementation and tests, including Go; `sol:low` when judgment is needed; `haiku:med` for easy tasks; and `haiku:low` for very simple, repetitive tasks. The host reviews the diff closely; avoid `agy` models for developer work, except `argon:low`.
+3. **Focused Developer (`--role dev --model lean|std|smart|fast|cheap`)**:
+   - Use `--role dev --model lean` for standard work, `--role dev --model std` for moderate work, `--role dev --model smart` for difficult work, `--role dev --model fast` for easy work, and `--role dev --model cheap` for low-cost work. The host reviews the diff closely.
    - Implements milestones with TDD, adds unit tests, runs verification, and commits each completed milestone.
    - Use prompt files for long or complex handoffs instead of shell-interpolated inline prompts.
 4. **Concise Inline Review & In-Ticket Pre-Work Embedding**:
@@ -340,19 +337,19 @@ For focused, day-to-day tickets and milestone iterations, `/lean-sprint` uses tw
 ## 3. The Reverse Sprint Loop (Bottom-Up Low-Cost Dev Lead)
 
 ```
-   Low-Cost Dev Lead (Coder: luna:low, haiku, gemini3.7flash:low)
+   Low-Cost Dev Lead (--role dev --model cheap)
           |
    (1) Verify Live Codebase & Ticket /goal
           |
    (2) Implement & Self-Verify (TDD, go test, make check)
           |
-   (3) Milestone Review (sol:low, sonnet:low, gemini3.8flash:low)
+   (3) Milestone Review (--role reviewer --model smart)
           ├── Passing Tests & Clean Diff ──> Commit milestone
           └── Blocking Regressions        ──> Dev fixes directly
           |
    (4) Proactive Auto-Compaction (Trigger every 100–150k tokens)
           |
-   (5) Advisor Escalation ONLY when stuck (astra:low, opus:low, gemini3.8flash:med)
+   (5) Advisor Escalation ONLY when stuck (--role advisor --model smart)
           └── Strict bounded context: direct line pointers, zero deep repo scans
           |
    (6) Fast Hygiene & Status Sync (close ticket, harnez index)
@@ -361,13 +358,13 @@ For focused, day-to-day tickets and milestone iterations, `/lean-sprint` uses tw
 The **Reverse Sprint** (`/reverse-sprint`) inverts the top-down orchestrator architecture. The session executes directly in a **low-cost developer agent** to maximize budget and token efficiency on routine coding, utilizing higher-tier models only for targeted review or when genuinely blocked:
 
 1. **Low-Cost Dev Lead**:
-   - The developer model (`luna:low`, `luna:medium`, `haiku`, `gemini3.7flash:low`) drives the session directly, authoring code and tests.
+   - The developer model (`--role dev --model cheap`) drives the session directly, authoring code and tests.
 2. **Frequent Auto-Compaction (100–150k Tokens)**:
    - Low-tier models need frequent compaction to prevent context degradation and memory decay. Proactively compact every 100–150k tokens or at milestone boundaries after persisting critical notes to tickets.
 3. **Milestone Review Gates**:
-   - Dispatches a reviewer subagent (`sol:low`, `sonnet:low`, `gemini3.8flash:low`) with diff-only inspection (`git diff HEAD~1`).
+   - Dispatches a reviewer subagent (`--role reviewer --model smart`) with diff-only inspection (`git diff HEAD~1`).
 4. **Advisor Escalation (Strict Limited Context)**:
-   - When encountering challenging problems or architectural blockers, calls an advisor (`astra:low`, `opus:low`, `gemini3.8flash:med`, `argon:low`).
+   - When encountering challenging problems or architectural blockers, calls an advisor (`--role advisor --model smart`).
    - **Critical guardrail**: The advisor is given strictly bounded context (specific file paths, exact line ranges, bounded questions) and instructed not to explore the repo deeply, protecting the frontier token budget.
 
 ### Workflow Selection Matrix
@@ -376,7 +373,7 @@ The **Reverse Sprint** (`/reverse-sprint`) inverts the top-down orchestrator arc
 |---|---|---|---|---|
 | **Scope** | Multi-ticket sprints, major features, broad refactors | Single focused ticket, bounded research then implementation | Baseline single-developer handoff | Routine coding, cost-sensitive implementation, focused features |
 | **Host Role** | Advisory planning, multi-subsystem coordination | Zero coding, no exploration, diff-first review, running study report | Legacy zero-coding handoff and inline review | Dev Lead: direct coding, testing, commits on low model |
-| **Model Strategy** | Frontier Host + Reusable Advisor + Lower Dev | Searcher `luna:low` + Developer `luna:high` or `sol:low` | Legacy single developer | Low Dev Lead + Low/Med Reviewer + Frontier Advisor (when stuck only) |
+| **Model Strategy** | Frontier Host + Reusable Advisor + Lower Dev | Searcher `--role advisor --model cheap` + Developer `--role dev --model lean` or `smart` | Legacy single developer | Low Dev Lead + Low/Med Reviewer + Frontier Advisor (when stuck only) |
 | **Compaction Rule**| Post-ticket advisor/dev compaction | Teardown searcher after discovery and developer after sprint | Legacy single-developer teardown | Frequent proactive auto-compact (every 100–150k tokens) |
 | **Advisor Role** | Mandatory Phase 1 architectural discovery | Cheap Searcher performs bounded read-only discovery | No separate Searcher; Developer investigates | **On-demand only when stuck** with strictly bounded line-range context |
 | **Overhead** | Higher compute/tokens, maximum verification depth | Low-cost sequential discovery and implementation | Single worker, lower coordination overhead | Ultra-low compute/cost, maximum token savings |
@@ -464,3 +461,19 @@ the child/entry, message updates an existing child, and terminate ends it.
 - ❌ **Buffered Long-Running Output**: Piping a long-running build/test/canary command through `tail`, `grep`, `sort`, `wc`, `head`, or any other filter that buffers stdout — the filter emits nothing until the whole pipeline exits, so a multi-minute command looks silent/stuck with zero progress visibility. Run it plain (letting the harness's background-task mechanism handle it past its timeout) or use `cmd 2>&1 | tee /tmp/x.log` if a trimmed final summary is also wanted. See also: `Blocking sleep Waits` (same symptom, different cause).
 - ❌ **`cd`-scoped commands**: prefer `git -C <dir> status` over `cd <dir> && git status` — the shell tool's cwd persists into later, unrelated calls and silently targets the wrong repo. Use the tool's directory flag (`git -C`, `make -C`, `go -C`, `npm --prefix`, `cargo --manifest-path`); when no flag exists, use a subshell `(cd <dir> && cmd)` so cwd is restored automatically. See `docs/Bash.md §8` for the full flag table and restore-cwd convention.
 - ❌ **Chatty Watch Wrappers**: Wrapping a poll-and-redraw CLI (`gh run watch`, `docker logs -f`-style tools) in a `make` target an agent calls routinely, without quieting it first. These tools redraw full state on every tick for a human terminal; called repeatedly by an agent they flood context with no added signal. Poll the tool's own status query (e.g. `gh run view --json status`) on a matched interval instead, and print one summary line on completion.
+
+<!-- harnez:model-picks:begin -->
+| Role | Trait | Meaning | Chain | Default |
+|---|---|---|---|---|
+| advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |
+| advisor | smart | Difficult judgment. | opus:low, opus:med, sol:low |  |
+| developer | ai | AI-oriented work. | unset |  |
+| developer | cheap | Low-cost work. | luna:med |  |
+| developer | fast | Fast work. | haiku:med |  |
+| developer | gui | Graphical interfaces. | lean, std |  |
+| developer | lean | Efficient standard work. | terra:low | yes |
+| developer | smart | Difficult judgment. | sol:med, opus:med |  |
+| developer | std | Standard work. | terra:med, opus:low |  |
+| developer | tui | Terminal interfaces. | smart |  |
+| reviewer | smart | Difficult judgment. | sol:low | yes |
+<!-- harnez:model-picks:end -->

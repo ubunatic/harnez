@@ -102,7 +102,7 @@ models:
     eff: "~"
     skills: Go~ TUI- SQL?
     use: Owner guidance — background and mechanical work, including log compaction.
-    use_med: Owner guidance — cheap default developer for well-specified implementation and tests.
+    use_med: Owner guidance — low-cost developer option for well-specified implementation and tests.
   codex:sol:
     aliases: [sol, sol:low]
     preferred: true

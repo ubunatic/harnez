@@ -204,7 +204,7 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 	if !strings.Contains(low, "spec-default") || !strings.Contains(low, "developer") || !strings.Contains(low, "background and mechanical work") || !strings.Contains(low, "including log compaction") || !strings.Contains(low, " 1 ") || !strings.Contains(low, "Go~ TUI- SQL?") {
 		t.Fatalf("luna:low row = %q", low)
 	}
-	if !strings.Contains(med, "cheap default developer") || !strings.Contains(med, "well-specified implementation and tests") {
+	if !strings.Contains(med, "low-cost developer option") || !strings.Contains(med, "well-specified implementation and tests") {
 		t.Fatalf("luna:med row must use use_med: %q", med)
 	}
 	if strings.Contains(med, "including log compaction") {
