@@ -80,6 +80,31 @@ external_sessions:
 #          Spawn rights come from roles.<role>.spawns below.
 # Evidence: docs/Models.md.
 models_legend: "COST is an owner-guided relative estimate by effort tier; codex:luna:low = 1 · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
+purpose_roles:
+  dev: Implementation work.
+  search: Read-only discovery.
+  review: Independent review.
+  arch: Architecture and design.
+purpose_traits:
+  lean: Efficient standard work.
+  std: Standard work.
+  smart: Difficult judgment.
+  tui: Terminal interfaces.
+  gui: Graphical interfaces.
+  cheap: Low-cost work.
+  fast: Fast work.
+  ai: AI-oriented work.
+purpose_aliases:
+  dev:lean: [terra:low]
+  dev:std: [terra:med, opus:low]
+  dev:smart: [sol:med, opus:med]
+  dev:tui: [dev:smart]
+  dev:gui: [dev:lean, dev:std]
+  dev:cheap: [luna:med]
+  dev:fast: [haiku:med]
+  dev:ai: []
+  search:cheap: [luna:low, haiku:low]
+  review:smart: [sol:low]
 models:
   codex:luna:
     aliases: [luna, luna:low]

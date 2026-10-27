@@ -398,7 +398,19 @@ func ResolveModel(spec string) (Model, error) {
 }
 
 func resolveModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalog.Catalog, spec string) (Model, error) {
-	model, err := resolveModelIn(aliases, spec)
+	modelSpec := spec
+	agent, err := agentSpecOnce()
+	if err != nil {
+		return Model{}, err
+	}
+	role := strings.ToLower(strings.SplitN(strings.TrimSpace(spec), ":", 2)[0])
+	if _, ok := agent.PurposeRoles[role]; ok {
+		modelSpec, err = resolvePurpose(agent.PurposeAliases, strings.ToLower(strings.TrimSpace(spec)), map[string]bool{}, 1)
+		if err != nil {
+			return Model{}, err
+		}
+	}
+	model, err := resolveModelIn(aliases, modelSpec)
 	if err != nil {
 		return Model{}, err
 	}
@@ -406,6 +418,29 @@ func resolveModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalo
 		return Model{}, fmt.Errorf("model %q is disabled by user policy", spec)
 	}
 	return model, nil
+}
+
+func resolvePurpose(aliases map[string][]string, name string, visiting map[string]bool, depth int) (string, error) {
+	if depth > 4 {
+		return "", fmt.Errorf("purpose alias depth exceeds 4 at %q", name)
+	}
+	if visiting[name] {
+		return "", fmt.Errorf("purpose alias cycle at %q", name)
+	}
+	targets, ok := aliases[name]
+	if !ok {
+		return "", fmt.Errorf("unknown purpose alias %q", name)
+	}
+	if len(targets) == 0 {
+		return "", fmt.Errorf("purpose alias %q is unset", name)
+	}
+	visiting[name] = true
+	defer delete(visiting, name)
+	target := targets[0]
+	if purposeName.MatchString(target) {
+		return resolvePurpose(aliases, target, visiting, depth+1)
+	}
+	return target, nil
 }
 
 func resolveDefaultModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalog.Catalog, spec string) (Model, error) {

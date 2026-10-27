@@ -61,7 +61,7 @@
       "additionalProperties": false
     }
   },
-  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "default_role", "models", "roles", "stop", "external_sessions"],
+  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "default_role", "models", "roles", "stop", "external_sessions", "purpose_aliases", "purpose_roles", "purpose_traits"],
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
@@ -171,6 +171,19 @@
     "default_model": { "type": "string", "minLength": 1 },
     "default_role": { "type": "string", "minLength": 1 },
     "models_legend": { "type": "string" },
+    "purpose_roles": {
+      "type": "object", "required": ["dev", "search", "review", "arch"],
+      "propertyNames": { "enum": ["dev", "search", "review", "arch"] },
+      "additionalProperties": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" }
+    },
+    "purpose_traits": {
+      "type": "object", "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" }
+    },
+    "purpose_aliases": {
+      "type": "object", "propertyNames": { "pattern": "^(dev|search|review|arch):[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+    },
     "models": {
       "type": "object",
       "minProperties": 1,
