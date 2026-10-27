@@ -194,6 +194,27 @@ Plan accepted (per-run hooks: `claude --settings`, `codex -c 'hooks.<Event>=[...
    compacting resume (3 Codex calls).
 4. The doc section also records the owner's commands from §1 as measured (owner, 2026-10-27, versions from §1).
 
+### M1 delivered (f726353c): measured hooks and events per provider
+
+`docs/AutoCompaction.md` "Compaction probes (issue 987 M1)". Host checked the raw scratch output: Codex
+`turn.completed.usage` input 16,307 → 32,786 → 49,322 over start, plain resume, compacting resume.
+
+### Pre-work for M3 and M4 (from M1 findings)
+
+1. Codex `--json` emits **no** `context_compacted` event, and `turn.completed.usage` stays cumulative even across
+   the compaction (49,322 after it). So M3 cannot confirm a drop from the stream: confirm from the PostCompact
+   hook record (session ID + turn ID) or the rollout `compacted` item, and read context before/after from the
+   rollout `last_token_usage` / `latest_token_usage_record`, not from `usage`.
+2. Codex hook payloads carry no token counts; harnez telemetry's pre and post snapshots both held the cumulative
+   32,798, so today's `compaction_economics` row is `insufficient_data`. M3 fills before/after from the rollout.
+3. A per-run `-c hooks.<Event>=` override ran **in addition to** the installed hooks (two pre and two post rows),
+   so the probe doubled records; the installed config alone gives one pair. M4: pair records by session ID + turn
+   ID and tolerate duplicates.
+4. Claude 2.1.311 fires `PostCompact` in `-p` with `trigger` and `compact_summary`: M4 can use a real Pre/Post pair.
+5. agy has no hooks and no plain transcript marker; the stream's `step_update` with `step_type: checkpoint` is the
+   signal. M4 for agy uses that stream event from `Compact()`, not a `PostInvocation` hook; record it as
+   `stream_fallback`.
+
 ## Milestones
 
 - **M1 (measure, read-only for code):** a temporary logging hook (`cat > <scratch>/<event>.json`), one real
