@@ -283,6 +283,10 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
     blocks". (2) Rename the markers from `harnez:purpose-aliases:begin/end` (design-A name) to
     `harnez:model-picks:begin/end`. The changed guidance assertions (`low-cost developer option`,
     `--role dev --model <trait>` phrases) follow the new contract and are accepted.
+  - **M7 delivered (`9a7b66c0`, prose migration):** developer `make test-q1`: 59 `ok`, 0 `--- FAIL`. Host: touched
+    packages green, `make install` and `harnez init -d .` leave a clean tree, `harnez agent models --picks --md`
+    prints plain `luna:low`, 8 docs carry `harnez:model-picks` blocks, `harnez apply` refreshed the installed
+    lean-sprint skill.
 
 ## 3. Implementation & Verification Plan
 
