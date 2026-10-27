@@ -307,6 +307,14 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
      names the canonical role (`developer`).
   - **Host decision:** role aliases stay rejected in `models.yaml` (item 7); one name per role keeps overrides
     unambiguous. Reversible.
+  - **M8 delivered (`2bf4ab41`, review fixes):** dev-983 wrote all 7 items and hit its Codex usage limit while
+    running the suite, before commit; the host ran `make test` (59 `ok`, 0 `--- FAIL`), read the diff (the only
+    changed old assertion gained phrases) and committed. Host live with a temp `models.yaml`: `gui: [ai, lean]`
+    resolves `codex:terra:low`; `roles.dev` is rejected naming `developer`; `lean: []` gives the
+    default-disabled message.
+- **Goal check (host):** picks live once in `spec/agent.yaml` with schema (M2); harnez resolves them (M2, M4, M8),
+  prints them (M3, M6) and accepts user overrides (M5); skills and practice docs write `--role X --model <trait>`
+  with a generated table (M7). No shortfall; trait guessing stays in 984.
 
 ## 3. Implementation & Verification Plan
 
