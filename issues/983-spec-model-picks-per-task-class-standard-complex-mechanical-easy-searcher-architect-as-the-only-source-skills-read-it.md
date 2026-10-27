@@ -287,6 +287,26 @@ Re-cut after the design-B decision (M1 shipped `<role>:<trait>`; M2 moves it int
     packages green, `make install` and `harnez init -d .` leave a clean tree, `harnez agent models --picks --md`
     prints plain `luna:low`, 8 docs carry `harnez:model-picks` blocks, `harnez apply` refreshed the installed
     lean-sprint skill.
+- **M8 (review fixes, rv-983 opus:low, 2026-10-27: no blockers):** each fix starts with a failing test.
+  1. `agent resume --model <trait>` takes `targets[0]` with no fallback (`runResume` →
+     `ResolveModelForCanonicalRole` → `resolveRoleTrait`). Use the same availability-aware fallback as start.
+  2. A background worker gets `--model <trait>` and resolves it again: it can land on another model than the
+     parent printed and recorded, and the fallback notice prints twice. Pass the concrete spec to the worker and
+     carry the trait separately for `model_alias`.
+  3. A nested unset trait (`[]`) aborts the chain (`resolveTraitCandidates`): override `gui: [ai, lean]` must skip
+     `ai` with a reason and resolve `lean`.
+  4. The trait-failure error ends with "ask for guidance rather than using a different model" after suggesting
+     `--model provider:model:tier`; drop that suffix when a trait was given.
+  5. Spec-load validation of `roles.*.models` runs only when `model_traits` is set (`parseAgentSpec`); validate
+     whenever any role has `models`.
+  6. Nits: one const for the trait depth limit (3 copies of `4`); delete the unused `ModelPicks()`; a test that
+     `pickdocs`' own spec struct agrees with the subagent loader; the generated block says it shows the shipped
+     picks and that `models.yaml` overrides are listed by `harnez agent models --picks`.
+  7. Negative tests: resume with a disabled first candidate; an override setting a role's default trait to `[]`
+     gives the default-disabled wording; an override keyed by a role alias (`dev`) is rejected with an error that
+     names the canonical role (`developer`).
+  - **Host decision:** role aliases stay rejected in `models.yaml` (item 7); one name per role keeps overrides
+    unambiguous. Reversible.
 
 ## 3. Implementation & Verification Plan
 
