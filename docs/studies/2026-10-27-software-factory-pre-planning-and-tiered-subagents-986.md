@@ -112,9 +112,39 @@ The searcher (`search-986`, `haiku:med`) is mandated to call `neus ask "<questio
 - **Turn 3 (M3a - CLI assess flags & DefaultLinter)**: `neus ask` returned high-level summaries; searcher supplemented with direct targeted reads of `cmd/harnez/assess_cmd.go` and `internal/lint/lint.go`.
 - **Takeaway**: `neus ask` serves well as an initial orientation check, but broad natural language questions can surface superficial keyword matches. Future prompts should test symbol-targeted queries (e.g. `neus ask "DefaultLinter Rule interface"`). We will periodically collect 1-line feedback notes from agents without interrupting the development loop.
 
+### Milestone 4 Delivery (`5ee4ae3f`)
+- **Searcher `search-986` (`haiku:med`)**: 34s, 426k tokens (incl. cached). Located `Output.md` entry in `config.yaml`, copyable doc guidelines in `docs/other/Spec.md`, and command table in `docs/CLIDesign.md`.
+- **Developer `dev-986-m4` (`haiku:med`)**: 2m56s, 525k tokens (incl. cached).
+  - Added Canonical Terminology rules to `.harnez/rules/Output.md` via `config.yaml` with suppression tags on quote lines.
+  - Added glossary spec entry to `docs/other/Spec.md`.
+  - Added `harnez assess --glossary` documentation and flag in `docs/CLIDesign.md`.
+  - Ran `harnez init -d .` to synchronize root doc copies.
+- **Verification & Quota-1 Pass**:
+  - `TestRootDocCopiesMatchSources` passed.
+  - `harnez assess --glossary` passed with **0 findings**.
+  - `make test-q1` flagged golden CLI help drift (`TestHelpGolden`) due to the new `--glossary` flag (as predicted in `arch-986`'s review). Updated `cmd/harnez/testdata/help.golden` via `-update`.
+  - Full `make test-q1` ran green across all 67 packages.
+  - `make install` passed cleanly. Committed as `5ee4ae3f`.
+
 ---
 
-## 7. Next Steps for Skill Codification (`/software-factory`)
+## 7. Experiment Retrospective & Software Factory Findings
+
+1. **Was skipping a mid/high-tier developer successful?**
+   **Yes, completely.** All four milestones (M1–M4) were delivered, verified, and committed without ever needing a high-cost developer model.
+2. **Key Factor: High-Information Single-Turn Architect Consultations (`argon:low`)**:
+   Providing aggregated facts from the cheap Searcher to `argon:low` allowed it to output complete, production-ready types, regex algorithms, and locked table tests in ~1-minute single turns (~150k–280k tokens incl. cached).
+3. **Mechanical Developers (`haiku:med`) Followed Rigid Specs Verbatim**:
+   `haiku:med` excelled when given unambiguous types and locked test cases. When it encountered edge cases (such as the line-1 suppression conflict in M2), it accurately diagnosed the root cause and proposed valid options instead of silently tampering with test assertions.
+4. **Session Lifecycle Policy Succeeded**:
+   - Resumable Searcher (`search-986`) kept high prompt-cache efficiency across M1–M4.
+   - Fresh Developer sessions per milestone (`dev-986-m1`, `dev-986-m2`, `dev-986-m3a`, `dev-986-m3b`, `dev-986-m4`) kept developer context low (<25k novel tokens), completely bypassing context fatigue and compaction degradation.
+5. **No Fallback Needed**:
+   Neither the Haiku underperformance nor the Argon latency circuit-breakers were triggered; the fallback to Opus was not required.
+
+---
+
+## 8. Next Steps for Skill Codification (`/software-factory`)
 
 This live run on Issue #986 will measure the real cost, turn counts, and failure rates of this multi-tier pipeline. Upon completion, the following steps will be abstracted into a generic skill:
 1. Automated role assignment based on task typology (Searcher -> Architect Gate -> Fresh Mechanical Dev -> Host Review).
