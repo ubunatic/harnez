@@ -18,13 +18,11 @@ Owner, 2026-10-27: a new GPT-6.1 Terra model is out and should be onboarded. Har
 Sol (`gpt-6.1-sol`) and Astra (`gpt-6-astra`), but no Terra. The older GPT-5.6 Terra was removed in 715 as an
 older-generation model; GPT-6.1 Terra is a new model, so 715's decision does not apply to it.
 
-## 2. Findings (to verify; nothing below is confirmed yet)
+## 2. Findings (research snapshot 2026-10-27)
 
-- Model ID: unverified; `gpt-6.1-terra` by analogy with `gpt-6.1-sol`. Confirm from OpenAI's model page and from the
-  installed Codex CLI's model list.
-- Needed from the web, each with a source URL and the effort level it was measured at:
-  context window, max output, price per MTok (input/output/cache), long-context price step if any (Luna and Sol 5.6
-  have one above 272k), benchmarks for tool calling, research and coding, and how it sits between Luna and Sol.
+- [OpenAI's model page](https://developers.openai.com/api/docs/models/gpt-6.1-terra) confirms the API ID `gpt-6.1-terra`, 1,050,000-token context, 128,000 maximum output tokens, and reasoning efforts none/low/medium/high/xhigh/max. Installed Codex availability remains unverified.
+- The same page gives standard API prices per million tokens of $1 input, $0.05 cached input, $5 output, and $1.25 for 30-minute cache writes. Above 272K input tokens, the full request is priced at 2x input/cache and 1.5x output. These are API rates, not measured Harnez or Codex task costs.
+- [Comparison study](../docs/studies/2026-10-27-codex-sol-terra-luna-comparison.md): Terra sits between Sol and Luna in the independent coding-agent comparison consulted. Comparable three-model SWE-bench scores and independent Terra throughput remain unverified. Source benchmark, effort, workload, and conditions before using them in guidance; tool-calling and research benchmarks still need review.
 - Old alias: 715 made old `terra` sessions fail clearly. Reusing `terra`/`terra:low` as aliases for the new model must
   not silently resume an old GPT-5.6 Terra session.
 - Entry shape: follow `codex:sol` in `spec/agent.yaml` (aliases, provider, name, tier, roles, cost, cost_by_tier, eff,
@@ -32,7 +30,7 @@ older-generation model; GPT-6.1 Terra is a new model, so 715's decision does not
 
 ## 3. Implementation & Verification Plan
 
-1. Research: a cheap web researcher collects the numbers above; mark vendor-marketing or blog claims unverified.
+1. Research: fill the remaining benchmark gaps above and verify sources and effort settings; distinguish vendor claims from independently measured results.
 2. Owner decides alias, roles, cost estimate and one-line `use` guidance from the research.
 3. Add the spec entry and update guides that list the model family (`docs/Models.md`, `docs/ModelResearch.md`,
    `docs/practices/ModelRoles.md` source plus root copy) and any test asserting the model table.
