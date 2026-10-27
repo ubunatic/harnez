@@ -126,6 +126,13 @@ one ran, why, and what it changed) by session ID, and use that record for all co
     `codebase-memory-mcp hook-augment`, the other `harnez codex-telemetry`. So each SessionStart trigger runs two
     hooks; the owner run showed two such pairs (likely `resume`, then `compact`; unconfirmed). Codex
     SessionStart's `compact` matcher is a second post-compaction signal next to `PostCompact`.
+  - Control run (searcher, same session `01a17c6c`, codex-cli 0.164.0, resumed without the `-c` limit): no
+    Pre/PostCompact lines and one SessionStart pair (the resume). So in the compacted run the second pair came from
+    the compaction: compaction re-triggers SessionStart with `compact` and runs both hooks again (two runs; a
+    logging hook naming the trigger would confirm it).
+  - Cost: the control turn reported 265,096 tokens used, the compacted turn 107,088, for the same one-line status
+    prompt on the same session. The compaction turn was cheaper than a normal turn on the uncompacted context, so
+    an on-demand compaction pays for itself in its own turn here.
   - Open, to measure in the first read-only developer turn with a logging hook (`cat > <scratch>/<event>.json`):
     Claude `PostCompact` in print mode and its fields; Codex hook config path and Pre/Post fields; the
     `context_compacted` JSON fields; whether Codex `turn.completed` usage is per turn or cumulative (two
