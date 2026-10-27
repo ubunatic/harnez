@@ -268,6 +268,22 @@ truncates long command output, so a ~70k context needed three chunked reads.
 - Host live checks after M4b and `harnez apply`: one throwaway `claude:haiku:low` and one `agy:argon:low` session in a
   /tmp dir: `agent start`, `agent compact`, `agent status --json`.
 
+### M4a delivered (2cce6a88): session state and pairing
+
+`compactSession` saves context usage and `compaction_count` (Codex only so far); `LatestCompactionPair` with a
+`source` column and migration; `agent status --json` gains `compaction_pair`. The developer's `make test-q1` failed
+on two expectation tests, which it fixed afterwards without a rerun; the host reran `make test-q1`: exit 0, 59 packages
+ok, no FAIL.
+
+### Pre-work for M4b (from M4a review)
+
+1. `saveCompactResult` runs only inside `if x.Provider == "codex"`. Store the post-compaction context usage and count
+   for Claude and agy compactions too (Claude's result carries `ContextTokens` after `compact_boundary`); print the
+   same `Compacted: ...` line when before/after are known, else `Compacted: context usage unknown`.
+2. `agent status --json` returns an error when the telemetry DB cannot be opened (fresh machine, no DB yet). It must
+   still print the session with `"compaction_pair": null`; add a test with a missing DB path.
+3. `spec/telemetry.yaml` schema: the two changed lines use spaces where the block uses tabs; match the block.
+
 ### Pre-work for M3 and M4 (from M1 findings)
 
 1. Codex `--json` emits **no** `context_compacted` event, and `turn.completed.usage` stays cumulative even across
