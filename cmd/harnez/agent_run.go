@@ -684,6 +684,10 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	if err != nil {
 		return err
 	}
+	compactMode, err := subagent.AutoCompactMode(sess.Provider)
+	if err != nil {
+		return err
+	}
 	contextTokens := sess.LastContextTokens()
 	if interactive && contextTokens >= threshold {
 		return fmt.Errorf("session %q has %d context tokens, over the limit %d (setting agent.compact_threshold_tokens in ~/.harnez/config.yaml); an active interactive session cannot be compacted and verified from outside; next step: resume it non-interactively, or start a fresh session with harnez agent start", sess.Name, contextTokens, threshold)
@@ -697,13 +701,8 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		}
 		return driver.Compact(ctx, sess.ProviderID())
 	}
-	// Noninteractive Codex exec applies configured automatic compaction during
-	// resume; its updated context count is read from the rollout afterward.
-	// agy supports on-demand /compact in print mode (issue 823), but exposes
-	// no reliable current-context size: usage totals model calls, and /compact
-	// returns unchanged usage with an empty response (issue 644). Keep automatic
-	// threshold compaction disabled until a reliable context count is available.
-	if contextTokens >= 0 && ((sess.Provider != "codex" && sess.Provider != "agy") || interactive) {
+	// Interactive sessions are guarded above; native compaction is verified after resume.
+	if contextTokens >= 0 && (compactMode == "manual" || interactive) {
 		compacted, err = subagent.EnsureContextUnderThreshold(contextTokens, threshold, compactFn)
 		if err != nil {
 			return fmt.Errorf("refusing to send resume prompt: %w", err)
@@ -846,7 +845,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	for _, warning := range r.Warnings {
 		fmt.Fprintln(cmd.ErrOrStderr(), warning)
 	}
-	if sess.Provider == "codex" && contextTokens >= threshold && (!r.CompactionObserved || r.ContextTokens < 0 || r.ContextTokens >= threshold) {
+	if compactMode == "native" && contextTokens >= threshold && (!r.CompactionObserved || r.ContextTokens < 0 || r.ContextTokens >= threshold) {
 		context := fmt.Sprintf("%d", r.ContextTokens)
 		if r.ContextTokens < 0 {
 			context = "unknown"

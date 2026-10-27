@@ -46,7 +46,7 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 		t.Errorf("codex:sol use = %q, want judgment guidance", sol.Use)
 	}
 	haiku := spec.Models["claude:haiku"]
-	if !strings.Contains(haiku.Use, "haiku:med for easy tasks") || !strings.Contains(haiku.Use, "haiku:low for very simple, repetitive tasks") || !strings.Contains(haiku.Use, "100k") || !strings.Contains(haiku.Use, "5x") || !strings.Contains(haiku.Use, "configure Haiku to compact at about 80k via agent.compact_thresholds") {
+	if !strings.Contains(haiku.Use, "haiku:med for easy tasks") || !strings.Contains(haiku.Use, "haiku:low for very simple, repetitive tasks") || !strings.Contains(haiku.Use, "100k") || !strings.Contains(haiku.Use, "5x") || !strings.Contains(haiku.Use, "harnez compacts Haiku at 80k by default; override via agent.compact_thresholds") {
 		t.Errorf("claude:haiku use = %q, want tier, price-step and compaction guidance", haiku.Use)
 	}
 	for name, model := range spec.Models {
@@ -64,7 +64,7 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, phrase := range []string{"`luna:med` for well-specified implementation and tests", "`sol:low` when judgment", "`haiku:med` for easy tasks", "`haiku:low` for very simple, repetitive tasks", "above 100k tokens costs 5x", "configure Haiku to compact at about 80k via `agent.compact_thresholds`"} {
+	for _, phrase := range []string{"`luna:med` for well-specified implementation and tests", "`sol:low` when judgment", "`haiku:med` for easy tasks", "`haiku:low` for very simple, repetitive tasks", "above 100k tokens costs 5x", "harnez compacts Haiku at 80k by default; override via `agent.compact_thresholds`"} {
 		if !strings.Contains(string(skill), phrase) {
 			t.Errorf("lean-sprint skill missing %q", phrase)
 		}
@@ -152,6 +152,27 @@ func TestKnownErrorChecksMatchAgentSchema(t *testing.T) {
 	}
 	if err := resolved.Validate(document); err != nil {
 		t.Fatalf("agent spec does not match schema: %v", err)
+	}
+	for _, invalid := range []any{0, -1, "80000"} {
+		document["compact_thresholds"] = map[string]any{"claude:haiku:low": invalid}
+		if err := resolved.Validate(document); err == nil {
+			t.Errorf("schema accepted invalid compact threshold %#v", invalid)
+		}
+	}
+	document["compact_thresholds"] = map[string]any{"claude:haiku:low": 80000}
+	for _, invalid := range []any{true, 42, "unexpected"} {
+		document["auto_compact"] = map[string]any{"default_mode": invalid, "provider_modes": map[string]any{"agy": "disabled"}, "watchdog_grace_ms": 20000, "legacy_growth_threshold_tokens": 100000}
+		if err := resolved.Validate(document); err == nil {
+			t.Errorf("schema accepted invalid compaction mode %#v", invalid)
+		}
+	}
+	document["auto_compact"] = map[string]any{"default_mode": "manual", "provider_modes": map[string]any{"agy": false}, "watchdog_grace_ms": 20000, "legacy_growth_threshold_tokens": 100000}
+	if err := resolved.Validate(document); err == nil {
+		t.Error("schema accepted a boolean provider mode")
+	}
+	document["auto_compact"] = map[string]any{"default_mode": "manual", "provider_modes": map[string]any{}, "watchdog_grace_ms": "20000", "legacy_growth_threshold_tokens": 100000}
+	if err := resolved.Validate(document); err == nil {
+		t.Error("schema accepted a string watchdog grace")
 	}
 	checks, err := KnownErrorChecks()
 	if err != nil {
@@ -266,7 +287,7 @@ func TestParseAgentSpecRejectsBadDefault(t *testing.T) {
 }
 
 func TestParseAgentSpecRequiresExternalSessionDiscovery(t *testing.T) {
-	data := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\ndefault_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
+	data := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\n" + testAutoCompactYAML + "default_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
 	if _, err := parseAgentSpec([]byte(data)); err == nil || !strings.Contains(err.Error(), "external_sessions") {
 		t.Fatalf("parse without external_sessions = %v, want required provider error", err)
 	}
@@ -400,8 +421,10 @@ func TestResolveRoleDynamicStaticBeforeClassifierAndGracefulFallback(t *testing.
 	}
 }
 
+const testAutoCompactYAML = "auto_compact: {default_mode: manual, provider_modes: {}, watchdog_grace_ms: 20000, legacy_growth_threshold_tokens: 100000}\n"
+
 func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
-	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\n" + testExternalSessionSpecYAML
+	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\n" + testAutoCompactYAML + testExternalSessionSpecYAML
 	for name, doc := range map[string]string{
 		"default role undefined": base + "default_role: nobody\nroles:\n  a: {description: fine, spawns: [], rules: x}\n",
 		"spawns undefined role":  base + "default_role: a\nroles:\n  a: {description: fine, spawns: [b], rules: x}\n",
@@ -427,7 +450,7 @@ func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 
 func TestParseAgentSpecDoesNotMutateModelAliases(t *testing.T) {
 	before := KnownModels()
-	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
+	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ndefault_role: a\ncompact_threshold_tokens: 200000\n" + testAutoCompactYAML + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
 		t.Fatal(err)
 	}
 	after := KnownModels()

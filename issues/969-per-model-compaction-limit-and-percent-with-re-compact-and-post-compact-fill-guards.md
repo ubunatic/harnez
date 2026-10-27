@@ -17,9 +17,9 @@ cost 5x more (verified in R2), so compaction must start reliably below that step
 
 Three gaps:
 
-1. **No per-model percent.** `spec/agent.yaml` has one token value (`compact_threshold_tokens: 200000`), and
-   `~/.harnez/config.yaml` `agent.compact_thresholds` can override it per `provider:model[:tier]`, but only as an
-   absolute token count. Needed: a limit and a percent of it, for example Haiku at 100k and 80%, so Haiku compacts at
+1. **No per-model percent.** `spec/agent.yaml` has a global token value (`compact_threshold_tokens: 200000`) and
+   per-model token defaults; `~/.harnez/config.yaml` `agent.compact_thresholds` can override per `provider:model[:tier]`,
+   but only as an absolute token count. Needed: a limit and a percent of it, for example Haiku at 100k and 80%, so Haiku compacts at
    80k. Claude's own trigger (window minus buffer) is separate and was not proven by the 956 canary.
 2. **No guard against compacting again too soon.** Haiku reaches about 80k and compacts to about 70k; the next trigger
    is then only about 10k away, and each compaction costs a full summary turn for little room gained.
@@ -138,7 +138,7 @@ Done:
 - R2 (price steps) and most of R3 (Claude trigger mechanism): section 2a, `docs/AutoCompaction.md` (a2f8ca09).
 - Owner decisions: default 200k for every model in use except Haiku; Haiku target 80k; Gemini Flash 3.8 and Argon
   stay at 200k.
-- Haiku override live in `~/.harnez/config.yaml` (owner file, not in git): `agent.compact_thresholds` with
+- Haiku default shipped in `spec/agent.yaml` (issue 973 M3); the earlier owner override remains in `~/.harnez/config.yaml` (owner file, not in git): `agent.compact_thresholds` with
   `claude:haiku:low|med|high: 80000`. Verified with harnez's own `CompactThreshold` against the real config: Haiku
   80000, Sonnet and Luna 200000. All three tier keys are needed because lookup tries the exact
   `provider:alias:tier` first and the bare `haiku` alias resolves to `claude:haiku:low`. Pitfall: tests in

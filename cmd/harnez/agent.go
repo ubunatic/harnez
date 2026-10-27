@@ -101,9 +101,8 @@ The model default comes from spec/agent.yaml. Agents run with -d <dir> as their
 working directory (default: cwd); resume reuses the session's directory.
 Sessions are chosen by --name, attribution in -d, or -c. Use -- to send text
 literally. Slash commands are /compact, /stop, and /status. Automatic compaction uses
-agent.compact_threshold_tokens from ~/.harnez/config.yaml (default from
-spec/agent.yaml compact_threshold_tokens).
-agent.compact_thresholds may override provider:model[:tier] thresholds.`}
+agent.compact_thresholds from ~/.harnez/config.yaml, then spec model defaults,
+then user agent.compact_threshold_tokens, then the spec global default.`}
 	root.PersistentFlags().StringVar(&ac.storeDir, "store-dir", subagent.DefaultStoreDir(), "session store directory")
 	root.PersistentFlags().StringVarP(&ac.workDir, "dir", "d", ".", "agent working directory (all providers) and session scope")
 	root.PersistentFlags().StringVar(&ac.name, "name", "", "session name")

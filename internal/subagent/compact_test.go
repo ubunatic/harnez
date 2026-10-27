@@ -32,6 +32,59 @@ func TestCompactThresholdDefaultGlobalAndOverride(t *testing.T) {
 	}
 }
 
+func TestCompactThresholdHaikuSpecAndUserPrecedence(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, tc := range []struct {
+		name string
+		want int
+	}{
+		{"haiku", 80000}, {"claude:haiku:low", 80000}, {"claude:haiku:med", 80000},
+		{"claude:haiku:high", 80000}, {"claude:sonnet:low", 200000}, {"codex:luna:med", 200000},
+	} {
+		model, err := ResolveModel(tc.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := CompactThreshold(model)
+		if err != nil || got != tc.want {
+			t.Errorf("%s: threshold = %d, %v; want %d", tc.name, got, err, tc.want)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".harnez"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	model, err := ResolveModel("haiku")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		config string
+		want   int
+	}{
+		{"agent:\n  compact_threshold_tokens: 150000\n", 80000},
+		{"agent:\n  compact_threshold_tokens: 150000\n  compact_thresholds:\n    claude:haiku:low: 120000\n", 120000},
+		{"agent:\n  compact_thresholds:\n    claude:haiku:low: 60000\n", 60000},
+	} {
+		if err := os.WriteFile(filepath.Join(home, ".harnez", "config.yaml"), []byte(tc.config), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := CompactThreshold(model)
+		if err != nil || got != tc.want {
+			t.Errorf("config %q: threshold = %d, %v; want %d", tc.config, got, err, tc.want)
+		}
+	}
+}
+
+func TestAutoCompactModesFromSpec(t *testing.T) {
+	for provider, want := range map[string]string{"agy": "disabled", "claude": "manual", "codex": "native", "other": "manual"} {
+		got, err := AutoCompactMode(provider)
+		if err != nil || got != want {
+			t.Errorf("%s mode = %q, %v; want %q", provider, got, err, want)
+		}
+	}
+}
+
 func TestVerifyCompactionRequiresAckAndTokenDrop(t *testing.T) {
 	cases := []struct {
 		name    string

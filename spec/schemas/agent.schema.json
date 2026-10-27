@@ -61,11 +61,23 @@
       "additionalProperties": false
     }
   },
-  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "default_role", "models", "roles", "stop", "external_sessions"],
+  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "default_role", "models", "roles", "stop", "external_sessions"],
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
     "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
+    "compact_thresholds": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": "Model-specific default compaction thresholds." },
+    "auto_compact": {
+      "type": "object",
+      "required": ["default_mode", "provider_modes", "watchdog_grace_ms", "legacy_growth_threshold_tokens"],
+      "properties": {
+        "default_mode": { "type": "string", "enum": ["manual", "native", "disabled"] },
+        "provider_modes": { "type": "object", "additionalProperties": { "type": "string", "enum": ["manual", "native", "disabled"] } },
+        "watchdog_grace_ms": { "type": "integer", "minimum": 1 },
+        "legacy_growth_threshold_tokens": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
     "model_probe_budget": {
       "type": "object",
       "required": ["max_calls_per_update", "max_output_tokens_per_call", "timeout_seconds"],

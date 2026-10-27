@@ -81,7 +81,11 @@ func (w *TokenWatchdog) StopGroup(ctx context.Context, pgid int, done <-chan str
 	}
 	grace := w.Grace
 	if grace <= 0 {
-		grace = 20 * time.Second
+		spec, err := agentSpecOnce()
+		if err != nil {
+			return false, err
+		}
+		grace = time.Duration(spec.AutoCompact.WatchdogGraceMS) * time.Millisecond
 	}
 	if err := killer.KillGroup(pgid, syscall.SIGINT); err != nil {
 		return false, fmt.Errorf("interrupt process group %d: %w", pgid, err)

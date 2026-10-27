@@ -14,7 +14,7 @@ Without a unified layer, orchestrators cannot reliably invoke low-cost models ac
 1. Dispatches and resumes developer subagents across all providers (`codex`, `claude`, `agy`, `local`). Known limit: a `claude:*` session started from inside Claude Code can't be resumed yet, because the child doesn't save its transcript (issue 498). Use one fresh session per milestone, with the ticket as context.
 2. Provides explicit, first-class reconnectability with a concise **Reconnect Banner** emitted on agent start.
 3. Enforces **session isolation and ancestry-scoped process hygiene**: agents only manage and terminate their own child agents; external sessions running concurrently in other tools/windows are strictly protected from cross-session interference.
-4. Enforces **automatic context compaction** before resume prompts at the configured token threshold (default 200,000 from `spec/agent.yaml` `compact_threshold_tokens`), and detects idle KV-cache expiration.
+4. Enforces **automatic context compaction** before resume prompts at the configured token threshold (default 80,000 for Haiku and 200,000 for other models from `spec/agent.yaml`), and detects idle KV-cache expiration.
 5. Integrates seamlessly into all **Sprint Skills** (`sprint`, `lean-sprint`, `reverse-sprint`).
 6. Supports an **Opt-In/Out Feature Switch** (`subagent_mode: harnez|native`) allowing native tool interception/replacement and side-by-side A/B effectiveness/token-usage comparisons.
 
@@ -38,7 +38,7 @@ flowchart TD
     B -->|"Validate Ownership / Lineage"| H{"Owns Target?"}
     H -->|"Yes (Own / Child)"| I["Stop / Teardown Session"]
     H -->|"No (External Session)"| J["Reject / Protect Foreign Agent"]
-    B -->|"Auto-Compact Check (last-call context)"| E{"Context > threshold (200k)?"}
+    B -->|"Auto-Compact Check (last-call context)"| E{"Context at or above model threshold?"}
     E -->|"Yes"| F["Execute Compaction"]
     E -->|"No"| G["Preserve KV Cache"]
     F --> D
@@ -95,12 +95,7 @@ never the turn total: a turn with many tool steps sums every call and can report
 several times the real context (issue 673, Claude 441k stored vs 45k real; 644 agy,
 594 Codex). Claude reads it from `--output-format stream-json --verbose` (last
 main-thread assistant event with non-zero usage, or `compact_boundary.post_tokens`);
-when no per-call figure exists the size is unknown (negative) and compaction is skipped. Automatic compaction reads
-`agent.compact_threshold_tokens` from the global
-`~/.harnez/config.yaml`; without it the default is `compact_threshold_tokens`
-in the embedded `spec/agent.yaml` (200000). Optional
-`agent.compact_thresholds` entries override the value by provider,
-`provider:model`, or `provider:model:tier`. Harnez waits for compaction
+when no per-call figure exists the size is unknown (negative) and compaction is skipped. Automatic compaction uses user `agent.compact_thresholds` model overrides, then spec model defaults (80000 for Haiku), then user `agent.compact_threshold_tokens`, then the spec global default (200000). Model keys match provider, `provider:model`, or `provider:model:tier`. Harnez waits for compaction
 completion and requires an acknowledgement and a lower reported input-token
 count before sending a resume prompt. Provider CLIs can report a failed compaction
 as success (Claude returns `result` subtype `success` with text `Error during
@@ -446,7 +441,7 @@ How a spec reaches the provider CLI (batch drivers):
 ## 4. Auto-Compaction & Cache-Affinity Management
 
 ### 4.1 Auto-Compaction Trigger Rules
-1. **Context Threshold**: When the session's context size (last call's full input, see §2.10; not the cumulative turn total) exceeds the configured threshold (default 200,000 from `spec/agent.yaml` `compact_threshold_tokens`), `harnez agent` compacts before the next resume prompt.
+1. **Context Threshold**: When the session's context size (last call's full input, see §2.10; not the cumulative turn total) exceeds the configured threshold (default 80,000 for Haiku and 200,000 for other models from `spec/agent.yaml`), `harnez agent` compacts before the next resume prompt.
 2. **Turn-Boundary Compaction**: The agent persists its decisions and code pointers to disk/ticket, then compacts its history before accepting the next milestone prompt.
 3. **Manual Override**: Callers can disable auto-compaction per run using `--no-compact`.
 

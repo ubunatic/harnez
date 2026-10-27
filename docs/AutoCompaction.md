@@ -10,10 +10,12 @@ Each fact is marked **measured** (owner or canary run, with version), **docs** (
 
 ## Two triggers
 
-- **harnez:** `compact_threshold_tokens` in `spec/agent.yaml` (200000), overridable per `provider:model[:tier]` via
-  `agent.compact_thresholds` in `~/.harnez/config.yaml` (`internal/subagent/compact.go`). Before each prompt,
+- **harnez:** `compact_threshold_tokens` in `spec/agent.yaml` defaults to 200000; spec `compact_thresholds` defaults Haiku to 80000. User `agent.compact_thresholds` overrides model-specific defaults, which take precedence over the user global threshold (`internal/subagent/compact.go`). Before each prompt,
   `harnez agent` compares the last turn's input tokens with it and sends `/compact` (591); the stream watchdog stops
   a turn that grows past it (592). Absolute tokens only, no percent yet (969).
+- `auto_compact` in `spec/agent.yaml` selects manual, native, or disabled routing by provider: Claude uses manual,
+  Codex uses native, and agy is disabled until reliable context counts are available (644, 869). The same spec sets
+  the watchdog's shutdown grace and the legacy growth-telemetry threshold.
 - **The CLI's own trigger,** below. Whichever comes first wins, so harnez values only work if the CLI's trigger is
   set at or above them.
 

@@ -4,9 +4,21 @@ default_model: codex:luna:high
 role_classify_timeout_ms: 1500
 reply_history_limit: 20
 # Context tokens (last call's full input) above which harnez agent compacts a
-# session before the next prompt; ~/.harnez/config.yaml agent.compact_threshold_tokens
-# and agent.compact_thresholds override it.
+# session before the next prompt; model-specific values take precedence over global values,
+# and user configuration takes precedence over the spec at the same specificity.
 compact_threshold_tokens: 200000
+compact_thresholds:
+  claude:haiku:low: 80000
+  claude:haiku:med: 80000
+  claude:haiku:high: 80000
+# Manual compaction requires a verified context drop; Codex compacts natively.
+# Agy lacks a reliable context count (issues 644 and 869).
+auto_compact:
+  default_mode: manual
+  provider_modes: {claude: manual, codex: native, agy: disabled}
+  watchdog_grace_ms: 20000
+  # Legacy growth telemetry; dispatch uses full-context thresholds above.
+  legacy_growth_threshold_tokens: 100000
 model_probe_budget:
   max_calls_per_update: 20
   max_output_tokens_per_call: 16
@@ -117,7 +129,7 @@ models:
     cost_by_tier: {med: 4, high: 7}
     eff: "-"
     skills: Go~ TUI~ SQL~
-    use: Owner guidance — haiku:med for easy tasks and haiku:low for very simple, repetitive tasks. Haiku 5.5 input above 100k tokens costs 5x; configure Haiku to compact at about 80k via agent.compact_thresholds (issue 969, docs/AutoCompaction.md), as high thinking effort fills that budget quickly; see guidance_source_url.
+    use: Owner guidance — haiku:med for easy tasks and haiku:low for very simple, repetitive tasks. Haiku 5.5 input above 100k tokens costs 5x; harnez compacts Haiku at 80k by default; override via agent.compact_thresholds (issue 969, docs/AutoCompaction.md). High thinking effort fills that budget quickly; see guidance_source_url.
     guidance_source_url: https://code.claude.com/docs/en/model-config#haiku-55-context-window-and-pricing
   claude:sonnet:
     aliases: [sonnet, sonnet:low]

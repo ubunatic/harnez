@@ -26,35 +26,42 @@ type compactConfig struct {
 	} `yaml:"agent"`
 }
 
-// CompactThreshold reads the global agent threshold, with an optional exact
-// provider:model[:tier] override. Missing configuration uses the spec default.
+// CompactThreshold prefers user model overrides, spec model defaults, the user
+// global threshold, then the spec global default.
 func CompactThreshold(model Model) (int, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return DefaultCompactThreshold()
-	}
-	b, err := os.ReadFile(filepath.Join(home, ".harnez", "config.yaml"))
-	if os.IsNotExist(err) {
-		return DefaultCompactThreshold()
-	}
-	if err != nil {
-		return 0, fmt.Errorf("read agent compact config: %w", err)
-	}
 	var cfg compactConfig
-	if err := yaml.Unmarshal(b, &cfg); err != nil {
-		return 0, fmt.Errorf("parse agent compact config: %w", err)
+	home, err := os.UserHomeDir()
+	if err == nil {
+		b, readErr := os.ReadFile(filepath.Join(home, ".harnez", "config.yaml"))
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return 0, fmt.Errorf("read agent compact config: %w", readErr)
+		}
+		if readErr == nil {
+			if err := yaml.Unmarshal(b, &cfg); err != nil {
+				return 0, fmt.Errorf("parse agent compact config: %w", err)
+			}
+		}
 	}
-	threshold := cfg.Agent.CompactThresholdTokens
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return 0, err
+	}
+	keys := []string{model.Spec(), model.Provider + ":" + model.Name, model.Provider}
+	threshold := 0
+	for _, thresholds := range []map[string]int{cfg.Agent.CompactThresholds, spec.CompactThresholds} {
+		for _, key := range keys {
+			if n, ok := thresholds[key]; ok {
+				threshold = n
+				if threshold <= 0 {
+					return 0, fmt.Errorf("agent compact threshold must be positive")
+				}
+				return threshold, nil
+			}
+		}
+	}
+	threshold = cfg.Agent.CompactThresholdTokens
 	if threshold == 0 {
-		if threshold, err = DefaultCompactThreshold(); err != nil {
-			return 0, err
-		}
-	}
-	for _, key := range []string{model.Spec(), model.Provider + ":" + model.Name, model.Provider} {
-		if n, ok := cfg.Agent.CompactThresholds[key]; ok {
-			threshold = n
-			break
-		}
+		threshold = spec.CompactThreshold
 	}
 	if threshold <= 0 {
 		return 0, fmt.Errorf("agent compact threshold must be positive")

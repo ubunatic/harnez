@@ -623,6 +623,28 @@ func TestCodexOverThresholdResumeUsesProviderAutoCompact(t *testing.T) {
 	}
 }
 
+func TestAgyOverThresholdResumeSkipsAutomaticCompaction(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	store, err := subagent.NewSessionStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "agy", Model: "model", Status: "completed", ContextTokens: 250000}); err != nil {
+		t.Fatal(err)
+	}
+	driver := &codexAutoCompactDriver{result: subagent.TurnResult{ContextTokens: 250000}}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+	if _, err := runWithStore(t, driver, dir, "resume", "--name", "worker", "prompt"); err != nil {
+		t.Fatal(err)
+	}
+	if driver.compactCalls != 0 || driver.resumeCalls != 1 {
+		t.Fatalf("compact calls=%d resume calls=%d", driver.compactCalls, driver.resumeCalls)
+	}
+}
+
 type unverifiedCompactDriver struct {
 	recordingAgentDriver
 	resumes int

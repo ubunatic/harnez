@@ -30,9 +30,35 @@ type agentSpec struct {
 	ExternalSessions      map[string]ExternalSessionSpec `yaml:"external_sessions"`
 	ReplyHistoryLimit     int                            `yaml:"reply_history_limit"`
 	CompactThreshold      int                            `yaml:"compact_threshold_tokens"`
+	CompactThresholds     map[string]int                 `yaml:"compact_thresholds"`
+	AutoCompact           AutoCompactSpec                `yaml:"auto_compact"`
 	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
 	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
 	ResumeNote            ResumeNoteSpec                 `yaml:"resume_note"`
+}
+
+// AutoCompactSpec defines provider compaction routing and watchdog timing.
+type AutoCompactSpec struct {
+	DefaultMode                 string            `yaml:"default_mode"`
+	ProviderModes               map[string]string `yaml:"provider_modes"`
+	WatchdogGraceMS             int               `yaml:"watchdog_grace_ms"`
+	LegacyGrowthThresholdTokens int               `yaml:"legacy_growth_threshold_tokens"`
+}
+
+func (s AutoCompactSpec) mode(provider string) string {
+	if mode, ok := s.ProviderModes[provider]; ok {
+		return mode
+	}
+	return s.DefaultMode
+}
+
+// AutoCompactMode reports the configured compaction routing for a provider.
+func AutoCompactMode(provider string) (string, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return "", err
+	}
+	return spec.AutoCompact.mode(provider), nil
 }
 
 // KnownErrorCheckSpec describes a fixed-text provider error and its single
@@ -135,6 +161,20 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if spec.CompactThreshold <= 0 {
 		return agentSpec{}, fmt.Errorf("agent spec: positive compact_threshold_tokens required")
+	}
+	for key, threshold := range spec.CompactThresholds {
+		if threshold <= 0 {
+			return agentSpec{}, fmt.Errorf("agent spec: compact_thresholds.%s must be positive", key)
+		}
+	}
+	validMode := func(mode string) bool { return mode == "manual" || mode == "native" || mode == "disabled" }
+	if !validMode(spec.AutoCompact.DefaultMode) || spec.AutoCompact.ProviderModes == nil || spec.AutoCompact.WatchdogGraceMS <= 0 || spec.AutoCompact.LegacyGrowthThresholdTokens <= 0 {
+		return agentSpec{}, fmt.Errorf("agent spec: auto_compact requires valid modes and positive watchdog_grace_ms")
+	}
+	for provider, mode := range spec.AutoCompact.ProviderModes {
+		if !validMode(mode) {
+			return agentSpec{}, fmt.Errorf("agent spec: invalid auto_compact mode for %s", provider)
+		}
 	}
 	models := make(map[string]modelAlias, len(spec.Models))
 	for key, entry := range spec.Models {
