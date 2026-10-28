@@ -77,3 +77,11 @@ Notes:
   allowlist, so they stay `ask` even though the owner approved them once.
 - Grants are per conversation (canary 1), so the catalog is the input for the spec list; the
   global settings shape (canary step 1) is still unknown.
+
+## Decision (owner, 2026-10-28)
+
+The prefix tiers above are not a security boundary: `make test` runs whatever the agent wrote into
+the Makefile. The owner treats the dedicated agent account on this machine as the sandbox. So
+`harnez apply` writes a broad agy allowlist (the catalogued prefixes plus the additions, and the
+in-workspace file tools), with a short ask list as an accident guard (`git push`, `sudo`,
+recursive deletes outside the workspace). The list is a spec value, so another machine can narrow it.
