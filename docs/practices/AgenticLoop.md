@@ -189,6 +189,7 @@ Agentic software engineering scales effectively when concurrency is structured a
    - Never proactively offer, volunteer, or initiate implementation or coding tasks in another repository.
    - Cross-repository coding tasks may *only* be executed if the user explicitly orders and scopes them.
    - Outside the host repository, an agent may only read for context, inspect dependencies, or file an issue when requested or required. Never pivot the active implementation focus away from the host repo.
+   - Use `/focus` to re-ground on the active repository's deliverables and priorities and choose the next goal.
 
 ---
 
