@@ -42,3 +42,13 @@ interactive sessions need a real allowlist, not skip-all.
 4. Tests: merge into empty / existing settings, idempotency, user keys kept.
 5. Canary: a fresh `harnez-agy` session runs `ls`, `cat`, `harnez issues list` without a prompt
    and still asks before a write outside the allowlist.
+
+## Canary 1 (host, 2026-10-28, 22:41)
+
+The owner approved many tools in a live `harnez-agy` session (conversation 6a040f1a). No config
+file changed: `settings.json` keys unchanged (last write 22:33 at session start),
+`~/.gemini/config/` untouched. Only the conversation DB (`conversations/<id>.db`, tables
+`trajectory_meta`, `steps`, `trajectory_metadata_blob`, ...) and summaries changed. So the
+approvals are per conversation and are not persisted as a global allowlist. The global shape for
+`agentPermissions` / `allowlist` / `autoExecutionPolicy` still has to come from agy docs or the
+prompt's own scope options (e.g. "always allow" / "for this workspace", if offered).
