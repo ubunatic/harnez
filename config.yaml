@@ -163,6 +163,7 @@ debloat:
   preset_skill_overrides:
     commit: user-invocable-only
     docup: user-invocable-only
+    issue-research: user-invocable-only
     focus: user-invocable-only
     lean-sprint: user-invocable-only
     factory-sprint: user-invocable-only
@@ -411,6 +412,11 @@ agy_target: ~/.gemini/antigravity-cli
 bundled_skills: []
 
 skills:
+  - name: issue-research
+    license: AGPL-3.0-or-later
+    description: "Fan out subagent web research over candidate tickets, report, and update tracker. Only on explicit /issue-research."
+    file: docs/commands/issue-research.md
+
   - name: focus
     license: AGPL-3.0-or-later
     description: "Re-ground agent on the host repository's product, summarize top 2-3 open priorities and outcomes, and prompt for goal. Only on explicit /focus or 'focus'."
