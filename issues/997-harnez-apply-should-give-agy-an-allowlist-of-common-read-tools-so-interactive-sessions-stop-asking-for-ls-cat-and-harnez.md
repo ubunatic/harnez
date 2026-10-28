@@ -52,3 +52,6 @@ file changed: `settings.json` keys unchanged (last write 22:33 at session start)
 approvals are per conversation and are not persisted as a global allowlist. The global shape for
 `agentPermissions` / `allowlist` / `autoExecutionPolicy` still has to come from agy docs or the
 prompt's own scope options (e.g. "always allow" / "for this workspace", if offered).
+- Owner also had to approve plain file `edit` in the same session (22:45). The allowlist must
+  cover agy's built-in file tools (view/list/edit), not only shell commands; whether `edit` is
+  auto-allowed inside trusted workspaces is a decision for the owner.
