@@ -249,3 +249,45 @@ func collectCodexAgainstURL(t *testing.T, codexDir string, mockServer *httptest.
 	client := &http.Client{Transport: redirectTransport{target: mockServer.URL}}
 	return CollectCodex(context.Background(), codexDir, client)
 }
+
+// TestCollectCodexParsesNestedTokenFields checks that the current Codex CLI
+// auth.json, whose tokens object nests oauth_provenance, still authenticates
+// and forwards the account ID (issue 991).
+func TestCollectCodexParsesNestedTokenFields(t *testing.T) {
+	isolateUsageTestStorage(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "auth.json"), []byte(`{
+		"auth_mode": "chatgpt",
+		"OPENAI_API_KEY": null,
+		"tokens": {
+			"id_token": "",
+			"access_token": "mock-access-token",
+			"refresh_token": "mock-refresh-token",
+			"oauth_provenance": {"issuer": "https://auth.openai.com", "client_id": "mock-client"},
+			"login_owner_id": "mock-owner",
+			"account_id": "mock-account"
+		},
+		"last_refresh": "2026-10-28T12:00:00Z"
+	}`), 0600); err != nil {
+		t.Fatalf("write auth.json: %v", err)
+	}
+
+	var gotAccount string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAccount = r.Header.Get("ChatGPT-Account-ID")
+		codexWhamOKHandler(w, r)
+	}))
+	defer mockServer.Close()
+
+	usage := collectCodexAgainstURL(t, dir, mockServer)
+
+	if !usage.Authenticated || usage.Error != "" {
+		t.Fatalf("Authenticated = %v, Error = %q; want authenticated without error", usage.Authenticated, usage.Error)
+	}
+	if gotAccount != "mock-account" {
+		t.Errorf("ChatGPT-Account-ID = %q, want mock-account", gotAccount)
+	}
+	if usage.Session == nil || usage.Session.UsedPercent != 40 {
+		t.Errorf("Session = %+v, want UsedPercent 40 from live fetch", usage.Session)
+	}
+}

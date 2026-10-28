@@ -16,10 +16,18 @@ import (
 
 // CodexAuth models ~/.codex/auth.json
 type CodexAuth struct {
-	AuthMode    string            `json:"auth_mode"`
-	OpenAIKey   *string           `json:"OPENAI_API_KEY"`
-	Tokens      map[string]string `json:"tokens"`
-	LastRefresh string            `json:"last_refresh"`
+	AuthMode    string      `json:"auth_mode"`
+	OpenAIKey   *string     `json:"OPENAI_API_KEY"`
+	Tokens      CodexTokens `json:"tokens"`
+	LastRefresh string      `json:"last_refresh"`
+}
+
+// CodexTokens holds the auth.json token fields harnez reads; other keys,
+// including nested objects such as oauth_provenance, are ignored.
+type CodexTokens struct {
+	IDToken     string `json:"id_token"`
+	AccessToken string `json:"access_token"`
+	AccountID   string `json:"account_id"`
 }
 
 // decodeJWTPayload parses the unverified claims JSON from a standard 3-part JWT token.
@@ -261,8 +269,8 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 		return usage
 	}
 
-	accessToken := auth.Tokens["access_token"]
-	idToken := auth.Tokens["id_token"]
+	accessToken := auth.Tokens.AccessToken
+	idToken := auth.Tokens.IDToken
 	if idToken == "" {
 		idToken = accessToken
 	}
@@ -339,8 +347,8 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, CodexWhamUsageURL, nil)
 		if err == nil {
 			req.Header.Set("Authorization", "Bearer "+accessToken)
-			if accountID, ok := auth.Tokens["account_id"]; ok && accountID != "" {
-				req.Header.Set("ChatGPT-Account-ID", accountID)
+			if auth.Tokens.AccountID != "" {
+				req.Header.Set("ChatGPT-Account-ID", auth.Tokens.AccountID)
 			}
 			req.Header.Set("User-Agent", "codex")
 			req.Header.Set("Accept", "application/json")
