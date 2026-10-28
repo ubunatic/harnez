@@ -85,3 +85,18 @@ the Makefile. The owner treats the dedicated agent account on this machine as th
 `harnez apply` writes a broad agy allowlist (the catalogued prefixes plus the additions, and the
 in-workspace file tools), with a short ask list as an accident guard (`git push`, `sudo`,
 recursive deletes outside the workspace). The list is a spec value, so another machine can narrow it.
+
+## Decision refined (owner, 2026-10-28)
+
+Goal of the allowlist: agents must not break their own machine, and they are **steered** to
+`make` targets and Go code instead of ad-hoc commands. Not a security boundary, a guard rail:
+
+- **allow**: `make <target>`, `go` (build/test/run/vet), `harnez`, read tools (`ls cat head tail
+  wc rg grep find stat which`), local git (`status diff log show branch add commit`), in-workspace
+  file tools.
+- **ask** (so the agent writes a make target or Go program instead): shell wrappers (`bash -c`,
+  `zsh -c`, `fish -c`, `sh -c`), pipes into interpreters (`| sh`, `| python`), `python`/`node`
+  one-liners, `curl`/`wget`, `chmod`/`chown`, `rm -r`, `mv`/`cp` outside the workspace,
+  `git push`/`checkout`/`config`/`reset`, `sudo`, `systemctl`, `kill`/`pkill`, package managers.
+- This replaces the "broad allowlist incl. shell wrappers" note above: wrappers stay **ask**,
+  because they are the main door to crazy commands.
