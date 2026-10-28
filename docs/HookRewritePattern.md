@@ -146,7 +146,7 @@ names the opt-out.
   - **Activation**: Provisioned by `harnez apply` at `~/.harnez/shims/bash`. Enabled in AGY environments via `PATH="$HOME/.harnez/shims:$PATH"`.
 
 - **Client-Native Tool Observation (`hooks.json` PreToolUse Observer)**:
-  - See [issues/373](../issues/373-bake-antigravity-internal-tool-observation-hook-into-harnez-apply-and-hooks-management.md) and canary at `scripts/canary-agy-tool-hook.sh`.
+  - See [issues/373](../issues/373-bake-antigravity-internal-tool-observation-hook-into-harnez-apply-and-hooks-management.md). `harnez apply` installs the observer globally in `~/.gemini/config/hooks.json` as `harnez hook agy` (PreToolUse) and `harnez hook agy-post` (PostToolUse), matcher `*`. No workspace `.agents/hooks.json` is committed: a machine-specific path there broke every agy tool call on other checkouts (see [issues/996](../issues/996-committed-agy-workspace-hook-uses-an-absolute-home-uwe-path-and-blocks-every-agy-tool-call-on-other-machines.md)).
   - **The Distinction**: Issue 271 decommissioned `hooks.json` for *command rewriting* because `overwrite.CommandLine` polluted the UI. However, client-internal RPC tools (`schedule`, `generate_image`, `ask_question`, `view_file`, `replace_file_content`, etc.) never invoke bash and are completely invisible to PATH shims.
   - **Passive Observation**: A read-only `PreToolUse` hook with `matcher: "*"` returns `{"decision": "allow"}` without rewriting commands. This introduces **zero UI artifacts** while seamlessly capturing all host-internal tool calls into `tool_catalog.sqlite` for `harnez stats`.
 
