@@ -1,6 +1,6 @@
 # 995 — Statusline fails with Text file busy while the harnez binary is being replaced
 
-**Status**: Open
+**Status**: Backlog — rare: owner sees it seldom (2026-10-28); fix when touching install
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
