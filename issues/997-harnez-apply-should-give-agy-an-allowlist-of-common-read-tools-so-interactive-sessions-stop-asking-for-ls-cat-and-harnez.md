@@ -55,3 +55,25 @@ prompt's own scope options (e.g. "always allow" / "for this workspace", if offer
 - Owner also had to approve plain file `edit` in the same session (22:45). The allowlist must
   cover agy's built-in file tools (view/list/edit), not only shell commands; whether `edit` is
   auto-allowed inside trusted workspaces is a decision for the owner.
+
+## Catalog of owner approvals (host, 2026-10-28, 22:55)
+
+Source: the `permissions` blob of each `steps` row in `~/.gemini/antigravity-cli/conversations/*.db`
+(read-only). A grant is `{kind, prefix}`; agy offers the command's **prefix** as the grant scope
+(e.g. `git status`, `cat`, `bash -c '`). 54 grants: 46 `command`, 8 `write_file`.
+
+| Group | Prefixes granted | Proposed wildcard tier |
+| --- | --- | --- |
+| read-only shell | `ls`, `cat`, `echo`, `which`, `strings`, `find`, `git status`, `git diff`, `git log` | **auto**: plus `head`, `tail`, `wc`, `rg`, `grep`, `file`, `stat`, `git show`, `git branch`, `git rev-parse` |
+| harnez / agy | `harnez`, `agy` | **auto** for `harnez` read verbs (`read`, `find`, `issues list`, `agent list`, `usage`, `--version`); `agy` only `--help` |
+| build / test | `make test`, `make test-q1`, `make install` | **auto**: `make test*`, `make lint`, `go test`, `go build`, `go vet`; `make install` auto (repo rule) |
+| local git writes | `git add`, `git commit`, `git checkout`, `git config` | **auto**: `git add`, `git commit`; **ask**: `git checkout`, `git config` (can switch branch / change remotes) |
+| fs writes | `mkdir`, `write_file` in the workspace (8, all under the project) | **auto** inside trusted workspace; **ask** outside |
+| shell wrappers | `bash -c '`, `bash -i -c '`, `zsh -c '`, `fish -c '`, `./dotfiles` | **ask**: a wrapper prefix approves any script (no real scope) |
+| never auto | — (none granted) | `git push`, `rm -rf`, `sudo`, `curl \| sh`, `--dangerously-*` |
+
+Notes:
+- Shell-wrapper grants were all for alias / completion probing in dotfiles; they defeat any
+  allowlist, so they stay `ask` even though the owner approved them once.
+- Grants are per conversation (canary 1), so the catalog is the input for the spec list; the
+  global settings shape (canary step 1) is still unknown.
