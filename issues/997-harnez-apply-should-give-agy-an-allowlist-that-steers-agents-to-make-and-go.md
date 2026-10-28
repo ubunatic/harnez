@@ -1,4 +1,4 @@
-# 997 — harnez apply should give agy an allowlist of common read tools so interactive sessions stop asking for ls, cat and harnez
+# 997 — harnez apply should give agy an allowlist that steers agents to make and Go
 
 **Status**: Open
 **Priority**: P1 (High)
