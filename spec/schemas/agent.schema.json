@@ -220,6 +220,7 @@
           "description": { "type": "string", "minLength": 1 },
           "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
           "spawns": { "type": "array", "items": { "type": "string" } },
+          "auto_approve_tools": { "type": "boolean", "description": "Agy sessions of this role run tools unattended (--dangerously-skip-permissions --sandbox), because headless print mode cannot approve a call. Other providers ignore it. Default false." },
           "default_model": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
           "models": {
             "type": "object", "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },

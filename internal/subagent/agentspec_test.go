@@ -325,13 +325,34 @@ func TestRoleSchemaDeclaresDescriptionsAndAliases(t *testing.T) {
 	if err := json.Unmarshal(schema.Properties["roles"], &roles); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"description", "aliases", "spawns", "rules"} {
+	for _, name := range []string{"description", "aliases", "spawns", "rules", "auto_approve_tools"} {
 		if _, ok := roles.AdditionalProperties.Properties[name]; !ok {
 			t.Errorf("role schema is missing %q", name)
 		}
 	}
 	if !containsString(roles.AdditionalProperties.Required, "description") {
 		t.Fatal("role schema does not require descriptions")
+	}
+}
+
+func TestRoleAutoApproveToolsFromSpec(t *testing.T) {
+	for _, tc := range []struct {
+		role string
+		want bool
+	}{
+		{"advisor", true},
+		{"reviewer", true},
+		{"review", true},
+		{"developer", false},
+		{"orchestrator", false},
+	} {
+		got, err := RoleAutoApproveTools(tc.role)
+		if err != nil || got != tc.want {
+			t.Errorf("RoleAutoApproveTools(%q) = %v, %v; want %v", tc.role, got, err, tc.want)
+		}
+	}
+	if _, err := RoleAutoApproveTools("wizard"); err == nil {
+		t.Fatal("unknown role must be an error")
 	}
 }
 

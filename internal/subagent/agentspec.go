@@ -149,7 +149,10 @@ type RoleSpec struct {
 	Description  string              `yaml:"description"`
 	Aliases      []string            `yaml:"aliases"`
 	Spawns       []string            `yaml:"spawns"`
-	Rules        string              `yaml:"rules"`
+	// AutoApproveTools lets an agy session of this role run tools without a
+	// human to approve them (issue 995); other providers ignore it.
+	AutoApproveTools bool   `yaml:"auto_approve_tools"`
+	Rules            string `yaml:"rules"`
 }
 
 // ModelPick describes one configured role and trait.
@@ -622,6 +625,19 @@ func RoleRules(role string) (string, error) {
 	}
 	r := spec.Roles[canonical]
 	return strings.TrimSpace(r.Rules), nil
+}
+
+// RoleAutoApproveTools reports whether role runs agy tools unattended.
+func RoleAutoApproveTools(role string) (bool, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return false, err
+	}
+	canonical, err := resolveRoleIn(spec, role)
+	if err != nil {
+		return false, err
+	}
+	return spec.Roles[canonical].AutoApproveTools, nil
 }
 
 // KnownErrorChecks returns the ordered error checks from the agent spec.

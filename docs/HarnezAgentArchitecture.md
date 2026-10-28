@@ -435,6 +435,7 @@ How a spec reaches the provider CLI (batch drivers):
 | codex | `codex exec --json --dangerously-bypass-approvals-and-sandbox -m <name> -c model_reasoning_effort=<tier>` | `low`/`med`/`high` → reasoning effort |
 | claude | `claude -p --dangerously-skip-permissions --model <name> [--effort <tier>] --output-format json` | explicit `low`/`med`/`high` tier passed as `low`/`medium`/`high`; omitted when no tier is set |
 | agy | `agy --model <name> --effort <tier>` | effort omitted for `effort: false` models (`agy:sonnet`, `agy:opus`) |
+| agy, `advisor`/`reviewer` roles | adds `--dangerously-skip-permissions --sandbox` before `--output-format json -p` (`roles.<role>.auto_approve_tools` in `spec/agent.yaml`) | headless `-p` cannot approve a tool call; without it agy ends the turn with no reply, which harnez reports as an error (issue 995) |
 
 ---
 

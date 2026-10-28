@@ -24,6 +24,17 @@ type AgyDriver struct {
 	Dir       string
 	SessionID string
 	ModelSpec string
+	// AutoApproveTools runs Run and Resume with tool calls approved (issue 995).
+	AutoApproveTools bool
+}
+
+// approvalArgs approves every tool call when AutoApproveTools is set. Headless
+// -p mode has no one to approve a call, so an unapproved call ends the turn.
+func (d AgyDriver) approvalArgs() []string {
+	if !d.AutoApproveTools {
+		return nil
+	}
+	return []string{"--dangerously-skip-permissions", "--sandbox"}
 }
 
 func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) {
@@ -119,6 +130,7 @@ func (d AgyDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 			args = append(args, "--effort", agyEffort(o.Model.Tier))
 		}
 	}
+	args = append(args, d.approvalArgs()...)
 	args = append(args, "--output-format", "json", "-p", o.Prompt)
 	b, err := d.command(ctx, args...)
 	r, parseErr := parseAgyWithQuota(ctx, b, o.Model.Name, cachedAgyQuotaAvailable)
@@ -147,6 +159,7 @@ func (d AgyDriver) Resume(ctx context.Context, id, prompt string, model Model) (
 			args = append(args, "--effort", agyEffort(model.Tier))
 		}
 	}
+	args = append(args, d.approvalArgs()...)
 	args = append(args, "--output-format", "json", "-p", prompt)
 	b, err := d.command(ctx, args...)
 	r, parseErr := parseAgyWithQuota(ctx, b, model.Name, cachedAgyQuotaAvailable)
@@ -194,7 +207,7 @@ func (d AgyDriver) Compact(ctx context.Context, id string) (*TurnResult, error) 
 			result = event.Result
 		}
 	}
-	r, err := parseAgy(result)
+	r, err := decodeAgy(result)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +260,22 @@ func agyRunError(op string, b []byte, err error) error {
 	return fmt.Errorf("%s: %w", op, err)
 }
 
+// parseAgy parses a turn's reply. A SUCCESS turn with no reply after output
+// tokens means agy ended the turn at a tool call it could not run (issue 995).
 func parseAgy(data []byte) (*TurnResult, error) {
+	r, err := decodeAgy(data)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(r.Response) == "" && r.OutputTokens > 0 {
+		return nil, fmt.Errorf("agy turn ended without a reply after %d output tokens; likely an unapproved tool call", r.OutputTokens)
+	}
+	return r, nil
+}
+
+// decodeAgy decodes an agy result without judging its reply: /compact
+// legitimately returns an empty response.
+func decodeAgy(data []byte) (*TurnResult, error) {
 	var v agyResult
 	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, fmt.Errorf("parse agy json: %w", err)
