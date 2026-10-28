@@ -66,4 +66,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 990 | [990-automatically-reconcile-issue-indexes-when-agents-file-tickets-concurrently.md](990-automatically-reconcile-issue-indexes-when-agents-file-tickets-concurrently.md) | Automatically reconcile issue indexes when agents file tickets concurrently | Open |
 | 991 | [991-harnez-usage-fails-with-no-collector-snapshots-and-cannot-show-codex-free-plan-quota.md](991-harnez-usage-fails-with-no-collector-snapshots-and-cannot-show-codex-free-plan-quota.md) | harnez usage fails with no collector snapshots and cannot show Codex free-plan quota | Open |
 | 992 | [992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md](992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md) | Per-provider plan preference: own, free or shared plan limits which roles a provider gets | Open |
+| 993 | [993-support-xhigh-and-max-effort-tiers-e-g-claude-haiku-xhigh.md](993-support-xhigh-and-max-effort-tiers-e-g-claude-haiku-xhigh.md) | Support xhigh and max effort tiers (e.g. claude:haiku:xhigh) | Open |
 <!-- harnez:end issues-active-index -->
