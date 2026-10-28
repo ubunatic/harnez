@@ -163,6 +163,7 @@ debloat:
     commit: user-invocable-only
     docup: user-invocable-only
     lean-sprint: user-invocable-only
+    factory-sprint: user-invocable-only
     lean-sprint-v1: user-invocable-only
     lean-sprinter: user-invocable-only
     mode: user-invocable-only
@@ -492,6 +493,11 @@ skills:
     license: AGPL-3.0-or-later
     description: "Execute a lean sprint with optional architect refinement (Searcher -> Architect -> Developer -> Review -> Study)"
     file: docs/commands/lean-sprint.md
+
+  - name: factory-sprint
+    license: AGPL-3.0-or-later
+    description: "Execute a software factory sprint with tiered subagents (Resumable Searcher -> Single-Turn Architect -> Fresh Mechanical Developer -> Quota-1 Review)"
+    file: docs/commands/factory-sprint.md
 
   - name: lean-sprint-v1
     license: AGPL-3.0-or-later
