@@ -12,17 +12,17 @@ Reference Study: `docs/studies/2026-10-27-software-factory-pre-planning-and-tier
 | Role | Default Model Pick | Lifecycle | Responsibility & Context Boundaries |
 |---|---|---|---|
 | **Host Orchestrator** | Main session (Antigravity / Host) | Continuous | Pure delegation; never performs exploratory repo digging; enforces Quota-1, reviews milestone commit diffs, runs `make install`, commits milestones. |
-| **Searcher** | `haiku:med` | Resumable (`search-<ticket>`) | Codebase discovery; mandated to use `neus ask "<question>"` first before ripgrep/file reads. Resumed across milestones to maximize prompt caching. |
-| **Architect** | `argon:low` | Single-turn advisory (`arch-<ticket>`) | High-leverage decision maker. Evaluates API shapes, JSON schemas, edge-case algorithms, and locked table tests. Strategy: feed aggregated info in one rich prompt and get a fast, decisive single-turn reply (<2m, ~150k–280k tokens). |
-| **Mechanical Developer** | `haiku:med` | Fresh per milestone (`dev-<ticket>-m<N>`) | Pure translator of explicit specs into code and tests. Never invents algorithms or resolves ambiguous architecture. Reset to 0k context each milestone to stay under the 80k/100k limits and prevent instruction rot. |
+| **Searcher** | `--role advisor --model cheap` (Haiku med effort) | Resumable (`search-<ticket>`) | Codebase discovery; mandated to use `neus ask "<question>"` first before ripgrep/file reads. Resumed across milestones to maximize prompt caching. |
+| **Architect** | `--role advisor --model smart` (Argon low effort) | Single-turn advisory (`arch-<ticket>`) | High-leverage decision maker. Evaluates API shapes, JSON schemas, edge-case algorithms, and locked table tests. Strategy: feed aggregated info in one rich prompt and get a fast, decisive single-turn reply (<2m, ~150k–280k tokens). |
+| **Mechanical Developer** | `--role developer --model cheap` (Haiku med effort) | Fresh per milestone (`dev-<ticket>-m<N>`) | Pure translator of explicit specs into code and tests. Never invents algorithms or resolves ambiguous architecture. Reset to 0k context each milestone to stay under the 80k/100k limits and prevent instruction rot. |
 
 ---
 
 ## Circuit Breakers & Fallback Policy
 
-- **Haiku Underperformance**: If `haiku:med` enters a loop, attempts to weaken test assertions, or fails Quota-1 verification twice on the same milestone, abort the low-tier worker and switch to **`claude:opus:low`** as developer.
-- **Argon Latency / Token Spikes**: If `argon:low` takes too long (>2m) or consumes excessive tokens, switch brain/advisory queries to **`claude:opus:med`**.
-- **Search Stability**: Searchers remain on `haiku:med` (with `neus ask` priority) regardless of developer fallbacks.
+- **Haiku Underperformance**: If cheap worker enters a loop, attempts to weaken test assertions, or fails Quota-1 verification twice on the same milestone, abort the low-tier worker and switch to **`claude:opus` (low effort)** as developer.
+- **Argon Latency / Token Spikes**: If smart advisor takes too long (>2m) or consumes excessive tokens, switch brain/advisory queries to **`claude:opus` (med effort)**.
+- **Search Stability**: Searchers remain on cheap tier (with `neus ask` priority) regardless of developer fallbacks.
 
 ---
 
@@ -31,7 +31,7 @@ Reference Study: `docs/studies/2026-10-27-software-factory-pre-planning-and-tier
 1. **One-Level Delegation**: Helpers are dispatched strictly as leaf workers (`--role advisor|developer|reviewer`); they never spawn further subagents.
 2. **Zero Host Coding**: The Host Orchestrator never writes code or quick fixes directly. All implementation is performed by the dispatched developer agent.
 3. **Pre-Bake Algorithms (Zero Algorithm Invention by Developer)**:
-   - For complex algorithms (token position math, multiline comments, regex word boundaries, suppression parsing), the Architect (`argon:low`) must write exact struct definitions and pseudocode before the Developer touches code.
+   - For complex algorithms (token position math, multiline comments, regex word boundaries, suppression parsing), the Architect (`--role advisor --model smart`) must write exact struct definitions and pseudocode before the Developer touches code.
 4. **Lock Test Cases (Anti-Tampering Guardrail)**:
    - In every developer prompt, pass required table-test cases verbatim with explicit instructions forbidding assertion relaxation (e.g. replacing exact matches with `strings.Contains`).
    - Host reviews test diffs (`git diff`) after each milestone to confirm assertions were preserved.
@@ -58,7 +58,7 @@ Reference Study: `docs/studies/2026-10-27-software-factory-pre-planning-and-tier
 For each milestone in the ticket:
 
 ### Phase 1: Bounded Discovery (Resumable Searcher)
-1. Resume or start `search-<ticket>` (`haiku:med`):
+1. Resume or start `search-<ticket>` (`--role advisor --model cheap`):
    ```bash
    HTO=0 harnez agent resume --name search-<ticket> -f prompt-search.md
    ```
@@ -66,7 +66,7 @@ For each milestone in the ticket:
 3. Collect exact file paths, existing library helpers, and pattern citations.
 
 ### Phase 2: Single-Turn Advisory Spec (Architect)
-1. Feed the aggregated search findings and milestone goals into a single prompt for `arch-<ticket>` (`argon:low`):
+1. Feed the aggregated search findings and milestone goals into a single prompt for `arch-<ticket>` (`--role advisor --model smart`):
    ```bash
    HTO=0 harnez agent resume --name arch-<ticket> -f prompt-arch.md
    ```
@@ -75,7 +75,7 @@ For each milestone in the ticket:
 ### Phase 3: Fresh Mechanical Translation (Developer)
 1. Launch a **fresh** developer session for the milestone:
    ```bash
-   HTO=0 harnez agent start --role developer --name dev-<ticket>-m<N> --model haiku:med -f prompt-dev.md
+   HTO=0 harnez agent start --role developer --name dev-<ticket>-m<N> --model cheap -f prompt-dev.md
    ```
 2. Pass the architect's exact code and locked test suite verbatim.
 3. Developer runs local package tests (`go test -v ./...`).
