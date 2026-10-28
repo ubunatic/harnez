@@ -53,8 +53,8 @@ Phase 4: Synthesis, Documentation & Hygiene (/evergreen, /wrap)
 
 | # | Ticket | Pri | What | Sprint Group | Searcher → Architect → Developer | Reviewer | Status |
 |---|---|---|---|---|---|---|---|
-| 1 | 996 | P1 | Agent instruction: repo-scoped focus and product primacy | 1 (Policy) | cheap → — → lean | smart | Open |
-| 2 | 998 | P2 | `/focus` skill: re-ground agent on host product and top priorities | 2 (Skills) | cheap → smart → lean | smart | Open |
+| 1 | 996 | P1 | Agent instruction: repo-scoped focus and product primacy | 1 (Policy) | cheap → — → lean | smart | Closed |
+| 2 | 998 | P2 | `/focus` skill: re-ground agent on host product and top priorities | 2 (Skills) | cheap → smart → lean | smart | Closed |
 | 3 | 994 | P2 | `/issue-research` skill: fan out subagent web research over tickets | 3 (Research) | cheap → smart → lean | smart | Open |
 | 4 | — | — | Run `/evergreen` learnings and `/wrap` session close | 4 (Wrap) | — | — | Pending |
 
