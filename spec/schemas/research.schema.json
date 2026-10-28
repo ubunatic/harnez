@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harnez research profile",
+  "type": "object",
+  "required": [
+    "goals"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "subagent_model": {
+      "type": "string"
+    },
+    "subagent_role": {
+      "type": "string",
+      "enum": [
+        "advisor",
+        "developer",
+        "reviewer",
+        "orchestrator"
+      ],
+      "default": "advisor"
+    },
+    "batch_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 3
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "type": "string"
+        },
+        "toolchain": {
+          "type": "string"
+        },
+        "disallowed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignored_blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "goals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "prio",
+          "title",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "prio": {
+            "type": "string",
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto_close_infeasible": {
+          "type": "boolean"
+        },
+        "close_reason_template": {
+          "type": "string"
+        },
+        "update_section": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
