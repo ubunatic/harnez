@@ -40,7 +40,7 @@ func TestGlobalSectionsSpec(t *testing.T) {
 	if len(cfg.GlobalSectionTargets) != 5 || len(cfg.GlobalSections) != 2 {
 		t.Fatalf("missing global config: %+v", cfg.GlobalSections)
 	}
-	if !strings.Contains(cfg.GlobalSections[0].Content, "pkill -f") || !strings.Contains(cfg.GlobalSections[0].Content, "HTO=0") {
+	if !strings.Contains(cfg.GlobalSections[0].Content, "pkill -f") || !strings.Contains(cfg.GlobalSections[0].Content, "HTO=0") || !strings.Contains(cfg.GlobalSections[0].Content, "sole product") {
 		t.Fatal("process hygiene rules missing")
 	}
 	const wantFeedback = "### Tool Feedback Protocol\n" +
