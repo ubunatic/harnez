@@ -67,5 +67,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 992 | [992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md](992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md) | Per-provider plan preference: own, free or shared plan limits which roles a provider gets | Open |
 | 993 | [993-support-xhigh-and-max-effort-tiers-e-g-claude-haiku-xhigh.md](993-support-xhigh-and-max-effort-tiers-e-g-claude-haiku-xhigh.md) | Support xhigh and max effort tiers (e.g. claude:haiku:xhigh) | Open |
 | 997 | [997-code-box-in-harnez-usage-for-configured-repos-pr-counts-and-latest-pr-age.md](997-code-box-in-harnez-usage-for-configured-repos-pr-counts-and-latest-pr-age.md) | Code box in harnez usage for configured repos PR counts and latest PR age | Open |
-| 999 | [999-epic-agent-product-focus-boundary-instructions-and-research-skills.md](999-epic-agent-product-focus-boundary-instructions-and-research-skills.md) | Epic: Agent product focus, boundary instructions, and research skills | Open |
 <!-- harnez:end issues-active-index -->

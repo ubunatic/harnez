@@ -1,6 +1,6 @@
 # 999 — Epic: Agent product focus, boundary instructions, and research skills
 
-**Status**: Open
+**Status**: Closed — completed all phases: 996 repo-scoped product focus policy, 998 /focus skill, 994 /issue-research skill, epic orchestrator clarification, and evergreen learnings
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Epic
