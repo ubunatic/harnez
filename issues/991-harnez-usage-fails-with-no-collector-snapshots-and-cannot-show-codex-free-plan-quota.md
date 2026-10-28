@@ -44,3 +44,24 @@ architectural or OS blocker, or no progress, clear the goal and write a failure 
 - 829 made `harnez usage` read-only (only the collector writes), so a missing collector now
   makes `harnez usage` fail completely.
 - Check the live code and recent history first; 942's children may already cover item 3.
+
+## Findings (2026-10-28, after `harnez server install`)
+
+- **Install leaves the unit unable to start.** The unit was enabled but failed with
+  `status=226/NAMESPACE`: `Failed to set up mount namespacing: /home/alfiz/.cache/harnez: No such
+  file or directory`. Every `ReadWritePaths=` entry (`%t/harnez %S/harnez %C/harnez
+  %h/.local/share/harnez`) must exist, and `%C/harnez` did not. Fix: `harnez server install`
+  creates the directories, or the unit prefixes the entries with `-`. Creating the directory by
+  hand fixed it.
+- **Stray server holds the socket.** A `harnez server` that had not been started by systemd (it
+  had 0 clients and never wrote a snapshot) owned the socket, so the unit could not take over
+  until that process was killed. Then `systemctl --user restart` worked, and the first snapshot
+  arrived within seconds. Check why the stray server never collected anything.
+- **Codex root cause.** `harnez usage --agent codex --json` shows `"authenticated": false,
+  "error": "invalid auth.json format"`. `CodexAuth.Tokens` is `map[string]string`
+  (`internal/usage/codex.go:21`), but the current Codex CLI writes a nested object
+  `tokens.oauth_provenance {issuer, client_id}` (alongside `id_token`, `access_token`,
+  `refresh_token`, `login_owner_id`, `account_id`), so `json.Unmarshal` fails for every ChatGPT
+  login. Fix: give the tokens a struct with string fields and ignore unknown nested keys; add a
+  test fixture with `oauth_provenance`. Only after that can you tell whether the free plan's
+  rate-limit response is parsed correctly (Expected item 2).
