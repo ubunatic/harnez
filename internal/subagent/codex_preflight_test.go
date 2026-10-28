@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -74,5 +75,17 @@ func TestCodexPreflightWrapsProbeErrors(t *testing.T) {
 	err := p.Check(context.Background())
 	if !errors.Is(err, want) {
 		t.Fatalf("Check() error = %v, want wrapped probe error", err)
+	}
+}
+
+func TestCodexAuthFileParsesNestedTokenFields(t *testing.T) {
+	data := `{"auth_mode":"chatgpt","tokens":{"access_token":"at","id_token":"it",` +
+		`"oauth_provenance":{"issuer":"https://auth.openai.com","client_id":"x"}}}`
+	var auth codexAuthFile
+	if err := json.Unmarshal([]byte(data), &auth); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if auth.Tokens.AccessToken != "at" {
+		t.Fatalf("access token = %q, want at", auth.Tokens.AccessToken)
 	}
 }

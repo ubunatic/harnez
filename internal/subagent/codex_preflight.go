@@ -63,6 +63,16 @@ type codexAuthRejectedError struct{ status string }
 
 func (e *codexAuthRejectedError) Error() string { return e.status }
 
+// codexAuthFile reads only the fields the probe needs; tokens also holds
+// non-string entries such as oauth_provenance (issue 991).
+type codexAuthFile struct {
+	AuthMode string `json:"auth_mode"`
+	APIKey   string `json:"OPENAI_API_KEY"`
+	Tokens   struct {
+		AccessToken string `json:"access_token"`
+	} `json:"tokens"`
+}
+
 func probeCodexAuth(ctx context.Context) error {
 	home := os.Getenv("CODEX_HOME")
 	if home == "" {
@@ -77,15 +87,11 @@ func probeCodexAuth(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read Codex credentials: %w", err)
 	}
-	var auth struct {
-		AuthMode string            `json:"auth_mode"`
-		APIKey   string            `json:"OPENAI_API_KEY"`
-		Tokens   map[string]string `json:"tokens"`
-	}
+	var auth codexAuthFile
 	if err := json.Unmarshal(data, &auth); err != nil {
 		return fmt.Errorf("decode Codex credentials: %w", err)
 	}
-	token, endpoint := auth.Tokens["access_token"], "https://chatgpt.com/backend-api/wham/usage"
+	token, endpoint := auth.Tokens.AccessToken, "https://chatgpt.com/backend-api/wham/usage"
 	if key := os.Getenv("OPENAI_API_KEY"); key != "" {
 		token = key
 		endpoint = "https://api.openai.com/v1/models"
