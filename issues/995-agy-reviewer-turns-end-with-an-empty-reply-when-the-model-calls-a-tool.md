@@ -54,3 +54,25 @@ one-shot only.
    - b. no tools: harnez attaches the context and the role prompt says so; document it as policy.
 3. Canary (one agy turn, owner's go): a reviewer prompt that needs `git diff` returns a non-empty
    reply, or a clear error per item 1.
+
+## Decision (owner, 2026-10-28)
+
+Option a, for the read-only roles: an agy session with role `advisor` or `reviewer` runs with
+`--dangerously-skip-permissions --sandbox`, on `Run` and `Resume`. Writes inside `--add-dir` stay
+possible; accepted. `developer` and `orchestrator` are unchanged (their tool access is a separate
+decision).
+
+## Implementation notes (host, 2026-10-28)
+
+- The role does not reach the drivers today: `RunOptions` (`internal/subagent/driver.go:77`) has
+  only `Prompt`, `Model`, `Dir`, and `Resume` takes `(id, prompt, model)`. Plumb the role (or a
+  resolved "auto-approve tools" bool) from the session to the agy driver; the other drivers ignore
+  it. A resumed session uses the role stored in its record.
+- Which roles auto-approve is a spec value (`spec/agent.yaml` role entry, with its JSON schema),
+  not a Go list (repo rule: configurable values live in `spec/`).
+- Empty reply: `parseAgy` (`internal/subagent/agy.go`) returns an error when `status` is
+  `SUCCESS`, `response` is empty and output tokens > 0, naming the likely cause. Table test.
+- Tests: argv for advisor/reviewer (flags present, on Run and Resume) and developer (absent) with
+  the existing fake command; never a real `agy`.
+- Host canary after `make install`: the ticket 991 refinement as one `harnez agent --role advisor
+  --model agy:argon:low` turn with read tools.
