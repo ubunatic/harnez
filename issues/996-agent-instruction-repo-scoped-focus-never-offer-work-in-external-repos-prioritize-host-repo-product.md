@@ -1,6 +1,6 @@
 # 996 — Agent instruction: repo-scoped focus — never offer work in external repos, prioritize host repo product
 
-**Status**: Open
+**Status**: Closed — completed repository scope and product focus instructions across config, docs, and agent specs
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Policy
