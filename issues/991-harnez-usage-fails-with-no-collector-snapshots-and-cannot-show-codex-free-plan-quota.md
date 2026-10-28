@@ -65,3 +65,17 @@ architectural or OS blocker, or no progress, clear the goal and write a failure 
   login. Fix: give the tokens a struct with string fields and ignore unknown nested keys; add a
   test fixture with `oauth_provenance`. Only after that can you tell whether the free plan's
   rate-limit response is parsed correctly (Expected item 2).
+
+## Progress (2026-10-28)
+
+- Done: `CodexTokens` struct replaces the token map (`internal/usage/codex.go`); regression test
+  `TestCollectCodexParsesNestedTokenFields`. Live after `make install`: Codex authenticated,
+  `plan_tier: Free`, one window at 0% used, resetting 2026-11-26 (~29 days out).
+- New: the free plan reports a single ~30-day window, which `buildCodexQuotaWindow` labels
+  `Weekly`. Name windows by their real length (e.g. `Monthly`), and confirm the free plan never
+  has a 5-hour window.
+- Unrelated, already on main: `TestCollectCatchupFetchesOnlyProvidersOlderThanThreshold` has a
+  data race under `-race` (`catchup_test.go:39/51`), so `make test-pkg PKG=./internal/usage/...`
+  fails without this change too. File it separately if no ticket covers it.
+- Still open: Expected items 1 (empty-store message, unit dirs, stray server) and 3 (picks
+  fallback, see 992).
