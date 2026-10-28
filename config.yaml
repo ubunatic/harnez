@@ -163,6 +163,7 @@ debloat:
   preset_skill_overrides:
     commit: user-invocable-only
     docup: user-invocable-only
+    focus: user-invocable-only
     lean-sprint: user-invocable-only
     factory-sprint: user-invocable-only
     lean-sprint-v1: user-invocable-only
@@ -410,6 +411,11 @@ agy_target: ~/.gemini/antigravity-cli
 bundled_skills: []
 
 skills:
+  - name: focus
+    license: AGPL-3.0-or-later
+    description: "Re-ground agent on the host repository's product, summarize top 2-3 open priorities and outcomes, and prompt for goal. Only on explicit /focus or 'focus'."
+    file: docs/commands/focus.md
+
   - name: docup
     license: AGPL-3.0-or-later
     description: "Review and update bounded repository documentation by category (testing, architecture)"
