@@ -1,10 +1,10 @@
-# 997 — harnez apply should give agy an allowlist that steers agents to make and Go
+# 1002 — harnez apply should give agy an allowlist that steers agents to make and Go
 
 **Status**: Open
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Feature
-**Related**: 995, 996, 373
+**Related**: 1000, 1001, 373
 
 ---
 
@@ -16,7 +16,7 @@ allowlist (46 allow rules) but writes nothing permission-related for agy: it onl
 `statusLine` in `~/.gemini/antigravity-cli/settings.json` and hooks in
 `~/.gemini/config/hooks.json`. agy should get the same common-tool allowlist.
 
-995 solved the headless side for advisor/reviewer with `--dangerously-skip-permissions --sandbox`;
+1000 solved the headless side for advisor/reviewer with `--dangerously-skip-permissions --sandbox`;
 interactive sessions need a real allowlist, not skip-all.
 
 ## 2. Technical Specification / Findings

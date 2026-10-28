@@ -150,7 +150,7 @@ type RoleSpec struct {
 	Aliases      []string            `yaml:"aliases"`
 	Spawns       []string            `yaml:"spawns"`
 	// AutoApproveTools lets an agy session of this role run tools without a
-	// human to approve them (issue 995); other providers ignore it.
+	// human to approve them (issue 1000); other providers ignore it.
 	AutoApproveTools bool   `yaml:"auto_approve_tools"`
 	Rules            string `yaml:"rules"`
 }

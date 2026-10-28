@@ -1,4 +1,4 @@
-# 995 — agy reviewer turns end with an empty reply when the model calls a tool
+# 1000 — agy reviewer turns end with an empty reply when the model calls a tool
 
 **Status**: Open
 **Priority**: P1 (High)

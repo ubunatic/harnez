@@ -173,7 +173,7 @@ Agentic software engineering scales effectively when concurrency is structured a
     follow-up as a ticket and list its allocated number in the study. The study is not
     complete until follow-ups are tracked or explicitly justified as non-goals.
 
-8. **Deployment Transparency — 3-State Grounding (when applicable)**:
+12. **Deployment Transparency — 3-State Grounding (when applicable)**:
    - Remote deployment status has three independent states that must never be conflated:
      **Local State** (checkout, configs, unit tests), **Deployed Artifact State** (remote
      filesystem binaries, permissions, config overlays), and **Active Daemon State** (remote
@@ -183,6 +183,13 @@ Agentic software engineering scales effectively when concurrency is structured a
      full probes and anti-patterns. Projects that prohibit remote deployment should ignore this
      capability-specific rule. A clean local build or passing local test is evidence about Local
      State only, never evidence of a remote state.
+
+13. **Repository Scope & Product Primacy**:
+   - The applications, tools, and code inside the current repository are the sole product of this agent session. They always take precedence over external distractions.
+   - Never proactively offer, volunteer, or initiate implementation or coding tasks in another repository.
+   - Cross-repository coding tasks may *only* be executed if the user explicitly orders and scopes them.
+   - Outside the host repository, an agent may only read for context, inspect dependencies, or file an issue when requested or required. Never pivot the active implementation focus away from the host repo.
+   - Use `/focus` to re-ground on the active repository's deliverables and priorities and choose the next goal.
 
 ---
 

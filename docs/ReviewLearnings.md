@@ -94,3 +94,11 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   Check `git show --stat` before retrying and preserve the other session's history. Proposed harness
   improvement: serialize staging and commit as one cross-session operation; no AGENTS rule or lock
   implementation was added in this session.
+- **Host orchestrator delegation boundary**: Under `/goal` or after context compaction, host agents default
+  to inlined implementation unless the epic command documentation explicitly states that the host
+  orchestrates sprints and runs post-handoff verification tests, but does not *do* the sprint implementation
+  itself. Epic 999 refined `docs/commands/epic.md` to clarify that the Developer model defined in the
+  selected sprint skill implements the changes, while the host only reviews diffs and runs verification checks.
+- **Reviewer selection for complex diffs**: Use `argon:low` (`agy:argon:low`) for one-shot, no-digging full-diff
+  reviews when complex work needs to be assessed. It provides high-signal detection of model trait fallbacks,
+  schema boundary constraints, and test coverage gaps without conversational fatigue.

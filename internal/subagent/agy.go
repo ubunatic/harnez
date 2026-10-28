@@ -24,7 +24,7 @@ type AgyDriver struct {
 	Dir       string
 	SessionID string
 	ModelSpec string
-	// AutoApproveTools runs Run and Resume with tool calls approved (issue 995).
+	// AutoApproveTools runs Run and Resume with tool calls approved (issue 1000).
 	AutoApproveTools bool
 }
 
@@ -261,7 +261,7 @@ func agyRunError(op string, b []byte, err error) error {
 }
 
 // parseAgy parses a turn's reply. A SUCCESS turn with no reply after output
-// tokens means agy ended the turn at a tool call it could not run (issue 995).
+// tokens means agy ended the turn at a tool call it could not run (issue 1000).
 func parseAgy(data []byte) (*TurnResult, error) {
 	r, err := decodeAgy(data)
 	if err != nil {

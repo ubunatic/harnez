@@ -28,6 +28,7 @@ global_sections:
       - Never use `pkill -f`/`pgrep -f` with a pattern that can match your own shell command line.
         Match exact argv fields via `ps -eo pid,args`, or kill recorded PIDs.
       - Set `HTO=0` for long-running commands, tests, or waits run as background tasks/jobs.
+      - The applications and code in the current repository are your sole product. Never proactively offer, volunteer, or initiate implementation in external repositories. Outside this repository, only read for context or file a requested/blocking issue.
   - name: Tool Feedback Protocol
     rate_feedback: true
     existing_only: true
@@ -162,6 +163,8 @@ debloat:
   preset_skill_overrides:
     commit: user-invocable-only
     docup: user-invocable-only
+    issue-research: user-invocable-only
+    focus: user-invocable-only
     lean-sprint: user-invocable-only
     factory-sprint: user-invocable-only
     lean-sprint-v1: user-invocable-only
@@ -409,6 +412,16 @@ agy_target: ~/.gemini/antigravity-cli
 bundled_skills: []
 
 skills:
+  - name: issue-research
+    license: AGPL-3.0-or-later
+    description: "Fan out subagent web research over candidate tickets, report, and update tracker. Only on explicit /issue-research."
+    file: docs/commands/issue-research.md
+
+  - name: focus
+    license: AGPL-3.0-or-later
+    description: "Re-ground agent on the host repository's product, summarize top 2-3 open priorities and outcomes, and prompt for goal. Only on explicit /focus or 'focus'."
+    file: docs/commands/focus.md
+
   - name: docup
     license: AGPL-3.0-or-later
     description: "Review and update bounded repository documentation by category (testing, architecture)"
@@ -791,8 +804,15 @@ agents_md:
           Where `@docs/AgenticLoop.md` is present in this project, follow it rather than
           restating it here — in particular Invariant 1 (Parallel Read, Sequential Write:
           one writer per workspace), Invariant 3 (Zero Zombie Guarantee: track and terminate
-          every background task and subagent), and Invariant 6 (Context Discipline: no whole-file
-          reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads).
+          every background task and subagent), Invariant 6 (Context Discipline: no whole-file
+          reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and Invariant 13
+          (Repository Scope & Product Primacy).
+
+          ## Repository Scope & Product Primacy
+          The applications, tools, and code inside this repository are your sole product.
+          - Never proactively offer, volunteer, or initiate implementation or coding tasks in external repositories.
+          - Cross-repository coding tasks may only be executed when the user explicitly commands and scopes them.
+          - Outside this repository, you may only perform read-only lookups for context, inspect dependencies, or file a requested/blocking issue. Never pivot the active implementation focus away from the host repo.
       - name: Issues.md
         content: |
           # Harnez Issues

@@ -1061,7 +1061,7 @@ func withAgyMeterSession(driver subagent.Driver, sessionID string) subagent.Driv
 }
 
 // withAgyAutoApprove sets whether an agy driver approves tool calls for the
-// session's role (issue 995); other drivers are returned unchanged.
+// session's role (issue 1000); other drivers are returned unchanged.
 func withAgyAutoApprove(driver subagent.Driver, autoApprove bool) subagent.Driver {
 	if d, ok := driver.(subagent.AgyDriver); ok {
 		d.AutoApproveTools = autoApprove

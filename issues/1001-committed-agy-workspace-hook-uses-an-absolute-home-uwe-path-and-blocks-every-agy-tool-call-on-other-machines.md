@@ -1,10 +1,10 @@
-# 996 — committed agy workspace hook uses an absolute /home/uwe path and blocks every agy tool call on other machines
+# 1001 — committed agy workspace hook uses an absolute /home/uwe path and blocks every agy tool call on other machines
 
 **Status**: Open
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
-**Related**: 373, 995
+**Related**: 373, 1000
 
 ---
 
@@ -22,7 +22,7 @@ exit status 126, stderr: sh: line 1: /home/uwe/projects/harnez/scripts/canary-ag
 ```
 
 Seen 2026-10-28 (user alfiz, harnez 0.2.6+4019, session `argon-991b`): the first agy turn with
-tool approval (995) could not read a single file and stopped with a blocked report. Reviewers and
+tool approval (1000) could not read a single file and stopped with a blocked report. Reviewers and
 advisors on agy are unusable in harnez checkouts until this is fixed. Forgewerk jobs that run agy
 in a harnez worktree would hit the same wall.
 

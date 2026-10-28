@@ -18,7 +18,7 @@ import (
 var homePathRE = regexp.MustCompile(`/(home|Users)/[^/\s"']+/`)
 
 // hookConfigDirs are the agent config trees that clients load from a repo
-// checkout (issue 996).
+// checkout (issue 1001).
 var hookConfigDirs = []string{".agents", ".claude", ".codex", ".gemini"}
 
 // TestHookConfigsHaveNoAbsoluteHomePaths guards committed hook and agent
@@ -48,7 +48,7 @@ func TestHookConfigsHaveNoAbsoluteHomePaths(t *testing.T) {
 			for lineNumber, line := range strings.Split(string(contents), "\n") {
 				if match := homePathRE.FindString(line); match != "" {
 					rel, _ := filepath.Rel(root, path)
-					t.Errorf("%s:%d: absolute home path %q in committed config; use a repo-relative or installed command (issue 996): %s",
+					t.Errorf("%s:%d: absolute home path %q in committed config; use a repo-relative or installed command (issue 1001): %s",
 						rel, lineNumber+1, match, strings.TrimSpace(line))
 				}
 			}

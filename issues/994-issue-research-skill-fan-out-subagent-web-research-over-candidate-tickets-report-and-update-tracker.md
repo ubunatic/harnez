@@ -1,6 +1,6 @@
 # 994 — issue-research skill: fan out subagent web research over candidate tickets, report, and update tracker
 
-**Status**: Open
+**Status**: Closed — implemented generic issue-research skill, research.schema.json, and validation tests (28b3aa86, 99ad1bec, ae0418a1)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

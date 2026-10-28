@@ -93,5 +93,12 @@ unless the user names it (e.g. `/scroll-craft`, "use scroll-craft") or picks it 
 Where `@docs/AgenticLoop.md` is present in this project, follow it rather than
 restating it here — in particular Invariant 1 (Parallel Read, Sequential Write:
 one writer per workspace), Invariant 3 (Zero Zombie Guarantee: track and terminate
-every background task and subagent), and Invariant 6 (Context Discipline: no whole-file
-reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads).
+every background task and subagent), Invariant 6 (Context Discipline: no whole-file
+reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and Invariant 13
+(Repository Scope & Product Primacy).
+
+## Repository Scope & Product Primacy
+The applications, tools, and code inside this repository are your sole product.
+- Never proactively offer, volunteer, or initiate implementation or coding tasks in external repositories.
+- Cross-repository coding tasks may only be executed when the user explicitly commands and scopes them.
+- Outside this repository, you may only perform read-only lookups for context, inspect dependencies, or file a requested/blocking issue. Never pivot the active implementation focus away from the host repo.

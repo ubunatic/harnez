@@ -9,7 +9,7 @@ import (
 	"ubunatic.com/harnez/internal/subagent"
 )
 
-// Read-only agy roles run tools unattended (issue 995): start and resume pass
+// Read-only agy roles run tools unattended (issue 1000): start and resume pass
 // the role's auto_approve_tools to the agy driver; developer does not.
 func TestAgentAgyRoleAutoApprovesTools(t *testing.T) {
 	t.Setenv(agentRoleEnv, "")

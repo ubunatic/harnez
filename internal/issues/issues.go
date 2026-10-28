@@ -75,7 +75,7 @@ type Report struct {
 }
 
 var (
-	issueFileRegex        = regexp.MustCompile(`^(\d{3}|GH[1-9]\d*)-.*\.md$`)
+	issueFileRegex        = regexp.MustCompile(`^(\d{3,}|GH[1-9]\d*)-.*\.md$`)
 	statusLineRegex       = regexp.MustCompile(`(?i)^\s*[-*]?\s*(?:\*\*status:?\*\*|status):?\s*(.+)$`)
 	priorityLineRegex     = regexp.MustCompile(`(?i)^\s*[-*]?\s*\*\*priority:?\*\*:?\s*(P[0-3])(?:\s|$|[—–-])`)
 	closedByLineRegex     = regexp.MustCompile(`^\s*\*\*Closed-By\*\*:\s*.*$`)

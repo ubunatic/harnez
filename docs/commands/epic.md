@@ -4,7 +4,11 @@ disable-model-invocation: true
 # Plan, Refine and Run an Epic
 
 You, the agent that received this invocation, are the Host Orchestrator. An epic is one ticket
-that owns a task table; each task becomes a subticket run as a `/lean-sprint`.
+that owns a task table; each task becomes a subticket run as a `/lean-sprint`. The host runs
+the epic and orchestrates each sprint, but does not *do* the sprints (no direct coding
+or feature implementation). Each sprint is executed by dispatching the Developer model
+defined within the selected sprint skill (defaulting to `/lean-sprint`), with the host
+reviewing worker diffs and running post-handoff verification tests as detailed in that skill.
 
 Invocation: `/epic "<idea>"` drafts a new epic; `/epic <n>` refines or runs epic ticket `<n>`;
 `/epic <n> no-web` skips the web fanout.
@@ -94,8 +98,10 @@ and record each choice in the subticket's `## Decision`.
 
 ## 6. Run
 
-One `/lean-sprint` per sprint group; group very small tickets. Update the task table as each
-lands (commit with the ticket update).
+Run each sprint group via the selected sprint skill (default `/lean-sprint`). The host
+coordinates the run and runs verification tests upon handoff, but does not implement:
+dispatch the sprint's configured Developer worker (`harnez agent start`) to write code
+and tests. Update the task table as each lands (commit with the ticket update).
 
 ### 6b. Circuit Breaker
 

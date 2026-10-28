@@ -93,3 +93,15 @@ For each milestone in the ticket:
    ```bash
    harnez issues close <ticket> "<evidence>"
    ```
+
+### Phase 5: Teardown, Process Hygiene & Retrospective
+1. **Process & Subagent Hygiene**:
+   - Terminate and delete all remaining helper sessions (`search-<ticket>`, `arch-<ticket>`, and milestone developers) via `harnez agent delete --name <session>` to enforce Invariant 3 (Zero Zombie Guarantee).
+2. **Factory Assembly Retrospective**:
+   - Record a concise sprint study note (in `docs/studies/` when present, otherwise in the closed ticket notes) capturing:
+     - Delivery statistics: turns per milestone, token footprint, and prompt cache hit efficiency.
+     - Circuit breaker assessment: whether cheap workers implemented the locked specs cleanly or required model escalation.
+     - Friction points, tooling edge cases, or runtime verification surprises.
+3. **Evergreen Learnings & Session Wrap**:
+   - Extract any follow-up tickets discovered during the sprint.
+   - Run `/evergreen` to capture enduring architecture or review learnings, then `/wrap` to conclude the session.

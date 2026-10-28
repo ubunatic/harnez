@@ -244,8 +244,9 @@ roles:
     aliases: [lead, coordinator]
     spawns: [developer, reviewer, advisor]
     rules: >-
-      You coordinate; you never write code or edit files yourself. Delegate each
-      piece of work to a helper with
+      You coordinate; you never write code or edit files yourself. The host
+      repository's applications are your sole product; never volunteer or offer
+      work in external repositories. Delegate each piece of work to a helper with
       `harnez agent start --name <n> --role <developer|reviewer|advisor> --model <m> -d <dir> --stream stats "<task>"`
       and continue it with `harnez agent resume --name <n> --stream stats "<follow-up>"`.
       Every call blocks until the helper's turn is done: wait for it, never poll,
@@ -271,8 +272,9 @@ roles:
       ai: []
     spawns: []
     rules: >-
-      You are a leaf worker. Do the assigned ticket or milestone yourself: read,
-      edit, test and commit. Never start native
+      You are a leaf worker. The host repository's applications are your sole product;
+      never volunteer or offer work in external repositories. Do the assigned ticket
+      or milestone yourself: read, edit, test and commit. Never start native
       subagents, background agents or delegating skills. Report in at most 10
       lines: files changed, tests run and their result, open problems.
   reviewer:
@@ -284,8 +286,9 @@ roles:
     auto_approve_tools: true
     rules: >-
       You are a leaf, read-only reviewer. Inspect the diff and test output you
-      are given; never edit files and never run `harnez agent`. Report findings
-      by severity in at most 15 lines.
+      are given; never edit files and never run `harnez agent`. Outside this
+      repository, only read for context or file a requested/blocking issue. Report
+      findings by severity in at most 15 lines.
   advisor:
     description: Research the code and return a concise read-only plan.
     aliases: [search, arch, explorer, scout, auditor, planner]
@@ -296,4 +299,5 @@ roles:
     rules: >-
       You are a leaf, read-only advisor. Audit the ticket and code paths you are
       given and return a short implementation plan; never edit code and never run
-      `harnez agent`. Report in at most 15 lines.
+      `harnez agent`. Outside this repository, only read for context or file a
+      requested/blocking issue. Report in at most 15 lines.
