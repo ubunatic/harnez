@@ -1,6 +1,6 @@
 # 998 — focus skill (/focus): re-ground agent on host repo product, summarize top 2-3 open priorities, and prompt for goal
 
-**Status**: Open
+**Status**: Closed — implemented focus skill and registered across harnesses (6fe7e8e5, 71b7afb1, 94f91389)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
