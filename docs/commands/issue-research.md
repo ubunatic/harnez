@@ -24,10 +24,10 @@ leave tracker changes to the coordinator.
 
 Dispatch one session per candidate in parallel using the host's session-owned
 background runner, with `HTO=0 harnez agent start --name <unique-name> --role
-<configured-role> --model <configured-model> -f <prompt-file>`. Use the configured
-model and role, defaulting the role to advisor. If no model is configured, use
-`--role advisor --model cheap` where available; if the selected model is unavailable,
-report the failure and request a usable model. Track each session and its job;
+advisor -p "<prompt>"` (or `-f <prompt-file>`). Use the configured role if set,
+and pass `--model <configured-model>` only if the profile specifies a model;
+otherwise rely on the role's default model resolution. If the selected model is
+unavailable, report the failure and request a usable model. Track each session and its job;
 never use shell backgrounding or polling loops. Follow the host's reactive
 completion mechanism and clean up all sessions and temporary prompts.
 

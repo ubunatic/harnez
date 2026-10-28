@@ -69,15 +69,36 @@ actions:
 	if err := resolved.Validate(document); err != nil {
 		t.Fatalf("example: %v", err)
 	}
-	goals := document["goals"].([]any)
-	goal := goals[0].(map[string]any)
-	goal["prio"] = "P9"
-	if err := resolved.Validate(document); err == nil {
-		t.Error("accepted invalid priority")
+	tests := []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"batch below minimum", func(d map[string]any) { d["batch_size"] = 0 }},
+		{"batch above maximum", func(d map[string]any) { d["batch_size"] = 15 }},
+		{"empty goals", func(d map[string]any) { d["goals"] = []any{} }},
+		{"missing goals", func(d map[string]any) { delete(d, "goals") }},
+		{"missing id", func(d map[string]any) { delete(d["goals"].([]any)[0].(map[string]any), "id") }},
+		{"missing title", func(d map[string]any) { delete(d["goals"].([]any)[0].(map[string]any), "title") }},
+		{"missing description", func(d map[string]any) { delete(d["goals"].([]any)[0].(map[string]any), "description") }},
+		{"empty id", func(d map[string]any) { d["goals"].([]any)[0].(map[string]any)["id"] = "" }},
+		{"empty title", func(d map[string]any) { d["goals"].([]any)[0].(map[string]any)["title"] = "" }},
+		{"empty description", func(d map[string]any) { d["goals"].([]any)[0].(map[string]any)["description"] = "" }},
+		{"invalid priority", func(d map[string]any) { d["goals"].([]any)[0].(map[string]any)["prio"] = "P9" }},
+		{"extra root key", func(d map[string]any) { d["extra"] = true }},
+		{"extra goal key", func(d map[string]any) { d["goals"].([]any)[0].(map[string]any)["extra"] = true }},
+		{"extra constraints key", func(d map[string]any) { d["constraints"].(map[string]any)["extra"] = true }},
+		{"extra actions key", func(d map[string]any) { d["actions"].(map[string]any)["extra"] = true }},
 	}
-	goal["prio"] = "P1"
-	delete(document, "goals")
-	if err := resolved.Validate(document); err == nil {
-		t.Error("accepted missing goals")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var document map[string]any
+			if err := yaml.Unmarshal([]byte(example), &document); err != nil {
+				t.Fatal(err)
+			}
+			tt.mutate(document)
+			if err := resolved.Validate(document); err == nil {
+				t.Error("accepted invalid document")
+			}
+		})
 	}
 }

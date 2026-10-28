@@ -64,7 +64,8 @@
         ],
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "prio": {
             "type": "string",
@@ -76,10 +77,12 @@
             ]
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "description": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           }
         }
       }
@@ -95,7 +98,8 @@
           "type": "string"
         },
         "update_section": {
-          "type": "string"
+          "type": "string",
+          "default": "2. Technical Specification / Findings"
         }
       }
     }
