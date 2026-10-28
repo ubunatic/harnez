@@ -42,3 +42,13 @@ in a harnez worktree would hit the same wall.
    `.claude/`, `.codex/`).
 3. Canary: one `harnez agent --role advisor --model agy:argon:low` turn in a harnez checkout
    reads a file and replies.
+
+## Decision (host, 2026-10-28, owner go for the fix)
+
+373 is Closed (0314dfbd): `harnez apply` installs the observer globally in
+`~/.gemini/config/hooks.json` (`harnez hook agy` PreToolUse, `harnez hook agy-post` PostToolUse,
+matcher `*`). The committed `.agents/hooks.json` is a canary leftover that duplicates it with a
+machine path. Fix: remove `.agents/hooks.json` from the repo (keep `scripts/canary-agy-tool-hook.sh`
+only if a doc still uses it; update `docs/HookRewritePattern.md`), and add a test that fails on an
+absolute home path (`/home/<user>/`, `/Users/<user>/`) in committed hook configs (`.agents/`,
+`.claude/`, `.codex/`, `.gemini/`). Observation stays on through the global hook.
