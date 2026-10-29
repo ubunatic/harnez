@@ -217,6 +217,7 @@ func newUsageCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("read usage store: %w", err)
 				}
+				summary = usagecli.FilterSummaryByAgent(summary, usageAgent)
 				usage.RenderSummaryWithUsage(summary, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			}
 			return nil
@@ -245,7 +246,20 @@ func newUsageCmd() *cobra.Command {
 		fmt.Sprintf("refresh interval for --watch (minimum %s, to avoid hammering live quota APIs)", usage.MinWatchInterval))
 
 	usageCmd.AddCommand(newUsageHistoryCmd(&usageOffline, &usageShared), newUsageExportCmd(), newUsageArchiveCmd())
+	silenceUsageOnRunnable(usageCmd)
 	return usageCmd
+}
+
+// silenceUsageOnRunnable sets SilenceUsage on every runnable command in the
+// tree: cobra only checks the executed command and the root, so a runtime
+// store or SSH error from a subcommand would otherwise dump the help text.
+func silenceUsageOnRunnable(cmd *cobra.Command) {
+	if cmd.Runnable() {
+		cmd.SilenceUsage = true
+	}
+	for _, child := range cmd.Commands() {
+		silenceUsageOnRunnable(child)
+	}
 }
 
 // newUsageHistoryCmd builds `harnez usage history` and its subcommands.

@@ -157,6 +157,11 @@ func TestUsageCmdJSONReadsChmodReadOnlyStore(t *testing.T) {
 
 func seedUsageStore(t *testing.T) string {
 	t.Helper()
+	return seedUsageStoreAgents(t, usage.AgentUsage{AgentID: "claude", Name: "Claude Code", Installed: true})
+}
+
+func seedUsageStoreAgents(t *testing.T, agents ...usage.AgentUsage) string {
+	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_DATA_HOME", home+"/data")
@@ -166,10 +171,53 @@ func seedUsageStore(t *testing.T) string {
 	if err := usage.InitializeUsageStore(ctx, home, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := usage.PersistUsageSummary(ctx, home, "", usage.UsageSummary{Timestamp: time.Now(), Agents: []usage.AgentUsage{{AgentID: "claude", Name: "Claude Code", Installed: true}}}); err != nil {
+	if err := usage.PersistUsageSummary(ctx, home, "", usage.UsageSummary{Timestamp: time.Now(), Agents: agents}); err != nil {
 		t.Fatal(err)
 	}
 	return usage.UsageStorePath()
+}
+
+func TestUsageAgentFilterAppliesToTableViews(t *testing.T) {
+	reset := time.Now().Add(48 * time.Hour)
+	week := func() *usage.QuotaWindow {
+		return &usage.QuotaWindow{Name: "Weekly", UsedPercent: 10, RemainingPercent: 90, ResetAt: &reset}
+	}
+	seedUsageStoreAgents(t,
+		usage.AgentUsage{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true, Weekly: week()},
+		usage.AgentUsage{AgentID: "codex", Name: "Codex CLI", Installed: true, Authenticated: true, Weekly: week()},
+	)
+	for _, view := range [][]string{{}, {"--compact"}, {"--minimal"}} {
+		args := append([]string{"usage", "--offline", "--agent", "codex"}, view...)
+		t.Run(fmt.Sprint(view), func(t *testing.T) {
+			root := newRootCmd()
+			buf := new(bytes.Buffer)
+			root.SetOut(buf)
+			root.SetArgs(args)
+			if err := root.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			out := buf.String()
+			if !strings.Contains(out, "Codex") {
+				t.Errorf("output missing Codex:\n%s", out)
+			}
+			if strings.Contains(out, "Claude Code") {
+				t.Errorf("--agent codex output still shows Claude:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestUsageSubcommandsSilenceUsageOnRuntimeErrors(t *testing.T) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		if c.Runnable() && !c.SilenceUsage {
+			t.Errorf("%q does not set SilenceUsage", c.CommandPath())
+		}
+		for _, child := range c.Commands() {
+			walk(child)
+		}
+	}
+	walk(newUsageCmd())
 }
 
 func TestUsageEmptyStoreFailsWithActionableError(t *testing.T) {
@@ -184,6 +232,7 @@ func TestUsageEmptyStoreFailsWithActionableError(t *testing.T) {
 			{"usage", "--compact"},
 			{"usage", "--agent", "codex"},
 			{"usage", "--json"},
+			{"usage", "history", "record"},
 		} {
 			t.Run(store+"/"+fmt.Sprint(args), func(t *testing.T) {
 				home := t.TempDir()
