@@ -19,9 +19,18 @@ type ToolPolicySpec struct {
 	Reason string `yaml:"reason"`
 }
 
+// PermissionsSpec lists agy permission rules added on top of the rules
+// translated from Claude's config, and agy's toolPermission mode (issue 1002).
+type PermissionsSpec struct {
+	ToolPermission string   `yaml:"tool_permission"`
+	Allow          []string `yaml:"allow"`
+	Deny           []string `yaml:"deny"`
+}
+
 // Spec is the top-level shape of spec/agy_tools.yaml.
 type Spec struct {
 	DisallowedTools map[string]ToolPolicySpec `yaml:"disallowed_tools"`
+	Permissions     PermissionsSpec           `yaml:"permissions"`
 }
 
 var (

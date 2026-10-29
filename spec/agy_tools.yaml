@@ -5,3 +5,39 @@
 disallowed_tools:
   schedule:
     reason: "violates the harnez rule to not use schedules but run commands in the background and just wait until completion"
+
+# agy permission rules that `harnez apply` adds on top of the rules it translates from
+# config.yaml `permissions` (issue 1002). Claude reads, searches and edits files with its own
+# tools; agy does the same work with shell commands, so it needs these extra prefixes.
+# Rule syntax: command(<prefix>) (word-boundary prefix), read_file(<path>), write_file(<path>);
+# `~/` expands to the home directory.
+# tool_permission is written to agy's `toolPermission`. "always-proceed" lets agy run every tool
+# without asking, like Claude in auto mode: the machine is the sandbox (owner decision 2026-10-29).
+# A different value the user set themselves is kept. Empty: harnez leaves the key alone.
+permissions:
+  tool_permission: "always-proceed"
+  allow:
+    - "command(cat)"
+    - "command(head)"
+    - "command(tail)"
+    - "command(wc)"
+    - "command(rg)"
+    - "command(grep)"
+    - "command(find)"
+    - "command(stat)"
+    - "command(file)"
+    - "command(which)"
+    - "command(echo)"
+    - "command(pwd)"
+    - "command(diff)"
+    - "command(sort)"
+    - "command(uniq)"
+    - "command(cut)"
+    - "command(basename)"
+    - "command(dirname)"
+    - "command(realpath)"
+    - "command(readlink)"
+    - "command(du)"
+    - "command(df)"
+    - "command(date)"
+    - "write_file(~/projects)"

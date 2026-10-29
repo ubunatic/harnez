@@ -20,6 +20,29 @@
           }
         }
       }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool_permission": {
+          "type": "string"
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(command|read_file|write_file|mcp|read_url)\\(.+\\)$"
+          }
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(command|read_file|write_file|mcp|read_url)\\(.+\\)$"
+          }
+        }
+      }
     }
   }
 }

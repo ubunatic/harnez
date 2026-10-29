@@ -113,3 +113,94 @@ This host's agy 1.4.9 settings at `~/.gemini/antigravity-cli/settings.json` incl
 `toolPermission: "always-proceed"`. These are observed values, not proof that the
 allowlist is enforced or evidence of a portable wildcard translation. Canary with
 an isolated configuration and a restrictive policy before implementation.
+
+## Canary 2 (host, 2026-10-29): `permissions.allow` is enforced
+
+agy 1.4.9 on this machine (its settings had no permission keys). For one run,
+`~/.gemini/antigravity-cli/settings.json` got only `"permissions": {"allow": ["command(ls)"]}`,
+no `toolPermission`; the original file was restored right after.
+
+One headless turn, `harnez agent --role developer --model agy:flash38:low` (no auto-approve), asked
+to run `ls -1 spec`, then `cat go.mod`. Conversation 0677e6e6, steps:
+
+| Step | Tool call | Status |
+| --- | --- | --- |
+| 2 | `run_command` `ls -1 spec` | 3, completed without a prompt |
+| 4 | `run_command` `cat go.mod` | 7, waiting for permission (same status as owner-approval steps in canary 1) |
+
+harnez then failed the turn with the 1000 error ("agy turn ended without a reply after 77 output
+tokens; likely an unapproved tool call"). So:
+
+- `permissions.allow` with `command(<prefix>)` is read from settings.json and enforced, headless too.
+- `command(ls)` matches `ls -1 spec`: prefix match on the command line (word boundary not yet tested,
+  e.g. whether `command(ls)` also allows `lsblk`).
+- Not yet tested: the entry syntax for file tools (view/edit/write), wildcards inside `command(...)`,
+  `deny`, and what `toolPermission` values other than `always-proceed` do.
+
+## Canary 3 (host, 2026-10-29): rule syntax, prefix boundary, write paths, deny
+
+Rule kinds, from the docs embedded in the agy 1.4.9 binary: `command(<prefix>)`, `read_file(<path>)`,
+`write_file(<path>)`, `mcp(<server>/<tool>)`, `read_url(...)`. The same docs warn against `command(*)`,
+`read_file(*)`, `write_file(*)`, `mcp(*)`.
+
+Settings for both turns (restored afterwards):
+`"permissions": {"allow": ["command(ls)", "command(git)", "write_file(<w>/ok)"], "deny": ["command(git log)"]}`,
+workspace `<w>` = a throwaway dir under `~/projects` (removed afterwards). Two headless
+`agy:flash38:low` developer turns, conversations ba5882b7 and b1ed828d:
+
+| Call | Rule in play | Result |
+| --- | --- | --- |
+| `ls -1` | `command(ls)` | ran |
+| `git --version` | `command(git)` | ran |
+| `write_file <w>/ok/a.txt` | `write_file(<w>/ok)` | ran, file written |
+| `lsblk -d` | `command(ls)` | **blocked**: prefix matches on word boundary |
+| `git log -1 --oneline` | `deny: command(git log)` over `allow: command(git)` | **refused**; the agent continued to the next step, so deny returns a refusal instead of waiting |
+| `write_file <w>/other/b.txt` | none | blocked, turn ended |
+
+Conclusions for the implementation:
+- Claude `Bash(<prefix>:*)` / `Bash(<prefix> *)` maps to agy `command(<prefix>)` (word-boundary prefix).
+- Claude `Edit`/`Write` path rules map to `write_file(<dir>)`; workspace-wide write = the workspace dir.
+- Claude `deny` maps to agy `deny`, and deny wins over a broader allow.
+- Not mapped: Claude rules with mid-pattern wildcards (`Bash(git * --help)`), `WebFetch(domain:...)`
+  (agy `read_url` syntax unverified), tool names without an agy equivalent. Report them, do not guess.
+
+## Implementation (2026-10-29)
+
+- `internal/agy/permissions.go`: `TranslateClaudeRule` maps `Bash(<prefix> *)`/`Bash(<prefix>:*)`
+  to `command(<prefix>)`, `Read(~/x/**)`/`Read(//x/**)` to `read_file(<abs>)`, `Edit`/`Write` paths to
+  `write_file(<abs>)`; config.yaml `deny` maps to agy `deny`. Everything else (MCP, WebFetch,
+  mid-pattern wildcards, project-relative paths) is reported as unmapped, not guessed.
+- `spec/agy_tools.yaml` `permissions.allow` adds what agy does through the shell but Claude does with
+  its own tools: `cat head tail wc rg grep find stat file which echo pwd diff sort uniq cut basename
+  dirname realpath readlink du df date`, plus `write_file(~/projects)`. Schema updated.
+- `harnez apply` merges both lists into `<agy_target>/settings.json` `permissions` (union, user rules and
+  other keys kept, no `toolPermission`), only when the agy dir exists; prints unmapped rules.
+  `harnez status` shows `[permissions]` ok/drifted/missing; `revert --managed` removes only harnez's rules.
+- On this host: 68 allow rules written; unmapped: `mcp__harnez__*`. Second apply: no change.
+
+## Canary 4 (host, 2026-10-29): after `harnez apply`
+
+Real settings written by `harnez apply` (68 allow rules), no restore. One headless
+`agy:flash38:low` developer turn (conversation 98eb855d), no auto-approve: `ls -1 spec`,
+`cat go.mod`, `head -3 README.md`, `harnez --version`, `grep -c agy spec/agy_tools.yaml` all ran
+(steps status 3), no prompt, turn done in 21s.
+
+Not yet checked: an interactive `harnez-agy` session; whether `mcp(harnez/*)` is a valid agy rule
+for the unmapped `mcp__harnez__*`.
+
+## Decision (owner, 2026-10-29, later): `harnez apply` sets `toolPermission: always-proceed`
+
+The machine is the sandbox, as for Claude in auto mode: fix the sandbox, not the agent. Uwe's
+other host already runs agy with `toolPermission: "always-proceed"`. The allowlist stays (it is not
+replaced), so a user who switches toolPermission back keeps the rules.
+
+- `spec/agy_tools.yaml` `permissions.tool_permission: "always-proceed"`; empty would leave the key alone.
+- Apply writes it only when the key is absent, so a value the user set themselves is kept.
+  `revert --managed` removes it only while it still has harnez's value.
+- Difference to Claude auto mode, for the record: Claude still has a classifier that reviews each
+  action; agy with always-proceed has none.
+
+## Canary 5 (host, 2026-10-29): always-proceed after `harnez apply`
+
+One headless `agy:flash38:low` developer turn with commands not on the allowlist: `uptime`,
+`printenv HOME`, `id -un`, plus `cat go.mod`. All ran (status 3), no prompt, reply correct.
