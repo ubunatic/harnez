@@ -163,3 +163,27 @@ Conclusions for the implementation:
 - Claude `deny` maps to agy `deny`, and deny wins over a broader allow.
 - Not mapped: Claude rules with mid-pattern wildcards (`Bash(git * --help)`), `WebFetch(domain:...)`
   (agy `read_url` syntax unverified), tool names without an agy equivalent. Report them, do not guess.
+
+## Implementation (2026-10-29)
+
+- `internal/agy/permissions.go`: `TranslateClaudeRule` maps `Bash(<prefix> *)`/`Bash(<prefix>:*)`
+  to `command(<prefix>)`, `Read(~/x/**)`/`Read(//x/**)` to `read_file(<abs>)`, `Edit`/`Write` paths to
+  `write_file(<abs>)`; config.yaml `deny` maps to agy `deny`. Everything else (MCP, WebFetch,
+  mid-pattern wildcards, project-relative paths) is reported as unmapped, not guessed.
+- `spec/agy_tools.yaml` `permissions.allow` adds what agy does through the shell but Claude does with
+  its own tools: `cat head tail wc rg grep find stat file which echo pwd diff sort uniq cut basename
+  dirname realpath readlink du df date`, plus `write_file(~/projects)`. Schema updated.
+- `harnez apply` merges both lists into `<agy_target>/settings.json` `permissions` (union, user rules and
+  other keys kept, no `toolPermission`), only when the agy dir exists; prints unmapped rules.
+  `harnez status` shows `[permissions]` ok/drifted/missing; `revert --managed` removes only harnez's rules.
+- On this host: 68 allow rules written; unmapped: `mcp__harnez__*`. Second apply: no change.
+
+## Canary 4 (host, 2026-10-29): after `harnez apply`
+
+Real settings written by `harnez apply` (68 allow rules), no restore. One headless
+`agy:flash38:low` developer turn (conversation 98eb855d), no auto-approve: `ls -1 spec`,
+`cat go.mod`, `head -3 README.md`, `harnez --version`, `grep -c agy spec/agy_tools.yaml` all ran
+(steps status 3), no prompt, turn done in 21s.
+
+Not yet checked: an interactive `harnez-agy` session; whether `mcp(harnez/*)` is a valid agy rule
+for the unmapped `mcp__harnez__*`.

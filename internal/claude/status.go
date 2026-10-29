@@ -202,6 +202,23 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 			state: state,
 		})
 	}
+	if cfg.AgyTarget != "" {
+		agyDir := fsutil.ExpandHome(cfg.AgyTarget)
+		if _, err := os.Stat(agyDir); err == nil {
+			settingsPath := agy.StatusLineSettingsPath(agyDir)
+			allow, deny, _ := agy.PermissionRules(cfg.Permissions.Allow, cfg.Permissions.Deny)
+			state := "ok"
+			if missing := agy.PermissionsStatus(settingsPath, allow, deny); missing == len(allow)+len(deny) {
+				state = "missing"
+			} else if missing > 0 {
+				state = "drifted"
+			}
+			checks = append(checks, entry{
+				label: settingsPath + " [permissions]",
+				state: state,
+			})
+		}
+	}
 	if selection.HasComponent("usage") && cfg.CodexHooksTarget != "" {
 		settingsPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
 		installed, _ := codex.StatusLineStatus(settingsPath)
