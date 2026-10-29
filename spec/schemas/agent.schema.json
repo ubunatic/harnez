@@ -61,12 +61,23 @@
       "additionalProperties": false
     }
   },
-  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "default_role", "models", "roles", "stop", "external_sessions", "model_traits"],
+  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "pi_compaction","default_role", "models", "roles", "stop", "external_sessions", "model_traits"],
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
     "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
     "compact_thresholds": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": "Model-specific default compaction thresholds." },
+    "pi_compaction": {
+      "type": "object",
+      "description": "Pi compaction overrides written by harnez apply for small-window models; the loader also rejects reserve_fraction + keep_recent_fraction >= 1.",
+      "required": ["small_window_threshold_tokens", "reserve_fraction", "keep_recent_fraction"],
+      "properties": {
+        "small_window_threshold_tokens": { "type": "integer", "minimum": 1 },
+        "reserve_fraction": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+        "keep_recent_fraction": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 }
+      },
+      "additionalProperties": false
+    },
     "auto_compact": {
       "type": "object",
       "required": ["default_mode", "provider_modes", "watchdog_grace_ms", "legacy_growth_threshold_tokens", "codex_on_demand_limit_tokens", "codex_status_prompt"],

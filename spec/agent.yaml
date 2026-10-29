@@ -14,6 +14,13 @@ compact_thresholds:
   claude:haiku:low: 80000
   claude:haiku:med: 80000
   claude:haiku:high: 80000
+# Pi compaction overrides that `harnez apply` writes into Pi's settings.json for
+# each model in Pi's models.json whose contextWindow is below the threshold
+# (issue 1023). Pi's defaults (16384 reserve, 20000 kept) do not fit a 32k window.
+pi_compaction:
+  small_window_threshold_tokens: 65536
+  reserve_fraction: 0.4
+  keep_recent_fraction: 0.25
 # Manual compaction requires a verified context drop; Codex compacts natively.
 # Agy lacks a reliable context count (issues 644 and 869).
 auto_compact:

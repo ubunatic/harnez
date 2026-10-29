@@ -215,6 +215,17 @@ func TestKnownErrorChecksMatchAgentSchema(t *testing.T) {
 		}
 	}
 	document["compact_thresholds"] = map[string]any{"claude:haiku:low": 80000}
+	piCompaction := document["pi_compaction"].(map[string]any)
+	for _, key := range []string{"reserve_fraction", "keep_recent_fraction"} {
+		original := piCompaction[key]
+		for _, invalid := range []any{0, -0.1, 1, 1.5} {
+			piCompaction[key] = invalid
+			if err := resolved.Validate(document); err == nil {
+				t.Errorf("schema accepted pi_compaction.%s %#v", key, invalid)
+			}
+		}
+		piCompaction[key] = original
+	}
 	validAuto := document["auto_compact"].(map[string]any)
 	for key, invalid := range map[string]any{"codex_on_demand_limit_tokens": 0, "codex_status_prompt": " "} {
 		original := validAuto[key]
@@ -508,7 +519,31 @@ func TestResolveRoleDynamicStaticBeforeClassifierAndGracefulFallback(t *testing.
 	}
 }
 
-const testAutoCompactYAML = "auto_compact: {default_mode: manual, provider_modes: {}, watchdog_grace_ms: 20000, legacy_growth_threshold_tokens: 100000, codex_on_demand_limit_tokens: 50000, codex_status_prompt: status}\n"
+const testAutoCompactYAML = "auto_compact: {default_mode: manual, provider_modes: {}, watchdog_grace_ms: 20000, legacy_growth_threshold_tokens: 100000, codex_on_demand_limit_tokens: 50000, codex_status_prompt: status}\n" + testPiCompactionYAML
+
+const testPiCompactionYAML = "pi_compaction: {small_window_threshold_tokens: 65536, reserve_fraction: 0.4, keep_recent_fraction: 0.25}\n"
+
+func TestPiCompactionSpec(t *testing.T) {
+	got, err := PiCompaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != (PiCompactionSpec{SmallWindowThresholdTokens: 65536, ReserveFraction: 0.4, KeepRecentFraction: 0.25}) {
+		t.Fatalf("PiCompaction() = %+v", got)
+	}
+	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\n" + testAutoCompactYAML + testExternalSessionSpecYAML + "default_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
+	for _, bad := range []string{
+		"small_window_threshold_tokens: 0, reserve_fraction: 0.4, keep_recent_fraction: 0.25",
+		"small_window_threshold_tokens: 65536, reserve_fraction: 0, keep_recent_fraction: 0.25",
+		"small_window_threshold_tokens: 65536, reserve_fraction: 0.4, keep_recent_fraction: 1",
+		"small_window_threshold_tokens: 65536, reserve_fraction: 0.6, keep_recent_fraction: 0.4",
+	} {
+		doc := strings.Replace(base, testPiCompactionYAML, "pi_compaction: {"+bad+"}\n", 1)
+		if _, err := parseAgentSpec([]byte(doc)); err == nil || !strings.Contains(err.Error(), "pi_compaction") {
+			t.Errorf("parseAgentSpec accepted pi_compaction {%s}: %v", bad, err)
+		}
+	}
+}
 
 func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\nreply_history_limit: 20\ncompact_threshold_tokens: 200000\n" + testAutoCompactYAML + testExternalSessionSpecYAML

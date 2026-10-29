@@ -80,6 +80,9 @@ func newApplyCmd() *cobra.Command {
 			if err := claude.ApplyAllVariant(t, cfg, applyOpts); err != nil {
 				return err
 			}
+			if err := applyPiCompaction(claude.PiAgentRoot(cfg), cmd.ErrOrStderr()); err != nil {
+				return err
+			}
 			if cfg.AgyTarget != "" && set.Has(claude.Usage) {
 				agyStatusLinePath := agy.StatusLineSettingsPath(fsutil.ExpandHome(cfg.AgyTarget))
 				if cfg.StatusLine {

@@ -35,9 +35,25 @@ type agentSpec struct {
 	CompactThreshold      int                            `yaml:"compact_threshold_tokens"`
 	CompactThresholds     map[string]int                 `yaml:"compact_thresholds"`
 	AutoCompact           AutoCompactSpec                `yaml:"auto_compact"`
+	PiCompaction          PiCompactionSpec               `yaml:"pi_compaction"`
 	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
 	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
 	ResumeNote            ResumeNoteSpec                 `yaml:"resume_note"`
+}
+
+// PiCompactionSpec sizes the Pi compaction overrides for small-window models (issue 1023).
+type PiCompactionSpec struct {
+	SmallWindowThresholdTokens int     `yaml:"small_window_threshold_tokens"`
+	ReserveFraction            float64 `yaml:"reserve_fraction"`
+	KeepRecentFraction         float64 `yaml:"keep_recent_fraction"`
+}
+
+func (s PiCompactionSpec) validate() error {
+	inRange := func(f float64) bool { return f > 0 && f < 1 }
+	if s.SmallWindowThresholdTokens <= 0 || !inRange(s.ReserveFraction) || !inRange(s.KeepRecentFraction) || s.ReserveFraction+s.KeepRecentFraction >= 1 {
+		return fmt.Errorf("agent spec: pi_compaction requires positive small_window_threshold_tokens and fractions in (0,1) summing below 1")
+	}
+	return nil
 }
 
 // AutoCompactSpec defines provider compaction routing and watchdog timing.
@@ -229,6 +245,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if spec.AutoCompact.CodexOnDemandLimitTokens <= 0 || strings.TrimSpace(spec.AutoCompact.CodexStatusPrompt) == "" {
 		return agentSpec{}, fmt.Errorf("agent spec: auto_compact requires positive codex_on_demand_limit_tokens and nonempty codex_status_prompt")
+	}
+	if err := spec.PiCompaction.validate(); err != nil {
+		return agentSpec{}, err
 	}
 	for provider, mode := range spec.AutoCompact.ProviderModes {
 		if !validMode(mode) {
@@ -442,6 +461,15 @@ func AgentReplyHistoryLimit() (int, error) {
 		return 0, err
 	}
 	return spec.ReplyHistoryLimit, nil
+}
+
+// PiCompaction returns the spec values for Pi small-window compaction overrides.
+func PiCompaction() (PiCompactionSpec, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return PiCompactionSpec{}, err
+	}
+	return spec.PiCompaction, nil
 }
 
 // ModelsLegend is the one-line key printed under `harnez agent models`.

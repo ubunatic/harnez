@@ -296,6 +296,9 @@ func primeAgentRoot(cfg *Config) string {
 	return fsutil.ExpandHome(cfg.PrimeAgentTarget)
 }
 
+// PiAgentRoot returns Pi's agent dir: PI_CODING_AGENT_DIR, else pi_agent_target from config.
+func PiAgentRoot(cfg *Config) string { return piAgentRoot(cfg) }
+
 func piAgentRoot(cfg *Config) string {
 	if env := os.Getenv("PI_CODING_AGENT_DIR"); env != "" {
 		return fsutil.ExpandHome(env)
