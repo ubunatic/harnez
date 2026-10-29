@@ -73,4 +73,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1006 | [1006-consolidate-shared-skills-and-project-local-guidance-patterns.md](1006-consolidate-shared-skills-and-project-local-guidance-patterns.md) | Consolidate shared skills and project-local guidance patterns | Open |
 | 1007 | [1007-evaluate-shared-agents-skills-discovery-across-providers.md](1007-evaluate-shared-agents-skills-discovery-across-providers.md) | Evaluate shared .agents skills discovery across providers | Open |
 | 1008 | [1008-add-optional-agent-start-and-resume-continuity-self-test.md](1008-add-optional-agent-start-and-resume-continuity-self-test.md) | Add optional agent start and resume continuity self-test | Open |
+| 1009 | [1009-install-pi-background-task-runner-globally-and-clarify-mcp-discovery.md](1009-install-pi-background-task-runner-globally-and-clarify-mcp-discovery.md) | Install Pi background task runner globally and clarify MCP discovery | Open |
 <!-- harnez:end issues-active-index -->
