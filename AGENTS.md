@@ -82,6 +82,12 @@ Run from project root.
 - Small fixes: direct commit is permitted once all tests pass and existing test assertions remain intact.
 - Larger changes & features: require a review pass before commit (orchestrated across subagents or by spawning a fresh reviewer subagent if acting as main agent) to verify test rigor, doc/ticket sync, and code clarity for future agents.
 
+## Git Output Parsing
+- `gitOutput` (`internal/issues/maintenance`) trims its result, which eats the leading space of
+  porcelain lines like ` M path` on the first line. Never feed it to a line-based parser; use
+  `porcelainStatus` (untrimmed) for `git status --porcelain`, or `exec.Command(...).Output()` and
+  split yourself. `gitOutput` is fine for single-value results (`rev-parse`) and emptiness checks.
+
 ## Troubleshooting & Log Exploration
 - Do not get trapped exhaustively browsing transcript/system logs.
 - If a root cause is not apparent after 1–2 targeted grep/tail inspections, stop reading logs, reason from first principles, or ask for guidance.
