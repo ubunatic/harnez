@@ -1,6 +1,6 @@
 # 1001 — committed agy workspace hook uses an absolute /home/uwe path and blocks every agy tool call on other machines
 
-**Status**: Open
+**Status**: Closed — Code landed as issue 996 before renumbering: b20befff (removed .agents/hooks.json and canary script, guard test internal/claude/hook_path_guard_test.go); renumbered in merge 3731684a; merged via PR #3. Live: argon-991c ran agy tools without exit-126 hook failures.
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
