@@ -18,6 +18,8 @@ compact_thresholds:
 # Agy lacks a reliable context count (issues 644 and 869).
 auto_compact:
   default_mode: manual
+  # lmcoder (served through Pi) is not listed: no verified context drop or native
+  # compaction exists for the local model yet, so it keeps the manual default.
   provider_modes: {claude: manual, codex: native, agy: disabled}
   watchdog_grace_ms: 20000
   # Legacy growth telemetry; dispatch uses full-context thresholds above.

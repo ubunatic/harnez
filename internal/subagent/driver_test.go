@@ -165,6 +165,9 @@ func TestLmcoderCoderListedAsPiSupported(t *testing.T) {
 	if _, ok := DriverFor(Model{Provider: "lmcoder", Name: "coder", Tier: "low"}, "").(PiDriver); !ok {
 		t.Fatal("DriverFor(lmcoder) is not PiDriver")
 	}
+	if _, ok := StreamDriverFor(Model{Provider: "lmcoder", Name: "coder", Tier: "low"}, "").(PiStreamDriver); !ok {
+		t.Fatal("StreamDriverFor(lmcoder) is not PiStreamDriver")
+	}
 }
 
 func TestCodexPassesReasoningEffort(t *testing.T) {
