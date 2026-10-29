@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
-**Related**: 1022, 1023, lmcoder 260
+**Related**: 1022, 1023, lmcoder 260, lmcoder 263 (bigger window for coder)
 
 ---
 
