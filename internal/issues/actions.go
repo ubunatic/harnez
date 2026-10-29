@@ -74,6 +74,21 @@ func DuplicateError(title string, matches []DuplicateMatch, thresholdPercent int
 	return errors.New(message.String())
 }
 
+// trimStatusPrefix drops a leading "<label> —" (or "<label> -") from reason,
+// case-insensitively, so "Closed — x" given to close is not doubled.
+func trimStatusPrefix(label, reason string) string {
+	if len(reason) <= len(label) || !strings.EqualFold(reason[:len(label)], label) {
+		return reason
+	}
+	rest := strings.TrimLeft(reason[len(label):], " \t")
+	for _, dash := range []string{"—", "-"} {
+		if after, ok := strings.CutPrefix(rest, dash); ok && len(rest) < len(reason[len(label):]) {
+			return strings.TrimSpace(after)
+		}
+	}
+	return reason
+}
+
 // ComposeStatus renders the status text produced by an issues lifecycle verb.
 func ComposeStatus(verb, reason string) (string, error) {
 	reason = strings.TrimSpace(reason)
@@ -82,6 +97,7 @@ func ComposeStatus(verb, reason string) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("issues: missing lifecycle label for %q", key)
 		}
+		reason = trimStatusPrefix(label, reason)
 		if reason == "" {
 			return label, nil
 		}
