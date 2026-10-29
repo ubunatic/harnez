@@ -23,10 +23,18 @@ func TestPrintServerSystemdStatusShowsOwnerAndHandoff(t *testing.T) {
 	}
 	var output bytes.Buffer
 	printServerSystemdStatus(&output, cfg, server.SystemdStatus{Available: true, Installed: true, Active: true, MainPID: 100, SocketPID: 200}, localServerStatusResponse{PID: 200})
-	for _, want := range []string{"MainPID=100", "socket owner: another process (PID 200)", "systemctl --user restart " + cfg.SystemdUnitName} {
+	for _, want := range []string{"MainPID=100", "socket owner: stray process (PID 200)", "systemctl --user restart " + cfg.SystemdUnitName} {
 		if !strings.Contains(output.String(), want) {
 			t.Errorf("status output missing %q:\n%s", want, output.String())
 		}
+	}
+	for _, bad := range []string{"another process", "hand back to systemd"} {
+		if strings.Contains(output.String(), bad) {
+			t.Errorf("status output has redundant line %q:\n%s", bad, output.String())
+		}
+	}
+	if n := strings.Count(output.String(), "socket owner:"); n != 1 {
+		t.Errorf("socket owner lines = %d, want 1:\n%s", n, output.String())
 	}
 }
 

@@ -456,7 +456,6 @@ func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.Sy
 	if !status.Installed {
 		fmt.Fprintln(out, "install the collector service with: harnez server install")
 		if status.SocketPID > 0 {
-			fmt.Fprintf(out, "socket owner: another process (PID %d)\n", status.SocketPID)
 			printStrayServerNotice(out, cfg, status)
 			printServerUptimeAndVersion(out, srv)
 		} else {
@@ -471,9 +470,7 @@ func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.Sy
 	if status.SocketPID == status.MainPID {
 		fmt.Fprintf(out, "socket owner: systemd service (PID %d)\n", status.SocketPID)
 	} else {
-		fmt.Fprintf(out, "socket owner: another process (PID %d)\n", status.SocketPID)
 		printStrayServerNotice(out, cfg, status)
-		fmt.Fprintf(out, "hand back to systemd with: systemctl --user restart %s\n", cfg.SystemdUnitName)
 	}
 	printServerUptimeAndVersion(out, srv)
 }
