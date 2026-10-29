@@ -78,6 +78,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		body        string
 	}{
 		{"bug-hunt", "Run a bug hunt over active P1/P2 bug tickets", "## 2. Re-verify (read-only)"},
+		{"value-scan", "Rank topic-scoped issues by expected value", "## Workflow"},
 		{"study", "Write a concise sprint, retrospective, or topic study", "## Required Sections"},
 		{"story", "Write the overall follow-up project story", "## Required Story Sections"},
 		{"tui-check", "Validate a terminal UI change cell by cell", "## 4. Live tmux check"},
@@ -106,6 +107,20 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		if !strings.Contains(string(installed), expected.body) || !strings.Contains(string(installed), expected.description) {
 			t.Errorf("installed skill %q is missing its expected description or workflow body", expected.name)
 		}
+	}
+
+	valueScanPath := filepath.Join(claudeSkillsDir, "value-scan", "SKILL.md")
+	valueScan, err := os.ReadFile(valueScanPath)
+	if err != nil {
+		t.Fatalf("expected %s to be installed: %v", valueScanPath, err)
+	}
+	valueScanSource, err := os.ReadFile(filepath.Join("..", "..", "docs", "commands", "value-scan.md"))
+	if err != nil {
+		t.Fatalf("read value-scan source: %v", err)
+	}
+	workflow := strings.TrimPrefix(string(valueScanSource), "---\ndisable-model-invocation: true\n---\n")
+	if workflow == string(valueScanSource) || !strings.Contains(string(valueScan), "disable-model-invocation: true") || !strings.HasSuffix(string(valueScan), workflow) {
+		t.Errorf("installed value-scan must be user-invoked and retain its complete source workflow")
 	}
 
 	storySkillPath := filepath.Join(claudeSkillsDir, "story", "SKILL.md")

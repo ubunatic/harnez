@@ -175,6 +175,7 @@ debloat:
     respect: user-invocable-only
     review: user-invocable-only
     roadmap: user-invocable-only
+    value-scan: user-invocable-only
     sprint: user-invocable-only
     sprinter: user-invocable-only
     standup: user-invocable-only
@@ -561,6 +562,11 @@ skills:
     license: AGPL-3.0-or-later
     description: "Product-manager-style roadmap creation/update from the open issue backlog (check issues -> check existing roadmap -> synthesize/reconcile by product value axis)"
     file: docs/commands/roadmap.md
+
+  - name: value-scan
+    license: AGPL-3.0-or-later
+    description: "Rank topic-scoped issues by expected value and identify provisional quick wins"
+    file: docs/commands/value-scan.md
 
   - name: publish
     license: AGPL-3.0-or-later

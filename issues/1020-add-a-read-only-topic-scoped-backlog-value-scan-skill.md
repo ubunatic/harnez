@@ -24,3 +24,7 @@ Unlike 978, this is a conversational topic scan, not generic triage or a workflo
 ## Verification
 
 Recheck live skill and tracker conventions before implementation. Verify installation and demonstrate the scan on a Harnez-tracked repository and a repository with a different documented tracker or representative fixture; include inaccessible tracker, broad topic and research-only cases. Confirm no tracker or repository changes by default and preserve user-managed content.
+
+## Handoff
+
+The managed skill and installation round-trip assertion are implemented. `make lint` and `make test-q1` passed; an isolated-home `harnez apply` installed the Pi skill with the expected workflow. The conversation's earlier Harnez skills-topic scan demonstrates the intended ranking, but did not exercise the newly installed skill. Live scans using the installed skill, including a non-Harnez tracker or fixture and unavailable-tracker/broad-topic cases, remain unverified; keep this issue open until those acceptance checks and an independent review are complete.
