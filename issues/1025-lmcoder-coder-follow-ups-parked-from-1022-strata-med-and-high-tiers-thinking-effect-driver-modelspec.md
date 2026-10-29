@@ -1,6 +1,6 @@
 # 1025 — lmcoder:coder follow-ups parked from 1022
 
-**Status**: Open
+**Status**: Closed — items 2 and 3: lmcoder 260 says all tiers are ignored, catalog already enables only low; item 1: owner treats strata like coder, compaction override already written by 1023 M1; item 4: asymmetry intended, ModelSpec only feeds agy's HARNEZ_AGENT_MODEL and PiDriver passes the model as arguments
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
@@ -35,3 +35,10 @@ Ticket 1022 (closed) added `lmcoder:coder` to the model catalog and drives it th
 - Untested in 260: a real Pi run with `reasoning: true`, a `chat_template_kwargs` override, run-to-run variance.
   Enabling thinking would be a new owner decision, not part of this ticket.
 - Items 1 (`strata`, parked until the owner asks) and 4 (`ModelSpec` asymmetry) remain open.
+
+## Result for items 1 and 4 (2026-10-29)
+- Item 1: owner note: treat `lmcoder:strata` like `coder` and file new issues only when a problem shows up.
+  `harnez apply` already writes its Pi compaction override (1023 M1). Nothing more to do here.
+- Item 4: the asymmetry is intended. `AgyDriver.ModelSpec` exists only to set `HARNEZ_AGENT_MODEL` for agy
+  (`internal/subagent/agy.go:52-53`). `PiDriver` has no such field and passes the model as Pi arguments, like
+  the claude and codex drivers, so the lmcoder branch has nothing to set.
