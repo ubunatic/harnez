@@ -1,6 +1,6 @@
 # 1009 — Install Pi background task runner globally and clarify MCP discovery
 
-**Status**: Open
+**Status**: Closed — User confirmed external Pi background completion and selftest; installation and guidance reviewed, lint and test-q1 passed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
