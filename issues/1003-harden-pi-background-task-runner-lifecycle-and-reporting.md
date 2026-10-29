@@ -1,6 +1,6 @@
 # 1003 — Harden Pi background task runner lifecycle and reporting
 
-**Status**: Open
+**Status**: Closed — Lifecycle hardened; 33 Pi tests, lint and test-q1 passed; independently reviewed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
