@@ -22,3 +22,9 @@ The same session could not run `/harnez-selftest`: its background task tools wer
 - Provide agent instructions for identifying and using exposed code-memory/search MCP tools, checking the project index and indexing when needed, with an honest fallback if tools are unavailable.
 - Add an appropriate managed agent instruction: if background tasks are troublesome, run the Harnez self-test once to learn the host's task workflow; report unavailable tools rather than guessing.
 - Before work, check live code, configuration and recent commits; verify the reported behavior remains current.
+
+## Handoff (2026-10-29)
+
+Global managed installation, duplicate coordination, MCP guidance and Pi documentation are implemented and independently reviewed. `make lint` and `make test-q1` passed; the host self-test passed with a shared explicit `--session` (instruction defect tracked in 1012). The user's normal `harnez apply` installed the runner globally and `harnez status` reported its files clean.
+
+Still open: verify in a trusted Pi session outside Harnez that the globally loaded model-callable tools run a task and deliver its automatic completion follow-up, and exercise self-test progression there. An isolated real-loader/RPC canary exposed commands, but had no authenticated model and does not prove agent-side notification. Do not copy or link user credentials or change real configuration for a canary without explicit approval. A prior attempt to redirect only some apply targets inadvertently changed real home artifacts; the user subsequently ran `make install && harnez apply`, and managed status reported the affected artifacts clean. Isolate all write targets, not just the named provider targets, before any future apply canary.
