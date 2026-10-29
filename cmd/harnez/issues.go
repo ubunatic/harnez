@@ -114,7 +114,8 @@ then the README is regenerated and the batch is committed once.
                     also selected when CLAUDE_CODE_REMOTE is set. Strong
                     duplicate matches block before gh issue create unless
                     --force is supplied. No fallback.
-  new [--force] [--number N] [title] Atomically reserve the next free issue number and create
+  new [--force] [--number N] [title]
+                    Atomically reserve the next free issue number and create
                     a Draft placeholder file (issues/<NNN>-<title-slug>.md,
                     or issues/<NNN>-reserved.md with no title), using
                     O_CREATE|O_EXCL so concurrent callers never collide. Non-
@@ -296,6 +297,7 @@ valid, exit-0 answer.`,
 					return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
 				}
 				fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
+				warnNumberAhead(cmd.ErrOrStderr(), dir, numberFlag)
 				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag)
 			}
 			if args[0] == "show" {
@@ -590,6 +592,23 @@ func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]s
 // -- and never commits.
 func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
 	return runIssuesNewWithForce(w, dir, title, jsonOutput, false, "")
+}
+
+// warnNumberAhead warns on w when an explicit --number skips past the next
+// free number; the reservation itself is still allowed.
+func warnNumberAhead(w io.Writer, dir, number string) {
+	n, err := strconv.Atoi(strings.TrimSpace(number))
+	if err != nil {
+		return
+	}
+	files, err := issues.Scan(filepath.Join(dir, "issues"))
+	if err != nil {
+		return
+	}
+	next := issues.NextNumberFromFiles(files)
+	if nextN, err := strconv.Atoi(next); err == nil && n > nextN {
+		fmt.Fprintf(w, "issues new: --number %d is ahead of next free %s; later tickets continue from %d\n", n, next, n+1)
+	}
 }
 
 func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force bool, number string) error {

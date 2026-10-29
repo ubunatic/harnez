@@ -746,8 +746,8 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 	explicit := ""
 	if opts.Number != "" {
 		n, err := strconv.Atoi(strings.TrimSpace(opts.Number))
-		if err != nil || n < 0 {
-			return "", "", fmt.Errorf("invalid ticket number %q (expected a non-negative integer)", opts.Number)
+		if err != nil || n < 1 {
+			return "", "", fmt.Errorf("invalid ticket number %q (expected a positive integer)", opts.Number)
 		}
 		explicit = fmt.Sprintf("%03d", n)
 	}

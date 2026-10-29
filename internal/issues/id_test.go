@@ -74,6 +74,11 @@ func TestReserveExplicitNumber(t *testing.T) {
 	if num, _, err := Reserve(dir, ReserveOptions{Title: "Short", Number: "7"}); err != nil || num != "007" {
 		t.Fatalf("short number: %s %v", num, err)
 	}
+	for _, bad := range []string{"0", "-5"} {
+		if _, _, err := Reserve(dir, ReserveOptions{Number: bad}); err == nil {
+			t.Fatalf("accepted number %s", bad)
+		}
+	}
 	if _, _, err := Reserve(dir, ReserveOptions{Number: "x1"}); err == nil {
 		t.Fatal("accepted invalid number")
 	}
