@@ -46,6 +46,13 @@ The local `coder` model has a 32,768-token context window (`~/.pi/agent/models.j
   keeps searching. Next candidates: a smaller fixed prompt (1027 `plain` mode), a narrower review prompt, or a
   turn/tool-call limit. The `pi` child outlived `timeout` again but exited on its own shortly after.
 
+## Narrow-prompt attempt (2026-10-29 23:28, host), not a test result
+- Prompt: one fixed `git diff` over the 5 changed files, at most 4 more tool calls, at most 5 findings
+  (scratchpad `r1024-narrow.md`).
+- Run `r1024c`: `pi reported error: the engine stopped unexpectedly (exit code -15)` after 11 s; retry `r1024d`:
+  `502 status code` after 15 s. Both with 0 tool calls. Proxy `/v1/models` afterwards: `coder` `live: false`.
+  The server was being restarted by another agent; the run is owed once `coder` is back.
+
 ## Notes
 
 - Out of scope: switching the proxy model. `lmcoder:strata` is not tried.
