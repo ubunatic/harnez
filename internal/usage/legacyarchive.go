@@ -376,7 +376,7 @@ func importArchivedHistory(ctx context.Context, store *usagestore.Store, path st
 			agent := AgentUsage{AgentID: entry.Agent, LastRefreshed: entry.Timestamp}
 			if entry.Group != "" {
 				agent.ModelGroups = []ModelGroup{{Name: entry.Group, Windows: []QuotaWindow{window}}}
-			} else if strings.Contains(strings.ToLower(entry.Window), "week") {
+			} else if isLongQuotaWindowName(strings.ToLower(entry.Window)) {
 				agent.Weekly = &window
 			} else {
 				agent.Session = &window

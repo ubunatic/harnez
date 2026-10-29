@@ -1109,6 +1109,8 @@ func NormalizeWindowKey(provider, pool, name string) string {
 	switch {
 	case strings.Contains(name, "week"), strings.Contains(name, "7-day"), strings.Contains(name, "7 day"), strings.Contains(compact, "7d"), strings.Contains(compact, "sevenday"):
 		return "weekly"
+	case strings.Contains(name, "month"), strings.Contains(name, "30-day"), strings.Contains(name, "30 day"):
+		return "monthly"
 	case strings.Contains(name, "5-hour"), strings.Contains(name, "5 hour"), strings.Contains(compact, "fivehour"), strings.Contains(compact, "5h"), strings.Contains(name, "session"):
 		return "five_hour"
 	case strings.Contains(name, "spend"):

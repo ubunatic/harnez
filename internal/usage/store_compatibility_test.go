@@ -214,3 +214,14 @@ func TestApplyStoredWindowsDropsStatuslineDefaultWhenModelGroupsExist(t *testing
 		t.Fatalf("model groups = %+v, want the fresh Gemini window", agent.ModelGroups)
 	}
 }
+
+func TestApplyStoredWindowsKeepsMonthlyInLongSlot(t *testing.T) {
+	for _, name := range []string{"Monthly", "Monthly (stale)", "30-day", "30 day"} {
+		var agent AgentUsage
+		key := usagestore.NormalizeWindowKey("codex", "", name)
+		applyStoredWindows(&agent, []usagestore.Window{{Key: key, Name: name, Source: "test", UsedFraction: 0.1}}, time.Now())
+		if agent.Weekly == nil || agent.Session != nil {
+			t.Errorf("%q (key %q): Weekly = %+v, Session = %+v; want the long slot only", name, key, agent.Weekly, agent.Session)
+		}
+	}
+}

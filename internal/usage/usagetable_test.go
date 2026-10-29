@@ -57,6 +57,22 @@ func TestUsageTableOneRowPerQuotaWindow(t *testing.T) {
 	}
 }
 
+func TestUsageTableShowsMonthlyWindowWithoutFiveHourRow(t *testing.T) {
+	agent := AgentUsage{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true, PlanTier: "Free",
+		Weekly: &QuotaWindow{Name: "Monthly", UsedPercent: 0, DurationLeft: 29 * 24 * time.Hour}}
+	var rows []string
+	for _, l := range usageTableLines([]AgentUsage{agent}, nil, true, testTime) {
+		rows = append(rows, strings.Join(strings.Fields(stripANSI(l)), " "))
+	}
+	text := strings.Join(rows, "\n")
+	if !strings.Contains(text, "OpenAI Codex monthly 0%") || strings.Contains(text, "5h") || strings.Contains(text, "weekly") {
+		t.Fatalf("table rows:\n%s", text)
+	}
+	if lines := allUsageLinesAt(UsageSummary{Agents: []AgentUsage{agent}}, 100, false, testTime, time.Minute); len(lines) == 0 || !strings.Contains(stripANSI(lines[0]), "OpenAI Codex") {
+		t.Fatalf("compact output lost the Monthly window: %q", lines)
+	}
+}
+
 func TestUsageTableHidesTokenColumns(t *testing.T) {
 	lines := usageTableLines(usageTableFixture(), nil, false, testTime)
 	text := stripANSI(strings.Join(lines, "\n"))
@@ -162,6 +178,9 @@ func TestQuotaWindowKind(t *testing.T) {
 		"Session (5-hour)":          "5h",
 		"5-Hour (stale)":            "5h",
 		"Five Hour Limit Remaining": "5h",
+		"Monthly":                   "monthly",
+		"Monthly (stale)":           "monthly",
+		"30-day":                    "monthly",
 		"Opus":                      "Opus",
 	} {
 		if got := quotaWindowKind(name); got != want {

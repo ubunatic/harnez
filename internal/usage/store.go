@@ -598,7 +598,7 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 			continue
 		}
 		name := strings.ToLower(r.Name)
-		if r.Key == "weekly" || strings.Contains(name, "week") || strings.Contains(name, "7-day") {
+		if r.Key == "weekly" || r.Key == "monthly" || isLongQuotaWindowName(name) {
 			agent.Weekly = &w
 		} else if agent.Session == nil {
 			agent.Session = &w
@@ -705,7 +705,7 @@ func importCompatibility(s *usagestore.Store, ctx context.Context, homeDir strin
 		u := AgentUsage{AgentID: e.Agent, LastRefreshed: e.Timestamp}
 		if e.Group != "" {
 			u.ModelGroups = []ModelGroup{{Name: e.Group, Windows: []QuotaWindow{w}}}
-		} else if strings.Contains(strings.ToLower(e.Window), "week") {
+		} else if isLongQuotaWindowName(strings.ToLower(e.Window)) {
 			u.Weekly = &w
 		} else {
 			u.Session = &w
