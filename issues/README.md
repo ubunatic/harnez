@@ -69,4 +69,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 997 | [997-code-box-in-harnez-usage-for-configured-repos-pr-counts-and-latest-pr-age.md](997-code-box-in-harnez-usage-for-configured-repos-pr-counts-and-latest-pr-age.md) | Code box in harnez usage for configured repos PR counts and latest PR age | Open |
 | 1002 | [1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md](1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md) | harnez apply should give agy an allowlist that steers agents to make and Go | Open |
 | 1003 | [1003-harden-pi-background-task-runner-lifecycle-and-reporting.md](1003-harden-pi-background-task-runner-lifecycle-and-reporting.md) | Harden Pi background task runner lifecycle and reporting | Open |
+| 1004 | [1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md](1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md) | TestGoldenFontAssets fails: all five golden font PNGs are stale | Open |
 <!-- harnez:end issues-active-index -->
