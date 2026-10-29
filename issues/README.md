@@ -72,4 +72,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1005 | [1005-backfill-historical-closed-ticket-outcomes-flagged-by-status.md](1005-backfill-historical-closed-ticket-outcomes-flagged-by-status.md) | Backfill historical closed-ticket outcomes flagged by status | Open |
 | 1006 | [1006-consolidate-shared-skills-and-project-local-guidance-patterns.md](1006-consolidate-shared-skills-and-project-local-guidance-patterns.md) | Consolidate shared skills and project-local guidance patterns | Open |
 | 1007 | [1007-evaluate-shared-agents-skills-discovery-across-providers.md](1007-evaluate-shared-agents-skills-discovery-across-providers.md) | Evaluate shared .agents skills discovery across providers | Open |
+| 1008 | [1008-add-optional-agent-start-and-resume-continuity-self-test.md](1008-add-optional-agent-start-and-resume-continuity-self-test.md) | Add optional agent start and resume continuity self-test | Open |
 <!-- harnez:end issues-active-index -->
