@@ -725,6 +725,10 @@ func ApplyAllVariant(target string, cfg *Config, opts ApplyOptions) error {
 		return err
 	}
 
+	if err := applyPiBackgroundTasks(r, cfg, selection); err != nil {
+		return err
+	}
+
 	if err := applyCodexHooks(r, cfg, selection); err != nil {
 		return err
 	}
@@ -793,6 +797,9 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 	}
 	if err := report(diffSkills(cfg, selection)); err != nil {
 		return false, err
+	}
+	if err := report(diffPiBackgroundTasks(cfg, selection)); err != nil {
+		return false, fmt.Errorf("pi background tasks: %w", err)
 	}
 	// issue 491 M5: check Codex/AGY under the resolved selection directly
 	// rather than skipping them because a filtered config blanked their
@@ -962,6 +969,9 @@ func CleanAll(target string, cfg *Config) error {
 			}
 			fmt.Printf("  removed %s\n", skillDir)
 		}
+	}
+	if _, err := removeManagedPiBackgroundTasks(cfg); err != nil {
+		return fmt.Errorf("pi background tasks: %w", err)
 	}
 	if cfg.CodexHooksTarget != "" {
 		hooksPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
