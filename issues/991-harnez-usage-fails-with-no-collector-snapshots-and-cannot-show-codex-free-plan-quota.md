@@ -79,3 +79,8 @@ architectural or OS blocker, or no progress, clear the goal and write a failure 
   fails without this change too. File it separately if no ticket covers it.
 - Still open: Expected items 1 (empty-store message, unit dirs, stray server) and 3 (picks
   fallback, see 992).
+
+## Handoff (host, 2026-10-29)
+
+A code-checked refinement by Argon (4 ordered items with file:line, expected behaviour and tests;
+item 4 may move to 992) waits for the owner go: `docs/studies/2026-10-28-argon-991-refinement-draft.md`.
