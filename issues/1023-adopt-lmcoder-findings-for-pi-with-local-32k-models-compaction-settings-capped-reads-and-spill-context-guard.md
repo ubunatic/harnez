@@ -86,10 +86,34 @@ Verification: reproduce with a 32k local model and default settings (length stop
 - Host choice: the window fractions (reserve about 40%, keep recent about 25%) and the warning threshold (64k) are
   configurable values, so they go in `spec/` with a schema, not as Go defaults (`docs/Spec.md`).
 
+- Host choice, after the searcher audit: the settings go into the global Pi settings file as
+  `compaction.modelOverrides["<provider>/<id>"]`, written by `harnez apply` (which already locates the Pi agent dir,
+  `piAgentRoot` in `internal/claude/apply.go:299`), one entry per model in `<agentDir>/models.json` whose
+  `contextWindow` is below the threshold. Reasons: a per-session `PI_CODING_AGENT_DIR` loses `auth.json`,
+  `models.json` and the sessions that resume needs; a `<cwd>/.pi/settings.json` writes into the user's repo and is
+  ignored for untrusted projects; a global per-model override also fixes the host Pi, which is this ticket's
+  motivation, and leaves large-window models alone. The window comes from Pi's own `models.json`, not a copy in
+  harnez. Apply must keep every other key in `settings.json` and keep entries the user wrote by hand.
+
+## Searcher audit (2026-10-29, `haiku:low`)
+- Pi is launched by `piRunArgs`/`piResumeArgs`/`piModelArgs` (`internal/subagent/pi.go:113-125`) through
+  `runProviderCLI` (`internal/subagent/process.go:100`); harnez passes no Pi settings today.
+- Pi 1.4.0: defaults `reserveTokens` 16384, `keepRecentTokens` 20000 (`core/settings-defaults.js:8-11`); global
+  `<agentDir>/settings.json` deep-merged under project `<cwd>/.pi/settings.json` (`settings-manager.js:220-240`);
+  `compaction.modelOverrides` keyed `provider/id` (`settings-manager.js:650`). Not yet checked: whether the override
+  wins over the plain field, and whether a CLI flag exists.
+- `lmcoder`/`coder` has `contextWindow` 32768 in `~/.pi/agent/models.json`; harnez never reads it.
+- Spec home: `spec/agent.yaml` beside `compact_thresholds`, schema `spec/schemas/agent.schema.json`, loader
+  `internal/subagent/agentspec.go:204,373`.
+- Warning pattern: `cmd/harnez/agent_run.go:57`. Tests: `internal/subagent/pi_test.go:27,40`,
+  `internal/subagent/agentspec_test.go`.
+
 ## Sprint 2026-10-29 (items 1 and 2)
-- M1 (derived compaction settings): when harnez starts Pi with a model whose context window is below the
-  threshold, Pi gets `compaction.reserveTokens` and `keepRecentTokens` derived from that window. Unit tests for the
-  derivation, including 32768 giving values near 14000/8000, and windows at and above the threshold left alone.
-- M2 (warning): a visible warning when a Pi session runs below the threshold with Pi's default compaction settings.
+- M1 (derived compaction settings): `harnez apply` writes `compaction.modelOverrides["<provider>/<id>"]` with
+  `reserveTokens` and `keepRecentTokens` derived from each small-window model in Pi's `models.json` (see Decision).
+  Unit tests for the derivation (32768 gives values near 14000/8000; at and above the threshold no entry), for
+  keeping unrelated keys and hand-written overrides, for idempotency, and for a missing or unreadable `models.json`.
+- M2 (warning): `harnez agent start` with a Pi model below the threshold and no compaction override for it prints a
+  warning naming the model, its window and the fix (`harnez apply`).
 - M3 (live check): one `harnez agent start --model lmcoder:coder` run with a prompt large enough to pass about 20k
   tokens, before and after, recording prompt tokens and stop reason.
