@@ -52,6 +52,19 @@ synchronous start itself was not covered.
   Reproduction test first: start `harnez agent start` (or the start function) with a fake provider that runs
   `sleep 30` and records its PID, send SIGTERM to harnez, assert the child is gone within a bounded wait and the
   session status is `stopped`. Also SIGINT. Negative case: a normal completed turn still ends `done`, not `stopped`.
+- M1 plan accepted (developer `d1029`, 58 s): `agentSignalContext` with `context.WithCancelCause` in new
+  `cmd/harnez/agent_signal.go`, wired in `withAgentTimeout` (`agent_run.go:154`, covers all sync start/resume
+  call sites) and the detached runner (`agent_async.go:362,413`); signal cause saved as `stopped` in the start
+  error branch and before `recordResumeFailure` (not counted as a resume failure); tests in new
+  `cmd/harnez/agent_signal_test.go` reusing the `agent_stop_test.go:21` fixture; doc paragraph in
+  `docs/HarnezAgentArchitecture.md`.
+  Host pre-work for the write turn:
+  - After the first signal, restore default handling (call the NotifyContext stop) so a second Ctrl-C or SIGTERM
+    ends harnez at once if the cleanup hangs.
+  - Exit code: plain non-zero is enough; add 128+signal only if `clilog.go` already carries exit codes.
+  - The codex case must not make the test wait for the 15 s `WaitDelay`: if the fake codex ignores SIGINT, assert
+    the bounded outcome you actually get and keep the test under a few seconds.
+  - A `--timeout` deadline must still be reported as a timeout, not as a signal (test it).
 - M2 (live check, host): `timeout 20 harnez agent start --model lmcoder:coder ...` with a long prompt; afterwards
   no `pi` process is left and `harnez agent list` shows the session stopped.
 
