@@ -1,6 +1,6 @@
 # 1022 — Add lmcoder coder and strata models through the x600 proxy
 
-**Status**: Open — M4 pre-work from the lmcoder:coder one-shot review: compaction mode and streaming driver test
+**Status**: Closed — M4 done in 09541733: provider_modes comment (manual default kept, no verified compaction for lmcoder); TestLmcoderCoderListedAsPiSupported now asserts StreamDriverFor maps lmcoder to PiStreamDriver, and a temporary guard made it fail. make test-q1: no --- FAIL, internal/subagent and internal/modelcatalog ok. lmcoder:coder live result from M3 stands. Parked: lmcoder:strata (out of scope); med/high tiers; --thinking low effect unverified; ModelSpec asymmetry in driver.go.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
