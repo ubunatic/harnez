@@ -622,3 +622,31 @@ test("DefaultResourceLoader: a reload that does not retire the previous runtime 
     assert.equal(isClaimed(bus), false, "retiring the first runtime releases the claim");
   });
 });
+
+test("DefaultResourceLoader: plain reload() after a trusted startup flips ownership to the project copy in the new runtime, one set", { skip: SKIP }, async () => {
+  await withIsolatedPi(async (pi) => {
+    const runtime = scenario(pi, { project: true, global: true });
+    const bus = pi.createEventBus();
+    const loader = resourceLoaderFor(pi, runtime, bus);
+    const startup = await reloadWithTrust(loader, true);
+    assertOneSet(startup, "startup, trusted");
+    const startupOwner = startup.extensions.find((extension: any) => extension.tools.size > 0);
+    assert.ok(startupOwner.resolvedPath.startsWith(join(runtime.agentDir, "extensions")), `startup owner is the global copy, got ${startupOwner.resolvedPath}`);
+
+    // No resolveProjectTrust here: reload() keeps the persisted trust from the startup pass, so the project copy loads.
+    await retireExtensions(loader);
+    await loader.reload();
+    const reloaded = loader.getExtensions();
+    assert.notEqual(reloaded, startup, "the reload produced a new runtime");
+    assertOneSet(reloaded, "plain reload after trusted startup");
+    const owners = reloaded.extensions.filter((extension: any) => extension.tools.size > 0);
+    assert.equal(owners.length, 1, "exactly one extension owns the tools after the reload");
+    assert.notEqual(owners[0], startupOwner, "ownership flips to the extension of the new runtime");
+    assert.ok(owners[0].resolvedPath.startsWith(runtime.cwd), `the project copy owns after a plain reload, got ${owners[0].resolvedPath}`);
+    assert.equal(isClaimed(bus), true, "the new runtime holds the bus claim while it is live");
+
+    await retireExtensions(loader);
+    assert.equal(isClaimed(bus), false, "retiring the new runtime releases the claim");
+    assertNoSessionsWritten(runtime.agentDir);
+  });
+});

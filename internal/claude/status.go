@@ -144,6 +144,16 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 			}
 		}
 	}
+	piRows, err := piBackgroundStatus(cfg, selection)
+	if err != nil {
+		return fmt.Errorf("status: pi background tasks: %w", err)
+	}
+	for _, row := range piRows {
+		checks = append(checks, entry{
+			label: row.label,
+			state: row.state,
+		})
+	}
 	for _, adapter := range distillAdapters(cfg) {
 		adapter := adapter
 		checks = append(checks, entry{
