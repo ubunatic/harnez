@@ -10,6 +10,23 @@ import (
 	"ubunatic.com/harnez/internal/jsonc"
 )
 
+// Rules is what harnez writes to agy's settings.json: allow/deny rules and
+// the toolPermission mode ("" leaves toolPermission alone).
+type Rules struct {
+	Allow          []string
+	Deny           []string
+	ToolPermission string
+}
+
+// Count is the number of settings entries harnez manages for these rules.
+func (r Rules) Count() int {
+	n := len(r.Allow) + len(r.Deny)
+	if r.ToolPermission != "" {
+		n++
+	}
+	return n
+}
+
 // TranslateClaudeRule maps one Claude permission rule to the agy rule with the
 // same reach (issue 1002, canaries 2 and 3). agy matches command(<prefix>) on a
 // word boundary and read_file/write_file(<dir>) on the whole directory. Rules
@@ -73,40 +90,41 @@ func expandRule(rule, home string) string {
 	return rule
 }
 
-// TranslateRules builds the agy allow/deny lists from Claude's rules plus the
-// spec extras, and returns the Claude rules it could not map.
-func TranslateRules(claudeAllow, claudeDeny []string, extra PermissionsSpec, home string) (allow, deny, unmapped []string) {
+// TranslateRules builds the agy rules from Claude's rules plus the spec
+// extras, and returns the Claude rules it could not map.
+func TranslateRules(claudeAllow, claudeDeny []string, extra PermissionsSpec, home string) (r Rules, unmapped []string) {
 	add := func(dst []string, rule string) []string {
 		if slices.Contains(dst, rule) {
 			return dst
 		}
 		return append(dst, rule)
 	}
-	for _, r := range claudeAllow {
-		if a, ok := TranslateClaudeRule(r, home); ok {
-			allow = add(allow, a)
+	for _, c := range claudeAllow {
+		if a, ok := TranslateClaudeRule(c, home); ok {
+			r.Allow = add(r.Allow, a)
 		} else {
-			unmapped = append(unmapped, r)
+			unmapped = append(unmapped, c)
 		}
 	}
-	for _, r := range claudeDeny {
-		if a, ok := TranslateClaudeRule(r, home); ok {
-			deny = add(deny, a)
+	for _, c := range claudeDeny {
+		if a, ok := TranslateClaudeRule(c, home); ok {
+			r.Deny = add(r.Deny, a)
 		} else {
-			unmapped = append(unmapped, r)
+			unmapped = append(unmapped, c)
 		}
 	}
-	for _, r := range extra.Allow {
-		allow = add(allow, expandRule(r, home))
+	for _, a := range extra.Allow {
+		r.Allow = add(r.Allow, expandRule(a, home))
 	}
-	for _, r := range extra.Deny {
-		deny = add(deny, expandRule(r, home))
+	for _, a := range extra.Deny {
+		r.Deny = add(r.Deny, expandRule(a, home))
 	}
-	return allow, deny, unmapped
+	r.ToolPermission = extra.ToolPermission
+	return r, unmapped
 }
 
 // PermissionRules translates Claude's rules with the embedded spec extras.
-func PermissionRules(claudeAllow, claudeDeny []string) (allow, deny, unmapped []string) {
+func PermissionRules(claudeAllow, claudeDeny []string) (Rules, []string) {
 	home, _ := os.UserHomeDir()
 	return TranslateRules(claudeAllow, claudeDeny, MustLoadSpec().Permissions, home)
 }
@@ -149,54 +167,69 @@ func writeSettings(path string, doc map[string]any) (bool, error) {
 	return true, os.WriteFile(path, data, 0644)
 }
 
-// ApplyPermissions adds allow/deny rules to agy's settings.json, keeping the
-// user's own rules and every other key. It never sets toolPermission.
-func ApplyPermissions(path string, allow, deny []string) (bool, error) {
+// ApplyPermissions adds the rules to agy's settings.json, keeping the user's
+// own rules and every other key. toolPermission is set only when absent, so a
+// value the user chose stays.
+func ApplyPermissions(path string, r Rules) (bool, error) {
 	doc := jsonc.Read(path)
 	perm, err := permissionsObject(doc, path)
 	if err != nil {
 		return false, err
 	}
-	for key, rules := range map[string][]string{"allow": allow, "deny": deny} {
+	for key, rules := range map[string][]string{"allow": r.Allow, "deny": r.Deny} {
 		list := stringList(perm[key])
-		for _, r := range rules {
-			if !slices.Contains(list, r) {
-				list = append(list, r)
+		for _, rule := range rules {
+			if !slices.Contains(list, rule) {
+				list = append(list, rule)
 			}
 		}
 		if len(list) > 0 {
 			perm[key] = list
 		}
 	}
-	if len(perm) == 0 {
+	if len(perm) > 0 {
+		doc["permissions"] = perm
+	}
+	if _, set := doc["toolPermission"]; r.ToolPermission != "" && !set {
+		doc["toolPermission"] = r.ToolPermission
+	}
+	if len(doc) == 0 {
 		return false, nil
 	}
-	doc["permissions"] = perm
 	return writeSettings(path, doc)
 }
 
-// PermissionsStatus reports how many wanted rules are missing from settings.json.
-func PermissionsStatus(path string, allow, deny []string) (missing int) {
-	perm, _ := jsonc.Read(path)["permissions"].(map[string]any)
-	for key, rules := range map[string][]string{"allow": allow, "deny": deny} {
+// PermissionsStatus reports how many managed entries are missing from
+// settings.json. A toolPermission the user set to another value is not missing.
+func PermissionsStatus(path string, r Rules) (missing int) {
+	doc := jsonc.Read(path)
+	perm, _ := doc["permissions"].(map[string]any)
+	for key, rules := range map[string][]string{"allow": r.Allow, "deny": r.Deny} {
 		have := stringList(perm[key])
-		for _, r := range rules {
-			if !slices.Contains(have, r) {
+		for _, rule := range rules {
+			if !slices.Contains(have, rule) {
 				missing++
 			}
 		}
 	}
+	if _, set := doc["toolPermission"]; r.ToolPermission != "" && !set {
+		missing++
+	}
 	return missing
 }
 
-// RemovePermissions removes the given rules and leaves user-added rules alone.
-func RemovePermissions(path string, allow, deny []string) (bool, error) {
+// RemovePermissions removes the given rules, and toolPermission when it still
+// has harnez's value; user-added rules stay.
+func RemovePermissions(path string, r Rules) (bool, error) {
+	if _, err := os.Stat(path); err != nil {
+		return false, nil
+	}
 	doc := jsonc.Read(path)
 	perm, err := permissionsObject(doc, path)
-	if err != nil || len(perm) == 0 {
+	if err != nil {
 		return false, err
 	}
-	for key, rules := range map[string][]string{"allow": allow, "deny": deny} {
+	for key, rules := range map[string][]string{"allow": r.Allow, "deny": r.Deny} {
 		if _, ok := perm[key]; !ok {
 			continue
 		}
@@ -211,6 +244,9 @@ func RemovePermissions(path string, allow, deny []string) (bool, error) {
 		delete(doc, "permissions")
 	} else {
 		doc["permissions"] = perm
+	}
+	if r.ToolPermission != "" && doc["toolPermission"] == r.ToolPermission {
+		delete(doc, "toolPermission")
 	}
 	return writeSettings(path, doc)
 }

@@ -11,7 +11,11 @@ disallowed_tools:
 # tools; agy does the same work with shell commands, so it needs these extra prefixes.
 # Rule syntax: command(<prefix>) (word-boundary prefix), read_file(<path>), write_file(<path>);
 # `~/` expands to the home directory.
+# tool_permission is written to agy's `toolPermission`. "always-proceed" lets agy run every tool
+# without asking, like Claude in auto mode: the machine is the sandbox (owner decision 2026-10-29).
+# A different value the user set themselves is kept. Empty: harnez leaves the key alone.
 permissions:
+  tool_permission: "always-proceed"
   allow:
     - "command(cat)"
     - "command(head)"

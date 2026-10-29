@@ -25,6 +25,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "tool_permission": {
+          "type": "string"
+        },
         "allow": {
           "type": "array",
           "items": {

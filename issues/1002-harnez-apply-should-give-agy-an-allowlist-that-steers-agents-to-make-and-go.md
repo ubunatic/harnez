@@ -187,3 +187,20 @@ Real settings written by `harnez apply` (68 allow rules), no restore. One headle
 
 Not yet checked: an interactive `harnez-agy` session; whether `mcp(harnez/*)` is a valid agy rule
 for the unmapped `mcp__harnez__*`.
+
+## Decision (owner, 2026-10-29, later): `harnez apply` sets `toolPermission: always-proceed`
+
+The machine is the sandbox, as for Claude in auto mode: fix the sandbox, not the agent. Uwe's
+other host already runs agy with `toolPermission: "always-proceed"`. The allowlist stays (it is not
+replaced), so a user who switches toolPermission back keeps the rules.
+
+- `spec/agy_tools.yaml` `permissions.tool_permission: "always-proceed"`; empty would leave the key alone.
+- Apply writes it only when the key is absent, so a value the user set themselves is kept.
+  `revert --managed` removes it only while it still has harnez's value.
+- Difference to Claude auto mode, for the record: Claude still has a classifier that reviews each
+  action; agy with always-proceed has none.
+
+## Canary 5 (host, 2026-10-29): always-proceed after `harnez apply`
+
+One headless `agy:flash38:low` developer turn with commands not on the allowlist: `uptime`,
+`printenv HOME`, `id -un`, plus `cat go.mod`. All ran (status 3), no prompt, reply correct.

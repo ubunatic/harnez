@@ -206,9 +206,9 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 		agyDir := fsutil.ExpandHome(cfg.AgyTarget)
 		if _, err := os.Stat(agyDir); err == nil {
 			settingsPath := agy.StatusLineSettingsPath(agyDir)
-			allow, deny, _ := agy.PermissionRules(cfg.Permissions.Allow, cfg.Permissions.Deny)
+			rules, _ := agy.PermissionRules(cfg.Permissions.Allow, cfg.Permissions.Deny)
 			state := "ok"
-			if missing := agy.PermissionsStatus(settingsPath, allow, deny); missing == len(allow)+len(deny) {
+			if missing := agy.PermissionsStatus(settingsPath, rules); missing == rules.Count() {
 				state = "missing"
 			} else if missing > 0 {
 				state = "drifted"

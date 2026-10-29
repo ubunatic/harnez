@@ -37,24 +37,34 @@ func TestTranslateClaudeRule(t *testing.T) {
 }
 
 func TestTranslateRulesAddsExtrasAndReportsUnmapped(t *testing.T) {
-	extra := PermissionsSpec{Allow: []string{"command(cat)", "command(ls)", "write_file(~/projects)"}}
-	allow, deny, unmapped := TranslateRules(
+	extra := PermissionsSpec{
+		ToolPermission: "always-proceed",
+		Allow:          []string{"command(cat)", "command(ls)", "write_file(~/projects)"},
+	}
+	r, unmapped := TranslateRules(
 		[]string{"Bash(ls *)", "mcp__harnez__*"}, []string{"Bash(git push *)"}, extra, "/h")
 	wantAllow := []string{"command(ls)", "command(cat)", "write_file(/h/projects)"}
-	if !slices.Equal(allow, wantAllow) {
-		t.Errorf("allow = %v, want %v", allow, wantAllow)
+	if !slices.Equal(r.Allow, wantAllow) {
+		t.Errorf("allow = %v, want %v", r.Allow, wantAllow)
 	}
-	if !slices.Equal(deny, []string{"command(git push)"}) {
-		t.Errorf("deny = %v", deny)
+	if !slices.Equal(r.Deny, []string{"command(git push)"}) {
+		t.Errorf("deny = %v", r.Deny)
+	}
+	if r.ToolPermission != "always-proceed" {
+		t.Errorf("toolPermission = %q", r.ToolPermission)
 	}
 	if !slices.Equal(unmapped, []string{"mcp__harnez__*"}) {
 		t.Errorf("unmapped = %v", unmapped)
 	}
 }
 
-func TestEmbeddedSpecAllowsCat(t *testing.T) {
-	if !slices.Contains(MustLoadSpec().Permissions.Allow, "command(cat)") {
-		t.Fatal("spec/agy_tools.yaml permissions.allow must contain command(cat)")
+func TestEmbeddedSpecPermissions(t *testing.T) {
+	p := MustLoadSpec().Permissions
+	if !slices.Contains(p.Allow, "command(cat)") {
+		t.Error("spec/agy_tools.yaml permissions.allow must contain command(cat)")
+	}
+	if p.ToolPermission != "always-proceed" {
+		t.Errorf("spec tool_permission = %q, want always-proceed", p.ToolPermission)
 	}
 }
 
@@ -64,8 +74,12 @@ func TestApplyPermissionsMergesAndKeepsUserSettings(t *testing.T) {
 	if err := os.WriteFile(path, []byte(orig), 0644); err != nil {
 		t.Fatal(err)
 	}
-	allow, deny := []string{"command(ls)", "command(cat)"}, []string{"command(git push)"}
-	changed, err := ApplyPermissions(path, allow, deny)
+	r := Rules{
+		Allow:          []string{"command(ls)", "command(cat)"},
+		Deny:           []string{"command(git push)"},
+		ToolPermission: "always-proceed",
+	}
+	changed, err := ApplyPermissions(path, r)
 	if err != nil || !changed {
 		t.Fatalf("first apply: changed=%v err=%v", changed, err)
 	}
@@ -73,43 +87,74 @@ func TestApplyPermissionsMergesAndKeepsUserSettings(t *testing.T) {
 	if doc["model"] != "x" || doc["trustedWorkspaces"] == nil {
 		t.Errorf("user keys lost: %v", doc)
 	}
-	if _, ok := doc["toolPermission"]; ok {
-		t.Error("apply must not set toolPermission")
+	if doc["toolPermission"] != "always-proceed" {
+		t.Errorf("toolPermission = %v", doc["toolPermission"])
 	}
 	perm := doc["permissions"].(map[string]any)
 	if got := stringList(perm["allow"]); !slices.Equal(got, []string{"command(mine)", "command(ls)", "command(cat)"}) {
 		t.Errorf("allow = %v", got)
 	}
-	if got := stringList(perm["deny"]); !slices.Equal(got, deny) {
+	if got := stringList(perm["deny"]); !slices.Equal(got, r.Deny) {
 		t.Errorf("deny = %v", got)
 	}
-	if missing := PermissionsStatus(path, allow, deny); missing != 0 {
+	if missing := PermissionsStatus(path, r); missing != 0 {
 		t.Errorf("status missing = %d, want 0", missing)
 	}
-	if changed, err := ApplyPermissions(path, allow, deny); err != nil || changed {
+	if changed, err := ApplyPermissions(path, r); err != nil || changed {
 		t.Errorf("second apply must be a no-op: changed=%v err=%v", changed, err)
 	}
 
-	if changed, err := RemovePermissions(path, allow, deny); err != nil || !changed {
+	if changed, err := RemovePermissions(path, r); err != nil || !changed {
 		t.Fatalf("remove: changed=%v err=%v", changed, err)
 	}
-	perm = jsonc.Read(path)["permissions"].(map[string]any)
+	doc = jsonc.Read(path)
+	perm = doc["permissions"].(map[string]any)
 	if got := stringList(perm["allow"]); !slices.Equal(got, []string{"command(mine)"}) {
 		t.Errorf("after remove allow = %v, want user rule only", got)
 	}
 	if _, ok := perm["deny"]; ok {
 		t.Error("empty deny list should be dropped")
 	}
+	if _, ok := doc["toolPermission"]; ok {
+		t.Error("remove must drop harnez's toolPermission")
+	}
+}
+
+func TestApplyPermissionsKeepsUserToolPermission(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"toolPermission":"ask"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	r := Rules{Allow: []string{"command(ls)"}, ToolPermission: "always-proceed"}
+	if _, err := ApplyPermissions(path, r); err != nil {
+		t.Fatal(err)
+	}
+	if got := jsonc.Read(path)["toolPermission"]; got != "ask" {
+		t.Errorf("toolPermission = %v, want the user's ask", got)
+	}
+	if missing := PermissionsStatus(path, r); missing != 0 {
+		t.Errorf("a user-chosen toolPermission is not missing: %d", missing)
+	}
+	if _, err := RemovePermissions(path, r); err != nil {
+		t.Fatal(err)
+	}
+	if got := jsonc.Read(path)["toolPermission"]; got != "ask" {
+		t.Errorf("remove must keep the user's toolPermission, got %v", got)
+	}
 }
 
 func TestApplyPermissionsEmptyFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	changed, err := ApplyPermissions(path, []string{"command(ls)"}, nil)
+	r := Rules{Allow: []string{"command(ls)"}}
+	changed, err := ApplyPermissions(path, r)
 	if err != nil || !changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}
-	if missing := PermissionsStatus(path, []string{"command(ls)"}, nil); missing != 0 {
+	if missing := PermissionsStatus(path, r); missing != 0 {
 		t.Errorf("missing = %d", missing)
+	}
+	if _, ok := jsonc.Read(path)["toolPermission"]; ok {
+		t.Error("empty ToolPermission must not write the key")
 	}
 }
 
@@ -118,7 +163,7 @@ func TestApplyPermissionsRejectsNonObject(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"permissions":"all"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ApplyPermissions(path, []string{"command(ls)"}, nil); err == nil {
+	if _, err := ApplyPermissions(path, Rules{Allow: []string{"command(ls)"}}); err == nil {
 		t.Fatal("expected error for non-object permissions")
 	}
 }

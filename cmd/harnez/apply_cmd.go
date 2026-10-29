@@ -104,14 +104,15 @@ func newApplyCmd() *cobra.Command {
 				// issue 1002: agy gets the equivalent of Claude's permission rules.
 				agyDir := fsutil.ExpandHome(cfg.AgyTarget)
 				if _, err := os.Stat(agyDir); err == nil {
-					allow, deny, unmapped := agy.PermissionRules(cfg.Permissions.Allow, cfg.Permissions.Deny)
+					rules, unmapped := agy.PermissionRules(cfg.Permissions.Allow, cfg.Permissions.Deny)
 					agyPermPath := agy.StatusLineSettingsPath(agyDir)
-					changed, err := agy.ApplyPermissions(agyPermPath, allow, deny)
+					changed, err := agy.ApplyPermissions(agyPermPath, rules)
 					if err != nil {
 						return fmt.Errorf("Antigravity permissions: %w", err)
 					}
 					if changed {
-						fmt.Printf("  updated %s [permissions: %d allow, %d deny]\n", agyPermPath, len(allow), len(deny))
+						fmt.Printf("  updated %s [permissions: %d allow, %d deny; toolPermission: %s]\n",
+							agyPermPath, len(rules.Allow), len(rules.Deny), rules.ToolPermission)
 					}
 					if len(unmapped) > 0 {
 						fmt.Printf("  agy permissions: %d Claude rule(s) have no agy equivalent: %v\n", len(unmapped), unmapped)
@@ -308,8 +309,8 @@ func newRevertCmd() *cobra.Command {
 					} else if changed {
 						fmt.Printf("  removed %s [statusLine]\n", agyStatusLinePath)
 					}
-					allow, deny, _ := agy.PermissionRules(cfg.Permissions.Allow, cfg.Permissions.Deny)
-					if changed, err := agy.RemovePermissions(agyStatusLinePath, allow, deny); err != nil {
+					rules, _ := agy.PermissionRules(cfg.Permissions.Allow, cfg.Permissions.Deny)
+					if changed, err := agy.RemovePermissions(agyStatusLinePath, rules); err != nil {
 						return fmt.Errorf("Antigravity permissions: %w", err)
 					} else if changed {
 						fmt.Printf("  removed harnez rules from %s [permissions]\n", agyStatusLinePath)
