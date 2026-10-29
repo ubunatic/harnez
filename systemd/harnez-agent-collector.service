@@ -18,7 +18,7 @@ RuntimeDirectoryPreserve=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%t/harnez %S/harnez %C/harnez %h/.local/share/harnez
+ReadWritePaths=-%t/harnez -%S/harnez -%C/harnez -%h/.local/share/harnez
 
 [Install]
 WantedBy=default.target

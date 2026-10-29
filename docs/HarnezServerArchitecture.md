@@ -126,7 +126,8 @@ spool the server drains (830). A boundary test fails on any writable `telemetry.
 the server. On Linux, `harnez server install|status|restart|stop|logs|uninstall` manages the systemd user service.
 The unit restarts on failure. It sets `RuntimeDirectory=harnez` (preserved on stop): `/run/user/<uid>`
 is empty after boot, and a missing `ReadWritePaths` entry makes systemd fail every start with
-`226/NAMESPACE` (886). When a newer build finds that the old server is the unit's `MainPID`,
+`226/NAMESPACE` (886); entries are `-`-prefixed and `install` creates the cache, data and state
+directories. A collector that starts with an empty store fetches immediately even with no clients (991). When a newer build finds that the old server is the unit's `MainPID`,
 it rewrites the unit's `ExecStart` to its own executable and runs `systemctl --user restart`
 instead of taking the socket, so any install path (`go install`, `make install`, a release) keeps
 the server under systemd. Otherwise a successful takeover exits the old server with status 0,

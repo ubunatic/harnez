@@ -106,9 +106,43 @@ func newServerInstallCmd() *cobra.Command {
 			fmt.Fprintln(cmd.OutOrStdout(), "systemd user service is unavailable; run `harnez usage -w` to keep the collector running")
 			return nil
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "installed and started %s\n", cfg.SystemdUnitName)
+		// Detection only: a stray server is reported, never signalled or stopped.
+		socket, err := cfg.Socket()
+		if err != nil {
+			printServerInstallResult(cmd.OutOrStdout(), cfg, server.SystemdStatus{})
+			return nil
+		}
+		srv := queryLocalServerStatus(cmd.Context(), cfg, socket)
+		status, err := server.NewSystemdService(cfg).Status(cmd.Context(), srv.PID)
+		if err != nil {
+			status = server.SystemdStatus{}
+		}
+		printServerInstallResult(cmd.OutOrStdout(), cfg, status)
 		return nil
 	}}
+}
+
+// printServerInstallResult confirms the install and, when a server that
+// systemd does not manage holds the socket, tells the user how to hand it over.
+func printServerInstallResult(out io.Writer, cfg server.Config, status server.SystemdStatus) {
+	fmt.Fprintf(out, "installed and started %s\n", cfg.SystemdUnitName)
+	if isStrayServer(status) {
+		printStrayServerNotice(out, cfg, status)
+	}
+}
+
+// isStrayServer reports a socket owner that is not the unit's main process.
+func isStrayServer(status server.SystemdStatus) bool {
+	return status.SocketPID > 0 && status.SocketPID != status.MainPID
+}
+
+func printStrayServerNotice(out io.Writer, cfg server.Config, status server.SystemdStatus) {
+	fmt.Fprintf(out, "socket owner: stray process (PID %d), not managed by systemd\n", status.SocketPID)
+	if !status.Installed {
+		fmt.Fprintln(out, "stop it with: harnez server stop")
+		return
+	}
+	fmt.Fprintf(out, "stop it with: harnez server stop, then: systemctl --user restart %s\n", cfg.SystemdUnitName)
 }
 
 func newServerUninstallCmd() *cobra.Command {
@@ -423,6 +457,7 @@ func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.Sy
 		fmt.Fprintln(out, "install the collector service with: harnez server install")
 		if status.SocketPID > 0 {
 			fmt.Fprintf(out, "socket owner: another process (PID %d)\n", status.SocketPID)
+			printStrayServerNotice(out, cfg, status)
 			printServerUptimeAndVersion(out, srv)
 		} else {
 			fmt.Fprintln(out, "socket owner: none")
@@ -437,6 +472,7 @@ func printServerSystemdStatus(out io.Writer, cfg server.Config, status server.Sy
 		fmt.Fprintf(out, "socket owner: systemd service (PID %d)\n", status.SocketPID)
 	} else {
 		fmt.Fprintf(out, "socket owner: another process (PID %d)\n", status.SocketPID)
+		printStrayServerNotice(out, cfg, status)
 		fmt.Fprintf(out, "hand back to systemd with: systemctl --user restart %s\n", cfg.SystemdUnitName)
 	}
 	printServerUptimeAndVersion(out, srv)
