@@ -117,3 +117,6 @@ Verification: reproduce with a 32k local model and default settings (length stop
   warning naming the model, its window and the fix (`harnez apply`).
 - M3 (live check): one `harnez agent start --model lmcoder:coder` run with a prompt large enough to pass about 20k
   tokens, before and after, recording prompt tokens and stop reason.
+  Server notes from the owner: the proxy loads the model lazily on the first request, so a first reply can take
+  about 30 s; another agent works on the server and may restart it. A slow first reply or a connection error during
+  a restart is not a test result: retry once after it is back, and record it.
