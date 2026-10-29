@@ -68,6 +68,19 @@ synchronous start itself was not covered.
 - M2 (live check, host): `timeout 20 harnez agent start --model lmcoder:coder ...` with a long prompt; afterwards
   no `pi` process is left and `harnez agent list` shows the session stopped.
 
+## Delivery
+- M1 delivered (`e0a35fed`, signal stops the child): `agentSignalContext` in `cmd/harnez/agent_signal.go`, wired in
+  `withAgentTimeout` and both detached runners; start and resume save `stopped` with `interrupted by <SIG>`, resume
+  does not count it as a failure; a second signal gets the default action. Tests in `agent_signal_test.go`: claude
+  start SIGTERM/SIGINT, claude resume SIGTERM, codex start SIGTERM failed before the fix ("provider child still
+  running") and pass after (harnez exits 3-23 ms after the signal); a normal turn stays `completed`; `--timeout`
+  stays a deadline, not `stopped`. Developer `make test-q1`: exit 0, no `--- FAIL`, 129 packages ok. Host rerun
+  `go test ./cmd/harnez -run 'Signal|Stop'`: ok. Not tested: SIGHUP and the second signal (same code path).
+- M2 delivered (live, host, 2026-10-29 23:25): `timeout 25 harnez agent start --role reviewer --model lmcoder:coder`
+  ended with `interrupted by SIGTERM; provider stopped and session "m2-1029" can be resumed`, exit 124; no `pi`
+  process left; `harnez agent status --name m2-1029` shows `Status: stopped`. A stopped session is not shown by
+  `harnez agent list` (active sessions only), which is expected.
+
 /goal Make a signal to a synchronous `harnez agent start`/`resume` end the provider child and mark the session
 stopped, or stop and report when a provider cannot be stopped this way. Circuit breaker: on a loop or no progress,
 clear the goal and write a failure report. Re-check live code first; this ticket was written on 2026-10-29.
