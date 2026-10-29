@@ -100,7 +100,10 @@ test-ubuntu: ⚙️ container-test  # alias for container-test (Ubuntu 24.04, gi
 macos-ci: ⚙️  # trigger and watch macos-hello CI workflow on the GitHub mirror
 	bash scripts/macos-ci.sh
 
-check: ⚙️  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
+test-pi: ⚙️  # Pi background-task extension tests (node 22.18+; fails when node is missing)
+	bash scripts/test-pi.sh
+
+check: ⚙️ test-pi  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
 	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
 	GOWORK=off go test $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) ./...
@@ -108,7 +111,7 @@ check: ⚙️  # run static analysis and tests (GOWORK=off: catch go.mod pin dri
 check-fast: ⚙️  # fast local feedback loop
 	go test ./...
 
-test-short: ⚙️  # fast unit tier: go test -short (skips PTY/media/integration tests)
+test-short: ⚙️ test-pi  # fast unit tier: go test -short (skips PTY/media/integration tests) and the Pi extension tests
 	GOWORK=off go test -short $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) ./...
 
 test-pkg: ⚙️  # one package with -race, uncached: make test-pkg PKG=./internal/lint/...

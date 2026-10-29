@@ -62,7 +62,15 @@ jobs:
             ~/.cache/go-build
           key: go-unit-${{ hashFiles('go.sum') }}-${{ github.sha }}
           restore-keys: go-unit-${{ hashFiles('go.sum') }}-
+      # make test-short includes make test-pi, which needs node 22.18+ (TypeScript type stripping).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
       - run: bash scripts/install-dev-deps.sh
+      # Pi tests run in their own step first: inside make test-short their TAP output lands in unit.json, where the
+      # report keeps only a 40-line tail, so a failure would not show its test name. Here the full output is in the job log.
+      - name: make test-pi
+        run: make test-pi
       - name: make test-short
         id: test
         run: make test-short TESTFLAGS=-json > unit.json 2>&1

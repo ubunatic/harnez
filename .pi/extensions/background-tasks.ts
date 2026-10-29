@@ -1,119 +1,69 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import {
+  BackgroundTaskRunner,
+  defaultRunnerOptions,
+  loadBackgroundTaskConfig,
+  resolveTask,
+  type BackgroundTask,
+  type CancelOutcome,
+  type RunnerOptions,
+} from "../lib/background-task-runner.ts";
 
-interface BackgroundTask {
-  id: number;
-  command: string;
-  process: ChildProcess;
-  output: string;
-  startedAt: number;
-  status: "running" | "completed" | "failed" | "cancelled";
-  exitCode?: number | null;
-  completionNotified?: boolean;
-}
-
-const MAX_OUTPUT = 16_000;
-const TaskParams = Type.Object({
-  command: Type.String({ description: "Shell command to run in the background" }),
+// Bounds live in spec/ (see docs/Spec.md); the extension has no fallback values of its own.
+const CONFIG_PATH = fileURLToPath(new URL("../../spec/pi-background-tasks.yaml", import.meta.url));
+const TaskIdParams = Type.Object({
+  id: Type.Integer({ minimum: 1, description: "Background task ID from background_task, e.g. 1" }),
 });
 
-export default function (pi: ExtensionAPI) {
-  const tasks = new Map<number, BackgroundTask>();
-  let nextId = 1;
-  let shuttingDown = false;
+type Notify = { ui: { notify: (message: string, level: "info" | "error") => void } };
+type CommandHandler = Parameters<ExtensionAPI["registerCommand"]>[1]["handler"];
+
+/** Wires the runner into Pi. Tests pass overrides (fake spawn, clock, signal function, small bounds). */
+export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<RunnerOptions> = {}) {
+  const options: RunnerOptions = {
+    ...defaultRunnerOptions(loadBackgroundTaskConfig(CONFIG_PATH)),
+    ...overrides,
+  };
+  const runner = new BackgroundTaskRunner(options);
   let setStatus: ((text: string | undefined) => void) | undefined;
 
   const updateStatus = () => {
-    const running = [...tasks.values()].filter((task) => task.status === "running").length;
+    const running = [...runner.tasks.values()].filter((task) => task.status === "running").length;
     setStatus?.(running ? `Tasks: ${running}` : undefined);
   };
-
-  const notifyCompletion = (task: BackgroundTask) => {
-    if (shuttingDown || task.status === "cancelled" || task.completionNotified) return;
-    task.completionNotified = true;
-    const output = task.output || "(no output)";
+  runner.on("changed", updateStatus);
+  runner.on("finished", (task: BackgroundTask) => {
     pi.sendUserMessage(
-      `Background command #${task.id} finished (${task.status}, exit ${task.exitCode ?? "unknown"}).\nCommand: ${task.command}\nOutput:\n${output}\n\nInspect this result and report what it means. If it indicates unfinished work, continue appropriately.`,
+      `Background command #${task.id} finished (${task.status}, ${describeEnd(task)}).\nCommand: ${task.command}\nOutput:\n${task.output || "(no output)"}\n\nInspect this result and report what it means. If it indicates unfinished work, continue appropriately.`,
       { deliverAs: "followUp" },
     );
-  };
-
-  const startTask = (command: string, cwd: string): BackgroundTask => {
-    const cleanCommand = command.trim();
-    if (!cleanCommand) throw new Error("Provide a command: /task <command>");
-
-    const child = spawn(process.env.SHELL || "/bin/sh", ["-lc", cleanCommand], {
-      cwd,
-      env: process.env,
-      detached: process.platform !== "win32",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const task: BackgroundTask = {
-      id: nextId++,
-      command: cleanCommand,
-      process: child,
-      output: "",
-      startedAt: Date.now(),
-      status: "running",
-    };
-    tasks.set(task.id, task);
-    updateStatus();
-
-    const append = (chunk: Buffer) => {
-      task.output = (task.output + chunk.toString("utf8")).slice(-MAX_OUTPUT);
-    };
-    child.stdout?.on("data", append);
-    child.stderr?.on("data", append);
-    child.once("error", (error) => {
-      task.output = `${task.output}\n${error.message}`.slice(-MAX_OUTPUT);
-      task.status = "failed";
-      updateStatus();
-      notifyCompletion(task);
-    });
-    child.once("close", (code) => {
-      task.exitCode = code;
-      if (task.status === "running") task.status = code === 0 ? "completed" : "failed";
-      updateStatus();
-      notifyCompletion(task);
-    });
-    return task;
-  };
-
-  const stopTask = (task: BackgroundTask) => {
-    if (task.process.pid && process.platform !== "win32") {
-      try {
-        process.kill(-task.process.pid, "SIGTERM");
-      } catch {
-        task.process.kill("SIGTERM");
-      }
-    } else {
-      task.process.kill("SIGTERM");
-    }
-  };
+  });
 
   pi.on("session_start", (_event, ctx) => {
     setStatus = (text) => ctx.ui.setStatus("background-tasks", text);
     updateStatus();
   });
 
-  pi.on("session_shutdown", () => {
-    shuttingDown = true;
-    for (const task of tasks.values()) {
-      if (task.status === "running") stopTask(task);
-    }
-    tasks.clear();
+  pi.on("session_shutdown", async () => {
+    const unconfirmed = await runner.shutdown();
     updateStatus();
     setStatus = undefined;
+    if (unconfirmed.length) {
+      process.stderr.write(`Background tasks not confirmed stopped at shutdown: ${unconfirmed.map((id) => `#${id}`).join(", ")}\n`);
+    }
   });
 
   pi.registerTool({
     name: "background_task",
     label: "Background Task",
     description: "Run any shell command as a background task. The command's output is sent back to you for inspection when it exits.",
-    parameters: TaskParams,
+    parameters: Type.Object({
+      command: Type.String({ description: "Shell command to run in the background" }),
+    }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const task = startTask(params.command, ctx.cwd);
+      const task = runner.start(params.command, ctx.cwd);
       return {
         content: [{ type: "text", text: `Started background command #${task.id}: ${task.command}` }],
         details: { id: task.id, command: task.command, status: task.status },
@@ -124,25 +74,56 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "background_task_list",
     label: "Background Tasks",
-    description: "List background commands, including running/completed status, elapsed time, exit code, and command.",
+    description: "List background commands, including running/completed status, elapsed time, exit code or signal, and command.",
     parameters: Type.Object({}),
     async execute() {
-      const listed = [...tasks.values()].map((task) => ({
+      const listed = [...runner.tasks.values()].map((task) => ({
         id: task.id,
         command: task.command,
         status: task.status,
-        elapsedSeconds: Math.floor((Date.now() - task.startedAt) / 1000),
+        elapsedMs: runner.elapsedMs(task),
         exitCode: task.exitCode,
+        signal: task.signal,
       }));
       return {
-        content: [{ type: "text", text: listed.length ? listed.map((task) => `#${task.id} [${task.status}] ${task.elapsedSeconds}s${task.exitCode === undefined ? "" : ` exit ${task.exitCode}`} — ${task.command}`).join("\n") : "No background tasks" }],
+        content: [{ type: "text", text: listed.length ? listed.map((task) => statusLine(task.id, task.status, task.elapsedMs, task.exitCode, task.signal, task.command)).join("\n") : "No background tasks" }],
         details: { tasks: listed },
       };
     },
   });
 
-  const startCommand: Parameters<ExtensionAPI["registerCommand"]>[1]["handler"] = async (command, ctx) => {
-    const task = startTask(command, ctx.cwd);
+  pi.registerTool({
+    name: "background_task_result",
+    label: "Background Task Result",
+    description: "Show the status, exit code or signal, elapsed time and captured output (bounded, newest kept) of one background command by ID.",
+    parameters: TaskIdParams,
+    async execute(_toolCallId, params) {
+      const task = resolveTask(runner, params.id);
+      const elapsedMs = runner.elapsedMs(task);
+      const header = statusLine(task.id, task.status, elapsedMs, task.exitCode, task.signal, task.command);
+      const body = task.output || (task.status === "running" ? "Task is still running; no output yet." : "No output.");
+      return {
+        content: [{ type: "text", text: `${header}\n${body}` }],
+        details: { id: task.id, command: task.command, status: task.status, exitCode: task.exitCode, signal: task.signal, elapsedMs, output: task.output },
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "background_task_cancel",
+    label: "Cancel Background Task",
+    description: "Stop a running background command by ID: SIGTERM to its process group, then SIGKILL after a bounded grace. Returns an error, and keeps the task running, when termination cannot be confirmed.",
+    parameters: TaskIdParams,
+    async execute(_toolCallId, params) {
+      const task = resolveTask(runner, params.id);
+      const outcome = await runner.cancel(task);
+      if (outcome === "not-confirmed") throw new Error(notConfirmedMessage(task));
+      return { content: [{ type: "text", text: cancelMessage(task, outcome) }], details: { id: task.id, outcome, status: task.status, signal: task.signal } };
+    },
+  });
+
+  const startCommand: CommandHandler = async (command, ctx) => {
+    const task = runner.start(command, ctx.cwd);
     ctx.ui.notify(`Started background command #${task.id}: ${task.command}`, "info");
   };
   pi.registerCommand("task", {
@@ -150,11 +131,8 @@ export default function (pi: ExtensionAPI) {
     handler: startCommand,
   });
 
-  const listTasks: Parameters<ExtensionAPI["registerCommand"]>[1]["handler"] = async (_args, ctx) => {
-    const rows = [...tasks.values()].map((task) => {
-      const elapsed = Math.floor((Date.now() - task.startedAt) / 1000);
-      return `#${task.id} [${task.status}] ${elapsed}s — ${task.command}`;
-    });
+  const listTasks: CommandHandler = async (_args, ctx) => {
+    const rows = [...runner.tasks.values()].map((task) => statusLine(task.id, task.status, runner.elapsedMs(task), task.exitCode, task.signal, task.command));
     ctx.ui.notify(rows.length ? rows.join("\n") : "No background tasks", "info");
   };
   pi.registerCommand("tasks", {
@@ -162,33 +140,63 @@ export default function (pi: ExtensionAPI) {
     handler: listTasks,
   });
 
-  const showResult: Parameters<ExtensionAPI["registerCommand"]>[1]["handler"] = async (args, ctx) => {
-    const task = tasks.get(Number(args.trim()));
-    if (!task) {
-      ctx.ui.notify("Unknown background task ID", "error");
-      return;
-    }
-    const result = task.output || (task.status === "running" ? "Task is still running." : "No output.");
-    ctx.ui.notify(`#${task.id} [${task.status}]${task.exitCode === undefined ? "" : ` (exit ${task.exitCode})`}\n${result}`, task.status === "failed" ? "error" : "info");
+  const showResult: CommandHandler = async (args, ctx) => {
+    await withTaskOrNotify(runner, args, ctx, (task) => {
+      const result = task.output || (task.status === "running" ? "Task is still running." : "No output.");
+      ctx.ui.notify(`${statusLine(task.id, task.status, runner.elapsedMs(task), task.exitCode, task.signal, "")}\n${result}`, task.status === "failed" ? "error" : "info");
+    });
   };
   pi.registerCommand("task-result", {
     description: "Show captured output: /task-result <id>",
     handler: showResult,
   });
 
-  const cancelTask: Parameters<ExtensionAPI["registerCommand"]>[1]["handler"] = async (args, ctx) => {
-    const task = tasks.get(Number(args.trim()));
-    if (!task || task.status !== "running") {
-      ctx.ui.notify("No running background task with that ID", "error");
-      return;
-    }
-    task.status = "cancelled";
-    stopTask(task);
-    updateStatus();
-    ctx.ui.notify(`Cancelled background command #${task.id}`, "info");
+  const cancelCommand: CommandHandler = async (args, ctx) => {
+    await withTaskOrNotify(runner, args, ctx, async (task) => {
+      const outcome = await runner.cancel(task);
+      if (outcome === "not-confirmed") ctx.ui.notify(notConfirmedMessage(task), "error");
+      else ctx.ui.notify(cancelMessage(task, outcome), "info");
+    });
   };
   pi.registerCommand("task-cancel", {
     description: "Stop a background command: /task-cancel <id>",
-    handler: cancelTask,
+    handler: cancelCommand,
   });
+
+  return { runner };
+}
+
+export default function (pi: ExtensionAPI) {
+  installBackgroundTasks(pi);
+}
+
+async function withTaskOrNotify(runner: BackgroundTaskRunner, args: string, ctx: Notify, action: (task: BackgroundTask) => void | Promise<void>): Promise<void> {
+  let task: BackgroundTask;
+  try {
+    task = resolveTask(runner, args.trim());
+  } catch (error) {
+    ctx.ui.notify((error as Error).message, "error");
+    return;
+  }
+  await action(task);
+}
+
+function describeEnd(task: BackgroundTask): string {
+  return task.signal ? `signal ${task.signal}` : `exit ${task.exitCode ?? "unknown"}`;
+}
+
+function statusLine(id: number, status: string, elapsedMs: number, exitCode: number | null | undefined, signal: NodeJS.Signals | null | undefined, command: string): string {
+  // null exit with no signal means the process failed without an exit code (for example a spawn error), not "null".
+  const end = signal ? ` signal ${signal}` : exitCode === undefined ? "" : ` exit ${exitCode ?? "unknown"}`;
+  return `#${id} [${status}] ${Math.floor(elapsedMs / 1000)}s${end}${command ? ` — ${command}` : ""}`;
+}
+
+function cancelMessage(task: BackgroundTask, outcome: CancelOutcome): string {
+  if (outcome === "cancelled") return `Cancelled background command #${task.id} (${task.signal ?? "no signal"}); its process group is confirmed gone.`;
+  return `Background command #${task.id} already ${task.status}; nothing to cancel.`;
+}
+
+function notConfirmedMessage(task: BackgroundTask): string {
+  const detail = task.lastSignalError ? ` Signal error: ${task.lastSignalError}.` : "";
+  return `Could not confirm that background command #${task.id} stopped. It is still running: SIGTERM and then SIGKILL were sent to its process group within bounded waits.${detail} The task is watched and will report its exit when its process group is empty; retry background_task_cancel to signal again.`;
 }

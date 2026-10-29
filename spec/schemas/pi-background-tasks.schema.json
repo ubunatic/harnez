@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ubunatic.com/harnez/spec/schemas/pi-background-tasks.schema.json",
+  "title": "Pi background task bounds",
+  "description": "Bounds for the project-local Pi background-task extension: captured output, finished-task retention and termination timing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["output_limit_chars", "finished_retention_limit", "stop"],
+  "properties": {
+    "output_limit_chars": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum characters of combined stdout/stderr kept per task (newest kept)."
+    },
+    "finished_retention_limit": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum finished (completed, failed or cancelled) tasks kept; running tasks are never evicted."
+    },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["grace_ms", "kill_wait_ms", "poll_ms"],
+      "properties": {
+        "grace_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Wait after SIGTERM to the process group before escalating to SIGKILL."
+        },
+        "kill_wait_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum wait after SIGKILL (and after output-stream drain) before reporting termination as not confirmed."
+        },
+        "poll_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Interval for re-checking process-group liveness while waiting for termination."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=schemas/pi-background-tasks.schema.json
+# Bounds for the project-local Pi background-task extension (.pi/extensions/background-tasks.ts).
+# This file is JSON-compatible YAML (one flow mapping, no anchors or tags) so the extension can load
+# it strictly with JSON.parse and no YAML dependency. Keep it in that form; validate with the schema.
+{
+  "output_limit_chars": 16000,
+  "finished_retention_limit": 50,
+  "stop": {
+    "grace_ms": 1000,
+    "kill_wait_ms": 2000,
+    "poll_ms": 25
+  }
+}
