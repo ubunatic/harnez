@@ -4,7 +4,7 @@
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
-**Related**: 1012, 1009, 1010
+**Related**: 1014, 1009, 1010
 
 ---
 
@@ -16,7 +16,7 @@ a loop, a hard blocker or no progress, clear the goal and write a failure report
 ## Problem
 
 The next number is max+1 over the local `issues/` only. On 2026-10-29 the owner reserved 1009 on
-another machine; the fork clone would have handed out 1009 again. 1012 added `--number` as a manual
+another machine; the fork clone would have handed out 1009 again. 1014 added `--number` as a manual
 escape hatch, which still checks only the local tree.
 
 ## Proposal (advisor h1012-adv, claude:opus:med)
