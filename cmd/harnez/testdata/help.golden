@@ -1633,6 +1633,12 @@ then the README is regenerated and the batch is committed once.
                     ownership from history and deterministically repairing any
                     number collisions in an explicit final commit. --dry-run
                     prints the plan without changing Git state.
+  reconcile [ref]   After a git merge, renumber this branch's own colliding
+                    tickets (added in ref..HEAD; default: merged parent, else
+                    origin/main), rewrite references, repair indexes and commit
+                    once. --dry-run prints the plan. --fetch fetches and prints
+                    the plan against the upstream; --pull fetches, merges the
+                    upstream and reconciles (use instead of git pull).
   lint              Read-only validation for duplicate numbers, conflicting
                     filename/H1 numbers, and drift across all three indexes.
   status            Show lifecycle counts and warn when active tickets exceed
@@ -1688,6 +1694,7 @@ Flags:
       --commit string    override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
   -d, --dir string       repo root containing issues/ (default ".")
       --dry-run          alias for --check
+      --fetch            reconcile: git fetch, then print the plan against the upstream (no changes)
       --force            with new: create despite strong duplicate matches
   -h, --help             help for issues
   -I, --image            render visual PNG card context
@@ -1698,6 +1705,7 @@ Flags:
       --no-code          with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit
       --no-commit        rewrite the ticket file and README but do not git add/commit
       --number string    with new: use this ticket number instead of the next free one (refused if it exists)
+      --pull             reconcile: git fetch + merge the upstream, then renumber colliding local tickets and commit once
   -r, --raw              output raw text directly to stdout
       --remote           with new: allocate a permanent GH id using authenticated gh on the github remote
       --session string   with close/done: record the closing session (defaults to HARNEZ_SESSION_ID)

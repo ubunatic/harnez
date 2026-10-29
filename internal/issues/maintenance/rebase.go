@@ -105,6 +105,17 @@ func rebaseInProgress(dir string) bool {
 	return false
 }
 
+// porcelainStatus returns untrimmed `git status --porcelain` output. gitOutput
+// trims, which would eat the leading space of " M" on the first line and make
+// trackerDirty misparse that path.
+func porcelainStatus(dir string) (string, error) {
+	out, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
+	if err != nil {
+		return "", fmt.Errorf("git status: %w", err)
+	}
+	return string(out), nil
+}
+
 func trackerDirty(status string) bool {
 	for _, line := range strings.Split(status, "\n") {
 		if len(line) < 4 {
@@ -113,6 +124,9 @@ func trackerDirty(status string) bool {
 		path := strings.TrimSpace(line[3:])
 		if arrow := strings.LastIndex(path, " -> "); arrow >= 0 {
 			path = path[arrow+4:]
+		}
+		if path == "issues/README.md.lock" {
+			continue // index sidecar lock, never tracker content
 		}
 		if path == ".gitattributes" || path == "issues" || strings.HasPrefix(path, "issues/") {
 			return true
@@ -188,7 +202,7 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 			}
 		}
 	}
-	status, err := gitOutput(dir, "status", "--porcelain")
+	status, err := porcelainStatus(dir)
 	if err != nil {
 		return fmt.Errorf("issues rebase: %w", err)
 	}

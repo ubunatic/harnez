@@ -69,6 +69,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var dir string
 	var checkFlag bool
 	var dryRunFlag bool
+	var fetchFlag, pullFlag bool
 	var jsonFlag bool
 	var rawFlag bool
 	var textFlag bool
@@ -143,6 +144,12 @@ then the README is regenerated and the batch is committed once.
                     ownership from history and deterministically repairing any
                     number collisions in an explicit final commit. --dry-run
                     prints the plan without changing Git state.
+  reconcile [ref]   After a git merge, renumber this branch's own colliding
+                    tickets (added in ref..HEAD; default: merged parent, else
+                    origin/main), rewrite references, repair indexes and commit
+                    once. --dry-run prints the plan. --fetch fetches and prints
+                    the plan against the upstream; --pull fetches, merges the
+                    upstream and reconciles (use instead of git pull).
   lint              Read-only validation for duplicate numbers, conflicting
                     filename/H1 numbers, and drift across all three indexes.
   status            Show lifecycle counts and warn when active tickets exceed
@@ -212,7 +219,7 @@ valid, exit-0 answer.`,
 				return nil
 			}
 			if len(args) == 0 {
-				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, backlog, promote, new, show, mv, rebase, lint, status, list)")
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, backlog, promote, new, show, mv, rebase, reconcile, lint, status, list)")
 			}
 			if args[0] == "new" {
 				return nil // [title] is optional, no ticket-number argument exists yet
@@ -232,9 +239,9 @@ valid, exit-0 answer.`,
 				}
 				return nil
 			}
-			if args[0] == "rebase" {
+			if args[0] == "rebase" || args[0] == "reconcile" {
 				if len(args) > 2 {
-					return fmt.Errorf("issues rebase: accepts at most one argument: [upstream]")
+					return fmt.Errorf("issues %s: accepts at most one argument: [upstream|ref]", args[0])
 				}
 				return nil
 			}
@@ -272,6 +279,16 @@ valid, exit-0 answer.`,
 					target = args[4]
 				}
 				return issuesmaintenance.RunIssuesMergeDriverVersions(args[1], args[2], args[3], target)
+			}
+			if args[0] == "reconcile" {
+				ref := ""
+				if len(args) == 2 {
+					ref = args[1]
+				}
+				if checkFlag && pullFlag {
+					return fmt.Errorf("issues reconcile: --check/--dry-run cannot be combined with --pull (it would merge first); use --fetch to preview")
+				}
+				return issuesmaintenance.RunIssuesReconcileOpts(cmd.OutOrStdout(), dir, issuesmaintenance.ReconcileOptions{Ref: ref, DryRun: dryRunFlag || checkFlag, Fetch: fetchFlag, Pull: pullFlag})
 			}
 			if args[0] == "rebase" {
 				upstream := "@{upstream}"
@@ -387,6 +404,8 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
 	cmd.Flags().BoolVar(&checkFlag, "check", false, "report what would change without writing or committing; exit 1 on drift")
 	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "alias for --check")
+	cmd.Flags().BoolVar(&fetchFlag, "fetch", false, "reconcile: git fetch, then print the plan against the upstream (no changes)")
+	cmd.Flags().BoolVar(&pullFlag, "pull", false, "reconcile: git fetch + merge the upstream, then renumber colliding local tickets and commit once")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output a single JSON object instead of a text line")
 	cmd.Flags().BoolVarP(&rawFlag, "raw", "r", false, "output raw text directly to stdout")
 	cmd.Flags().BoolVarP(&textFlag, "text", "t", false, "output raw text directly to stdout (alias for --raw)")
@@ -554,6 +573,7 @@ func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]s
 			"show\tinspect a ticket",
 			"mv\trenumber a ticket",
 			"rebase\treplay local issue commits",
+			"reconcile\trepair ticket collisions after a merge",
 			"lint\tvalidate the issue tracker",
 			"status\tshow issue lifecycle counts",
 			"list\tlist matching tickets",
