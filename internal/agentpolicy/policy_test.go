@@ -88,7 +88,7 @@ func TestConfigureDocumentsHarnezAgentRoutesForBothModes(t *testing.T) {
 				"harnez agent list", "harnez agent status", "harnez agent wait <session>",
 				"harnez agent resume --name <session>", "harnez agent stop",
 				"`wait <session>` takes its session positionally",
-				"`HTO=0` in your session background", "`run_in_background: true`", "`run_command`",
+				"`HTO=0` in your session background", "`run_in_background: true`", "not a harnez flag", "`run_command`",
 				"`WaitMsBeforeAsync`", "`exec_command`", "`write_stdin`",
 				"There is no `harnez advisor` command",
 				"dispatch it directly with `harnez agent start --model <name>`",

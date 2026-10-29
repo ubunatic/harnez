@@ -32,7 +32,7 @@ you; your own background tool is the only signal. One call per worker, with
 
 | Host | Tool and parameter | How completion reaches the host |
 |---|---|---|
-| Claude Code | `Bash` with `run_in_background: true`, command `HTO=0 harnez agent start ...` | task-notification on exit; jobs stop after 30 minutes, so size each worker turn to finish before that |
+| Claude Code | `Bash` with `run_in_background: true`, command `HTO=0 harnez agent start ...`. `run_in_background`: Claude Code Bash tool parameter only; not a harnez flag. | task-notification on exit; jobs stop after 30 minutes, so size each worker turn to finish before that |
 | AGY | `run_command` with `HTO=0 harnez agent start ...` and a small `WaitMsBeforeAsync` (e.g. 500) | background-task completion notice |
 | Codex | `exec_command` with `HTO=0 harnez agent start ...` | call `write_stdin` on the returned `session_id` with chars `""` until it reports an exit code |
 

@@ -84,6 +84,7 @@ One call per worker, with HTO=0 so the turn never detaches after 60s:
                "HTO=0 harnez agent start ...". Its exit sends you a
                task-notification. Claude Code stops background jobs after
                30 minutes: size each worker turn to finish before that.
+  run_in_background: Claude Code Bash tool parameter only; not a harnez flag.
   AGY          run_command with "HTO=0 harnez agent start ..." and a small
                WaitMsBeforeAsync (e.g. 500); you are notified on completion.
   Codex        exec_command with "HTO=0 harnez agent start ..."; then call
@@ -123,7 +124,7 @@ func reattachSteps(host, name string) []string {
 		}
 	case "claude":
 		return []string{
-			"Run `" + wait + "` with the Bash tool and run_in_background: true (a host background job); Claude Code will automatically notify you when it exits.",
+			"Run `" + wait + "` with the Bash tool and run_in_background: true (a host background job); Claude Code will automatically notify you when it exits. `run_in_background`: Claude Code Bash tool parameter only; not a harnez flag.",
 			"Do NOT poll. Do NOT schedule timers or cron jobs.",
 		}
 	}

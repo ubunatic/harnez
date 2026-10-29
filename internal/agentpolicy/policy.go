@@ -37,7 +37,7 @@ const policyBody = `# subagent_mode: %s
 - Run ` + "`start`" + ` and ` + "`resume`" + ` with ` + "`HTO=0`" + ` in your session background, one call per worker:
   Claude Code Bash with ` + "`run_in_background: true`" + `; AGY ` + "`run_command`" + ` with a small
   ` + "`WaitMsBeforeAsync`" + `; Codex ` + "`exec_command`" + `, then ` + "`write_stdin`" + ` until an exit code.
-  Never use shell ` + "`&`" + `, ` + "`nohup`" + ` or a status/log polling loop; see ` + "`harnez agent start --help`" + `.
+  Never use shell ` + "`&`" + `, ` + "`nohup`" + ` or a status/log polling loop; see ` + "`harnez agent start --help`" + `. ` + "`run_in_background`" + `: Claude Code Bash tool parameter only; not a harnez flag.
 - There is no ` + "`harnez advisor`" + ` command.
 - Before broad shell searches, use ` + "`harnez find code|docs`" + ` or MCP ` + "`harnez_find`" + `; see ` + "`@docs/Search.md`" + `.
 - Preserve the repository's instructions and report the provider and session used.`
