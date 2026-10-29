@@ -365,3 +365,40 @@ func TestCollectCodexParsesNestedTokenFields(t *testing.T) {
 		t.Errorf("Session = %+v, want UsedPercent 40 from live fetch", usage.Session)
 	}
 }
+
+func TestAssignCodexWindowNeutralQuotaNeverDisplacesRealWindows(t *testing.T) {
+	neutral := QuotaWindow{Name: "Quota", UsedPercent: 1}
+	session := QuotaWindow{Name: "5-Hour", UsedPercent: 2}
+	weekly := QuotaWindow{Name: "Weekly", UsedPercent: 3}
+	monthly := QuotaWindow{Name: "Monthly", UsedPercent: 4}
+	for _, tc := range []struct {
+		name        string
+		in          []QuotaWindow
+		wantSession string
+		wantWeekly  string
+	}{
+		{"lone neutral stays out of session", []QuotaWindow{neutral}, "", "Quota"},
+		{"neutral then weekly", []QuotaWindow{neutral, weekly}, "", "Weekly"},
+		{"weekly then neutral", []QuotaWindow{weekly, neutral}, "", "Weekly"},
+		{"neutral then monthly", []QuotaWindow{neutral, monthly}, "", "Monthly"},
+		{"session then neutral", []QuotaWindow{session, neutral}, "5-Hour", "Quota"},
+		{"neutral then session", []QuotaWindow{neutral, session}, "5-Hour", "Quota"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var u AgentUsage
+			for _, w := range tc.in {
+				assignCodexWindow(&u, w)
+			}
+			gotS, gotW := "", ""
+			if u.Session != nil {
+				gotS = u.Session.Name
+			}
+			if u.Weekly != nil {
+				gotW = u.Weekly.Name
+			}
+			if gotS != tc.wantSession || gotW != tc.wantWeekly {
+				t.Errorf("Session=%q Weekly=%q, want %q / %q", gotS, gotW, tc.wantSession, tc.wantWeekly)
+			}
+		})
+	}
+}

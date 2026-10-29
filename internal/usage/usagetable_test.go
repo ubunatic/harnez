@@ -181,10 +181,21 @@ func TestQuotaWindowKind(t *testing.T) {
 		"Monthly":                   "monthly",
 		"Monthly (stale)":           "monthly",
 		"30-day":                    "monthly",
+		"Quota":                     "quota",
+		"Quota (stale)":             "quota",
 		"Opus":                      "Opus",
 	} {
 		if got := quotaWindowKind(name); got != want {
 			t.Errorf("quotaWindowKind(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestUsageTableWindowsLabelsNeutralQuota(t *testing.T) {
+	for name, want := range map[string]string{"Quota": "quota", "Weekly": "weekly", "Monthly": "monthly"} {
+		got := usageTableWindows(AgentUsage{Weekly: &QuotaWindow{Name: name}}, time.Now())
+		if len(got) != 1 || got[0].label != want {
+			t.Errorf("%s window labelled %+v, want %q", name, got, want)
 		}
 	}
 }

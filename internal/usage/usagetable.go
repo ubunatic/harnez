@@ -152,7 +152,7 @@ func usageTableWindows(agent AgentUsage, now time.Time) []namedWindow {
 	}
 	if agent.Weekly != nil {
 		label := "weekly"
-		if kind := quotaWindowKind(agent.Weekly.Name); kind == "monthly" {
+		if kind := quotaWindowKind(agent.Weekly.Name); kind == "monthly" || kind == "quota" {
 			label = kind
 		}
 		out = append(out, namedWindow{label: label, w: *agent.Weekly})
@@ -194,6 +194,8 @@ func quotaWindowKind(name string) string {
 		return "weekly"
 	case strings.Contains(lower, "month"), strings.Contains(lower, "30-day"), strings.Contains(lower, "30 day"):
 		return "monthly"
+	case strings.HasPrefix(lower, "quota"):
+		return "quota"
 	case strings.Contains(lower, "five hour"), strings.Contains(lower, "5-hour"), strings.Contains(lower, "5 hour"), strings.Contains(lower, "session"):
 		return "5h"
 	}
@@ -204,7 +206,7 @@ func quotaWindowKind(name string) string {
 // Weekly-then-Session order of single-pool agents.
 func quotaWindowKindOrder(name string) int {
 	switch quotaWindowKind(name) {
-	case "weekly", "monthly":
+	case "weekly", "monthly", "quota":
 		return 0
 	case "5h":
 		return 1

@@ -598,7 +598,14 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 			continue
 		}
 		name := strings.ToLower(r.Name)
-		if r.Key == "weekly" || r.Key == "monthly" || isLongQuotaWindowName(name) {
+		neutral := strings.HasPrefix(name, "quota") && r.Key != "weekly" && r.Key != "monthly"
+		if neutral && agent.Weekly != nil {
+			// A neutral unknown-length window never displaces a real one.
+			if agent.ExtraWindows == nil {
+				agent.ExtraWindows = map[string]QuotaWindow{}
+			}
+			agent.ExtraWindows[r.Key] = w
+		} else if r.Key == "weekly" || r.Key == "monthly" || isLongQuotaWindowName(name) {
 			agent.Weekly = &w
 		} else if agent.Session == nil {
 			agent.Session = &w

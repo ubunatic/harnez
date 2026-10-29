@@ -225,3 +225,24 @@ func TestApplyStoredWindowsKeepsMonthlyInLongSlot(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyStoredWindowsNeutralQuotaNeverDisplacesRealWindows(t *testing.T) {
+	neutral := usagestore.Window{Key: "quota", Name: "Quota", Source: "test", Freshness: "fresh", ObservedAt: time.Now(), UsedFraction: 0.1}
+	weekly := usagestore.Window{Key: "weekly", Name: "Weekly", Source: "test", Freshness: "fresh", ObservedAt: time.Now(), UsedFraction: 0.2}
+	session := usagestore.Window{Key: "five_hour", Name: "5-Hour", Source: "test", Freshness: "fresh", ObservedAt: time.Now(), UsedFraction: 0.3}
+	for name, in := range map[string][]usagestore.Window{
+		"neutral then weekly": {neutral, weekly},
+		"weekly then neutral": {weekly, neutral},
+	} {
+		var agent AgentUsage
+		applyStoredWindows(&agent, in, time.Now())
+		if agent.Weekly == nil || agent.Weekly.Name != "Weekly" || agent.Session != nil {
+			t.Errorf("%s: Weekly = %+v, Session = %+v; want real Weekly and no Session", name, agent.Weekly, agent.Session)
+		}
+	}
+	var agent AgentUsage
+	applyStoredWindows(&agent, []usagestore.Window{neutral, session}, time.Now())
+	if agent.Session == nil || agent.Session.Name != "5-Hour" {
+		t.Errorf("Session = %+v, want the real 5-Hour window", agent.Session)
+	}
+}

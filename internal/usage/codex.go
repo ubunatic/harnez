@@ -177,6 +177,24 @@ func collectCodexTokensContext(ctx context.Context, codexDir string) (*TokenBrea
 // When the window length is unknown, time left only bounds the class from
 // below: more than 7 days left cannot be a weekly window, so it is "Monthly";
 // anything else stays the neutral "Quota" rather than guessing a class.
+// assignCodexWindow files a window into the session or long slot. A neutral
+// "Quota" window (unknown length) is never guessed as a session or weekly
+// window: it only fills an empty long slot and any real window wins.
+func assignCodexWindow(usage *AgentUsage, qw QuotaWindow) {
+	switch {
+	case strings.HasSuffix(qw.Name, "-Hour"):
+		if usage.Session == nil {
+			usage.Session = &qw
+		}
+	case qw.Name == "Quota":
+		if usage.Weekly == nil {
+			usage.Weekly = &qw
+		}
+	default:
+		usage.Weekly = &qw
+	}
+}
+
 func buildCodexQuotaWindow(pw *CodexRateWindow, now time.Time) QuotaWindow {
 	usedPct := pw.UsedPercent
 	remPct := 100.0 - usedPct
@@ -391,12 +409,7 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 								if pw == nil {
 									continue
 								}
-								qw := buildCodexQuotaWindow(pw, now)
-								if !strings.HasSuffix(qw.Name, "-Hour") {
-									usage.Weekly = &qw
-								} else if usage.Session == nil {
-									usage.Session = &qw
-								}
+								assignCodexWindow(&usage, buildCodexQuotaWindow(pw, now))
 							}
 						}
 
