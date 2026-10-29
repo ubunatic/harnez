@@ -42,6 +42,32 @@ JSON events provide per-turn input/output/cache usage when Pi reports it. Pi's
 JSON protocol does not provide Harnez with a validated context-window size, so
 context-window capacity and reasoning-token counts remain unknown.
 
+## Local small-window models (lmcoder)
+
+`--model lmcoder:<id>` runs Pi against the local lmcoder proxy (port 8735). What harnez does and what
+was learned on these models (issues 1023, 1024, 1029):
+
+- **Compaction overrides.** Pi's defaults (reserve 16384, keep recent 20000) stop a 32k model with
+  `length` before it answers. `harnez apply` writes `compaction.modelOverrides["<provider>/<id>"]` into
+  `~/.pi/agent/settings.json` for every model in Pi's `models.json` whose `contextWindow` is below the
+  `pi_compaction` threshold in `spec/agent.yaml` (reserve about 40%, keep about 25% of the window;
+  `internal/picompact`). Other keys and hand-written entries are kept. `agent start` warns when a
+  small-window Pi model has no override. Gap (1023): an entry apply wrote is not removed when the
+  model's window later grows past the threshold; remove it by hand.
+- **A bigger window is not enough.** On 64k, `lmcoder:coder` no longer stopped with `length`, but a
+  review of a 98-line diff still made 73-80 tool calls (mostly repo-wide `grep`) and gave no answer
+  in 10 minutes, also when the prompt allowed only 4 more calls. Prompt limits are not followed.
+  Small local models need rails set by harnez, not more prompt wording: a tool-call limit per turn
+  (1033), only the tools the task needs (1027), and all input attached up front with short role
+  guidance so the agent reads nothing itself (1034).
+- **Server behaviour.** The proxy loads a model lazily (first reply about 30 s; a long prefill on a
+  bigger window 100 s or more), and the server is shared and may be restarted by other agents. A
+  `502` or `engine stopped unexpectedly` right after a restart is not a test result: retry once when
+  the model is back. `GET /v1/models` shows `lmcoder.live` per model without loading it. A warmup
+  step before the real task is tracked in 1032.
+- **Stopping a run.** Since 1029, a signal to `agent start`/`resume` also stops the `pi` child and
+  saves the session as `stopped` (see `HarnezAgentArchitecture.md`).
+
 ## Interactive Project Extensions and Background Tasks
 
 Pi has separate extension scopes: user extensions under
