@@ -37,6 +37,15 @@ The local `coder` model has a 32,768-token context window (`~/.pi/agent/models.j
 - Next: find out where the 14 minutes go (Pi session log: tool calls, compactions, prompt sizes) before
   deciding on a fix. A timeout or progress output for long synchronous lmcoder turns may belong here too.
 
+## Rerun on the 64k window (2026-10-29 22:51, host)
+- `coder` raised to 65536 by lmcoder 263; the 32k compaction override removed, so Pi defaults apply. Same prompt,
+  10-minute cap (`timeout 600`).
+- Result: no answer in 10 min (exit 124). Pi log `2026-10-29T21-51-15-944Z_01a189a5...jsonl`: 73 tool calls (all
+  bash, 49 of them `grep`), 2 compactions (vs 13 in 14 min on 32k), peak context 49,030 tokens, 9,461 output tokens.
+- Reading: the bigger window ended the compaction loop, but the model still does not converge on this review; it
+  keeps searching. Next candidates: a smaller fixed prompt (1027 `plain` mode), a narrower review prompt, or a
+  turn/tool-call limit. The `pi` child outlived `timeout` again but exited on its own shortly after.
+
 ## Notes
 
 - Out of scope: switching the proxy model. `lmcoder:strata` is not tried.
