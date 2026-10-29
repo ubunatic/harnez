@@ -81,4 +81,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1018 | [1018-reconcile-follow-ups-canary-on-a-real-merge-share-renumbering-with-mv-test-check-with-pull.md](1018-reconcile-follow-ups-canary-on-a-real-merge-share-renumbering-with-mv-test-check-with-pull.md) | reconcile follow-ups: canary on a real merge, share renumbering with mv, test --check with --pull | Open |
 | 1019 | [1019-agent-models-lists-models-the-codex-account-plan-does-not-support.md](1019-agent-models-lists-models-the-codex-account-plan-does-not-support.md) | agent models lists models the Codex account plan does not support | Open |
 | 1020 | [1020-add-a-read-only-topic-scoped-backlog-value-scan-skill.md](1020-add-a-read-only-topic-scoped-backlog-value-scan-skill.md) | Add a read-only topic-scoped backlog value scan skill | Open |
+| 1021 | [1021-control-pi-background-task-output-at-launch-and-avoid-duplicate-completion-dumps.md](1021-control-pi-background-task-output-at-launch-and-avoid-duplicate-completion-dumps.md) | Control Pi background task output at launch and avoid duplicate completion dumps | Open |
 <!-- harnez:end issues-active-index -->
