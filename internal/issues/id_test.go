@@ -61,3 +61,28 @@ func TestGHReservationDuplicateAndLint(t *testing.T) {
 		t.Fatalf("GH-only next %s", next)
 	}
 }
+
+func TestReserveExplicitNumber(t *testing.T) {
+	dir := t.TempDir()
+	num, file, err := Reserve(dir, ReserveOptions{Title: "Skip ahead", Number: "1010"})
+	if err != nil || num != "1010" || file != "1010-skip-ahead.md" {
+		t.Fatalf("reserve: %s %s %v", num, file, err)
+	}
+	if _, _, err := Reserve(dir, ReserveOptions{Title: "Again", Number: "1010"}); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("duplicate number: %v", err)
+	}
+	if num, _, err := Reserve(dir, ReserveOptions{Title: "Short", Number: "7"}); err != nil || num != "007" {
+		t.Fatalf("short number: %s %v", num, err)
+	}
+	for _, bad := range []string{"0", "-5"} {
+		if _, _, err := Reserve(dir, ReserveOptions{Number: bad}); err == nil {
+			t.Fatalf("accepted number %s", bad)
+		}
+	}
+	if _, _, err := Reserve(dir, ReserveOptions{Number: "x1"}); err == nil {
+		t.Fatal("accepted invalid number")
+	}
+	if num, _, err := Reserve(dir, ReserveOptions{Title: "Next"}); err != nil || num != "1011" {
+		t.Fatalf("default numbering after explicit: %s %v", num, err)
+	}
+}

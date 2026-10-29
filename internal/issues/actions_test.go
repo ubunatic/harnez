@@ -27,6 +27,16 @@ func TestComposeStatusTable(t *testing.T) {
 		{"backlog", "", "Backlog", false},
 		{"backlog", "later", "Backlog — later", false},
 		{"promote", "", "Open", false},
+		{"close", "Closed — items merged", "Closed — items merged", false},
+		{"close", "closed - items merged", "Closed — items merged", false},
+		{"done", "CLOSED — x", "Closed — x", false},
+		{"open", "Open — again", "Open — again", false},
+		{"start", "In Progress — going", "In Progress — going", false},
+		{"block", "Blocked — upstream", "Blocked — upstream", false},
+		{"draft", "Draft — x", "Draft — x", false},
+		{"backlog", "Backlog — later", "Backlog — later", false},
+		{"close", "Closed", "Closed — Closed", false},
+		{"close", "Closed fixes", "Closed — Closed fixes", false},
 		{"review", "", "", true},
 	}
 	for _, tc := range cases {

@@ -719,6 +719,7 @@ func Slugify(s string) string {
 type ReserveOptions struct {
 	Title    string // Optional title for the reserved ticket
 	RemoteID string // Already allocated GitHub ID; never falls back to local numbering
+	Number   string // Explicit local ticket number; refused when it already exists
 }
 
 // Reserve allocates the next ticket number and atomically creates a placeholder
@@ -742,12 +743,29 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 		return "", "", fmt.Errorf("lock reservations: %w", err)
 	}
 
+	explicit := ""
+	if opts.Number != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(opts.Number))
+		if err != nil || n < 1 {
+			return "", "", fmt.Errorf("invalid ticket number %q (expected a positive integer)", opts.Number)
+		}
+		explicit = fmt.Sprintf("%03d", n)
+	}
+
 	for attempts := 0; attempts < 100; attempts++ {
 		files, err := Scan(issuesDir)
 		if err != nil {
 			return "", "", fmt.Errorf("scan issues for reservation: %w", err)
 		}
 		nextNum := NextNumberFromFiles(files)
+		if explicit != "" {
+			nextNum = explicit
+			for _, f := range files {
+				if f.Number == nextNum {
+					return "", "", fmt.Errorf("ticket number %s already exists: issues/%s", nextNum, f.RelPath)
+				}
+			}
+		}
 		if opts.RemoteID != "" {
 			nextNum = opts.RemoteID
 			if !remoteIDRegex.MatchString(nextNum) {
@@ -797,7 +815,7 @@ Describe the implementation and how it will be verified.
 		targetPath := filepath.Join(issuesDir, baseName)
 		f, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
-			if os.IsExist(err) && opts.RemoteID == "" {
+			if os.IsExist(err) && opts.RemoteID == "" && explicit == "" {
 				// File already exists; retry loop to allocate the next number.
 				time.Sleep(time.Millisecond)
 				continue
