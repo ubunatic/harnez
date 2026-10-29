@@ -113,3 +113,26 @@ This host's agy 1.4.9 settings at `~/.gemini/antigravity-cli/settings.json` incl
 `toolPermission: "always-proceed"`. These are observed values, not proof that the
 allowlist is enforced or evidence of a portable wildcard translation. Canary with
 an isolated configuration and a restrictive policy before implementation.
+
+## Canary 2 (host, 2026-10-29): `permissions.allow` is enforced
+
+agy 1.4.9 on this machine (its settings had no permission keys). For one run,
+`~/.gemini/antigravity-cli/settings.json` got only `"permissions": {"allow": ["command(ls)"]}`,
+no `toolPermission`; the original file was restored right after.
+
+One headless turn, `harnez agent --role developer --model agy:flash38:low` (no auto-approve), asked
+to run `ls -1 spec`, then `cat go.mod`. Conversation 0677e6e6, steps:
+
+| Step | Tool call | Status |
+| --- | --- | --- |
+| 2 | `run_command` `ls -1 spec` | 3, completed without a prompt |
+| 4 | `run_command` `cat go.mod` | 7, waiting for permission (same status as owner-approval steps in canary 1) |
+
+harnez then failed the turn with the 1000 error ("agy turn ended without a reply after 77 output
+tokens; likely an unapproved tool call"). So:
+
+- `permissions.allow` with `command(<prefix>)` is read from settings.json and enforced, headless too.
+- `command(ls)` matches `ls -1 spec`: prefix match on the command line (word boundary not yet tested,
+  e.g. whether `command(ls)` also allows `lsblk`).
+- Not yet tested: the entry syntax for file tools (view/edit/write), wildcards inside `command(...)`,
+  `deny`, and what `toolPermission` values other than `always-proceed` do.
