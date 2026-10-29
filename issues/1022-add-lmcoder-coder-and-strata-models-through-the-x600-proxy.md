@@ -25,6 +25,9 @@
 - No model switching: the coder model is loaded lazily on demand on x600 and served through the lmcoder proxy to other services, so this ticket must not change which model the proxy loads.
 - Expect a first live call to be slow while the model loads on x600; allow for that in the timeout and report it as load time, not as failure.
 - Models: only Claude models for every agent in this ticket. OpenAI (codex) and Gemini (agy) quota is exhausted on this machine (owner, 2026-10-29), so do not start luna, sol, terra, codex or gemini models.
+- Tier `low` with `effort: false` for `lmcoder:coder` (M2, host decision). The schema allows `low|med|high`, but the local model has no verified thinking levels yet. Enable `med` and `high` after the M3 live call.
+- Pi model name is `coder`, not `lmcoder/coder` (M2, host decision). `piModelArgs` passes only the bare name, and `pi --list-models` shows one `coder` under provider `lmcoder`. M3 must confirm that Pi resolves the bare name.
+- `DriverFor` maps provider `lmcoder` to `PiDriver` as well as `pi` (M2, host decision). Without it, the acceptance criterion "callable through Pi" fails, because `ModelEntriesWithDriver` lists the model as unsupported. The endpoint and key stay in `~/.pi/agent/models.json`, so nothing machine-specific enters the repo.
 
 ## Milestones
 
