@@ -403,4 +403,67 @@ func TestAgyStopAndDeleteAreNoop(t *testing.T) {
 	}
 }
 
+func TestAgyAutoApproveToolsArgs(t *testing.T) {
+	model := Model{Name: "gemini-4-argon", Tier: "low"}
+	approval := []string{"--dangerously-skip-permissions", "--sandbox"}
+	tail := []string{"--output-format", "json", "-p", "review the diff"}
+	for _, auto := range []bool{true, false} {
+		t.Run(map[bool]string{true: "auto", false: "default"}[auto], func(t *testing.T) {
+			var calls [][]string
+			d := AgyDriver{Dir: "/work/dir", AutoApproveTools: auto, Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+				calls = append(calls, args)
+				return []byte(`{"conversation_id":"c1","status":"SUCCESS","response":"ok"}`), nil
+			}}
+			if _, err := d.Run(context.Background(), RunOptions{Prompt: "review the diff", Model: model}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := d.Resume(context.Background(), "c1", "review the diff", model); err != nil {
+				t.Fatal(err)
+			}
+			var flags []string
+			if auto {
+				flags = approval
+			}
+			wantRun := append(append([]string{"--add-dir", "/work/dir", "--model", "gemini-4-argon", "--effort", "low"}, flags...), tail...)
+			wantResume := append(append([]string{"--conversation", "c1", "--add-dir", "/work/dir", "--model", "gemini-4-argon", "--effort", "low"}, flags...), tail...)
+			if len(calls) != 2 || !reflect.DeepEqual(calls[0], wantRun) || !reflect.DeepEqual(calls[1], wantResume) {
+				t.Fatalf("calls = %#v, want run %#v and resume %#v", calls, wantRun, wantResume)
+			}
+		})
+	}
+}
+
+func TestAgyRunEmptyReplyIsError(t *testing.T) {
+	d := AgyDriver{Dir: "/work/dir", Command: func(context.Context, string, ...string) ([]byte, error) {
+		return []byte(`{"conversation_id":"c1","status":"SUCCESS","response":"","usage":{"output_tokens":189}}`), nil
+	}}
+	r, err := d.Run(context.Background(), RunOptions{Prompt: "run git diff", Model: Model{Name: "gemini-4-argon"}})
+	if err == nil || !strings.Contains(err.Error(), "without a reply") || !strings.Contains(err.Error(), "unapproved tool call") {
+		t.Fatalf("result = %#v, err = %v; want an empty-reply error", r, err)
+	}
+}
+
+func TestParseAgyEmptyReplyAfterOutputIsError(t *testing.T) {
+	for _, tc := range []struct {
+		name, data string
+		wantErr    bool
+	}{
+		{"empty reply after output", `{"status":"SUCCESS","response":"","usage":{"output_tokens":189}}`, true},
+		{"whitespace reply after output", `{"status":"SUCCESS","response":" \n","usage":{"output_tokens":254}}`, true},
+		{"reasoning only, no reply", `{"status":"SUCCESS","response":"","usage":{"output_tokens":0,"thinking_tokens":40}}`, true},
+		{"empty reply without output", `{"status":"SUCCESS","response":"","usage":{"output_tokens":0}}`, false},
+		{"reply", `{"status":"SUCCESS","response":"PONG","usage":{"output_tokens":5}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseAgy([]byte(tc.data))
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, want error %t", err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), "without a reply") {
+				t.Fatalf("err = %v, want the likely cause named", err)
+			}
+		})
+	}
+}
+
 var _ Driver = AgyDriver{}

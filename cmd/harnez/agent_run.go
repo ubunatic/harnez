@@ -422,7 +422,11 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if err != nil {
 		return fmt.Errorf("resolve working directory: %w", err)
 	}
-	baseDriver := agentDriver(m, canonicalWorkDir)
+	autoApprove, err := subagent.RoleAutoApproveTools(role)
+	if err != nil {
+		return err
+	}
+	baseDriver := withAgyAutoApprove(agentDriver(m, canonicalWorkDir), autoApprove)
 	if err := preflightCodex(ctx, m.Provider, baseDriver, d.preflight); err != nil {
 		return fmt.Errorf("agent start %q preflight: %w", spec, err)
 	}
@@ -724,7 +728,11 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	}
 	var driver subagent.Driver
 	if !interactive {
-		baseDriver := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir)
+		autoApprove, err := subagent.RoleAutoApproveTools(role)
+		if err != nil {
+			return err
+		}
+		baseDriver := withAgyAutoApprove(agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir), autoApprove)
 		if err := preflightCodex(ctx, sess.Provider, baseDriver, d.preflight); err != nil {
 			return fmt.Errorf("agent resume %q preflight: %w", sess.Name, err)
 		}
@@ -1050,6 +1058,16 @@ func withAgyMeterSession(driver subagent.Driver, sessionID string) subagent.Driv
 	default:
 		return driver
 	}
+}
+
+// withAgyAutoApprove sets whether an agy driver approves tool calls for the
+// session's role (issue 1000); other drivers are returned unchanged.
+func withAgyAutoApprove(driver subagent.Driver, autoApprove bool) subagent.Driver {
+	if d, ok := driver.(subagent.AgyDriver); ok {
+		d.AutoApproveTools = autoApprove
+		return d
+	}
+	return driver
 }
 
 func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut, showReply bool, turn int, allReplies bool) error {

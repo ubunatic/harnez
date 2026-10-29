@@ -546,6 +546,20 @@ func TestNextNumber(t *testing.T) {
 			t.Errorf("NextNumberFromFiles() = %q, want %q", got, "1000")
 		}
 	})
+
+	t.Run("four-digit files are scanned", func(t *testing.T) {
+		fs := fstest.MapFS{
+			"999-end.md":   &fstest.MapFile{Data: []byte("# 999 — End\n\n**Status:** Open\n")},
+			"1000-wrap.md": &fstest.MapFile{Data: []byte("# 1000 — Wrap\n\n**Status:** Open\n")},
+		}
+		files, err := ScanFS(fs, ".")
+		if err != nil {
+			t.Fatalf("ScanFS error: %v", err)
+		}
+		if got := NextNumberFromFiles(files); got != "1001" {
+			t.Errorf("NextNumberFromFiles() = %q, want %q", got, "1001")
+		}
+	})
 }
 
 func TestSlugify(t *testing.T) {

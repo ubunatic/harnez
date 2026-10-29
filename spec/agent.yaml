@@ -283,6 +283,7 @@ roles:
     default_model: smart
     models: {smart: [sol:low]}
     spawns: []
+    auto_approve_tools: true
     rules: >-
       You are a leaf, read-only reviewer. Inspect the diff and test output you
       are given; never edit files and never run `harnez agent`. Outside this
@@ -294,6 +295,7 @@ roles:
     default_model: cheap
     models: {cheap: [luna:low, haiku:low], smart: [opus:low, opus:med, sol:low]}
     spawns: []
+    auto_approve_tools: true
     rules: >-
       You are a leaf, read-only advisor. Audit the ticket and code paths you are
       given and return a short implementation plan; never edit code and never run
