@@ -70,4 +70,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1002 | [1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md](1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md) | harnez apply should give agy an allowlist that steers agents to make and Go | Open |
 | 1004 | [1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md](1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md) | TestGoldenFontAssets fails: all five golden font PNGs are stale | Open |
 | 1005 | [1005-backfill-historical-closed-ticket-outcomes-flagged-by-status.md](1005-backfill-historical-closed-ticket-outcomes-flagged-by-status.md) | Backfill historical closed-ticket outcomes flagged by status | Open |
+| 1006 | [1006-consolidate-shared-skills-and-project-local-guidance-patterns.md](1006-consolidate-shared-skills-and-project-local-guidance-patterns.md) | Consolidate shared skills and project-local guidance patterns | Open |
 <!-- harnez:end issues-active-index -->
