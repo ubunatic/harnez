@@ -174,8 +174,10 @@ func runCollectorWithDeps(ctx context.Context, homeDir, dbPath string, interval 
 			if initial {
 				initial = false
 				// If a tracker is present and has no active clients at startup,
-				// skip the immediate initial fetch per issue 714 M3.
-				if tracker != nil && tracker.Count() == 0 {
+				// skip the immediate initial fetch per issue 714 M3, unless the
+				// store has no snapshot yet: then waiting a full cadence would
+				// leave `harnez usage` with nothing to read (issue 991).
+				if tracker != nil && tracker.Count() == 0 && storeHasSnapshot(ctx, dbPath) {
 					timer := time.NewTimer(interval)
 					select {
 					case <-ctx.Done():
@@ -312,4 +314,10 @@ func collectTick(ctx context.Context, homeDir string, client *http.Client, state
 			fmt.Fprintf(out, "harnez server: write %s snapshot: %v\n", agent.AgentID, err)
 		}
 	}
+}
+
+// storeHasSnapshot reports whether the usage store already holds a collector snapshot.
+func storeHasSnapshot(ctx context.Context, dbPath string) bool {
+	_, err := ReadStoredSummary(ctx, dbPath)
+	return err == nil
 }
