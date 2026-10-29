@@ -139,6 +139,11 @@ Verification: reproduce with a 32k local model and default settings (length stop
     `compaction.modelOverrides` for `lmcoder/coder` and `lmcoder/strata` (13107 / 8192).
   - After apply: no warning; 2 compactions, peak 22,878 tokens, stop `stop`, a full answer in 95 s. The answer's
     correctness was not part of the check.
+- 2026-10-29, later: lmcoder 263 raised `coder` to a 65536 window (Pi `models.json` updated). `harnez apply`
+  then writes nothing for it, but keeps the old `lmcoder/coder` entry (13107 / 8192), which on 64k compacts
+  earlier and keeps less than Pi's defaults. The host removed that entry by hand from `~/.pi/agent/settings.json`.
+  Gap for a later fix: apply should drop an entry it once wrote when the model's window grows past the
+  threshold (for example: values that equal the derivation for some window, reserve/keep = 0.4/0.25).
 - Owner note (2026-10-29): treat `lmcoder:strata` like `coder`; file new issues only if a problem shows up.
   Server notes from the owner: the proxy loads the model lazily on the first request, so a first reply can take
   about 30 s; another agent works on the server and may restart it. A slow first reply or a connection error during
