@@ -144,6 +144,29 @@ func TestResolveLmcoderCoderThroughCatalog(t *testing.T) {
 	}
 }
 
+func TestLmcoderCoderListedAsPiSupported(t *testing.T) {
+	entries, err := KnownModelEntriesE()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range ModelEntriesWithDriver(entries, func(m Model) Driver { return DriverFor(m, "") }) {
+		if e.Spec != "lmcoder:coder:low" {
+			continue
+		}
+		found = true
+		if !e.Batch {
+			t.Fatal("lmcoder:coder:low is not listed as supported by the Pi driver")
+		}
+	}
+	if !found {
+		t.Fatal("lmcoder:coder:low missing from KnownModelEntriesE")
+	}
+	if _, ok := DriverFor(Model{Provider: "lmcoder", Name: "coder", Tier: "low"}, "").(PiDriver); !ok {
+		t.Fatal("DriverFor(lmcoder) is not PiDriver")
+	}
+}
+
 func TestCodexPassesReasoningEffort(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var got []string
