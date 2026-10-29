@@ -53,6 +53,8 @@ func runIsolatedTests(m *testing.M) int {
 	os.Unsetenv(agentModelEnv)
 	os.Unsetenv(agentSessionEnv)
 	os.Unsetenv(agentLauncherEnv)
+	// The Pi agent dir would otherwise bypass the temp HOME and reach the real ~/.pi.
+	os.Unsetenv("PI_CODING_AGENT_DIR")
 	for _, name := range resolve.SessionEnvVars {
 		os.Unsetenv(name)
 	}

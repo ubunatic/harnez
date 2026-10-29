@@ -141,6 +141,34 @@ func TestSyncIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestMissingOverride(t *testing.T) {
+	dir := guardPiDir(t)
+	writeFile(t, dir, "models.json", `{"providers": {
+  "lmcoder": {"models": [{"id": "coder", "contextWindow": 32768}, {"id": "default", "contextWindow": 65536}]},
+  "a": {"models": [{"id": "dup", "contextWindow": 32768}, {"id": "solo", "contextWindow": 32768}]},
+  "b": {"models": [{"id": "dup", "contextWindow": 32768}]}}}`)
+	for _, tc := range []struct {
+		provider, name, key string
+		missing             bool
+	}{
+		{"lmcoder", "coder", "lmcoder/coder", true},
+		{"lmcoder", "default", "", false},
+		{"pi", "solo", "a/solo", true},
+		{"pi", "a/dup", "a/dup", true},
+		{"pi", "dup", "", false},
+		{"claude", "coder", "", false},
+	} {
+		key, window, missing := MissingOverride(dir, tc.provider, tc.name, testParams)
+		if missing != tc.missing || (missing && (key != tc.key || window != 32768)) {
+			t.Errorf("MissingOverride(%s, %s) = %q, %d, %v", tc.provider, tc.name, key, window, missing)
+		}
+	}
+	writeFile(t, dir, "settings.json", `{"compaction": {"modelOverrides": {"lmcoder/coder": {"reserveTokens": 1}}}}`)
+	if _, _, missing := MissingOverride(dir, "lmcoder", "coder", testParams); missing {
+		t.Error("override present but reported missing")
+	}
+}
+
 func TestSyncMissingIsNoOp(t *testing.T) {
 	dir := guardPiDir(t)
 	for _, d := range []string{"", filepath.Join(dir, "absent"), dir} {

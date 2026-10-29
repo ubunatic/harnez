@@ -430,6 +430,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if err := preflightCodex(ctx, m.Provider, baseDriver, d.preflight); err != nil {
 		return fmt.Errorf("agent start %q preflight: %w", spec, err)
 	}
+	if m.Provider == "pi" || m.Provider == "lmcoder" {
+		warnSmallPiWindow(cmd.ErrOrStderr(), m, piAgentDir())
+	}
 	tl := newTimeline(cmd)
 	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir}
 	parentID := d.parent() // read before the child's environment replaces it

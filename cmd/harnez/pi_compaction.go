@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/picompact"
 	"ubunatic.com/harnez/internal/subagent"
 )
@@ -19,6 +20,31 @@ func piCompactionParams() (picompact.Params, error) {
 		ReserveFraction: spec.ReserveFraction,
 		KeepFraction:    spec.KeepRecentFraction,
 	}, nil
+}
+
+// piAgentDir is Pi's agent dir as `harnez apply` sees it, or "" when the config is unavailable.
+func piAgentDir() string {
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		return ""
+	}
+	return claude.PiAgentRoot(cfg)
+}
+
+// warnSmallPiWindow prints one warning when a Pi-driven model has a small
+// window and no compaction override; the fix is `harnez apply` (issue 1023).
+// Any lookup failure stays silent: the warning must never block a start.
+func warnSmallPiWindow(warn io.Writer, m subagent.Model, dir string) {
+	if m.Provider != "pi" && m.Provider != "lmcoder" {
+		return
+	}
+	params, err := piCompactionParams()
+	if err != nil {
+		return
+	}
+	if key, window, missing := picompact.MissingOverride(dir, m.Provider, m.Name, params); missing {
+		fmt.Fprintf(warn, "Warning: Pi model %s has a %d-token context window and no compaction override; run 'harnez apply' to add one.\n", key, window)
+	}
 }
 
 // applyPiCompaction writes Pi compaction overrides for small-window models during `harnez apply`.

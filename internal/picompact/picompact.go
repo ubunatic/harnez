@@ -157,6 +157,71 @@ func sameOverride(existing any, o Override) bool {
 	return m["reserveTokens"] == float64(o.ReserveTokens) && m["keepRecentTokens"] == float64(o.KeepRecentTokens)
 }
 
+// MissingOverride reports whether a Pi-driven harnez model has a window below
+// the threshold and no compaction.modelOverrides entry in <dir>/settings.json.
+// Provider lmcoder maps to key "lmcoder/<name>"; provider pi takes a
+// "<provider>/<id>" name as is, or matches a bare id when exactly one Pi
+// provider has it. Missing or malformed files report nothing.
+func MissingOverride(dir, provider, name string, p Params) (key string, window int, missing bool) {
+	if dir == "" || (provider != "pi" && provider != "lmcoder") {
+		return "", 0, false
+	}
+	windows, err := LoadModels(dir)
+	if err != nil || windows == nil {
+		return "", 0, false
+	}
+	key = resolveKey(windows, provider, name)
+	if key == "" {
+		return "", 0, false
+	}
+	window = windows[key]
+	if _, small := Derive(window, p); !small {
+		return "", 0, false
+	}
+	settings, err := os.ReadFile(filepath.Join(dir, "settings.json"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", 0, false
+	}
+	var doc struct {
+		Compaction struct {
+			ModelOverrides map[string]json.RawMessage `json:"modelOverrides"`
+		} `json:"compaction"`
+	}
+	if len(settings) > 0 && json.Unmarshal(settings, &doc) != nil {
+		return "", 0, false
+	}
+	if _, ok := doc.Compaction.ModelOverrides[key]; ok {
+		return "", 0, false
+	}
+	return key, window, true
+}
+
+func resolveKey(windows map[string]int, provider, name string) string {
+	if provider == "lmcoder" {
+		key := "lmcoder/" + name
+		if _, ok := windows[key]; ok {
+			return key
+		}
+		return ""
+	}
+	if strings.Contains(name, "/") {
+		if _, ok := windows[name]; ok {
+			return name
+		}
+		return ""
+	}
+	found := ""
+	for key := range windows {
+		if strings.HasSuffix(key, "/"+name) {
+			if found != "" {
+				return ""
+			}
+			found = key
+		}
+	}
+	return found
+}
+
 // Sync writes the overrides for small-window models in <dir>/models.json into
 // <dir>/settings.json. A missing dir or models.json is a silent no-op; a
 // malformed file prints one warning and leaves settings.json untouched.
