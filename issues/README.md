@@ -87,4 +87,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1026 | [1026-agent-session-record-shows-compaction-count-0-for-pi-sessions-that-compacted.md](1026-agent-session-record-shows-compaction-count-0-for-pi-sessions-that-compacted.md) | Agent session record shows compaction_count 0 for Pi sessions that compacted | Open |
 | 1027 | [1027-agent-context-modes-plain-no-skills-role-skills-for-pi-and-small-window-models.md](1027-agent-context-modes-plain-no-skills-role-skills-for-pi-and-small-window-models.md) | Agent context modes: plain, no-skills, role-skills for Pi and small-window models | Open |
 | 1028 | [1028-add-s-sessions-box-card-to-harnez-usage-watch-turns-tokens-compactions.md](1028-add-s-sessions-box-card-to-harnez-usage-watch-turns-tokens-compactions.md) | Add [S] Sessions box card to harnez usage --watch (turns, tokens, compactions) | Open |
+| 1029 | [1029-signal-to-harnez-agent-start-leaves-the-provider-child-pi-running.md](1029-signal-to-harnez-agent-start-leaves-the-provider-child-pi-running.md) | Signal to harnez agent start leaves the provider child (pi) running | Open |
 <!-- harnez:end issues-active-index -->
