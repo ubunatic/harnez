@@ -1,6 +1,6 @@
 # 1022 — Add lmcoder coder and strata models through the x600 proxy
 
-**Status**: Closed — lmcoder:coder resolves through harnez and answers via Pi on x600: harnez agent start (advisor, model lmcoder:coder) returned 'Hello!' in 1 s with the model already loaded; the first load took 43.9 s in a direct Pi run. make test-q1 has no --- FAIL after f27aeebd (commits 38190e98, 98b5ef58, f27aeebd). Parked, not in this ticket: lmcoder:strata (out of scope by owner decision); med and high tiers stay disabled; Pi accepts --thinking low but reports thinking off, effect unverified.
+**Status**: Open — M4 pre-work from the lmcoder:coder one-shot review: compaction mode and streaming driver test
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
