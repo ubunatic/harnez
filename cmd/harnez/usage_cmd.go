@@ -42,6 +42,8 @@ func newUsageCmd() *cobra.Command {
 		Use:     "usage",
 		Aliases: []string{"quota", "tokens"},
 		Short:   "Show unified token, session, and quota status across AI coding agents",
+		// Runtime store errors are not usage mistakes; skip the flags dump.
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			serverCfg, err := server.LoadConfig()
 			if err != nil {
@@ -294,9 +296,10 @@ func newUsageHistoryCmd(offline, shared *bool) *cobra.Command {
 	}
 
 	historyRecordCmd := &cobra.Command{
-		Use:     "record",
-		Aliases: []string{"append"},
-		Short:   "Collect and record a usage snapshot to the local machine history log",
+		Use:          "record",
+		Aliases:      []string{"append"},
+		Short:        "Collect and record a usage snapshot to the local machine history log",
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			summary, err := usagecli.LoadLocalUsage(ctx, *offline)

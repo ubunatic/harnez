@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,10 @@ import (
 	"ubunatic.com/harnez/internal/usagestore"
 	"ubunatic.com/harnez/internal/xdgpath"
 )
+
+// ErrNoCollectorSnapshots reports a usage store that is missing or holds no
+// collector snapshot yet.
+var ErrNoCollectorSnapshots = errors.New("usage store has no collector snapshots yet")
 
 // UsageStorePath resolves the canonical store path without creating it or
 // migrating the legacy telemetry database.
@@ -25,6 +30,9 @@ func ReadStoredSummary(ctx context.Context, dbPath string) (UsageSummary, error)
 		dbPath = UsageStorePath()
 	}
 	if _, err := os.Stat(dbPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return UsageSummary{}, fmt.Errorf("%w: %w", ErrNoCollectorSnapshots, err)
+		}
 		return UsageSummary{}, err
 	}
 	store, err := usagestore.OpenReadOnly(dbPath)
@@ -34,8 +42,8 @@ func ReadStoredSummary(ctx context.Context, dbPath string) (UsageSummary, error)
 	defer store.Close()
 	record, err := store.LatestUsageSummary(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return UsageSummary{}, fmt.Errorf("usage store has no collector snapshots yet")
+		if errors.Is(err, sql.ErrNoRows) {
+			return UsageSummary{}, ErrNoCollectorSnapshots
 		}
 		return UsageSummary{}, err
 	}

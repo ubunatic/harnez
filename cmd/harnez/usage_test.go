@@ -3,11 +3,15 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
 	"ubunatic.com/harnez/internal/usagecli"
 )
@@ -166,4 +170,60 @@ func seedUsageStore(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return usage.UsageStorePath()
+}
+
+func TestUsageEmptyStoreFailsWithActionableError(t *testing.T) {
+	old := usagecli.EnsureLocalServerFunc
+	usagecli.EnsureLocalServerFunc = func(context.Context, server.Config) usagecli.ServerCheckResult {
+		return usagecli.ServerCheckResult{}
+	}
+	t.Cleanup(func() { usagecli.EnsureLocalServerFunc = old })
+	for _, store := range []string{"initialized", "missing"} {
+		for _, args := range [][]string{
+			{"usage"},
+			{"usage", "--compact"},
+			{"usage", "--agent", "codex"},
+			{"usage", "--json"},
+		} {
+			t.Run(store+"/"+fmt.Sprint(args), func(t *testing.T) {
+				home := t.TempDir()
+				t.Setenv("HOME", home)
+				t.Setenv("XDG_DATA_HOME", home+"/data")
+				t.Setenv("XDG_STATE_HOME", home+"/state")
+				t.Setenv("XDG_CACHE_HOME", home+"/cache")
+				if store == "initialized" {
+					if err := usage.InitializeUsageStore(context.Background(), home, ""); err != nil {
+						t.Fatal(err)
+					}
+				}
+				root := &cobra.Command{Use: "harnez"}
+				root.AddCommand(newUsageCmd())
+				out := new(bytes.Buffer)
+				root.SetOut(out)
+				root.SetErr(out)
+				root.SetArgs(args)
+				err := root.Execute()
+				if err == nil {
+					t.Fatalf("expected an error; output:\n%s", out)
+				}
+				if got := exitCodeFromRunError(err); got != 1 {
+					t.Fatalf("exit code = %d, want 1", got)
+				}
+				if !errors.Is(err, usage.ErrNoCollectorSnapshots) {
+					t.Fatalf("error %v does not wrap ErrNoCollectorSnapshots", err)
+				}
+				text := out.String() + err.Error()
+				for _, want := range []string{"usage store has no collector snapshots yet", "harnez server install"} {
+					if !strings.Contains(text, want) {
+						t.Fatalf("output missing %q:\n%s", want, text)
+					}
+				}
+				for _, bad := range []string{"Usage:", "Flags:"} {
+					if strings.Contains(text, bad) {
+						t.Fatalf("output contains %q:\n%s", bad, text)
+					}
+				}
+			})
+		}
+	}
 }

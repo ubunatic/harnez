@@ -32,6 +32,10 @@ type ServerCheckResult struct {
 	passiveNoQuota map[string]uint64
 }
 
+// EnsureLocalServerFunc is the server bootstrap used by LoadLocalUsageWithStatus;
+// tests replace it to avoid spawning a real detached server.
+var EnsureLocalServerFunc = EnsureLocalServer
+
 func EnsureLocalServer(ctx context.Context, cfg server.Config) ServerCheckResult {
 	starter := ServerStarter{
 		probe: probeHarnezServer,
@@ -55,13 +59,16 @@ func LoadLocalUsageWithStatus(ctx context.Context, offline bool) (usage.UsageSum
 	ctx, cancel := context.WithTimeout(ctx, cfg.UsageDeadline)
 	defer cancel()
 	if !offline {
-		check := EnsureLocalServer(ctx, cfg)
+		check := EnsureLocalServerFunc(ctx, cfg)
 		status = check.status
 		passiveNoQuota = check.passiveNoQuota
 	}
 	summary, err := ReadStoredSummaryBounded(ctx, usage.UsageStorePath())
-	if err != nil && os.IsNotExist(err) && offline {
+	if err != nil && errors.Is(err, os.ErrNotExist) && offline {
 		return usage.UsageSummary{}, status, fmt.Errorf("usage store does not exist; start harnez server first (or run usage without --offline)")
+	}
+	if err != nil && errors.Is(err, usage.ErrNoCollectorSnapshots) {
+		err = fmt.Errorf("%w; run 'harnez server install' to start the collector, or retry once the first collection finishes", usage.ErrNoCollectorSnapshots)
 	}
 	if err == nil && !offline {
 		summary.PassiveNoQuota = passiveNoQuota
