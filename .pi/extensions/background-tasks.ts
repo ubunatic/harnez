@@ -166,8 +166,41 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
   return { runner };
 }
 
+// Pi loads this file from the project and the global location into one runtime. Both copies share that runtime's
+// event bus, so the first copy to install answers the probe and later copies yield. Pi delivers bus events
+// synchronously and by reference, so the probe's mutation is visible to the emitter before emit returns.
+const CLAIM_CHANNEL = "harnez:background-tasks:claim";
+type ClaimProbe = { claimed: boolean };
+
 export default function (pi: ExtensionAPI) {
+  const bus: Partial<ExtensionAPI["events"]> | undefined = pi.events;
+  if (typeof bus?.emit !== "function" || typeof bus?.on !== "function") {
+    // Without the bus there is no way to see an earlier copy, so both copies register. Say so instead of claiming dedup.
+    process.stderr.write("background-tasks: pi.events is missing; duplicate-load protection is off\n");
+    installBackgroundTasks(pi);
+    return;
+  }
+  const probe: ClaimProbe = { claimed: false };
+  bus.emit(CLAIM_CHANNEL, probe);
+  if (probe.claimed) return;
+  // Install first: if it throws, no subscription is made, so a failed load leaves no claim behind.
   installBackgroundTasks(pi);
+  const release = bus.on(CLAIM_CHANNEL, markClaimed);
+  pi.on("session_shutdown", () => release());
+}
+
+/**
+ * Marks a probe as claimed. Anything else that arrives on the channel (undefined, a primitive, a frozen or read-only
+ * payload) is left alone and never throws, so the subscription survives it. A payload that refuses the write is not
+ * marked, so the emitter still sees no claim and registers.
+ */
+function markClaimed(data: unknown): void {
+  if (typeof data !== "object" || data === null) return;
+  try {
+    (data as ClaimProbe).claimed = true;
+  } catch {
+    // Read-only property or frozen object: no claim is recorded.
+  }
 }
 
 async function withTaskOrNotify(runner: BackgroundTaskRunner, args: string, ctx: Notify, action: (task: BackgroundTask) => void | Promise<void>): Promise<void> {

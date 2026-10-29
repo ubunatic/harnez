@@ -15,4 +15,4 @@ then echo "test-pi: node $(node --version) is too old; 22.18 or newer is require
      exit 1
 fi
 
-node --import ./test/pi/register.mjs --test test/pi/background-tasks.test.ts
+node --import ./test/pi/register.mjs --test test/pi/background-tasks.test.ts test/pi/background-claim.test.ts
