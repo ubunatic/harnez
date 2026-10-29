@@ -190,6 +190,91 @@ notification before running its verification step. The `background_task_list`
 tool is available for checking whether a job is still active; completion
 notifications avoid polling merely to wait.
 
+### Global background-task runner (`harnez apply`)
+
+The same runner is also installed for every project, not only this repository.
+`harnez apply` mirrors `.pi/extensions/background-tasks.ts`, its library, and
+`spec/pi-background-tasks.yaml` into the Pi agent dir as one directory extension:
+`<pi agent dir>/extensions/background-tasks/`, with a `package.json` whose
+`pi.extensions` names the entry point. The Pi agent dir is `$PI_CODING_AGENT_DIR`
+when set, otherwise `pi_agent_target` (default `~/.pi/agent`). The runner is part
+of the `skills` component: with that component selected, apply installs it; without
+it, apply reverts a managed install.
+
+Commands:
+
+- `harnez apply` installs or updates the runner. It decides everything from the
+  disk first and refuses before writing when a file is modified or unrecorded.
+  Re-running with no changes writes nothing.
+- `harnez status` lists one row per managed path with its state (for example `ok`
+  or `drifted`).
+- `harnez diff` reports drift without writing anything.
+- Revert runs when apply is given a component set without `skills`, for example
+  `harnez apply --components telemetry-only`. It removes the unmodified files it owns
+  and keeps the changed ones and their marker, naming each one it kept.
+
+**Ownership by digest.** The directory's `.harnez-managed` file is a ledger. It
+records the SHA-256 digest of each file harnez last committed, and, while an apply
+is interrupted, the digest of the bytes it is writing. A file is harnez's only while
+its bytes match one of those digests. A modified file, or a file without a ledger
+record, is a drift: apply refuses to overwrite it, and revert keeps it. A symlink, a
+special file, or an extra entry point (`index.ts`/`index.js`) is unsafe: apply refuses
+and deactivates an unmodified `package.json`. Revert keeps a changed package and its
+marker until nothing it did not write remains.
+
+**Pretrust load.** The runner lives in Pi's user extension scope, which Pi loads
+without project trust. Project extensions under `.pi/extensions/` load only after
+the project is trusted. Both copies run in one Pi runtime, so the event-bus claim
+below covers them (see the limits list).
+
+**Event-bus dedup.** A copy that loads first emits a claim probe on the channel
+`harnez:background-tasks:claim`. An earlier copy marks the probe as claimed; a later
+copy sees the claim and does not register its tools, commands, or session hooks.
+The claim is released on session shutdown.
+
+Limits of this dedup (not hidden by the code):
+
+- **Broken foreign extensions.** A foreign listener on the channel that throws makes
+  the emit throw. This copy then fails to load and records no claim; the other copy
+  may still load. This runner does not repair or disable the foreign extension.
+- **Spoofable events.** Any extension on the same bus can emit the claim channel and
+  mark the probe as claimed, which makes this copy yield. The bus is not
+  authenticated; it is coordination, not a security boundary.
+- **Missing event API.** If `pi.events` is missing or lacks `emit`/`on`, the runner
+  prints a warning on stderr and registers unconditionally; duplicate protection is
+  off.
+- **Same-user concurrent race.** Two Pi processes started at the same moment do not
+  share a bus. Each registers its own runner, so the tasks are not deduplicated
+  across processes.
+
+**Write order and hard kill.** Apply writes in this order: the ledger, staged (its
+digests describe the bytes about to be written); the dependency files; the
+`package.json` that activates the runner; and finally the ledger, committed. Each
+write is a temp file renamed into place. Nothing is deleted automatically.
+
+- **Before the first ledger rename** (no `.harnez-managed` marker yet). A kill can
+  leave an empty `extensions/` and `extensions/background-tasks/`, or a ledger temp
+  file `.harnez-managed.<hex>.tmp` in the managed directory. An empty directory is
+  not "nothing to do". Without a marker, apply and revert classify the directory as a
+  clash, print `clash ... (no .harnez-managed marker); kept it`, and install nothing.
+  To recover, inspect it with `ls -la`. Move a temp file aside, then remove the
+  directory with `rmdir`, which refuses to delete anything still inside. Do not use
+  `rm -rf`, and do not delete unknown files.
+- **After the staged ledger, before `package.json`.** The install is in progress. Some
+  dependency files may be missing or partial. Pi has no manifest to activate, so the
+  runner does not load. Apply refuses unrecorded files and lists them. Move any
+  unknown file aside, then run `harnez apply` again to finish.
+- **After `package.json`, before the final commit.** The payload is complete and the
+  runner is active, but the ledger still holds the staged record. Running
+  `harnez apply` again writes the final ledger and changes nothing else.
+
+An unrecorded temp file inside the payload, such as `.background-tasks.ts.<hex>.tmp`,
+is preserved: apply refuses and names it, and revert keeps it.
+
+**Recovery without deleting data.** Stop Pi. Run `harnez status` and `harnez diff`
+to see the state. Move unknown or temp files aside (or inspect them), then run
+`harnez apply` again. Do not remove the ledger by hand; apply and revert read it.
+
 ## Skills and Hooks Integration
 
 `harnez apply` manages skills and extension hooks for Pi instances, exactly like

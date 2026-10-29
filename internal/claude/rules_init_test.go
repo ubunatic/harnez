@@ -90,6 +90,44 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 	}
 }
 
+// Generated Tools.md must separate an unexposed code-memory MCP from an unindexed repository, never claim auto-indexing,
+// and point to the self-test exactly once for troubled background tasks.
+func TestRunInit_GeneratedToolsMCPAndSelftestGuidance(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/mcp\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := claude.LoadTestConfig(t)
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Tools.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := string(raw)
+	for _, want := range []string{
+		"list_projects", "index_status", "index_repository", "authorized",
+		"Distinguish three states", "MCP not exposed", "Only the first is \"unavailable\"",
+		"Do not assume auto-indexing", "harnez find code|docs", "`rg`",
+		"background_task_list", "--session <id>", "runner is not loaded",
+	} {
+		if !strings.Contains(tools, want) {
+			t.Errorf("generated Tools.md missing %q", want)
+		}
+	}
+	if n := strings.Count(tools, "harnez agent selftest --step hello"); n != 1 {
+		t.Errorf("generated Tools.md must name the self-test exactly once, got %d", n)
+	}
+	// "harnez agent selftest" does not contain "harnez selftest", so a plain substring check is correct here.
+	if strings.Contains(tools, "harnez selftest") {
+		t.Error("generated Tools.md names a top-level `harnez selftest`, which does not exist")
+	}
+}
+
 func TestRunInit_MigratesLocalOverlaysWithSingleHeaderGap(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/headergap\n"), 0o644); err != nil {
