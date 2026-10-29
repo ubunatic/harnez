@@ -41,6 +41,10 @@ func TestHookConfigsHaveNoAbsoluteHomePaths(t *testing.T) {
 			if entry.IsDir() {
 				return nil
 			}
+			// Pi and Claude may keep machine-local permissions here; they are not committed hooks.
+			if dir == ".claude" && path == filepath.Join(base, "settings.local.json") {
+				return nil
+			}
 			contents, err := os.ReadFile(path)
 			if err != nil {
 				return err
