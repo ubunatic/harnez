@@ -359,14 +359,18 @@ func runDetachedWorker(cmd *cobra.Command, req startRequest, storeDir string) er
 		return fmt.Errorf("detached worker session %q was not registered", req.SessionID)
 	}
 	req.StoredPrompt = sess.StartPrompt
-	err = runStart(agentCommandContext(cmd), cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return sess.ParentSessionID }, preflight: subagent.CheckCodexAuth, dbPath: agentUsageDBPath()}, req)
+	ctx, stopSignals := agentSignalContext(agentCommandContext(cmd))
+	defer stopSignals()
+	err = runStart(ctx, cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return sess.ParentSessionID }, preflight: subagent.CheckCodexAuth, dbPath: agentUsageDBPath()}, req)
 	current, getErr := store.Get(sess.ID)
 	if getErr != nil {
 		return getErr
 	}
 	current.ProcessPID = 0
 	current.LastActiveAt = time.Now()
-	if err != nil {
+	if sig, signalled := agentSignalCause(ctx); err != nil && signalled {
+		current.Status, current.LastError = "stopped", sig.Error()
+	} else if err != nil {
 		current.Status = "failed"
 		current.LastError = err.Error()
 	} else {
@@ -410,14 +414,18 @@ func runDetachedResumeWorker(cmd *cobra.Command, sessionID string, req resumeReq
 		},
 		preflight: subagent.CheckCodexAuth,
 	}
-	err = runResume(agentCommandContext(cmd), cmd, deps, req)
+	ctx, stopSignals := agentSignalContext(agentCommandContext(cmd))
+	defer stopSignals()
+	err = runResume(ctx, cmd, deps, req)
 	current, getErr := store.Get(sessionID)
 	if getErr != nil {
 		return getErr
 	}
 	current.ProcessPID = 0
 	current.LastActiveAt = time.Now()
-	if err != nil {
+	if sig, signalled := agentSignalCause(ctx); err != nil && signalled {
+		current.Status, current.LastError = "stopped", sig.Error()
+	} else if err != nil {
 		current.Status = "failed"
 		current.LastError = err.Error()
 	} else {

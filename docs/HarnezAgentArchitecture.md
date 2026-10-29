@@ -286,6 +286,13 @@ task running the turn may report its exit a few seconds later; that is expected.
 killed only the wrapper, and the next resume failed with Codex's "thread already has an active
 writer".
 
+SIGINT, SIGTERM or SIGHUP to a running `start` or `resume` (foreground or detached worker)
+cancels the turn's context, so the provider's process group is killed through the same
+`cmd.Cancel` path; the session is saved as `stopped` with `interrupted by <signal>` and harnez
+exits non-zero. A second signal ends harnez at once if that cleanup hangs. A `--timeout` deadline
+stays a timeout (`failed`), and SIGKILL cannot be caught. Before 1029, a signal left the
+provider child running and the session `running`.
+
 ### 2.6 Slash commands
 
 A single-line root prompt beginning with `/` is intercepted unless it came from

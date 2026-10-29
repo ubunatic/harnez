@@ -151,8 +151,10 @@ func agentCommandContext(cmd *cobra.Command) context.Context {
 // withAgentTimeout hands run the command context, bounded by --timeout when
 // set. It never mutates cmd's context: goroutines started by run may still
 // read their ctx after run returns, and cmd.SetContext would race them.
+// A signal cancels the context too, so the provider child dies with the turn.
 func withAgentTimeout(cmd *cobra.Command, timeout time.Duration, run func(context.Context) error) error {
-	ctx := agentCommandContext(cmd)
+	ctx, stop := agentSignalContext(agentCommandContext(cmd))
+	defer stop()
 	if timeout <= 0 || cmd == nil || (!cmd.Flags().Changed("timeout") && !cmd.InheritedFlags().Changed("timeout")) {
 		return run(ctx)
 	}
@@ -572,19 +574,27 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		baselineCacheAt := turnQuotaBaseline(turnStarted, before)
 		storeTurnQuota(d.dbPath, id, m.Provider, turn, "before", before)
 		recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
-		if req.SessionID == "" {
+		sig, signalled := agentSignalCause(ctx)
+		if req.SessionID == "" || signalled {
 			sess, getErr := s.Get(id)
 			if getErr != nil {
 				sess = initialSession("failed")
 			}
 			sess.ProviderSessionID = firstNonEmpty(sess.ProviderSessionID, observedSessionID)
 			sess.Status = "failed"
+			if signalled {
+				sess.Status, sess.ProviderPID, sess.ProviderStarttime = "stopped", 0, 0
+				err = sig
+			}
 			sess.ProcessPID, sess.ProcessStarttime = 0, 0
 			sess.LastError = err.Error()
 			sess.LastActiveAt = time.Now()
 			if saveErr := s.Save(sess); saveErr != nil {
 				return fmt.Errorf("agent start %q failed: %s; session recovery record failed: %w", spec, shortCause(err), saveErr)
 			}
+		}
+		if signalled {
+			return fmt.Errorf("agent start %q %s; provider stopped and session %q can be resumed", spec, sig, sessName)
 		}
 		return fmt.Errorf("agent start %q failed: %s; verify the provider/model configuration or ask for guidance", spec, shortCause(err))
 	}
@@ -902,6 +912,16 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		baselineCacheAt := turnQuotaBaseline(turnStarted, before)
 		storeTurnQuota(d.dbPath, sess.ID, sess.Provider, turn, "before", before)
 		recordTurnQuota(d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt)
+		if sig, signalled := agentSignalCause(ctx); signalled {
+			// A signal is the caller's stop, not a provider failure.
+			sess.Status, sess.LastError = "stopped", sig.Error()
+			sess.ProcessPID, sess.ProviderPID, sess.ProviderStarttime = 0, 0, 0
+			sess.LastActiveAt = time.Now()
+			if saveErr := s.Save(sess); saveErr != nil {
+				return fmt.Errorf("agent resume %q %s; session recovery record failed: %w", sess.Name, sig, saveErr)
+			}
+			return fmt.Errorf("agent resume %q %s; provider stopped and session can be resumed", sess.Name, sig)
+		}
 		recordResumeFailure(s, sess, err)
 		quotaState := "unknown"
 		if d.availability != nil {
