@@ -1,6 +1,6 @@
 # 1000 — agy reviewer turns end with an empty reply when the model calls a tool
 
-**Status**: Open
+**Status**: Closed — Code landed as issue 995 before renumbering: 5a1589a7 (auto_approve_tools for advisor/reviewer, parseAgy empty-reply error); renumbered in merge 3731684a; merged via ubunatic/harnez PR #3. Live canary argon-991c: agy:argon:low advisor read the code and returned a full 991 refinement (8m08s).
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
