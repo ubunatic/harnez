@@ -125,6 +125,14 @@ Verification: reproduce with a 32k local model and default settings (length stop
   warning naming the model, its window and the fix (`harnez apply`).
 - M3 (live check): one `harnez agent start --model lmcoder:coder` run with a prompt large enough to pass about 20k
   tokens, before and after, recording prompt tokens and stop reason.
+- M1 delivered (`bb6b6386`, apply writes overrides): new `internal/picompact`, spec block `pi_compaction` in
+  `spec/agent.yaml` with schema and loader check, `harnez apply` calls `picompact.Sync`. Host review: diff matches
+  the plan; tests assert 13107/8192 exactly, unrelated keys and a hand-written override kept, byte and mtime
+  equality on a second sync, malformed files untouched; touched packages green on rerun.
+- M2 delivered (`b5440c80`, start warning): `warnSmallPiWindow` in `cmd/harnez/pi_compaction.go`, called from
+  `runStart` for providers `pi` and `lmcoder`; test covers lmcoder, unique and ambiguous `pi:<id>`, 65536 and a
+  non-Pi provider, and no warning after apply. `cmd/harnez` tests now unset `PI_CODING_AGENT_DIR`.
+- Owner note (2026-10-29): treat `lmcoder:strata` like `coder`; file new issues only if a problem shows up.
   Server notes from the owner: the proxy loads the model lazily on the first request, so a first reply can take
   about 30 s; another agent works on the server and may restart it. A slow first reply or a connection error during
   a restart is not a test result: retry once after it is back, and record it.
