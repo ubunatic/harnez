@@ -27,6 +27,34 @@ synchronous start itself was not covered.
 - A test starts a fake provider that sleeps, signals harnez, and asserts that no child process is left.
 - Check the other providers (claude, codex, agy) on the same path.
 
+## Searcher audit (2026-10-29, `haiku:low`, 35 s)
+- Provider launch: `runProviderCLI` (`internal/subagent/process.go:100-110`) -> `exec.CommandContext`; `IsolateProcess`
+  sets `Setpgid` (`process.go:44`) and `cmd.Cancel` SIGKILLs the group on context cancel (`process.go:56-58`). Claude
+  same path (`claude.go:22`); codex `startProcess` (`codex.go:593-598`) also `Setpgid`, cancels with SIGINT.
+- No `signal.Notify`/`NotifyContext` on the start path; `root.Execute()` (`cmd/harnez/clilog.go:183`) uses a
+  background context. Go's default SIGTERM action exits without running `Cancel`, and no `Pdeathsig` is set, so
+  the child lives on. Signal handling exists only in `usage_cmd.go:365,406`, `server_cmd.go:83`, `channel.go:38`.
+- Status: sync start writes `failed` on error (`cmd/harnez/agent_run.go:581`) and `stopped` for the watchdog
+  (`agent_run.go:554`); `reportSessionStop` writes `stopped` and clears PIDs (`agent_stop.go:93-97`).
+- Test templates: `internal/subagent/claude_stream_test.go:160` `TestClaudeStreamCancelKillsProcessGroup`
+  (fake provider runs `sleep 30 &`, writes the PID, asserts it is dead); `cmd/harnez/agent_stop_test.go:21,46`
+  (`TestStopFakeProviderWrapper`, `TestStopProviderTreeAndWrapper`, helper-process fixtures).
+
+## Decision
+- Host, 2026-10-29: Claude models only (OpenAI and Gemini quota exhausted): developer `opus:low`.
+- Host: fix in harnez, not in each driver: a `signal.NotifyContext` (SIGINT, SIGTERM, SIGHUP) for `agent start`
+  and `agent resume` whose cancel reaches the existing `cmd.Cancel` group kill, then the session is saved as
+  `stopped` (as the watchdog does) and harnez exits non-zero. No `Pdeathsig`: it is Linux-only and would not
+  update the session record. SIGKILL to harnez stays out of scope (cannot be caught).
+
+## Milestones
+- M1 (signal stops the child): the fix above for start and resume, all providers through the shared path.
+  Reproduction test first: start `harnez agent start` (or the start function) with a fake provider that runs
+  `sleep 30` and records its PID, send SIGTERM to harnez, assert the child is gone within a bounded wait and the
+  session status is `stopped`. Also SIGINT. Negative case: a normal completed turn still ends `done`, not `stopped`.
+- M2 (live check, host): `timeout 20 harnez agent start --model lmcoder:coder ...` with a long prompt; afterwards
+  no `pi` process is left and `harnez agent list` shows the session stopped.
+
 /goal Make a signal to a synchronous `harnez agent start`/`resume` end the provider child and mark the session
 stopped, or stop and report when a provider cannot be stopped this way. Circuit breaker: on a loop or no progress,
 clear the goal and write a failure report. Re-check live code first; this ticket was written on 2026-10-29.
