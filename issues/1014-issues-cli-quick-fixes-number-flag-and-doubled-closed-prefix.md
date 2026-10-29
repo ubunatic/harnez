@@ -1,4 +1,4 @@
-# 1012 — issues CLI quick fixes: `--number` for `new` and the doubled "Closed —" prefix
+# 1014 — issues CLI quick fixes: `--number` for `new` and the doubled "Closed —" prefix
 
 **Status**: Closed — issues new --number and status-word dedup landed
 **Closed-By**: claude:sonnet:med, session h1012-dev
