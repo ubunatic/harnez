@@ -10,8 +10,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 <!-- harnez:begin issues-active-index -->
 | # | File | Title | Status |
 |---|------|-------|--------|
-| 1002 | [1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md](1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md) | harnez apply should give agy an allowlist that steers agents to make and Go | Open |
-| 1004 | [1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md](1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md) | TestGoldenFontAssets fails: all five golden font PNGs are stale | Open |
 | 851 | [851-bug-hunt-skill-pick-p1-p2-bugs-re-verify-close-obsolete-ones-fix-the-rest-the-way-forward.md](851-bug-hunt-skill-pick-p1-p2-bugs-re-verify-close-obsolete-ones-fix-the-rest-the-way-forward.md) | bug-hunt skill: pick P1/P2 bugs, re-verify, close obsolete ones, fix the rest the way forward | Open |
 | 865 | [865-privileged-subprocesses-pam-fingerprint-prompts-and-stderr-visibility.md](865-privileged-subprocesses-pam-fingerprint-prompts-and-stderr-visibility.md) | Privileged subprocesses, PAM biometric prompts, and stderr visibility | Open |
 | 869 | [869-agy-agents-auto-compact-at-200k-tokens-by-default-per-session-flag-to-turn-auto-compact-on-or-off.md](869-agy-agents-auto-compact-at-200k-tokens-by-default-per-session-flag-to-turn-auto-compact-on-or-off.md) | agy agents auto-compact at 200k tokens by default, per-session flag to turn auto-compact on or off | Open |
@@ -69,4 +67,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 992 | [992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md](992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md) | Per-provider plan preference: own, free or shared plan limits which roles a provider gets | Open |
 | 993 | [993-support-xhigh-and-max-effort-tiers-e-g-claude-haiku-xhigh.md](993-support-xhigh-and-max-effort-tiers-e-g-claude-haiku-xhigh.md) | Support xhigh and max effort tiers (e.g. claude:haiku:xhigh) | Open |
 | 997 | [997-code-box-in-harnez-usage-for-configured-repos-pr-counts-and-latest-pr-age.md](997-code-box-in-harnez-usage-for-configured-repos-pr-counts-and-latest-pr-age.md) | Code box in harnez usage for configured repos PR counts and latest PR age | Open |
+| 1002 | [1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md](1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md) | harnez apply should give agy an allowlist that steers agents to make and Go | Open |
+| 1004 | [1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md](1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md) | TestGoldenFontAssets fails: all five golden font PNGs are stale | Open |
 <!-- harnez:end issues-active-index -->
