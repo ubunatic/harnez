@@ -1,6 +1,6 @@
 # 1029 — Signal to harnez agent start leaves the provider child (pi) running
 
-**Status**: Open
+**Status**: Closed — SIGINT/SIGTERM/SIGHUP to agent start or resume now kills the provider process group and saves the session stopped (e0a35fed); tests for claude start/resume and codex failed before and pass after; live: timeout 25 on lmcoder:coder left no pi process and status stopped
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
