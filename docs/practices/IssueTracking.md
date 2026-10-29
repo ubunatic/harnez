@@ -78,6 +78,16 @@ Bare numbers remain unchanged because they cannot identify which duplicate was i
 If the ticket lacks its numbered title, add `# NNN — Title` before retrying. After all moves,
 run `harnez index --check` and check for any remaining merge conflict markers.
 
+Instead of moving files by hand, use `harnez issues reconcile` on a pushed branch where history
+must not be rewritten (rebase and force-push are not allowed there). It renumbers only this
+branch's own colliding tickets (files added in `<ref>..HEAD`, default: the merged parent, else
+`origin/main`) to the next free numbers, rewrites references, repairs the indexes and commits
+once; a failure rolls back and commits nothing. `--dry-run` prints the plan. Agents should use
+`harnez issues reconcile --pull` instead of `git pull`: it fetches, merges the upstream, then
+reconciles (`--fetch` only fetches and previews). It stops on real merge conflicts and refuses a
+dirty tracked tree. No merge hook runs it implicitly: a hidden renumbering step was judged too
+risky (1016).
+
 README synchronization uses a persistent `issues/README.md.lock` for `flock`; deleting it
 can split concurrent writers across different inodes. `harnez init` ignores it (and the
 reservation lock) in `.git/info/exclude`.

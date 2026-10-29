@@ -31,6 +31,7 @@ In-repo tracker in `issues/`, one file per ticket (`issues/NNN-kebab-case-title.
 - `harnez issues close <n> [reason] --model <spec> --session <id>` — Record `**Closed-By**` under Status; defaults are `HARNEZ_AGENT_MODEL` and `HARNEZ_SESSION_ID`, with flags taking precedence. Missing parts are omitted, generated indexes exclude this line, and a later close replaces it.
 - `harnez issues mv <old> [new]` — Renumber ticket, rename file, rewrite title header and exact filename references in issues/ and docs/, resync index, commit. Bare numbers stay unchanged.
 - Duplicate numbers after a merge: `harnez index` and `harnez status` fail with all colliding paths. Run `harnez issues mv -d . issues/NNN-extra-ticket.md` for each extra file (next free number by default); use the path because the number is ambiguous. If the title lacks a number, add `# NNN — Title` before retrying.
+- On a pushed branch, prefer `harnez issues reconcile [--dry-run]`: renumbers only your own colliding tickets (added in `<ref>..HEAD`), rewrites references, repairs indexes, commits once, rolls back on failure. Agents use `harnez issues reconcile --pull` instead of `git pull` (`--fetch` previews only). No hook runs it implicitly.
 - `harnez issues list [filter]` — List matching tickets (default `is:open`).
 
 ### 3.2 Metadata Header (Top of Every Ticket)
