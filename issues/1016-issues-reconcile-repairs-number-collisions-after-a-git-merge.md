@@ -1,6 +1,7 @@
 # 1016 — `issues reconcile` repairs number collisions after a `git merge`
 
-**Status**: Open
+**Status**: Closed — implemented reconcile with --fetch/--pull; merge hook and canary deferred
+**Closed-By**: session 75720e1c-e632-4b07-b620-4411c6ae4713
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

@@ -78,6 +78,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1012 | [1012-agent-selftest-hello-and-later-steps-omit-session-so-separate-tool-shells-fail.md](1012-agent-selftest-hello-and-later-steps-omit-session-so-separate-tool-shells-fail.md) | Agent selftest hello and later steps omit --session so separate tool shells fail | Open |
 | 1013 | [1013-issues-new-checks-fetched-remote-refs-for-the-next-free-number.md](1013-issues-new-checks-fetched-remote-refs-for-the-next-free-number.md) | `issues new` checks fetched remote refs for the next free number | Open |
 | 1015 | [1015-issues-mv-rewrites-references-to-the-moved-ticket-number.md](1015-issues-mv-rewrites-references-to-the-moved-ticket-number.md) | `issues mv` rewrites references to the moved ticket number | Open |
-| 1016 | [1016-issues-reconcile-repairs-number-collisions-after-a-git-merge.md](1016-issues-reconcile-repairs-number-collisions-after-a-git-merge.md) | `issues reconcile` repairs number collisions after a `git merge` | Open |
 | 1017 | [1017-issues-rebase-dry-run-shows-the-collision-plan-and-leaves-a-valid-index.md](1017-issues-rebase-dry-run-shows-the-collision-plan-and-leaves-a-valid-index.md) | `issues rebase --dry-run` shows the collision plan and leaves a valid index | Open |
 <!-- harnez:end issues-active-index -->
