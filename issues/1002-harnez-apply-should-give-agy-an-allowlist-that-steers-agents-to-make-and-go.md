@@ -136,3 +136,30 @@ tokens; likely an unapproved tool call"). So:
   e.g. whether `command(ls)` also allows `lsblk`).
 - Not yet tested: the entry syntax for file tools (view/edit/write), wildcards inside `command(...)`,
   `deny`, and what `toolPermission` values other than `always-proceed` do.
+
+## Canary 3 (host, 2026-10-29): rule syntax, prefix boundary, write paths, deny
+
+Rule kinds, from the docs embedded in the agy 1.4.9 binary: `command(<prefix>)`, `read_file(<path>)`,
+`write_file(<path>)`, `mcp(<server>/<tool>)`, `read_url(...)`. The same docs warn against `command(*)`,
+`read_file(*)`, `write_file(*)`, `mcp(*)`.
+
+Settings for both turns (restored afterwards):
+`"permissions": {"allow": ["command(ls)", "command(git)", "write_file(<w>/ok)"], "deny": ["command(git log)"]}`,
+workspace `<w>` = a throwaway dir under `~/projects` (removed afterwards). Two headless
+`agy:flash38:low` developer turns, conversations ba5882b7 and b1ed828d:
+
+| Call | Rule in play | Result |
+| --- | --- | --- |
+| `ls -1` | `command(ls)` | ran |
+| `git --version` | `command(git)` | ran |
+| `write_file <w>/ok/a.txt` | `write_file(<w>/ok)` | ran, file written |
+| `lsblk -d` | `command(ls)` | **blocked**: prefix matches on word boundary |
+| `git log -1 --oneline` | `deny: command(git log)` over `allow: command(git)` | **refused**; the agent continued to the next step, so deny returns a refusal instead of waiting |
+| `write_file <w>/other/b.txt` | none | blocked, turn ended |
+
+Conclusions for the implementation:
+- Claude `Bash(<prefix>:*)` / `Bash(<prefix> *)` maps to agy `command(<prefix>)` (word-boundary prefix).
+- Claude `Edit`/`Write` path rules map to `write_file(<dir>)`; workspace-wide write = the workspace dir.
+- Claude `deny` maps to agy `deny`, and deny wins over a broader allow.
+- Not mapped: Claude rules with mid-pattern wildcards (`Bash(git * --help)`), `WebFetch(domain:...)`
+  (agy `read_url` syntax unverified), tool names without an agy equivalent. Report them, do not guess.
