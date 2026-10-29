@@ -68,4 +68,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 993 | [993-support-xhigh-and-max-effort-tiers-e-g-claude-haiku-xhigh.md](993-support-xhigh-and-max-effort-tiers-e-g-claude-haiku-xhigh.md) | Support xhigh and max effort tiers (e.g. claude:haiku:xhigh) | Open |
 | 997 | [997-code-box-in-harnez-usage-for-configured-repos-pr-counts-and-latest-pr-age.md](997-code-box-in-harnez-usage-for-configured-repos-pr-counts-and-latest-pr-age.md) | Code box in harnez usage for configured repos PR counts and latest PR age | Open |
 | 1002 | [1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md](1002-harnez-apply-should-give-agy-an-allowlist-that-steers-agents-to-make-and-go.md) | harnez apply should give agy an allowlist that steers agents to make and Go | Open |
+| 1003 | [1003-harden-pi-background-task-runner-lifecycle-and-reporting.md](1003-harden-pi-background-task-runner-lifecycle-and-reporting.md) | Harden Pi background task runner lifecycle and reporting | Open |
 <!-- harnez:end issues-active-index -->
