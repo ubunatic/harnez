@@ -22,6 +22,8 @@ loop, a hard blocker or no progress, clear the goal and write a failure report h
   (10 lines). Assumed cause: the rebase repair renumbered the file but did not regenerate the index;
   verify before fixing.
 
+- Another real collision (local self-test issue 1010 vs upstream 1010) stopped replay at the generated-index merge driver with `conflicting generated rows for 1010`, before automatic repair. Resolving it required manually renumbering the local ticket during the stopped rebase and regenerating the index afterward. Verify this failure path rather than assuming replay always reaches the repair step.
+
 ## Want
 
 - Dry run: list each collision (`ours` file, `theirs` file, new number) and the references that
