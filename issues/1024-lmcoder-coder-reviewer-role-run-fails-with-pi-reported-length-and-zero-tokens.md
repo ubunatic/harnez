@@ -29,6 +29,14 @@ The local `coder` model has a 32,768-token context window (`~/.pi/agent/models.j
 - If the cause is the window, the fix belongs in the role prompt or in the context guard that 1023 tracks. Do not change `~/.pi/agent/models.json` or the model load.
 - Add a test or a documented limit so a reviewer run on `lmcoder:coder` fails with a clear message, not a bare `length`.
 
+## Rerun after 1023 (2026-10-29, host)
+- `harnez agent start --role reviewer --model lmcoder:coder`, prompt: review `git diff 38190e98^..f27aeebd`
+  (the 1022 diff; the original prompt was not kept). Compaction overrides from 1023 M1 in place.
+- No `length` stop this time, but no answer either: still waiting with no output after 14 min, stopped by the
+  owner at 21:56. Killing `harnez` left its `pi` child running (reparented); it had to be killed separately.
+- Next: find out where the 14 minutes go (Pi session log: tool calls, compactions, prompt sizes) before
+  deciding on a fix. A timeout or progress output for long synchronous lmcoder turns may belong here too.
+
 ## Notes
 
 - Out of scope: switching the proxy model. `lmcoder:strata` is not tried.
