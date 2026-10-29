@@ -95,6 +95,14 @@ Verification: reproduce with a 32k local model and default settings (length stop
   motivation, and leaves large-window models alone. The window comes from Pi's own `models.json`, not a copy in
   harnez. Apply must keep every other key in `settings.json` and keep entries the user wrote by hand.
 
+- Host choice, after the developer plan: no marker and no state file. apply treats an existing override entry as
+  its own only when it equals what it would write now; any other entry is kept and named in one stderr line. A
+  later spec change then leaves old values in place with that notice, which is acceptable for fewer moving parts
+  and no extra harnez file in the Pi dir. Values are the plain floors (32768 gives 13107 / 8192), no rounding.
+  `lmcoder/strata` also gets an entry: it is a settings entry only, the model is never loaded.
+- Pi 1.4.0 checked by the developer: each field resolves `override ?? ordinary ?? default`
+  (`core/settings-manager.js:649-658`); key `${provider}/${id}`; values must be non-negative integers.
+
 ## Searcher audit (2026-10-29, `haiku:low`)
 - Pi is launched by `piRunArgs`/`piResumeArgs`/`piModelArgs` (`internal/subagent/pi.go:113-125`) through
   `runProviderCLI` (`internal/subagent/process.go:100`); harnez passes no Pi settings today.
