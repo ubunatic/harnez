@@ -53,6 +53,16 @@ The local `coder` model has a 32,768-token context window (`~/.pi/agent/models.j
   `502 status code` after 15 s. Both with 0 tool calls. Proxy `/v1/models` afterwards: `coder` `live: false`.
   The server was being restarted by another agent; the run is owed once `coder` is back.
 
+## Narrow-prompt run (2026-10-29 23:32, host, 64k window)
+- Same narrow prompt (`r1024-narrow.md`: one fixed `git diff`, at most 4 more tool calls, at most 5 findings),
+  session `r1024e`, `timeout 600`.
+- No answer in 10 min (exit 124). Pi log `2026-10-29T22-32-28-178Z_01a189cb...jsonl`: 80 tool calls (51 `grep`,
+  30 of them `grep -rn` across the repo), 2 compactions, peak 49,039 tokens, 9,723 output tokens.
+- The model ignored the tool budget in the prompt; a prompt alone does not bound it. Same pattern as the
+  unbounded prompt (73 calls). Next: a harness-side bound (tool-call limit per turn, or the read-only `plain`
+  mode from 1027 with only the tools the task needs), not more prompt wording.
+- 1029 fix confirmed live: harnez printed `interrupted by SIGTERM; provider stopped`, and no `pi` was left.
+
 ## Notes
 
 - Out of scope: switching the proxy model. `lmcoder:strata` is not tried.

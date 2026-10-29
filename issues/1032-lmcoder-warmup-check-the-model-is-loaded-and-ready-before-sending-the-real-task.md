@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Enhancement
-**Related**: 1024, 1029, 1030, lmcoder 263
+**Related**: 1024, 1029, 1030, lmcoder 263, lmcoder 268 (server readiness signal), neus 112 (same client step)
 
 ---
 
