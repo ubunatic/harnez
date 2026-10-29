@@ -27,6 +27,13 @@
 
 ## Milestones
 
-- M1: Searcher verifies the premise (catalog, Pi driver, proxy config) for `lmcoder:coder` and reports exact locations; no edits.
+- M1 (done, Searcher, read-only): premise verified.
+  - Catalog: `models:` in `spec/agent.yaml:97`; schema `spec/schemas/agent.schema.json:180` requires `provider`, `name`, and `tier` (`low|med|high`).
+  - Loader: `internal/modelcatalog/catalog.go` (`Load`); user policy file `~/.config/harnez/models.yaml` is absent on this machine.
+  - Resolution: `internal/subagent/driver.go:322` (`ModelEntriesWithDriver`), `:394` (`ResolveModel`).
+  - Pi: `internal/subagent/pi.go:24` (`PiDriver`), `:125` (`piModelArgs`) emits `--model <name>` and `--thinking <tier>` (`med` maps to `medium`). Pi takes the provider URL and key from its own `~/.pi/agent/models.json`, not from harnez.
+  - This machine's `~/.pi/agent/models.json` already defines provider `lmcoder` at `http://127.0.0.1:8735/v1` (`openai-completions`) with model IDs `coder` and `strata`. The key is not recorded here.
+  - The repo has no Pi `lmcoder` provider. The canary template defines only `llamacpp`; `scripts/agent-canary/bin/codex-launch` defines `lmcoder`.
+  - Not verified: whether `127.0.0.1:8735` reaches x600 and answers, and whether Pi needs `coder` or `lmcoder/coder` as the model name.
 - M2: Catalog entry for `lmcoder:coder` in `spec/agent.yaml` with schema, resolved through the normal path, with isolated tests.
 - M3: Minimal live call to `lmcoder:coder` via the x600 proxy through Pi, or an honest blocker report.
