@@ -17,3 +17,13 @@
 - Recheck the live catalog, supported agent drivers, proxy configuration and recent history before implementation. Determine how the two names map to the proxy and which harness can actually call them; do not assume catalog entries alone provide a working driver.
 - List and resolve both names through the normal model selection path, respecting catalog schema and model policy. Keep machine-specific endpoints and credentials out of shipped defaults; use the project's configuration conventions.
 - Verify selection and error handling with isolated tests, then make a minimal live call to each model via the x600 proxy when available. Report unavailable models or infrastructure honestly rather than treating listing as proof of access.
+
+## Decision
+
+- Driver: the models are called through Pi Agent (`internal/subagent/pi.go`), chosen by the owner on 2026-10-29. Do not add a different harness for these two names.
+
+## Milestones
+
+- M1: Searcher verifies the premise (catalog, Pi driver, proxy config) and reports exact locations; no edits.
+- M2: Catalog entries for `lmcoder:coder` and `lmcoder:strata` in `spec/agent.yaml` with schema, resolved through the normal path, with isolated tests.
+- M3: Minimal live call to each model via the x600 proxy through Pi, or an honest blocker report.
