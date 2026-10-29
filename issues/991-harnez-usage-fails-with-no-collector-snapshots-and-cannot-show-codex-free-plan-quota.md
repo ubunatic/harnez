@@ -1,6 +1,6 @@
 # 991 — harnez usage fails with no collector snapshots and cannot show Codex free-plan quota
 
-**Status**: Open
+**Status**: Closed — items 1-3 merged in #6 (live: codex monthly row ok); picks fallback moved to 992; fresh-user install check moved to container test 1010
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
