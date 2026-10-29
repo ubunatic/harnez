@@ -132,6 +132,13 @@ Verification: reproduce with a 32k local model and default settings (length stop
 - M2 delivered (`b5440c80`, start warning): `warnSmallPiWindow` in `cmd/harnez/pi_compaction.go`, called from
   `runStart` for providers `pi` and `lmcoder`; test covers lmcoder, unique and ambiguous `pi:<id>`, 65536 and a
   non-Pi provider, and no warning after apply. `cmd/harnez` tests now unset `PI_CODING_AGENT_DIR`.
+- M3 delivered (live check, host, 2026-10-29, `lmcoder:coder`, same read-five-docs prompt, advisor role):
+  - Before apply: the M2 warning printed; 4 tool calls, last prompt 28,643 tokens, 1 output token, stop `length`,
+    0 compactions, 50 s; harnez reported `pi reported length`.
+  - `harnez apply`: the only semantic change to `~/.pi/agent/settings.json` was
+    `compaction.modelOverrides` for `lmcoder/coder` and `lmcoder/strata` (13107 / 8192).
+  - After apply: no warning; 2 compactions, peak 22,878 tokens, stop `stop`, a full answer in 95 s. The answer's
+    correctness was not part of the check.
 - Owner note (2026-10-29): treat `lmcoder:strata` like `coder`; file new issues only if a problem shows up.
   Server notes from the owner: the proxy loads the model lazily on the first request, so a first reply can take
   about 30 s; another agent works on the server and may restart it. A slow first reply or a connection error during
