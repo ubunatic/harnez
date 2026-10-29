@@ -74,5 +74,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1008 | [1008-add-optional-agent-start-and-resume-continuity-self-test.md](1008-add-optional-agent-start-and-resume-continuity-self-test.md) | Add optional agent start and resume continuity self-test | Open |
 | 1009 | [1009-install-pi-background-task-runner-globally-and-clarify-mcp-discovery.md](1009-install-pi-background-task-runner-globally-and-clarify-mcp-discovery.md) | Install Pi background task runner globally and clarify MCP discovery | Open |
 | 1010 | [1010-container-integration-test-for-harnez-server-install-on-a-fresh-user.md](1010-container-integration-test-for-harnez-server-install-on-a-fresh-user.md) | Container integration test for `harnez server install` on a fresh user | Open |
-| 1012 | [1012-issues-cli-quick-fixes-number-flag-and-doubled-closed-prefix.md](1012-issues-cli-quick-fixes-number-flag-and-doubled-closed-prefix.md) | issues CLI quick fixes: `--number` for `new` and the doubled "Closed —" prefix | Open |
 <!-- harnez:end issues-active-index -->

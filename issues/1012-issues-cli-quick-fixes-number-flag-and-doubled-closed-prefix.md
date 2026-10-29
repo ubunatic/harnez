@@ -1,6 +1,7 @@
 # 1012 — issues CLI quick fixes: `--number` for `new` and the doubled "Closed —" prefix
 
-**Status**: Open
+**Status**: Closed — issues new --number and status-word dedup landed
+**Closed-By**: claude:sonnet:med, session h1012-dev
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
