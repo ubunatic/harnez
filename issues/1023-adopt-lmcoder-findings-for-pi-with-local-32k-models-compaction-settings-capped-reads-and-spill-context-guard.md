@@ -75,3 +75,21 @@ Decide what harnez does; candidate items (each its own child ticket if accepted)
 
 Verification: reproduce with a 32k local model and default settings (length stop), then with the derived settings
 (no length stop), and re-run the lmcoder realistic replay (`scripts/strata-context-replay.py`, ticket 255).
+
+## Decision
+- 2026-10-29, owner: lean sprint on candidate items 1 (derived compaction settings) and 2 (small-window warning)
+  only. Items 3 (context guard) and 4 (skipped-compaction event) stay open in this ticket.
+- Live checks use only the `coder` model on the lmcoder proxy. It is shared with other agents' tests: never
+  unload it, and never load `strata`.
+- Host choice: agents run on Claude models only (OpenAI and Gemini quota exhausted, see 1024), so the searcher is
+  `haiku:low`, the developer `opus:low` and the reviewer `opus:med` instead of the codex defaults.
+- Host choice: the window fractions (reserve about 40%, keep recent about 25%) and the warning threshold (64k) are
+  configurable values, so they go in `spec/` with a schema, not as Go defaults (`docs/Spec.md`).
+
+## Sprint 2026-10-29 (items 1 and 2)
+- M1 (derived compaction settings): when harnez starts Pi with a model whose context window is below the
+  threshold, Pi gets `compaction.reserveTokens` and `keepRecentTokens` derived from that window. Unit tests for the
+  derivation, including 32768 giving values near 14000/8000, and windows at and above the threshold left alone.
+- M2 (warning): a visible warning when a Pi session runs below the threshold with Pi's default compaction settings.
+- M3 (live check): one `harnez agent start --model lmcoder:coder` run with a prompt large enough to pass about 20k
+  tokens, before and after, recording prompt tokens and stop reason.
