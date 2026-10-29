@@ -71,4 +71,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1004 | [1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md](1004-testgoldenfontassets-fails-all-five-golden-font-pngs-are-stale.md) | TestGoldenFontAssets fails: all five golden font PNGs are stale | Open |
 | 1005 | [1005-backfill-historical-closed-ticket-outcomes-flagged-by-status.md](1005-backfill-historical-closed-ticket-outcomes-flagged-by-status.md) | Backfill historical closed-ticket outcomes flagged by status | Open |
 | 1006 | [1006-consolidate-shared-skills-and-project-local-guidance-patterns.md](1006-consolidate-shared-skills-and-project-local-guidance-patterns.md) | Consolidate shared skills and project-local guidance patterns | Open |
+| 1007 | [1007-evaluate-shared-agents-skills-discovery-across-providers.md](1007-evaluate-shared-agents-skills-discovery-across-providers.md) | Evaluate shared .agents skills discovery across providers | Open |
 <!-- harnez:end issues-active-index -->
