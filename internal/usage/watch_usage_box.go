@@ -284,7 +284,7 @@ func formatAllUsageTableLineWithMidWidth(label string, windows []QuotaWindow, co
 	foundWeekly, found5h := false, false
 	for _, w := range windows {
 		nameLow := strings.ToLower(w.Name)
-		if !foundWeekly && (strings.Contains(nameLow, "week") || strings.Contains(nameLow, "7-day")) {
+		if !foundWeekly && (isLongQuotaWindowName(nameLow)) {
 			w1 = w
 			foundWeekly = true
 		} else if !found5h && (strings.Contains(nameLow, "5-hour") || strings.Contains(nameLow, "five hour") || strings.Contains(nameLow, "session")) {
@@ -336,7 +336,7 @@ func formatAllUsageTableLineWithMidWidth(label string, windows []QuotaWindow, co
 func firstAllUsageWindow(windows []QuotaWindow) QuotaWindow {
 	for _, window := range windows {
 		name := strings.ToLower(window.Name)
-		if strings.Contains(name, "week") || strings.Contains(name, "7-day") {
+		if isLongQuotaWindowName(name) {
 			return window
 		}
 	}
@@ -512,7 +512,7 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	foundWeekly, found5h := false, false
 	for _, w := range windows {
 		nameLow := strings.ToLower(w.Name)
-		if !foundWeekly && (strings.Contains(nameLow, "week") || strings.Contains(nameLow, "7-day")) {
+		if !foundWeekly && (isLongQuotaWindowName(nameLow)) {
 			w1 = w
 			foundWeekly = true
 		} else if !found5h && (strings.Contains(nameLow, "5-hour") || strings.Contains(nameLow, "five hour") || strings.Contains(nameLow, "session")) {

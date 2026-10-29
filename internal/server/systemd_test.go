@@ -11,6 +11,11 @@ import (
 
 func TestSystemdInstallUsesTempUnitDirAndStartsConfiguredUnit(t *testing.T) {
 	runtimeDir := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	t.Setenv("SSH_AUTH_SOCK", filepath.Join(runtimeDir, "agent.sock"))
 	cfg, err := LoadConfig()
@@ -42,7 +47,7 @@ func TestSystemdInstallUsesTempUnitDirAndStartsConfiguredUnit(t *testing.T) {
 		"RestartSec=5s",
 		"RuntimeDirectory=harnez",
 		"RuntimeDirectoryPreserve=yes",
-		"ReadWritePaths=%t/harnez",
+		"ReadWritePaths=-%t/harnez -%S/harnez -%C/harnez -%h/.local/share/harnez",
 		`Environment=SSH_AUTH_SOCK="%t/agent.sock"`,
 	} {
 		if !strings.Contains(content, want) {
@@ -51,6 +56,11 @@ func TestSystemdInstallUsesTempUnitDirAndStartsConfiguredUnit(t *testing.T) {
 	}
 	if strings.Contains(content, "{{") {
 		t.Errorf("unit has unresolved placeholders:\n%s", content)
+	}
+	for _, dir := range []string{"data", "cache", "state"} {
+		if info, err := os.Stat(filepath.Join(home, dir, "harnez")); err != nil || !info.IsDir() {
+			t.Errorf("install did not create %s/harnez: %v", dir, err)
+		}
 	}
 	wantCalls := []string{"--user show-environment", "--user daemon-reload", "--user enable --now " + cfg.SystemdUnitName}
 	if strings.Join(calls, "\n") != strings.Join(wantCalls, "\n") {

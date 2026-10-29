@@ -151,7 +151,11 @@ func usageTableWindows(agent AgentUsage, now time.Time) []namedWindow {
 		return out
 	}
 	if agent.Weekly != nil {
-		out = append(out, namedWindow{label: "weekly", w: *agent.Weekly})
+		label := "weekly"
+		if kind := quotaWindowKind(agent.Weekly.Name); kind == "monthly" || kind == "quota" {
+			label = kind
+		}
+		out = append(out, namedWindow{label: label, w: *agent.Weekly})
 	}
 	if agent.Session != nil {
 		out = append(out, namedWindow{label: "5h", w: *agent.Session})
@@ -169,6 +173,18 @@ func usageTableUnavailable(agent AgentUsage) string {
 	return "-"
 }
 
+// isLongQuotaWindowName reports whether a lowercased window name denotes the
+// long-horizon (weekly, monthly or unknown-length "quota") window rather than
+// a 5-hour session window.
+func isLongQuotaWindowName(lower string) bool {
+	for _, part := range []string{"week", "7-day", "month", "30-day", "30 day"} {
+		if strings.Contains(lower, part) {
+			return true
+		}
+	}
+	return strings.HasPrefix(lower, "quota")
+}
+
 // quotaWindowKind shortens collector window names such as "Weekly (7-day)"
 // or "Five Hour Limit Remaining" to "weekly" or "5h".
 func quotaWindowKind(name string) string {
@@ -176,6 +192,10 @@ func quotaWindowKind(name string) string {
 	switch {
 	case strings.Contains(lower, "week"):
 		return "weekly"
+	case strings.Contains(lower, "month"), strings.Contains(lower, "30-day"), strings.Contains(lower, "30 day"):
+		return "monthly"
+	case strings.HasPrefix(lower, "quota"):
+		return "quota"
 	case strings.Contains(lower, "five hour"), strings.Contains(lower, "5-hour"), strings.Contains(lower, "5 hour"), strings.Contains(lower, "session"):
 		return "5h"
 	}
@@ -186,7 +206,7 @@ func quotaWindowKind(name string) string {
 // Weekly-then-Session order of single-pool agents.
 func quotaWindowKindOrder(name string) int {
 	switch quotaWindowKind(name) {
-	case "weekly":
+	case "weekly", "monthly", "quota":
 		return 0
 	case "5h":
 		return 1

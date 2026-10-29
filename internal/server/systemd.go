@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/xdgpath"
 )
 
 type SystemdService struct {
@@ -128,6 +129,9 @@ func (s SystemdService) Install(ctx context.Context) (bool, error) {
 	if err := os.MkdirAll(s.UnitDir, 0755); err != nil {
 		return true, fmt.Errorf("create systemd user unit directory: %w", err)
 	}
+	if err := ensureServiceDirs(); err != nil {
+		return true, err
+	}
 	path := filepath.Join(s.UnitDir, s.Config.SystemdUnitName)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return true, fmt.Errorf("write systemd user unit: %w", err)
@@ -139,6 +143,25 @@ func (s SystemdService) Install(ctx context.Context) (bool, error) {
 		return true, fmt.Errorf("enable systemd user service: %w", err)
 	}
 	return true, nil
+}
+
+// ensureServiceDirs creates the per-user directories the unit lists in
+// ReadWritePaths so the service has somewhere to write on its first start.
+func ensureServiceDirs() error {
+	state := os.Getenv("XDG_STATE_HOME")
+	if !filepath.IsAbs(state) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolve home directory: %w", err)
+		}
+		state = filepath.Join(home, ".local", "state")
+	}
+	for _, base := range []string{xdgpath.CacheHome(), xdgpath.DataHome(), state} {
+		if err := os.MkdirAll(filepath.Join(base, "harnez"), 0755); err != nil {
+			return fmt.Errorf("create service directory: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s SystemdService) Uninstall(ctx context.Context) (bool, error) {

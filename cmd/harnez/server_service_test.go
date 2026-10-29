@@ -23,10 +23,18 @@ func TestPrintServerSystemdStatusShowsOwnerAndHandoff(t *testing.T) {
 	}
 	var output bytes.Buffer
 	printServerSystemdStatus(&output, cfg, server.SystemdStatus{Available: true, Installed: true, Active: true, MainPID: 100, SocketPID: 200}, localServerStatusResponse{PID: 200})
-	for _, want := range []string{"MainPID=100", "socket owner: another process (PID 200)", "systemctl --user restart " + cfg.SystemdUnitName} {
+	for _, want := range []string{"MainPID=100", "socket owner: stray process (PID 200)", "systemctl --user restart " + cfg.SystemdUnitName} {
 		if !strings.Contains(output.String(), want) {
 			t.Errorf("status output missing %q:\n%s", want, output.String())
 		}
+	}
+	for _, bad := range []string{"another process", "hand back to systemd"} {
+		if strings.Contains(output.String(), bad) {
+			t.Errorf("status output has redundant line %q:\n%s", bad, output.String())
+		}
+	}
+	if n := strings.Count(output.String(), "socket owner:"); n != 1 {
+		t.Errorf("socket owner lines = %d, want 1:\n%s", n, output.String())
 	}
 }
 
@@ -305,5 +313,50 @@ func TestRunServerLogs(t *testing.T) {
 	err = runServerLogs(context.Background(), &buf2, cfg, server.SystemdStatus{Available: false, Installed: false}, false, 50, nil)
 	if err != nil || !strings.Contains(buf2.String(), "foreground server logs are printed to its terminal") {
 		t.Fatalf("case 2 failed: err=%v, out=%q", err, buf2.String())
+	}
+}
+
+func TestPrintServerSystemdStatusReportsStrayServerWithoutKilling(t *testing.T) {
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, status := range map[string]server.SystemdStatus{
+		"not installed":     {Available: true, SocketPID: 200},
+		"installed, active": {Available: true, Installed: true, Active: true, MainPID: 100, SocketPID: 200},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var output bytes.Buffer
+			printServerSystemdStatus(&output, cfg, status, localServerStatusResponse{PID: 200})
+			for _, want := range []string{"stray process (PID 200)", "harnez server stop"} {
+				if !strings.Contains(output.String(), want) {
+					t.Errorf("status output missing %q:\n%s", want, output.String())
+				}
+			}
+		})
+	}
+	var managed bytes.Buffer
+	printServerSystemdStatus(&managed, cfg, server.SystemdStatus{Available: true, Installed: true, Active: true, MainPID: 100, SocketPID: 100}, localServerStatusResponse{PID: 100})
+	if strings.Contains(managed.String(), "stray") {
+		t.Errorf("systemd-owned socket reported as stray:\n%s", managed.String())
+	}
+}
+
+func TestPrintServerInstallResultWarnsAboutStrayServer(t *testing.T) {
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	printServerInstallResult(&output, cfg, server.SystemdStatus{Available: true, Installed: true, MainPID: 100, SocketPID: 200})
+	for _, want := range []string{"installed and started " + cfg.SystemdUnitName, "stray process (PID 200)", "harnez server stop", "systemctl --user restart " + cfg.SystemdUnitName} {
+		if !strings.Contains(output.String(), want) {
+			t.Errorf("install output missing %q:\n%s", want, output.String())
+		}
+	}
+	var clean bytes.Buffer
+	printServerInstallResult(&clean, cfg, server.SystemdStatus{Available: true, Installed: true, MainPID: 100, SocketPID: 100})
+	if strings.Contains(clean.String(), "stray") {
+		t.Errorf("clean install reported a stray server:\n%s", clean.String())
 	}
 }

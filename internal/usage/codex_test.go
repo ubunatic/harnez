@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -48,6 +49,79 @@ func TestBuildCodexQuotaWindow(t *testing.T) {
 			t.Errorf("DurationLeft = %v, want ~2h derived from ResetAt", qw.DurationLeft)
 		}
 	})
+}
+
+func TestBuildCodexQuotaWindowLabelsByDuration(t *testing.T) {
+	now := time.Now()
+	day := 86400
+	for _, tc := range []struct {
+		name  string
+		pw    CodexRateWindow
+		label string
+	}{
+		{"5 hour", CodexRateWindow{LimitWindowSeconds: 18000}, "5-Hour"},
+		{"7 day", CodexRateWindow{LimitWindowSeconds: int64(7 * day)}, "Weekly"},
+		{"30 day", CodexRateWindow{LimitWindowSeconds: int64(30 * day)}, "Monthly"},
+		{"30 day, last week", CodexRateWindow{LimitWindowSeconds: int64(30 * day), ResetAfterSeconds: int64(3 * day)}, "Monthly"},
+		{"unknown length, 29 days left", CodexRateWindow{ResetAt: now.Add(29 * 24 * time.Hour).Unix()}, "Monthly"},
+		{"unknown length, 29 days left via reset_after", CodexRateWindow{ResetAfterSeconds: int64(29 * day)}, "Monthly"},
+		// Time left alone never proves a shorter class, so no "Weekly" guess.
+		{"unknown length, 3 days left", CodexRateWindow{ResetAfterSeconds: int64(3 * day)}, "Quota"},
+		{"unknown length, no reset", CodexRateWindow{}, "Quota"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pw := tc.pw
+			if got := buildCodexQuotaWindow(&pw, now).Name; got != tc.label {
+				t.Errorf("Name = %q, want %q", got, tc.label)
+			}
+		})
+	}
+}
+
+// A ChatGPT Free account reports one ~30-day window and no 5-hour window.
+func TestCollectCodexFreePlanSingleMonthlyWindow(t *testing.T) {
+	dir := codexFixtureDir(t)
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"plan_type":"free","rate_limit":{"allowed":true,"limit_reached":false,
+			"primary_window":{"used_percent":0,"limit_window_seconds":2592000,"reset_after_seconds":2505600},
+			"secondary_window":null}}`))
+	}))
+	defer mockServer.Close()
+
+	got := collectCodexAgainstURL(t, dir, mockServer)
+	if !got.Authenticated || got.PlanTier != "Free" {
+		t.Fatalf("Authenticated = %v, PlanTier = %q; want authenticated Free", got.Authenticated, got.PlanTier)
+	}
+	if got.Session != nil {
+		t.Errorf("Session = %+v, want nil (no phantom 5-hour window)", got.Session)
+	}
+	if got.Weekly == nil || got.Weekly.Name != "Monthly" {
+		t.Fatalf("Weekly = %+v, want the Monthly window", got.Weekly)
+	}
+
+	ctx := context.Background()
+	home := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "store.sqlite")
+	if err := InitializeUsageStore(ctx, home, dbPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := PersistUsageSummary(ctx, home, dbPath, UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{got}}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := ReadStoredSummary(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Agents) != 1 || stored.Agents[0].Weekly == nil || stored.Agents[0].Weekly.Name != "Monthly" || stored.Agents[0].Session != nil {
+		t.Fatalf("stored summary lost the Monthly window: %+v", stored.Agents)
+	}
+	_, fromWindows, err := ProviderSnapshotFromStoreAt(ctx, dbPath, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromWindows.Weekly == nil || !strings.HasPrefix(fromWindows.Weekly.Name, "Monthly") || fromWindows.Session != nil {
+		t.Fatalf("window round-trip: Weekly = %+v, Session = %+v; want Monthly and nil", fromWindows.Weekly, fromWindows.Session)
+	}
 }
 
 func TestCollectCodexTokensAggregatesFinalSessionCounts(t *testing.T) {
@@ -289,5 +363,42 @@ func TestCollectCodexParsesNestedTokenFields(t *testing.T) {
 	}
 	if usage.Session == nil || usage.Session.UsedPercent != 40 {
 		t.Errorf("Session = %+v, want UsedPercent 40 from live fetch", usage.Session)
+	}
+}
+
+func TestAssignCodexWindowNeutralQuotaNeverDisplacesRealWindows(t *testing.T) {
+	neutral := QuotaWindow{Name: "Quota", UsedPercent: 1}
+	session := QuotaWindow{Name: "5-Hour", UsedPercent: 2}
+	weekly := QuotaWindow{Name: "Weekly", UsedPercent: 3}
+	monthly := QuotaWindow{Name: "Monthly", UsedPercent: 4}
+	for _, tc := range []struct {
+		name        string
+		in          []QuotaWindow
+		wantSession string
+		wantWeekly  string
+	}{
+		{"lone neutral stays out of session", []QuotaWindow{neutral}, "", "Quota"},
+		{"neutral then weekly", []QuotaWindow{neutral, weekly}, "", "Weekly"},
+		{"weekly then neutral", []QuotaWindow{weekly, neutral}, "", "Weekly"},
+		{"neutral then monthly", []QuotaWindow{neutral, monthly}, "", "Monthly"},
+		{"session then neutral", []QuotaWindow{session, neutral}, "5-Hour", "Quota"},
+		{"neutral then session", []QuotaWindow{neutral, session}, "5-Hour", "Quota"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var u AgentUsage
+			for _, w := range tc.in {
+				assignCodexWindow(&u, w)
+			}
+			gotS, gotW := "", ""
+			if u.Session != nil {
+				gotS = u.Session.Name
+			}
+			if u.Weekly != nil {
+				gotW = u.Weekly.Name
+			}
+			if gotS != tc.wantSession || gotW != tc.wantWeekly {
+				t.Errorf("Session=%q Weekly=%q, want %q / %q", gotS, gotW, tc.wantSession, tc.wantWeekly)
+			}
+		})
 	}
 }

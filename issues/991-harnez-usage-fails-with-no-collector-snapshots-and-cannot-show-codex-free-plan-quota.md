@@ -84,3 +84,23 @@ architectural or OS blocker, or no progress, clear the goal and write a failure 
 
 A code-checked refinement by Argon (4 ordered items with file:line, expected behaviour and tests;
 item 4 may move to 992) waits for the owner go: `docs/studies/2026-10-28-argon-991-refinement-draft.md`.
+
+## Progress (2026-10-29)
+
+- Done, Item 1: `usage` (incl. `--compact`, `--agent`, `--json`, `history record`) exits 1 with
+  `SilenceUsage`; `usage.ErrNoCollectorSnapshots` is wrapped for both a missing DB and 0 snapshots
+  and `LoadLocalUsageWithStatus` (`errors.Is`) adds the `harnez server install` hint. `--offline`
+  missing-store message unchanged.
+- Done, Item 2: `buildCodexQuotaWindow` labels `N-Hour` (<1d), `Weekly` (<14d), `Monthly` (>=14d).
+  Unknown length (`limit_window_seconds` 0): >7 days left => `Monthly`, otherwise the neutral
+  `Quota` (time left never implies a shorter class). `CollectCodex` routes every non-`-Hour`
+  window to the long slot. `NormalizeWindowKey`, `applyStoredWindows`, history importers,
+  `quotaWindowKind` and the watch box share `isLongQuotaWindowName`. Table row is `monthly`.
+- Done, Item 3: unit `ReadWritePaths` entries `-`-prefixed; `install` creates cache/data/state
+  `harnez` dirs; collector fetches at startup when the store has no snapshot; `server status` and
+  `install` report a stray socket owner and point at `harnez server stop` (no process is touched).
+  Also guarded the `catchup_test.go` map with a mutex (`-race` clean).
+- Moved: Item 4 (picks fallback) is noted in 992.
+- Needs a live host check: `harnez server install` on a host with no `~/.cache/harnez` starts
+  without `226/NAMESPACE` and writes a snapshot within seconds; `harnez usage --agent codex` on the
+  ChatGPT Free account shows one `monthly` row and no `5h` row.

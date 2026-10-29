@@ -173,7 +173,28 @@ func collectCodexTokensContext(ctx context.Context, codexDir string) (*TokenBrea
 }
 
 // buildCodexQuotaWindow converts one wham rate-limit window into a QuotaWindow,
-// naming it "Weekly" for windows of a day or longer and "N-Hour" otherwise.
+// naming it "N-Hour" below a day, "Weekly" up to 14 days and "Monthly" beyond.
+// When the window length is unknown, time left only bounds the class from
+// below: more than 7 days left cannot be a weekly window, so it is "Monthly";
+// anything else stays the neutral "Quota" rather than guessing a class.
+// assignCodexWindow files a window into the session or long slot. A neutral
+// "Quota" window (unknown length) is never guessed as a session or weekly
+// window: it only fills an empty long slot and any real window wins.
+func assignCodexWindow(usage *AgentUsage, qw QuotaWindow) {
+	switch {
+	case strings.HasSuffix(qw.Name, "-Hour"):
+		if usage.Session == nil {
+			usage.Session = &qw
+		}
+	case qw.Name == "Quota":
+		if usage.Weekly == nil {
+			usage.Weekly = &qw
+		}
+	default:
+		usage.Weekly = &qw
+	}
+}
+
 func buildCodexQuotaWindow(pw *CodexRateWindow, now time.Time) QuotaWindow {
 	usedPct := pw.UsedPercent
 	remPct := 100.0 - usedPct
@@ -181,9 +202,19 @@ func buildCodexQuotaWindow(pw *CodexRateWindow, now time.Time) QuotaWindow {
 		remPct = 0
 	}
 
-	windowName := "Weekly"
-	if pw.LimitWindowSeconds > 0 && pw.LimitWindowSeconds < 86400 {
+	var windowName string
+	switch {
+	case pw.LimitWindowSeconds <= 0:
+		windowName = "Quota"
+		if left := codexTimeLeft(pw, now); left > 7*24*time.Hour {
+			windowName = "Monthly"
+		}
+	case pw.LimitWindowSeconds < 86400:
 		windowName = fmt.Sprintf("%d-Hour", pw.LimitWindowSeconds/3600)
+	case pw.LimitWindowSeconds >= 14*86400:
+		windowName = "Monthly"
+	default:
+		windowName = "Weekly"
 	}
 
 	qw := QuotaWindow{
@@ -203,6 +234,14 @@ func buildCodexQuotaWindow(pw *CodexRateWindow, now time.Time) QuotaWindow {
 		qw.DurationLeft = time.Duration(pw.ResetAfterSeconds) * time.Second
 	}
 	return qw
+}
+
+// codexTimeLeft is the time until the window resets, preferring ResetAt.
+func codexTimeLeft(pw *CodexRateWindow, now time.Time) time.Duration {
+	if pw.ResetAt > 0 {
+		return time.Unix(pw.ResetAt, 0).Sub(now)
+	}
+	return time.Duration(pw.ResetAfterSeconds) * time.Second
 }
 
 // CollectCodex inspects ~/.codex for auth status, plan tier, active model config, and queries live rate limits when online.
@@ -370,12 +409,7 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 								if pw == nil {
 									continue
 								}
-								qw := buildCodexQuotaWindow(pw, now)
-								if qw.Name == "Weekly" {
-									usage.Weekly = &qw
-								} else if usage.Session == nil {
-									usage.Session = &qw
-								}
+								assignCodexWindow(&usage, buildCodexQuotaWindow(pw, now))
 							}
 						}
 

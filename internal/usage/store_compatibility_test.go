@@ -214,3 +214,35 @@ func TestApplyStoredWindowsDropsStatuslineDefaultWhenModelGroupsExist(t *testing
 		t.Fatalf("model groups = %+v, want the fresh Gemini window", agent.ModelGroups)
 	}
 }
+
+func TestApplyStoredWindowsKeepsMonthlyInLongSlot(t *testing.T) {
+	for _, name := range []string{"Monthly", "Monthly (stale)", "30-day", "30 day"} {
+		var agent AgentUsage
+		key := usagestore.NormalizeWindowKey("codex", "", name)
+		applyStoredWindows(&agent, []usagestore.Window{{Key: key, Name: name, Source: "test", UsedFraction: 0.1}}, time.Now())
+		if agent.Weekly == nil || agent.Session != nil {
+			t.Errorf("%q (key %q): Weekly = %+v, Session = %+v; want the long slot only", name, key, agent.Weekly, agent.Session)
+		}
+	}
+}
+
+func TestApplyStoredWindowsNeutralQuotaNeverDisplacesRealWindows(t *testing.T) {
+	neutral := usagestore.Window{Key: "quota", Name: "Quota", Source: "test", Freshness: "fresh", ObservedAt: time.Now(), UsedFraction: 0.1}
+	weekly := usagestore.Window{Key: "weekly", Name: "Weekly", Source: "test", Freshness: "fresh", ObservedAt: time.Now(), UsedFraction: 0.2}
+	session := usagestore.Window{Key: "five_hour", Name: "5-Hour", Source: "test", Freshness: "fresh", ObservedAt: time.Now(), UsedFraction: 0.3}
+	for name, in := range map[string][]usagestore.Window{
+		"neutral then weekly": {neutral, weekly},
+		"weekly then neutral": {weekly, neutral},
+	} {
+		var agent AgentUsage
+		applyStoredWindows(&agent, in, time.Now())
+		if agent.Weekly == nil || agent.Weekly.Name != "Weekly" || agent.Session != nil {
+			t.Errorf("%s: Weekly = %+v, Session = %+v; want real Weekly and no Session", name, agent.Weekly, agent.Session)
+		}
+	}
+	var agent AgentUsage
+	applyStoredWindows(&agent, []usagestore.Window{neutral, session}, time.Now())
+	if agent.Session == nil || agent.Session.Name != "5-Hour" {
+		t.Errorf("Session = %+v, want the real 5-Hour window", agent.Session)
+	}
+}

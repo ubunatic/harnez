@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,26 +18,32 @@ func TestCollectCatchupFetchesOnlyProvidersOlderThanThreshold(t *testing.T) {
 	// Provider 2: stale (2m ago)  -> should BE fetched
 	// Provider 3: never fetched   -> should BE fetched
 
+	var mu sync.Mutex
 	fetched := map[string]int{}
+	count := func(id string) {
+		mu.Lock()
+		defer mu.Unlock()
+		fetched[id]++
+	}
 	registry, err := NewRegistry(
 		Collector{
 			ID: "p1", Provider: "p1", Cadence: 5 * time.Minute, Timeout: time.Second,
 			Collect: func(ctx context.Context) (AgentUsage, error) {
-				fetched["p1"]++
+				count("p1")
 				return AgentUsage{AgentID: "p1"}, nil
 			},
 		},
 		Collector{
 			ID: "p2", Provider: "p2", Cadence: 5 * time.Minute, Timeout: time.Second,
 			Collect: func(ctx context.Context) (AgentUsage, error) {
-				fetched["p2"]++
+				count("p2")
 				return AgentUsage{AgentID: "p2"}, nil
 			},
 		},
 		Collector{
 			ID: "p3", Provider: "p3", Cadence: 5 * time.Minute, Timeout: time.Second,
 			Collect: func(ctx context.Context) (AgentUsage, error) {
-				fetched["p3"]++
+				count("p3")
 				return AgentUsage{AgentID: "p3"}, nil
 			},
 		},
@@ -129,6 +136,13 @@ func TestCollectorSkipsInitialFetchWhenNoClients(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // no real load.watch_host poll
 	dbPath := filepath.Join(home, "usage.sqlite")
+	// A stored snapshot exists, so the startup fetch is safe to skip (714 M3).
+	if err := InitializeUsageStore(ctx, home, dbPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := PersistUsageSummary(ctx, home, dbPath, UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude", Installed: true}}}); err != nil {
+		t.Fatal(err)
+	}
 	tracker := NewClientTracker(time.Second)
 
 	done := make(chan error, 1)
@@ -184,6 +198,43 @@ func TestCollectorReadyBeforeFirstFetch(t *testing.T) {
 		t.Fatal("collector not ready without a fetch: clients would wait for the first interval")
 	}
 
+	cancel()
+	<-done
+}
+
+// An empty store must not wait a full cadence for its first snapshot just
+// because no client has attached yet (issue 991).
+func TestCollectorInitialFetchWhenStoreEmptyEvenWithoutClients(t *testing.T) {
+	var fetched atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dbPath := filepath.Join(home, "usage.sqlite")
+	tracker := NewClientTracker(time.Second)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- RunCollectorWithClientTracker(ctx, home, dbPath, time.Hour, io.Discard, false, func(ctx context.Context) (UsageSummary, error) {
+			fetched.Add(1)
+			return UsageSummary{Timestamp: time.Now(), Agents: []AgentUsage{{AgentID: "claude", Installed: true}}}, nil
+		}, nil, nil, tracker)
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := ReadStoredSummary(ctx, dbPath); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no snapshot persisted at startup with an empty store (fetches: %d)", fetched.Load())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := fetched.Load(); got != 1 {
+		t.Fatalf("initial fetches = %d, want 1", got)
+	}
 	cancel()
 	<-done
 }

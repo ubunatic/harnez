@@ -48,3 +48,13 @@ key per provider plus role filtering; the catalog and access work stays in 942.
 - Should the shared one-shot mode be enforced (e.g. no tool use, single turn) or only steer
   prompts/skills? Suggestion: steer first, enforce later.
 - Does `shared` also need a budget cap per day/week, or is role filtering enough for v1?
+
+## Handoff from 991 (2026-10-29)
+
+991 Item 4 (picks fallback) was not implemented there and moved here. Plan:
+`docs/studies/2026-10-28-argon-991-refinement-draft.md` Item 4. In short, in
+`ProviderQuotaAvailabilitiesFromStore` (`internal/usage/statecache.go`): treat a window at
+`UsedFraction >= 1` with a nil `ResetAt` as exhausted when fresh; and when a provider has no
+quota windows but the latest snapshot says `Installed && !Authenticated`, mark it unavailable so
+`cachedModelPicks`/`selectStartSelection` fall back. A missing store or no snapshot must stay
+`unknown` (keeps `agent-picks.golden`). Re-verify the line numbers; they are a day old.
