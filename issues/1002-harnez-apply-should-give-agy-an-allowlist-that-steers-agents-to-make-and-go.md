@@ -86,7 +86,7 @@ the Makefile. The owner treats the dedicated agent account on this machine as th
 in-workspace file tools), with a short ask list as an accident guard (`git push`, `sudo`,
 recursive deletes outside the workspace). The list is a spec value, so another machine can narrow it.
 
-## Decision refined (owner, 2026-10-28)
+## Decision refined (owner, 2026-10-28; superseded)
 
 Goal of the allowlist: agents must not break their own machine, and they are **steered** to
 `make` targets and Go code instead of ad-hoc commands. Not a security boundary, a guard rail:
@@ -100,3 +100,16 @@ Goal of the allowlist: agents must not break their own machine, and they are **s
   `git push`/`checkout`/`config`/`reset`, `sudo`, `systemctl`, `kill`/`pkill`, package managers.
 - This replaces the "broad allowlist incl. shell wrappers" note above: wrappers stay **ask**,
   because they are the main door to crazy commands.
+
+## Decision (owner, 2026-10-29): literal Claude parity
+
+Supersedes the narrower agy policy above: provision the equivalent of Claude's
+configured permission rules, including its broad rules, while preserving user settings.
+Verify actual agy matching and unsupported Claude-specific rules before claiming parity;
+do not replace the allowlist with blanket `always-proceed`.
+
+This host's agy 1.4.9 settings at `~/.gemini/antigravity-cli/settings.json` include
+`permissions.allow` entries such as `command(ls)` and `command(git status)`, and
+`toolPermission: "always-proceed"`. These are observed values, not proof that the
+allowlist is enforced or evidence of a portable wildcard translation. Canary with
+an isolated configuration and a restrictive policy before implementation.
