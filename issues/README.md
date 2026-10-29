@@ -74,4 +74,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1008 | [1008-add-optional-agent-start-and-resume-continuity-self-test.md](1008-add-optional-agent-start-and-resume-continuity-self-test.md) | Add optional agent start and resume continuity self-test | Open |
 | 1009 | [1009-install-pi-background-task-runner-globally-and-clarify-mcp-discovery.md](1009-install-pi-background-task-runner-globally-and-clarify-mcp-discovery.md) | Install Pi background task runner globally and clarify MCP discovery | Open |
 | 1010 | [1010-container-integration-test-for-harnez-server-install-on-a-fresh-user.md](1010-container-integration-test-for-harnez-server-install-on-a-fresh-user.md) | Container integration test for `harnez server install` on a fresh user | Open |
+| 1012 | [1012-agent-selftest-hello-and-later-steps-omit-session-so-separate-tool-shells-fail.md](1012-agent-selftest-hello-and-later-steps-omit-session-so-separate-tool-shells-fail.md) | Agent selftest hello and later steps omit --session so separate tool shells fail | Open |
 <!-- harnez:end issues-active-index -->
