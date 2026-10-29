@@ -124,6 +124,26 @@ func TestResolveModelRejectsUnknownTierAliases(t *testing.T) {
 	}
 }
 
+func TestResolveLmcoderCoderThroughCatalog(t *testing.T) {
+	for _, spec := range []string{"lmcoder:coder", "lmcoder:coder:low"} {
+		m, err := ResolveModel(spec)
+		if err != nil {
+			t.Fatalf("ResolveModel(%q): %v", spec, err)
+		}
+		if m.Provider != "lmcoder" || m.Name != "coder" || m.Tier != "low" {
+			t.Fatalf("ResolveModel(%q) = %#v, want lmcoder:coder:low", spec, m)
+		}
+	}
+	if _, err := ResolveModel("lmcoder:strata"); err == nil {
+		t.Fatal("lmcoder:strata resolved, but it is out of scope for issue 1022")
+	}
+	for _, spec := range KnownModelSpecs() {
+		if strings.HasPrefix(spec, "lmcoder:strata") {
+			t.Fatalf("catalog lists %q, but lmcoder:strata is out of scope for issue 1022", spec)
+		}
+	}
+}
+
 func TestCodexPassesReasoningEffort(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var got []string

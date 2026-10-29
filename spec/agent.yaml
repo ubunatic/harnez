@@ -231,6 +231,12 @@ models:
     eff: "?"
     skills: Go+ TUI~ SQL~
     use: Claude Opus 5.5; careful analysis of hard problems
+  lmcoder:coder:
+    provider: lmcoder
+    name: coder
+    tier: low
+    effort: false
+    use: Local coder model served by the lmcoder proxy on x600; the first call waits while the model loads.
 
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf

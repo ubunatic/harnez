@@ -37,6 +37,18 @@ func TestPiRunAndResumeArgs(t *testing.T) {
 	}
 }
 
+func TestPiLmcoderCoderArgs(t *testing.T) {
+	model, err := ResolveModel("lmcoder:coder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Pi resolves the bare ID "coder" against ~/.pi/agent/models.json, where
+	// provider lmcoder defines it; the thinking tier is low.
+	if got, want := piRunArgs(model, "ping"), []string{"--mode", "json", "--model", "coder", "--thinking", "low", "--", "ping"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("piRunArgs(lmcoder:coder) = %#v, want %#v", got, want)
+	}
+}
+
 func TestPiCompactUsesRPC(t *testing.T) {
 	var gotCommand, gotInput string
 	var gotArgs []string

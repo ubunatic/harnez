@@ -90,6 +90,32 @@ func TestLegacyAgentCatalogStillMatchesSchemaAndProbeBudget(t *testing.T) {
 	}
 }
 
+func TestAgentSpecLmcoderCoderEntryRejectsBadFields(t *testing.T) {
+	entry := func(doc any) map[string]any {
+		return doc.(map[string]any)["models"].(map[string]any)["lmcoder:coder"].(map[string]any)
+	}
+	if err := validate(t, "agent.schema.json", readYAML(t, "spec/agent.yaml")); err != nil {
+		t.Fatalf("agent spec rejected: %v", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"unknown tier", func(e map[string]any) { e["tier"] = "xhigh" }},
+		{"missing name", func(e map[string]any) { delete(e, "name") }},
+		{"missing tier", func(e map[string]any) { delete(e, "tier") }},
+		{"missing provider", func(e map[string]any) { delete(e, "provider") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := readYAML(t, "spec/agent.yaml")
+			tc.mutate(entry(doc))
+			if err := validate(t, "agent.schema.json", doc); err == nil {
+				t.Fatalf("schema accepted lmcoder:coder with %s", tc.name)
+			}
+		})
+	}
+}
+
 func TestPolicyRolePickSchema(t *testing.T) {
 	for _, tc := range []struct {
 		name, doc string
