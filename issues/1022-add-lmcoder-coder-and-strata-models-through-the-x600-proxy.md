@@ -40,4 +40,9 @@
   - The repo has no Pi `lmcoder` provider. The canary template defines only `llamacpp`; `scripts/agent-canary/bin/codex-launch` defines `lmcoder`.
   - Not verified: whether `127.0.0.1:8735` reaches x600 and answers, and whether Pi needs `coder` or `lmcoder/coder` as the model name.
 - M2: Catalog entry for `lmcoder:coder` in `spec/agent.yaml` with schema, resolved through the normal path, with isolated tests.
+- M2 (coder catalog entry): done in `38190e98` and `98b5ef58`; reviewed by opus:low, approved with no blockers or majors.
 - M3: Minimal live call to `lmcoder:coder` via the x600 proxy through Pi, or an honest blocker report.
+  - Pre-work (from the M2 review):
+    1. `spec/agent.yaml` (the `lmcoder:coder` entry, around line 239): the `use:` text names the host `x600`. Reword it to "the local lmcoder proxy" so no machine name appears in a shipped default.
+    2. The Pi test expects `--thinking low` while the entry has `effort: false`. Confirm with a live call that Pi accepts `--thinking low` for this model. If Pi rejects it or the flag contradicts `effort: false`, drop the flag for this entry and report the change.
+  - Run the live call with `harnez agent start` through Pi, using `lmcoder:coder`. Allow for the lazy model load on x600. Report the load time, the reply, and the error text if it fails.
