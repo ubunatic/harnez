@@ -65,6 +65,7 @@ func newIssuesCmd() *cobra.Command {
 func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var remoteFlag bool
 	var forceFlag bool
+	var numberFlag string
 	var dir string
 	var checkFlag bool
 	var dryRunFlag bool
@@ -113,7 +114,7 @@ then the README is regenerated and the batch is committed once.
                     also selected when CLAUDE_CODE_REMOTE is set. Strong
                     duplicate matches block before gh issue create unless
                     --force is supplied. No fallback.
-  new [--force] [title] Atomically reserve the next free issue number and create
+  new [--force] [--number N] [title] Atomically reserve the next free issue number and create
                     a Draft placeholder file (issues/<NNN>-<title-slug>.md,
                     or issues/<NNN>-reserved.md with no title), using
                     O_CREATE|O_EXCL so concurrent callers never collide. Non-
@@ -122,7 +123,10 @@ then the README is regenerated and the batch is committed once.
                     re-deriving the slug from the title by hand (a
                     hand-derived slug can diverge and leave an orphaned
                     placeholder behind, see issue 202). Strong duplicate
-                    matches block unless --force is supplied. Unlike every
+                    matches block unless --force is supplied. --number N uses
+                    ticket number N (e.g. one reserved on another machine)
+                    instead of the next free one; it fails if a ticket with
+                    that number already exists. Unlike every
                     other verb, 'new' takes no ticket number (there isn't one
                     yet) and never commits.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
@@ -193,6 +197,9 @@ valid, exit-0 answer.`,
 			}
 			if remoteFlag && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --remote requires new")
+			}
+			if numberFlag != "" && (len(args) == 0 || args[0] != "new" || remoteFlag) {
+				return fmt.Errorf("issues: --number requires local new (not --remote)")
 			}
 			if forceFlag && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --force requires new")
@@ -289,7 +296,7 @@ valid, exit-0 answer.`,
 					return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
 				}
 				fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
-				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag)
+				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag)
 			}
 			if args[0] == "show" {
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
@@ -372,6 +379,7 @@ valid, exit-0 answer.`,
 		ValidArgsFunction: issuesCompletion,
 	}
 	cmd.Flags().BoolVar(&remoteFlag, "remote", false, "with new: allocate a permanent GH id using authenticated gh on the github remote")
+	cmd.Flags().StringVar(&numberFlag, "number", "", "with new: use this ticket number instead of the next free one (refused if it exists)")
 	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: create despite strong duplicate matches")
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
@@ -581,10 +589,10 @@ func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]s
 // (or accept) a ticket number -- there isn't one until this call allocates it
 // -- and never commits.
 func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
-	return runIssuesNewWithForce(w, dir, title, jsonOutput, false)
+	return runIssuesNewWithForce(w, dir, title, jsonOutput, false, "")
 }
 
-func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force bool) error {
+func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force bool, number string) error {
 	issuesDir := filepath.Join(dir, "issues")
 	adoptTracker := !dirExists(issuesDir)
 	if !force {
@@ -592,7 +600,7 @@ func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force boo
 			return err
 		}
 	}
-	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: title})
+	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: title, Number: number})
 	if err != nil {
 		return fmt.Errorf("issues new: %w", err)
 	}

@@ -1463,3 +1463,29 @@ func TestRunIssuesShowJSONBacklogCategory(t *testing.T) {
 		t.Fatalf("canonical_status = %v, want Backlog", parsed["canonical_status"])
 	}
 }
+
+func TestIssuesNewNumberFlag(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	var out bytes.Buffer
+	cmd := newIssuesCmd()
+	cmd.SetArgs([]string{"new", "--number", "50", "-d", dir, "Reserved elsewhere"})
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("new --number: %v", err)
+	}
+	if !strings.HasPrefix(out.String(), "050\t") {
+		t.Fatalf("output %q, want number 050", out.String())
+	}
+	cmd = newIssuesCmd()
+	cmd.SetArgs([]string{"new", "--number", "42", "-d", dir, "Taken number"})
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("existing number: got %v, want already exists", err)
+	}
+	cmd = newIssuesCmd()
+	cmd.SetArgs([]string{"close", "--number", "50", "-d", dir, "42"})
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("--number accepted for a non-new verb")
+	}
+}
