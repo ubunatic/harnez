@@ -24,6 +24,7 @@
 - Scope (owner, 2026-10-29): only `lmcoder:coder`. `lmcoder:strata` is not part of this ticket and is not tried yet.
 - No model switching: the coder model is loaded lazily on demand on x600 and served through the lmcoder proxy to other services, so this ticket must not change which model the proxy loads.
 - Expect a first live call to be slow while the model loads on x600; allow for that in the timeout and report it as load time, not as failure.
+- Models: only Claude models for every agent in this ticket. OpenAI (codex) and Gemini (agy) quota is exhausted on this machine (owner, 2026-10-29), so do not start luna, sol, terra, codex or gemini models.
 
 ## Milestones
 
