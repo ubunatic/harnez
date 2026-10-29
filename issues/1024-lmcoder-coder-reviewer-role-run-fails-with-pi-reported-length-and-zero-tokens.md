@@ -1,6 +1,6 @@
 # 1024 — lmcoder:coder reviewer-role run fails with pi reported length and zero tokens
 
-**Status**: Open
+**Status**: Closed — No fix here: the length stop is gone on 64k, but the model does not converge (73-80 tool calls, no answer in 10 min). Learning: small local models need rails - harnez-enforced tool-call limit (1033), stripped tools (1027), tighter guidance, all input attached as files with no reads.
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
@@ -62,6 +62,15 @@ The local `coder` model has a 32,768-token context window (`~/.pi/agent/models.j
   unbounded prompt (73 calls). Next: a harness-side bound (tool-call limit per turn, or the read-only `plain`
   mode from 1027 with only the tools the task needs), not more prompt wording.
 - 1029 fix confirmed live: harnez printed `interrupted by SIGTERM; provider stopped`, and no `pi` was left.
+
+## Outcome (owner, 2026-10-30)
+Closed without a fix in this ticket. The `length` stop is gone on the 64k window; what remains is that a small
+local model does not converge on an open task. The learning: such runs need more rails, not a bigger window or
+more prompt wording:
+- a tool-call limit enforced by harnez (1033);
+- stripped tools, only what the task needs (1027 `plain` mode);
+- tighter guidance for the role;
+- all input attached as files up front, so the agent cannot (and need not) read anything itself.
 
 ## Notes
 
