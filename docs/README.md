@@ -223,6 +223,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-27-two-agent-lean-sprint-987-subagent-compaction.md](studies/2026-10-27-two-agent-lean-sprint-987-subagent-compaction.md) | Two-agent lean sprint: 987, subagent compaction for every provider |
 | [studies/2026-10-28-argon-991-refinement-draft.md](studies/2026-10-28-argon-991-refinement-draft.md) | Argon refinement draft for 991 (pending owner go) |
 | [studies/2026-10-29-two-agent-lean-sprint-1023-pi-small-window-compaction.md](studies/2026-10-29-two-agent-lean-sprint-1023-pi-small-window-compaction.md) | Lean sprint 1023: Pi compaction overrides for small-window models |
+| [studies/2026-10-29-two-agent-lean-sprint-1029-signal-stops-provider-child.md](studies/2026-10-29-two-agent-lean-sprint-1029-signal-stops-provider-child.md) | Lean sprint 1029: a signal to agent start stops the provider child |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
