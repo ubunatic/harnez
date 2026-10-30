@@ -1,6 +1,7 @@
 # 1036 — Reused searchers: run harnez agent compact after larger search chunks
 
-**Status**: Open
+**Status**: Closed — Compaction rule landed in factory-sprint Phase 1 and lean-sprint section 1 (5026b0ac). make lint: same 213 pre-existing issues, 3 glossary errors in issues/1031 unrelated to this change. Live Pre/Post compaction verification moved to 1038.
+**Closed-By**: claude:haiku:high, session dev-1037
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Enhancement
