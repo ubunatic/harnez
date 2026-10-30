@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { visibleWidth } from "./width-stub.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import backgroundTasksExtension, { installBackgroundTasks } from "../../.pi/extensions/background-tasks.ts";
@@ -51,6 +51,52 @@ afterEach(async () => {
 function fakeStream() {
   return Object.assign(new EventEmitter(), { destroy() {} });
 }
+
+test("capture keeps complete bytes privately, cleans up on eviction and shutdown, and supports opt-out", async () => {
+  const children: FakeChild[] = [];
+  const s = setup({ spawn: () => { const child = new FakeChild(100 + children.length); children.push(child); return child as any; }, config: { ...fastConfig, finishedRetentionLimit: 1 } });
+  const first = s.runner.start("first", process.cwd());
+  const second = s.runner.start("second", process.cwd());
+  const bytes = Buffer.from("secret 🚀 ".repeat(5000));
+  children[0].stdout.emit("data", bytes.subarray(0, 9));
+  children[0].stdout.emit("data", bytes.subarray(9));
+  assert.deepEqual(readFileSync(first.capture!.path), bytes);
+  assert.equal(statSync(first.capture!.path).mode & 0o777, 0o600);
+  assert.equal(statSync(first.capture!.directory).mode & 0o777, 0o700);
+  children[0].emit("exit", 0, null);
+  children[0].emit("close", 0, null);
+  children[1].emit("exit", 0, null);
+  children[1].emit("close", 0, null);
+  assert.equal(existsSync(first.capture!.path), false);
+  const secondPath = second.capture!.path;
+  const third = s.runner.start("third", process.cwd(), { capture: false });
+  assert.equal(third.capture, undefined);
+  children[2].emit("exit", 0, null);
+  children[2].emit("close", 0, null);
+  assert.equal(existsSync(secondPath), false);
+  await s.runner.shutdown();
+});
+
+test("partial capture write failure preserves bytes and does not stop the task", async () => {
+  const child = new FakeChild(123);
+  let calls = 0;
+  const s = setup({ spawn: () => child as any, captureWrite: (fd, buffer, offset, length) => {
+    if (calls++ === 0) return writeSync(fd, buffer, offset, Math.min(3, length));
+    throw new Error("disk full");
+  } });
+  const task = s.runner.start("command", process.cwd());
+  child.stdout.emit("data", Buffer.from("abcdef"));
+  child.stderr.emit("data", Buffer.from("more"));
+  assert.equal(task.status, "running");
+  assert.match(task.captureError!, /disk full/);
+  assert.equal(readFileSync(task.capture!.path, "utf8"), "abc");
+  assert.equal(task.output, "abcdefmore");
+  child.emit("exit", 0, null);
+  child.emit("close", 0, null);
+  const path = task.capture!.path;
+  await s.runner.shutdown();
+  assert.equal(existsSync(path), false);
+});
 
 class FakeChild extends EventEmitter {
   pid: number;
