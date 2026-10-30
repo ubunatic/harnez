@@ -34,6 +34,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/find"
+	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
 	issuesmaintenance "ubunatic.com/harnez/internal/issues/maintenance"
@@ -804,6 +805,11 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		return result, true, nil
 	}
 
+	if !opts.NoCommit {
+		if err := gitflow.GuardCommit(opts.Dir, "renumber ticket "+f.Number); err != nil {
+			return issuesResult{}, false, fmt.Errorf("issues mv: %w", err)
+		}
+	}
 	claimFile, err := os.OpenFile(newPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		if os.IsExist(err) {
@@ -940,6 +946,10 @@ func defaultCommitMessage(verb, ticketNumber, reason string) string {
 // used by any agent or human caller, and attribution is a caller-session
 // concern, not something baked into the command (issue 232).
 func gitAddAndCommit(dir string, paths []string, message string) (string, error) {
+	// Backstop: callers that write files first guard before their first write.
+	if err := gitflow.GuardCommit(dir, "commit"); err != nil {
+		return "", err
+	}
 	trackedCmd := exec.Command("git", append([]string{"ls-files", "--cached", "--"}, paths...)...)
 	trackedCmd.Dir = dir
 	trackedOut, err := trackedCmd.Output()

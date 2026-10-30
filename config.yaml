@@ -164,9 +164,7 @@ debloat:
     commit: user-invocable-only
     docup: user-invocable-only
     issue-research: user-invocable-only
-    focus: user-invocable-only
-    lean-sprint: user-invocable-only
-    factory-sprint: user-invocable-only
+    pm: user-invocable-only
     lean-sprint-v1: user-invocable-only
     lean-sprinter: user-invocable-only
     mode: user-invocable-only
@@ -420,8 +418,13 @@ skills:
 
   - name: focus
     license: AGPL-3.0-or-later
-    description: "Re-ground agent on the host repository's product, summarize top 2-3 open priorities and outcomes, and prompt for goal. Only on explicit /focus or 'focus'."
+    description: "Re-ground on the host repository's product, summarize its top 2-3 open priorities with expected outcomes, and ask for the next goal. Use at the start of a session or when the user asks what to work on."
     file: docs/commands/focus.md
+
+  - name: pm
+    license: AGPL-3.0-or-later
+    description: "Put this session in product-manager mode: ground on the product with focus, route each request to issue, factory-sprint or lean-sprint, and stay a non-coding host. Only on explicit /pm, /pm lean or /pm factory."
+    file: docs/commands/pm.md
 
   - name: docup
     license: AGPL-3.0-or-later
@@ -505,12 +508,12 @@ skills:
 
   - name: lean-sprint
     license: AGPL-3.0-or-later
-    description: "Execute a lean sprint with optional architect refinement (Searcher -> Architect -> Developer -> Review -> Study)"
+    description: "Run one ticket or scoped task as a lean sprint: cheap Searcher, optional architect, fresh developer, milestone review. Use when the user hands over a ticket or scoped task to execute. Not for questions or conversation."
     file: docs/commands/lean-sprint.md
 
   - name: factory-sprint
     license: AGPL-3.0-or-later
-    description: "Execute a software factory sprint with tiered subagents (Resumable Searcher -> Single-Turn Architect -> Fresh Mechanical Developer -> Quota-1 Review)"
+    description: "Run a fully specified multi-milestone ticket as a factory sprint with cheap mechanical developers, locked tests and Quota-1 review. Use only when the ticket already has explicit milestones and specs; otherwise lean-sprint."
     file: docs/commands/factory-sprint.md
 
   - name: lean-sprint-v1
@@ -1092,28 +1095,51 @@ agents_md:
       template: docs/templates/version.yaml
       default: auto   # go.mod (opt-in / auto for Go projects)
 
-  # repo git setups — pick one with `init --repo-mode/-m` to add a short
-  # "Repo Setup" section to a project's AGENTS.md (see docs/lang/Git.md for the
-  # general rules these builds on)
+  # repo git setups — pick one with `init --repo-mode/-m` (or `git.mode` in
+  # .harnez/repo.yaml) to add a short "Repo Setup" section to a project's
+  # AGENTS.md (see docs/lang/Git.md for the general rules these builds on).
+  # `<mode>_protected` is used instead of `<mode>` when git.protected_main is
+  # set. `rule` is the one-line summary written to .harnez/rules/Index.md when
+  # the mode comes from repo.yaml.
   repo_modes:
     solo:
       name: "Solo / hobby"
+      rule: "Git workflow: solo (work on the default branch)."
       content: |
         ## Repo Setup
         - Solo/hobby repo — single default branch, no PR workflow.
         - codeberg.org is primary; github.com (if present) is a synced mirror only.
     fork:
       name: "Fork"
+      rule: "Git workflow: fork (topic branch per ticket, PR against upstream)."
       content: |
         ## Repo Setup
         - This repo is a fork.
         - Keep the default branch in sync with upstream; never force-push over upstream history.
         - Open PRs against upstream from feature branches, not from the default branch.
         - codeberg.org is primary; github.com may carry contributor branches for upstream PRs.
-    team:
-      name: "Team / protected branches"
+    fork_protected:
+      name: "Fork / protected main"
+      rule: "Git workflow: fork, protected main (never commit to or push main; harnez refuses)."
       content: |
         ## Repo Setup
-        - Team repo with protected branches.
-        - Never push directly to the default branch — open a PR and get it reviewed.
+        - This repo is a fork.
+        - Keep the default branch in sync with upstream; never force-push over upstream history.
+        - Open PRs against upstream from feature branches, not from the default branch.
+        - codeberg.org is primary; github.com may carry contributor branches for upstream PRs.
+        - main is protected; harnez refuses commits on it. Never commit to or push the default branch.
+    team:
+      name: "Team"
+      rule: "Git workflow: team (topic branch per ticket or sprint, PR to merge)."
+      content: |
+        ## Repo Setup
+        - Team repo: one topic branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`); push the branch and open a PR to merge.
+        - Update/rebase your branch before merging; follow this repo's CI and review requirements.
+    team_protected:
+      name: "Team / protected main"
+      rule: "Git workflow: team, protected main (never commit to or push main; harnez refuses)."
+      content: |
+        ## Repo Setup
+        - Team repo: one topic branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`); push the branch and open a PR to merge.
+        - main is protected; harnez refuses commits on it. Never commit to or push the default branch, never force-push.
         - Update/rebase your branch before merging; follow this repo's CI and review requirements.

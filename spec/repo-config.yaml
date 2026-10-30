@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=schemas/repo-config.schema.json
+# Metadata for the keys of .harnez/repo.yaml (spec/schemas/repo.schema.json
+# owns the key list, types and enums). `harnez config` and LoadRepoConfig read
+# this file instead of carrying Go copies.
+
+# Keys whose value changes rendered output (AGENTS.md, Index.md, Makefile):
+# a set or unset prints `run: harnez init -d <repo>`.
+render_keys:
+  - issues.tracker
+  - issues.merge_driver
+  - docs.studies
+  - docs.copies
+  - rules.quota
+  - git.mode
+  - git.protected_main
+  - make.scaffold
+  - make.container_test
+
+# Keys that do not. render_keys plus plain_keys must cover every schema key.
+plain_keys:
+  - version
+  - issues.active_cap
+  - git.default_branch
+
+# Effective values of optional keys that are not in the file. git.* defaults
+# live in spec/git.yaml and issues.active_cap in spec/issues.yaml.
+defaults:
+  make.scaffold: true

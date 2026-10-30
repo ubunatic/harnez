@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/index"
 	issuecore "ubunatic.com/harnez/internal/issues"
 )
@@ -170,13 +171,23 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	if _, err := gitOutput(dir, "symbolic-ref", "-q", "HEAD"); err != nil {
 		return fmt.Errorf("issues rebase: detached HEAD is unsupported; check out a branch and retry")
 	}
-	driver, err := gitOutput(dir, "config", "--local", "--get", "merge.harnez-issues-index.driver")
-	if err != nil || strings.TrimSpace(driver) == "" {
+	attribute, err := gitOutput(dir, "check-attr", "merge", "--", "issues/README.md")
+	isUnion := err == nil && (strings.HasSuffix(attribute, ": union") || strings.Contains(attribute, "merge: union"))
+	isCustom := err == nil && (strings.HasSuffix(attribute, ": harnez-issues-index") || strings.Contains(attribute, "merge: harnez-issues-index"))
+	if !isUnion && !isCustom {
 		return fmt.Errorf("issues rebase: issue Git integration is not enabled; run 'harnez init --issues-git' and retry")
 	}
-	attribute, err := gitOutput(dir, "check-attr", "merge", "--", "issues/README.md")
-	if err != nil || !strings.HasSuffix(attribute, ": harnez-issues-index") {
-		return fmt.Errorf("issues rebase: issue Git integration is not enabled; run 'harnez init --issues-git' and retry")
+	if isCustom {
+		driver, err := gitOutput(dir, "config", "--local", "--get", "merge.harnez-issues-index.driver")
+		if err != nil || strings.TrimSpace(driver) == "" {
+			return fmt.Errorf("issues rebase: issue Git integration is not enabled; run 'harnez init --issues-git' and retry")
+		}
+	}
+	if !dryRun {
+		// Every path that later commits repairs runs through here first.
+		if err := gitflow.GuardCommit(dir, "repair tickets"); err != nil {
+			return fmt.Errorf("issues rebase: %w", err)
+		}
 	}
 	statePath, err := rebaseStatePath(dir)
 	if err != nil {

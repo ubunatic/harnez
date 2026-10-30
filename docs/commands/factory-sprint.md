@@ -1,6 +1,3 @@
----
-disable-model-invocation: true
----
 # Factory Sprint — Multi-Tier Subagent Assembly Loop
 
 Orchestrate a token-efficient, subscription-tiered software factory sprint: a resumable cheap searcher, single-turn architect consultations on aggregated context, fresh mechanical developers per milestone, strict locked test cases, and Quota-1 host verification. Works across any repository using `harnez` with optional discovery via `neus` and static analysis via `gokay`.
@@ -60,6 +57,8 @@ Reference Practice: `@docs/AgenticLoop.md`
 For each milestone in the ticket:
 
 ### Phase 1: Bounded Discovery (Resumable Searcher)
+If `search-<ticket>` ran a large search round in an earlier milestone, compact it before resuming: `HTO=0 harnez agent compact --name search-<ticket>`. This compacts between milestones, not in the middle of a search.
+
 1. Resume or start `search-<ticket>` (`--role advisor --model cheap`):
    ```bash
    HTO=0 harnez agent resume --name search-<ticket> -f prompt-search.md
@@ -75,6 +74,7 @@ For each milestone in the ticket:
 2. Architect returns concrete types, function signatures, complete logic, and locked table/unit tests.
 
 ### Phase 3: Fresh Mechanical Translation (Developer)
+- **Git mode**: Before Dev, read `git.mode` in `.harnez/repo.yaml` (key absent = solo). If it isn't solo, create or reuse `sprint/<tickets>`; never commit sprint work to the default branch. The final step pushes the branch and reports the PR URL (the host opens it with tea/gh), instead of committing to main.
 1. Launch a **fresh** developer session for the milestone:
    ```bash
    HTO=0 harnez agent start --role developer --name dev-<ticket>-m<N> --model cheap -f prompt-dev.md
@@ -95,6 +95,7 @@ For each milestone in the ticket:
    ```
 
 ### Phase 5: Teardown, Process Hygiene & Retrospective
+- **Publish (team/protected mode)**: push `sprint/<tickets>` and report the PR URL (the host opens it with tea/gh); never push the default branch.
 1. **Process & Subagent Hygiene**:
    - Terminate and delete all remaining helper sessions (`search-<ticket>`, `arch-<ticket>`, and milestone developers) via `harnez agent delete --name <session>` to enforce Invariant 3 (Zero Zombie Guarantee).
 2. **Factory Assembly Retrospective**:

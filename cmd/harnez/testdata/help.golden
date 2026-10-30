@@ -16,6 +16,7 @@ Available Commands:
   compact-check   Assess whether a /compact likely dropped information (manual, opt-in)
   completion      Generate the autocompletion script for the specified shell
   compose         Print a ready-to-use snippet from the embedded spec
+  config          Get, set or unset keys of .harnez/repo.yaml, like git config
   decide          Ask a decision model (Jev) typed questions: noul, choice, score
   diff            Show what apply would change in managed blocks
   distill         Strip low-signal noise (passing tests, ANSI, repeats) from command output
@@ -858,6 +859,41 @@ Examples:
 Flags:
   -h, --help   help for compose
 
+=== harnez config
+config reads and changes the per-repo settings in <repo>/.harnez/repo.yaml
+without hand-editing YAML.
+
+  harnez config git.mode                  print the effective value
+  harnez config git.mode team             set a key
+  harnez config --unset git.mode          remove a key
+  harnez config --list                    print every effective key=value
+
+Keys are dotted paths (git.mode, issues.tracker, docs.copies, ...). The key
+list, value types and allowed values come from the repo.yaml schema. Values
+are parsed by type: true/false, an integer, one of the allowed words, or free
+text. A list key such as docs.copies takes comma-separated items and replaces
+the whole list (docs.copies golang,bash; an empty value gives an empty list).
+A negative number needs -- before it, as in: harnez config <key> -- -1.
+
+A set or unset is checked with the same rules as loading repo.yaml (schema,
+required keys, git.protected_main needs git.mode team or fork). When a check
+fails nothing is written and the error names the key and the allowed values.
+Comments, key order and unrelated keys survive the edit.
+
+--list shows spec defaults for keys the file leaves out, marked (default).
+After a set or unset of a key that changes rendered output (AGENTS.md, rules,
+Makefile), config prints "run: harnez init -d <repo>"; it does not run init.
+get and --list also work without a repo.yaml; set and unset need one.
+
+Usage:
+  harnez config [-d <repo>] (<key> [<value>] | --unset <key> | --list) [flags]
+
+Flags:
+  -d, --dir string   repo root containing .harnez/repo.yaml (default ".")
+  -h, --help         help for config
+      --list         print every effective key=value, spec defaults marked (default)
+      --unset        remove the key
+
 === harnez decide
 Ask a decision model typed questions about a state.
 
@@ -1552,16 +1588,18 @@ Flags:
   -d, --dir string         project directory to initialise (default: current directory) (default ".")
       --docs strings       docs to set up in the project, comma-separated or repeated (e.g. golang,canary)
   -f, --force              allow initializing home directory, root, or non-coding directory
+      --git-mode string    alias for --repo-mode
       --gowork             set up or migrate Go workspace (go.work.example + untracked local go.work symlink)
   -h, --help               help for init
       --issues-git         record issue-index Git integration for a Harnez tracker (use --issues-git=false to remove it)
       --json               output RAMP report in JSON format
       --no-wizard          skip repository feature prompts
+      --protected-main     record git.protected_main: harnez refuses commits and pushes on the default branch (needs team or fork)
       --quota-1            scaffold Quota-1 single-test guardrails in AGENTS.md and Makefile
       --ramp               report RAMP maturity profile and projected init changes (offline, read-only)
       --ramp-report        alias for --ramp
       --replace            delete existing AGENTS.md and recreate from template before init
-  -m, --repo-mode string   repo git setup to note in AGENTS.md (solo, fork, team)
+  -m, --repo-mode string   repo git workflow, recorded as git.mode in .harnez/repo.yaml and noted in AGENTS.md (solo, fork, team)
       --summary            run claude -p to generate a project summary and add it to AGENTS.md
       --update             re-fetch and refresh the project summary (implies --summary)
       --variant string     doc variant to install: lite or full (default: keep each existing doc variant, else full)

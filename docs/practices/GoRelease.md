@@ -176,6 +176,13 @@ is broken.
 
 Release only when the user or active `/goal` asks for a release; otherwise recommend the release and proposed bump, then wait. Releases push commits and tags and publish artifacts. Before releasing, ensure the tree is clean and docs/tickets are committed and indexed, then pass `make lint` and `make test-q1` (`make release` itself depends on `check`, which runs gofmt, vet, and all Go tests). Use **patch** for compatible fixes, docs, and refactors; **minor** for new backward-compatible capabilities; **major** for breaking public APIs.
 
+### Protected Main (`git.protected_main`)
+Under protected main, `harnez release` refuses on the default branch before it bumps anything and
+refuses to push it. Release from `release/vX.Y.Z` (`git switch -c release/vX.Y.Z`): the bump
+commit and the tag are made there, and the branch and the tag are pushed. Open the PR and
+**rebase-merge or fast-forward** it so the tag stays on `main`'s history; a merge or squash
+commit leaves the tag off `main`. Harnez does not tag after the merge.
+
 ### Standard Release (Bumps Patch by default)
 ```bash
 make release

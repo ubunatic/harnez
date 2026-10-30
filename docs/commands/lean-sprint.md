@@ -46,6 +46,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Skip the Searcher when the ticket was just refined against live code in this sprint and already cites exact file:line causes; say so in the sprint report.
 - Also skip the Searcher for a narrowly scoped ticket that identifies the exact file and function, documents the complete expected write set (including tests/docs), and leaves no unresolved premise, scope, or architecture questions. Require a plan-only first Developer turn that inspects live code, verifies the premise and current locations, and confirms the write set; file:line citations alone do not qualify. The host must review the concrete findings before granting writes and reconsider developer/model choice. If inspection reveals stale assumptions, missing files, or scope uncertainty, run the Searcher before implementation. Record the skip and findings in the sprint report.
 - When used, run the Searcher sequentially before the Developer. The host reads its concise findings and decides what the Developer needs; the host does not repeat discovery by browsing the repository.
+- A Searcher reused from an earlier round: after a large search round, compact it before the next resume with `HTO=0 harnez agent compact --name <searcher>`, so compaction happens between rounds rather than mid-search.
 
 ### 1.5. Optional Architect Refinement
 - When the user asks for a lean sprint "with an advisor", they mean this architect step, not the Searcher (both run as `--role advisor`).
@@ -78,6 +79,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - **Stay Responsive**: Dispatching the worker must not block the chat; note the emitted Reconnect Banner and return control or proceed with review preparation.
 
 ### 3. Autonomous Milestone Execution & Commit
+- **Git mode**: Before Dev, read `git.mode` in `.harnez/repo.yaml` (key absent = solo). If it isn't solo, create or reuse `sprint/<tickets>`; never commit sprint work to the default branch. The final step pushes the branch and reports the PR URL (the host opens it with tea/gh), instead of committing to main.
 - The developer agent implements the milestone autonomously.
 - Follows Test-Driven Development (TDD) and executes repo-native verification (`go test ./...`, `make test`).
 - Under a one-run test budget, use `make test-q1` when available; otherwise run `harnez exec --quota-1 -- <repo-test-command>`. Write full output to a file and grep for `--- FAIL`; never pipe it into `tail`. Before committing, quote the run's final test summary line in the report: no `--- FAIL` in a run that stopped early (e.g. at gofmt or vet) is not a pass (941 M4 committed after a run that never reached the tests). A failure in an untouched test gets its own ticket instead of a loosened assertion. After fixing a failure from that run, rerun only the touched packages and report that the full run is owed; the host runs it before review (issue 896). If that host run fails, the host fixes nothing: it records the failure as pre-work in the ticket and resumes the developer.
@@ -128,6 +130,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - The developer agent picks up the updated ticket for Milestone $N+1$ (resumed via `harnez agent resume --name <session_id> "<pre_work_and_milestone_prompt>"` or native subagent message), executes the embedded pre-work first, and then proceeds with Milestone $N+1$ implementation.
 - Repeat Steps 1–3 for each milestone.
 - Once the final milestone passes concise review and tests are 100% green, confirm completion.
+- In team/protected mode, push `sprint/<tickets>` and report the PR URL (the host opens it with tea/gh); `main` is never pushed.
 - Before a ticket closes, the host/reviewer compares what was delivered with the ticket's `/goal` and the
   milestone plan; a shortfall is parked in its own ticket and named in the close reason (884 M9 moved 157 of
   ~5k planned lines and was first closed as delivered).

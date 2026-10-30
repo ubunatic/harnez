@@ -89,5 +89,6 @@ compaction before parking a reusable filer; a self-summary is not compaction. Re
 unavailable operations honestly. Close disposable filers after collecting their result.
 
 Stage only the new ticket and regenerated index so unrelated working-tree changes remain
-untouched. If the repository is not harnez-managed, follow its local tracker and commit
+untouched. In team/protected mode (`git.mode` in `.harnez/repo.yaml`), the ticket commit rides
+on the current topic branch; on the default branch, create `issue/<n>-<slug>` first. If the repository is not harnez-managed, follow its local tracker and commit
 rules instead of assuming `harnez`, `issues/`, or an immediate tracker commit.

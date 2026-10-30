@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harnez repo.yaml key metadata",
+  "type": "object",
+  "required": ["render_keys", "plain_keys", "defaults"],
+  "properties": {
+    "render_keys": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "plain_keys": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "make.scaffold": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

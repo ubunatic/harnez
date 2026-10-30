@@ -120,9 +120,15 @@ See `@docs/AgenticLoop.md` Invariant 10 (Media & Demo Verification Gate).
 
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
-- Solo/hobby repo — single default branch, no PR workflow.
-- codeberg.org and github.com are both dev remotes; Codeberg is canonical for releases (see Remotes in docs/Git.md).
+- Team repo: one topic branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`); push the branch and open a PR to merge.
+- main is protected; harnez refuses commits on it. Never commit to or push the default branch, never force-push.
+- Update/rebase your branch before merging; follow this repo's CI and review requirements.
 <!-- harnez:end Repo Setup -->
+
+## Remotes
+- codeberg.org and github.com are both dev remotes; Codeberg is canonical for releases (see Remotes in docs/Git.md).
+- `origin` is `ubunatic/harnez` on Codeberg and its `main` is protected: every change goes through a topic
+  branch and a PR, which the host opens. The `flashcoder` remote is pushed only by the trigger or the owner.
 
 <!-- harnez:begin Language Conventions -->
 Adhere to the following conventions.

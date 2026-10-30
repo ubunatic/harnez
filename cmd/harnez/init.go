@@ -15,6 +15,7 @@ func newInitCmd() *cobra.Command {
 	var initDocs []string
 	var initConfigPath string
 	var initRepoMode string
+	var initProtectedMain bool
 	var initVariant string
 	var initSummary, initUpdate, initReplace, initYes, initAll, initIssuesGit, initGoWork, initForce, initQuota1 bool
 	var initRAMP, initRAMPReport, initJSON bool
@@ -49,8 +50,12 @@ func newInitCmd() *cobra.Command {
 			if cmd.Flags().Changed("issues-git") {
 				issuesGit = &initIssuesGit
 			}
+			var protectedMain *bool
+			if cmd.Flags().Changed("protected-main") {
+				protectedMain = &initProtectedMain
+			}
 			opts := claude.InitOptions{
-				Docs: initDocs, RepoMode: initRepoMode, AssumeYes: initYes,
+				Docs: initDocs, RepoMode: initRepoMode, ProtectedMain: protectedMain, AssumeYes: initYes,
 				WithSummary: initSummary, Update: initUpdate, Replace: initReplace,
 				IssuesGit: issuesGit, GoWork: initGoWork, Force: initForce,
 				Variant: initVariant, Quota1: initQuota1,
@@ -72,7 +77,10 @@ func newInitCmd() *cobra.Command {
 		"treat --dir as a workspace directory and non-interactively init every eligible child (has AGENTS.md/CLAUDE.md); refuses $HOME (see issue 068)")
 	initCmd.Flags().StringSliceVar(&initDocs, "docs", nil, "docs to set up in the project, comma-separated or repeated (e.g. golang,canary)")
 	initCmd.Flags().StringVar(&initVariant, "variant", "", "doc variant to install: lite or full (default: keep each existing doc variant, else full)")
-	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git setup to note in AGENTS.md (solo, fork, team)")
+	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git workflow, recorded as git.mode in .harnez/repo.yaml and noted in AGENTS.md (solo, fork, team)")
+	initCmd.Flags().StringVar(&initRepoMode, "git-mode", "", "alias for --repo-mode")
+	initCmd.MarkFlagsMutuallyExclusive("repo-mode", "git-mode")
+	initCmd.Flags().BoolVar(&initProtectedMain, "protected-main", false, "record git.protected_main: harnez refuses commits and pushes on the default branch (needs team or fork)")
 	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "use detected/recorded setup and reconcile Makefile targets without prompts")
 	initCmd.Flags().BoolVar(&initWizard, "wizard", false, "prompt for repository features even without a terminal (EOF keeps defaults)")
 	initCmd.Flags().BoolVar(&initNoWizard, "no-wizard", false, "skip repository feature prompts")

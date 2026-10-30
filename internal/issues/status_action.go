@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"ubunatic.com/harnez/internal/gitflow"
 )
 
 // StatusResult is the command-independent result of a lifecycle mutation.
@@ -108,6 +110,12 @@ func ApplyStatus(verb, ticketArg, reason string, opts StatusBatchOptions) (Statu
 	if verb == "close" || verb == "done" {
 		if err := requireImplementationCommit(opts, result.Number); err != nil {
 			return StatusResult{}, false, err
+		}
+	}
+	if !opts.Check && !opts.NoCommit {
+		// Refuse before any write; a no-op close above never reaches this.
+		if err := gitflow.GuardCommit(opts.Dir, fmt.Sprintf("%s ticket %s", verb, result.Number)); err != nil {
+			return StatusResult{}, false, fmt.Errorf("issues: %w", err)
 		}
 	}
 	if oldStatus == newStatus {

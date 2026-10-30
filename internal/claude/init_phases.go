@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/markdown"
 	"ubunatic.com/harnez/internal/pickdocs"
 )
@@ -13,6 +14,50 @@ import (
 // initReport accumulates the change count of one RunInitWithVariant run.
 type initReport struct {
 	changes int
+}
+
+// applyGitFlags folds --repo-mode and --protected-main into repoConfig.Git and
+// returns the repo_modes key to render ("" renders nothing: no flag and no
+// git key). changed reports that the flags altered the config, so it must be
+// persisted. It validates before init writes anything.
+func applyGitFlags(repoConfig *RepoConfig, opts InitOptions) (key string, changed bool, err error) {
+	g := &repoConfig.Git
+	if opts.RepoMode != "" {
+		switch mode := gitflow.Mode(opts.RepoMode); mode {
+		case gitflow.ModeSolo, gitflow.ModeFork, gitflow.ModeTeam:
+			g.Mode = mode
+		default:
+			return "", false, fmt.Errorf("unknown repo mode %q (want solo, fork or team)", opts.RepoMode)
+		}
+		if g.Mode == gitflow.ModeSolo {
+			g.ProtectedMain = false // leaving team/fork drops its protection
+		}
+		changed = true
+	}
+	if opts.ProtectedMain != nil {
+		g.ProtectedMain = *opts.ProtectedMain
+		changed = true
+	}
+	if g.ProtectedMain && (g.Mode == "" || g.Mode == gitflow.ModeSolo) {
+		return "", false, fmt.Errorf("--protected-main needs --repo-mode team or fork, but git.mode is solo")
+	}
+	if g.Mode == "" {
+		return "", changed, nil
+	}
+	key = string(g.Mode)
+	if g.ProtectedMain {
+		key += "_protected"
+	}
+	return key, changed, nil
+}
+
+// gitModeRule returns the Index.md summary line for a repo_modes key, or ""
+// when the mode is not recorded in repo.yaml or has no rule.
+func gitModeRule(cfg *Config, repoConfig *RepoConfig, key string) string {
+	if cfg == nil || repoConfig.Git.Mode == "" {
+		return ""
+	}
+	return cfg.AgentsMD.RepoModes[key].Rule
 }
 
 // initLocalSections writes the config-defined local AGENTS.md sections (e.g. Language Conventions).
