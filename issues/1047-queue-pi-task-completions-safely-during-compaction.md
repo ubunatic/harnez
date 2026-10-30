@@ -24,7 +24,7 @@ The completion's delivery and whether it can be lost or duplicated are not yet e
 
 A deterministic local-stub canary in real Pi 1.4.0 reproduced lost completion messages during manual compaction, including multiple tasks; `session_compact` fires before the guard clears while `session_compact_failed` fires afterward. The runtime `sendUserMessage` wrapper returns no usable acknowledgement, so general exactly-once delivery across all races cannot be guaranteed by this extension alone. An input-handler race and pre-existing queued follow-up stalling were also observed. The canary is temporarily at `/tmp/pi-1047-canary.ck5aSM/`; it uses a local stub, not an external model.
 
-## Bounded delivery queue: evidence and remaining gaps
+## Delivery queue: evidence and remaining gaps
 
 `CompletionDelivery` (`.pi/lib/background-task-runner.ts`) holds notifications from this extension's manual `session_before_compact` until `session_compact`/`session_compact_failed`, then submits each at most once, in arrival order, after Pi is idle. Timing is in the `delivery` block of `spec/pi-background-tasks.yaml`.
 
@@ -41,11 +41,15 @@ Same canary before and after the change (real Pi 1.4.0, loopback-only network na
 
 Remaining gaps, so the no-loss goal is not fully met:
 
-1. A completion arriving before this extension's hook runs (another extension's earlier handler is holding) is still rejected and lost as a notification. Pi 1.4.0 exposes no compaction-state API to extensions; the task result stays readable through `background_task_result` until retention evicts it.
+1. A completion arriving before this extension's hook runs (another extension's earlier handler is holding) is still rejected and lost as a notification. Pi 1.4.0 exposes no direct compaction-state API; review suggests combining idle and agent lifecycle signals may mitigate this, but it is not yet proven. The task result stays readable through `background_task_result` until retention evicts it.
 2. Pi gives no acknowledgement. A held message whose submission fails after the guard clears (for example missing auth) surfaces only as Pi's extension error; delivery is at most once.
 3. Notifications still held at shutdown are not submitted; their IDs go to stderr.
 4. The input-handler race and the follow-up stranded by manual compaction are Pi behaviour, unchanged here.
-5. Not exercised: the interactive TUI, and a real-extension completion during automatic compaction (the fixture-level canary delivered it once).
+5. Not exercised after the fix with the real extension: interactive TUI, automatic compaction, cancel/abort, completion during summary, and the drain's active-follow-up branch (some have fixture-only or unit evidence).
+
+## Review pre-work
+
+Independent review found no critical/high blocker but identified missing committed tests for extension hook wiring, and the real Pi canary exists only in `/tmp`. Add deterministic wiring tests, preserve a maintainable canary in the repo, and test whether agent lifecycle plus `isIdle` can prevent the earlier-hook loss (scenario 17) without breaking normal streaming. Recheck idle on every drain step, guard compaction-end reason where applicable, ensure stranded-follow-up warning is not lost to a slow later hook, and reduce success warning noise. Do not claim acknowledgement or exactly-once where Pi cannot provide it. Avoid weakening existing assertions or hiding remaining limits.
 
 Implement and verify a bounded improvement for the reproduced race without claiming the full no-loss goal unless the API limitation is resolved. Preserve ordinary streaming follow-ups and cancellation; make undelivered or unconfirmed work visible, avoid blind resend/duplicate loops, and report residual cases. Keep batching policy in 1044 and output formatting in 1021/1046. Review design and canary evidence before closing; park any genuinely unresolvable gap explicitly.
 
