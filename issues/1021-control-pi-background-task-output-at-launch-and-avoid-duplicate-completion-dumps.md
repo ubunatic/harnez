@@ -1,6 +1,6 @@
 # 1021 — Control Pi background task output at launch and avoid duplicate completion dumps
 
-**Status**: Blocked — asynchronous capture drain and shutdown lifecycle needs design
+**Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -9,6 +9,10 @@
 ## Refinement: owner decisions needed
 
 Read-only discovery confirms the runner retains a 16,000-character tail for up to 50 finished tasks; generic shell output cannot reliably identify an agent final message. Owner decisions: file-backed capture is the default and may be opted out of per task, including consideration of manual tasks. Use private files on a best-effort basis; a short completion tail is acceptable. Delete captures when the session closes (and on earlier eviction); best-effort crash cleanup must not delete other live sessions' files. On disk-full or write failure, keep the task running, explicitly mark capture incomplete and retain the readable portion. Do not impose an arbitrary capture cap or claim incomplete output is complete. Provide explicit paged retrieval and document the privacy and crash limitations. 1044 batching is sequenced after this policy.
+
+## Architect refinement and decisions
+
+Opus:med proposed a serialized asynchronous capture writer with bounded in-memory queue and stream backpressure, explicit incomplete states for stall, write failure and drain timeout, and lifecycle gates for finalization, eviction and shutdown. Use private temporary storage respecting `TMPDIR` (not a new persistent cache); it may be memory-backed and exhaust space, so errors must be visible. Preserve captured prefixes and never claim full capture after loss. Use spec/schema for configurable watermarks and deadlines, not a transcript size cap. In-flight filesystem operations cannot necessarily be cancelled; report residual cleanup and crash limitations. Test delayed and partial writes, timeouts, late callbacks, cancellation, cleanup and live Pi behavior. The existing M1 remains unaccepted until these review findings are fixed. Defer a crash sweep unless ownership and liveness can be established safely. 1044 handles batching and 1046 presentation; neither changes Pi's lack of delivery acknowledgement.
 
 ## M2 pre-work: M1 capture review
 
