@@ -1,6 +1,6 @@
 # 1051 — Summarize Pi background task launch commands
 
-**Status**: Open
+**Status**: Closed — Repository launch preview delivered in b34640d0 and 81b2d5bb; Quota-1 and Pi model/TUI canaries passed; global refresh parked in 1052.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
