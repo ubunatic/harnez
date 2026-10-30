@@ -1,6 +1,3 @@
----
-disable-model-invocation: true
----
 # Factory Sprint — Multi-Tier Subagent Assembly Loop
 
 Orchestrate a token-efficient, subscription-tiered software factory sprint: a resumable cheap searcher, single-turn architect consultations on aggregated context, fresh mechanical developers per milestone, strict locked test cases, and Quota-1 host verification. Works across any repository using `harnez` with optional discovery via `neus` and static analysis via `gokay`.
