@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Epic
-**Related**: 1011, 1021, 1044, 1046, 1047, 1048, 1049, 1051
+**Related**: 1011, 1021, 1044, 1046, 1047, 1048, 1049, 1051, 1052
 
 ## Goal
 
@@ -29,7 +29,8 @@ Sprint groups, dependencies and role/model assignments are placeholders until co
 | 1047 | Safe completion delivery during compaction | TBD | TBD | TBD | Open |
 | 1048 | Ctrl-B for manual command backgrounding | TBD | TBD | TBD | Open |
 | 1049 | Guard reload while tasks are running | TBD | TBD | TBD | Open |
-| 1051 | Concise background-task launch command display | Launch presentation, independent | advisor cheap → architect smart → developer lean | reviewer smart | Open; first delivery slice |
+| 1051 | Concise background-task launch command display | Launch presentation, independent | advisor cheap → architect smart → developer lean | reviewer smart | Closed; global refresh parked in 1052 |
+| 1052 | Safely refresh global Pi task extension | Installation | TBD | TBD | Open; needed for global delivery |
 | — | Evergreen: study, review learnings and linked follow-ups | Final | TBD | TBD | Pending |
 | — | Wrap: verify task outcomes and report next command | Final | TBD | TBD | Pending |
 
