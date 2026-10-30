@@ -10,6 +10,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/markdown"
 )
@@ -34,6 +35,9 @@ type RepoConfig struct {
 		Scaffold      bool `yaml:"scaffold"`
 		ContainerTest bool `yaml:"container_test"`
 	} `yaml:"make"`
+	// Git stays zero when repo.yaml has no git key, so it is omitted on write;
+	// gitflow.Load supplies the spec defaults.
+	Git gitflow.Config `yaml:"git,omitempty"`
 }
 
 func repoConfigPath(dir string) string { return filepath.Join(dir, ".harnez", "repo.yaml") }
@@ -49,19 +53,11 @@ func LoadRepoConfig(dir string) (*RepoConfig, error) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	schemaData, err := harnez.DefaultFS.ReadFile("spec/schemas/repo.schema.json")
-	if err != nil {
+	// gitflow.Load runs first so git errors name the file and key (git.mode).
+	if _, err := gitflow.Load(dir); err != nil {
 		return nil, err
 	}
-	var schema jsonschema.Schema
-	if err := json.Unmarshal(schemaData, &schema); err != nil {
-		return nil, err
-	}
-	resolved, err := schema.Resolve(nil)
-	if err != nil {
-		return nil, err
-	}
-	if err := resolved.Validate(doc); err != nil {
+	if err := validateRepoDocument(doc); err != nil {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
 	}
 	var cfg RepoConfig
@@ -74,6 +70,23 @@ func LoadRepoConfig(dir string) (*RepoConfig, error) {
 		}
 	}
 	return &cfg, nil
+}
+
+// validateRepoDocument checks a parsed repo.yaml against the embedded schema.
+func validateRepoDocument(doc map[string]any) error {
+	schemaData, err := harnez.DefaultFS.ReadFile("spec/schemas/repo.schema.json")
+	if err != nil {
+		return err
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(schemaData, &schema); err != nil {
+		return err
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		return err
+	}
+	return resolved.Validate(doc)
 }
 
 // ActiveIssueCapForRepo returns the per-repo override when configured, or the

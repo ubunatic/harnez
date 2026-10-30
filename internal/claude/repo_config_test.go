@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestRepoConfigDetectionAndValidation(t *testing.T) {
@@ -346,4 +348,91 @@ func writeRepoYAML(t *testing.T, dir, content string) {
 	if err := os.WriteFile(repoConfigPath(dir), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func writeGitRepoYAML(t *testing.T, gitBlock string) string {
+	t.Helper()
+	dir := t.TempDir()
+	body := "version: 1\nissues:\n  tracker: harnez\n  merge_driver: true\ndocs:\n  studies: true\n  copies: []\nrules:\n  quota: true\nmake:\n  container_test: false\n" + gitBlock
+	if err := os.MkdirAll(filepath.Join(dir, ".harnez"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".harnez", "repo.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestRepoConfigLoadsGitKey(t *testing.T) {
+	cfg, err := LoadRepoConfig(writeGitRepoYAML(t, "git:\n  mode: team\n  protected_main: true\n  default_branch: trunk\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Git.Mode != "team" || !cfg.Git.ProtectedMain || cfg.Git.DefaultBranch != "trunk" {
+		t.Fatalf("git config not loaded: %+v", cfg.Git)
+	}
+}
+
+func TestSchemaRejectsUnknownMode(t *testing.T) {
+	_, err := LoadRepoConfig(writeGitRepoYAML(t, "git:\n  mode: trunk\n"))
+	if err == nil || !strings.Contains(err.Error(), "git.mode") {
+		t.Fatalf("error = %v, want one naming git.mode", err)
+	}
+}
+
+func TestSchemaRejectsProtectedOnSolo(t *testing.T) {
+	_, err := LoadRepoConfig(writeGitRepoYAML(t, "git:\n  mode: solo\n  protected_main: true\n"))
+	if err == nil || !strings.Contains(err.Error(), "protected_main") {
+		t.Fatalf("error = %v, want a validation error naming protected_main", err)
+	}
+}
+
+func TestSchemaRejectsUnknownGitKey(t *testing.T) {
+	_, err := LoadRepoConfig(writeGitRepoYAML(t, "git:\n  mode: team\n  foo: 1\n"))
+	if err == nil || !strings.Contains(err.Error(), "foo") {
+		t.Fatalf("error = %v, want an unknown-key error naming foo", err)
+	}
+}
+
+// The schema itself (not only gitflow.Load) must enforce the git rules, so it
+// is exercised with the gitflow pre-check bypassed.
+func TestRepoSchemaGitRulesStandAlone(t *testing.T) {
+	for name, block := range map[string]string{
+		"enum":      "git:\n  mode: trunk\n",
+		"solo rule": "git:\n  mode: solo\n  protected_main: true\n",
+		"extra key": "git:\n  mode: team\n  foo: 1\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateRepoSchema(t, writeGitRepoYAML(t, block)); err == nil {
+				t.Fatal("schema accepted an invalid git block")
+			}
+		})
+	}
+}
+
+func TestWriteRepoConfigOmitsAbsentGitKey(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeRepoConfig(dir, &RepoConfig{Version: 1}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".harnez", "repo.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "git:") {
+		t.Fatalf("zero git config must stay out of repo.yaml:\n%s", data)
+	}
+}
+
+func validateRepoSchema(t *testing.T, dir string) error {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, ".harnez", "repo.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	return validateRepoDocument(doc)
 }
