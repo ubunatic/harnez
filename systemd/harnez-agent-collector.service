@@ -12,6 +12,7 @@ RestartSec={{RESTART_DELAY}}
 RuntimeDirectory=harnez
 RuntimeDirectoryPreserve=yes
 {{SSH_AUTH_SOCK_ENV}}
+Environment="PATH=%h/.local/bin:%h/go/bin:%h/.cargo/bin:/usr/local/bin:/usr/bin:/bin"
 
 # Writes its Unix socket and usage data to the per-user XDG directories.
 # SQLite needs a writable temporary directory under this strict filesystem sandbox.

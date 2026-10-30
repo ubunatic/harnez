@@ -60,6 +60,9 @@ func TestInstallSystemdUnitWritesExpandedExecStart(t *testing.T) {
 	if !strings.Contains(content, "PrivateTmp=yes") {
 		t.Errorf("unit must provide a writable private /tmp for SQLite temporary files:\n%s", content)
 	}
+	if !strings.Contains(content, `Environment="PATH=%h/.local/bin:%h/go/bin:%h/.cargo/bin:/usr/local/bin:/usr/bin:/bin"`) {
+		t.Errorf("unit must include user CLI directories in PATH:\n%s", content)
+	}
 	if !strings.Contains(content, `Environment=SSH_AUTH_SOCK="%t/keyring/ssh"`) {
 		t.Errorf("unit must use %%t for an SSH agent socket under XDG_RUNTIME_DIR:\n%s", content)
 	}
