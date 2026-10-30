@@ -26,13 +26,17 @@ Sprint groups, dependencies and role/model assignments are placeholders until co
 | 1021 | File-backed output and selective host retrieval | TBD | TBD | TBD | Open |
 | 1044 | Aggregate completion notifications | TBD | TBD | TBD | Open |
 | 1046 | Concise user and agent previews, preferably output tail | TBD | TBD | TBD | Open |
-| 1047 | Safe completion delivery during compaction | TBD | TBD | TBD | Open |
+| 1047 | Safe completion delivery during compaction | Compaction delivery | advisor Claude → architect Claude → developer Claude | Claude review pending | Open; partial fix, shutdown stale-context error under review |
 | 1048 | Ctrl-B for manual command backgrounding | TBD | TBD | TBD | Open |
 | 1049 | Guard reload while tasks are running | TBD | TBD | TBD | Open |
 | 1051 | Concise background-task launch command display | Launch presentation, independent | advisor cheap → architect smart → developer lean | reviewer smart | Closed; global refresh parked in 1052 |
-| 1052 | Safely refresh global Pi task extension | Installation | TBD | TBD | Open; needed for global delivery |
+| 1052 | Safely refresh global Pi task extension | Installation | advisor → none → developer | reviewer | Open; installed and ledger verified, real Claude Pi model canary pending credentials |
 | — | Evergreen: study, review learnings and linked follow-ups | Final | TBD | TBD | Pending |
 | — | Wrap: verify task outcomes and report next command | Final | TBD | TBD | Pending |
+
+## Session handoff
+
+Paused with Claude's five-hour quota exhausted (reported reset 22:00 Europe/Berlin); the owner requested Claude-only subagents, no OpenAI or Gemini. Resume by independently reviewing 1047, including the host canary's stale-context shutdown error recorded in that ticket, then fix and reverify. The committed 1047 changes are not yet installed in the global Pi extension. 1052's targeted installer updated the global copy before those changes; its model-issued global canary remains pending because Pi has no Anthropic credentials. Other open tasks remain unimplemented. No exactly-once claim is supported by Pi's current acknowledgement API.
 
 ## Refinement and gates
 
