@@ -22,7 +22,7 @@ Sprint groups, dependencies and role/model assignments are placeholders until co
 
 | Ticket | What | Group | Searcher → architect → developer | Reviewer | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1011 | Labeled task status; verify remaining model-issued tool path | TBD | TBD | TBD | Open; implementation committed, verification pending |
+| 1011 | Labeled task status and live verification | Labels | advisor cheap → none → developer lean | Host verification | Closed: real model tool call, interactive canary and Quota-1 passed |
 | 1021 | File-backed output and selective host retrieval | TBD | TBD | TBD | Open |
 | 1044 | Aggregate completion notifications | TBD | TBD | TBD | Open |
 | 1046 | Concise user and agent previews, preferably output tail | TBD | TBD | TBD | Open |
@@ -35,6 +35,6 @@ Sprint groups, dependencies and role/model assignments are placeholders until co
 
 ## Refinement and gates
 
-Initial read-only discovery (epic1050-scout) confirms all seven tickets remain open; 1011 has implementation but needs its remaining live verification. Current completion sends full captured output as a follow-up, and reload cancels in-memory tasks. Pi API support for delivery, input and reload needs direct investigation; absence of a local package in the checkout does not establish absence of the installed Pi API. Proposed ordering: API discovery; output contract (1021) and previews (1046); aggregation and compaction (1044, 1047); interaction and lifecycle items (1011, 1048, 1049); combined live canaries. Dependencies and ordering remain provisional until API discovery. Prior-art web fanout is skipped for this internal Pi integration; inspect the installed Pi implementation instead. Gemini models are unavailable; do not dispatch them or use fallback chains that include them.
+Initial read-only discovery (epic1050-scout) found all original seven tickets open; 1011 has since passed verification and closed. Current completion sends full captured output as a follow-up, and reload cancels in-memory tasks. Pi API support for delivery, input and reload needs direct investigation; absence of a local package in the checkout does not establish absence of the installed Pi API. Proposed ordering: API discovery; output contract (1021) and previews (1046); aggregation and compaction (1044, 1047); interaction and lifecycle items (1011, 1048, 1049); combined live canaries. Dependencies and ordering remain provisional until API discovery. Prior-art web fanout is skipped for this internal Pi integration; inspect the installed Pi implementation instead. Gemini models are unavailable; do not dispatch them or use fallback chains that include them.
 
 Confirm task boundaries and ordering, especially shared output/notification behavior, after live code discovery. Record phases, dependency gates, write sets, roles and build-versus-reuse decisions before dispatch; assess whether external prior-art research adds value or is unnecessary for Pi-specific integration. Each phase exits when its children are closed or explicitly parked, its canary or design review passes, and the working tree is clean. Finish with evergreen and wrap; close only when all tasks are closed, skipped with reasons or parked in their own tickets.
