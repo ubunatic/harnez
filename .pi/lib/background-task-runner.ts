@@ -24,6 +24,7 @@ export interface BackgroundTaskConfig {
   outputLimitChars: number;
   finishedRetentionLimit: number;
   stop: { graceMs: number; killWaitMs: number; pollMs: number };
+  delivery: DeliveryConfig;
   status: StatusConfig;
 }
 
@@ -175,8 +176,9 @@ export function parseBackgroundTaskConfig(text: string, source: string, width: (
   } catch (error) {
     throw new Error(`${source}: not JSON-compatible YAML: ${(error as Error).message}`);
   }
-  const root = exactKeys(value, source, ["output_limit_chars", "finished_retention_limit", "stop", "status"]);
+  const root = exactKeys(value, source, ["output_limit_chars", "finished_retention_limit", "stop", "delivery", "status"]);
   const stop = exactKeys(root.stop, `${source}: stop`, ["grace_ms", "kill_wait_ms", "poll_ms"]);
+  const delivery = exactKeys(root.delivery, `${source}: delivery`, ["hold_warn_ms", "flush_poll_ms"]);
   const status = exactKeys(root.status, `${source}: status`, ["max_cells", "reserved_cells", "label_max_cells", "fallback_label", "manual_emoji", "default_emoji", "label_emoji"]);
   const labelEmoji = status.label_emoji;
   if (typeof labelEmoji !== "object" || labelEmoji === null || Array.isArray(labelEmoji)) throw new Error(`${source}: invalid label_emoji`);
@@ -204,7 +206,175 @@ export function parseBackgroundTaskConfig(text: string, source: string, width: (
       killWaitMs: positiveInt(stop.kill_wait_ms, `${source}: stop.kill_wait_ms`),
       pollMs: positiveInt(stop.poll_ms, `${source}: stop.poll_ms`),
     },
+    delivery: {
+      holdWarnMs: positiveInt(delivery.hold_warn_ms, `${source}: delivery.hold_warn_ms`),
+      flushPollMs: positiveInt(delivery.flush_poll_ms, `${source}: delivery.flush_poll_ms`),
+    },
   };
+}
+
+export interface DeliveryConfig {
+  holdWarnMs: number;
+  flushPollMs: number;
+}
+
+/** The part of Pi's extension context that delivery needs. */
+export interface DeliveryContext {
+  isIdle(): boolean;
+  hasPendingMessages(): boolean;
+  ui: { notify(message: string, level: "info" | "warning" | "error"): void };
+}
+
+export interface DeliveryTimers {
+  set(callback: () => void, ms: number): unknown;
+  clear(handle: unknown): void;
+}
+
+const realTimers: DeliveryTimers = {
+  set: (callback, ms) => {
+    const handle = setTimeout(callback, ms);
+    handle.unref();
+    return handle;
+  },
+  clear: (handle) => clearTimeout(handle as NodeJS.Timeout),
+};
+
+/**
+ * Holds completion notifications while manual compaction runs. Pi 1.4.0 rejects sendUserMessage in that window and
+ * reports it only as an extension error, so a message sent there is lost and the sender cannot tell.
+ *
+ * Outside a hold every message goes straight to send. Held messages go out in arrival order, one per poll: the first
+ * only once Pi is idle, because a session_compact handler still runs with Pi's guard set. Each is submitted at most
+ * once and never retried: Pi gives no acknowledgement, so a retry could duplicate a message that did arrive.
+ */
+export class CompletionDelivery {
+  private readonly held: Array<{ id: number; text: string }> = [];
+  private holding = false;
+  private closed = false;
+  private submittedHeld = false;
+  private warned = false;
+  private flushTimer: unknown;
+  private watchTimer: unknown;
+  private ctx: DeliveryContext | undefined;
+
+  private readonly send: (text: string) => void;
+  private readonly config: DeliveryConfig;
+  private readonly timers: DeliveryTimers;
+
+  constructor(send: (text: string) => void, config: DeliveryConfig, timers: DeliveryTimers = realTimers) {
+    this.send = send;
+    this.config = config;
+    this.timers = timers;
+  }
+
+  submit(id: number, text: string): void {
+    if (this.closed || (!this.holding && this.held.length === 0)) {
+      this.send(text);
+      return;
+    }
+    this.held.push({ id, text });
+    this.notify(`Background command #${id} finished during compaction; its notification is held until compaction ends.`, "warning");
+    this.armWatch();
+  }
+
+  /** Manual compaction reached this extension's session_before_compact hook. */
+  begin(ctx: DeliveryContext): void {
+    if (this.closed) return;
+    this.ctx = ctx;
+    this.holding = true;
+    this.submittedHeld = false;
+    this.warned = false;
+    this.clearFlush();
+    if (this.held.length) this.armWatch();
+  }
+
+  /** Compaction succeeded or failed. Does nothing unless a manual hold is active. */
+  end(ctx: DeliveryContext): void {
+    if (this.closed || !this.holding) return;
+    this.ctx = ctx;
+    this.holding = false;
+    this.scheduleFlush();
+  }
+
+  /** Stops all timers and returns the IDs whose notifications were never submitted. */
+  shutdown(): number[] {
+    this.closed = true;
+    this.clearFlush();
+    this.clearWatch();
+    return this.held.splice(0).map((entry) => entry.id);
+  }
+
+  private flush(): void {
+    this.flushTimer = undefined;
+    if (this.closed || this.holding) return;
+    const ctx = this.ctx!;
+    if (this.held.length === 0) {
+      if (!this.submittedHeld && this.idle() && ctx.hasPendingMessages()) {
+        this.notify("Pi still has a queued message after compaction; it is sent with the next prompt.", "warning");
+      }
+      return;
+    }
+    if (!this.submittedHeld && !this.idle()) {
+      this.scheduleFlush();
+      return;
+    }
+    const entry = this.held.shift()!;
+    this.submittedHeld = true;
+    this.clearWatch();
+    try {
+      this.send(entry.text);
+      this.notify(`Submitted the held notification for background command #${entry.id} once. Pi gives no acknowledgement; if no response appears, read it with background_task_result.`, "warning");
+    } catch (error) {
+      this.notify(`Could not submit the held notification for background command #${entry.id}: ${(error as Error).message}. It is not retried; read it with background_task_result.`, "error");
+    }
+    if (this.held.length) this.scheduleFlush();
+  }
+
+  private scheduleFlush(): void {
+    if (this.flushTimer === undefined) this.flushTimer = this.timers.set(() => this.flush(), this.config.flushPollMs);
+  }
+
+  private clearFlush(): void {
+    if (this.flushTimer !== undefined) this.timers.clear(this.flushTimer);
+    this.flushTimer = undefined;
+  }
+
+  private armWatch(): void {
+    if (this.watchTimer === undefined) this.watchTimer = this.timers.set(() => this.watch(), this.config.holdWarnMs);
+  }
+
+  private clearWatch(): void {
+    if (this.watchTimer !== undefined) this.timers.clear(this.watchTimer);
+    this.watchTimer = undefined;
+  }
+
+  private watch(): void {
+    this.watchTimer = undefined;
+    if (this.closed || this.held.length === 0 || this.submittedHeld) return;
+    if (!this.warned) {
+      this.warned = true;
+      this.notify(`${this.held.length} background task notification(s) still held: Pi has not finished compaction or is busy.`, "warning");
+    }
+    // Idle rules compaction out, so a hold still active here means its end hook never reached this extension.
+    if (this.holding && this.idle()) this.end(this.ctx!);
+    this.armWatch();
+  }
+
+  private idle(): boolean {
+    try {
+      return this.ctx?.isIdle() ?? false;
+    } catch {
+      return false;
+    }
+  }
+
+  private notify(message: string, level: "info" | "warning" | "error"): void {
+    try {
+      this.ctx?.ui.notify(message, level);
+    } catch {
+      process.stderr.write(`background-tasks: ${message}\n`);
+    }
+  }
 }
 
 export function loadBackgroundTaskConfig(path: string, width: (text: string) => number): BackgroundTaskConfig {

@@ -10,6 +10,10 @@
     "kill_wait_ms": 2000,
     "poll_ms": 25
   },
+  "delivery": {
+    "hold_warn_ms": 30000,
+    "flush_poll_ms": 25
+  },
   "status": {
     "max_cells": 72,
     "reserved_cells": 16,

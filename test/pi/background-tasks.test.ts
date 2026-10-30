@@ -33,6 +33,7 @@ const fastConfig: BackgroundTaskConfig = {
   outputLimitChars: 16_000,
   finishedRetentionLimit: 50,
   stop: { graceMs: 20, killWaitMs: 60, pollMs: 5 },
+  delivery: { holdWarnMs: 1_000, flushPollMs: 1 },
   status: parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec", visibleWidth).status,
 };
 const escalationConfig: BackgroundTaskConfig = { ...fastConfig, stop: { graceMs: 50, killWaitMs: 5_000, pollMs: 10 } };
@@ -413,6 +414,7 @@ test("config: the spec file loads with the documented bounds", () => {
     outputLimitChars: 16_000,
     finishedRetentionLimit: 50,
     stop: { graceMs: 1_000, killWaitMs: 2_000, pollMs: 25 },
+    delivery: { holdWarnMs: 30_000, flushPollMs: 25 },
     status: fastConfig.status,
   });
 });
@@ -422,6 +424,7 @@ test("config: unknown, missing, non-positive and non-JSON-compatible values fail
     output_limit_chars: 1,
     finished_retention_limit: 1,
     stop: { grace_ms: 1, kill_wait_ms: 1, poll_ms: 1 },
+    delivery: { hold_warn_ms: 1, flush_poll_ms: 1 },
     status: JSON.parse(readFileSync(SPEC_PATH, "utf8").split("\n").filter((line) => !line.startsWith("#")).join("\n")).status,
   };
   const parse = (value: unknown) => parseBackgroundTaskConfig(JSON.stringify(value), "test", visibleWidth);
@@ -440,6 +443,8 @@ test("config: unknown, missing, non-positive and non-JSON-compatible values fail
   assert.throws(() => parse({ ...valid, status: { ...valid.status, fallback_label: "task", label_max_cells: 3 } }), /exceeds label_max_cells/);
   assert.throws(() => parse({ ...valid, extra: 1 }), /unknown key "extra"/);
   assert.throws(() => parse({ ...valid, stop: { grace_ms: 1, kill_wait_ms: 1 } }), /missing key "poll_ms"/);
+  assert.throws(() => parse({ ...valid, delivery: { hold_warn_ms: 1 } }), /missing key "flush_poll_ms"/);
+  assert.throws(() => parse({ ...valid, delivery: { hold_warn_ms: 0, flush_poll_ms: 1 } }), /hold_warn_ms/);
   assert.throws(() => parse({ ...valid, output_limit_chars: 0 }), /positive safe integer/);
   assert.throws(() => parse({ ...valid, finished_retention_limit: 1.5 }), /positive safe integer/);
   assert.throws(() => parseBackgroundTaskConfig("output_limit_chars: 1\n", "test", visibleWidth), /not JSON-compatible YAML/);

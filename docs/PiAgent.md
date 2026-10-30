@@ -81,6 +81,18 @@ extension for general shell commands (not Pi prompt/subagent execution). Its
 logic lives in `.pi/lib/background-task-runner.ts`; Pi autoloads only
 `.pi/extensions/`, so the library and its tests stay out of autoload.
 
+Completion notifications during manual compaction: Pi rejects `sendUserMessage` while
+manual compaction runs and reports that only as an extension error, so the extension
+holds notifications from its `session_before_compact` hook until `session_compact` or
+`session_compact_failed`, then submits each once, in arrival order, after Pi reports idle
+(`delivery` in `spec/pi-background-tasks.yaml` sets the timing). Delivery is at most once,
+not exactly once: Pi gives no acknowledgement, so nothing is retried and each held
+submission shows a warning pointing at `background_task_result`. Known gaps (issue 1047):
+a completion is still rejected if another extension's earlier `session_before_compact`
+handler is holding when it arrives, held notifications are dropped with a stderr report
+at shutdown, and a follow-up queued before compaction waits for the next prompt (with a
+warning). Automatic compaction and ordinary streaming follow-ups are not held.
+
 Tools (model-callable):
 
 - `background_task` starts a command through `$SHELL -lc` in the current project

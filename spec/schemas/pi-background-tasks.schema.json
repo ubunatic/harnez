@@ -9,6 +9,7 @@
     "output_limit_chars",
     "finished_retention_limit",
     "stop",
+    "delivery",
     "status"
   ],
   "properties": {
@@ -49,6 +50,28 @@
           "type": "integer",
           "minimum": 1,
           "description": "Interval for re-checking process-group liveness while waiting for termination.",
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hold_warn_ms",
+        "flush_poll_ms"
+      ],
+      "properties": {
+        "hold_warn_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Wait before warning that completion notifications are still held for manual compaction, and between checks that the compaction end was not missed.",
+          "maximum": 9007199254740991
+        },
+        "flush_poll_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Interval between submitting held completion notifications, and between checks that Pi is idle before the first one.",
           "maximum": 9007199254740991
         }
       }
