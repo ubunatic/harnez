@@ -120,7 +120,10 @@ then the README is regenerated and the batch is committed once.
                     Atomically reserve the next free issue number and create
                     a Draft placeholder file (issues/<NNN>-<title-slug>.md,
                     or issues/<NNN>-reserved.md with no title), using
-                    O_CREATE|O_EXCL so concurrent callers never collide. Non-
+                    O_CREATE|O_EXCL so concurrent callers never collide. A
+                    number is taken if a ticket under issues/ on any fetched
+                    remote branch (refs/remotes/*) uses it; new never fetches,
+                    so run git fetch first to see other clones' tickets. Non-
                     JSON output is "<NUMBER>\t<PATH>" -- write the ticket's
                     real content directly to that printed path instead of
                     re-deriving the slug from the title by hand (a
@@ -129,7 +132,8 @@ then the README is regenerated and the batch is committed once.
                     matches block unless --force is supplied. --number N uses
                     ticket number N (e.g. one reserved on another machine)
                     instead of the next free one; it fails if a ticket with
-                    that number already exists. Unlike every
+                    that number already exists locally or on a fetched remote
+                    branch. Unlike every
                     other verb, 'new' takes no ticket number (there isn't one
                     yet) and never commits.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
@@ -626,7 +630,11 @@ func warnNumberAhead(w io.Writer, dir, number string) {
 	if err != nil {
 		return
 	}
-	next := issues.NextNumberFromFiles(files)
+	elsewhere, err := issues.RemoteTicketFiles(dir)
+	if err != nil {
+		return
+	}
+	next := issues.NextNumberFromFiles(append(files, elsewhere...))
 	if nextN, err := strconv.Atoi(next); err == nil && n > nextN {
 		fmt.Fprintf(w, "issues new: --number %d is ahead of next free %s; later tickets continue from %d\n", n, next, n+1)
 	}
@@ -640,7 +648,11 @@ func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force boo
 			return err
 		}
 	}
-	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: title, Number: number})
+	elsewhere, err := issues.RemoteTicketFiles(dir)
+	if err != nil {
+		return fmt.Errorf("issues new: %w", err)
+	}
+	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: title, Number: number, Elsewhere: elsewhere})
 	if err != nil {
 		return fmt.Errorf("issues new: %w", err)
 	}
