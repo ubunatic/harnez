@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Enhancement
-**Related**: 987 (on-demand `harnez agent compact`), 973 (Haiku 80k compaction default), 1023
+**Related**: 987 (on-demand `harnez agent compact`), 973 (Haiku 80k compaction default), 1023, 1038 (threshold trigger, resume hint, and the live Pre/Post verification parked from §3)
 
 ---
 

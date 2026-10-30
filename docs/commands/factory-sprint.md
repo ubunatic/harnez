@@ -57,6 +57,8 @@ Reference Practice: `@docs/AgenticLoop.md`
 For each milestone in the ticket:
 
 ### Phase 1: Bounded Discovery (Resumable Searcher)
+If `search-<ticket>` ran a large search round in an earlier milestone, compact it before resuming: `HTO=0 harnez agent compact --name search-<ticket>`. This compacts between milestones, not in the middle of a search.
+
 1. Resume or start `search-<ticket>` (`--role advisor --model cheap`):
    ```bash
    HTO=0 harnez agent resume --name search-<ticket> -f prompt-search.md
