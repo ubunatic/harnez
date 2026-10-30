@@ -53,7 +53,7 @@ func TestWatchPTYLifecycle(t *testing.T) {
 			}
 			quoted := "'" + strings.ReplaceAll(exe, "'", "'\\''") + "'"
 			cmd := exec.Command("script", "-qec", quoted+" -test.run=^TestWatchPTYHelper$", "/dev/null")
-			cmd.Env = append(os.Environ(), "HARNEZ_WATCH_PTY_HELPER="+tc.mode)
+			cmd.Env = append(os.Environ(), "SHELL=/bin/sh", "HARNEZ_WATCH_PTY_HELPER="+tc.mode)
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 			in, err := cmd.StdinPipe()
 			if err != nil {

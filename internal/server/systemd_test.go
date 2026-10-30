@@ -47,6 +47,7 @@ func TestSystemdInstallUsesTempUnitDirAndStartsConfiguredUnit(t *testing.T) {
 		"RestartSec=5s",
 		"RuntimeDirectory=harnez",
 		"RuntimeDirectoryPreserve=yes",
+		`Environment="PATH=%h/.local/bin:%h/go/bin:%h/.cargo/bin:/usr/local/bin:/usr/bin:/bin"`,
 		"ReadWritePaths=-%t/harnez -%S/harnez -%C/harnez -%h/.local/share/harnez",
 		`Environment=SSH_AUTH_SOCK="%t/agent.sock"`,
 	} {

@@ -62,7 +62,11 @@ var runAGYUsageCmdFn = runAGYUsageCmd
 func runAGYUsageCmd(ctx context.Context) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, agyUsageCmdTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "agy", "-p", "/usage")
+	path, err := resolveExecutable("agy")
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, path, "-p", "/usage")
 	return cmd.Output()
 }
 
