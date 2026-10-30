@@ -13,7 +13,10 @@ Reference Practice: `@docs/practices/GoRelease.md`
 1. **Commit pending code**: `git status`. Commit any uncommitted changes on the
    current branch. If stray `issues/` or `docs/` changes are mixed in, follow
    the same authorship/sanity-check bar as `/commit`.
-2. **Push**: `git push`.
+   With `git.protected_main` in `.harnez/repo.yaml`: branch (`git switch -c release/vX.Y.Z`),
+   then release, then open a PR and rebase-merge it. Never push `main`.
+2. **Push**: `git push`. (Skip under `protected_main`: `harnez release` pushes the release
+   branch and tag itself.)
 3. **Release**: run `harnez release`.
 4. **On failure**:
    - If it fails because a login/auth step is needed (e.g. forge token, minisign

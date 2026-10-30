@@ -10,8 +10,15 @@ Applies unless overridden by project-local instructions for coding agents,
 commonly stored in an `AGENTS.md` file at the repository root.
 
 ## Workflow
-- Work local, work on the repo's default branch (usually `main`, sometimes `master`) —
-  no local feature branches unless the project's Repo Setup says otherwise.
+- Workflow follows `git.mode` in `.harnez/repo.yaml` (key absent = solo; set it with
+  `harnez init --repo-mode <mode> [--protected-main]`; the project's Repo Setup restates it):
+  - `solo`: work local, on the repo's default branch (usually `main`, sometimes `master`);
+    no local feature branches.
+  - `team` / `fork`: one topic branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`),
+    push the branch, open a PR. Ticket commits ride on the current topic branch.
+  - `protected_main` (team/fork only): never commit to or push the default branch, never
+    force-push. `harnez issues`, `harnez release` and other auto-committing commands refuse on
+    it and print the `git switch -c` command to run.
 - Commit proactively:
   - Default preference: commit autonomously after intermediate steps once tests are clean, after finished features (with review pass), between iteration attempts on a stuck bug, and immediately after filing issue-tracker entries.
   - Ask-first harness interaction: If running in a harness that mandates explicit user confirmation for `git commit`, ask the user **upfront before starting work / during session kickoff** for authorization to commit local checkpoints proactively. This enables the user to step away without returning to uncommitted progress.
@@ -21,9 +28,10 @@ commonly stored in an `AGENTS.md` file at the repository root.
   - non-trivial changes / features: perform a dedicated review pass (host orchestration or a fresh reviewer subagent) before committing to verify test rigor, doc/ticket accuracy, and codebase clarity
 - Do not push until the user confirms pushing. One confirmation covers the session:
   push later finished work without asking again, unless the user narrows or revokes consent.
-- "Push" means `main` and tags to both dev remotes. Ask again only for force pushes,
-  new remote branches, or a remote that diverged.
-- Do not create remote branches or PRs unless asked.
+- Solo: "push" means `main` and tags to both dev remotes. Ask again only for force pushes,
+  new remote branches, or a remote that diverged. Team/fork: "push" means the topic branch.
+- Solo: do not create remote branches or PRs unless asked. Team/fork: pushing the topic
+  branch is the delivery; the PR is opened by the host or owner (`tea`/`gh` per forge).
 
 ## Commit messages
 - Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary):

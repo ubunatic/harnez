@@ -74,6 +74,7 @@ If `search-<ticket>` ran a large search round in an earlier milestone, compact i
 2. Architect returns concrete types, function signatures, complete logic, and locked table/unit tests.
 
 ### Phase 3: Fresh Mechanical Translation (Developer)
+- **Git mode**: Before Dev, read `git.mode` in `.harnez/repo.yaml` (key absent = solo). If it isn't solo, create or reuse `sprint/<tickets>`; never commit sprint work to the default branch. The final step pushes the branch and reports the PR URL (the host opens it with tea/gh), instead of committing to main.
 1. Launch a **fresh** developer session for the milestone:
    ```bash
    HTO=0 harnez agent start --role developer --name dev-<ticket>-m<N> --model cheap -f prompt-dev.md
@@ -94,6 +95,7 @@ If `search-<ticket>` ran a large search round in an earlier milestone, compact i
    ```
 
 ### Phase 5: Teardown, Process Hygiene & Retrospective
+- **Publish (team/protected mode)**: push `sprint/<tickets>` and report the PR URL (the host opens it with tea/gh); never push the default branch.
 1. **Process & Subagent Hygiene**:
    - Terminate and delete all remaining helper sessions (`search-<ticket>`, `arch-<ticket>`, and milestone developers) via `harnez agent delete --name <session>` to enforce Invariant 3 (Zero Zombie Guarantee).
 2. **Factory Assembly Retrospective**:

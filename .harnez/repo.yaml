@@ -19,3 +19,6 @@ rules:
     quota: true
 make:
     container_test: true
+git:
+    mode: team
+    protected_main: true
