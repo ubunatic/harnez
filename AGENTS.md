@@ -128,7 +128,7 @@ See `@docs/AgenticLoop.md` Invariant 10 (Media & Demo Verification Gate).
 ## Remotes
 - codeberg.org and github.com are both dev remotes; Codeberg is canonical for releases (see Remotes in docs/Git.md).
 - `origin` is `ubunatic/harnez` on Codeberg and its `main` is protected: every change goes through a topic
-  branch and a PR, which the host opens. The `flashcoder` remote is pushed only by the trigger or the owner.
+  branch and a PR, which the host opens.
 
 <!-- harnez:begin Language Conventions -->
 Adhere to the following conventions.
