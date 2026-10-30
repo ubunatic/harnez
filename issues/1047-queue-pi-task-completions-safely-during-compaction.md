@@ -54,7 +54,7 @@ Host `make canary-pi-compaction` passed all 14 scenarios after `eac42623`. The s
 
 ## Shutdown fix review and pre-work
 
-`62466a45` detaches the captured status callback before task shutdown. Developer reports Quota-1 and 14 real-Pi scenarios passing, including shutdown with held ID on stderr and no subsequent extension error. One-shot sol review accepted the bounded fix but found the canary's `startTasks()` clears earlier recorded events: its zero-error assertion only covers later events. Preserve or independently track extension errors across the entire shutdown scenario, without weakening the intentional rejection scenario, then verify. Full no-loss delivery remains unproven because Pi provides no acknowledgement; keep this issue open.
+`62466a45` detaches the captured status callback before task shutdown. Developer reports Quota-1 and 14 real-Pi scenarios passing, including shutdown with held ID on stderr and no subsequent extension error. One-shot sol review accepted the bounded fix but found the canary's `startTasks()` clears earlier recorded events: its zero-error assertion only covers later events. Preserve or independently track extension errors across the entire shutdown scenario, without weakening the intentional rejection scenario, then verify. `adb22d42` tracks errors across the full process lifetime; an injected early error was detected and the real-Pi canary passed 14 scenarios. Host `make test-q1` passed after that change. Full no-loss delivery remains unproven because Pi provides no acknowledgement; keep this issue open.
 
 ## Review pre-work
 
