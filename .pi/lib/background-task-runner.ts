@@ -24,9 +24,17 @@ export interface BackgroundTaskConfig {
   outputLimitChars: number;
   finishedRetentionLimit: number;
   stop: { graceMs: number; killWaitMs: number; pollMs: number };
+  status: StatusConfig;
+}
+
+export interface StatusConfig {
+  maxCells: number; reservedCells: number; labelMaxCells: number; fallbackLabel: string;
+  manualEmoji: string; defaultEmoji: string; labelEmoji: Record<string, string>;
 }
 
 export interface BackgroundTask {
+  readonly label: string;
+  readonly emoji: string;
   readonly id: number;
   readonly command: string;
   readonly startedAt: number;
@@ -61,6 +69,7 @@ export interface BackgroundTask {
 
 export interface RunnerOptions {
   config: BackgroundTaskConfig;
+  visibleWidth: (text: string) => number;
   shell: string;
   platform: NodeJS.Platform;
   now: () => number;
@@ -74,9 +83,17 @@ export interface RunnerOptions {
   liveGroupMembers: (pgid: number) => number | undefined;
 }
 
+/** Width without Pi: exact for ASCII, 2 per other code point. It may overcount, so labels can shorten but never overrun a bound. */
+function conservativeWidth(text: string): number {
+  let width = 0;
+  for (const char of text) width += char.codePointAt(0)! < 0x7f ? 1 : 2;
+  return width;
+}
+
 export function defaultRunnerOptions(config: BackgroundTaskConfig): RunnerOptions {
   return {
     config,
+    visibleWidth: conservativeWidth,
     shell: process.env.SHELL || "/bin/sh",
     platform: process.platform,
     now: () => Date.now(),
@@ -149,7 +166,7 @@ export function resolveTask(runner: BackgroundTaskRunner, value: unknown): Backg
   return task;
 }
 
-export function parseBackgroundTaskConfig(text: string, source: string): BackgroundTaskConfig {
+export function parseBackgroundTaskConfig(text: string, source: string, width: (text: string) => number): BackgroundTaskConfig {
   // Whole-line comments are dropped before JSON.parse; the file is otherwise plain JSON syntax.
   const body = text.split("\n").filter((line) => !line.trimStart().startsWith("#")).join("\n");
   let value: unknown;
@@ -158,9 +175,28 @@ export function parseBackgroundTaskConfig(text: string, source: string): Backgro
   } catch (error) {
     throw new Error(`${source}: not JSON-compatible YAML: ${(error as Error).message}`);
   }
-  const root = exactKeys(value, source, ["output_limit_chars", "finished_retention_limit", "stop"]);
+  const root = exactKeys(value, source, ["output_limit_chars", "finished_retention_limit", "stop", "status"]);
   const stop = exactKeys(root.stop, `${source}: stop`, ["grace_ms", "kill_wait_ms", "poll_ms"]);
+  const status = exactKeys(root.status, `${source}: status`, ["max_cells", "reserved_cells", "label_max_cells", "fallback_label", "manual_emoji", "default_emoji", "label_emoji"]);
+  const labelEmoji = status.label_emoji;
+  if (typeof labelEmoji !== "object" || labelEmoji === null || Array.isArray(labelEmoji)) throw new Error(`${source}: invalid label_emoji`);
+  for (const [key, value] of Object.entries(labelEmoji)) {
+    if (!/^[a-z][a-z0-9_-]*$/.test(key) || typeof value !== "string" || !value || /[\p{C}]/u.test(value)) throw new Error(`${source}: invalid label_emoji`);
+  }
+  const fallbackLabel = status.fallback_label;
+  if (typeof fallbackLabel !== "string" || !validLabel(fallbackLabel) || fallbackLabel !== fallbackLabel.normalize("NFC")) throw new Error(`${source}: invalid fallback_label`);
+  const emoji = (value: unknown) => {
+    if (typeof value !== "string" || !value || /[\p{C}]/u.test(value)) throw new Error(`${source}: invalid emoji`);
+    return value;
+  };
+  const labelMaxCells = positiveInt(status.label_max_cells, `${source}: label_max_cells`);
+  if (width(fallbackLabel) > labelMaxCells) throw new Error(`${source}: fallback_label exceeds label_max_cells`);
+  const reservedCells = status.reserved_cells;
+  if (typeof reservedCells !== "number" || !Number.isSafeInteger(reservedCells) || reservedCells < 0) throw new Error(`${source}: invalid reserved_cells`);
   return {
+    status: { maxCells: positiveInt(status.max_cells, `${source}: max_cells`), reservedCells,
+      labelMaxCells, fallbackLabel,
+      manualEmoji: emoji(status.manual_emoji), defaultEmoji: emoji(status.default_emoji), labelEmoji: labelEmoji as Record<string, string> },
     outputLimitChars: positiveInt(root.output_limit_chars, `${source}: output_limit_chars`),
     finishedRetentionLimit: positiveInt(root.finished_retention_limit, `${source}: finished_retention_limit`),
     stop: {
@@ -171,8 +207,8 @@ export function parseBackgroundTaskConfig(text: string, source: string): Backgro
   };
 }
 
-export function loadBackgroundTaskConfig(path: string): BackgroundTaskConfig {
-  return parseBackgroundTaskConfig(readFileSync(path, "utf8"), path);
+export function loadBackgroundTaskConfig(path: string, width: (text: string) => number): BackgroundTaskConfig {
+  return parseBackgroundTaskConfig(readFileSync(path, "utf8"), path, width);
 }
 
 function exactKeys(value: unknown, label: string, keys: string[]): Record<string, unknown> {
@@ -198,6 +234,49 @@ function errorCode(error: unknown): string | undefined {
   return typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : undefined;
 }
 
+
+function validLabel(label: string): boolean {
+  return /^[\p{L}\p{N}][\p{L}\p{M}\p{N}_-]*$/u.test(label);
+}
+
+export function taskLabel(label: string | undefined, command: string, config: StatusConfig, width: (s: string) => number): string {
+  // Runtime guard: callers outside TypeScript or a real schema check can pass any value.
+  if (label !== undefined && typeof label !== "string") return config.fallbackLabel;
+  let token = label;
+  if (token === undefined) {
+    token = "";
+    for (const part of command.trim().split(/\s+/)) {
+      // Do not interpret shell quoting, escaping, expansion or operators. Splitting those could expose an assignment value.
+      if (!/^[A-Za-z0-9_./:@%+,=\-]+$/.test(part)) return config.fallbackLabel;
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(part)) continue;
+      token = part;
+      break;
+    }
+  }
+  const candidate = (label === undefined ? (token.split(/[\\/]/).pop() ?? "").replace(/\.[^.]*$/, "") : token).trim().normalize("NFC");
+  if (!validLabel(candidate)) return config.fallbackLabel;
+  let result = "";
+  for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(candidate)) {
+    if (width(result + segment) > config.labelMaxCells) break;
+    result += segment;
+  }
+  return result || config.fallbackLabel;
+}
+
+export function formatTaskStatus(tasks: Iterable<BackgroundTask>, budget: number, width: (s: string) => number): string | undefined {
+  const running = [...tasks].filter((task) => task.status === "running").sort((a, b) => a.id - b.id);
+  if (!running.length) return undefined;
+  const count = `Tasks (${running.length})`;
+  const superscripts = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+  const entries = running.map((task) => [...String(task.id)].map((digit) => superscripts[Number(digit)]).join("") + task.emoji + task.label);
+  for (let n = entries.length; n > 0; n--) {
+    const omitted = entries.length - n;
+    const text = `${count}: ${entries.slice(0, n).join(", ")}${omitted ? `, +${omitted}` : ""}`;
+    if (width(text) <= budget) return text;
+  }
+  return count;
+}
+
 export class BackgroundTaskRunner extends EventEmitter {
   readonly tasks = new Map<number, BackgroundTask>();
   shuttingDown = false;
@@ -212,11 +291,14 @@ export class BackgroundTaskRunner extends EventEmitter {
     this.options = options;
   }
 
-  start(command: string, cwd: string): BackgroundTask {
+  start(command: string, cwd: string, metadata: { label?: string; manual?: boolean } = {}): BackgroundTask {
     const cleanCommand = command.trim();
     if (!cleanCommand) throw new Error("Provide a command: /task <command>");
     if (this.shuttingDown) throw new Error("Background tasks are shutting down");
 
+    // Resolve display metadata first: a failure here must not leave a spawned process without a task.
+    const label = taskLabel(metadata.label, cleanCommand, this.options.config.status, this.options.visibleWidth);
+    const emoji = metadata.manual ? this.options.config.status.manualEmoji : (Object.hasOwn(this.options.config.status.labelEmoji, label.toLowerCase()) ? this.options.config.status.labelEmoji[label.toLowerCase()] : this.options.config.status.defaultEmoji);
     const { platform } = this.options;
     const child = this.options.spawn(this.options.shell, ["-lc", cleanCommand], {
       cwd,
@@ -225,6 +307,8 @@ export class BackgroundTaskRunner extends EventEmitter {
       stdio: ["ignore", "pipe", "pipe"],
     });
     const task: BackgroundTask = {
+      label,
+      emoji,
       id: this.nextId++,
       command: cleanCommand,
       startedAt: this.options.now(),

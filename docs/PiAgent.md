@@ -85,7 +85,8 @@ Tools (model-callable):
 
 - `background_task` starts a command through `$SHELL -lc` in the current project
   directory, inheriting the Pi process environment. Each command runs in its own
-  process group, which is what cancellation targets.
+  process group, which is what cancellation targets. Supply an optional single-word
+  `label` for the status line; existing command-only calls remain valid.
 - `background_task_list` lists in-memory tasks with status, elapsed time, exit
   code or signal, and command.
 - `background_task_result` takes `id` and returns status, exit code or signal,
@@ -114,8 +115,11 @@ Lifecycle and reporting:
 - Elapsed time is frozen when the task leaves `running`.
 - Output is decoded per stream (stdout and stderr each have their own UTF-8
   decoder), so a multibyte character split across chunks is not corrupted.
-- The status bar shows `Tasks: N` for running tasks. The count is local to this
-  extension runtime, not a cross-session/global process count.
+- The status shows running tasks, for example `Tasks (3): ¹🔨build, ²🧪tests, ³👤backup`. IDs are actual numeric task IDs; result and cancel still take ordinary numbers. Duplicate labels are allowed. Manual `/task` entries use 👤; other entries use the spec's label-to-emoji map or its default emoji.
+- Labels are trimmed and normalized to NFC. They must begin with a letter or number and then contain only letters, marks, numbers, `_` or `-`. Invalid labels use the spec fallback; valid long labels are truncated at grapheme and cell boundaries. When omitted, the first command token that is not a `NAME=value` assignment supplies its basename without extension, subject to the same validation. Arguments are never displayed in the label and the command is not rewritten for labeling. Quoting, escapes, expansion, or other ambiguous shell syntax in the assignment/command prefix uses the fallback instead of parsing shell syntax.
+- The extension budgets `min(max_cells, max(0, terminal columns - reserved_cells))` cells, or `max_cells` when columns are unavailable. It refreshes on terminal resize, fits whole entries and an omitted count, and falls back to the total alone. A terminal narrower than the total cannot display it fully. Pi joins sorted footer statuses and may truncate the result further because it does not expose the width allocated to this status. The count is local to this extension runtime.
+
+The schema checks label syntax, safe integer bounds, and Unicode control and format categories in emoji. The loader additionally requires NFC and verifies the fallback label fits `label_max_cells` using Pi’s cell width; JSON Schema cannot express those width and normalization checks. Go and JavaScript Unicode tables can differ by version, including treatment of unassigned characters, so the loader remains authoritative.
 
 Bounds live in `spec/pi-background-tasks.yaml` (schema
 `spec/schemas/pi-background-tasks.schema.json`). The file is JSON-compatible YAML so

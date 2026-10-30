@@ -1,8 +1,9 @@
 // Run: node --import ./test/pi/register.mjs --test test/pi/background-tasks.test.ts
 // Fake children never reach a real signal function: the default kill in these tests only records calls.
 // Real-process tests pass realKill and use a POSIX shell (/bin/sh).
-import { after, test } from "node:test";
+import { after, afterEach, test } from "node:test";
 import assert from "node:assert/strict";
+import { visibleWidth } from "./width-stub.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -11,7 +12,10 @@ import { join } from "node:path";
 import backgroundTasksExtension, { installBackgroundTasks } from "../../.pi/extensions/background-tasks.ts";
 import {
   BackgroundTaskRunner,
+  defaultRunnerOptions,
   liveProcessGroupMembers,
+  formatTaskStatus,
+  taskLabel,
   parseBackgroundTaskConfig,
   parseProcStat,
   parseTaskId,
@@ -29,14 +33,17 @@ const fastConfig: BackgroundTaskConfig = {
   outputLimitChars: 16_000,
   finishedRetentionLimit: 50,
   stop: { graceMs: 20, killWaitMs: 60, pollMs: 5 },
+  status: parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec", visibleWidth).status,
 };
 const escalationConfig: BackgroundTaskConfig = { ...fastConfig, stop: { graceMs: 50, killWaitMs: 5_000, pollMs: 10 } };
 const IS_LINUX = process.platform === "linux";
 const HAS_SETSID = spawnSync("sh", ["-c", "command -v setsid"]).status === 0;
 
 const runners: BackgroundTaskRunner[] = [];
-after(async () => {
-  for (const runner of runners) await runner.shutdown();
+const sessionCleanups: Array<() => Promise<unknown>> = [];
+afterEach(async () => {
+  for (const cleanup of sessionCleanups.splice(0)) await cleanup();
+  for (const runner of runners.splice(0)) await runner.shutdown();
 });
 
 /** Fake stream: the runner destroys a stream when its output is drained after a held pipe. */
@@ -98,6 +105,7 @@ function setup(overrides: Partial<RunnerOptions> = {}) {
   runners.push(runner);
   const ctx = fakeCtx();
   fake.handlers.get("session_start")?.({}, ctx);
+  sessionCleanups.push(async () => fake.handlers.get("session_shutdown")?.({}, ctx));
   return {
     ...fake,
     runner,
@@ -170,7 +178,7 @@ test("lifecycle: exit 0 completes, exit 7 fails, stderr captured, status updates
   assert.equal(failed.exitCode, 7);
   assert.ok(failed.output.includes("bad"));
 
-  assert.ok(s.ctx.statuses.includes("Tasks: 1"), "status bar showed a running task");
+  assert.ok(s.ctx.statuses.includes("Tasks (1): ¹🤖echo"), "status bar showed a running task");
   assert.equal(s.ctx.statuses.at(-1), undefined, "status bar cleared after the last task");
   assert.equal(s.messages.length, 2, "one follow-up per task");
   assert.ok(s.messages[0].text.includes("#1 finished (completed, exit 0)"));
@@ -301,7 +309,7 @@ test("bounded retention keeps running tasks: limit 3 with #1 running and #2-#5 f
   let next = 0;
   const s = setup({ spawn: () => children[next++] as any, config: { ...fastConfig, finishedRetentionLimit: 3 } });
   for (let i = 0; i < 5; i++) {
-    await s.tool("background_task").execute(`c${i}`, { command: `task ${i + 1}` }, undefined, undefined, s.ctx);
+    await s.tool("background_task").execute(`c${i}`, { command: `task ${i + 1}`, label: i === 0 ? "build" : "tests" }, undefined, undefined, s.ctx);
   }
   for (const child of children.slice(1)) {
     child.emit("exit", 0, null);
@@ -309,6 +317,7 @@ test("bounded retention keeps running tasks: limit 3 with #1 running and #2-#5 f
   }
   assert.deepEqual([...s.runner.tasks.keys()], [1, 3, 4, 5]);
   assert.equal(s.runner.tasks.get(1)!.status, "running");
+  assert.equal(s.ctx.statuses.at(-1), "Tasks (1): ¹🔨build");
 });
 
 test("strict ID validation: tool and commands reject malformed IDs; unknown 999 is reported as unknown", async () => {
@@ -399,11 +408,12 @@ test("duplicate error then close: one notification, frozen end time, and no sign
 });
 
 test("config: the spec file loads with the documented bounds", () => {
-  const config = parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec/pi-background-tasks.yaml");
+  const config = parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec/pi-background-tasks.yaml", visibleWidth);
   assert.deepEqual(config, {
     outputLimitChars: 16_000,
     finishedRetentionLimit: 50,
     stop: { graceMs: 1_000, killWaitMs: 2_000, pollMs: 25 },
+    status: fastConfig.status,
   });
 });
 
@@ -412,14 +422,27 @@ test("config: unknown, missing, non-positive and non-JSON-compatible values fail
     output_limit_chars: 1,
     finished_retention_limit: 1,
     stop: { grace_ms: 1, kill_wait_ms: 1, poll_ms: 1 },
+    status: JSON.parse(readFileSync(SPEC_PATH, "utf8").split("\n").filter((line) => !line.startsWith("#")).join("\n")).status,
   };
-  const parse = (value: unknown) => parseBackgroundTaskConfig(JSON.stringify(value), "test");
+  const parse = (value: unknown) => parseBackgroundTaskConfig(JSON.stringify(value), "test", visibleWidth);
   assert.ok(parse(valid));
+  assert.ok(parse({ ...valid, status: { ...valid.status, reserved_cells: 0 } }));
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, unknown: 1 } }), /unknown key/);
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, max_cells: 0 } }), /positive safe integer/);
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, reserved_cells: -1 } }), /reserved_cells/);
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, fallback_label: "two words" } }), /fallback_label/);
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, manual_emoji: "\x1b" } }), /emoji/);
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, manual_emoji: "a\u200db" } }), /emoji/);
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, fallback_label: "e\u0301" } }), /fallback_label/);
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, reserved_cells: Number.MAX_SAFE_INTEGER + 1 } }), /reserved_cells/);
+  assert.throws(() => parse({ ...valid, output_limit_chars: Number.MAX_SAFE_INTEGER + 1 }), /positive safe integer/);
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, label_emoji: { build: "\x1b" } } }), /label_emoji/);
+  assert.throws(() => parse({ ...valid, status: { ...valid.status, fallback_label: "task", label_max_cells: 3 } }), /exceeds label_max_cells/);
   assert.throws(() => parse({ ...valid, extra: 1 }), /unknown key "extra"/);
   assert.throws(() => parse({ ...valid, stop: { grace_ms: 1, kill_wait_ms: 1 } }), /missing key "poll_ms"/);
   assert.throws(() => parse({ ...valid, output_limit_chars: 0 }), /positive safe integer/);
   assert.throws(() => parse({ ...valid, finished_retention_limit: 1.5 }), /positive safe integer/);
-  assert.throws(() => parseBackgroundTaskConfig("output_limit_chars: 1\n", "test"), /not JSON-compatible YAML/);
+  assert.throws(() => parseBackgroundTaskConfig("output_limit_chars: 1\n", "test", visibleWidth), /not JSON-compatible YAML/);
 });
 
 test("extension entry registers the four tools and four commands", () => {
@@ -639,9 +662,11 @@ test("retry boundary: a group that empties after the leader's exit settles as a 
   const child = new FakeChild(9600);
   let live = 1;
   const s = setup({ spawn: () => child as any, liveGroupMembers: () => live });
-  await s.tool("background_task").execute("c", { command: "sleep 1000" }, undefined, undefined, s.ctx);
+  await s.tool("background_task").execute("c", { command: "sleep 1000", label: "tests" }, undefined, undefined, s.ctx);
   const task = s.runner.tasks.get(1)!;
+  assert.equal(s.ctx.statuses.at(-1), "Tasks (1): ¹🧪tests");
   assert.equal(await s.runner.cancel(task), "not-confirmed");
+  assert.equal(s.ctx.statuses.at(-1), "Tasks (1): ¹🧪tests");
 
   child.emit("exit", 1, null);
   assert.equal(task.status, "running", "a group member keeps the task running");
@@ -650,6 +675,7 @@ test("retry boundary: a group that empties after the leader's exit settles as a 
   const signalsBefore = s.signals.length;
   assert.equal(await s.runner.cancel(task), "already-ended");
   assert.equal(task.status, "failed", "settled by its real exit, not as cancelled");
+  assert.equal(s.ctx.statuses.at(-1), undefined);
   assert.equal(s.signals.length, signalsBefore, "no signal to a group that is already empty");
   assert.equal(s.messages.length, 0, "output is not final yet: no follow-up");
 
@@ -687,9 +713,11 @@ test("successful retry: a leader that already exited, then a group emptied by th
     },
     liveGroupMembers: () => live,
   });
-  await s.tool("background_task").execute("c", { command: "sleep 1000" }, undefined, undefined, s.ctx);
+  await s.tool("background_task").execute("c", { command: "sleep 1000", label: "build" }, undefined, undefined, s.ctx);
   const task = s.runner.tasks.get(1)!;
+  assert.equal(s.ctx.statuses.at(-1), "Tasks (1): ¹🔨build");
   assert.equal(await s.runner.cancel(task), "not-confirmed");
+  assert.equal(s.ctx.statuses.at(-1), "Tasks (1): ¹🔨build");
 
   child.emit("exit", 0, null);
   assert.equal(task.status, "running", "a group member keeps the task running after its leader exits");
@@ -698,6 +726,7 @@ test("successful retry: a leader that already exited, then a group emptied by th
   sent.length = 0;
   assert.equal(await s.runner.cancel(task), "cancelled");
   assert.equal(task.status, "cancelled");
+  assert.equal(s.ctx.statuses.at(-1), undefined);
   assert.deepEqual(sent, [[-9800, "SIGTERM"]], "the SIGTERM confirmed the group: no SIGKILL");
   child.emit("close", 0, null);
   assert.equal(s.messages.length, 0, "a cancelled task sends no follow-up");
@@ -789,4 +818,123 @@ test("liveProcessGroupMembers counts live members, skips vanished entries, and i
   assert.equal(liveProcessGroupMembers(42, fakeProc({ "1": "1 (init) S 0 42 42 0", "6": "garbage" })), undefined, "malformed entry: unknown, not empty");
   assert.equal(liveProcessGroupMembers(42, fakeProc({ "7": "7 (x) S 0" })), undefined, "truncated before the group field: unknown, not empty");
   assert.equal(liveProcessGroupMembers(42, join(tmpdir(), "pi-proc-no-such-root")), undefined, "no /proc root: unknown");
+});
+
+
+test("status: cell boundaries, real IDs, ordering and omitted counts", async () => {
+  const { visibleWidth } = await import("./width-stub.mjs");
+  const entry = (id: number, label: string, emoji: string) => ({ id, label, emoji, status: "running" } as BackgroundTask);
+  const three = [entry(3, "backup", "👤"), entry(1, "build", "🔨"), entry(2, "tests", "🧪")];
+  for (const [budget, expected] of [[40, "Tasks (3): ¹🔨build, ²🧪tests, ³👤backup"], [39, "Tasks (3): ¹🔨build, ²🧪tests, +1"], [23, "Tasks (3): ¹🔨build, +2"], [22, "Tasks (3)"], [8, "Tasks (3)"]] as const) {
+    assert.equal(formatTaskStatus(three, budget, visibleWidth), expected);
+    if (budget >= visibleWidth(expected)) assert.ok(visibleWidth(expected) <= budget);
+  }
+  const seven = [...three, ...[4, 5, 6, 7].map((id) => entry(id, "task", "🤖"))];
+  assert.equal(formatTaskStatus(seven, 44, visibleWidth), "Tasks (7): ¹🔨build, ²🧪tests, ³👤backup, +4");
+  assert.equal(formatTaskStatus(seven, 43, visibleWidth), "Tasks (7): ¹🔨build, ²🧪tests, +5");
+  assert.equal(formatTaskStatus([], 40, visibleWidth), undefined);
+  assert.equal(formatTaskStatus([entry(1203, "x", "🤖"), entry(10, "x", "🤖"), entry(9, "x", "🤖")], 72, visibleWidth), "Tasks (3): ⁹🤖x, ¹⁰🤖x, ¹²⁰³🤖x");
+});
+
+test("status: labels are safe and legacy commands do not disclose arguments", async () => {
+  const { visibleWidth } = await import("./width-stub.mjs");
+  const c = fastConfig.status;
+  for (const label of ["", " ", "two words", "\x1b[31m", "x\ny", "x‍y", "😀"]) assert.equal(taskLabel(label, "echo secret", c, visibleWidth), c.fallbackLabel);
+  assert.equal(taskLabel("  e\u0301  ", "", c, visibleWidth), "é");
+  assert.equal(taskLabel("abcdefghijklm", "", c, visibleWidth), "abcdefghijkl");
+  assert.equal(taskLabel(undefined, "TOKEN=secret /usr/bin/build.sh password", c, visibleWidth), "build");
+  assert.equal(taskLabel(undefined, "TOKEN=secret", c, visibleWidth), c.fallbackLabel);
+  for (const command of [String.raw`TOKEN=foo\ secret build`, `TOKEN="foo secret" build`, `TOKEN='foo secret' build`, String.raw`TOKEN=foo\ bar=baz build`, `"TOKEN=secret" build`]) {
+    assert.equal(taskLabel(undefined, command, c, visibleWidth), c.fallbackLabel);
+  }
+  assert.equal(taskLabel("漢字abc", "", { ...c, labelMaxCells: 4 }, visibleWidth), "漢字");
+  assert.equal(taskLabel("漢字abc", "", { ...c, labelMaxCells: 3 }, visibleWidth), "漢");
+  assert.equal(taskLabel("e\u0301e\u0301x", "", { ...c, labelMaxCells: 2 }, visibleWidth), "éé");
+});
+
+
+test("status: resize, repeated starts and shutdown manage one listener", async () => {
+  const original = Object.getOwnPropertyDescriptor(process.stdout, "columns");
+  const base = process.stdout.listenerCount("resize");
+  const children: FakeChild[] = [];
+  const s = setup({ spawn: () => { const child = new FakeChild(700 + children.length); children.push(child); return child as any; } });
+  try {
+    await s.tool("background_task").execute("c", { command: "build --secret", label: "build" }, undefined, undefined, s.ctx);
+    assert.equal(s.ctx.statuses.at(-1), "Tasks (1): ¹🔨build");
+    for (const columns of [80, 40, 16, undefined]) {
+      Object.defineProperty(process.stdout, "columns", { configurable: true, value: columns });
+      process.stdout.emit("resize");
+      assert.equal(s.ctx.statuses.at(-1), columns === 16 ? "Tasks (1)" : "Tasks (1): ¹🔨build");
+    }
+    const before = s.ctx.statuses.length;
+    process.stdout.emit("resize");
+    assert.equal(s.ctx.statuses.length, before);
+    s.handlers.get("session_start")!({}, s.ctx);
+    assert.equal(process.stdout.listenerCount("resize"), base + 1);
+    children[0].emit("exit", 0, null);
+    children[0].emit("close", 0, null);
+    await s.handlers.get("session_shutdown")!({}, s.ctx);
+    assert.equal(process.stdout.listenerCount("resize"), base);
+  } finally {
+    if (original) Object.defineProperty(process.stdout, "columns", original);
+    else delete (process.stdout as any).columns;
+  }
+});
+
+
+test("status: manual and tool metadata exist on first change without changing argv", async () => {
+  const calls: string[][] = [];
+  const s = setup({ spawn: (_shell, args) => { calls.push(args); return new FakeChild(880 + calls.length) as any; } });
+  await s.tool("background_task").execute("c", { command: "build --token secret", label: "build" }, undefined, undefined, s.ctx);
+  assert.equal(s.ctx.statuses.at(-1), "Tasks (1): ¹🔨build");
+  await s.command("task").handler("backup --token secret", s.ctx);
+  assert.equal(s.ctx.statuses.at(-1), "Tasks (2): ¹🔨build, ²👤backup");
+  assert.deepEqual(calls, [["-lc", "build --token secret"], ["-lc", "backup --token secret"]]);
+  for (const task of s.runner.tasks.values()) {
+    task.child.emit("exit", 0, null);
+    task.child.emit("close", 0, null);
+  }
+  assert.equal(s.ctx.statuses.at(-1), undefined);
+  assert.equal(s.messages.length, 2);
+});
+
+test("label: an invalid value uses the fallback and every spawned process has a task", async () => {
+  let spawned = 0;
+  const s = setup({ spawn: () => new FakeChild(900 + spawned++) as any });
+  const invalid = [null, 42, true, {}, [], "", " ", "two words", "\x1b[31m"];
+  for (const label of invalid) {
+    await s.tool("background_task").execute("c", { command: "sleep 1", label }, undefined, undefined, s.ctx);
+  }
+  assert.equal(spawned, invalid.length);
+  assert.equal(s.runner.tasks.size, invalid.length);
+  for (const task of s.runner.tasks.values()) {
+    assert.equal(task.label, fastConfig.status.fallbackLabel);
+    task.child.emit("exit", 0, null);
+    task.child.emit("close", 0, null);
+  }
+});
+
+test("label: a failure while resolving metadata launches no process", () => {
+  let spawned = 0;
+  const s = setup({
+    spawn: () => { spawned++; return new FakeChild(950) as any; },
+    visibleWidth: () => { throw new Error("width failed"); },
+  });
+  assert.throws(() => s.runner.start("sleep 1", s.ctx.cwd, { label: "build" }), /width failed/);
+  assert.throws(() => s.runner.start("sleep 1", s.ctx.cwd, null as any), TypeError);
+  assert.equal(spawned, 0);
+  assert.equal(s.runner.tasks.size, 0);
+});
+
+test("default width: a direct runner never overruns the label bound and needs no Pi package", () => {
+  const options = defaultRunnerOptions(fastConfig);
+  for (const sample of ["🇩🇪", "का", "漢字", "é", "é", "¹🔨build"]) assert.ok(options.visibleWidth(sample) >= visibleWidth(sample), sample);
+  assert.equal(options.visibleWidth("build"), 5);
+  assert.equal(taskLabel("abcdefghijklm", "", fastConfig.status, options.visibleWidth), "abcdefghijkl");
+  assert.equal(taskLabel("漢".repeat(8), "", fastConfig.status, options.visibleWidth), "漢".repeat(6));
+  const runner = new BackgroundTaskRunner({ ...options, spawn: () => new FakeChild(960) as any, kill: () => {}, liveGroupMembers: () => undefined });
+  const task = runner.start("sleep 1", process.cwd(), { label: "漢".repeat(8) });
+  assert.ok(visibleWidth(task.label) <= fastConfig.status.labelMaxCells);
+  task.child.emit("exit", 0, null);
+  task.child.emit("close", 0, null);
 });

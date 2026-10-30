@@ -9,5 +9,25 @@
     "grace_ms": 1000,
     "kill_wait_ms": 2000,
     "poll_ms": 25
+  },
+  "status": {
+    "max_cells": 72,
+    "reserved_cells": 16,
+    "label_max_cells": 12,
+    "fallback_label": "task",
+    "manual_emoji": "👤",
+    "default_emoji": "🤖",
+    "label_emoji": {
+      "build": "🔨",
+      "test": "🧪",
+      "tests": "🧪",
+      "lint": "🧹",
+      "deploy": "🚀",
+      "release": "🚀",
+      "install": "📦",
+      "download": "📥",
+      "backup": "💾",
+      "docs": "📝"
+    }
   }
 }
