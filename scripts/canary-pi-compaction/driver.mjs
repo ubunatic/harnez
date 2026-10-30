@@ -68,7 +68,11 @@ async function scenario(name, options, body) {
   fs.mkdirSync(agentDir, { recursive: true });
   fs.mkdirSync(cwd);
   const events = [];
-  const log = (event) => events.push(event);
+  const extensionErrors = [];
+  const log = (event) => {
+    events.push(event);
+    if (event.e === "extension_error") extensionErrors.push(event);
+  };
   const state = { log, usage: 50 };
   const server = await startStub(state);
   fs.writeFileSync(path.join(agentDir, "models.json"), JSON.stringify({
@@ -179,8 +183,7 @@ async function scenario(name, options, body) {
     const match = text(message).match(/^Background command #(\d+) finished|^FIXTURE (\S+) done/);
     return match ? [match[1] ?? match[2]] : [];
   });
-  const rejected = events.filter((event) => event.e === "extension_error" && event.error?.includes(REJECTED)).length;
-  const extensionErrors = events.filter((event) => event.e === "extension_error");
+  const rejected = extensionErrors.filter((event) => event.error?.includes(REJECTED)).length;
   const check = (label, actual, expected) => {
     if (JSON.stringify(actual) !== JSON.stringify(expected)) problems.push(`${label}: got ${JSON.stringify(actual)}, want ${JSON.stringify(expected)}`);
   };
@@ -200,7 +203,7 @@ async function scenario(name, options, body) {
   for (const event of events) {
     console.log("  " + JSON.stringify(Object.fromEntries(Object.entries(event).filter(([, value]) => value !== undefined))).slice(0, 200));
   }
-  console.log("  FINAL " + JSON.stringify({ rejected, transcript, stderr: stderr.slice(0, 160) }));
+  console.log("  FINAL " + JSON.stringify({ rejected, extensionErrors, transcript, stderr: stderr.slice(0, 160) }));
   for (const problem of problems) console.log(`  PROBLEM ${problem}`);
   if (problems.length) failures++;
 }
