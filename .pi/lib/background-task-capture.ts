@@ -12,7 +12,9 @@ export interface CaptureTimers {
 export interface CaptureResult {
   complete: boolean; reason?: string;
   accepted: number; committed: number; queued: number; inflight: number; dropped: number;
+  confirmedDropped: number; uncertain: number;
 }
+export interface CaptureCleanup { pending: boolean; errors: string[] }
 export interface CaptureCallbacks {
   pause(): void;
   resume(): void;
@@ -26,6 +28,7 @@ export class CaptureWriter<H> {
   private accepted = 0;
   private committed = 0;
   private dropped = 0;
+  private uncertain = 0;
   private handle?: H;
   private opening = true;
   private writing = false;
@@ -40,6 +43,10 @@ export class CaptureWriter<H> {
   private timer?: unknown;
   private readonly resultPromise: Promise<CaptureResult>;
   private resolve!: (result: CaptureResult) => void;
+  private readonly cleanupPromise: Promise<CaptureCleanup>;
+  private resolveCleanup!: (result: CaptureCleanup) => void;
+  private cleanupDone = false;
+  private cleanupErrors: string[] = [];
   private readonly io: CaptureIO<H>;
   private readonly timers: CaptureTimers;
   private readonly schedule: (fn: () => void) => void;
@@ -58,6 +65,7 @@ export class CaptureWriter<H> {
     this.config = config;
     this.callbacks = callbacks;
     this.resultPromise = new Promise((resolve) => { this.resolve = resolve; });
+    this.cleanupPromise = new Promise((resolve) => { this.resolveCleanup = resolve; });
     this.arm();
     try { Promise.resolve(io.open()).then((h) => this.opened(h), (e) => this.openFailed(e)); }
     catch (e) { this.openFailed(e); }
@@ -67,18 +75,23 @@ export class CaptureWriter<H> {
   append(data: Uint8Array): void {
     if (this.ending || this.settled) throw new Error("capture is ending");
     this.accepted += data.byteLength;
-    if (this.reason || this.queued + this.inflight + data.byteLength > this.config.hard) {
+    if (this.reason !== undefined || this.queued + this.inflight + data.byteLength > this.config.hard) {
       this.dropped += data.byteLength;
       this.fail("capture queue limit exceeded");
       return;
     }
-    if (data.byteLength) { this.queue.push(data.slice()); this.queued += data.byteLength; }
+    if (data.byteLength) { this.queue.push(Uint8Array.from(data)); this.queued += data.byteLength; }
     this.flow();
     this.pumpSoon();
   }
 
   /** Marks unobserved stream loss, while flushing all bytes already accepted. */
-  truncate(reason: string): void { if (!this.reason) this.reason = reason; }
+  truncate(reason: string): void {
+    if (this.settled) throw new Error("capture is settled");
+    this.reason ??= reason || "capture truncated";
+    this.ending = true;
+    this.pumpSoon();
+  }
 
   finish(): Promise<CaptureResult> {
     if (!this.settled) { this.ending = true; this.pumpSoon(); }
@@ -88,9 +101,10 @@ export class CaptureWriter<H> {
   /** Settles synchronously; an in-flight operation retains ownership until its callback arrives. */
   abort(reason: string): CaptureResult {
     if (!this.settled) {
-      this.reason ??= reason;
+      this.reason ??= reason || "capture aborted";
       this.dropQueued();
       this.dropped += this.inflight;
+      this.uncertain += this.inflight;
       this.inflight = 0;
       this.resume();
       this.settle();
@@ -99,11 +113,16 @@ export class CaptureWriter<H> {
     return this.snapshot();
   }
 
-  detach(): void { this.detached = true; }
+  detach(): void { this.resume(); this.detached = true; }
+
+  /** Resolves only after outstanding operations and any resulting close have completed. */
+  cleanup(): Promise<CaptureCleanup> { return this.cleanupPromise; }
+  cleanupStatus(): CaptureCleanup { return { pending: !this.cleanupDone, errors: [...this.cleanupErrors] }; }
 
   private snapshot(): CaptureResult {
-    return { complete: this.settled && !this.reason && this.closed, reason: this.reason,
-      accepted: this.accepted, committed: this.committed, queued: this.queued, inflight: this.inflight, dropped: this.dropped };
+    return { complete: this.settled && this.reason === undefined && this.closed, reason: this.reason,
+      accepted: this.accepted, committed: this.committed, queued: this.queued, inflight: this.inflight, dropped: this.dropped,
+      confirmedDropped: this.dropped - this.uncertain, uncertain: this.uncertain };
   }
   private call(fn: () => void): void {
     if (this.detached) return;
@@ -130,6 +149,8 @@ export class CaptureWriter<H> {
   private openFailed(error: unknown): void {
     this.opening = false;
     if (!this.settled) { this.fail(`capture open failed: ${String(error)}`); this.settle(); }
+    else this.cleanupErrors.push(`capture open failed: ${String(error)}`);
+    this.finishCleanup();
   }
   private pumpSoon(): void {
     if (this.scheduled || this.settled) return;
@@ -150,7 +171,10 @@ export class CaptureWriter<H> {
   }
   private wrote(data: Uint8Array, n: number): void {
     this.writing = false;
-    if (this.settled) { this.close(); return; }
+    if (this.settled) {
+      if (!Number.isSafeInteger(n) || n <= 0 || n > data.byteLength) this.cleanupErrors.push("capture late write returned invalid count");
+      this.close(); return;
+    }
     this.disarm();
     if (!Number.isSafeInteger(n) || n <= 0 || n > data.byteLength) { this.writeFailed("invalid or zero write"); return; }
     this.inflight = 0;
@@ -161,7 +185,7 @@ export class CaptureWriter<H> {
   }
   private writeFailed(error: unknown): void {
     this.writing = false;
-    if (this.settled) { this.close(); return; }
+    if (this.settled) { this.cleanupErrors.push(`capture late write failed: ${String(error)}`); this.close(); return; }
     this.disarm();
     this.dropped += this.inflight;
     this.inflight = 0;
@@ -180,15 +204,24 @@ export class CaptureWriter<H> {
     if (this.closing || this.closed || this.opening || this.writing || this.handle === undefined) return;
     this.closing = true;
     if (!this.settled) this.arm();
-    try { Promise.resolve(this.io.close(this.handle)).then(() => this.closeDone(), (e) => this.closeDone(e)); }
-    catch (e) { this.closeDone(e); }
+    try { Promise.resolve(this.io.close(this.handle)).then(() => this.closeDone(false), (e) => this.closeDone(true, e)); }
+    catch (e) { this.closeDone(true, e); }
   }
-  private closeDone(error?: unknown): void {
+  private closeDone(failed: boolean, error?: unknown): void {
     this.closing = false;
     this.closed = true;
-    if (this.settled) return;
-    if (error !== undefined) this.reason ??= `capture close failed: ${String(error)}`;
-    this.settle();
+    if (failed) {
+      const message = `capture close failed: ${String(error)}`;
+      this.cleanupErrors.push(message);
+      this.reason ??= message;
+    }
+    if (!this.settled) this.settle();
+    this.finishCleanup();
+  }
+  private finishCleanup(): void {
+    if (this.cleanupDone || !this.settled || this.opening || this.writing || this.closing || (this.handle !== undefined && !this.closed)) return;
+    this.cleanupDone = true;
+    this.resolveCleanup(this.cleanupStatus());
   }
   private settle(): void {
     if (this.settled) return;

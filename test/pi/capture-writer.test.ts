@@ -172,3 +172,107 @@ test("callback throw aborts without escaping or leaking timers", async () => {
   await turn();
   assert.equal(timers.size, 0);
 });
+
+test("Buffer input is copied, and truncation flushes accepted bytes even with an empty reason", async () => {
+  const open = deferred<number>();
+  const f = fixture({ open: () => open.promise });
+  const bytes = Buffer.from([0xff, 1, 2]);
+  f.writer.append(bytes);
+  bytes.fill(0);
+  f.writer.truncate("");
+  assert.throws(() => f.writer.append(Uint8Array.of(3)));
+  open.resolve(1);
+  const result = await f.writer.finish();
+  assert.deepEqual(f.writes, [0xff, 1, 2]);
+  assert.equal(result.complete, false);
+  assert.match(result.reason!, /truncated/);
+  assert.throws(() => f.writer.truncate("late"));
+  assert.deepEqual(await f.writer.cleanup(), { pending: false, errors: [] });
+});
+
+test("detach resumes a paused producer before suppressing callbacks", async () => {
+  const pending = deferred<number>();
+  const f = fixture({ write: () => pending.promise });
+  await turn();
+  f.writer.append(Uint8Array.of(1, 2, 3, 4));
+  await turn();
+  f.writer.detach();
+  assert.deepEqual(f.calls, ["pause", "resume"]);
+  pending.resolve(4);
+  assert.equal((await f.writer.finish()).complete, true);
+  assert.equal(f.settled.length, 0);
+  assert.deepEqual(await f.writer.cleanup(), { pending: false, errors: [] });
+});
+
+test("cleanup gate exposes residual operations and late failures", async () => {
+  const pending = deferred<number>();
+  const f = fixture({ write: () => pending.promise, close: () => Promise.reject(undefined) });
+  await turn();
+  f.writer.append(Uint8Array.of(1, 2, 3, 4));
+  await turn();
+  const result = f.writer.abort("cancel");
+  assert.equal(result.uncertain, 4);
+  assert.equal(result.confirmedDropped, 0);
+  assert.equal(f.writer.cleanupStatus().pending, true);
+  pending.reject(undefined);
+  const cleanup = await f.writer.cleanup();
+  assert.equal(cleanup.pending, false);
+  assert.match(cleanup.errors[0], /late write failed: undefined/);
+  assert.match(cleanup.errors[1], /close failed: undefined/);
+  assert.equal(f.timers.size, 0);
+});
+
+test("undefined close rejection and synchronous I/O throws fail capture", async () => {
+  const cases: Partial<CaptureIO<number>>[] = [
+    { open: () => { throw undefined; } },
+    { write: () => { throw undefined; } },
+    { close: () => { throw undefined; } },
+    { close: () => Promise.reject(undefined) },
+  ];
+  for (const io of cases) {
+    const f = fixture(io);
+    await turn();
+    if (!f.settled.length) f.writer.append(Uint8Array.of(1));
+    const result = await f.writer.finish();
+    assert.equal(result.complete, false);
+    assert.match(result.reason!, /failed: undefined/);
+    balanced(result);
+    assert.equal((await f.writer.cleanup()).pending, false);
+    assert.equal(f.timers.size, 0);
+  }
+});
+
+test("invalid write counts fail, and independent writers settle separately", async () => {
+  for (const count of [-1, 0, 2, 0.5, NaN]) {
+    const f = fixture({ write: async () => count });
+    f.writer.append(Uint8Array.of(1));
+    const result = await f.writer.finish();
+    assert.equal(result.complete, false);
+    assert.match(result.reason!, /invalid or zero/);
+    balanced(result);
+    await f.writer.cleanup();
+  }
+  const pending = deferred<number>();
+  const slow = fixture({ open: () => pending.promise });
+  const fast = fixture();
+  fast.writer.append(Uint8Array.of(7));
+  assert.equal((await fast.writer.finish()).complete, true);
+  assert.equal(slow.writer.cleanupStatus().pending, true);
+  slow.writer.abort("stop");
+  pending.reject(new Error("late open"));
+  assert.match((await slow.writer.cleanup()).errors[0], /late open/);
+});
+
+test("late close rejection is reported after bounded settlement", async () => {
+  const close = deferred<void>();
+  const f = fixture({ close: () => close.promise });
+  await turn();
+  const done = f.writer.finish();
+  await turn();
+  f.fire();
+  assert.equal((await done).complete, false);
+  assert.equal(f.writer.cleanupStatus().pending, true);
+  close.reject(undefined);
+  assert.match((await f.writer.cleanup()).errors[0], /close failed: undefined/);
+  assert.equal(f.timers.size, 0);
+});
