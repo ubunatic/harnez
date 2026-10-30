@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Epic
-**Related**: 1011, 1021, 1044, 1046, 1047, 1048, 1049
+**Related**: 1011, 1021, 1044, 1046, 1047, 1048, 1049, 1051
 
 ## Goal
 
@@ -29,6 +29,7 @@ Sprint groups, dependencies and role/model assignments are placeholders until co
 | 1047 | Safe completion delivery during compaction | TBD | TBD | TBD | Open |
 | 1048 | Ctrl-B for manual command backgrounding | TBD | TBD | TBD | Open |
 | 1049 | Guard reload while tasks are running | TBD | TBD | TBD | Open |
+| 1051 | Concise background-task launch command display | TBD | TBD | TBD | Open |
 | — | Evergreen: study, review learnings and linked follow-ups | Final | TBD | TBD | Pending |
 | — | Wrap: verify task outcomes and report next command | Final | TBD | TBD | Pending |
 
