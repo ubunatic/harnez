@@ -8,7 +8,7 @@
 
 ## Ask
 
-Let the user background their own manual Pi shell commands with **Ctrl-B**, integrated with the existing task system. For example, after starting a manual `sleep 10`, the user wants to leave it running in the background rather than wait for it in the foreground.
+Let the user background their own manual Pi shell commands with **Ctrl-B**, integrated with the existing task system. For example, after starting a manual `sleep 10`, the user wants to leave it running in the background rather than wait for it in the foreground. The owner confirmed the chat remains active while a manual command runs and that Ctrl-B currently moves the cursor back one character; explicitly override that chat binding for this workflow.
 
 ## Goal
 
