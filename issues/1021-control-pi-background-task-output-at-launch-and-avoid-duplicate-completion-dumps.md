@@ -10,6 +10,10 @@
 
 Read-only discovery confirms the runner retains a 16,000-character tail for up to 50 finished tasks; generic shell output cannot reliably identify an agent final message. Owner decisions: file-backed capture is the default and may be opted out of per task, including consideration of manual tasks. Use private files on a best-effort basis; a short completion tail is acceptable. Delete captures when the session closes (and on earlier eviction); best-effort crash cleanup must not delete other live sessions' files. On disk-full or write failure, keep the task running, explicitly mark capture incomplete and retain the readable portion. Do not impose an arbitrary capture cap or claim incomplete output is complete. Provide explicit paged retrieval and document the privacy and crash limitations. 1044 batching is sequenced after this policy.
 
+## M2 pre-work: M1 capture review
+
+M1 `62b1356f` adds private captures; developer reports Quota-1 passed. Sol review requires fixes before extending the API: replace synchronous event-loop-blocking writes with asynchronous bounded backpressure; visibly report capture creation/write/close failures while tasks continue; mark drain-timeout-discarded output incomplete; unwind descriptor and file if creation fails after opening; and clean up the direct-runner test's capture. Cover creation/close errors, slow storage, cancellation/drain and path replacement. Inode checks are best-effort, not atomic protection against same-user races. Do not weaken prior assertions. Preserve owner-approved session cleanup and no arbitrary cap; crash or kill may leave private orphan files and must be disclosed.
+
 ## Problem
 
 During sitegen epic 008, the agent inspected completed background jobs while orchestrating work, then delayed completion messages displayed their full outputs again as separate user-visible messages. Fourteen large repeated notifications interrupted the conversation and were also presented to the agent. Shell redirection suggested as a workaround relies on each agent remembering to pipe output, which the owner does not want to rely on.
