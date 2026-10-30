@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/index"
 	issuecore "ubunatic.com/harnez/internal/issues"
 )
@@ -106,6 +107,11 @@ func RunIssuesReconcile(w io.Writer, dir, ref string, dryRun bool) error {
 	if len(collisions) == 0 {
 		fmt.Fprintln(w, "issues reconcile: no collisions")
 		return nil
+	}
+	if !dryRun {
+		if err := gitflow.GuardCommit(dir, "reconcile tickets"); err != nil {
+			return fmt.Errorf("issues reconcile: %w", err)
+		}
 	}
 	issuesDir := filepath.Join(dir, "issues")
 	var stage []string

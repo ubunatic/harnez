@@ -309,3 +309,36 @@ func TestIssuesMergeDriverRejectsConflictOutsideDocsBlock(t *testing.T) {
 		t.Fatalf("driver changed unresolved hand-written conflict:\n%s", got)
 	}
 }
+
+func TestIssuesRebaseRefusedOnProtectedMain(t *testing.T) {
+	dir := t.TempDir()
+	gitTestRun(t, dir, "init", "-b", "main")
+	gitTestRun(t, dir, "config", "user.name", "Test")
+	gitTestRun(t, dir, "config", "user.email", "test@example.invalid")
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{
+		"issues/README.md":  "# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n",
+		".gitattributes":    issuesAttributesLineForTest + "\n",
+		".harnez/repo.yaml": "version: 1\nissues:\n  tracker: harnez\n  merge_driver: true\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\ngit:\n  mode: team\n  protected_main: true\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, path)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitTestRun(t, dir, "add", ".")
+	gitTestRun(t, dir, "commit", "-m", "base")
+	gitTestRun(t, dir, "config", "merge.harnez-issues-index.driver", "true")
+	var out bytes.Buffer
+	err := runIssuesRebase(&out, dir, "main", false)
+	if err == nil || !strings.Contains(err.Error(), "git.protected_main") {
+		t.Fatalf("expected a protected_main refusal, got %v", err)
+	}
+	if err := runIssuesRebase(&out, dir, "main", true); err != nil && strings.Contains(err.Error(), "git.protected_main") {
+		t.Fatalf("--dry-run must not be guarded: %v", err)
+	}
+}

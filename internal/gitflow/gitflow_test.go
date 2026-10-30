@@ -152,3 +152,127 @@ func TestDefaultBranchNoOriginHEAD(t *testing.T) {
 		t.Fatalf("ProtectedBranches = %v, want %v", ProtectedBranches(dir, cfg), want)
 	}
 }
+
+const (
+	teamYAML          = "version: 1\ngit:\n  mode: team\n"
+	teamProtectedYAML = "version: 1\ngit:\n  mode: team\n  protected_main: true\n"
+)
+
+// guardRepo builds a scratch repo on branch with the given repo.yaml body and
+// captures the guard's stderr warning.
+func guardRepo(t *testing.T, branch, yaml string) (dir string, stderr *strings.Builder) {
+	t.Helper()
+	dir = newRepo(t, branch)
+	if yaml != "" {
+		writeRepoYAML(t, dir, yaml)
+	}
+	stderr = &strings.Builder{}
+	old := Stderr
+	Stderr = stderr
+	t.Cleanup(func() { Stderr = old })
+	return dir, stderr
+}
+
+func TestGuardSoloOnMain(t *testing.T) {
+	dir, stderr := guardRepo(t, "main", "")
+	if err := GuardCommit(dir, "close ticket"); err != nil {
+		t.Fatalf("solo on main must commit: %v", err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("solo must not warn, got %q", stderr)
+	}
+}
+
+func TestGuardTeamOnMainWarns(t *testing.T) {
+	dir, stderr := guardRepo(t, "main", teamYAML)
+	if err := GuardCommit(dir, "close ticket"); err != nil {
+		t.Fatalf("unprotected team on main must still commit: %v", err)
+	}
+	if want := "git.mode=team: committing on main; use a topic branch"; !strings.Contains(stderr.String(), want) {
+		t.Fatalf("stderr = %q, want it to contain %q", stderr, want)
+	}
+}
+
+func TestGuardProtectedOnMainRefuses(t *testing.T) {
+	dir, _ := guardRepo(t, "main", teamProtectedYAML)
+	err := GuardCommit(dir, "close ticket")
+	if err == nil {
+		t.Fatal("protected main must refuse")
+	}
+	for _, want := range []string{"git.protected_main", "git switch -c", "close ticket", "'main'"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+}
+
+func TestGuardProtectedOnTopicBranch(t *testing.T) {
+	dir, stderr := guardRepo(t, "main", teamProtectedYAML)
+	runGit(t, dir, "switch", "-c", "issue/1039-git-mode")
+	if err := GuardCommit(dir, "close ticket"); err != nil {
+		t.Fatalf("topic branch must commit: %v", err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("topic branch must not warn, got %q", stderr)
+	}
+}
+
+func TestGuardProtectedDetachedHEAD(t *testing.T) {
+	dir, _ := guardRepo(t, "main", teamProtectedYAML)
+	runGit(t, dir, "checkout", "--detach")
+	err := GuardCommit(dir, "close ticket")
+	if err == nil || !strings.Contains(err.Error(), "detached HEAD") {
+		t.Fatalf("error = %v, want a detached HEAD refusal", err)
+	}
+}
+
+func TestGuardTeamDetachedHEADWarns(t *testing.T) {
+	dir, stderr := guardRepo(t, "main", teamYAML)
+	runGit(t, dir, "checkout", "--detach")
+	if err := GuardCommit(dir, "close ticket"); err != nil {
+		t.Fatalf("unprotected team must still commit: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "detached HEAD") {
+		t.Fatalf("stderr = %q, want a detached HEAD warning", stderr)
+	}
+}
+
+func TestGuardSoloDetachedHEAD(t *testing.T) {
+	dir, stderr := guardRepo(t, "main", "")
+	runGit(t, dir, "checkout", "--detach")
+	if err := GuardCommit(dir, "close ticket"); err != nil || stderr.Len() != 0 {
+		t.Fatalf("solo detached: err=%v stderr=%q, want nil and silence", err, stderr)
+	}
+}
+
+func TestGuardProtectedNoOriginHEADOnMaster(t *testing.T) {
+	dir, _ := guardRepo(t, "master", teamProtectedYAML)
+	err := GuardCommit(dir, "close ticket")
+	if err == nil || !strings.Contains(err.Error(), "'master'") {
+		t.Fatalf("error = %v, want a refusal naming 'master' (fallback list)", err)
+	}
+}
+
+func TestGuardProtectedUsesOriginHEADNotFallbackNames(t *testing.T) {
+	dir, _ := guardRepo(t, "dev", teamProtectedYAML)
+	bare := t.TempDir()
+	runGit(t, bare, "init", "--bare", "-b", "dev")
+	runGit(t, dir, "remote", "add", "origin", bare)
+	runGit(t, dir, "push", "origin", "dev")
+	runGit(t, dir, "remote", "set-head", "origin", "-a")
+	if err := GuardCommit(dir, "close ticket"); err == nil {
+		t.Fatal("origin HEAD is dev: committing on dev must be refused")
+	}
+	runGit(t, dir, "switch", "-c", "main")
+	if err := GuardCommit(dir, "close ticket"); err != nil {
+		t.Fatalf("a branch named main is a topic branch when origin HEAD is dev: %v", err)
+	}
+}
+
+func TestGuardInvalidRepoYAML(t *testing.T) {
+	dir, _ := guardRepo(t, "main", "version: 1\ngit:\n  mode: trunk\n")
+	err := GuardCommit(dir, "close ticket")
+	if err == nil || !strings.Contains(err.Error(), "git.mode") {
+		t.Fatalf("error = %v, want one naming git.mode", err)
+	}
+}

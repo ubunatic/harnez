@@ -6,6 +6,7 @@ package gitflow
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -157,4 +158,54 @@ func ProtectedBranches(dir string, c Config) []string {
 	}
 	spec, _ := loadSpec()
 	return slices.Clone(spec.FallbackBranches)
+}
+
+// Stderr receives the guard's warnings. Tests replace it.
+var Stderr io.Writer = os.Stderr
+
+// currentBranch returns the checked-out branch. detached is true when HEAD
+// points at a commit; ok is false when dir is not a git work tree.
+func currentBranch(dir string) (branch string, detached, ok bool) {
+	out, err := exec.Command("git", "-C", dir, "symbolic-ref", "-q", "--short", "HEAD").Output()
+	if err == nil {
+		return strings.TrimSpace(string(out)), false, true
+	}
+	if exec.Command("git", "-C", dir, "rev-parse", "--git-dir").Run() != nil {
+		return "", false, false
+	}
+	return "", true, true
+}
+
+// GuardCommit is the one check every harnez path that stages or commits runs
+// first, before it writes anything. action names the operation for the
+// message ("close ticket", "release"). Solo repos always pass. Team and fork
+// repos warn when committing on the default branch or a detached HEAD; with
+// protected_main they refuse, naming the command that fixes it.
+func GuardCommit(dir, action string) error {
+	cfg, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	if cfg.Mode == ModeSolo {
+		return nil
+	}
+	branch, detached, ok := currentBranch(dir)
+	if !ok {
+		return nil // not a git work tree: the commit step reports that itself
+	}
+	if detached {
+		if cfg.ProtectedMain {
+			return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing to %s on a detached HEAD; check out a branch", action)
+		}
+		fmt.Fprintf(Stderr, "git.mode=%s: committing on a detached HEAD; check out a branch\n", cfg.Mode)
+		return nil
+	}
+	if !slices.Contains(ProtectedBranches(dir, cfg), branch) {
+		return nil
+	}
+	if cfg.ProtectedMain {
+		return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing to %s on '%s'; run: git switch -c issue/<n>-<slug>", action, branch)
+	}
+	fmt.Fprintf(Stderr, "git.mode=%s: committing on %s; use a topic branch\n", cfg.Mode, branch)
+	return nil
 }
