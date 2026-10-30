@@ -1,6 +1,7 @@
 # 145 — Add an orchestrator-session skill and command
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Superseded by 1037 (/pm skill, docs/commands/pm.md, commit 53a39c82)
+**Closed-By**: claude:haiku:high, session dev-1037
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

@@ -2,7 +2,7 @@
 
 Re-orient and ground the agent strictly on the host repository's product, summarize the top 2–3 open priorities with concrete expected outcomes, and align with the user on the next goal.
 
-Triggers: only on explicit /focus or 'focus'.
+Triggers: the start of a session, `/focus`, or when the user asks what to work on next.
 
 ## Invocation Syntax
 

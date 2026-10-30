@@ -46,6 +46,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Skip the Searcher when the ticket was just refined against live code in this sprint and already cites exact file:line causes; say so in the sprint report.
 - Also skip the Searcher for a narrowly scoped ticket that identifies the exact file and function, documents the complete expected write set (including tests/docs), and leaves no unresolved premise, scope, or architecture questions. Require a plan-only first Developer turn that inspects live code, verifies the premise and current locations, and confirms the write set; file:line citations alone do not qualify. The host must review the concrete findings before granting writes and reconsider developer/model choice. If inspection reveals stale assumptions, missing files, or scope uncertainty, run the Searcher before implementation. Record the skip and findings in the sprint report.
 - When used, run the Searcher sequentially before the Developer. The host reads its concise findings and decides what the Developer needs; the host does not repeat discovery by browsing the repository.
+- A Searcher reused from an earlier round: after a large search round, compact it before the next resume with `HTO=0 harnez agent compact --name <searcher>`, so compaction happens between rounds rather than mid-search.
 
 ### 1.5. Optional Architect Refinement
 - When the user asks for a lean sprint "with an advisor", they mean this architect step, not the Searcher (both run as `--role advisor`).
