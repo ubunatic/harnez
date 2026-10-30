@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"syscall"
@@ -754,7 +755,23 @@ func installPiBackground(site piBackgroundSite, cfg *Config, r *applyReport, str
 		return piRefuseUnsafe(site, plan.unsafe)
 	}
 	if len(plan.refused) > 0 {
+		if strict {
+			return fmt.Errorf("modified or unrecorded file(s): %s; nothing was changed (inspect and preserve these files, then retry harnez pi background-tasks update)", strings.Join(plan.refused, ", "))
+		}
 		return fmt.Errorf("modified or unrecorded file(s) would be overwritten: %s; nothing was written (move them aside or remove them, then apply again)", strings.Join(plan.refused, ", "))
+	}
+	if strict {
+		if err := piFault("preflight"); err != nil {
+			return err
+		}
+		// Detect changes to planned paths before the first write. This is not a lock.
+		checked, err := planPiBackgroundApply(site, target)
+		if err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(plan.targets, checked.targets) || !reflect.DeepEqual(plan.obsolete, checked.obsolete) || len(checked.unsafe) != 0 || len(checked.refused) != 0 {
+			return errors.New("installation changed during update; nothing was changed by the updater (inspect it, then retry harnez pi background-tasks update)")
+		}
 	}
 
 	needs := func(t piTargetFile) bool { return t.state == piPathMissing || t.state == piPathOutdated }

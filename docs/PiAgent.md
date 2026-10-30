@@ -248,8 +248,12 @@ Commands:
   managing other components. It refuses modified or unrecorded files, invalid
   ledgers, symlinks and unsafe entry points without changing the installation,
   including its activation manifest. Edited obsolete ledger entries are refused.
-  A retry recovers an interrupted update using the staged ledger. An unrecorded
-  temporary file left by an interruption must be inspected and moved aside first.
+  A retry recovers an interrupted update using the staged ledger. Do not run an
+  updater or apply concurrently, or edit the managed directory during an update:
+  there is no lock or atomic protection against concurrent changes. If an
+  interruption leaves an unrecorded temporary file, stop updates and inspect it;
+  preserve its contents by moving it outside the Pi extension directory before
+  retrying. Do not delete a file unless you have established that it is disposable.
 - `harnez status` lists one row per managed path with its state (for example `ok`
   or `drifted`).
 - `harnez diff` reports drift without writing anything.

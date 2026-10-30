@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -55,6 +57,28 @@ func TestPiBackgroundUpdateRefusesWithoutMutation(t *testing.T) {
 		"drift": func(t *testing.T, root string, cfg *Config) {
 			writeTestFile(t, filepath.Join(piBackgroundDirPath(root), ".pi/lib/background-task-runner.ts"), []byte("edited"))
 		},
+		"drifted manifest": func(t *testing.T, root string, cfg *Config) {
+			writeTestFile(t, filepath.Join(piBackgroundDirPath(root), "package.json"), []byte("edited manifest"))
+		},
+		"temporary file": func(t *testing.T, root string, cfg *Config) {
+			writeTestFile(t, filepath.Join(piBackgroundDirPath(root), ".leftover.tmp"), []byte("recover me"))
+		},
+		"special file": func(t *testing.T, root string, cfg *Config) {
+			if err := syscall.Mkfifo(filepath.Join(piBackgroundDirPath(root), "user-fifo"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"symlinked parent": func(t *testing.T, root string, cfg *Config) {
+			p := filepath.Join(piBackgroundDirPath(root), ".pi/lib")
+			outside := filepath.Join(root, "saved-lib")
+			if err := os.Rename(p, outside); err != nil {
+				t.Fatal(err)
+			}
+			mustSymlink(t, outside, p)
+		},
+		"unsafe ledger path": func(t *testing.T, root string, cfg *Config) {
+			writeTestFile(t, filepath.Join(piBackgroundDirPath(root), ".harnez-managed"), []byte(piBackgroundLedgerHeader+"file: ../outside "+strings.Repeat("a", 64)+"\n"))
+		},
 		"unrecorded": func(t *testing.T, root string, cfg *Config) {
 			writeTestFile(t, filepath.Join(piBackgroundDirPath(root), "extra"), []byte("user"))
 		},
@@ -95,6 +119,22 @@ func TestPiBackgroundUpdateRefusesWithoutMutation(t *testing.T) {
 			writeTestFile(t, p, []byte("edited"))
 		},
 	}
+	want := map[string]string{
+		"drift": "background-task-runner.ts", "drifted manifest": "package.json",
+		"temporary file": ".leftover.tmp", "special file": "user-fifo",
+		"symlinked parent": "unsafe path", "unsafe ledger path": `unsafe path "../outside"`,
+		"unrecorded": "extra", "unrecorded target": "background-task-runner.ts",
+		"invalid ledger": "not a valid ledger", "missing ledger": ".harnez-managed",
+		"unsafe entry": "unsafe path", "symlink": "unsafe path", "edited obsolete": "retired",
+	}
+	reasons := map[string]string{
+		"drift": "modified or unrecorded", "drifted manifest": "modified or unrecorded",
+		"temporary file": "modified or unrecorded", "special file": "modified or unrecorded",
+		"symlinked parent": "unsafe path", "unsafe ledger path": "not a valid ledger",
+		"unrecorded": "modified or unrecorded", "unrecorded target": "modified or unrecorded",
+		"invalid ledger": "not a valid ledger", "missing ledger": "no .harnez-managed marker",
+		"unsafe entry": "unsafe path", "symlink": "unsafe path", "edited obsolete": "modified or unrecorded",
+	}
 	for name, setup := range cases {
 		t.Run(name, func(t *testing.T) {
 			root, cfg := piBackgroundFixture(t)
@@ -103,8 +143,12 @@ func TestPiBackgroundUpdateRefusesWithoutMutation(t *testing.T) {
 			}
 			setup(t, root, cfg)
 			before := updateSnapshot(t, root)
-			if err := UpdatePiBackgroundTasks(cfg); err == nil {
-				t.Fatal("expected refusal")
+			err := UpdatePiBackgroundTasks(cfg)
+			if err == nil || (!strings.Contains(err.Error(), want[name]) || !strings.Contains(err.Error(), reasons[name])) {
+				t.Fatalf("expected refusal containing %q, got %v", want[name], err)
+			}
+			if strings.Contains(err.Error(), "apply again") {
+				t.Fatalf("unsafe remediation: %v", err)
 			}
 			if after := updateSnapshot(t, root); !reflect.DeepEqual(before, after) {
 				t.Fatalf("refusal changed tree: before %v, after %v", before, after)
@@ -181,5 +225,29 @@ func TestPiBackgroundUpdateTargetAndPreservation(t *testing.T) {
 	cfg.PiAgentTarget = ""
 	if err := UpdatePiBackgroundTasks(cfg); err == nil {
 		t.Fatal("expected missing target error")
+	}
+}
+
+func TestPiBackgroundUpdatePreflightRecheck(t *testing.T) {
+	root, cfg := piBackgroundFixture(t)
+	if err := UpdatePiBackgroundTasks(cfg); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(piBackgroundDirPath(root), ".pi/lib/background-task-runner.ts")
+	var before map[string]string
+	piBackgroundFault = func(point string) error {
+		if point == "preflight" {
+			writeTestFile(t, p, []byte("concurrent edit"))
+			before = updateSnapshot(t, root)
+		}
+		return nil
+	}
+	t.Cleanup(func() { piBackgroundFault = nil })
+	err := UpdatePiBackgroundTasks(cfg)
+	if err == nil || !strings.Contains(err.Error(), "installation changed during update") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if after := updateSnapshot(t, root); !reflect.DeepEqual(before, after) {
+		t.Fatal("updater changed tree after concurrent edit")
 	}
 }
