@@ -98,4 +98,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1046 | [1046-keep-pi-task-completion-output-out-of-the-user-chat.md](1046-keep-pi-task-completion-output-out-of-the-user-chat.md) | Keep Pi task completion output out of the user chat | Open |
 | 1047 | [1047-queue-pi-task-completions-safely-during-compaction.md](1047-queue-pi-task-completions-safely-during-compaction.md) | Queue Pi task completions safely during compaction | Open |
 | 1048 | [1048-background-manual-pi-commands-with-ctrl-b.md](1048-background-manual-pi-commands-with-ctrl-b.md) | Background manual Pi commands with Ctrl-B | Open |
+| 1049 | [1049-guard-pi-session-reload-while-background-tasks-are-running.md](1049-guard-pi-session-reload-while-background-tasks-are-running.md) | Guard Pi session reload while background tasks are running | Open |
 <!-- harnez:end issues-active-index -->
