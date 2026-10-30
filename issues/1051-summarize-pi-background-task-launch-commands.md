@@ -21,3 +21,9 @@ Implement launch presentation as an independent slice, without changing output c
 ## Review pre-work
 
 Review of `b34640d0` found a derived-label leak candidate: shell assignments such as `TOKEN+=dir/sk_live_x` may expose the final path component in the launch label. Reproduce with a synthetic secret and harden label derivation without changing command execution; preserve existing label and lifecycle tests. Verify actual Pi collapsed/expanded presentation and agent-visible result, document the global-install path and safely determine how to refresh it without unrelated global changes. The manual `/task` launch still prints the command and is outside this agent-launch slice; document the limitation. The existing runner trims outer whitespace, so this issue preserves existing semantics rather than promising byte-for-byte input preservation.
+
+## Delivery and verification
+
+`b34640d0` makes agent launch results concise; `81b2d5bb` guards assignment-derived labels. Host `make test-q1` passed after both changes (77 Pi tests and Go checks). A real Pi model launch returned the concise result and a disposable persisted transcript retained the full arguments; an isolated Pi TUI with a synthetic saved tool call showed truncation and Ctrl-O expansion. The TUI canary was not itself model-driven. Independent review found no blocking repository-code defect. Manual `/task` and later completion/list/result views may still show commands; truncation is not secrecy.
+
+Global install is not updated: `make install` does not refresh it and the available broad apply can affect unrelated configuration. Safe targeted refresh and a global canary are parked in 1052; until then the global extension retains the old behavior.
