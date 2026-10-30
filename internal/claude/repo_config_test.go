@@ -249,6 +249,27 @@ func TestWriteRulesAcceptsNilRepoConfig(t *testing.T) {
 	}
 }
 
+func TestParseRepoConfigChecksCandidateBytes(t *testing.T) {
+	const base = "version: 1\nissues:\n  tracker: none\n  merge_driver: false\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\n"
+	cfg, err := ParseRepoConfig("/nowhere/repo.yaml", []byte(base))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Make.Scaffold {
+		t.Fatal("omitted make.scaffold must take the spec/repo-config.yaml default (true)")
+	}
+	for name, body := range map[string]string{
+		"schema":   strings.Replace(base, "tracker: none", "tracker: bogus", 1),
+		"solo":     base + "git:\n  mode: solo\n  protected_main: true\n",
+		"required": strings.Replace(base, "version: 1\n", "", 1),
+	} {
+		_, err := ParseRepoConfig("/nowhere/repo.yaml", []byte(body))
+		if err == nil || !strings.Contains(err.Error(), "/nowhere/repo.yaml") {
+			t.Fatalf("%s: error = %v, want one naming the path", name, err)
+		}
+	}
+}
+
 func TestRunInitMakeScaffoldOptOutAndLegacyDefault(t *testing.T) {
 	tests := []struct {
 		name           string
