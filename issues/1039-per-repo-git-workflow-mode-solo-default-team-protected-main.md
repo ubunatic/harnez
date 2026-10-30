@@ -208,3 +208,14 @@ Every commit path calls it:
   - Tag-after-merge release support.
   - Making `GuardCommit` switch to a new branch automatically. Refusing with the exact command is enough and safer.
 - **Kept separate on purpose:** `protected_main` instead of a fourth mode. That way fork + protected works without a combined mode for every pairing.
+
+## Delivery
+
+- M1 delivered (schema and loader), `96251950`: `spec/git.yaml` plus its schema, the repo.yaml `git` key, `internal/gitflow`
+  (`Load`, `DefaultBranch`, `ProtectedBranches`), and `RepoConfig.Git`. The locked tests are intact, plus a schema-only test and a zero-key round trip.
+- M2 delivered (commit guard), `24753219`: `GuardCommit` wired into ApplyStatus, mv (before the first write, with a backstop in
+  gitAddAndCommit), rebase and reconcile. `--check`/`--no-commit`/`--dry-run` skip it. Host review: the refusal tests assert no
+  file change, no commit and a clean tree. Host rerun: gitflow, claude, issues/..., cmd/harnez all ok. Lint is unchanged at 213.
+
+### M3-M5 Pre-Work
+- None. Continue with M3 (release), M4 (init) and M5 (docs and skills, then set this repo to team + protected) as planned.
