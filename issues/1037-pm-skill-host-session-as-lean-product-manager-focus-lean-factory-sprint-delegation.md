@@ -62,6 +62,11 @@ delegation only, not the product-manager part.
   Each repo gets its own `/pm` session, so multi-repo management is out of scope. Ticket 145 closes as superseded.
 - Host: the threshold-based compaction trigger and the `resume` hint from 1036 are parked in a follow-up ticket;
   1036 delivers the documented compaction step only.
+- Host (plan review): `/pm` itself stays explicit-only, because a mode change that lasts the whole session should not fire on its own;
+  the `[repo...]` argument is dropped. The cost is accepted: the three auto-trigger descriptions load into every Claude session.
+- Host (plan review): 1036 closes once the rule has landed. Its live two-milestone Pre/Post verification moves to the
+  parked follow-up ticket. The developer does not close 1037; the host closes it after checking the installed
+  copies and doing a live `/pm` check.
 
 ## Milestones
 
