@@ -100,4 +100,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1049 | [1049-guard-pi-session-reload-while-background-tasks-are-running.md](1049-guard-pi-session-reload-while-background-tasks-are-running.md) | Guard Pi session reload while background tasks are running | Open |
 | 1050 | [1050-epic-pi-background-task-experience-and-reliability.md](1050-epic-pi-background-task-experience-and-reliability.md) | Epic: Pi background task experience and reliability | Open |
 | 1051 | [1051-summarize-pi-background-task-launch-commands.md](1051-summarize-pi-background-task-launch-commands.md) | Summarize Pi background task launch commands | Open |
+| 1052 | [1052-safely-refresh-the-pi-background-task-extension-independently.md](1052-safely-refresh-the-pi-background-task-extension-independently.md) | Safely refresh the Pi background task extension independently | Open |
 <!-- harnez:end issues-active-index -->
