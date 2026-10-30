@@ -1,6 +1,6 @@
 # 970 — Note on every run_in_background mention that it is a Claude Code Bash tool parameter, not a harnez command-line flag
 
-**Status**: Open
+**Status**: Closed — Note added to every run_in_background mention (Go strings, tests, config, docs) by forgewerk job qar35we3, reviewed ready by claude:opus:med, merged as ubunatic/harnez#9 (c5078c31)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Docs
