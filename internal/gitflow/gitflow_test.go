@@ -84,6 +84,17 @@ func TestLoadTeamProtected(t *testing.T) {
 	}
 }
 
+func TestLoadBytesChecksCandidateWithoutDisk(t *testing.T) {
+	cfg, err := LoadBytes("/nowhere/repo.yaml", []byte("version: 1\ngit:\n  mode: team\n  protected_main: true\n"))
+	if err != nil || cfg.Mode != ModeTeam || !cfg.ProtectedMain {
+		t.Fatalf("LoadBytes = %+v, %v; want team protected", cfg, err)
+	}
+	_, err = LoadBytes("/nowhere/repo.yaml", []byte("version: 1\ngit:\n  protected_main: true\n"))
+	if err == nil || !strings.Contains(err.Error(), "/nowhere/repo.yaml") || !strings.Contains(err.Error(), "git.protected_main") {
+		t.Fatalf("LoadBytes error = %v, want the path and git.protected_main (mode defaults to solo)", err)
+	}
+}
+
 func TestLoadRejectsInvalidGitKey(t *testing.T) {
 	cases := map[string]struct{ body, want string }{
 		"unknown mode":      {"git:\n  mode: trunk\n", "git.mode"},

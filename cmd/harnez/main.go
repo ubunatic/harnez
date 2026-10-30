@@ -141,7 +141,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newAgyMeterCmd())
 
 	root.AddCommand(newChannelCmd(), newComposeCmd(), newInstallCmd(), newSessionCmd())
-	root.AddCommand(newApplyCmd(), newDiffCmd(), newScanDocsCmd(), newStatusCmd(), newRevertCmd(), newCleanCmd(), newUsageCmd(), newLoadStreamCmd(), newInitCmd(), newAssessCmd(), newCollectorCmd(), newServerCmd(), newDistillCmd(), newModeCmd(), newReleaseCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newCodexTelemetryCmd(), newHookCmd(), newStatuslineCmd(), newAGYStatuslineCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd(), newAgentCmd(), newMCPCmd(), newBenchCmd(), newSkillCmd(), newSkillsCmd(), newDecideCmd(), newGuardCmd(), newCompactCmd(), newTUICmd(), newManCmd(root))
+	root.AddCommand(newApplyCmd(), newDiffCmd(), newScanDocsCmd(), newStatusCmd(), newRevertCmd(), newCleanCmd(), newUsageCmd(), newLoadStreamCmd(), newInitCmd(), newAssessCmd(), newCollectorCmd(), newServerCmd(), newDistillCmd(), newModeCmd(), newReleaseCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newCodexTelemetryCmd(), newHookCmd(), newStatuslineCmd(), newAGYStatuslineCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd(), newAgentCmd(), newMCPCmd(), newBenchCmd(), newSkillCmd(), newSkillsCmd(), newDecideCmd(), newGuardCmd(), newCompactCmd(), newTUICmd(), newConfigCmd(), newManCmd(root))
 	return root
 }
 
