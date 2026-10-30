@@ -1,6 +1,7 @@
 # 1013 — `issues new` checks fetched remote refs for the next free number
 
-**Status**: Open
+**Status**: Closed — issues new and --number skip numbers on fetched remote branches (1f70988e)
+**Closed-By**: claude:haiku:high, session gentle-otter
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

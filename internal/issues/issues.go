@@ -20,6 +20,7 @@ type IssueFile struct {
 	Number       string         // e.g. "036"
 	HeaderNumber string         // number declared by the first numbered H1, if any
 	RelPath      string         // e.g. "036-harnez-status-issues-tracker-linter.md" or "archive/001-diff-clean-wrong-path.md"
+	Ref          string         // remote ref the file was read from (e.g. "origin/main"); empty for the working tree
 	Title        string         // e.g. "036 — `harnez status` Issues Tracker Status Linter"
 	RawStatus    string         // exact string after "**Status:**", e.g. "Closed — fixed in 444c29f"
 	Priority     string         // priority code (P0-P3), empty if missing or malformed
@@ -720,6 +721,9 @@ type ReserveOptions struct {
 	Title    string // Optional title for the reserved ticket
 	RemoteID string // Already allocated GitHub ID; never falls back to local numbering
 	Number   string // Explicit local ticket number; refused when it already exists
+	// Elsewhere lists ticket files on other refs (see RemoteTicketFiles). Their
+	// numbers count as taken, but nothing is written to them.
+	Elsewhere []IssueFile
 }
 
 // Reserve allocates the next ticket number and atomically creates a placeholder
@@ -757,12 +761,13 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 		if err != nil {
 			return "", "", fmt.Errorf("scan issues for reservation: %w", err)
 		}
+		files = append(files, opts.Elsewhere...)
 		nextNum := NextNumberFromFiles(files)
 		if explicit != "" {
 			nextNum = explicit
 			for _, f := range files {
 				if f.Number == nextNum {
-					return "", "", fmt.Errorf("ticket number %s already exists: issues/%s", nextNum, f.RelPath)
+					return "", "", fmt.Errorf("ticket number %s already exists: %s", nextNum, f.location())
 				}
 			}
 		}
@@ -773,7 +778,7 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 			}
 			for _, f := range files {
 				if f.Number == nextNum {
-					return "", "", fmt.Errorf("duplicate ticket number %s: issues/%s", nextNum, f.RelPath)
+					return "", "", fmt.Errorf("duplicate ticket number %s: %s", nextNum, f.location())
 				}
 			}
 		}
