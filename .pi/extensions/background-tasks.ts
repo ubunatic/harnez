@@ -81,8 +81,8 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const task = runner.start(params.command, ctx.cwd, { label: params.label });
       return {
-        content: [{ type: "text", text: `Started background command #${task.id}: ${task.command}` }],
-        details: { id: task.id, command: task.command, status: task.status },
+        content: [{ type: "text", text: `Started background command #${task.id} (${task.label})` }],
+        details: { id: task.id, label: task.label, status: task.status },
       };
     },
   });

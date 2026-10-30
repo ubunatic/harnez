@@ -86,7 +86,12 @@ Tools (model-callable):
 - `background_task` starts a command through `$SHELL -lc` in the current project
   directory, inheriting the Pi process environment. Each command runs in its own
   process group, which is what cancellation targets. Supply an optional single-word
-  `label` for the status line; existing command-only calls remain valid.
+  `label` for the status line; existing command-only calls remain valid. The launch
+  result identifies the task by ID and label without repeating its command. Pi's
+  default collapsed tool-call display truncates long arguments; Ctrl+O expands them.
+  This is presentation, not secret protection: full call arguments remain in the
+  session transcript and may also appear in later task lists, results and completion
+  messages. The runner trims leading and trailing command whitespace before execution.
 - `background_task_list` lists in-memory tasks with status, elapsed time, exit
   code or signal, and command.
 - `background_task_result` takes `id` and returns status, exit code or signal,

@@ -882,6 +882,30 @@ test("status: resize, repeated starts and shutdown manage one listener", async (
 });
 
 
+test("launch result identifies the task without repeating its command", async () => {
+  const calls: string[][] = [];
+  const s = setup({ spawn: (_shell, args) => { calls.push(args); return new FakeChild(800 + calls.length) as any; } });
+  const cases = [
+    { command: "echo short", label: undefined, expected: "echo" },
+    { command: `echo ${"long".repeat(100)}`, label: "build", expected: "build" },
+    { command: "  printf 'first\\n'\nprintf 'second\\n'  ", label: "tests", expected: "tests" },
+    { command: "echo SYNTHETIC_SECRET_1051", label: "safe", expected: "safe" },
+  ];
+  for (const [index, item] of cases.entries()) {
+    const params = item.label === undefined ? { command: item.command } : { command: item.command, label: item.label };
+    const result = await s.tool("background_task").execute(`c${index}`, params, undefined, undefined, s.ctx);
+    assert.deepEqual(result, {
+      content: [{ type: "text", text: `Started background command #${index + 1} (${item.expected})` }],
+      details: { id: index + 1, label: item.expected, status: "running" },
+    });
+    assert.deepEqual(calls[index], ["-lc", item.command.trim()]);
+  }
+  for (const task of s.runner.tasks.values()) {
+    task.child.emit("exit", 0, null);
+    task.child.emit("close", 0, null);
+  }
+});
+
 test("status: manual and tool metadata exist on first change without changing argv", async () => {
   const calls: string[][] = [];
   const s = setup({ spawn: (_shell, args) => { calls.push(args); return new FakeChild(880 + calls.length) as any; } });
