@@ -101,6 +101,8 @@ Tools (model-callable):
   termination cannot be confirmed (the task then stays `running`).
 
 Commands: `/task <command>`, `/tasks`, `/task-result <id>`, `/task-cancel <id>`.
+The manual `/task` launch prints the full command; the concise launch result above
+applies to the model-callable `background_task` tool.
 The same IDs are accepted by the tools and commands: a positive safe integer, or
 its canonical decimal string. `0`, negative values, fractions, leading zeros
 (`01`), `NaN`, empty strings and unknown IDs are rejected without sending any signal.
@@ -241,6 +243,10 @@ Commands:
 - `harnez apply` installs or updates the runner. It decides everything from the
   disk first and refuses before writing when a file is modified or unrecorded.
   Re-running with no changes writes nothing.
+- There is no runner-only apply option: selecting `skills` also manages other
+  global skills and components according to the selected set. Copying files by hand
+  would invalidate the ownership ledger. Review the wider apply effects before
+  refreshing the installed runner.
 - `harnez status` lists one row per managed path with its state (for example `ok`
   or `drifted`).
 - `harnez diff` reports drift without writing anything.

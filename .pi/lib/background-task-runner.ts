@@ -248,7 +248,8 @@ export function taskLabel(label: string | undefined, command: string, config: St
     for (const part of command.trim().split(/\s+/)) {
       // Do not interpret shell quoting, escaping, expansion or operators. Splitting those could expose an assignment value.
       if (!/^[A-Za-z0-9_./:@%+,=\-]+$/.test(part)) return config.fallbackLabel;
-      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(part)) continue;
+      if (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(part)) continue;
+      if (part.includes("=")) return config.fallbackLabel;
       token = part;
       break;
     }

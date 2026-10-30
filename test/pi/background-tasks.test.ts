@@ -844,6 +844,12 @@ test("status: labels are safe and legacy commands do not disclose arguments", as
   assert.equal(taskLabel("abcdefghijklm", "", c, visibleWidth), "abcdefghijkl");
   assert.equal(taskLabel(undefined, "TOKEN=secret /usr/bin/build.sh password", c, visibleWidth), "build");
   assert.equal(taskLabel(undefined, "TOKEN=secret", c, visibleWidth), c.fallbackLabel);
+  assert.equal(taskLabel(undefined, "TOKEN+=dir/sk_live_x", c, visibleWidth), c.fallbackLabel);
+  assert.equal(taskLabel(undefined, "TOKEN+=dir/sk_live_x /usr/bin/build.sh", c, visibleWidth), "build");
+  for (const command of ["1TOKEN=dir/sk_live_x", "TOKEN++=dir/sk_live_x", "TOKEN-=dir/sk_live_x", "dir/TOKEN=sk_live_x", "TOKEN+=dir/sk_live_x 1TOKEN=dir/sk_live_x"]) {
+    assert.equal(taskLabel(undefined, command, c, visibleWidth), c.fallbackLabel);
+  }
+  assert.equal(taskLabel("safe", "TOKEN+=dir/sk_live_x", c, visibleWidth), "safe");
   for (const command of [String.raw`TOKEN=foo\ secret build`, `TOKEN="foo secret" build`, `TOKEN='foo secret' build`, String.raw`TOKEN=foo\ bar=baz build`, `"TOKEN=secret" build`]) {
     assert.equal(taskLabel(undefined, command, c, visibleWidth), c.fallbackLabel);
   }
@@ -890,6 +896,9 @@ test("launch result identifies the task without repeating its command", async ()
     { command: `echo ${"long".repeat(100)}`, label: "build", expected: "build" },
     { command: "  printf 'first\\n'\nprintf 'second\\n'  ", label: "tests", expected: "tests" },
     { command: "echo SYNTHETIC_SECRET_1051", label: "safe", expected: "safe" },
+    { command: "TOKEN+=dir/sk_live_x", label: undefined, expected: fastConfig.status.fallbackLabel },
+    { command: "TOKEN+=dir/sk_live_x", label: "safe", expected: "safe" },
+    { command: "TOKEN++=dir/sk_live_x", label: undefined, expected: fastConfig.status.fallbackLabel },
   ];
   for (const [index, item] of cases.entries()) {
     const params = item.label === undefined ? { command: item.command } : { command: item.command, label: item.label };
