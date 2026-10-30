@@ -1,6 +1,7 @@
 # 1043 — Collector systemd unit lacks user PATH for agent CLIs
 
-**Status**: Open
+**Status**: Closed — Added user PATH to collector systemd unit and user-bin fallback resolver in usage package
+**Closed-By**: codex:luna:med, session dotfiles-005-dev
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
