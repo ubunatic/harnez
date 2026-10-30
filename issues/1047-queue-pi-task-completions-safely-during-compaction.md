@@ -48,6 +48,10 @@ Remaining gaps, so the no-loss goal is not fully met:
 5. A completion in the short window between Pi starting a run and `agent_start` is held until `agent_start`, and polling continues until Pi is idle, a run is known or the session shuts down.
 6. Not exercised with the real extension: interactive TUI.
 
+## Host canary and pending review
+
+Host `make canary-pi-compaction` passed all 14 scenarios after `eac42623`. The shutdown scenario nevertheless emitted an `extension_error` saying the captured extension context was stale, alongside the expected stderr report of held task #1; passing scenario assertions do not establish that shutdown is error-free. Independent review must investigate this before acceptance. Claude reviewer dispatch failed on the provider's five-hour quota; no alternate provider was used.
+
 ## Review pre-work
 
 Independent review found no critical/high blocker but identified missing committed tests for extension hook wiring, and the real Pi canary existed only in `/tmp`. Add deterministic wiring tests, preserve a maintainable canary in the repo, and test whether agent lifecycle plus `isIdle` can prevent the earlier-hook loss (scenario 17) without breaking normal streaming. Recheck idle on every drain step, guard compaction-end reason where applicable, ensure stranded-follow-up warning is not lost to a slow later hook, and reduce success warning noise. Do not claim acknowledgement or exactly-once where Pi cannot provide it. Avoid weakening existing assertions or hiding remaining limits.
