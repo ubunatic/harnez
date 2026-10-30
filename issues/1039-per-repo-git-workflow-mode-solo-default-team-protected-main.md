@@ -1,6 +1,6 @@
 # 1039 — Per-repo git workflow mode: solo (default), team, protected main
 
-**Status**: Open
+**Status**: Closed — Delivered git.mode solo|fork|team + protected_main: internal/gitflow loader/guard, issue-command and release guards, init persistence, docs/skills; repo set to team+protected. Scratch repo: close refused on protected main, committed on a topic branch, solo+protected rejected (rc=1). make test-q1: only the known TestGoldenFontAssets fails. Cut by design: forge API/PR creation, tag-after-merge.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Enhancement
