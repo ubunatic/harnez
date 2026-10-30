@@ -99,4 +99,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1047 | [1047-queue-pi-task-completions-safely-during-compaction.md](1047-queue-pi-task-completions-safely-during-compaction.md) | Queue Pi task completions safely during compaction | Open |
 | 1048 | [1048-background-manual-pi-commands-with-ctrl-b.md](1048-background-manual-pi-commands-with-ctrl-b.md) | Background manual Pi commands with Ctrl-B | Open |
 | 1049 | [1049-guard-pi-session-reload-while-background-tasks-are-running.md](1049-guard-pi-session-reload-while-background-tasks-are-running.md) | Guard Pi session reload while background tasks are running | Open |
+| 1050 | [1050-epic-pi-background-task-experience-and-reliability.md](1050-epic-pi-background-task-experience-and-reliability.md) | Epic: Pi background task experience and reliability | Open |
 <!-- harnez:end issues-active-index -->
