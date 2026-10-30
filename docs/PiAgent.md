@@ -84,14 +84,17 @@ logic lives in `.pi/lib/background-task-runner.ts`; Pi autoloads only
 Completion notifications during manual compaction: Pi rejects `sendUserMessage` while
 manual compaction runs and reports that only as an extension error, so the extension
 holds notifications from its `session_before_compact` hook until `session_compact` or
-`session_compact_failed`, then submits each once, in arrival order, after Pi reports idle
-(`delivery` in `spec/pi-background-tasks.yaml` sets the timing). Delivery is at most once,
-not exactly once: Pi gives no acknowledgement, so nothing is retried and each held
-submission shows a warning pointing at `background_task_result`. Known gaps (issue 1047):
-a completion is still rejected if another extension's earlier `session_before_compact`
-handler is holding when it arrives, held notifications are dropped with a stderr report
-at shutdown, and a follow-up queued before compaction waits for the next prompt (with a
-warning). Automatic compaction and ordinary streaming follow-ups are not held.
+`session_compact_failed`. Pi has no compaction-state API, so a completion is also held when
+Pi is not idle and no agent run is known (`agent_start` to `agent_settled`); this covers
+another extension's earlier hook. Held notifications go out in arrival order, one per poll,
+only while Pi is idle or a known run is active (`delivery` in
+`spec/pi-background-tasks.yaml` sets the timing). Delivery is at most once, not exactly
+once: Pi gives no acknowledgement, so nothing is retried, and one summary warning points at
+`background_task_result`. Known gaps (issue 1047): a run started while an earlier hook holds
+compaction can still get a completion rejected, held notifications are dropped with a stderr
+report at shutdown, and a follow-up queued before compaction waits for the next prompt (with
+a warning). Automatic compaction and ordinary streaming follow-ups are not held.
+`make canary-pi-compaction` checks this against the real Pi with a local stub model.
 
 Tools (model-callable):
 

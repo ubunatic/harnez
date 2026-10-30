@@ -187,6 +187,99 @@ test("lifecycle: exit 0 completes, exit 7 fails, stderr captured, status updates
   assert.deepEqual(s.messages[0].options, { deliverAs: "followUp" });
 });
 
+/** A session whose idle state the test controls; each task below finishes through a real process. */
+function compactionSession() {
+  const s = setup();
+  const ctx = { ...s.ctx, idle: true, isIdle: () => ctx.idle, hasPendingMessages: () => false };
+  s.handlers.get("session_start")?.({}, ctx);
+  const finish = async (command: string) => {
+    const finished = once(s.runner, "finished");
+    await s.tool("background_task").execute("c", { command }, undefined, undefined, s.ctx);
+    await finished;
+  };
+  const until = async (done: () => boolean) => {
+    const deadline = Date.now() + TIMEOUT_MS;
+    while (!done()) {
+      assert.ok(Date.now() < deadline, "timed out waiting for delivery");
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
+  return { ...s, ctx, finish, until };
+}
+
+test("wiring: manual compaction hooks hold a completion, and it goes out once as a follow-up after the end hook", async () => {
+  const s = compactionSession();
+  s.ctx.idle = false;
+  s.handlers.get("session_before_compact")?.({ reason: "manual" }, s.ctx);
+  await s.finish("echo held");
+  assert.equal(s.messages.length, 0);
+  assert.ok(s.ctx.notes.some((n) => n.level === "warning" && /#1 finished while Pi is compacting or busy/.test(n.message)));
+
+  s.handlers.get("session_compact")?.({ reason: "manual" }, s.ctx);
+  s.ctx.idle = true;
+  await s.until(() => s.messages.length === 1);
+  assert.ok(s.messages[0].text.includes("#1 finished (completed, exit 0)"));
+  assert.deepEqual(s.messages[0].options, { deliverAs: "followUp" });
+});
+
+test("wiring: session_compact_failed also releases a manual hold", async () => {
+  const s = compactionSession();
+  s.ctx.idle = false;
+  s.handlers.get("session_before_compact")?.({ reason: "manual" }, s.ctx);
+  await s.finish("echo held");
+  s.handlers.get("session_compact_failed")?.({ reason: "manual", aborted: true }, s.ctx);
+  s.ctx.idle = true;
+  await s.until(() => s.messages.length === 1);
+});
+
+test("wiring: automatic compaction hooks neither hold nor end a manual hold", async () => {
+  const s = compactionSession();
+  s.handlers.get("session_before_compact")?.({ reason: "threshold" }, s.ctx);
+  await s.finish("echo auto");
+  assert.equal(s.messages.length, 1, "not held");
+
+  s.ctx.idle = false;
+  s.handlers.get("session_before_compact")?.({ reason: "manual" }, s.ctx);
+  s.handlers.get("session_compact")?.({ reason: "threshold" }, s.ctx);
+  s.handlers.get("session_compact_failed")?.({ reason: "overflow" }, s.ctx);
+  s.ctx.idle = true;
+  await s.finish("echo manual");
+  assert.equal(s.messages.length, 1, "the manual hold is still active");
+});
+
+test("wiring: agent_start and agent_settled decide whether a busy session holds", async () => {
+  const s = compactionSession();
+  s.ctx.idle = false;
+  s.handlers.get("agent_start")?.({}, s.ctx);
+  await s.finish("echo streaming");
+  assert.equal(s.messages.length, 1, "known run: sent at once");
+  s.handlers.get("agent_settled")?.({}, s.ctx);
+  await s.finish("echo pre-hook");
+  assert.equal(s.messages.length, 1, "busy with no run: held before any compaction hook ran");
+  s.ctx.idle = true;
+  await s.until(() => s.messages.length === 2);
+});
+
+test("wiring: shutdown reports held notifications on stderr and does not send them", async () => {
+  const s = compactionSession();
+  s.ctx.idle = false;
+  s.handlers.get("session_before_compact")?.({ reason: "manual" }, s.ctx);
+  await s.finish("echo held");
+  const written: string[] = [];
+  const realWrite = process.stderr.write;
+  process.stderr.write = ((text: string) => {
+    written.push(text);
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    await s.handlers.get("session_shutdown")?.({}, s.ctx);
+  } finally {
+    process.stderr.write = realWrite;
+  }
+  assert.ok(written.some((text) => /not submitted before shutdown: #1/.test(text)));
+  assert.equal(s.messages.length, 0);
+});
+
 test("real process escalation: SIGTERM ignored, SIGKILL reaches the OS, status cancelled, no follow-up", async () => {
   const s = setup({ ...realProcess, config: escalationConfig });
   const ready = once(s.runner, "output", (task, chunk) => task.id === 1 && chunk.includes("ready"));

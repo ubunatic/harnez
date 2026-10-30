@@ -243,15 +243,20 @@ const realTimers: DeliveryTimers = {
  * Holds completion notifications while manual compaction runs. Pi 1.4.0 rejects sendUserMessage in that window and
  * reports it only as an extension error, so a message sent there is lost and the sender cannot tell.
  *
- * Outside a hold every message goes straight to send. Held messages go out in arrival order, one per poll: the first
- * only once Pi is idle, because a session_compact handler still runs with Pi's guard set. Each is submitted at most
- * once and never retried: Pi gives no acknowledgement, so a retry could duplicate a message that did arrive.
+ * Extensions cannot read that state, so it is inferred: Pi not idle with no agent run between agent_start and
+ * agent_settled means compaction may be active, even before this extension's own session_before_compact handler runs.
+ * A message arriving during a known run or while idle goes straight to send, so streaming follow-ups are never delayed.
+ *
+ * Held messages go out in arrival order, one per poll, only while Pi is idle or a known run is active. Each is submitted
+ * at most once and never retried: Pi gives no acknowledgement, so a retry could duplicate a message that did arrive.
  */
 export class CompletionDelivery {
   private readonly held: Array<{ id: number; text: string }> = [];
   private holding = false;
   private closed = false;
-  private submittedHeld = false;
+  private runActive = false;
+  private checkStranded = false;
+  private readonly submitted: number[] = [];
   private warned = false;
   private flushTimer: unknown;
   private watchTimer: unknown;
@@ -268,13 +273,28 @@ export class CompletionDelivery {
   }
 
   submit(id: number, text: string): void {
-    if (this.closed || (!this.holding && this.held.length === 0)) {
+    if (this.closed || (!this.holding && this.held.length === 0 && (this.runActive || this.idle() !== false))) {
       this.send(text);
       return;
     }
     this.held.push({ id, text });
-    this.notify(`Background command #${id} finished during compaction; its notification is held until compaction ends.`, "warning");
+    this.notify(`Background command #${id} finished while Pi is compacting or busy; its notification is held until compaction ends.`, "warning");
     this.armWatch();
+    if (!this.holding) this.scheduleFlush();
+  }
+
+  /** The session context, so a completion can check for compaction before any compaction hook has run. */
+  attach(ctx: DeliveryContext): void {
+    this.ctx = ctx;
+  }
+
+  agentStarted(): void {
+    this.runActive = true;
+    this.checkStranded = false;
+  }
+
+  agentSettled(): void {
+    this.runActive = false;
   }
 
   /** Manual compaction reached this extension's session_before_compact hook. */
@@ -282,7 +302,7 @@ export class CompletionDelivery {
     if (this.closed) return;
     this.ctx = ctx;
     this.holding = true;
-    this.submittedHeld = false;
+    this.checkStranded = false;
     this.warned = false;
     this.clearFlush();
     if (this.held.length) this.armWatch();
@@ -293,6 +313,7 @@ export class CompletionDelivery {
     if (this.closed || !this.holding) return;
     this.ctx = ctx;
     this.holding = false;
+    this.checkStranded = true;
     this.scheduleFlush();
   }
 
@@ -307,27 +328,38 @@ export class CompletionDelivery {
   private flush(): void {
     this.flushTimer = undefined;
     if (this.closed || this.holding) return;
-    const ctx = this.ctx!;
-    if (this.held.length === 0) {
-      if (!this.submittedHeld && this.idle() && ctx.hasPendingMessages()) {
-        this.notify("Pi still has a queued message after compaction; it is sent with the next prompt.", "warning");
-      }
-      return;
-    }
-    if (!this.submittedHeld && !this.idle()) {
+    if (this.held.length === 0 && this.submitted.length === 0 && !this.checkStranded) return;
+    // A slow later session_compact handler keeps Pi's guard set: wait, for the stranded check too.
+    const idle = this.idle() === true;
+    if (!idle && !this.runActive) {
       this.scheduleFlush();
       return;
     }
+    if (this.held.length === 0) {
+      this.finishDrain(idle);
+      return;
+    }
     const entry = this.held.shift()!;
-    this.submittedHeld = true;
-    this.clearWatch();
+    this.checkStranded = false;
+    if (this.held.length === 0) this.clearWatch();
     try {
       this.send(entry.text);
-      this.notify(`Submitted the held notification for background command #${entry.id} once. Pi gives no acknowledgement; if no response appears, read it with background_task_result.`, "warning");
+      this.submitted.push(entry.id);
     } catch (error) {
       this.notify(`Could not submit the held notification for background command #${entry.id}: ${(error as Error).message}. It is not retried; read it with background_task_result.`, "error");
     }
-    if (this.held.length) this.scheduleFlush();
+    this.scheduleFlush();
+  }
+
+  private finishDrain(idle: boolean): void {
+    if (this.submitted.length) {
+      const ids = this.submitted.splice(0).map((id) => `#${id}`).join(", ");
+      this.notify(`Submitted held background task notifications once each: ${ids}. Pi gives no acknowledgement; if no response appears, read them with background_task_result.`, "warning");
+    }
+    if (this.checkStranded && idle && this.pendingMessages()) {
+      this.notify("Pi still has a queued message after compaction; it is sent with the next prompt.", "warning");
+    }
+    this.checkStranded = false;
   }
 
   private scheduleFlush(): void {
@@ -350,19 +382,28 @@ export class CompletionDelivery {
 
   private watch(): void {
     this.watchTimer = undefined;
-    if (this.closed || this.held.length === 0 || this.submittedHeld) return;
+    if (this.closed || this.held.length === 0) return;
     if (!this.warned) {
       this.warned = true;
       this.notify(`${this.held.length} background task notification(s) still held: Pi has not finished compaction or is busy.`, "warning");
     }
     // Idle rules compaction out, so a hold still active here means its end hook never reached this extension.
-    if (this.holding && this.idle()) this.end(this.ctx!);
+    if (this.holding && this.idle() === true) this.end(this.ctx!);
     this.armWatch();
   }
 
-  private idle(): boolean {
+  /** Undefined when Pi cannot say: no session yet, or a stale context. */
+  private idle(): boolean | undefined {
     try {
-      return this.ctx?.isIdle() ?? false;
+      return this.ctx?.isIdle();
+    } catch {
+      return undefined;
+    }
+  }
+
+  private pendingMessages(): boolean {
+    try {
+      return this.ctx?.hasPendingMessages() ?? false;
     } catch {
       return false;
     }

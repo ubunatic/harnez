@@ -60,10 +60,17 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
   pi.on("session_before_compact", (event, ctx) => {
     if (event.reason === "manual") delivery.begin(ctx);
   });
-  pi.on("session_compact", (_event, ctx) => delivery.end(ctx));
-  pi.on("session_compact_failed", (_event, ctx) => delivery.end(ctx));
+  pi.on("session_compact", (event, ctx) => {
+    if (event.reason === "manual") delivery.end(ctx);
+  });
+  pi.on("session_compact_failed", (event, ctx) => {
+    if (event.reason === "manual") delivery.end(ctx);
+  });
+  pi.on("agent_start", () => delivery.agentStarted());
+  pi.on("agent_settled", () => delivery.agentSettled());
 
   pi.on("session_start", (_event, ctx) => {
+    delivery.attach(ctx);
     process.stdout.removeListener("resize", updateStatus);
     setStatus = (text) => ctx.ui.setStatus("background-tasks", text);
     statusSet = false;

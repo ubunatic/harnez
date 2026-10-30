@@ -63,10 +63,13 @@ test("manual compaction success: held in arrival order, nothing sent before the 
   assert.deepEqual(h.sent, ["two"], "one message per poll");
   h.ctx.idle = false;
   h.flush();
+  assert.deepEqual(h.sent, ["two"], "busy with no known run: the guard may be set again, so every step rechecks");
+  h.delivery.agentStarted();
+  h.flush();
   h.flush();
   assert.deepEqual(h.sent, ["two", "one", "three"], "the first run is active, so the rest queue as follow-ups");
-  assert.equal(h.notes.filter((n) => /once\. Pi gives no acknowledgement/.test(n.message)).length, 3);
   h.flush();
+  assert.equal(h.notes.filter((n) => /once each: #2, #1, #3\. Pi gives no acknowledgement/.test(n.message)).length, 1, "one summary, not one warning per task");
   h.watch();
   assert.equal(h.sent.length, 3, "no retry");
   assert.equal(h.pending.size, 0, "no timer left");
@@ -161,6 +164,93 @@ test("a send that throws is reported as an error and not retried, and the rest s
   while (handles.length) handles.shift()!();
   assert.deepEqual(sent, ["two"]);
   assert.equal(notes.filter((n) => n.level === "error" && /#1: boom\. It is not retried/.test(n.message)).length, 1);
+});
+
+test("before any compaction hook: busy with no known run holds, and the later hook takes over without a duplicate", () => {
+  const h = harness();
+  h.delivery.attach(h.ctx);
+  h.ctx.idle = false;
+  h.delivery.submit(1, "one");
+  assert.deepEqual(h.sent, []);
+  h.flush();
+  assert.deepEqual(h.sent, [], "an earlier extension's hook may be holding with Pi's guard set");
+  h.delivery.begin(h.ctx);
+  h.delivery.submit(2, "two");
+  h.ctx.idle = true;
+  h.delivery.end(h.ctx);
+  h.flush();
+  h.flush();
+  assert.deepEqual(h.sent, ["one", "two"]);
+});
+
+test("a known agent run sends at once with no timer, so streaming follow-ups are not delayed", () => {
+  const h = harness();
+  h.delivery.attach(h.ctx);
+  h.delivery.agentStarted();
+  h.ctx.idle = false;
+  h.delivery.submit(1, "one");
+  assert.deepEqual(h.sent, ["one"]);
+  assert.equal(h.pending.size, 0);
+  assert.deepEqual(h.notes, []);
+});
+
+test("run starting before agent_start: held only until the run is known", () => {
+  const h = harness();
+  h.delivery.attach(h.ctx);
+  h.delivery.submit(1, "one");
+  assert.deepEqual(h.sent, []);
+  h.delivery.agentStarted();
+  h.flush();
+  assert.deepEqual(h.sent, ["one"]);
+});
+
+test("after agent_settled, busy means compaction may be active again", () => {
+  const h = harness();
+  h.delivery.attach(h.ctx);
+  h.delivery.agentStarted();
+  h.delivery.agentSettled();
+  h.delivery.submit(1, "one");
+  assert.deepEqual(h.sent, []);
+  h.ctx.idle = true;
+  h.flush();
+  assert.deepEqual(h.sent, ["one"]);
+});
+
+test("a stale context never sends a held message and does not throw from the timer", () => {
+  const h = harness();
+  h.delivery.begin(h.ctx);
+  h.delivery.submit(1, "one");
+  h.delivery.end(h.ctx);
+  h.ctx.isIdle = () => {
+    throw new Error("stale");
+  };
+  h.flush();
+  assert.deepEqual(h.sent, []);
+  assert.deepEqual(h.delivery.shutdown(), [1]);
+});
+
+test("the stranded check survives a slow later session_compact handler", () => {
+  const h = harness();
+  h.delivery.begin(h.ctx);
+  h.ctx.queued = true;
+  h.delivery.end(h.ctx);
+  h.flush();
+  assert.equal(h.notes.length, 0, "the guard is still set: not decided yet");
+  h.ctx.idle = true;
+  h.flush();
+  assert.equal(h.notes.filter((n) => /still has a queued message/.test(n.message)).length, 1);
+  assert.equal(h.pending.size, 0);
+});
+
+test("a run that starts after compaction cancels the stranded check", () => {
+  const h = harness();
+  h.delivery.begin(h.ctx);
+  h.ctx.queued = true;
+  h.delivery.end(h.ctx);
+  h.delivery.agentStarted();
+  h.flush();
+  assert.deepEqual(h.notes, []);
+  assert.equal(h.pending.size, 0);
 });
 
 test("nothing held but a follow-up stranded in Pi's queue: warn, do not resend", () => {
