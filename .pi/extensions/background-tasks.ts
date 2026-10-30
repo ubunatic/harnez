@@ -80,14 +80,13 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
 
   pi.on("session_shutdown", async () => {
     process.stdout.removeListener("resize", updateStatus);
+    setStatus = undefined;
+    statusSet = false;
     const undelivered = delivery.shutdown();
     if (undelivered.length) {
       process.stderr.write(`Background task notifications not submitted before shutdown: ${undelivered.map((id) => `#${id}`).join(", ")}\n`);
     }
     const unconfirmed = await runner.shutdown();
-    updateStatus();
-    setStatus = undefined;
-    statusSet = false;
     if (unconfirmed.length) {
       process.stderr.write(`Background tasks not confirmed stopped at shutdown: ${unconfirmed.map((id) => `#${id}`).join(", ")}\n`);
     }

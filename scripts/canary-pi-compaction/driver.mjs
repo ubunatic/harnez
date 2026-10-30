@@ -79,7 +79,7 @@ async function scenario(name, options, body) {
     retry: { enabled: false, provider: { maxRetries: 0 } },
   }));
   // Handler order follows load order: "fixtureFirst" makes the fixture's hook hold before the extension's hook runs.
-  const loads = options.fixtureFirst ? [fixture, extension] : [extension, fixture];
+  const loads = options.noFixture ? [extension] : options.fixtureFirst ? [fixture, extension] : [extension, fixture];
   const args = ["--mode", "rpc", "--provider", "stub", "--model", "m", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--session-dir", path.join(home, "sessions")];
   for (const load of loads) args.push("-e", load);
   const pi = spawn(piBin, args, {
@@ -90,7 +90,8 @@ async function scenario(name, options, body) {
   let stderr = "";
   let exited = false;
   pi.stderr.on("data", (data) => (stderr += data));
-  pi.on("exit", () => (exited = true));
+  // Wait for stdio to drain as well as process exit, so shutdown errors are observed.
+  pi.on("close", () => (exited = true));
 
   let nextId = 0;
   const pending = new Map();
@@ -135,7 +136,7 @@ async function scenario(name, options, body) {
       await see("cfg");
     },
     seed: async () => {
-      await see("session_start");
+      if (!options.noFixture) await see("session_start");
       await turn("seed one");
       await turn("seed two");
     },
@@ -179,10 +180,12 @@ async function scenario(name, options, body) {
     return match ? [match[1] ?? match[2]] : [];
   });
   const rejected = events.filter((event) => event.e === "extension_error" && event.error?.includes(REJECTED)).length;
+  const extensionErrors = events.filter((event) => event.e === "extension_error");
   const check = (label, actual, expected) => {
     if (JSON.stringify(actual) !== JSON.stringify(expected)) problems.push(`${label}: got ${JSON.stringify(actual)}, want ${JSON.stringify(expected)}`);
   };
   check("rejections", rejected, options.rejected ?? 0);
+  check("extension errors", extensionErrors.length, options.extensionErrors ?? 0);
   check("transcript completions", transcript, options.transcript ?? []);
   for (const pattern of options.notes ?? []) {
     if (!events.some((event) => event.e === "notify" && pattern.test(event.message))) problems.push(`missing note ${pattern}`);
@@ -242,7 +245,7 @@ await scenario("normal-idle-and-streaming", { transcript: ["1", "2"], noNotes: [
   return { checks };
 });
 
-await scenario("runtime-contract-rejects-during-hold", { rejected: 1 }, async (c) => {
+await scenario("runtime-contract-rejects-during-hold", { rejected: 1, extensionErrors: 1 }, async (c) => {
   await c.seed();
   await c.configure({ holdBefore: true });
   compact(c);
@@ -373,12 +376,12 @@ await scenario("stranded-follow-up-warns", { transcript: [], notes: [/still has 
   await c.until(() => c.events.some((event) => event.e === "notify" && /still has a queued message/.test(event.message)), "warning");
 });
 
-await scenario("shutdown-while-held", { stderr: /not submitted before shutdown: #1/, notes: [HELD] }, async (c) => {
+await scenario("shutdown-while-held", { noFixture: true, stderr: /not submitted before shutdown: #1/, notes: [HELD] }, async (c) => {
   await c.seed();
   const finish = await c.startTasks(1);
-  await c.configure({ holdBefore: true });
+  c.state.holdSummary = latch();
   compact(c);
-  await c.see("held");
+  await c.until(() => c.events.some((event) => event.e === "stub" && event.kind === "summary"), "summary");
   finish(1);
   await c.until(() => c.events.some((event) => event.e === "notify" && HELD.test(event.message)), "hold");
 });

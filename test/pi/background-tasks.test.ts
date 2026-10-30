@@ -280,6 +280,17 @@ test("wiring: shutdown reports held notifications on stderr and does not send th
   assert.equal(s.messages.length, 0);
 });
 
+test("shutdown never uses a stale UI while cancelling a running task", async () => {
+  const s = setup(realProcess);
+  const ready = once(s.runner, "output", (_task, chunk) => chunk.includes("ready"));
+  await s.tool("background_task").execute("c", { command: "echo ready; exec sleep 30" }, undefined, undefined, s.ctx);
+  await ready;
+  s.ctx.ui.setStatus = () => { throw new Error("stale context"); };
+  await s.handlers.get("session_shutdown")!({}, s.ctx);
+  assert.equal(s.runner.tasks.size, 0);
+  assert.equal(s.messages.length, 0);
+});
+
 test("real process escalation: SIGTERM ignored, SIGKILL reaches the OS, status cancelled, no follow-up", async () => {
   const s = setup({ ...realProcess, config: escalationConfig });
   const ready = once(s.runner, "output", (task, chunk) => task.id === 1 && chunk.includes("ready"));
