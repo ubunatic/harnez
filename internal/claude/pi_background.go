@@ -549,10 +549,31 @@ func applyPiBackgroundTasks(r *applyReport, cfg *Config, selection Set) error {
 		}
 		return nil
 	}
-	if err := installPiBackground(site, cfg, r); err != nil {
+	if err := installPiBackground(site, cfg, r, false); err != nil {
 		return fmt.Errorf("pi background tasks: %w", err)
 	}
 	r.addStat("pi tasks", fsutil.ContractHome(site.managedDir()))
+	return nil
+}
+
+// UpdatePiBackgroundTasks installs only the Pi package, refusing all ownership
+// conflicts before changing the existing installation.
+func UpdatePiBackgroundTasks(cfg *Config) error {
+	root := piAgentRoot(cfg)
+	if root == "" {
+		return errors.New("pi background tasks: no Pi agent target configured")
+	}
+	site, err := openPiBackgroundSite(root, true)
+	if err != nil {
+		return fmt.Errorf("pi background tasks: %w", err)
+	}
+	defer site.close()
+	if site.owner == piBackgroundClash {
+		return fmt.Errorf("pi background tasks: %s: %s", site.clashPath, site.reason)
+	}
+	if err := installPiBackground(site, cfg, &applyReport{}, true); err != nil {
+		return fmt.Errorf("pi background tasks: %w", err)
+	}
 	return nil
 }
 
@@ -690,7 +711,7 @@ func reportPiWrite(r *applyReport, site piBackgroundSite, rel string, changed bo
 // installPiBackground applies the install in the order that keeps a half-applied package undiscoverable. The steps are:
 // refuse if anything is unsafe or unrecorded, deactivate when a dependency changes, record the staged ledger, write the
 // dependencies, remove owned leftovers, write package.json last, then commit the ledger. Refusals write nothing.
-func installPiBackground(site piBackgroundSite, cfg *Config, r *applyReport) error {
+func installPiBackground(site piBackgroundSite, cfg *Config, r *applyReport, strict bool) error {
 	if site.root == nil {
 		return errors.New("no Pi agent dir to install into")
 	}
@@ -703,7 +724,33 @@ func installPiBackground(site piBackgroundSite, cfg *Config, r *applyReport) err
 	if err != nil {
 		return err
 	}
+	if strict && site.owner == piBackgroundManaged {
+		entries, err := site.entries()
+		if err != nil {
+			return err
+		}
+		walked, err := walkPiBackground(site.root)
+		if err != nil {
+			return err
+		}
+		for _, entry := range walked {
+			if entry.dir {
+				continue
+			}
+			if entry.special || piLedgerEntryFor(entries, entry.rel) == nil {
+				plan.refused = append(plan.refused, site.display(entry.rel))
+			}
+		}
+		for _, obsolete := range plan.obsolete {
+			if obsolete.state == piPathDrifted {
+				plan.refused = append(plan.refused, site.display(obsolete.entry.rel))
+			}
+		}
+	}
 	if len(plan.unsafe) > 0 {
+		if strict {
+			return fmt.Errorf("unsafe path(s) in the managed package: %s; nothing was changed", strings.Join(plan.unsafe, ", "))
+		}
 		return piRefuseUnsafe(site, plan.unsafe)
 	}
 	if len(plan.refused) > 0 {

@@ -243,10 +243,13 @@ Commands:
 - `harnez apply` installs or updates the runner. It decides everything from the
   disk first and refuses before writing when a file is modified or unrecorded.
   Re-running with no changes writes nothing.
-- There is no runner-only apply option: selecting `skills` also manages other
-  global skills and components according to the selected set. Copying files by hand
-  would invalidate the ownership ledger. Review the wider apply effects before
-  refreshing the installed runner.
+- `harnez pi background-tasks update [-c config.yaml]` installs or updates only
+  the runner. It uses the same Pi target precedence and ledger as apply, without
+  managing other components. It refuses modified or unrecorded files, invalid
+  ledgers, symlinks and unsafe entry points without changing the installation,
+  including its activation manifest. Edited obsolete ledger entries are refused.
+  A retry recovers an interrupted update using the staged ledger. An unrecorded
+  temporary file left by an interruption must be inspected and moved aside first.
 - `harnez status` lists one row per managed path with its state (for example `ok`
   or `drifted`).
 - `harnez diff` reports drift without writing anything.
