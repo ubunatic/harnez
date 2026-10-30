@@ -24,9 +24,18 @@ export interface BackgroundTaskConfig {
   outputLimitChars: number;
   finishedRetentionLimit: number;
   stop: { graceMs: number; killWaitMs: number; pollMs: number };
+  delivery: DeliveryConfig;
+  status: StatusConfig;
+}
+
+export interface StatusConfig {
+  maxCells: number; reservedCells: number; labelMaxCells: number; fallbackLabel: string;
+  manualEmoji: string; defaultEmoji: string; labelEmoji: Record<string, string>;
 }
 
 export interface BackgroundTask {
+  readonly label: string;
+  readonly emoji: string;
   readonly id: number;
   readonly command: string;
   readonly startedAt: number;
@@ -61,6 +70,7 @@ export interface BackgroundTask {
 
 export interface RunnerOptions {
   config: BackgroundTaskConfig;
+  visibleWidth: (text: string) => number;
   shell: string;
   platform: NodeJS.Platform;
   now: () => number;
@@ -74,9 +84,17 @@ export interface RunnerOptions {
   liveGroupMembers: (pgid: number) => number | undefined;
 }
 
+/** Width without Pi: exact for ASCII, 2 per other code point. It may overcount, so labels can shorten but never overrun a bound. */
+function conservativeWidth(text: string): number {
+  let width = 0;
+  for (const char of text) width += char.codePointAt(0)! < 0x7f ? 1 : 2;
+  return width;
+}
+
 export function defaultRunnerOptions(config: BackgroundTaskConfig): RunnerOptions {
   return {
     config,
+    visibleWidth: conservativeWidth,
     shell: process.env.SHELL || "/bin/sh",
     platform: process.platform,
     now: () => Date.now(),
@@ -149,7 +167,7 @@ export function resolveTask(runner: BackgroundTaskRunner, value: unknown): Backg
   return task;
 }
 
-export function parseBackgroundTaskConfig(text: string, source: string): BackgroundTaskConfig {
+export function parseBackgroundTaskConfig(text: string, source: string, width: (text: string) => number): BackgroundTaskConfig {
   // Whole-line comments are dropped before JSON.parse; the file is otherwise plain JSON syntax.
   const body = text.split("\n").filter((line) => !line.trimStart().startsWith("#")).join("\n");
   let value: unknown;
@@ -158,9 +176,29 @@ export function parseBackgroundTaskConfig(text: string, source: string): Backgro
   } catch (error) {
     throw new Error(`${source}: not JSON-compatible YAML: ${(error as Error).message}`);
   }
-  const root = exactKeys(value, source, ["output_limit_chars", "finished_retention_limit", "stop"]);
+  const root = exactKeys(value, source, ["output_limit_chars", "finished_retention_limit", "stop", "delivery", "status"]);
   const stop = exactKeys(root.stop, `${source}: stop`, ["grace_ms", "kill_wait_ms", "poll_ms"]);
+  const delivery = exactKeys(root.delivery, `${source}: delivery`, ["hold_warn_ms", "flush_poll_ms"]);
+  const status = exactKeys(root.status, `${source}: status`, ["max_cells", "reserved_cells", "label_max_cells", "fallback_label", "manual_emoji", "default_emoji", "label_emoji"]);
+  const labelEmoji = status.label_emoji;
+  if (typeof labelEmoji !== "object" || labelEmoji === null || Array.isArray(labelEmoji)) throw new Error(`${source}: invalid label_emoji`);
+  for (const [key, value] of Object.entries(labelEmoji)) {
+    if (!/^[a-z][a-z0-9_-]*$/.test(key) || typeof value !== "string" || !value || /[\p{C}]/u.test(value)) throw new Error(`${source}: invalid label_emoji`);
+  }
+  const fallbackLabel = status.fallback_label;
+  if (typeof fallbackLabel !== "string" || !validLabel(fallbackLabel) || fallbackLabel !== fallbackLabel.normalize("NFC")) throw new Error(`${source}: invalid fallback_label`);
+  const emoji = (value: unknown) => {
+    if (typeof value !== "string" || !value || /[\p{C}]/u.test(value)) throw new Error(`${source}: invalid emoji`);
+    return value;
+  };
+  const labelMaxCells = positiveInt(status.label_max_cells, `${source}: label_max_cells`);
+  if (width(fallbackLabel) > labelMaxCells) throw new Error(`${source}: fallback_label exceeds label_max_cells`);
+  const reservedCells = status.reserved_cells;
+  if (typeof reservedCells !== "number" || !Number.isSafeInteger(reservedCells) || reservedCells < 0) throw new Error(`${source}: invalid reserved_cells`);
   return {
+    status: { maxCells: positiveInt(status.max_cells, `${source}: max_cells`), reservedCells,
+      labelMaxCells, fallbackLabel,
+      manualEmoji: emoji(status.manual_emoji), defaultEmoji: emoji(status.default_emoji), labelEmoji: labelEmoji as Record<string, string> },
     outputLimitChars: positiveInt(root.output_limit_chars, `${source}: output_limit_chars`),
     finishedRetentionLimit: positiveInt(root.finished_retention_limit, `${source}: finished_retention_limit`),
     stop: {
@@ -168,11 +206,220 @@ export function parseBackgroundTaskConfig(text: string, source: string): Backgro
       killWaitMs: positiveInt(stop.kill_wait_ms, `${source}: stop.kill_wait_ms`),
       pollMs: positiveInt(stop.poll_ms, `${source}: stop.poll_ms`),
     },
+    delivery: {
+      holdWarnMs: positiveInt(delivery.hold_warn_ms, `${source}: delivery.hold_warn_ms`),
+      flushPollMs: positiveInt(delivery.flush_poll_ms, `${source}: delivery.flush_poll_ms`),
+    },
   };
 }
 
-export function loadBackgroundTaskConfig(path: string): BackgroundTaskConfig {
-  return parseBackgroundTaskConfig(readFileSync(path, "utf8"), path);
+export interface DeliveryConfig {
+  holdWarnMs: number;
+  flushPollMs: number;
+}
+
+/** The part of Pi's extension context that delivery needs. */
+export interface DeliveryContext {
+  isIdle(): boolean;
+  hasPendingMessages(): boolean;
+  ui: { notify(message: string, level: "info" | "warning" | "error"): void };
+}
+
+export interface DeliveryTimers {
+  set(callback: () => void, ms: number): unknown;
+  clear(handle: unknown): void;
+}
+
+const realTimers: DeliveryTimers = {
+  set: (callback, ms) => {
+    const handle = setTimeout(callback, ms);
+    handle.unref();
+    return handle;
+  },
+  clear: (handle) => clearTimeout(handle as NodeJS.Timeout),
+};
+
+/**
+ * Holds completion notifications while manual compaction runs. Pi 1.4.0 rejects sendUserMessage in that window and
+ * reports it only as an extension error, so a message sent there is lost and the sender cannot tell.
+ *
+ * Extensions cannot read that state, so it is inferred: Pi not idle with no agent run between agent_start and
+ * agent_settled means compaction may be active, even before this extension's own session_before_compact handler runs.
+ * A message arriving during a known run or while idle goes straight to send, so streaming follow-ups are never delayed.
+ *
+ * Held messages go out in arrival order, one per poll, only while Pi is idle or a known run is active. Each is submitted
+ * at most once and never retried: Pi gives no acknowledgement, so a retry could duplicate a message that did arrive.
+ */
+export class CompletionDelivery {
+  private readonly held: Array<{ id: number; text: string }> = [];
+  private holding = false;
+  private closed = false;
+  private runActive = false;
+  private checkStranded = false;
+  private readonly submitted: number[] = [];
+  private warned = false;
+  private flushTimer: unknown;
+  private watchTimer: unknown;
+  private ctx: DeliveryContext | undefined;
+
+  private readonly send: (text: string) => void;
+  private readonly config: DeliveryConfig;
+  private readonly timers: DeliveryTimers;
+
+  constructor(send: (text: string) => void, config: DeliveryConfig, timers: DeliveryTimers = realTimers) {
+    this.send = send;
+    this.config = config;
+    this.timers = timers;
+  }
+
+  submit(id: number, text: string): void {
+    if (this.closed || (!this.holding && this.held.length === 0 && (this.runActive || this.idle() !== false))) {
+      this.send(text);
+      return;
+    }
+    this.held.push({ id, text });
+    this.notify(`Background command #${id} finished while Pi is compacting or busy; its notification is held until compaction ends.`, "warning");
+    this.armWatch();
+    if (!this.holding) this.scheduleFlush();
+  }
+
+  /** The session context, so a completion can check for compaction before any compaction hook has run. */
+  attach(ctx: DeliveryContext): void {
+    this.ctx = ctx;
+  }
+
+  agentStarted(): void {
+    this.runActive = true;
+    this.checkStranded = false;
+  }
+
+  agentSettled(): void {
+    this.runActive = false;
+  }
+
+  /** Manual compaction reached this extension's session_before_compact hook. */
+  begin(ctx: DeliveryContext): void {
+    if (this.closed) return;
+    this.ctx = ctx;
+    this.holding = true;
+    this.checkStranded = false;
+    this.warned = false;
+    this.clearFlush();
+    if (this.held.length) this.armWatch();
+  }
+
+  /** Compaction succeeded or failed. Does nothing unless a manual hold is active. */
+  end(ctx: DeliveryContext): void {
+    if (this.closed || !this.holding) return;
+    this.ctx = ctx;
+    this.holding = false;
+    this.checkStranded = true;
+    this.scheduleFlush();
+  }
+
+  /** Stops all timers and returns the IDs whose notifications were never submitted. */
+  shutdown(): number[] {
+    this.closed = true;
+    this.clearFlush();
+    this.clearWatch();
+    return this.held.splice(0).map((entry) => entry.id);
+  }
+
+  private flush(): void {
+    this.flushTimer = undefined;
+    if (this.closed || this.holding) return;
+    if (this.held.length === 0 && this.submitted.length === 0 && !this.checkStranded) return;
+    // A slow later session_compact handler keeps Pi's guard set: wait, for the stranded check too.
+    const idle = this.idle() === true;
+    if (!idle && !this.runActive) {
+      this.scheduleFlush();
+      return;
+    }
+    if (this.held.length === 0) {
+      this.finishDrain(idle);
+      return;
+    }
+    const entry = this.held.shift()!;
+    this.checkStranded = false;
+    if (this.held.length === 0) this.clearWatch();
+    try {
+      this.send(entry.text);
+      this.submitted.push(entry.id);
+    } catch (error) {
+      this.notify(`Could not submit the held notification for background command #${entry.id}: ${(error as Error).message}. It is not retried; read it with background_task_result.`, "error");
+    }
+    this.scheduleFlush();
+  }
+
+  private finishDrain(idle: boolean): void {
+    if (this.submitted.length) {
+      const ids = this.submitted.splice(0).map((id) => `#${id}`).join(", ");
+      this.notify(`Submitted held background task notifications once each: ${ids}. Pi gives no acknowledgement; if no response appears, read them with background_task_result.`, "warning");
+    }
+    if (this.checkStranded && idle && this.pendingMessages()) {
+      this.notify("Pi still has a queued message after compaction; it is sent with the next prompt.", "warning");
+    }
+    this.checkStranded = false;
+  }
+
+  private scheduleFlush(): void {
+    if (this.flushTimer === undefined) this.flushTimer = this.timers.set(() => this.flush(), this.config.flushPollMs);
+  }
+
+  private clearFlush(): void {
+    if (this.flushTimer !== undefined) this.timers.clear(this.flushTimer);
+    this.flushTimer = undefined;
+  }
+
+  private armWatch(): void {
+    if (this.watchTimer === undefined) this.watchTimer = this.timers.set(() => this.watch(), this.config.holdWarnMs);
+  }
+
+  private clearWatch(): void {
+    if (this.watchTimer !== undefined) this.timers.clear(this.watchTimer);
+    this.watchTimer = undefined;
+  }
+
+  private watch(): void {
+    this.watchTimer = undefined;
+    if (this.closed || this.held.length === 0) return;
+    if (!this.warned) {
+      this.warned = true;
+      this.notify(`${this.held.length} background task notification(s) still held: Pi has not finished compaction or is busy.`, "warning");
+    }
+    // Idle rules compaction out, so a hold still active here means its end hook never reached this extension.
+    if (this.holding && this.idle() === true) this.end(this.ctx!);
+    this.armWatch();
+  }
+
+  /** Undefined when Pi cannot say: no session yet, or a stale context. */
+  private idle(): boolean | undefined {
+    try {
+      return this.ctx?.isIdle();
+    } catch {
+      return undefined;
+    }
+  }
+
+  private pendingMessages(): boolean {
+    try {
+      return this.ctx?.hasPendingMessages() ?? false;
+    } catch {
+      return false;
+    }
+  }
+
+  private notify(message: string, level: "info" | "warning" | "error"): void {
+    try {
+      this.ctx?.ui.notify(message, level);
+    } catch {
+      process.stderr.write(`background-tasks: ${message}\n`);
+    }
+  }
+}
+
+export function loadBackgroundTaskConfig(path: string, width: (text: string) => number): BackgroundTaskConfig {
+  return parseBackgroundTaskConfig(readFileSync(path, "utf8"), path, width);
 }
 
 function exactKeys(value: unknown, label: string, keys: string[]): Record<string, unknown> {
@@ -198,6 +445,50 @@ function errorCode(error: unknown): string | undefined {
   return typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : undefined;
 }
 
+
+function validLabel(label: string): boolean {
+  return /^[\p{L}\p{N}][\p{L}\p{M}\p{N}_-]*$/u.test(label);
+}
+
+export function taskLabel(label: string | undefined, command: string, config: StatusConfig, width: (s: string) => number): string {
+  // Runtime guard: callers outside TypeScript or a real schema check can pass any value.
+  if (label !== undefined && typeof label !== "string") return config.fallbackLabel;
+  let token = label;
+  if (token === undefined) {
+    token = "";
+    for (const part of command.trim().split(/\s+/)) {
+      // Do not interpret shell quoting, escaping, expansion or operators. Splitting those could expose an assignment value.
+      if (!/^[A-Za-z0-9_./:@%+,=\-]+$/.test(part)) return config.fallbackLabel;
+      if (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(part)) continue;
+      if (part.includes("=")) return config.fallbackLabel;
+      token = part;
+      break;
+    }
+  }
+  const candidate = (label === undefined ? (token.split(/[\\/]/).pop() ?? "").replace(/\.[^.]*$/, "") : token).trim().normalize("NFC");
+  if (!validLabel(candidate)) return config.fallbackLabel;
+  let result = "";
+  for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(candidate)) {
+    if (width(result + segment) > config.labelMaxCells) break;
+    result += segment;
+  }
+  return result || config.fallbackLabel;
+}
+
+export function formatTaskStatus(tasks: Iterable<BackgroundTask>, budget: number, width: (s: string) => number): string | undefined {
+  const running = [...tasks].filter((task) => task.status === "running").sort((a, b) => a.id - b.id);
+  if (!running.length) return undefined;
+  const count = `Tasks (${running.length})`;
+  const superscripts = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+  const entries = running.map((task) => [...String(task.id)].map((digit) => superscripts[Number(digit)]).join("") + task.emoji + task.label);
+  for (let n = entries.length; n > 0; n--) {
+    const omitted = entries.length - n;
+    const text = `${count}: ${entries.slice(0, n).join(", ")}${omitted ? `, +${omitted}` : ""}`;
+    if (width(text) <= budget) return text;
+  }
+  return count;
+}
+
 export class BackgroundTaskRunner extends EventEmitter {
   readonly tasks = new Map<number, BackgroundTask>();
   shuttingDown = false;
@@ -212,11 +503,14 @@ export class BackgroundTaskRunner extends EventEmitter {
     this.options = options;
   }
 
-  start(command: string, cwd: string): BackgroundTask {
+  start(command: string, cwd: string, metadata: { label?: string; manual?: boolean } = {}): BackgroundTask {
     const cleanCommand = command.trim();
     if (!cleanCommand) throw new Error("Provide a command: /task <command>");
     if (this.shuttingDown) throw new Error("Background tasks are shutting down");
 
+    // Resolve display metadata first: a failure here must not leave a spawned process without a task.
+    const label = taskLabel(metadata.label, cleanCommand, this.options.config.status, this.options.visibleWidth);
+    const emoji = metadata.manual ? this.options.config.status.manualEmoji : (Object.hasOwn(this.options.config.status.labelEmoji, label.toLowerCase()) ? this.options.config.status.labelEmoji[label.toLowerCase()] : this.options.config.status.defaultEmoji);
     const { platform } = this.options;
     const child = this.options.spawn(this.options.shell, ["-lc", cleanCommand], {
       cwd,
@@ -225,6 +519,8 @@ export class BackgroundTaskRunner extends EventEmitter {
       stdio: ["ignore", "pipe", "pipe"],
     });
     const task: BackgroundTask = {
+      label,
+      emoji,
       id: this.nextId++,
       command: cleanCommand,
       startedAt: this.options.now(),

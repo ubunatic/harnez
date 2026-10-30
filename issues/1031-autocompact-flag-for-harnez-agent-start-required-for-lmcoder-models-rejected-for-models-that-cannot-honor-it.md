@@ -9,7 +9,7 @@
 ---
 
 ## Ask (owner, 2026-10-29)
-When agents call `harnez agent` with lmcoder models, they MUST give the context size, either directly or by
+When agents call `harnez agent` with lmcoder models, they MUST give the context window, either directly or by
 setting `--autocompact` (a flag adopted from Claude). A custom `--autocompact` works for every agent and model
 that can support it; passing it for a model that cannot honor it fails with a clear error.
 
@@ -20,7 +20,7 @@ a silent misfit into an explicit choice.
 
 ## Open questions
 - Flag shape: what Claude's autocompact setting takes (percent of the window, a token limit, on/off) and which
-  form harnez adopts; a separate flag for the context size, or one flag for both.
+  form harnez adopts; a separate flag for the context window, or one flag for both.
 - Per provider, what can honor it: Pi (`compaction.reserveTokens`/`keepRecentTokens`, 1023), Codex
   (`-c model_auto_compact_token_limit`, used in 987), Claude (its autocompact setting), agy (869). Which fail.
 - How it relates to the spec defaults in `agent.compact_thresholds` (969) and the `harnez apply` override (1023),
@@ -28,7 +28,7 @@ a silent misfit into an explicit choice.
 - Resume: does the value persist with the session.
 
 ## Acceptance
-- `harnez agent start` with an lmcoder model and neither a context size nor `--autocompact` fails with a message
+- `harnez agent start` with an lmcoder model and neither a context window nor `--autocompact` fails with a message
   that names both options.
 - `--autocompact` applies on every provider that supports it (verified live once per provider) and fails
   before launch on one that does not.

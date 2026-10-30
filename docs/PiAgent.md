@@ -81,11 +81,32 @@ extension for general shell commands (not Pi prompt/subagent execution). Its
 logic lives in `.pi/lib/background-task-runner.ts`; Pi autoloads only
 `.pi/extensions/`, so the library and its tests stay out of autoload.
 
+Completion notifications during manual compaction: Pi rejects `sendUserMessage` while
+manual compaction runs and reports that only as an extension error, so the extension
+holds notifications from its `session_before_compact` hook until `session_compact` or
+`session_compact_failed`. Pi has no compaction-state API, so a completion is also held when
+Pi is not idle and no agent run is known (`agent_start` to `agent_settled`); this covers
+another extension's earlier hook. Held notifications go out in arrival order, one per poll,
+only while Pi is idle or a known run is active (`delivery` in
+`spec/pi-background-tasks.yaml` sets the timing). Delivery is at most once, not exactly
+once: Pi gives no acknowledgement, so nothing is retried, and one summary warning points at
+`background_task_result`. Known gaps (issue 1047): a run started while an earlier hook holds
+compaction can still get a completion rejected, held notifications are dropped with a stderr
+report at shutdown, and a follow-up queued before compaction waits for the next prompt (with
+a warning). Automatic compaction and ordinary streaming follow-ups are not held.
+`make canary-pi-compaction` checks this against the real Pi with a local stub model.
+
 Tools (model-callable):
 
 - `background_task` starts a command through `$SHELL -lc` in the current project
   directory, inheriting the Pi process environment. Each command runs in its own
-  process group, which is what cancellation targets.
+  process group, which is what cancellation targets. Supply an optional single-word
+  `label` for the status line; existing command-only calls remain valid. The launch
+  result identifies the task by ID and label without repeating its command. Pi's
+  default collapsed tool-call display truncates long arguments; Ctrl+O expands them.
+  This is presentation, not secret protection: full call arguments remain in the
+  session transcript and may also appear in later task lists, results and completion
+  messages. The runner trims leading and trailing command whitespace before execution.
 - `background_task_list` lists in-memory tasks with status, elapsed time, exit
   code or signal, and command.
 - `background_task_result` takes `id` and returns status, exit code or signal,
@@ -95,6 +116,8 @@ Tools (model-callable):
   termination cannot be confirmed (the task then stays `running`).
 
 Commands: `/task <command>`, `/tasks`, `/task-result <id>`, `/task-cancel <id>`.
+The manual `/task` launch prints the full command; the concise launch result above
+applies to the model-callable `background_task` tool.
 The same IDs are accepted by the tools and commands: a positive safe integer, or
 its canonical decimal string. `0`, negative values, fractions, leading zeros
 (`01`), `NaN`, empty strings and unknown IDs are rejected without sending any signal.
@@ -114,8 +137,11 @@ Lifecycle and reporting:
 - Elapsed time is frozen when the task leaves `running`.
 - Output is decoded per stream (stdout and stderr each have their own UTF-8
   decoder), so a multibyte character split across chunks is not corrupted.
-- The status bar shows `Tasks: N` for running tasks. The count is local to this
-  extension runtime, not a cross-session/global process count.
+- The status shows running tasks, for example `Tasks (3): ¹🔨build, ²🧪tests, ³👤backup`. IDs are actual numeric task IDs; result and cancel still take ordinary numbers. Duplicate labels are allowed. Manual `/task` entries use 👤; other entries use the spec's label-to-emoji map or its default emoji.
+- Labels are trimmed and normalized to NFC. They must begin with a letter or number and then contain only letters, marks, numbers, `_` or `-`. Invalid labels use the spec fallback; valid long labels are truncated at grapheme and cell boundaries. When omitted, the first command token that is not a `NAME=value` assignment supplies its basename without extension, subject to the same validation. Arguments are never displayed in the label and the command is not rewritten for labeling. Quoting, escapes, expansion, or other ambiguous shell syntax in the assignment/command prefix uses the fallback instead of parsing shell syntax.
+- The extension budgets `min(max_cells, max(0, terminal columns - reserved_cells))` cells, or `max_cells` when columns are unavailable. It refreshes on terminal resize, fits whole entries and an omitted count, and falls back to the total alone. A terminal narrower than the total cannot display it fully. Pi joins sorted footer statuses and may truncate the result further because it does not expose the width allocated to this status. The count is local to this extension runtime.
+
+The schema checks label syntax, safe integer bounds, and Unicode control and format categories in emoji. The loader additionally requires NFC and verifies the fallback label fits `label_max_cells` using Pi’s cell width; JSON Schema cannot express those width and normalization checks. Go and JavaScript Unicode tables can differ by version, including treatment of unassigned characters, so the loader remains authoritative.
 
 Bounds live in `spec/pi-background-tasks.yaml` (schema
 `spec/schemas/pi-background-tasks.schema.json`). The file is JSON-compatible YAML so
@@ -232,6 +258,17 @@ Commands:
 - `harnez apply` installs or updates the runner. It decides everything from the
   disk first and refuses before writing when a file is modified or unrecorded.
   Re-running with no changes writes nothing.
+- `harnez pi background-tasks update [-c config.yaml]` installs or updates only
+  the runner. It uses the same Pi target precedence and ledger as apply, without
+  managing other components. It refuses modified or unrecorded files, invalid
+  ledgers, symlinks and unsafe entry points without changing the installation,
+  including its activation manifest. Edited obsolete ledger entries are refused.
+  A retry recovers an interrupted update using the staged ledger. Do not run an
+  updater or apply concurrently, or edit the managed directory during an update:
+  there is no lock or atomic protection against concurrent changes. If an
+  interruption leaves an unrecorded temporary file, stop updates and inspect it;
+  preserve its contents by moving it outside the Pi extension directory before
+  retrying. Do not delete a file unless you have established that it is disposable.
 - `harnez status` lists one row per managed path with its state (for example `ok`
   or `drifted`).
 - `harnez diff` reports drift without writing anything.

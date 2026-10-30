@@ -124,6 +124,9 @@ smoke: ⚙️ build  # live smoke: apply/diff/repair + usage bar-alignment again
 smoke-container: ⚙️  # build both agent images and run the in-pod Pi/Codex smoke test (LMCODER_MODEL_DIR=reuse host models, LMCODER_CACHE_DIR=download to a host dir)
 	bash scripts/agent-canary/run.sh
 
+canary-pi-compaction: ⚙️  # real-Pi canary for completions during compaction: local stub, no external network (issue 1047)
+	bash scripts/canary-pi-compaction/run.sh
+
 test: ⚙️ check  # full tier: alias for check (gofmt, vet, all tests)
 
 test-dot8: ⚙️  # run tests with dot8 build tag

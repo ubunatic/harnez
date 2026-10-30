@@ -1,6 +1,6 @@
 # 1011 — Show labeled Pi background tasks in the status line
 
-**Status**: Open
+**Status**: Closed — Labels delivered in 3a1990f4; 76 Pi tests and Go checks passed; real model labeled call and interactive manual cancellation, resize and duplicate-copy canaries passed, with footer width limitations documented.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -24,7 +24,7 @@ Tasks (3): ¹🔨build, ²🧪tests, ³👤backup
 
 The calling agent supplies a single-word label when creating a task; manual `/task` jobs use the fixed 👤 emoji. Bound the display for narrow terminals or many tasks while retaining the total, for example `Tasks (7): ¹🔨build, ²🧪tests, ³👤backup, +4`. Preserve task execution, completion notifications, and existing workflows.
 
-## 3. Live-Code Findings (2026-10-29)
+## 3. Historical Live-Code Findings (2026-10-29; before implementation)
 
 - `.pi/extensions/background-tasks.ts`: `updateStatus` filters `status === "running"`, emits `Tasks: N` through `ctx.ui.setStatus("background-tasks", text)`, and clears it with `undefined` at zero. It runs on runner `changed` events and session start. Both `background_task` and `/task` currently pass only command and cwd to `runner.start`; the tool schema accepts only `command`.
 - `.pi/lib/background-task-runner.ts`: `BackgroundTask` has no display metadata. `start(command, cwd)` allocates increasing numeric IDs per runner; finished-task eviction does not renumber surviving tasks. Result/cancel tools and commands resolve the same canonical positive safe-integer IDs. An unconfirmed cancellation remains `running` until settlement.
@@ -43,10 +43,16 @@ The calling agent supplies a single-word label when creating a task; manual `/ta
 - Bound using terminal display cells, not JS string length; avoid splitting surrogate pairs, grapheme clusters, emoji sequences or IDs. Reserve the count and overflow suffix first; `+K` counts omitted running entries. When no entry fits, fall back to the count alone. If even the count cannot fit, document the physical limitation instead of promising impossible visibility.
 - **Feasibility check before rendering work:** the current `setStatus` call supplies a string and no allocated footer width. Verify the installed Pi API's width/resize facilities and its handling of other footer statuses; terminal columns alone may overestimate available space. Use a supported integration and deterministic formatter tests; distinguish the extension's width budget from any later Pi truncation. Record the chosen budget, resize behavior, and limitations without replacing the whole footer merely to render this status.
 
-## 5. Implementation Verification (Not Performed by This Refinement)
+## 5. Original Implementation Verification Plan
 
 - Extend automated tests for the approved three-task example, supplied labels and legacy command-only calls, manual 👤 tasks, label validation/fallbacks, duplicate labels and unchanged command execution. Retain lifecycle assertions while updating the old count-only expectation.
 - Cover count/entry updates after success, failure, confirmed cancellation, unconfirmed cancellation and eventual settlement; clear at zero/shutdown. Cover nonconsecutive IDs after completion/eviction, 9→10 and larger IDs, stable ordering, and unchanged numeric result/cancel lookup.
 - Test many tasks, exact width boundaries, no-entry/count-only fallback, correct `+K`, long labels, Unicode/emoji cell widths and resize behavior. Add an appropriate `.ansi` mockup under `docs/data/` per `docs/AgenticLoop.md` before TUI implementation.
 - Keep schema/parser validation and spec fixtures aligned. Run the Pi tests (`make test-pi`, including `background-claim.test.ts`) and the applicable Go spec/embed/install checks through the repository's quota workflow; no installer redesign is needed.
 - Verify in a live Pi session with the real tool schema, agent and manual starts, lifecycle updates, a narrow/resized terminal, other footer statuses, and coordinated project/global copies. Record environment limitations honestly; fake UI tests alone cannot prove footer behavior. Installation/live checks belong to implementation, not this ticket-only refinement.
+
+## 6. Delivery and verification
+
+Implemented in `3a1990f4`, including `docs/data/issue-1011.ansi`. `make test-q1` passed with 76 Pi tests and Go checks. A disposable real Pi model issued `background_task` with `label: selftest`; task #1 completed with exit 0 and its result was retrieved. The owner also confirmed the live selftest label. A private interactive Pi session loaded two explicitly supplied project/global-shaped extension copies without duplicate registration: `/task sleep 120` displayed one `¹👤sleep`, cancellation confirmed its process group gone and cleared the status. With another footer status, 30 columns showed count only; at 120 columns a subsequent task showed its full label. Earlier live probing observed competing statuses and resize with real Pi schema handlers.
+
+Limitations: the duplicate-copy canary explicitly loaded copies rather than independently testing installed automatic discovery; live failure and unconfirmed cancellation were not induced, and are covered by automated lifecycle tests. Pi does not expose allocated footer width, so competing statuses can truncate or hide task text at narrow widths; see `docs/PiAgent.md`.

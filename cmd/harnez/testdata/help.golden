@@ -36,6 +36,7 @@ Available Commands:
   man             Generate, print, or install roff man pages
   mcp             Serve Harnez agent tools over MCP stdio
   mode            Switch ConciseMode terseness level and synchronize .harnez/rules/Local.md
+  pi              Manage Pi integrations
   rate            Record a 1-5 quality rating for an internal tool call, or a lean --ok heartbeat
   read            Read bounded text or explicitly requested visual PNG cards
   release         Language-agnostic version bump, build, minisign, and forge publish pipeline
@@ -2054,6 +2055,44 @@ Global Flags:
       --no-file       alias for --ephemeral
       --persist       accepted for compatibility; still write to ./.harnez/rules/Local.md
   -q, --quiet         suppress stdout directive (file sync only)
+
+=== harnez pi
+Manage Pi integrations
+
+Usage:
+  harnez pi [command]
+
+Available Commands:
+  background-tasks Manage the Pi background-task extension
+
+Flags:
+  -h, --help   help for pi
+
+Use "harnez pi [command] --help" for more information about a command.
+
+=== harnez pi background-tasks
+Manage the Pi background-task extension
+
+Usage:
+  harnez pi background-tasks [command]
+
+Available Commands:
+  update      Install or update only the managed Pi background-task extension
+
+Flags:
+  -h, --help   help for background-tasks
+
+Use "harnez pi background-tasks [command] --help" for more information about a command.
+
+=== harnez pi background-tasks update
+Install or update only the managed Pi background-task extension
+
+Usage:
+  harnez pi background-tasks update [flags]
+
+Flags:
+  -c, --config string   path to config YAML file (default: embedded)
+  -h, --help            help for update
 
 === harnez rate
 rate writes a single tool_calls row (call_type=internal, exit_code=NULL)

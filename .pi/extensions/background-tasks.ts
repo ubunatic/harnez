@@ -1,9 +1,12 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   BackgroundTaskRunner,
+  CompletionDelivery,
   defaultRunnerOptions,
+  formatTaskStatus,
   loadBackgroundTaskConfig,
   resolveTask,
   type BackgroundTask,
@@ -23,33 +26,68 @@ type CommandHandler = Parameters<ExtensionAPI["registerCommand"]>[1]["handler"];
 /** Wires the runner into Pi. Tests pass overrides (fake spawn, clock, signal function, small bounds). */
 export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<RunnerOptions> = {}) {
   const options: RunnerOptions = {
-    ...defaultRunnerOptions(loadBackgroundTaskConfig(CONFIG_PATH)),
+    ...defaultRunnerOptions(loadBackgroundTaskConfig(CONFIG_PATH, visibleWidth)),
+    visibleWidth,
     ...overrides,
   };
   const runner = new BackgroundTaskRunner(options);
   let setStatus: ((text: string | undefined) => void) | undefined;
 
+  let lastStatus: string | undefined;
+  let statusSet = false;
   const updateStatus = () => {
-    const running = [...runner.tasks.values()].filter((task) => task.status === "running").length;
-    setStatus?.(running ? `Tasks: ${running}` : undefined);
+    const columns = process.stdout.columns;
+    const budget = typeof columns === "number" && Number.isFinite(columns)
+      ? Math.min(options.config.status.maxCells, Math.max(0, columns - options.config.status.reservedCells))
+      : options.config.status.maxCells;
+    const text = formatTaskStatus(runner.tasks.values(), budget, options.visibleWidth);
+    if (statusSet && text === lastStatus) return;
+    if (setStatus) { setStatus(text); lastStatus = text; statusSet = true; }
   };
   runner.on("changed", updateStatus);
+  const delivery = new CompletionDelivery(
+    (text) => pi.sendUserMessage(text, { deliverAs: "followUp" }),
+    options.config.delivery,
+  );
   runner.on("finished", (task: BackgroundTask) => {
-    pi.sendUserMessage(
+    delivery.submit(
+      task.id,
       `Background command #${task.id} finished (${task.status}, ${describeEnd(task)}).\nCommand: ${task.command}\nOutput:\n${task.output || "(no output)"}\n\nInspect this result and report what it means. If it indicates unfinished work, continue appropriately.`,
-      { deliverAs: "followUp" },
     );
   });
 
+  // Only manual compaction rejects prompts; during automatic compaction Pi queues the follow-up itself.
+  pi.on("session_before_compact", (event, ctx) => {
+    if (event.reason === "manual") delivery.begin(ctx);
+  });
+  pi.on("session_compact", (event, ctx) => {
+    if (event.reason === "manual") delivery.end(ctx);
+  });
+  pi.on("session_compact_failed", (event, ctx) => {
+    if (event.reason === "manual") delivery.end(ctx);
+  });
+  pi.on("agent_start", () => delivery.agentStarted());
+  pi.on("agent_settled", () => delivery.agentSettled());
+
   pi.on("session_start", (_event, ctx) => {
+    delivery.attach(ctx);
+    process.stdout.removeListener("resize", updateStatus);
     setStatus = (text) => ctx.ui.setStatus("background-tasks", text);
+    statusSet = false;
+    process.stdout.on("resize", updateStatus);
     updateStatus();
   });
 
   pi.on("session_shutdown", async () => {
+    process.stdout.removeListener("resize", updateStatus);
+    const undelivered = delivery.shutdown();
+    if (undelivered.length) {
+      process.stderr.write(`Background task notifications not submitted before shutdown: ${undelivered.map((id) => `#${id}`).join(", ")}\n`);
+    }
     const unconfirmed = await runner.shutdown();
     updateStatus();
     setStatus = undefined;
+    statusSet = false;
     if (unconfirmed.length) {
       process.stderr.write(`Background tasks not confirmed stopped at shutdown: ${unconfirmed.map((id) => `#${id}`).join(", ")}\n`);
     }
@@ -61,12 +99,13 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
     description: "Run any shell command as a background task. The command's output is sent back to you for inspection when it exits.",
     parameters: Type.Object({
       command: Type.String({ description: "Shell command to run in the background" }),
+      label: Type.Optional(Type.String({ description: "Single-word task label, e.g. build or tests" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const task = runner.start(params.command, ctx.cwd);
+      const task = runner.start(params.command, ctx.cwd, { label: params.label });
       return {
-        content: [{ type: "text", text: `Started background command #${task.id}: ${task.command}` }],
-        details: { id: task.id, command: task.command, status: task.status },
+        content: [{ type: "text", text: `Started background command #${task.id} (${task.label})` }],
+        details: { id: task.id, label: task.label, status: task.status },
       };
     },
   });
@@ -123,7 +162,7 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
   });
 
   const startCommand: CommandHandler = async (command, ctx) => {
-    const task = runner.start(command, ctx.cwd);
+    const task = runner.start(command, ctx.cwd, { manual: true });
     ctx.ui.notify(`Started background command #${task.id}: ${task.command}`, "info");
   };
   pi.registerCommand("task", {

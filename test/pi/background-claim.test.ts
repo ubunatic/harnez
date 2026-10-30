@@ -5,6 +5,8 @@
 // fresh temp home, so the real config is never read or written.
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
+import { visibleWidth as stubWidth } from "./width-stub.mjs";
+import { formatTaskStatus, taskLabel } from "../../.pi/lib/background-task-runner.ts";
 import { mkdirSync, mkdtempSync, copyFileSync, existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -41,6 +43,11 @@ function mirrorTree(root: string, options: { packageJson?: boolean } = {}): stri
   }
   if (options.packageJson) writeFileSync(join(root, "package.json"), JSON.stringify(MIRROR_PACKAGE_JSON, null, 2));
   return root;
+}
+
+/** Imports a mirrored extension directly. The query asks typebox-hook.mjs to stub pi-tui for this copy only. */
+function importMirror(root: string) {
+  return import(`${pathToFileURL(join(root, ".pi/extensions/background-tasks.ts")).href}?pi-tui-stub`);
 }
 
 type Listener = (data: unknown) => void;
@@ -167,8 +174,8 @@ test("project and global copies on one bus: exactly one tool and command set", a
   // Two mirrored trees imported separately: two module instances, as Pi loads two copies of the file.
   const projectRoot = mirrorTree(tempDir("bg-project-copy-"));
   const globalRoot = mirrorTree(tempDir("bg-global-copy-"), { packageJson: true });
-  const projectModule = await import(pathToFileURL(join(projectRoot, ".pi/extensions/background-tasks.ts")).href);
-  const globalModule = await import(pathToFileURL(join(globalRoot, ".pi/extensions/background-tasks.ts")).href);
+  const projectModule = await importMirror(projectRoot);
+  const globalModule = await importMirror(globalRoot);
   const projectCopy = fakePi({ bus });
   projectModule.default(projectCopy.pi);
   const globalCopy = fakePi({ bus });
@@ -271,7 +278,7 @@ test("boundary: the claim is not authenticated; a listener that marks every prob
 test("mirrored package: a copy of the tree registers from its sibling lib and spec and subscribes once", async () => {
   const bus = fakeBus();
   const root = mirrorTree(tempDir("bg-mirror-"), { packageJson: true });
-  const mirrored = await import(pathToFileURL(join(root, ".pi/extensions/background-tasks.ts")).href);
+  const mirrored = await importMirror(root);
   const fake = fakePi({ bus });
   mirrored.default(fake.pi);
   assert.deepEqual([...fake.tools.keys()].sort(), EXPECTED_TOOLS);
@@ -285,7 +292,7 @@ test("mirrored package with an invalid sibling spec fails loudly and leaves no s
   const bus = fakeBus();
   const root = mirrorTree(tempDir("bg-mirror-bad-"));
   writeFileSync(join(root, "spec/pi-background-tasks.yaml"), "{}\n");
-  const mirrored = await import(pathToFileURL(join(root, ".pi/extensions/background-tasks.ts")).href);
+  const mirrored = await importMirror(root);
   assert.throws(() => mirrored.default(fakePi({ bus }).pi), /missing key|unknown key|output_limit_chars/);
   assert.equal(bus.count(), 0);
 });
@@ -317,6 +324,22 @@ function locatePiPackage(): { dir: string } | { skip: string } {
 
 const PI_LOCATION = locatePiPackage();
 const SKIP = "dir" in PI_LOCATION ? false : `real-loader tests skipped: ${PI_LOCATION.skip}`;
+
+test("real Pi cell widths agree for representative graphemes and status boundaries", { skip: SKIP }, async () => {
+  const { dir } = PI_LOCATION as { dir: string };
+  const { visibleWidth } = await import(pathToFileURL(join(dirname(dir), "pi-tui", "dist", "utils.js")).href);
+  for (const sample of ["🇩🇪", "का", "漢字", "é", "e\u0301", "¹🔨build", "👤backup"]) {
+    assert.equal(stubWidth(sample), visibleWidth(sample), `width for ${sample}`);
+  }
+  const status = { maxCells: 72, reservedCells: 16, labelMaxCells: 4, fallbackLabel: "task", manualEmoji: "👤", defaultEmoji: "🤖", labelEmoji: {} };
+  assert.equal(taskLabel("漢字a", "", status, visibleWidth), "漢字");
+  assert.equal(taskLabel("漢字a", "", { ...status, labelMaxCells: 3 }, visibleWidth), "漢");
+  const tasks = [{ id: 1, label: "漢字", emoji: "🤖", status: "running" }] as any;
+  const expected = "Tasks (1): ¹🤖漢字";
+  const width = visibleWidth(expected);
+  assert.equal(formatTaskStatus(tasks, width, visibleWidth), expected);
+  assert.equal(formatTaskStatus(tasks, width - 1, visibleWidth), "Tasks (1)");
+});
 
 type PiModules = {
   home: string;

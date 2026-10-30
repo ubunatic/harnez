@@ -1,0 +1,45 @@
+# 1050 — Epic: Pi background task experience and reliability
+
+**Status**: Open
+**Priority**: P2 (Medium)
+**Severity**: Moderate
+**Category**: Epic
+**Related**: 1011, 1021, 1044, 1046, 1047, 1048, 1049, 1051, 1052
+
+## Goal
+
+/goal Deliver a reliable and concise Pi background-task experience for the user and host agent, with the linked tasks verified or explicitly parked with reasons; or stop and report when blocked on user input or denied permission. On a worker loop, hard architectural or OS blocker, or no progress, clear the goal and write a failure report describing attempts, cause and resume point.
+
+Re-check live code, ticket status and recent history before work. Existing tickets are candidates, not yet refined sprint assignments. Do not claim runtime delivery without the relevant live Pi canary.
+
+## Scope and decisions
+
+Task labels, output capture and presentation, completion delivery, manual command backgrounding and reload safety. Out of scope: reviving tasks across reloads, unrelated generated-index drift (1045), and changes to Pi or other external repositories. Investigate Pi APIs and existing behavior before choosing mechanisms; Ctrl-B's existing cursor binding is intentionally displaced for the requested workflow (1048). Separate host-visible content from UI rendering and protect sensitive output.
+
+## Candidate tasks
+
+Sprint groups, dependencies and role/model assignments are placeholders until code discovery and refinement. Each code task requires its tests, install and a runtime canary before closure; design/discovery work requires a study and decomposed backlog instead.
+
+| Ticket | What | Group | Searcher → architect → developer | Reviewer | Status |
+| --- | --- | --- | --- | --- | --- |
+| 1011 | Labeled task status and live verification | Labels | advisor cheap → none → developer lean | Host verification | Closed: real model tool call, interactive canary and Quota-1 passed |
+| 1021 | File-backed output and selective host retrieval | TBD | TBD | TBD | Open |
+| 1044 | Aggregate completion notifications | TBD | TBD | TBD | Open |
+| 1046 | Concise user and agent previews, preferably output tail | TBD | TBD | TBD | Open |
+| 1047 | Safe completion delivery during compaction | Compaction delivery | advisor Claude → architect Claude → developer Claude | Claude review pending | Open; partial fix, shutdown stale-context error under review |
+| 1048 | Ctrl-B for manual command backgrounding | TBD | TBD | TBD | Open |
+| 1049 | Guard reload while tasks are running | TBD | TBD | TBD | Open |
+| 1051 | Concise background-task launch command display | Launch presentation, independent | advisor cheap → architect smart → developer lean | reviewer smart | Closed; global refresh parked in 1052 |
+| 1052 | Safely refresh global Pi task extension | Installation | advisor → none → developer | reviewer | Open; installed and ledger verified, real Claude Pi model canary pending credentials |
+| — | Evergreen: study, review learnings and linked follow-ups | Final | TBD | TBD | Pending |
+| — | Wrap: verify task outcomes and report next command | Final | TBD | TBD | Pending |
+
+## Session handoff
+
+Paused with Claude's five-hour quota exhausted (reported reset 22:00 Europe/Berlin); the owner requested Claude-only subagents, no OpenAI or Gemini. Resume by independently reviewing 1047, including the host canary's stale-context shutdown error recorded in that ticket, then fix and reverify. The committed 1047 changes are not yet installed in the global Pi extension. 1052's targeted installer updated the global copy before those changes; its model-issued global canary remains pending because Pi has no Anthropic credentials. Other open tasks remain unimplemented. No exactly-once claim is supported by Pi's current acknowledgement API.
+
+## Refinement and gates
+
+Initial read-only discovery (epic1050-scout) found all original seven tickets open; 1011 has since passed verification and closed. Current completion sends full captured output as a follow-up, and reload cancels in-memory tasks. Pi API support for delivery, input and reload needs direct investigation; absence of a local package in the checkout does not establish absence of the installed Pi API. Proposed ordering: API discovery; output contract (1021) and previews (1046); aggregation and compaction (1044, 1047); interaction and lifecycle items (1011, 1048, 1049); combined live canaries. API discovery suggests 1051 can proceed independently before the output-contract work. The output architect proposed capture and previews together, but its suggested file cap and full-delivery semantics do not yet establish the owner's full-output requirement; validate these tradeoffs before adopting them. Remaining dependencies and ordering remain provisional. Prior-art web fanout is skipped for this internal Pi integration; inspect the installed Pi implementation instead. Gemini models are unavailable; do not dispatch them or use fallback chains that include them.
+
+Confirm task boundaries and ordering, especially shared output/notification behavior, after live code discovery. Record phases, dependency gates, write sets, roles and build-versus-reuse decisions before dispatch; assess whether external prior-art research adds value or is unnecessary for Pi-specific integration. Each phase exits when its children are closed or explicitly parked, its canary or design review passes, and the working tree is clean. Finish with evergreen and wrap; close only when all tasks are closed, skipped with reasons or parked in their own tickets.
