@@ -77,6 +77,15 @@ harnez config [-d <repo>] --list                # effective values, defaults mar
   `std`, with a plan-only first turn.
 - Host: a set or unset that leaves a required key missing, or breaks a schema rule, is refused with the
   file unchanged.
+- Host (dev plan review): plan adopted.
+  - New `internal/repocfg` package; `gitflow.LoadBytes` and `claude.ParseRepoConfig` refactors so the candidate
+    bytes are validated before any write.
+  - `spec/repo-config.yaml` holds `render_keys`/`plain_keys`, with a drift test against the schema.
+  - Arrays are a comma list that replaces the whole list; no `--add`.
+  - `set`/`unset` without a repo.yaml are refused; the help golden moves to M1.
+- Host: `make.scaffold` default (true, currently only in Go at `LoadRepoConfig:67-71`) moves into
+  `spec/repo-config.yaml` under `defaults:` in M1. `LoadRepoConfig` and `--list` both read it, so
+  `--list` shows `make.scaffold=true (default)`. There is no follow-up ticket.
 
 ## Searcher findings (search-1040, codex:luna:low, 45s)
 
