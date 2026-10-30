@@ -1,6 +1,6 @@
 # 1021 — Control Pi background task output at launch and avoid duplicate completion dumps
 
-**Status**: Open
+**Status**: Blocked — asynchronous capture drain and shutdown lifecycle needs design
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -12,7 +12,7 @@ Read-only discovery confirms the runner retains a 16,000-character tail for up t
 
 ## M2 pre-work: M1 capture review
 
-M1 `62b1356f` adds private captures; developer reports Quota-1 passed. Sol review requires fixes before extending the API: replace synchronous event-loop-blocking writes with asynchronous bounded backpressure; visibly report capture creation/write/close failures while tasks continue; mark drain-timeout-discarded output incomplete; unwind descriptor and file if creation fails after opening; and clean up the direct-runner test's capture. Cover creation/close errors, slow storage, cancellation/drain and path replacement. Inode checks are best-effort, not atomic protection against same-user races. Do not weaken prior assertions. Preserve owner-approved session cleanup and no arbitrary cap; crash or kill may leave private orphan files and must be disclosed.
+M1 `62b1356f` adds private captures; developer reports Quota-1 passed. Terra stopped before implementing review fixes: pending asynchronous writes race drain timeout and shutdown/cleanup, and a safe verified lifecycle design is needed. M1 is not accepted for release. Sol review requires fixes before extending the API: replace synchronous event-loop-blocking writes with asynchronous bounded backpressure; visibly report capture creation/write/close failures while tasks continue; mark drain-timeout-discarded output incomplete; unwind descriptor and file if creation fails after opening; and clean up the direct-runner test's capture. Cover creation/close errors, slow storage, cancellation/drain and path replacement. Inode checks are best-effort, not atomic protection against same-user races. Do not weaken prior assertions. Preserve owner-approved session cleanup and no arbitrary cap; crash or kill may leave private orphan files and must be disclosed.
 
 ## Problem
 
