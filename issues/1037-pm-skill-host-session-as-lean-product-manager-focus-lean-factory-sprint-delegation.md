@@ -1,6 +1,6 @@
 # 1037 — /pm skill: host session as lean product manager (focus + lean/factory sprint delegation)
 
-**Status**: Open
+**Status**: Closed — M1 2ff9264f (auto-trigger focus/lean-sprint/factory-sprint), M2 5026b0ac (1036 compaction rule), M3 53a39c82 (/pm skill, explicit-only). Live check: /pm in a fresh host session loaded, ran focus, and reported the sprint mode; the owner confirmed it works; harnez agent list empty. make lint: 213 pre-existing issues, unchanged. test-q1: only the pre-existing TestGoldenFontAssets failure.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
