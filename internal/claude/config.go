@@ -254,6 +254,9 @@ type MDSection struct {
 type RepoMode struct {
 	Name    string `yaml:"name"`
 	Content string `yaml:"content"`
+	// Rule is the one-line summary written to .harnez/rules/Index.md when the
+	// mode is recorded in repo.yaml.
+	Rule string `yaml:"rule"`
 }
 
 type Language struct {

@@ -1106,7 +1106,7 @@ func canonicalPath(path string) string {
 
 // RunInitWithVariant initializes one project using explicit operation options.
 func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
-	docs, repoMode := opts.Docs, opts.RepoMode
+	docs := opts.Docs
 	assumeYes, withSummary, update, replace := opts.AssumeYes, opts.WithSummary, opts.Update, opts.Replace
 	gowork, force, variant := opts.GoWork, opts.Force, opts.Variant
 	if err := ValidateInitTarget(dir, force); err != nil {
@@ -1118,6 +1118,10 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 		repoConfig = detectRepoConfig(dir, cfg)
 	} else if repoErr != nil {
 		return repoErr
+	}
+	repoMode, gitChanged, err := applyGitFlags(repoConfig, opts)
+	if err != nil {
+		return err
 	}
 	wizardActive := opts.WizardInput != nil && !assumeYes
 	trackerAdopted := false
@@ -1152,7 +1156,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 			return fmt.Errorf("init wizard: %w", err)
 		}
 		docs = nil // The wizard's final choices replace explicit-doc defaults.
-	} else if os.IsNotExist(repoErr) || trackerAdopted || opts.IssuesGit != nil || opts.Quota1 || len(opts.Docs) > 0 {
+	} else if os.IsNotExist(repoErr) || trackerAdopted || opts.IssuesGit != nil || opts.Quota1 || len(opts.Docs) > 0 || gitChanged {
 		if err := writeRepoConfig(dir, repoConfig); err != nil {
 			return fmt.Errorf("write %s: %w", repoConfigPath, err)
 		}
@@ -1228,7 +1232,11 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 	}
 
 	if cfg != nil {
-		ruleChanges, err := writeRules(dir, cfg.AgentsMD.Rules, quota1Active, repoConfig)
+		rules := cfg.AgentsMD.Rules
+		if line := gitModeRule(cfg, repoConfig, repoMode); line != "" {
+			rules.Index += "\n" + line + "\n"
+		}
+		ruleChanges, err := writeRules(dir, rules, quota1Active, repoConfig)
 		if err != nil {
 			return fmt.Errorf("write .harnez/rules: %w", err)
 		}

@@ -18,17 +18,20 @@ type ApplyOptions struct {
 // integration is installed only when the repo selects the Harnez tracker.
 // An omitted Variant preserves each installed doc's variant.
 type InitOptions struct {
-	Docs        []string
-	RepoMode    string
-	AssumeYes   bool
-	WithSummary bool
-	Update      bool
-	Replace     bool
-	IssuesGit   *bool
-	GoWork      bool
-	Force       bool
-	Variant     string
-	Quota1      bool
+	Docs     []string
+	RepoMode string
+	// ProtectedMain is set only when --protected-main was passed; nil keeps
+	// the value recorded in repo.yaml.
+	ProtectedMain *bool
+	AssumeYes     bool
+	WithSummary   bool
+	Update        bool
+	Replace       bool
+	IssuesGit     *bool
+	GoWork        bool
+	Force         bool
+	Variant       string
+	Quota1        bool
 	// WizardInput opts into interactive configuration; nil keeps the legacy path.
 	// AssumeYes always bypasses it. WizardOutput defaults to stdout when omitted.
 	WizardInput  io.Reader

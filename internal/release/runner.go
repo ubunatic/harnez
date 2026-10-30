@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/gitflow"
 )
 
 // Options configures the release workflow.
@@ -82,6 +84,14 @@ func Run(opt Options) error {
 		}
 		if !clean {
 			return fmt.Errorf("git working tree is dirty; please commit or stash changes before releasing")
+		}
+	}
+
+	// Refuse before the bump writes any file, so a refused release leaves
+	// nothing half-done. --continue only pushes, which pushRelease guards.
+	if !opt.Continue {
+		if err := gitflow.GuardCommit(opt.Dir, "release"); err != nil {
+			return err
 		}
 	}
 

@@ -298,3 +298,42 @@ func TestReconcilePullAfterOldMergeAlreadyUpToDate(t *testing.T) {
 		t.Fatal("renumbered ticket must stay")
 	}
 }
+
+func TestReconcileRefusedOnProtectedDefaultBranch(t *testing.T) {
+	dir := rcMerged(t)
+	rcWrite(t, dir, ".harnez/repo.yaml", "version: 1\nissues:\n  tracker: harnez\n  merge_driver: true\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\ngit:\n  mode: team\n  protected_main: true\n  default_branch: feat\n")
+	head := rcGit(t, dir, "rev-parse", "HEAD")
+	var out strings.Builder
+	err := RunIssuesReconcile(&out, dir, "main", false)
+	if err == nil || !strings.Contains(err.Error(), "git.protected_main") {
+		t.Fatalf("expected a protected_main refusal, got %v", err)
+	}
+	if got := rcGit(t, dir, "rev-parse", "HEAD"); got != head {
+		t.Errorf("refused reconcile committed: %s -> %s", head, got)
+	}
+	if !rcExists(dir, "issues/002-ours.md") {
+		t.Error("refused reconcile renumbered the ticket")
+	}
+}
+
+func TestReconcileCommitsOnTopicBranchWhenProtected(t *testing.T) {
+	dir := rcMerged(t)
+	rcWrite(t, dir, ".harnez/repo.yaml", "version: 1\nissues:\n  tracker: harnez\n  merge_driver: true\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\ngit:\n  mode: team\n  protected_main: true\n")
+	head := rcGit(t, dir, "rev-parse", "HEAD")
+	var out strings.Builder
+	if err := RunIssuesReconcile(&out, dir, "main", false); err != nil {
+		t.Fatalf("reconcile on topic branch feat: %v\n%s", err, out.String())
+	}
+	if got := rcGit(t, dir, "rev-parse", "HEAD"); got == head {
+		t.Error("HEAD did not advance")
+	}
+}
+
+func TestReconcileDryRunSkipsGuard(t *testing.T) {
+	dir := rcMerged(t)
+	rcWrite(t, dir, ".harnez/repo.yaml", "version: 1\nissues:\n  tracker: harnez\n  merge_driver: true\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\ngit:\n  mode: team\n  protected_main: true\n  default_branch: feat\n")
+	var out strings.Builder
+	if err := RunIssuesReconcile(&out, dir, "main", true); err != nil {
+		t.Fatalf("dry-run must not be guarded: %v", err)
+	}
+}

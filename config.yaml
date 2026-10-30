@@ -1095,28 +1095,51 @@ agents_md:
       template: docs/templates/version.yaml
       default: auto   # go.mod (opt-in / auto for Go projects)
 
-  # repo git setups — pick one with `init --repo-mode/-m` to add a short
-  # "Repo Setup" section to a project's AGENTS.md (see docs/lang/Git.md for the
-  # general rules these builds on)
+  # repo git setups — pick one with `init --repo-mode/-m` (or `git.mode` in
+  # .harnez/repo.yaml) to add a short "Repo Setup" section to a project's
+  # AGENTS.md (see docs/lang/Git.md for the general rules these builds on).
+  # `<mode>_protected` is used instead of `<mode>` when git.protected_main is
+  # set. `rule` is the one-line summary written to .harnez/rules/Index.md when
+  # the mode comes from repo.yaml.
   repo_modes:
     solo:
       name: "Solo / hobby"
+      rule: "Git workflow: solo (work on the default branch)."
       content: |
         ## Repo Setup
         - Solo/hobby repo — single default branch, no PR workflow.
         - codeberg.org is primary; github.com (if present) is a synced mirror only.
     fork:
       name: "Fork"
+      rule: "Git workflow: fork (topic branch per ticket, PR against upstream)."
       content: |
         ## Repo Setup
         - This repo is a fork.
         - Keep the default branch in sync with upstream; never force-push over upstream history.
         - Open PRs against upstream from feature branches, not from the default branch.
         - codeberg.org is primary; github.com may carry contributor branches for upstream PRs.
-    team:
-      name: "Team / protected branches"
+    fork_protected:
+      name: "Fork / protected main"
+      rule: "Git workflow: fork, protected main (never commit to or push main; harnez refuses)."
       content: |
         ## Repo Setup
-        - Team repo with protected branches.
-        - Never push directly to the default branch — open a PR and get it reviewed.
+        - This repo is a fork.
+        - Keep the default branch in sync with upstream; never force-push over upstream history.
+        - Open PRs against upstream from feature branches, not from the default branch.
+        - codeberg.org is primary; github.com may carry contributor branches for upstream PRs.
+        - main is protected; harnez refuses commits on it. Never commit to or push the default branch.
+    team:
+      name: "Team"
+      rule: "Git workflow: team (topic branch per ticket or sprint, PR to merge)."
+      content: |
+        ## Repo Setup
+        - Team repo: one topic branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`); push the branch and open a PR to merge.
+        - Update/rebase your branch before merging; follow this repo's CI and review requirements.
+    team_protected:
+      name: "Team / protected main"
+      rule: "Git workflow: team, protected main (never commit to or push main; harnez refuses)."
+      content: |
+        ## Repo Setup
+        - Team repo: one topic branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`); push the branch and open a PR to merge.
+        - main is protected; harnez refuses commits on it. Never commit to or push the default branch, never force-push.
         - Update/rebase your branch before merging; follow this repo's CI and review requirements.
