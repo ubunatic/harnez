@@ -463,7 +463,7 @@ func TestRunInit_IssuesGitDefaultsOnAndIsRemovable(t *testing.T) {
 		t.Fatalf("plain RunInit failed: %v", err)
 	}
 	attributes, _ := os.ReadFile(filepath.Join(dir, ".gitattributes"))
-	if !strings.HasPrefix(string(attributes), "*.bin binary\n") || !strings.Contains(string(attributes), "issues/README.md merge=harnez-issues-index") {
+	if !strings.HasPrefix(string(attributes), "*.bin binary\n") || !strings.Contains(string(attributes), "issues/README.md merge=union") {
 		t.Fatalf("plain init did not preserve unrelated and add issue attributes: %q", attributes)
 	}
 	if err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Run(); err != nil {
@@ -486,10 +486,10 @@ func TestRunInit_IssuesGitDefaultsOnAndIsRemovable(t *testing.T) {
 	}
 	attributes, _ = os.ReadFile(filepath.Join(dir, ".gitattributes"))
 	for _, line := range []string{
-		"issues/README.md merge=harnez-issues-index",
-		"issues/BACKLOG.md merge=harnez-issues-index",
-		"issues/CLOSED.md merge=harnez-issues-index",
-		"docs/README.md merge=harnez-issues-index",
+		"issues/README.md merge=union",
+		"issues/BACKLOG.md merge=union",
+		"issues/CLOSED.md merge=union",
+		"docs/README.md merge=union",
 	} {
 		if strings.Count(string(attributes), line) != 1 {
 			t.Fatalf("enable did not install one %q attribute: %q", line, attributes)

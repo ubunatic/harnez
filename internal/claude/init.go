@@ -1323,6 +1323,15 @@ func rulesAreGitIgnored(dir string) (bool, error) {
 
 func issuesAttributesLines() []string {
 	return []string{
+		"issues/README.md merge=union",
+		"issues/BACKLOG.md merge=union",
+		"issues/CLOSED.md merge=union",
+		"docs/README.md merge=union",
+	}
+}
+
+func legacyIssuesAttributesLines() []string {
+	return []string{
 		"issues/README.md merge=harnez-issues-index",
 		"issues/BACKLOG.md merge=harnez-issues-index",
 		"issues/CLOSED.md merge=harnez-issues-index",
@@ -1333,6 +1342,11 @@ func issuesAttributesLines() []string {
 func isIssuesAttributeLine(line string) bool {
 	for _, generated := range issuesAttributesLines() {
 		if line == generated {
+			return true
+		}
+	}
+	for _, legacy := range legacyIssuesAttributesLines() {
+		if line == legacy {
 			return true
 		}
 	}
@@ -1366,6 +1380,12 @@ func installIssuesGitIntegration(dir string) (int, error) {
 		return 0, fmt.Errorf("read %s: %w", attributes, err)
 	}
 	attributeText := string(content)
+	for i, legacy := range legacyIssuesAttributesLines() {
+		if containsExactLine(attributeText, legacy) {
+			attributeText = strings.ReplaceAll(attributeText, legacy, issuesAttributesLines()[i])
+			changes++
+		}
+	}
 	for _, line := range issuesAttributesLines() {
 		if containsExactLine(attributeText, line) {
 			continue
@@ -1382,13 +1402,15 @@ func installIssuesGitIntegration(dir string) (int, error) {
 		}
 		fmt.Printf("  configured %s as generated merge paths\n", attributes)
 	}
-	configArgs := []string{"-C", dir, "config", "--local", "merge.harnez-issues-index.driver", "harnez issues merge-driver %O %A %B %P"}
-	if out, err := exec.Command("git", configArgs...).CombinedOutput(); err != nil {
-		return 0, fmt.Errorf("configure generated issue-index merge driver: %w: %s", err, strings.TrimSpace(string(out)))
-	}
-	nameArgs := []string{"-C", dir, "config", "--local", "merge.harnez-issues-index.name", "harnez generated issue index"}
-	if out, err := exec.Command("git", nameArgs...).CombinedOutput(); err != nil {
-		return 0, fmt.Errorf("name generated issue-index merge driver: %w: %s", err, strings.TrimSpace(string(out)))
+	for _, driverName := range []string{"union", "harnez-issues-index"} {
+		configArgs := []string{"-C", dir, "config", "--local", "merge." + driverName + ".driver", "harnez issues merge-driver %O %A %B %P"}
+		if out, err := exec.Command("git", configArgs...).CombinedOutput(); err != nil {
+			return 0, fmt.Errorf("configure generated issue-index merge driver: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+		nameArgs := []string{"-C", dir, "config", "--local", "merge." + driverName + ".name", "harnez generated issue index"}
+		if out, err := exec.Command("git", nameArgs...).CombinedOutput(); err != nil {
+			return 0, fmt.Errorf("name generated issue-index merge driver: %w: %s", err, strings.TrimSpace(string(out)))
+		}
 	}
 	hooksDirOut, err := exec.Command("git", "-C", dir, "rev-parse", "--git-path", "hooks").Output()
 	if err != nil {
@@ -1532,7 +1554,10 @@ func removeIssuesGitIntegration(dir string) (int, error) {
 			changes++
 		}
 	}
-	for _, key := range []string{"merge.harnez-issues-index.driver", "merge.harnez-issues-index.name"} {
+	for _, key := range []string{
+		"merge.union.driver", "merge.union.name",
+		"merge.harnez-issues-index.driver", "merge.harnez-issues-index.name",
+	} {
 		cmd := exec.Command("git", "-C", dir, "config", "--local", "--unset-all", key)
 		if out, err := cmd.CombinedOutput(); err == nil {
 			changes++

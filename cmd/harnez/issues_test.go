@@ -762,7 +762,7 @@ func TestRunIssuesNewAdoptsOnlyNewIssuesDirectory(t *testing.T) {
 			t.Fatalf("init after adoption: %v", err)
 		}
 		gitAttributes, err := os.ReadFile(filepath.Join(dir, ".gitattributes"))
-		if err != nil || !strings.Contains(string(gitAttributes), "merge=harnez-issues-index") {
+		if err != nil || (!strings.Contains(string(gitAttributes), "merge=union") && !strings.Contains(string(gitAttributes), "merge=harnez-issues-index")) {
 			t.Fatalf("issue merge driver not installed: attributes=%q err=%v", gitAttributes, err)
 		}
 		if driver := repoRunGitOutput(t, dir, "config", "--get", "merge.harnez-issues-index.driver"); !strings.Contains(driver, "harnez issues merge-driver") {

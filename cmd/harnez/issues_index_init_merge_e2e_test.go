@@ -44,7 +44,7 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 		}
 	}
 	cli("init", "-d", ".")
-	config := gitRunE2E(t, root, nil, "config", "--local", "--get", "merge.harnez-issues-index.driver")
+	config := gitRunE2E(t, root, nil, "config", "--local", "--get", "merge.union.driver")
 	if config != "harnez issues merge-driver %O %A %B %P" {
 		t.Fatalf("plain CLI init driver = %q", config)
 	}
@@ -53,10 +53,10 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, line := range []string{
-		"issues/README.md merge=harnez-issues-index",
-		"issues/BACKLOG.md merge=harnez-issues-index",
-		"issues/CLOSED.md merge=harnez-issues-index",
-		"docs/README.md merge=harnez-issues-index",
+		"issues/README.md merge=union",
+		"issues/BACKLOG.md merge=union",
+		"issues/CLOSED.md merge=union",
+		"docs/README.md merge=union",
 	} {
 		if !strings.Contains(string(attrs), line) {
 			t.Errorf("plain CLI init omitted %q from .gitattributes", line)
@@ -152,7 +152,7 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 	editPreface(t, root, "main handwritten edit")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "docs/README.md")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "main handwritten edit")
-	if got := gitRunE2E(t, root, nil, "check-attr", "merge", "--", "docs/README.md"); !strings.Contains(got, "harnez-issues-index") {
+	if got := gitRunE2E(t, root, nil, "check-attr", "merge", "--", "docs/README.md"); !strings.Contains(got, "union") {
 		t.Fatalf("docs README merge attribute = %q", got)
 	}
 	mergeBase := gitRunE2E(t, root, nil, "merge-base", "main", "handwritten")

@@ -193,9 +193,11 @@ promote the match instead, or pass `--force` for a genuinely new ticket.
 
 Generated files start with a `<!-- managed by harnez index: … -->` line and wrap generated tables
 in `harnez:begin/end` markers; edit the source ticket or study, never the rows. `harnez init`
-installs a `harnez-issues-index` git merge driver (`.gitattributes` + local git config) that merges
-these files by rebuilding their generated blocks from both branches; conflicts in hand-written parts
-of a partly generated file stay normal git conflicts.
+configures `.gitattributes` with `merge=union` for generated index files (`issues/README.md`, `BACKLOG.md`,
+`CLOSED.md`, `docs/README.md`), allowing remote Git forges (Forgejo, GitHub) and local merges to
+union concurrent row additions without spurious merge conflicts, while the post-merge hook regenerates
+and cleanly formats the index tables. A local `harnez-issues-index` merge driver is also maintained for
+backwards compatibility.
 For generated rows, a deletion on one branch wins when the other branch left the row unchanged from
 the common ancestor. A rename is a deletion of the old key and an addition of the new key; competing
 edits to the same row remain conflicts.
