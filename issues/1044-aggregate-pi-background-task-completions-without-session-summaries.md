@@ -8,6 +8,10 @@
 
 ---
 
+## Decision
+
+Establish 1021's output capture and retrieval policy before implementing batching: combining today's full retained outputs can produce large messages, and a premature cap could conflict with full-output retrieval. A bounded window preserves completion order but can reorder completions relative to unrelated messages; verify and document that tradeoff during refinement. Pi has no delivery acknowledgement, so do not claim exactly-once. The observed cause of session summaries remains unverified.
+
 ## Problem & Goal
 
 When many Pi background tasks finish while an agent is busy, their completion notifications can queue and be handled one at a time, consuming an agent step for each. The agent may also respond to a completion with a lengthy summary of the entire session rather than treating it as a tool result arriving during ongoing work. The owner observed this particularly with multiple successful tasks; the precise queuing and delivery mechanics need verification.
