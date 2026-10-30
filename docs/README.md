@@ -222,6 +222,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-27-two-agent-lean-sprint-983-model-picks.md](studies/2026-10-27-two-agent-lean-sprint-983-model-picks.md) | Two-agent lean sprint: 983, model picks per role as the only source |
 | [studies/2026-10-27-two-agent-lean-sprint-987-subagent-compaction.md](studies/2026-10-27-two-agent-lean-sprint-987-subagent-compaction.md) | Two-agent lean sprint: 987, subagent compaction for every provider |
 | [studies/2026-10-28-argon-991-refinement-draft.md](studies/2026-10-28-argon-991-refinement-draft.md) | Argon refinement draft for 991 (pending owner go) |
+| [studies/2026-10-29-job-qar35we3.md](studies/2026-10-29-job-qar35we3.md) | Job qar35we3 partial report (2026-10-29) |
 | [studies/2026-10-29-two-agent-lean-sprint-1023-pi-small-window-compaction.md](studies/2026-10-29-two-agent-lean-sprint-1023-pi-small-window-compaction.md) | Lean sprint 1023: Pi compaction overrides for small-window models |
 | [studies/2026-10-29-two-agent-lean-sprint-1029-signal-stops-provider-child.md](studies/2026-10-29-two-agent-lean-sprint-1029-signal-stops-provider-child.md) | Lean sprint 1029: a signal to agent start stops the provider child |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
