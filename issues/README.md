@@ -95,4 +95,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1042 | [1042-use-merge-union-in-gitattributes-for-generated-issue-indexes-to-avoid-forge-merge-conflicts.md](1042-use-merge-union-in-gitattributes-for-generated-issue-indexes-to-avoid-forge-merge-conflicts.md) | Use merge=union in .gitattributes for generated issue indexes to avoid forge merge conflicts | Open |
 | 1044 | [1044-aggregate-pi-background-task-completions-without-session-summaries.md](1044-aggregate-pi-background-task-completions-without-session-summaries.md) | Aggregate Pi background task completions without session summaries | Open |
 | 1045 | [1045-avoid-generated-index-drift-after-fast-forward-pulls.md](1045-avoid-generated-index-drift-after-fast-forward-pulls.md) | Avoid generated index drift after fast-forward pulls | Open |
+| 1046 | [1046-keep-pi-task-completion-output-out-of-the-user-chat.md](1046-keep-pi-task-completion-output-out-of-the-user-chat.md) | Keep Pi task completion output out of the user chat | Open |
 <!-- harnez:end issues-active-index -->
