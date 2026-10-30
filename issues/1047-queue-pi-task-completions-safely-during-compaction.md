@@ -35,7 +35,7 @@ Same canary before and after the change (real Pi 1.4.0, loopback-only network na
 | Three tasks during manual compaction, success | 3 rejected, 0 in transcript | 0 rejected, model receives #2, #1, #3 in finish order, once each |
 | Same, summary failure | 3 rejected, 0 in transcript | 0 rejected, same order, once each |
 | No compaction: idle and streaming completions | Delivered | Delivered, no hold notes |
-| Shutdown during hold | Rejected | Held, then the canary's kill ended the run; the stderr report path is unit-tested only |
+| Shutdown during hold | Rejected | Held, not submitted; Pi's stderr shows `Background task notifications not submitted before shutdown: #1` |
 | Earlier extension's `session_before_compact` handler holds | 3 rejected | **Still 3 rejected** |
 | Follow-up queued before compaction | Stranded silently | Still stranded until the next prompt, now with a warning |
 
