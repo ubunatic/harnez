@@ -1,6 +1,6 @@
 # 1011 — Show labeled Pi background tasks in the status line
 
-**Status**: Open
+**Status**: Closed — Labels delivered in 3a1990f4; 76 Pi tests and Go checks passed; real model labeled call and interactive manual cancellation, resize and duplicate-copy canaries passed, with footer width limitations documented.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
