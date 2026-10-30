@@ -61,7 +61,7 @@ type toolDefinition struct {
 
 // sessionBackgroundInstruction names each host's own background tool, so the
 // worker is a job of the chat session and its exit wakes the host (issue 630).
-const sessionBackgroundInstruction = "Run it as one session-background job: Claude Code Bash with run_in_background: true; AGY run_command with a small WaitMsBeforeAsync; Codex exec_command, then write_stdin until an exit code. Never poll its status or logs."
+const sessionBackgroundInstruction = "Run it as one session-background job: Claude Code Bash with run_in_background: true; AGY run_command with a small WaitMsBeforeAsync; Codex exec_command, then write_stdin until an exit code. Never poll its status or logs. `run_in_background`: Claude Code Bash tool parameter only; not a harnez flag."
 
 var tools = []toolDefinition{
 	{"harnez_spawn_agent", "Start a Harnez subagent through MCP and wait for its result and session record. For interactive hosts, do not synchronously spawn or wait in chat: use harnez_command with HTO=0 in the host's background runner (session background). " + sessionBackgroundInstruction, schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name")}, "prompt")},

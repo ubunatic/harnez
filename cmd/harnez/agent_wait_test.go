@@ -482,7 +482,7 @@ func TestDetachedLaunchHelper(t *testing.T) {
 func TestReattachStepsUseHostVocabulary(t *testing.T) {
 	for host, want := range map[string][]string{
 		"codex":  {"exec_command", "write_stdin", "session_id", "Do NOT end your turn"},
-		"claude": {"run_in_background: true", "Do NOT poll"},
+		"claude": {"run_in_background: true", "not a harnez flag", "Do NOT poll"},
 		"agy":    {"background task", "Do NOT poll"},
 		"":       {"host background job", "Do NOT poll"},
 	} {
@@ -525,7 +525,7 @@ func TestAgentHelpHidesDetachAndNamesSessionBackground(t *testing.T) {
 					t.Errorf("%s help still lists %s:\n%s", sub, hidden, help)
 				}
 			}
-			for _, want := range []string{"session background", "HTO=0", "run_in_background: true", "run_command", "WaitMsBeforeAsync", "exec_command", "write_stdin", "30 minutes", "Never check status or logs in a loop"} {
+			for _, want := range []string{"session background", "HTO=0", "run_in_background: true", "not a harnez flag", "run_command", "WaitMsBeforeAsync", "exec_command", "write_stdin", "30 minutes", "Never check status or logs in a loop"} {
 				if !strings.Contains(help, want) {
 					t.Errorf("%s help missing %q", sub, want)
 				}

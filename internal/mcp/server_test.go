@@ -83,7 +83,7 @@ func TestHarnezCommandFormatsActionsAndQuotesShellArguments(t *testing.T) {
 			if result["command"] != tt.want {
 				t.Errorf("command = %q, want %q", result["command"], tt.want)
 			}
-			for _, want := range []string{"session-background job", "run_in_background: true", "run_command", "WaitMsBeforeAsync", "exec_command", "write_stdin", "Never poll"} {
+			for _, want := range []string{"session-background job", "run_in_background: true", "not a harnez flag", "run_command", "WaitMsBeforeAsync", "exec_command", "write_stdin", "Never poll"} {
 				if !strings.Contains(result["instruction"], want) {
 					t.Errorf("instruction lacks host background guidance %q: %q", want, result["instruction"])
 				}
@@ -215,7 +215,7 @@ func TestSpawnToolHidesAsync(t *testing.T) {
 				t.Errorf("harnez_spawn_agent still advertises %s: %s", bad, text)
 			}
 		}
-		for _, want := range []string{"harnez_command", "HTO=0", "session background", "run_in_background: true", "WaitMsBeforeAsync", "write_stdin"} {
+		for _, want := range []string{"harnez_command", "HTO=0", "session background", "run_in_background: true", "not a harnez flag", "WaitMsBeforeAsync", "write_stdin"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("harnez_spawn_agent description missing %q", want)
 			}
