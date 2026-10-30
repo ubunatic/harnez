@@ -164,6 +164,7 @@ debloat:
     commit: user-invocable-only
     docup: user-invocable-only
     issue-research: user-invocable-only
+    pm: user-invocable-only
     lean-sprint-v1: user-invocable-only
     lean-sprinter: user-invocable-only
     mode: user-invocable-only
@@ -419,6 +420,11 @@ skills:
     license: AGPL-3.0-or-later
     description: "Re-ground on the host repository's product, summarize its top 2-3 open priorities with expected outcomes, and ask for the next goal. Use at the start of a session or when the user asks what to work on."
     file: docs/commands/focus.md
+
+  - name: pm
+    license: AGPL-3.0-or-later
+    description: "Put this session in product-manager mode: ground on the product with focus, route each request to issue, factory-sprint or lean-sprint, and stay a non-coding host. Only on explicit /pm, /pm lean or /pm factory."
+    file: docs/commands/pm.md
 
   - name: docup
     license: AGPL-3.0-or-later
