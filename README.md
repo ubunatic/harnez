@@ -354,7 +354,8 @@ records the measured input-token effect.
 - `-d <dir>` — project directory (default: `.`)
 - `-f, --force` — allow initializing home directory, root, or non-coding directory
 - `--docs <name>[,<name>…]` — doc(s) to set up in the project (comma-separated or repeated)
-- `-m, --repo-mode <mode>` — repo git setup to note in AGENTS.md (`solo`, `fork`, `team`)
+- `-m, --repo-mode <mode>`, `--git-mode <mode>` — repo git workflow, recorded as `git.mode` in `.harnez/repo.yaml` and noted in AGENTS.md (`solo`, `fork`, `team`)
+- `--protected-main` — record `git.protected_main`: harnez refuses commits and pushes on the default branch (needs `team` or `fork`)
 - `--summary` — run `claude -p` to generate an AI project summary in AGENTS.md
 - `--update` — re-fetch and refresh the project summary (implies `--summary`)
 - `--replace` — delete existing AGENTS.md and recreate from template before init

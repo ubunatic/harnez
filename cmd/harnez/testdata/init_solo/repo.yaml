@@ -1,0 +1,12 @@
+version: 1
+issues:
+    tracker: none
+    merge_driver: false
+docs:
+    studies: false
+    copies: []
+rules:
+    quota: false
+make:
+    scaffold: false
+    container_test: false
