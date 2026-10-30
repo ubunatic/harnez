@@ -13,6 +13,7 @@ import (
 	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/markdown"
+	"ubunatic.com/harnez/internal/repospec"
 )
 
 // RepoConfig records project-local Harnez choices. It is deliberately separate
@@ -49,12 +50,19 @@ func LoadRepoConfig(dir string) (*RepoConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseRepoConfig(path, data)
+}
+
+// ParseRepoConfig runs LoadRepoConfig's checks on repo.yaml content that is
+// not on disk yet, so a writer can validate a candidate before replacing the
+// file. path is only used to name the file in errors.
+func ParseRepoConfig(path string, data []byte) (*RepoConfig, error) {
 	var doc map[string]any
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	// gitflow.Load runs first so git errors name the file and key (git.mode).
-	if _, err := gitflow.Load(dir); err != nil {
+	// gitflow.LoadBytes runs first so git errors name the file and key (git.mode).
+	if _, err := gitflow.LoadBytes(path, data); err != nil {
 		return nil, err
 	}
 	if err := validateRepoDocument(doc); err != nil {
@@ -66,7 +74,11 @@ func LoadRepoConfig(dir string) (*RepoConfig, error) {
 	}
 	if makeConfig, ok := doc["make"].(map[string]any); ok {
 		if _, exists := makeConfig["scaffold"]; !exists {
-			cfg.Make.Scaffold = true
+			spec, err := repospec.Load()
+			if err != nil {
+				return nil, err
+			}
+			cfg.Make.Scaffold, _ = spec.BoolDefault("make.scaffold")
 		}
 	}
 	return &cfg, nil

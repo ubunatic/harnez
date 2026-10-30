@@ -81,19 +81,30 @@ var gitKeys = []string{"mode", "protected_main", "default_branch"}
 // protected_main on a solo repo fail with an error naming the file and key, so
 // callers that never run the full repo.yaml schema still reject them.
 func Load(dir string) (Config, error) {
+	path := filepath.Join(dir, ".harnez", "repo.yaml")
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		spec, err := loadSpec()
+		if err != nil {
+			return Config{}, err
+		}
+		return Config{Mode: spec.Mode, ProtectedMain: spec.ProtectedMain}, nil
+	}
+	if err != nil {
+		return Config{}, err
+	}
+	return LoadBytes(path, data)
+}
+
+// LoadBytes runs Load's checks on repo.yaml content that is not on disk yet,
+// so a writer can validate a candidate before replacing the file. path is only
+// used to name the file in errors.
+func LoadBytes(path string, data []byte) (Config, error) {
 	spec, err := loadSpec()
 	if err != nil {
 		return Config{}, err
 	}
 	cfg := Config{Mode: spec.Mode, ProtectedMain: spec.ProtectedMain}
-	path := filepath.Join(dir, ".harnez", "repo.yaml")
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return cfg, nil
-	}
-	if err != nil {
-		return Config{}, err
-	}
 	var doc struct {
 		Git map[string]any `yaml:"git"`
 	}
