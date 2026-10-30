@@ -1,6 +1,6 @@
 # 1021 — Control Pi background task output at launch and avoid duplicate completion dumps
 
-**Status**: Blocked — owner decisions needed on capture privacy retention and disk exhaustion
+**Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -8,7 +8,7 @@
 
 ## Refinement: owner decisions needed
 
-Read-only discovery confirms the runner retains a 16,000-character tail for up to 50 finished tasks; generic shell output cannot reliably identify an agent final message. A file-backed design changes privacy and persistence: decide default capture for existing/manual callers, whether completion previews may expose output, retention after session shutdown/crash, and the response to disk exhaustion without silently claiming full capture. The proposed design uses private files, explicit paged retrieval, visible incomplete-capture errors and no arbitrary transcript cap; it remains a plan, not implemented. 1044 batching is sequenced after this policy.
+Read-only discovery confirms the runner retains a 16,000-character tail for up to 50 finished tasks; generic shell output cannot reliably identify an agent final message. Owner decisions: file-backed capture is the default and may be opted out of per task, including consideration of manual tasks. Use private files on a best-effort basis; a short completion tail is acceptable. Delete captures when the session closes (and on earlier eviction); best-effort crash cleanup must not delete other live sessions' files. On disk-full or write failure, keep the task running, explicitly mark capture incomplete and retain the readable portion. Do not impose an arbitrary capture cap or claim incomplete output is complete. Provide explicit paged retrieval and document the privacy and crash limitations. 1044 batching is sequenced after this policy.
 
 ## Problem
 
