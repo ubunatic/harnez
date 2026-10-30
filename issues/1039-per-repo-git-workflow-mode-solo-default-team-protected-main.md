@@ -60,6 +60,13 @@ A per-repo key, e.g. `git.mode` in `.harnez/repo.yaml` (name open), with `harnez
   `internal/gitflow`; team without protection warns instead of refusing; release refuses before the bump.
   Cuts: no forge API, no PR creation, no tag-after-merge, no automatic branch switching.
 - Host: 1039 is delivered on branch `sprint/1039` and published as a PR, since origin `main` is protected.
+- Host (dev plan review): all 8 developer corrections were adopted. In short:
+  - `ProtectedBranches(dir, c)` helper; `LoadRepoConfig` validates gitflow first; an absent git key stays zero.
+  - The ApplyStatus guard goes after the no-op checks; mv/rebase/reconcile are guarded up front, with gitAddAndCommit as a backstop.
+  - `index --stage` is not guarded; warnings go through `gitflow.Stderr`; the release push refusal applies only with protected_main.
+  - M4 validates before writing; M5 edits the sources in docs/commands and regenerates the marker blocks with init.
+- Host: release dry-run runs the guard too, so the preview matches reality.
+- Host: two review gates: M1-M2 (schema, loader, commit guard), then M3-M5 (release, init, docs).
 
 ## Architecture (arch-1039, adopted)
 
