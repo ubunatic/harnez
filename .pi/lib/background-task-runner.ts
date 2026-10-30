@@ -543,7 +543,7 @@ export class BackgroundTaskRunner extends EventEmitter {
       stdoutDecoder: new StringDecoder("utf8"),
       stderrDecoder: new StringDecoder("utf8"),
     };
-    if (metadata.capture !== false) this.createCapture(task);
+    if (metadata.capture === true) this.createCapture(task);
     this.tasks.set(task.id, task);
     this.emit("changed", task);
 

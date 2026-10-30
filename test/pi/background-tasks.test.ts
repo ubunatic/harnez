@@ -55,8 +55,8 @@ function fakeStream() {
 test("capture keeps complete bytes privately, cleans up on eviction and shutdown, and supports opt-out", async () => {
   const children: FakeChild[] = [];
   const s = setup({ spawn: () => { const child = new FakeChild(100 + children.length); children.push(child); return child as any; }, config: { ...fastConfig, finishedRetentionLimit: 1 } });
-  const first = s.runner.start("first", process.cwd());
-  const second = s.runner.start("second", process.cwd());
+  const first = s.runner.start("first", process.cwd(), { capture: true });
+  const second = s.runner.start("second", process.cwd(), { capture: true });
   const bytes = Buffer.from("secret 🚀 ".repeat(5000));
   children[0].stdout.emit("data", bytes.subarray(0, 9));
   children[0].stdout.emit("data", bytes.subarray(9));
@@ -74,6 +74,10 @@ test("capture keeps complete bytes privately, cleans up on eviction and shutdown
   children[2].emit("exit", 0, null);
   children[2].emit("close", 0, null);
   assert.equal(existsSync(secondPath), false);
+  const ordinary = s.runner.start("ordinary", process.cwd());
+  assert.equal(ordinary.capture, undefined);
+  children[3].emit("exit", 0, null);
+  children[3].emit("close", 0, null);
   await s.runner.shutdown();
 });
 
@@ -84,7 +88,7 @@ test("partial capture write failure preserves bytes and does not stop the task",
     if (calls++ === 0) return writeSync(fd, buffer, offset, Math.min(3, length));
     throw new Error("disk full");
   } });
-  const task = s.runner.start("command", process.cwd());
+  const task = s.runner.start("command", process.cwd(), { capture: true });
   child.stdout.emit("data", Buffer.from("abcdef"));
   child.stderr.emit("data", Buffer.from("more"));
   assert.equal(task.status, "running");
