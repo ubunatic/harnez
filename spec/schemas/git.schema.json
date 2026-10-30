@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Git workflow defaults",
+  "type": "object",
+  "required": ["mode", "protected_main", "fallback_branches"],
+  "properties": {
+    "mode": { "type": "string", "enum": ["solo", "fork", "team"] },
+    "protected_main": { "type": "boolean" },
+    "fallback_branches": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "additionalProperties": false
+}

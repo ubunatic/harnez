@@ -1552,16 +1552,18 @@ Flags:
   -d, --dir string         project directory to initialise (default: current directory) (default ".")
       --docs strings       docs to set up in the project, comma-separated or repeated (e.g. golang,canary)
   -f, --force              allow initializing home directory, root, or non-coding directory
+      --git-mode string    alias for --repo-mode
       --gowork             set up or migrate Go workspace (go.work.example + untracked local go.work symlink)
   -h, --help               help for init
       --issues-git         record issue-index Git integration for a Harnez tracker (use --issues-git=false to remove it)
       --json               output RAMP report in JSON format
       --no-wizard          skip repository feature prompts
+      --protected-main     record git.protected_main: harnez refuses commits and pushes on the default branch (needs team or fork)
       --quota-1            scaffold Quota-1 single-test guardrails in AGENTS.md and Makefile
       --ramp               report RAMP maturity profile and projected init changes (offline, read-only)
       --ramp-report        alias for --ramp
       --replace            delete existing AGENTS.md and recreate from template before init
-  -m, --repo-mode string   repo git setup to note in AGENTS.md (solo, fork, team)
+  -m, --repo-mode string   repo git workflow, recorded as git.mode in .harnez/repo.yaml and noted in AGENTS.md (solo, fork, team)
       --summary            run claude -p to generate a project summary and add it to AGENTS.md
       --update             re-fetch and refresh the project summary (implies --summary)
       --variant string     doc variant to install: lite or full (default: keep each existing doc variant, else full)

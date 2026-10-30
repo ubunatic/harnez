@@ -1,0 +1,7 @@
+# yaml-language-server: $schema=schemas/git.schema.json
+# Defaults for the per-repo `git:` key in .harnez/repo.yaml. Go code reads
+# these values instead of carrying its own copies.
+mode: solo
+protected_main: false
+# Branches treated as protected when the default branch cannot be detected.
+fallback_branches: [main, master]

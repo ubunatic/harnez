@@ -30,6 +30,17 @@
       "properties": {"quota": {"type": "boolean"}},
       "additionalProperties": false
     },
+    "git": {
+      "type": "object",
+      "properties": {
+        "mode": {"type": "string", "enum": ["solo", "fork", "team"]},
+        "protected_main": {"type": "boolean"},
+        "default_branch": {"type": "string", "minLength": 1}
+      },
+      "if": {"properties": {"mode": {"const": "solo"}}, "required": ["mode"]},
+      "then": {"properties": {"protected_main": {"const": false}}},
+      "additionalProperties": false
+    },
     "make": {
       "type": "object",
       "required": ["container_test"],

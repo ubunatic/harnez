@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/index"
 	issuecore "ubunatic.com/harnez/internal/issues"
 )
@@ -177,6 +178,12 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	attribute, err := gitOutput(dir, "check-attr", "merge", "--", "issues/README.md")
 	if err != nil || !strings.HasSuffix(attribute, ": harnez-issues-index") {
 		return fmt.Errorf("issues rebase: issue Git integration is not enabled; run 'harnez init --issues-git' and retry")
+	}
+	if !dryRun {
+		// Every path that later commits repairs runs through here first.
+		if err := gitflow.GuardCommit(dir, "repair tickets"); err != nil {
+			return fmt.Errorf("issues rebase: %w", err)
+		}
 	}
 	statePath, err := rebaseStatePath(dir)
 	if err != nil {

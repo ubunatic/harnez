@@ -154,6 +154,13 @@ treats `already exists` as success. A nonempty release without `SHA256SUMS` also
 Runtime errors suppress usage; auth failures suggest `fj auth login`, followed by
 `harnez release --continue`.
 
+### Protected main (`git.protected_main`)
+
+`harnez release` refuses on the default branch before bumping, and refuses to push it. Release
+from `release/vX.Y.Z`; the bump commit and tag are made there and both are pushed. Open the PR and
+rebase-merge or fast-forward it so the tag stays on `main`'s history (a merge or squash commit
+leaves the tag off `main`). Harnez does not tag after the merge.
+
 ### 4.1 `go.work` and local co-development
 
 Build step forces `GOWORK=off` by default: an enclosing `go.work` silently substitutes an

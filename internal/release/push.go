@@ -3,8 +3,32 @@ package release
 import (
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
+
+	"ubunatic.com/harnez/internal/gitflow"
 )
+
+// refuseProtectedBranchPush stops a release from pushing the default branch
+// when git.protected_main is set. It runs before any remote is contacted, so
+// no remote can be updated while another is refused.
+func refuseProtectedBranchPush(opt Options, tag string) error {
+	cfg, err := gitflow.Load(opt.Dir)
+	if err != nil {
+		return err
+	}
+	if !cfg.ProtectedMain {
+		return nil
+	}
+	branch, err := getGitCurrentBranch(opt.Dir)
+	if err != nil {
+		return fmt.Errorf("get current branch: %w", err)
+	}
+	if !slices.Contains(gitflow.ProtectedBranches(opt.Dir, cfg), branch) {
+		return nil
+	}
+	return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing to push '%s' with release %s; run: git switch -c release/%s, then release from that branch and open a PR", branch, tag, tag)
+}
 
 // pushRelease treats the repository's configured Git remotes as development
 // destinations. Validate every destination before writing any refs, then keep
@@ -12,6 +36,9 @@ import (
 // participate in one atomic transaction; a later transport failure or concurrent
 // remote update can still require retrying with --continue.
 func pushRelease(opt Options, tag string, forge *ForgeInfo) error {
+	if err := refuseProtectedBranchPush(opt, tag); err != nil {
+		return err
+	}
 	cmd := exec.Command("git", "remote")
 	cmd.Dir = opt.Dir
 	out, err := cmd.CombinedOutput()
