@@ -17,7 +17,7 @@ Reference Practice: `@docs/AgenticLoop.md`
 
 ## Circuit Breakers & Fallback Policy
 
-- **Cheap Worker Underperformance**: If the cheap worker enters a loop, attempts to weaken test assertions, or fails Quota-1 verification twice on the same milestone, abort the low-tier worker and switch to **`claude:opus` (low effort)** as developer.
+- **Cheap Worker Underperformance**: If the cheap worker enters a loop, attempts to weaken test assertions, or fails Quota-1 verification once on the same milestone, abort the low-tier worker and switch to **`claude:opus` (low effort)** as developer.
 - **Smart Advisor Latency / Token Spikes**: If smart advisor takes too long (>2m) or consumes excessive tokens, switch brain/advisory queries to **`claude:opus` (med effort)**.
 - **Search Stability**: Searchers remain on cheap tier (with `neus ask` priority) regardless of developer fallbacks.
 
