@@ -97,4 +97,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1045 | [1045-avoid-generated-index-drift-after-fast-forward-pulls.md](1045-avoid-generated-index-drift-after-fast-forward-pulls.md) | Avoid generated index drift after fast-forward pulls | Open |
 | 1046 | [1046-keep-pi-task-completion-output-out-of-the-user-chat.md](1046-keep-pi-task-completion-output-out-of-the-user-chat.md) | Keep Pi task completion output out of the user chat | Open |
 | 1047 | [1047-queue-pi-task-completions-safely-during-compaction.md](1047-queue-pi-task-completions-safely-during-compaction.md) | Queue Pi task completions safely during compaction | Open |
+| 1048 | [1048-background-manual-pi-commands-with-ctrl-b.md](1048-background-manual-pi-commands-with-ctrl-b.md) | Background manual Pi commands with Ctrl-B | Open |
 <!-- harnez:end issues-active-index -->
