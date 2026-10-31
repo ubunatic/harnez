@@ -50,6 +50,21 @@ Open questions:
   unverified for both dev remotes (Codeberg and GitHub). A rejection must fail clearly and leave
   `harnez release --continue` usable.
 
+Answers from implementation:
+
+- **Who the guard refuses:** nobody on a branch; `harnez release` is refused only on a detached HEAD.
+  A new `gitflow.GuardRelease` lets it through on the protected branch and prints a note; every other
+  auto-committing command still uses `GuardCommit` and stays refused. On 2026-10-31 this repo was the
+  only one under `~/projects` with `protected_main: true`, so no other repo loses a guard.
+- **Remote rejection:** `git push --dry-run` runs no server hooks, so the preflight cannot see branch
+  protection and the rejection comes on the real push. `--atomic` keeps the tag off that remote, the
+  error carries the remote's reason, and `--continue` finishes the release once the push is allowed.
+  A test covers this with a `pre-receive` hook.
+- **Unverified:** whether Codeberg's protection lets the admin push `main` (the API reports
+  `protected: true`; `user_can_push` was only read anonymously). GitHub's `main` is unprotected. The
+  first real release shows it. A rejection leaves the bump commit and tag local only.
+- **Known consequence:** a release on `main` also pushes any other unpushed commits on it, unreviewed.
+
 ## 3. Implementation & Verification Plan
 Done when all of these hold:
 

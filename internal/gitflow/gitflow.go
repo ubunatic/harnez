@@ -216,6 +216,24 @@ func CheckDetachedHead(dir string) string {
 	return fmt.Sprintf("WARNING: HEAD is detached at %s; agent commits will land off-branch. Switch to a branch (git switch -c <topic> or git switch <branch>) before committing.", ref)
 }
 
+// GuardRelease is GuardCommit for `harnez release`, which may run on a protected
+// default branch: it is an explicit request that adds only the bump commit and
+// tag, and the forge's branch protection decides whether the push is accepted.
+func GuardRelease(dir string) error {
+	cfg, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	if cfg.ProtectedMain {
+		branch, detached, ok := CurrentBranch(dir)
+		if ok && !detached && slices.Contains(ProtectedBranches(dir, cfg), branch) {
+			fmt.Fprintf(Stderr, "git.protected_main: releasing directly on %s; the forge's branch protection decides whether the push is accepted\n", branch)
+			return nil
+		}
+	}
+	return GuardCommit(dir, "release")
+}
+
 // GuardCommit is the one check every harnez path that stages or commits runs
 // first, before it writes anything. action names the operation for the
 // message ("close ticket", "release"). Solo repos always pass. Team and fork

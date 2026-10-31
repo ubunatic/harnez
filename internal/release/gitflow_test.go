@@ -62,44 +62,69 @@ func gitflowReleaseOptions(dir string, out *bytes.Buffer) Options {
 	return Options{Dir: dir, Bump: "patch", Force: true, SkipBuild: true, SkipSign: true, SkipPublish: true, Out: out}
 }
 
-func TestReleaseRefusesOnProtectedMainBeforeBump(t *testing.T) {
-	for _, dryRun := range []bool{false, true} {
-		name := "release"
-		if dryRun {
-			name = "dry-run"
+func wantRemoteMatchesLocal(t *testing.T, dir, bare string, refs ...string) {
+	t.Helper()
+	for _, ref := range refs {
+		want := pushTestGitOutput(t, dir, "rev-parse", ref)
+		if got := pushTestGitOutput(t, bare, "rev-parse", ref); got != want {
+			t.Errorf("remote %s = %s, want %s", ref, got, want)
 		}
-		t.Run(name, func(t *testing.T) {
-			dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
-			spec, err := os.ReadFile(filepath.Join(dir, "version.yaml"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			head := pushTestGitOutput(t, dir, "rev-parse", "HEAD")
-			tags := pushTestGitOutput(t, dir, "tag")
-			remoteRefs := pushTestRefs(t, bare)
-			var out bytes.Buffer
-			opt := gitflowReleaseOptions(dir, &out)
-			opt.DryRun = dryRun
-			err = Run(opt)
-			if err == nil || !strings.Contains(err.Error(), "git.protected_main") || !strings.Contains(err.Error(), "release") {
-				t.Fatalf("want a protected_main refusal naming the release, got %v\n%s", err, out.String())
-			}
-			if got, _ := os.ReadFile(filepath.Join(dir, "version.yaml")); !bytes.Equal(got, spec) {
-				t.Errorf("version.yaml changed by a refused release:\n%s", got)
-			}
-			if got := pushTestGitOutput(t, dir, "rev-parse", "HEAD"); got != head {
-				t.Errorf("refused release committed: %s -> %s", head, got)
-			}
-			if got := pushTestGitOutput(t, dir, "tag"); got != tags {
-				t.Errorf("refused release tagged: %q -> %q", tags, got)
-			}
-			if got := pushTestRefs(t, bare); got != remoteRefs {
-				t.Errorf("refused release pushed:\nbefore %s\nafter  %s", remoteRefs, got)
-			}
-			if strings.Contains(out.String(), "Bumping version") {
-				t.Errorf("version bump started before the refusal:\n%s", out.String())
-			}
-		})
+	}
+}
+
+func TestReleaseOnProtectedMainPushesMainAndTag(t *testing.T) {
+	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	var out bytes.Buffer
+	if err := Run(gitflowReleaseOptions(dir, &out)); err != nil {
+		t.Fatalf("release on protected main: %v\n%s", err, out.String())
+	}
+	wantRemoteMatchesLocal(t, dir, bare, "refs/heads/main", "refs/tags/v1.0.1")
+}
+
+func TestReleaseDryRunOnProtectedMainChangesNothing(t *testing.T) {
+	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	spec, err := os.ReadFile(filepath.Join(dir, "version.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := pushTestGitOutput(t, dir, "rev-parse", "HEAD")
+	tags := pushTestGitOutput(t, dir, "tag")
+	remoteRefs := pushTestRefs(t, bare)
+	var out bytes.Buffer
+	opt := gitflowReleaseOptions(dir, &out)
+	opt.DryRun = true
+	if err := Run(opt); err != nil {
+		t.Fatalf("dry run on protected main: %v\n%s", err, out.String())
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "version.yaml")); !bytes.Equal(got, spec) {
+		t.Errorf("version.yaml changed by a dry run:\n%s", got)
+	}
+	if got := pushTestGitOutput(t, dir, "rev-parse", "HEAD"); got != head {
+		t.Errorf("dry run committed: %s -> %s", head, got)
+	}
+	if got := pushTestGitOutput(t, dir, "tag"); got != tags {
+		t.Errorf("dry run tagged: %q -> %q", tags, got)
+	}
+	if got := pushTestRefs(t, bare); got != remoteRefs {
+		t.Errorf("dry run pushed:\nbefore %s\nafter  %s", remoteRefs, got)
+	}
+}
+
+func TestReleaseOnProtectedDetachedHeadRefusesBeforeBump(t *testing.T) {
+	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	runGitCmd(t, dir, "switch", "--detach")
+	head := pushTestGitOutput(t, dir, "rev-parse", "HEAD")
+	remoteRefs := pushTestRefs(t, bare)
+	var out bytes.Buffer
+	err := Run(gitflowReleaseOptions(dir, &out))
+	if err == nil || !strings.Contains(err.Error(), "detached HEAD") {
+		t.Fatalf("want a detached HEAD refusal, got %v\n%s", err, out.String())
+	}
+	if got := pushTestGitOutput(t, dir, "rev-parse", "HEAD"); got != head {
+		t.Errorf("refused release committed: %s -> %s", head, got)
+	}
+	if got := pushTestRefs(t, bare); got != remoteRefs {
+		t.Errorf("refused release pushed:\nbefore %s\nafter  %s", remoteRefs, got)
 	}
 }
 
@@ -122,41 +147,56 @@ func TestReleaseOnBranchPushesBranchAndTag(t *testing.T) {
 	}
 }
 
-func TestReleaseContinueRefusesPushOfProtectedMain(t *testing.T) {
+func TestReleaseContinuePushesProtectedMain(t *testing.T) {
 	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
-	// A bumped, tagged release sitting on main: --continue must not push main.
+	// A bumped, tagged release sitting on main, as a failed push leaves it.
 	if err := os.WriteFile(filepath.Join(dir, "version.yaml"), []byte("version: 1.0.1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	runGitCmd(t, dir, "commit", "-am", "chore(release): bump version to v1.0.1")
 	runGitCmd(t, dir, "tag", "-a", "v1.0.1", "-m", "v1.0.1")
-	remoteRefs := pushTestRefs(t, bare)
 	var out bytes.Buffer
 	opt := gitflowReleaseOptions(dir, &out)
 	opt.Continue = true
-	err := Run(opt)
-	if err == nil || !strings.Contains(err.Error(), "git.protected_main") {
-		t.Fatalf("want a protected_main refusal at push time, got %v\n%s", err, out.String())
+	if err := Run(opt); err != nil {
+		t.Fatalf("--continue on protected main: %v\n%s", err, out.String())
 	}
-	if got := pushTestRefs(t, bare); got != remoteRefs {
-		t.Errorf("refused push changed the remote:\nbefore %s\nafter  %s", remoteRefs, got)
-	}
+	wantRemoteMatchesLocal(t, dir, bare, "refs/heads/main", "refs/tags/v1.0.1")
 }
 
-func TestReleaseProtectedPushRefusalPrecedesRemoteLoop(t *testing.T) {
+// A forge's branch protection answers only on the real push: --dry-run does not
+// run server hooks. The failure must name the remote's reason, leave the tag off
+// the remote, and let --continue finish once the push is allowed.
+func TestReleaseRejectedByRemoteProtectionCanContinue(t *testing.T) {
 	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
-	second := t.TempDir()
-	runGitCmd(t, second, "init", "--bare")
-	runGitCmd(t, dir, "remote", "add", "second", second)
-	runGitCmd(t, dir, "push", "second", "main")
-	refs := pushTestRefs(t, bare) + "|" + pushTestRefs(t, second)
-	err := pushRelease(Options{Dir: dir, Out: &bytes.Buffer{}}, "v9.9.9", nil)
-	if err == nil || !strings.Contains(err.Error(), "git.protected_main") {
-		t.Fatalf("want a protected_main refusal, got %v", err)
+	hook := filepath.Join(bare, "hooks", "pre-receive")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho 'branch main is protected' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if got := pushTestRefs(t, bare) + "|" + pushTestRefs(t, second); got != refs {
-		t.Errorf("a remote changed despite the refusal:\nbefore %s\nafter  %s", refs, got)
+	remoteRefs := pushTestRefs(t, bare)
+	var out bytes.Buffer
+	err := Run(gitflowReleaseOptions(dir, &out))
+	if err == nil {
+		t.Fatalf("want the remote's rejection, got success\n%s", out.String())
 	}
+	for _, want := range []string{"branch main is protected", "--continue"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+	if got := pushTestRefs(t, bare); got != remoteRefs {
+		t.Errorf("rejected push changed the remote:\nbefore %s\nafter  %s", remoteRefs, got)
+	}
+	if err := os.Remove(hook); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	opt := gitflowReleaseOptions(dir, &out)
+	opt.Continue = true
+	if err := Run(opt); err != nil {
+		t.Fatalf("--continue after the rejection: %v\n%s", err, out.String())
+	}
+	wantRemoteMatchesLocal(t, dir, bare, "refs/heads/main", "refs/tags/v1.0.1")
 }
 
 // wantSoloReleaseOutput was recorded from a solo release on main before the

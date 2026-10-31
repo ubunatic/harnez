@@ -14,11 +14,18 @@ commonly stored in an `AGENTS.md` file at the repository root.
   `harnez init --repo-mode <mode> [--protected-main]`; the project's Repo Setup restates it):
   - `solo`: work local, on the repo's default branch (usually `main`, sometimes `master`);
     no local feature branches.
-  - `team` / `fork`: one topic branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`),
-    push the branch, open a PR. Ticket commits ride on the current topic branch.
-  - `protected_main` (team/fork only): never commit to or push the default branch, never
-    force-push. `harnez issues`, `harnez release` and other auto-committing commands refuse on
-    it and print the `git switch -c` command to run.
+  - `team` / `fork`: work on a local topic branch and open a PR. Ticket commits ride on the
+    current topic branch.
+    - `team`, AGit by default: on a forge with AGit (Forgejo, Gitea), tickets and small PRs reuse
+      one local branch and push no branch: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
+      Pushes update the topic's open PR; once it is merged, the next push opens a new PR.
+    - Otherwise one branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`), pushed: for
+      work others push to, long sprints that need rebasing, forks, and GitHub, which has no AGit.
+  - `protected_main` (team/fork only): do not commit to or push the default branch unless the
+    repository admin explicitly authorizes it in the current session, and never force-push.
+    `harnez issues` and other auto-committing commands refuse on it and print the `git switch -c`
+    command to run. `harnez release` is the exception: the admin, or an agent asked to release,
+    may run it there; the forge's branch protection decides whether the push is accepted.
 - Commit proactively:
   - Default preference: commit autonomously after intermediate steps once tests are clean, after finished features (with review pass), between iteration attempts on a stuck bug, and immediately after filing issue-tracker entries.
   - Ask-first harness interaction: If running in a harness that mandates explicit user confirmation for `git commit`, ask the user **upfront before starting work / during session kickoff** for authorization to commit local checkpoints proactively. This enables the user to step away without returning to uncommitted progress.
