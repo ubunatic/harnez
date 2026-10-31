@@ -48,6 +48,10 @@ commonly stored in an `AGENTS.md` file at the repository root.
 - Do not commit secrets.
 - Do not commit large files unless tracked via git-lfs.
 - Do not commit PII.
+- Cross-repo tag and spec reads must never check out tags in a shared checkout; use
+  `git -C <repo> show <tag>:<path>`, `git worktree add`, or scratch clones. Checking out
+  a tag leaves the repository in a detached HEAD state and risks causing subsequent agent
+  commits in that shared checkout to land off-branch.
 
 ## Remotes
 - Two dev remotes: Codeberg (`codeberg.org/<username>/<reponame>`) and GitHub (same path).

@@ -235,6 +235,11 @@ func TestGuardProtectedDetachedHEAD(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "detached HEAD") {
 		t.Fatalf("error = %v, want a detached HEAD refusal", err)
 	}
+	for _, want := range []string{"git switch main", "git switch -c topic"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain actionable recovery %q", err, want)
+		}
+	}
 }
 
 func TestGuardTeamDetachedHEADWarns(t *testing.T) {
@@ -245,6 +250,37 @@ func TestGuardTeamDetachedHEADWarns(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "detached HEAD") {
 		t.Fatalf("stderr = %q, want a detached HEAD warning", stderr)
+	}
+	for _, want := range []string{"git switch main", "git switch -c topic"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("stderr %q does not contain actionable recovery %q", stderr.String(), want)
+		}
+	}
+}
+
+func TestCheckDetachedHead(t *testing.T) {
+	dir := newRepo(t, "main")
+	if warn := CheckDetachedHead(dir); warn != "" {
+		t.Fatalf("expected empty warning on main, got: %s", warn)
+	}
+
+	// Detach HEAD at commit
+	runGit(t, dir, "checkout", "--detach")
+	warn := CheckDetachedHead(dir)
+	if warn == "" {
+		t.Fatal("expected warning when HEAD is detached, got empty")
+	}
+	for _, want := range []string{"WARNING: HEAD is detached at", "Switch to a branch (git switch main) before committing."} {
+		if !strings.Contains(warn, want) {
+			t.Errorf("warning %q does not contain %q", warn, want)
+		}
+	}
+
+	// Detach HEAD at a tag
+	runGit(t, dir, "tag", "v1.2.3")
+	warn = CheckDetachedHead(dir)
+	if !strings.Contains(warn, "HEAD is detached at v1.2.3") {
+		t.Errorf("warning %q does not mention tag v1.2.3", warn)
 	}
 }
 

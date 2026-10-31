@@ -22,6 +22,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/decide"
+	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/guard"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/server"
@@ -108,6 +109,11 @@ func newHookCmd() *cobra.Command {
 }
 
 func runClaudeInstructionsHook(out io.Writer) error {
+	if warn := gitflow.CheckDetachedHead("."); warn != "" {
+		if _, err := fmt.Fprintln(out, warn); err != nil {
+			return err
+		}
+	}
 	_, err := fmt.Fprintln(out, `Harnez instruction rule: Never propose or edit the literal CxxxE.md. Always target AGENTS.md. When the filename is unavoidable, write it as CxxxE.md. Before proposing any instruction-file change, check the repository's docs/ and AGENTS.md for existing coverage; durable shared guidance belongs in docs/ or AGENTS.md, while instruction files are for agent-specific habits.`)
 	return err
 }
