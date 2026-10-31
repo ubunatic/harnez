@@ -102,4 +102,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1053 | [1053-git-md-add-a-breaking-change-commit-example.md](1053-git-md-add-a-breaking-change-commit-example.md) | Git.md: add a breaking-change commit example | Open |
 | 1054 | [1054-configure-repository-roles-and-push-rules-per-repo.md](1054-configure-repository-roles-and-push-rules-per-repo.md) | Configure repository roles and push rules per repo | Open |
 | 1055 | [1055-automate-issue-indexes-after-merges-with-a-forgejo-workflow.md](1055-automate-issue-indexes-after-merges-with-a-forgejo-workflow.md) | Automate issue indexes after merges with a Forgejo workflow | Open |
+| 1056 | [1056-set-time-limited-default-models-for-agent-effort-tiers.md](1056-set-time-limited-default-models-for-agent-effort-tiers.md) | Set time-limited default models for agent effort tiers | Open |
 <!-- harnez:end issues-active-index -->
