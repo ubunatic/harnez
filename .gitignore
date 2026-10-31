@@ -25,3 +25,7 @@ downloads
 /.dot8/
 .dot8/
 /testreport/
+
+# Devin analysis artifacts
+/.devin-extracted/
+/.sandbox-logs/

@@ -232,6 +232,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-31-job-q5wp7x7h.md](studies/2026-10-31-job-q5wp7x7h.md) | Job q5wp7x7h partial report (2026-10-31) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
+| [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
 | [studies/MacOSContainerAMD.md](studies/MacOSContainerAMD.md) | macOS Containers on AMD KVM & Podman: Architecture, Quirks, and Diagnostic Guide |
@@ -240,6 +241,8 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/RTKShellWrapperHandling.md](studies/RTKShellWrapperHandling.md) | RTK: Shell-Wrapper and Pipe Handling in Command-Rewrite Hooks |
 | [studies/TestSuiteSprintSession.md](studies/TestSuiteSprintSession.md) | Test-Suite Sprint Session (2026-10-23) |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees — learnings & TODOs |
+| [studies/scratch-devin-binary-analysis.md](studies/scratch-devin-binary-analysis.md) | Devin CLI binary analysis (scratch, issue 1063 M2) |
+| [studies/scratch-devin-web-research.md](studies/scratch-devin-web-research.md) | Devin CLI web research (scratch, issue #1063) |
 <!-- harnez:end docs-studies-index -->
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports

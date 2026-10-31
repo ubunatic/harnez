@@ -1,0 +1,40 @@
+# Containerfile.sandbox — Isolated, observable sandbox for untrusted agent tools.
+# Layer order follows docs/Containerfile.md: static first, dynamic last.
+
+FROM debian:bookworm-slim
+
+# 1. Base system tools and debugging/observability utilities (changes rarely)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      binutils \
+      ca-certificates \
+      curl \
+      dnsutils \
+      file \
+      git \
+      git-lfs \
+      jq \
+      less \
+      lsof \
+      procps \
+      strace \
+      tar \
+      tcpdump \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Dedicated unprivileged sandbox user
+RUN useradd -m -s /bin/bash -u 1000 sandbox
+
+USER sandbox
+ENV HOME=/home/sandbox \
+    USER=sandbox \
+    PATH=/home/sandbox/.local/bin:$PATH
+
+WORKDIR /home/sandbox
+
+# 3. Install target agent CLI in user space (skipping interactive setup during build)
+RUN curl -fsSL https://cli.devin.ai/install.sh | sed 's/"\$VERSION_DIR\/bin\/\$COMPILED_BIN_NAME" setup/true/' | bash
+
+# 4. Workdir for mounting user projects
+WORKDIR /workspace
+
+CMD ["/bin/bash"]
