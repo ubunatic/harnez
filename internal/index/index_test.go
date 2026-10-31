@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -705,5 +707,49 @@ func TestUpdateIssuesReadme_LockContentionFailsFastNotHang(t *testing.T) {
 	}
 	if string(got) != original {
 		t.Errorf("README.md was modified despite failing to acquire the lock")
+	}
+}
+
+func TestUnlockReadmeRemovesLockFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "README.md")
+	f, err := lockReadme(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(p + ".lock"); err != nil {
+		t.Fatalf("lock missing while held: %v", err)
+	}
+	unlockReadme(f)
+	if _, err := os.Stat(p + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("lock file should be removed, stat err=%v", err)
+	}
+}
+
+func TestLockReadmeConcurrent(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "README.md")
+	var wg sync.WaitGroup
+	var inside, violations atomic.Int32
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f, err := lockReadme(p)
+			if err != nil {
+				return // budget exhausted is allowed; mutual exclusion is what we check
+			}
+			if inside.Add(1) != 1 {
+				violations.Add(1)
+			}
+			time.Sleep(2 * time.Millisecond)
+			inside.Add(-1)
+			unlockReadme(f)
+		}()
+	}
+	wg.Wait()
+	if violations.Load() != 0 {
+		t.Fatalf("mutual exclusion violated %d times", violations.Load())
+	}
+	if _, err := os.Stat(p + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("lock file left behind: %v", err)
 	}
 }

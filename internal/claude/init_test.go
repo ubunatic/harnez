@@ -340,7 +340,7 @@ func runInitCaptureStderr(t *testing.T, dir string, cfg *claude.Config, docs []s
 	return string(data)
 }
 
-func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
+func TestRunInit_IgnoresIssuesLockFilesInTrackedGitignore(t *testing.T) {
 	dir := t.TempDir()
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
 		t.Fatalf("git init: %v", err)
@@ -386,12 +386,22 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(gotGitignore) != gitignore {
-		t.Errorf("project .gitignore changed:\ngot:\n%s\nwant:\n%s", gotGitignore, gitignore)
+	if !strings.HasPrefix(string(gotGitignore), gitignore) {
+		t.Errorf("existing .gitignore content was lost:\n%s", gotGitignore)
 	}
 
 	if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{}); err != nil {
 		t.Fatalf("RunInit second run failed: %v", err)
+	}
+	// Tracked .gitignore carries the patterns so fresh clones ignore locks (issue 1066).
+	gotGitignore, err = os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lock := range []string{"/issues/README.md.lock", "/issues/.reserve.lock"} {
+		if strings.Count(string(gotGitignore), lock) != 1 {
+			t.Errorf("%s should appear once in .gitignore:\n%s", lock, gotGitignore)
+		}
 	}
 	exclude, err := os.ReadFile(excludePath)
 	if err != nil {

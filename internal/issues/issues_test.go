@@ -3,6 +3,7 @@ package issues
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -828,5 +829,39 @@ func TestRewriteHeaderNumber(t *testing.T) {
 				t.Errorf("content mismatch:\ngot:  %q\nwant: %q", got, tc.wantContent)
 			}
 		})
+	}
+}
+
+func TestReserveLeavesNoLockFile(t *testing.T) {
+	dir := t.TempDir()
+	if _, _, err := Reserve(dir, ReserveOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".reserve.lock")); !os.IsNotExist(err) {
+		t.Errorf(".reserve.lock should be removed after Reserve, stat err = %v", err)
+	}
+}
+
+func TestReserveFreshCloneLeavesGitStatusClean(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	// Tracked .gitignore as in a fresh clone; init was never run.
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.lock\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issuesDir := filepath.Join(dir, "issues")
+	if _, _, err := Reserve(issuesDir, ReserveOptions{Title: "fresh"}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("git", "-C", dir, "status", "--porcelain", "--untracked-files=all").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range strings.Split(string(out), "\n") {
+		if strings.Contains(l, ".lock") {
+			t.Fatalf("untracked lock file: %q", l)
+		}
 	}
 }

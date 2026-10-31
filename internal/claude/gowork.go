@@ -51,6 +51,10 @@ func isManagedWorkspace(dir string) (isManaged bool, hasExample bool, hasWork bo
 }
 
 func ensureGitignoreEntries(dir string, entries ...string) (bool, error) {
+	return ensureGitignoreSection(dir, "# local Go workspace (untracked; see go.work.example)", entries...)
+}
+
+func ensureGitignoreSection(dir, comment string, entries ...string) (bool, error) {
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	var existing []byte
 	if data, err := os.ReadFile(gitignorePath); err == nil {
@@ -63,7 +67,7 @@ func ensureGitignoreEntries(dir string, entries ...string) (bool, error) {
 	var toAdd []string
 	for _, entry := range entries {
 		pattern := strings.TrimPrefix(entry, "/")
-		if !strings.Contains(content, entry) && !strings.Contains(content, pattern) {
+		if !hasGitignoreLine(content, entry) && !hasGitignoreLine(content, pattern) {
 			toAdd = append(toAdd, entry)
 		}
 	}
@@ -77,7 +81,7 @@ func ensureGitignoreEntries(dir string, entries ...string) (bool, error) {
 	if len(existing) > 0 && !strings.HasSuffix(content, "\n") {
 		b.WriteString("\n")
 	}
-	b.WriteString("\n# local Go workspace (untracked; see go.work.example)\n")
+	b.WriteString("\n" + comment + "\n")
 	for _, entry := range toAdd {
 		b.WriteString(entry + "\n")
 	}
@@ -323,4 +327,14 @@ func ignoredModuleScanDir(name string) bool {
 	default:
 		return false
 	}
+}
+
+// hasGitignoreLine reports whether content has a line equal to entry.
+func hasGitignoreLine(content, entry string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == entry {
+			return true
+		}
+	}
+	return false
 }
