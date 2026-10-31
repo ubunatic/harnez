@@ -107,4 +107,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1058 | [1058-squash-sprint-commits-by-milestone-without-rewriting-main.md](1058-squash-sprint-commits-by-milestone-without-rewriting-main.md) | Squash sprint commits by milestone without rewriting main | Open |
 | 1059 | [1059-interpret-slash-separated-model-picks-by-skill-role.md](1059-interpret-slash-separated-model-picks-by-skill-role.md) | Interpret slash-separated model picks by skill role | Open |
 | 1060 | [1060-add-a-branch-cleanup-skill-with-optional-autonomous-decisions.md](1060-add-a-branch-cleanup-skill-with-optional-autonomous-decisions.md) | Add a branch cleanup skill with optional autonomous decisions | Open |
+| 1061 | [1061-investigate-skills-only-apply-removing-unrelated-managed-configuration.md](1061-investigate-skills-only-apply-removing-unrelated-managed-configuration.md) | Investigate skills-only apply removing unrelated managed configuration | Open |
 <!-- harnez:end issues-active-index -->

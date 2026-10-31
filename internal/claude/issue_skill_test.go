@@ -35,6 +35,8 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		}
 		assertIssueTLDR(t, path, content)
 		assertIssueGoalExitClause(t, path, content)
+		assertIssuePublicationGuidance(t, path, content)
+		assertIssueRouteOrder(t, path, content)
 		for _, name := range []string{"issue", "review", "roadmap"} {
 			path := filepath.Join(skillsRoot, name, "SKILL.md")
 			content := readIssueInstall(t, path)
@@ -71,6 +73,51 @@ func assertIssueGoalExitClause(t *testing.T, path, content string) {
 		if !strings.Contains(content, want) {
 			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)
 		}
+	}
+}
+
+func assertIssuePublicationGuidance(t *testing.T, path, content string) {
+	t.Helper()
+	for _, want := range []string{
+		"## Publish Promptly",
+		"**Direct push to `main`**, preferred whenever",
+		"The strictest rule wins",
+		"Never use `--force` or a `+` refspec.",
+		"git -C <repo> push origin HEAD:refs/for/main/<topic>",
+		"Several issues may share one topic and one PR.",
+		"git -C <repo> merge-base --is-ancestor <sha> origin/main",
+		"Equality is not required",
+		"Do not fall back to a direct push.",
+		"Never delete or overwrite content.",
+		"not on `main` until it is merged",
+		"Say \"published\" or \"on main\" only after the remote confirms it.",
+		"Where applicable policy requires authorization in the current session, standing consent is insufficient",
+		"`<sha>` is the intended issue commit",
+		"If any unrelated commit or file is included, stop and report it.",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)
+		}
+	}
+}
+
+func assertIssueRouteOrder(t *testing.T, path, content string) {
+	t.Helper()
+	routes := []string{
+		"1. **Direct push to `main`**",
+		"2. **AGit PR to `main`**",
+		"3. **Stop**",
+	}
+	last := -1
+	for _, route := range routes {
+		idx := strings.Index(content, route)
+		if idx < 0 {
+			t.Fatalf("expected %s to contain route %q, got:\n%s", path, route, content)
+		}
+		if idx <= last {
+			t.Errorf("route %q must come after the previous route in %s", route, path)
+		}
+		last = idx
 	}
 }
 
