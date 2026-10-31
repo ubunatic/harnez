@@ -830,3 +830,13 @@ func TestRewriteHeaderNumber(t *testing.T) {
 		})
 	}
 }
+
+func TestReserveLeavesNoLockFile(t *testing.T) {
+	dir := t.TempDir()
+	if _, _, err := Reserve(dir, ReserveOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".reserve.lock")); !os.IsNotExist(err) {
+		t.Errorf(".reserve.lock should be removed after Reserve, stat err = %v", err)
+	}
+}

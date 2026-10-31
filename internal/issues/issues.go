@@ -735,17 +735,30 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 	}
 
 	lockPath := filepath.Join(issuesDir, ".reserve.lock")
-	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		return "", "", fmt.Errorf("open reservation lock: %w", err)
+	var lock *os.File
+	for {
+		lock, err = os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+		if err != nil {
+			return "", "", fmt.Errorf("open reservation lock: %w", err)
+		}
+		if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+			_ = lock.Close()
+			return "", "", fmt.Errorf("lock reservations: %w", err)
+		}
+		// The previous holder removes the file on release; retry if we locked
+		// a file that is no longer on disk (issue 1066).
+		fi, e1 := lock.Stat()
+		pi, e2 := os.Stat(lockPath)
+		if e1 == nil && e2 == nil && os.SameFile(fi, pi) {
+			break
+		}
+		_ = lock.Close()
 	}
 	defer func() {
+		_ = os.Remove(lockPath)
 		_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 		_ = lock.Close()
 	}()
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
-		return "", "", fmt.Errorf("lock reservations: %w", err)
-	}
 
 	explicit := ""
 	if opts.Number != "" {

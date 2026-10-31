@@ -83,7 +83,15 @@ func initGitIntegration(ir *initReport, dir string, repoConfig *RepoConfig) erro
 	}
 	if fileExists(filepath.Join(dir, "issues")) {
 		// Lock files left by the README sync and `harnez issues new` (issue 672).
-		for _, lock := range []string{"/issues/README.md.lock", "/issues/.reserve.lock"} {
+		locks := []string{"/issues/README.md.lock", "/issues/.reserve.lock"}
+		// Tracked .gitignore too: .git/info/exclude is clone-local (issue 1066).
+		if changed, err := ensureGitignoreSection(dir, "# harnez issue-index lock files", locks...); err != nil {
+			return fmt.Errorf("ignore issue locks in .gitignore: %w", err)
+		} else if changed {
+			fmt.Printf("  ignored issue lock files in .gitignore\n")
+			ir.changes++
+		}
+		for _, lock := range locks {
 			ignored, err := fsutil.EnsureGitExclude(dir, lock)
 			if err != nil {
 				return fmt.Errorf("ignore %s: %w", lock, err)

@@ -48,7 +48,18 @@ func lockReadme(path string) (*os.File, error) {
 	}
 	for attempt := 0; attempt <= readmeLockRetries; attempt++ {
 		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
-			return f, nil
+			// The previous holder removes the file on unlock; make sure we
+			// locked the file that is still on disk, else reopen (issue 1066).
+			fi, e1 := f.Stat()
+			pi, e2 := os.Stat(lockPath)
+			if e1 == nil && e2 == nil && os.SameFile(fi, pi) {
+				return f, nil
+			}
+			f.Close()
+			if f, err = os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600); err != nil {
+				return nil, fmt.Errorf("open lock file %s: %w", lockPath, err)
+			}
+			continue
 		}
 		if attempt < readmeLockRetries {
 			time.Sleep(readmeLockDelay)
@@ -59,6 +70,8 @@ func lockReadme(path string) (*os.File, error) {
 }
 
 func unlockReadme(f *os.File) {
+	// Remove while still holding the lock so no sidecar is left in the tree.
+	_ = os.Remove(f.Name())
 	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 	_ = f.Close()
 }

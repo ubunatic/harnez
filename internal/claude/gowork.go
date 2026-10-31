@@ -51,6 +51,10 @@ func isManagedWorkspace(dir string) (isManaged bool, hasExample bool, hasWork bo
 }
 
 func ensureGitignoreEntries(dir string, entries ...string) (bool, error) {
+	return ensureGitignoreSection(dir, "# local Go workspace (untracked; see go.work.example)", entries...)
+}
+
+func ensureGitignoreSection(dir, comment string, entries ...string) (bool, error) {
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	var existing []byte
 	if data, err := os.ReadFile(gitignorePath); err == nil {
@@ -77,7 +81,7 @@ func ensureGitignoreEntries(dir string, entries ...string) (bool, error) {
 	if len(existing) > 0 && !strings.HasSuffix(content, "\n") {
 		b.WriteString("\n")
 	}
-	b.WriteString("\n# local Go workspace (untracked; see go.work.example)\n")
+	b.WriteString("\n" + comment + "\n")
 	for _, entry := range toAdd {
 		b.WriteString(entry + "\n")
 	}
