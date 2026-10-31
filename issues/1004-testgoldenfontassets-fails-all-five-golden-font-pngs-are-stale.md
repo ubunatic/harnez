@@ -1,6 +1,6 @@
 # 1004 — TestGoldenFontAssets fails: all five golden font PNGs are stale
 
-**Status**: Open
+**Status**: Closed — test compares decoded pixels; encoder byte drift only
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -30,6 +30,11 @@ A red quick tier hides new failures, so every agent turn now has to rule this on
 - The test compares the render against `docs/data/golden-font-<size>.png`; all five sizes differ.
 - `docs/data/` last changed in 47b8967b (issue 922). The cause (renderer, font spec or Go/image
   change) has not been checked.
+
+- Cause (2026-10-31): the render did not change. Decoding the five PNGs and comparing them with
+  `GoldenFontImage` gives 0 differing pixels on go1.27.3; only the `image/png` encoder's output bytes
+  differ. Fix in 0f0b07c6: the test now compares decoded RGBA pixels and bounds, not PNG bytes.
+  Seen on forgewerk too: every harnez job's base `make test-short` failed on this test.
 
 ## 3. Plan
 
