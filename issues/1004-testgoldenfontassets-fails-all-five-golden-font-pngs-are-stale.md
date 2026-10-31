@@ -31,6 +31,11 @@ A red quick tier hides new failures, so every agent turn now has to rule this on
 - `docs/data/` last changed in 47b8967b (issue 922). The cause (renderer, font spec or Go/image
   change) has not been checked.
 
+- Cause (2026-10-31): the render did not change. Decoding the five PNGs and comparing them with
+  `GoldenFontImage` gives 0 differing pixels on go1.27.3; only the `image/png` encoder's output bytes
+  differ. Fix in 0f0b07c6: the test now compares decoded RGBA pixels and bounds, not PNG bytes.
+  Seen on forgewerk too: every harnez job's base `make test-short` failed on this test.
+
 ## 3. Plan
 
 Find what changed the render. If the change was intended, regenerate with
