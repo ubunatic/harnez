@@ -59,6 +59,11 @@ Done when all of these hold:
 - Tests cover both guards and `--continue` on `main`, plus a push the remote rejects.
 - The `Repo Setup` text in `config.yaml` and the regenerated AGENTS.md block no longer forbid agents
   acting for the admin to push.
+- The same `Repo Setup` text and `docs/Git.md` make AGit the default for tickets and small PRs on a
+  forge that supports it (`git push origin HEAD:refs/for/main/<topic>`), using one reusable local
+  branch and no pushed branch. They keep pushed branches for work others push to, long sprints that
+  need rebasing, and GitHub, which has no AGit. The local branch stays because harnez refuses
+  commits on protected `main` and on a detached HEAD.
 - `docs/GoRelease.md` (edit the copyable source and sync the root copy) and `docs/Git.md` describe
   the new behaviour.
 - `harnez release --dry-run` on `main` passes the guards without changing anything.
