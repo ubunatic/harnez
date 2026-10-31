@@ -44,16 +44,31 @@ Today, this capability check (the "10-5 trial") is conducted ad-hoc in conversat
 
 - Skill source file: `docs/commands/trial.md` (registered in `config.yaml` as `trial`, `user-invocable-only` under the skill presets; covered by `internal/claude/claudeskills_test.go`; documented in `docs/practices/AgenticLoop.md` and its lite copy).
 
-## 5. Live Verification: `/trial sprint` on `sprint/1069-trial-skill`
+## 5. Live Verification: `/trial today` (2026-10-31)
 
-Evidence: `git log main..HEAD --oneline` returned one commit (`a3028bf0`). Shortfall rule applied; counts are stated, not padded.
+Evidence: `git log --since="midnight" --oneline` (77 commits), `harnez find -d . issues closed` (newest 10), `git log --since="midnight" -- issues/`. Verified at HEAD by running `go test` on the named Go tests, `bash scripts/test-pi.sh` (130/130 pass) and `harnez ... --help`. One item per ticket.
 
-### Things We Can Do Now (1 verified)
+# ⚖️ Capability Trial: harnez, 2026-10-31
 
-1. **Invoke a 10-5 audit with scoped evidence rules** — `/trial`, `/trial today`, `/trial sprint`, `/trial <ticket>` skill in `docs/commands/trial.md`, registered by the `trial` entry in `config.yaml` and checked by `internal/claude/claudeskills_test.go` ([a3028bf0](issue 1069)).
+### Ten Things We Can Do Now
 
-### Things We Cannot Do Yet (3 verified)
+1. **Time-limited model defaults per effort tier** — `harnez models set --until=HH:MM|--hours=<n>` (also `harnez agent models set`); `TestAgentModelsSetFlagValidationAndExpiry`; commit 969632f0, ticket 1056.
+2. **Selectable agent context modes** — `harnez agent start --context-mode plain|no-skills|default`; `TestAgentStartContextModePassThrough`; commit c7830529, ticket 1027.
+3. **Detached-HEAD warning at session start and commit guard** — `TestCheckDetachedHead`, `TestRunClaudeInstructionsHookDetachedHeadWarning`; commit bc15f0ae, ticket 1065.
+4. **Issue-index lock files ignored and cleaned up** — `harnez init` writes the tracked gitignore entry; `TestRunInit_IgnoresIssuesLockFilesInTrackedGitignore`, `TestReserveFreshCloneLeavesGitStatusClean`; commit 2fbe34aa, ticket 1066.
+5. **Private exclusive capture of Pi background task output** — `test/pi/capture-store.test.ts` ("private exclusive captures contain exact bytes..."); commit c04ce40c, ticket 1021.
+6. **Batched background-task completions** — `test/pi/compaction-delivery.test.ts` ("first arrival fixes the window; ..."); commit 8eb43a12, ticket 1044.
+7. **Safe completion delivery during compaction** — `test/pi/background-tasks.test.ts` ("slow capture defers notification and drain while backpressured"); commit 85293bf3, ticket 1047.
+8. **Collapsed task result output until expanded** — `test/pi/background-tasks.test.ts` ("default capture is visible in completion and result; ..." asserts collapsed/expanded rendering); commit 4a56d4e0, ticket 1046.
+9. **Pixel-based golden font comparison** — `go test ./internal/readcard -run TestGoldenFontAssets`; commit 2414bf73, ticket 1004.
+10. **Scoped 10-5 capability audits** — `/trial [today|sprint|<ticket>]`, `docs/commands/trial.md`, checked by `internal/claude/claudeskills_test.go`; commits a3028bf0 and dd6e035e, ticket 1069.
 
-1. **Import forge issues** — `harnez issues import` does not exist yet; open [1064](1064-harnez-issues-import-command-to-fetch-remote-forge-issues-into-local-tracker.md).
-2. **Export local issues to a forge** — `harnez issues export` does not exist yet; open [1067](1067-add-harnez-issues-export-command-to-export-local-issues-to-remote-forge-tracker-via-agit-or-fj.md).
-3. **Pin docs, skills and tools per role** — role profiles not built; open [1068](1068-adopt-plain-mode-for-general-tasks-and-create-role-profiles-to-pin-docs-skills-and-tools.md).
+---
+
+### Five Things We Cannot Do Yet
+
+1. **Pin docs, skills and tools per role** — plain mode exists but role profiles do not; open [1068](1068-adopt-plain-mode-for-general-tasks-and-create-role-profiles-to-pin-docs-skills-and-tools.md).
+2. **Use xhigh/max effort tiers in model picks** — `claude:haiku:xhigh` is unsupported; open [993](993-support-xhigh-and-max-effort-tiers-e-g-claude-haiku-xhigh.md).
+3. **Background a running manual Pi command with Ctrl-B** — Pi 1.4.0 has no running shell transfer API; blocked [1048](1048-background-manual-pi-commands-with-ctrl-b.md).
+4. **Guard Pi session reload while background tasks run** — Pi 1.4.0 exposes no cancellable pre-reload hook; blocked [1049](1049-guard-pi-session-reload-while-background-tasks-are-running.md).
+5. **Refresh the Pi background task extension independently** — global refresh parked from 1051; open [1052](1052-safely-refresh-the-pi-background-task-extension-independently.md).
