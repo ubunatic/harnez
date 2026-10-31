@@ -50,18 +50,19 @@ Evidence: `git log --since="midnight" --oneline` (77 commits), `harnez find -d .
 
 # ⚖️ Capability Trial: harnez, 2026-10-31
 
-### Ten Things We Can Do Now
+### Nine Verified Things We Can Do Now
+
+(Only 9 verified; no padding. The pixel-based golden font comparison, 2414bf73 / 1004, was dropped as an internal test refactor.)
 
 1. **Time-limited model defaults per effort tier** — `harnez models set --until=HH:MM|--hours=<n>` (also `harnez agent models set`); `TestAgentModelsSetFlagValidationAndExpiry`; commit 969632f0, ticket 1056.
-2. **Selectable agent context modes** — `harnez agent start --context-mode plain|no-skills|default`; `TestAgentStartContextModePassThrough`; commit c7830529, ticket 1027.
+2. **Selectable agent context modes** — `harnez agent start --context-mode plain|no-skills|default` (Pi driver only); `TestAgentStartContextModePassThrough`; commit c7830529, ticket 1027.
 3. **Detached-HEAD warning at session start and commit guard** — `TestCheckDetachedHead`, `TestRunClaudeInstructionsHookDetachedHeadWarning`; commit bc15f0ae, ticket 1065.
 4. **Issue-index lock files ignored and cleaned up** — `harnez init` writes the tracked gitignore entry; `TestRunInit_IgnoresIssuesLockFilesInTrackedGitignore`, `TestReserveFreshCloneLeavesGitStatusClean`; commit 2fbe34aa, ticket 1066.
-5. **Private exclusive capture of Pi background task output** — `test/pi/capture-store.test.ts` ("private exclusive captures contain exact bytes..."); commit c04ce40c, ticket 1021.
-6. **Batched background-task completions** — `test/pi/compaction-delivery.test.ts` ("first arrival fixes the window; ..."); commit 8eb43a12, ticket 1044.
-7. **Safe completion delivery during compaction** — `test/pi/background-tasks.test.ts` ("slow capture defers notification and drain while backpressured"); commit 85293bf3, ticket 1047.
-8. **Collapsed task result output until expanded** — `test/pi/background-tasks.test.ts` ("default capture is visible in completion and result; ..." asserts collapsed/expanded rendering); commit 4a56d4e0, ticket 1046.
-9. **Pixel-based golden font comparison** — `go test ./internal/readcard -run TestGoldenFontAssets`; commit 2414bf73, ticket 1004.
-10. **Scoped 10-5 capability audits** — `/trial [today|sprint|<ticket>]`, `docs/commands/trial.md`, checked by `internal/claude/claudeskills_test.go`; commits a3028bf0 and dd6e035e, ticket 1069.
+5. **Private exclusive capture of Pi background task output** — `test/pi/capture-store.test.ts` ("private exclusive captures contain exact bytes..."); commit c04ce40c, ticket 1021 (still Open: further work remains).
+6. **Batched background-task completions** — `test/pi/compaction-delivery.test.ts` ("first arrival fixes the window; ..."); commit 8eb43a12, ticket 1044 (still Open).
+7. **Manual-compaction completions are held and delivered in order** — `test/pi/compaction-delivery.test.ts` ("manual compaction holds FIFO until the end hook and the guard both clear"); commit 85293bf3, ticket 1047 (still Open: full auto-compaction no-loss has remaining gaps).
+8. **Collapsed task result output until expanded** — `test/pi/background-tasks.test.ts` ("default capture is visible in completion and result; ..." asserts collapsed/expanded rendering); commit 4a56d4e0, ticket 1046 (still Open).
+9. **Scoped 10-5 capability audits** — `/trial [today|sprint|<ticket>]`, `docs/commands/trial.md`, checked by `internal/claude/claudeskills_test.go`; commits a3028bf0 and dd6e035e, ticket 1069.
 
 ---
 
