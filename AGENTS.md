@@ -121,7 +121,7 @@ See `@docs/AgenticLoop.md` Invariant 10 (Media & Demo Verification Gate).
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
 - Team repo: one topic branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`); push the branch and open a PR to merge.
-- main is protected; harnez refuses commits on it. Never commit to or push the default branch, never force-push.
+- main is protected; harnez refuses commits on it. Do not commit to or push the default branch unless the repository admin explicitly authorizes it in the current session. Never force-push.
 - Update/rebase your branch before merging; follow this repo's CI and review requirements.
 <!-- harnez:end Repo Setup -->
 
