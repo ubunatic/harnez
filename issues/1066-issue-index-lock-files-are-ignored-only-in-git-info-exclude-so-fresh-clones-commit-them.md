@@ -1,6 +1,6 @@
 # 1066 — Issue-index lock files are ignored only in .git/info/exclude, so fresh clones commit them
 
-**Status**: Open
+**Status**: Closed — ignored lock files in tracked gitignore and cleaned up unheld locks on exit with fresh clone and concurrency tests
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
