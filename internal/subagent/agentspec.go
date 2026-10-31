@@ -36,9 +36,19 @@ type agentSpec struct {
 	CompactThresholds     map[string]int                 `yaml:"compact_thresholds"`
 	AutoCompact           AutoCompactSpec                `yaml:"auto_compact"`
 	PiCompaction          PiCompactionSpec               `yaml:"pi_compaction"`
+	ContextModes          map[string]ContextModeSpec     `yaml:"context_modes"`
 	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
 	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
 	ResumeNote            ResumeNoteSpec                 `yaml:"resume_note"`
+}
+
+// ContextModeSpec defines settings for an agent context mode (issue 1027).
+type ContextModeSpec struct {
+	Description  string   `yaml:"description"`
+	Skills       *bool    `yaml:"skills"`
+	MCP          *bool    `yaml:"mcp"`
+	ContextFiles *bool    `yaml:"context_files"`
+	Tools        []string `yaml:"tools"`
 }
 
 // PiCompactionSpec sizes the Pi compaction overrides for small-window models (issue 1023).
@@ -247,6 +257,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 		return agentSpec{}, fmt.Errorf("agent spec: auto_compact requires positive codex_on_demand_limit_tokens and nonempty codex_status_prompt")
 	}
 	if err := spec.PiCompaction.validate(); err != nil {
+		return agentSpec{}, err
+	}
+	if err := validateContextModes(spec.ContextModes); err != nil {
 		return agentSpec{}, err
 	}
 	for provider, mode := range spec.AutoCompact.ProviderModes {
@@ -501,6 +514,55 @@ func DefaultModel() (Model, error) {
 		return Model{}, err
 	}
 	return resolveDefaultModelWithCatalog(modelAliases, mergedModelCatalog, spec)
+}
+
+func validateContextModes(modes map[string]ContextModeSpec) error {
+	if modes == nil {
+		return nil
+	}
+	for _, required := range []string{"default", "plain", "no-skills"} {
+		if _, ok := modes[required]; !ok {
+			return fmt.Errorf("agent spec: required context_mode %q is missing", required)
+		}
+	}
+	for name, m := range modes {
+		if strings.TrimSpace(m.Description) == "" {
+			return fmt.Errorf("agent spec: context_mode %q requires a description", name)
+		}
+	}
+	return nil
+}
+
+// ContextModeNames returns all configured context mode names sorted alphabetically.
+func ContextModeNames() ([]string, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(spec.ContextModes))
+	for name := range spec.ContextModes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// ResolveContextMode returns the ContextModeSpec for the given name.
+// If name is empty, it returns the spec for "default".
+func ResolveContextMode(name string) (ContextModeSpec, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return ContextModeSpec{}, err
+	}
+	if name == "" {
+		name = "default"
+	}
+	mode, ok := spec.ContextModes[name]
+	if !ok {
+		names, _ := ContextModeNames()
+		return ContextModeSpec{}, fmt.Errorf("unknown context mode %q; known modes: %s", name, strings.Join(names, ", "))
+	}
+	return mode, nil
 }
 
 func validateRoles(spec agentSpec) error {

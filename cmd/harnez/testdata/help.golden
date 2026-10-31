@@ -107,6 +107,7 @@ Available Commands:
 
 Flags:
       --allow-exhausted-quota   start even when cached provider quota is exhausted
+      --context-mode string     agent context mode (e.g. plain, no-skills, default)
   -c, --continue                resume the most recently active attributable session
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
   -f, --file strings            prompt file (repeatable; - reads stdin)
@@ -431,6 +432,7 @@ Examples:
 
 Flags:
       --allow-exhausted-quota   start even when cached provider quota is exhausted
+      --context-mode string     agent context mode (e.g. plain, no-skills, default)
   -f, --file strings            prompt file (repeatable; - reads stdin)
   -h, --help                    help for start
   -i, --interactive             launch the provider's interactive terminal

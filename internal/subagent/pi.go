@@ -31,7 +31,7 @@ func (d PiDriver) commandLines(ctx context.Context, fn func([]byte), args ...str
 
 func (d PiDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 	start := time.Now()
-	b, err := d.command(ctx, piRunArgs(o.Model, o.Prompt)...)
+	b, err := d.command(ctx, piRunArgs(o.Model, o.Prompt, o.ContextMode)...)
 	if err != nil {
 		return nil, fmt.Errorf("pi: %w", err)
 	}
@@ -58,7 +58,7 @@ type PiStreamDriver struct{ PiDriver }
 
 func (d PiStreamDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
 	start := time.Now()
-	b, err := d.commandLines(ctx, piLineFunc(fn), piRunArgs(o.Model, o.Prompt)...)
+	b, err := d.commandLines(ctx, piLineFunc(fn), piRunArgs(o.Model, o.Prompt, o.ContextMode)...)
 	if err != nil {
 		return nil, fmt.Errorf("pi: %w", err)
 	}
@@ -110,10 +110,36 @@ func piLineFunc(fn EventFunc) func([]byte) {
 	}
 }
 
-func piRunArgs(model Model, prompt string) []string {
+func piRunArgs(model Model, prompt string, contextMode ...string) []string {
 	args := []string{"--mode", "json"}
 	args = append(args, piModelArgs(model)...)
+	var mode string
+	if len(contextMode) > 0 {
+		mode = contextMode[0]
+	}
+	args = append(args, piContextModeArgs(mode)...)
 	return append(args, "--", prompt)
+}
+
+func piContextModeArgs(mode string) []string {
+	var args []string
+	spec, err := ResolveContextMode(mode)
+	if err != nil {
+		return nil
+	}
+	if spec.Skills != nil && !*spec.Skills {
+		args = append(args, "--no-skills")
+	}
+	if spec.ContextFiles != nil && !*spec.ContextFiles {
+		args = append(args, "--no-context-files")
+	}
+	if spec.MCP != nil && !*spec.MCP {
+		args = append(args, "--no-mcp")
+	}
+	if len(spec.Tools) > 0 {
+		args = append(args, "--tools", strings.Join(spec.Tools, ","))
+	}
+	return args
 }
 
 func piResumeArgs(id, prompt string, model Model) []string {

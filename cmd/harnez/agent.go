@@ -125,6 +125,13 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 	root.Flags().StringSliceVarP(&rootFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	root.Flags().StringVar(&ac.streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 	root.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
+	root.Flags().StringVar(&ac.contextMode, "context-mode", "", "agent context mode (e.g. plain, no-skills, default)")
+	root.Flags().StringVar(&ac.contextMode, "mode", "", "alias for --context-mode")
+	_ = root.Flags().MarkHidden("mode")
+	_ = root.RegisterFlagCompletionFunc("context-mode", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		names, _ := subagent.ContextModeNames()
+		return names, cobra.ShellCompDirectiveNoFileComp
+	})
 	root.Flags().StringVar(&ac.planSpec, "plan", "no", "planning gate: yes or no")
 	ac.store = func() (*subagent.FileSessionStore, error) { return subagent.NewSessionStore(ac.storeDir) }
 	ac.parent = currentHostSession
@@ -233,7 +240,7 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 				return findErr
 			}
 			return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-				return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
+				return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, ContextMode: ac.contextMode})
 			})
 		}
 		if rootContinue {
@@ -253,7 +260,7 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			}
 		}
 		return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-			return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
+			return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, ContextMode: ac.contextMode})
 		})
 	}
 

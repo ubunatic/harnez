@@ -431,6 +431,7 @@ func (d *recordingAgentDriver) Run(_ context.Context, opts subagent.RunOptions) 
 	}
 	d.dir = opts.Dir
 	d.prompt = opts.Prompt
+	d.contextMode = opts.ContextMode
 	return &subagent.TurnResult{SessionID: "recorded", Response: "ok"}, nil
 }
 

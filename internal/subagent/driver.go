@@ -76,9 +76,10 @@ func (d UnsupportedDriver) Delete(context.Context, string) error { return d.unsu
 
 // RunOptions describes a new provider turn.
 type RunOptions struct {
-	Prompt string
-	Model  Model
-	Dir    string
+	Prompt      string
+	Model       Model
+	Dir         string
+	ContextMode string
 }
 
 // Model is a resolved provider model specification.

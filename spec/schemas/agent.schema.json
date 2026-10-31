@@ -61,7 +61,7 @@
       "additionalProperties": false
     }
   },
-  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "pi_compaction","default_role", "models", "roles", "stop", "external_sessions", "model_traits"],
+  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "pi_compaction", "context_modes", "default_role", "models", "roles", "stop", "external_sessions", "model_traits"],
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
@@ -77,6 +77,27 @@
         "keep_recent_fraction": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 }
       },
       "additionalProperties": false
+    },
+    "context_modes": {
+      "type": "object",
+      "description": "Selectable context modes for agent runs (issue 1027).",
+      "required": ["default", "plain", "no-skills"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["description"],
+        "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "skills": { "type": "boolean" },
+          "mcp": { "type": "boolean" },
+          "context_files": { "type": "boolean" },
+          "tools": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
     },
     "auto_compact": {
       "type": "object",

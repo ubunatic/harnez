@@ -21,6 +21,24 @@ pi_compaction:
   small_window_threshold_tokens: 65536
   reserve_fraction: 0.4
   keep_recent_fraction: 0.25
+# Selectable context modes for agent runs starting with Pi (issue 1027).
+context_modes:
+  default:
+    description: Default context with all discovered skills, context files, MCP servers, and default tools.
+    skills: true
+    mcp: true
+    context_files: true
+  no-skills:
+    description: Rules, context files and tools enabled, but skills and MCP disabled.
+    skills: false
+    mcp: false
+    context_files: true
+  plain:
+    description: Minimal context without skills, rules, context files, or MCP; restricted to standard review tools.
+    skills: false
+    mcp: false
+    context_files: false
+    tools: [read, edit, write, grep, find, bash]
 # Manual compaction requires a verified context drop; Codex compacts natively.
 # Agy lacks a reliable context count (issues 644 and 869).
 auto_compact:
