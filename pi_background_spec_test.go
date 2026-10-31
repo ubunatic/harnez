@@ -34,6 +34,12 @@ func TestPiBackgroundTasksSpecMatchesSchema(t *testing.T) {
 		"missing poll":        func(doc map[string]any) { delete(doc["stop"].(map[string]any), "poll_ms") },
 		"missing status":      func(doc map[string]any) { delete(doc, "status") },
 		"missing delivery":    func(doc map[string]any) { delete(doc, "delivery") },
+		"missing capture":     func(doc map[string]any) { delete(doc, "capture") },
+		"zero capture stall":  func(doc map[string]any) { doc["capture"].(map[string]any)["stall_ms"] = 0 },
+		"tiny entry cap":      func(doc map[string]any) { doc["delivery"].(map[string]any)["entry_max_chars"] = 255 },
+		"tiny batch cap":      func(doc map[string]any) { doc["delivery"].(map[string]any)["batch_max_chars"] = 511 },
+		"zero batch window":   func(doc map[string]any) { doc["delivery"].(map[string]any)["batch_window_ms"] = 0 },
+		"missing batch cap":   func(doc map[string]any) { delete(doc["delivery"].(map[string]any), "batch_max_chars") },
 		"zero flush poll":     func(doc map[string]any) { doc["delivery"].(map[string]any)["flush_poll_ms"] = 0 },
 		"unknown status key":  func(doc map[string]any) { doc["status"].(map[string]any)["extra"] = 1 },
 		"invalid label bound": func(doc map[string]any) { doc["status"].(map[string]any)["label_max_cells"] = 0 },
@@ -52,10 +58,11 @@ func TestPiBackgroundTasksSpecMatchesSchema(t *testing.T) {
 			t.Errorf("schema accepted an invalid spec: %s", name)
 		}
 	}
-	// Schema cannot compare terminal-cell width or enforce Unicode normalization; the loader rejects both.
+	// Schema cannot compare fields (batch/entry bounds or terminal-cell width) or enforce Unicode normalization; the loader checks these.
 	for name, mutate := range map[string]func(map[string]any){
-		"decomposed fallback":       func(doc map[string]any) { doc["status"].(map[string]any)["fallback_label"] = "e\u0301" },
-		"fallback wider than bound": func(doc map[string]any) { doc["status"].(map[string]any)["label_max_cells"] = 3 },
+		"batch cannot fit entry plus envelope": func(doc map[string]any) { doc["delivery"].(map[string]any)["batch_max_chars"] = 800 },
+		"decomposed fallback":                  func(doc map[string]any) { doc["status"].(map[string]any)["fallback_label"] = "e\u0301" },
+		"fallback wider than bound":            func(doc map[string]any) { doc["status"].(map[string]any)["label_max_cells"] = 3 },
 	} {
 		candidate := clonePiBackgroundSpec(document)
 		mutate(candidate)
@@ -90,6 +97,7 @@ func resolvePiBackgroundSchema(t *testing.T) *jsonschema.Resolved {
 // clonePiBackgroundSpec copies the nested maps so a mutation does not change the valid document.
 func clonePiBackgroundSpec(doc map[string]any) map[string]any {
 	out := maps.Clone(doc)
+	out["capture"] = maps.Clone(doc["capture"].(map[string]any))
 	out["stop"] = maps.Clone(doc["stop"].(map[string]any))
 	out["delivery"] = maps.Clone(doc["delivery"].(map[string]any))
 	out["status"] = maps.Clone(doc["status"].(map[string]any))

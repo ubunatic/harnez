@@ -96,8 +96,8 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1045 | [1045-avoid-generated-index-drift-after-fast-forward-pulls.md](1045-avoid-generated-index-drift-after-fast-forward-pulls.md) | Avoid generated index drift after fast-forward pulls | Open |
 | 1046 | [1046-keep-pi-task-completion-output-out-of-the-user-chat.md](1046-keep-pi-task-completion-output-out-of-the-user-chat.md) | Keep Pi task completion output out of the user chat | Open |
 | 1047 | [1047-queue-pi-task-completions-safely-during-compaction.md](1047-queue-pi-task-completions-safely-during-compaction.md) | Queue Pi task completions safely during compaction | Open |
-| 1048 | [1048-background-manual-pi-commands-with-ctrl-b.md](1048-background-manual-pi-commands-with-ctrl-b.md) | Background manual Pi commands with Ctrl-B | Open |
-| 1049 | [1049-guard-pi-session-reload-while-background-tasks-are-running.md](1049-guard-pi-session-reload-while-background-tasks-are-running.md) | Guard Pi session reload while background tasks are running | Open |
+| 1048 | [1048-background-manual-pi-commands-with-ctrl-b.md](1048-background-manual-pi-commands-with-ctrl-b.md) | Background manual Pi commands with Ctrl-B | Blocked — Pi 1.4.0 has no supported running shell transfer API |
+| 1049 | [1049-guard-pi-session-reload-while-background-tasks-are-running.md](1049-guard-pi-session-reload-while-background-tasks-are-running.md) | Guard Pi session reload while background tasks are running | Blocked — Pi 1.4.0 exposes no cancellable pre-reload hook |
 | 1050 | [1050-epic-pi-background-task-experience-and-reliability.md](1050-epic-pi-background-task-experience-and-reliability.md) | Epic: Pi background task experience and reliability | Open |
 | 1052 | [1052-safely-refresh-the-pi-background-task-extension-independently.md](1052-safely-refresh-the-pi-background-task-extension-independently.md) | Safely refresh the Pi background task extension independently | Open |
 | 1053 | [1053-git-md-add-a-breaking-change-commit-example.md](1053-git-md-add-a-breaking-change-commit-example.md) | Git.md: add a breaking-change commit example | Open |

@@ -19,12 +19,14 @@ import (
 	"ubunatic.com/harnez"
 )
 
-// piBackgroundExpectedFiles are the five paths of a complete install, relative to the managed directory.
+// piBackgroundExpectedFiles are the paths of a complete install, relative to the managed directory.
 var piBackgroundExpectedFiles = []string{
 	".harnez-managed",
 	"package.json",
 	".pi/extensions/background-tasks.ts",
 	".pi/lib/background-task-runner.ts",
+	".pi/lib/background-task-capture.ts",
+	".pi/lib/background-task-store.ts",
 	"spec/pi-background-tasks.yaml",
 }
 
@@ -625,7 +627,7 @@ func TestPiBackgroundRevertDeactivatesAndApplyRecovers(t *testing.T) {
 	if piBackgroundPresent(filepath.Join(dir, "package.json")) {
 		t.Error("package.json is still present after revert; it must be deactivated first")
 	}
-	for _, rel := range []string{".pi/extensions/background-tasks.ts", "spec/pi-background-tasks.yaml"} {
+	for _, rel := range []string{".pi/extensions/background-tasks.ts", ".pi/lib/background-task-capture.ts", ".pi/lib/background-task-store.ts", "spec/pi-background-tasks.yaml"} {
 		if piBackgroundPresent(filepath.Join(dir, filepath.FromSlash(rel))) {
 			t.Errorf("unchanged owned file %s survived revert", rel)
 		}
@@ -643,7 +645,7 @@ func TestPiBackgroundRevertDeactivatesAndApplyRecovers(t *testing.T) {
 	}
 
 	// The edited runner is someone's edit, so apply refuses while it is present and writes nothing. This replaces the
-	// round-2 behaviour, which overwrote it. Once the edit is removed, apply repairs the runner, entry, spec and package.json.
+	// round-2 behaviour, which overwrote it. Once the edit is removed, apply restores the six missing paths.
 	r := &applyReport{}
 	if err := applyPiBackgroundTasks(r, cfg, nil); err == nil || !strings.Contains(err.Error(), "background-task-runner.ts") {
 		t.Fatalf("apply over the edited runner: err = %v, want a refusal naming it", err)
@@ -655,8 +657,18 @@ func TestPiBackgroundRevertDeactivatesAndApplyRecovers(t *testing.T) {
 	if err := os.Remove(lib); err != nil {
 		t.Fatal(err)
 	}
-	if n := piBackgroundApply(t, cfg, nil); n != 4 {
-		t.Errorf("apply after revert changed %d paths, want 4 (runner, entry, spec, package.json)", n)
+	if n := piBackgroundApply(t, cfg, nil); n != 6 {
+		t.Errorf("apply after revert changed %d paths, want 6", n)
+	}
+	for _, rel := range []string{".pi/extensions/background-tasks.ts", ".pi/lib/background-task-runner.ts", ".pi/lib/background-task-capture.ts", ".pi/lib/background-task-store.ts", "spec/pi-background-tasks.yaml"} {
+		want, err := fs.ReadFile(harnez.DefaultFS, rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertFileBytes(t, filepath.Join(dir, filepath.FromSlash(rel)), want)
+	}
+	if !piBackgroundPresent(filepath.Join(dir, "package.json")) {
+		t.Error("package.json missing after repairing apply")
 	}
 	if piBackgroundDiffChanged(t, cfg, nil) {
 		t.Error("diff reports drift after the repairing apply")

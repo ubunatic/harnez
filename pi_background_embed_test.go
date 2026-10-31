@@ -12,6 +12,8 @@ func TestPiBackgroundTaskSourcesEmbeddedMatchRepository(t *testing.T) {
 	for _, path := range []string{
 		".pi/extensions/background-tasks.ts",
 		".pi/lib/background-task-runner.ts",
+		".pi/lib/background-task-capture.ts",
+		".pi/lib/background-task-store.ts",
 		"spec/pi-background-tasks.yaml",
 	} {
 		embedded, err := DefaultFS.ReadFile(path)

@@ -1,4 +1,7 @@
 // Test stand-in for Pi's terminal cell measurement.
+export class Text {
+  constructor(text) { this.text = text; }
+}
 export function visibleWidth(text) {
   let width = 0;
   for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)) {

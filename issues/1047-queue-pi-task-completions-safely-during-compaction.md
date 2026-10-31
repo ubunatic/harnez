@@ -24,6 +24,10 @@ The completion's delivery and whether it can be lost or duplicated are not yet e
 
 A deterministic local-stub canary in real Pi 1.4.0 reproduced lost completion messages during manual compaction, including multiple tasks; `session_compact` fires before the guard clears while `session_compact_failed` fires afterward. The runtime `sendUserMessage` wrapper returns no usable acknowledgement, so general exactly-once delivery across all races cannot be guaranteed by this extension alone. An input-handler race and pre-existing queued follow-up stalling were also observed. The canary is now `scripts/canary-pi-compaction/` (`make canary-pi-compaction`); it uses a local stub, not an external model.
 
+## Later hardening from 1021 review
+
+Sol found no MVP blocker in `b6d0998a`. Follow up on direct sends that throw out of `submit` without held-send error reporting, and add an integrated throwing-send regression that asserts the release callback unpins and permits eviction. These do not resolve Pi's missing delivery acknowledgement.
+
 ## Delivery queue: evidence and remaining gaps
 
 `CompletionDelivery` (`.pi/lib/background-task-runner.ts`) holds notifications from this extension's manual `session_before_compact` until `session_compact`/`session_compact_failed`, then submits each at most once, in arrival order, after Pi is idle. Timing is in the `delivery` block of `spec/pi-background-tasks.yaml`.
@@ -51,6 +55,10 @@ Remaining gaps, so the no-loss goal is not fully met:
 ## Host canary and pending review
 
 Host `make canary-pi-compaction` passed all 14 scenarios after `eac42623`. The shutdown scenario nevertheless emitted an `extension_error` saying the captured extension context was stale, alongside the expected stderr report of held task #1; passing scenario assertions do not establish that shutdown is error-free. Independent review must investigate this before acceptance. Claude reviewer dispatch failed on the provider's five-hour quota; no alternate provider was used.
+
+## Shutdown fix review and pre-work
+
+`62466a45` detaches the captured status callback before task shutdown. Developer reports Quota-1 and 14 real-Pi scenarios passing, including shutdown with held ID on stderr and no subsequent extension error. One-shot sol review accepted the bounded fix but found the canary's `startTasks()` clears earlier recorded events: its zero-error assertion only covers later events. Preserve or independently track extension errors across the entire shutdown scenario, without weakening the intentional rejection scenario, then verify. `adb22d42` tracks errors across the full process lifetime; an injected early error was detected and the real-Pi canary passed 14 scenarios. Host `make test-q1` passed after that change. Full no-loss delivery remains unproven because Pi provides no acknowledgement; keep this issue open.
 
 ## Review pre-work
 

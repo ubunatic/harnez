@@ -86,14 +86,22 @@ manual compaction runs and reports that only as an extension error, so the exten
 holds notifications from its `session_before_compact` hook until `session_compact` or
 `session_compact_failed`. Pi has no compaction-state API, so a completion is also held when
 Pi is not idle and no agent run is known (`agent_start` to `agent_settled`); this covers
-another extension's earlier hook. Held notifications go out in arrival order, one per poll,
+another extension's earlier hook. Completions share a fixed window starting at the first arrival; later
+arrivals do not extend it. Batches obey task-count and character bounds and go out in arrival order,
 only while Pi is idle or a known run is active (`delivery` in
 `spec/pi-background-tasks.yaml` sets the timing). Delivery is at most once, not exactly
 once: Pi gives no acknowledgement, so nothing is retried, and one summary warning points at
 `background_task_result`. Known gaps (issue 1047): a run started while an earlier hook holds
 compaction can still get a completion rejected, held notifications are dropped with a stderr
 report at shutdown, and a follow-up queued before compaction waits for the next prompt (with
-a warning). Automatic compaction and ordinary streaming follow-ups are not held.
+a warning). Batching can change their order relative to unrelated messages. Automatic compaction
+and ordinary streaming follow-ups use the same batching window. Entries contain task identity,
+status, bounded command/capture diagnostics and retrieval guidance, never an opt-out output dump.
+Tasks stay pinned against retention eviction until their batch's send attempt, then ordinary retention
+resumes; this is not an acknowledgement or a guarantee that old results remain until read. Shutdown
+releases unsent pins and clears delivery timers. The loader rejects entry limits below 256, message
+limits below 512, or a message limit unable to fit one full entry plus the guidance envelope; the
+schema enforces individual bounds and the loader additionally checks the field relationship.
 `make canary-pi-compaction` checks this against the real Pi with a local stub model.
 
 Tools (model-callable):
@@ -101,7 +109,7 @@ Tools (model-callable):
 - `background_task` starts a command through `$SHELL -lc` in the current project
   directory, inheriting the Pi process environment. Each command runs in its own
   process group, which is what cancellation targets. Supply an optional single-word
-  `label` for the status line; existing command-only calls remain valid. The launch
+  `label` for the status line and `capture: false` to opt out of file capture; existing command-only calls remain valid. The launch
   result identifies the task by ID and label without repeating its command. Pi's
   default collapsed tool-call display truncates long arguments; Ctrl+O expands them.
   This is presentation, not secret protection: full call arguments remain in the
@@ -110,17 +118,31 @@ Tools (model-callable):
 - `background_task_list` lists in-memory tasks with status, elapsed time, exit
   code or signal, and command.
 - `background_task_result` takes `id` and returns status, exit code or signal,
-  elapsed time, and the captured output so far (running or finished).
+  elapsed time, and the retained output tail to the model (running or finished).
+  The interactive tool result hides the tail until Ctrl+O expands it; the full
+  returned tail is still in the session transcript and model context. `/task-result`
+  explicitly displays the tail to the user. For full captured output use `read`.
 - `background_task_cancel` takes `id` and stops a running task. It returns
   `cancelled`, or reports that the task already ended, or returns an error when
   termination cannot be confirmed (the task then stays `running`).
 
-Commands: `/task <command>`, `/tasks`, `/task-result <id>`, `/task-cancel <id>`.
+Commands: `/task [--no-capture] <command>`, `/tasks`, `/task-result <id>`, `/task-cancel <id>`.
 The manual `/task` launch prints the full command; the concise launch result above
 applies to the model-callable `background_task` tool.
 The same IDs are accepted by the tools and commands: a positive safe integer, or
 its canonical decimal string. `0`, negative values, fractions, leading zeros
 (`01`), `NaN`, empty strings and unknown IDs are rejected without sending any signal.
+
+File capture is enabled by default. Output is written asynchronously to a private temporary
+file (directory mode 0700, file mode 0600); these permissions do not isolate other processes
+running as the same user. The temporary directory can be tmpfs and consume RAM. Completion
+and result report the path, committed byte count and any incomplete reason; result also shows
+the bounded in-memory tail. Use Pi's `read` tool with offset and limit for paged inspection
+of text captures. Captures are removed on session shutdown or earlier task eviction. A crash,
+forced termination, or hung filesystem operation can leave residual files; cleanup is best effort.
+The bounded post-exit drain deadline can mark even finite buffered output incomplete when
+storage is slow. Tasks with held completion messages remain available until submission,
+which is not an acknowledgement of delivery; normal eviction can follow submission.
 
 Lifecycle and reporting:
 
@@ -128,7 +150,8 @@ Lifecycle and reporting:
   (non-zero exit, or killed by a signal such as SIGKILL, shown as `signal SIGKILL`
   with a null exit code), or `cancelled`.
 - When a task completes or fails, its command, status, exit code or signal, and
-  captured output are sent to the agent as one follow-up message. A confirmed
+  capture status and path are sent in a bounded batched follow-up. Without file capture,
+  the follow-up points to the retained tail instead of including it. A confirmed
   cancellation and session shutdown send no follow-up. A cancel that was not
   confirmed leaves the task running; when it later ends, it settles like any other
   task and sends its follow-up.

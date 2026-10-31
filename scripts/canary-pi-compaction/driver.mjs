@@ -36,8 +36,9 @@ function lastText(request) {
 async function answer(state, request, res) {
   const summary = !request.tools?.length && /summar/i.test(JSON.stringify(request.messages ?? []));
   const text = lastText(request);
-  const completion = text.match(/Background command #(\d+) finished|FIXTURE (\S+) done/);
-  state.log({ e: "stub", kind: summary ? "summary" : "turn", completion: completion?.[1] ?? completion?.[2] });
+  const completions = [...text.matchAll(/Background command #(\d+) finished|FIXTURE (\S+) done/g)].map((match) => match[1] ?? match[2]);
+  const completion = completions.length > 0;
+  state.log({ e: "stub", kind: summary ? "summary" : "turn", completions, text });
   if (summary && state.failSummary) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: { message: "stub summary failure" } }));
@@ -68,7 +69,11 @@ async function scenario(name, options, body) {
   fs.mkdirSync(agentDir, { recursive: true });
   fs.mkdirSync(cwd);
   const events = [];
-  const log = (event) => events.push(event);
+  const extensionErrors = [];
+  const log = (event) => {
+    events.push(event);
+    if (event.e === "extension_error") extensionErrors.push(event);
+  };
   const state = { log, usage: 50 };
   const server = await startStub(state);
   fs.writeFileSync(path.join(agentDir, "models.json"), JSON.stringify({
@@ -79,7 +84,7 @@ async function scenario(name, options, body) {
     retry: { enabled: false, provider: { maxRetries: 0 } },
   }));
   // Handler order follows load order: "fixtureFirst" makes the fixture's hook hold before the extension's hook runs.
-  const loads = options.fixtureFirst ? [fixture, extension] : [extension, fixture];
+  const loads = options.noFixture ? [extension] : options.fixtureFirst ? [fixture, extension] : [extension, fixture];
   const args = ["--mode", "rpc", "--provider", "stub", "--model", "m", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--session-dir", path.join(home, "sessions")];
   for (const load of loads) args.push("-e", load);
   const pi = spawn(piBin, args, {
@@ -90,7 +95,8 @@ async function scenario(name, options, body) {
   let stderr = "";
   let exited = false;
   pi.stderr.on("data", (data) => (stderr += data));
-  pi.on("exit", () => (exited = true));
+  // Wait for stdio to drain as well as process exit, so shutdown errors are observed.
+  pi.on("close", () => (exited = true));
 
   let nextId = 0;
   const pending = new Map();
@@ -135,7 +141,7 @@ async function scenario(name, options, body) {
       await see("cfg");
     },
     seed: async () => {
-      await see("session_start");
+      if (!options.noFixture) await see("session_start");
       await turn("seed one");
       await turn("seed two");
     },
@@ -150,7 +156,7 @@ async function scenario(name, options, body) {
       return (i) => fs.writeFileSync(`${home}/go${i}`, "");
     },
     // Waits until every listed completion reached the model.
-    delivered: (ids) => until(() => ids.every((id) => events.some((event) => event.e === "stub" && event.completion === String(id))), `delivery of ${ids}`),
+    delivered: (ids) => until(() => ids.every((id) => events.some((event) => event.e === "stub" && event.completions?.includes(String(id)))), `delivery of ${ids}`),
     settle: () => sleep(400),
   };
 
@@ -175,15 +181,15 @@ async function scenario(name, options, body) {
   const text = (message) => (typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join(""));
   const transcript = messages.flatMap((message) => {
     if (message.role === "assistant") return [];
-    const match = text(message).match(/^Background command #(\d+) finished|^FIXTURE (\S+) done/);
-    return match ? [match[1] ?? match[2]] : [];
+    return [...text(message).matchAll(/Background command #(\d+) finished|FIXTURE (\S+) done/g)].map((match) => match[1] ?? match[2]);
   });
-  const rejected = events.filter((event) => event.e === "extension_error" && event.error?.includes(REJECTED)).length;
+  const rejected = extensionErrors.filter((event) => event.error?.includes(REJECTED)).length;
   const check = (label, actual, expected) => {
     if (JSON.stringify(actual) !== JSON.stringify(expected)) problems.push(`${label}: got ${JSON.stringify(actual)}, want ${JSON.stringify(expected)}`);
   };
   check("rejections", rejected, options.rejected ?? 0);
-  check("transcript completions", transcript, options.transcript ?? []);
+  check("extension errors", extensionErrors.length, options.extensionErrors ?? 0);
+  check("transcript completions", options.transcriptSorted ? [...transcript].sort() : transcript, options.transcript ?? []);
   for (const pattern of options.notes ?? []) {
     if (!events.some((event) => event.e === "notify" && pattern.test(event.message))) problems.push(`missing note ${pattern}`);
   }
@@ -197,7 +203,7 @@ async function scenario(name, options, body) {
   for (const event of events) {
     console.log("  " + JSON.stringify(Object.fromEntries(Object.entries(event).filter(([, value]) => value !== undefined))).slice(0, 200));
   }
-  console.log("  FINAL " + JSON.stringify({ rejected, transcript, stderr: stderr.slice(0, 160) }));
+  console.log("  FINAL " + JSON.stringify({ rejected, extensionErrors, transcript, stderr: stderr.slice(0, 160) }));
   for (const problem of problems) console.log(`  PROBLEM ${problem}`);
   if (problems.length) failures++;
 }
@@ -222,9 +228,13 @@ const threeTasksDuringHold = (holdOptions = {}) => async (c) => {
   await c.see("compaction_end");
   await c.delivered([2, 1, 3]);
   await c.settle();
+  const batches = c.events.filter((event) => event.e === "stub" && event.completions?.length);
+  const batch = batches[0]?.text ?? "";
+  const paths = [...batch.matchAll(/Path: ([^\s]+?)\. Deleted/g)].map((match) => match[1]);
+  return { checks: [["batch count", batches.length, 1], ["batch IDs and order", batches[0]?.completions, ["2", "1", "3"]], ["completed statuses", (batch.match(/finished \(completed, exit 0\)/g) ?? []).length, 3], ["independent capture paths", new Set(paths).size, 3]] };
 };
 
-await scenario("normal-idle-and-streaming", { transcript: ["1", "2"], noNotes: [HELD, SUBMITTED] }, async (c) => {
+await scenario("normal-idle-and-streaming", { transcript: ["1", "2"], noNotes: [HELD], notes: [SUBMITTED] }, async (c) => {
   await c.seed();
   const finish = await c.startTasks(2);
   finish(1);
@@ -232,7 +242,7 @@ await scenario("normal-idle-and-streaming", { transcript: ["1", "2"], noNotes: [
   await c.settle();
   c.state.holdStream = latch();
   c.prompt("HOLDSTREAM");
-  await c.until(() => c.events.some((event) => event.e === "stub" && !event.completion && event.kind === "turn"), "streaming");
+  await c.until(() => c.events.some((event) => event.e === "stub" && !event.completions?.length && event.kind === "turn"), "streaming");
   finish(2);
   await c.until(() => c.events.some((event) => event.e === "queue_update" && event.followUp === 1), "follow-up queued during the stream");
   const checks = [["model turns before stream release", c.count("agent_end"), 1]];
@@ -242,7 +252,19 @@ await scenario("normal-idle-and-streaming", { transcript: ["1", "2"], noNotes: [
   return { checks };
 });
 
-await scenario("runtime-contract-rejects-during-hold", { rejected: 1 }, async (c) => {
+await scenario("near-simultaneous-idle-batch", { transcript: ["1", "2", "3"], transcriptSorted: true }, async (c) => {
+  await c.seed();
+  const finish = await c.startTasks(3);
+  for (const id of [1, 2, 3]) finish(id);
+  await c.delivered([1, 2, 3]);
+  await c.settle();
+  const batches = c.events.filter((event) => event.e === "stub" && event.completions?.length);
+  const batch = batches[0]?.text ?? "";
+  const paths = [...batch.matchAll(/Path: ([^\s]+?)\. Deleted/g)].map((match) => match[1]);
+  return { checks: [["batch count", batches.length, 1], ["batch IDs", [...(batches[0]?.completions ?? [])].sort(), ["1", "2", "3"]], ["completed statuses", (batch.match(/finished \(completed, exit 0\)/g) ?? []).length, 3], ["independent capture paths", new Set(paths).size, 3]] };
+});
+
+await scenario("runtime-contract-rejects-during-hold", { rejected: 1, extensionErrors: 1 }, async (c) => {
   await c.seed();
   await c.configure({ holdBefore: true });
   compact(c);
@@ -302,7 +324,7 @@ await scenario("drain-queues-rest-as-follow-ups", { transcript: ["1", "2", "3"],
   }
   await c.prompt("/release before");
   await c.see("compaction_end");
-  await c.until(() => c.events.some((event) => event.e === "queue_update" && event.followUp === 2), "both later messages queued in Pi during the first run");
+  await c.until(() => c.events.some((event) => event.e === "stub" && event.completions?.join(",") === "1,2,3"), "all three completions in one batch");
   c.state.holdStream.release();
   await c.delivered([1, 2, 3]);
   await c.settle();
@@ -373,12 +395,12 @@ await scenario("stranded-follow-up-warns", { transcript: [], notes: [/still has 
   await c.until(() => c.events.some((event) => event.e === "notify" && /still has a queued message/.test(event.message)), "warning");
 });
 
-await scenario("shutdown-while-held", { stderr: /not submitted before shutdown: #1/, notes: [HELD] }, async (c) => {
+await scenario("shutdown-while-held", { noFixture: true, stderr: /not submitted before shutdown: #1/, notes: [HELD] }, async (c) => {
   await c.seed();
   const finish = await c.startTasks(1);
-  await c.configure({ holdBefore: true });
+  c.state.holdSummary = latch();
   compact(c);
-  await c.see("held");
+  await c.until(() => c.events.some((event) => event.e === "stub" && event.kind === "summary"), "summary");
   finish(1);
   await c.until(() => c.events.some((event) => event.e === "notify" && HELD.test(event.message)), "hold");
 });

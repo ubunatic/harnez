@@ -8,6 +8,10 @@
 
 ---
 
+## MVP review follow-ups
+
+Sol found no source-level MVP blocker in `2a205d72`. Later polish: make capture-path guidance conditional on an actual available capture, and use Pi's configured expand-key hint rather than hardcoding Ctrl+O. Renderer tests cover the successful stub case; real interactive verification and full Quota-1 remain outstanding.
+
 ## Problem & Goal
 
 Pi background-task completion currently presents the full output or transcript in the user chat. The owner wants a concise preview for both the user and host agent, with full output available on demand rather than automatically loaded into context. This is separate from issue 1021's capture policy and issue 1044's batching and agent-response guidance.
