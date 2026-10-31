@@ -1,6 +1,6 @@
 # 1069 — Add trial skill for concise 10-5 capability audits (10 things we can do, 5 things we cannot)
 
-**Status**: Open
+**Status**: Closed — delivered /trial capability audit skill with anti-overclaim rules, test coverage, and documentation
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
