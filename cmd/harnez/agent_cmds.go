@@ -233,6 +233,7 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 	models.Flags().BoolVar(&picksOnly, "picks", false, "print role model picks")
 	models.Flags().BoolVar(&markdownOutput, "md", false, "print the embedded picks as Markdown")
 	models.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
+	models.AddCommand(ac.modelsSetCmd())
 	return models
 }
 
