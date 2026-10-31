@@ -178,6 +178,7 @@ debloat:
     sprinter: user-invocable-only
     standup: user-invocable-only
     story: user-invocable-only
+    trial: user-invocable-only
     retro: user-invocable-only
     harnez-status: user-invocable-only
     harnez-selftest: user-invocable-only
@@ -495,6 +496,11 @@ skills:
     license: AGPL-3.0-or-later
     description: "Write a concise sprint, retrospective, or topic study in docs/studies/"
     file: docs/commands/study.md
+
+  - name: trial
+    license: AGPL-3.0-or-later
+    description: "Run an objective 10-5 capability audit over recent work: 10 things the product can do now, and 5 things it cannot do yet"
+    file: docs/commands/trial.md
 
   - name: retro
     license: AGPL-3.0-or-later
