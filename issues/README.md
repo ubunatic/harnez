@@ -108,4 +108,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1059 | [1059-interpret-slash-separated-model-picks-by-skill-role.md](1059-interpret-slash-separated-model-picks-by-skill-role.md) | Interpret slash-separated model picks by skill role | Open |
 | 1060 | [1060-add-a-branch-cleanup-skill-with-optional-autonomous-decisions.md](1060-add-a-branch-cleanup-skill-with-optional-autonomous-decisions.md) | Add a branch cleanup skill with optional autonomous decisions | Open |
 | 1061 | [1061-investigate-skills-only-apply-removing-unrelated-managed-configuration.md](1061-investigate-skills-only-apply-removing-unrelated-managed-configuration.md) | Investigate skills-only apply removing unrelated managed configuration | Open |
+| 1062 | [1062-safe-git-push-and-git-pull-ergonomics-for-agit-repositories.md](1062-safe-git-push-and-git-pull-ergonomics-for-agit-repositories.md) | Safe git push and git pull ergonomics for AGit repositories | Open |
 <!-- harnez:end issues-active-index -->
