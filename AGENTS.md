@@ -120,15 +120,16 @@ See `@docs/AgenticLoop.md` Invariant 10 (Media & Demo Verification Gate).
 
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
-- Team repo: one topic branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`); push the branch and open a PR to merge.
-- main is protected; harnez refuses commits on it. Do not commit to or push the default branch unless the repository admin explicitly authorizes it in the current session. Never force-push.
+- Team repo: work on a local topic branch and open a PR to merge. Tickets and small PRs on a forge with AGit (Forgejo, Gitea) reuse one local branch and push no branch: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
+- Push a branch (`issue/<n>-<slug>`, `sprint/<n>`) for work others push to, long sprints that need rebasing, and GitHub, which has no AGit.
+- main is protected; harnez refuses commits on it, except `harnez release`, which the repository admin or an agent asked to release may run there. Otherwise do not commit to or push the default branch unless the repository admin explicitly authorizes it in the current session. Never force-push.
 - Update/rebase your branch before merging; follow this repo's CI and review requirements.
 <!-- harnez:end Repo Setup -->
 
 ## Remotes
 - codeberg.org and github.com are both dev remotes; Codeberg is canonical for releases (see Remotes in docs/Git.md).
-- `origin` is `ubunatic/harnez` on Codeberg and its `main` is protected: every change goes through a topic
-  branch and a PR, which the host opens.
+- `origin` is `ubunatic/harnez` on Codeberg and its `main` is protected: every change except `harnez release` goes
+  through a topic branch and a PR, which the host opens.
 
 <!-- harnez:begin Language Conventions -->
 Adhere to the following conventions.

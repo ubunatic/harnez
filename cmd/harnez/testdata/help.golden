@@ -1632,7 +1632,7 @@ Flags:
       --issues-git         record issue-index Git integration for a Harnez tracker (use --issues-git=false to remove it)
       --json               output RAMP report in JSON format
       --no-wizard          skip repository feature prompts
-      --protected-main     record git.protected_main: harnez refuses commits and pushes on the default branch (needs team or fork)
+      --protected-main     record git.protected_main: harnez refuses commits on the default branch, except harnez release (needs team or fork)
       --quota-1            scaffold Quota-1 single-test guardrails in AGENTS.md and Makefile
       --ramp               report RAMP maturity profile and projected init changes (offline, read-only)
       --ramp-report        alias for --ramp

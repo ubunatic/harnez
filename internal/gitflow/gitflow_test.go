@@ -228,6 +228,46 @@ func TestGuardProtectedOnTopicBranch(t *testing.T) {
 	}
 }
 
+func TestGuardReleaseAllowsProtectedMainWithNote(t *testing.T) {
+	dir, stderr := guardRepo(t, "main", teamProtectedYAML)
+	if err := GuardRelease(dir); err != nil {
+		t.Fatalf("release on protected main must pass: %v", err)
+	}
+	if want := "branch protection decides"; !strings.Contains(stderr.String(), want) {
+		t.Fatalf("stderr = %q, want it to contain %q", stderr, want)
+	}
+	// Every other auto-committing command stays refused on the same branch.
+	if err := GuardCommit(dir, "close ticket"); err == nil {
+		t.Fatal("protected main must still refuse other commits")
+	}
+}
+
+func TestGuardReleaseFallsBackToGuardCommit(t *testing.T) {
+	t.Run("protected detached HEAD refuses", func(t *testing.T) {
+		dir, _ := guardRepo(t, "main", teamProtectedYAML)
+		runGit(t, dir, "checkout", "--detach")
+		err := GuardRelease(dir)
+		if err == nil || !strings.Contains(err.Error(), "refusing to release on a detached HEAD") {
+			t.Fatalf("error = %v, want a detached HEAD refusal", err)
+		}
+	})
+	t.Run("protected topic branch is silent", func(t *testing.T) {
+		dir, stderr := guardRepo(t, "release/v1.0.1", teamProtectedYAML)
+		if err := GuardRelease(dir); err != nil || stderr.Len() != 0 {
+			t.Fatalf("err = %v, stderr = %q", err, stderr)
+		}
+	})
+	t.Run("unprotected team main warns", func(t *testing.T) {
+		dir, stderr := guardRepo(t, "main", teamYAML)
+		if err := GuardRelease(dir); err != nil {
+			t.Fatal(err)
+		}
+		if want := "use a topic branch"; !strings.Contains(stderr.String(), want) {
+			t.Fatalf("stderr = %q, want it to contain %q", stderr, want)
+		}
+	})
+}
+
 func TestGuardProtectedDetachedHEAD(t *testing.T) {
 	dir, _ := guardRepo(t, "main", teamProtectedYAML)
 	runGit(t, dir, "checkout", "--detach")

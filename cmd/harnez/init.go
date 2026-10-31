@@ -80,7 +80,7 @@ func newInitCmd() *cobra.Command {
 	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git workflow, recorded as git.mode in .harnez/repo.yaml and noted in AGENTS.md (solo, fork, team)")
 	initCmd.Flags().StringVar(&initRepoMode, "git-mode", "", "alias for --repo-mode")
 	initCmd.MarkFlagsMutuallyExclusive("repo-mode", "git-mode")
-	initCmd.Flags().BoolVar(&initProtectedMain, "protected-main", false, "record git.protected_main: harnez refuses commits and pushes on the default branch (needs team or fork)")
+	initCmd.Flags().BoolVar(&initProtectedMain, "protected-main", false, "record git.protected_main: harnez refuses commits on the default branch, except harnez release (needs team or fork)")
 	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "use detected/recorded setup and reconcile Makefile targets without prompts")
 	initCmd.Flags().BoolVar(&initWizard, "wizard", false, "prompt for repository features even without a terminal (EOF keeps defaults)")
 	initCmd.Flags().BoolVar(&initNoWizard, "no-wizard", false, "skip repository feature prompts")
