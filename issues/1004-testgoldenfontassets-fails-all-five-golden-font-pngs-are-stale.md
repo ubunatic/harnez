@@ -1,6 +1,6 @@
 # 1004 — TestGoldenFontAssets fails: all five golden font PNGs are stale
 
-**Status**: Open
+**Status**: Closed — test compares decoded pixels; encoder byte drift only
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
