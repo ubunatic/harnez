@@ -37,6 +37,25 @@ func TestPiRunAndResumeArgs(t *testing.T) {
 	}
 }
 
+func TestPiRunContextModes(t *testing.T) {
+	model := Model{Provider: "pi", Name: "openai/gpt-4o", Tier: "low"}
+
+	// default mode: no extra flags
+	if got, want := piRunArgs(model, "prompt", "default"), []string{"--mode", "json", "--model", "openai/gpt-4o", "--thinking", "low", "--", "prompt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("default context mode args = %#v, want %#v", got, want)
+	}
+
+	// no-skills mode: --no-skills, --no-mcp
+	if got, want := piRunArgs(model, "prompt", "no-skills"), []string{"--mode", "json", "--model", "openai/gpt-4o", "--thinking", "low", "--no-skills", "--no-mcp", "--", "prompt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("no-skills context mode args = %#v, want %#v", got, want)
+	}
+
+	// plain mode: --no-skills, --no-context-files, --no-mcp, --tools read,edit,write,grep,find,bash
+	if got, want := piRunArgs(model, "prompt", "plain"), []string{"--mode", "json", "--model", "openai/gpt-4o", "--thinking", "low", "--no-skills", "--no-context-files", "--no-mcp", "--tools", "read,edit,write,grep,find,bash", "--", "prompt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("plain context mode args = %#v, want %#v", got, want)
+	}
+}
+
 func TestPiLmcoderCoderArgs(t *testing.T) {
 	model, err := ResolveModel("lmcoder:coder")
 	if err != nil {

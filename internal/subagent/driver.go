@@ -76,9 +76,10 @@ func (d UnsupportedDriver) Delete(context.Context, string) error { return d.unsu
 
 // RunOptions describes a new provider turn.
 type RunOptions struct {
-	Prompt string
-	Model  Model
-	Dir    string
+	Prompt      string
+	Model       Model
+	Dir         string
+	ContextMode string
 }
 
 // Model is a resolved provider model specification.
@@ -448,6 +449,9 @@ func resolveCanonicalRoleModel(spec agentSpec, roleName, modelSpec string) (Mode
 			return DefaultModel()
 		}
 	}
+	if overrideModel, ok := ActiveTierOverride(modelSpec); ok {
+		return ResolveModel(overrideModel)
+	}
 	if _, ok := role.Models[modelSpec]; ok {
 		modelSpec, err = resolveRoleTrait(role.Models, modelSpec, map[string]bool{}, 1)
 		if err != nil {
@@ -544,7 +548,17 @@ func resolveRoleSelection(spec agentSpec, roleName, requested string, resolve fu
 		m, err := resolveCanonicalRoleModel(spec, roleName, requested)
 		return ModelSelection{Model: m}, err
 	}
-	result, err := resolveTraitCandidates(role.Models, trait, resolve, available)
+	roleModels := role.Models
+	if overrideModel, ok := ActiveTierOverride(trait); ok {
+		// Clone and prepend or replace candidate for trait
+		cloned := make(map[string][]string, len(role.Models))
+		for k, v := range role.Models {
+			cloned[k] = v
+		}
+		cloned[trait] = append([]string{overrideModel}, role.Models[trait]...)
+		roleModels = cloned
+	}
+	result, err := resolveTraitCandidates(roleModels, trait, resolve, available)
 	result.Trait = trait
 	if err != nil && isDefault && len(role.Models[trait]) == 0 {
 		return result, fmt.Errorf("default model %q is disabled by user policy; pass --model <spec> to choose another model or enable it in models.yaml: %w", trait, err)

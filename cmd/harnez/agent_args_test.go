@@ -81,6 +81,7 @@ func TestAgentRootVerbAndPromptDispatch(t *testing.T) {
 		{name: "dash prompt", args: []string{"--", "foo"}, wantPrompt: "foo"},
 		{name: "prompt flag", args: []string{"-p", "foo"}, wantPrompt: "foo"},
 		{name: "prompt consumes flag", args: []string{"-p", "--model"}, wantError: `-p needs prompt text but got flag "--model"`},
+		{name: "context mode flag", args: []string{"--context-mode", "plain", "-p", "foo"}, wantPrompt: "foo"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -211,4 +212,22 @@ func (m mockDriver) Stop(ctx context.Context, id string) error {
 }
 func (m mockDriver) Delete(ctx context.Context, id string) error {
 	return m.deleteFunc(ctx, id)
+}
+
+func TestAgentStartContextModePassThrough(t *testing.T) {
+	old := agentDriver
+	driver := &recordingAgentDriver{}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "--store-dir", t.TempDir(), "--context-mode", "plain", "-p", "review task"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("start failed: %v", err)
+	}
+	if driver.contextMode != "plain" {
+		t.Fatalf("driver.contextMode = %q, want %q", driver.contextMode, "plain")
+	}
 }

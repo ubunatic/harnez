@@ -1,6 +1,6 @@
 # 1057 — Epic: plain agent runs and temporary model selection
 
-**Status**: Open
+**Status**: Closed — delivered selectable agent context modes (1027) and time-limited default models for effort tiers (1056)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Epic
@@ -24,8 +24,8 @@ Open decisions: exact time syntax and tier precedence; provider support and sema
 
 | Ticket | What | Group | Searcher → architect → developer | Reviewer | Status |
 |---|---|---|---|---|---|
-| 1027 | Code: agent context modes and verify minimal invocation | 1 | cheap → as needed → lean | smart | Open; refine and canary |
-| 1056 | Code: expiring tier defaults and optional tool-free hello | 2, after 1 | cheap → as needed → lean | smart | Open; refine with 942 |
+| 1027 | Code: agent context modes and verify minimal invocation | 1 | cheap → as needed → lean | smart | Closed (c7830529) |
+| 1056 | Code: expiring tier defaults and optional tool-free hello | 2, after 1 | cheap → as needed → lean | smart | Closed (969632f0) |
 | 946 / 955 | Shared bare-probe dependencies, owned by 942 | external dependency | coordinate with 942 | per 942 | Open; no duplicate ownership |
-| — | Sprint study and `/evergreen` | final | host | host | Pending |
-| — | `/wrap` | final | host | — | Pending |
+| — | Sprint study and `/evergreen` | final | host | host | Closed |
+| — | `/wrap` | final | host | — | Done |

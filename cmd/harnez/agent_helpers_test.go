@@ -9,11 +9,12 @@ import (
 )
 
 type recordingAgentDriver struct {
-	dir     string
-	prompt  string
-	stopped []string
-	deleted []string
-	runHook func()
+	dir         string
+	prompt      string
+	contextMode string
+	stopped     []string
+	deleted     []string
+	runHook     func()
 }
 
 type resumeOutcomeDriver struct {

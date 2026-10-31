@@ -192,9 +192,9 @@ func warnQuota1Changes(cmd *cobra.Command, dir string, turnStarted time.Time) {
 // startRequest describes one new agent turn. Prompt is sent to the agent;
 // StoredPrompt is what the session records (files as "path (N bytes)").
 type startRequest struct {
-	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode, Role string
-	JSON, PlanFirst, AllowExhaustedQuota                         bool
-	SessionID                                                    string
+	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode, Role, ContextMode string
+	JSON, PlanFirst, AllowExhaustedQuota                                      bool
+	SessionID                                                                 string
 }
 
 func providerAvailability(provider, model string) usage.ProviderQuotaAvailability {
@@ -436,7 +436,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		warnSmallPiWindow(cmd.ErrOrStderr(), m, piAgentDir())
 	}
 	tl := newTimeline(cmd)
-	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir}
+	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir, ContextMode: req.ContextMode}
 	parentID := d.parent() // read before the child's environment replaces it
 	defer setAgentEnv(role, sessName, spec)()
 	initialSession := func(status string) *subagent.Session {
@@ -458,6 +458,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 			}
 			workerSpec := m.Spec()
 			args := []string{"--store-dir", d.storeDir, "agent", "start", "--worker-session", id, "--json", "--model", workerSpec, "--role", role, "--name", sessName, "--dir", canonicalWorkDir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
+			if req.ContextMode != "" {
+				args = append(args, "--context-mode", req.ContextMode)
+			}
 			if req.AllowExhaustedQuota {
 				args = append(args, "--allow-exhausted-quota")
 			}

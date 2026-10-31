@@ -443,6 +443,63 @@ func TestResolveModelBareSonnetOpusAmbiguous(t *testing.T) {
 	}
 }
 
+func TestAgentSpecContextModes(t *testing.T) {
+	names, err := ContextModeNames()
+	if err != nil {
+		t.Fatalf("ContextModeNames() failed: %v", err)
+	}
+	expected := []string{"default", "no-skills", "plain"}
+	for _, exp := range expected {
+		found := false
+		for _, name := range names {
+			if name == exp {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected context mode %q not found in %v", exp, names)
+		}
+	}
+
+	def, err := ResolveContextMode("")
+	if err != nil {
+		t.Fatalf("ResolveContextMode(\"\") failed: %v", err)
+	}
+	if def.Skills == nil || !*def.Skills {
+		t.Errorf("expected default mode skills to be true")
+	}
+
+	noSkills, err := ResolveContextMode("no-skills")
+	if err != nil {
+		t.Fatalf("ResolveContextMode(\"no-skills\") failed: %v", err)
+	}
+	if noSkills.Skills == nil || *noSkills.Skills {
+		t.Errorf("expected no-skills mode skills to be false")
+	}
+	if noSkills.MCP == nil || *noSkills.MCP {
+		t.Errorf("expected no-skills mode mcp to be false")
+	}
+
+	plain, err := ResolveContextMode("plain")
+	if err != nil {
+		t.Fatalf("ResolveContextMode(\"plain\") failed: %v", err)
+	}
+	if plain.Skills == nil || *plain.Skills {
+		t.Errorf("expected plain mode skills to be false")
+	}
+	if plain.ContextFiles == nil || *plain.ContextFiles {
+		t.Errorf("expected plain mode context_files to be false")
+	}
+	if len(plain.Tools) != 6 {
+		t.Errorf("expected plain mode to have 6 tools, got %v", plain.Tools)
+	}
+
+	if _, err := ResolveContextMode("non-existent-mode"); err == nil || !strings.Contains(err.Error(), "unknown context mode") {
+		t.Errorf("expected error for non-existent-mode, got %v", err)
+	}
+}
+
 func TestAgentSpecRolesAndCheckSpawn(t *testing.T) {
 	if r, err := DefaultRole(); err != nil || r != "developer" {
 		t.Fatalf("default role = %q, %v", r, err)

@@ -24,6 +24,7 @@ type agentCLI struct {
 	all                 bool
 	allowExhaustedQuota bool
 	children            bool
+	contextMode         string
 	detach              bool
 	failedOnly          bool
 	find                func(cmd *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error)
@@ -90,7 +91,7 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 			}
 			return runInteractiveStart(cmd, interactiveDeps{store: ac.store, parent: ac.parent, storeDir: ac.storeDir}, interactiveStartRequest{Prompt: prompt, Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, Role: startRoleSpec, AllowExhaustedQuota: ac.allowExhaustedQuota})
 		}
-		req := startRequest{Role: startRoleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, SessionID: ac.workerID, AllowExhaustedQuota: ac.allowExhaustedQuota}
+		req := startRequest{Role: startRoleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, SessionID: ac.workerID, AllowExhaustedQuota: ac.allowExhaustedQuota, ContextMode: ac.contextMode}
 		if ac.workerID != "" {
 			return runDetachedWorker(cmd, req, ac.storeDir)
 		}
@@ -111,6 +112,13 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 	start.Flags().BoolVar(&ac.detach, "async", false, "internal: alias for --detach")
 	_ = start.Flags().MarkHidden("detach")
 	_ = start.Flags().MarkHidden("async")
+	start.Flags().StringVar(&ac.contextMode, "context-mode", "", "agent context mode (e.g. plain, no-skills, default)")
+	start.Flags().StringVar(&ac.contextMode, "mode", "", "alias for --context-mode")
+	_ = start.Flags().MarkHidden("mode")
+	_ = start.RegisterFlagCompletionFunc("context-mode", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		names, _ := subagent.ContextModeNames()
+		return names, cobra.ShellCompDirectiveNoFileComp
+	})
 	start.Flags().BoolVar(&ac.allowExhaustedQuota, "allow-exhausted-quota", false, "start even when cached provider quota is exhausted")
 	start.Flags().StringVar(&ac.workerID, "worker-session", "", "internal detached worker session ID")
 	start.Flags().StringVar(&ac.planSpec, "plan", "no", "planning gate: yes or no")
@@ -225,6 +233,7 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 	models.Flags().BoolVar(&picksOnly, "picks", false, "print role model picks")
 	models.Flags().BoolVar(&markdownOutput, "md", false, "print the embedded picks as Markdown")
 	models.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
+	models.AddCommand(ac.modelsSetCmd())
 	return models
 }
 
