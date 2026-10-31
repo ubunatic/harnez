@@ -249,6 +249,8 @@ test("invalid write counts fail, and independent writers settle separately", asy
     const result = await f.writer.finish();
     assert.equal(result.complete, false);
     assert.match(result.reason!, /invalid or zero/);
+    assert.equal(result.uncertain, 1);
+    assert.equal(result.confirmedDropped, 0);
     balanced(result);
     await f.writer.cleanup();
   }
@@ -261,6 +263,23 @@ test("invalid write counts fail, and independent writers settle separately", asy
   slow.writer.abort("stop");
   pending.reject(new Error("late open"));
   assert.match((await slow.writer.cleanup()).errors[0], /late open/);
+});
+
+test("a rejected write may have persisted a prefix and is classified as uncertain", async () => {
+  const persisted: number[] = [];
+  const f = fixture({ write: async (_handle, bytes) => {
+    persisted.push(...bytes.subarray(0, 2));
+    throw new Error("write failed after prefix");
+  } });
+  f.writer.append(Uint8Array.of(1, 2, 3, 4));
+  const result = await f.writer.finish();
+  assert.deepEqual(persisted, [1, 2]);
+  assert.equal(result.complete, false);
+  assert.equal(result.committed, 0);
+  assert.equal(result.uncertain, 4);
+  assert.equal(result.confirmedDropped, 0);
+  balanced(result);
+  assert.equal((await f.writer.cleanup()).pending, false);
 });
 
 test("late close rejection is reported after bounded settlement", async () => {

@@ -188,6 +188,7 @@ export class CaptureWriter<H> {
     if (this.settled) { this.cleanupErrors.push(`capture late write failed: ${String(error)}`); this.close(); return; }
     this.disarm();
     this.dropped += this.inflight;
+    this.uncertain += this.inflight;
     this.inflight = 0;
     this.fail(`capture write failed: ${String(error)}`);
     this.close();
