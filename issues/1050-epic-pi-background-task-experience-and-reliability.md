@@ -16,9 +16,16 @@ Re-check live code, ticket status and recent history before work. Existing ticke
 
 Task labels, output capture and presentation, completion delivery, manual command backgrounding and reload safety. Out of scope: reviving tasks across reloads, unrelated generated-index drift (1045), and changes to Pi or other external repositories. Investigate Pi APIs and existing behavior before choosing mechanisms; Ctrl-B's existing cursor binding is intentionally displaced for the requested workflow (1048). Separate host-visible content from UI rendering and protect sensitive output.
 
-## Candidate tasks
+## Remaining work and delivery phases
 
-Sprint groups, dependencies and role/model assignments are placeholders until code discovery and refinement. Each code task requires its tests, install and a runtime canary before closure; design/discovery work requires a study and decomposed backlog instead.
+This epic owns the remaining Pi background-task plugin work in 1021, 1044, 1046, 1047, 1048, 1049 and 1052; the MVPs in PR #31 do not close their follow-ups. Revalidate each ticket against live code and recent Pi releases before dispatch. Sprint assignments and exact write sets remain subject to discovery and refinement.
+
+- **Capture and presentation:** 1021 and 1046, code follow-ups after the merged MVP. Review retention, truthful capture status and user/model presentation together where they overlap.
+- **Completion delivery:** 1044 and 1047, code follow-ups dependent on the capture retention contract. Preserve FIFO within batches and acknowledge Pi's no-delivery-ack limitation.
+- **Installation verification:** 1052, after the integrated changes to be installed are verified. Use only the targeted updater and report the credential-dependent model canary separately.
+- **Pi API-dependent interaction:** 1048 and 1049 are blocked, not presumed implemented. Recheck supported APIs or seek an owner-approved alternative before scheduling.
+
+Each code task requires its tests, install and a runtime canary before closure; design/discovery work requires a study and decomposed backlog instead. A phase exits with its children closed or explicitly parked, its declared canary or design review passing, and a clean tree.
 
 | Ticket | What | Group | Searcher → architect → developer | Reviewer | Status |
 | --- | --- | --- | --- | --- | --- |
