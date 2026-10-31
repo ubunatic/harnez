@@ -1,6 +1,6 @@
 # 1027 — Agent context modes: plain, no-skills, role-skills for Pi and small-window models
 
-**Status**: Open
+**Status**: Closed — shipped selectable context modes (default, no-skills, plain) starting with Pi driver via spec and CLI flag
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
