@@ -37,6 +37,12 @@ commonly stored in an `AGENTS.md` file at the repository root.
 - Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary):
   `type(scope)?: summary`, e.g. `feat(cli): add init command`.
 - Common types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
+- Mark a breaking change with `!` after the type or scope and a `BREAKING CHANGE:` footer, e.g.:
+  ```
+  feat(cli)!: drop the --old flag
+
+  BREAKING CHANGE: the --old flag is removed; use --new instead.
+  ```
 
 ## Hygiene
 - Do not commit secrets.
