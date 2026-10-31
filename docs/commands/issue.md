@@ -40,14 +40,16 @@ The goal is that the ticket commit reaches `main`, or a review PR, as soon as it
 
 Routes, in order:
 
-1. **Direct push to `main`**, preferred whenever the admin's authorization (from this session or applicable standing repository policy) allows it and the remote accepts it. Several policy sources may apply, such as `AGENTS.md`, `.harnez/repo.yaml` or `docs/Git.md`. The strictest rule wins, and the remote's branch protection has the final word.
+1. **Direct push to `main`**, preferred whenever the admin's authorization allows it and the remote accepts it. Standing consent counts only where applicable policy allows it. Where applicable policy requires authorization in the current session, standing consent is insufficient: ask for it, or use the AGit route. Several policy sources may apply, such as `AGENTS.md`, `.harnez/repo.yaml` or `docs/Git.md`. The strictest rule wins, and the remote's branch protection has the final word.
 2. **AGit PR to `main`**, when direct push is not allowed and the remote supports AGit. Use the contributor's reusable topic (by default the Git username). Several issues may share one topic and one PR.
 3. **Stop** otherwise. Leave the commit on the current branch, or on `issue/<n>-<slug>` if you are on the default branch, and report the reason.
+
+`<sha>` is the intended issue commit: the commit that `harnez issues open --commit` made for this ticket.
 
 Direct route:
 
 - `git -C <repo> fetch origin main`
-- Only the ticket change may go out. `git -C <repo> log --oneline origin/main..<sha>` must list only this ticket's commits, and `git -C <repo> diff --stat origin/main <sha>` must touch only `issues/` files. Otherwise stop.
+- Only the ticket change may go out. `git -C <repo> log --oneline origin/main..<sha>` must list only this ticket's commits, and `git -C <repo> diff --stat origin/main <sha>` must touch only `issues/` files. If any unrelated commit or file is included, stop and report it. Do not push.
 - `git -C <repo> push --dry-run origin <sha>:refs/heads/main`, then `git -C <repo> push origin <sha>:refs/heads/main`. Never use `--force` or a `+` refspec. A rejection means `main` moved: fetch, re-check, and report.
 - After the push, fetch again and check `git -C <repo> merge-base --is-ancestor <sha> origin/main`. Equality is not required, because `main` may advance after the push.
 
@@ -55,7 +57,7 @@ AGit route:
 
 - `git -C <repo> push origin HEAD:refs/for/main/<topic>`. This is the form the repository owner reports the Forgejo remote accepts; it is not verified on other servers. If the remote rejects it, stop and report the server's message. Do not fall back to a direct push.
 - Pushes to the same topic update its open PR. Check the topic's PR is still open before pushing. If it was closed or merged, use a new topic and say so.
-- The topic may contain other issues' commits. Check that the commits being pushed contain no unrelated changes.
+- The topic may contain other issues' commits. Check that the commits being pushed contain no unrelated changes. If any pushed commit is unrelated to an issue, stop and report it.
 - The PR is not on `main` until it is merged. Report it as open, not as published.
 
 Number collisions: `harnez issues new` checks only fetched remote branches, so another clone's unpushed reservation stays invisible. Before publishing, check `git -C <repo> ls-tree origin/main issues/` for the reserved number. If it is taken, fetch, run `harnez issues new` for a fresh number, move the draft into the new path, and update its number. Keep the old file until the move is confirmed with `git -C <repo> status`. Never delete or overwrite content. Stop and report the paths only if this cannot be done cleanly.
