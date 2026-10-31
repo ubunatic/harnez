@@ -23,6 +23,7 @@ If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.
 harnez find -d <repo> issues -a status:active
 harnez find -d <repo> issues "<search terms>"
 harnez find -d <repo> issues similar "<search terms>"
+git -C <repo> fetch          # reserved numbers must see other clones' tickets
 harnez issues new -d <repo> "<title>"
 # Fill the returned ticket path using the repository's issue conventions.
 harnez issues open -d <repo> <n> --commit "docs(issues): file <n>, <summary>"
@@ -32,6 +33,19 @@ Use text for routine issue discovery. Add `-I/--image` only when the user explic
 requests image output; an assumed token benefit is not a reason to render PNG cards.
 The active index `issues/README.md` covers Open, In Progress, Blocked, and Draft tickets;
 it links to the generated Backlog and Closed indexes.
+
+## Publish Promptly
+
+The goal is a clean ticket commit that reaches review as soon as it is filed. Publishing to `main` is the exception, not the default.
+
+1. Commit on a topic branch. Under `git.mode: team` with `protected_main: true` in `.harnez/repo.yaml`, `harnez` refuses commits on the default branch. If you are on it, create `issue/<n>-<slug>` first.
+2. Take the first route that the repository policy and the remote permissions allow:
+   - **Direct push to `main`**: only if `protected_main` is `false`, or the repository administrator explicitly authorizes it in the current session, and the remote accepts the push. A machine or user name alone is not authorization.
+   - **Contributor AGit PR**: otherwise push with `git push origin HEAD:refs/for/main -o topic=<topic>`, where `<topic>` is the contributor's reusable topic (typically the Git username). Reuse the open PR for that topic: later ticket commits pushed to the same topic update it. Do not open one PR per ticket. If that PR was already closed or merged, use a new topic and say so. Never force-push.
+   - **Stop**: if the remote refuses AGit or the user lacks permission, leave the commit on the topic branch and report the denial. Do not push to `main` as a workaround.
+3. Report the state exactly: "committed on <branch>", "pushed to <remote> <ref>", or "AGit PR <number or URL> opened or updated". An AGit change reaches `main` only after the PR is merged. Say "published" or "on main" only after the remote confirms it.
+
+Number collisions are secondary to publishing, but never allow a duplicate or an overwrite. If the remote already holds a different ticket with the reserved number, do not overwrite or rename it: fetch, allocate a fresh number with `harnez issues new`, and delete only your own unpublished placeholder after checking it. If that cannot be resolved cleanly, stop and report the collision.
 
 On the delegated path, keep the host responsive: report that filing was dispatched and don't block the main chat
 on the subagent's result, unless the user explicitly asked to wait or the very next step in
@@ -54,8 +68,9 @@ walked in, never "as discussed above." At minimum, include:
 - Any explicit constraints the user stated (scope limits, priority hints, what *not*
   to do).
 - The absolute repository and installed skill paths, execution mode (`direct`),
-  selected agent/model/effort, write and commit authority, and expected result:
-  ticket number/path or duplicate finding, verification, commit, and remaining blockers.
+  selected agent/model/effort, write, commit and publication authority (direct push, AGit PR or stop),
+  and expected result: ticket number/path or duplicate finding, verification, commit, publication
+  status, and remaining blockers.
 
 The delegator supplies known context without predoing duplicate search or drafting.
 The executor must read the full installed issue skill and applicable repository

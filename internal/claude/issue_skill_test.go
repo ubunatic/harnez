@@ -35,6 +35,7 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		}
 		assertIssueTLDR(t, path, content)
 		assertIssueGoalExitClause(t, path, content)
+		assertIssuePublicationGuidance(t, path, content)
 		for _, name := range []string{"issue", "review", "roadmap"} {
 			path := filepath.Join(skillsRoot, name, "SKILL.md")
 			content := readIssueInstall(t, path)
@@ -67,6 +68,23 @@ func assertIssueGoalExitClause(t *testing.T, path, content string) {
 	for _, want := range []string{
 		"Always define a `/goal` with an exit clause",
 		"stop and report when blocked on a user decision or denied permission",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)
+		}
+	}
+}
+
+func assertIssuePublicationGuidance(t *testing.T, path, content string) {
+	t.Helper()
+	for _, want := range []string{
+		"## Publish Promptly",
+		"Publishing to `main` is the exception, not the default.",
+		"git push origin HEAD:refs/for/main -o topic=<topic>",
+		"Reuse the open PR for that topic",
+		"Never force-push.",
+		"Do not push to `main` as a workaround.",
+		"Say \"published\" or \"on main\" only after the remote confirms it.",
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)
