@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { Text, visibleWidth } from "@earendil-works/pi-tui";
 import {
   BackgroundTaskRunner,
   CompletionDelivery,
@@ -139,6 +139,13 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
     label: "Background Task Result",
     description: "Show the status, exit code or signal, elapsed time and captured output (bounded, newest kept) of one background command by ID.",
     parameters: TaskIdParams,
+    renderResult(result, options, _theme, context) {
+      const content = result.content.filter((part) => part.type === "text").map((part) => part.text).join("\n");
+      if (options.expanded || context.isError) return new Text(content, 0, 0);
+      const details = result.details;
+      const status = details ? statusLine(details.id, details.status, details.elapsedMs, details.exitCode, details.signal, "") : "Background task result";
+      return new Text(`${status}\nOutput hidden (Ctrl+O to expand); use the capture path in the result for paged inspection.`, 0, 0);
+    },
     async execute(_toolCallId, params) {
       const task = resolveTask(runner, params.id);
       const elapsedMs = runner.elapsedMs(task);
@@ -146,7 +153,7 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
       const body = task.output || (task.status === "running" ? "Task is still running; no output yet." : "No output.");
       return {
         content: [{ type: "text", text: `${header}\n${task.captureWriter ? `${captureDescription(task)}\n` : ""}${body}` }],
-        details: { id: task.id, command: task.command, status: task.status, exitCode: task.exitCode, signal: task.signal, elapsedMs, output: task.output, capture: task.capture ? { path: task.capture.path, result: task.captureResult } : undefined, captureError: task.captureError },
+        details: { id: task.id, status: task.status, exitCode: task.exitCode, signal: task.signal, elapsedMs },
       };
     },
   });

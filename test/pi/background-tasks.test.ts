@@ -341,9 +341,17 @@ test("default capture is visible in completion and result; tool and command can 
   assert.match(s.messages[0].text, /Capture complete: 14 committed bytes/);
   assert.ok(s.messages[0].text.includes(task.capture!.path));
   assert.ok(!s.messages[0].text.includes("private output"));
-  const result = text(await s.tool("background_task_result").execute("r", { id: 1 }));
+  const tool = s.tool("background_task_result");
+  const rawResult = await tool.execute("r", { id: 1 });
+  const result = text(rawResult);
   assert.ok(result.includes(task.capture!.path) && result.includes("private output"));
   assert.match(result, /session close or earlier eviction/);
+  assert.ok(!JSON.stringify(rawResult.details).includes("private output"));
+  const collapsed = tool.renderResult(rawResult, { expanded: false }, {}, { isError: false }).text;
+  assert.match(collapsed, /#1 \[completed\].*exit 0/);
+  assert.match(collapsed, /Ctrl\+O/);
+  assert.ok(!collapsed.includes("private output"));
+  assert.ok(tool.renderResult(rawResult, { expanded: true }, {}, { isError: false }).text.includes("private output"));
   await s.command("task-result").handler("1", s.ctx);
   assert.ok(s.ctx.notes.at(-1)!.message.includes(task.capture!.path));
   await s.tool("background_task").execute("b", { command: "second", capture: false }, undefined, undefined, s.ctx);

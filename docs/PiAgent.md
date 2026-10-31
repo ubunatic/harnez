@@ -118,7 +118,10 @@ Tools (model-callable):
 - `background_task_list` lists in-memory tasks with status, elapsed time, exit
   code or signal, and command.
 - `background_task_result` takes `id` and returns status, exit code or signal,
-  elapsed time, and the captured output so far (running or finished).
+  elapsed time, and the retained output tail to the model (running or finished).
+  The interactive tool result hides the tail until Ctrl+O expands it; the full
+  returned tail is still in the session transcript and model context. `/task-result`
+  explicitly displays the tail to the user. For full captured output use `read`.
 - `background_task_cancel` takes `id` and stops a running task. It returns
   `cancelled`, or reports that the task already ended, or returns an error when
   termination cannot be confirmed (the task then stays `running`).
@@ -147,7 +150,8 @@ Lifecycle and reporting:
   (non-zero exit, or killed by a signal such as SIGKILL, shown as `signal SIGKILL`
   with a null exit code), or `cancelled`.
 - When a task completes or fails, its command, status, exit code or signal, and
-  capture status and path are sent to the agent as one follow-up message. Without file capture, the bounded output tail is sent instead. A confirmed
+  capture status and path are sent in a bounded batched follow-up. Without file capture,
+  the follow-up points to the retained tail instead of including it. A confirmed
   cancellation and session shutdown send no follow-up. A cancel that was not
   confirmed leaves the task running; when it later ends, it settles like any other
   task and sends its follow-up.
