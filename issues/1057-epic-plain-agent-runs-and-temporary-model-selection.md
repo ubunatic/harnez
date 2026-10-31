@@ -24,7 +24,7 @@ Open decisions: exact time syntax and tier precedence; provider support and sema
 
 | Ticket | What | Group | Searcher → architect → developer | Reviewer | Status |
 |---|---|---|---|---|---|
-| 1027 | Code: agent context modes and verify minimal invocation | 1 | cheap → as needed → lean | smart | Open; refine and canary |
+| 1027 | Code: agent context modes and verify minimal invocation | 1 | cheap → as needed → lean | smart | Closed (c7830529) |
 | 1056 | Code: expiring tier defaults and optional tool-free hello | 2, after 1 | cheap → as needed → lean | smart | Open; refine with 942 |
 | 946 / 955 | Shared bare-probe dependencies, owned by 942 | external dependency | coordinate with 942 | per 942 | Open; no duplicate ownership |
 | — | Sprint study and `/evergreen` | final | host | host | Pending |
