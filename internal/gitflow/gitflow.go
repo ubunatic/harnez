@@ -174,9 +174,9 @@ func ProtectedBranches(dir string, c Config) []string {
 // Stderr receives the guard's warnings. Tests replace it.
 var Stderr io.Writer = os.Stderr
 
-// currentBranch returns the checked-out branch. detached is true when HEAD
+// CurrentBranch returns the checked-out branch. detached is true when HEAD
 // points at a commit; ok is false when dir is not a git work tree.
-func currentBranch(dir string) (branch string, detached, ok bool) {
+func CurrentBranch(dir string) (branch string, detached, ok bool) {
 	out, err := exec.Command("git", "-C", dir, "symbolic-ref", "-q", "--short", "HEAD").Output()
 	if err == nil {
 		return strings.TrimSpace(string(out)), false, true
@@ -185,6 +185,35 @@ func currentBranch(dir string) (branch string, detached, ok bool) {
 		return "", false, false
 	}
 	return "", true, true
+}
+
+// DetachedHeadRef returns a human-readable ref or commit description for a
+// detached HEAD (such as an exact tag or short commit hash).
+func DetachedHeadRef(dir string) string {
+	out, err := exec.Command("git", "-C", dir, "describe", "--tags", "--exact-match", "HEAD").Output()
+	if err == nil {
+		if s := strings.TrimSpace(string(out)); s != "" {
+			return s
+		}
+	}
+	out, err = exec.Command("git", "-C", dir, "rev-parse", "--short", "HEAD").Output()
+	if err == nil {
+		if s := strings.TrimSpace(string(out)); s != "" {
+			return s
+		}
+	}
+	return "HEAD"
+}
+
+// CheckDetachedHead checks whether dir is in a detached HEAD state.
+// If detached, it returns a descriptive warning string; otherwise it returns empty string.
+func CheckDetachedHead(dir string) string {
+	_, detached, ok := CurrentBranch(dir)
+	if !ok || !detached {
+		return ""
+	}
+	ref := DetachedHeadRef(dir)
+	return fmt.Sprintf("WARNING: HEAD is detached at %s; agent commits will land off-branch. Switch to a branch (git switch -c <topic> or git switch <branch>) before committing.", ref)
 }
 
 // GuardCommit is the one check every harnez path that stages or commits runs
@@ -200,15 +229,15 @@ func GuardCommit(dir, action string) error {
 	if cfg.Mode == ModeSolo {
 		return nil
 	}
-	branch, detached, ok := currentBranch(dir)
+	branch, detached, ok := CurrentBranch(dir)
 	if !ok {
 		return nil // not a git work tree: the commit step reports that itself
 	}
 	if detached {
 		if cfg.ProtectedMain {
-			return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing to %s on a detached HEAD; check out a branch", action)
+			return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing to %s on a detached HEAD; check out a branch (git switch -c topic or git switch <branch>)", action)
 		}
-		fmt.Fprintf(Stderr, "git.mode=%s: committing on a detached HEAD; check out a branch\n", cfg.Mode)
+		fmt.Fprintf(Stderr, "git.mode=%s: committing on a detached HEAD; check out a branch (git switch -c topic or git switch <branch>)\n", cfg.Mode)
 		return nil
 	}
 	if !slices.Contains(ProtectedBranches(dir, cfg), branch) {

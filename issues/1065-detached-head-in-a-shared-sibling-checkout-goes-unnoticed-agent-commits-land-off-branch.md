@@ -1,6 +1,6 @@
 # 1065 — Detached HEAD in a shared sibling checkout goes unnoticed; agent commits land off-branch
 
-**Status**: Open
+**Status**: Closed — prevented accidental off-branch commits by warning on detached HEAD in session start and commit guards with actionable recovery guidance
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
