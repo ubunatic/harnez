@@ -104,4 +104,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1055 | [1055-automate-issue-indexes-after-merges-with-a-forgejo-workflow.md](1055-automate-issue-indexes-after-merges-with-a-forgejo-workflow.md) | Automate issue indexes after merges with a Forgejo workflow | Open |
 | 1056 | [1056-set-time-limited-default-models-for-agent-effort-tiers.md](1056-set-time-limited-default-models-for-agent-effort-tiers.md) | Set time-limited default models for agent effort tiers | Open |
 | 1057 | [1057-epic-plain-agent-runs-and-temporary-model-selection.md](1057-epic-plain-agent-runs-and-temporary-model-selection.md) | Epic: plain agent runs and temporary model selection | Open |
+| 1058 | [1058-squash-sprint-commits-by-milestone-without-rewriting-main.md](1058-squash-sprint-commits-by-milestone-without-rewriting-main.md) | Squash sprint commits by milestone without rewriting main | Open |
 <!-- harnez:end issues-active-index -->
