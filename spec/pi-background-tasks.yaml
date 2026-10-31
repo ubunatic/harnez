@@ -11,7 +11,7 @@
     "poll_ms": 25
   },
   "capture": {
-    "enabled_by_default": false,
+    "enabled_by_default": true,
     "low_watermark_bytes": 262144,
     "high_watermark_bytes": 1048576,
     "hard_watermark_bytes": 2097152,

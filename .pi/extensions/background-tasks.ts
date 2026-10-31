@@ -48,11 +48,13 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
   const delivery = new CompletionDelivery(
     (text) => pi.sendUserMessage(text, { deliverAs: "followUp" }),
     options.config.delivery,
+    undefined,
+    (id) => runner.releaseDelivery(id),
   );
   runner.on("finished", (task: BackgroundTask) => {
-    delivery.submit(
+    task.deliveryHeld = delivery.submit(
       task.id,
-      `Background command #${task.id} finished (${task.status}, ${describeEnd(task)}).\nCommand: ${task.command}\nOutput:\n${task.output || "(no output)"}\n\nInspect this result and report what it means. If it indicates unfinished work, continue appropriately.`,
+      `Background command #${task.id} finished (${task.status}, ${describeEnd(task)}).\nCommand: ${task.command}\n${task.captureWriter ? captureDescription(task) : `Output:\n${task.output || "(no output)"}`}${task.spawnError && task.captureWriter ? `\nSpawn error: ${task.spawnError}` : ""}\n\nInspect this result and report what it means. If it indicates unfinished work, continue appropriately.`,
     );
   });
 
@@ -95,13 +97,14 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
   pi.registerTool({
     name: "background_task",
     label: "Background Task",
-    description: "Run any shell command as a background task. The command's output is sent back to you for inspection when it exits.",
+    description: "Run a shell command in the background. Output is captured to a private temporary file by default; use capture false to opt out.",
     parameters: Type.Object({
       command: Type.String({ description: "Shell command to run in the background" }),
       label: Type.Optional(Type.String({ description: "Single-word task label, e.g. build or tests" })),
+      capture: Type.Optional(Type.Boolean({ description: "Capture output to a temporary file (default true); false opts out" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const task = runner.start(params.command, ctx.cwd, { label: params.label });
+      const task = runner.start(params.command, ctx.cwd, { label: params.label, capture: params.capture });
       return {
         content: [{ type: "text", text: `Started background command #${task.id} (${task.label})` }],
         details: { id: task.id, label: task.label, status: task.status },
@@ -141,8 +144,8 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
       const header = statusLine(task.id, task.status, elapsedMs, task.exitCode, task.signal, task.command);
       const body = task.output || (task.status === "running" ? "Task is still running; no output yet." : "No output.");
       return {
-        content: [{ type: "text", text: `${header}\n${body}` }],
-        details: { id: task.id, command: task.command, status: task.status, exitCode: task.exitCode, signal: task.signal, elapsedMs, output: task.output },
+        content: [{ type: "text", text: `${header}\n${task.captureWriter ? `${captureDescription(task)}\n` : ""}${body}` }],
+        details: { id: task.id, command: task.command, status: task.status, exitCode: task.exitCode, signal: task.signal, elapsedMs, output: task.output, capture: task.capture ? { path: task.capture.path, result: task.captureResult } : undefined, captureError: task.captureError },
       };
     },
   });
@@ -161,11 +164,12 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
   });
 
   const startCommand: CommandHandler = async (command, ctx) => {
-    const task = runner.start(command, ctx.cwd, { manual: true });
+    const match = command.match(/^\s*--no-capture(?:\s+|$)/);
+    const task = runner.start(match ? command.slice(match[0].length) : command, ctx.cwd, { manual: true, capture: match ? false : undefined });
     ctx.ui.notify(`Started background command #${task.id}: ${task.command}`, "info");
   };
   pi.registerCommand("task", {
-    description: "Run any shell command in the background: /task <command>",
+    description: "Run a shell command in the background: /task [--no-capture] <command>",
     handler: startCommand,
   });
 
@@ -181,7 +185,7 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
   const showResult: CommandHandler = async (args, ctx) => {
     await withTaskOrNotify(runner, args, ctx, (task) => {
       const result = task.output || (task.status === "running" ? "Task is still running." : "No output.");
-      ctx.ui.notify(`${statusLine(task.id, task.status, runner.elapsedMs(task), task.exitCode, task.signal, "")}\n${result}`, task.status === "failed" ? "error" : "info");
+      ctx.ui.notify(`${statusLine(task.id, task.status, runner.elapsedMs(task), task.exitCode, task.signal, "")}\n${task.captureWriter ? `${captureDescription(task)}\n` : ""}${result}`, task.status === "failed" ? "error" : "info");
     });
   };
   pi.registerCommand("task-result", {
@@ -202,6 +206,14 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
   });
 
   return { runner };
+}
+
+function captureDescription(task: BackgroundTask): string {
+  const location = task.capture ? `Path: ${task.capture.path}` : "No capture file created";
+  const lifetime = "Deleted at session close or earlier eviction. Use Pi's read tool with offset and limit to inspect the file.";
+  if (!task.captureResult) return `Capture pending. ${location}. ${lifetime}`;
+  const result = task.captureResult;
+  return `Capture ${result.complete ? "complete" : `incomplete (${result.reason ?? "unknown reason"})`}: ${result.committed} committed bytes. ${location}. ${lifetime}`;
 }
 
 // Pi loads this file from the project and the global location into one runtime. Both copies share that runtime's

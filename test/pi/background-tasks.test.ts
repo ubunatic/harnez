@@ -6,9 +6,10 @@ import assert from "node:assert/strict";
 import { visibleWidth } from "./width-stub.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { nodeStoreFS } from "../../.pi/lib/background-task-store.ts";
 import backgroundTasksExtension, { installBackgroundTasks } from "../../.pi/extensions/background-tasks.ts";
 import {
   BackgroundTaskRunner,
@@ -34,7 +35,7 @@ const fastConfig: BackgroundTaskConfig = {
   finishedRetentionLimit: 50,
   stop: { graceMs: 20, killWaitMs: 60, pollMs: 5 },
   delivery: { holdWarnMs: 1_000, flushPollMs: 1 },
-  capture: parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec", visibleWidth).capture,
+  capture: { ...parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec", visibleWidth).capture, enabledByDefault: false },
   status: parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec", visibleWidth).status,
 };
 const escalationConfig: BackgroundTaskConfig = { ...fastConfig, stop: { graceMs: 50, killWaitMs: 5_000, pollMs: 10 } };
@@ -50,7 +51,12 @@ afterEach(async () => {
 
 /** Fake stream: the runner destroys a stream when its output is drained after a held pipe. */
 function fakeStream() {
-  return Object.assign(new EventEmitter(), { destroy() {} });
+  return Object.assign(new EventEmitter(), { destroy() {}, pause() {}, resume() {} });
+}
+
+async function waitForRemoval(path: string): Promise<void> {
+  const deadline = Date.now() + TIMEOUT_MS;
+  while (existsSync(path) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 1));
 }
 
 test("capture keeps complete bytes privately, cleans up on eviction and shutdown, and supports opt-out", async () => {
@@ -61,19 +67,23 @@ test("capture keeps complete bytes privately, cleans up on eviction and shutdown
   const bytes = Buffer.from("secret 🚀 ".repeat(5000));
   children[0].stdout.emit("data", bytes.subarray(0, 9));
   children[0].stdout.emit("data", bytes.subarray(9));
+  children[0].emit("exit", 0, null);
+  children[0].emit("close", 0, null);
+  await first.captureWriter!.finish();
   assert.deepEqual(readFileSync(first.capture!.path), bytes);
   assert.equal(statSync(first.capture!.path).mode & 0o777, 0o600);
   assert.equal(statSync(first.capture!.directory).mode & 0o777, 0o700);
-  children[0].emit("exit", 0, null);
-  children[0].emit("close", 0, null);
   children[1].emit("exit", 0, null);
   children[1].emit("close", 0, null);
+  await second.captureWriter!.finish();
+  await waitForRemoval(first.capture!.path);
   assert.equal(existsSync(first.capture!.path), false);
   const secondPath = second.capture!.path;
   const third = s.runner.start("third", process.cwd(), { capture: false });
   assert.equal(third.capture, undefined);
   children[2].emit("exit", 0, null);
   children[2].emit("close", 0, null);
+  await waitForRemoval(secondPath);
   assert.equal(existsSync(secondPath), false);
   const ordinary = s.runner.start("ordinary", process.cwd());
   assert.equal(ordinary.capture, undefined);
@@ -85,14 +95,18 @@ test("capture keeps complete bytes privately, cleans up on eviction and shutdown
 test("partial capture write failure preserves bytes and does not stop the task", async () => {
   const child = new FakeChild(123);
   let calls = 0;
-  const s = setup({ spawn: () => child as any, captureWrite: (fd, buffer, offset, length) => {
-    if (calls++ === 0) return writeSync(fd, buffer, offset, Math.min(3, length));
-    throw new Error("disk full");
-  } });
+  const s = setup({ spawn: () => child as any, captureFS: { ...nodeStoreFS, open: async (...args) => {
+    const handle = await nodeStoreFS.open(...args);
+    return { stat: () => handle.stat(), close: () => handle.close(), write: async (data) => {
+      if (calls++ === 0) return handle.write(data.subarray(0, 3));
+      throw new Error("disk full");
+    } };
+  } } });
   const task = s.runner.start("command", process.cwd(), { capture: true });
   child.stdout.emit("data", Buffer.from("abcdef"));
   child.stderr.emit("data", Buffer.from("more"));
   assert.equal(task.status, "running");
+  await task.captureWriter!.finish();
   assert.match(task.captureError!, /disk full/);
   assert.equal(readFileSync(task.capture!.path, "utf8"), "abc");
   assert.equal(task.output, "abcdefmore");
@@ -101,6 +115,96 @@ test("partial capture write failure preserves bytes and does not stop the task",
   const path = task.capture!.path;
   await s.runner.shutdown();
   assert.equal(existsSync(path), false);
+});
+
+test("slow capture defers notification and drain while backpressured", async () => {
+  const child = new FakeChild(123);
+  let release!: () => void;
+  let started!: () => void;
+  const writing = new Promise<void>((resolve) => { started = resolve; });
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  let pauses = 0;
+  let resumes = 0;
+  child.stdout.pause = child.stderr.pause = () => { pauses++; };
+  child.stdout.resume = child.stderr.resume = () => { resumes++; };
+  const capture = { ...fastConfig.capture, lowWatermarkBytes: 1, highWatermarkBytes: 2, hardWatermarkBytes: 100 };
+  const s = setup({ spawn: () => child as any, config: { ...fastConfig, capture }, captureFS: { ...nodeStoreFS, open: async (...args) => {
+    const handle = await nodeStoreFS.open(...args);
+    return { stat: () => handle.stat(), close: () => handle.close(), write: async (data) => { started(); await blocked; return handle.write(data); } };
+  } } });
+  let finished = 0;
+  s.runner.on("finished", () => finished++);
+  const task = s.runner.start("slow", process.cwd(), { capture: true });
+  child.stdout.emit("data", Buffer.from("slow"));
+  await writing;
+  child.emit("exit", 0, null);
+  assert.equal(pauses, 2);
+  assert.ok(task.drainTimer, "post-exit deadline remains armed during backpressure");
+  child.emit("close", 0, null);
+  assert.equal(finished, 0);
+  release();
+  await task.captureWriter!.finish();
+  assert.equal(resumes, 2, "normal close resumes both streams after capture drains");
+  assert.equal(finished, 1);
+  assert.equal(task.captureResult!.complete, true);
+});
+
+test("post-exit drain deadline survives repeated capture progress and backpressure", async () => {
+  const child = new FakeChild(123);
+  let destroyed = 0;
+  let pauses = 0;
+  let writes = 0;
+  child.stdout.destroy = child.stderr.destroy = () => { destroyed++; };
+  child.stdout.pause = child.stderr.pause = () => { pauses++; };
+  child.stdout.resume = () => { if (!destroyed) child.stdout.emit("data", Buffer.from("xy")); };
+  const capture = { ...fastConfig.capture, lowWatermarkBytes: 1, highWatermarkBytes: 2, hardWatermarkBytes: 100, stallMs: 1000 };
+  let spawned = false;
+  const s = setup({ spawn: () => { if (spawned) return new FakeChild(124) as any; spawned = true; return child as any; }, config: { ...fastConfig, capture, finishedRetentionLimit: 1 }, captureFS: { ...nodeStoreFS, open: async (...args) => {
+    const handle = await nodeStoreFS.open(...args);
+    return { stat: () => handle.stat(), close: () => handle.close(), write: async (data) => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      writes++;
+      return handle.write(data);
+    } };
+  } } });
+  const task = s.runner.start("escaped", process.cwd(), { capture: true });
+  const finished = new Promise<void>((resolve) => s.runner.once("finished", () => resolve()));
+  child.stdout.emit("data", Buffer.from("xy"));
+  child.emit("exit", 0, null);
+  await finished;
+  assert.ok(writes > 1 && pauses > 2, "writes and pause/resume cycles continued after exit");
+  assert.equal(destroyed, 2);
+  assert.match(task.captureError!, /drain timed out/);
+  assert.equal(task.captureResult!.complete, false);
+  assert.ok(readFileSync(task.capture!.path).length >= 2, "accepted prefix was retained");
+  const next = s.runner.start("next", process.cwd());
+  next.child.emit("exit", 0, null);
+  next.child.emit("close", 0, null);
+  assert.equal(s.runner.tasks.has(task.id), false, "finished task can be evicted");
+});
+
+test("capture records drain truncation and cancellation retains the tail", async () => {
+  const child = new FakeChild(123);
+  const s = setup({ spawn: () => child as any, liveGroupMembers: () => 0 });
+  const task = s.runner.start("held", process.cwd(), { capture: true });
+  child.stdout.emit("data", Buffer.from("tail"));
+  child.emit("exit", 0, null);
+  await new Promise<void>((resolve) => s.runner.once("finished", () => resolve()));
+  assert.match(task.captureError!, /drain timed out/);
+  assert.match(task.output, /tail/);
+  assert.equal(task.captureResult!.complete, false);
+
+  const other = new FakeChild(124);
+  const c = setup({ spawn: () => other as any, liveGroupMembers: () => 0 });
+  const cancelled = c.runner.start("cancel", process.cwd(), { capture: true });
+  other.stdout.emit("data", Buffer.from("cancel tail"));
+  const attempt = c.runner.cancel(cancelled);
+  other.emit("exit", null, "SIGTERM");
+  other.emit("close", null, "SIGTERM");
+  assert.equal(await attempt, "cancelled");
+  await cancelled.captureWriter!.finish();
+  assert.equal(cancelled.output, "cancel tail");
+  assert.equal(cancelled.captureResult!.complete, true);
 });
 
 class FakeChild extends EventEmitter {
@@ -211,6 +315,113 @@ function isDead(pid: number): boolean {
 function text(result: { content: Array<{ text: string }> }): string {
   return result.content.map((part) => part.text).join("\n");
 }
+
+test("default capture is visible in completion and result; tool and command can opt out", async () => {
+  const children: FakeChild[] = [];
+  const config = { ...fastConfig, capture: { ...fastConfig.capture, enabledByDefault: true }, finishedRetentionLimit: 2 };
+  const s = setup({ config, spawn: () => { const child = new FakeChild(200 + children.length); children.push(child); return child as any; } });
+  await s.tool("background_task").execute("a", { command: "first" }, undefined, undefined, s.ctx);
+  const task = s.runner.tasks.get(1)!;
+  children[0].stdout.emit("data", Buffer.from("private output"));
+  children[0].emit("exit", 0, null);
+  children[0].emit("close", 0, null);
+  await task.captureWriter!.finish();
+  assert.match(s.messages[0].text, /Capture complete: 14 committed bytes/);
+  assert.ok(s.messages[0].text.includes(task.capture!.path));
+  assert.ok(!s.messages[0].text.includes("private output"));
+  const result = text(await s.tool("background_task_result").execute("r", { id: 1 }));
+  assert.ok(result.includes(task.capture!.path) && result.includes("private output"));
+  assert.match(result, /session close or earlier eviction/);
+  await s.command("task-result").handler("1", s.ctx);
+  assert.ok(s.ctx.notes.at(-1)!.message.includes(task.capture!.path));
+  await s.tool("background_task").execute("b", { command: "second", capture: false }, undefined, undefined, s.ctx);
+  assert.equal(s.runner.tasks.get(2)!.captureWriter, undefined);
+  await s.command("task").handler("--no-capture third", s.ctx);
+  assert.equal(s.runner.tasks.get(3)!.command, "third");
+  assert.equal(s.runner.tasks.get(3)!.captureWriter, undefined);
+  children[1].emit("exit", 0, null); children[1].emit("close", 0, null);
+  children[2].emit("exit", 0, null); children[2].emit("close", 0, null);
+  await waitForRemoval(task.capture!.path);
+  assert.equal(existsSync(task.capture!.path), false);
+});
+
+test("held captures survive retention until their notifications are submitted", async () => {
+  const children: FakeChild[] = [];
+  const config = { ...fastConfig, capture: { ...fastConfig.capture, enabledByDefault: true }, finishedRetentionLimit: 1 };
+  const s = setup({ config, spawn: () => { const child = new FakeChild(400 + children.length); children.push(child); return child as any; } });
+  const ctx = { ...s.ctx, idle: false, isIdle: () => ctx.idle, hasPendingMessages: () => false };
+  s.handlers.get("session_start")?.({}, ctx);
+  s.handlers.get("session_before_compact")?.({ reason: "manual" }, ctx);
+  const tasks: BackgroundTask[] = [];
+  for (let i = 0; i < 3; i++) {
+    await s.tool("background_task").execute("a", { command: `held-${i}` }, undefined, undefined, ctx);
+    const task = s.runner.tasks.get(i + 1)!;
+    tasks.push(task);
+    children[i].stdout.emit("data", Buffer.from(`output-${i}`));
+    children[i].emit("exit", 0, null);
+    children[i].emit("close", 0, null);
+    await task.captureWriter!.finish();
+  }
+  assert.equal(s.messages.length, 0);
+  for (const task of tasks) {
+    assert.ok(s.runner.tasks.has(task.id));
+    assert.ok(existsSync(task.capture!.path));
+  }
+  s.handlers.get("session_compact")?.({ reason: "manual" }, ctx);
+  ctx.idle = true;
+  const deadline = Date.now() + TIMEOUT_MS;
+  while (s.messages.length < 3 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(s.messages.length, 3);
+  for (const [i, message] of s.messages.entries()) assert.ok(message.text.includes(tasks[i].capture!.path));
+  await waitForRemoval(tasks[0].capture!.path);
+  await waitForRemoval(tasks[1].capture!.path);
+  assert.equal(existsSync(tasks[0].capture!.path), false);
+  assert.equal(existsSync(tasks[1].capture!.path), false);
+  assert.equal(s.runner.tasks.size, 1);
+  assert.ok(existsSync(tasks[2].capture!.path));
+  await s.runner.shutdown();
+  assert.equal(existsSync(tasks[2].capture!.path), false);
+});
+
+test("shutdown removes captures even while completion is held", async () => {
+  const child = new FakeChild(402);
+  const s = setup({ spawn: () => child as any, config: { ...fastConfig, capture: { ...fastConfig.capture, enabledByDefault: true } } });
+  const ctx = { ...s.ctx, isIdle: () => false, hasPendingMessages: () => false };
+  s.handlers.get("session_before_compact")?.({ reason: "manual" }, ctx);
+  await s.tool("background_task").execute("a", { command: "held" }, undefined, undefined, ctx);
+  const task = s.runner.tasks.get(1)!;
+  child.emit("exit", 0, null); child.emit("close", 0, null);
+  await task.captureWriter!.finish();
+  const path = task.capture!.path;
+  assert.ok(existsSync(path));
+  await s.handlers.get("session_shutdown")?.({}, ctx);
+  assert.equal(existsSync(path), false);
+  assert.equal(s.messages.length, 0);
+});
+
+test("spawn failure diagnostic appears alongside empty complete capture", async () => {
+  const child = new FakeChild(401);
+  const s = setup({ spawn: () => child as any, config: { ...fastConfig, capture: { ...fastConfig.capture, enabledByDefault: true } } });
+  await s.tool("background_task").execute("a", { command: "missing" }, undefined, undefined, s.ctx);
+  const task = s.runner.tasks.get(1)!;
+  child.emit("error", new Error("spawn ENOENT"));
+  child.emit("close", null, null);
+  await task.captureWriter!.finish();
+  assert.match(s.messages[0].text, /Capture complete: 0 committed bytes/);
+  assert.match(s.messages[0].text, /Spawn error: spawn ENOENT/);
+});
+
+test("capture creation failure is visible in completion and result", async () => {
+  const child = new FakeChild(300);
+  const config = { ...fastConfig, capture: { ...fastConfig.capture, enabledByDefault: true } };
+  const s = setup({ config, spawn: () => child as any, captureFS: { ...nodeStoreFS, mkdtemp: async () => { throw new Error("no space"); } } });
+  await s.tool("background_task").execute("a", { command: "bad" }, undefined, undefined, s.ctx);
+  const task = s.runner.tasks.get(1)!;
+  child.emit("exit", 1, null); child.emit("close", 1, null);
+  await task.captureWriter!.finish();
+  assert.match(s.messages[0].text, /Capture incomplete .*no space.*0 committed bytes.*No capture file created/);
+  assert.match(text(await s.tool("background_task_result").execute("r", { id: 1 })), /no space/);
+});
 
 test("lifecycle: exit 0 completes, exit 7 fails, stderr captured, status updates, one follow-up per task", async () => {
   const s = setup({ ...realProcess, config: escalationConfig });
@@ -570,7 +781,7 @@ test("config: the spec file loads with the documented bounds", () => {
     finishedRetentionLimit: 50,
     stop: { graceMs: 1_000, killWaitMs: 2_000, pollMs: 25 },
     delivery: { holdWarnMs: 30_000, flushPollMs: 25 },
-    capture: fastConfig.capture,
+    capture: { ...fastConfig.capture, enabledByDefault: true },
     status: fastConfig.status,
   });
 });

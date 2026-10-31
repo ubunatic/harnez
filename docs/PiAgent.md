@@ -101,7 +101,7 @@ Tools (model-callable):
 - `background_task` starts a command through `$SHELL -lc` in the current project
   directory, inheriting the Pi process environment. Each command runs in its own
   process group, which is what cancellation targets. Supply an optional single-word
-  `label` for the status line; existing command-only calls remain valid. The launch
+  `label` for the status line and `capture: false` to opt out of file capture; existing command-only calls remain valid. The launch
   result identifies the task by ID and label without repeating its command. Pi's
   default collapsed tool-call display truncates long arguments; Ctrl+O expands them.
   This is presentation, not secret protection: full call arguments remain in the
@@ -115,12 +115,23 @@ Tools (model-callable):
   `cancelled`, or reports that the task already ended, or returns an error when
   termination cannot be confirmed (the task then stays `running`).
 
-Commands: `/task <command>`, `/tasks`, `/task-result <id>`, `/task-cancel <id>`.
+Commands: `/task [--no-capture] <command>`, `/tasks`, `/task-result <id>`, `/task-cancel <id>`.
 The manual `/task` launch prints the full command; the concise launch result above
 applies to the model-callable `background_task` tool.
 The same IDs are accepted by the tools and commands: a positive safe integer, or
 its canonical decimal string. `0`, negative values, fractions, leading zeros
 (`01`), `NaN`, empty strings and unknown IDs are rejected without sending any signal.
+
+File capture is enabled by default. Output is written asynchronously to a private temporary
+file (directory mode 0700, file mode 0600); these permissions do not isolate other processes
+running as the same user. The temporary directory can be tmpfs and consume RAM. Completion
+and result report the path, committed byte count and any incomplete reason; result also shows
+the bounded in-memory tail. Use Pi's `read` tool with offset and limit for paged inspection
+of text captures. Captures are removed on session shutdown or earlier task eviction. A crash,
+forced termination, or hung filesystem operation can leave residual files; cleanup is best effort.
+The bounded post-exit drain deadline can mark even finite buffered output incomplete when
+storage is slow. Tasks with held completion messages remain available until submission,
+which is not an acknowledgement of delivery; normal eviction can follow submission.
 
 Lifecycle and reporting:
 
@@ -128,7 +139,7 @@ Lifecycle and reporting:
   (non-zero exit, or killed by a signal such as SIGKILL, shown as `signal SIGKILL`
   with a null exit code), or `cancelled`.
 - When a task completes or fails, its command, status, exit code or signal, and
-  captured output are sent to the agent as one follow-up message. A confirmed
+  capture status and path are sent to the agent as one follow-up message. Without file capture, the bounded output tail is sent instead. A confirmed
   cancellation and session shutdown send no follow-up. A cancel that was not
   confirmed leaves the task running; when it later ends, it settles like any other
   task and sends its follow-up.

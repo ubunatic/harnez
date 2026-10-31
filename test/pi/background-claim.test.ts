@@ -16,7 +16,7 @@ import backgroundTasksExtension, { installBackgroundTasks } from "../../.pi/exte
 const CLAIM_CHANNEL = "harnez:background-tasks:claim";
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 // The tree a global package mirrors: the extension, its sibling lib, and the spec it reads relative to itself.
-const SOURCE_FILES = [".pi/extensions/background-tasks.ts", ".pi/lib/background-task-runner.ts", "spec/pi-background-tasks.yaml"];
+const SOURCE_FILES = [".pi/extensions/background-tasks.ts", ".pi/lib/background-task-runner.ts", ".pi/lib/background-task-store.ts", ".pi/lib/background-task-capture.ts", "spec/pi-background-tasks.yaml"];
 // The M2 installer must write this same manifest for the global copy (type module, extension entry point).
 const MIRROR_PACKAGE_JSON = { name: "harnez-pi-background-tasks", private: true, type: "module", pi: { extensions: [".pi/extensions/background-tasks.ts"] } };
 const EXPECTED_TOOLS = ["background_task", "background_task_cancel", "background_task_list", "background_task_result"];

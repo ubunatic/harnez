@@ -24,6 +24,10 @@ The completion's delivery and whether it can be lost or duplicated are not yet e
 
 A deterministic local-stub canary in real Pi 1.4.0 reproduced lost completion messages during manual compaction, including multiple tasks; `session_compact` fires before the guard clears while `session_compact_failed` fires afterward. The runtime `sendUserMessage` wrapper returns no usable acknowledgement, so general exactly-once delivery across all races cannot be guaranteed by this extension alone. An input-handler race and pre-existing queued follow-up stalling were also observed. The canary is now `scripts/canary-pi-compaction/` (`make canary-pi-compaction`); it uses a local stub, not an external model.
 
+## Later hardening from 1021 review
+
+Sol found no MVP blocker in `b6d0998a`. Follow up on direct sends that throw out of `submit` without held-send error reporting, and add an integrated throwing-send regression that asserts the release callback unpins and permits eviction. These do not resolve Pi's missing delivery acknowledgement.
+
 ## Delivery queue: evidence and remaining gaps
 
 `CompletionDelivery` (`.pi/lib/background-task-runner.ts`) holds notifications from this extension's manual `session_before_compact` until `session_compact`/`session_compact_failed`, then submits each at most once, in arrival order, after Pi is idle. Timing is in the `delivery` block of `spec/pi-background-tasks.yaml`.

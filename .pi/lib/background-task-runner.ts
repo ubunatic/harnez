@@ -2,9 +2,10 @@
 // tests can drive it with fake children, an injected clock and an injected signal function.
 import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { closeSync, fstatSync, lstatSync, mkdtempSync, openSync, readdirSync, readFileSync, rmdirSync, unlinkSync, writeSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { CaptureStore, type CaptureFile, type StoreFS } from "./background-task-store.ts";
+import { CaptureWriter, type CaptureResult } from "./background-task-capture.ts";
 import { StringDecoder } from "node:string_decoder";
 
 export type TaskStatus = "running" | "completed" | "failed" | "cancelled";
@@ -51,8 +52,16 @@ export interface BackgroundTask {
   /** Combined stdout/stderr, bounded to outputLimitChars (newest text kept). */
   output: string;
   /** Private full-output capture, or an error and readable partial capture if writing failed. */
-  capture?: { path: string; directory: string; fd?: number; fileInode: number; directoryInode: number; error?: string };
+  capture?: { path: string; directory: string; error?: string };
+  captureWriter?: CaptureWriter<CaptureFile>;
+  captureFile?: CaptureFile;
+  captureResult?: CaptureResult;
+  capturePaused?: boolean;
+  drainTimedOut?: boolean;
+  finalizeTimer?: NodeJS.Timeout;
   captureError?: string;
+  spawnError?: string;
+  deliveryHeld?: boolean;
   // Internal bookkeeping below; read-only for callers.
   child: ChildProcess;
   /** The shell leader has exited or closed. Its PID may be reused after reaping, so no signal is sent. */
@@ -88,7 +97,8 @@ export interface RunnerOptions {
    * Needed because a zombie still answers a signal-0 group probe but runs nothing and holds no output pipe.
    */
   liveGroupMembers: (pgid: number) => number | undefined;
-  captureWrite?: (fd: number, buffer: Buffer, offset: number, length: number) => number;
+  captureFS?: StoreFS;
+  captureTmpdir?: string;
 }
 
 /** Width without Pi: exact for ASCII, 2 per other code point. It may overcount, so labels can shorten but never overrun a bound. */
@@ -281,22 +291,25 @@ export class CompletionDelivery {
   private readonly send: (text: string) => void;
   private readonly config: DeliveryConfig;
   private readonly timers: DeliveryTimers;
+  private readonly released: (id: number) => void;
 
-  constructor(send: (text: string) => void, config: DeliveryConfig, timers: DeliveryTimers = realTimers) {
+  constructor(send: (text: string) => void, config: DeliveryConfig, timers: DeliveryTimers = realTimers, released: (id: number) => void = () => {}) {
     this.send = send;
     this.config = config;
     this.timers = timers;
+    this.released = released;
   }
 
-  submit(id: number, text: string): void {
+  submit(id: number, text: string): boolean {
     if (this.closed || (!this.holding && this.held.length === 0 && (this.runActive || this.idle() !== false))) {
       this.send(text);
-      return;
+      return false;
     }
     this.held.push({ id, text });
     this.notify(`Background command #${id} finished while Pi is compacting or busy; its notification is held until compaction ends.`, "warning");
     this.armWatch();
     if (!this.holding) this.scheduleFlush();
+    return true;
   }
 
   /** The session context, so a completion can check for compaction before any compaction hook has run. */
@@ -364,6 +377,7 @@ export class CompletionDelivery {
     } catch (error) {
       this.notify(`Could not submit the held notification for background command #${entry.id}: ${(error as Error).message}. It is not retried; read it with background_task_result.`, "error");
     }
+    this.released(entry.id);
     this.scheduleFlush();
   }
 
@@ -511,12 +525,15 @@ export class BackgroundTaskRunner extends EventEmitter {
   private nextId = 1;
   private finishSeq = 0;
   private readonly options: RunnerOptions;
+  private readonly store: CaptureStore;
+  private readonly removals = new Set<Promise<void>>();
 
   // Events: "changed" (task) on any status change, "output" (task, text) per decoded chunk,
   // "finished" (task) once per completed or failed task whose output is final.
   constructor(options: RunnerOptions) {
     super();
     this.options = options;
+    this.store = new CaptureStore({ io: options.captureFS, tmpdir: options.captureTmpdir, concurrency: options.config.capture.ioConcurrency });
   }
 
   start(command: string, cwd: string, metadata: { label?: string; manual?: boolean; capture?: boolean } = {}): BackgroundTask {
@@ -553,7 +570,7 @@ export class BackgroundTaskRunner extends EventEmitter {
       stdoutDecoder: new StringDecoder("utf8"),
       stderrDecoder: new StringDecoder("utf8"),
     };
-    if (metadata.capture === true) this.createCapture(task);
+    if (metadata.capture ?? this.options.config.capture.enabledByDefault) this.createCapture(task);
     this.tasks.set(task.id, task);
     this.emit("changed", task);
 
@@ -566,6 +583,7 @@ export class BackgroundTaskRunner extends EventEmitter {
     });
     child.once("error", (error: Error) => {
       if (task.released) return;
+      task.spawnError = error.message;
       this.appendOutput(task, `\n${error.message}`);
       this.leaderGone(task, null, null);
     });
@@ -614,6 +632,14 @@ export class BackgroundTaskRunner extends EventEmitter {
     const unconfirmed = running.filter((task) => task.status === "running").map((task) => task.id);
     for (const task of this.tasks.values()) this.release(task);
     for (const task of this.tasks.values()) this.removeCapture(task);
+    this.store.shutdown();
+    const deadline = Date.now() + this.options.config.capture.cleanupMs;
+    while ((this.removals.size || this.store.status().pending || this.store.status().active) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(10, Math.max(1, deadline - Date.now()))));
+    }
+    const status = this.store.status();
+    if (status.pending || status.active || status.orphans.length || status.errors.length)
+      process.stderr.write(`Background capture cleanup incomplete: ${JSON.stringify({ ...status, paths: [...this.tasks.values()].flatMap((task) => task.capture ? [task.capture.path] : []) })}\n`);
     this.tasks.clear();
     return unconfirmed;
   }
@@ -745,72 +771,65 @@ export class BackgroundTaskRunner extends EventEmitter {
     this.evictFinished();
   }
 
-  /** Keeps the newest finishedRetentionLimit finished tasks. Running tasks are never evicted. */
+  /** A held notification was submitted or failed; normal retention can resume. */
+  releaseDelivery(id: number): void {
+    const task = this.tasks.get(id);
+    if (task) task.deliveryHeld = false;
+    this.evictFinished();
+  }
+
+  /** Keeps the newest finishedRetentionLimit finished tasks. Running and held tasks are never evicted. */
   private evictFinished(): void {
+    if (this.shuttingDown) return;
     const finished = [...this.tasks.values()]
       .filter((task) => task.status !== "running")
       .sort((a, b) => a.finishSeq - b.finishSeq);
     const excess = finished.length - this.options.config.finishedRetentionLimit;
     for (const task of finished.slice(0, Math.max(0, excess))) {
-      if (!task.outputDone) continue;
+      if (!task.outputDone || task.deliveryHeld || (task.captureWriter && !task.captureResult)) continue;
       this.removeCapture(task);
       this.tasks.delete(task.id);
     }
   }
 
   private createCapture(task: BackgroundTask): void {
-    let directory: string | undefined;
-    try {
-      directory = mkdtempSync(join(tmpdir(), "harnez-pi-task-"));
-      const directoryInode = lstatSync(directory).ino;
-      const path = join(directory, "output");
-      const fd = openSync(path, "wx", 0o600);
-      task.capture = { path, directory, fd, fileInode: fstatSync(fd).ino, directoryInode };
-    } catch (error) {
-      task.captureError = `capture creation failed: ${(error as Error).message}`;
-      if (directory) { try { rmdirSync(directory); } catch { /* leave an unsafe or nonempty directory alone */ } }
-    }
+    const config = this.options.config.capture;
+    task.captureWriter = new CaptureWriter<CaptureFile>({
+      open: async () => {
+        const file = await this.store.create();
+        task.captureFile = file;
+        task.capture = { path: file.path, directory: dirname(file.path) };
+        return file;
+      },
+      write: (file, data) => file.write(data),
+      close: (file) => file.close(),
+    }, { set: (fn, ms) => setTimeout(fn, ms), clear: (timer) => clearTimeout(timer as NodeJS.Timeout) },
+    (fn) => queueMicrotask(fn), { low: config.lowWatermarkBytes, high: config.highWatermarkBytes, hard: config.hardWatermarkBytes, stallMs: config.stallMs }, {
+      pause: () => { task.capturePaused = true; task.child.stdout?.pause(); task.child.stderr?.pause(); },
+      resume: () => { task.capturePaused = false; if (!task.drainTimedOut) { task.child.stdout?.resume(); task.child.stderr?.resume(); } },
+      settled: (result) => {
+        clearTimeout(task.finalizeTimer); task.finalizeTimer = undefined;
+        task.captureResult = result;
+        if (!result.complete) task.captureError = result.reason ?? "capture incomplete";
+        if (task.capture && task.captureError) task.capture.error = task.captureError;
+        this.notifyFinished(task); this.evictFinished();
+      },
+    });
   }
 
-  // Synchronous writes apply backpressure to the pipes without buffering an unbounded transcript in JS memory.
   private captureChunk(task: BackgroundTask, chunk: Buffer): void {
-    const capture = task.capture;
-    if (!capture || capture.fd === undefined || capture.error) return;
-    try {
-      let offset = 0;
-      while (offset < chunk.length) {
-        const written = (this.options.captureWrite ?? writeSync)(capture.fd, chunk, offset, chunk.length - offset);
-        if (written <= 0) throw new Error("capture write made no progress");
-        offset += written;
-      }
-    } catch (error) {
-      capture.error = task.captureError = `capture write failed: ${(error as Error).message}`;
-    }
-  }
-
-  private closeCapture(task: BackgroundTask): void {
-    const capture = task.capture;
-    if (!capture || capture.fd === undefined) return;
-    try { closeSync(capture.fd); } catch (error) {
-      capture.error = task.captureError = `capture close failed: ${(error as Error).message}`;
-    }
-    capture.fd = undefined;
+    try { task.captureWriter?.append(chunk); } catch { /* capture failed; retain the tail */ }
   }
 
   private removeCapture(task: BackgroundTask): void {
-    const capture = task.capture;
-    if (!capture) return;
-    this.closeCapture(task);
-    try {
-      const directory = lstatSync(capture.directory);
-      const file = lstatSync(capture.path);
-      if (!directory.isDirectory() || directory.ino !== capture.directoryInode || !file.isFile() || file.ino !== capture.fileInode) throw new Error("capture identity changed");
-      unlinkSync(capture.path);
-      rmdirSync(capture.directory);
-    } catch (error) {
-      task.captureError = `capture cleanup failed: ${(error as Error).message}`;
-      process.stderr.write(`Background task #${task.id}: ${task.captureError}\n`);
-    }
+    const writer = task.captureWriter;
+    if (!writer) return;
+    const removal = writer.cleanup().then(async (cleanup) => {
+      if (cleanup.errors.length) task.captureError = cleanup.errors.join("; ");
+      if (task.captureFile) await task.captureFile.remove();
+    }).catch((error) => { task.captureError = `capture cleanup failed: ${String(error)}`; process.stderr.write(`Background task #${task.id}: ${task.captureError}\n`); });
+    this.removals.add(removal);
+    void removal.finally(() => this.removals.delete(removal));
   }
 
   private appendOutput(task: BackgroundTask, text: string): void {
@@ -831,7 +850,12 @@ export class BackgroundTaskRunner extends EventEmitter {
     task.drainTimer = undefined;
     this.appendOutput(task, task.stdoutDecoder.end() + task.stderrDecoder.end());
     task.outputDone = true;
-    this.closeCapture(task);
+    task.drainTimedOut = drained;
+    if (task.captureWriter && !task.captureResult) {
+      if (drained) task.captureWriter.truncate("output drain timed out");
+      void task.captureWriter.finish();
+      if (!task.captureResult) task.finalizeTimer = setTimeout(() => task.captureWriter?.abort("capture finalization timed out"), this.options.config.capture.finalizeMs);
+    }
     if (drained) {
       task.child.stdout?.destroy();
       task.child.stderr?.destroy();
@@ -845,6 +869,10 @@ export class BackgroundTaskRunner extends EventEmitter {
   private release(task: BackgroundTask): void {
     clearInterval(task.watch);
     task.watch = undefined;
+    task.released = true;
+    task.captureWriter?.detach();
+    clearTimeout(task.finalizeTimer); task.finalizeTimer = undefined;
+    if (task.captureWriter) task.captureResult = task.captureWriter.abort("capture released during shutdown");
     this.finishOutput(task, false);
     task.child.stdout?.destroy();
     task.child.stderr?.destroy();
@@ -855,7 +883,7 @@ export class BackgroundTaskRunner extends EventEmitter {
 
   /** Follow-ups are for natural completion or failure only: never for cancellation, and never during shutdown. */
   private notifyFinished(task: BackgroundTask): void {
-    if (task.notified || !task.outputDone || this.shuttingDown) return;
+    if (task.notified || !task.outputDone || (task.captureWriter && !task.captureResult) || this.shuttingDown) return;
     if (task.status !== "completed" && task.status !== "failed") return;
     task.notified = true;
     this.emit("finished", task);
