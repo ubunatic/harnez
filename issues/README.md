@@ -100,4 +100,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1050 | [1050-epic-pi-background-task-experience-and-reliability.md](1050-epic-pi-background-task-experience-and-reliability.md) | Epic: Pi background task experience and reliability | Open |
 | 1052 | [1052-safely-refresh-the-pi-background-task-extension-independently.md](1052-safely-refresh-the-pi-background-task-extension-independently.md) | Safely refresh the Pi background task extension independently | Open |
 | 1053 | [1053-git-md-add-a-breaking-change-commit-example.md](1053-git-md-add-a-breaking-change-commit-example.md) | Git.md: add a breaking-change commit example | Open |
+| 1054 | [1054-configure-repository-roles-and-push-rules-per-repo.md](1054-configure-repository-roles-and-push-rules-per-repo.md) | Configure repository roles and push rules per repo | Open |
 <!-- harnez:end issues-active-index -->
