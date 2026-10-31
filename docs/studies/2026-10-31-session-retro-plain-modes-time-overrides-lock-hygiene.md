@@ -1,3 +1,9 @@
+---
+kind: retro
+title: "2026-10-31 Sprint Retrospective: Plain Context Modes, Time-Limited Overrides, Lock Hygiene, and Detached HEAD Protection"
+weight: 10
+---
+
 # 2026-10-31 Sprint Retrospective: Plain Context Modes, Time-Limited Overrides, Lock Hygiene, and Detached HEAD Protection
 
 **Date**: 2026-10-31  
@@ -7,24 +13,36 @@
 
 ---
 
-## 1. Executive Summary & Deliveries
+## 1. Context
 
-Today's intensive agentic pairing delivered four major capabilities into production, merged across Codeberg Pull Requests [#44](https://codeberg.org/ubunatic/harnez/pulls/44), [#45](https://codeberg.org/ubunatic/harnez/pulls/45), and [#46](https://codeberg.org/ubunatic/harnez/pulls/46):
+This session addressed four high-leverage challenges across agent context hygiene, temporary model steering, tracker concurrency, and multi-agent git safety:
+- Small-window models (such as local 32k/8k models or Pi instances) were drowning in injected initialization tokens from user/project skills, rules, and MCP schemas.
+- Setting temporary model defaults for specific effort tiers required editing static YAML specs or manually passing verbose flags on every subagent start.
+- Automated CI and fresh clones running `harnez issues` were accidentally staging untracked flock sidecars (`issues/README.md.lock`, `issues/.reserve.lock`) because ignores were only placed in `.git/info/exclude`.
+- Agents performing cross-repo tag reads left shared checkouts on detached HEADs, causing subsequent agent sessions to commit onto detached commits and orphan work.
+
+The goal was to execute lean sprints following the 5-phase agentic loop (Discovery → Dev → Independent Review → Process Hygiene → Retro) with a strict zero-coding host orchestrator.
+
+---
+
+## 2. Outcome
+
+Four deliverables were designed, verified with tests, and merged via Codeberg Pull Requests [#44](https://codeberg.org/ubunatic/harnez/pulls/44), [#45](https://codeberg.org/ubunatic/harnez/pulls/45), and [#46](https://codeberg.org/ubunatic/harnez/pulls/46):
 
 1. **Selectable Agent Context Modes (`--context-mode`) — Issue #1027**:
-   - Introduced `default`, `no-skills`, and `plain` context modes in `spec/agent.yaml`.
-   - `plain` mode enforces positive whitelisting of the 6 core coding tools (`[read, edit, write, grep, find, bash]`) while cleanly stripping skills (`--no-skills`), context files (`--no-context-files`), and MCP tools (`--no-mcp`), dropping thousands of initialization tokens for small-window models and targeted tasks.
+   - Added `default`, `no-skills`, and `plain` context modes in `spec/agent.yaml`.
+   - `plain` mode enforces positive whitelisting of the 6 core coding tools (`[read, edit, write, grep, find, bash]`) while cleanly passing `--no-skills`, `--no-context-files`, and `--no-mcp`.
 
 2. **Temporary, Time-Expiring Model Tier Defaults — Issue #1056**:
    - Implemented `harnez agent models set` (and alias `harnez models set`) allowing operators to temporarily redirect effort tiers (`cheap`, `lean`, `smart`) with an expiration timer (`--until=HH:MM` or `--hours=<float>`).
    - Overrides persist in XDG state (`$XDG_STATE_HOME/harnez/models/tier_overrides.json`) and are automatically resolved by subagent drivers until expiry, with optional minimal plain-mode `--hello` probes.
 
-3. **Issue Tracker Lockfile Hygiene & Clean Fresh Clones — Issue #1066 (from Codeberg #41)**:
-   - Eliminated dirty lockfile leaks in fresh clones by adding `/issues/README.md.lock` and `/issues/.reserve.lock` directly to the tracked `.gitignore` upon `harnez init`.
-   - Hardened `Reserve` and `lockReadme` to safely verify inode identity via `os.SameFile` across contention loops and unlink unheld locks on exit, backed by concurrent race tests and fresh-clone integration tests.
+3. **Issue Tracker Lockfile Hygiene & Clean Fresh Clones — Issue #1066 (Codeberg #41)**:
+   - `harnez init` now places `/issues/README.md.lock` and `/issues/.reserve.lock` directly into the tracked `.gitignore`.
+   - `Reserve` and `lockReadme` verify inode identity via `os.SameFile` across contention loops and unlink unheld locks on graceful exit, verified with concurrent race tests and fresh clone tests.
 
-4. **Actionable Detached HEAD Protection in Checkouts — Issue #1065 (from Codeberg #40)**:
-   - Added early turn-1 detached HEAD detection in `harnez hook claude-instructions` (`SessionStart` hook), alerting agents immediately if their working tree is detached at a commit or tag.
+4. **Actionable Detached HEAD Protection — Issue #1065 (Codeberg #40)**:
+   - Added early turn-1 detached HEAD detection in `harnez hook claude-instructions` (`SessionStart` hook).
    - Upgraded `gitflow.GuardCommit` to intercept commits on detached HEADs and provide concrete recovery commands (`git switch -c <topic> or git switch <branch>`), preventing accidental orphaned commits in shared sibling checkouts.
 
 5. **Advanced Feature Specification & Role Profiles — Issue #1068**:
@@ -32,44 +50,38 @@ Today's intensive agentic pairing delivered four major capabilities into product
 
 ---
 
-## 2. Multi-Vendor Agent Effectiveness & Quota Dynamics
+## 3. What Went Wrong
 
-### Cross-Vendor Performance Spectrum
-- **Gemini 3.8 Flash (`agy:flash38:low`)**:
-  - Outstanding price-to-performance ratio for mechanical development and refactoring. Delivered Issue #1027, Issue #1056, and Issue #1065 cleanly and verified against full test suites without hallucinations.
-- **Claude Sonnet 5.5 (`claude:sonnet:low` / `agy:sonnet:low`)**:
-  - Extremely reliable on nuanced Go concurrency mechanics (resolving the `flock` and `os.SameFile` recheck logic) and sharp as an independent reviewer on gitflow edge cases.
-- **Claude Opus 5.5 (`claude:opus:low`)**:
-  - Exceptional review rigor. Uncovered a subtle retry-budget starvation bug in `lockReadme` where stale-reopens burned retry attempts against `readmeLockRetries`, backing the finding with synthetic concurrency data.
-- **Codex Sol (`codex:sol:med`)**:
-  - High-precision ticket specification and schema authoring. Successfully stepped in when Argon was quota-exhausted to refine Issue #1068 with concrete YAML models, precedence rules, and failure edge cases.
+1. **Flock Inode Starvation in Concurrent Retries**:
+   - *Failure*: In commit `2fbe34aa`, reopening after detecting a deleted lockfile (`!os.SameFile`) decremented the shared `attempt` counter in `lockReadme`. Under high concurrency (8+ workers), this burned all attempts and returned false "lock held by another process" errors.
+   - *Detection*: Caught by independent reviewer `sprint-1066-rev` (`claude:opus:low`) during synthetic stress testing (showing 47 failures in 1600 cycles).
+   - *Fix*: Separated stale-file reopens into a dedicated counter (`readmeMaxStaleReopens = 10`), preserving the full backoff retry budget for real lock contention.
 
-### Quota Resets & Fallback Agility
-- Running mixed-vendor sprints demonstrated the resilience of the Harnez model catalog: when Claude hit its 5-hour ceiling and Argon reached its weekly subscription cap, work continued uninterrupted by falling back to `agy:flash38:low` for development, `agy:sonnet:low` for reviewing, and `codex:sol:med` for specification refinement.
+2. **Hardcoded Branch Assumption in Guard Guidance**:
+   - *Failure*: Initial detached HEAD guidance suggested `git switch main`. Repositories using `master` or feature topic branches received misleading commands.
+   - *Detection*: Caught by independent reviewer `sprint-1065-rev` (`agy:sonnet:low`).
+   - *Fix*: Updated guidance across `GuardCommit` and `CheckDetachedHead` to recommend `git switch -c <topic> or git switch <branch>`.
 
----
-
-## 3. Durable Safeguards Added
-
-| Safeguard | Mechanism | Location |
-|---|---|---|
-| **Tracked Gitignore for Locks** | `harnez init` ensures tracked `.gitignore` excludes `/issues/*.lock` | `internal/claude/init_agent_file.go`, `internal/claude/gowork.go` |
-| **Inode-Verified Lock Removal** | `os.SameFile` check before unlinking held lock files on graceful exit | `internal/index/index.go`, `internal/issues/issues.go` |
-| **SessionStart Detached HEAD Warning** | Stderr/Stdout turn-1 alert reporting detached ref and recovery advice | `cmd/harnez/hook.go`, `internal/gitflow/gitflow.go` |
-| **Commit Guard Detached Refusal** | Blocks commits on detached HEAD in protected repos with `git switch -c topic` guidance | `internal/gitflow/gitflow.go` |
-| **Cross-Repo Read Convention** | Instruction forbidding checkout of tags in shared checkouts (use `git show <tag>:<path>`) | `docs/lang/Git.md`, `docs/Git.md` |
+3. **Weekly Quota Exhaustion & Dynamic Model Pivoting**:
+   - *Failure*: Claude 5-hour limit and Gemini 4 Argon weekly subscription quota were exhausted during peak development turns.
+   - *Detection*: Caught by CLI pre-flight quota checks (`harnez agent start` returning error 1).
+   - *Fix*: Seamlessly pivoted to `agy:flash38:low` for mechanical development, `agy:sonnet:low` for review gates, and `codex:sol:med` for specification refinement.
 
 ---
 
-## 4. Architectural Learnings & Takeaways
+## 4. Learnings
 
-1. **Negative Deny vs. Positive Whitelist**:
-   - The `--debloat` flag historically operated via negative blacklisting (`MinimalDeny`, `AggressiveExtraDeny`), which requires continuous maintenance as providers introduce new native tools.
-   - The `--context-mode=plain` approach shifts the paradigm to **strict positive whitelisting** (`tools: [read, edit, write, grep, find, bash]`). This guarantees a zero-noise execution sandbox regardless of what unmanaged tools the underlying provider adds.
+- **Strict Positive Whitelisting vs. Negative Deny Lists**: Negative debloating (`--debloat`) requires continuous maintenance as upstream providers release new native tools. `--context-mode=plain` establishes a durable invariant by whitelisting only the necessary coding tools.
+- **Flock Lifecycle & Deletion Invariant**: In POSIX systems, unlinking a file while holding an advisory `flock` requires subsequent acquirers to re-verify `os.SameFile(fi, pi)` after acquiring the lock to avoid holding orphaned descriptors.
+- **Reviewer Diversity**: Opus excels at deep concurrency and edge-case modeling; Sonnet excels at API contract validation, ergonomics, and test completeness.
 
-2. **Flock & File Removal Semantics**:
-   - Deleting a lock file under advisory `flock` on POSIX systems can create a race condition where a secondary process opens and locks a newly unlinked inode while another process creates a fresh file on disk.
-   - Re-verifying `os.SameFile(fi, pi)` after acquiring the lock and bounding stale reopens (`readmeMaxStaleReopens = 10`) proves to be the canonical pattern for clean lock cleanup without leaving residual sidecars.
+---
 
-3. **Zero-Coding Host Orchestration**:
-   - Adhering to the zero-coding invariant during `/lean-sprint` and `/sprint` allowed the host to focus entirely on requirement verification, independent review orchestration, and remote PR lifecycle management, yielding rapid parallel throughput across four distinct tickets.
+## 5. Follow-Up Tickets
+
+The following actionable follow-ups were identified and recorded:
+
+- **[1068](file:///home/uwe/projects/harnez/issues/1068-adopt-plain-mode-for-general-tasks-and-create-role-profiles-to-pin-docs-skills-and-tools.md)** — Adopt plain mode for general tasks and create role profiles to pin docs, skills, and tools (Filed and refined in this session).
+- **[1064](file:///home/uwe/projects/harnez/issues/1064-harnez-issues-import-command-to-fetch-remote-forge-issues-into-local-tracker.md)** — Add `harnez issues import` command to fetch remote forge issues into local tracker.
+- **[1067](file:///home/uwe/projects/harnez/issues/1067-add-harnez-issues-export-command-to-export-local-issues-to-remote-forge-tracker-via-agit-or-fj.md)** — Add `harnez issues export` command to export local issues to remote forge tracker via AGit or fj.
+- **[1042](file:///home/uwe/projects/harnez/issues/1042-use-merge-union-in-gitattributes-for-generated-issue-indexes-to-avoid-forge-merge-conflicts.md)** — Validate live forge behavior of `merge=union` in `.gitattributes` during PR merges.
