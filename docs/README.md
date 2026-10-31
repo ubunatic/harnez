@@ -242,6 +242,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/TestSuiteSprintSession.md](studies/TestSuiteSprintSession.md) | Test-Suite Sprint Session (2026-10-23) |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees — learnings & TODOs |
 | [studies/scratch-devin-binary-analysis.md](studies/scratch-devin-binary-analysis.md) | Devin CLI binary analysis (scratch, issue 1063 M2) |
+| [studies/scratch-devin-fusion-deep-dive.md](studies/scratch-devin-fusion-deep-dive.md) | Devin Fusion and Multi-Agent Logic: Deep Dive (scratch) |
 | [studies/scratch-devin-web-research.md](studies/scratch-devin-web-research.md) | Devin CLI web research (scratch, issue #1063) |
 <!-- harnez:end docs-studies-index -->
 

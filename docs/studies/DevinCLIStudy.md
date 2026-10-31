@@ -142,3 +142,63 @@ devin
    Devin's use of `bwrap` with `--bind`, `--ro-bind`, and proxy environment variables matches Harnez's existing `quota1SandboxArgs`. Exposing this cleanly as `harnez wrap [--net=none|proxy] -- <command>` gives developers a native way to run untrusted third-party CLIs safely on the host without full container overhead.
 3. **In-CLI Secret Masking (`secret-create`)**:
    Devin's `drs secret-create` ingests credentials via interactive prompts or direct stdin pipes, ensuring secrets never appear in `argv`, shell history, or process listings (`ps`). Harnez can adopt similar ingestion mechanics for API tokens and sensitive configs.
+
+---
+
+## 5. Devin Fusion Deep Dive: Architecture, Guardrails, and Protocol
+
+Based on the static inspection of `chisel-agent/src/local_fusion/` in the `devin` binary (issue [#1063](file:///home/uwe/projects/harnez/issues/1063-study-devin-cli-features-binary-capabilities-and-multi-agent-workflows-vs-harnez.md)):
+
+### 5.1 In-Process Dispatch Mechanics
+* **Tool Interface**: The Lead dispatches work through an internal tool named `sidekick` with two arguments: `message` (mandatory brief) and `block` (default `true`).
+* **Session Persistence**: There is exactly one persistent Sidekick per session running in the same process against the shared workspace filesystem. Its state is tracked in SQLite via `V17__subagent_heads(session_id, agent_id, chain_node_id, updated_at)`.
+* **Model Routing**: The Lead acts as a model router. The backend returns the paired model via `/exa.api_server_pb.ApiServerService/AssignModel` (Connect RPC).
+* **Execution Flow & Interrupts**:
+  * If the Sidekick is running and the Lead issues a new call, it is delivered as an interrupt (`<lead_update>`) rather than spawning a duplicate worker.
+  * If a blocking wait expires, the Sidekick transitions into background execution; upon completion, it pushes a `<subagent_completion_notification>`.
+
+### 5.2 Checks and Validations Between Agents
+* **Diff Review as Landing Point**: The Lead's system prompt dictates: *"A handoff report about code it wrote or committed is itself a landing point: read the full diff and give it a verdict before your next action."* The report prose is treated strictly as an unverified claim until grounded in artifacts.
+* **Prohibition of Test Alteration**: The Sidekick prompt explicitly forbids editing test assertions to make failing suites pass.
+* **Explicit Declaration of Unverified Work**: If a test run cannot be executed, the Sidekick must explicitly state: *"implementation done, cannot verify because X"*.
+* **Code Attribution Checks**: Edits matching non-permissive public code trigger a hard rollback (`"Attribution check failed; reverting edit"`).
+* **No Code-Enforced Diff Gate**: No AST parser, test status validator, or compiler gate was found in the Rust binary between the Sidekick and Lead; the quality gate is enforced entirely via prompt guidance and the Lead's review turn.
+
+### 5.3 Guardrails and Isolation Boundaries
+* **Authority Asymmetry**: The Sidekick is banned from communicating with the user, creating Git commits, pushing to remotes, opening PRs, or running destructive Git commands (`reset --hard`, `clean -fd`, `checkout --`, `stash drop`, `sudo git`). The workspace is left dirty for the Lead to inspect and commit.
+* **Code-Enforced Background Permissions**: When running in the background, any tool that would prompt the user for approval is automatically denied by the runtime (`permission_mask`).
+* **Runaway Command Termination**: A `memory_guard` monitors cgroup limits (`DEVIN_MEMORY_GUARD_PERCENT`) and terminates the process group of any command exceeding safety thresholds.
+* **Compaction and Cache Keep-Alive**:
+  * `agent-ext/src/compactor/handoff_history.rs` preserves Lead briefs verbatim across conversation compaction (`HandoffHistoryMetadata`).
+  * While the Sidekick is executing, the Lead's prompt cache is kept warm via an active keepalive (`[CACHE_KEEPALIVE] Lead idle but subagent mid-run; leaving keepalive alone`).
+* **Runtime Reminder Injections**: Code dynamically injects system prompts when rules are violated (e.g. `<system_guidance> You made a direct edit yourself instead of delegating to Sidekick...` when the Lead edits files directly).
+
+### 5.4 Data Storage & Protocol
+* **Message Forest**: Conversations are modeled as immutable directed acyclic graphs in SQLite (`message_nodes`). Branches and subagent chains represent separate paths within this forest.
+* **Wire Protocol**: No JSON-RPC or network protocol is used between Lead and Sidekick; communication is entirely in-process using Rust async channels and tool invocation / result messages. External protocols (ACP for IDEs, Connect RPC Protobuf for the Cognition API) are used exclusively for external boundaries.
+
+---
+
+## 6. Actionable Adoption Proposals for Harnez Multi-Agent Flows
+
+### Priority 1: Text & Prompt Enhancements (Zero Code Changes)
+1. **Report as a Mandatory Landing Point**:
+   Update `AgenticLoop.md` and role specifications to treat a worker subagent's summary strictly as an unverified claim. The orchestrator/host must inspect the raw `git diff` and execution logs and render an explicit verdict before proceeding.
+2. **Standardized Verification Schema**:
+   Standardize the `developer` role handoff to require:
+   - What was modified (file paths and line ranges).
+   - Verbatim verification commands run and their exact exit codes.
+   - Explicit declaration: *"done, but unverified because <reason>"* when tests cannot be executed.
+3. **Carry Settled State in Briefs**:
+   Include settled architectural decisions, running server ports, and completed checks in worker briefs to prevent redundant re-discovery.
+
+### Priority 2: Runtime Code Guardrails
+4. **Dynamic Post-Turn Reminders**:
+   Implement an event-driven reminder hook in `harnez exec` or `harnez agent`: when a worker finishes with uncommitted working tree modifications, inject an orchestrator reminder to inspect the diff before dispatching subsequent tasks.
+5. **Delegation Ineligibility List**:
+   Define strict boundaries in `spec/agent.yaml` preventing the delegation of correctness-critical components (such as benchmark graders, verification thresholds, and production database queries) to non-frontier models where plausible but erroneous output cannot be caught by compilers.
+
+### Priority 3: Empirical Experiments
+6. **Persistent Worker vs Fresh Worker Evaluation**:
+   Compare token costs and regression rates using `/jam`: evaluate whether a persistent developer subagent (retaining session context across milestones) outperforms fresh-handoff developers (`factory-sprint`) across multi-step tickets.
+
