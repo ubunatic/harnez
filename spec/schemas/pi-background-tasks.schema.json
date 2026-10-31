@@ -9,6 +9,7 @@
     "output_limit_chars",
     "finished_retention_limit",
     "stop",
+    "capture",
     "delivery",
     "status"
   ],
@@ -129,6 +130,60 @@
             "minLength": 1,
             "pattern": "^[^\\p{C}]+$"
           }
+        }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled_by_default",
+        "low_watermark_bytes",
+        "high_watermark_bytes",
+        "hard_watermark_bytes",
+        "stall_ms",
+        "finalize_ms",
+        "cleanup_ms",
+        "io_concurrency"
+      ],
+      "properties": {
+        "enabled_by_default": {
+          "type": "boolean"
+        },
+        "low_watermark_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "high_watermark_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "hard_watermark_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "stall_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "finalize_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "cleanup_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "io_concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
         }
       }
     }

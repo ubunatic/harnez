@@ -293,6 +293,8 @@ func piBackgroundCrashPoints() []string {
 		"staged",
 		"wrote .pi/extensions/background-tasks.ts",
 		"wrote .pi/lib/background-task-runner.ts",
+		"wrote .pi/lib/background-task-capture.ts",
+		"wrote .pi/lib/background-task-store.ts",
 		"wrote spec/pi-background-tasks.yaml",
 		"activated",
 		"finalized",

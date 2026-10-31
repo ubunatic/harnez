@@ -34,6 +34,7 @@ const fastConfig: BackgroundTaskConfig = {
   finishedRetentionLimit: 50,
   stop: { graceMs: 20, killWaitMs: 60, pollMs: 5 },
   delivery: { holdWarnMs: 1_000, flushPollMs: 1 },
+  capture: parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec", visibleWidth).capture,
   status: parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec", visibleWidth).status,
 };
 const escalationConfig: BackgroundTaskConfig = { ...fastConfig, stop: { graceMs: 50, killWaitMs: 5_000, pollMs: 10 } };
@@ -569,6 +570,7 @@ test("config: the spec file loads with the documented bounds", () => {
     finishedRetentionLimit: 50,
     stop: { graceMs: 1_000, killWaitMs: 2_000, pollMs: 25 },
     delivery: { holdWarnMs: 30_000, flushPollMs: 25 },
+    capture: fastConfig.capture,
     status: fastConfig.status,
   });
 });
@@ -579,10 +581,18 @@ test("config: unknown, missing, non-positive and non-JSON-compatible values fail
     finished_retention_limit: 1,
     stop: { grace_ms: 1, kill_wait_ms: 1, poll_ms: 1 },
     delivery: { hold_warn_ms: 1, flush_poll_ms: 1 },
+    capture: JSON.parse(readFileSync(SPEC_PATH, "utf8").split("\n").filter((line) => !line.startsWith("#")).join("\n")).capture,
     status: JSON.parse(readFileSync(SPEC_PATH, "utf8").split("\n").filter((line) => !line.startsWith("#")).join("\n")).status,
   };
   const parse = (value: unknown) => parseBackgroundTaskConfig(JSON.stringify(value), "test", visibleWidth);
   assert.ok(parse(valid));
+  for (const key of ["low_watermark_bytes", "high_watermark_bytes", "hard_watermark_bytes", "stall_ms", "finalize_ms", "cleanup_ms", "io_concurrency"]) {
+    assert.throws(() => parse({ ...valid, capture: { ...valid.capture, [key]: 0 } }), /positive safe integer/);
+  }
+  assert.throws(() => parse({ ...valid, capture: { ...valid.capture, enabled_by_default: 1 } }), /enabled_by_default/);
+  assert.throws(() => parse({ ...valid, capture: { ...valid.capture, low_watermark_bytes: valid.capture.high_watermark_bytes } }), /ordering/);
+  assert.throws(() => parse({ ...valid, capture: { ...valid.capture, hard_watermark_bytes: valid.capture.high_watermark_bytes - 1 } }), /ordering/);
+  assert.throws(() => parse({ ...valid, capture: { ...valid.capture, extra: 1 } }), /unknown key/);
   assert.ok(parse({ ...valid, status: { ...valid.status, reserved_cells: 0 } }));
   assert.throws(() => parse({ ...valid, status: { ...valid.status, unknown: 1 } }), /unknown key/);
   assert.throws(() => parse({ ...valid, status: { ...valid.status, max_cells: 0 } }), /positive safe integer/);

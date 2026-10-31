@@ -10,6 +10,16 @@
     "kill_wait_ms": 2000,
     "poll_ms": 25
   },
+  "capture": {
+    "enabled_by_default": false,
+    "low_watermark_bytes": 262144,
+    "high_watermark_bytes": 1048576,
+    "hard_watermark_bytes": 2097152,
+    "stall_ms": 30000,
+    "finalize_ms": 30000,
+    "cleanup_ms": 2000,
+    "io_concurrency": 2
+  },
   "delivery": {
     "hold_warn_ms": 30000,
     "flush_poll_ms": 25

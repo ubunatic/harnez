@@ -34,6 +34,8 @@ func TestPiBackgroundTasksSpecMatchesSchema(t *testing.T) {
 		"missing poll":        func(doc map[string]any) { delete(doc["stop"].(map[string]any), "poll_ms") },
 		"missing status":      func(doc map[string]any) { delete(doc, "status") },
 		"missing delivery":    func(doc map[string]any) { delete(doc, "delivery") },
+		"missing capture":     func(doc map[string]any) { delete(doc, "capture") },
+		"zero capture stall":  func(doc map[string]any) { doc["capture"].(map[string]any)["stall_ms"] = 0 },
 		"zero flush poll":     func(doc map[string]any) { doc["delivery"].(map[string]any)["flush_poll_ms"] = 0 },
 		"unknown status key":  func(doc map[string]any) { doc["status"].(map[string]any)["extra"] = 1 },
 		"invalid label bound": func(doc map[string]any) { doc["status"].(map[string]any)["label_max_cells"] = 0 },
@@ -90,6 +92,7 @@ func resolvePiBackgroundSchema(t *testing.T) *jsonschema.Resolved {
 // clonePiBackgroundSpec copies the nested maps so a mutation does not change the valid document.
 func clonePiBackgroundSpec(doc map[string]any) map[string]any {
 	out := maps.Clone(doc)
+	out["capture"] = maps.Clone(doc["capture"].(map[string]any))
 	out["stop"] = maps.Clone(doc["stop"].(map[string]any))
 	out["delivery"] = maps.Clone(doc["delivery"].(map[string]any))
 	out["status"] = maps.Clone(doc["status"].(map[string]any))

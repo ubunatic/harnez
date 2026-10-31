@@ -26,6 +26,7 @@ export interface BackgroundTaskConfig {
   outputLimitChars: number;
   finishedRetentionLimit: number;
   stop: { graceMs: number; killWaitMs: number; pollMs: number };
+  capture: { enabledByDefault: boolean; lowWatermarkBytes: number; highWatermarkBytes: number; hardWatermarkBytes: number; stallMs: number; finalizeMs: number; cleanupMs: number; ioConcurrency: number };
   delivery: DeliveryConfig;
   status: StatusConfig;
 }
@@ -182,8 +183,14 @@ export function parseBackgroundTaskConfig(text: string, source: string, width: (
   } catch (error) {
     throw new Error(`${source}: not JSON-compatible YAML: ${(error as Error).message}`);
   }
-  const root = exactKeys(value, source, ["output_limit_chars", "finished_retention_limit", "stop", "delivery", "status"]);
+  const root = exactKeys(value, source, ["output_limit_chars", "finished_retention_limit", "stop", "capture", "delivery", "status"]);
   const stop = exactKeys(root.stop, `${source}: stop`, ["grace_ms", "kill_wait_ms", "poll_ms"]);
+  const capture = exactKeys(root.capture, `${source}: capture`, ["enabled_by_default", "low_watermark_bytes", "high_watermark_bytes", "hard_watermark_bytes", "stall_ms", "finalize_ms", "cleanup_ms", "io_concurrency"]);
+  if (typeof capture.enabled_by_default !== "boolean") throw new Error(`${source}: invalid capture.enabled_by_default`);
+  const low = positiveInt(capture.low_watermark_bytes, `${source}: capture.low_watermark_bytes`);
+  const high = positiveInt(capture.high_watermark_bytes, `${source}: capture.high_watermark_bytes`);
+  const hard = positiveInt(capture.hard_watermark_bytes, `${source}: capture.hard_watermark_bytes`);
+  if (low >= high || high > hard) throw new Error(`${source}: invalid capture watermark ordering`);
   const delivery = exactKeys(root.delivery, `${source}: delivery`, ["hold_warn_ms", "flush_poll_ms"]);
   const status = exactKeys(root.status, `${source}: status`, ["max_cells", "reserved_cells", "label_max_cells", "fallback_label", "manual_emoji", "default_emoji", "label_emoji"]);
   const labelEmoji = status.label_emoji;
@@ -212,6 +219,9 @@ export function parseBackgroundTaskConfig(text: string, source: string, width: (
       killWaitMs: positiveInt(stop.kill_wait_ms, `${source}: stop.kill_wait_ms`),
       pollMs: positiveInt(stop.poll_ms, `${source}: stop.poll_ms`),
     },
+    capture: { enabledByDefault: capture.enabled_by_default, lowWatermarkBytes: low, highWatermarkBytes: high, hardWatermarkBytes: hard,
+      stallMs: positiveInt(capture.stall_ms, `${source}: capture.stall_ms`), finalizeMs: positiveInt(capture.finalize_ms, `${source}: capture.finalize_ms`),
+      cleanupMs: positiveInt(capture.cleanup_ms, `${source}: capture.cleanup_ms`), ioConcurrency: positiveInt(capture.io_concurrency, `${source}: capture.io_concurrency`) },
     delivery: {
       holdWarnMs: positiveInt(delivery.hold_warn_ms, `${source}: delivery.hold_warn_ms`),
       flushPollMs: positiveInt(delivery.flush_poll_ms, `${source}: delivery.flush_poll_ms`),

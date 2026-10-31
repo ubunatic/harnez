@@ -62,6 +62,8 @@ const piBackgroundManifestName = "package.json"
 var piBackgroundSourceFiles = []string{
 	".pi/extensions/background-tasks.ts",
 	".pi/lib/background-task-runner.ts",
+	".pi/lib/background-task-capture.ts",
+	".pi/lib/background-task-store.ts",
 }
 
 // piBackgroundSpecPath is read from cfg.FS and installed next to the extension, which reads it relative to itself.
