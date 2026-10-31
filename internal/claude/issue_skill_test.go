@@ -79,11 +79,15 @@ func assertIssuePublicationGuidance(t *testing.T, path, content string) {
 	t.Helper()
 	for _, want := range []string{
 		"## Publish Promptly",
-		"Publishing to `main` is the exception, not the default.",
-		"git push origin HEAD:refs/for/main -o topic=<topic>",
-		"Reuse the open PR for that topic",
-		"Never force-push.",
-		"Do not push to `main` as a workaround.",
+		"Prefer a direct push to `main` when it is authorized and allowed.",
+		"Standing consent from an earlier session does not carry over.",
+		"`protected_main: false` alone is not authority for a push.",
+		"Never use `--force` or a `+` refspec.",
+		"git -C <repo> push origin HEAD:refs/for/main/<topic>",
+		"Pushes to the same topic update the one open PR",
+		"Do not fall back to a direct push.",
+		"not on `main` until merged",
+		"Never delete a placeholder to recover",
 		"Say \"published\" or \"on main\" only after the remote confirms it.",
 	} {
 		if !strings.Contains(content, want) {

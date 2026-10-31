@@ -23,7 +23,7 @@ If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.
 harnez find -d <repo> issues -a status:active
 harnez find -d <repo> issues "<search terms>"
 harnez find -d <repo> issues similar "<search terms>"
-git -C <repo> fetch          # reserved numbers must see other clones' tickets
+git -C <repo> fetch          # see tickets already pushed by other clones (unpushed reservations stay invisible)
 harnez issues new -d <repo> "<title>"
 # Fill the returned ticket path using the repository's issue conventions.
 harnez issues open -d <repo> <n> --commit "docs(issues): file <n>, <summary>"
@@ -36,16 +36,29 @@ it links to the generated Backlog and Closed indexes.
 
 ## Publish Promptly
 
-The goal is a clean ticket commit that reaches review as soon as it is filed. Publishing to `main` is the exception, not the default.
+The goal is a clean ticket commit that reaches review as soon as it is filed. Prefer a direct push to `main` when it is authorized and allowed. Otherwise use a reusable AGit PR when the remote supports it. Otherwise stop.
 
-1. Commit on a topic branch. Under `git.mode: team` with `protected_main: true` in `.harnez/repo.yaml`, `harnez` refuses commits on the default branch. If you are on it, create `issue/<n>-<slug>` first.
-2. Take the first route that the repository policy and the remote permissions allow:
-   - **Direct push to `main`**: only if `protected_main` is `false`, or the repository administrator explicitly authorizes it in the current session, and the remote accepts the push. A machine or user name alone is not authorization.
-   - **Contributor AGit PR**: otherwise push with `git push origin HEAD:refs/for/main -o topic=<topic>`, where `<topic>` is the contributor's reusable topic (typically the Git username). Reuse the open PR for that topic: later ticket commits pushed to the same topic update it. Do not open one PR per ticket. If that PR was already closed or merged, use a new topic and say so. Never force-push.
-   - **Stop**: if the remote refuses AGit or the user lacks permission, leave the commit on the topic branch and report the denial. Do not push to `main` as a workaround.
-3. Report the state exactly: "committed on <branch>", "pushed to <remote> <ref>", or "AGit PR <number or URL> opened or updated". An AGit change reaches `main` only after the PR is merged. Say "published" or "on main" only after the remote confirms it.
+Policy precedence, strictest wins. Every layer must allow a direct push to `main`:
 
-Number collisions are secondary to publishing, but never allow a duplicate or an overwrite. If the remote already holds a different ticket with the reserved number, do not overwrite or rename it: fetch, allocate a fresh number with `harnez issues new`, and delete only your own unpublished placeholder after checking it. If that cannot be resolved cleanly, stop and report the collision.
+1. The repository administrator's instruction in the current session. Standing consent from an earlier session does not carry over.
+2. `.harnez/repo.yaml` (`git.protected_main`) and `docs/Git.md`. `protected_main: false` alone is not authority for a push.
+3. The remote's own branch protection. The server has the final word, and a rejected push is never retried with force.
+
+1. Commit on a topic branch. Under `git.mode: team` with `protected_main: true`, `harnez` refuses commits on the default branch. If you are on it, create `issue/<n>-<slug>` first. Then confirm the topic holds only the ticket commit: `git -C <repo> log --oneline origin/main..HEAD` must list nothing unrelated.
+2. Route A, direct push to `main`, only when all three layers allow it:
+   - `git -C <repo> fetch origin main`
+   - Stop if `origin/main` is not an ancestor of the ticket commit: `git -C <repo> merge-base --is-ancestor origin/main <sha>`. Report it; do not rebase silently.
+   - `git -C <repo> log --oneline origin/main..<sha>` must list only the ticket commit, and `git -C <repo> diff --stat origin/main <sha>` must touch only `issues/` files.
+   - `git -C <repo> push --dry-run origin <sha>:refs/heads/main`, then `git -C <repo> push origin <sha>:refs/heads/main`. Never use `--force` or a `+` refspec. A rejection means `main` moved: stop, fetch, and report.
+   - Confirm with `git -C <repo> fetch origin main` that `origin/main` equals `<sha>`. Repeat for any other remote that `docs/Git.md` requires to hold `main` in sync.
+3. Route B, contributor AGit PR, when Route A is not allowed and the remote supports AGit:
+   - `git -C <repo> push origin HEAD:refs/for/main/<topic>`, where `<topic>` is the contributor's reusable topic, by default the Git username. This is the form the repository's Forgejo remote accepted in practice, per the repository owner; it is not checked against other servers.
+   - Pushes to the same topic update the one open PR, so do not open one PR per ticket. Before pushing, check whether the topic's PR is still open. If it was closed or merged, use a new topic, for example with a `-2` suffix, and say so. Never push to a closed topic and assume it reached `main`.
+   - If the remote rejects the AGit push, stop and report the server's message. Do not fall back to a direct push.
+4. Stop: if neither route is allowed or supported, leave the commit on the topic branch and report the reason.
+5. Report exactly one state per ticket: "pushed to `main` at <sha>" (only after the fetch check above), "AGit PR <number or URL> open or updated, not on `main` until merged", or "committed locally on <branch>, not published, <reason>". Say "published" or "on main" only after the remote confirms it.
+
+Number reservation is secondary to publishing, but never allow a duplicate or an overwrite. `harnez issues new` checks only fetched remote branches. A fetch cannot see a reservation that another clone has not pushed, so a clash can still appear after publishing. Before publishing, check `git -C <repo> ls-tree origin/main issues/` for the reserved number. If a different ticket holds it, stop before pushing and report the path. Never overwrite or rename a remote ticket. Never delete a placeholder to recover: leave it in place, report its path and `git status`, and let the host decide.
 
 On the delegated path, keep the host responsive: report that filing was dispatched and don't block the main chat
 on the subagent's result, unless the user explicitly asked to wait or the very next step in
