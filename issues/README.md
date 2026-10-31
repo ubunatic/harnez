@@ -109,4 +109,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1060 | [1060-add-a-branch-cleanup-skill-with-optional-autonomous-decisions.md](1060-add-a-branch-cleanup-skill-with-optional-autonomous-decisions.md) | Add a branch cleanup skill with optional autonomous decisions | Open |
 | 1061 | [1061-investigate-skills-only-apply-removing-unrelated-managed-configuration.md](1061-investigate-skills-only-apply-removing-unrelated-managed-configuration.md) | Investigate skills-only apply removing unrelated managed configuration | Open |
 | 1062 | [1062-safe-git-push-and-git-pull-ergonomics-for-agit-repositories.md](1062-safe-git-push-and-git-pull-ergonomics-for-agit-repositories.md) | Safe git push and git pull ergonomics for AGit repositories | Open |
+| 1063 | [1063-study-devin-cli-features-binary-capabilities-and-multi-agent-workflows-vs-harnez.md](1063-study-devin-cli-features-binary-capabilities-and-multi-agent-workflows-vs-harnez.md) | Study Devin CLI features, binary capabilities, and multi-agent workflows vs harnez | Open |
 <!-- harnez:end issues-active-index -->
