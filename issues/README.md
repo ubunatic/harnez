@@ -103,4 +103,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1054 | [1054-configure-repository-roles-and-push-rules-per-repo.md](1054-configure-repository-roles-and-push-rules-per-repo.md) | Configure repository roles and push rules per repo | Open |
 | 1055 | [1055-automate-issue-indexes-after-merges-with-a-forgejo-workflow.md](1055-automate-issue-indexes-after-merges-with-a-forgejo-workflow.md) | Automate issue indexes after merges with a Forgejo workflow | Open |
 | 1056 | [1056-set-time-limited-default-models-for-agent-effort-tiers.md](1056-set-time-limited-default-models-for-agent-effort-tiers.md) | Set time-limited default models for agent effort tiers | Open |
+| 1057 | [1057-epic-plain-agent-runs-and-temporary-model-selection.md](1057-epic-plain-agent-runs-and-temporary-model-selection.md) | Epic: plain agent runs and temporary model selection | Open |
 <!-- harnez:end issues-active-index -->
