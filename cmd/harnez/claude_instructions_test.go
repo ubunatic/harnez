@@ -39,16 +39,23 @@ func TestRunClaudeInstructionsHookDetachedHeadWarning(t *testing.T) {
 	}
 	runCmd("add", "file.txt")
 	runCmd("commit", "-m", "init")
-	runCmd("checkout", "--detach")
 
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
+	// On a normal branch, verify no warning is emitted and standard instruction line is present.
+	t.Chdir(dir)
+
+	var normalOut bytes.Buffer
+	if err := runClaudeInstructionsHook(&normalOut); err != nil {
+		t.Fatalf("runClaudeInstructionsHook on normal branch: %v", err)
 	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
+	if strings.Contains(normalOut.String(), "WARNING: HEAD is detached") {
+		t.Errorf("did not expect detached HEAD warning on normal branch, got: %s", normalOut.String())
 	}
-	t.Cleanup(func() { _ = os.Chdir(wd) })
+	if !strings.Contains(normalOut.String(), "Harnez instruction rule:") {
+		t.Errorf("expected standard instruction line on normal branch, got: %s", normalOut.String())
+	}
+
+	// Detach HEAD
+	runCmd("checkout", "--detach")
 
 	var out bytes.Buffer
 	if err := runClaudeInstructionsHook(&out); err != nil {
@@ -57,7 +64,10 @@ func TestRunClaudeInstructionsHookDetachedHeadWarning(t *testing.T) {
 	if !strings.Contains(out.String(), "WARNING: HEAD is detached at") {
 		t.Errorf("expected detached HEAD warning in output, got: %s", out.String())
 	}
-	if !strings.Contains(out.String(), "Switch to a branch (git switch main) before committing.") {
+	if !strings.Contains(out.String(), "Switch to a branch (git switch -c <topic> or git switch <branch>) before committing.") {
 		t.Errorf("expected recovery command guidance in output, got: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "Harnez instruction rule:") {
+		t.Errorf("expected standard instruction line alongside warning, got: %s", out.String())
 	}
 }

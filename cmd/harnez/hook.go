@@ -109,6 +109,9 @@ func newHookCmd() *cobra.Command {
 }
 
 func runClaudeInstructionsHook(out io.Writer) error {
+	// runClaudeInstructionsHook is a Claude SessionStart hook whose stdout is injected
+	// directly into Claude's prompt context as instructions. Putting the WARNING on stdout
+	// is the desired behaviour so the agent reads it on turn 1.
 	if warn := gitflow.CheckDetachedHead("."); warn != "" {
 		if _, err := fmt.Fprintln(out, warn); err != nil {
 			return err

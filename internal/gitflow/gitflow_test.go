@@ -235,7 +235,7 @@ func TestGuardProtectedDetachedHEAD(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "detached HEAD") {
 		t.Fatalf("error = %v, want a detached HEAD refusal", err)
 	}
-	for _, want := range []string{"git switch main", "git switch -c topic"} {
+	for _, want := range []string{"git switch -c topic", "git switch <branch>"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain actionable recovery %q", err, want)
 		}
@@ -251,7 +251,7 @@ func TestGuardTeamDetachedHEADWarns(t *testing.T) {
 	if !strings.Contains(stderr.String(), "detached HEAD") {
 		t.Fatalf("stderr = %q, want a detached HEAD warning", stderr)
 	}
-	for _, want := range []string{"git switch main", "git switch -c topic"} {
+	for _, want := range []string{"git switch -c topic", "git switch <branch>"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Errorf("stderr %q does not contain actionable recovery %q", stderr.String(), want)
 		}
@@ -259,6 +259,12 @@ func TestGuardTeamDetachedHEADWarns(t *testing.T) {
 }
 
 func TestCheckDetachedHead(t *testing.T) {
+	// Non-git directory returns empty warning
+	nonGitDir := t.TempDir()
+	if warn := CheckDetachedHead(nonGitDir); warn != "" {
+		t.Fatalf("expected empty warning in non-git dir, got: %s", warn)
+	}
+
 	dir := newRepo(t, "main")
 	if warn := CheckDetachedHead(dir); warn != "" {
 		t.Fatalf("expected empty warning on main, got: %s", warn)
@@ -270,7 +276,7 @@ func TestCheckDetachedHead(t *testing.T) {
 	if warn == "" {
 		t.Fatal("expected warning when HEAD is detached, got empty")
 	}
-	for _, want := range []string{"WARNING: HEAD is detached at", "Switch to a branch (git switch main) before committing."} {
+	for _, want := range []string{"WARNING: HEAD is detached at", "Switch to a branch (git switch -c <topic> or git switch <branch>) before committing."} {
 		if !strings.Contains(warn, want) {
 			t.Errorf("warning %q does not contain %q", warn, want)
 		}
@@ -281,6 +287,14 @@ func TestCheckDetachedHead(t *testing.T) {
 	warn = CheckDetachedHead(dir)
 	if !strings.Contains(warn, "HEAD is detached at v1.2.3") {
 		t.Errorf("warning %q does not mention tag v1.2.3", warn)
+	}
+}
+
+func TestDetachedHeadRefFallback(t *testing.T) {
+	// In a non-git directory or repo where describe and rev-parse fail, DetachedHeadRef falls back to "HEAD"
+	nonGitDir := t.TempDir()
+	if ref := DetachedHeadRef(nonGitDir); ref != "HEAD" {
+		t.Fatalf("expected HEAD fallback in non-git dir, got: %q", ref)
 	}
 }
 
