@@ -1,6 +1,6 @@
 # 1070 — Allow plain harnez release from protected main for the repo admin
 
-**Status**: Open
+**Status**: In Progress — implementing guard, rule and doc changes
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
