@@ -8,8 +8,9 @@ Triggers: `/trial`, `/trial <scope>` (e.g. `/trial today`, `/trial sprint`, `/tr
 
 ## 1. Invocation Syntax
 
-- `/trial` or `/trial today` — audit capabilities and boundaries delivered today (or over the active session).
-- `/trial sprint` or `/trial <ticket>` — audit capabilities and boundaries delivered for a specific sprint, milestone, or epic.
+- `/trial` or `/trial today` — evidence: `git log --since="midnight" --oneline` (use `--since="24 hours ago"` if empty), plus tickets closed in that window via `harnez find -d . issues -a status:closed` (newest 10 only; never dump the whole closed index).
+- `/trial sprint` — evidence: `git log main..HEAD --oneline` on the current topic/sprint branch, plus tickets closed on this branch.
+- `/trial <ticket>` — evidence: `git log --grep="<ticket>" --oneline` and `harnez issues show -d . <ticket>`.
 
 ---
 
@@ -56,6 +57,7 @@ Format the audit with sharp contrast, zero opening/closing pleasantries, and exa
 
 ## 4. Execution Rules
 
-- **Zero Hallucination**: Every "Can Do" item must correspond to existing, committed, and test-verified code. If fewer than 10 genuine capabilities exist in the requested scope, state the exact verified count honestly rather than padding with trivial or duplicate items.
-- **Actionable Limitations**: Every "Cannot Do" item must represent a real functional gap or known defect, preferably linking to an open issue in `issues/` or proposing a follow-up ticket.
+- **Verified "Can Do"**: Every item must cite a CLI command, flag, or named test and you must confirm it exists at HEAD (e.g. `harnez <cmd> --help`, `grep` for the flag, or `go test -run <Name>`). Do not just repeat commit subjects. Exclude pure internal refactors, and list at most one item per ticket.
+- **Cited "Cannot Do"**: Every item must cite an open ticket (from `harnez find -d . issues -a status:active`, or a Backlog ticket) or a command failure you reproduced in this session (quote the command and error).
+- **Shortfall rule (both lists)**: If fewer than 10 genuine capabilities or fewer than 5 genuine limitations exist in the requested scope, state the verified count honestly (e.g. "6 verified") rather than padding with trivial, duplicate, or unverified items.
 - **Concise Discipline**: Do not add conversational filler. Present verbatim CLI commands and direct evidence.

@@ -37,3 +37,23 @@ Today, this capability check (the "10-5 trial") is conducted ad-hoc in conversat
 1. **Author `SKILL.md`**: Create the skill instruction file with clear frontmatter, workflow guidelines, and the 10-can / 5-cannot output template.
 2. **Registration & Docs**: Add `/trial` to skill definitions and relevant documentation.
 3. **Verification**: Run a live trial invocation across recent commits to verify that it outputs 10 accurate capabilities and 5 grounded limitations with exact file/commit links.
+
+---
+
+## 4. Implementation Notes
+
+- Skill source file: `docs/commands/trial.md` (registered in `config.yaml` as `trial`, `user-invocable-only` under the skill presets; covered by `internal/claude/claudeskills_test.go`; documented in `docs/practices/AgenticLoop.md` and its lite copy).
+
+## 5. Live Verification: `/trial sprint` on `sprint/1069-trial-skill`
+
+Evidence: `git log main..HEAD --oneline` returned one commit (`a3028bf0`). Shortfall rule applied; counts are stated, not padded.
+
+### Things We Can Do Now (1 verified)
+
+1. **Invoke a 10-5 audit with scoped evidence rules** — `/trial`, `/trial today`, `/trial sprint`, `/trial <ticket>` skill in `docs/commands/trial.md`, registered by the `trial` entry in `config.yaml` and checked by `internal/claude/claudeskills_test.go` ([a3028bf0](issue 1069)).
+
+### Things We Cannot Do Yet (3 verified)
+
+1. **Import forge issues** — `harnez issues import` does not exist yet; open [1064](1064-harnez-issues-import-command-to-fetch-remote-forge-issues-into-local-tracker.md).
+2. **Export local issues to a forge** — `harnez issues export` does not exist yet; open [1067](1067-add-harnez-issues-export-command-to-export-local-issues-to-remote-forge-tracker-via-agit-or-fj.md).
+3. **Pin docs, skills and tools per role** — role profiles not built; open [1068](1068-adopt-plain-mode-for-general-tasks-and-create-role-profiles-to-pin-docs-skills-and-tools.md).
