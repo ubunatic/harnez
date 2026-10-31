@@ -1,6 +1,6 @@
 # 1057 — Epic: plain agent runs and temporary model selection
 
-**Status**: Open
+**Status**: Closed — delivered selectable agent context modes (1027) and time-limited default models for effort tiers (1056)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Epic
