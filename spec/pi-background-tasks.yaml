@@ -22,7 +22,11 @@
   },
   "delivery": {
     "hold_warn_ms": 30000,
-    "flush_poll_ms": 25
+    "flush_poll_ms": 25,
+    "batch_window_ms": 100,
+    "batch_max_tasks": 8,
+    "batch_max_chars": 8192,
+    "entry_max_chars": 768
   },
   "status": {
     "max_cells": 72,

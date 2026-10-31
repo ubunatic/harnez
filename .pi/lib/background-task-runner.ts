@@ -201,7 +201,7 @@ export function parseBackgroundTaskConfig(text: string, source: string, width: (
   const high = positiveInt(capture.high_watermark_bytes, `${source}: capture.high_watermark_bytes`);
   const hard = positiveInt(capture.hard_watermark_bytes, `${source}: capture.hard_watermark_bytes`);
   if (low >= high || high > hard) throw new Error(`${source}: invalid capture watermark ordering`);
-  const delivery = exactKeys(root.delivery, `${source}: delivery`, ["hold_warn_ms", "flush_poll_ms"]);
+  const delivery = exactKeys(root.delivery, `${source}: delivery`, ["hold_warn_ms", "flush_poll_ms", "batch_window_ms", "batch_max_tasks", "batch_max_chars", "entry_max_chars"]);
   const status = exactKeys(root.status, `${source}: status`, ["max_cells", "reserved_cells", "label_max_cells", "fallback_label", "manual_emoji", "default_emoji", "label_emoji"]);
   const labelEmoji = status.label_emoji;
   if (typeof labelEmoji !== "object" || labelEmoji === null || Array.isArray(labelEmoji)) throw new Error(`${source}: invalid label_emoji`);
@@ -218,6 +218,15 @@ export function parseBackgroundTaskConfig(text: string, source: string, width: (
   if (width(fallbackLabel) > labelMaxCells) throw new Error(`${source}: fallback_label exceeds label_max_cells`);
   const reservedCells = status.reserved_cells;
   if (typeof reservedCells !== "number" || !Number.isSafeInteger(reservedCells) || reservedCells < 0) throw new Error(`${source}: invalid reserved_cells`);
+  const deliveryConfig: DeliveryConfig = {
+    holdWarnMs: positiveInt(delivery.hold_warn_ms, `${source}: delivery.hold_warn_ms`),
+    flushPollMs: positiveInt(delivery.flush_poll_ms, `${source}: delivery.flush_poll_ms`),
+    batchWindowMs: positiveInt(delivery.batch_window_ms, `${source}: delivery.batch_window_ms`),
+    batchMaxTasks: positiveInt(delivery.batch_max_tasks, `${source}: delivery.batch_max_tasks`),
+    batchMaxChars: positiveInt(delivery.batch_max_chars, `${source}: delivery.batch_max_chars`),
+    entryMaxChars: positiveInt(delivery.entry_max_chars, `${source}: delivery.entry_max_chars`),
+  };
+  validateDeliveryConfig(deliveryConfig, source);
   return {
     status: { maxCells: positiveInt(status.max_cells, `${source}: max_cells`), reservedCells,
       labelMaxCells, fallbackLabel,
@@ -232,16 +241,28 @@ export function parseBackgroundTaskConfig(text: string, source: string, width: (
     capture: { enabledByDefault: capture.enabled_by_default, lowWatermarkBytes: low, highWatermarkBytes: high, hardWatermarkBytes: hard,
       stallMs: positiveInt(capture.stall_ms, `${source}: capture.stall_ms`), finalizeMs: positiveInt(capture.finalize_ms, `${source}: capture.finalize_ms`),
       cleanupMs: positiveInt(capture.cleanup_ms, `${source}: capture.cleanup_ms`), ioConcurrency: positiveInt(capture.io_concurrency, `${source}: capture.io_concurrency`) },
-    delivery: {
-      holdWarnMs: positiveInt(delivery.hold_warn_ms, `${source}: delivery.hold_warn_ms`),
-      flushPollMs: positiveInt(delivery.flush_poll_ms, `${source}: delivery.flush_poll_ms`),
-    },
+    delivery: deliveryConfig,
   };
 }
 
 export interface DeliveryConfig {
   holdWarnMs: number;
   flushPollMs: number;
+  batchWindowMs: number;
+  batchMaxTasks: number;
+  batchMaxChars: number;
+  entryMaxChars: number;
+}
+
+const COMPLETION_HEADER = "Background task completions:\n";
+const COMPLETION_GUIDANCE = "\n\nUse background_task_result for retained output. Inspect these results and continue ongoing work as appropriate; do not automatically summarize the session.";
+
+function validateDeliveryConfig(config: DeliveryConfig, source: string): void {
+  for (const [key, value] of Object.entries(config)) positiveInt(value, `${source}: delivery.${key}`);
+  if (config.entryMaxChars < 256) throw new Error(`${source}: entry_max_chars must be at least 256`);
+  if (config.batchMaxChars < 512 || config.entryMaxChars > config.batchMaxChars - COMPLETION_HEADER.length - COMPLETION_GUIDANCE.length) {
+    throw new Error(`${source}: batch_max_chars must be at least 512 and fit entry_max_chars plus completion guidance`);
+  }
 }
 
 /** The part of Pi's extension context that delivery needs. */
@@ -271,9 +292,9 @@ const realTimers: DeliveryTimers = {
  *
  * Extensions cannot read that state, so it is inferred: Pi not idle with no agent run between agent_start and
  * agent_settled means compaction may be active, even before this extension's own session_before_compact handler runs.
- * A message arriving during a known run or while idle goes straight to send, so streaming follow-ups are never delayed.
+ * Completions arriving during a known run or while idle use the same fixed first-arrival batching window.
  *
- * Held messages go out in arrival order, one per poll, only while Pi is idle or a known run is active. Each is submitted
+ * Bounded batches go out in arrival order, one per poll, only while Pi is idle or a known run is active. Each is submitted
  * at most once and never retried: Pi gives no acknowledgement, so a retry could duplicate a message that did arrive.
  */
 export class CompletionDelivery {
@@ -285,6 +306,7 @@ export class CompletionDelivery {
   private readonly submitted: number[] = [];
   private warned = false;
   private flushTimer: unknown;
+  private batchTimer: unknown;
   private watchTimer: unknown;
   private ctx: DeliveryContext | undefined;
 
@@ -294,22 +316,30 @@ export class CompletionDelivery {
   private readonly released: (id: number) => void;
 
   constructor(send: (text: string) => void, config: DeliveryConfig, timers: DeliveryTimers = realTimers, released: (id: number) => void = () => {}) {
+    validateDeliveryConfig(config, "CompletionDelivery");
     this.send = send;
     this.config = config;
     this.timers = timers;
     this.released = released;
   }
 
-  submit(id: number, text: string): boolean {
-    if (this.closed || (!this.holding && this.held.length === 0 && (this.runActive || this.idle() !== false))) {
-      this.send(text);
-      return false;
+  submit(id: number, text: string): void {
+    if (this.closed) { this.released(id); return; }
+    const first = this.held.length === 0;
+    // Identity is part of the bounded entry even when the caller provides enormous text.
+    const prefix = `#${id}: `;
+    this.held.push({ id, text: prefix + text.slice(0, this.config.entryMaxChars - prefix.length) });
+    if (this.holding || (!this.runActive && this.idle() === false)) {
+      this.notify(`Background command #${id} finished while Pi is compacting or busy; its notification is held until compaction ends.`, "warning");
+      this.armWatch();
     }
-    this.held.push({ id, text });
-    this.notify(`Background command #${id} finished while Pi is compacting or busy; its notification is held until compaction ends.`, "warning");
-    this.armWatch();
-    if (!this.holding) this.scheduleFlush();
-    return true;
+    if (first) {
+      this.clearFlush();
+      this.batchTimer = this.timers.set(() => {
+        this.batchTimer = undefined;
+        this.flush();
+      }, this.config.batchWindowMs);
+    }
   }
 
   /** The session context, so a completion can check for compaction before any compaction hook has run. */
@@ -351,12 +381,17 @@ export class CompletionDelivery {
     this.closed = true;
     this.clearFlush();
     this.clearWatch();
-    return this.held.splice(0).map((entry) => entry.id);
+    if (this.batchTimer !== undefined) this.timers.clear(this.batchTimer);
+    this.batchTimer = undefined;
+    this.submitted.length = 0;
+    const ids = this.held.splice(0).map((entry) => entry.id);
+    for (const id of ids) this.released(id);
+    return ids;
   }
 
   private flush(): void {
     this.flushTimer = undefined;
-    if (this.closed || this.holding) return;
+    if (this.closed || this.holding || this.batchTimer !== undefined) return;
     if (this.held.length === 0 && this.submitted.length === 0 && !this.checkStranded) return;
     // A slow later session_compact handler keeps Pi's guard set: wait, for the stranded check too.
     const idle = this.idle() === true;
@@ -368,16 +403,27 @@ export class CompletionDelivery {
       this.finishDrain(idle);
       return;
     }
-    const entry = this.held.shift()!;
+    const separator = "\n\n";
+    const entries: Array<{ id: number; text: string }> = [];
+    let length = COMPLETION_HEADER.length + COMPLETION_GUIDANCE.length;
+    while (this.held.length && entries.length < this.config.batchMaxTasks) {
+      const next = this.held[0];
+      const available = this.config.batchMaxChars - length - (entries.length ? separator.length : 0);
+      if (entries.length && next.text.length > available) break;
+      this.held.shift();
+      entries.push(next);
+      length += next.text.length + (entries.length > 1 ? separator.length : 0);
+    }
     this.checkStranded = false;
     if (this.held.length === 0) this.clearWatch();
     try {
-      this.send(entry.text);
-      this.submitted.push(entry.id);
+      this.send(COMPLETION_HEADER + entries.map((entry) => entry.text).join(separator) + COMPLETION_GUIDANCE);
+      this.submitted.push(...entries.map((entry) => entry.id));
     } catch (error) {
-      this.notify(`Could not submit the held notification for background command #${entry.id}: ${(error as Error).message}. It is not retried; read it with background_task_result.`, "error");
+      this.notify(`Could not submit background task notifications ${entries.map((entry) => `#${entry.id}`).join(", ")}: ${String(error)}. They are not retried; read them with background_task_result.`, "error");
+    } finally {
+      for (const entry of entries) this.released(entry.id);
     }
-    this.released(entry.id);
     this.scheduleFlush();
   }
 
@@ -393,7 +439,7 @@ export class CompletionDelivery {
   }
 
   private scheduleFlush(): void {
-    if (this.flushTimer === undefined) this.flushTimer = this.timers.set(() => this.flush(), this.config.flushPollMs);
+    if (!this.closed && this.batchTimer === undefined && this.flushTimer === undefined) this.flushTimer = this.timers.set(() => this.flush(), this.config.flushPollMs);
   }
 
   private clearFlush(): void {

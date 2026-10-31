@@ -86,14 +86,22 @@ manual compaction runs and reports that only as an extension error, so the exten
 holds notifications from its `session_before_compact` hook until `session_compact` or
 `session_compact_failed`. Pi has no compaction-state API, so a completion is also held when
 Pi is not idle and no agent run is known (`agent_start` to `agent_settled`); this covers
-another extension's earlier hook. Held notifications go out in arrival order, one per poll,
+another extension's earlier hook. Completions share a fixed window starting at the first arrival; later
+arrivals do not extend it. Batches obey task-count and character bounds and go out in arrival order,
 only while Pi is idle or a known run is active (`delivery` in
 `spec/pi-background-tasks.yaml` sets the timing). Delivery is at most once, not exactly
 once: Pi gives no acknowledgement, so nothing is retried, and one summary warning points at
 `background_task_result`. Known gaps (issue 1047): a run started while an earlier hook holds
 compaction can still get a completion rejected, held notifications are dropped with a stderr
 report at shutdown, and a follow-up queued before compaction waits for the next prompt (with
-a warning). Automatic compaction and ordinary streaming follow-ups are not held.
+a warning). Batching can change their order relative to unrelated messages. Automatic compaction
+and ordinary streaming follow-ups use the same batching window. Entries contain task identity,
+status, bounded command/capture diagnostics and retrieval guidance, never an opt-out output dump.
+Tasks stay pinned against retention eviction until their batch's send attempt, then ordinary retention
+resumes; this is not an acknowledgement or a guarantee that old results remain until read. Shutdown
+releases unsent pins and clears delivery timers. The loader rejects entry limits below 256, message
+limits below 512, or a message limit unable to fit one full entry plus the guidance envelope; the
+schema enforces individual bounds and the loader additionally checks the field relationship.
 `make canary-pi-compaction` checks this against the real Pi with a local stub model.
 
 Tools (model-callable):

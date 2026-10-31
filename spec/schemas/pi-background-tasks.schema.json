@@ -60,7 +60,11 @@
       "additionalProperties": false,
       "required": [
         "hold_warn_ms",
-        "flush_poll_ms"
+        "flush_poll_ms",
+        "batch_window_ms",
+        "batch_max_tasks",
+        "batch_max_chars",
+        "entry_max_chars"
       ],
       "properties": {
         "hold_warn_ms": {
@@ -72,8 +76,31 @@
         "flush_poll_ms": {
           "type": "integer",
           "minimum": 1,
-          "description": "Interval between submitting held completion notifications, and between checks that Pi is idle before the first one.",
+          "description": "Interval between batches and checks for a cleared compaction guard.",
           "maximum": 9007199254740991
+        },
+        "batch_window_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Fixed window from the first queued completion; later arrivals do not reset it."
+        },
+        "batch_max_tasks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "batch_max_chars": {
+          "type": "integer",
+          "minimum": 512,
+          "maximum": 9007199254740991,
+          "description": "Maximum completion message characters, including guidance. Loader also requires room for entry_max_chars plus the envelope."
+        },
+        "entry_max_chars": {
+          "type": "integer",
+          "minimum": 256,
+          "maximum": 9007199254740991,
+          "description": "Maximum characters per entry including task identity; at least 256 for useful status and retrieval context."
         }
       }
     },

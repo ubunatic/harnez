@@ -34,7 +34,7 @@ const fastConfig: BackgroundTaskConfig = {
   outputLimitChars: 16_000,
   finishedRetentionLimit: 50,
   stop: { graceMs: 20, killWaitMs: 60, pollMs: 5 },
-  delivery: { holdWarnMs: 1_000, flushPollMs: 1 },
+  delivery: { holdWarnMs: 1_000, flushPollMs: 1, batchWindowMs: 1, batchMaxTasks: 8, batchMaxChars: 8192, entryMaxChars: 768 },
   capture: { ...parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec", visibleWidth).capture, enabledByDefault: false },
   status: parseBackgroundTaskConfig(readFileSync(SPEC_PATH, "utf8"), "spec", visibleWidth).status,
 };
@@ -180,6 +180,7 @@ test("post-exit drain deadline survives repeated capture progress and backpressu
   const next = s.runner.start("next", process.cwd());
   next.child.emit("exit", 0, null);
   next.child.emit("close", 0, null);
+  await until(() => !s.runner.tasks.has(task.id));
   assert.equal(s.runner.tasks.has(task.id), false, "finished task can be evicted");
 });
 
@@ -238,6 +239,8 @@ function fakeCtx() {
     cwd: process.cwd(),
     statuses,
     notes,
+    isIdle: () => true,
+    hasPendingMessages: () => false,
     ui: {
       setStatus: (_key: string, text: string | undefined) => statuses.push(text),
       notify: (message: string, level: string) => notes.push({ message, level }),
@@ -312,6 +315,14 @@ function isDead(pid: number): boolean {
   }
 }
 
+async function until(done: () => boolean): Promise<void> {
+  const deadline = Date.now() + TIMEOUT_MS;
+  while (!done()) {
+    assert.ok(Date.now() < deadline, "timed out waiting for delivery");
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
 function text(result: { content: Array<{ text: string }> }): string {
   return result.content.map((part) => part.text).join("\n");
 }
@@ -326,6 +337,7 @@ test("default capture is visible in completion and result; tool and command can 
   children[0].emit("exit", 0, null);
   children[0].emit("close", 0, null);
   await task.captureWriter!.finish();
+  await until(() => s.messages.length >= 1);
   assert.match(s.messages[0].text, /Capture complete: 14 committed bytes/);
   assert.ok(s.messages[0].text.includes(task.capture!.path));
   assert.ok(!s.messages[0].text.includes("private output"));
@@ -343,6 +355,37 @@ test("default capture is visible in completion and result; tool and command can 
   children[2].emit("exit", 0, null); children[2].emit("close", 0, null);
   await waitForRemoval(task.capture!.path);
   assert.equal(existsSync(task.capture!.path), false);
+});
+
+test("ordinary batching pins opt-out results through send attempt, bounds huge text, and resumes retention", async () => {
+  const children: FakeChild[] = [];
+  const config = { ...fastConfig, finishedRetentionLimit: 1, delivery: { ...fastConfig.delivery, batchWindowMs: 100 } };
+  const s = setup({ config, spawn: () => { const child = new FakeChild(450 + children.length); children.push(child); return child as any; } });
+  const send = s.pi.sendUserMessage;
+  s.pi.sendUserMessage = (message, options) => {
+    for (const task of s.runner.tasks.values()) assert.equal(task.deliveryHeld, true, "pinned during send attempt");
+    assert.deepEqual([...s.runner.tasks.keys()], [1, 2, 3]);
+    return send(message, options);
+  };
+  for (let i = 0; i < 3; i++) {
+    const task = s.runner.start(`task-${i} ` + "c".repeat(100000), process.cwd(), { capture: false });
+    children[i].stdout.emit("data", Buffer.from("huge private output ".repeat(10000)));
+    children[i].emit("exit", i === 1 ? 7 : 0, null);
+    children[i].emit("close", i === 1 ? 7 : 0, null);
+    assert.equal(task.deliveryHeld, true);
+  }
+  assert.equal(s.messages.length, 0);
+  assert.deepEqual([...s.runner.tasks.keys()], [1, 2, 3]);
+  await until(() => s.messages.length === 1);
+  assert.deepEqual([...s.runner.tasks.keys()], [3]);
+  const message = s.messages[0].text;
+  assert.ok(message.length <= config.delivery.batchMaxChars);
+  assert.doesNotMatch(message, /huge private output/);
+  for (const id of [1, 2, 3]) assert.ok(message.includes(`#${id} finished`));
+  assert.match(message, /failed, exit 7/);
+  assert.match(message, /background_task_result/);
+  assert.equal(s.runner.tasks.get(3)!.deliveryHeld, false);
+  assert.match(text(await s.tool("background_task_result").execute("r", { id: 3 })), /huge private output/);
 });
 
 test("held captures survive retention until their notifications are submitted", async () => {
@@ -370,9 +413,9 @@ test("held captures survive retention until their notifications are submitted", 
   s.handlers.get("session_compact")?.({ reason: "manual" }, ctx);
   ctx.idle = true;
   const deadline = Date.now() + TIMEOUT_MS;
-  while (s.messages.length < 3 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 1));
-  assert.equal(s.messages.length, 3);
-  for (const [i, message] of s.messages.entries()) assert.ok(message.text.includes(tasks[i].capture!.path));
+  while (s.messages.length < 1 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(s.messages.length, 1, "held completions fit in a single batch");
+  for (const task of tasks) assert.ok(s.messages[0].text.includes(task.capture!.path));
   await waitForRemoval(tasks[0].capture!.path);
   await waitForRemoval(tasks[1].capture!.path);
   assert.equal(existsSync(tasks[0].capture!.path), false);
@@ -407,6 +450,7 @@ test("spawn failure diagnostic appears alongside empty complete capture", async 
   child.emit("error", new Error("spawn ENOENT"));
   child.emit("close", null, null);
   await task.captureWriter!.finish();
+  await until(() => s.messages.length >= 1);
   assert.match(s.messages[0].text, /Capture complete: 0 committed bytes/);
   assert.match(s.messages[0].text, /Spawn error: spawn ENOENT/);
 });
@@ -419,6 +463,7 @@ test("capture creation failure is visible in completion and result", async () =>
   const task = s.runner.tasks.get(1)!;
   child.emit("exit", 1, null); child.emit("close", 1, null);
   await task.captureWriter!.finish();
+  await until(() => s.messages.length >= 1);
   assert.match(s.messages[0].text, /Capture incomplete .*no space.*0 committed bytes.*No capture file created/);
   assert.match(text(await s.tool("background_task_result").execute("r", { id: 1 })), /no space/);
 });
@@ -428,6 +473,7 @@ test("lifecycle: exit 0 completes, exit 7 fails, stderr captured, status updates
   const first = once(s.runner, "finished", (task) => task.id === 1);
   await s.tool("background_task").execute("c1", { command: "echo out; echo err >&2" }, undefined, undefined, s.ctx);
   await first;
+  await until(() => s.messages.length === 1);
   const ok = s.runner.tasks.get(1)!;
   assert.equal(ok.status, "completed");
   assert.equal(ok.exitCode, 0);
@@ -443,7 +489,8 @@ test("lifecycle: exit 0 completes, exit 7 fails, stderr captured, status updates
 
   assert.ok(s.ctx.statuses.includes("Tasks (1): ¹🤖echo"), "status bar showed a running task");
   assert.equal(s.ctx.statuses.at(-1), undefined, "status bar cleared after the last task");
-  assert.equal(s.messages.length, 2, "one follow-up per task");
+  await until(() => s.messages.length === 2);
+  assert.equal(s.messages.length, 2, "one follow-up per staggered task");
   assert.ok(s.messages[0].text.includes("#1 finished (completed, exit 0)"));
   assert.ok(s.messages[1].text.includes("#2 finished (failed, exit 7)"));
   assert.deepEqual(s.messages[0].options, { deliverAs: "followUp" });
@@ -498,6 +545,7 @@ test("wiring: automatic compaction hooks neither hold nor end a manual hold", as
   const s = compactionSession();
   s.handlers.get("session_before_compact")?.({ reason: "threshold" }, s.ctx);
   await s.finish("echo auto");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "not held");
 
   s.ctx.idle = false;
@@ -506,6 +554,7 @@ test("wiring: automatic compaction hooks neither hold nor end a manual hold", as
   s.handlers.get("session_compact_failed")?.({ reason: "overflow" }, s.ctx);
   s.ctx.idle = true;
   await s.finish("echo manual");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "the manual hold is still active");
 });
 
@@ -514,9 +563,11 @@ test("wiring: agent_start and agent_settled decide whether a busy session holds"
   s.ctx.idle = false;
   s.handlers.get("agent_start")?.({}, s.ctx);
   await s.finish("echo streaming");
-  assert.equal(s.messages.length, 1, "known run: sent at once");
+  await until(() => s.messages.length >= 1);
+  assert.equal(s.messages.length, 1, "known run: sent after the batching window");
   s.handlers.get("agent_settled")?.({}, s.ctx);
   await s.finish("echo pre-hook");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "busy with no run: held before any compaction hook ran");
   s.ctx.idle = true;
   await s.until(() => s.messages.length === 2);
@@ -646,6 +697,7 @@ test("signal reporting: a child killed by a signal is failed with null exit, the
   const result = await s.tool("background_task_result").execute("r", { id: 1 }, undefined, undefined, s.ctx);
   assert.match(text(result), /signal SIGKILL/);
   assert.equal(result.details.signal, "SIGKILL");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1);
   assert.match(s.messages[0].text, /failed, signal SIGKILL/);
 });
@@ -682,6 +734,7 @@ test("bounded retention keeps running tasks: limit 3 with #1 running and #2-#5 f
     child.emit("exit", 0, null);
     child.emit("close", 0, null);
   }
+  await until(() => !s.runner.tasks.has(2));
   assert.deepEqual([...s.runner.tasks.keys()], [1, 3, 4, 5]);
   assert.equal(s.runner.tasks.get(1)!.status, "running");
   assert.equal(s.ctx.statuses.at(-1), "Tasks (1): ¹🔨build");
@@ -746,6 +799,7 @@ test("model controls: inspect a completed and a running task, cancel the running
   const again = await s.tool("background_task_cancel").execute("x2", { id: 2 }, undefined, undefined, s.ctx);
   assert.match(text(again), /already cancelled/);
   assert.equal(s.runner.tasks.get(2)!.status, "cancelled");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "only the completed task produced a follow-up");
 });
 
@@ -763,6 +817,7 @@ test("duplicate error then close: one notification, frozen end time, and no sign
   const task = s.runner.tasks.get(1)!;
   assert.equal(task.status, "failed");
   assert.ok(task.output.includes("spawn boom"));
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "single notification");
   const frozen = s.runner.elapsedMs(task);
   clock = 5_000;
@@ -771,6 +826,7 @@ test("duplicate error then close: one notification, frozen end time, and no sign
   const outcome = await s.runner.cancel(task);
   assert.equal(outcome, "already-ended");
   assert.equal(s.signals.length, 0, "no signal after the leader was reported gone");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1);
 });
 
@@ -780,7 +836,7 @@ test("config: the spec file loads with the documented bounds", () => {
     outputLimitChars: 16_000,
     finishedRetentionLimit: 50,
     stop: { graceMs: 1_000, killWaitMs: 2_000, pollMs: 25 },
-    delivery: { holdWarnMs: 30_000, flushPollMs: 25 },
+    delivery: { holdWarnMs: 30_000, flushPollMs: 25, batchWindowMs: 100, batchMaxTasks: 8, batchMaxChars: 8192, entryMaxChars: 768 },
     capture: { ...fastConfig.capture, enabledByDefault: true },
     status: fastConfig.status,
   });
@@ -791,7 +847,7 @@ test("config: unknown, missing, non-positive and non-JSON-compatible values fail
     output_limit_chars: 1,
     finished_retention_limit: 1,
     stop: { grace_ms: 1, kill_wait_ms: 1, poll_ms: 1 },
-    delivery: { hold_warn_ms: 1, flush_poll_ms: 1 },
+    delivery: { hold_warn_ms: 1, flush_poll_ms: 1, batch_window_ms: 1, batch_max_tasks: 8, batch_max_chars: 8192, entry_max_chars: 768 },
     capture: JSON.parse(readFileSync(SPEC_PATH, "utf8").split("\n").filter((line) => !line.startsWith("#")).join("\n")).capture,
     status: JSON.parse(readFileSync(SPEC_PATH, "utf8").split("\n").filter((line) => !line.startsWith("#")).join("\n")).status,
   };
@@ -819,7 +875,11 @@ test("config: unknown, missing, non-positive and non-JSON-compatible values fail
   assert.throws(() => parse({ ...valid, extra: 1 }), /unknown key "extra"/);
   assert.throws(() => parse({ ...valid, stop: { grace_ms: 1, kill_wait_ms: 1 } }), /missing key "poll_ms"/);
   assert.throws(() => parse({ ...valid, delivery: { hold_warn_ms: 1 } }), /missing key "flush_poll_ms"/);
-  assert.throws(() => parse({ ...valid, delivery: { hold_warn_ms: 0, flush_poll_ms: 1 } }), /hold_warn_ms/);
+  assert.throws(() => parse({ ...valid, delivery: { ...valid.delivery, hold_warn_ms: 0 } }), /hold_warn_ms/);
+  assert.throws(() => parse({ ...valid, delivery: { ...valid.delivery, entry_max_chars: 255 } }), /entry_max_chars/);
+  assert.throws(() => parse({ ...valid, delivery: { ...valid.delivery, batch_max_chars: 511 } }), /batch_max_chars/);
+  assert.throws(() => parse({ ...valid, delivery: { ...valid.delivery, batch_max_chars: 800 } }), /fit entry_max_chars/);
+  assert.ok(parse({ ...valid, delivery: { ...valid.delivery, entry_max_chars: 256, batch_max_chars: 512 } }));
   assert.throws(() => parse({ ...valid, output_limit_chars: 0 }), /positive safe integer/);
   assert.throws(() => parse({ ...valid, finished_retention_limit: 1.5 }), /positive safe integer/);
   assert.throws(() => parseBackgroundTaskConfig("output_limit_chars: 1\n", "test", visibleWidth), /not JSON-compatible YAML/);
@@ -880,6 +940,7 @@ test("unconfirmed cancel: the task stays running, is watched, and settles with i
 
   assert.equal(task.status, "failed", "settled by its real exit, not hidden as cancelled");
   assert.equal(task.signal, "SIGKILL");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "the follow-up is not suppressed after an unconfirmed cancel");
   assert.match(s.messages[0].text, /failed, signal SIGKILL/);
 });
@@ -911,6 +972,7 @@ test("reaped leader: the group is signalled only while a live member is seen, an
   assert.equal(task.status, "failed");
   assert.equal(await s.runner.cancel(task), "already-ended");
   assert.deepEqual(sent, [], "no signal once the group is empty: its ID may be reused");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1);
 });
 
@@ -927,6 +989,7 @@ test("unknown end: a spawn error reports exit unknown in list, result and follow
   assert.match(listed, /\[failed\].*exit unknown/);
   const result = text(await s.tool("background_task_result").execute("r", { id: 1 }, undefined, undefined, s.ctx));
   assert.match(result, /exit unknown/);
+  await until(() => s.messages.length >= 1);
   assert.match(s.messages[0].text, /failed, exit unknown/);
   assert.doesNotMatch(`${listed}\n${result}\n${s.messages[0].text}`, /exit null/);
 });
@@ -942,6 +1005,7 @@ test("held pipe: a child that outlives the shell keeps stdout open; output is fi
   assert.equal(task.exitCode, 0);
   assert.match(task.output, /held/);
   assert.match(task.output, /output streams stayed open after the command exited/);
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "one follow-up once output is final");
 });
 
@@ -1002,6 +1066,7 @@ test("slash actions with valid IDs: /task starts, /tasks lists, /task-result sho
   assert.equal(running.status, "cancelled");
   assert.match(s.ctx.notes.at(-1)!.message, /Cancelled background command #2/);
   assert.equal(s.ctx.notes.at(-1)!.level, "info");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "only the completed task produced a follow-up");
 });
 
@@ -1060,9 +1125,11 @@ test("retry boundary: a group that empties after the leader's exit settles as a 
   assert.equal(s.messages.length, 0, "output is not final yet: no follow-up");
 
   child.emit("close", 1, null);
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "one follow-up once output is final");
   assert.match(s.messages[0].text, /failed, exit 1/);
   assert.equal(await s.runner.cancel(task), "already-ended");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1, "no second follow-up");
 });
 
@@ -1134,6 +1201,7 @@ test("unknown liveness: a successful group probe keeps the task running; a probe
   await done;
   assert.equal(task.status, "failed");
   assert.equal(task.signal, "SIGTERM");
+  await until(() => s.messages.length >= 1);
   assert.equal(s.messages.length, 1);
 });
 
@@ -1308,7 +1376,10 @@ test("status: manual and tool metadata exist on first change without changing ar
     task.child.emit("close", 0, null);
   }
   assert.equal(s.ctx.statuses.at(-1), undefined);
-  assert.equal(s.messages.length, 2);
+  await until(() => s.messages.length === 1);
+  assert.equal(s.messages.length, 1, "simultaneous completions share a batch");
+  assert.match(s.messages[0].text, /#1 finished/);
+  assert.match(s.messages[0].text, /#2 finished/);
 });
 
 test("label: an invalid value uses the fallback and every spawned process has a task", async () => {

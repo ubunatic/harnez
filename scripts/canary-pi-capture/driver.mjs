@@ -12,6 +12,7 @@ fs.mkdirSync(agentDir);
 fs.mkdirSync(cwd);
 let nextTool;
 let readResult;
+const results = new Map();
 const completions = [];
 const server = http.createServer((req, res) => {
   let body = "";
@@ -56,6 +57,7 @@ readline.createInterface({ input: pi.stdout }).on("line", (line) => {
   if (msg.type === "agent_end") ends++;
   if (msg.type === "extension_error") errors.push(msg.error);
   if (msg.type === "tool_execution_end" && msg.toolName === "read") readResult = JSON.stringify(msg.result);
+  if (msg.type === "tool_execution_end" && msg.toolName === "background_task_result") results.set(msg.args?.id, JSON.stringify(msg.result));
 });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(fn, label, timeout = 15000) {
@@ -90,10 +92,15 @@ try {
   assert(readResult?.includes("PAGE_MARKER"), `Pi read tool returned PAGE_MARKER with offset 1 and limit 1: ${readResult}`);
   await turn("tool opt out", { name: "background_task", args: { command: "printf TOOL_OPTOUT", capture: false } });
   await until(() => completions.some((entry) => entry.id === 2), "tool opt out");
-  assert(/Output:\s*TOOL_OPTOUT/.test(completions.find((entry) => entry.id === 2).text), "tool capture false returns output");
+  assert(/Capture disabled/.test(completions.find((entry) => entry.id === 2).text), "tool capture false reports disabled");
+  await turn("inspect tool opt out", { name: "background_task_result", args: { id: 2 } });
+  assert([...results.values()].some((result) => result.includes("TOOL_OPTOUT")), "tool capture false retains output in result");
   await send({ type: "prompt", message: "/task --no-capture printf SLASH_OPTOUT" });
   await until(() => completions.some((entry) => entry.id === 3), "slash opt out");
-  assert(/Output:\s*SLASH_OPTOUT/.test(completions.find((entry) => entry.id === 3).text), "slash --no-capture returns output");
+  assert(/Capture disabled/.test(completions.find((entry) => entry.id === 3).text), "slash --no-capture reports disabled");
+  await turn("inspect slash opt out", { name: "background_task_result", args: { id: 3 } });
+  assert([...results.values()].some((result) => result.includes("SLASH_OPTOUT")), "slash --no-capture retains output in result");
+  assert(completions.find((entry) => entry.id === 1).text.match(/Background command #\d+ finished/g).length === 1, "singleton contains exactly one completion");
   await turn("drain timeout", { name: "background_task", args: { command: "setsid sh -c 'sleep 5' & printf DRAIN_PREFIX" } });
   await until(() => completions.some((entry) => entry.id === 4), "drain timeout completion");
   const incomplete = completions.find((entry) => entry.id === 4).text;

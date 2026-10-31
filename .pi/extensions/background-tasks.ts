@@ -52,9 +52,10 @@ export function installBackgroundTasks(pi: ExtensionAPI, overrides: Partial<Runn
     (id) => runner.releaseDelivery(id),
   );
   runner.on("finished", (task: BackgroundTask) => {
-    task.deliveryHeld = delivery.submit(
-      task.id,
-      `Background command #${task.id} finished (${task.status}, ${describeEnd(task)}).\nCommand: ${task.command}\n${task.captureWriter ? captureDescription(task) : `Output:\n${task.output || "(no output)"}`}${task.spawnError && task.captureWriter ? `\nSpawn error: ${task.spawnError}` : ""}\n\nInspect this result and report what it means. If it indicates unfinished work, continue appropriately.`,
+    task.deliveryHeld = true;
+    const clip = (value: string) => value.slice(0, Math.max(0, Math.floor(options.config.delivery.entryMaxChars / 4)));
+    delivery.submit(task.id,
+      `Background command #${task.id} finished (${task.status}, ${describeEnd(task)}).\n${task.captureWriter ? clip(captureDescription(task)) : "Capture disabled; bounded output tail available via background_task_result."}${task.spawnError ? `\nSpawn error: ${clip(task.spawnError)}` : ""}\nCommand: ${clip(task.command)}`,
     );
   });
 
