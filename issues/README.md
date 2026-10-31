@@ -106,4 +106,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1057 | [1057-epic-plain-agent-runs-and-temporary-model-selection.md](1057-epic-plain-agent-runs-and-temporary-model-selection.md) | Epic: plain agent runs and temporary model selection | Open |
 | 1058 | [1058-squash-sprint-commits-by-milestone-without-rewriting-main.md](1058-squash-sprint-commits-by-milestone-without-rewriting-main.md) | Squash sprint commits by milestone without rewriting main | Open |
 | 1059 | [1059-interpret-slash-separated-model-picks-by-skill-role.md](1059-interpret-slash-separated-model-picks-by-skill-role.md) | Interpret slash-separated model picks by skill role | Open |
+| 1060 | [1060-add-a-branch-cleanup-skill-with-optional-autonomous-decisions.md](1060-add-a-branch-cleanup-skill-with-optional-autonomous-decisions.md) | Add a branch cleanup skill with optional autonomous decisions | Open |
 <!-- harnez:end issues-active-index -->
