@@ -144,6 +144,12 @@ The bounded post-exit drain deadline can mark even finite buffered output incomp
 storage is slow. Tasks with held completion messages remain available until submission,
 which is not an acknowledgement of delivery; normal eviction can follow submission.
 
+For isolated real-Pi regression checks, `scripts/canary-pi-capture/run.sh` exercises
+capture, paged reads and opt-outs; `scripts/canary-pi-presentation/run.sh` checks
+collapsed and expanded interactive output. These use a local stub model and do not
+establish that an installed global extension or an external model is configured correctly.
+The compaction canary above checks batching and held notifications separately.
+
 Lifecycle and reporting:
 
 - A task is `running`, then exactly one of: `completed` (exit 0), `failed`
