@@ -10,7 +10,7 @@
 
 ## 1. Problem & Motivation
 
-Repository instructions can forbid direct pushes even when the repository administrator explicitly authorizes one for a session. Clarify the repository role and applicable push rules in per-repository Harnez settings so agents can distinguish normal team workflow from an explicitly authorized administrator exception.
+Repository instructions can forbid direct pushes even when the repository administrator authorizes them. The owner specifies that, from this machine, issue filing, epic planning and documentation-only changes may be committed and pushed directly to `main`; feature work generally goes through a pull request. Represent this distinction in per-repository Harnez settings and guidance, rather than requiring a PR for every tracker or documentation change.
 
 ## 2. Goal & Acceptance Criteria
 
@@ -18,4 +18,4 @@ Repository instructions can forbid direct pushes even when the repository admini
 
 - Check live configuration, enforcement and recent history before implementation; decide how the new settings relate to existing `git.mode` without duplicating or weakening safeguards.
 - Specify safe defaults, precedence and the meaning of administrator authorization; do not imply a setting grants remote permissions or overrides server-side protection. Keep force-push policy explicit.
-- Cover configuration validation and representative team/admin workflows with tests and documentation.
+- Cover configuration validation and representative team/admin workflows with tests and documentation. Distinguish eligible documentation-only changes from feature or mixed changes, and identify the authorized machine/role without treating self-assertion as remote permission.
