@@ -340,7 +340,7 @@ func runInitCaptureStderr(t *testing.T, dir string, cfg *claude.Config, docs []s
 	return string(data)
 }
 
-func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
+func TestRunInit_IgnoresIssuesLockFilesInTrackedGitignore(t *testing.T) {
 	dir := t.TempDir()
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
 		t.Fatalf("git init: %v", err)

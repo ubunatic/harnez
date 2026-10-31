@@ -5,6 +5,7 @@
 /dist/
 /*.1
 /issues/README.md.lock
+/issues/.reserve.lock
 *.lock
 .harnez/*
 !.harnez/repo.yaml

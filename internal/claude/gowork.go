@@ -67,7 +67,7 @@ func ensureGitignoreSection(dir, comment string, entries ...string) (bool, error
 	var toAdd []string
 	for _, entry := range entries {
 		pattern := strings.TrimPrefix(entry, "/")
-		if !strings.Contains(content, entry) && !strings.Contains(content, pattern) {
+		if !hasGitignoreLine(content, entry) && !hasGitignoreLine(content, pattern) {
 			toAdd = append(toAdd, entry)
 		}
 	}
@@ -327,4 +327,14 @@ func ignoredModuleScanDir(name string) bool {
 	default:
 		return false
 	}
+}
+
+// hasGitignoreLine reports whether content has a line equal to entry.
+func hasGitignoreLine(content, entry string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == entry {
+			return true
+		}
+	}
+	return false
 }

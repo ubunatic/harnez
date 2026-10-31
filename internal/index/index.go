@@ -32,6 +32,7 @@ import (
 // lock that can't be acquired within the budget is a hard error rather
 // than a silent skip.
 const readmeLockRetries = 5
+const readmeMaxStaleReopens = 10
 const readmeLockDelay = 50 * time.Millisecond
 
 // lockReadme takes a non-blocking, bounded-retry exclusive flock on a
@@ -46,7 +47,8 @@ func lockReadme(path string) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open lock file %s: %w", lockPath, err)
 	}
-	for attempt := 0; attempt <= readmeLockRetries; attempt++ {
+	stale := 0
+	for attempt := 0; attempt <= readmeLockRetries; {
 		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
 			// The previous holder removes the file on unlock; make sure we
 			// locked the file that is still on disk, else reopen (issue 1066).
@@ -56,6 +58,10 @@ func lockReadme(path string) (*os.File, error) {
 				return f, nil
 			}
 			f.Close()
+			// Stale reopen does not consume the retry budget; bounded separately.
+			if stale++; stale > readmeMaxStaleReopens {
+				return nil, fmt.Errorf("could not acquire lock on %s (lock file kept being replaced)", path)
+			}
 			if f, err = os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600); err != nil {
 				return nil, fmt.Errorf("open lock file %s: %w", lockPath, err)
 			}
@@ -64,6 +70,7 @@ func lockReadme(path string) (*os.File, error) {
 		if attempt < readmeLockRetries {
 			time.Sleep(readmeLockDelay)
 		}
+		attempt++
 	}
 	f.Close()
 	return nil, fmt.Errorf("could not acquire lock on %s (held by another process)", path)
