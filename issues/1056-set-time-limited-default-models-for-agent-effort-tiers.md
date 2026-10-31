@@ -1,6 +1,6 @@
 # 1056 — Set time-limited default models for agent effort tiers
 
-**Status**: Open
+**Status**: Closed — delivered temporary time-limited default models for effort tiers via harnez agent models set and harnez models set with --until/--hours and subagent driver integration
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
