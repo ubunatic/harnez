@@ -8,7 +8,7 @@
 
 ---
 
-/goal Make a plain `harnez release` work on `main` for the repository admin while agents stay refused, and verify both paths in tests, or stop and report when blocked on a user decision or denied permission. On a loop, a hard blocker or no progress, clear the goal and write a failure report here.
+/goal Make a plain `harnez release` work on `main` for the repository admin and for agents acting for them, fix the Repo Setup rule that forbids those agents to push, and verify it in tests, or stop and report when blocked on a user decision or denied permission. On a loop, a hard blocker or no progress, clear the goal and write a failure report here.
 
 ## 1. Problem & Motivation
 The repository admin runs `harnez release` on `main` and gets this refusal:
@@ -26,36 +26,44 @@ Check these against live code before starting:
 
 - Two guards refuse: `gitflow.GuardCommit(opt.Dir, "release")` before the bump
   (`internal/release/runner.go`), and `refuseProtectedBranchPush` at push time
-  (`internal/release/push.go`). Both must allow the admin; `--continue` only hits the second.
-- The first guard's hint names `issue/<n>-<slug>`, while `docs/GoRelease.md` and the push guard
-  name `release/vX.Y.Z`. The release refusal that remains for non-admins should name the release
-  branch.
-- 1039 introduced the guards. `internal/release/gitflow_test.go` asserts the refusals, and the
-  non-admin cases must keep passing.
-- The AGENTS.md rule stays: agents do not commit to or push the default branch unless the admin
-  authorizes it in the current session. This ticket must not give agents a way around it.
+  (`internal/release/push.go`). Both must let this release through; `--continue` only hits the
+  second.
+- 1039 introduced the guards. `internal/release/gitflow_test.go` asserts the refusals and must
+  change with them.
+- **The rule forbidding agents to push is a bug (user's call).** AGENTS.md line "Do not commit to
+  or push the default branch unless the repository admin explicitly authorizes it in the current
+  session" blocks agents acting for the admin. Fix it. `.harnez/rules/Tools.md` still applies:
+  agents release only when the user or `/goal` asks.
+- **The rule's source is out of sync.** That line sits in the managed `Repo Setup` block of
+  AGENTS.md, but `config.yaml` (about line 1136) generates "Never commit to or push the default
+  branch." The AGENTS.md wording was hand-edited in 7c5f4c2e and the next `harnez init` overwrites
+  it. Fix the `config.yaml` source. `docs/Git.md` (`protected_main`) needs the same change.
 
 Open questions:
 
-- **How harnez knows the caller is the admin.** The user asked for the plain command with no
-  extra flag. No admin identity exists in `.harnez/repo.yaml` today. Agent sessions may be
-  detectable from the environment (`HARNEZ_SESSION_ID`, `HARNEZ_AGENT_MODEL` and similar are read
-  in `cmd/harnez/issues.go`), but that is not proven reliable for every host, including a `!`
-  command typed in an agent session. Settle this with a small probe and ask the user if it stays
-  ambiguous.
-- **What happens if a remote rejects the push.** Harnez's guard is not the forge's branch
-  protection. The admin reports that pushing works, but this is unverified for both dev remotes
-  (Codeberg and GitHub). A rejection must fail clearly and leave `harnez release --continue` usable.
+- **Who the guard still refuses.** With agents allowed there is no need to tell admin and agent
+  apart, so no admin identity or agent detection is needed. The likely design is that harnez stops
+  refusing the release and the forge's branch protection decides who can push. Confirm this does
+  not remove the protection for other repos using `protected_main` without forge-side protection;
+  ask the user if it does.
+- **What happens if a remote rejects the push.** The admin reports that pushing works, but this is
+  unverified for both dev remotes (Codeberg and GitHub). A rejection must fail clearly and leave
+  `harnez release --continue` usable.
 
 ## 3. Implementation & Verification Plan
 Done when all of these hold:
 
-- A plain `harnez release` from `main` as admin bumps, tags, pushes `main` and the tag, and
-  publishes, with no flag and no release branch.
-- An agent session running the same command is still refused, with a hint that names
-  `release/vX.Y.Z`.
+- A plain `harnez release` from `main` bumps, tags, pushes `main` and the tag, and publishes, with
+  no flag and no release branch, whether the admin or an agent acting for them runs it.
 - The `release/vX.Y.Z` route still works.
-- Tests cover admin and agent on both guards, and `--continue`.
-- `docs/GoRelease.md` (edit the copyable source and sync the root copy), `docs/Git.md` and
-  AGENTS.md describe the new behaviour.
-- `harnez release --dry-run` on `main` as admin passes the guards without changing anything.
+- Tests cover both guards and `--continue` on `main`, plus a push the remote rejects.
+- The `Repo Setup` text in `config.yaml` and the regenerated AGENTS.md block no longer forbid agents
+  acting for the admin to push.
+- The same `Repo Setup` text and `docs/Git.md` make AGit the default for tickets and small PRs on a
+  forge that supports it (`git push origin HEAD:refs/for/main/<topic>`), using one reusable local
+  branch and no pushed branch. They keep pushed branches for work others push to, long sprints that
+  need rebasing, and GitHub, which has no AGit. The local branch stays because harnez refuses
+  commits on protected `main` and on a detached HEAD.
+- `docs/GoRelease.md` (edit the copyable source and sync the root copy) and `docs/Git.md` describe
+  the new behaviour.
+- `harnez release --dry-run` on `main` passes the guards without changing anything.
