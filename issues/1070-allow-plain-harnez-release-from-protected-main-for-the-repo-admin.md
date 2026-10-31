@@ -1,6 +1,6 @@
 # 1070 — Allow plain harnez release from protected main for the repo admin
 
-**Status**: In Progress — implementing guard, rule and doc changes
+**Status**: Closed — Delivered: plain harnez release runs on protected main, other auto-commits stay refused; Repo Setup source fixed and AGit made the team default. make test-q1 passed, reviewer findings fixed. Not yet proven: that Codeberg accepts the admin's push of main; the first real release shows it.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
