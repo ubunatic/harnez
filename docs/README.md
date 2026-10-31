@@ -230,6 +230,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-30-two-agent-lean-sprint-1037-pm-skill-auto-trigger.md](studies/2026-10-30-two-agent-lean-sprint-1037-pm-skill-auto-trigger.md) | Lean sprint 1036/1037: `/pm` skill, auto-trigger for focus and the sprint skills, searcher compaction |
 | [studies/2026-10-30-two-agent-lean-sprint-1039-git-workflow-mode.md](studies/2026-10-30-two-agent-lean-sprint-1039-git-workflow-mode.md) | Lean Sprint 1039: Per-Repo Git Workflow Mode |
 | [studies/2026-10-31-job-q5wp7x7h.md](studies/2026-10-31-job-q5wp7x7h.md) | Job q5wp7x7h partial report (2026-10-31) |
+| [studies/2026-10-31-session-retro-plain-modes-time-overrides-lock-hygiene.md](studies/2026-10-31-session-retro-plain-modes-time-overrides-lock-hygiene.md) | 2026-10-31 Sprint Retrospective: Plain Context Modes, Time-Limited Overrides, Lock Hygiene, and Detached HEAD Protection |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
