@@ -164,15 +164,79 @@ func TestReleaseContinuePushesProtectedMain(t *testing.T) {
 	wantRemoteMatchesLocal(t, dir, bare, "refs/heads/main", "refs/tags/v1.0.1")
 }
 
+// protectRemoteMain installs an update hook that rejects only refs/heads/main,
+// as a forge's branch protection does. Without --atomic the tag would still land.
+func protectRemoteMain(t *testing.T, bare string) (hook string) {
+	t.Helper()
+	hook = filepath.Join(bare, "hooks", "update")
+	script := "#!/bin/sh\nif test \"$1\" = refs/heads/main\nthen\n\techo 'branch main is protected' >&2\n\texit 1\nfi\n"
+	if err := os.WriteFile(hook, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return hook
+}
+
+// addSecondRemote adds a bare remote named second that already has main.
+func addSecondRemote(t *testing.T, dir string) (second string) {
+	t.Helper()
+	second = t.TempDir()
+	runGitCmd(t, second, "init", "--bare")
+	runGitCmd(t, dir, "remote", "add", "second", second)
+	runGitCmd(t, dir, "push", "second", "main")
+	return second
+}
+
+// The publishing forge is pushed first, so its rejection reaches no other remote.
+func TestReleasePushForgeRejectionLeavesOtherRemotes(t *testing.T) {
+	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	second := addSecondRemote(t, dir)
+	protectRemoteMain(t, second)
+	runGitCmd(t, dir, "commit", "--allow-empty", "-m", "chore(release): bump version to v9.9.9")
+	runGitCmd(t, dir, "tag", "-a", "v9.9.9", "-m", "v9.9.9")
+	refs := pushTestRefs(t, bare) + "|" + pushTestRefs(t, second)
+	// "origin" sorts first in `git remote`; only forge priority can put "second" ahead.
+	err := pushRelease(Options{Dir: dir, Out: &bytes.Buffer{}}, "v9.9.9", &ForgeInfo{RemoteName: "second"})
+	if err == nil || !strings.Contains(err.Error(), "branch main is protected") {
+		t.Fatalf("want the forge's rejection, got %v", err)
+	}
+	if got := pushTestRefs(t, bare) + "|" + pushTestRefs(t, second); got != refs {
+		t.Errorf("a remote changed despite the forge's rejection:\nbefore %s\nafter  %s", refs, got)
+	}
+}
+
+// A later remote can reject after an earlier one accepted; retrying is idempotent.
+func TestReleasePushLaterRemoteRejectionCanRetry(t *testing.T) {
+	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	second := addSecondRemote(t, dir)
+	hook := protectRemoteMain(t, second)
+	runGitCmd(t, dir, "commit", "--allow-empty", "-m", "chore(release): bump version to v9.9.9")
+	runGitCmd(t, dir, "tag", "-a", "v9.9.9", "-m", "v9.9.9")
+	secondRefs := pushTestRefs(t, second)
+	opt := Options{Dir: dir, Out: &bytes.Buffer{}}
+	forge := &ForgeInfo{RemoteName: "origin"}
+	err := pushRelease(opt, "v9.9.9", forge)
+	if err == nil || !strings.Contains(err.Error(), "--continue") {
+		t.Fatalf("want a retryable failure, got %v", err)
+	}
+	wantRemoteMatchesLocal(t, dir, bare, "refs/tags/v9.9.9")
+	if got := pushTestRefs(t, second); got != secondRefs {
+		t.Errorf("rejected push changed the remote:\nbefore %s\nafter  %s", secondRefs, got)
+	}
+	if err := os.Remove(hook); err != nil {
+		t.Fatal(err)
+	}
+	if err := pushRelease(opt, "v9.9.9", forge); err != nil {
+		t.Fatalf("retry after the rejection: %v", err)
+	}
+	wantRemoteMatchesLocal(t, dir, second, "refs/heads/main", "refs/tags/v9.9.9")
+}
+
 // A forge's branch protection answers only on the real push: --dry-run does not
 // run server hooks. The failure must name the remote's reason, leave the tag off
 // the remote, and let --continue finish once the push is allowed.
 func TestReleaseRejectedByRemoteProtectionCanContinue(t *testing.T) {
 	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
-	hook := filepath.Join(bare, "hooks", "pre-receive")
-	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho 'branch main is protected' >&2\nexit 1\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	hook := protectRemoteMain(t, bare)
 	remoteRefs := pushTestRefs(t, bare)
 	var out bytes.Buffer
 	err := Run(gitflowReleaseOptions(dir, &out))

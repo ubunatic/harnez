@@ -190,6 +190,11 @@ the tag are pushed. Open the PR and **rebase-merge or fast-forward** it so the t
 `main`'s history; a merge or squash commit leaves the tag off `main`. Harnez does not tag after
 the merge.
 
+If the forge rejected a release on the default branch, the bump commit and tag exist only locally.
+To finish through a PR instead, keep them: run `git switch -c release/vX.Y.Z`, then
+`harnez release --continue`, then `git branch -f main origin/main`. A plain `harnez release` there
+stops with "nothing to release".
+
 ### Standard Release (Bumps Patch by default)
 ```bash
 make release

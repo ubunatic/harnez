@@ -165,6 +165,9 @@ made there and both are pushed. Open the PR and rebase-merge or fast-forward it 
 `main`'s history (a merge or squash commit leaves the tag off `main`). Harnez does not tag after
 the merge.
 
+To finish a rejected release through a PR, keep its local bump commit and tag: run
+`git switch -c release/vX.Y.Z`, `harnez release --continue`, then `git branch -f main origin/main`.
+
 ### 4.1 `go.work` and local co-development
 
 Build step forces `GOWORK=off` by default: an enclosing `go.work` silently substitutes an

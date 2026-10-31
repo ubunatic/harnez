@@ -88,7 +88,7 @@ func Run(opt Options) error {
 	}
 
 	// Refuse before the bump writes any file, so a refused release leaves
-	// nothing half-done. --continue only pushes.
+	// nothing half-done. --continue makes no bump commit or tag, so it skips this.
 	if !opt.Continue {
 		if err := gitflow.GuardRelease(opt.Dir); err != nil {
 			return err

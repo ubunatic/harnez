@@ -1126,7 +1126,7 @@ agents_md:
         - codeberg.org is primary; github.com may carry contributor branches for upstream PRs.
     fork_protected:
       name: "Fork / protected main"
-      rule: "Git workflow: fork, protected main (no commits to or pushes of main except `harnez release`; harnez refuses other commits)."
+      rule: "Git workflow: fork, protected main (harnez refuses commits on main except `harnez release`; see Repo Setup)."
       content: |
         ## Repo Setup
         - This repo is a fork.
@@ -1136,7 +1136,7 @@ agents_md:
         - main is protected; harnez refuses commits on it, except `harnez release`, which the repository admin or an agent asked to release may run there. Otherwise do not commit to or push the default branch unless the repository admin explicitly authorizes it in the current session. Never force-push.
     team:
       name: "Team"
-      rule: "Git workflow: team (local topic branch per ticket or sprint, PR to merge; AGit where the forge supports it)."
+      rule: "Git workflow: team (local topic branch, PR to merge; AGit where the forge supports it)."
       content: |
         ## Repo Setup
         - Team repo: work on a local topic branch and open a PR to merge. Tickets and small PRs on a forge with AGit (Forgejo, Gitea) reuse one local branch and push no branch: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
@@ -1144,7 +1144,7 @@ agents_md:
         - Update/rebase your branch before merging; follow this repo's CI and review requirements.
     team_protected:
       name: "Team / protected main"
-      rule: "Git workflow: team, protected main (no commits to or pushes of main except `harnez release`; harnez refuses other commits)."
+      rule: "Git workflow: team, protected main (harnez refuses commits on main except `harnez release`; see Repo Setup)."
       content: |
         ## Repo Setup
         - Team repo: work on a local topic branch and open a PR to merge. Tickets and small PRs on a forge with AGit (Forgejo, Gitea) reuse one local branch and push no branch: `git push origin HEAD:refs/for/<default-branch>/<topic>`.

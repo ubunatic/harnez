@@ -18,7 +18,10 @@ commonly stored in an `AGENTS.md` file at the repository root.
     current topic branch.
     - `team`, AGit by default: on a forge with AGit (Forgejo, Gitea), tickets and small PRs reuse
       one local branch and push no branch: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
-      Pushes update the topic's open PR; once it is merged, the next push opens a new PR.
+      Pushes update the topic's open PR, and once it is merged or closed the next push opens a new
+      PR. A topic is per pusher. An update that is not a fast-forward is rejected; do not override
+      that with `-o force-push=true`. After a squash or rebase merge, reset the local branch to
+      `origin/<default-branch>`, or the merged commits reappear in the next PR.
     - Otherwise one branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`), pushed: for
       work others push to, long sprints that need rebasing, forks, and GitHub, which has no AGit.
   - `protected_main` (team/fork only): do not commit to or push the default branch unless the
