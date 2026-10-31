@@ -1,6 +1,6 @@
 # 1063 — Study Devin CLI features, binary capabilities, and multi-agent workflows vs harnez
 
-**Status**: Open
+**Status**: Closed — completed study in docs/studies/DevinCLIStudy.md via Haiku web search and Opus binary analysis
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Study
