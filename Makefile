@@ -86,6 +86,14 @@ lint: ⚙️ build  # gofmt, go vet, harnez lint --check on tracked files, docs/
 install-canary: ⚙️  # verify the latest Codeberg release installs and reports its version
 	bash scripts/install-canary.sh
 
+install-git-hooks: ⚙️  # copy scripts/git-hooks/pre-push to this clone's hooks dir (FORCE=1 replaces a differing hook without git lfs)
+	@dst="$$(git rev-parse --git-path hooks)/pre-push" && \
+	if test -f "$$dst" && ! cmp -s scripts/git-hooks/pre-push "$$dst" && ! grep -q 'git lfs pre-push' "$$dst" && test "$(FORCE)" != 1; then \
+		echo "❌ $$dst differs and has no 'git lfs pre-push' line; not overwriting (FORCE=1 replaces it)" >&2; exit 1; \
+	fi && \
+	mkdir -p "$$(dirname "$$dst")" && \
+	install -m 0755 scripts/git-hooks/pre-push "$$dst" && echo "✅ installed $$dst"
+
 container-test: ⚙️  # run make lint check offline in Containerfile.test (ENGINE=podman|docker; log in TEST_OUT)
 	@test -n "$(ENGINE)" || (echo "❌ neither podman nor docker is installed" && exit 1)
 	$(ENGINE) build -f Containerfile.test -t $(TEST_IMG) \
