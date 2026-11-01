@@ -165,6 +165,7 @@ debloat:
     docup: user-invocable-only
     issue-research: user-invocable-only
     pm: user-invocable-only
+    decide: user-invocable-only
     lean-sprint-v1: user-invocable-only
     lean-sprinter: user-invocable-only
     mode: user-invocable-only
@@ -427,6 +428,11 @@ skills:
     license: AGPL-3.0-or-later
     description: "Put this session in product-manager mode: ground on the product with focus, route each request to issue, factory-sprint or lean-sprint, and stay a non-coding host. Only on explicit /pm, /pm lean or /pm factory."
     file: docs/commands/pm.md
+
+  - name: decide
+    license: AGPL-3.0-or-later
+    description: "Session-scoped autonomy for the orchestrating agent: answer simple questions yourself, consult cheap or smart advisors, push ready work without asking, and stop only for very critical questions. Only on explicit /decide."
+    file: docs/commands/decide.md
 
   - name: docup
     license: AGPL-3.0-or-later

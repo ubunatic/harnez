@@ -190,6 +190,7 @@ Agentic software engineering scales effectively when concurrency is structured a
    - Cross-repository coding tasks may *only* be executed if the user explicitly orders and scopes them.
    - Outside the host repository, an agent may only read for context, inspect dependencies, or file an issue when requested or required. Never pivot the active implementation focus away from the host repo.
    - Use `/focus` to re-ground on the active repository's deliverables and priorities and choose the next goal.
+   - Use `/decide` for session-scoped autonomy: the orchestrator answers routine questions, consults `cheap` or `smart` advisors, pushes ready work, and stops only for very critical questions. It grants no release.
    - Use `/trial [today|sprint|<ticket>]` for a concise capability checkpoint: ten verified things we can do and five cited things we cannot, from git history and the issue tracker. It sits alongside `/study`, `/retro` and `/focus`; it reports and files nothing.
 
 ---
