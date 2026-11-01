@@ -291,9 +291,19 @@ func applyDistillAdapters(r *applyReport, cfg *Config, selection Set) error {
 	// issue 491 M6: like Codex/AGY hooks above, distill adapters are only
 	// installed under the telemetry component; without it they're actively
 	// removed, since cfg is unfiltered here (selection decides, not Filter).
+	// issue 1061 M1: only a harnez-managed adapter is written or removed; a
+	// user file or symlink at the path is kept and reported, and apply succeeds.
 	if adapters := distillAdapters(cfg); len(adapters) > 0 {
 		if selection.HasComponent("telemetry") {
 			for _, adapter := range adapters {
+				owner, err := inspectDistillAdapter(adapter.path)
+				if err != nil {
+					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+				}
+				if owner == adapterKept {
+					reportKeptAdapter(adapter.path)
+					continue
+				}
 				ar, err := writeFileIfChanged(adapter.path, []byte(adapter.content))
 				if err != nil {
 					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
@@ -306,11 +316,19 @@ func applyDistillAdapters(r *applyReport, cfg *Config, selection Set) error {
 			r.addStat("distill", distillAdapterSummary(cfg))
 		} else {
 			for _, adapter := range adapters {
-				if err := os.Remove(adapter.path); err == nil {
+				owner, err := inspectDistillAdapter(adapter.path)
+				if err != nil {
+					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+				}
+				switch owner {
+				case adapterKept:
+					reportKeptAdapter(adapter.path)
+				case adapterManaged:
+					if err := os.Remove(adapter.path); err != nil {
+						return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+					}
 					r.changes++
 					fmt.Printf("  removed %s\n", adapter.path)
-				} else if !os.IsNotExist(err) {
-					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
 				}
 			}
 		}

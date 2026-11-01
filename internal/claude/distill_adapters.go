@@ -1,12 +1,67 @@
 package claude
 
 import (
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"ubunatic.com/harnez/internal/fsutil"
 )
+
+// distillAdapterHeader is the first line of every adapter harnez writes, in
+// every version. A regular file that starts with it is harnez-owned (issue 1061 M1).
+const distillAdapterHeader = "// Managed by harnez."
+
+// distillAdapterOwnership says who owns the file at an adapter path.
+type distillAdapterOwnership int
+
+const (
+	// adapterAbsent: no entry at the path; install creates it.
+	adapterAbsent distillAdapterOwnership = iota
+	// adapterManaged: a regular file carrying distillAdapterHeader; install
+	// updates it and removal deletes it.
+	adapterManaged
+	// adapterKept: a user-authored file, a symlink or another non-regular
+	// entry. Apply never reads through it, writes it or removes it.
+	adapterKept
+)
+
+// inspectDistillAdapter classifies path without following symlinks.
+func inspectDistillAdapter(path string) (distillAdapterOwnership, error) {
+	fi, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return adapterAbsent, nil
+	}
+	if err != nil {
+		return adapterKept, err
+	}
+	if !fi.Mode().IsRegular() {
+		return adapterKept, nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return adapterKept, err
+	}
+	defer f.Close()
+	head := make([]byte, len(distillAdapterHeader))
+	n, err := io.ReadFull(f, head)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return adapterKept, err
+	}
+	if string(head[:n]) == distillAdapterHeader {
+		return adapterManaged, nil
+	}
+	return adapterKept, nil
+}
+
+// reportKeptAdapter names an adapter path that apply leaves alone.
+func reportKeptAdapter(path string) {
+	fmt.Printf("  kept %s: not harnez-managed\n", path)
+}
 
 const piDistillAdapter = `// Managed by harnez. Keep rewrite policy in 'harnez distill hook'.
 import { spawnSync } from "node:child_process";
