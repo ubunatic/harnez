@@ -565,6 +565,23 @@ func TestMergeGeneratedIndexesConflictsOnCompetingRowEdits(t *testing.T) {
 	}
 }
 
+func TestMergeGeneratedIndexesReplayKeepsCurrentRowOnConflict(t *testing.T) {
+	header := "| # | File | Title | Status |\n|---|------|-------|--------|\n"
+	base := managedDocument("# Issues\n\n"+header, "issues-active-index", issuesActiveNotice)
+	ours := managedDocument("# Issues\n\n"+header+"| 1010 | [ours.md](ours.md) | ours | Open |\n", "issues-active-index", issuesActiveNotice)
+	theirs := managedDocument("# Issues\n\n"+header+"| 1010 | [theirs.md](theirs.md) | theirs | Open |\n", "issues-active-index", issuesActiveNotice)
+	if _, err := MergeIssuesReadme(base, ours, theirs); err == nil || !strings.Contains(err.Error(), "conflicting generated rows") {
+		t.Fatalf("outside a replay the error = %v, want conflict", err)
+	}
+	got, err := MergeIssuesReadmeReplay(base, ours, theirs)
+	if err != nil {
+		t.Fatalf("replay merge: %v", err)
+	}
+	if !strings.Contains(got, "ours.md") || strings.Contains(got, "theirs.md") {
+		t.Fatalf("replay merge should keep the current row:\n%s", got)
+	}
+}
+
 func docsIndexFixture(extraRow string) string {
 	return docsStudiesNotice + "\n# Docs\n\nHand-written intro.\n\n**`docs/studies/`** — case studies\n\n" +
 		"<!-- harnez:begin docs-studies-index -->\n| File | Topic |\n|------|-------|\n| [studies/base.md](studies/base.md) | base study |\n" + extraRow + "<!-- harnez:end docs-studies-index -->\n"

@@ -123,6 +123,295 @@ func TestIssuesRebaseRepairsIndependentTicketCollisions(t *testing.T) {
 	}
 }
 
+// setupFourDigitCollision makes a local ticket 1010 and an upstream ticket 1010,
+// with a doc naming the local one and a commit subject naming its number.
+func setupFourDigitCollision(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Cleanup(func() {
+		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err == nil {
+				_ = os.Chmod(path, 0o777)
+			}
+			return nil
+		})
+	})
+	gitTestRun(t, dir, "init", "-b", "main")
+	gitTestRun(t, dir, "config", "user.name", "Test")
+	gitTestRun(t, dir, "config", "user.email", "test@example.invalid")
+	gitTestRun(t, dir, "config", "merge.harnez-issues-index.driver", "true")
+	if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{
+		"issues/README.md": "# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n",
+		".gitattributes":   issuesAttributesLineForTest + "\n",
+		"docs/Notes.md":    "base\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitTestRun(t, dir, "add", "-A")
+	gitTestRun(t, dir, "commit", "-m", "base")
+	base := gitTestRun(t, dir, "rev-parse", "HEAD")
+
+	writeTestTicket(t, dir, 1010, "local-issue")
+	if err := os.WriteFile(filepath.Join(dir, "docs", "Notes.md"), []byte("See issues/1010-local-issue.md.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitTestRun(t, dir, "add", "docs")
+	commitIssueIndex(t, dir, "docs(issues): file 1010")
+
+	gitTestRun(t, dir, "branch", "upstream", base)
+	gitTestRun(t, dir, "switch", "upstream")
+	writeTestTicket(t, dir, 1010, "upstream-issue")
+	commitIssueIndex(t, dir, "upstream ticket")
+	gitTestRun(t, dir, "switch", "main")
+	return dir
+}
+
+func TestIssuesRebaseDryRunListsFourDigitCollision(t *testing.T) {
+	dir := setupFourDigitCollision(t)
+	head := gitTestRun(t, dir, "rev-parse", "HEAD")
+	var out bytes.Buffer
+	if err := runIssuesRebase(&out, dir, "upstream", true); err != nil {
+		t.Fatalf("dry run: %v\n%s", err, out.String())
+	}
+	for _, want := range []string{
+		"issues/1010-local-issue.md\t1010 -> 1011\tcollides with issues/1010-upstream-issue.md\n",
+		"  rewrite references in docs/Notes.md\n",
+		"warning: commit subject names moved number 1010",
+		"next: git rebase upstream",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("dry run output misses %q:\n%s", want, out.String())
+		}
+	}
+	if got := gitTestRun(t, dir, "rev-parse", "HEAD"); got != head {
+		t.Errorf("dry run moved HEAD from %s to %s", head, got)
+	}
+	if got := gitTestRun(t, dir, "status", "--porcelain"); got != "" {
+		t.Errorf("dry run changed the tree:\n%s", got)
+	}
+	statePath, err := rebaseStatePath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+		t.Errorf("dry run left recovery state: %v", err)
+	}
+}
+
+func TestIssuesRebaseDryRunWithoutCollisionSaysSo(t *testing.T) {
+	dir := setupFourDigitCollision(t)
+	gitTestRun(t, dir, "mv", "issues/1010-local-issue.md", "issues/1020-local-issue.md")
+	if err := os.WriteFile(filepath.Join(dir, "issues", "1020-local-issue.md"), []byte("# 1020 — local-issue\n\n**Status**: Open\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitIssueIndex(t, dir, "move away")
+	var out bytes.Buffer
+	if err := runIssuesRebase(&out, dir, "upstream", true); err != nil {
+		t.Fatalf("dry run: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "no ticket numbers collide") {
+		t.Errorf("dry run output = %q", out.String())
+	}
+}
+
+func TestIssuesRebaseRepairsFourDigitCollision(t *testing.T) {
+	dir := setupFourDigitCollision(t)
+	var out bytes.Buffer
+	if err := runIssuesRebase(&out, dir, "upstream", false); err != nil {
+		t.Fatalf("rebase: %v\n%s", err, out.String())
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "issues", "1011-local-issue.md"))
+	if err != nil {
+		t.Fatalf("missing repaired ticket: %v\n%s", err, out.String())
+	}
+	if !strings.HasPrefix(string(data), "# 1011 —") {
+		t.Errorf("repaired header = %q", strings.SplitN(string(data), "\n", 2)[0])
+	}
+	if _, err := os.Stat(filepath.Join(dir, "issues", "1010-upstream-issue.md")); err != nil {
+		t.Errorf("upstream ticket must keep its number: %v", err)
+	}
+	notes, err := os.ReadFile(filepath.Join(dir, "docs", "Notes.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(notes) != "See issues/1011-local-issue.md.\n" {
+		t.Errorf("reference not rewritten: %q", notes)
+	}
+	readme, err := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"1011-local-issue.md", "1010-upstream-issue.md"} {
+		if !strings.Contains(string(readme), want) {
+			t.Errorf("index misses %s:\n%s", want, readme)
+		}
+	}
+	if !strings.Contains(out.String(), "issues tracker valid") {
+		t.Errorf("rebase did not report a clean lint:\n%s", out.String())
+	}
+	if got := gitTestRun(t, dir, "status", "--porcelain"); got != "" {
+		t.Errorf("rebase left changes for a manual fix commit:\n%s", got)
+	}
+	if err := runIssuesLint(&bytes.Buffer{}, dir); err != nil {
+		t.Errorf("lint after repair: %v", err)
+	}
+	statePath, err := rebaseStatePath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+		t.Errorf("completed rebase left recovery state: %v", err)
+	}
+}
+
+func TestRepairSkipsReferenceInFileWithUncommittedChanges(t *testing.T) {
+	dir := setupFourDigitCollision(t)
+	if err := os.WriteFile(filepath.Join(dir, "docs", "Notes.md"), []byte("See issues/1010-local-issue.md. User edit.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runIssuesRebase(&out, dir, "upstream", false); err != nil {
+		t.Fatalf("rebase: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "warning: docs/Notes.md has uncommitted changes") {
+		t.Errorf("no warning about the skipped file:\n%s", out.String())
+	}
+	notes, err := os.ReadFile(filepath.Join(dir, "docs", "Notes.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(notes) != "See issues/1010-local-issue.md. User edit.\n" {
+		t.Errorf("user edit was changed: %q", notes)
+	}
+	if got := gitTestRun(t, dir, "status", "--porcelain"); !strings.Contains(got, "docs/Notes.md") {
+		t.Errorf("user edit should stay uncommitted, status:\n%s", got)
+	}
+}
+
+func TestIssuesRebaseRetryAfterFailedRepairCommit(t *testing.T) {
+	dir := setupFourDigitCollision(t)
+	hook := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runIssuesRebase(&out, dir, "upstream", false); err == nil {
+		t.Fatalf("expected the failing hook to stop the repair commit:\n%s", out.String())
+	}
+	if err := os.Remove(hook); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := runIssuesRebase(&out, dir, "upstream", true); err != nil || !strings.Contains(out.String(), "unfinished") {
+		t.Fatalf("dry run with retained state: %v\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := runIssuesRebase(&out, dir, "upstream", false); err != nil {
+		t.Fatalf("retry: %v\n%s", err, out.String())
+	}
+	if got := gitTestRun(t, dir, "status", "--porcelain"); got != "" {
+		t.Errorf("retry left changes:\n%s", got)
+	}
+	if got := gitTestRun(t, dir, "show", "HEAD:docs/Notes.md"); got != "See issues/1011-local-issue.md." {
+		t.Errorf("retry did not commit the rewritten reference: %q", got)
+	}
+}
+
+func TestRepairSkipsReferenceInIgnoredFile(t *testing.T) {
+	dir := setupFourDigitCollision(t)
+	if err := os.WriteFile(filepath.Join(dir, ".git", "info", "exclude"), []byte("docs/gen.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body := "See issues/1010-local-issue.md.\n"
+	if err := os.WriteFile(filepath.Join(dir, "docs", "gen.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runIssuesRebase(&out, dir, "upstream", false); err != nil {
+		t.Fatalf("rebase: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "warning: docs/gen.md is not tracked") {
+		t.Errorf("no warning about the ignored file:\n%s", out.String())
+	}
+}
+
+func TestIssuesRebaseSameFileOnBothSidesIsNoCollision(t *testing.T) {
+	dir := setupFourDigitCollision(t)
+	gitTestRun(t, dir, "switch", "upstream")
+	gitTestRun(t, dir, "mv", "issues/1010-upstream-issue.md", "issues/1009-upstream-issue.md")
+	if err := os.WriteFile(filepath.Join(dir, "issues", "1009-upstream-issue.md"), []byte("# 1009 — upstream-issue\n\n**Status**: Open\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeTestTicket(t, dir, 1010, "local-issue")
+	commitIssueIndex(t, dir, "same file upstream")
+	gitTestRun(t, dir, "switch", "main")
+	var out bytes.Buffer
+	if err := runIssuesRebase(&out, dir, "upstream", true); err != nil {
+		t.Fatalf("dry run: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "no ticket numbers collide") {
+		t.Errorf("same file counted as a collision:\n%s", out.String())
+	}
+}
+
+func TestRebaseStatePathMigratesLegacyDirectory(t *testing.T) {
+	dir := t.TempDir()
+	gitTestRun(t, dir, "init", "-b", "main")
+	path := filepath.Join(dir, ".git", "harnez", "issues-rebase.json")
+	legacy := filepath.Join(path, "harnez", "issues-rebase.json")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte(`{"upstream":"old","phase":"repair"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := rebaseStatePath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, found, err := readRebaseState(got)
+	if err != nil || !found || state.Upstream != "old" {
+		t.Fatalf("migrated state = %+v, found %v, err %v", state, found, err)
+	}
+}
+
+func TestRebaseStatePathIsNotDoubled(t *testing.T) {
+	dir := t.TempDir()
+	gitTestRun(t, dir, "init", "-b", "main")
+	got, err := rebaseStatePath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(dir, ".git", "harnez", "issues-rebase.json"); got != want {
+		t.Fatalf("rebaseStatePath = %q, want %q", got, want)
+	}
+}
+
+func TestTrackerDirtySeesBothSidesOfRename(t *testing.T) {
+	for status, want := range map[string]bool{
+		"R  issues/001-a.md -> docs/001-a.md\n": true,
+		"R  docs/001-a.md -> issues/001-a.md\n": true,
+		"R  docs/a.md -> docs/b.md\n":           false,
+		" M issues/README.md.lock\n":            false,
+		" M .gitattributes\n":                   true,
+	} {
+		if got := trackerDirty(status); got != want {
+			t.Errorf("trackerDirty(%q) = %v, want %v", status, got, want)
+		}
+	}
+}
+
 func TestIssuesLintChecksBacklogAndClosedIndexes(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {

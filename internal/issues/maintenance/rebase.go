@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -20,6 +21,19 @@ import (
 type rebaseOwnedTicket struct {
 	Path   string `json:"path"`
 	Number string `json:"number"`
+	Theirs string `json:"theirs,omitempty"` // the upstream file holding the same number
+}
+
+// localTicketFileRegex matches a local ticket file name, of any number of digits
+// from three up, as issues.Scan does. GH tickets have no local number to repair.
+var localTicketFileRegex = regexp.MustCompile(`^(\d{3,})-.*\.md$`)
+
+func localTicketNumber(path string) (string, bool) {
+	match := localTicketFileRegex.FindStringSubmatch(filepath.Base(path))
+	if match == nil {
+		return "", false
+	}
+	return match[1], true
 }
 
 type rebaseState struct {
@@ -29,6 +43,9 @@ type rebaseState struct {
 	Phase    string              `json:"phase"`
 	Repairs  []rebaseRepair      `json:"repairs"`
 	Staged   string              `json:"staged_patch,omitempty"`
+	// RefPaths lists files whose references to a moved ticket were rewritten, so
+	// a retry after a failed commit still stages them.
+	RefPaths []string `json:"ref_paths,omitempty"`
 }
 
 type rebaseRepair struct {
@@ -51,14 +68,57 @@ func gitOutput(dir string, args ...string) (string, error) {
 func GitOutput(dir string, args ...string) (string, error) { return gitOutput(dir, args...) }
 
 func rebaseStatePath(dir string) (string, error) {
-	common, err := gitOutput(dir, "rev-parse", "--git-path", "harnez/issues-rebase.json")
+	path, err := gitOutput(dir, "rev-parse", "--git-path", "harnez/issues-rebase.json")
 	if err != nil {
 		return "", err
 	}
-	if !filepath.IsAbs(common) {
-		common = filepath.Join(dir, common)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
 	}
-	return filepath.Join(filepath.Clean(common), "harnez", "issues-rebase.json"), nil
+	path = filepath.Clean(path)
+	if err := migrateLegacyRebaseState(path); err != nil {
+		return "", fmt.Errorf("migrate recovery state: %w", err)
+	}
+	return path, nil
+}
+
+// migrateLegacyRebaseState handles checkouts from when the state file lived at
+// <path>/harnez/issues-rebase.json, which left a directory at path.
+func migrateLegacyRebaseState(path string) error {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return nil
+	}
+	legacy := filepath.Join(path, "harnez", "issues-rebase.json")
+	tmp := path + ".migrate"
+	hasState := true
+	if err := os.Rename(legacy, tmp); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		hasState = false
+	}
+	if err := os.RemoveAll(path); err != nil {
+		return err
+	}
+	if hasState {
+		return os.Rename(tmp, path)
+	}
+	return nil
+}
+
+// rebaseReplayActive reports whether `issues rebase` is replaying commits in the
+// worktree at dir, including after the user resumed with `git rebase --continue`.
+func rebaseReplayActive(dir string) bool {
+	if !rebaseInProgress(dir) {
+		return false
+	}
+	path, err := rebaseStatePath(dir)
+	if err != nil {
+		return false
+	}
+	state, found, err := readRebaseState(path)
+	return err == nil && found && state.Phase == "replay"
 }
 
 func writeRebaseState(path string, state rebaseState) error {
@@ -122,15 +182,14 @@ func trackerDirty(status string) bool {
 		if len(line) < 4 {
 			continue
 		}
-		path := strings.TrimSpace(line[3:])
-		if arrow := strings.LastIndex(path, " -> "); arrow >= 0 {
-			path = path[arrow+4:]
-		}
-		if path == "issues/README.md.lock" {
-			continue // index sidecar lock, never tracker content
-		}
-		if path == ".gitattributes" || path == "issues" || strings.HasPrefix(path, "issues/") {
-			return true
+		// A rename names both paths, and either side can be in the tracker.
+		for _, path := range strings.Split(strings.TrimSpace(line[3:]), " -> ") {
+			if path == "issues/README.md.lock" {
+				continue // index sidecar lock, never tracker content
+			}
+			if path == ".gitattributes" || path == "issues" || strings.HasPrefix(path, "issues/") {
+				return true
+			}
 		}
 	}
 	return false
@@ -153,15 +212,12 @@ func collectLocalTickets(dir, upstream string) (rebaseState, error) {
 			return rebaseState{}, err
 		}
 		for _, path := range strings.Fields(paths) {
-			base := filepath.Base(path)
-			if path == "issues/README.md" || !strings.HasSuffix(base, ".md") || len(base) < 4 || base[3] != '-' {
-				continue
-			}
-			if _, err := strconv.Atoi(base[:3]); err != nil || seen[path] {
+			number, ok := localTicketNumber(path)
+			if !ok || seen[path] {
 				continue
 			}
 			seen[path] = true
-			state.Owned = append(state.Owned, rebaseOwnedTicket{Path: path, Number: base[:3]})
+			state.Owned = append(state.Owned, rebaseOwnedTicket{Path: path, Number: number})
 		}
 	}
 	return state, nil
@@ -217,6 +273,10 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	if err != nil {
 		return fmt.Errorf("issues rebase: %w", err)
 	}
+	if dryRun && resume && (state.Phase == "restore" || state.Phase == "repair") {
+		fmt.Fprintf(w, "next: a rebase repair is unfinished (phase %s); run 'harnez issues rebase' without --dry-run to finish it\n", state.Phase)
+		return nil
+	}
 	if resume && state.Phase == "restore" {
 		if err := restoreStagedChanges(dir, state); err != nil {
 			return fmt.Errorf("issues rebase: staged-state recovery failed; state retained at %s: %w", statePath, err)
@@ -252,17 +312,33 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 		return fmt.Errorf("issues rebase: %w", err)
 	}
 	for i, owned := range collisions {
-		fmt.Fprintf(w, "%s\t%s -> %03d\n", owned.Path, owned.Number, max+i+1)
+		newNumber := fmt.Sprintf("%03d", max+i+1)
+		base := filepath.Base(owned.Path)
+		newPath := filepath.ToSlash(filepath.Join(filepath.Dir(owned.Path), newNumber+strings.TrimPrefix(base, owned.Number)))
+		fmt.Fprintf(w, "%s\t%s -> %s\tcollides with %s\n", owned.Path, owned.Number, newNumber, owned.Theirs)
+		edits, err := issuecore.PlanReferences(dir, owned.Path, newPath)
+		if err != nil {
+			return fmt.Errorf("issues rebase: scan references: %w", err)
+		}
+		for _, e := range edits {
+			rel, _ := filepath.Rel(dir, e.Path)
+			fmt.Fprintf(w, "  rewrite references in %s\n", filepath.ToSlash(rel))
+		}
 		if !resume {
-			newNumber := fmt.Sprintf("%03d", max+i+1)
-			base := filepath.Base(owned.Path)
 			state.Repairs = append(state.Repairs, rebaseRepair{
-				OldPath: owned.Path, NewPath: filepath.ToSlash(filepath.Join(filepath.Dir(owned.Path), newNumber+strings.TrimPrefix(base, owned.Number))),
+				OldPath: owned.Path, NewPath: newPath,
 				OldNumber: owned.Number, NewNumber: newNumber,
 			})
 		}
 	}
+	if err := warnMovedNumbersInSubjects(w, dir, upstream, collisions); err != nil {
+		return fmt.Errorf("issues rebase: %w", err)
+	}
 	if dryRun {
+		if len(collisions) == 0 {
+			fmt.Fprintf(w, "next: git rebase %s; no ticket numbers collide\n", upstream)
+			return nil
+		}
 		fmt.Fprintf(w, "next: git rebase %s, then harnez repairs and commits the listed paths\n", upstream)
 		return nil
 	}
@@ -293,6 +369,27 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	return nil
 }
 
+// warnMovedNumbersInSubjects names replayed commits whose subject mentions a
+// number that moves. Rewriting a subject would change history beyond the rebase
+// the user asked for, so this only says so.
+func warnMovedNumbersInSubjects(w io.Writer, dir, upstream string, collisions []rebaseOwnedTicket) error {
+	if len(collisions) == 0 {
+		return nil
+	}
+	log, err := gitOutput(dir, "log", "--reverse", "--format=%h %s", upstream+"..HEAD")
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(log, "\n") {
+		for _, owned := range collisions {
+			if regexp.MustCompile(`\b` + owned.Number + `\b`).MatchString(line[strings.IndexByte(line, ' ')+1:]) {
+				fmt.Fprintf(w, "warning: commit subject names moved number %s and is not rewritten: %s\n", owned.Number, line)
+			}
+		}
+	}
+	return nil
+}
+
 func plannedCollisions(dir, upstream string, state rebaseState) (int, []rebaseOwnedTicket, error) {
 	files, err := issuecore.Scan(filepath.Join(dir, "issues"))
 	if err != nil {
@@ -311,20 +408,29 @@ func plannedCollisions(dir, upstream string, state rebaseState) (int, []rebaseOw
 	if err != nil {
 		return 0, nil, err
 	}
+	ownedPaths := map[string]bool{}
+	for _, owned := range state.Owned {
+		ownedPaths[owned.Path] = true
+	}
+	theirs := map[string]string{}
 	for _, p := range strings.Fields(remote) {
-		base := filepath.Base(p)
-		if len(base) >= 4 && base[3] == '-' {
-			if n, e := strconv.Atoi(base[:3]); e == nil {
-				if n > max {
-					max = n
-				}
-				counts[base[:3]]++
-			}
+		number, ok := localTicketNumber(p)
+		if !ok {
+			continue
 		}
+		if n, e := strconv.Atoi(number); e == nil && n > max {
+			max = n
+		}
+		if ownedPaths[p] {
+			continue // the same file on both sides (cherry-pick, squash) is no collision
+		}
+		counts[number]++
+		theirs[number] = p
 	}
 	var collisions []rebaseOwnedTicket
 	for _, owned := range state.Owned {
 		if counts[owned.Number] > 1 {
+			owned.Theirs = theirs[owned.Number]
 			collisions = append(collisions, owned)
 		}
 	}
@@ -364,6 +470,7 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath 
 		if err != nil {
 			return fmt.Errorf("%s: %w", repair.OldPath, err)
 		}
+		rewritten = issuecore.RewriteReferences(rewritten, repair.OldPath, repair.NewPath)
 		tempID := sha256.Sum256([]byte(state.Head + "\x00" + repair.OldPath + "\x00" + repair.NewPath))
 		tmpPath := fmt.Sprintf("%s.harnez-%x.tmp", newPath, tempID[:6])
 		if newInfo != nil {
@@ -425,6 +532,11 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath 
 		fmt.Fprintf(w, "renumbered %s -> %s\n", repair.OldPath, repair.NewPath)
 		stage = append(stage, repair.OldPath, repair.NewPath)
 	}
+	refPaths, err := rewriteRepairReferences(w, dir, &state, statePath)
+	if err != nil {
+		return err
+	}
+	stage = append(stage, refPaths...)
 	readme := filepath.Join(dir, "issues", "README.md")
 	changed, err := index.UpdateIssuesReadme(readme, filepath.Join(dir, "issues"))
 	if err != nil {
@@ -432,7 +544,7 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath 
 	}
 	if len(state.Repairs) == 0 && !changed {
 		fmt.Fprintln(w, "issues rebase: no repair needed")
-		return nil
+		return runIssuesLint(w, dir)
 	}
 	stage = append(stage, issueIndexRelPaths()...)
 	if !mutated && !changed {
@@ -444,10 +556,24 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath 
 			return runIssuesLint(w, dir)
 		}
 	}
-	if _, err := gitOutput(dir, append([]string{"add", "--"}, stage...)...); err != nil {
+	// A failed earlier attempt already staged the old path's deletion, and git add
+	// rejects a path that is in neither the tree nor the index. git commit still
+	// accepts it, because HEAD has it.
+	var addable []string
+	for _, path := range stage {
+		_, statErr := os.Stat(filepath.Join(dir, filepath.FromSlash(path)))
+		tracked, err := gitOutput(dir, "ls-files", "--", path)
+		if err != nil {
+			return err
+		}
+		if statErr == nil || tracked != "" {
+			addable = append(addable, path)
+		}
+	}
+	if _, err := gitOutput(dir, append([]string{"add", "--"}, addable...)...); err != nil {
 		return err
 	}
-	commitArgs := []string{"commit", "--only", "-m", "docs(issues): repair ticket numbers after rebase", "--"}
+	commitArgs :=[]string{"commit", "--only", "-m", "docs(issues): repair ticket numbers after rebase", "--"}
 	commitArgs = append(commitArgs, stage...)
 	if _, err := gitOutput(dir, commitArgs...); err != nil {
 		return err
@@ -460,6 +586,70 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath 
 		return err
 	}
 	return runIssuesLint(w, dir)
+}
+
+// rewriteRepairReferences points references to each moved ticket at its new path
+// and returns every file to stage, including those rewritten by an earlier
+// attempt. A file with uncommitted changes is skipped, because committing it
+// would also commit the user's unrelated work.
+func rewriteRepairReferences(w io.Writer, dir string, state *rebaseState, statePath string) ([]string, error) {
+	// Files this repair writes itself count as changed, but are never user work.
+	ours := map[string]bool{}
+	for _, name := range issueIndexRelPaths() {
+		ours[name] = true
+	}
+	for _, repair := range state.Repairs {
+		ours[repair.NewPath] = true
+	}
+	for _, path := range state.RefPaths {
+		ours[path] = true
+	}
+	for _, repair := range state.Repairs {
+		edits, err := issuecore.PlanReferences(dir, repair.OldPath, repair.NewPath)
+		if err != nil {
+			return nil, fmt.Errorf("scan references: %w", err)
+		}
+		var clean []issuecore.ReferenceEdit
+		for _, e := range edits {
+			rel, err := filepath.Rel(dir, e.Path)
+			if err != nil {
+				return nil, err
+			}
+			rel = filepath.ToSlash(rel)
+			if !ours[rel] {
+				pathStatus, err := gitOutput(dir, "status", "--porcelain", "--", rel)
+				if err != nil {
+					return nil, err
+				}
+				if pathStatus != "" {
+					fmt.Fprintf(w, "warning: %s has uncommitted changes and still names %s; update it by hand\n", rel, repair.OldPath)
+					continue
+				}
+				// Status is also empty for an ignored file, which git add would reject.
+				tracked, err := gitOutput(dir, "ls-files", "--", rel)
+				if err != nil {
+					return nil, err
+				}
+				if tracked == "" {
+					fmt.Fprintf(w, "warning: %s is not tracked and still names %s; update it by hand\n", rel, repair.OldPath)
+					continue
+				}
+				ours[rel] = true
+				state.RefPaths = append(state.RefPaths, rel)
+			}
+			clean = append(clean, e)
+		}
+		if len(clean) == 0 {
+			continue
+		}
+		if err := writeRebaseState(statePath, *state); err != nil {
+			return nil, fmt.Errorf("persist repair references: %w", err)
+		}
+		if err := issuecore.WriteReferences(clean, false); err != nil {
+			return nil, fmt.Errorf("rewrite references: %w", err)
+		}
+	}
+	return state.RefPaths, nil
 }
 
 func restoreStagedChanges(dir string, state rebaseState) error {
@@ -703,13 +893,18 @@ func runIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPa
 		}
 		ancestor, other = string(ancestorBytes), string(otherBytes)
 	}
+	// During an `issues rebase` replay the indexes are regenerated afterwards, so
+	// two tickets with one number must not stop the replay before their repair.
+	replay := rebaseReplayActive(root)
 	var generated string
 	switch target {
 	case "issues/README.md":
 		if index.HasConflictOutsideManagedBlock(string(orig), "issues-active-index") {
 			return fmt.Errorf("issues merge-driver: unresolved conflict outside generated block in %s", target)
 		}
-		if ancestorPath != "" && otherPath != "" {
+		if ancestorPath != "" && otherPath != "" && replay {
+			generated, err = index.MergeIssuesReadmeReplay(ancestor, string(orig), other)
+		} else if ancestorPath != "" && otherPath != "" {
 			generated, err = index.MergeIssuesReadme(ancestor, string(orig), other)
 		} else {
 			generated, err = index.RenderIssuesReadme(string(orig), issuesDir, target)
@@ -717,7 +912,9 @@ func runIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPa
 	case "issues/BACKLOG.md":
 		fallthrough
 	case "issues/CLOSED.md":
-		if ancestorPath != "" && otherPath != "" {
+		if ancestorPath != "" && otherPath != "" && replay {
+			generated, err = index.MergeFullIssueIndexReplay(ancestor, string(orig), other, filepath.Base(target))
+		} else if ancestorPath != "" && otherPath != "" {
 			generated, err = index.MergeFullIssueIndex(ancestor, string(orig), other, filepath.Base(target))
 		} else {
 			var indexes map[string]string

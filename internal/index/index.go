@@ -148,7 +148,18 @@ func HasConcurrentEditsOutsideManagedBlock(ancestor, ours, theirs, id string) bo
 // MergeIssuesReadme merges generated active-ticket rows from the three index
 // versions while preserving the current branch's hand-written content.
 func MergeIssuesReadme(ancestor, ours, theirs string) (string, error) {
-	table, err := mergeGeneratedTableRows(ancestor, ours, theirs, "issues-active-index", issuesTableHeader, "|---|------|-------|--------|")
+	return mergeIssuesReadme(ancestor, ours, theirs, false)
+}
+
+// MergeIssuesReadmeReplay is MergeIssuesReadme for an `issues rebase` replay:
+// a conflicting row keeps the current version, because the repair step that
+// follows the replay regenerates the index from the ticket files.
+func MergeIssuesReadmeReplay(ancestor, ours, theirs string) (string, error) {
+	return mergeIssuesReadme(ancestor, ours, theirs, true)
+}
+
+func mergeIssuesReadme(ancestor, ours, theirs string, keepOurs bool) (string, error) {
+	table, err := mergeGeneratedTableRows(ancestor, ours, theirs, "issues-active-index", issuesTableHeader, "|---|------|-------|--------|", keepOurs)
 	if err != nil {
 		return "", err
 	}
@@ -159,13 +170,23 @@ func MergeIssuesReadme(ancestor, ours, theirs string) (string, error) {
 // document is managed, so the current branch's title and notice remain the
 // document shell around the merged rows.
 func MergeFullIssueIndex(ancestor, ours, theirs, name string) (string, error) {
+	return mergeFullIssueIndex(ancestor, ours, theirs, name, false)
+}
+
+// MergeFullIssueIndexReplay is MergeFullIssueIndex for an `issues rebase`
+// replay; see MergeIssuesReadmeReplay.
+func MergeFullIssueIndexReplay(ancestor, ours, theirs, name string) (string, error) {
+	return mergeFullIssueIndex(ancestor, ours, theirs, name, true)
+}
+
+func mergeFullIssueIndex(ancestor, ours, theirs, name string, keepOurs bool) (string, error) {
 	id, title := "issues-backlog-index", "# Backlog"
 	if name == "CLOSED.md" {
 		id, title = "issues-closed-index", "# Closed"
 	} else if name != "BACKLOG.md" {
 		return "", fmt.Errorf("unsupported full issue index %q", name)
 	}
-	table, err := mergeGeneratedTableRows(ancestor, ours, theirs, id, issuesTableHeader, "|---|------|-------|--------|")
+	table, err := mergeGeneratedTableRows(ancestor, ours, theirs, id, issuesTableHeader, "|---|------|-------|--------|", keepOurs)
 	if err != nil {
 		return "", err
 	}
@@ -176,7 +197,7 @@ func MergeFullIssueIndex(ancestor, ours, theirs, name string) (string, error) {
 // MergeDocsReadme merges generated study rows from the three index versions
 // while preserving the current branch's hand-written content byte-for-byte.
 func MergeDocsReadme(ancestor, ours, theirs, docsDir, readmePath string) (string, error) {
-	table, err := mergeGeneratedTableRows(ancestor, ours, theirs, "docs-studies-index", "| File | Topic |", "|------|-------|")
+	table, err := mergeGeneratedTableRows(ancestor, ours, theirs, "docs-studies-index", "| File | Topic |", "|------|-------|", false)
 	if err != nil {
 		return "", err
 	}
@@ -187,7 +208,7 @@ func MergeDocsReadme(ancestor, ours, theirs, docsDir, readmePath string) (string
 	return replaceManagedBlock(canonical, "docs-studies-index", table, -1, -1)
 }
 
-func mergeGeneratedTableRows(ancestor, ours, theirs, id, header, separator string) (string, error) {
+func mergeGeneratedTableRows(ancestor, ours, theirs, id, header, separator string, keepOurs bool) (string, error) {
 	baseRows := generatedTableRows(ancestor, id)
 	ourRows := generatedTableRows(ours, id)
 	theirRows := generatedTableRows(theirs, id)
@@ -219,6 +240,8 @@ func mergeGeneratedTableRows(ancestor, ours, theirs, id, header, separator strin
 		case sameGeneratedRow(oursRow, oursExists, base, baseExists):
 			merged = theirsRow
 		case sameGeneratedRow(theirsRow, theirsExists, base, baseExists):
+			merged = oursRow
+		case keepOurs:
 			merged = oursRow
 		case !baseExists:
 			return "", fmt.Errorf("conflicting generated rows for %s in managed block %q", key, id)
