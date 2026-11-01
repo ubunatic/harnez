@@ -19,8 +19,8 @@
 
 ## Pick up
 
-- On the starting machine: `harnez agent status --name jules-implement-1087b`, then `HTO=0 harnez agent resume --name jules-implement-1087b wait` if it is still running. Exit 0 can mean the wait ran out, so read the state in the output.
-- On another machine: open the URL above, and look for its PR with `gh pr list --state open --repo ubunatic/harnez`.
+- On any machine with the repo: `harnez agent status --model jules --id 5832791262383075829` reads the run once and writes nothing. Then `HTO=0 harnez agent resume --model jules --id 5832791262383075829 wait` records the run on first use and tracks it until it stops. Exit 0 can mean the wait ran out, so read the state in the output.
+- Look for its PR with `gh pr list --state open --repo ubunatic/harnez`.
 
 ## Finish
 
