@@ -1,6 +1,6 @@
 # 951 — usage catchup test: concurrent map writes from parallel collectors (flaky fatal)
 
-**Status**: Open
+**Status**: Closed — Already done by commit 87ad04a8, which did not name this ticket: its mutex guards the shared state and go test -race -count=5 passes. Found by the Jules audit, reports/jules/951.md (1075).
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
