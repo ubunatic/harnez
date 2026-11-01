@@ -1,6 +1,6 @@
 # 1071 — Add Google Jules as an agent provider for GitHub pull requests
 
-**Status**: Open
+**Status**: Closed — Delivered: Jules provider; real run on 1017 reached GitHub PR 37
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
