@@ -70,6 +70,8 @@ commonly stored in an `AGENTS.md` file at the repository root.
 - Codeberg is canonical for releases: `go get` resolves there, so tags go to Codeberg first.
 - Keep both `main` branches equal: every `main` update fast-forwards and goes to both remotes.
   Never force either `main`; never set a push mirror (it overwrites the other side).
+  A branch filter does not make a mirror safe: a Codeberg mirror filtered to `main` still
+  coincided with every other GitHub branch being deleted and the open PRs on them closing.
 - Check every destination for divergence before pushing anything. `harnez release` uses
   all Git remotes configured in the repo, checks branch and release tag updates first,
   then pushes both atomically per remote. A later connection failure or concurrent remote

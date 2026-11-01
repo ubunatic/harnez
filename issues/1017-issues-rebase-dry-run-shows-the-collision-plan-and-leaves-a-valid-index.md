@@ -38,3 +38,5 @@ loop, a hard blocker or no progress, clear the goal and write a failure report h
 Jules opened [GitHub PR 37](https://github.com/ubunatic/harnez/pull/37) as the real test of 1071. Not reviewed
 or merged. It changes `rebase.go` and `reconcile.go`, adds no Go tests (the goal wants tests) and adds two
 throwaway scripts at the repository root (`test-dry-run.sh`, `test-real-run.sh`). Its base is GitHub `main`.
+PR 37 was closed and its branch deleted on 2026-11-01 when a push mirror removed the GitHub branches; the owner
+chose not to restore them. Its commit `591930b0` is still readable as GitHub's `refs/pull/37/head`.
