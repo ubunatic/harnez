@@ -1,4 +1,4 @@
-# 1094 — Jules resume returns the old question instead of waiting for the reply
+# 1095 — Jules resume returns the old question instead of waiting for the reply
 
 **Status**: Open
 **Priority**: P2 (Medium)
