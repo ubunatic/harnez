@@ -88,6 +88,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		{"jules", "Run one-shot Google Jules audit", "## 7. Implement Prompt"},
 		{"jules", "Run one-shot Google Jules audit", "## 8. Experiment Prompt"},
 		{"jules", "Run one-shot Google Jules audit", "## 9. Ideas Prompt"},
+		{"jules", "Run one-shot Google Jules audit", "### Findings capture"},
 	} {
 		var configured *Command
 		for i := range cfg.Skills {
