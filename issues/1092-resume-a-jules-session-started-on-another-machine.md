@@ -1,6 +1,7 @@
 # 1092 — Resume a Jules session started on another machine
 
-**Status**: Open
+**Status**: Closed — Acceptance: harnez agent status --model jules --id 5832791262383075829 shows AWAITING_USER_FEEDBACK (read-only). Commits 4c162a48 (M1 adopt and status --id), bc6e1085 (M2 docs), d70e866b (M1 golden). Quota-1 run: TestHelpGolden failed, fixed in d70e866b; targeted re-run passes; full suite not re-run under the one-run quota.
+**Closed-By**: claude:haiku:med, session dev-1092
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
