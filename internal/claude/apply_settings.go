@@ -217,9 +217,14 @@ func buildSettingsDoc(cfg *Config, selection Set) map[string]any {
 		}
 		doc["permissions"] = map[string]any{"allow": allow, "deny": deny}
 	}
-	if len(eventMap) > 0 {
+	// Issue 1061 D1: under a scoped selection an unselected component's keys are
+	// left out of the document, so applyMerge keeps what is on disk. Only a
+	// hooks merge would strip harnez hooks, so telemetry-off scope skips it.
+	switch {
+	case !selection.HasComponent("telemetry") && selection.Scoped():
+	case len(eventMap) > 0:
 		doc["hooks"] = eventMap
-	} else if !selection.HasComponent("telemetry") {
+	case !selection.HasComponent("telemetry"):
 		doc["hooks"] = nil
 	}
 	if len(cfg.Env) > 0 {
@@ -235,7 +240,7 @@ func buildSettingsDoc(cfg *Config, selection Set) map[string]any {
 			"type":    "command",
 			"command": "harnez statusline",
 		}
-	} else if !cfg.StatusLine || !selection.HasComponent("usage") {
+	} else if selection.HasComponent("usage") || !selection.Scoped() {
 		doc["statusLine"] = nil
 	}
 	return doc

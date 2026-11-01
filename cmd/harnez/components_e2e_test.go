@@ -18,10 +18,12 @@ import (
 // test for issue 491: it drives `apply`/`diff` through newRootCmd() (real CLI
 // dispatch, not the internal claude/components APIs directly) so a selected
 // apply's removal pass is exercised the same way a user's shell invocation
-// would trigger it. `--components docs-only` must actively remove the
-// Codex/AGY harnez hooks and the tool-feedback-protocol skill (including its
-// resources), leave `diff --components docs-only` clean, and a subsequent
-// full apply must reinstall everything with `diff` clean again.
+// would trigger it. `--components docs-only --prune` (desired state, issue
+// 1061 D1) must actively remove the Codex/AGY harnez hooks and the
+// tool-feedback-protocol skill (including its resources), leave
+// `diff --components docs-only --prune` clean, and a subsequent full apply
+// must reinstall everything with `diff` clean again. Without --prune the same
+// flag removes nothing; see TestApplyCLI_ComponentsFlagWithoutPruneKeepsOthers.
 func TestApplyDiffCLI_ComponentsDocsOnlyRoundTrip(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -73,7 +75,7 @@ func TestApplyDiffCLI_ComponentsDocsOnlyRoundTrip(t *testing.T) {
 		t.Fatal("full apply: agy hook not installed")
 	}
 
-	run("apply", "--config", configPath, "--components", "docs-only", "--target", target)
+	run("apply", "--config", configPath, "--components", "docs-only", "--prune", "--target", target)
 
 	if _, err := os.Stat(rateSkill); !os.IsNotExist(err) {
 		t.Errorf("docs-only: tool-feedback-protocol SKILL.md left, stat err = %v", err)
@@ -106,7 +108,7 @@ func TestApplyDiffCLI_ComponentsDocsOnlyRoundTrip(t *testing.T) {
 	diffCmd := newRootCmd()
 	var diffOut strings.Builder
 	diffCmd.SetOut(&diffOut)
-	diffCmd.SetArgs([]string{"diff", "--config", configPath, "--components", "docs-only", "--target", target, "--exit-code"})
+	diffCmd.SetArgs([]string{"diff", "--config", configPath, "--components", "docs-only", "--prune", "--target", target, "--exit-code"})
 	if err := diffCmd.Execute(); err != nil {
 		t.Fatalf("diff --components docs-only reports drift: %v\n%s", err, diffOut.String())
 	}

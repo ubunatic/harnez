@@ -110,11 +110,14 @@ func underAgentCommand(cmd *cobra.Command) bool {
 	return false
 }
 
-func resolveComponentSelection(cfg *claude.Config, flag []string) (claude.Set, error) {
+// resolveComponentSelection resolves the --components flag against the config.
+// prune is the --prune flag: a flag selection is scoped (components outside it
+// are left alone) unless prune is set (issue 1061 D1).
+func resolveComponentSelection(cfg *claude.Config, flag []string, prune bool) (claude.Set, error) {
 	if err := claude.ValidateConfig(cfg); err != nil {
 		return nil, err
 	}
-	return claude.Resolve(flag, cfg.ComponentNames, nil)
+	return claude.Resolve(flag, cfg.ComponentNames, nil, prune)
 }
 
 func main() {

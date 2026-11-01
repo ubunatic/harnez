@@ -362,6 +362,25 @@ func skillRemovalReason(skill Command, selection Set, disableRateFeedback bool) 
 	return "disabled"
 }
 
+// skillOutOfScope reports whether a scoped selection (issue 1061 D1) must leave
+// skill alone: its skills component is off, or a `requires:` component is not
+// selected. Such a skill is then neither installed, updated nor removed. A
+// desired-state selection is not scoped, so it keeps the removal of skillDisabled.
+func skillOutOfScope(skill Command, selection Set) bool {
+	if !selection.Scoped() {
+		return false
+	}
+	if !selection.HasComponent("skills") {
+		return true
+	}
+	for _, req := range skill.Requires {
+		if !selection.HasComponent(req) {
+			return true
+		}
+	}
+	return false
+}
+
 func skillTargets(cfg *Config) []string {
 	var targets []string
 
@@ -797,6 +816,28 @@ func ApplyAllVariant(target string, cfg *Config, opts ApplyOptions) error {
 }
 
 // DiffAll diffs the config and reports whether changes/drift were detected.
+// diffStatusLineRemovals names the managed AGY and Codex status lines that a
+// desired-state run without usage would remove (issue 1061 M4). A scoped run
+// is not asked: it leaves them alone.
+func diffStatusLineRemovals(cfg *Config) (bool, error) {
+	changed := false
+	if cfg.AgyTarget != "" {
+		path := agy.StatusLineSettingsPath(fsutil.ExpandHome(cfg.AgyTarget))
+		if installed, _ := agy.StatusLineStatus(path); installed {
+			changed = true
+			fmt.Printf("  would remove %s [statusLine] (usage not selected)\n", path)
+		}
+	}
+	if cfg.CodexHooksTarget != "" {
+		path := fsutil.ExpandHome(cfg.CodexHooksTarget)
+		if installed, _ := codex.StatusLineStatus(path); installed {
+			changed = true
+			fmt.Printf("  would remove Harnez status items from %s [tui.status_line] (usage not selected)\n", path)
+		}
+	}
+	return changed, nil
+}
+
 func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 	anyChanged := false
 	report := func(changed bool, err error) error {
@@ -831,7 +872,7 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 			if !installed || drifted {
 				anyChanged = true
 			}
-		} else if installed {
+		} else if installed && !selection.Scoped() {
 			anyChanged = true
 			fmt.Printf("  would remove harnez hooks from %s (telemetry not selected)\n", hooksPath)
 		}
@@ -845,10 +886,15 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 				if !installed || drifted {
 					anyChanged = true
 				}
-			} else if installed {
+			} else if installed && !selection.Scoped() {
 				anyChanged = true
 				fmt.Printf("  would remove harnez hooks from %s (telemetry not selected)\n", hooksPath)
 			}
+		}
+	}
+	if !selection.Scoped() && !selection.Has(Usage) {
+		if err := report(diffStatusLineRemovals(cfg)); err != nil {
+			return false, fmt.Errorf("status lines: %w", err)
 		}
 	}
 	if err := report(diffDistillAdapters(cfg, selection)); err != nil {

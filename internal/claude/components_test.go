@@ -56,21 +56,38 @@ func TestNilSetEnablesAll(t *testing.T) {
 }
 
 func TestResolvePrecedence(t *testing.T) {
-	got, _ := Resolve([]string{"agents-only"}, []string{"docs-only"}, []string{"telemetry-only"})
+	got, _ := Resolve([]string{"agents-only"}, []string{"docs-only"}, []string{"telemetry-only"}, false)
 	if got.String() != "agents" {
 		t.Errorf("flag should win, got %s", got)
 	}
-	got, _ = Resolve(nil, []string{"docs-only"}, []string{"telemetry-only"})
+	if !got.Scoped() {
+		t.Error("flag selection without prune should be scoped (issue 1061 D1)")
+	}
+	got, _ = Resolve(nil, []string{"docs-only"}, []string{"telemetry-only"}, false)
 	if got.String() != "docs,skills" {
 		t.Errorf("config should win over local, got %s", got)
 	}
-	got, _ = Resolve(nil, nil, []string{"telemetry-only"})
+	if got.Scoped() {
+		t.Error("config selection is desired state, not scoped")
+	}
+	got, _ = Resolve(nil, nil, []string{"telemetry-only"}, false)
 	if got.String() != "telemetry" {
 		t.Errorf("local fallback, got %s", got)
 	}
-	got, _ = Resolve(nil, nil, nil)
+	got, _ = Resolve(nil, nil, nil, false)
 	if got != nil {
 		t.Errorf("no selection should be nil (full), got %s", got)
+	}
+}
+
+func TestResolvePruneMakesFlagDesiredState(t *testing.T) {
+	got, _ := Resolve([]string{"agents-only"}, []string{"docs-only"}, nil, true)
+	if got.String() != "agents" || got.Scoped() {
+		t.Errorf("flag with prune should be desired state for the flag selection, got %s scoped=%v", got, got.Scoped())
+	}
+	got, _ = Resolve(nil, []string{"docs-only"}, nil, true)
+	if got.String() != "docs,skills" || got.Scoped() {
+		t.Errorf("config with prune stays desired state, got %s scoped=%v", got, got.Scoped())
 	}
 }
 

@@ -91,7 +91,7 @@ func diffDistillAdapters(cfg *Config, selection Set) (bool, error) {
 					fmt.Printf("  would update %s\n", adapter.path)
 				}
 			}
-		case owner == adapterManaged:
+		case owner == adapterManaged && !selection.Scoped():
 			changed = true
 			fmt.Printf("  would remove %s (telemetry not selected)\n", adapter.path)
 		}

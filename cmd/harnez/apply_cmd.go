@@ -25,6 +25,7 @@ func newApplyCmd() *cobra.Command {
 	var applyShell bool
 	var applyVariant string
 	var componentNames []string
+	var pruneComponents bool
 	var debloat bool
 	var debloatPreset string
 	var debloatNotebookEdit bool
@@ -44,7 +45,7 @@ func newApplyCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			set, err := resolveComponentSelection(cfg, componentNames)
+			set, err := resolveComponentSelection(cfg, componentNames, pruneComponents)
 			if err != nil {
 				return err
 			}
@@ -122,6 +123,26 @@ func newApplyCmd() *cobra.Command {
 					}
 				}
 			}
+			// issue 1061 M4: desired state without usage removes the managed status
+			// lines, as the settings statusLine key does. A scoped run leaves them.
+			if !set.Scoped() && !set.Has(claude.Usage) {
+				if cfg.AgyTarget != "" {
+					agyStatusLinePath := agy.StatusLineSettingsPath(fsutil.ExpandHome(cfg.AgyTarget))
+					if changed, err := agy.RemoveStatusLine(agyStatusLinePath); err != nil {
+						return fmt.Errorf("Antigravity status line: %w", err)
+					} else if changed {
+						fmt.Printf("  removed %s [statusLine]\n", agyStatusLinePath)
+					}
+				}
+				if cfg.CodexHooksTarget != "" {
+					codexConfigPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+					if changed, err := codex.RemoveStatusLine(codexConfigPath); err != nil {
+						return fmt.Errorf("Codex status line: %w", err)
+					} else if changed {
+						fmt.Printf("  removed Harnez status items from %s [tui.status_line]\n", codexConfigPath)
+					}
+				}
+			}
 			if cfg.CodexHooksTarget != "" && set.Has(claude.Usage) {
 				codexConfigPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
 				if cfg.StatusLine {
@@ -188,7 +209,8 @@ func newApplyCmd() *cobra.Command {
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
-	apply.Flags().StringSliceVar(&componentNames, "components", nil, "component(s) to install, comma-separated or repeated (e.g. docs-only,telemetry)")
+	apply.Flags().StringSliceVar(&componentNames, "components", nil, "component(s) to install, comma-separated or repeated (e.g. docs-only,telemetry); scoped: components not named are left untouched unless --prune is set")
+	apply.Flags().BoolVar(&pruneComponents, "prune", false, "with --components: also remove what the selection leaves out (desired state); without it a --components run leaves components outside the selection untouched")
 	apply.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
 	apply.Flags().StringVar(&agyTarget, "agy-target", "", "Antigravity config directory (default: agy_target from config.yaml)")
 	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary,all)")
@@ -220,6 +242,7 @@ func newDiffCmd() *cobra.Command {
 	var configPath string
 	var target string
 	var componentNames []string
+	var pruneComponents bool
 	var diffExitCode bool
 	var captureDocs bool
 	var captureOutput string
@@ -231,7 +254,7 @@ func newDiffCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			set, err := resolveComponentSelection(cfg, componentNames)
+			set, err := resolveComponentSelection(cfg, componentNames, pruneComponents)
 			if err != nil {
 				return err
 			}
@@ -266,7 +289,8 @@ func newDiffCmd() *cobra.Command {
 	}
 	diff.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	diff.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
-	diff.Flags().StringSliceVar(&componentNames, "components", nil, "component(s) to inspect, comma-separated or repeated (e.g. docs-only,telemetry)")
+	diff.Flags().StringSliceVar(&componentNames, "components", nil, "component(s) to inspect, comma-separated or repeated (e.g. docs-only,telemetry); scoped: components not named are not reported unless --prune is set")
+	diff.Flags().BoolVar(&pruneComponents, "prune", false, "with --components: also report what the selection leaves out as removals (desired state), as apply --prune would")
 	diff.Flags().BoolVarP(&diffExitCode, "exit-code", "e", false, "exit with status 1 if drift/changes are found")
 	diff.Flags().BoolVar(&captureDocs, "capture-docs", false, "write configured project-doc drift to an inbox Markdown report")
 	diff.Flags().StringVar(&captureOutput, "out", "", "output path for --capture-docs (default: issues/inbox/managed-docs-drift-<timestamp>.md)")

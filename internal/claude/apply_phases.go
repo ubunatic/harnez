@@ -96,6 +96,9 @@ func applySkills(r *applyReport, cfg *Config, selection Set, disableRateFeedback
 			// or whose `requires:` component isn't selected, is actively
 			// removed (not merely skipped) — same rationale as the
 			// section-clean branch above.
+			if skillOutOfScope(skill, selection) {
+				continue // issue 1061 D1: a scoped run leaves it untouched
+			}
 			if skillDisabled(skill, selection, disableRateFeedback) {
 				for _, skillsRoot := range targets {
 					skillDir := filepath.Join(skillsRoot, skill.Name)
@@ -261,7 +264,7 @@ func applyCodexHooks(r *applyReport, cfg *Config, selection Set) error {
 				fmt.Println("  note: Codex will prompt for hook-trust review before this hook becomes active (see its /hooks panel).")
 			}
 			r.addStat("codex hooks", codex.Summary(hooksPath))
-		} else {
+		} else if !selection.Scoped() {
 			changed, err := codex.Remove(hooksPath)
 			if err != nil {
 				return fmt.Errorf("codex hooks: %w", err)
@@ -293,7 +296,7 @@ func applyAgyHooks(r *applyReport, cfg *Config, selection Set) error {
 					fmt.Printf("  wrote %s\n", hooksPath)
 				}
 				r.addStat("agy hooks", agy.Summary(hooksPath))
-			} else {
+			} else if !selection.Scoped() {
 				changed, err := agy.Remove(hooksPath)
 				if err != nil {
 					return fmt.Errorf("agy hooks: %w", err)
@@ -336,7 +339,7 @@ func applyDistillAdapters(r *applyReport, cfg *Config, selection Set) error {
 				printResult("wrote", adapter.path, ar)
 			}
 			r.addStat("distill", distillAdapterSummary(cfg))
-		} else {
+		} else if !selection.Scoped() {
 			for _, adapter := range adapters {
 				owner, err := inspectDistillAdapter(adapter.path)
 				if err != nil {

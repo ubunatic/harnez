@@ -37,6 +37,9 @@ func diffSkills(cfg *Config, selection Set) (bool, error) {
 
 	if len(cfg.Skills) > 0 {
 		for _, skill := range cfg.Skills {
+			if skillOutOfScope(skill, selection) {
+				continue // issue 1061 D1: a scoped run leaves it untouched
+			}
 			if skillDisabled(skill, selection, disableRateFeedback) {
 				for _, skillsRoot := range skillTargets(cfg) {
 					skillDir := filepath.Join(skillsRoot, skill.Name)
