@@ -720,17 +720,12 @@ func ApplyAllVariant(target string, cfg *Config, opts ApplyOptions) error {
 		return err
 	}
 	r := &applyReport{}
-	removed, err := removeDecommissionedArtifacts(target, cfg)
-	if err != nil {
+	if err := removeDecommissionedArtifacts(r, target, cfg); err != nil {
 		return err
 	}
-	r.changes += removed
-
-	removed, err = removeDroppedSkills(cfg)
-	if err != nil {
+	if err := removeDroppedSkills(r, cfg); err != nil {
 		return err
 	}
-	r.changes += removed
 
 	globalChanged, err := manageGlobalSections(cfg, false)
 	if err != nil {
