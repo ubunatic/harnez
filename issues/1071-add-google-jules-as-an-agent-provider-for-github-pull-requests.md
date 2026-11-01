@@ -1,6 +1,6 @@
 # 1071 — Add Google Jules as an agent provider for GitHub pull requests
 
-**Status**: Open
+**Status**: Closed — Delivered: Jules provider; real run on 1017 reached GitHub PR 37
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -35,3 +35,10 @@ The API is alpha. Its documentation describes connected GitHub sources, API-key 
 - The PR link is at `outputs[].pullRequest.url` on the session. No webhooks or streaming were found, so tracking means polling.
 - No model or effort field was found, which does not fit the `provider:model:effort` spec form directly.
 - Plan limits per rolling 24 hours: 15 tasks and 3 concurrent, Pro 100 and 15, Ultra 300 and 60. Whether API sessions count against them is unconfirmed.
+
+**Real run (2026-11-01):** `harnez agent start --model jules --role developer -f issues/1017-*.md` on `ubunatic/harnez`, session `6379860427770255774`.
+
+- Verified for real: submit from a local ticket, the 25-minute wait ending with the session still running, `resume wait` picking it up without a new task, `COMPLETED` and the PR URL ([GitHub PR 37](https://github.com/ubunatic/harnez/pull/37), 30 minutes in total), and the `headRef`/`baseRef` fields, which the API returns although the reference page was reported not to list them.
+- Found and fixed: `agent start` dropped driver warnings, so the warning that GitHub `main` was behind Codeberg never appeared.
+- Only tested against a fake API: `FAILED`, `AWAITING_*`, `PAUSED`, `approve`, messages and the drift warning's real output. `AUTO_CREATE_PR` did not stop for plan approval in this run.
+- Quality of PR 37 is a separate question, recorded in 1017.

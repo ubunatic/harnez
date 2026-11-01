@@ -40,6 +40,7 @@ type agentSpec struct {
 	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
 	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
 	ResumeNote            ResumeNoteSpec                 `yaml:"resume_note"`
+	Jules                 JulesSpec                      `yaml:"jules"`
 }
 
 // ContextModeSpec defines settings for an agent context mode (issue 1027).
@@ -297,6 +298,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 		}
 	}
 	if err := validateExternalSessions(spec.ExternalSessions); err != nil {
+		return agentSpec{}, err
+	}
+	if err := spec.Jules.validate(); err != nil {
 		return agentSpec{}, err
 	}
 	return spec, nil
