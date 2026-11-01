@@ -54,7 +54,9 @@ A category dir forms once 3+ docs share a theme.
   in `docs/*.md` (also in this repo), `~/.claude/docs/` and other projects only follow via
   `harnez init`/`apply`. Edit the source file, never the root copy alone: a root-only edit is
   silently overwritten by the next `harnez init`. After editing a source, sync the root copy
-  (`harnez init -d .`, then `git checkout --` any unrelated file it rewrites) and commit both;
+  (run `make install` first, then `harnez init -d .`, because init copies the docs embedded in the
+  installed binary and otherwise changes nothing; then `git checkout --` any unrelated file it
+  rewrites) and commit both;
   `TestRootDocCopiesMatchSources` fails when a root copy diverges from its source.
   A root copy may come from a `*.lite.md` source (first line `<!-- harnez:variant=lite -->`);
   edit both the full and the lite source.
@@ -130,6 +132,9 @@ See `@docs/AgenticLoop.md` Invariant 10 (Media & Demo Verification Gate).
 - codeberg.org and github.com are both dev remotes; Codeberg is canonical for releases (see Remotes in docs/Git.md).
 - `origin` is `ubunatic/harnez` on Codeberg and its `main` is protected: every change except `harnez release` goes
   through a topic branch and a PR, which the host opens.
+- Owner's clone with the `both` remote: `make install-git-hooks` copies `scripts/git-hooks/pre-push` (Git LFS
+  plus the GitHub guard) into this clone's hooks dir. It refuses to replace a differing hook without the
+  `git lfs pre-push` line unless `FORCE=1`. Tests: `internal/githooks`.
 
 <!-- harnez:begin Language Conventions -->
 Adhere to the following conventions.
