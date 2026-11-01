@@ -87,7 +87,7 @@ func TestApplyJevCompactionPluginWriteIdempotencyAndRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := applyManagedLocalPlugins(target, true, true)
+	result, err := applyManagedLocalPlugins(target, true, true, managedPluginOptions{})
 	if err != nil || !result.changed {
 		t.Fatalf("first apply = %+v, %v", result, err)
 	}
@@ -97,7 +97,7 @@ func TestApplyJevCompactionPluginWriteIdempotencyAndRemoval(t *testing.T) {
 			t.Errorf("plugin file %s: %v", name, err)
 		}
 	}
-	result, err = applyManagedLocalPlugins(target, true, true)
+	result, err = applyManagedLocalPlugins(target, true, true, managedPluginOptions{})
 	if err != nil || result.changed {
 		t.Fatalf("second apply = %+v, %v; want unchanged", result, err)
 	}
@@ -121,7 +121,7 @@ func TestApplyJevCompactionPluginWriteIdempotencyAndRemoval(t *testing.T) {
 		t.Fatalf("function hook runtime not enabled: %#v", settings["env"])
 	}
 
-	result, err = applyManagedLocalPlugins(target, false, true)
+	result, err = applyManagedLocalPlugins(target, false, true, managedPluginOptions{})
 	if err != nil || !result.changed {
 		t.Fatalf("remove = %+v, %v", result, err)
 	}
@@ -164,7 +164,7 @@ func TestManagedMarketplaceChannelRepair(t *testing.T) {
 			if err := os.WriteFile(knownPath, data, 0644); err != nil {
 				t.Fatal(err)
 			}
-			result, err := applyManagedLocalPlugins(target, enabled, true)
+			result, err := applyManagedLocalPlugins(target, enabled, true, managedPluginOptions{})
 			if err != nil || !result.changed {
 				t.Fatalf("apply: %+v, %v", result, err)
 			}
@@ -213,7 +213,7 @@ func TestManagedMarketplaceChannelRepair(t *testing.T) {
 			if repaired["installLocation"] != marketplaceDir || repaired["source"].(map[string]any)["path"] != marketplaceDir || known["other"] == nil {
 				t.Fatalf("known: %#v", known)
 			}
-			result, err = applyManagedLocalPlugins(target, enabled, true)
+			result, err = applyManagedLocalPlugins(target, enabled, true, managedPluginOptions{})
 			if err != nil || result.changed {
 				t.Fatalf("second apply: %+v, %v", result, err)
 			}

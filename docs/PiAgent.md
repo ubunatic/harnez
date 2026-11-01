@@ -301,9 +301,11 @@ Commands:
 - `harnez status` lists one row per managed path with its state (for example `ok`
   or `drifted`).
 - `harnez diff` reports drift without writing anything.
-- Revert runs when apply is given a component set without `skills`, for example
-  `harnez apply --components telemetry-only`. It removes the unmodified files it owns
-  and keeps the changed ones and their marker, naming each one it kept.
+- Revert runs when apply is given a desired-state component set without `skills`, for
+  example `harnez apply --components telemetry-only --prune` (issue 1061 D1). It removes
+  the unmodified files it owns and keeps the changed ones and their marker, naming each
+  one it kept. A plain `harnez apply --components telemetry-only` leaves the runner
+  untouched.
 
 **Ownership by digest.** The directory's `.harnez-managed` file is a ledger. It
 records the SHA-256 digest of each file harnez last committed, and, while an apply

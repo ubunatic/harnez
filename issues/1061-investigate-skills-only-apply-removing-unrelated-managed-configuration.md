@@ -1,6 +1,6 @@
 # 1061 — Investigate skills-only apply removing unrelated managed configuration
 
-**Status**: Open
+**Status**: Closed — scoped --components, --prune, ownership-aware adapters and truthful removal reports; reviewed with mutation checks
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -61,15 +61,19 @@ This matches a skills-only apply that was never followed by a plain apply, altho
 
 ## Decisions
 
-**D1, owner confirmation required before M3.** Recommended: the `--components` flag becomes scoped, and a persisted `components:` key stays desired-state.
+**D1, confirmed by the owner (2026-11-01).** The `--components` flag becomes scoped, and a persisted `components:` key stays desired-state.
 
 - `apply --components X` reconciles only X and leaves unselected components untouched, with no install and no removal. `diff` and `status` use the same scope, so unselected parts are not drift.
 - `apply --components X --prune` gives today's removal for one run. Check `docs/CLIDesign.md` for shorthand conflicts first.
 - A `components:` key in the loaded config keeps removing unselected components, because it is a persistent, explicit choice. A flag overrides its scope, and without `--prune` the flag run removes nothing.
+- Implementation: the scope travels inside the resolved `Set` (`claude.Scope`, `Set.Scoped`), not in a separate `ApplyOptions` field, so every existing selection parameter carries it. `--prune` is long-only (`-d` is taken, see `docs/CLIDesign.md`). `status` takes no `--prune`: it is read-only and removes nothing.
 
 Rejected: keeping the removal and only adding a warning, because the documented recipe and the natural reading of the flag would both stay destructive.
 
 **D2, decided:** the always-on writes in §8.3 (`model`, `effortLevel`, `permissions`, `env`, `spinnerVerbs`, decommissioned-artifact cleanup, shims) stay as they are. They are additive and already documented. Whether guards deserve their own component is out of scope here; this ticket only corrects the docs.
+
+- Dropped-skill removal is always on too, whatever the selection. It removes only skills harnez manages and that are absent from config, never user or external skills. Its removals, like decommissioned ones, appear in the end-of-run `removed:` summary with their reason (review item 4, 2026-11-01).
+- Jev compaction plugin (owner decision, 2026-11-01, replaces the earlier known-limitation note): with `jev_compaction_enabled` false, a scoped run keeps an installed plugin and prints a warning that it was detected and not removed; plain apply and `--prune` remove it and report the removal; with the setting on, a scoped run is unchanged; `diff` matches apply. Tests: `cmd/harnez/jev_scope_test.go`. Recorded in `docs/HarnezComponents.md` §8.4 and `docs/JevCompaction.md`.
 
 ## Milestones
 

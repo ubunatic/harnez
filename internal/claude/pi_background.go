@@ -531,6 +531,9 @@ func applyPiBackgroundTasks(r *applyReport, cfg *Config, selection Set) error {
 		return nil
 	}
 	selected := selection.HasComponent("skills")
+	if !selected && selection.Scoped() {
+		return nil // issue 1061 D1: a scoped run leaves the runner untouched
+	}
 	site, err := openPiBackgroundSite(root, selected)
 	if err != nil {
 		return fmt.Errorf("pi background tasks: %w", err)
@@ -1131,7 +1134,7 @@ func diffPiBackgroundTasks(cfg *Config, selection Set) (bool, error) {
 	}
 	defer site.close()
 	if !selection.HasComponent("skills") {
-		if site.owner != piBackgroundManaged {
+		if site.owner != piBackgroundManaged || selection.Scoped() {
 			return false, nil
 		}
 		n, err := revertPiBackground(site, true)
@@ -1178,7 +1181,7 @@ func piBackgroundStatus(cfg *Config, selection Set) ([]piBackgroundStatusRow, er
 		return []piBackgroundStatusRow{{label: site.clashPath, state: "clash"}}, nil
 	}
 	if !selection.HasComponent("skills") {
-		if site.owner != piBackgroundManaged {
+		if site.owner != piBackgroundManaged || selection.Scoped() {
 			return nil, nil
 		}
 		n, err := revertPiBackground(site, true)

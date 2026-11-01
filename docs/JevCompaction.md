@@ -29,6 +29,13 @@ the transcript file has no effect on the live session.
   the embedded plugin (marketplace + cache under `~/.claude`), enables it and sets
   `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. Setting it back to `false` removes all of it; the
   `harnez-local` marketplace entry is removed only if it points at harnez's own directory.
+- Scoped runs (issue 1061, owner decision): with `jev_compaction_enabled: false`, a scoped
+  run (`apply --components X`, no `--prune`) leaves an installed plugin in place. It prints
+  `warning: experimental Jev compaction plugin was detected and not removed` and reports no
+  change, so a repeat run still says `No changes.`. A plain `apply` or `apply --prune`
+  removes the plugin and names it in the `removed:` summary. `diff` shows the same warning
+  in a scoped run, and names the removal otherwise. With the setting on, a scoped run is
+  unchanged. Tests: `cmd/harnez/jev_scope_test.go` (real CLI, throwaway HOME).
 - All TS lives in the Go tree (`internal/claude/jevcompaction/`, `go:embed`). No copy outside
   the binary. Thresholds (auto-trigger %, minimum reduction, pinned messages, timeout, size
   limit) come from `spec/jev_compaction.yaml` and are rendered into `hook.ts.tmpl`.

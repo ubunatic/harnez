@@ -34,8 +34,9 @@ func TestDroppedSkillsOwnershipAndDrift(t *testing.T) {
 	if drift, err := diffSkills(cfg, selection); err != nil || !drift {
 		t.Fatalf("before cleanup: drift=%v err=%v", drift, err)
 	}
-	if changes, err := removeDroppedSkills(cfg); err != nil || changes != 1 {
-		t.Fatalf("cleanup: changes=%d err=%v", changes, err)
+	report := &applyReport{}
+	if err := removeDroppedSkills(report, cfg); err != nil || report.changes != 1 {
+		t.Fatalf("cleanup: changes=%d err=%v", report.changes, err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "dropped")); !os.IsNotExist(err) {
 		t.Fatalf("dropped directory remains: %v", err)
@@ -49,8 +50,9 @@ func TestDroppedSkillsOwnershipAndDrift(t *testing.T) {
 	if drift, err := diffSkills(cfg, selection); err != nil || drift {
 		t.Fatalf("after cleanup: drift=%v err=%v", drift, err)
 	}
-	if changes, err := removeDroppedSkills(cfg); err != nil || changes != 0 {
-		t.Fatalf("second cleanup: changes=%d err=%v", changes, err)
+	second := &applyReport{}
+	if err := removeDroppedSkills(second, cfg); err != nil || second.changes != 0 {
+		t.Fatalf("second cleanup: changes=%d err=%v", second.changes, err)
 	}
 }
 
@@ -61,10 +63,51 @@ func TestDroppedSkillsReadError(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &Config{SkillsTarget: root}
-	if _, err := removeDroppedSkills(cfg); err == nil || !strings.Contains(err.Error(), "skills dir "+root) {
+	if err := removeDroppedSkills(&applyReport{}, cfg); err == nil || !strings.Contains(err.Error(), "skills dir "+root) {
 		t.Fatalf("cleanup error = %v", err)
 	}
 	if _, err := diffSkills(cfg, nil); err == nil || !strings.Contains(err.Error(), "skills dir "+root) {
 		t.Fatalf("diff error = %v", err)
+	}
+}
+
+// Dropped and decommissioned removals run regardless of the selection (D2), so
+// the end-of-run "removed:" summary must name them with their reason, as it
+// does for the other removals (issue 1061 review item 4).
+func TestDroppedAndDecommissionedRemovalsAreSummarized(t *testing.T) {
+	target, cfg, _, _ := adapterOwnershipSetup(t)
+	droppedSkill := filepath.Join(cfg.ClaudeSkillsTarget, "old-skill")
+	writeAdapterTestFile(t, filepath.Join(droppedSkill, ManagedSkillMarker), "")
+	writeAdapterTestFile(t, filepath.Join(droppedSkill, "SKILL.md"), "obsolete")
+	decommissionedSkill := filepath.Join(cfg.ClaudeSkillsTarget, "old-decom")
+	writeAdapterTestFile(t, filepath.Join(decommissionedSkill, "SKILL.md"), "obsolete")
+	cfg.Decommissioned = DecommissionedConfig{Commands: []string{"old-cmd"}}
+	cfg.Decommissioned.Skills = []string{"old-decom"}
+	var commandFiles []string
+	for _, root := range commandTargets(target, cfg) {
+		commandFiles = append(commandFiles, filepath.Join(root, "old-cmd.md"))
+		writeAdapterTestFile(t, commandFiles[len(commandFiles)-1], "obsolete")
+	}
+
+	out, err := CaptureTestStdout(func() error {
+		return ApplyAllVariant(target, cfg, ApplyOptions{})
+	})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	want := []string{
+		droppedSkill + " (not in config)",
+		decommissionedSkill + " (decommissioned)",
+	}
+	for _, file := range commandFiles {
+		want = append(want, file+" (decommissioned)")
+	}
+	for _, w := range want {
+		if !strings.Contains(out, w) {
+			t.Errorf("removed summary does not name %q; output:\n%s", w, out)
+		}
+	}
+	if !strings.Contains(out, "removed:") {
+		t.Errorf("apply printed no removed: summary line:\n%s", out)
 	}
 }

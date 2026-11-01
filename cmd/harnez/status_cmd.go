@@ -27,7 +27,7 @@ func newStatusCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			set, err := resolveComponentSelection(cfg, componentNames)
+			set, err := resolveComponentSelection(cfg, componentNames, false)
 			if err != nil {
 				return err
 			}

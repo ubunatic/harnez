@@ -45,7 +45,9 @@ func TestRemoveDecommissionedArtifacts(t *testing.T) {
 		t.Fatalf("write keep: %v", err)
 	}
 
-	changed, err := removeDecommissionedArtifacts(target, cfg)
+	report := &applyReport{}
+	err := removeDecommissionedArtifacts(report, target, cfg)
+	changed := report.changes
 	if err != nil {
 		t.Fatalf("removeDecommissionedArtifacts: %v", err)
 	}
@@ -101,7 +103,9 @@ func TestRemoveDecommissionedSkillOwnership(t *testing.T) {
 					}
 				}
 			}
-			changed, err := removeDecommissionedArtifacts(filepath.Join(home, ".claude"), cfg)
+			report := &applyReport{}
+			err := removeDecommissionedArtifacts(report, filepath.Join(home, ".claude"), cfg)
+			changed := report.changes
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -128,8 +132,9 @@ func TestRemoveDecommissionedSkillOwnership(t *testing.T) {
 					}
 				})
 			}
-			if changed, err := removeDecommissionedArtifacts(filepath.Join(home, ".claude"), cfg); err != nil || changed != 0 {
-				t.Errorf("second cleanup = (%d, %v), want (0, nil)", changed, err)
+			second := &applyReport{}
+			if err := removeDecommissionedArtifacts(second, filepath.Join(home, ".claude"), cfg); err != nil || second.changes != 0 {
+				t.Errorf("second cleanup = (%d, %v), want (0, nil)", second.changes, err)
 			}
 		})
 	}
@@ -149,7 +154,7 @@ func TestRemoveDecommissionedArtifactsRejectsTraversal(t *testing.T) {
 			Skills: []string{"../must-not-remove"},
 		},
 	}
-	if _, err := removeDecommissionedArtifacts(t.TempDir(), cfg); err == nil {
+	if err := removeDecommissionedArtifacts(&applyReport{}, t.TempDir(), cfg); err == nil {
 		t.Fatal("expected traversal-like skill name to fail")
 	}
 	if _, err := os.Stat(outside); err != nil {

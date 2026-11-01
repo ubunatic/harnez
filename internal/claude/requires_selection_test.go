@@ -129,6 +129,84 @@ func TestCodexAgyAppliedByTelemetrySelection(t *testing.T) {
 	}
 }
 
+// An unmet requires: skill stays installed under a scoped flag selection (the
+// unselected telemetry component is not pruned) and is removed under --prune,
+// which makes the same selection desired state (issue 1061 D1).
+func TestRequiresSkillStaysUnderScopeAndPruneRemoves(t *testing.T) {
+	cfg := loadTestConfig(t)
+	skillsDir := t.TempDir()
+	cfg.ClaudeSkillsTarget = skillsDir
+	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
+	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
+	cfg.PrimeAgentTarget = ""
+	cfg.CodexHooksTarget = ""
+	cfg.AgyHooksTarget = ""
+
+	docup, idx := findSkill(t, cfg, "docup")
+	if len(docup.Resources) == 0 {
+		t.Fatalf("docup skill has no resources; test needs a resource-bearing skill")
+	}
+	docup.Requires = []string{"telemetry"}
+	cfg.Skills[idx] = docup
+
+	skillMD := filepath.Join(skillsDir, "docup", "SKILL.md")
+	resourcePaths := make([]string, len(docup.Resources))
+	for i, r := range docup.Resources {
+		resourcePaths[i] = filepath.Join(skillsDir, "docup", r.Target)
+	}
+
+	target := t.TempDir()
+	full := Set{Docs: true, Skills: true, Telemetry: true, Agents: true, Usage: true}
+	if _, err := CaptureTestStdout(func() error {
+		return ApplyAllVariant(target, cfg, ApplyOptions{Selection: full})
+	}); err != nil {
+		t.Fatalf("full apply: %v", err)
+	}
+
+	names := []string{"docs", "skills", "agents", "usage"}
+	scoped, err := Resolve(names, nil, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CaptureTestStdout(func() error {
+		return ApplyAllVariant(target, cfg, ApplyOptions{Selection: scoped})
+	}); err != nil {
+		t.Fatalf("scoped apply: %v", err)
+	}
+	if _, err := os.Stat(skillMD); err != nil {
+		t.Errorf("scoped apply removed %s, which is outside the selection: %v", skillMD, err)
+	}
+	for _, p := range resourcePaths {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("scoped apply removed resource %s: %v", p, err)
+		}
+	}
+	if changed, err := DiffAll(target, cfg, scoped); err != nil || changed {
+		t.Errorf("scoped DiffAll: changed=%v err=%v, want clean", changed, err)
+	}
+
+	pruned, err := Resolve(names, nil, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CaptureTestStdout(func() error {
+		return ApplyAllVariant(target, cfg, ApplyOptions{Selection: pruned})
+	}); err != nil {
+		t.Fatalf("pruned apply: %v", err)
+	}
+	if _, err := os.Stat(skillMD); !os.IsNotExist(err) {
+		t.Errorf("--prune left %s installed, stat err = %v", skillMD, err)
+	}
+	for _, p := range resourcePaths {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("--prune left resource %s installed, stat err = %v", p, err)
+		}
+	}
+	if changed, err := DiffAll(target, cfg, pruned); err != nil || changed {
+		t.Errorf("pruned DiffAll: changed=%v err=%v, want clean", changed, err)
+	}
+}
+
 func TestSkillDisabledHelper(t *testing.T) {
 	full := Set{Telemetry: true}
 	none := Set{}

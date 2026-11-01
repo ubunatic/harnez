@@ -5,6 +5,7 @@ package claude
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -42,6 +43,27 @@ func PresetNames() []string {
 // made and enables everything, so a config without `components:` behaves as
 // today (nil = full).
 type Set map[Component]bool
+
+// scopeKey marks a Set as scoped (issue 1061 D1). It is not a Component, so it
+// never matches Has, String or Parse; it rides in the map so every apply and
+// diff function that already receives the selection sees the scope too.
+const scopeKey Component = "\x00scoped"
+
+// Scope returns a copy of s marked as scoped: components outside s are then
+// left untouched, not removed. A nil (full) Set stays nil, because it removes nothing.
+func Scope(s Set) Set {
+	if s == nil {
+		return nil
+	}
+	out := maps.Clone(s)
+	out[scopeKey] = true
+	return out
+}
+
+// Scoped reports whether components outside s are left untouched (see Scope).
+func (s Set) Scoped() bool {
+	return s[scopeKey]
+}
 
 // Has reports whether c is enabled.
 func (s Set) Has(c Component) bool {
@@ -122,8 +144,19 @@ func joinComponents(cs []Component) string {
 
 // Resolve applies the precedence from §8.5: flag > config > local config.
 // Each argument is a list of names; the first non-empty one wins.
-func Resolve(flag, config, local []string) (Set, error) {
-	for _, names := range [][]string{flag, config, local} {
+//
+// Issue 1061 D1: a flag selection is scoped, so components outside it are left
+// alone, unless prune is set; prune makes the flag selection desired state and
+// removes what it does not select. A config or local selection is always desired state.
+func Resolve(flag, config, local []string, prune bool) (Set, error) {
+	if len(flag) > 0 {
+		set, err := Parse(flag...)
+		if err != nil || prune {
+			return set, err
+		}
+		return Scope(set), nil
+	}
+	for _, names := range [][]string{config, local} {
 		if len(names) > 0 {
 			return Parse(names...)
 		}

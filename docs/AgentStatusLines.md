@@ -116,7 +116,9 @@ does not poll either agent or make a separate data request.
 
 Use `harnez apply --components usage` to install or update both global status
 line settings and Codex's native footer items, and
-`harnez status --components usage` to check them. Codex receives its default
+`harnez status --components usage` to check them. The flag is scoped (issue 1061 D1):
+it leaves other components alone. Add `--prune` to also remove the status lines when
+`usage` is not selected. Codex receives its default
 model, directory, and thread items plus context-remaining, model-context,
 five-hour-limit, and weekly-limit items. These are Codex's built-in displays, not a Harnez custom
 renderer. The AGY setting enables `stack_with_default` so Antigravity's

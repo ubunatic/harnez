@@ -72,7 +72,38 @@ func renderJevHook(spec jevCompactionSpec) ([]byte, error) {
 	return []byte(content), nil
 }
 
-func applyManagedLocalPlugins(target string, enabled bool, channelEnabled bool, preserveFunctionHookFlag ...bool) (applyResult, error) {
+// managedPluginOptions tunes applyManagedLocalPlugins for the caller's run.
+type managedPluginOptions struct {
+	// preserveFunctionHookFlag keeps CLAUDE_CODE_ENABLE_FUNCTION_HOOKS when the
+	// jev plugin is disabled, because the user may have set it.
+	preserveFunctionHookFlag bool
+	// keepDisabledJev leaves an installed jev plugin, its settings entries and its
+	// marketplace untouched while jev is disabled. Scoped runs set it (issue 1061).
+	keepDisabledJev bool
+}
+
+// jevKeptWarning is printed by apply and diff when a scoped run leaves an
+// installed jev plugin in place (issue 1061 owner decision).
+const jevKeptWarning = "warning: experimental Jev compaction plugin was detected and not removed (jev_compaction_enabled is false; a scoped run keeps it). A plain apply or --prune removes it."
+
+// jevPluginRoot is the cache directory of the jev plugin under target.
+func jevPluginRoot(target string) string {
+	return filepath.Join(target, "plugins", "cache", jevMarketplaceName, jevPluginName)
+}
+
+// jevPluginInstalled reports whether the jev plugin is present under target, using
+// the same test applyManagedLocalPlugins uses to decide the plugin is managed.
+func jevPluginInstalled(target string) bool {
+	settings := jsonc.Read(filepath.Join(target, "settings.json"))
+	plugins, _ := settings["enabledPlugins"].(map[string]any)
+	installed, _ := readJSONMap(filepath.Join(target, "plugins", "installed_plugins.json"))["plugins"].(map[string]any)
+	_, enabled := plugins[jevPluginID]
+	_, present := installed[jevPluginID]
+	return enabled || present || fileExists(jevPluginRoot(target))
+}
+
+func applyManagedLocalPlugins(target string, enabled bool, channelEnabled bool, opts managedPluginOptions) (applyResult, error) {
+	keepJev := opts.keepDisabledJev && !enabled
 	settingsPath := filepath.Join(target, "settings.json")
 	settings := jsonc.Read(settingsPath)
 	changed := false
@@ -144,10 +175,13 @@ func applyManagedLocalPlugins(target string, enabled bool, channelEnabled bool, 
 			{"hooks/jev-compact.ts", hook},
 		}
 		setMapKey(env, "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "1")
-	} else if pluginManaged && !(len(preserveFunctionHookFlag) > 0 && preserveFunctionHookFlag[0]) {
+	} else if pluginManaged && !opts.preserveFunctionHookFlag && !keepJev {
 		removeMapKey(env, "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS")
 	}
 	for _, plugin := range managedPlugins {
+		if keepJev && plugin.name == jevPluginName {
+			continue
+		}
 		id := plugin.name + "@" + jevMarketplaceName
 		pluginDir := filepath.Join(marketplaceDir, "plugins", plugin.name)
 		cacheRoot := filepath.Join(target, "plugins", "cache", jevMarketplaceName, plugin.name)
@@ -200,7 +234,7 @@ func applyManagedLocalPlugins(target string, enabled bool, channelEnabled bool, 
 			"source":          map[string]any{"source": "directory", "path": marketplaceDir},
 		})
 		setMapKey(installed, "version", 2)
-	} else {
+	} else if !keepJev {
 		if source, ok := extraKnown[jevMarketplaceName].(map[string]any); ok {
 			if details, ok := source["source"].(map[string]any); ok && details["path"] == marketplaceDir {
 				removeMapKey(extraKnown, jevMarketplaceName)

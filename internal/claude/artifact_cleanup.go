@@ -16,25 +16,28 @@ func decommissionedName(name string) error {
 	return nil
 }
 
-func removeDecommissionedArtifacts(target string, cfg *Config) (int, error) {
-	changes := 0
+// removeDecommissionedArtifacts removes the commands and skills named in
+// cfg.Decommissioned. It runs regardless of the selection (issue 1061 D2) and
+// records each removal in r for the end-of-run summary (issue 1061 review item 4).
+func removeDecommissionedArtifacts(r *applyReport, target string, cfg *Config) error {
 	for _, name := range cfg.Decommissioned.Commands {
 		if err := decommissionedName(name); err != nil {
-			return changes, err
+			return err
 		}
 		for _, root := range commandTargets(target, cfg) {
 			artifact := filepath.Join(root, name+".md")
 			if err := os.Remove(artifact); err == nil {
-				changes++
+				r.changes++
 				fmt.Printf("  removed %s\n", artifact)
+				r.addRemoval(artifact, "decommissioned")
 			} else if !os.IsNotExist(err) {
-				return changes, fmt.Errorf("remove decommissioned command %s: %w", artifact, err)
+				return fmt.Errorf("remove decommissioned command %s: %w", artifact, err)
 			}
 		}
 	}
 	for _, name := range cfg.Decommissioned.Skills {
 		if err := decommissionedName(name); err != nil {
-			return changes, err
+			return err
 		}
 		for _, root := range skillTargets(cfg) {
 			artifact := filepath.Join(root, name)
@@ -45,21 +48,23 @@ func removeDecommissionedArtifacts(target string, cfg *Config) (int, error) {
 			if _, err := os.Stat(artifact); os.IsNotExist(err) {
 				continue
 			} else if err != nil {
-				return changes, fmt.Errorf("inspect decommissioned skill %s: %w", artifact, err)
+				return fmt.Errorf("inspect decommissioned skill %s: %w", artifact, err)
 			}
 			if err := os.RemoveAll(artifact); err != nil {
-				return changes, fmt.Errorf("remove decommissioned skill %s: %w", artifact, err)
+				return fmt.Errorf("remove decommissioned skill %s: %w", artifact, err)
 			}
-			changes++
+			r.changes++
 			fmt.Printf("  removed %s\n", artifact)
+			r.addRemoval(artifact, "decommissioned")
 		}
 	}
-	return changes, nil
+	return nil
 }
 
 // removeDroppedSkills removes only previously managed skills absent from config.
-func removeDroppedSkills(cfg *Config) (int, error) {
-	changes := 0
+// It runs regardless of the selection (issue 1061 D2) and records each removal
+// in r for the end-of-run summary (issue 1061 review item 4).
+func removeDroppedSkills(r *applyReport, cfg *Config) error {
 	configuredSkills := make(map[string]struct{}, len(cfg.Skills))
 	for _, skill := range cfg.Skills {
 		configuredSkills[skill.Name] = struct{}{}
@@ -70,7 +75,7 @@ func removeDroppedSkills(cfg *Config) (int, error) {
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
-			return changes, fmt.Errorf("skills dir %s: %w", skillsRoot, err)
+			return fmt.Errorf("skills dir %s: %w", skillsRoot, err)
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() {
@@ -81,11 +86,12 @@ func removeDroppedSkills(cfg *Config) (int, error) {
 				continue
 			}
 			if err := os.RemoveAll(skillDir); err != nil {
-				return changes, fmt.Errorf("remove dropped skill %s: %w", skillDir, err)
+				return fmt.Errorf("remove dropped skill %s: %w", skillDir, err)
 			}
 			fmt.Printf("  removed %s\n", skillDir)
-			changes++
+			r.changes++
+			r.addRemoval(skillDir, "not in config")
 		}
 	}
-	return changes, nil
+	return nil
 }

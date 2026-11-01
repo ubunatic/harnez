@@ -3,6 +3,7 @@ package claude
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,8 +16,9 @@ import (
 // applyReport accumulates the change count and the per-phase summary lines
 // that ApplyAllVariant prints at the end of an apply run.
 type applyReport struct {
-	changes int
-	stats   []applyStat
+	changes  int
+	stats    []applyStat
+	removals []string
 }
 
 type applyStat struct{ label, detail string }
@@ -26,6 +28,25 @@ func (r *applyReport) addStat(label, detail string) {
 	if detail != "" {
 		r.stats = append(r.stats, applyStat{label, detail})
 	}
+}
+
+// addRemoval records one removal and its reason for the end-of-run summary
+// (issue 1061 M2).
+func (r *applyReport) addRemoval(what, reason string) {
+	r.removals = append(r.removals, what+" ("+reason+")")
+}
+
+// reportHookRemoval prints and records the removal of harnez hooks from a
+// config file. Codex and Antigravity remove the file only when it ends up
+// empty; otherwise apply just edited it, and the message says so.
+func (r *applyReport) reportHookRemoval(path, reason string) {
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		fmt.Printf("  removed %s\n", path)
+		r.addRemoval(path, reason)
+		return
+	}
+	fmt.Printf("  removed harnez hooks from %s\n", path)
+	r.addRemoval(path+" harnez hooks", reason)
 }
 
 // applyCommands installs configured slash commands into every command target.
@@ -75,6 +96,9 @@ func applySkills(r *applyReport, cfg *Config, selection Set, disableRateFeedback
 			// or whose `requires:` component isn't selected, is actively
 			// removed (not merely skipped) — same rationale as the
 			// section-clean branch above.
+			if skillOutOfScope(skill, selection) {
+				continue // issue 1061 D1: a scoped run leaves it untouched
+			}
 			if skillDisabled(skill, selection, disableRateFeedback) {
 				for _, skillsRoot := range targets {
 					skillDir := filepath.Join(skillsRoot, skill.Name)
@@ -91,6 +115,7 @@ func applySkills(r *applyReport, cfg *Config, selection Set, disableRateFeedback
 						}
 						r.changes++
 						fmt.Printf("  removed %s\n", path)
+						r.addRemoval(path, skillRemovalReason(skill, selection, disableRateFeedback))
 						_ = os.Remove(skillDir) // best-effort: drop now-empty dir
 					} else if !os.IsNotExist(err) {
 						return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
@@ -239,14 +264,14 @@ func applyCodexHooks(r *applyReport, cfg *Config, selection Set) error {
 				fmt.Println("  note: Codex will prompt for hook-trust review before this hook becomes active (see its /hooks panel).")
 			}
 			r.addStat("codex hooks", codex.Summary(hooksPath))
-		} else {
+		} else if !selection.Scoped() {
 			changed, err := codex.Remove(hooksPath)
 			if err != nil {
 				return fmt.Errorf("codex hooks: %w", err)
 			}
 			if changed {
 				r.changes++
-				fmt.Printf("  removed %s\n", hooksPath)
+				r.reportHookRemoval(hooksPath, "telemetry not selected")
 			}
 		}
 	}
@@ -271,14 +296,14 @@ func applyAgyHooks(r *applyReport, cfg *Config, selection Set) error {
 					fmt.Printf("  wrote %s\n", hooksPath)
 				}
 				r.addStat("agy hooks", agy.Summary(hooksPath))
-			} else {
+			} else if !selection.Scoped() {
 				changed, err := agy.Remove(hooksPath)
 				if err != nil {
 					return fmt.Errorf("agy hooks: %w", err)
 				}
 				if changed {
 					r.changes++
-					fmt.Printf("  removed %s\n", hooksPath)
+					r.reportHookRemoval(hooksPath, "telemetry not selected")
 				}
 			}
 		}
@@ -291,9 +316,19 @@ func applyDistillAdapters(r *applyReport, cfg *Config, selection Set) error {
 	// issue 491 M6: like Codex/AGY hooks above, distill adapters are only
 	// installed under the telemetry component; without it they're actively
 	// removed, since cfg is unfiltered here (selection decides, not Filter).
+	// issue 1061 M1: only a harnez-managed adapter is written or removed; a
+	// user file or symlink at the path is kept and reported, and apply succeeds.
 	if adapters := distillAdapters(cfg); len(adapters) > 0 {
 		if selection.HasComponent("telemetry") {
 			for _, adapter := range adapters {
+				owner, err := inspectDistillAdapter(adapter.path)
+				if err != nil {
+					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+				}
+				if owner == adapterKept {
+					reportKeptAdapter(adapter.path)
+					continue
+				}
 				ar, err := writeFileIfChanged(adapter.path, []byte(adapter.content))
 				if err != nil {
 					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
@@ -304,13 +339,22 @@ func applyDistillAdapters(r *applyReport, cfg *Config, selection Set) error {
 				printResult("wrote", adapter.path, ar)
 			}
 			r.addStat("distill", distillAdapterSummary(cfg))
-		} else {
+		} else if !selection.Scoped() {
 			for _, adapter := range adapters {
-				if err := os.Remove(adapter.path); err == nil {
+				owner, err := inspectDistillAdapter(adapter.path)
+				if err != nil {
+					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+				}
+				switch owner {
+				case adapterKept:
+					reportKeptAdapter(adapter.path)
+				case adapterManaged:
+					if err := os.Remove(adapter.path); err != nil {
+						return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+					}
 					r.changes++
 					fmt.Printf("  removed %s\n", adapter.path)
-				} else if !os.IsNotExist(err) {
-					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+					r.addRemoval(adapter.path, "telemetry not selected")
 				}
 			}
 		}
