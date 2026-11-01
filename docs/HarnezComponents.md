@@ -279,8 +279,11 @@ E remains the fallback for one-off setups and costs nothing to keep.
 | `usage` (transitional) | `statusLine` in Claude `settings.json`, Codex and AGY status lines, `harnez-agent-collector` systemd unit | `usage`, `statusline`, … until moved to loom |
 
 Always applied regardless of selection: `model`, `effortLevel`, `permissions`, `env`,
-`spinnerVerbs`, decommissioned-artifact cleanup, bash shims. These are
-harness settings, not component features.
+`spinnerVerbs`, decommissioned-artifact cleanup, dropped-skill removal, bash shims. These
+are harness settings, not component features. Decommissioned and dropped removals only
+touch harnez-owned entries and are listed in the end-of-run `removed:` summary (issue 1061
+D2 and review item 4). Dropped-skill removal removes only skills harnez manages that are
+absent from config; user and external skills are never touched.
 
 The issue tracker (`issues`, `find`, `index`) stays in core: it installs nothing into
 harnesses, and the docs and skills that name its commands ship with it.
@@ -318,6 +321,11 @@ Two behaviours, chosen by how harmful a leftover is:
 The removals above happen only in desired state (`--prune` or a `components:` key). A
 scoped run (a plain `--components` flag, §8.5) skips them. The "Remove" list is the
 list of what desired state removes, not what every run removes.
+
+Known limitation (issue 1061, owner-confirmed as experimental and low priority): the jev
+compaction plugin is removed in a scoped run when `jev_compaction_enabled` is false. That
+removal follows the config key, not the selection, so `--components` does not protect it.
+The code is unchanged; a fix would move it under a component or the selection.
 
 Ownership rule: harnez owns a hook or status line when its command is `harnez` or starts
 with `harnez `; for Codex, a hook group whose handlers all run harnez. Nothing else is
@@ -388,7 +396,8 @@ phase's output:
 1. Resolve selection (flag > config > local config > full) and whether it is scoped
    (§8.5); filter config.
 2. Telemetry schema init — only with `telemetry` (today it runs unconditionally).
-3. Decommissioned-artifact cleanup — always, whatever the selection (D2, issue 1061).
+3. Decommissioned-artifact and dropped-skill cleanup — always, whatever the selection
+   (D2, issue 1061). Both record their removals in the end-of-run summary.
 4. `settings.json` — one merged write: always-on settings, hooks of enabled components,
    `statusLine` set or removed. In desired state the `hooks` key is written even when
    empty, so hooks of disabled components are replaced away. A scoped run omits the
