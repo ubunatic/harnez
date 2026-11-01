@@ -20,3 +20,11 @@ Reported by the taia session from horg worker runs (epic horg#6), 2026-11-01. So
 - Reproduce under agy sandbox; find the resolved store path.
 - Open the store read-only (`mode=ro`/`immutable=1`) for read paths, or degrade with a clear message naming the path and sandbox.
 - Test: unwritable store dir still lets `harnez quota` report or fail with an actionable error.
+
+## 4. Resolution
+
+Root cause: `usagestore.OpenReadOnly` opened the WAL-mode database with `mode=ro`. In a read-only data dir SQLite cannot create the `-shm` file, so the first read failed with CANTOPEN (14). `Ping` did not touch the file, so the failure surfaced only at query time.
+
+Fix (`internal/usagestore/store.go`): the open is now verified with a real read (`SELECT count(*) FROM sqlite_master`). On failure the store reopens the same path with `immutable=1`, which reads the main file without WAL or `-shm`. Limitation: WAL frames not yet checkpointed into the main file are invisible in that fallback, so the newest observations may be missing until the writer checkpoints. Writes stay rejected (`query_only`).
+
+Test: `TestOpenReadOnlyReadsWALDatabaseInReadOnlyDir` (skipped as root). Quota-1 `make test-q1` run once after the change.

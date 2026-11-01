@@ -632,3 +632,40 @@ func TestWindowLegacyTokensAndSnakeCasePrecedence(t *testing.T) {
 		t.Fatalf("legacy window: %+v", got)
 	}
 }
+
+// A sandbox (agy/Gemini) may mount the data dir read-only. A WAL database
+// then cannot get its -shm file and SQLite reports CANTOPEN (14) (issue 1078).
+func TestOpenReadOnlyReadsWALDatabaseInReadOnlyDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := filepath.Join(t.TempDir(), "ro")
+	path := filepath.Join(dir, "usage.sqlite")
+	writable, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, q string) error { return writable.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := writable.WriteUsageSummary(ctx, UsageSummaryRecord{Hostname: "host", ObservedAt: time.Now().UTC(), Payload: []byte(`{"agents":[]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writable.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	readonly, err := OpenReadOnly(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readonly.Close()
+	rows, err := readonly.UsageSummaries(ctx)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("read rows=%d err=%v", len(rows), err)
+	}
+}
