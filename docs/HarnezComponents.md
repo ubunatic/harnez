@@ -322,10 +322,12 @@ The removals above happen only in desired state (`--prune` or a `components:` ke
 scoped run (a plain `--components` flag, §8.5) skips them. The "Remove" list is the
 list of what desired state removes, not what every run removes.
 
-Known limitation (issue 1061, owner-confirmed as experimental and low priority): the jev
-compaction plugin is removed in a scoped run when `jev_compaction_enabled` is false. That
-removal follows the config key, not the selection, so `--components` does not protect it.
-The code is unchanged; a fix would move it under a component or the selection.
+Jev compaction plugin (issue 1061, owner decision): while `jev_compaction_enabled` is false,
+a scoped run (a plain `--components` flag) keeps an installed plugin and prints a warning
+that it was detected and not removed. A plain `apply` or `apply --prune` removes it and
+names the removal in the `removed:` summary. With the setting on, a scoped run is unchanged.
+`diff` matches apply: it shows the warning in a scoped run and names the removal otherwise.
+Details in [JevCompaction.md](JevCompaction.md).
 
 Ownership rule: harnez owns a hook or status line when its command is `harnez` or starts
 with `harnez `; for Codex, a hook group whose handlers all run harnez. Nothing else is

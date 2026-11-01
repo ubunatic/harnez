@@ -737,12 +737,24 @@ func ApplyAllVariant(target string, cfg *Config, opts ApplyOptions) error {
 	if err := applySettings(r, target, cfg, selection); err != nil {
 		return err
 	}
-	jevResult, err := applyManagedLocalPlugins(target, cfg.JevCompactionEnabled, true, cfg.Env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] != "")
+	// issue 1061: a scoped run keeps an installed jev plugin while jev is disabled.
+	jevWasInstalled := !cfg.JevCompactionEnabled && jevPluginInstalled(target)
+	jevResult, err := applyManagedLocalPlugins(target, cfg.JevCompactionEnabled, true, managedPluginOptions{
+		preserveFunctionHookFlag: cfg.Env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] != "",
+		keepDisabledJev:          selection.Scoped(),
+	})
 	if err != nil {
 		return fmt.Errorf("managed local plugins: %w", err)
 	}
 	if jevResult.changed {
 		r.changes++
+	}
+	if jevWasInstalled && jevResult.changed && !jevPluginInstalled(target) {
+		fmt.Printf("  removed %s\n", jevPluginRoot(target))
+		r.addRemoval(jevPluginRoot(target), "jev_compaction_enabled is false")
+	}
+	if !cfg.JevCompactionEnabled && selection.Scoped() && jevPluginInstalled(target) {
+		fmt.Println("  " + jevKeptWarning)
 	}
 	printResult("managed", filepath.Join(target, "plugins", "marketplaces", jevMarketplaceName), jevResult)
 
@@ -887,6 +899,16 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 			}
 		}
 	}
+	// issue 1061: mirror applyManagedLocalPlugins. Plain apply and --prune remove an
+	// installed jev plugin while jev is disabled; a scoped run keeps it and warns.
+	if !cfg.JevCompactionEnabled && jevPluginInstalled(target) {
+		if selection.Scoped() {
+			fmt.Println("  " + jevKeptWarning)
+		} else {
+			anyChanged = true
+			fmt.Printf("  would remove %s (jev_compaction_enabled is false)\n", jevPluginRoot(target))
+		}
+	}
 	if !selection.Scoped() && !selection.Has(Usage) {
 		if err := report(diffStatusLineRemovals(cfg)); err != nil {
 			return false, fmt.Errorf("status lines: %w", err)
@@ -991,7 +1013,7 @@ func CleanAll(target string, cfg *Config) error {
 	if _, err := manageGlobalSections(&withoutSections, false); err != nil {
 		return err
 	}
-	if _, err := applyManagedLocalPlugins(target, false, false); err != nil {
+	if _, err := applyManagedLocalPlugins(target, false, false, managedPluginOptions{}); err != nil {
 		return fmt.Errorf("managed local plugins: %w", err)
 	}
 	if err := cleanSettingsJSON(filepath.Join(target, "settings.json")); err != nil {

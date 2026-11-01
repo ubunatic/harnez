@@ -73,7 +73,7 @@ Rejected: keeping the removal and only adding a warning, because the documented 
 **D2, decided:** the always-on writes in §8.3 (`model`, `effortLevel`, `permissions`, `env`, `spinnerVerbs`, decommissioned-artifact cleanup, shims) stay as they are. They are additive and already documented. Whether guards deserve their own component is out of scope here; this ticket only corrects the docs.
 
 - Dropped-skill removal is always on too, whatever the selection. It removes only skills harnez manages and that are absent from config, never user or external skills. Its removals, like decommissioned ones, appear in the end-of-run `removed:` summary with their reason (review item 4, 2026-11-01).
-- Known limitation, not changed by this ticket: the jev compaction plugin is removed in a scoped run when `jev_compaction_enabled` is false. That removal follows config, not the selection. The owner confirmed the feature is experimental and low priority (2026-11-01), so its code stays as it is. Recorded in `docs/HarnezComponents.md` §8.4.
+- Jev compaction plugin (owner decision, 2026-11-01, replaces the earlier known-limitation note): with `jev_compaction_enabled` false, a scoped run keeps an installed plugin and prints a warning that it was detected and not removed; plain apply and `--prune` remove it and report the removal; with the setting on, a scoped run is unchanged; `diff` matches apply. Tests: `cmd/harnez/jev_scope_test.go`. Recorded in `docs/HarnezComponents.md` §8.4 and `docs/JevCompaction.md`.
 
 ## Milestones
 
