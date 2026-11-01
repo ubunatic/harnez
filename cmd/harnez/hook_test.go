@@ -556,6 +556,23 @@ func createTestFile(t *testing.T, dir, name string, lines int) string {
 	return path
 }
 
+// assertReadDenyGuidance checks that a read-guard deny message names both
+// allowed options: a harnez read -L range, and a native Read with offset and
+// limit under the threshold (issue 1079 M1).
+func assertReadDenyGuidance(t *testing.T, reason string) {
+	t.Helper()
+	for _, want := range []string{
+		"violates Reading & Context Discipline",
+		"harnez read -L <range>",
+		"native Read with both offset and limit spanning fewer than 100 lines",
+		"offset but no limit is not bounded",
+	} {
+		if !strings.Contains(reason, want) {
+			t.Errorf("deny reason missing %q: %q", want, reason)
+		}
+	}
+}
+
 func TestRunAgyToolHook_ReadingDiscipline(t *testing.T) {
 	enforceRead := true
 	tempDir := t.TempDir()
@@ -632,6 +649,38 @@ func TestRunAgyToolHook_ReadingDiscipline(t *testing.T) {
 			wantDecision: "allow",
 		},
 		{
+			name: "large file offset without limit deny (open-ended)",
+			toolCallJSON: fmt.Sprintf(`{
+				"toolCall": {
+					"name": "view_file",
+					"args": {"AbsolutePath": %q, "StartLine": 50}
+				}
+			}`, largeFile),
+			wantDecision: "deny",
+			wantInReason: "violates Reading & Context Discipline",
+		},
+		{
+			name: "large file range 99 lines allow",
+			toolCallJSON: fmt.Sprintf(`{
+				"toolCall": {
+					"name": "view_file",
+					"args": {"AbsolutePath": %q, "StartLine": 1, "EndLine": 99}
+				}
+			}`, largeFile),
+			wantDecision: "allow",
+		},
+		{
+			name: "large file range 100 lines deny",
+			toolCallJSON: fmt.Sprintf(`{
+				"toolCall": {
+					"name": "view_file",
+					"args": {"AbsolutePath": %q, "StartLine": 1, "EndLine": 100}
+				}
+			}`, largeFile),
+			wantDecision: "deny",
+			wantInReason: "violates Reading & Context Discipline",
+		},
+		{
 			name: "non-reading tool allow",
 			toolCallJSON: `{
 				"toolCall": {
@@ -676,6 +725,10 @@ func TestRunAgyToolHook_ReadingDiscipline(t *testing.T) {
 					t.Errorf("reason = %q, want containing %q", reason, tc.wantInReason)
 				}
 			}
+			if tc.wantDecision == "deny" {
+				reason, _ := resp["reason"].(string)
+				assertReadDenyGuidance(t, reason)
+			}
 			if recorded.ToolName == "" {
 				t.Errorf("expected telemetry insert to be called, got empty ToolName")
 			}
@@ -688,6 +741,8 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 	tempDir := t.TempDir()
 	smallFile := createTestFile(t, tempDir, "small.txt", 40)
 	largeFile := createTestFile(t, tempDir, "large.txt", 160)
+	ninetyNineFile := createTestFile(t, tempDir, "ninety-nine.txt", 99)
+	hundredFile := createTestFile(t, tempDir, "hundred.txt", 100)
 
 	tests := []struct {
 		name         string
@@ -730,6 +785,63 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 				"tool_name": "View",
 				"tool_input": {"file_path": %q, "view_range": [1, 120]}
 			}`, largeFile),
+			wantDecision: "deny",
+			wantInSystem: "violates Reading & Context Discipline",
+		},
+		{
+			name: "Read small range on large file allow",
+			payloadJSON: fmt.Sprintf(`{
+				"hookEventName": "PreToolUse",
+				"tool_name": "Read",
+				"tool_input": {"file_path": %q, "offset": 10, "limit": 20}
+			}`, largeFile),
+			wantDecision: "",
+		},
+		{
+			name: "Read offset without limit deny (open-ended)",
+			payloadJSON: fmt.Sprintf(`{
+				"hookEventName": "PreToolUse",
+				"tool_name": "Read",
+				"tool_input": {"file_path": %q, "offset": 50}
+			}`, largeFile),
+			wantDecision: "deny",
+			wantInSystem: "violates Reading & Context Discipline",
+		},
+		{
+			name: "Read range 99 lines on large file allow",
+			payloadJSON: fmt.Sprintf(`{
+				"hookEventName": "PreToolUse",
+				"tool_name": "Read",
+				"tool_input": {"file_path": %q, "offset": 1, "limit": 99}
+			}`, largeFile),
+			wantDecision: "",
+		},
+		{
+			name: "Read range 100 lines on large file deny",
+			payloadJSON: fmt.Sprintf(`{
+				"hookEventName": "PreToolUse",
+				"tool_name": "Read",
+				"tool_input": {"file_path": %q, "offset": 1, "limit": 100}
+			}`, largeFile),
+			wantDecision: "deny",
+			wantInSystem: "violates Reading & Context Discipline",
+		},
+		{
+			name: "Read whole 99-line file allow",
+			payloadJSON: fmt.Sprintf(`{
+				"hookEventName": "PreToolUse",
+				"tool_name": "Read",
+				"tool_input": {"file_path": %q}
+			}`, ninetyNineFile),
+			wantDecision: "",
+		},
+		{
+			name: "Read whole 100-line file deny",
+			payloadJSON: fmt.Sprintf(`{
+				"hookEventName": "PreToolUse",
+				"tool_name": "Read",
+				"tool_input": {"file_path": %q}
+			}`, hundredFile),
 			wantDecision: "deny",
 			wantInSystem: "violates Reading & Context Discipline",
 		},
@@ -794,6 +906,9 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 				if !strings.Contains(resp.SystemMessage, tc.wantInSystem) {
 					t.Errorf("systemMessage = %q, want containing %q", resp.SystemMessage, tc.wantInSystem)
 				}
+			}
+			if tc.wantDecision == "deny" {
+				assertReadDenyGuidance(t, resp.HookSpecificOutput.PermissionDecisionReason)
 			}
 		})
 	}

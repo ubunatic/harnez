@@ -450,7 +450,7 @@ func agyBashShimActive(home, path string) bool {
 
 // readingDisciplineDenyReason is the structured guidance message returned when an agent
 // attempts native IDE file viewing on large files without using harnez read (issue 405).
-const readingDisciplineDenyReason = "harnez guard: native view_file on large files (>100 lines) violates Reading & Context Discipline. Execute 'harnez read -L <range> -n <file>' for line-bounded editing anchors ('harnez read -I' is paused, issue 543)."
+const readingDisciplineDenyReason = "harnez guard: this native file read covers 100 or more lines and violates Reading & Context Discipline. Choose one: run 'harnez read -L <range> -n <file>' for line-bounded editing anchors, or use native Read with both offset and limit spanning fewer than 100 lines. A read with offset but no limit is not bounded. ('harnez read -I' is paused, issue 543.)"
 
 // isReadTool reports whether toolName is a client-native file reading tool that
 // should be intercepted under Reading & Context Discipline.
@@ -788,11 +788,6 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 			info, err := os.Stat(path)
 			if err != nil || !info.Mode().IsRegular() {
 				continue
-			}
-			if strings.EqualFold(payload.ToolName, "read") {
-				if lines, err := countFileLines(path); err == nil && lines > 100 {
-					deny = true
-				}
 			}
 			if repeatedRead(stateDir, payload.SessionID, path) {
 				deny = true
