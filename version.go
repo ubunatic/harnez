@@ -1,6 +1,6 @@
 package harnez
 
-var Version = "0.2.12"
+var Version = "0.3.0"
 
 // CommitCount is set by release and development build commands. An empty value
 // identifies a build without comparable commit metadata.
