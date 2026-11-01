@@ -23,5 +23,12 @@ func GenerateSessionName(taken func(string) bool) (string, error) {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("all memorable session names are in use")
+
+	for suffix := 1; ; suffix++ {
+		i := int(start.Int64()) % total
+		name := fmt.Sprintf("%s-%s-%d", sessionAdjectives[i/len(sessionAnimals)], sessionAnimals[i%len(sessionAnimals)], suffix)
+		if taken == nil || !taken(name) {
+			return name, nil
+		}
+	}
 }

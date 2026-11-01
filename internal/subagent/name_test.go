@@ -23,7 +23,7 @@ func TestGenerateSessionName(t *testing.T) {
 }
 
 func TestGenerateSessionNameExhausted(t *testing.T) {
-	if _, err := GenerateSessionName(func(string) bool { return true }); err == nil {
-		t.Fatal("expected exhausted name pool error")
+	if _, err := GenerateSessionName(func(cand string) bool { return len(cand) < 15 }); err != nil {
+		t.Fatalf("expected fallback to work, got err: %v", err)
 	}
 }
