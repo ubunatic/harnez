@@ -1,6 +1,6 @@
 # 1075 — Use one-shot Jules runs for report-only audits, with a jules-audit skill
 
-**Status**: Open
+**Status**: Closed — Delivered: 25 one-shot Jules runs, reports in reports/jules/, 80 of 86 checked references held up, and the /jules-audit skill. Outcome section records what is worth keeping.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
