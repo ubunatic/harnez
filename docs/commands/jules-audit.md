@@ -36,9 +36,9 @@ HTO=0 harnez agent start --model jules --role developer --name jules-audit-<n> -
 $(cat "$P")"
 ```
 
-The job's exit is your signal, so do not poll in a loop. A run usually takes 10 to 25 minutes. If a job's wait runs out while the session still runs, continue with `harnez agent resume --name jules-audit-<n> wait`.
+The job's exit is your signal, so do not poll in a loop. A run took between 3 and 40 minutes in the first 25 runs. Ten at once all ran. If a job's wait runs out while the session still runs, continue with `harnez agent resume --name jules-audit-<n> wait`.
 
-The job output names the GitHub PR. A run that finished without a PR, or a session that is waiting for an answer, counts as a failed run. Record it and do not reply to it.
+The job output names the GitHub PR. A run that finished without a PR, or a session that is waiting for an answer, counts as a failed run. Record it and do not reply to it. This happened to 2 of the first 25 runs, one of them despite the prompt forbidding it. Its last message may still hold usable findings: treat them as leads and check them the same way.
 
 ---
 
@@ -79,7 +79,7 @@ Then collect and clean up:
 Use this text as is. `<number>` stays literal, because the first line of the prompt names the ticket.
 
 ```text
-This is a one-shot, read-only audit. Nobody will answer questions and there will be no follow-up, so finish in a single pass and never wait for feedback.
+This is a one-shot, read-only audit. Nobody will answer questions and there will be no follow-up, so finish in a single pass and never wait for feedback. Do not ask whether your plan is right, and do not stop at a plan: write the file. A run that ends with a question loses its report.
 
 Read the ticket named above (`issues/<number>-*.md`), then check it against the current code on this branch. Ticket text may be weeks old, so trust the code over the ticket.
 

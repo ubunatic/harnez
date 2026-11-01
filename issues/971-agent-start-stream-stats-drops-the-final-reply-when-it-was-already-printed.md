@@ -20,6 +20,7 @@ agy:argon:low advisor no `[reply` line appeared at all. The host had to read `re
   "already shown above" note, so any consumer that keys on the header loses the reply.
 - agy (argon) turns printed no `[reply` header at all in stats mode.
 - `harnez agent status --name <s>` shows no reply text, so there is no CLI way to re-read the last reply.
+  Correction (2026-11-01, checked from the Jules audit in `reports/jules/971.md`): `agent status --reply` now exists (`cmd/harnez/agent_manage_cmds.go:175`), so step 3 below is done.
 
 ## 3. Implementation & Verification Plan
 1. In stats mode always print the full final reply after the `[reply ...]` header, never the "already shown"

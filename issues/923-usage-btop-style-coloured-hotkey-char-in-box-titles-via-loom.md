@@ -17,6 +17,7 @@ and report. Circuit breaker: on a loop or no progress, clear the goal and write 
 
 - Owner request (2026-10-25), reference: btop top bar `¹cpu`, `menu`, `preset` with red key letters.
 - Blocked on loom 385 (Box title cannot style a single char today, `loom/box.go:227-238`).
+- Correction (2026-11-01, checked from the Jules audit in `reports/jules/923.md`): the outer view now uses loom (`UsageLoomWidget`, `internal/usage/loom.go:16`), but boxes are still strings from `renderWBox`.
 - The watch view does not draw through loom yet (own `renderWBox`, `internal/usage/watch_layout.go:84`), so
   this either waits for the migration (see the loom-usage note in this session, park as its own ticket) or
   adds the colour in `renderWBox` and moves later. Decide when picked up.
