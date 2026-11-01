@@ -24,3 +24,14 @@ The owner has Jules connected to GitHub repositories and wants Harnez to send wo
 ## 3. Notes
 
 The API is alpha. Its documentation describes connected GitHub sources, API-key authentication, session tracking, and `AUTO_CREATE_PR`; verify current behavior before implementation. Check live code and recent commits before starting, and resolve any provider-interface or GitHub-to-Codeberg workflow uncertainties against the current project.
+
+**Shutdown (checked 2026-11-01):** [Google's changelog](https://jules.google/docs/changelog/2026-10-29) says Jules winds down on 2026-12-31. Sessions can be finished until 2026-11-11, then Jules is read-only until the end of the year. A real workflow can only be validated until 2026-11-11. The owner chose to keep this ticket open anyway.
+
+**API findings (2026-11-01, one research pass, not exercised):**
+
+- Base URL `https://jules.googleapis.com/v1alpha`, header `X-Goog-Api-Key`, key created at `https://jules.google.com/settings#api`.
+- `POST /v1alpha/sessions` takes `prompt`, `sourceContext` (`source`, `githubRepoContext.startingBranch`), `title`, `automationMode` (`AUTO_CREATE_PR`) and `requirePlanApproval`. Sessions also have `:sendMessage` and `:approvePlan`.
+- Session `state`: `QUEUED`, `PLANNING`, `IN_PROGRESS`, `AWAITING_PLAN_APPROVAL`, `AWAITING_USER_FEEDBACK`, `PAUSED`, `FAILED`, `COMPLETED`. The docs do not describe `PAUSED`.
+- The PR link is at `outputs[].pullRequest.url` on the session. No webhooks or streaming were found, so tracking means polling.
+- No model or effort field was found, which does not fit the `provider:model:effort` spec form directly.
+- Plan limits per rolling 24 hours: 15 tasks and 3 concurrent, Pro 100 and 15, Ultra 300 and 60. Whether API sessions count against them is unconfirmed.
