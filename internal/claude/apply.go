@@ -348,6 +348,20 @@ func skillDisabled(skill Command, selection Set, disableRateFeedback bool) bool 
 	return false
 }
 
+// skillRemovalReason says why skillDisabled removes skill, for apply and diff
+// reports (issue 1061 M2).
+func skillRemovalReason(skill Command, selection Set, disableRateFeedback bool) string {
+	if skill.RateFeedback && disableRateFeedback {
+		return "rate feedback disabled"
+	}
+	for _, req := range skill.Requires {
+		if !selection.HasComponent(req) {
+			return "requires " + req + " not selected"
+		}
+	}
+	return "disabled"
+}
+
 func skillTargets(cfg *Config) []string {
 	var targets []string
 
@@ -766,6 +780,9 @@ func ApplyAllVariant(target string, cfg *Config, opts ApplyOptions) error {
 		}
 	}
 
+	if len(r.removals) > 0 {
+		r.addStat("removed", strings.Join(r.removals, "; "))
+	}
 	if r.changes == 0 {
 		fmt.Println("No changes.")
 	} else if r.changes == 1 {
@@ -816,6 +833,7 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 			}
 		} else if installed {
 			anyChanged = true
+			fmt.Printf("  would remove harnez hooks from %s (telemetry not selected)\n", hooksPath)
 		}
 	}
 	if cfg.AgyHooksTarget != "" {
@@ -829,8 +847,12 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 				}
 			} else if installed {
 				anyChanged = true
+				fmt.Printf("  would remove harnez hooks from %s (telemetry not selected)\n", hooksPath)
 			}
 		}
+	}
+	if err := report(diffDistillAdapters(cfg, selection)); err != nil {
+		return false, fmt.Errorf("distill adapters: %w", err)
 	}
 
 	if shimPath := BashShimPath(); shimPath != "" {

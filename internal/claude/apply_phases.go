@@ -3,6 +3,7 @@ package claude
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,8 +16,9 @@ import (
 // applyReport accumulates the change count and the per-phase summary lines
 // that ApplyAllVariant prints at the end of an apply run.
 type applyReport struct {
-	changes int
-	stats   []applyStat
+	changes  int
+	stats    []applyStat
+	removals []string
 }
 
 type applyStat struct{ label, detail string }
@@ -26,6 +28,25 @@ func (r *applyReport) addStat(label, detail string) {
 	if detail != "" {
 		r.stats = append(r.stats, applyStat{label, detail})
 	}
+}
+
+// addRemoval records one removal and its reason for the end-of-run summary
+// (issue 1061 M2).
+func (r *applyReport) addRemoval(what, reason string) {
+	r.removals = append(r.removals, what+" ("+reason+")")
+}
+
+// reportHookRemoval prints and records the removal of harnez hooks from a
+// config file. Codex and Antigravity remove the file only when it ends up
+// empty; otherwise apply just edited it, and the message says so.
+func (r *applyReport) reportHookRemoval(path, reason string) {
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		fmt.Printf("  removed %s\n", path)
+		r.addRemoval(path, reason)
+		return
+	}
+	fmt.Printf("  removed harnez hooks from %s\n", path)
+	r.addRemoval(path+" harnez hooks", reason)
 }
 
 // applyCommands installs configured slash commands into every command target.
@@ -91,6 +112,7 @@ func applySkills(r *applyReport, cfg *Config, selection Set, disableRateFeedback
 						}
 						r.changes++
 						fmt.Printf("  removed %s\n", path)
+						r.addRemoval(path, skillRemovalReason(skill, selection, disableRateFeedback))
 						_ = os.Remove(skillDir) // best-effort: drop now-empty dir
 					} else if !os.IsNotExist(err) {
 						return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
@@ -246,7 +268,7 @@ func applyCodexHooks(r *applyReport, cfg *Config, selection Set) error {
 			}
 			if changed {
 				r.changes++
-				fmt.Printf("  removed %s\n", hooksPath)
+				r.reportHookRemoval(hooksPath, "telemetry not selected")
 			}
 		}
 	}
@@ -278,7 +300,7 @@ func applyAgyHooks(r *applyReport, cfg *Config, selection Set) error {
 				}
 				if changed {
 					r.changes++
-					fmt.Printf("  removed %s\n", hooksPath)
+					r.reportHookRemoval(hooksPath, "telemetry not selected")
 				}
 			}
 		}
@@ -329,6 +351,7 @@ func applyDistillAdapters(r *applyReport, cfg *Config, selection Set) error {
 					}
 					r.changes++
 					fmt.Printf("  removed %s\n", adapter.path)
+					r.addRemoval(adapter.path, "telemetry not selected")
 				}
 			}
 		}

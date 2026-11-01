@@ -63,6 +63,42 @@ func reportKeptAdapter(path string) {
 	fmt.Printf("  kept %s: not harnez-managed\n", path)
 }
 
+// diffDistillAdapters names what apply would do to each adapter path and
+// reports whether it would change anything. A kept user file is named but is
+// not drift, because apply does not touch it.
+func diffDistillAdapters(cfg *Config, selection Set) (bool, error) {
+	changed := false
+	for _, adapter := range distillAdapters(cfg) {
+		owner, err := inspectDistillAdapter(adapter.path)
+		if err != nil {
+			return false, fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+		}
+		switch {
+		case owner == adapterKept:
+			reportKeptAdapter(adapter.path)
+		case selection.HasComponent("telemetry"):
+			switch owner {
+			case adapterAbsent:
+				changed = true
+				fmt.Printf("  would write %s\n", adapter.path)
+			case adapterManaged:
+				data, err := os.ReadFile(adapter.path)
+				if err != nil {
+					return false, fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+				}
+				if string(data) != adapter.content {
+					changed = true
+					fmt.Printf("  would update %s\n", adapter.path)
+				}
+			}
+		case owner == adapterManaged:
+			changed = true
+			fmt.Printf("  would remove %s (telemetry not selected)\n", adapter.path)
+		}
+	}
+	return changed, nil
+}
+
 const piDistillAdapter = `// Managed by harnez. Keep rewrite policy in 'harnez distill hook'.
 import { spawnSync } from "node:child_process";
 import { appendFileSync } from "node:fs";

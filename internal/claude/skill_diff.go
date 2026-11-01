@@ -46,6 +46,7 @@ func diffSkills(cfg *Config, selection Set) (bool, error) {
 					path := filepath.Join(skillDir, "SKILL.md")
 					if _, err := os.Stat(path); err == nil {
 						anyChanged = true
+						fmt.Printf("  would remove %s (%s)\n", path, skillRemovalReason(skill, selection, disableRateFeedback))
 					} else if !os.IsNotExist(err) {
 						return false, fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
 					}
