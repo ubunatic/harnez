@@ -63,9 +63,9 @@ Harnez bugs from the same report are in 1089.
 | Kind | Session | Jules ID | PR | State |
 | --- | --- | --- | --- | --- |
 | Implement 1087 | `jules-implement-1087` | 18446295051615578068 | none | Failed: stopped to ask a question |
-| Implement 1087, retry | `jules-implement-1087b` | see `harnez agent status` | | Running, findings not captured |
-| Experiment | `jules-experiment-name-pool` | 4937665632004048219 | | Running, findings not captured |
-| Ideas | `jules-ideas-integration` | 14043785152502570607 | GitHub 61 | Report read, findings not captured |
+| Implement 1087, retry | `jules-implement-1087b` | 5832791262383075829 | | Pending, see 1090 |
+| Experiment | `jules-experiment-name-pool` | 4937665632004048219 | GitHub 62 | Findings captured in 1086; tests in `internal/subagent` matching `Name` pass at the PR head |
+| Ideas | `jules-ideas-integration` | 14043785152502570607 | GitHub 61 | Findings captured in 1091; 3 of 5 proposals dropped: `git -C ""` works, sequential remotes are low value, transient poll errors counting is existing behaviour |
 
 Decision (2026-11-01): pushed run table in the ticket. `harnez agent list` and open PRs show what is running, but neither shows whether findings were captured, and the agent store exists only on this machine.
 

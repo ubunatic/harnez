@@ -26,3 +26,7 @@ Passing `--name` worked. `harnez agent list` there showed no sessions and "1 mor
 - Automatic naming falls back, for example to a numeric suffix, instead of failing.
 - Old finished sessions stop holding names. Check first what holds them, and whether resuming a finished session by name must keep working.
 - The error or `list` output shows what holds the names, if a failure remains possible.
+
+## Jules experiment findings (GitHub PR 62, 2026-11-01)
+
+A numeric suffix fallback in `GenerateSessionName` is a small change, and tests matching `Name` in `internal/subagent` pass at the PR head. Do not copy it as is: its test only marks names under 15 characters as taken, so it may never reach the fallback, and the loop never ends when every name counts as taken. It also leaves finished sessions holding names. The store is read from `.json` files, per the report; not independently checked.
