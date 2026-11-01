@@ -1,6 +1,6 @@
 # 1084 — init-siblings rewrites every sibling repo without a guard
 
-**Status**: Open
+**Status**: Closed — init-siblings needs CONFIRM=1, clean tree and main; init -y skips version.yaml in untagged repos
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
