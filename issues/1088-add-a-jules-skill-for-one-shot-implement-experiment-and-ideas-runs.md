@@ -41,6 +41,22 @@ Decide in this ticket whether `/jules-audit` stays as an alias or is replaced, a
 - Lean sprint without a Searcher: the host already read the skill and all its callers (`config.yaml`, `internal/claude/claudeskills_test.go`).
 - M1 is the skill, pushed to `main`. M2 is one real run of each new kind, started from `main`, because a start on another branch skips the GitHub sync.
 
+## Evidence from uman (peer report, 2026-11-01, four runs at `0506459`)
+
+- Implement runs took 24 and about 39 minutes and gave usable code; report-only runs took 7 and 8 minutes.
+- Ideas: 4 of 5 proposals restated `CLAUDE.md`, and the fifth understated a real bug. Prompts should exclude known gaps, and a report's severity needs checking.
+- Experiment: the run skipped an approach the prompt asked for, so the prompt needs a checklist the report must answer.
+- A start that hits its wait limit exits 0, so exit 0 does not mean the run finished.
+
+Harnez bugs from the same report are in 1089.
+
+## Skill changes owed before closing
+
+- Implement prompt: pick the smallest option yourself where the ticket leaves a choice. The first run on 1087 stopped to ask.
+- Ideas prompt: exclude gaps already listed in `CLAUDE.md` and open tickets.
+- Experiment prompt: a checklist of requested approaches that the report must answer.
+- Section 3: exit 0 can mean the wait ran out, so read the state in the output.
+
 ## Done when
 
 The skill is installed by `harnez init`, and one real run of each new kind is recorded here with what was kept.
