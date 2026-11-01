@@ -1,6 +1,6 @@
 # 1079 — harnez read guard: allow native Read with offset/limit; harnez read -L range failure from haiku worker
 
-**Status**: Open
+**Status**: Closed — Ranged Claude Read under 100 lines now passes (a second unconditional >100-line check removed), deny text names both options, threshold and text in spec/reading_discipline.yaml; repeated-read message wording left as is
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Enhancement
