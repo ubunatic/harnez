@@ -119,4 +119,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1089 | [1089-jules-start-refused-run-keeps-its-name-vague-refusal-unexplained-compare-failure.md](1089-jules-start-refused-run-keeps-its-name-vague-refusal-unexplained-compare-failure.md) | Jules start: refused run keeps its name, vague refusal, unexplained compare failure | Open |
 | 1090 | [1090-pick-up-the-pending-jules-implement-run-on-1087-and-finish-1088.md](1090-pick-up-the-pending-jules-implement-run-on-1087-and-finish-1088.md) | Pick up the pending Jules implement run on 1087 and finish 1088 | Open |
 | 1091 | [1091-jules-driver-sync-fetch-can-miss-the-compared-commit-and-cut-off-responses-give-a-vague-error.md](1091-jules-driver-sync-fetch-can-miss-the-compared-commit-and-cut-off-responses-give-a-vague-error.md) | Jules driver: sync fetch can miss the compared commit, and cut-off responses give a vague error | Open |
+| 1092 | [1092-resume-a-jules-session-started-on-another-machine.md](1092-resume-a-jules-session-started-on-another-machine.md) | Resume a Jules session started on another machine | Open |
 <!-- harnez:end issues-active-index -->
