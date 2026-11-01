@@ -1,6 +1,6 @@
 # 1053 — Git.md: add a breaking-change commit example
 
-**Status**: Open
+**Status**: Closed — Already done: the example is present at docs/lang/Git.md:50-55. Found by the Jules audit, reports/jules/1053.md (1075).
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Docs
