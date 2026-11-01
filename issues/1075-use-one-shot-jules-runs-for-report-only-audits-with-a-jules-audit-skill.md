@@ -26,6 +26,15 @@ Audits of tickets 923, 950, 966, 985 and 1031, from GitHub `main` at `c7429fb7`,
 
 Passes when at least 4 of the 5 reports add only that file and at least 80% of the checked `path:line` references hold up.
 
+**Result: passed.** All 5 runs completed unattended in 10 to 16 minutes and each added only its report (GitHub PRs 38 to 42). All 11 `path:line` references I checked hold up at `c7429fb7`.
+
+Weaknesses, which the prompt for later batches addresses:
+
+- 950 gave no `path:line` reference, and 1031 and 966 only one each.
+- 1031 searched only for lowercase `autocompact`, so it missed the `auto_compact` settings in `internal/subagent/agentspec.go`.
+- 923 cites line 53 of a file while listing a command that read only its first 30 lines, so listed commands do not prove the evidence.
+- 950 names `docs/GoRelease.md` and `docs/Go.md`, which are generated copies. The sources are in `docs/practices/` and `docs/lang/`.
+
 ## Steps after a passing pilot
 
 1. Run three more audit batches of 5 tickets each.
