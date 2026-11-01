@@ -179,6 +179,7 @@ debloat:
     standup: user-invocable-only
     story: user-invocable-only
     trial: user-invocable-only
+    jules-audit: user-invocable-only
     retro: user-invocable-only
     harnez-status: user-invocable-only
     harnez-selftest: user-invocable-only
@@ -501,6 +502,11 @@ skills:
     license: AGPL-3.0-or-later
     description: "Run an objective 10-5 capability audit over recent work: 10 things the product can do now, and 5 things it cannot do yet"
     file: docs/commands/trial.md
+
+  - name: jules-audit
+    license: AGPL-3.0-or-later
+    description: "Audit tickets against the code with one-shot, report-only Google Jules runs, then check each report's evidence. Only on explicit /jules-audit."
+    file: docs/commands/jules-audit.md
 
   - name: retro
     license: AGPL-3.0-or-later
