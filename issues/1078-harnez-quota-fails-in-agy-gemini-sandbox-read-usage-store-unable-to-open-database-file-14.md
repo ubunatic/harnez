@@ -1,6 +1,6 @@
 # 1078 — harnez quota fails in agy (Gemini) sandbox: read usage store unable to open database file (14)
 
-**Status**: Open
+**Status**: Closed — Fixed in 3edbe6bb: OpenReadOnly falls back to immutable=1 when the WAL -shm cannot be created
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
