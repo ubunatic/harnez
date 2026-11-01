@@ -114,4 +114,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1081 | [1081-expose-worker-s-own-session-name-and-pid-in-env-so-agents-recognise-their-own-claude-p-process.md](1081-expose-worker-s-own-session-name-and-pid-in-env-so-agents-recognise-their-own-claude-p-process.md) | Expose worker's own session name and pid in env so agents recognise their own claude -p process | Open |
 | 1082 | [1082-release-push-fails-when-a-forge-push-mirror-updates-another-remote-first.md](1082-release-push-fails-when-a-forge-push-mirror-updates-another-remote-first.md) | release: push fails when a forge push mirror updates another remote first | Open |
 | 1084 | [1084-init-siblings-rewrites-every-sibling-repo-without-a-guard.md](1084-init-siblings-rewrites-every-sibling-repo-without-a-guard.md) | init-siblings rewrites every sibling repo without a guard | Open |
+| 1085 | [1085-decide-skill-session-scoped-autonomy-for-the-orchestrating-agent.md](1085-decide-skill-session-scoped-autonomy-for-the-orchestrating-agent.md) | decide skill: session-scoped autonomy for the orchestrating agent | Open |
 <!-- harnez:end issues-active-index -->
