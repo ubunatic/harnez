@@ -1,6 +1,6 @@
 # 1017 — `issues rebase --dry-run` shows the collision plan and leaves a valid index
 
-**Status**: Open
+**Status**: Closed — Fixed: rebase handles numbers of any length, dry run lists collisions and references, real run repairs through the real merge driver and lints; covered by unit and e2e tests.
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
