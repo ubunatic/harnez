@@ -51,6 +51,12 @@ The job's exit is your signal, so do not poll in a loop. Exit 0 can also mean th
 
 The job output names the GitHub PR. A run that finished without a PR, or a session that is waiting for an answer, counts as a failed run. Record it and do not reply to it. This happened to 2 of the first 25 runs, one of them despite the prompt forbidding it. Its last message may still hold usable findings: treat them as leads and check them the same way.
 
+### Run tracking
+
+Before or right after starting a batch, record each run in a `## Jules runs` table (columns: kind, session name, Jules ID, PR, state) in the target ticket, or for runs with no ticket in a tracking issue filed through `/issue`. With `issues.tracker: none`, keep the table where `.harnez/rules/Index.md` says local tracking goes. Commit it through the repo's normal route. Update a row when its findings are captured (Findings capture); the batch is done when no row is pending.
+To catch up in a new session, read that table, run `harnez agent list --all-sessions --dead` and `gh pr list --state open`, and use `harnez agent resume --name <session> wait` for runs still going; that sends Jules no message.
+Why: the agent store exists only on this machine, and neither it nor the PRs show whether findings were captured.
+
 ---
 
 ## 4. Check Each Report
