@@ -1,6 +1,6 @@
 # 1083 — Triage active backlog from 104 tickets down to the 30-ticket cap
 
-**Status**: Open
+**Status**: Backlog — for later: P3, the active cap triage is not urgent
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
