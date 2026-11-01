@@ -111,4 +111,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1073 | [1073-jules-setup-script-installs-harnez-loom-and-the-tools-for-working-the-harnez-way.md](1073-jules-setup-script-installs-harnez-loom-and-the-tools-for-working-the-harnez-way.md) | Jules setup script installs harnez, loom and the tools for working the harnez way | Open |
 | 1074 | [1074-sync-main-to-github-with-a-codeberg-ci-job-without-force-or-pruning.md](1074-sync-main-to-github-with-a-codeberg-ci-job-without-force-or-pruning.md) | Sync main to GitHub with a Codeberg CI job, without force or pruning | Open |
 | 1076 | [1076-agent-start-context-mode-is-silently-ignored-for-claude-codex-and-agy.md](1076-agent-start-context-mode-is-silently-ignored-for-claude-codex-and-agy.md) | agent start --context-mode is silently ignored for Claude, Codex and AGY | Open |
+| 1077 | [1077-init-go-summary-drops-cobra-quota-1-merge-duplicates-enforced-test-target.md](1077-init-go-summary-drops-cobra-quota-1-merge-duplicates-enforced-test-target.md) | init: Go summary drops Cobra; Quota-1 merge duplicates Enforced Test Target | Open |
 <!-- harnez:end issues-active-index -->
