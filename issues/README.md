@@ -121,4 +121,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1091 | [1091-jules-driver-sync-fetch-can-miss-the-compared-commit-and-cut-off-responses-give-a-vague-error.md](1091-jules-driver-sync-fetch-can-miss-the-compared-commit-and-cut-off-responses-give-a-vague-error.md) | Jules driver: sync fetch can miss the compared commit, and cut-off responses give a vague error | Open |
 | 1093 | [1093-failed-jules-start-leaves-a-session-record-that-blocks-the-retry-name.md](1093-failed-jules-start-leaves-a-session-record-that-blocks-the-retry-name.md) | Failed Jules start leaves a session record that blocks the retry name | Open |
 | 1094 | [1094-research-autoswarm-hkuds-and-absorb-useful-ideas-into-harnez.md](1094-research-autoswarm-hkuds-and-absorb-useful-ideas-into-harnez.md) | Research AutoSwarm (HKUDS) and absorb useful ideas into harnez | Open |
+| 1095 | [1095-analyze-t3-code-t3-codes-and-absorb-useful-ideas-into-harnez.md](1095-analyze-t3-code-t3-codes-and-absorb-useful-ideas-into-harnez.md) | Analyze T3 Code (t3.codes) and absorb useful ideas into harnez | Open |
 <!-- harnez:end issues-active-index -->
