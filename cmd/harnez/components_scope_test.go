@@ -157,3 +157,23 @@ func TestApplyCLI_PruneRemovesStatusLinesWhenUsageUnselected(t *testing.T) {
 		t.Error("desired-state apply left the codex status items installed")
 	}
 }
+
+// TestApplyCLI_RepeatSelectionReportsNoChanges covers issue 1061 review item 2:
+// once a selection has been applied, repeating it through the CLI reports
+// "No changes.", for a full apply, a scoped flag and a --prune run.
+func TestApplyCLI_RepeatSelectionReportsNoChanges(t *testing.T) {
+	target, configPath, run := scopeCLISetup(t)
+	base := []string{"apply", "--config", configPath, "--target", target}
+	for _, sel := range [][]string{
+		nil,
+		{"--components", "docs-only"},
+		{"--components", "docs-only", "--prune"},
+	} {
+		args := append(append([]string{}, base...), sel...)
+		run(args...) // the first run of a selection may change things; its output is not asserted
+		out := run(args...)
+		if !strings.Contains(out, "No changes.") {
+			t.Errorf("repeat of apply %v: want a 'No changes.' line, got:\n%s", sel, out)
+		}
+	}
+}

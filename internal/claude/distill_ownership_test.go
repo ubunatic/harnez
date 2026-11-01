@@ -119,6 +119,51 @@ func TestDistillAdapterSymlinkKept(t *testing.T) {
 	}
 }
 
+// A symlink whose target carries the harnez header is still a symlink: apply
+// must not classify it as managed, so it never writes through it and never
+// removes it (issue 1061 review item 3; the regular-file guard in
+// inspectDistillAdapter is what this pins).
+func TestDistillAdapterSymlinkToManagedHeaderKept(t *testing.T) {
+	target, cfg, piPath, _ := adapterOwnershipSetup(t)
+	elsewhere := filepath.Join(t.TempDir(), "elsewhere.ts")
+	managed := distillAdapterHeader + "\n// harnez content behind a symlink\n"
+	writeAdapterTestFile(t, elsewhere, managed)
+	if err := os.MkdirAll(filepath.Dir(piPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, piPath); err != nil {
+		t.Fatal(err)
+	}
+
+	if owner, err := inspectDistillAdapter(piPath); err != nil || owner != adapterKept {
+		t.Fatalf("symlink to a managed-header file: owner=%v err=%v, want adapterKept", owner, err)
+	}
+	if _, err := CaptureTestStdout(func() error {
+		return ApplyAllVariant(target, cfg, ApplyOptions{})
+	}); err != nil {
+		t.Fatalf("full apply over a symlink: %v", err)
+	}
+	if got, _ := os.ReadFile(elsewhere); string(got) != managed {
+		t.Fatalf("apply wrote through the symlink:\n%s", got)
+	}
+	prune, err := Resolve([]string{"skills"}, nil, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CaptureTestStdout(func() error {
+		return ApplyAllVariant(target, cfg, ApplyOptions{Selection: prune})
+	}); err != nil {
+		t.Fatalf("pruned apply over a symlink: %v", err)
+	}
+	fi, err := os.Lstat(piPath)
+	if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("symlink at adapter path was removed: fi=%v err=%v", fi, err)
+	}
+	if got, _ := os.ReadFile(elsewhere); string(got) != managed {
+		t.Fatalf("prune changed the symlink target:\n%s", got)
+	}
+}
+
 // Managed files, including ones written by older harnez versions that share
 // the header line, are updated on install and removed on removal.
 func TestDistillAdapterManagedFileUpdatedAndRemoved(t *testing.T) {
