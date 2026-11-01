@@ -45,3 +45,9 @@ Reported by the taia session from horg worker runs (epic horg#6), 2026-11-01. So
 - Pre-Work: `internal/subagent/subagent.go:191` reads the spec value too.
 - Spec loader fails loudly on a bad spec; no silent zero-value fallback. No new deps for schema validation.
 - Tests: a threshold value comes from spec; boundary cases 99/100 lines for range and whole file stay as today.
+
+## 4. Resolution
+- M1 delivered (d34d04d3): deny message names both options; the real bug was a second check in `runClaudeReadHook` that denied every Claude `Read` of a >100-line file regardless of range (the searcher missed it; tests only used `View`). Removed; range-aware evaluation decides.
+- M2 delivered (3957689d): `spec/reading_discipline.yaml` + schema hold `max_lines`, deny text and subagent guidance; `internal/readdiscipline` loads them, panics on a bad spec.
+- Host check: installed hook allows Read offset 200/limit 20 on hook.go, denies limit 150 and whole file; touched packages pass; dev's make test-q1 had 0 `--- FAIL`.
+- Left open: the repeated-read deny reuses the "100 or more lines" text, which is wrong for a small repeated read (was already wrong); stale comment above `readingDiscipline` in hook.go.

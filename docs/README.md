@@ -231,6 +231,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-30-two-agent-lean-sprint-1039-git-workflow-mode.md](studies/2026-10-30-two-agent-lean-sprint-1039-git-workflow-mode.md) | Lean Sprint 1039: Per-Repo Git Workflow Mode |
 | [studies/2026-10-31-job-q5wp7x7h.md](studies/2026-10-31-job-q5wp7x7h.md) | Job q5wp7x7h partial report (2026-10-31) |
 | [studies/2026-10-31-session-retro-plain-modes-time-overrides-lock-hygiene.md](studies/2026-10-31-session-retro-plain-modes-time-overrides-lock-hygiene.md) | 2026-10-31 Sprint Retrospective: Plain Context Modes, Time-Limited Overrides, Lock Hygiene, and Detached HEAD Protection |
+| [studies/2026-11-01-two-agent-lean-sprint-1079-read-guard.md](studies/2026-11-01-two-agent-lean-sprint-1079-read-guard.md) | Lean sprint 1079: read guard message and spec threshold |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
