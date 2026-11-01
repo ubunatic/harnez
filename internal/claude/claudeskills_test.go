@@ -84,7 +84,10 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		{"tui-check", "Validate a terminal UI change cell by cell", "## 4. Live tmux check"},
 		{"jam", "Run a jam: several agents on different models", "## 5. Pre-assess"},
 		{"trial", "Run an objective 10-5 capability audit", "## 2. Evidence Gathering Workflow"},
-		{"jules-audit", "Audit tickets against the code with one-shot", "## 4. Check Each Report"},
+		{"jules", "Run one-shot Google Jules audit", "## 4. Check Each Report"},
+		{"jules", "Run one-shot Google Jules audit", "## 7. Implement Prompt"},
+		{"jules", "Run one-shot Google Jules audit", "## 8. Experiment Prompt"},
+		{"jules", "Run one-shot Google Jules audit", "## 9. Ideas Prompt"},
 	} {
 		var configured *Command
 		for i := range cfg.Skills {

@@ -116,6 +116,7 @@ decommissioned:
     - grill-with-docs
     - domain-modeling
     - to-spec
+    - jules-audit
 
 # how `init` reconciles its own Makefile targets (e.g. `help`) into an
 # existing project Makefile — see docs/src/Make.md
@@ -180,7 +181,7 @@ debloat:
     standup: user-invocable-only
     story: user-invocable-only
     trial: user-invocable-only
-    jules-audit: user-invocable-only
+    jules: user-invocable-only
     retro: user-invocable-only
     harnez-status: user-invocable-only
     harnez-selftest: user-invocable-only
@@ -509,10 +510,10 @@ skills:
     description: "Run an objective 10-5 capability audit over recent work: 10 things the product can do now, and 5 things it cannot do yet"
     file: docs/commands/trial.md
 
-  - name: jules-audit
+  - name: jules
     license: AGPL-3.0-or-later
-    description: "Audit tickets against the code with one-shot, report-only Google Jules runs, then check each report's evidence. Only on explicit /jules-audit."
-    file: docs/commands/jules-audit.md
+    description: "Run one-shot Google Jules audit, implement, experiment or ideas runs, then check each result's evidence. Only on explicit /jules."
+    file: docs/commands/jules.md
 
   - name: retro
     license: AGPL-3.0-or-later
