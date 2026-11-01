@@ -1,6 +1,6 @@
 # 1085 — decide skill: session-scoped autonomy for the orchestrating agent
 
-**Status**: Open
+**Status**: Closed — /decide skill added in 2aef5b8f; tests pass
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
