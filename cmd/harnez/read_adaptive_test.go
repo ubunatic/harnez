@@ -172,7 +172,7 @@ func TestReadHookNativeProtocolAndRepeat(t *testing.T) {
 		}
 		return decoded
 	}
-	resp := invoke("large", map[string]any{"file_path": path, "offset": 10, "limit": 5})
+	resp := invoke("large", map[string]any{"file_path": path, "offset": 10, "limit": 100})
 	hook, ok := resp["hookSpecificOutput"].(map[string]any)
 	if !ok {
 		t.Fatalf("missing hookSpecificOutput in denied response: %v", resp)
@@ -184,7 +184,7 @@ func TestReadHookNativeProtocolAndRepeat(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing permissionDecisionReason in denied response: %v", hook)
 	}
-	if !strings.Contains(reason, "harnez read -n -L 10:14 -- '") || !strings.Contains(reason, "'\"'\"'") {
+	if !strings.Contains(reason, "harnez read -n -L 10:109 -- '") || !strings.Contains(reason, "'\"'\"'") {
 		t.Fatalf("unsafe/missing redirect: %s", reason)
 	}
 	if err := os.WriteFile(path, []byte("short\n"), 0600); err != nil {

@@ -116,6 +116,9 @@ func TestAutoDocProfilesAndExplicitOverrides(t *testing.T) {
 		if !strings.Contains(res.Prompt, "harnez read <file>") || strings.Contains(res.Prompt, "--auto") || strings.Contains(res.Prompt, "PNG") {
 			t.Fatal("read handoff missing")
 		}
+		if !strings.Contains(res.Prompt, "For files over 100 lines") {
+			t.Fatal("read guidance threshold missing from spec-rendered prompt")
+		}
 	}
 	res, err := subagent.StageSubagentContext(t.TempDir(), subagent.StageOptions{DocMode: subagent.DocModeLite, Provider: readcard.ProviderClaude})
 	if err != nil || res.DocMode != subagent.DocModeLite {

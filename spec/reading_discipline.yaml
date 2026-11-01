@@ -1,0 +1,7 @@
+# yaml-language-server: $schema=schemas/reading_discipline.schema.json
+# Reading & Context Discipline (issue 1079): the line threshold for bounded
+# reads and the guidance text that cites it. Go code reads these values and
+# must not repeat them. Placeholders: {max_lines}.
+max_lines: 100
+deny_message: "harnez guard: this native file read covers {max_lines} or more lines and violates Reading & Context Discipline. Choose one: run 'harnez read -L <range> -n <file>' for line-bounded editing anchors, or use native Read with both offset and limit spanning fewer than {max_lines} lines. A read with offset but no limit is not bounded. ('harnez read -I' is paused, issue 543.)"
+subagent_guidance: "For files over {max_lines} lines or repeated slices, execute harnez read <file> or harnez read -n -L START:END <file>."

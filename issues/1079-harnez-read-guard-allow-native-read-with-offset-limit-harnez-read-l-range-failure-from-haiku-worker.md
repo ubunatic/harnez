@@ -1,6 +1,6 @@
 # 1079 — harnez read guard: allow native Read with offset/limit; harnez read -L range failure from haiku worker
 
-**Status**: Open
+**Status**: Closed — Ranged Claude Read under 100 lines now passes (a second unconditional >100-line check removed), deny text names both options, threshold and text in spec/reading_discipline.yaml; repeated-read message wording left as is
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Enhancement
@@ -19,6 +19,35 @@
 
 Reported by the taia session from horg worker runs (epic horg#6), 2026-11-01. Source log: codeberg harnez/horg docs/studies/2026-11-01-agent-performance-log.md, section "Tool Experience".
 
+## 2b. Searcher Findings (lean sprint, 2026-11-01)
+- Ranged Read is already allowed: `evaluateReadToolViolation` (`cmd/harnez/hook.go:639-684`) denies a ranged Read only when the range is >= 100 lines; whole-file Read of a >= 100-line file is denied.
+- Deny text `readingDisciplineDenyReason` (`hook.go:453`) points only to `harnez read`, never says a Read with offset/limit under 100 lines works. Likely why the reviewer used `cat -n`.
+- Threshold 100 is hard-coded at `hook.go:453, 646, 666, 676, 680, 684, 793`; not in `spec/`.
+- Mode: `readEnforcementEnabledFor` (`hook.go:204`); tests in `cmd/harnez/hook_test.go` (560, 687, 805-908), `guard_hook_test.go`.
+- s3-dev `-L` failure: not in telemetry/rate log; source study gives no exact argument.
+
+## Decision
+- Drop the reviewer-role exception: ranged Read already passes, so the fix is the message.
+- Drop the s3-dev reproduction: not reproducible without the argument; malformed `-L` hints stay with 696.
+
+- Deny wording lives in the spec next to the threshold, so they cannot drift (developer plan, accepted).
+- `internal/subagent/subagent.go:191` hardcodes 100 in guidance text: fold into M2 and read it from the spec; no follow-up ticket.
+- Docs saying ">100 lines" (AgenticLoop source, config.yaml, Tools.md) stay as is: prose, not a second value.
+- Open-ended Read (offset, no limit) keeps today's behaviour.
+
 ## 3. Implementation & Verification Plan
-- Guard test: ranged Read passes, unbounded Read of a large file still blocks (in enforce mode).
-- Reproduce the s3-dev `-L` failure and add a regression test.
+### M1 (clear deny message)
+- Deny text names both options: `harnez read -L <range>` and native Read with offset/limit spanning fewer than <threshold> lines.
+- Tests assert the new wording for both the whole-file and the too-large-range deny cases.
+
+### M2 (threshold in spec)
+- Move the 100-line threshold into a spec file (e.g. `spec/edit_guard.yaml` or a new reading-discipline spec) with its JSON schema under `spec/schemas/`, per `docs/Spec.md`; every hook.go site and the message use the one value.
+- Pre-Work: `internal/subagent/subagent.go:191` reads the spec value too.
+- Spec loader fails loudly on a bad spec; no silent zero-value fallback. No new deps for schema validation.
+- Tests: a threshold value comes from spec; boundary cases 99/100 lines for range and whole file stay as today.
+
+## 4. Resolution
+- M1 delivered (d34d04d3): deny message names both options; the real bug was a second check in `runClaudeReadHook` that denied every Claude `Read` of a >100-line file regardless of range (the searcher missed it; tests only used `View`). Removed; range-aware evaluation decides.
+- M2 delivered (3957689d): `spec/reading_discipline.yaml` + schema hold `max_lines`, deny text and subagent guidance; `internal/readdiscipline` loads them, panics on a bad spec.
+- Host check: installed hook allows Read offset 200/limit 20 on hook.go, denies limit 150 and whole file; touched packages pass; dev's make test-q1 had 0 `--- FAIL`.
+- Left open: the repeated-read deny reuses the "100 or more lines" text, which is wrong for a small repeated read (was already wrong); stale comment above `readingDiscipline` in hook.go.

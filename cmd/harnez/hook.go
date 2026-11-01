@@ -24,6 +24,7 @@ import (
 	"ubunatic.com/harnez/internal/decide"
 	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/guard"
+	"ubunatic.com/harnez/internal/readdiscipline"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/subagent"
@@ -450,7 +451,12 @@ func agyBashShimActive(home, path string) bool {
 
 // readingDisciplineDenyReason is the structured guidance message returned when an agent
 // attempts native IDE file viewing on large files without using harnez read (issue 405).
-const readingDisciplineDenyReason = "harnez guard: native view_file on large files (>100 lines) violates Reading & Context Discipline. Execute 'harnez read -L <range> -n <file>' for line-bounded editing anchors ('harnez read -I' is paused, issue 543)."
+// readingDiscipline is the embedded Reading & Context Discipline spec (issue 1079):
+// the line threshold and the deny text both come from spec/reading_discipline.yaml.
+var readingDiscipline = readdiscipline.MustLoad()
+
+// readingDisciplineDenyReason is the deny message for a read the guard blocks.
+var readingDisciplineDenyReason = readingDiscipline.Deny()
 
 // isReadTool reports whether toolName is a client-native file reading tool that
 // should be intercepted under Reading & Context Discipline.
@@ -643,7 +649,7 @@ func evaluateReadToolViolation(toolName string, args map[string]any, baseDir str
 
 	rng := extractReadRange(args)
 	if rng.hasRange && rng.startLine > 0 && rng.endLine >= rng.startLine {
-		if rng.endLine-rng.startLine+1 >= 100 {
+		if rng.endLine-rng.startLine+1 >= readingDiscipline.MaxLines {
 			return true, readingDisciplineDenyReason
 		}
 	}
@@ -663,7 +669,7 @@ func evaluateReadToolViolation(toolName string, args map[string]any, baseDir str
 			// If file doesn't exist on disk, we can't count lines; range check above already checked explicit >= 100.
 			continue
 		}
-		if totalLines < 100 {
+		if totalLines < readingDiscipline.MaxLines {
 			// Allowed: file is smaller than 100 lines.
 			continue
 		}
@@ -673,15 +679,15 @@ func evaluateReadToolViolation(toolName string, args map[string]any, baseDir str
 			return true, readingDisciplineDenyReason
 		}
 		if rng.startLine > 0 && rng.endLine >= rng.startLine {
-			if rng.endLine-rng.startLine+1 >= 100 {
+			if rng.endLine-rng.startLine+1 >= readingDiscipline.MaxLines {
 				return true, readingDisciplineDenyReason
 			}
 		} else if rng.startLine > 0 && rng.endLine == 0 {
-			if totalLines-rng.startLine+1 >= 100 {
+			if totalLines-rng.startLine+1 >= readingDiscipline.MaxLines {
 				return true, readingDisciplineDenyReason
 			}
 		} else if rng.endLine > 0 && rng.startLine == 0 {
-			if rng.endLine >= 100 {
+			if rng.endLine >= readingDiscipline.MaxLines {
 				return true, readingDisciplineDenyReason
 			}
 		}
@@ -725,9 +731,9 @@ func newReadHookCmd() *cobra.Command {
 		Use:    "read",
 		Short:  "Claude Code PreToolUse file-read interception hook",
 		Hidden: true,
-		Long: `read accepts Claude Code's PreToolUse JSON payload on stdin for View and ReadMultipleFiles,
-intercepts unconstrained or large (>=100 lines) file reads, and returns a permissionDecision of deny
-with guidance to use 'harnez read'. Small files (<100 lines) and bounded slices (<100 lines) are allowed.`,
+		Long: fmt.Sprintf(`read accepts Claude Code's PreToolUse JSON payload on stdin for View and ReadMultipleFiles,
+intercepts unconstrained or large (>=%[1]d lines) file reads, and returns a permissionDecision of deny
+with guidance to use 'harnez read'. Small files (<%[1]d lines) and bounded slices (<%[1]d lines) are allowed.`, readingDiscipline.MaxLines),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runClaudeReadHook(cmd.InOrStdin(), cmd.OutOrStdout(), readHookOptions{})
@@ -788,11 +794,6 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 			info, err := os.Stat(path)
 			if err != nil || !info.Mode().IsRegular() {
 				continue
-			}
-			if strings.EqualFold(payload.ToolName, "read") {
-				if lines, err := countFileLines(path); err == nil && lines > 100 {
-					deny = true
-				}
 			}
 			if repeatedRead(stateDir, payload.SessionID, path) {
 				deny = true

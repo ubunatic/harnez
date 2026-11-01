@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"ubunatic.com/harnez/internal/readcard"
+	"ubunatic.com/harnez/internal/readdiscipline"
 )
 
 // DocMode represents the documentation delivery mode for subagent execution.
@@ -188,7 +189,8 @@ Task:
 	return res, nil
 }
 
-const readGuidance = "For files over 100 lines or repeated slices, execute harnez read <file> or harnez read -n -L START:END <file>."
+// readGuidance is the read handoff line; its threshold comes from spec/reading_discipline.yaml.
+var readGuidance = readdiscipline.MustLoad().Guidance()
 
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
