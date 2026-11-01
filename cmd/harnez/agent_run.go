@@ -570,7 +570,13 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		}
 	} else {
 		tl.announceTurn("start", m.Provider+":"+m.Name, sessName)
-		r, err = driver.Run(ctx, opts)
+		r, err = driver.Run(subagent.WithProviderSessionObserver(ctx, func(providerID string) {
+			if sess, getErr := s.Get(id); getErr == nil {
+				sess.ProviderSessionID = providerID
+				sess.LastActiveAt = time.Now()
+				_ = s.Save(sess)
+			}
+		}), opts)
 	}
 	if err != nil {
 		before := <-beforeCapture
@@ -800,6 +806,10 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return err
 	}
 	queuedMessages := queuedSession.PendingMessages
+	if subagent.IsControlPrompt(driver, req.Prompt) {
+		// A command carries no text; queued messages stay for the next real message.
+		queuedMessages, resumeIdle = nil, 0
+	}
 	req.Prompt = subagent.PrependQueuedMessages(queuedMessages, req.Prompt)
 	if interactive {
 		action := "prompt"

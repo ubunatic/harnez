@@ -443,6 +443,44 @@ How a spec reaches the provider CLI (batch drivers):
 | claude | `claude -p --dangerously-skip-permissions --model <name> [--effort <tier>] --output-format json` | explicit `low`/`med`/`high` tier passed as `low`/`medium`/`high`; omitted when no tier is set |
 | agy | `agy --model <name> --effort <tier>` | effort omitted for `effort: false` models (`agy:sonnet`, `agy:opus`) |
 | agy, `advisor`/`reviewer` roles | adds `--dangerously-skip-permissions --sandbox` before `--output-format json -p` (`roles.<role>.auto_approve_tools` in `spec/agent.yaml`) | headless `-p` cannot approve a tool call; without it agy ends the turn with no reply, which harnez reports as an error (issue 1000) |
+| jules | no CLI: REST calls to the Jules API (`internal/subagent/jules.go`) | no tiers; see below |
+
+### Google Jules
+
+`--model jules` submits a task to Google Jules, a cloud agent that works on a connected GitHub
+repository and delivers a GitHub pull request. Google ends it soon: sessions can be finished until
+2026-11-11, and the service shuts down on 2026-12-31 (issue 1071).
+
+Setup: create an API key in the Jules settings and connect the repository to Jules, then write
+`~/.jules/config.json` with mode 600. harnez refuses a file other users can read. A non-empty
+`github_projects` is an allowlist of repository names:
+
+```json
+{"key": "<API key>", "github_projects": [{"repo": "harnez"}]}
+```
+
+Use it from a checkout that has a github.com remote, which harnez picks by preferring the remote
+named `github`:
+
+```bash
+harnez agent start --name fix-42 --model jules -f issues/42-some-bug.md
+harnez agent resume --name fix-42 wait        # keep tracking; sends nothing
+harnez agent resume --name fix-42 approve     # approve a plan waiting for approval
+harnez agent resume --name fix-42 "<message>" # answer Jules
+```
+
+`HARNEZ_JULES_BRANCH` selects the starting branch; the default is GitHub's default branch. Jules
+starts from GitHub, so harnez warns when that branch differs from the same branch on the other
+remotes.
+
+Each turn waits at most `jules.wait_timeout_ms` (`spec/agent.yaml`). A wait that runs out, or a
+session waiting for an answer or a plan approval, is a normal result that says how to continue; only
+a failed session or a refused API call is an error. A turn that dies still leaves the provider
+session ID in the session record, so `resume ... wait` can pick it up.
+
+The owner keeps control of the result: harnez only reports the pull request URL. It merges nothing
+and pushes nothing to Codeberg. The API has no cancel call, so `harnez agent stop` ends local tracking
+and the session keeps running, and `harnez agent delete` removes only the local record.
 
 ---
 

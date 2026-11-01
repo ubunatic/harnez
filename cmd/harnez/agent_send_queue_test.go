@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"ubunatic.com/harnez/internal/channel"
 	"ubunatic.com/harnez/internal/subagent"
@@ -87,6 +88,60 @@ func TestQueuedMessagesResumeOnceAndFailurePreserves(t *testing.T) {
 	sess, _ = store.Get("sid")
 	if len(sess.PendingMessages) != 0 || sess.Turn != 2 {
 		t.Fatalf("session = %#v", sess)
+	}
+}
+
+type controlPromptDriver struct{ queuedResumeDriver }
+
+func (d *controlPromptDriver) IsControlPrompt(prompt string) bool { return prompt == "approve" }
+
+// A driver command such as Jules' approve must arrive unchanged, or it becomes
+// an ordinary message: the plan is never approved and the text goes to the model.
+func TestControlPromptSkipsQueueAndResumeNote(t *testing.T) {
+	driver := &controlPromptDriver{}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	t.Cleanup(func() { agentDriver = old })
+	dir := t.TempDir()
+	store := saveResumeSession(t, dir, "sid", "worker", "fake")
+	sess, _ := store.Get("sid")
+	sess.LastActiveAt = time.Now().Add(-24 * time.Hour)
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.QueueMessage("worker", "", "sender-1071", "QUEUED-1071"); err != nil {
+		t.Fatal(err)
+	}
+	resume := func(prompt string) {
+		t.Helper()
+		cmd := newAgentCmd()
+		cmd.SetOut(new(bytes.Buffer))
+		cmd.SetErr(new(bytes.Buffer))
+		cmd.SetArgs([]string{"resume", "--name", "worker", prompt, "--store-dir", dir})
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resume("approve")
+	if len(driver.prompts) != 1 || driver.prompts[0] != "approve" {
+		t.Fatalf("prompts = %q", driver.prompts)
+	}
+	sess, _ = store.Get("sid")
+	if len(sess.PendingMessages) != 1 {
+		t.Fatalf("a command consumed the queue: %#v", sess.PendingMessages)
+	}
+	sess.LastActiveAt = time.Now().Add(-24 * time.Hour)
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	resume("a real message")
+	got := driver.prompts[1]
+	if !strings.Contains(got, "QUEUED-1071") || !strings.HasSuffix(got, "a real message") || got == "QUEUED-1071\n\na real message" {
+		t.Fatalf("message prompt = %q", got)
+	}
+	sess, _ = store.Get("sid")
+	if len(sess.PendingMessages) != 0 {
+		t.Fatalf("queue not consumed: %#v", sess.PendingMessages)
 	}
 }
 

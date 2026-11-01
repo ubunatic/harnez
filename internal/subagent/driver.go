@@ -20,6 +20,19 @@ type Driver interface {
 	Delete(context.Context, string) error
 }
 
+// ControlPromptDriver is a driver for which some resume prompts are commands to
+// the driver, not text for the model.
+type ControlPromptDriver interface {
+	IsControlPrompt(prompt string) bool
+}
+
+// IsControlPrompt reports whether the driver treats prompt as a command, which
+// must reach it unchanged: no queued messages and no resume note around it.
+func IsControlPrompt(driver Driver, prompt string) bool {
+	control, ok := driver.(ControlPromptDriver)
+	return ok && control.IsControlPrompt(prompt)
+}
+
 type ResumeChecker interface {
 	CheckResumable(providerID string) (ok bool, reason string)
 }
@@ -37,6 +50,8 @@ func DriverFor(m Model, dir string) Driver {
 	case "pi", "lmcoder":
 		// lmcoder models are served through Pi, which reads the proxy URL from ~/.pi/agent/models.json.
 		return PiDriver{Dir: dir}
+	case "jules":
+		return JulesDriver{Dir: dir}
 	default:
 		return UnsupportedDriver{Provider: m.Provider}
 	}

@@ -45,7 +45,7 @@ auto_compact:
   default_mode: manual
   # lmcoder (served through Pi) is not listed: no verified context drop or native
   # compaction exists for the local model yet, so it keeps the manual default.
-  provider_modes: {claude: manual, codex: native, agy: disabled}
+  provider_modes: {claude: manual, codex: native, agy: disabled, jules: disabled}
   watchdog_grace_ms: 20000
   # Legacy growth telemetry; dispatch uses full-context thresholds above.
   legacy_growth_threshold_tokens: 100000
@@ -264,6 +264,26 @@ models:
     tier: low
     effort: false
     use: Local coder model served by the local lmcoder proxy; the first call waits while the model loads.
+  jules:jules:
+    aliases: [jules]
+    provider: jules
+    name: jules
+    tier: low
+    effort: false
+    roles: developer
+    use: Google Jules cloud agent on a connected GitHub repo; delivers a GitHub PR. Google shuts it down on 2026-12-31 and sessions end on 2026-11-11.
+
+# Google Jules REST API (issue 1071). config_path holds the API key and must not
+# be readable by other users. A wait that runs out leaves the session running, so
+# keep wait_timeout_ms under the 30-minute limit on Claude Code background jobs.
+jules:
+  base_url: https://jules.googleapis.com/v1alpha
+  config_path: ~/.jules/config.json
+  poll_interval_ms: 30000
+  wait_timeout_ms: 1500000
+  request_timeout_ms: 30000
+  max_poll_errors: 5
+  completed_pr_polls: 3
 
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf
