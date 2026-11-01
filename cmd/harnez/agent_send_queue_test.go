@@ -91,6 +91,31 @@ func TestQueuedMessagesResumeOnceAndFailurePreserves(t *testing.T) {
 	}
 }
 
+type warningStartDriver struct{ recordingAgentDriver }
+
+func (d *warningStartDriver) Run(context.Context, subagent.RunOptions) (*subagent.TurnResult, error) {
+	return &subagent.TurnResult{SessionID: "recorded", Response: "ok", Warnings: []string{"WARNING-1071"}}, nil
+}
+
+// Found in the real Jules run: start dropped the warning that GitHub was behind
+// Codeberg, although resume printed the same kind of warning.
+func TestAgentStartPrintsDriverWarnings(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return &warningStartDriver{} }
+	t.Cleanup(func() { agentDriver = old })
+	var stderr bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"start", "--model", "codex:luna", "task", "--name", "w", "--store-dir", t.TempDir()})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "WARNING-1071") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 type controlPromptDriver struct{ queuedResumeDriver }
 
 func (d *controlPromptDriver) IsControlPrompt(prompt string) bool { return prompt == "approve" }

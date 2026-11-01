@@ -401,6 +401,18 @@ func TestJulesResumeSendsMessageAndIgnoresStaleState(t *testing.T) {
 	}
 }
 
+// The field names come from a real session response (ticket 1071).
+func TestJulesDecodesRealPullRequestShape(t *testing.T) {
+	var session julesSession
+	data := `{"state":"COMPLETED","outputs":[{"changeSet":{}},{"pullRequest":{"url":"u","title":"t","headRef":"fix","baseRef":"main"}}]}`
+	if err := json.Unmarshal([]byte(data), &session); err != nil {
+		t.Fatal(err)
+	}
+	if pr := session.pullRequest(); pr == nil || pr.HeadRef != "fix" || pr.BaseRef != "main" {
+		t.Fatalf("pull request = %#v", pr)
+	}
+}
+
 func TestJulesAPIErrorRedactsEchoedKey(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

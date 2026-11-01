@@ -607,6 +607,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		}
 		return fmt.Errorf("agent start %q failed: %s; verify the provider/model configuration or ask for guidance", spec, shortCause(err))
 	}
+	for _, warning := range r.Warnings {
+		fmt.Fprintln(cmd.ErrOrStderr(), warning)
+	}
 	providerSessionID := r.SessionID
 	reservedID := id
 	if r.SessionID != "" && req.SessionID == "" {
