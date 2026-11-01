@@ -154,14 +154,16 @@ func collectLocalTickets(dir, upstream string) (rebaseState, error) {
 		}
 		for _, path := range strings.Fields(paths) {
 			base := filepath.Base(path)
-			if path == "issues/README.md" || !strings.HasSuffix(base, ".md") || len(base) < 4 || base[3] != '-' {
+			dash := strings.IndexByte(base, '-')
+			if path == "issues/README.md" || !strings.HasSuffix(base, ".md") || dash < 3 {
 				continue
 			}
-			if _, err := strconv.Atoi(base[:3]); err != nil || seen[path] {
+			numStr := base[:dash]
+			if _, err := strconv.Atoi(numStr); err != nil || seen[path] {
 				continue
 			}
 			seen[path] = true
-			state.Owned = append(state.Owned, rebaseOwnedTicket{Path: path, Number: base[:3]})
+			state.Owned = append(state.Owned, rebaseOwnedTicket{Path: path, Number: numStr})
 		}
 	}
 	return state, nil
@@ -251,14 +253,23 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	if err != nil {
 		return fmt.Errorf("issues rebase: %w", err)
 	}
-	for i, owned := range collisions {
-		fmt.Fprintf(w, "%s\t%s -> %03d\n", owned.Path, owned.Number, max+i+1)
-		if !resume {
-			newNumber := fmt.Sprintf("%03d", max+i+1)
-			base := filepath.Base(owned.Path)
+	for i, col := range collisions {
+		newNumber := fmt.Sprintf("%03d", max+i+1)
+		base := filepath.Base(col.Ours)
+		newPath := filepath.ToSlash(filepath.Join(filepath.Dir(col.Ours), newNumber+strings.TrimPrefix(base, col.Number)))
+		if dryRun {
+			fmt.Fprintf(w, "collision: ours %s, theirs %s -> %s\n", col.Ours, col.Theirs, newNumber)
+			edits, planErr := issuecore.PlanReferences(dir, col.Ours, newPath)
+			if planErr == nil {
+				for _, e := range edits {
+					rel, _ := filepath.Rel(dir, e.Path)
+					fmt.Fprintf(w, "  rewrite references in %s\n", filepath.ToSlash(rel))
+				}
+			}
+		} else if !resume {
 			state.Repairs = append(state.Repairs, rebaseRepair{
-				OldPath: owned.Path, NewPath: filepath.ToSlash(filepath.Join(filepath.Dir(owned.Path), newNumber+strings.TrimPrefix(base, owned.Number))),
-				OldNumber: owned.Number, NewNumber: newNumber,
+				OldPath: col.Ours, NewPath: newPath,
+				OldNumber: col.Number, NewNumber: newNumber,
 			})
 		}
 	}
@@ -293,7 +304,13 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	return nil
 }
 
-func plannedCollisions(dir, upstream string, state rebaseState) (int, []rebaseOwnedTicket, error) {
+type rebaseCollision struct {
+	Ours   string
+	Theirs string
+	Number string
+}
+
+func plannedCollisions(dir, upstream string, state rebaseState) (int, []rebaseCollision, error) {
 	files, err := issuecore.Scan(filepath.Join(dir, "issues"))
 	if err != nil {
 		return 0, nil, err
@@ -311,21 +328,32 @@ func plannedCollisions(dir, upstream string, state rebaseState) (int, []rebaseOw
 	if err != nil {
 		return 0, nil, err
 	}
+	theirsPaths := map[string]string{}
 	for _, p := range strings.Fields(remote) {
 		base := filepath.Base(p)
-		if len(base) >= 4 && base[3] == '-' {
-			if n, e := strconv.Atoi(base[:3]); e == nil {
+		dash := strings.IndexByte(base, '-')
+		if dash >= 3 && strings.HasSuffix(base, ".md") {
+			if n, e := strconv.Atoi(base[:dash]); e == nil {
 				if n > max {
 					max = n
 				}
-				counts[base[:3]]++
+				counts[base[:dash]]++
+				theirsPaths[base[:dash]] = p
 			}
 		}
 	}
-	var collisions []rebaseOwnedTicket
+	var collisions []rebaseCollision
 	for _, owned := range state.Owned {
 		if counts[owned.Number] > 1 {
-			collisions = append(collisions, owned)
+			theirs := theirsPaths[owned.Number]
+			if theirs == "" {
+				theirs = owned.Path
+			}
+			collisions = append(collisions, rebaseCollision{
+				Ours:   owned.Path,
+				Theirs: theirs,
+				Number: owned.Number,
+			})
 		}
 	}
 	return max, collisions, nil
@@ -452,6 +480,22 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath 
 	if _, err := gitOutput(dir, commitArgs...); err != nil {
 		return err
 	}
+
+	if commits, err := gitOutput(dir, "log", "--format=%h %s", state.Upstream+"..HEAD"); err == nil {
+		for _, line := range strings.Split(commits, "\n") {
+			if len(line) < 8 {
+				continue
+			}
+			hash := line[:7]
+			subject := line[8:]
+			for _, repair := range state.Repairs {
+				if strings.Contains(subject, repair.OldNumber) && !strings.Contains(subject, repair.NewNumber) {
+					fmt.Fprintf(w, "issues rebase: warning: replayed commit %s subject names moved ticket %s (cannot be rewritten safely)\n", hash, repair.OldNumber)
+				}
+			}
+		}
+	}
+
 	state.Phase = "restore"
 	if err := writeRebaseState(statePath, state); err != nil {
 		return fmt.Errorf("persist staged-state recovery phase: %w", err)

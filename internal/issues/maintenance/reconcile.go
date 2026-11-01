@@ -124,13 +124,13 @@ func RunIssuesReconcile(w io.Writer, dir, ref string, dryRun bool) error {
 	}
 	for i, owned := range collisions {
 		newNumber := fmt.Sprintf("%03d", max+i+1)
-		base := filepath.Base(owned.Path)
-		newPath := filepath.ToSlash(filepath.Join(filepath.Dir(owned.Path), newNumber+strings.TrimPrefix(base, owned.Number)))
-		edits, err := issuecore.PlanReferences(dir, owned.Path, newPath)
+		base := filepath.Base(owned.Ours)
+		newPath := filepath.ToSlash(filepath.Join(filepath.Dir(owned.Ours), newNumber+strings.TrimPrefix(base, owned.Number)))
+		edits, err := issuecore.PlanReferences(dir, owned.Ours, newPath)
 		if err != nil {
 			return fail(fmt.Errorf("scan references: %w", err))
 		}
-		fmt.Fprintf(w, "%s\t%s -> %s\n", owned.Path, owned.Number, newNumber)
+		fmt.Fprintf(w, "%s\t%s -> %s\n", owned.Ours, owned.Number, newNumber)
 		for _, e := range edits {
 			rel, _ := filepath.Rel(dir, e.Path)
 			fmt.Fprintf(w, "  rewrite references in %s\n", filepath.ToSlash(rel))
@@ -138,7 +138,7 @@ func RunIssuesReconcile(w io.Writer, dir, ref string, dryRun bool) error {
 		if dryRun {
 			continue
 		}
-		oldAbs := filepath.Join(dir, filepath.FromSlash(owned.Path))
+		oldAbs := filepath.Join(dir, filepath.FromSlash(owned.Ours))
 		newAbs := filepath.Join(dir, filepath.FromSlash(newPath))
 		content, err := os.ReadFile(oldAbs)
 		if err != nil {
@@ -146,9 +146,9 @@ func RunIssuesReconcile(w io.Writer, dir, ref string, dryRun bool) error {
 		}
 		rewritten, err := issuecore.RewriteHeaderNumber(string(content), newNumber)
 		if err != nil {
-			return fail(fmt.Errorf("%s: %w", owned.Path, err))
+			return fail(fmt.Errorf("%s: %w", owned.Ours, err))
 		}
-		rewritten = issuecore.RewriteReferences(rewritten, owned.Path, newPath)
+		rewritten = issuecore.RewriteReferences(rewritten, owned.Ours, newPath)
 		f, err := os.OpenFile(newAbs, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
 			return fail(fmt.Errorf("claim %s: %w", newPath, err))
@@ -171,7 +171,7 @@ func RunIssuesReconcile(w io.Writer, dir, ref string, dryRun bool) error {
 			return fail(fmt.Errorf("rewrite references: %w", err))
 		}
 		undo = append(undo, func() { _ = issuecore.WriteReferences(edits, true) })
-		stage = append(stage, owned.Path, newPath)
+		stage = append(stage, owned.Ours, newPath)
 		for _, e := range edits {
 			rel, _ := filepath.Rel(dir, e.Path)
 			stage = append(stage, filepath.ToSlash(rel))
