@@ -45,3 +45,5 @@ Proposed shape (open for the developer plan):
 ## M1 Pre-Work
 
 - Before adopting, confirm that `runResume` and `CheckResumable` (`agent_run.go:668`, `agent.go:659`) accept a Jules record with no local run history. If they reject it, fix that path inside M1.
+
+- Result: no fix needed. Only `CodexDriver` implements `CheckResumable`, so Jules is not refused there, and the lineage check passes for a top-level host. `TestJulesIDAdoptsOnceThenResumesOnTheRecord` drives adopt then `wait` through `runResume` on a record with no history.

@@ -299,14 +299,15 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 	var continueResume bool
 	var resumePrompt string
 	var resumeInteractive bool
-	resume := &cobra.Command{Use: "resume [session] [prompt...]", Short: "Resume an existing agent session", Long: "Resume an existing agent session.\n\n" + sessionBackgroundHelp, Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume <id> \"next step\"\n  harnez agent resume -i --name w", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+	var resumeJulesID string
+	resume := &cobra.Command{Use: "resume [session] [prompt...]", Short: "Resume an existing agent session", Long: "Resume an existing agent session.\n\n" + sessionBackgroundHelp, Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume <id> \"next step\"\n  harnez agent resume -i --name w\n  harnez agent resume --model jules --id <jules-session-id> wait", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(ac.planSpec)
 		if err != nil {
 			return err
 		}
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
 		selector := ""
-		if ac.name == "" && len(words) > 0 {
+		if ac.name == "" && resumeJulesID == "" && len(words) > 0 {
 			if s, storeErr := ac.store(); storeErr != nil {
 				return storeErr
 			} else if matches, matchErr := matchResumeSelector(s, words[0]); matchErr != nil {
@@ -332,6 +333,16 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 				return err
 			}
 		}
+		if resumeJulesID != "" {
+			if resumeInteractive || continueResume || resumeWorkerID != "" {
+				return fmt.Errorf("--id cannot be combined with --interactive, --continue or --worker-session")
+			}
+			name, err := adoptJulesForResume(cmd, ac, resumeJulesID)
+			if err != nil {
+				return err
+			}
+			ac.name = name
+		}
 		if resumeInteractive {
 			if err := validateInteractiveFlags(cmd, false, ac.jsonOut, ac.streamMode, ac.agentTimeout, resumeWorkerID != ""); err != nil {
 				return err
@@ -355,6 +366,7 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 	resume.Flags().StringSliceVarP(&resumeFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	resume.Flags().StringVarP(&resumePrompt, "prompt", "p", "", "prompt text")
 	resume.Flags().BoolVarP(&resumeInteractive, "interactive", "i", false, "resume in the provider's interactive terminal")
+	resume.Flags().StringVar(&resumeJulesID, "id", "", "adopt and resume a Jules session by its ID (requires --model jules); records it once")
 	resume.Flags().BoolVarP(&continueResume, "continue", "c", false, "resume the most recently active attributable session")
 	withHostTrackingLine(resume, ac.store, ac.parent, func() bool { return resumeWorkerID != "" })
 	return resume
