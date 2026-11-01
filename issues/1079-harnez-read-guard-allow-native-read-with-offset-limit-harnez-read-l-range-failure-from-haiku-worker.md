@@ -30,6 +30,11 @@ Reported by the taia session from horg worker runs (epic horg#6), 2026-11-01. So
 - Drop the reviewer-role exception: ranged Read already passes, so the fix is the message.
 - Drop the s3-dev reproduction: not reproducible without the argument; malformed `-L` hints stay with 696.
 
+- Deny wording lives in the spec next to the threshold, so they cannot drift (developer plan, accepted).
+- `internal/subagent/subagent.go:191` hardcodes 100 in guidance text: fold into M2 and read it from the spec; no follow-up ticket.
+- Docs saying ">100 lines" (AgenticLoop source, config.yaml, Tools.md) stay as is: prose, not a second value.
+- Open-ended Read (offset, no limit) keeps today's behaviour.
+
 ## 3. Implementation & Verification Plan
 ### M1 (clear deny message)
 - Deny text names both options: `harnez read -L <range>` and native Read with offset/limit spanning fewer than <threshold> lines.
@@ -37,4 +42,6 @@ Reported by the taia session from horg worker runs (epic horg#6), 2026-11-01. So
 
 ### M2 (threshold in spec)
 - Move the 100-line threshold into a spec file (e.g. `spec/edit_guard.yaml` or a new reading-discipline spec) with its JSON schema under `spec/schemas/`, per `docs/Spec.md`; every hook.go site and the message use the one value.
+- Pre-Work: `internal/subagent/subagent.go:191` reads the spec value too.
+- Spec loader fails loudly on a bad spec; no silent zero-value fallback. No new deps for schema validation.
 - Tests: a threshold value comes from spec; boundary cases 99/100 lines for range and whole file stay as today.
