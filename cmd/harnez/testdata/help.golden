@@ -370,11 +370,13 @@ Examples:
   harnez agent resume --name w "next step"
   harnez agent resume <id> "next step"
   harnez agent resume -i --name w
+  harnez agent resume --model jules --id <jules-session-id> wait
 
 Flags:
   -c, --continue                resume the most recently active attributable session
   -f, --file strings            prompt file (repeatable; - reads stdin)
   -h, --help                    help for resume
+      --id string               adopt and resume a Jules session by its ID (requires --model jules); records it once
   -i, --interactive             resume in the provider's interactive terminal
       --json                    JSON output
       --plan string             planning gate: yes or no (default "no")
@@ -496,11 +498,12 @@ Usage:
   harnez agent status [flags]
 
 Flags:
-      --all        show all saved turn replies
-  -h, --help       help for status
-      --json       JSON output
-      --reply      show the latest saved reply
-      --turn int   show the saved reply for turn N
+      --all         show all saved turn replies
+  -h, --help        help for status
+      --id string   Jules session ID to read with --model jules; one read, writes nothing
+      --json        JSON output
+      --reply       show the latest saved reply
+      --turn int    show the saved reply for turn N
 
 Global Flags:
       --allow-exhausted-quota   start even when cached provider quota is exhausted
