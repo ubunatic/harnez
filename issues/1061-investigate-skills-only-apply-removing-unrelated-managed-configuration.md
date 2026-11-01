@@ -1,6 +1,6 @@
 # 1061 — Investigate skills-only apply removing unrelated managed configuration
 
-**Status**: Open
+**Status**: Closed — scoped --components, --prune, ownership-aware adapters and truthful removal reports; reviewed with mutation checks
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
