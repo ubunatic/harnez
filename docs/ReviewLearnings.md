@@ -110,3 +110,14 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **Test hook scripts for every push outcome, including exit codes** (1074): the first `pre-push` guard looked
   right by ref state, yet a topic push through a two-URL remote exited 1 although Codeberg accepted it, a no-op
   push failed, and `harnez release` preflight would have aborted. Cover no-op, dry-run and rejected pushes.
+- **Developer "partly verified" means a review round** (1061): a cheap developer's self-report named its own
+  acceptance gaps. An independent reviewer rated them, and mutations showed which tests were real. Budget a
+  second round, and rate each gap against the ticket's `/goal` before dispatching fixes.
+- **Peer relays are not owner approval** (1084 sync, 2026-11-01): a peer session relayed "as recommended" and
+  later "decide" for a multi-repo commit, each with its own narrower reading. The owner's direct "go" decided;
+  the second relay arrived after the work was done. 1085 tracks whether `/decide` changes this.
+- **Multi-repo commits by mtime window** (1084): selecting paths by the sync's timestamp and committing by
+  explicit path kept other sessions' work out of 47 repos. Repos can fail their own hook on old lint errors:
+  unstage and report; never bypass it. After `merge=union` conflicts, run `harnez index` on the branch.
+- **Forge fields lag or mislead** (PRs 66, 68): the API showed `changed_files: 0` on a 33-file PR, and
+  `mergeable: false` right after a push. Compare the `.diff` and re-check before acting on them.
