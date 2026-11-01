@@ -82,6 +82,36 @@ commonly stored in an `AGENTS.md` file at the repository root.
   `push.default_remotes` lists them in `.uman.toml`; it does not sync tags or check all
   destinations before the first push. Do not assume an unconfigured `uman push` syncs both.
 
+### Keeping GitHub `main` level, without CI or a mirror
+- Before a Jules session on `main`, harnez fast-forwards GitHub `main` to Codeberg's `main` with one
+  plain push: no force, prune or mirror. A failed or diverged sync warns and names the commit Jules
+  will read. Settings live in `spec/agent.yaml` (`jules.sync_*`).
+- Owner's clone, optional: one remote `both` whose push URLs are Codeberg and GitHub, so one push
+  sends `main` to both. `origin` keeps one URL, because a hook can fail a whole push but only for
+  that remote:
+  ```
+  git remote add both <codeberg-url>
+  git remote set-url --push both <codeberg-url>
+  git remote set-url --add --push both <github-url>
+  git config remote.pushDefault both
+  git config remote.both.push refs/heads/main:refs/heads/main
+  ```
+  Use the exact strings that `git remote get-url --push origin` and `git remote get-url github`
+  print for `<codeberg-url>` and `<github-url>`. The release skip compares URL strings exactly, so
+  `.git` suffixes, `ssh://` against `https://`, or a trailing slash make it miss the match.
+  A `pre-push` hook on this clone can refuse a push to GitHub unless Codeberg already holds the
+  commit. `harnez release` skips a remote whose push URLs are all pushed by other remotes, so
+  `both` does not run during a release.
+  Pitfalls for such a hook: it runs during `git push --dry-run`, it can fail only the whole push to
+  that URL (not one ref), and it runs with empty stdin when that URL is already up to date. A plain
+  `git push` here sends `main` even from a topic branch. The hook lives in `.git/hooks`, so it is
+  per clone and unversioned.
+- Contributor clone on a forge with AGit: send each push to the topic's PR without typing the refspec:
+  ```
+  git config remote.origin.push HEAD:refs/for/main/<topic>
+  ```
+  Replace `<topic>` with the topic name in that clone.
+
 ### Branches from either remote
 Cloud agents (Claude Code web, Jules, Codex) usually work on GitHub branches.
 - At start and before the final push, merge Codeberg `main`:

@@ -45,6 +45,9 @@ type remoteEntry struct {
 	owner string
 	repo  string
 	valid bool
+	// fanOut marks a remote with several push URLs (a local `both`, issue 1074).
+	// It is not a copy of one forge, so it is chosen only as the last resort.
+	fanOut bool
 }
 
 // DetectPrioritizedForgeInfo inspects all configured git remotes based on URL, prioritizing which
@@ -52,7 +55,10 @@ type remoteEntry struct {
 //  1. Priority 1: origin if its URL points to codeberg.org or github.com.
 //  2. Priority 2: Any remote (e.g. codeberg, forgejo, upstream) whose URL points to codeberg.org.
 //  3. Priority 3: Any remote (e.g. github, mirror) whose URL points to github.com.
+//  4. Last resort: a fan-out remote (several push URLs) pointing at either forge.
 //
+// Fan-out remotes are skipped in priorities 2 and 3, so a `both` never stands in for the real remote.
+// Priority 1 takes origin even when it fans out, because origin is the release remote by convention.
 // If no remote matches any of these criteria, it returns an error.
 func DetectPrioritizedForgeInfo(dir string) (*ForgeInfo, error) {
 	cmd := exec.Command("git", "remote", "-v")
@@ -94,6 +100,18 @@ func DetectPrioritizedForgeInfo(dir string) (*ForgeInfo, error) {
 		})
 	}
 
+	// Push URL counts per remote name: a name with several push URLs is a fan-out.
+	fanOutByName := make(map[string]bool)
+	for i := range entries {
+		isFanOut, known := fanOutByName[entries[i].name]
+		if !known {
+			urls, _ := pushURLs(dir, entries[i].name)
+			isFanOut = len(urls) > 1
+			fanOutByName[entries[i].name] = isFanOut
+		}
+		entries[i].fanOut = isFanOut
+	}
+
 	// Priority 1: Remote named origin pointing to codeberg.org or github.com
 	for _, e := range entries {
 		if strings.EqualFold(e.name, "origin") && e.valid {
@@ -108,7 +126,7 @@ func DetectPrioritizedForgeInfo(dir string) (*ForgeInfo, error) {
 
 	// Priority 2: Any remote pointing to codeberg.org
 	for _, e := range entries {
-		if e.valid && strings.EqualFold(e.host, "codeberg.org") {
+		if e.valid && !e.fanOut && strings.EqualFold(e.host, "codeberg.org") {
 			return &ForgeInfo{
 				RemoteName: e.name,
 				Host:       e.host,
@@ -120,7 +138,19 @@ func DetectPrioritizedForgeInfo(dir string) (*ForgeInfo, error) {
 
 	// Priority 3: Any remote pointing to github.com
 	for _, e := range entries {
-		if e.valid && strings.EqualFold(e.host, "github.com") {
+		if e.valid && !e.fanOut && strings.EqualFold(e.host, "github.com") {
+			return &ForgeInfo{
+				RemoteName: e.name,
+				Host:       e.host,
+				Owner:      e.owner,
+				Repo:       e.repo,
+			}, nil
+		}
+	}
+
+	// Last resort: a fan-out remote that points at a supported forge.
+	for _, e := range entries {
+		if e.valid {
 			return &ForgeInfo{
 				RemoteName: e.name,
 				Host:       e.host,

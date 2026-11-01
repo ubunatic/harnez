@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -32,6 +33,7 @@ type fakeJules struct {
 	activities []map[string]any
 	getStatus  []int
 	sourceCode int
+	onCreate   func() // called when a session is created, to order it against git calls
 }
 
 func (f *fakeJules) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +54,9 @@ func (f *fakeJules) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.creates++
 		if err := json.NewDecoder(r.Body).Decode(&f.created); err != nil {
 			f.t.Errorf("decode create body: %v", err)
+		}
+		if f.onCreate != nil {
+			f.onCreate()
 		}
 		fmt.Fprint(w, `{"id":"123","name":"sessions/123","state":"QUEUED"}`)
 	case r.Method == http.MethodPost && r.URL.Path == "/sessions/123:sendMessage":
@@ -102,7 +107,7 @@ func newJulesHarness(t *testing.T, fake *fakeJules, remotes map[string]string, h
 	sleeps := 0
 	driver := JulesDriver{
 		Dir:    t.TempDir(),
-		Spec:   &JulesSpec{BaseURL: server.URL, ConfigPath: config, PollIntervalMS: 1, WaitTimeoutMS: 60000, RequestTimeoutMS: 5000, MaxPollErrors: 3, CompletedPRPolls: 2},
+		Spec:   &JulesSpec{BaseURL: server.URL, ConfigPath: config, PollIntervalMS: 1, WaitTimeoutMS: 60000, RequestTimeoutMS: 5000, MaxPollErrors: 3, CompletedPRPolls: 2, SyncRemote: "origin", SyncBranch: "main", SyncTimeoutMS: 30000},
 		Client: server.Client(),
 		Sleep:  func(context.Context, time.Duration) error { sleeps++; return nil },
 		Getenv: func(string) string { return "" },
@@ -191,6 +196,55 @@ func TestJulesRunSelectsBranchAndWarnsOnDrift(t *testing.T) {
 	}
 	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "github/topic differs from origin/topic") {
 		t.Errorf("warnings = %v", res.Warnings)
+	}
+}
+
+// TestJulesRunSyncsBeforeCreatingSession checks that on the sync branch the push
+// to GitHub happens before the session is created, and that a refused push
+// only warns: the session is still created.
+func TestJulesRunSyncsBeforeCreatingSession(t *testing.T) {
+	for _, pushFails := range []bool{false, true} {
+		t.Run(fmt.Sprintf("push fails=%v", pushFails), func(t *testing.T) {
+			var events []string
+			fake := &fakeJules{states: []julesSession{julesDone("https://github.com/o/harnez/pull/9")}}
+			fake.onCreate = func() { events = append(events, "create") }
+			h := newJulesHarness(t, fake, julesTestRemotes, map[string]string{"origin": "bbb", "github": "aaa"})
+			inner := h.driver.Git
+			h.driver.Git = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
+				switch args[0] {
+				case "cat-file":
+					return nil, nil
+				case "merge-base":
+					return []byte("aaa\n"), nil
+				case "push":
+					events = append(events, "push")
+					if pushFails {
+						return nil, errors.New("refused by policy")
+					}
+					return nil, nil
+				}
+				return inner(ctx, dir, args...)
+			}
+			res, err := h.driver.Run(context.Background(), RunOptions{Prompt: "task"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Join(events, ",") != "push,create" {
+				t.Errorf("events = %v, want push before create", events)
+			}
+			if fake.creates != 1 {
+				t.Errorf("sessions created = %d, want 1 even when the push fails", fake.creates)
+			}
+			pushWarned := false
+			for _, w := range res.Warnings {
+				if strings.Contains(w, "could not push") && strings.Contains(w, "refused by policy") {
+					pushWarned = true
+				}
+			}
+			if pushWarned != pushFails {
+				t.Errorf("push warning = %v, want %v; warnings = %v", pushWarned, pushFails, res.Warnings)
+			}
+		})
 	}
 }
 
@@ -484,6 +538,258 @@ func TestJulesActivitiesFollowPages(t *testing.T) {
 	}
 	if len(all) != 2 || all[0].CreateTime != "1" {
 		t.Fatalf("activities = %+v", all)
+	}
+}
+
+// issue 1074: a fan-out remote (several push URLs, such as a local both) must
+// not be chosen as the GitHub copy while a single-URL GitHub remote exists,
+// whatever the remote names sort as.
+func TestJulesGitHubRemoteSkipsFanOut(t *testing.T) {
+	gitWith := func(names string) func(context.Context, string, ...string) ([]byte, error) {
+		return func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			switch {
+			case len(args) == 1 && args[0] == "remote":
+				return []byte(names), nil
+			case len(args) == 3 && args[0] == "remote" && args[1] == "get-url":
+				return []byte("https://github.com/o/harnez.git\n"), nil
+			case len(args) == 5 && args[0] == "remote" && args[1] == "get-url" && args[2] == "--push" && args[3] == "--all":
+				if args[4] == "both" {
+					return []byte("https://codeberg.org/o/harnez.git\nhttps://github.com/o/harnez.git\n"), nil
+				}
+				return []byte("https://github.com/o/harnez.git\n"), nil
+			}
+			return nil, fmt.Errorf("unexpected git %v", args)
+		}
+	}
+	name, owner, repo, err := JulesDriver{Dir: t.TempDir(), Git: gitWith("both\nmirror\n")}.githubRemote(context.Background())
+	if err != nil || name != "mirror" || owner != "o" || repo != "harnez" {
+		t.Errorf("githubRemote = %s %s/%s, %v; want mirror o/harnez", name, owner, repo, err)
+	}
+	name, _, _, err = JulesDriver{Dir: t.TempDir(), Git: gitWith("both\n")}.githubRemote(context.Background())
+	if err != nil || name != "both" {
+		t.Errorf("fan-out alone: githubRemote = %s, %v; want both", name, err)
+	}
+}
+
+// julesSyncSpec names the canonical remote as origin and the branch as main.
+var julesSyncSpec = JulesSpec{SyncRemote: "origin", SyncBranch: "main", SyncTimeoutMS: 30000}
+
+// julesSyncRepo is a working clone with two bare remotes: origin stands in for
+// Codeberg and github for GitHub. Both start with one commit on main.
+type julesSyncRepo struct {
+	work, canonical, github string
+}
+
+func julesSyncGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	full := append([]string{"-C", dir, "-c", "user.name=test", "-c", "user.email=test@example.com"}, args...)
+	out, err := exec.Command("git", full...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func newJulesSyncRepo(t *testing.T) julesSyncRepo {
+	t.Helper()
+	r := julesSyncRepo{work: t.TempDir(), canonical: t.TempDir(), github: t.TempDir()}
+	julesSyncGit(t, r.canonical, "init", "--bare")
+	julesSyncGit(t, r.github, "init", "--bare")
+	julesSyncGit(t, r.work, "init", "-b", "main")
+	julesSyncGit(t, r.work, "commit", "--allow-empty", "-m", "c1")
+	julesSyncGit(t, r.work, "remote", "add", "origin", r.canonical)
+	julesSyncGit(t, r.work, "remote", "add", "github", r.github)
+	julesSyncGit(t, r.work, "push", "origin", "main")
+	julesSyncGit(t, r.work, "push", "github", "main")
+	return r
+}
+
+// commit adds an empty commit to the clone in dir and returns its sha.
+func (r julesSyncRepo) commit(t *testing.T, dir, message string) string {
+	t.Helper()
+	julesSyncGit(t, dir, "commit", "--allow-empty", "-m", message)
+	return julesSyncGit(t, dir, "rev-parse", "HEAD")
+}
+
+func (r julesSyncRepo) githubMain(t *testing.T) string {
+	t.Helper()
+	return julesSyncGit(t, r.github, "rev-parse", "refs/heads/main")
+}
+
+func TestJulesSyncFastForwardsGitHubMainAndTouchesNoOtherRef(t *testing.T) {
+	r := newJulesSyncRepo(t)
+	julesSyncGit(t, r.work, "push", "github", "main:refs/heads/other")
+	other := julesSyncGit(t, r.github, "rev-parse", "refs/heads/other")
+	c2 := r.commit(t, r.work, "c2")
+	julesSyncGit(t, r.work, "push", "origin", "main")
+
+	d := JulesDriver{Dir: r.work}
+	if warnings := d.syncGitHubBranch(context.Background(), "github", julesSyncSpec); len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
+	}
+	if got := r.githubMain(t); got != c2 {
+		t.Errorf("github main = %s, want %s", got, c2)
+	}
+	if got := julesSyncGit(t, r.github, "rev-parse", "refs/heads/other"); got != other {
+		t.Errorf("github other = %s, want untouched %s", got, other)
+	}
+}
+
+// TestJulesSyncFetchesCommitTheLocalCloneLacks covers a clone that has never seen
+// Codeberg's newest commit: the sync must fetch it before it can push it.
+func TestJulesSyncFetchesCommitTheLocalCloneLacks(t *testing.T) {
+	r := newJulesSyncRepo(t)
+	// Another clone pushes c2 to Codeberg; the work clone never fetches it.
+	other := t.TempDir()
+	julesSyncGit(t, other, "clone", "-q", "-b", "main", r.canonical, ".")
+	c2 := r.commit(t, other, "c2")
+	julesSyncGit(t, other, "push", "origin", "main")
+
+	d := JulesDriver{Dir: r.work}
+	if warnings := d.syncGitHubBranch(context.Background(), "github", julesSyncSpec); len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
+	}
+	if got := r.githubMain(t); got != c2 {
+		t.Errorf("github main = %s, want the Codeberg commit %s", got, c2)
+	}
+}
+
+// TestJulesSyncFailedFetchWarnsAndPushesNothing scripts git so the fetch fails:
+// the sync must warn and must not push a commit it could not fetch.
+func TestJulesSyncFailedFetchWarnsAndPushesNothing(t *testing.T) {
+	pushed := false
+	d := JulesDriver{Dir: t.TempDir(), Git: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		switch args[0] {
+		case "ls-remote":
+			if args[1] == "github" {
+				return []byte("aaa\trefs/heads/main\n"), nil
+			}
+			return []byte("bbb\trefs/heads/main\n"), nil
+		case "cat-file":
+			return nil, errors.New("missing object")
+		case "fetch":
+			return nil, errors.New("network unreachable")
+		case "push":
+			pushed = true
+			return nil, nil
+		}
+		return nil, fmt.Errorf("unexpected git %v", args)
+	}}
+	warnings := d.syncGitHubBranch(context.Background(), "github", julesSyncSpec)
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "could not fetch origin/main") || !strings.Contains(warnings[0], "github/main at aaa") {
+		t.Errorf("warnings = %v, want one fetch warning naming github/main at aaa", warnings)
+	}
+	if pushed {
+		t.Error("sync pushed after a failed fetch")
+	}
+}
+
+func TestJulesSyncLeavesEqualBranchAlone(t *testing.T) {
+	r := newJulesSyncRepo(t)
+	c1 := r.githubMain(t)
+	d := JulesDriver{Dir: r.work}
+	if warnings := d.syncGitHubBranch(context.Background(), "github", julesSyncSpec); len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none", warnings)
+	}
+	if got := r.githubMain(t); got != c1 {
+		t.Errorf("github main = %s, want %s", got, c1)
+	}
+}
+
+// TestJulesSyncPushArgsAreExact records the git calls of a sync that must push,
+// so the push cannot grow a force, tag or submodule option unnoticed.
+func TestJulesSyncPushArgsAreExact(t *testing.T) {
+	var pushArgs []string
+	d := JulesDriver{Dir: t.TempDir(), Git: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		switch args[0] {
+		case "ls-remote":
+			if args[1] == "github" {
+				return []byte("aaa\trefs/heads/main\n"), nil
+			}
+			return []byte("bbb\trefs/heads/main\n"), nil
+		case "cat-file":
+			return nil, nil
+		case "merge-base":
+			return []byte("aaa\n"), nil
+		case "push":
+			pushArgs = args
+			return nil, nil
+		}
+		return nil, fmt.Errorf("unexpected git %v", args)
+	}}
+	if warnings := d.syncGitHubBranch(context.Background(), "github", julesSyncSpec); len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
+	}
+	want := []string{"push", "--no-force", "--no-follow-tags", "--no-recurse-submodules", "github", "bbb:refs/heads/main"}
+	if strings.Join(pushArgs, " ") != strings.Join(want, " ") {
+		t.Errorf("push args = %q, want %q", pushArgs, want)
+	}
+}
+
+func TestJulesSyncWarnsOnDivergenceWithoutPushing(t *testing.T) {
+	r := newJulesSyncRepo(t)
+	// GitHub gets its own commit on main, so the two branches diverge from c1.
+	clone := filepath.Join(t.TempDir(), "gh")
+	julesSyncGit(t, filepath.Dir(clone), "clone", "-q", "-b", "main", r.github, clone)
+	g2 := r.commit(t, clone, "g2")
+	julesSyncGit(t, clone, "push", "origin", "main")
+	r.commit(t, r.work, "c2")
+	julesSyncGit(t, r.work, "push", "origin", "main")
+
+	d := JulesDriver{Dir: r.work}
+	warnings := d.syncGitHubBranch(context.Background(), "github", julesSyncSpec)
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "Jules will read github/main at "+g2) {
+		t.Errorf("warnings = %v, want one naming %s", warnings, g2)
+	}
+	if got := r.githubMain(t); got != g2 {
+		t.Errorf("github main = %s, want untouched %s", got, g2)
+	}
+}
+
+func TestJulesSyncWarnsWhenPushIsRefusedAndNeverAborts(t *testing.T) {
+	r := newJulesSyncRepo(t)
+	c1 := r.githubMain(t)
+	hook := "#!/bin/sh\necho 'refused by policy' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(r.github, "hooks", "pre-receive"), []byte(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r.commit(t, r.work, "c2")
+	julesSyncGit(t, r.work, "push", "origin", "main")
+
+	d := JulesDriver{Dir: r.work}
+	warnings := d.syncGitHubBranch(context.Background(), "github", julesSyncSpec)
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "Jules will read github/main at "+c1) || !strings.Contains(warnings[0], "refused by policy") {
+		t.Errorf("warnings = %v, want one naming %s and the refusal", warnings, c1)
+	}
+	if got := r.githubMain(t); got != c1 {
+		t.Errorf("github main = %s, want untouched %s", got, c1)
+	}
+}
+
+// TestJulesSyncTimeoutBoundsAHungPush runs a real push whose pre-receive hook
+// hangs. The sync must give up at sync_timeout_ms and warn, not wait for the
+// hook: the hook's child keeps the output pipe open, which would block forever.
+func TestJulesSyncTimeoutBoundsAHungPush(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits for the git wait delay")
+	}
+	r := newJulesSyncRepo(t)
+	c1 := r.githubMain(t)
+	if err := os.WriteFile(filepath.Join(r.github, "hooks", "pre-receive"), []byte("#!/bin/sh\nsleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r.commit(t, r.work, "c2")
+	julesSyncGit(t, r.work, "push", "origin", "main")
+
+	spec := julesSyncSpec
+	spec.SyncTimeoutMS = 1000
+	started := time.Now()
+	warnings := JulesDriver{Dir: r.work}.syncGitHubBranch(context.Background(), "github", spec)
+	if elapsed := time.Since(started); elapsed > 30*time.Second {
+		t.Errorf("sync took %v, want it bounded by sync_timeout_ms", elapsed)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "could not push") || !strings.Contains(warnings[0], "github/main at "+c1) {
+		t.Errorf("warnings = %v, want one push warning naming %s", warnings, c1)
 	}
 }
 

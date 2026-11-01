@@ -41,6 +41,11 @@ type JulesSpec struct {
 	RequestTimeoutMS int    `yaml:"request_timeout_ms"`
 	MaxPollErrors    int    `yaml:"max_poll_errors"`
 	CompletedPRPolls int    `yaml:"completed_pr_polls"`
+	// SyncRemote is the canonical remote (Codeberg) whose SyncBranch the GitHub
+	// copy is brought level with before a session starts (issue 1074).
+	SyncRemote    string `yaml:"sync_remote"`
+	SyncBranch    string `yaml:"sync_branch"`
+	SyncTimeoutMS int    `yaml:"sync_timeout_ms"`
 }
 
 func (s JulesSpec) validate() error {
@@ -49,6 +54,9 @@ func (s JulesSpec) validate() error {
 	}
 	if s.PollIntervalMS <= 0 || s.WaitTimeoutMS <= 0 || s.RequestTimeoutMS <= 0 || s.MaxPollErrors <= 0 || s.CompletedPRPolls < 0 {
 		return errors.New("agent spec: positive jules poll, wait and request bounds required")
+	}
+	if strings.TrimSpace(s.SyncRemote) == "" || strings.TrimSpace(s.SyncBranch) == "" || s.SyncTimeoutMS <= 0 {
+		return errors.New("agent spec: jules.sync_remote, jules.sync_branch and a positive jules.sync_timeout_ms are required")
 	}
 	return nil
 }
@@ -221,8 +229,15 @@ func (d JulesDriver) git(ctx context.Context, args ...string) ([]byte, error) {
 	}
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", d.Dir}, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	// A hook or helper can keep the output pipe open after git itself is killed
+	// at the deadline; WaitDelay stops Output from waiting for it (issue 1074).
+	cmd.WaitDelay = julesGitWaitDelay
 	return cmd.Output()
 }
+
+// julesGitWaitDelay bounds how long a git command may run on after its context
+// ends. It is a safety margin, not a user setting, so it is not in the spec.
+const julesGitWaitDelay = 3 * time.Second
 
 // loadJulesConfig reads the key file and refuses one other users can read.
 func loadJulesConfig(path string) (julesConfig, error) {
@@ -282,7 +297,9 @@ func parseGitHubRemote(remoteURL string) (owner, repo string, ok bool) {
 }
 
 // githubRemote finds the GitHub copy of the repository: the remote named github
-// when it points at github.com, else the first remote that does.
+// when it points at github.com, else the first remote that does. A fan-out
+// remote (several push URLs, such as a local both) is used only when no
+// single-URL remote points at GitHub (issue 1074).
 func (d JulesDriver) githubRemote(ctx context.Context) (name, owner, repo string, err error) {
 	out, err := d.git(ctx, "remote")
 	if err != nil {
@@ -290,16 +307,33 @@ func (d JulesDriver) githubRemote(ctx context.Context) (name, owner, repo string
 	}
 	remotes := strings.Fields(string(out))
 	sort.SliceStable(remotes, func(i, j int) bool { return remotes[i] == "github" && remotes[j] != "github" })
+	var fanOut string
+	var fanOutOwner, fanOutRepo string
 	for _, remote := range remotes {
 		remoteURL, urlErr := d.git(ctx, "remote", "get-url", remote)
 		if urlErr != nil {
 			continue
 		}
 		if owner, repo, ok := parseGitHubRemote(string(remoteURL)); ok {
+			if d.fansOut(ctx, remote) {
+				if fanOut == "" {
+					fanOut, fanOutOwner, fanOutRepo = remote, owner, repo
+				}
+				continue
+			}
 			return remote, owner, repo, nil
 		}
 	}
+	if fanOut != "" {
+		return fanOut, fanOutOwner, fanOutRepo, nil
+	}
 	return "", "", "", fmt.Errorf("no github.com remote in %s; Jules only works on connected GitHub repositories", d.Dir)
+}
+
+// fansOut reports whether a remote pushes to several URLs at once.
+func (d JulesDriver) fansOut(ctx context.Context, remote string) bool {
+	out, err := d.git(ctx, "remote", "get-url", "--push", "--all", remote)
+	return err == nil && len(strings.Fields(string(out))) > 1
 }
 
 func checkJulesProject(config julesConfig, repo string) error {
@@ -322,17 +356,7 @@ func (d JulesDriver) branchDriftWarning(ctx context.Context, github, branch stri
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	ref := "refs/heads/" + branch
-	head := func(remote string) (string, error) {
-		out, err := d.git(ctx, "ls-remote", remote, ref)
-		if err != nil {
-			return "", err
-		}
-		fields := strings.Fields(string(out))
-		if len(fields) == 0 {
-			return "", nil
-		}
-		return fields[0], nil
-	}
+	head := func(remote string) (string, error) { return d.remoteHead(ctx, remote, ref) }
 	githubHead, err := head(github)
 	if err != nil {
 		return fmt.Sprintf("could not check whether %s/%s is current: %v", github, branch, err)
@@ -354,6 +378,86 @@ func (d JulesDriver) branchDriftWarning(ctx context.Context, github, branch stri
 		}
 	}
 	return ""
+}
+
+// remoteHead returns the commit a remote holds for ref, or "" when it has none.
+func (d JulesDriver) remoteHead(ctx context.Context, remote, ref string) (string, error) {
+	out, err := d.git(ctx, "ls-remote", remote, ref)
+	if err != nil {
+		return "", err
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) == 0 {
+		return "", nil
+	}
+	return fields[0], nil
+}
+
+// syncGitHubBranch brings the GitHub copy of spec.SyncBranch level with the
+// canonical remote before Jules starts from it (issue 1074). It only fast-forwards:
+// the one push is the canonical commit to the GitHub branch, with no force, prune,
+// mirror or other refspec, and only when GitHub is strictly behind. Every failure
+// or divergence comes back as a warning that names the commit Jules will read,
+// and none of them stops the session.
+func (d JulesDriver) syncGitHubBranch(ctx context.Context, github string, spec JulesSpec) []string {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(spec.SyncTimeoutMS)*time.Millisecond)
+	defer cancel()
+	branch := spec.SyncBranch
+	ref := "refs/heads/" + branch
+	githubMain := github + "/" + branch
+	githubHead, err := d.remoteHead(ctx, github, ref)
+	if err != nil {
+		return []string{fmt.Sprintf("could not read %s: %s; Jules will read %s", githubMain, gitFailure(err), githubMain)}
+	}
+	canonicalHead, err := d.remoteHead(ctx, spec.SyncRemote, ref)
+	if err != nil {
+		return []string{fmt.Sprintf("could not read %s/%s: %s, so %s was not synced; Jules will read %s", spec.SyncRemote, branch, gitFailure(err), githubMain, julesReads(githubMain, githubHead))}
+	}
+	if canonicalHead == "" {
+		return []string{fmt.Sprintf("%s/%s has no commit to sync from; Jules will read %s", spec.SyncRemote, branch, julesReads(githubMain, githubHead))}
+	}
+	if canonicalHead == githubHead {
+		return nil
+	}
+	if githubHead == "" {
+		return []string{fmt.Sprintf("%s has no commit while %s/%s is at %s; nothing was pushed; Jules will read %s", githubMain, spec.SyncRemote, branch, canonicalHead, julesReads(githubMain, githubHead))}
+	}
+	for _, source := range []struct{ remote, sha string }{{spec.SyncRemote, canonicalHead}, {github, githubHead}} {
+		if _, err := d.git(ctx, "cat-file", "-e", source.sha+"^{commit}"); err == nil {
+			continue
+		}
+		if _, err := d.git(ctx, "fetch", "--no-tags", "--quiet", source.remote, ref); err != nil {
+			return []string{fmt.Sprintf("could not fetch %s/%s: %s, so %s was not synced; Jules will read %s", source.remote, branch, gitFailure(err), githubMain, julesReads(githubMain, githubHead))}
+		}
+	}
+	base, err := d.git(ctx, "merge-base", githubHead, canonicalHead)
+	if err != nil || strings.TrimSpace(string(base)) != githubHead {
+		return []string{fmt.Sprintf("%s is at %s and %s/%s at %s; GitHub is not strictly behind, so nothing was pushed; Jules will read %s", githubMain, githubHead, spec.SyncRemote, branch, canonicalHead, julesReads(githubMain, githubHead))}
+	}
+	if _, err := d.git(ctx, "push", "--no-force", "--no-follow-tags", "--no-recurse-submodules", github, canonicalHead+":"+ref); err != nil {
+		return []string{fmt.Sprintf("could not push %s/%s (%s) to %s: %s; Jules will read %s", spec.SyncRemote, branch, canonicalHead, githubMain, gitFailure(err), julesReads(githubMain, githubHead))}
+	}
+	return nil
+}
+
+// julesReads names the commit a branch holds, which is the one Jules reads.
+func julesReads(branch, sha string) string {
+	if sha == "" {
+		return branch + ", which has no commit"
+	}
+	return branch + " at " + sha
+}
+
+// gitFailure returns the stderr of a failed git command, joined on one line,
+// or the error itself when git printed nothing.
+func gitFailure(err error) string {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if text := strings.TrimSpace(string(exitErr.Stderr)); text != "" {
+			return strings.ReplaceAll(text, "\n", "; ")
+		}
+	}
+	return err.Error()
 }
 
 func julesTitle(prompt string) string {
@@ -411,6 +515,11 @@ func (d JulesDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error)
 		return nil, fmt.Errorf("Jules source %s/%s has no default branch; set %s", owner, repo, julesBranchEnv)
 	}
 	var warnings []string
+	// Jules starts from GitHub, so GitHub's copy of the sync branch is brought
+	// level with the canonical remote first. Warnings never stop the session.
+	if branch == spec.SyncBranch {
+		warnings = append(warnings, d.syncGitHubBranch(ctx, remote, spec)...)
+	}
 	if warning := d.branchDriftWarning(ctx, remote, branch, time.Duration(spec.RequestTimeoutMS)*time.Millisecond); warning != "" {
 		warnings = append(warnings, warning)
 	}

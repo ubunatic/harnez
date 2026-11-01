@@ -102,3 +102,11 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **Reviewer selection for complex diffs**: Use `argon:low` (`agy:argon:low`) for one-shot, no-digging full-diff
   reviews when complex work needs to be assessed. It provides high-signal detection of model trait fallbacks,
   schema boundary constraints, and test coverage gaps without conversational fatigue.
+- **Mutation-check a new side effect's wiring** (1074): The Jules sync had passing direct tests while
+  disabling its call in `Run`, its fetch, or adding `+` to its refspec left every test green. A reviewer
+  found this by mutating the code. Assert the call from the real entry point and pin exact push arguments.
+- **Context timeouts do not bound a git child holding the pipe** (1074): killing `git` left a hook's child
+  holding stderr, so `cmd.Output()` waited 20 s past a 1 s timeout. Set `cmd.WaitDelay` and test with a slow hook.
+- **Test hook scripts for every push outcome, including exit codes** (1074): the first `pre-push` guard looked
+  right by ref state, yet a topic push through a two-URL remote exited 1 although Codeberg accepted it, a no-op
+  push failed, and `harnez release` preflight would have aborted. Cover no-op, dry-run and rejected pushes.

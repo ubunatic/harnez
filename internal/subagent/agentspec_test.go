@@ -643,7 +643,7 @@ func TestParseAgentSpecDoesNotMutateModelAliases(t *testing.T) {
 	}
 }
 
-const testExternalSessionSpecYAML = `jules: {base_url: "https://jules.test", config_path: "~/.jules/config.json", poll_interval_ms: 1, wait_timeout_ms: 1, request_timeout_ms: 1, max_poll_errors: 1, completed_pr_polls: 0}
+const testExternalSessionSpecYAML = `jules: {base_url: "https://jules.test", config_path: "~/.jules/config.json", poll_interval_ms: 1, wait_timeout_ms: 1, request_timeout_ms: 1, max_poll_errors: 1, completed_pr_polls: 0, sync_remote: origin, sync_branch: main, sync_timeout_ms: 1}
 external_sessions:
   fixture:
     root: "{home}/sessions"

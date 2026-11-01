@@ -26,6 +26,10 @@ updating GitHub during harnez's own push, though the mirror configuration was no
 `internal/release/push.go` pushes each remote in turn after a dry-run preflight, so the preflight
 cannot catch this race.
 
+Update from the uman session: the owner removed emojig's mirror automation, which works around the
+race for that repo, though no retried release has confirmed it yet. Other repos with a second forge
+remote can still hit it.
+
 ## 3. Implementation & Verification Plan
 When a remote push fails, re-read that remote's refs with `git ls-remote`. If the branch and tag
 already match the local commit and tag object, log it and continue instead of failing. Any other

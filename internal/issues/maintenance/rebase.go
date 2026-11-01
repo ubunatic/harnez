@@ -573,7 +573,7 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath 
 	if _, err := gitOutput(dir, append([]string{"add", "--"}, addable...)...); err != nil {
 		return err
 	}
-	commitArgs :=[]string{"commit", "--only", "-m", "docs(issues): repair ticket numbers after rebase", "--"}
+	commitArgs := []string{"commit", "--only", "-m", "docs(issues): repair ticket numbers after rebase", "--"}
 	commitArgs = append(commitArgs, stage...)
 	if _, err := gitOutput(dir, commitArgs...); err != nil {
 		return err

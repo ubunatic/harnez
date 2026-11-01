@@ -18,10 +18,10 @@ Google stops accepting new Jules work on 2026-11-11 and shuts Jules down on 2026
 
 ## 2. Before the Batch
 
-Jules reads GitHub, not Codeberg or your local tree, so the audited code is GitHub's `main`.
+Jules reads GitHub, not Codeberg or your local tree, so the audited code is GitHub's `main`. A `harnez agent start --model jules` syncs it first (issue 1074), but only when the starting branch equals `jules.sync_branch` (`main`); a start on any other branch skips the sync. When GitHub `main` is strictly behind Codeberg's `main`, harnez fast-forwards it with one plain push of Codeberg's commit, with no `--force`, prune or other refspec. A sync that fails or diverges prints a warning that names the commit Jules will read, and the start goes on.
 
-1. Compare `git rev-parse origin/main` with `git ls-remote github refs/heads/main`.
-2. If GitHub is behind and you may push `main`, run `git push github origin/main:main`, with no `--force` and no other refspec. If you may not push, audit the older commit and say so in the results.
+1. Before the batch, compare `git ls-remote origin refs/heads/main` with `git ls-remote github refs/heads/main`. Starts that run at once may race on that push; a losing one only warns.
+2. If the two still differ, or a start warned, audit the commit GitHub holds and say so in the results. Do not push `main` by hand.
 3. Never set a push mirror, and never run `git fetch --prune` on the `github` remote. Keep the numbers of any open PRs you did not start out of this batch.
 
 ---

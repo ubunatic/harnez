@@ -284,6 +284,11 @@ jules:
   request_timeout_ms: 30000
   max_poll_errors: 5
   completed_pr_polls: 3
+# Before a session starts on sync_branch, the GitHub copy is fast-forwarded to
+# sync_remote's commit (issue 1074). A failed or diverged sync only warns.
+  sync_remote: origin
+  sync_branch: main
+  sync_timeout_ms: 60000
 
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf

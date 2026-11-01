@@ -125,7 +125,7 @@
     "jules": {
       "type": "object",
       "description": "Google Jules REST API settings; a wait that runs out leaves the session running.",
-      "required": ["base_url", "config_path", "poll_interval_ms", "wait_timeout_ms", "request_timeout_ms", "max_poll_errors", "completed_pr_polls"],
+      "required": ["base_url", "config_path", "poll_interval_ms", "wait_timeout_ms", "request_timeout_ms", "max_poll_errors", "completed_pr_polls", "sync_remote", "sync_branch", "sync_timeout_ms"],
       "properties": {
         "base_url": { "type": "string", "minLength": 1 },
         "config_path": { "type": "string", "minLength": 1 },
@@ -133,7 +133,10 @@
         "wait_timeout_ms": { "type": "integer", "minimum": 1 },
         "request_timeout_ms": { "type": "integer", "minimum": 1 },
         "max_poll_errors": { "type": "integer", "minimum": 1 },
-        "completed_pr_polls": { "type": "integer", "minimum": 0 }
+        "completed_pr_polls": { "type": "integer", "minimum": 0 },
+        "sync_remote": { "type": "string", "minLength": 1, "description": "Canonical remote (Codeberg) whose sync_branch the GitHub copy is fast-forwarded to before a session." },
+        "sync_branch": { "type": "string", "minLength": 1 },
+        "sync_timeout_ms": { "type": "integer", "minimum": 1 }
       },
       "additionalProperties": false
     },

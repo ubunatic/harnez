@@ -1,4 +1,4 @@
-# 1074 — Sync main to GitHub with a Codeberg CI job, without force or pruning
+# 1074 — Sync main to GitHub from this machine and before Jules, without CI, force or pruning
 
 **Status**: Open
 **Priority**: P3 (Low)
@@ -8,7 +8,7 @@
 
 ---
 
-/goal Every update of Codeberg `main` reaches GitHub `main` by itself, with a plain fast-forward push that touches no other GitHub ref, verified on a real merge, or stop and report when blocked on a user decision or denied permission. Circuit breaker: on a loop, a hard blocker or no progress, clear the goal and write a failure report here.
+/goal `harnez release` works beside a local multi-URL push remote, and starting a Jules session brings GitHub `main` level with Codeberg `main` by a plain fast-forward that touches no other GitHub ref, or stop and report when blocked on a user decision or denied permission. Circuit breaker: on a loop, a hard blocker or no progress, clear the goal and write a failure report here.
 
 ## Problem
 
@@ -16,10 +16,15 @@ GitHub `main` falls behind Codeberg unless someone runs `git push github origin/
 
 ## Want
 
-- A job that runs on a push to Codeberg `main` and runs only `git push github <sha>:refs/heads/main`: no `--force`, no `--prune`, no `--mirror`, and no other refspec.
-- A rejected push fails the job visibly, because it means the two `main` branches diverged.
-- The GitHub token is a CI secret limited to this repository and never appears in the log.
+The owner rejected CI jobs and push mirrors. GitHub may lag between releases, but remote agents such as Jules should start from the latest `main`. Only the owner's machine releases.
+
+- **Local remote (not committed):** that clone gets a remote `both` with Codeberg and GitHub as push URLs, `remote.pushDefault=both`, and `remote.both.push=refs/heads/main:refs/heads/main`. A `pre-push` hook refuses GitHub unless Codeberg already has the commit. `origin` keeps one URL because a hook can only fail a whole push, so topic and AGit pushes through a two-URL `origin` exit 1.
+- **Release:** `pushRelease` pushes every remote, and its dry-run preflight runs the hook, so `both` would abort each release before Codeberg has the commit. It must skip a remote whose push URLs are all covered by the other remotes, while still pushing `origin` and `github`. Check that the other remote scans (`internal/release/forge.go`, `internal/subagent/jules.go`) do not pick `both` instead of the real remote.
+- **Jules:** before starting a session, compare GitHub and Codeberg `main`. If GitHub is strictly behind, push with `git push <github> <codeberg-sha>:refs/heads/main`: no `--force`, `--prune`, `--mirror` or other refspec. If the push fails or the branches diverged, warn and name the commit Jules will read; do not abort the session. Configurable values go in `spec/`.
+- **Docs:** `docs/lang/Git.md` (the source) gets the two configurations: this `both` setup, and `git config remote.origin.push HEAD:refs/for/main/<topic>` for a contributor clone.
 
 ## Notes
 
-The repository has no Codeberg CI today (`.forgejo/` does not exist). Check that Codeberg runners are available to this repository before building on them. `harnez release` also pushes `main` to both remotes, so check that it tolerates the job having pushed first.
+A Forgejo push mirror is never an option, and nothing here may run `git fetch --prune` on the GitHub remote.
+
+Status: code is in PR #64. The `both` remote and hook are installed on the owner's clone, and a real push moved GitHub `main` to `19e4fd00` with its branch count unchanged. Before closing: merge the PR and run one real Jules start from `main`.

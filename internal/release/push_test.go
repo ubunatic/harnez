@@ -74,6 +74,123 @@ func TestReleasePushAllRemotes(t *testing.T) {
 	}
 }
 
+// A remote with several push URLs (issue 1074: `both` pushes to Codeberg and
+// GitHub) is skipped when the other remotes already push to all of them, so its
+// pre-push hook never runs during a release. The hook refuses `both`, so any
+// push to it fails the release.
+func TestReleasePushSkipsRemoteCoveredByOthers(t *testing.T) {
+	for _, scenario := range []string{"fan-out-refused", "identical-urls"} {
+		t.Run(scenario, func(t *testing.T) {
+			dir := setupGitRepoWithVersion(t, "1.0.0", false)
+			runGitCmd(t, dir, "branch", "-M", "main")
+			bin := t.TempDir()
+			if err := os.WriteFile(filepath.Join(bin, "fj"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			codeberg := t.TempDir()
+			runGitCmd(t, codeberg, "init", "--bare")
+			github := t.TempDir()
+			runGitCmd(t, github, "init", "--bare")
+			runGitCmd(t, dir, "remote", "add", "origin", "https://codeberg.org/test/repo.git")
+			runGitCmd(t, dir, "remote", "set-url", "--push", "origin", codeberg)
+			runGitCmd(t, dir, "push", "origin", "main")
+			wantPushes := 1
+			if scenario == "fan-out-refused" {
+				wantPushes = 2
+				runGitCmd(t, dir, "remote", "add", "github", "https://github.com/test/repo.git")
+				runGitCmd(t, dir, "remote", "set-url", "--push", "github", github)
+				runGitCmd(t, dir, "push", "github", "main")
+				runGitCmd(t, dir, "remote", "add", "both", "https://codeberg.org/test/repo.git")
+				runGitCmd(t, dir, "remote", "set-url", "--push", "both", codeberg)
+				runGitCmd(t, dir, "remote", "set-url", "--add", "--push", "both", github)
+				hook := "#!/bin/sh\nif test \"$1\" = both\nthen\n\techo 'pre-push: refusing both' >&2\n\texit 1\nfi\nexit 0\n"
+				if err := os.WriteFile(filepath.Join(dir, ".git", "hooks", "pre-push"), []byte(hook), 0755); err != nil {
+					t.Fatal(err)
+				}
+				// Precondition: the hook really refuses a push to both.
+				probe := exec.Command("git", "-C", dir, "push", "both", "main:refs/heads/probe")
+				if out, err := probe.CombinedOutput(); err == nil {
+					t.Fatalf("hook did not refuse push to both: %s", out)
+				}
+			} else {
+				runGitCmd(t, dir, "remote", "add", "mirror", "https://codeberg.org/test/repo.git")
+				runGitCmd(t, dir, "remote", "set-url", "--push", "mirror", codeberg)
+			}
+			var out bytes.Buffer
+			err := Run(Options{Dir: dir, Bump: "patch", Force: true, SkipBuild: true, SkipSign: true, SkipPublish: true, Out: &out})
+			if err != nil {
+				t.Fatalf("release: %v\n%s", err, out.String())
+			}
+			skipped := "both"
+			if scenario == "identical-urls" {
+				skipped = "mirror"
+			}
+			if !strings.Contains(out.String(), "[skip]") || !strings.Contains(out.String(), skipped) {
+				t.Errorf("want a skip line naming %s, got:\n%s", skipped, out.String())
+			}
+			if got := strings.Count(out.String(), "Pushing branch"); got != wantPushes {
+				t.Errorf("pushed to %d remotes, want %d:\n%s", got, wantPushes, out.String())
+			}
+			targets := map[string]string{"codeberg": codeberg}
+			if wantPushes == 2 {
+				targets["github"] = github
+			}
+			for _, ref := range []string{"refs/heads/main", "refs/tags/v1.0.1"} {
+				want := pushTestGitOutput(t, dir, "rev-parse", ref)
+				for name, bare := range targets {
+					if got := pushTestGitOutput(t, bare, "rev-parse", ref); got != want {
+						t.Errorf("%s %s = %s, want %s", name, ref, got, want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestReleasePushDryRunListsOnlyKeptRemotes(t *testing.T) {
+	dir := setupGitRepoWithVersion(t, "1.0.0", false)
+	codeberg, github := t.TempDir(), t.TempDir()
+	runGitCmd(t, dir, "remote", "add", "origin", "https://codeberg.org/test/repo.git")
+	runGitCmd(t, dir, "remote", "set-url", "--push", "origin", codeberg)
+	runGitCmd(t, dir, "remote", "add", "github", "https://github.com/test/repo.git")
+	runGitCmd(t, dir, "remote", "set-url", "--push", "github", github)
+	runGitCmd(t, dir, "remote", "add", "both", "https://codeberg.org/test/repo.git")
+	runGitCmd(t, dir, "remote", "set-url", "--push", "both", codeberg)
+	runGitCmd(t, dir, "remote", "set-url", "--add", "--push", "both", github)
+	var out bytes.Buffer
+	if err := pushRelease(Options{Dir: dir, DryRun: true, Out: &out}, "v1.0.1", nil); err != nil {
+		t.Fatalf("dry run: %v", err)
+	}
+	if strings.Contains(out.String(), "Would push branch and tag v1.0.1 to both") {
+		t.Errorf("dry run lists the fan-out remote:\n%s", out.String())
+	}
+	for _, want := range []string{"Would push branch and tag v1.0.1 to origin", "Would push branch and tag v1.0.1 to github"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("dry run lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestSelectPushRemotesKeepsOneOfIdenticalRemotes(t *testing.T) {
+	urls := map[string][]string{
+		"origin": {"/a"},
+		"mirror": {"/a"},
+		"both":   {"/a", "/b"},
+		"github": {"/b"},
+	}
+	kept, skipped, err := selectPushRemotes([]string{"origin", "mirror", "both", "github"}, func(r string) ([]string, error) { return urls[r], nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(kept, ","); got != "origin,github" {
+		t.Errorf("kept = %s, want origin,github", got)
+	}
+	if got := strings.Join(skipped, ","); got != "both,mirror" {
+		t.Errorf("skipped = %s, want both,mirror", got)
+	}
+}
+
 func pushTestRefs(t *testing.T, dir string) string {
 	t.Helper()
 	return pushTestGitOutput(t, dir, "show-ref")
