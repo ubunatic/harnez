@@ -194,12 +194,31 @@ func OpenReadOnly(path string) (*Store, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
 	}
-	uri := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String() + "?mode=ro&_pragma=query_only(ON)"
+	store, err := openReadOnlyURI(path, "mode=ro&_pragma=query_only(ON)")
+	if err == nil {
+		return store, nil
+	}
+	// A WAL database in a read-only directory cannot create its -shm file, so
+	// the first real read fails with CANTOPEN (14) (issue 1078). Retry with
+	// immutable=1, which reads the main file without WAL or -shm. Frames not
+	// yet checkpointed into the main file are not visible in this mode.
+	immutable, immErr := openReadOnlyURI(path, "immutable=1&_pragma=query_only(ON)")
+	if immErr != nil {
+		return nil, err
+	}
+	return immutable, nil
+}
+
+// openReadOnlyURI opens path with the given query parameters and verifies the
+// connection with a real read. Ping alone does not touch the database file.
+func openReadOnlyURI(path, query string) (*Store, error) {
+	uri := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String() + "?" + query
 	db, err := sql.Open("sqlite", uri)
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Ping(); err != nil {
+	var tables int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master`).Scan(&tables); err != nil {
 		db.Close()
 		return nil, err
 	}
