@@ -144,7 +144,11 @@ func (ac *agentCLI) listCmd() *cobra.Command {
 }
 
 func (ac *agentCLI) statusCmd() *cobra.Command {
+	var julesID string
 	status := &cobra.Command{Use: "status", Short: "Show agent session status", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
+		if julesID != "" {
+			return statusJulesID(cmd, ac, julesID)
+		}
 		if cmd.Flags().Changed("turn") && ac.statusTurn <= 0 {
 			return fmt.Errorf("--turn must be a positive turn number")
 		}
@@ -175,6 +179,7 @@ func (ac *agentCLI) statusCmd() *cobra.Command {
 	status.Flags().BoolVar(&ac.statusReply, "reply", false, "show the latest saved reply")
 	status.Flags().IntVar(&ac.statusTurn, "turn", 0, "show the saved reply for turn N")
 	status.Flags().BoolVar(&ac.statusAllReplies, "all", false, "show all saved turn replies")
+	status.Flags().StringVar(&julesID, "id", "", "Jules session ID to read with --model jules; one read, writes nothing")
 	return status
 }
 

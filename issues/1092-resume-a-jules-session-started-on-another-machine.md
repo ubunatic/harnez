@@ -1,6 +1,7 @@
 # 1092 — Resume a Jules session started on another machine
 
-**Status**: Open
+**Status**: Closed — Acceptance: harnez agent status --model jules --id 5832791262383075829 shows AWAITING_USER_FEEDBACK (read-only). Commits 4c162a48 (M1 adopt and status --id), bc6e1085 (M2 docs), d70e866b (M1 golden). Quota-1 run: TestHelpGolden failed, fixed in d70e866b; targeted re-run passes; full suite not re-run under the one-run quota.
+**Closed-By**: claude:haiku:med, session dev-1092
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -40,3 +41,10 @@ Proposed shape (open for the developer plan):
 ## Decision
 
 - An explicit `--id` flag rather than a name search: the name lives only in the starting machine's store, while the ID is what git holds.
+- Plan approved (dev-1092, 2026-11-01): with `--id` alone, the adopted record's name defaults to `jules-<last 6 chars of id>`. `--name` sets the name; it is refused when it conflicts with an existing record for that ID or with another session. The ID is validated with a GET before any write. `status --id` makes one GET and writes nothing.
+
+## M1 Pre-Work
+
+- Before adopting, confirm that `runResume` and `CheckResumable` (`agent_run.go:668`, `agent.go:659`) accept a Jules record with no local run history. If they reject it, fix that path inside M1.
+
+- Result: no fix needed. Only `CodexDriver` implements `CheckResumable`, so Jules is not refused there, and the lineage check passes for a top-level host. `TestJulesIDAdoptsOnceThenResumesOnTheRecord` drives adopt then `wait` through `runResume` on a record with no history.

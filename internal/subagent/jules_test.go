@@ -34,6 +34,9 @@ type fakeJules struct {
 	getStatus  []int
 	sourceCode int
 	onCreate   func() // called when a session is created, to order it against git calls
+	// sessionID, when set, is the ID the test adopts; its requests are served as
+	// the fake's session 123.
+	sessionID string
 }
 
 func (f *fakeJules) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +44,9 @@ func (f *fakeJules) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 	if got := r.Header.Get("X-Goog-Api-Key"); got != julesTestKey {
 		f.t.Errorf("%s %s sent key %q", r.Method, r.URL.Path, got)
+	}
+	if f.sessionID != "" && strings.HasPrefix(r.URL.Path, "/sessions/"+f.sessionID) {
+		r.URL.Path = "/sessions/123" + strings.TrimPrefix(r.URL.Path, "/sessions/"+f.sessionID)
 	}
 	switch {
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/sources/github/"):

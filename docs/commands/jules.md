@@ -55,7 +55,7 @@ The job output names the GitHub PR. A run that finished without a PR, or a sessi
 ### Run tracking
 
 Before or right after starting a batch, record each run in a `## Jules runs` table (columns: kind, session name, Jules ID, PR, state) in the target ticket, or for runs with no ticket in a tracking issue filed through `/issue`. With `issues.tracker: none`, keep the table where `.harnez/rules/Index.md` says local tracking goes. Commit it through the repo's normal route. Update a row when its findings are captured (Findings capture); the batch is done when no row is pending.
-To catch up in a new session, read that table, run `harnez agent list --all-sessions --dead` and `gh pr list --state open`, and use `harnez agent resume --name <session> wait` for runs still going; that sends Jules no message.
+To catch up in a new session, read that table, run `harnez agent list --all-sessions --dead` and `gh pr list --state open`, and, for each run still going, adopt and track it by its Jules ID: `harnez agent resume --model jules --id <jules-id> wait`. The first call records the run on this machine, and later calls reuse that record; `wait` sends Jules no message. To read a run once without writing anything, use `harnez agent status --model jules --id <jules-id>`.
 Why: the agent store exists only on this machine, and neither it nor the PRs show whether findings were captured.
 
 ---
