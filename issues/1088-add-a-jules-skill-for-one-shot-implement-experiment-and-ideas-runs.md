@@ -35,6 +35,12 @@ Decide in this ticket whether `/jules-audit` stays as an alias or is replaced, a
 - Include independent drafts of a failing test: 1075 ranked them as the most useful use so far.
 - Starting a run in a repository needs that repository in `github_projects` and connected at jules.google.com. Say so in the skill, because both errors stopped a uman audit on 2026-11-01.
 
+## Decision
+
+- `/jules` replaces `/jules-audit`, with no alias: Jules takes no new work after 2026-11-11, so an alias would outlive nothing. Reason: one skill to maintain.
+- Lean sprint without a Searcher: the host already read the skill and all its callers (`config.yaml`, `internal/claude/claudeskills_test.go`).
+- M1 is the skill, pushed to `main`. M2 is one real run of each new kind, started from `main`, because a start on another branch skips the GitHub sync.
+
 ## Done when
 
 The skill is installed by `harnez init`, and one real run of each new kind is recorded here with what was kept.
