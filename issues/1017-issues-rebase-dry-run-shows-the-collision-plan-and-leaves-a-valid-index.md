@@ -32,3 +32,9 @@ loop, a hard blocker or no progress, clear the goal and write a failure report h
   loudly when it is not clean.
 - Warn when a replayed commit subject names a number that was moved (it cannot be rewritten
   safely; just say so).
+
+## Attempt (2026-11-01)
+
+Jules opened [GitHub PR 37](https://github.com/ubunatic/harnez/pull/37) as the real test of 1071. Not reviewed
+or merged. It changes `rebase.go` and `reconcile.go`, adds no Go tests (the goal wants tests) and adds two
+throwaway scripts at the repository root (`test-dry-run.sh`, `test-real-run.sh`). Its base is GitHub `main`.
