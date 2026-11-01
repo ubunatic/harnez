@@ -1,6 +1,6 @@
 # 1088 — Add a /jules skill for one-shot implement, experiment and ideas runs
 
-**Status**: Open
+**Status**: In Progress — skill build on issue/1088-jules-skill
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

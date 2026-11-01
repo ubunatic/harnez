@@ -115,5 +115,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1082 | [1082-release-push-fails-when-a-forge-push-mirror-updates-another-remote-first.md](1082-release-push-fails-when-a-forge-push-mirror-updates-another-remote-first.md) | release: push fails when a forge push mirror updates another remote first | Open |
 | 1086 | [1086-agent-start-fails-when-the-memorable-session-name-pool-is-used-up.md](1086-agent-start-fails-when-the-memorable-session-name-pool-is-used-up.md) | agent start fails when the memorable session name pool is used up | Open |
 | 1087 | [1087-generated-rule-read-line-names-rule-files-the-repo-does-not-have.md](1087-generated-rule-read-line-names-rule-files-the-repo-does-not-have.md) | generated rule-read line names rule files the repo does not have | Open |
-| 1088 | [1088-add-a-jules-skill-for-one-shot-implement-experiment-and-ideas-runs.md](1088-add-a-jules-skill-for-one-shot-implement-experiment-and-ideas-runs.md) | Add a /jules skill for one-shot implement, experiment and ideas runs | Open |
+| 1088 | [1088-add-a-jules-skill-for-one-shot-implement-experiment-and-ideas-runs.md](1088-add-a-jules-skill-for-one-shot-implement-experiment-and-ideas-runs.md) | Add a /jules skill for one-shot implement, experiment and ideas runs | In Progress — skill build on issue/1088-jules-skill |
 <!-- harnez:end issues-active-index -->
