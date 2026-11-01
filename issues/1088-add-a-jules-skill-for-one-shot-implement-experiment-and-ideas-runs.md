@@ -56,6 +56,7 @@ Harnez bugs from the same report are in 1089.
 - Ideas prompt: exclude gaps already listed in `CLAUDE.md` and open tickets.
 - Experiment prompt: a checklist of requested approaches that the report must answer.
 - Section 3: exit 0 can mean the wait ran out, so read the state in the output.
+- Findings capture (owner, 2026-11-01): once a run has finished and its PR is read, every finding that survived the evidence check goes into a new issue in that repository's default tracker, through `/issue`. The exception is a quick fix, which is made directly as a small code change through the normal workflow.
 
 ## Done when
 
