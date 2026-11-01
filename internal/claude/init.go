@@ -434,6 +434,25 @@ func detectDoc(dir, name string) bool {
 	return false
 }
 
+// scaffoldVersionSpec reports whether init may scaffold the gorelease
+// version.yaml template (issue 1084). A non-interactive run (-y) in a repo that
+// has no git tags, and where gorelease was not requested with --docs, gets no
+// version.yaml: a repo that never released should not gain a release spec it
+// did not ask for. Interactive runs, explicit requests and tagged repos are unchanged.
+func scaffoldVersionSpec(dir string, assumeYes bool, explicitDocs []string) bool {
+	if !assumeYes || containsRepoDoc(explicitDocs, "gorelease") {
+		return true
+	}
+	return repoHasGitTags(dir)
+}
+
+// repoHasGitTags reports whether dir is a git repository with at least one tag.
+// A non-git directory has no tags.
+func repoHasGitTags(dir string) bool {
+	out, err := exec.Command("git", "-C", dir, "tag", "--list").Output()
+	return err == nil && strings.TrimSpace(string(out)) != ""
+}
+
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
@@ -1221,7 +1240,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 			return err
 		}
 
-		if err := initCopyDocs(ir, assumeYes, cfg, dir, docs, docVariants, repoConfig.Make.Scaffold); err != nil {
+		if err := initCopyDocs(ir, assumeYes, cfg, dir, docs, docVariants, repoConfig.Make.Scaffold, scaffoldVersionSpec(dir, assumeYes, opts.Docs)); err != nil {
 			return err
 		}
 		if repoConfig.Make.ContainerTest {

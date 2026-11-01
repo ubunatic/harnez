@@ -123,7 +123,8 @@ func initLocalSections(ir *initReport, cfg *Config, docs []string, repoMode stri
 }
 
 // initCopyDocs copies the selected language docs into the project and injects their Makefile targets.
-func initCopyDocs(ir *initReport, assumeYes bool, cfg *Config, dir string, docs []string, docVariants map[string]string, scaffoldMake bool) error {
+// scaffoldVersion=false skips writing a version.yaml template (see scaffoldVersionSpec).
+func initCopyDocs(ir *initReport, assumeYes bool, cfg *Config, dir string, docs []string, docVariants map[string]string, scaffoldMake, scaffoldVersion bool) error {
 	// Copy language docs locally and inject Makefile targets.
 	for _, name := range docs {
 		lang, ok := cfg.AgentsMD.Languages[name]
@@ -151,7 +152,8 @@ func initCopyDocs(ir *initReport, assumeYes bool, cfg *Config, dir string, docs 
 
 		makeScaffoldEnabled := name != "make" || scaffoldMake
 		justScaffolded := false
-		if lang.Template != "" && makeScaffoldEnabled {
+		versionSpecSkipped := !scaffoldVersion && filepath.Base(lang.Template) == "version.yaml"
+		if lang.Template != "" && makeScaffoldEnabled && !versionSpecSkipped {
 			dest := localPath(dir, filepath.Base(lang.Template))
 			if _, err := os.Stat(dest); os.IsNotExist(err) {
 				data, err := fs.ReadFile(cfg.FS, lang.Template)

@@ -58,7 +58,10 @@ apply: ⚙️ build  # apply config to ~/.claude globally
 init: ⚙️ build  # initialize or update this project
 	./$(BINARY) init -c $(CONFIG) -d $(PROJECT) -y
 
-init-siblings: ⚙️ build  # run harnez init across all sibling projects
+init-siblings: ⚙️ build  # run harnez init across all sibling projects (CONFIRM=1; refuses dirty tree or non-main branch)
+	@test "$(CONFIRM)" = 1 || (echo "❌ refusing: init-siblings rewrites every sibling repo; run: make init-siblings CONFIRM=1" && exit 1)
+	@test -z "$$(git status --porcelain)" || (echo "❌ refusing: this repo has uncommitted changes; commit or stash them, then run make init-siblings CONFIRM=1" && exit 1)
+	@test "$$(git branch --show-current)" = main || (echo "❌ refusing: this repo is not on main; run git switch main, then make init-siblings CONFIRM=1" && exit 1)
 	@for dir in $$(find .. -maxdepth 1 -mindepth 1 -type d | sort); do \
 		if test -d "$$dir/.git" || test -f "$$dir/AGENTS.md" || test -f "$$dir/CLAUDE.md"; then \
 			if test "$$dir" != "../archive" && test "$$dir" != "../videos"; then \
