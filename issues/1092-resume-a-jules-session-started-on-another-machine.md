@@ -40,3 +40,8 @@ Proposed shape (open for the developer plan):
 ## Decision
 
 - An explicit `--id` flag rather than a name search: the name lives only in the starting machine's store, while the ID is what git holds.
+- Plan approved (dev-1092, 2026-11-01): with `--id` alone, the adopted record's name defaults to `jules-<last 6 chars of id>`. `--name` sets the name; it is refused when it conflicts with an existing record for that ID or with another session. The ID is validated with a GET before any write. `status --id` makes one GET and writes nothing.
+
+## M1 Pre-Work
+
+- Before adopting, confirm that `runResume` and `CheckResumable` (`agent_run.go:668`, `agent.go:659`) accept a Jules record with no local run history. If they reject it, fix that path inside M1.
