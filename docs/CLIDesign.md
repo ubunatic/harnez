@@ -364,6 +364,9 @@ and positional arguments are never rewritten. New commands get this without regi
 
 ## Flag shorthands
 
+`apply --prune` (issue 1061) is long-only and has no shorthand: it only changes what a
+`--components` run removes, and `diff --prune` takes the same flag.
+
 `apply --docs` has shorthand `-d`. `init --docs` does **not** — `-d` is already taken by
 `--dir`. When adding new flags to either command, check for shorthand conflicts before
 committing to a letter.

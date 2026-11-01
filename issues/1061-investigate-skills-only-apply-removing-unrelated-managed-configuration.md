@@ -61,11 +61,12 @@ This matches a skills-only apply that was never followed by a plain apply, altho
 
 ## Decisions
 
-**D1, owner confirmation required before M3.** Recommended: the `--components` flag becomes scoped, and a persisted `components:` key stays desired-state.
+**D1, confirmed by the owner (2026-11-01).** The `--components` flag becomes scoped, and a persisted `components:` key stays desired-state.
 
 - `apply --components X` reconciles only X and leaves unselected components untouched, with no install and no removal. `diff` and `status` use the same scope, so unselected parts are not drift.
 - `apply --components X --prune` gives today's removal for one run. Check `docs/CLIDesign.md` for shorthand conflicts first.
 - A `components:` key in the loaded config keeps removing unselected components, because it is a persistent, explicit choice. A flag overrides its scope, and without `--prune` the flag run removes nothing.
+- Implementation: the scope travels inside the resolved `Set` (`claude.Scope`, `Set.Scoped`), not in a separate `ApplyOptions` field, so every existing selection parameter carries it. `--prune` is long-only (`-d` is taken, see `docs/CLIDesign.md`). `status` takes no `--prune`: it is read-only and removes nothing.
 
 Rejected: keeping the removal and only adding a warning, because the documented recipe and the natural reading of the flag would both stay destructive.
 

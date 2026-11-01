@@ -273,10 +273,10 @@ E remains the fallback for one-off setups and costs nothing to keep.
 | Component | Apply installs | Runtime commands (unchanged by selection) |
 |---|---|---|
 | `docs` | global copyable docs (`docs:`, `apply --docs`), managed CLAUDE.md/AGENTS.md convention sections | `docs`, `mode`, `read` |
-| `skills` | commands and skills into Claude, Codex, Gemini, Prime targets | — |
-| `telemetry` | harnez hooks in Claude `settings.json` (`exec hook`, `hook read`), Codex and AGY hooks, distill adapters, the Tool Feedback Protocol skill, telemetry schema init | `exec`, `hook`, `rate`, `log`, `stats`, `export`, `distill` |
+| `skills` | commands and skills into Claude, Codex, Gemini, Prime targets; the Pi background-task runner (`~/.pi/agent/extensions/background-tasks`, harnez-owned, see `docs/PiAgent.md`) | — |
+| `telemetry` | harnez hooks in Claude `settings.json` (`exec hook`, `hook read`, `hook sound`, and the other `harnez …` hook commands), Codex and AGY hooks, distill adapters, the Tool Feedback Protocol skill, telemetry schema init | `exec`, `hook`, `rate`, `log`, `stats`, `export`, `distill` |
 | `agents` | skills that declare `requires: [agents]` | `agent`, `subagent`, `compact-check` |
-| `usage` (transitional) | `statusLine`, `harnez-agent-collector` systemd unit | `usage`, `statusline`, … until moved to loom |
+| `usage` (transitional) | `statusLine` in Claude `settings.json`, Codex and AGY status lines, `harnez-agent-collector` systemd unit | `usage`, `statusline`, … until moved to loom |
 
 Always applied regardless of selection: `model`, `effortLevel`, `permissions`, `env`,
 `spinnerVerbs`, decommissioned-artifact cleanup, bash shims. These are
@@ -315,15 +315,31 @@ Two behaviours, chosen by how harmful a leftover is:
 - **Skip** docs, commands, and skills of a disabled component: apply stops managing them
   but does not delete them. A stale doc is harmless and may belong to another tool.
 
+The removals above happen only in desired state (`--prune` or a `components:` key). A
+scoped run (a plain `--components` flag, §8.5) skips them. The "Remove" list is the
+list of what desired state removes, not what every run removes.
+
 Ownership rule: harnez owns a hook or status line when its command is `harnez` or starts
 with `harnez `; for Codex, a hook group whose handlers all run harnez. Nothing else is
 removed. `internal/codex` applies the same rule: `Apply`, `Remove` and `Status` act on
-harnez-owned groups only, so user groups on the same Codex events survive. The Stop sound hook in the default config is not
-harnez-owned and survives every selection.
+harnez-owned groups only, so user groups on the same Codex events survive. The Stop sound
+hook (`harnez hook sound`, default config) is harnez-owned like every `harnez …` hook: it
+belongs to `telemetry`, is removed in desired state without `telemetry`, and a scoped
+run leaves it alone. Only user hooks that do not start with `harnez ` survive a
+desired-state removal.
 
 ### 8.5 Selection and persistence
 
 Resolution order: `apply --components` > `components:` in the loaded config > `full`.
+
+Scope (issue 1061, D1). A `--components` flag alone is scoped: `apply`, `diff` and
+`status` touch only the named components, and an unselected component is neither
+installed, updated nor removed. Adding `--prune` makes the flag selection desired state
+for that one run, so unselected components are removed as the disabled rules in §8.4
+describe. A `components:` key in the config is always desired state. A flag overrides
+the key's selection, and its scope follows the flag. With neither `--prune` nor a
+config key, a flag run removes nothing, and a plain `apply` after a scoped run
+restores nothing that was never removed.
 
 A flag alone is not persistent: the next plain `harnez apply` would reinstall everything,
 and `harnez diff`/`status` would report the deselected parts as drift. Options:
@@ -369,18 +385,26 @@ its own state otherwise. Agents stay free of sqlite either way.
 `apply` phases, each gated by the selection and depending only on config, not on another
 phase's output:
 
-1. Resolve selection (flag > config > local config > full); filter config.
+1. Resolve selection (flag > config > local config > full) and whether it is scoped
+   (§8.5); filter config.
 2. Telemetry schema init — only with `telemetry` (today it runs unconditionally).
-3. Decommissioned-artifact cleanup — always.
-4. `settings.json` — one merged write: always-on settings, hooks of enabled components
-   (the `hooks` key is written even when empty, so hooks of disabled components are
-   replaced away), `statusLine` set or removed.
-5. Commands and skills — `skills`; per-skill removal when `requires:` is unmet.
-6. Codex and AGY hooks — apply with `telemetry`, remove without.
-7. Distill adapters — `telemetry`.
-8. Global docs — `docs`.
-9. Shims and shell rc — always (unchanged).
-10. systemd collector unit — `usage` and `--systemd`.
+3. Decommissioned-artifact cleanup — always, whatever the selection (D2, issue 1061).
+4. `settings.json` — one merged write: always-on settings, hooks of enabled components,
+   `statusLine` set or removed. In desired state the `hooks` key is written even when
+   empty, so hooks of disabled components are replaced away. A scoped run omits the
+   `hooks` and `statusLine` keys of unselected components, so `applyMerge` keeps what is
+   on disk.
+5. Commands and skills — `skills`; per-skill removal when `requires:` is unmet, in desired
+   state only. A scoped run skips such a skill.
+6. Pi background-task runner — `skills`; a revert when `skills` is off, in desired state only.
+7. Codex and AGY hooks — apply with `telemetry`; remove without it, in desired state only.
+8. Codex and AGY status lines — apply with `usage` when status lines are enabled, remove
+   when `usage` is off in desired state (issue 1061 M4). A scoped run keeps them.
+9. Distill adapters — `telemetry`; remove without it, in desired state only. A
+   user-authored file or a symlink at an adapter path is kept and reported (issue 1061 M1).
+10. Global docs — `docs`.
+11. Shims and shell rc — always (unchanged).
+12. systemd collector unit — `usage` and `--systemd`.
 
 Because settings are written in one merge (step 4) and no later step reads them, each
 preset boots independently, and presets compose by union.
@@ -388,8 +412,10 @@ preset boots independently, and presets compose by union.
 ### 8.8 Migration
 
 - Default is `full`, so existing users see no change.
-- Switching `full` → `docs-only` removes harnez hooks, the status line, and the Tool
-  Feedback Protocol skill, and keeps docs and the other skills. Switching back reinstalls them.
+- Switching `full` → `docs-only` removes harnez hooks, the status lines, and the Tool
+  Feedback Protocol skill, and keeps docs and the other skills, only with `--prune` or a
+  `components: [docs-only]` config key (issue 1061 D1). A plain `--components docs-only`
+  leaves everything outside it installed. Switching back with a plain apply reinstalls them.
 - If B follows, each component maps 1:1 to a binary and the selection also decides which
   binaries a `harnez install` fetches. Hook strings keep working through the dispatcher.
 - `usage` drops out of the component list when it moves to loom; a saved selection that
