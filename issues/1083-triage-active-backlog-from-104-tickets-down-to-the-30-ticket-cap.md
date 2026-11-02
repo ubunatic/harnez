@@ -1,6 +1,6 @@
 # 1083 — Triage active backlog from 104 tickets down to the 30-ticket cap
 
-**Status**: Open
+**Status**: Closed — 88 tickets deferred to Backlog (16dc4ebc); active list focused on taia support, P1s and open bugs; 29 active
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
