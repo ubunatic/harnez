@@ -44,3 +44,12 @@ On 2026-11-02 two clones of this repo filed tickets 1095 and 1096 at the same ti
 - Closed-unmerged PRs do not reserve numbers.
 - Offline or an API error only warns ("open PRs not checked: ...") and never blocks filing. The lint fails only on a confirmed collision.
 - No PR was open at plan time, so acceptance is fixture-based. Add one live check once a PR is open.
+
+## Host review (2026-11-02)
+
+- M1 (forge open-PR list), M2 (shared number reservation), M3 (lint --against + pre-push + /issue step) and M4 (docs): diffs reviewed. Targeted `go test` passes for forge, issues, prwait and find. The developer's `make test-q1` exited 0 with no `--- FAIL`.
+- Live checks with the installed binary:
+  - `harnez find issues next` scans both forges and returns 1100 in 0.77s.
+  - With an unreachable proxy, it warns "open PRs not checked on github/origin" and still returns 1100.
+  - In a scratch clone, `lint --against` fails on a reused number and names both paths. A missing ref only warns, with exit 0.
+- Still pending: the live open-PR scan with a PR actually open. This sprint's own PR is the first case.
