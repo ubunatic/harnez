@@ -10,6 +10,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 <!-- harnez:begin issues-active-index -->
 | # | File | Title | Status |
 |---|------|-------|--------|
+| 857 | [857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md](857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md) | Support external issue providers (GitHub, GitLab, Codeberg, Trello, Jira) | Open |
 | 942 | [942-epic-model-catalog-access-discovery-and-user-model-policy.md](942-epic-model-catalog-access-discovery-and-user-model-policy.md) | Epic: model catalog, access discovery and user model policy | Open |
 | 959 | [959-agent-role-inference-turns-a-fix-prompt-into-a-read-only-reviewer.md](959-agent-role-inference-turns-a-fix-prompt-into-a-read-only-reviewer.md) | agent role inference turns a fix prompt into a read-only reviewer | Open |
 | 971 | [971-agent-start-stream-stats-drops-the-final-reply-when-it-was-already-printed.md](971-agent-start-stream-stats-drops-the-final-reply-when-it-was-already-printed.md) | agent start --stream stats drops the final reply when it was already printed | Open |
@@ -31,6 +32,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1076 | [1076-agent-start-context-mode-is-silently-ignored-for-claude-codex-and-agy.md](1076-agent-start-context-mode-is-silently-ignored-for-claude-codex-and-agy.md) | agent start --context-mode is silently ignored for Claude, Codex and AGY | Open |
 | 1081 | [1081-expose-worker-s-own-session-name-and-pid-in-env-so-agents-recognise-their-own-claude-p-process.md](1081-expose-worker-s-own-session-name-and-pid-in-env-so-agents-recognise-their-own-claude-p-process.md) | Expose worker's own session name and pid in env so agents recognise their own claude -p process | Open |
 | 1082 | [1082-release-push-fails-when-a-forge-push-mirror-updates-another-remote-first.md](1082-release-push-fails-when-a-forge-push-mirror-updates-another-remote-first.md) | release: push fails when a forge push mirror updates another remote first | Open |
+| 1083 | [1083-triage-active-backlog-from-104-tickets-down-to-the-30-ticket-cap.md](1083-triage-active-backlog-from-104-tickets-down-to-the-30-ticket-cap.md) | Triage active backlog from 104 tickets down to the 30-ticket cap | Open |
 | 1086 | [1086-agent-start-fails-when-the-memorable-session-name-pool-is-used-up.md](1086-agent-start-fails-when-the-memorable-session-name-pool-is-used-up.md) | agent start fails when the memorable session name pool is used up | Open |
 | 1100 | [1100-split-the-advisor-role-into-scout-and-consult.md](1100-split-the-advisor-role-into-scout-and-consult.md) | Split the advisor role into scout and consult | Open |
 | 1101 | [1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md](1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md) | Model pick by task and provider in harnez: absorb horg pick/models or call horg | Open |
