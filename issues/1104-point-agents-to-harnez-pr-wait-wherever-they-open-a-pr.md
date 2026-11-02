@@ -1,6 +1,6 @@
 # 1104 — Point agents to harnez pr wait wherever they open a PR
 
-**Status**: Open
+**Status**: Closed — pr wait note added to Git.md, lean-sprint, factory-sprint, release, decide (cd035ad4); make test green
 **Priority**: P2 (Medium)
 **Severity**: Enhancement
 **Category**: Agent Guidance

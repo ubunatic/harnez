@@ -124,5 +124,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1101 | [1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md](1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md) | Model pick by task and provider in harnez: absorb horg pick/models or call horg | Open |
 | 1102 | [1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md](1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md) | pre-push ticket-number lint checks the working tree, not the pushed commits | Open |
 | 1103 | [1103-harnez-release-attach-minisign-public-keys-from-keys-minisign.md](1103-harnez-release-attach-minisign-public-keys-from-keys-minisign.md) | harnez release: attach minisign public keys from keys/minisign/ | Open |
-| 1104 | [1104-point-agents-to-harnez-pr-wait-wherever-they-open-a-pr.md](1104-point-agents-to-harnez-pr-wait-wherever-they-open-a-pr.md) | Point agents to harnez pr wait wherever they open a PR | Open |
 <!-- harnez:end issues-active-index -->
