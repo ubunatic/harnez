@@ -28,3 +28,10 @@ In team mode the host opens an AGit PR and then waits for the owner to merge it.
 - Unit tests with a fake HTTP server for both forges: merged, closed unmerged, still open until timeout, 404 and a transient error.
 - Live check: wait on an already-merged Codeberg PR (for example 78) and get exit 0 at once.
 - Document the background use in the sprint and `/issue` skills' publish steps and in `harnez pr wait --help`.
+
+## Decision
+
+- Plan approved (dev-1096, 2026-11-02). Milestones: M1 spec `spec/pr.yaml` + schema + loader and `internal/forge` extracted from `internal/release/forge.go` (release tests unchanged); M2 `internal/prwait` clients for Forgejo and GitHub REST with httptest suite; M3 `cmd/harnez/pr.go` + help golden; M4 `/issue` (`docs/commands/issue.md`) and sprint skill docs.
+- Exit codes: 0 merged, 1 usage, 2 closed unmerged, 3 timeout, 4 API error, 5 `--contains` sha not on the default branch. First poll is immediate. Merged is read from `merged`, not `state` (a merged Forgejo PR reports `state: closed`).
+- Defaults in spec: poll 30s, timeout 12h. Tokens optional (`CODEBERG_TOKEN`-style env for Forgejo; `GITHUB_TOKEN`, else `gh auth token`), never in output or errors.
+- Commit subjects end with `(issue 1096 Mx)`; the Co-Authored-By trailer stays the last body line.
