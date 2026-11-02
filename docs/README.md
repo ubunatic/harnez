@@ -235,6 +235,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-01-two-agent-lean-sprint-jules-resume-by-id.md](studies/2026-11-01-two-agent-lean-sprint-jules-resume-by-id.md) | Lean sprint 1092: resume a Jules session by ID |
 | [studies/2026-11-02-two-agent-lean-sprint-jules-resume-reply.md](studies/2026-11-02-two-agent-lean-sprint-jules-resume-reply.md) | Lean sprint 1095: Jules resume waits for the real reply |
 | [studies/2026-11-02-two-agent-lean-sprint-pr-wait.md](studies/2026-11-02-two-agent-lean-sprint-pr-wait.md) | Lean sprint 1096: `harnez pr wait` |
+| [studies/2026-11-02-two-agent-lean-sprint-ticket-number-collisions.md](studies/2026-11-02-two-agent-lean-sprint-ticket-number-collisions.md) | Lean sprint 1099: ticket numbers claimed by open PRs |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |

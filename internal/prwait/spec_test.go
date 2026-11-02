@@ -32,6 +32,9 @@ func TestLoadSpecEmbedded(t *testing.T) {
 	if spec.MaxConsecutiveErrors != 3 {
 		t.Errorf("MaxConsecutiveErrors = %d, want 3", spec.MaxConsecutiveErrors)
 	}
+	if spec.OpenPRScan.Timeout != 5*time.Second || spec.OpenPRScan.PageSize != 50 || spec.OpenPRScan.MaxPages != 4 {
+		t.Errorf("OpenPRScan = %+v, want 5s/50/4", spec.OpenPRScan)
+	}
 	cb, ok := spec.ForgeFor("Codeberg.org")
 	if !ok || cb.Kind != "forgejo" || cb.APIBase != "https://codeberg.org/api/v1" {
 		t.Errorf("codeberg forge = %+v, %v", cb, ok)

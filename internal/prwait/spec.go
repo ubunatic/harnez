@@ -11,15 +11,11 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/forge"
 )
 
-// Forge describes one supported forge host from spec/pr.yaml.
-type Forge struct {
-	Host     string   `yaml:"host"`
-	Kind     string   `yaml:"kind"`
-	APIBase  string   `yaml:"api_base"`
-	TokenEnv []string `yaml:"token_env"`
-}
+// Forge describes one supported forge host from spec/pr.yaml. It lives in internal/forge.
+type Forge = forge.Forge
 
 // Spec holds the pull request wait settings loaded from spec/pr.yaml.
 type Spec struct {
@@ -29,7 +25,14 @@ type Spec struct {
 	DefaultTimeout       time.Duration
 	RequestTimeout       time.Duration
 	MaxConsecutiveErrors int
+	OpenPRScan           forge.ScanOptions
 	Forges               []Forge
+}
+
+type rawScan struct {
+	Timeout  string `yaml:"timeout"`
+	PageSize int    `yaml:"page_size"`
+	MaxPages int    `yaml:"max_pages"`
 }
 
 type rawSpec struct {
@@ -39,6 +42,7 @@ type rawSpec struct {
 	DefaultTimeout       string  `yaml:"default_timeout"`
 	RequestTimeout       string  `yaml:"request_timeout"`
 	MaxConsecutiveErrors int     `yaml:"max_consecutive_errors"`
+	OpenPRScan           rawScan `yaml:"open_pr_scan"`
 	Forges               []Forge `yaml:"forges"`
 }
 
@@ -88,6 +92,10 @@ func loadSpecFrom(fsys fs.FS, specPath, schemaPath string) (Spec, error) {
 	if err != nil {
 		return Spec{}, fmt.Errorf("%s: invalid request_timeout: %w", specPath, err)
 	}
+	scanTimeout, err := time.ParseDuration(raw.OpenPRScan.Timeout)
+	if err != nil {
+		return Spec{}, fmt.Errorf("%s: invalid open_pr_scan.timeout: %w", specPath, err)
+	}
 	return Spec{
 		DefaultRemote:        raw.DefaultRemote,
 		DefaultBranch:        raw.DefaultBranch,
@@ -95,7 +103,12 @@ func loadSpecFrom(fsys fs.FS, specPath, schemaPath string) (Spec, error) {
 		DefaultTimeout:       timeout,
 		RequestTimeout:       reqTimeout,
 		MaxConsecutiveErrors: raw.MaxConsecutiveErrors,
-		Forges:               raw.Forges,
+		OpenPRScan: forge.ScanOptions{
+			Timeout:  scanTimeout,
+			PageSize: raw.OpenPRScan.PageSize,
+			MaxPages: raw.OpenPRScan.MaxPages,
+		},
+		Forges: raw.Forges,
 	}, nil
 }
 

@@ -6,6 +6,14 @@ command -v git-lfs >/dev/null 2>&1 || { printf >&2 "\n%s\n\n" "This repository i
 refs=$(cat)
 printf '%s\n' "$refs" | git lfs pre-push "$@" || exit $?
 
+# Ticket numbers: a ticket added here must not reuse a number that origin/main gives to another
+# file (issue 1099). A failed fetch only warns; a confirmed collision blocks the push.
+if test -d issues && command -v harnez >/dev/null 2>&1
+then
+    git fetch --quiet origin main 2>/dev/null || echo >&2 "pre-push: could not fetch origin main; ticket numbers checked against the last fetched copy"
+    harnez issues lint --against origin/main || exit $?
+fi
+
 case "$1:$2" in
 both:*github.com*)
     ;;

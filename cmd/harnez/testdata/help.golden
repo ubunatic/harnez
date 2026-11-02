@@ -1729,6 +1729,7 @@ then the README is regenerated and the batch is committed once.
                     upstream and reconciles (use instead of git pull).
   lint              Read-only validation for duplicate numbers, conflicting
                     filename/H1 numbers, and drift across all three indexes.
+                    With --against REF, also fail on a number REF gives to another file.
   status            Show lifecycle counts and warn when active tickets exceed
                     the configured spec cap.
   list [filter]     Read-only: list tickets matching [filter] (default:
@@ -1775,6 +1776,7 @@ Usage:
   harnez issues <verb> <ticket-number...> [reason...] [flags]
 
 Flags:
+      --against string   with lint: fail when a ticket here reuses a number that REF (e.g. origin/main) gives to another file; warn if REF is missing
   -a, --all              with 'list': show all matching results
       --amend-reason     with close/done: amend the reason of an already-Closed ticket
       --cached           validate the staged Git snapshot (issues lint only)
@@ -1793,6 +1795,7 @@ Flags:
       --no-code          with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit
       --no-commit        rewrite the ticket file and README but do not git add/commit
       --number string    with new: use this ticket number instead of the next free one (refused if it exists)
+      --offline          with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read
       --pull             reconcile: git fetch + merge the upstream, then renumber colliding local tickets and commit once
   -r, --raw              output raw text directly to stdout
       --remote           with new: allocate a permanent GH id using authenticated gh on the github remote
