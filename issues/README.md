@@ -122,4 +122,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1093 | [1093-failed-jules-start-leaves-a-session-record-that-blocks-the-retry-name.md](1093-failed-jules-start-leaves-a-session-record-that-blocks-the-retry-name.md) | Failed Jules start leaves a session record that blocks the retry name | Open |
 | 1094 | [1094-research-autoswarm-hkuds-and-absorb-useful-ideas-into-harnez.md](1094-research-autoswarm-hkuds-and-absorb-useful-ideas-into-harnez.md) | Research AutoSwarm (HKUDS) and absorb useful ideas into harnez | Open |
 | 1095 | [1095-analyze-t3-code-t3-codes-and-absorb-useful-ideas-into-harnez.md](1095-analyze-t3-code-t3-codes-and-absorb-useful-ideas-into-harnez.md) | Analyze T3 Code (t3.codes) and absorb useful ideas into harnez | Open |
+| 1096 | [1096-analyse-herdr-and-absorb-useful-ideas-into-harnez.md](1096-analyse-herdr-and-absorb-useful-ideas-into-harnez.md) | Analyse Herdr and absorb useful ideas into harnez | Open |
 <!-- harnez:end issues-active-index -->
