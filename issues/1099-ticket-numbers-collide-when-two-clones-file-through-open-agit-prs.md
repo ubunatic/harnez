@@ -1,6 +1,7 @@
 # 1099 — Ticket numbers collide when two clones file through open AGit PRs
 
-**Status**: Open
+**Status**: Closed — Fixture-based acceptance passes: make test-q1 exit 0, no --- FAIL, 68 ok packages incl. internal/forge, internal/issues, internal/prwait, cmd/harnez (help golden, lint --against). Commits d9e6af47 (M1), 20b21774 (M2), 6b05afcb (M3), 2c2238e3 (M4). Pending: one live check of the open-PR scan once a real PR is open on the forge; no PR was open at test time.
+**Closed-By**: claude:haiku:med, session dev-1099
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
