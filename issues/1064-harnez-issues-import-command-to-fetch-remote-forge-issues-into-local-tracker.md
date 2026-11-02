@@ -1,6 +1,6 @@
 # 1064 — Add harnez issues import command to fetch remote forge issues into local tracker
 
-**Status**: Open
+**Status**: Closed — harnez issues import <url> reads a Codeberg/Forgejo or GitHub issue (read-only, spec/pr.yaml forges + tokens), writes an Open ticket linking it, quotes the body as data, refuses PRs and repeats (18e55411); live import of codeberg forgejo#1 OK; go test ./... green. Export (1067) stays open.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

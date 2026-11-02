@@ -137,7 +137,7 @@ func (l PullLister) getJSON(fg Forge, rawURL string, v any) error {
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
 		transient := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
-		return &APIError{Status: resp.StatusCode, Transient: transient, Detail: "listing pull requests on " + fg.Host}
+		return &APIError{Status: resp.StatusCode, Transient: transient, Detail: "API request to " + fg.Host}
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v); err != nil {
 		return &APIError{Status: resp.StatusCode, Detail: "decoding response from " + fg.Host}

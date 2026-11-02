@@ -227,13 +227,19 @@ valid, exit-0 answer.`,
 				return nil
 			}
 			if len(args) == 0 {
-				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, backlog, promote, new, show, mv, rebase, reconcile, lint, status, list)")
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, backlog, promote, new, import, show, mv, rebase, reconcile, lint, status, list)")
 			}
 			if args[0] == "new" {
 				return nil // [title] is optional, no ticket-number argument exists yet
 			}
 			if args[0] == "list" {
 				return nil // [filter] is optional, defaults to "is:open"
+			}
+			if args[0] == "import" {
+				if len(args) != 2 {
+					return fmt.Errorf("issues import: requires exactly 1 issue URL argument")
+				}
+				return nil
 			}
 			if args[0] == "show" {
 				if len(args) != 2 {
@@ -327,6 +333,9 @@ valid, exit-0 answer.`,
 				fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
 				warnNumberAhead(cmd.ErrOrStderr(), dir, numberFlag, offlineFlag)
 				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag, offlineFlag)
+			}
+			if args[0] == "import" {
+				return runIssuesImport(cmd.OutOrStdout(), dir, args[1], jsonFlag, offlineFlag, nil)
 			}
 			if args[0] == "show" {
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
