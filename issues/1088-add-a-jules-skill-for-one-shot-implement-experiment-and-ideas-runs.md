@@ -1,6 +1,6 @@
 # 1088 — Add a /jules skill for one-shot implement, experiment and ideas runs
 
-**Status**: In Progress — skill build on issue/1088-jules-skill
+**Status**: Closed — /jules skill ships audit, implement, experiment and ideas; each kind ran on a real task (runs table): implement 1087 via PR 63, experiment PR 62 -> 1086, ideas PR 61 -> 1091, audits from 1075.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
