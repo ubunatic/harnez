@@ -118,5 +118,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1091 | [1091-jules-driver-sync-fetch-can-miss-the-compared-commit-and-cut-off-responses-give-a-vague-error.md](1091-jules-driver-sync-fetch-can-miss-the-compared-commit-and-cut-off-responses-give-a-vague-error.md) | Jules driver: sync fetch can miss the compared commit, and cut-off responses give a vague error | Open |
 | 1093 | [1093-failed-jules-start-leaves-a-session-record-that-blocks-the-retry-name.md](1093-failed-jules-start-leaves-a-session-record-that-blocks-the-retry-name.md) | Failed Jules start leaves a session record that blocks the retry name | Open |
 | 1095 | [1095-jules-resume-returns-the-old-question-instead-of-waiting-for-the-reply.md](1095-jules-resume-returns-the-old-question-instead-of-waiting-for-the-reply.md) | Jules resume returns the old question instead of waiting for the reply | Open |
-| 1096 | [1096-wait-for-a-pr-to-merge-on-codeberg-or-github-as-a-background-command.md](1096-wait-for-a-pr-to-merge-on-codeberg-or-github-as-a-background-command.md) | Wait for a PR to merge on Codeberg or GitHub as a background command | Open |
 <!-- harnez:end issues-active-index -->

@@ -90,6 +90,8 @@ func assertIssuePublicationGuidance(t *testing.T, path, content string) {
 		"Do not fall back to a direct push.",
 		"Never delete or overwrite content.",
 		"not on `main` until it is merged",
+		"harnez pr wait <number> --contains <sha>",
+		"its exit code is the only merge signal",
 		"Say \"published\" or \"on main\" only after the remote confirms it.",
 		"Where applicable policy requires authorization in the current session, standing consent is insufficient",
 		"`<sha>` is the intended issue commit",

@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=schemas/pr.schema.json
+# Settings for `harnez pr wait`: the remote used when none is given, poll and timeout
+# defaults, the consecutive-error budget, and the forge hosts with their API bases.
+default_remote: origin
+default_branch: main
+poll_interval: 30s
+default_timeout: 12h
+request_timeout: 15s
+max_consecutive_errors: 3
+forges:
+  - host: codeberg.org
+    kind: forgejo
+    api_base: https://codeberg.org/api/v1
+    token_env: [CODEBERG_TOKEN, FORGEJO_TOKEN]
+  - host: github.com
+    kind: github
+    api_base: https://api.github.com
+    token_env: [GITHUB_TOKEN]
