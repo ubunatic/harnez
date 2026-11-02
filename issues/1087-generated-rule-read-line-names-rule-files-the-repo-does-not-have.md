@@ -1,6 +1,6 @@
 # 1087 — generated rule-read line names rule files the repo does not have
 
-**Status**: Open
+**Status**: Closed — Fixed in abac77cd: harnez read skips a missing Quota.md like Local.md, rules header says absent optional files are skipped; from Jules PR 63 plus the init golden and AGENTS.md sync Jules missed. make test-q1: 66 ok, 0 FAIL.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
