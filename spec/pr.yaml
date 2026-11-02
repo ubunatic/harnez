@@ -7,6 +7,12 @@ poll_interval: 30s
 default_timeout: 12h
 request_timeout: 15s
 max_consecutive_errors: 3
+# Open-PR ticket scan for `issues new`, `find next` and `issues mv`: per-request timeout,
+# page size and page budget for the forge API calls that list open pull requests.
+open_pr_scan:
+  timeout: 5s
+  page_size: 50
+  max_pages: 4
 forges:
   - host: codeberg.org
     kind: forgejo

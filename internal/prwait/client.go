@@ -6,9 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os/exec"
 	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/forge"
 )
 
 // PullInfo is the subset of a pull request that pr wait reads. Forgejo and GitHub both
@@ -23,18 +24,8 @@ type PullInfo struct {
 }
 
 // APIError is a failed pull request lookup. Transient errors (network, 429, 5xx) may be retried.
-type APIError struct {
-	Status    int // 0 when no HTTP response was received
-	Transient bool
-	Detail    string
-}
-
-func (e *APIError) Error() string {
-	if e.Status == 0 {
-		return fmt.Sprintf("pull request lookup failed: %s", e.Detail)
-	}
-	return fmt.Sprintf("pull request lookup failed: HTTP %d %s", e.Status, e.Detail)
-}
+// The type lives in internal/forge, shared with the open-PR ticket scan.
+type APIError = forge.APIError
 
 // Fetcher reads one pull request. Implementations must never include a token in an error.
 type Fetcher interface {
@@ -102,38 +93,11 @@ func (f *HTTPFetcher) tokenFor(fg Forge) string {
 	return f.Token(fg)
 }
 
-// TokenSource finds an optional token for a forge: the environment variables named in the spec,
-// then, for GitHub only, the output of `gh auth token`. Nothing is ever printed.
-type TokenSource struct {
-	Getenv  func(string) string
-	GHToken func() (string, error)
-}
+// TokenSource finds the optional forge token. It lives in internal/forge, shared with the
+// open-PR ticket scan; SystemTokenSource stays here for the pr wait callers.
+type TokenSource = forge.TokenSource
 
 // SystemTokenSource reads the real environment and the gh CLI when it is installed.
 func SystemTokenSource(getenv func(string) string) TokenSource {
-	return TokenSource{Getenv: getenv, GHToken: ghAuthToken}
-}
-
-// For returns the token for forge, or "" when none is configured.
-func (ts TokenSource) For(fg Forge) string {
-	for _, name := range fg.TokenEnv {
-		if v := strings.TrimSpace(ts.Getenv(name)); v != "" {
-			return v
-		}
-	}
-	if fg.Kind == "github" && ts.GHToken != nil {
-		if tok, err := ts.GHToken(); err == nil {
-			return strings.TrimSpace(tok)
-		}
-	}
-	return ""
-}
-
-func ghAuthToken() (string, error) {
-	out, err := exec.Command("gh", "auth", "token").Output()
-	if err != nil {
-		// Discard stderr on purpose: gh errors are not needed and must not be echoed.
-		return "", err
-	}
-	return string(out), nil
+	return forge.SystemTokenSource(getenv)
 }
