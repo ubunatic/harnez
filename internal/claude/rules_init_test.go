@@ -38,7 +38,7 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 		t.Fatalf("generated instruction must read Index-listed rules then Local.md in one call; got header %q", cfg.AgentsMD.Rules.Header)
 	}
 	// Resumed agent turns must not re-read the rules every prompt (issue 791).
-	for _, want := range []string{"**Once per session, before your first task, read", "Skip this if you already read them in this session."} {
+	for _, want := range []string{"**Once per session, before your first task, read", "Absent optional files are skipped", "Skip this if you already read them in this session."} {
 		if !strings.Contains(string(agents), want) {
 			t.Fatalf("rules header must ask for one read per session (%q); got header %q", want, cfg.AgentsMD.Rules.Header)
 		}

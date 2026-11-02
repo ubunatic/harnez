@@ -79,7 +79,8 @@ Examples:
 					if len(paths) == 1 {
 						return err
 					}
-					if filepath.Clean(file) == filepath.Join(".harnez", "rules", "Local.md") && errors.Is(err, os.ErrNotExist) {
+					clean := filepath.Clean(file)
+					if (clean == filepath.Join(".harnez", "rules", "Local.md") || clean == filepath.Join(".harnez", "rules", "Quota.md")) && errors.Is(err, os.ErrNotExist) {
 						fmt.Fprintf(cmd.OutOrStdout(), "=== %s (absent, optional) ===\n", file)
 						continue
 					}
