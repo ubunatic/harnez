@@ -59,6 +59,7 @@ AGit route:
 - Pushes to the same topic update its open PR. Check the topic's PR is still open before pushing. If it was closed or merged, use a new topic and say so.
 - The topic may contain other issues' commits. Check that the commits being pushed contain no unrelated changes. If any pushed commit is unrelated to an issue, stop and report it.
 - The PR is not on `main` until it is merged. Report it as open, not as published.
+- To learn the merge without asking the owner, start `harnez pr wait <number> --contains <sha>` as a background command (on Claude Code, Bash `run_in_background`). It polls Codeberg or GitHub, and its exit code is the only merge signal: 0 merged and `<sha>` is on the default branch; 2 closed without a merge; 3 still open at the timeout; 4 API error; 5 merged but `<sha>` is not on the default branch. Its exit wakes the agent. Do not poll it by hand, and do not report "merged" from chat alone.
 
 Number collisions: `harnez issues new` checks only fetched remote branches, so another clone's unpushed reservation stays invisible. Before publishing, check `git -C <repo> ls-tree origin/main issues/` for the reserved number. If it is taken, fetch, run `harnez issues new` for a fresh number, move the draft into the new path, and update its number. Keep the old file until the move is confirmed with `git -C <repo> status`. Never delete or overwrite content. Stop and report the paths only if this cannot be done cleanly.
 
