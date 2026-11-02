@@ -23,6 +23,12 @@ func TestLoadSpecEmbedded(t *testing.T) {
 	if spec.DefaultTimeout != 12*time.Hour {
 		t.Errorf("DefaultTimeout = %v, want 12h", spec.DefaultTimeout)
 	}
+	if spec.RequestTimeout != 15*time.Second {
+		t.Errorf("RequestTimeout = %v, want 15s", spec.RequestTimeout)
+	}
+	if spec.DefaultBranch != "main" {
+		t.Errorf("DefaultBranch = %q, want main", spec.DefaultBranch)
+	}
 	if spec.MaxConsecutiveErrors != 3 {
 		t.Errorf("MaxConsecutiveErrors = %d, want 3", spec.MaxConsecutiveErrors)
 	}

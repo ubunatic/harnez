@@ -24,16 +24,20 @@ type Forge struct {
 // Spec holds the pull request wait settings loaded from spec/pr.yaml.
 type Spec struct {
 	DefaultRemote        string
+	DefaultBranch        string
 	PollInterval         time.Duration
 	DefaultTimeout       time.Duration
+	RequestTimeout       time.Duration
 	MaxConsecutiveErrors int
 	Forges               []Forge
 }
 
 type rawSpec struct {
 	DefaultRemote        string  `yaml:"default_remote"`
+	DefaultBranch        string  `yaml:"default_branch"`
 	PollInterval         string  `yaml:"poll_interval"`
 	DefaultTimeout       string  `yaml:"default_timeout"`
+	RequestTimeout       string  `yaml:"request_timeout"`
 	MaxConsecutiveErrors int     `yaml:"max_consecutive_errors"`
 	Forges               []Forge `yaml:"forges"`
 }
@@ -80,10 +84,16 @@ func loadSpecFrom(fsys fs.FS, specPath, schemaPath string) (Spec, error) {
 	if err != nil {
 		return Spec{}, fmt.Errorf("%s: invalid default_timeout: %w", specPath, err)
 	}
+	reqTimeout, err := time.ParseDuration(raw.RequestTimeout)
+	if err != nil {
+		return Spec{}, fmt.Errorf("%s: invalid request_timeout: %w", specPath, err)
+	}
 	return Spec{
 		DefaultRemote:        raw.DefaultRemote,
+		DefaultBranch:        raw.DefaultBranch,
 		PollInterval:         poll,
 		DefaultTimeout:       timeout,
+		RequestTimeout:       reqTimeout,
 		MaxConsecutiveErrors: raw.MaxConsecutiveErrors,
 		Forges:               raw.Forges,
 	}, nil
