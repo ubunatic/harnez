@@ -130,7 +130,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - The developer agent picks up the updated ticket for Milestone $N+1$ (resumed via `harnez agent resume --name <session_id> "<pre_work_and_milestone_prompt>"` or native subagent message), executes the embedded pre-work first, and then proceeds with Milestone $N+1$ implementation.
 - Repeat Steps 1–3 for each milestone.
 - Once the final milestone passes concise review and tests are 100% green, confirm completion.
-- In team/protected mode, push `sprint/<tickets>` and report the PR URL (the host opens it with tea/gh); `main` is never pushed.
+- In team/protected mode, push `sprint/<tickets>` and report the PR URL (the host opens it with tea/gh); `main` is never pushed. If a next step depends on the merge, start `harnez pr wait <number> --contains <sha>` in the background; only exit 0 counts as merged.
 - Before a ticket closes, the host/reviewer compares what was delivered with the ticket's `/goal` and the
   milestone plan; a shortfall is parked in its own ticket and named in the close reason (884 M9 moved 157 of
   ~5k planned lines and was first closed as delivered).
