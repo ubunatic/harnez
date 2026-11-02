@@ -1,6 +1,6 @@
 # 1088 — Add a /jules skill for one-shot implement, experiment and ideas runs
 
-**Status**: In Progress — skill build on issue/1088-jules-skill
+**Status**: Closed — /jules skill ships audit, implement, experiment and ideas; each kind ran on a real task (runs table): implement 1087 via PR 63, experiment PR 62 -> 1086, ideas PR 61 -> 1091, audits from 1075.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -63,7 +63,7 @@ Harnez bugs from the same report are in 1089.
 | Kind | Session | Jules ID | PR | State |
 | --- | --- | --- | --- | --- |
 | Implement 1087 | `jules-implement-1087` | 18446295051615578068 | none | Failed: stopped to ask a question |
-| Implement 1087, retry | `jules-implement-1087b` | 5832791262383075829 | | Pending, see 1090 |
+| Implement 1087, retry | `jules-implement-1087b` | 5832791262383075829 | GitHub 63 | Done after two owner messages (asked a question at 18:59; the 21:19 confirmation got no reply; "submit a draft" did). Option 2 as asked, but `TestInitSoloGoldenUnchanged` fails at the PR head: the golden `cmd/harnez/testdata/init_solo/AGENTS.md` and the repo AGENTS.md/CLAUDE.md headers are not updated. Not mergeable as is; the host finishes it in 1090 |
 | Experiment | `jules-experiment-name-pool` | 4937665632004048219 | GitHub 62 | Findings captured in 1086; tests in `internal/subagent` matching `Name` pass at the PR head |
 | Ideas | `jules-ideas-integration` | 14043785152502570607 | GitHub 61 | Findings captured in 1091; 3 of 5 proposals dropped: `git -C ""` works, sequential remotes are low value, transient poll errors counting is existing behaviour |
 

@@ -1,6 +1,6 @@
 # 1090 — Pick up the pending Jules implement run on 1087 and finish 1088
 
-**Status**: Open
+**Status**: Closed — Jules run 5832791262383075829 finished as GitHub PR 63 after two owner messages; checked (golden test failed at its head), finished by the host in abac77cd; resume bug filed as 1095.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Chore

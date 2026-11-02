@@ -142,9 +142,15 @@ func TestReadMultipleFilesTreatsMissingLocalRulesAsOptional(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "present.txt"), []byte("present\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	quota := filepath.Join(".harnez", "rules", "Quota.md")
+
 	out, stderr, err := read("present.txt", local)
 	if err != nil || stderr != "" || !strings.Contains(out, "=== .harnez/rules/Local.md (absent, optional) ===") {
 		t.Fatalf("missing optional Local.md: err=%v stdout=%q stderr=%q", err, out, stderr)
+	}
+	out, stderr, err = read("present.txt", quota)
+	if err != nil || stderr != "" || !strings.Contains(out, "=== .harnez/rules/Quota.md (absent, optional) ===") {
+		t.Fatalf("missing optional Quota.md: err=%v stdout=%q stderr=%q", err, out, stderr)
 	}
 	out, stderr, err = read("present.txt", tools)
 	if err != nil || !strings.Contains(stderr, "Tools.md") || !strings.Contains(stderr, "no such file") {
