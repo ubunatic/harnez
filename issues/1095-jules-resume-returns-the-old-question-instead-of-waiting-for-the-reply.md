@@ -26,3 +26,13 @@ On 2026-11-01, `harnez agent resume --model jules --id 5832791262383075829 "Conf
 - Second test: a new agent message after the send is returned.
 - `approve` path: same rule (a plan approval must show a state change).
 - Done when both tests pass, `make test-q1` has no `--- FAIL`, and `/jules` skill text (`docs/commands/jules.md`) needs no change or is updated.
+
+## Decision
+
+- Plan approved (dev-1095, 2026-11-02): the answered rule is a state change from the pre-send state, or an agent activity created after the baseline `T`. For a send or approve, `T` is the newest activity `createTime` read before the send. For a bare `wait`, `T` is the newest `userMessaged` activity, or none. A timeout after a send prints "message sent, no reply yet" with the `wait` hint and never the old question. M1 is the fake seams, M2 the reproduction tests plus the fix in one commit, M3 docs. No red-only commit.
+- Real activity payload, checked by the host with one GET on session 5832791262383075829 (nothing sent):
+  - `originator` is `"agent"` or `"user"`.
+  - Payload keys are `agentMessaged`, `userMessaged`, `progressUpdated`, `artifacts` and `sessionCompleted`.
+  - Use `originator` to classify activities. A `progressUpdated` from the agent counts as a reaction.
+  - `createTime` precision varies between microseconds and nanoseconds (`...03.396603Z` against `...03.582943325Z`), so parse the times and compare them; never compare the strings.
+  - Real timeline: an owner message at 22:02:23, then the agent's `progressUpdated` at 22:15:32, about 13 minutes later.
