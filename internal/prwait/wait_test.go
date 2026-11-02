@@ -28,11 +28,17 @@ type fakeGit struct {
 	fetchErr  error
 	ancestor  bool
 	ancestorE error
+	url       string
+	urlErr    error
 	fetched   int
 	checked   []string
+	asked     int
 }
 
-func (g *fakeGit) RemoteURL(string, string) (string, error) { return "", nil }
+func (g *fakeGit) RemoteURL(string, string) (string, error) {
+	g.asked++
+	return g.url, g.urlErr
+}
 
 func (g *fakeGit) FetchRemote(string, string) error {
 	g.fetched++

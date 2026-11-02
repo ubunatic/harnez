@@ -38,6 +38,7 @@ Available Commands:
   mode            Switch ConciseMode terseness level and synchronize .harnez/rules/Local.md
   models          List known agent models with roles and when to use them
   pi              Manage Pi integrations
+  pr              Work with pull requests on Codeberg (Forgejo) and GitHub
   rate            Record a 1-5 quality rating for an internal tool call, or a lean --ok heartbeat
   read            Read bounded text or explicitly requested visual PNG cards
   release         Language-agnostic version bump, build, minisign, and forge publish pipeline
@@ -2169,6 +2170,50 @@ Usage:
 Flags:
   -c, --config string   path to config YAML file (default: embedded)
   -h, --help            help for update
+
+=== harnez pr
+Work with pull requests on Codeberg (Forgejo) and GitHub
+
+Usage:
+  harnez pr [command]
+
+Available Commands:
+  wait        Wait until a pull request is merged or closed
+
+Flags:
+  -h, --help   help for pr
+
+Use "harnez pr [command] --help" for more information about a command.
+
+=== harnez pr wait
+Poll a pull request on Codeberg (Forgejo) or GitHub until it is merged,
+closed without a merge, or the timeout passes. Run it in the background to be
+woken by the merge without anyone saying so.
+
+The forge and repository come from the git remote's URL (default origin), or
+from a pull request URL argument. The first poll happens at once, so a PR that
+is already merged exits 0 without waiting.
+
+Exit codes:
+  0  merged
+  1  usage, configuration, or local git error
+  2  closed without a merge
+  3  still open when the timeout passed
+  4  API error (not found, not authorized, or repeated transient failures)
+  5  merged, but the --contains commit is not on the default branch
+
+Tokens are optional. Forgejo reads the env vars in spec/pr.yaml (for example
+CODEBERG_TOKEN); GitHub reads GITHUB_TOKEN, else gh auth token. No token is
+ever printed.
+
+Usage:
+  harnez pr wait <number|url> [flags]
+
+Flags:
+      --contains string    after a merge, also require this commit to be on the default branch (exit 5 if not)
+  -h, --help               help for wait
+      --remote string      git remote whose URL names the forge and repository (default: default_remote in spec/pr.yaml)
+      --timeout duration   give up after this long (default: default_timeout in spec/pr.yaml)
 
 === harnez rate
 rate writes a single tool_calls row (call_type=internal, exit_code=NULL)
