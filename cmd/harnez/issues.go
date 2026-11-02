@@ -68,6 +68,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var forceFlag bool
 	var numberFlag string
 	var offlineFlag bool
+	var againstFlag string
 	var dir string
 	var checkFlag bool
 	var dryRunFlag bool
@@ -158,6 +159,7 @@ then the README is regenerated and the batch is committed once.
                     upstream and reconciles (use instead of git pull).
   lint              Read-only validation for duplicate numbers, conflicting
                     filename/H1 numbers, and drift across all three indexes.
+                    With --against REF, also fail on a number REF gives to another file.
   status            Show lifecycle counts and warn when active tickets exceed
                     the configured spec cap.
   list [filter]     Read-only: list tickets matching [filter] (default:
@@ -304,6 +306,9 @@ valid, exit-0 answer.`,
 				return issuesmaintenance.RunIssuesRebase(cmd.OutOrStdout(), dir, upstream, checkFlag || dryRunFlag)
 			}
 			if args[0] == "lint" {
+				if againstFlag != "" {
+					return issues.LintAgainst(cmd.OutOrStdout(), dir, againstFlag)
+				}
 				if cachedFlag {
 					return issuesmaintenance.RunIssuesLintCached(cmd.OutOrStdout(), dir)
 				}
@@ -409,6 +414,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
+	cmd.Flags().StringVar(&againstFlag, "against", "", "with lint: fail when a ticket here reuses a number that REF (e.g. origin/main) gives to another file; warn if REF is missing")
 	cmd.Flags().BoolVar(&checkFlag, "check", false, "report what would change without writing or committing; exit 1 on drift")
 	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "alias for --check")
 	cmd.Flags().BoolVar(&fetchFlag, "fetch", false, "reconcile: git fetch, then print the plan against the upstream (no changes)")
