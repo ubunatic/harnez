@@ -120,4 +120,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1094 | [1094-research-autoswarm-hkuds-and-absorb-useful-ideas-into-harnez.md](1094-research-autoswarm-hkuds-and-absorb-useful-ideas-into-harnez.md) | Research AutoSwarm (HKUDS) and absorb useful ideas into harnez | Open |
 | 1097 | [1097-analyze-t3-code-t3-codes-and-absorb-useful-ideas-into-harnez.md](1097-analyze-t3-code-t3-codes-and-absorb-useful-ideas-into-harnez.md) | Analyze T3 Code (t3.codes) and absorb useful ideas into harnez | Open |
 | 1098 | [1098-analyse-herdr-and-absorb-useful-ideas-into-harnez.md](1098-analyse-herdr-and-absorb-useful-ideas-into-harnez.md) | Analyse Herdr and absorb useful ideas into harnez | Open |
+| 1099 | [1099-ticket-numbers-collide-when-two-clones-file-through-open-agit-prs.md](1099-ticket-numbers-collide-when-two-clones-file-through-open-agit-prs.md) | Ticket numbers collide when two clones file through open AGit PRs | Open |
 <!-- harnez:end issues-active-index -->
