@@ -22,7 +22,8 @@ In-repo tracker in `issues/`, one file per ticket (`issues/NNN-kebab-case-title.
 
 ### 3.1 Allocation & Status CLI
 - `harnez find issues next [--json]` — Read-only next free number (`max(allocated)+1`). Never ad hoc shell (`ls | grep`).
-- `harnez issues new ["Title"] [--json]` — Atomically reserve number + create placeholder with `O_CREATE|O_EXCL`. Write directly to printed path.
+- `harnez issues new ["Title"] [--json]` — Atomically reserve number + create placeholder with `O_CREATE|O_EXCL`. Write directly to printed path. Also skips numbers used by open PRs on the forge (warns if unreachable; `--offline` skips).
+- `harnez issues lint --against origin/main` — Before publishing, fail on a number this checkout shares with a different file on `origin/main`. Pre-push runs it on tracker repos.
 - Cloud agents use `harnez issues new --remote "Title"`: authenticated `gh issue create` on the repo's `github` remote allocates permanent `GH<n>`, writes `issues/GH<n>-<slug>.md` with `# GH<n> — Title`, and links the GitHub body to that path. Missing/unauthenticated gh fails; no local fallback counter. Failures after creation identify the existing GitHub issue.
 - Setting `CLAUDE_CODE_REMOTE` (including empty) selects remote mode automatically. `new` prints the selected mode to stderr. GH IDs cannot be renumbered; local next-number allocation ignores them.
 - All status verbs, show/find/index/lint accept both namespaces: `GH42` and `gh42` select GH42; `42` stays local 042. README sorts local tickets first, then GH IDs numerically. Duplicate GH IDs are errors; reconcile the files preserving the ID (local renumber repair below does not apply).
