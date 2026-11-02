@@ -95,7 +95,7 @@ If `search-<ticket>` ran a large search round in an earlier milestone, compact i
    ```
 
 ### Phase 5: Teardown, Process Hygiene & Retrospective
-- **Publish (team/protected mode)**: push `sprint/<tickets>` and report the PR URL (the host opens it with tea/gh); never push the default branch.
+- **Publish (team/protected mode)**: push `sprint/<tickets>` and report the PR URL (the host opens it with tea/gh); never push the default branch. If a next step depends on the merge, start `harnez pr wait <number> --contains <sha>` in the background; only exit 0 counts as merged.
 1. **Process & Subagent Hygiene**:
    - Terminate and delete all remaining helper sessions (`search-<ticket>`, `arch-<ticket>`, and milestone developers) via `harnez agent delete --name <session>` to enforce Invariant 3 (Zero Zombie Guarantee).
 2. **Factory Assembly Retrospective**:

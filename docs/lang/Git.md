@@ -24,6 +24,9 @@ commonly stored in an `AGENTS.md` file at the repository root.
       `main`. An update that is not a fast-forward is rejected; do not override that with
       `-o force-push=true`. After a squash or rebase merge, reset the local branch to
       `origin/<default-branch>`, or the merged commits reappear in the next PR.
+    - When a next step depends on the merge (rebase, release, follow-up work), start
+      `harnez pr wait <number> --contains <sha>` in the background instead of asking whether it merged; only
+      exit 0 (merged, `<sha>` on the default branch) counts as merged.
     - Otherwise one branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`), pushed: for
       work others push to, long sprints that need rebasing, forks, and GitHub, which has no AGit.
   - `protected_main` (team/fork only): do not commit to or push the default branch unless the
