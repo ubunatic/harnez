@@ -122,4 +122,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1098 | [1098-analyse-herdr-and-absorb-useful-ideas-into-harnez.md](1098-analyse-herdr-and-absorb-useful-ideas-into-harnez.md) | Analyse Herdr and absorb useful ideas into harnez | Open |
 | 1100 | [1100-split-the-advisor-role-into-scout-and-consult.md](1100-split-the-advisor-role-into-scout-and-consult.md) | Split the advisor role into scout and consult | Open |
 | 1101 | [1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md](1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md) | Model pick by task and provider in harnez: absorb horg pick/models or call horg | Open |
+| 1102 | [1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md](1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md) | pre-push ticket-number lint checks the working tree, not the pushed commits | Open |
 <!-- harnez:end issues-active-index -->
