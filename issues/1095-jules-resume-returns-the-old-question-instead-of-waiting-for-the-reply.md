@@ -1,6 +1,7 @@
 # 1095 — Jules resume returns the old question instead of waiting for the reply
 
-**Status**: Open
+**Status**: Closed — Reproduction tests fail before and pass after (85b1df07): old question not returned after send, approve waits, bare wait skips pre-owner question; new reply after send returned. make test-q1 exit=0, 0 --- FAIL lines, 68 ok packages, 0 FAIL packages (log /tmp/harnez-1095-test-q1.log). Commits 73db8344 M1, 85b1df07 M2, 9fe41d43 M3.
+**Closed-By**: claude:haiku:med, session dev-1095
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
