@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -244,4 +245,39 @@ type UsageSummary struct {
 	Timestamp      time.Time         `json:"timestamp"`
 	Agents         []AgentUsage      `json:"agents"`
 	Load           *LoadSnapshot     `json:"load,omitempty"`
+}
+
+// agentUsageJSON is AgentUsage without its methods, so the JSON hooks below
+// can reuse the default encoding.
+type agentUsageJSON AgentUsage
+
+// MarshalJSON reports a long quota window under its real period: a window
+// named "Monthly" goes to "monthly", not "weekly" (issue 1105). Internally
+// the Weekly field stays the single long-window slot the renderers use.
+func (u AgentUsage) MarshalJSON() ([]byte, error) {
+	out := struct {
+		agentUsageJSON
+		Monthly *QuotaWindow `json:"monthly,omitempty"`
+	}{agentUsageJSON: agentUsageJSON(u)}
+	if u.Weekly != nil && u.Weekly.Name == "Monthly" {
+		out.Monthly, out.Weekly = u.Weekly, nil
+	}
+	return json.Marshal(out)
+}
+
+// UnmarshalJSON reads "monthly" back into the long-window slot, so stored
+// snapshots round-trip.
+func (u *AgentUsage) UnmarshalJSON(data []byte) error {
+	var in struct {
+		agentUsageJSON
+		Monthly *QuotaWindow `json:"monthly,omitempty"`
+	}
+	if err := json.Unmarshal(data, &in); err != nil {
+		return err
+	}
+	*u = AgentUsage(in.agentUsageJSON)
+	if u.Weekly == nil && in.Monthly != nil {
+		u.Weekly = in.Monthly
+	}
+	return nil
 }
