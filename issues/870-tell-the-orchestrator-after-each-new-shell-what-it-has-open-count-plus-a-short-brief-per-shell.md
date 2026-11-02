@@ -1,6 +1,6 @@
 # 870 — tell the orchestrator after each new shell what it has open: count plus a short brief per shell
 
-**Status**: Open
+**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
 **Priority**: P2 (Medium) — orchestrators of every vendor forget their open subtasks and shells
 **Severity**: Minor
 **Category**: Feature

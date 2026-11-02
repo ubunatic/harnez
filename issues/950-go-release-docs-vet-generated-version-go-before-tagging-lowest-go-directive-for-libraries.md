@@ -1,6 +1,6 @@
 # 950 — Go release docs: vet generated version.go before tagging, lowest go directive for libraries
 
-**Status**: Open
+**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Docs

@@ -1,6 +1,6 @@
 # 955 — 942 C3: bounded batch bare probes record accessible/denied per model
 
-**Status**: Open
+**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

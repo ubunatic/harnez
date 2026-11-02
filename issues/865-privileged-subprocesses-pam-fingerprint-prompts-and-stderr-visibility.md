@@ -1,6 +1,6 @@
 # 865 — Privileged subprocesses, PAM biometric prompts, and stderr visibility
 
-**Status**: Open
+**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
 **Priority**: P2 (Medium) — silent auth timeouts in wrappers break biometric sudo flows and conceal failure causes
 **Severity**: Moderate
 **Category**: Convention

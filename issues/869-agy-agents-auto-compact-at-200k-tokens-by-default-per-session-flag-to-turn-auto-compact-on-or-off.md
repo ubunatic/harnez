@@ -1,6 +1,6 @@
 # 869 — agy agents auto-compact at 200k tokens by default, per-session flag to turn auto-compact on or off
 
-**Status**: Open
+**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
 **Priority**: P2 (Medium) — long agy sessions slow to a crawl (dev-714: 4,100+ steps, 5 MB transcript)
 **Severity**: Minor
 **Category**: Feature

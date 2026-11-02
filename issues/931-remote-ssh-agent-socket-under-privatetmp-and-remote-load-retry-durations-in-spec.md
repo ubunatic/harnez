@@ -1,6 +1,6 @@
 # 931 — remote: ssh-agent socket under PrivateTmp and remote-load retry durations in spec
 
-**Status**: Open
+**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
