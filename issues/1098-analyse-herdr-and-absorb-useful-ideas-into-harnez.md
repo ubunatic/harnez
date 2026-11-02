@@ -1,4 +1,4 @@
-# 1096 — Analyse Herdr and absorb useful ideas into harnez
+# 1098 — Analyse Herdr and absorb useful ideas into harnez
 
 **Status**: Open
 **Priority**: P2 (Medium)
