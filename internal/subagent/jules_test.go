@@ -345,8 +345,8 @@ func TestJulesActionRequiredReturnsWhatToAnswer(t *testing.T) {
 		activities []map[string]any
 		want       []string
 	}{
-		{"plan", "AWAITING_PLAN_APPROVAL", []map[string]any{{"createTime": "1", "planGenerated": map[string]any{"plan": map[string]any{"steps": []map[string]any{{"title": "Edit docs"}}}}}}, []string{"1. Edit docs", "approve"}},
-		{"feedback", "AWAITING_USER_FEEDBACK", []map[string]any{{"createTime": "2", "agentMessaged": map[string]any{"agentMessage": "newer"}}, {"createTime": "1", "agentMessaged": map[string]any{"agentMessage": "older"}}}, []string{"Jules says: newer", `"<message>"`}},
+		{"plan", "AWAITING_PLAN_APPROVAL", []map[string]any{{"originator": "agent", "createTime": "2026-11-02T10:00:01Z", "planGenerated": map[string]any{"plan": map[string]any{"steps": []map[string]any{{"title": "Edit docs"}}}}}}, []string{"1. Edit docs", "approve"}},
+		{"feedback", "AWAITING_USER_FEEDBACK", []map[string]any{{"originator": "agent", "createTime": "2026-11-02T10:00:02Z", "agentMessaged": map[string]any{"agentMessage": "newer"}}, {"originator": "agent", "createTime": "2026-11-02T10:00:01Z", "agentMessaged": map[string]any{"agentMessage": "older"}}}, []string{"Jules says: newer", `"<message>"`}},
 		{"paused", "PAUSED", nil, []string{"PAUSED", "session page"}},
 	}
 	for _, tc := range tests {
@@ -542,25 +542,156 @@ func TestJulesResumeApprove(t *testing.T) {
 	}
 }
 
+// julesOldQuestion is a question Jules asked before the owner's reply, at 18:59Z.
+var julesOldQuestion = []map[string]any{{"originator": "agent", "createTime": "2026-11-02T18:59:00Z", "agentMessaged": map[string]any{"agentMessage": "old question"}}}
+
+// endWaitAfter ends a wait after n polls, so the test takes no real time.
+func endWaitAfter(h *julesHarness, n int) {
+	polls := 0
+	h.driver.Sleep = func(context.Context, time.Duration) error {
+		polls++
+		if polls >= n {
+			return context.DeadlineExceeded
+		}
+		return nil
+	}
+}
+
+// Reproduction: the send moves updateTime, the state stays AWAITING_USER_FEEDBACK,
+// and only the old question exists. Resume must not return that question.
+func TestJulesResumeKeepsWaitingForTheReplyNotTheOldQuestion(t *testing.T) {
+	waiting := julesSession{State: "AWAITING_USER_FEEDBACK", UpdateTime: "t1", URL: "https://jules.test/session/123"}
+	moved := waiting
+	moved.UpdateTime = "t2"
+	fake := &fakeJules{states: []julesSession{waiting, moved}, activities: julesOldQuestion}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	endWaitAfter(&h, 3)
+	res, err := h.driver.Resume(context.Background(), "123", "use the second option", Model{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.messages) != 1 {
+		t.Errorf("messages = %v", fake.messages)
+	}
+	if strings.Contains(res.Response, "old question") {
+		t.Errorf("returned the old question:\n%s", res.Response)
+	}
+	for _, want := range []string{"no reply yet", "harnez agent resume --name <session> wait"} {
+		if !strings.Contains(res.Response, want) {
+			t.Errorf("response misses %q:\n%s", want, res.Response)
+		}
+	}
+}
+
+func TestJulesResumeReturnsAReplyCreatedAfterTheSend(t *testing.T) {
+	waiting := julesSession{State: "AWAITING_USER_FEEDBACK", UpdateTime: "t1"}
+	moved := waiting
+	moved.UpdateTime = "t2"
+	fake := &fakeJules{
+		states:     []julesSession{waiting, moved},
+		activities: julesOldQuestion,
+		afterSend:  []map[string]any{{"originator": "agent", "createTime": "2026-11-02T21:25:00Z", "agentMessaged": map[string]any{"agentMessage": "new question"}}},
+	}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	res, err := h.driver.Resume(context.Background(), "123", "use the second option", Model{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Response, "Jules says: new question") {
+		t.Errorf("did not return the reply:\n%s", res.Response)
+	}
+}
+
+// Approve follows the same rule: a plan that is still waiting after the approval
+// is not an answer, so the old plan is not printed again.
+func TestJulesResumeApproveWaitsForAReaction(t *testing.T) {
+	waiting := julesSession{State: "AWAITING_PLAN_APPROVAL", UpdateTime: "t1"}
+	moved := waiting
+	moved.UpdateTime = "t2"
+	plan := []map[string]any{{"originator": "agent", "createTime": "2026-11-02T18:59:00Z", "planGenerated": map[string]any{"plan": map[string]any{"steps": []map[string]any{{"title": "Edit docs"}}}}}}
+	fake := &fakeJules{states: []julesSession{waiting, moved}, activities: plan}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	endWaitAfter(&h, 3)
+	res, err := h.driver.Resume(context.Background(), "123", "approve", Model{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.approvals != 1 {
+		t.Errorf("approvals = %d", fake.approvals)
+	}
+	if strings.Contains(res.Response, "Edit docs") || !strings.Contains(res.Response, "no reply yet") {
+		t.Errorf("approve returned the old plan or no timeout text:\n%s", res.Response)
+	}
+}
+
+// A bare wait after the owner's message must skip the question asked before it.
+func TestJulesWaitSkipsQuestionBeforeTheOwnersMessage(t *testing.T) {
+	acts := append(append([]map[string]any{}, julesOldQuestion...),
+		map[string]any{"originator": "user", "createTime": "2026-11-02T21:19:03Z", "userMessaged": map[string]any{"userMessage": "use the second option"}})
+	fake := &fakeJules{states: []julesSession{{State: "AWAITING_USER_FEEDBACK"}}, activities: acts}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	endWaitAfter(&h, 3)
+	res, err := h.driver.Resume(context.Background(), "123", "wait", Model{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(res.Response, "old question") || !strings.Contains(res.Response, "keeps running") {
+		t.Errorf("wait returned the old question:\n%s", res.Response)
+	}
+}
+
+// Jules writes createTime with mixed precision. As strings, "...23Z" sorts after
+// "...23.1Z" ('Z' > '.'), so the comparison must parse the times.
+func TestJulesReactionComparesTimesNotStrings(t *testing.T) {
+	owner := []map[string]any{{"originator": "user", "createTime": "2026-11-02T22:02:23Z", "userMessaged": map[string]any{"userMessage": "go"}}}
+	later := append(append([]map[string]any{}, owner...), map[string]any{"originator": "agent", "createTime": "2026-11-02T22:15:32.582943325Z"})
+	earlier := append(append([]map[string]any{}, owner...), map[string]any{"originator": "agent", "createTime": "2026-11-02T22:02:23.100Z"})
+	tests := []struct {
+		name string
+		acts []map[string]any
+		want bool
+	}{
+		{"fractional reply after a whole-second owner message", later, true},
+		{"fractional reply 0.1s after the owner message", earlier, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var acts []julesActivity
+			for _, m := range tc.acts {
+				b, _ := json.Marshal(m)
+				var a julesActivity
+				if err := json.Unmarshal(b, &a); err != nil {
+					t.Fatal(err)
+				}
+				acts = append(acts, a)
+			}
+			if got := (julesReply{}).reacted(acts); got != tc.want {
+				t.Errorf("reacted = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestJulesActivitiesFollowPages(t *testing.T) {
 	page := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		page++
 		if page == 1 {
-			fmt.Fprint(w, `{"activities":[{"createTime":"2"}],"nextPageToken":"a b"}`)
+			fmt.Fprint(w, `{"activities":[{"createTime":"2026-11-02T10:00:02.5Z"}],"nextPageToken":"a b"}`)
 			return
 		}
 		if r.URL.Query().Get("pageToken") != "a b" {
 			t.Errorf("pageToken = %q", r.URL.Query().Get("pageToken"))
 		}
-		_, _ = io.WriteString(w, `{"activities":[{"createTime":"1"}]}`)
+		_, _ = io.WriteString(w, `{"activities":[{"createTime":"2026-11-02T10:00:02Z"}]}`)
 	}))
 	defer server.Close()
 	all, err := JulesDriver{}.activities(context.Background(), julesClient{http: server.Client(), baseURL: server.URL}, "sessions/1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 2 || all[0].CreateTime != "1" {
+	// The second page holds the older time; string order would put "...02Z" after "...02.5Z".
+	if len(all) != 2 || all[0].CreateTime != "2026-11-02T10:00:02Z" {
 		t.Fatalf("activities = %+v", all)
 	}
 }
