@@ -51,6 +51,12 @@ minisign -G -W -f -p ~/.minisign/<project>.pub -s ~/.minisign/<project>.key
 
 Auto-detected as `~/.minisign/<project>.key` by project dir name; else `--sign-key`/`-s <path>`.
 
+Publish the key: commit `keys/minisign/<KEYID>.pub` (unchanged) and list it in
+`keys/minisign/keys.yaml` (`schema: 1`, `keys:` with `id`, `maintainer`, `status:
+active|retired`, `added`, optional `retired`, `note`). Release attaches each active key as
+`minisign-<KEYID>.pub`, names the signer in the notes, and refuses an invalid index or a
+signing key that is not active; without `keys.yaml` it only warns.
+
 ### 2.4 `.goreleaser.yaml` (GoReleaser v2)
 
 ```yaml

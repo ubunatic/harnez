@@ -76,6 +76,27 @@ minisign -G -W -f -p ~/.minisign/<project>.pub -s ~/.minisign/<project>.key
 ```
 `harnez release` auto-detects `~/.minisign/<project>.key` by project directory name. Alternatively, supply `--sign-key <path>` or `-s <path>`.
 
+Publish the public key so users can verify releases: commit it as
+`keys/minisign/<KEYID>.pub` (the file `minisign -G` wrote, unchanged) and list it in
+`keys/minisign/keys.yaml`:
+
+```yaml
+schema: 1
+keys:
+  - id: <KEYID>          # from the .pub comment line
+    maintainer: <handle>
+    status: active       # active | retired
+    added: YYYY-MM-DD
+    # retired: YYYY-MM-DD, note: <why>
+```
+
+`harnez release` attaches every active key as `minisign-<KEYID>.pub`, names the signing
+key in the release notes, and refuses a release when the index is invalid, a listed `.pub`
+is missing or holds another key, or the signing key is not active. Without `keys.yaml` it
+warns and releases without a key. Rotate a key by adding the new one and retiring the old
+one in one commit; keep the retired key's `.pub` so old releases stay verifiable. Keys are
+attached only to signed releases.
+
 ### 4. `.goreleaser.yaml`
 Scaffold standard GoReleaser v2 configuration:
 ```yaml

@@ -1,6 +1,6 @@
 # 1103 — harnez release: attach minisign public keys from keys/minisign/
 
-**Status**: Open
+**Status**: Closed — key index validation, signer check, minisign-<KEYID>.pub assets and signer in notes (b37de868); reviewed; go test ./... green
 **Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Release Engine

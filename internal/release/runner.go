@@ -75,6 +75,10 @@ func Run(opt Options) error {
 			}
 		}
 	}
+	// Validate the committed public keys before anything is bumped or pushed.
+	if _, err := releaseKeys(opt, keyPath); err != nil {
+		return err
+	}
 
 	// 3. Clean working tree check (unless continue or dry-run)
 	if !opt.Continue && !opt.DryRun {
@@ -554,6 +558,17 @@ func runSigningStep(opt Options, projectName, version, keyPath string) error {
 			return fmt.Errorf("signing %s: %w", checksumPath, err)
 		}
 		fmt.Fprintf(opt.Out, "  [sign]      Created signature %s\n", sigFile)
+		cfg, err := loadPublishConfig()
+		if err != nil {
+			return err
+		}
+		keys, err := loadPublicKeys(opt.Dir, cfg)
+		if err != nil {
+			return err
+		}
+		if _, err := signedBy(opt.Dir, keys, cfg); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -562,6 +577,22 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 	attachments, err := releaseAssetsFromDist(opt.Dir, projectName, tagName)
 	if err != nil {
 		return err
+	}
+	cfg, err := loadPublishConfig()
+	if err != nil {
+		return err
+	}
+	keys, err := loadPublicKeys(opt.Dir, cfg)
+	if err != nil {
+		return err
+	}
+	signer, err := signedBy(opt.Dir, keys, cfg)
+	if err != nil {
+		return err
+	}
+	// Publish keys only next to a signature they can verify.
+	if keys != nil && signer != "" {
+		attachments = append(attachments, keys.Active...)
 	}
 
 	if len(attachments) == 0 {
@@ -587,11 +618,11 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 		if forge != nil {
 			remoteName = forge.RemoteName
 		}
-		cfg, err := loadPublishConfig()
-		if err != nil {
-			return err
+		body := title
+		if signer != "" {
+			body += "\n\nSHA256SUMS signed by minisign key " + signer + "."
 		}
-		if err := publishForgejoAssetsWithConfig(opt.Dir, tagName, title, attachments, opt.Out, fjCommand(opt.Dir, remoteName), cfg, time.Sleep); err != nil {
+		if err := publishForgejoAssetsWithConfig(opt.Dir, tagName, title, body, attachments, opt.Out, fjCommand(opt.Dir, remoteName), cfg, time.Sleep); err != nil {
 			return err
 		}
 	}

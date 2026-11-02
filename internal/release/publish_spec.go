@@ -17,12 +17,18 @@ type PublishConfig struct {
 	UploadRetryAttempts int
 	UploadRetryDelay    time.Duration
 	ReleaseNotFound     *regexp.Regexp
+	PublicKeysDir       string
+	PublicKeysIndex     string
+	PublicKeyAsset      string
 }
 
 type publishSpec struct {
 	UploadRetryAttempts int    `yaml:"upload_retry_attempts"`
 	UploadRetryDelay    string `yaml:"upload_retry_delay"`
 	ReleaseNotFound     string `yaml:"release_not_found_pattern"`
+	PublicKeysDir       string `yaml:"public_keys_dir"`
+	PublicKeysIndex     string `yaml:"public_keys_index"`
+	PublicKeyAsset      string `yaml:"public_key_asset"`
 }
 
 func loadPublishConfig() (PublishConfig, error) {
@@ -61,5 +67,6 @@ func loadPublishConfig() (PublishConfig, error) {
 	if err != nil {
 		return PublishConfig{}, fmt.Errorf("spec/release.yaml: invalid release_not_found_pattern: %w", err)
 	}
-	return PublishConfig{UploadRetryAttempts: spec.UploadRetryAttempts, UploadRetryDelay: delay, ReleaseNotFound: pattern}, nil
+	return PublishConfig{UploadRetryAttempts: spec.UploadRetryAttempts, UploadRetryDelay: delay, ReleaseNotFound: pattern,
+		PublicKeysDir: spec.PublicKeysDir, PublicKeysIndex: spec.PublicKeysIndex, PublicKeyAsset: spec.PublicKeyAsset}, nil
 }

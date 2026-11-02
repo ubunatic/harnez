@@ -86,10 +86,10 @@ func publishForgejoReleaseWithConfig(dir, tag, title string, attachments []strin
 	for _, path := range attachments {
 		assets = append(assets, releaseAsset{Name: filepath.Base(path), Path: path})
 	}
-	return publishForgejoAssetsWithConfig(dir, tag, title, assets, out, run, cfg, wait)
+	return publishForgejoAssetsWithConfig(dir, tag, title, title, assets, out, run, cfg, wait)
 }
 
-func publishForgejoAssetsWithConfig(dir, tag, title string, attachments []releaseAsset, out io.Writer, run forgeCommand, cfg PublishConfig, wait func(time.Duration)) error {
+func publishForgejoAssetsWithConfig(dir, tag, title, body string, attachments []releaseAsset, out io.Writer, run forgeCommand, cfg PublishConfig, wait func(time.Duration)) error {
 	// Use the same release name as creation/attachment. fj's title lookup
 	// reports an explicit absence after listing releases; auth/network errors
 	// are followed by create/upload attempts so already-existing assets can be
@@ -127,7 +127,7 @@ func publishForgejoAssetsWithConfig(dir, tag, title string, attachments []releas
 		return fmt.Errorf("release has assets but no published SHA256SUMS; cannot safely mix sets; resolve manually (no remote assets deleted)")
 	}
 	if !exists {
-		data, err := run("release", "create", title, "--tag", tag, "-b", title)
+		data, err := run("release", "create", title, "--tag", tag, "-b", body)
 		if err != nil && !isAlreadyExists(data) {
 			return forgeError("create release", data, err)
 		}
