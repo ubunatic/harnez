@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
+
+	"ubunatic.com/harnez/internal/forge"
 )
 
 // ForgeInfo contains repository remote coordinates.
@@ -16,26 +17,10 @@ type ForgeInfo struct {
 	Repo       string
 }
 
-var (
-	sshRemoteRegex   = regexp.MustCompile(`(?i)^(?:ssh://)?(?:[^@]+@)?([^:/]+)[:/]([^/]+)/([^/]+?)(?:\.git)?$`)
-	httpsRemoteRegex = regexp.MustCompile(`(?i)^https?://([^/]+)/([^/]+)/([^/]+?)(?:\.git)?$`)
-)
-
 // IsSupportedForge checks if the given host is an authorized forge (codeberg.org or github.com).
 func IsSupportedForge(host string) bool {
 	h := strings.ToLower(strings.TrimSpace(host))
 	return h == "codeberg.org" || h == "github.com"
-}
-
-func parseForgeURL(raw string) (host, owner, repo string, ok bool) {
-	raw = strings.TrimSpace(raw)
-	if m := sshRemoteRegex.FindStringSubmatch(raw); m != nil {
-		return m[1], m[2], m[3], true
-	}
-	if m := httpsRemoteRegex.FindStringSubmatch(raw); m != nil {
-		return m[1], m[2], m[3], true
-	}
-	return "", "", "", false
 }
 
 type remoteEntry struct {
@@ -89,7 +74,7 @@ func DetectPrioritizedForgeInfo(dir string) (*ForgeInfo, error) {
 		}
 		seen[key] = true
 
-		host, owner, repo, ok := parseForgeURL(rawURL)
+		host, owner, repo, ok := forge.ParseRemoteURL(rawURL)
 		entries = append(entries, remoteEntry{
 			name:  name,
 			url:   rawURL,
