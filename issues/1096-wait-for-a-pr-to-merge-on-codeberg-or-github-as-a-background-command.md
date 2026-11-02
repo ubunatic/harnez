@@ -1,6 +1,7 @@
 # 1096 — Wait for a PR to merge on Codeberg or GitHub as a background command
 
-**Status**: Open
+**Status**: Closed — harnez pr wait 78 exits 0 in 344ms with merged=true and merge commit d2044b5a; 404 exits 4; make test-q1 exit 0, 0 FAIL lines (log /tmp/harnez-1096-test-q1.log). Commits 3bab4cf2 M1, 81526fa3 M2, a47c3434 M3, bb122cac M4.
+**Closed-By**: claude:haiku:med, session dev-1096
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
