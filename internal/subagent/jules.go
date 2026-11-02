@@ -107,7 +107,9 @@ type julesPullRequest struct {
 }
 
 type julesActivity struct {
-	CreateTime    string `json:"createTime"`
+	CreateTime string `json:"createTime"`
+	// Originator is "agent" or "user"; only agent activities are reactions.
+	Originator    string `json:"originator"`
 	AgentMessaged *struct {
 		AgentMessage string `json:"agentMessage"`
 	} `json:"agentMessaged"`

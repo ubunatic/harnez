@@ -31,12 +31,28 @@ type fakeJules struct {
 	messages   []string
 	approvals  int
 	activities []map[string]any
+	// afterSend are activities Jules adds once a message or approval is sent.
+	afterSend []map[string]any
+	// sentAt is the createTime of the owner's activity a send records; empty uses a fixed time.
+	sentAt     string
 	getStatus  []int
 	sourceCode int
 	onCreate   func() // called when a session is created, to order it against git calls
 	// sessionID, when set, is the ID the test adopts; its requests are served as
 	// the fake's session 123.
 	sessionID string
+}
+
+// recordSend adds the owner's activity a send creates, then the replies Jules
+// adds after it. The caller holds f.mu.
+func (f *fakeJules) recordSend(text string) {
+	at := f.sentAt
+	if at == "" {
+		at = "2026-11-02T21:19:03.396603Z"
+	}
+	f.activities = append(f.activities, map[string]any{"originator": "user", "createTime": at, "userMessaged": map[string]any{"userMessage": text}})
+	f.activities = append(f.activities, f.afterSend...)
+	f.afterSend = nil
 }
 
 func (f *fakeJules) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -71,9 +87,11 @@ func (f *fakeJules) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		f.messages = append(f.messages, body.Prompt)
+		f.recordSend(body.Prompt)
 		fmt.Fprint(w, `{}`)
 	case r.Method == http.MethodPost && r.URL.Path == "/sessions/123:approvePlan":
 		f.approvals++
+		f.recordSend("approve")
 		fmt.Fprint(w, `{}`)
 	case r.Method == http.MethodGet && r.URL.Path == "/sessions/123/activities":
 		_ = json.NewEncoder(w).Encode(map[string]any{"activities": f.activities})
