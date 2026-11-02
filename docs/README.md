@@ -233,6 +233,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-31-session-retro-plain-modes-time-overrides-lock-hygiene.md](studies/2026-10-31-session-retro-plain-modes-time-overrides-lock-hygiene.md) | 2026-10-31 Sprint Retrospective: Plain Context Modes, Time-Limited Overrides, Lock Hygiene, and Detached HEAD Protection |
 | [studies/2026-11-01-two-agent-lean-sprint-1079-read-guard.md](studies/2026-11-01-two-agent-lean-sprint-1079-read-guard.md) | Lean sprint 1079: read guard message and spec threshold |
 | [studies/2026-11-01-two-agent-lean-sprint-jules-resume-by-id.md](studies/2026-11-01-two-agent-lean-sprint-jules-resume-by-id.md) | Lean sprint 1092: resume a Jules session by ID |
+| [studies/2026-11-02-two-agent-lean-sprint-jules-resume-reply.md](studies/2026-11-02-two-agent-lean-sprint-jules-resume-reply.md) | Lean sprint 1095: Jules resume waits for the real reply |
 | [studies/2026-11-02-two-agent-lean-sprint-pr-wait.md](studies/2026-11-02-two-agent-lean-sprint-pr-wait.md) | Lean sprint 1096: `harnez pr wait` |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |

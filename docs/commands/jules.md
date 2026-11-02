@@ -17,7 +17,7 @@ Google stops accepting new Jules work on 2026-11-11 and shuts Jules down on 2026
 
 ## 1. Rules
 
-- **One shot:** one prompt per run. Never send Jules a follow-up message, an answer or a fix request. `harnez agent resume --name <session> wait` only keeps waiting, so it is allowed; any other resume text reaches Jules as a message.
+- **One shot:** one prompt per run. Never send Jules a follow-up message, an answer or a fix request. `harnez agent resume --name <session> wait` only keeps waiting, so it is allowed; any other resume text reaches Jules as a message. After such a message, a wait that runs out prints "message sent, no reply yet": Jules has not answered, and the question Jules asked before is not shown again.
 - **Report only (audit and ideas):** these runs add a report and nothing else. Never ask Jules to fix anything. Do any finishing work yourself.
 - **Code PRs (implement and experiment):** get normal review before merging. Never ask Jules to rework one; the host finishes fixes through the normal workflow. Experiment code is evidence only and is never merged.
 - **A report is a lead, not a fact:** check its evidence against the code before changing a ticket.

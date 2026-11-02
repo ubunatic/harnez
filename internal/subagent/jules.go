@@ -107,7 +107,9 @@ type julesPullRequest struct {
 }
 
 type julesActivity struct {
-	CreateTime    string `json:"createTime"`
+	CreateTime string `json:"createTime"`
+	// Originator is "agent" or "user"; only agent activities are reactions.
+	Originator    string `json:"originator"`
 	AgentMessaged *struct {
 		AgentMessage string `json:"agentMessage"`
 	} `json:"agentMessaged"`
@@ -541,7 +543,7 @@ func (d JulesDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error)
 		return nil, errors.New("create Jules session: the response has no session id")
 	}
 	observeProviderSession(ctx, session.ID)
-	return d.track(ctx, client, spec, session.ID, "", warnings, started)
+	return d.track(ctx, client, spec, session.ID, julesReply{}, warnings, started)
 }
 
 // IsControlPrompt reports the resume commands wait and approve, and the empty
@@ -562,31 +564,122 @@ func (d JulesDriver) Resume(ctx context.Context, id, prompt string, _ Model) (*T
 	name := "sessions/" + url.PathEscape(id)
 	command := strings.TrimSpace(prompt)
 	if command == "" || strings.EqualFold(command, julesWaitPrompt) {
-		return d.track(ctx, client, spec, id, "", nil, started)
+		return d.track(ctx, client, spec, id, julesReply{}, nil, started)
 	}
 	var session julesSession
 	if err := client.call(ctx, http.MethodGet, name, nil, &session); err != nil {
 		return nil, fmt.Errorf("read Jules session %s: %w", id, err)
 	}
-	if strings.EqualFold(command, julesApprovePrompt) {
-		if session.State != "AWAITING_PLAN_APPROVAL" {
-			return nil, fmt.Errorf("Jules session %s is %s, not waiting for plan approval", id, session.State)
-		}
+	approve := strings.EqualFold(command, julesApprovePrompt)
+	if approve && session.State != "AWAITING_PLAN_APPROVAL" {
+		return nil, fmt.Errorf("Jules session %s is %s, not waiting for plan approval", id, session.State)
+	}
+	// The baseline is read before the send, so the owner's own message cannot be
+	// mistaken for a reply. Without it nothing is sent.
+	before, err := d.activities(ctx, client, name)
+	if err != nil {
+		return nil, fmt.Errorf("read Jules activities of session %s before sending: %w", id, err)
+	}
+	reply := julesReply{sent: true, pre: session.State, after: julesNewest(before)}
+	if approve {
 		if err := client.call(ctx, http.MethodPost, name+":approvePlan", map[string]any{}, nil); err != nil {
 			return nil, fmt.Errorf("approve Jules plan: %w", err)
 		}
 	} else if err := client.call(ctx, http.MethodPost, name+":sendMessage", map[string]any{"prompt": command}, nil); err != nil {
 		return nil, fmt.Errorf("send message to Jules session %s: %w", id, err)
 	}
-	// The state read right after a send can still be the old one; only a newer
-	// update counts as the session's answer.
-	return d.track(ctx, client, spec, id, session.UpdateTime, nil, started)
+	return d.track(ctx, client, spec, id, reply, nil, started)
+}
+
+// julesReply is what a call sent to a session, and so what counts as Jules
+// answering it.
+type julesReply struct {
+	sent  bool      // this call sent a message or a plan approval
+	pre   string    // the session state read just before the send
+	after time.Time // the newest activity before the send; zero when there was none
+}
+
+// gates reports whether a state must be checked for a reply first. After a send
+// every state is; a bare wait only holds back the states that ask the owner.
+func (r julesReply) gates(state string) bool {
+	return r.sent || julesWaitingState(state)
+}
+
+// baseline is the time a reaction must come after: the newest activity before the
+// send, or for a bare wait the owner's newest message (zero when there is none).
+func (r julesReply) baseline(acts []julesActivity) time.Time {
+	if r.sent {
+		return r.after
+	}
+	var at time.Time
+	for _, a := range acts {
+		if a.Originator == "user" && julesCreated(a).After(at) {
+			at = julesCreated(a)
+		}
+	}
+	return at
+}
+
+// reacted reports whether an agent activity came after the baseline.
+func (r julesReply) reacted(acts []julesActivity) bool {
+	base := r.baseline(acts)
+	if !r.sent && base.IsZero() {
+		// A bare wait with no owner message has no older question to skip: the state is the answer.
+		return true
+	}
+	for _, a := range acts {
+		if a.Originator == "agent" && julesAfter(a, base) {
+			return true
+		}
+	}
+	return false
+}
+
+// answered reports whether Jules has answered the owner's last call: the state
+// moved from the one before the send, or an agent activity came after the baseline.
+func (d JulesDriver) answered(ctx context.Context, client julesClient, name string, reply julesReply, state string) bool {
+	if reply.sent && state != reply.pre {
+		return true
+	}
+	if !reply.gates(state) {
+		return false
+	}
+	acts, err := d.activities(ctx, client, name)
+	return err == nil && reply.reacted(acts)
+}
+
+// julesCreated parses an activity's createTime. Jules writes microseconds or
+// nanoseconds, so the strings are never compared; an unparsable time is zero.
+func julesCreated(a julesActivity) time.Time {
+	at, _ := time.Parse(time.RFC3339Nano, a.CreateTime)
+	return at
+}
+
+// julesAfter reports whether an activity was created after base; a zero base admits every activity.
+func julesAfter(a julesActivity, base time.Time) bool {
+	return base.IsZero() || julesCreated(a).After(base)
+}
+
+// julesNewest is the latest createTime among the activities, or zero.
+func julesNewest(acts []julesActivity) time.Time {
+	var at time.Time
+	for _, a := range acts {
+		if julesCreated(a).After(at) {
+			at = julesCreated(a)
+		}
+	}
+	return at
+}
+
+// julesWaitingState reports the states in which Jules asks the owner something.
+func julesWaitingState(state string) bool {
+	return state == "AWAITING_PLAN_APPROVAL" || state == "AWAITING_USER_FEEDBACK" || state == "PAUSED"
 }
 
 // track polls the session until it stops needing no one, or the wait runs out.
 // Only a Jules failure or an API refusal is an error: a session still running or
 // waiting for the owner is a normal result that says how to continue.
-func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSpec, id, staleUpdate string, warnings []string, started time.Time) (*TurnResult, error) {
+func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSpec, id string, reply julesReply, warnings []string, started time.Time) (*TurnResult, error) {
 	name := "sessions/" + url.PathEscape(id)
 	interval := time.Duration(spec.PollIntervalMS) * time.Millisecond
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(spec.WaitTimeoutMS)*time.Millisecond)
@@ -595,6 +688,7 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 		return &TurnResult{SessionID: id, Response: body, Messages: []string{body}, Warnings: warns, DurationMS: time.Since(started).Milliseconds()}
 	}
 	var last julesSession
+	answered := false
 	failures, prPolls := 0, 0
 	for {
 		var session julesSession
@@ -604,7 +698,7 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 		case ctx.Err() != nil:
 			return nil, ctx.Err()
 		case waitCtx.Err() != nil:
-			return result(julesStillRunning(id, last, spec), warnings), nil
+			return result(julesStillRunning(id, last, spec, reply.sent && !answered), warnings), nil
 		case err == nil:
 			failures = 0
 			last = session
@@ -614,10 +708,13 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 			failures++
 			if failures >= spec.MaxPollErrors {
 				warnings = append(warnings, fmt.Sprintf("stopped polling after %d failed requests: %v", failures, err))
-				return result(julesStillRunning(id, last, spec), warnings), nil
+				return result(julesStillRunning(id, last, spec, reply.sent && !answered), warnings), nil
 			}
 		}
-		if err == nil && (staleUpdate == "" || session.UpdateTime != staleUpdate) {
+		if err == nil {
+			answered = d.answered(waitCtx, client, name, reply, session.State)
+		}
+		if err == nil && (answered || !reply.gates(session.State)) {
 			switch session.State {
 			case "COMPLETED":
 				if session.pullRequest() != nil || prPolls >= spec.CompletedPRPolls {
@@ -631,7 +728,7 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 				}
 				return nil, fmt.Errorf("Jules session %s failed: %s (%s)", id, reason, session.URL)
 			case "AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK", "PAUSED":
-				detail, listErr := d.waitingDetail(waitCtx, client, name, session.State)
+				detail, listErr := d.waitingDetail(waitCtx, client, name, session.State, reply)
 				if listErr != nil {
 					warnings = append(warnings, "could not read Jules activities: "+listErr.Error())
 				}
@@ -642,7 +739,7 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
-			return result(julesStillRunning(id, last, spec), warnings), nil
+			return result(julesStillRunning(id, last, spec, reply.sent && !answered), warnings), nil
 		}
 	}
 }
@@ -690,12 +787,18 @@ func julesNeedsOwner(id string, session julesSession, detail string) string {
 	return strings.Join(lines, "\n")
 }
 
-func julesStillRunning(id string, session julesSession, spec JulesSpec) string {
+// julesStillRunning says the wait ran out. After a send with no reply yet, it says so,
+// and it never repeats an older message as the answer.
+func julesStillRunning(id string, session julesSession, spec JulesSpec, sentNoReply bool) string {
 	state := session.State
 	if state == "" {
 		state = "state unknown"
 	}
-	lines := []string{fmt.Sprintf("Jules session %s: %s; stopped waiting, and the session keeps running on Jules.", id, state)}
+	status := "stopped waiting, and the session keeps running on Jules."
+	if sentNoReply {
+		status = "message sent, no reply yet; stopped waiting, and the session keeps running on Jules."
+	}
+	lines := []string{fmt.Sprintf("Jules session %s: %s; %s", id, state, status)}
 	if session.URL != "" {
 		lines = append(lines, "Session: "+session.URL)
 	}
@@ -725,7 +828,7 @@ func (d JulesDriver) activities(ctx context.Context, client julesClient, name st
 			break
 		}
 	}
-	sort.SliceStable(all, func(i, j int) bool { return all[i].CreateTime < all[j].CreateTime })
+	sort.SliceStable(all, func(i, j int) bool { return julesCreated(all[i]).Before(julesCreated(all[j])) })
 	return all, nil
 }
 
@@ -742,14 +845,19 @@ func (d JulesDriver) failureReason(ctx context.Context, client julesClient, name
 	return "no reason reported", nil
 }
 
-// waitingDetail is the latest plan or agent message the owner must respond to.
-func (d JulesDriver) waitingDetail(ctx context.Context, client julesClient, name, state string) (string, error) {
+// waitingDetail is the latest plan or agent message the owner must respond to,
+// created after the reply baseline, so an older question is never shown again.
+func (d JulesDriver) waitingDetail(ctx context.Context, client julesClient, name, state string, reply julesReply) (string, error) {
 	activities, err := d.activities(ctx, client, name)
 	if err != nil {
 		return "", err
 	}
+	base := reply.baseline(activities)
 	for i := len(activities) - 1; i >= 0; i-- {
 		activity := activities[i]
+		if !julesAfter(activity, base) {
+			continue
+		}
 		if state == "AWAITING_PLAN_APPROVAL" && activity.PlanGenerated != nil {
 			steps := make([]string, 0, len(activity.PlanGenerated.Plan.Steps))
 			for n, step := range activity.PlanGenerated.Plan.Steps {
