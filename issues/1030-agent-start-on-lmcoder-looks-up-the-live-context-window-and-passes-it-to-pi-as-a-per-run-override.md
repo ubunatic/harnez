@@ -1,6 +1,6 @@
 # 1030 — Agent start on lmcoder looks up the live context window and passes it to Pi as a per-run override
 
-**Status**: Open
+**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Enhancement

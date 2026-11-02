@@ -1,6 +1,6 @@
 # 1010 — Container integration test for `harnez server install` on a fresh user
 
-**Status**: Open
+**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Testing

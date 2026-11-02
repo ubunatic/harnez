@@ -1,6 +1,6 @@
 # 857 — Support external issue providers (GitHub, GitLab, Codeberg, Trello, Jira)
 
-**Status**: Backlog
+**Status**: Open
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
