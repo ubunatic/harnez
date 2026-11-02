@@ -1,6 +1,6 @@
 # 1105 — usage --json reports the Codex monthly window in the weekly field
 
-**Status**: Open
+**Status**: Closed — usage --json puts a Monthly window under "monthly" (round-trips into the long slot); live: codex monthly=Monthly, claude weekly unchanged (9231ebc3); go test ./... green
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
