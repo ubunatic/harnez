@@ -127,10 +127,16 @@ func runFindHistory(w io.Writer, opts findHistoryOptions) error {
 
 func runFindNext(w io.Writer, dir string, jsonOutput bool) error {
 	issuesDir := filepath.Join(dir, "issues")
-	num, _, err := issues.NextNumber(issuesDir)
+	// Same numbering as `issues new`: local tickets plus the numbers other refs and open PRs claim.
+	files, err := issues.Scan(issuesDir)
 	if err != nil {
 		return fmt.Errorf("next issue number: %w", err)
 	}
+	claims, err := issues.Claims(dir, issues.ClaimOptions{Warn: os.Stderr})
+	if err != nil {
+		return fmt.Errorf("next issue number: %w", err)
+	}
+	num := issues.NextNumberFromFiles(append(files, claims...))
 	if jsonOutput {
 		data, err := json.Marshal(NextResultJSON{
 			Number:   num,

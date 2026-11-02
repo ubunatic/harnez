@@ -67,6 +67,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var remoteFlag bool
 	var forceFlag bool
 	var numberFlag string
+	var offlineFlag bool
 	var dir string
 	var checkFlag bool
 	var dryRunFlag bool
@@ -319,8 +320,8 @@ valid, exit-0 answer.`,
 					return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
 				}
 				fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
-				warnNumberAhead(cmd.ErrOrStderr(), dir, numberFlag)
-				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag)
+				warnNumberAhead(cmd.ErrOrStderr(), dir, numberFlag, offlineFlag)
+				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag, offlineFlag)
 			}
 			if args[0] == "show" {
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
@@ -405,6 +406,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVar(&remoteFlag, "remote", false, "with new: allocate a permanent GH id using authenticated gh on the github remote")
 	cmd.Flags().StringVar(&numberFlag, "number", "", "with new: use this ticket number instead of the next free one (refused if it exists)")
 	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: create despite strong duplicate matches")
+	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
 	cmd.Flags().BoolVar(&checkFlag, "check", false, "report what would change without writing or committing; exit 1 on drift")
@@ -616,12 +618,12 @@ func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]s
 // (or accept) a ticket number -- there isn't one until this call allocates it
 // -- and never commits.
 func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
-	return runIssuesNewWithForce(w, dir, title, jsonOutput, false, "")
+	return runIssuesNewWithForce(w, dir, title, jsonOutput, false, "", false)
 }
 
 // warnNumberAhead warns on w when an explicit --number skips past the next
 // free number; the reservation itself is still allowed.
-func warnNumberAhead(w io.Writer, dir, number string) {
+func warnNumberAhead(w io.Writer, dir, number string, offline bool) {
 	n, err := strconv.Atoi(strings.TrimSpace(number))
 	if err != nil {
 		return
@@ -630,7 +632,7 @@ func warnNumberAhead(w io.Writer, dir, number string) {
 	if err != nil {
 		return
 	}
-	elsewhere, err := issues.RemoteTicketFiles(dir)
+	elsewhere, err := issues.Claims(dir, issues.ClaimOptions{Offline: offline, Warn: w})
 	if err != nil {
 		return
 	}
@@ -640,7 +642,7 @@ func warnNumberAhead(w io.Writer, dir, number string) {
 	}
 }
 
-func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force bool, number string) error {
+func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force bool, number string, offline bool) error {
 	issuesDir := filepath.Join(dir, "issues")
 	adoptTracker := !dirExists(issuesDir)
 	if !force {
@@ -648,7 +650,7 @@ func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force boo
 			return err
 		}
 	}
-	elsewhere, err := issues.RemoteTicketFiles(dir)
+	elsewhere, err := issues.Claims(dir, issues.ClaimOptions{Offline: offline, Warn: os.Stderr})
 	if err != nil {
 		return fmt.Errorf("issues new: %w", err)
 	}
@@ -720,6 +722,12 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 	if err != nil {
 		return issuesResult{}, false, fmt.Errorf("issues mv: %w", err)
 	}
+	// Numbers that other refs or open pull requests claim count as taken, as in issues new.
+	claims, err := issues.Claims(opts.Dir, issues.ClaimOptions{Warn: os.Stderr})
+	if err != nil {
+		return issuesResult{}, false, fmt.Errorf("issues mv: %w", err)
+	}
+	taken := append(append([]issues.IssueFile{}, files...), claims...)
 
 	var newNum string
 	if strings.TrimSpace(newArg) != "" {
@@ -729,7 +737,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		}
 		newNum = fmt.Sprintf("%03d", n)
 	} else {
-		newNum = issues.NextNumberFromFiles(files)
+		newNum = issues.NextNumberFromFiles(taken)
 	}
 
 	oldPath := filepath.Join(issuesDir, f.RelPath)
@@ -755,7 +763,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 		return result, false, nil
 	}
 
-	for _, f2 := range files {
+	for _, f2 := range taken {
 		if f2.Number == newNum && f2.RelPath != f.RelPath {
 			return issuesResult{}, false, fmt.Errorf("issues mv: target ticket number %s already exists (%s)", newNum, f2.RelPath)
 		}

@@ -32,21 +32,28 @@ func RemoteTicketFiles(dir string) ([]IssueFile, error) {
 			return nil, fmt.Errorf("list tickets on %s: %w", ref, err)
 		}
 		short := strings.TrimPrefix(ref, "refs/remotes/")
-		for _, p := range strings.Split(listing, "\x00") {
-			rel, ok := strings.CutPrefix(p, "issues/")
-			if !ok {
-				continue
-			}
-			// Same layout as Scan: tickets directly in issues/ or in issues/archive/.
-			if dirPart := path.Dir(rel); dirPart != "." && dirPart != "archive" {
-				continue
-			}
-			if m := issueFileRegex.FindStringSubmatch(path.Base(rel)); m != nil {
-				files = append(files, IssueFile{Number: m[1], RelPath: rel, Ref: short})
-			}
-		}
+		files = append(files, ticketFilesFromPaths(strings.Split(listing, "\x00"), short)...)
 	}
 	return files, nil
+}
+
+// ticketFilesFromPaths keeps the repository paths that are tickets under issues/, with the
+// layout Scan uses: directly in issues/ or in issues/archive/. Ref names where they came from.
+func ticketFilesFromPaths(paths []string, ref string) []IssueFile {
+	var files []IssueFile
+	for _, p := range paths {
+		rel, ok := strings.CutPrefix(p, "issues/")
+		if !ok {
+			continue
+		}
+		if dirPart := path.Dir(rel); dirPart != "." && dirPart != "archive" {
+			continue
+		}
+		if m := issueFileRegex.FindStringSubmatch(path.Base(rel)); m != nil {
+			files = append(files, IssueFile{Number: m[1], RelPath: rel, Ref: ref})
+		}
+	}
+	return files
 }
 
 // gitStdout runs git -C dir args and returns its raw standard output.
