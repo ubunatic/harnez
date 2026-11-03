@@ -119,6 +119,10 @@ func runClaudeInstructionsHook(out io.Writer) error {
 		}
 	}
 	_, err := fmt.Fprintln(out, `Harnez instruction rule: Never propose or edit the literal CxxxE.md. Always target AGENTS.md. When the filename is unavoidable, write it as CxxxE.md. Before proposing any instruction-file change, check the repository's docs/ and AGENTS.md for existing coverage; durable shared guidance belongs in docs/ or AGENTS.md, while instruction files are for agent-specific habits.`)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out, `Harnez verify-first rule: every number, default, flag or behaviour you propose needs a source (doc, code, measurement) or an explicit "unverified" mark with a way to verify it. Ask about the owner's setup (models, plans, tools) instead of assuming it. Do not propose values while research you started is still running. Treat one measurement as a hypothesis and propose the canary that confirms it. Send thin research back for primary sources (official docs, source code) before relaying it. Ask for "go" only after listing the open facts, each verified or explicitly accepted as a risk.`)
 	return err
 }
 

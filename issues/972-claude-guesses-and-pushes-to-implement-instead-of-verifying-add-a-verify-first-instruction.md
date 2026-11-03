@@ -67,3 +67,9 @@ The defence does not cancel the pattern: the corrections were triggered by the o
   - When a research report is thin, send it back for primary sources (official docs, source code) before relaying.
 - Verify: replay the opening of the 969 discussion in a fresh Claude session with the rule active; it must ask which
   models are used, wait for research before proposing values, and mark the buffer as unverified.
+
+## 4. Result (2026-11-03)
+Added a verify-first line to `harnez hook claude-instructions` (Claude SessionStart, the 353 route),
+covered by `TestRunClaudeInstructionsHook`. Replay: fresh `claude -p --model haiku` with the 969
+opening ("propose --autocompact values per model, I measured 67k once") refused to give values,
+asked which models are in use, called the 67k a hypothesis and proposed a canary.
