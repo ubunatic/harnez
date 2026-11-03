@@ -2,6 +2,7 @@ package issues
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -423,6 +424,9 @@ func ParseTrackerTable(content string) ([]TableRow, error) {
 // Scan walks issuesDir (and its "archive" subdir) collecting IssueFile
 // entries for every NNN-*.md file found, sorted by Number then RelPath.
 func Scan(issuesDir string) ([]IssueFile, error) {
+	if _, err := os.Stat(issuesDir); errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("no local issue tracker (%s %w); if this repo keeps its tickets on a forge (Codeberg, GitHub), read them there, harnez has no forge-tracker mode yet", issuesDir, fs.ErrNotExist)
+	}
 	return ScanFS(os.DirFS(issuesDir), ".")
 }
 

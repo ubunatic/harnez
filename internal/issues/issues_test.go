@@ -1,7 +1,9 @@
 package issues
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +11,16 @@ import (
 	"testing"
 	"testing/fstest"
 )
+
+func TestScanMissingDirNamesForge(t *testing.T) {
+	_, err := Scan(filepath.Join(t.TempDir(), "issues"))
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("want fs.ErrNotExist, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "forge") || !strings.Contains(err.Error(), "issues") {
+		t.Fatalf("error should name the missing dir and the forge: %v", err)
+	}
+}
 
 func TestParseIssueFile(t *testing.T) {
 	tests := []struct {
