@@ -23,3 +23,8 @@ Reported 2026-11-03 by the lmcoder session. The harnez PreToolUse hook rewrites 
 ## Done when
 - A hook test shows no `updatedInput` for the chosen auto-mode path, or for an already-routed `⚙` command.
 - The agent docs say what agents should type.
+
+## Findings 2026-11-03 (lmcoder)
+- A call that already starts with `⚙ bash ...` passes through unchanged when it is the only call in the response.
+- If the hook rewrites even one plain call in a response with several Bash calls, auto mode refuses every other call in that response ("another call in this response was changed by a hook"). Each one must be resent alone.
+- Writing `⚙` on every call works, but one forgotten prefix breaks the whole batch. A per-agent habit is fragile, so the hook-side fix (skip the rewrite in auto mode) is the better route.
