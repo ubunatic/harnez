@@ -46,6 +46,9 @@ type JulesSpec struct {
 	SyncRemote    string `yaml:"sync_remote"`
 	SyncBranch    string `yaml:"sync_branch"`
 	SyncTimeoutMS int    `yaml:"sync_timeout_ms"`
+	// AutoReply, when set, is sent once per session the first time Jules waits
+	// for feedback, so a run that asks back still finishes (issue 1113).
+	AutoReply string `yaml:"auto_reply"`
 }
 
 func (s JulesSpec) validate() error {
@@ -113,6 +116,9 @@ type julesActivity struct {
 	AgentMessaged *struct {
 		AgentMessage string `json:"agentMessage"`
 	} `json:"agentMessaged"`
+	UserMessaged *struct {
+		UserMessage string `json:"userMessage"`
+	} `json:"userMessaged"`
 	SessionFailed *struct {
 		Reason string `json:"reason"`
 	} `json:"sessionFailed"`
@@ -736,6 +742,13 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 				}
 				return nil, fmt.Errorf("Jules session %s failed: %s (%s)", id, reason, session.URL)
 			case "AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK", "PAUSED":
+				if sent, autoErr := d.autoReply(waitCtx, client, spec, name, session.State); autoErr != nil {
+					warnings = append(warnings, "auto-reply failed (it may still have reached Jules; a later wait will not resend it): "+autoErr.Error())
+				} else if sent.sent {
+					warnings = append(warnings, "Jules asked back; sent the one auto-reply from spec jules.auto_reply")
+					reply, answered = sent, false
+					continue
+				}
 				detail, listErr := d.waitingDetail(waitCtx, client, name, session.State, reply)
 				if listErr != nil {
 					warnings = append(warnings, "could not read Jules activities: "+listErr.Error())
@@ -843,6 +856,30 @@ func (d JulesDriver) activities(ctx context.Context, client julesClient, name st
 	}
 	sort.SliceStable(all, func(i, j int) bool { return julesCreated(all[i]).Before(julesCreated(all[j])) })
 	return all, nil
+}
+
+// autoReply sends spec.AutoReply when Jules waits for feedback and no earlier
+// message in the session carried it, so it goes out at most once per session.
+// The real API echoes a sent message as userMessaged.userMessage (checked live
+// on 2026-11-03 against session 5832791262383075829).
+func (d JulesDriver) autoReply(ctx context.Context, client julesClient, spec JulesSpec, name, state string) (julesReply, error) {
+	text := strings.TrimSpace(spec.AutoReply)
+	if text == "" || state != "AWAITING_USER_FEEDBACK" {
+		return julesReply{}, nil
+	}
+	acts, err := d.activities(ctx, client, name)
+	if err != nil {
+		return julesReply{}, err
+	}
+	for _, a := range acts {
+		if a.UserMessaged != nil && strings.TrimSpace(a.UserMessaged.UserMessage) == text {
+			return julesReply{}, nil
+		}
+	}
+	if err := client.call(ctx, http.MethodPost, name+":sendMessage", map[string]any{"prompt": text}, nil); err != nil {
+		return julesReply{}, err
+	}
+	return julesReply{sent: true, pre: state, after: julesNewest(acts)}, nil
 }
 
 // lastAgentMessage is the newest message Jules wrote in the session, or "".
