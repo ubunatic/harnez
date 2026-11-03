@@ -34,6 +34,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/find"
+	"ubunatic.com/harnez/internal/forgetracker"
 	"ubunatic.com/harnez/internal/gitflow"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
@@ -147,6 +148,8 @@ then the README is regenerated and the batch is committed once.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
+                    Without a local issues/ dir, reads the ticket from the
+                    origin forge in spec/pr.yaml instead (read-only).
   mv <old> [new]   Renumber a ticket to [new] (default: next free number
                     from scanning issuesDir). Renames the file keeping the
                     same slug, rewrites the '# <new> — <title>' header line,
@@ -346,6 +349,11 @@ valid, exit-0 answer.`,
 			if args[0] == "show" {
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
 					return fmt.Errorf("issues show: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
+				}
+				if t, src, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
+					return err
+				} else if ok {
+					return forgeTrackerHint(forgetracker.Show(cmd.OutOrStdout(), src, t, args[1], jsonFlag), t)
 				}
 				return runIssuesShow(cmd.OutOrStdout(), dir, args[1], jsonFlag, rawFlag, textFlag, imageFlag)
 			}

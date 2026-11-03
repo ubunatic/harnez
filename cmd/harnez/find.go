@@ -17,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/find"
+	"ubunatic.com/harnez/internal/forgetracker"
 )
 
 func newFindCmd() *cobra.Command {
@@ -44,8 +45,10 @@ Entities:
   issues   searches issues/*.md and issues/archive/*.md (excludes
            issues/README.md and every other file/directory). Both active and
            archived tickets are in scope by default; use a status filter to
-           narrow lifecycle state.
-  code     searches source files through configured finders (neus first,
+           narrow lifecycle state. Without a local issues/ dir, plain term
+           searches read the origin forge (spec/pr.yaml) instead: every term
+           must match title or body; subcommands like next stay local-only.
+  code    searches source files through configured finders (neus first,
            with rg as the code fallback when neus is unavailable).
            Outside a Git worktree, an explicit -d/--dir is required.
   docs     searches documentation through configured finders, with built-in
@@ -146,6 +149,15 @@ Output formatting:
 				out, err := exec.CommandContext(cmd.Context(), "git", "-C", dir, "rev-parse", "--is-inside-work-tree").Output()
 				if err != nil || strings.TrimSpace(string(out)) != "true" {
 					return fmt.Errorf("find code: outside a Git worktree; use -d/--dir <directory> to select the search scope")
+				}
+			}
+			if args[0] == "issues" && !nextFlag && (len(args) < 2 || !findIssuesLocalOnly[args[1]]) {
+				t, src, spec, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir)
+				if err != nil {
+					return err
+				}
+				if ok {
+					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.OpenPRScan, args[1:], limitFlag, allFlag, jsonFlag), t)
 				}
 			}
 			opts := find.FindRunOptions{

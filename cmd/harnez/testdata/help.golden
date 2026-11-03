@@ -1323,8 +1323,10 @@ Entities:
   issues   searches issues/*.md and issues/archive/*.md (excludes
            issues/README.md and every other file/directory). Both active and
            archived tickets are in scope by default; use a status filter to
-           narrow lifecycle state.
-  code     searches source files through configured finders (neus first,
+           narrow lifecycle state. Without a local issues/ dir, plain term
+           searches read the origin forge (spec/pr.yaml) instead: every term
+           must match title or body; subcommands like next stay local-only.
+  code    searches source files through configured finders (neus first,
            with rg as the code fallback when neus is unavailable).
            Outside a Git worktree, an explicit -d/--dir is required.
   docs     searches documentation through configured finders, with built-in
@@ -1717,6 +1719,8 @@ then the README is regenerated and the batch is committed once.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
+                    Without a local issues/ dir, reads the ticket from the
+                    origin forge in spec/pr.yaml instead (read-only).
   mv <old> [new]   Renumber a ticket to [new] (default: next free number
                     from scanning issuesDir). Renames the file keeping the
                     same slug, rewrites the '# <new> — <title>' header line,
