@@ -241,6 +241,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
+| [studies/JulesPeerFeedback.md](studies/JulesPeerFeedback.md) | Jules Through Harnez: Peer Feedback (2026-11-03) |
 | [studies/MacOSContainerAMD.md](studies/MacOSContainerAMD.md) | macOS Containers on AMD KVM & Podman: Architecture, Quirks, and Diagnostic Guide |
 | [studies/PureGoSound.md](studies/PureGoSound.md) | Pure-Go Audio Playback Assessment for CLI Notifications |
 | [studies/Quota1Approach.md](studies/Quota1Approach.md) | Research Study: Quota-1 Guardrails for LLM Agent Loops |
