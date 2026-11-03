@@ -27,6 +27,13 @@ type JulesSessionStatus struct {
 	State       string `json:"state"`
 	URL         string `json:"url,omitempty"`
 	PullRequest string `json:"pull_request,omitempty"`
+	// Reason is Jules's failure reason for a FAILED session.
+	Reason string `json:"reason,omitempty"`
+	// LastMessage is the newest message Jules wrote: its question while it
+	// waits, or its summary once done.
+	LastMessage string `json:"last_message,omitempty"`
+	// Warning says why the activities could not be read.
+	Warning string `json:"warning,omitempty"`
 }
 
 // ValidateJulesSessionID refuses an ID that cannot be a Jules session ID, before
@@ -57,6 +64,17 @@ func (d JulesDriver) InspectJulesSession(ctx context.Context, id string) (JulesS
 	if pr := session.pullRequest(); pr != nil {
 		status.PullRequest = pr.URL
 	}
+	name := "sessions/" + url.PathEscape(id)
+	if last, err := d.lastAgentMessage(ctx, client, name); err != nil {
+		status.Warning = "could not read Jules activities: " + err.Error()
+	} else {
+		status.LastMessage = last
+	}
+	if session.State == "FAILED" && status.Warning == "" {
+		if reason, err := d.failureReason(ctx, client, name); err == nil {
+			status.Reason = reason
+		}
+	}
 	return status, nil
 }
 
@@ -73,6 +91,15 @@ func (s JulesSessionStatus) Summary() string {
 	}
 	if s.PullRequest != "" {
 		lines = append(lines, "Pull request: "+s.PullRequest)
+	}
+	if s.Reason != "" {
+		lines = append(lines, "Reason: "+s.Reason)
+	}
+	if s.LastMessage != "" {
+		lines = append(lines, "Jules says: "+s.LastMessage)
+	}
+	if s.Warning != "" {
+		lines = append(lines, "Warning: "+s.Warning)
 	}
 	if s.State == "AWAITING_USER_FEEDBACK" {
 		lines = append(lines, fmt.Sprintf(`Next: answer with harnez agent resume --model jules --id %s "<message>".`, s.ID))

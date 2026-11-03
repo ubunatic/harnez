@@ -148,3 +148,22 @@ func TestResumeWaitOnAdoptedSessionSendsNoMessage(t *testing.T) {
 		t.Errorf("wait sent messages %v and approvals %d", fake.messages, fake.approvals)
 	}
 }
+
+func TestInspectJulesSessionShowsReasonAndLastMessage(t *testing.T) {
+	acts := []map[string]any{
+		{"originator": "agent", "createTime": "2026-11-02T10:00:01Z", "agentMessaged": map[string]any{"agentMessage": "Which branch should I use?"}},
+		{"createTime": "2026-11-02T10:00:02Z", "sessionFailed": map[string]any{"reason": "setup script failed"}},
+	}
+	fake := &fakeJules{sessionID: julesAdoptID, states: []julesSession{{State: "FAILED"}}, activities: acts}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	status, err := h.driver.InspectJulesSession(context.Background(), julesAdoptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := status.Summary()
+	for _, want := range []string{"Reason: setup script failed", "Jules says: Which branch should I use?"} {
+		if !strings.Contains(sum, want) {
+			t.Errorf("summary lacks %q:\n%s", want, sum)
+		}
+	}
+}
