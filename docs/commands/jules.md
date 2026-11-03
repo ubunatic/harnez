@@ -1,6 +1,6 @@
 # Jules
 
-Run one-shot Google Jules work on this repository. Each run gets one prompt and no follow-up. You then check its evidence and use what holds up.
+Run one-shot Google Jules work on this repository. Each run gets one prompt; the only follow-up is up to two short replies when Jules stops to ask (Section 3, Asks back). You then check its evidence and use what holds up.
 
 Triggers: `/jules <kind> <target>`, where `<kind>` is one of:
 
@@ -17,7 +17,7 @@ Google stops accepting new Jules work on 2026-11-11 and shuts Jules down on 2026
 
 ## 1. Rules
 
-- **One shot:** one prompt per run. Never send Jules a follow-up message, an answer or a fix request. `harnez agent resume --name <session> wait` only keeps waiting, so it is allowed; any other resume text reaches Jules as a message. After such a message, a wait that runs out prints "message sent, no reply yet": Jules has not answered, and the question Jules asked before is not shown again.
+- **One shot:** one prompt per run. Never send Jules a fix request or new work. The only messages allowed are the at most two replies to a question Jules asks (Section 3, Asks back). `harnez agent resume --name <session> wait` only keeps waiting and sends nothing; any other resume text reaches Jules as a message. After a message, a wait that runs out prints "message sent, no reply yet": Jules has not answered, and the question Jules asked before is not shown again.
 - **Report only (audit and ideas):** these runs add a report and nothing else. Never ask Jules to fix anything. Do any finishing work yourself.
 - **Code PRs (implement and experiment):** get normal review before merging. Never ask Jules to rework one; the host finishes fixes through the normal workflow. Experiment code is evidence only and is never merged.
 - **A report is a lead, not a fact:** check its evidence against the code before changing a ticket.
@@ -50,7 +50,18 @@ For other kinds, use the same command with `jules-<kind>-<n>` as the name and th
 
 The job's exit is your signal, so do not poll in a loop. Exit 0 can also mean the wait ran out while the run goes on, so read the state in the job output before you count the run as finished. A run took between 3 and 40 minutes in the first 25 runs. Ten at once all ran. If a job's wait runs out while the session still runs, continue with `harnez agent resume --name jules-audit-<n> wait`.
 
-The job output names the GitHub PR. A run that finished without a PR, or a session that is waiting for an answer, counts as a failed run. Record it and do not reply to it. This happened to 2 of the first 25 runs, one of them despite the prompt forbidding it. Its last message may still hold usable findings: treat them as leads and check them the same way.
+The job output names the GitHub PR, and on completion it shows Jules's last message as `Jules says: ...`. A run that finished without a PR counts as a failed run: record it. Its last message may still hold usable findings: treat them as leads and check them the same way.
+
+### Asks back
+
+A session in `AWAITING_USER_FEEDBACK` (or `AWAITING_PLAN_APPROVAL`) shows Jules's question as `Jules says: ...`. This happened to 3 of the first 30 runs, even with the prompt forbidding questions. Reply at most twice, each reply in the background, followed by the wait the reply starts:
+
+1. **First reply:** answer the question in one or two sentences, picking the smallest option that keeps the run's rules (report only stays report only), and end with "Do not ask again; finish and submit the PR now." For a plan, use `approve`.
+   `HTO=0 harnez agent resume --name <session> "<answer>. Do not ask again; finish and submit the PR now."`
+2. **Second reply,** only if Jules asks again or the wait reports "message sent, no reply yet" twice: `HTO=0 harnez agent resume --name <session> "Submit what you have as a draft PR now."` In run 1087b a plain answer got no reaction for 40 minutes, and "submit a draft" got one 13 minutes later.
+3. After that, count the run as failed: record it, keep its last message as a lead, and stop sending.
+
+Never use a reply to widen the task, ask for fixes or rework a PR. Note each reply in the run's tracking row (`replies: 1` or `2`).
 
 ### Run tracking
 

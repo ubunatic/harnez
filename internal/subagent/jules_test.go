@@ -984,3 +984,20 @@ func TestJulesModelResolvesToDriver(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestJulesCompletedShowsLastAgentMessage(t *testing.T) {
+	acts := []map[string]any{
+		{"originator": "agent", "createTime": "2026-11-02T10:00:01Z", "agentMessaged": map[string]any{"agentMessage": "Starting."}},
+		{"originator": "agent", "createTime": "2026-11-02T10:00:09Z", "agentMessaged": map[string]any{"agentMessage": "Done: found two stale claims."}},
+		{"originator": "agent", "createTime": "2026-11-02T10:00:10Z", "progressUpdated": map[string]any{"title": "PR opened"}},
+	}
+	fake := &fakeJules{states: []julesSession{julesDone("https://github.com/o/harnez/pull/9")}, activities: acts}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	res, err := h.driver.Run(context.Background(), RunOptions{Prompt: "# 42 — Audit"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Response, "Jules says: Done: found two stale claims.") || strings.Contains(res.Response, "Starting.") {
+		t.Fatalf("response must show only the last agent message:\n%s", res.Response)
+	}
+}
