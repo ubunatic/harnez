@@ -37,4 +37,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1107 | [1107-agent-selftest-refuses-to-run-from-a-developer-role.md](1107-agent-selftest-refuses-to-run-from-a-developer-role.md) | agent selftest refuses to run from a developer role | Open |
 | 1111 | [1111-jules-start-exits-0-while-the-session-still-runs.md](1111-jules-start-exits-0-while-the-session-still-runs.md) | Jules start exits 0 while the session still runs | Open |
 | 1112 | [1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md](1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md) | Auto mode refuses Bash calls the gear-shim hook rewrote, doubling tool calls | Open |
+| 1114 | [1114-jules-wait-say-a-session-stalled-after-its-replies-instead-of-offering-another-wait.md](1114-jules-wait-say-a-session-stalled-after-its-replies-instead-of-offering-another-wait.md) | Jules wait: say a session stalled after its replies instead of offering another wait | Open |
 <!-- harnez:end issues-active-index -->

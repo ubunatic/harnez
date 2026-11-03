@@ -26,6 +26,7 @@ const (
 type Spec struct {
 	MaxLines         int    `yaml:"max_lines"`
 	DenyMessage      string `yaml:"deny_message"`
+	RepeatMessage    string `yaml:"repeat_message"`
 	SubagentGuidance string `yaml:"subagent_guidance"`
 }
 
@@ -76,6 +77,11 @@ func validate(doc map[string]any) error {
 // Deny returns the deny message with the threshold filled in.
 func (s Spec) Deny() string {
 	return render(s.DenyMessage, s.MaxLines)
+}
+
+// Repeat returns the deny message for a second native read of one file in a session.
+func (s Spec) Repeat() string {
+	return render(s.RepeatMessage, s.MaxLines)
 }
 
 // Guidance returns the subagent read guidance with the threshold filled in.

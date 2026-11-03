@@ -780,6 +780,7 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 			stateDir = filepath.Join(resolve.DefaultStateDir(), "read-hooks")
 		}
 		seen := map[string]bool{}
+		repeated := false
 		for _, path := range extractFilePaths(payload.ToolInput) {
 			if !filepath.IsAbs(path) {
 				path = filepath.Join(baseDir, path)
@@ -796,11 +797,15 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 				continue
 			}
 			if repeatedRead(stateDir, payload.SessionID, path) {
-				deny = true
+				repeated = true
 			}
 		}
-		if deny {
+		switch {
+		case deny:
 			reason = readingDisciplineDenyReason + "\n" + readRedirect(payload.ToolInput, baseDir)
+		case repeated:
+			deny = true
+			reason = readingDiscipline.Repeat() + "\n" + readRedirect(payload.ToolInput, baseDir)
 		}
 	}
 	if deny {

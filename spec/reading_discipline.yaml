@@ -4,4 +4,5 @@
 # must not repeat them. Placeholders: {max_lines}.
 max_lines: 100
 deny_message: "harnez guard: this native file read covers {max_lines} or more lines and violates Reading & Context Discipline. Choose one: run 'harnez read -L <range> -n <file>' for line-bounded editing anchors, or use native Read with both offset and limit spanning fewer than {max_lines} lines. A read with offset but no limit is not bounded. ('harnez read -I' is paused, issue 543.)"
+repeat_message: "harnez guard: this session already read this file natively, so a second native Read of it is denied even when the slice is small. Use the harnez read command below for any further slices."
 subagent_guidance: "For files over {max_lines} lines or repeated slices, execute harnez read <file> or harnez read -n -L START:END <file>."

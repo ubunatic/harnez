@@ -26,6 +26,7 @@ func TestEmbeddedSpecLoads(t *testing.T) {
 func TestThresholdComesFromSpec(t *testing.T) {
 	spec, err := Parse([]byte(`max_lines: 42
 deny_message: "block at {max_lines} lines, read fewer than {max_lines}"
+repeat_message: "again"
 subagent_guidance: "files over {max_lines} lines"
 `))
 	if err != nil {
@@ -37,6 +38,9 @@ subagent_guidance: "files over {max_lines} lines"
 	if got, want := spec.Deny(), "block at 42 lines, read fewer than 42"; got != want {
 		t.Errorf("Deny() = %q, want %q", got, want)
 	}
+	if got, want := spec.Repeat(), "again"; got != want {
+		t.Errorf("Repeat() = %q, want %q", got, want)
+	}
 	if got, want := spec.Guidance(), "files over 42 lines"; got != want {
 		t.Errorf("Guidance() = %q, want %q", got, want)
 	}
@@ -47,12 +51,13 @@ func TestParseRejects(t *testing.T) {
 		name string
 		yaml string
 	}{
-		{"zero threshold", "max_lines: 0\ndeny_message: \"a {max_lines}\"\nsubagent_guidance: \"b {max_lines}\"\n"},
-		{"missing guidance", "max_lines: 100\ndeny_message: \"a {max_lines}\"\n"},
-		{"unknown key", "max_lines: 100\ndeny_message: \"a {max_lines}\"\nsubagent_guidance: \"b {max_lines}\"\nextra: 1\n"},
-		{"deny without placeholder", "max_lines: 100\ndeny_message: \"no placeholder\"\nsubagent_guidance: \"b {max_lines}\"\n"},
-		{"guidance without placeholder", "max_lines: 100\ndeny_message: \"a {max_lines}\"\nsubagent_guidance: \"no placeholder\"\n"},
-		{"string threshold", "max_lines: \"100\"\ndeny_message: \"a {max_lines}\"\nsubagent_guidance: \"b {max_lines}\"\n"},
+		{"zero threshold", "max_lines: 0\ndeny_message: \"a {max_lines}\"\nrepeat_message: \"r\"\nsubagent_guidance: \"b {max_lines}\"\n"},
+		{"missing guidance", "max_lines: 100\ndeny_message: \"a {max_lines}\"\nrepeat_message: \"r\"\n"},
+		{"unknown key", "max_lines: 100\ndeny_message: \"a {max_lines}\"\nrepeat_message: \"r\"\nsubagent_guidance: \"b {max_lines}\"\nextra: 1\n"},
+		{"deny without placeholder", "max_lines: 100\ndeny_message: \"no placeholder\"\nrepeat_message: \"r\"\nsubagent_guidance: \"b {max_lines}\"\n"},
+		{"guidance without placeholder", "max_lines: 100\ndeny_message: \"a {max_lines}\"\nrepeat_message: \"r\"\nsubagent_guidance: \"no placeholder\"\n"},
+		{"missing repeat", "max_lines: 100\ndeny_message: \"a {max_lines}\"\nsubagent_guidance: \"b {max_lines}\"\n"},
+		{"string threshold", "max_lines: \"100\"\ndeny_message: \"a {max_lines}\"\nrepeat_message: \"r\"\nsubagent_guidance: \"b {max_lines}\"\n"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
