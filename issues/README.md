@@ -38,4 +38,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1111 | [1111-jules-start-exits-0-while-the-session-still-runs.md](1111-jules-start-exits-0-while-the-session-still-runs.md) | Jules start exits 0 while the session still runs | Open |
 | 1112 | [1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md](1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md) | Auto mode refuses Bash calls the gear-shim hook rewrote, doubling tool calls | Open |
 | 1114 | [1114-jules-wait-say-a-session-stalled-after-its-replies-instead-of-offering-another-wait.md](1114-jules-wait-say-a-session-stalled-after-its-replies-instead-of-offering-another-wait.md) | Jules wait: say a session stalled after its replies instead of offering another wait | Open |
+| 1115 | [1115-harnez-apply-keeps-docup-skill-dirs-with-extra-files-in-all-five-agent-roots.md](1115-harnez-apply-keeps-docup-skill-dirs-with-extra-files-in-all-five-agent-roots.md) | harnez apply keeps docup skill dirs with extra files in all five agent roots | Open |
 <!-- harnez:end issues-active-index -->
