@@ -47,3 +47,7 @@ Checked in the code and on this machine; nothing changed yet.
 - Skipping the rewrite in auto mode also drops the 60s kill, since no wrapper runs. That is acceptable, but the docs must say so.
 - If agents type `⚙` themselves, a background call needs `HTO=0 ⚙ ...` every time, unless `harnez exec` stops applying the default timeout to long-running harnez commands (`agent start`, `pr wait`), like the existing `agent wait` exemption. That exemption is small, testable and helps either route.
 - Do not widen `alreadyRoutedThroughExec`. Narrowing its `harnez exec` substring match is a separate small fix.
+
+## Progress 2026-11-03
+- Done: `harnez exec` no longer applies its default 60s timeout to `harnez agent start`, `agent resume`, `agent wait` or `pr wait` (`isHarnezAgentWait`, `internal/exec/exec.go`; cases in `TestResolveExecTimeout_HarnezAgentWaitDefaultsUnlimited`). A self-written `⚙` on these no longer needs `HTO=0`. An explicit timeout still wins.
+- Open: the auto-mode refusal itself (canary on `permission_mode` first).

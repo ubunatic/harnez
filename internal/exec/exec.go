@@ -185,7 +185,8 @@ func unwrapShellCommand(args []string) []string {
 	return args
 }
 
-// isHarnezAgentWait reports whether args invoke `harnez agent wait`, either
+// isHarnezAgentWait reports whether args invoke a long-running harnez command
+// (`agent wait`, `agent start`, `agent resume`, `pr wait`; issue 1112), either
 // directly or as a shell -c script. It intentionally recognizes command words
 // rather than searching for a substring, so references in unrelated text do
 // not disable the exec timeout.
@@ -198,7 +199,11 @@ func isHarnezAgentWait(args []string) bool {
 		if strings.Contains(tokens[i], "=") && !strings.HasPrefix(tokens[i], "-") {
 			continue
 		}
-		if filepath.Base(tokens[i]) == "harnez" && tokens[i+1] == "agent" && tokens[i+2] == "wait" {
+		if filepath.Base(tokens[i]) != "harnez" {
+			continue
+		}
+		switch tokens[i+1] + " " + tokens[i+2] {
+		case "agent wait", "agent start", "agent resume", "pr wait":
 			return true
 		}
 	}
