@@ -1,6 +1,6 @@
 # 1110 — Jules GitHub sync: divergence and missing push permission
 
-**Status**: Open
+**Status**: Closed — sync warning names GitHub-ahead vs diverged with the next step, and adds a credentials hint on a denied/403 push (syncGitHubBranch, internal/subagent/jules.go; TestJulesSyncNamesGitHubAhead, TestJulesSyncHintsAtCredentialsOnDeniedPush). harnez still pushes with the caller's own git credentials; a separate credential was not added.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

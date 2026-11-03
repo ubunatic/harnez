@@ -35,7 +35,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1101 | [1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md](1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md) | Model pick by task and provider in harnez: absorb horg pick/models or call horg | Open |
 | 1102 | [1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md](1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md) | pre-push ticket-number lint checks the working tree, not the pushed commits | Open |
 | 1107 | [1107-agent-selftest-refuses-to-run-from-a-developer-role.md](1107-agent-selftest-refuses-to-run-from-a-developer-role.md) | agent selftest refuses to run from a developer role | Open |
-| 1110 | [1110-jules-github-sync-divergence-and-missing-push-permission.md](1110-jules-github-sync-divergence-and-missing-push-permission.md) | Jules GitHub sync: divergence and missing push permission | Open |
 | 1111 | [1111-jules-start-exits-0-while-the-session-still-runs.md](1111-jules-start-exits-0-while-the-session-still-runs.md) | Jules start exits 0 while the session still runs | Open |
 | 1112 | [1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md](1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md) | Auto mode refuses Bash calls the gear-shim hook rewrote, doubling tool calls | Open |
 <!-- harnez:end issues-active-index -->
