@@ -30,3 +30,7 @@ Passing `--name` worked. `harnez agent list` there showed no sessions and "1 mor
 ## Jules experiment findings (GitHub PR 62, 2026-11-01)
 
 A numeric suffix fallback in `GenerateSessionName` is a small change, and tests matching `Name` in `internal/subagent` pass at the PR head. Do not copy it as is: its test only marks names under 15 characters as taken, so it may never reach the fallback, and the loop never ends when every name counts as taken. It also leaves finished sessions holding names. The store is read from `.json` files, per the report; not independently checked.
+
+## Audit 2026-11-03
+
+Jules audit (PR GH#68, report `reports/jules/1086.md`, checked against d8904997; one line off by one): still valid. `internal/subagent/name.go:26` fails with a static "all memorable session names are in use"; `cmd/harnez/agent_run.go:408-410` reserves every session's name, finished ones included. Smallest step: fall back to a numeric suffix when the pool is exhausted, so finished sessions keep resumable names.
