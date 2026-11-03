@@ -33,7 +33,7 @@ func (t Target) String() string { return t.Forge.Host + "/" + t.Owner + "/" + t.
 // Source reads issues; forge.PullLister satisfies it and tests replace it.
 type Source interface {
 	Issue(fg forge.Forge, owner, repo string, n int) (forge.RemoteIssue, error)
-	Issues(fg forge.Forge, owner, repo, query string, opts forge.ScanOptions) ([]forge.RemoteIssue, error)
+	Issues(fg forge.Forge, owner, repo string, opts forge.ScanOptions) ([]forge.RemoteIssue, bool, error)
 }
 
 // ErrNotApplicable means the repo has a local issues/ dir, or no forge origin, so the
@@ -102,16 +102,15 @@ func Show(w io.Writer, src Source, t Target, ticket string, jsonOut bool) error 
 // newest first, as "<number>\t<state>\t<title>\t<url>". limit caps the rows unless all is set.
 func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []string, limit int, all, jsonOut bool) error {
 	var lowered []string
-	server := ""
 	for _, term := range terms {
 		for _, f := range strings.Fields(term) {
-			lowered = append(lowered, strings.ToLower(f))
-			if len(f) > len(server) {
-				server = f
+			if strings.Contains(f, ":") {
+				return fmt.Errorf("find issues: filter %q is not supported for forge tickets; use plain search terms", f)
 			}
+			lowered = append(lowered, strings.ToLower(f))
 		}
 	}
-	list, err := src.Issues(t.Forge, t.Owner, t.Repo, server, opts)
+	list, truncated, err := src.Issues(t.Forge, t.Owner, t.Repo, opts)
 	if err != nil {
 		return fmt.Errorf("find issues: %s: %w", t, err)
 	}
@@ -138,6 +137,11 @@ func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []str
 	}
 	if _, err := fmt.Fprintf(w, "# %d matches on %s, showing %d (use --all to show all)\n", total, t, len(rows)); err != nil {
 		return err
+	}
+	if truncated {
+		if _, err := fmt.Fprintf(w, "# searched only the newest %d issues and pull requests (spec/pr.yaml open_pr_scan page budget)\n", opts.PageSize*opts.MaxPages); err != nil {
+			return err
+		}
 	}
 	for _, r := range rows {
 		if _, err := fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", r.Number, r.State, r.Title, r.URL); err != nil {

@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"ubunatic.com/harnez/internal/forge"
@@ -24,6 +27,11 @@ var forgeTrackerSource = func(spec prwait.Spec) forgetracker.Source { return for
 // resolveForgeTracker reports the forge that holds dir's tickets when dir has no
 // issues/ dir (issue 1116). ok=false keeps the local tracker behaviour.
 func resolveForgeTracker(stderr io.Writer, dir string) (forgetracker.Target, forgetracker.Source, prwait.Spec, bool, error) {
+	// A local issues/ dir wins before the spec is even read, so a broken spec
+	// never changes the local tracker's behaviour.
+	if _, err := os.Stat(filepath.Join(dir, "issues")); !errors.Is(err, fs.ErrNotExist) {
+		return forgetracker.Target{}, nil, prwait.Spec{}, false, nil
+	}
 	spec, err := prwait.LoadSpec()
 	if err != nil {
 		return forgetracker.Target{}, nil, spec, false, err

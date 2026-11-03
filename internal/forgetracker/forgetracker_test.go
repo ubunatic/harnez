@@ -16,7 +16,7 @@ import (
 
 type fakeSource struct {
 	issues    []forge.RemoteIssue
-	lastQuery string
+	truncated bool
 }
 
 func (f *fakeSource) Issue(_ forge.Forge, _, _ string, n int) (forge.RemoteIssue, error) {
@@ -28,9 +28,8 @@ func (f *fakeSource) Issue(_ forge.Forge, _, _ string, n int) (forge.RemoteIssue
 	return forge.RemoteIssue{}, &forge.APIError{Status: 404, Detail: "not found"}
 }
 
-func (f *fakeSource) Issues(_ forge.Forge, _, _, query string, _ forge.ScanOptions) ([]forge.RemoteIssue, error) {
-	f.lastQuery = query
-	return f.issues, nil
+func (f *fakeSource) Issues(_ forge.Forge, _, _ string, _ forge.ScanOptions) ([]forge.RemoteIssue, bool, error) {
+	return f.issues, f.truncated, nil
 }
 
 var target = Target{Forge: forge.Forge{Host: "codeberg.org"}, Owner: "o", Repo: "r"}
@@ -88,8 +87,23 @@ func TestFindMatchesAllTermsCaseInsensitive(t *testing.T) {
 	if err := Find(&out, src, target, forge.ScanOptions{}, []string{"loader slow"}, 10, false, false); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "# 1 matches") || src.lastQuery != "loader" {
-		t.Fatalf("want one AND match and longest term as server query, got %q query=%q", out.String(), src.lastQuery)
+	if !strings.Contains(out.String(), "# 1 matches") || !strings.Contains(out.String(), "Loader is slow") {
+		t.Fatalf("want one AND match, got %q", out.String())
+	}
+}
+
+func TestFindRejectsFiltersAndNotesTruncation(t *testing.T) {
+	if err := Find(&bytes.Buffer{}, sample(), target, forge.ScanOptions{}, []string{"status:open"}, 10, false, false); err == nil || !strings.Contains(err.Error(), "not supported") {
+		t.Fatalf("want unsupported filter error, got %v", err)
+	}
+	src := sample()
+	src.truncated = true
+	var out bytes.Buffer
+	if err := Find(&out, src, target, forge.ScanOptions{PageSize: 50, MaxPages: 4}, nil, 10, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "searched only the newest 200") {
+		t.Fatalf("want truncation note, got %s", out.String())
 	}
 }
 

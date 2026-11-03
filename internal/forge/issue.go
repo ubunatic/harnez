@@ -31,26 +31,30 @@ func (l PullLister) Issue(fg Forge, owner, repo string, n int) (RemoteIssue, err
 }
 
 // Issues lists the issues of owner/repo on fg in every state, newest first, without
-// pull requests. A non-empty query narrows the list on the server where the forge
-// supports it (Forgejo's q); callers still filter, because GitHub's list has no query.
-func (l PullLister) Issues(fg Forge, owner, repo, query string, opts ScanOptions) ([]RemoteIssue, error) {
+// pull requests. It reads at most opts.MaxPages pages and reports truncated=true when
+// more exist. It sends no server-side search: Forgejo's q is not a substring match
+// (canary 2026-11-03: "asskey" found fewer issues than "passkey"), so callers filter.
+func (l PullLister) Issues(fg Forge, owner, repo string, opts ScanOptions) (issues []RemoteIssue, truncated bool, err error) {
 	base := strings.TrimSuffix(fg.APIBase, "/") + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo) + "/issues"
-	q := url.Values{"state": {"all"}}
-	if fg.Kind != "github" {
-		q.Set("type", "issues")
-		if query != "" {
-			q.Set("q", query)
+	for page := 1; page <= opts.MaxPages; page++ {
+		q := url.Values{"state": {"all"}}
+		if fg.Kind != "github" {
+			q.Set("type", "issues")
+		}
+		q.Set(pageParam(fg), strconv.Itoa(opts.PageSize))
+		q.Set("page", strconv.Itoa(page))
+		var items []RemoteIssue
+		if err := l.getJSON(fg, base+"?"+q.Encode(), &items); err != nil {
+			return nil, false, err
+		}
+		for _, is := range items {
+			if is.PullRequest == nil {
+				issues = append(issues, is)
+			}
+		}
+		if len(items) < opts.PageSize {
+			return issues, false, nil
 		}
 	}
-	list, err := pagedGet[RemoteIssue](l, fg, base, q, opts)
-	if err != nil {
-		return nil, err
-	}
-	out := list[:0]
-	for _, is := range list {
-		if is.PullRequest == nil {
-			out = append(out, is)
-		}
-	}
-	return out, nil
+	return issues, true, nil
 }
