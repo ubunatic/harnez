@@ -1,6 +1,6 @@
 # 1108 — Failed Jules start keeps its session name; names are global across repos
 
-**Status**: Open
+**Status**: Closed — a failed start with no provider session frees its name; old record renamed <name>-failed-<id8> (releaseFailedStartName, cmd/harnez/agent_run.go; TestFailedStartNameIsReleased). Per-repo name scoping not done: the clash error names the global scope and suggests <name>-2.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
