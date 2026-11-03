@@ -1,6 +1,6 @@
 # 972 — Claude guesses and pushes to implement instead of verifying; add a verify-first instruction
 
-**Status**: Open
+**Status**: Closed — verify-first rule in claude-instructions hook; replay passed
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
