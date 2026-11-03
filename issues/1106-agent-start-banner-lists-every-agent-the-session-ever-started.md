@@ -1,6 +1,6 @@
 # 1106 — agent start banner lists every agent the session ever started
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

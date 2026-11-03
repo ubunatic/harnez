@@ -35,6 +35,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1100 | [1100-split-the-advisor-role-into-scout-and-consult.md](1100-split-the-advisor-role-into-scout-and-consult.md) | Split the advisor role into scout and consult | Open |
 | 1101 | [1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md](1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md) | Model pick by task and provider in harnez: absorb horg pick/models or call horg | Open |
 | 1102 | [1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md](1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md) | pre-push ticket-number lint checks the working tree, not the pushed commits | Open |
-| 1106 | [1106-agent-start-banner-lists-every-agent-the-session-ever-started.md](1106-agent-start-banner-lists-every-agent-the-session-ever-started.md) | agent start banner lists every agent the session ever started | Open |
 | 1107 | [1107-agent-selftest-refuses-to-run-from-a-developer-role.md](1107-agent-selftest-refuses-to-run-from-a-developer-role.md) | agent selftest refuses to run from a developer role | Open |
 <!-- harnez:end issues-active-index -->

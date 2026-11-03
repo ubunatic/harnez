@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestHostSessionTrackingLine(t *testing.T) {
 	saveTracked(t, st, "3", "adv-c", "host-a", "", "completed")
 	saveTracked(t, st, "4", "other", "host-b", "", "running")
 
-	want := "harnez: this session started 3 agents (1 running): adv-c, dev-a, rev-b"
+	want := "harnez: this session started 3 agents (1 running): dev-a"
 	if got := hostSessionTrackingLine(st, "host-a"); got != want {
 		t.Fatalf("line = %q, want %q", got, want)
 	}
@@ -47,7 +48,7 @@ func TestHostSessionTrackingLineSameNameTwice(t *testing.T) {
 	saveTracked(t, st, "1", "w", "host-a", "", "completed")
 	saveTracked(t, st, "2", "w", "host-a", "", "running")
 	got := hostSessionTrackingLine(st, "host-a")
-	if !strings.Contains(got, "started 2 agents (1 running): w, w") {
+	if !strings.HasSuffix(got, "started 2 agents (1 running): w") {
 		t.Fatalf("same name must count per session, got %q", got)
 	}
 }
@@ -59,9 +60,27 @@ func TestHostSessionTrackingLineResumeFromOtherSession(t *testing.T) {
 	}
 	saveTracked(t, st, "1", "w", "host-a", "host-b", "completed")
 	for _, host := range []string{"host-a", "host-b"} {
-		if got := hostSessionTrackingLine(st, host); got != "harnez: this session started 1 agent (0 running): w" {
+		if got := hostSessionTrackingLine(st, host); got != "harnez: this session started 1 agent (0 running)" {
 			t.Fatalf("host %s line = %q", host, got)
 		}
+	}
+}
+
+func TestHostSessionTrackingLineStaysShort(t *testing.T) {
+	st, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 62; i++ {
+		status := "completed"
+		if i < 8 {
+			status = "running"
+		}
+		saveTracked(t, st, fmt.Sprint(i), fmt.Sprintf("w%02d", i), "host-a", "", status)
+	}
+	want := "harnez: this session started 62 agents (8 running): w00, w01, w02, w03, w04, +3 more"
+	if got := hostSessionTrackingLine(st, "host-a"); got != want {
+		t.Fatalf("line = %q, want %q", got, want)
 	}
 }
 
