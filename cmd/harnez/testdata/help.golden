@@ -1667,6 +1667,12 @@ commit') into one call: it rewrites the ticket's Status line, regenerates
 issues/README.md, BACKLOG.md, and CLOSED.md in-process (the same logic
 'harnez index' uses), and commits the changed files by default.
 
+Commit rule (status verbs, mv): only the ticket file(s) and the index files
+this call rewrote are added and committed ('git commit -- <paths>'); other
+working-tree changes, staged or not, are never staged or committed.
+--commit "<msg>" replaces the default message; --no-commit rewrites the same
+files and leaves them uncommitted. 'new' never commits.
+
 Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
 
   open [reason]    Status: Open, or "Open — <reason>"
@@ -1714,7 +1720,7 @@ then the README is regenerated and the batch is committed once.
   mv <old> [new]   Renumber a ticket to [new] (default: next free number
                     from scanning issuesDir). Renames the file keeping the
                     same slug, rewrites the '# <new> — <title>' header line,
-                    resyncs issues/README.md, and commits both files by default.
+                    resyncs the issue indexes, and commits them per the commit rule.
                     Guarded by O_CREATE|O_EXCL so concurrent claims or existing
                     tickets are never overwritten.
   rebase [upstream] Replay local commits onto upstream, deriving local ticket
