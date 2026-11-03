@@ -416,8 +416,8 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		}
 	}
 	if req.Name != "" && req.SessionID == "" {
-		if existing, findErr := resolveSession(s, req.Name, ""); findErr == nil {
-			return fmt.Errorf("session name %q is already in use by %s in %s (names are global across repos, and a failed start keeps its name); pick another --name, e.g. %s-2", req.Name, existing.ID, existing.WorkingDir, req.Name)
+		if existing, findErr := resolveSession(s, req.Name, ""); findErr == nil && !releaseFailedStartName(s, existing) {
+			return fmt.Errorf("session name %q is already in use by %s in %s (names are global across repos); pick another --name, e.g. %s-2", req.Name, existing.ID, existing.WorkingDir, req.Name)
 		}
 	}
 	canonicalWorkDir, err := filepath.Abs(req.Dir)
@@ -1236,4 +1236,19 @@ func guardLeafRole(verb string) error {
 		return nil // the root form checks each start/resume/slash itself
 	}
 	return fmt.Errorf("%w (role source: %s; worker session: %q; Codex thread: %q; launcher PID: %q). If this is an interactive host, check inherited Harnez variables and restart the host; Harnez cannot change the host-managed sandbox or writable roots", subagent.CheckSpawn(role, "developer"), agentRoleEnv, os.Getenv(agentSessionEnv), os.Getenv("CODEX_THREAD_ID"), os.Getenv(agentLauncherEnv))
+}
+
+// releaseFailedStartName frees a name held by a start that failed before any
+// provider session existed (issue 1108): the old record keeps its ID and is
+// renamed, never deleted. It reports whether the name is free now.
+func releaseFailedStartName(s *subagent.FileSessionStore, existing *subagent.Session) bool {
+	if existing.Status != "failed" || existing.ProviderSessionID != "" {
+		return false
+	}
+	short := existing.ID
+	if len(short) > 8 {
+		short = short[:8]
+	}
+	existing.Name = existing.Name + "-failed-" + short
+	return s.Save(existing) == nil
 }
