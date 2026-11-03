@@ -36,7 +36,7 @@ lmcoder implements needed one fix in review. voxi's implement needed none.
 | Problem | Reported by | State |
 | --- | --- | --- |
 | Waits run out (about 25 min) and exit 0 while Jules is still running, so each run needs 1-2 resumes | all three | 1111 open, needs an owner decision |
-| Jules asks back (7 of 14 lmcoder runs) | lmcoder, loom, voxi | Auto-reply merged (1113). First live case (lmcoder run 130): it was sent 24 s after the question, but Jules did not react within 25 min; only a reply that answered the actual question moved the run on. The auto-reply showed only on stderr, so its result now also says so on stdout |
+| Jules asks back (7 of 14 lmcoder runs) | lmcoder, loom, voxi | Auto-reply merged (1113). First live case (lmcoder run 130): it was sent 24 s after the question, but Jules did not react within 25 min. A manual answer to its actual question 25 min later did not move it either; the run stalled with no PR. The auto-reply showed only on stderr, so its result now also says so on stdout |
 | The ⚙ hook rewrite makes auto mode refuse the call and its batch | all three | 1112: timeout part fixed in PR #100, refusal open |
 | The 1m exec timeout killed a start | lmcoder | Fixed in PR #100 |
 | A failed start kept its name; names are global across repos | voxi, loom | 1108 frees failed names; global names stay, and the error now says so |
@@ -75,3 +75,6 @@ repos with PRs, not the Jules collect step.
 - Waiting and collecting cost the most, not the Jules work itself. Wishes 1 and 2 are the
   highest-value harnez changes; wish 2 needs the 1111 decision first.
 - Prefer ideas runs on narrow areas, and implement runs only for small tickets with a test.
+- Larger implement tickets failed: lmcoder's 130 (a code generator) stalled after two replies, and 112
+  (a path move across two commands) ended "unable to complete the task" after about 75 min without
+  asking. Split such tickets before handing them to Jules.
