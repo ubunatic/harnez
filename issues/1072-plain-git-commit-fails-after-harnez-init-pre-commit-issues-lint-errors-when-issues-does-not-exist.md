@@ -1,6 +1,6 @@
 # 1072 — plain git commit fails after harnez init: pre-commit issues lint errors when issues/ does not exist
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Major (every commit in a freshly initialised repo is blocked)
 **Category**: Bug
