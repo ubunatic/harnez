@@ -21,7 +21,8 @@ directory`. Stopgap shipped: `Scan` now says there is no local tracker and point
 - `issues.tracker` enum is `harnez | none` (`spec/schemas/repo.schema.json`); a forge value
   (e.g. `forge`) is missing. Forge endpoints belong in `spec/`, not Go defaults.
 - `harnez pr wait` already talks to the Codeberg and GitHub APIs; reuse its client.
-- Open: read-only (show/find) first, or also `new`/status changes? Auth for private repos?
+- Scope decided by taia (2026-11-03): read-only show/find only; `fj` already covers create/close.
+  Stays P2, behind harnez P1 work. Open: auth for private repos.
 
 ## 3. Plan
 1. Add the tracker value and spec entries; read-only show/find via the forge API.
