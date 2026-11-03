@@ -57,7 +57,7 @@ The job output names the GitHub PR, and on completion it shows Jules's last mess
 
 ### Asks back
 
-A session in `AWAITING_USER_FEEDBACK` (or `AWAITING_PLAN_APPROVAL`) shows Jules's question as `Jules says: ...`. This happened to 3 of the first 30 runs, even with the prompt forbidding questions. Reply at most twice, each reply in the background, followed by the wait the reply starts:
+A session in `AWAITING_USER_FEEDBACK` (or `AWAITING_PLAN_APPROVAL`) shows Jules's question as `Jules says: ...`. This happened to 3 of the first 30 runs, even with the prompt forbidding questions. harnez already sends the first reply by itself when Jules first stops to ask (`jules.auto_reply` in `spec/agent.yaml`; the output warns "sent the one auto-reply"). So a run that still shows a question has used its first reply: go straight to the second. Without the auto-reply, reply at most twice, each reply in the background, followed by the wait the reply starts:
 
 1. **First reply:** answer the question in one or two sentences, picking the smallest option that keeps the run's rules (report only stays report only), and end with "Do not ask again; finish and submit the PR now." For a plan, use `approve`.
    `HTO=0 harnez agent resume --name <session> "<answer>. Do not ask again; finish and submit the PR now."`

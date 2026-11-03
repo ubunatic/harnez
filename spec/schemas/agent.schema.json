@@ -136,7 +136,8 @@
         "completed_pr_polls": { "type": "integer", "minimum": 0 },
         "sync_remote": { "type": "string", "minLength": 1, "description": "Canonical remote (Codeberg) whose sync_branch the GitHub copy is fast-forwarded to before a session." },
         "sync_branch": { "type": "string", "minLength": 1 },
-        "sync_timeout_ms": { "type": "integer", "minimum": 1 }
+        "sync_timeout_ms": { "type": "integer", "minimum": 1 },
+        "auto_reply": { "type": "string", "description": "Sent once per session when Jules first waits for feedback; empty turns it off." }
       },
       "additionalProperties": false
     },

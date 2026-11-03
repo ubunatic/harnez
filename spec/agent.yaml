@@ -289,6 +289,9 @@ jules:
   sync_remote: origin
   sync_branch: main
   sync_timeout_ms: 60000
+# Sent once per session when Jules first stops to ask (issue 1113: 6 of 12 runs
+# asked back despite the prompt). Empty turns it off.
+  auto_reply: "Nobody will answer questions. Pick the smallest option that keeps your task's rules, state which one you picked, then finish and submit the PR now. Do not ask again."
 
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf

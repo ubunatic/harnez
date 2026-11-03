@@ -1001,3 +1001,68 @@ func TestJulesCompletedShowsLastAgentMessage(t *testing.T) {
 		t.Fatalf("response must show only the last agent message:\n%s", res.Response)
 	}
 }
+
+func TestJulesAutoReplyOnceThenFinishes(t *testing.T) {
+	waiting := julesSession{State: "AWAITING_USER_FEEDBACK", UpdateTime: "t1"}
+	fake := &fakeJules{states: []julesSession{waiting, julesDone("https://github.com/o/harnez/pull/9")}, activities: julesOldQuestion}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	h.driver.Spec.AutoReply = "Finish and submit now."
+	res, err := h.driver.Resume(context.Background(), "123", "wait", Model{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.messages) != 1 || fake.messages[0] != "Finish and submit now." {
+		t.Fatalf("messages = %v, want the one auto-reply", fake.messages)
+	}
+	if !strings.Contains(res.Response, "pull/9") || !strings.Contains(strings.Join(res.Warnings, "\n"), "auto-reply") {
+		t.Fatalf("response %q warnings %v", res.Response, res.Warnings)
+	}
+}
+
+func TestJulesAutoReplyNeverSentTwice(t *testing.T) {
+	waiting := julesSession{State: "AWAITING_USER_FEEDBACK", UpdateTime: "t1"}
+	again := waiting
+	again.UpdateTime = "t2"
+	fake := &fakeJules{
+		states:     []julesSession{waiting, again},
+		activities: julesOldQuestion,
+		afterSend:  []map[string]any{{"originator": "agent", "createTime": "2026-11-02T21:25:00Z", "agentMessaged": map[string]any{"agentMessage": "second question"}}},
+	}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	h.driver.Spec.AutoReply = "Finish and submit now."
+	res, err := h.driver.Resume(context.Background(), "123", "wait", Model{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.messages) != 1 {
+		t.Fatalf("messages = %v, want exactly one auto-reply", fake.messages)
+	}
+	if !strings.Contains(res.Response, "Jules says: second question") {
+		t.Fatalf("second ask-back must go to the owner:\n%s", res.Response)
+	}
+}
+
+func TestJulesAutoReplyOffSendsNothing(t *testing.T) {
+	fake := &fakeJules{states: []julesSession{{State: "AWAITING_USER_FEEDBACK"}}, activities: julesOldQuestion}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	if _, err := h.driver.Resume(context.Background(), "123", "wait", Model{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.messages) != 0 {
+		t.Fatalf("messages = %v with auto_reply empty", fake.messages)
+	}
+}
+
+func TestJulesAutoReplyOnlyForUserFeedback(t *testing.T) {
+	for _, state := range []string{"PAUSED", "AWAITING_PLAN_APPROVAL"} {
+		fake := &fakeJules{states: []julesSession{{State: state}}, activities: julesOldQuestion}
+		h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+		h.driver.Spec.AutoReply = "Finish and submit now."
+		if _, err := h.driver.Resume(context.Background(), "123", "wait", Model{}); err != nil {
+			t.Fatal(err)
+		}
+		if len(fake.messages) != 0 || fake.approvals != 0 {
+			t.Fatalf("%s: messages %v approvals %d", state, fake.messages, fake.approvals)
+		}
+	}
+}
