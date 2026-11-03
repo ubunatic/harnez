@@ -125,6 +125,7 @@ func (ac *agentCLI) listCmd() *cobra.Command {
 			if x.HarnessType == "external" {
 				resume = "external"
 			}
+			resume = withJulesID(resume, x)
 			if colorEnabled {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", x.Name, x.Provider, agentListStatusColor(x.Status, true), resume, formatAgentContextTokens(x.LastContextTokens()), formatAgentContextTokens(x.ContextWindowSize), formatAgentSessionUsedTokens(x.SessionUsedTokens, x.SessionUsedKnown), x.WorkingDir, model)
 			} else {
@@ -534,4 +535,13 @@ func (ac *agentCLI) rateCmd() *cobra.Command {
 	}}
 	rate.ValidArgsFunction = agentSessionCompletion(ac.storeDir, ac.parent)
 	return rate
+}
+
+// withJulesID adds the numeric Jules ID that --model jules --id takes, since
+// the list's own ID column is the local session ID (issue 1109).
+func withJulesID(resume string, x *subagent.Session) string {
+	if x.Provider != "jules" || x.ProviderSessionID == "" {
+		return resume
+	}
+	return resume + " jules-id=" + x.ProviderSessionID
 }

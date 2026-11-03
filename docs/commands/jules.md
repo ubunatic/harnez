@@ -68,7 +68,7 @@ Never use a reply to widen the task, ask for fixes or rework a PR. Note each rep
 
 Before or right after starting a batch, record each run in a `## Jules runs` table (columns: kind, session name, Jules ID, PR, state) in the target ticket, or for runs with no ticket in a tracking issue filed through `/issue`. With `issues.tracker: none`, keep the table where `.harnez/rules/Index.md` says local tracking goes. Commit it through the repo's normal route. Update a row when its findings are captured (Findings capture); the batch is done when no row is pending.
 To catch up in a new session, read that table, run `harnez agent list --all-sessions --dead` and `gh pr list --state open`, and, for each run still going, adopt and track it by its Jules ID: `harnez agent resume --model jules --id <jules-id> wait`. The first call records the run on this machine, and later calls reuse that record; `wait` sends Jules no message. To read a run once without writing anything, use `harnez agent status --model jules --id <jules-id>`.
-Record the numeric Jules ID that the run output and `status` print; `harnez agent list` shows a local UUID instead, which `--id` does not take.
+Record the numeric Jules ID that the run output and `status` print; `harnez agent list` shows a local UUID in its ID column and the Jules ID as `jules-id=` in its RESUME column.
 Why: the agent store exists only on this machine, and neither it nor the PRs show whether findings were captured.
 
 ---
