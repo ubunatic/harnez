@@ -57,11 +57,13 @@ func hostSessionTrackingLine(store *subagent.FileSessionStore, hostSessionID str
 	if err != nil || len(sessions) == 0 {
 		return ""
 	}
+	// Only running agents are named, at most maxBannerNames of them, so the
+	// line stays short in long sessions (issue 1106); `harnez agent list`
+	// keeps the full list.
 	var names []string
-	runningCount := 0
 	for _, s := range sessions {
-		if s.Status == "running" || (s.Status == "active" && s.HarnessType == "interactive") {
-			runningCount++
+		if s.Status != "running" && !(s.Status == "active" && s.HarnessType == "interactive") {
+			continue
 		}
 		if s.Name != "" {
 			names = append(names, s.Name)
@@ -70,13 +72,24 @@ func hostSessionTrackingLine(store *subagent.FileSessionStore, hostSessionID str
 		}
 	}
 	sort.Strings(names)
+	runningCount := len(names)
 	total := len(sessions)
 	agentWord := "agents"
 	if total == 1 {
 		agentWord = "agent"
 	}
-	return fmt.Sprintf("harnez: this session started %d %s (%d running): %s", total, agentWord, runningCount, strings.Join(names, ", "))
+	line := fmt.Sprintf("harnez: this session started %d %s (%d running)", total, agentWord, runningCount)
+	if len(names) > maxBannerNames {
+		names = append(names[:maxBannerNames], fmt.Sprintf("+%d more", runningCount-maxBannerNames))
+	}
+	if len(names) > 0 {
+		line += ": " + strings.Join(names, ", ")
+	}
+	return line
 }
+
+// maxBannerNames caps the running agents named by hostSessionTrackingLine.
+const maxBannerNames = 5
 
 // assemblePrompt joins prompt files, positional words, and the verbatim tail.
 func assemblePrompt(files []string, words []string, afterDash []string, stdin io.Reader) (string, error) {
