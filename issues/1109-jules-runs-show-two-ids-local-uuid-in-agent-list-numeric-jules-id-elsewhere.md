@@ -1,6 +1,6 @@
 # 1109 — Jules runs show two IDs: local UUID in agent list, numeric Jules ID elsewhere
 
-**Status**: Open
+**Status**: Closed — agent list RESUME column shows jules-id=<numeric id> for Jules rows (withJulesID in cmd/harnez/agent_manage_cmds.go; TestAgentListShowsJulesID)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
