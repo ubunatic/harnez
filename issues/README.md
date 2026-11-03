@@ -39,5 +39,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1110 | [1110-jules-github-sync-divergence-and-missing-push-permission.md](1110-jules-github-sync-divergence-and-missing-push-permission.md) | Jules GitHub sync: divergence and missing push permission | Open |
 | 1111 | [1111-jules-start-exits-0-while-the-session-still-runs.md](1111-jules-start-exits-0-while-the-session-still-runs.md) | Jules start exits 0 while the session still runs | Open |
 | 1112 | [1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md](1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md) | Auto mode refuses Bash calls the gear-shim hook rewrote, doubling tool calls | Open |
-| 1113 | [1113-jules-driver-auto-answer-one-awaiting-user-feedback-with-a-fixed-finish-and-submit-reply.md](1113-jules-driver-auto-answer-one-awaiting-user-feedback-with-a-fixed-finish-and-submit-reply.md) | Jules driver: auto-answer one AWAITING_USER_FEEDBACK with a fixed finish-and-submit reply | Open |
 <!-- harnez:end issues-active-index -->

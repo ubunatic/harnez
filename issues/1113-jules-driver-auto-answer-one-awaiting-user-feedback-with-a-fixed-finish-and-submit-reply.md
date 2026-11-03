@@ -1,6 +1,6 @@
 # 1113 — Jules driver: auto-answer one AWAITING_USER_FEEDBACK with a fixed finish-and-submit reply
 
-**Status**: Open
+**Status**: Closed — jules.auto_reply sent once per session on AWAITING_USER_FEEDBACK (autoReply in internal/subagent/jules.go; TestJulesAutoReply*)
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Feature
