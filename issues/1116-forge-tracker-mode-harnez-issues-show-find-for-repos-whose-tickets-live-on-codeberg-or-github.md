@@ -1,6 +1,6 @@
 # 1116 — Forge-tracker mode: harnez issues show/find for repos whose tickets live on Codeberg or GitHub
 
-**Status**: Open
+**Status**: Closed — read-only forge show/find shipped; private repos need a token
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
