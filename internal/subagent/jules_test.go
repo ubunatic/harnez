@@ -1014,7 +1014,7 @@ func TestJulesAutoReplyOnceThenFinishes(t *testing.T) {
 	if len(fake.messages) != 1 || fake.messages[0] != "Finish and submit now." {
 		t.Fatalf("messages = %v, want the one auto-reply", fake.messages)
 	}
-	if !strings.Contains(res.Response, "pull/9") || !strings.Contains(strings.Join(res.Warnings, "\n"), "auto-reply") {
+	if !strings.Contains(res.Response, "pull/9") || !strings.Contains(res.Response, "Auto-reply: sent") || !strings.Contains(strings.Join(res.Warnings, "\n"), "auto-reply") {
 		t.Fatalf("response %q warnings %v", res.Response, res.Warnings)
 	}
 }
@@ -1037,7 +1037,7 @@ func TestJulesAutoReplyNeverSentTwice(t *testing.T) {
 	if len(fake.messages) != 1 {
 		t.Fatalf("messages = %v, want exactly one auto-reply", fake.messages)
 	}
-	if !strings.Contains(res.Response, "Jules says: second question") {
+	if !strings.Contains(res.Response, "Jules says: second question") || !strings.Contains(res.Response, "Auto-reply: sent") {
 		t.Fatalf("second ask-back must go to the owner:\n%s", res.Response)
 	}
 }

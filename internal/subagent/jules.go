@@ -703,7 +703,11 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 	interval := time.Duration(spec.PollIntervalMS) * time.Millisecond
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(spec.WaitTimeoutMS)*time.Millisecond)
 	defer cancel()
+	autoSent := false
 	result := func(body string, warns []string) *TurnResult {
+		if autoSent {
+			body += "\nAuto-reply: sent the one reply from spec jules.auto_reply in this wait."
+		}
 		return &TurnResult{SessionID: id, Response: body, Messages: []string{body}, Warnings: warns, DurationMS: time.Since(started).Milliseconds()}
 	}
 	var last julesSession
@@ -755,7 +759,7 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 					warnings = append(warnings, "auto-reply failed (it may still have reached Jules; a later wait will not resend it): "+autoErr.Error())
 				} else if sent.sent {
 					warnings = append(warnings, "Jules asked back; sent the one auto-reply from spec jules.auto_reply")
-					reply, answered = sent, false
+					reply, answered, autoSent = sent, false, true
 					continue
 				}
 				detail, listErr := d.waitingDetail(waitCtx, client, name, session.State, reply)

@@ -36,7 +36,7 @@ lmcoder implements needed one fix in review. voxi's implement needed none.
 | Problem | Reported by | State |
 | --- | --- | --- |
 | Waits run out (about 25 min) and exit 0 while Jules is still running, so each run needs 1-2 resumes | all three | 1111 open, needs an owner decision |
-| Jules asks back (7 of 14 lmcoder runs) | lmcoder, loom, voxi | Auto-reply merged (1113); lmcoder has not yet seen it fire |
+| Jules asks back (7 of 14 lmcoder runs) | lmcoder, loom, voxi | Auto-reply merged (1113). First live case (lmcoder run 130): it was sent 24 s after the question, but Jules did not react within 25 min; only a reply that answered the actual question moved the run on. The auto-reply showed only on stderr, so its result now also says so on stdout |
 | The ⚙ hook rewrite makes auto mode refuse the call and its batch | all three | 1112: timeout part fixed in PR #100, refusal open |
 | The 1m exec timeout killed a start | lmcoder | Fixed in PR #100 |
 | A failed start kept its name; names are global across repos | voxi, loom | 1108 frees failed names; global names stay, and the error now says so |
