@@ -26,6 +26,12 @@ rollout may stay behind, and the error says nothing about the half-done state.
 - Open: does the list entry get removed before or after the codex call, and should a failed
   backend delete keep the entry (or report "removed from list, codex session kept")?
 
+- Update 2026-11-03 ~23:00: taia hit it three times in a row (`agent delete --name taia31-dev`), so
+  not a self-update race. Ruled out: a missing working dir (Go reports that as `chdir <dir>: ...`,
+  checked). harnez starts codex directly (`startProcess`, no sandbox, inherited PATH/HOME). Leading
+  guess: the caller's shell is sandboxed and cannot see `~/.codex/packages/...`, so the symlink
+  dangles there. To check from the failing shell: `readlink -e ~/.local/bin/codex; echo $HOME`.
+
 ## 3. Plan
 1. Reproduce with a fake start func that returns `fs.ErrNotExist`.
 2. Keep the list entry on backend failure, or say clearly what was and was not removed.
