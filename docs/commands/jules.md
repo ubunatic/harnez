@@ -49,6 +49,8 @@ $(cat "$P")"
 
 For other kinds, use the same command with `jules-<kind>-<n>` as the name and the kind's title in place of `Audit ticket <n> (report only)`. Experiment and ideas runs have no ticket number, so give them a short slug (lowercase words joined by hyphens) as `<n>`, and write that slug into the prompt where it names the report.
 
+If you write the `⚙` prefix yourself, put `HTO=0` before it (`HTO=0 ⚙ bash run.sh`). `HTO=0` set inside the command does not lift the 1-minute `harnez exec` timeout (issue 1112).
+
 The job's exit is your signal, so do not poll in a loop. Exit 0 can also mean the wait ran out while the run goes on, so read the state in the job output before you count the run as finished. A run took between 3 and 40 minutes in the first 25 runs. Ten at once all ran. If a job's wait runs out while the session still runs, continue with `harnez agent resume --name jules-audit-<n> wait`.
 
 The job output names the GitHub PR, and on completion it shows Jules's last message as `Jules says: ...`. A run that finished without a PR counts as a failed run: record it. Its last message may still hold usable findings: treat them as leads and check them the same way.
