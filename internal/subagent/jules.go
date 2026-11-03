@@ -718,7 +718,11 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 			switch session.State {
 			case "COMPLETED":
 				if session.pullRequest() != nil || prPolls >= spec.CompletedPRPolls {
-					return result(julesCompleted(id, session), warnings), nil
+					last, listErr := d.lastAgentMessage(waitCtx, client, name)
+					if listErr != nil {
+						warnings = append(warnings, "could not read Jules activities: "+listErr.Error())
+					}
+					return result(julesCompleted(id, session, last), warnings), nil
 				}
 				prPolls++
 			case "FAILED":
@@ -753,8 +757,13 @@ func (s julesSession) pullRequest() *julesPullRequest {
 	return nil
 }
 
-func julesCompleted(id string, session julesSession) string {
+// julesCompleted reports a finished session with Jules's last message, which can
+// hold findings, most of all when the run opened no PR.
+func julesCompleted(id string, session julesSession, last string) string {
 	lines := []string{fmt.Sprintf("Jules session %s: COMPLETED", id), "Session: " + session.URL}
+	if last != "" {
+		lines = append(lines, "Jules says: "+last)
+	}
 	pr := session.pullRequest()
 	if pr == nil {
 		lines = append(lines, "No pull request was created. Check the session page for its changes.")
@@ -830,6 +839,20 @@ func (d JulesDriver) activities(ctx context.Context, client julesClient, name st
 	}
 	sort.SliceStable(all, func(i, j int) bool { return julesCreated(all[i]).Before(julesCreated(all[j])) })
 	return all, nil
+}
+
+// lastAgentMessage is the newest message Jules wrote in the session, or "".
+func (d JulesDriver) lastAgentMessage(ctx context.Context, client julesClient, name string) (string, error) {
+	activities, err := d.activities(ctx, client, name)
+	if err != nil {
+		return "", err
+	}
+	for i := len(activities) - 1; i >= 0; i-- {
+		if m := activities[i].AgentMessaged; m != nil && m.AgentMessage != "" {
+			return m.AgentMessage, nil
+		}
+	}
+	return "", nil
 }
 
 func (d JulesDriver) failureReason(ctx context.Context, client julesClient, name string) (string, error) {
