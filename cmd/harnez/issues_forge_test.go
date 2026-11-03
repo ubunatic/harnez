@@ -89,8 +89,8 @@ func TestIssuesLocalDirSkipsForge(t *testing.T) {
 	if err != nil || !strings.Contains(out, "local ticket") {
 		t.Fatalf("local show: %v\n%s", err, out)
 	}
-	if _, err := runHarnez(t, "find", "-d", dir, "issues", "local"); err != nil {
-		t.Fatalf("local find: %v", err)
+	if out, err := runHarnez(t, "find", "-d", dir, "issues", "--text", "local"); err != nil || !strings.Contains(out, "007") {
+		t.Fatalf("local find: %v\n%s", err, out)
 	}
 	if stub.calls != 0 {
 		t.Fatalf("local issues/ must not call the forge, got %d calls", stub.calls)

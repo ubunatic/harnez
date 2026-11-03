@@ -1325,9 +1325,10 @@ Entities:
            archived tickets are in scope by default; use a status filter to
            narrow lifecycle state. Without a local issues/ dir, plain term
            searches read the origin forge (spec/pr.yaml) instead: every term
-           must match title or body; status: filters and subcommands like
-           next stay local-only. It reads at most the spec's open_pr_scan
-           page budget and says so when a repo has more.
+           must match title or body; terms with ':' (status: filters) are
+           rejected and subcommands like next stay local-only. It reads at
+           most the spec's open_pr_scan page budget and notes when older
+           tickets may exist (JSON: "truncated").
   code     searches source files through configured finders (neus first,
            with rg as the code fallback when neus is unavailable).
            Outside a Git worktree, an explicit -d/--dir is required.

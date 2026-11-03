@@ -27,3 +27,15 @@ directory`. Stopgap shipped: `Scan` now says there is no local tracker and point
 ## 3. Plan
 1. Add the tracker value and spec entries; read-only show/find via the forge API.
 2. Verify in `~/projects/taia`: show an existing ticket, find by text, clear error offline.
+
+## 4. Result (2026-11-03)
+- Built without a new tracker value: a repo with no `issues/` dir whose origin is a forge in
+  `spec/pr.yaml` reads tickets from it (`internal/forgetracker`, `forge.PullLister.Issues`).
+- No server search: Forgejo `q` is not a substring match (canary on codeberg forgejo/forgejo:
+  `q=asskey` 37 results vs `q=passkey` 50). Client filter, every term must match title or body.
+- Page budget = `open_pr_scan`; beyond it, partial results with a note (JSON `truncated`).
+- Verified live on public codeberg forgejo/forgejo (find + show). taia (private) returns 404
+  until a token is set; the error names `CODEBERG_TOKEN, FORGEJO_TOKEN`. Reading `fj`'s
+  keys.json was not done: secret handling is the owner's decision.
+- Review: claude:haiku:med, two rounds; fixed all findings except: `show` ignores
+  `--image/--raw/--text` on the forge path silently, `docs/Search.md` not updated.

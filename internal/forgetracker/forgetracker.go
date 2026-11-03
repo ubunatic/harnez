@@ -133,13 +133,17 @@ func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []str
 		rows = rows[:limit]
 	}
 	if jsonOut {
-		return writeJSON(w, rows)
+		return writeJSON(w, struct {
+			Total     int         `json:"total"`
+			Truncated bool        `json:"truncated"`
+			Rows      []issueJSON `json:"rows"`
+		}{total, truncated, rows})
 	}
 	if _, err := fmt.Fprintf(w, "# %d matches on %s, showing %d (use --all to show all)\n", total, t, len(rows)); err != nil {
 		return err
 	}
 	if truncated {
-		if _, err := fmt.Fprintf(w, "# searched only the newest %d issues and pull requests (spec/pr.yaml open_pr_scan page budget)\n", opts.PageSize*opts.MaxPages); err != nil {
+		if _, err := fmt.Fprintf(w, "# searched the newest %d issues and pull requests; older ones may exist (spec/pr.yaml open_pr_scan page budget)\n", opts.PageSize*opts.MaxPages); err != nil {
 			return err
 		}
 	}

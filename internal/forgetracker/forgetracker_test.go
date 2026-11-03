@@ -102,8 +102,25 @@ func TestFindRejectsFiltersAndNotesTruncation(t *testing.T) {
 	if err := Find(&out, src, target, forge.ScanOptions{PageSize: 50, MaxPages: 4}, nil, 10, false, false); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "searched only the newest 200") {
+	if !strings.Contains(out.String(), "searched the newest 200") {
 		t.Fatalf("want truncation note, got %s", out.String())
+	}
+	out.Reset()
+	if err := Find(&out, src, target, forge.ScanOptions{PageSize: 50, MaxPages: 4}, nil, 10, false, true); err != nil {
+		t.Fatal(err)
+	}
+	var res struct {
+		Total     int              `json:"total"`
+		Truncated bool             `json:"truncated"`
+		Rows      []map[string]any `json:"rows"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil || !res.Truncated || res.Total != 3 {
+		t.Fatalf("want truncated JSON with total 3, got %+v (%v)", res, err)
+	}
+	for _, term := range []string{"https://x", "a:b"} {
+		if err := Find(&bytes.Buffer{}, sample(), target, forge.ScanOptions{}, []string{term}, 10, false, false); err == nil {
+			t.Errorf("term %q with ':' must be rejected", term)
+		}
 	}
 }
 
@@ -119,9 +136,11 @@ func TestFindLimitAllAndJSON(t *testing.T) {
 	if err := Find(&out, sample(), target, forge.ScanOptions{}, nil, 1, true, true); err != nil {
 		t.Fatal(err)
 	}
-	var rows []map[string]any
-	if err := json.Unmarshal(out.Bytes(), &rows); err != nil || len(rows) != 3 {
-		t.Fatalf("want 3 JSON rows with --all, got %d (%v): %s", len(rows), err, out.String())
+	var res struct {
+		Rows []map[string]any `json:"rows"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil || len(res.Rows) != 3 {
+		t.Fatalf("want 3 JSON rows with --all, got %d (%v): %s", len(res.Rows), err, out.String())
 	}
 }
 
