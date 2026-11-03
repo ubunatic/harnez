@@ -1,6 +1,6 @@
 # 1117 — harnez agent delete reports codex fork/exec error but still removes the agent from the list
 
-**Status**: Open
+**Status**: Closed — removed worktree dir; delete falls back to current dir
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
