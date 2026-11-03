@@ -135,7 +135,11 @@ func (e *julesAPIError) Error() string {
 	if e.Message == "" {
 		return fmt.Sprintf("Jules API returned HTTP %d", e.Status)
 	}
-	return fmt.Sprintf("Jules API returned HTTP %d: %s", e.Status, e.Message)
+	msg := fmt.Sprintf("Jules API returned HTTP %d: %s", e.Status, e.Message)
+	if e.Status == http.StatusBadRequest && strings.Contains(e.Message, "Precondition check failed") {
+		msg += " (seen when several sessions start within a minute or the repository is not connected at jules.google.com; wait a few minutes and retry with a new --name)"
+	}
+	return msg
 }
 
 func (e *julesAPIError) transient() bool {

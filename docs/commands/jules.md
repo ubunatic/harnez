@@ -31,8 +31,9 @@ Jules reads GitHub, not Codeberg or your local tree, so the audited code is GitH
 1. Before the batch, compare `git ls-remote origin refs/heads/main` with `git ls-remote github refs/heads/main`. Starts that run at once may race on that push; a losing one only warns.
 2. If the two still differ, or a start warned, audit the commit GitHub holds and say so in the results. Do not push `main` by hand.
 3. Never set a push mirror, and never run `git fetch --prune` on the `github` remote. Keep the numbers of any open PRs you did not start out of this batch.
-4. The repository needs a `github` remote pointing at its GitHub mirror; without one, `harnez agent start --model jules` fails with "no github.com remote". Add it with `git remote add github git@github.com:<owner>/<repo>.git`.
-5. Starting a run in a repository needs that repository in `github_projects` and connected at jules.google.com. Both errors stopped a uman audit on 2026-11-01.
+4. The GitHub push uses your own git credentials, not harnez's. If `git push github main` is refused for permission, Jules audits the older GitHub commit: say so in the results and ask the owner to sync.
+5. The repository needs a `github` remote pointing at its GitHub mirror; without one, `harnez agent start --model jules` fails with "no github.com remote". Add it with `git remote add github git@github.com:<owner>/<repo>.git`.
+6. Starting a run in a repository needs that repository in `github_projects` and connected at jules.google.com. Both errors stopped a uman audit on 2026-11-01.
 
 ---
 
@@ -67,6 +68,7 @@ Never use a reply to widen the task, ask for fixes or rework a PR. Note each rep
 
 Before or right after starting a batch, record each run in a `## Jules runs` table (columns: kind, session name, Jules ID, PR, state) in the target ticket, or for runs with no ticket in a tracking issue filed through `/issue`. With `issues.tracker: none`, keep the table where `.harnez/rules/Index.md` says local tracking goes. Commit it through the repo's normal route. Update a row when its findings are captured (Findings capture); the batch is done when no row is pending.
 To catch up in a new session, read that table, run `harnez agent list --all-sessions --dead` and `gh pr list --state open`, and, for each run still going, adopt and track it by its Jules ID: `harnez agent resume --model jules --id <jules-id> wait`. The first call records the run on this machine, and later calls reuse that record; `wait` sends Jules no message. To read a run once without writing anything, use `harnez agent status --model jules --id <jules-id>`.
+Record the numeric Jules ID that the run output and `status` print; `harnez agent list` shows a local UUID instead, which `--id` does not take.
 Why: the agent store exists only on this machine, and neither it nor the PRs show whether findings were captured.
 
 ---
@@ -76,7 +78,7 @@ Why: the agent store exists only on this machine, and neither it nor the PRs sho
 Compare against the commit the batch audited, not your working tree:
 
 1. **Scope (audit and ideas):** `gh pr view <pr> --json files --jq '.files[].path'` must list only `reports/jules/<n>.md`. Discard anything else, and do not salvage code from it. Implement and experiment PRs are checked under step 5.
-2. **References:** open every `path:line` with `git show <commit>:<path>` and confirm the line says what the report claims. Count placeholders (line 1, a file that does not exist) as failures.
+2. **References:** open every `path:line` with `git show <commit>:<path>` and confirm the line says what the report claims. When the line number is off but the quoted text sits within 10 lines, count the reference as holding up. Count placeholders (line 1, a file that does not exist) as failures.
 3. **Absence claims:** repeat any "does not exist" search yourself, case-insensitively and with spelling variants.
 4. **Verdict:** read the ticket and decide whether the verdict follows from the checked evidence. Listed commands do not prove a result, because Jules cannot be asked about them afterwards.
 5. **Code runs (implement and experiment):** check out the PR's head and run the tests yourself. A report's test claims count only once you have seen them pass; a failing test fails the run. Do not accept a report's word for it.
@@ -136,7 +138,7 @@ The report must have exactly these sections:
 One of: `still valid`, `partly done`, `already done`, `obsolete`, `unclear`. Then one sentence saying why.
 
 ## Evidence
-A list of claims from the ticket, each with what the code does today and a `path:line` reference. Give at least one `path:line` per claim. For a claim that something is missing, cite the existing code nearest to where it would go, or give the search that came back empty; never cite a placeholder such as line 1 or a file that does not exist. Open each cited line and check it says what you claim before you write it down. Quote the relevant line where it helps. Mark anything you could not confirm as `not verified`. Say which commands you ran and their results, and do not claim a result for a command you did not run.
+A list of claims from the ticket, each with what the code does today and a `path:line` reference. Give at least one `path:line` per claim. For a claim that something is missing, cite the existing code nearest to where it would go, or give the search that came back empty; never cite a placeholder such as line 1 or a file that does not exist. Open each cited line and check it says what you claim before you write it down. Quote the cited line itself in backticks after each reference, so a reader can find it again if the line number drifts. Mark anything you could not confirm as `not verified`. Say which commands you ran and their results, and do not claim a result for a command you did not run.
 
 Before saying something does not exist, search case-insensitively and try spelling variants (`autocompact`, `auto_compact`, `AutoCompact`). Files in `docs/` may be generated copies: `CLAUDE.md` says which directories hold the sources, so name the source when the next step edits a doc.
 

@@ -417,7 +417,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	}
 	if req.Name != "" && req.SessionID == "" {
 		if existing, findErr := resolveSession(s, req.Name, ""); findErr == nil {
-			return fmt.Errorf("session name %q is already in use by %s in %s", req.Name, existing.ID, existing.WorkingDir)
+			return fmt.Errorf("session name %q is already in use by %s in %s (names are global across repos, and a failed start keeps its name); pick another --name, e.g. %s-2", req.Name, existing.ID, existing.WorkingDir, req.Name)
 		}
 	}
 	canonicalWorkDir, err := filepath.Abs(req.Dir)

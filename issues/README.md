@@ -35,4 +35,8 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1101 | [1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md](1101-model-pick-by-task-and-provider-in-harnez-absorb-horg-pick-models-or-call-horg.md) | Model pick by task and provider in harnez: absorb horg pick/models or call horg | Open |
 | 1102 | [1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md](1102-pre-push-ticket-number-lint-checks-the-working-tree-not-the-pushed-commits.md) | pre-push ticket-number lint checks the working tree, not the pushed commits | Open |
 | 1107 | [1107-agent-selftest-refuses-to-run-from-a-developer-role.md](1107-agent-selftest-refuses-to-run-from-a-developer-role.md) | agent selftest refuses to run from a developer role | Open |
+| 1108 | [1108-failed-jules-start-keeps-its-session-name-names-are-global-across-repos.md](1108-failed-jules-start-keeps-its-session-name-names-are-global-across-repos.md) | Failed Jules start keeps its session name; names are global across repos | Open |
+| 1109 | [1109-jules-runs-show-two-ids-local-uuid-in-agent-list-numeric-jules-id-elsewhere.md](1109-jules-runs-show-two-ids-local-uuid-in-agent-list-numeric-jules-id-elsewhere.md) | Jules runs show two IDs: local UUID in agent list, numeric Jules ID elsewhere | Open |
+| 1110 | [1110-jules-github-sync-divergence-and-missing-push-permission.md](1110-jules-github-sync-divergence-and-missing-push-permission.md) | Jules GitHub sync: divergence and missing push permission | Open |
+| 1111 | [1111-jules-start-exits-0-while-the-session-still-runs.md](1111-jules-start-exits-0-while-the-session-still-runs.md) | Jules start exits 0 while the session still runs | Open |
 <!-- harnez:end issues-active-index -->
