@@ -56,4 +56,4 @@ Out of scope: the leaf-worker guard (`HARNEZ_AGENT_ROLE`), which stays as it is.
 
 ## Audit 2026-11-03
 
-Jules audit (PR GH#64, report `reports/jules/1012.md`, checked against d8904997, all references held): still open. The hello step's next actions at `cmd/harnez/agent_selftest.go:185-186` omit `--session`, and the "run hello first" errors (`:192`, `:228`) do not name it; the default session comes from `os.Getppid()` (`internal/resolve/resolve.go:82`).
+Jules audit (PR GH#64, report `reports/jules/1012-2.md`, checked against d8904997, all references held): still open. The hello step's next actions at `cmd/harnez/agent_selftest.go:185-186` omit `--session`, and the "run hello first" errors (`:192`, `:228`) do not name it; the default session comes from `os.Getppid()` (`internal/resolve/resolve.go:82`).

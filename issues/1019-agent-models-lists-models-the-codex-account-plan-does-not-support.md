@@ -27,3 +27,7 @@ So the failure is already visible when the model runs, but the models command do
 - Models that failed with a plan/account "not supported" error are marked unavailable (or "unsupported for this account") in `agent models`, at least for the cached session.
 - The start error is not truncated.
 - Record the error shape in the 943 study if it differs from `model_not_found`.
+
+## Audit 2026-11-03
+
+Jules audit (PR GH#71, report `reports/jules/1019-2.md`, checked against b0dcb501, all references held): partly done. The error shape is recorded in `docs/studies/2026-10-25-canary-model-access-discovery.md:15`. Still open: `candidateUnavailable` (`internal/subagent/driver.go:523`) has no "unsupported for this account" case, and `shortCause` (`cmd/harnez/agent_run.go:279`) truncates start errors to one line of 180 runes.

@@ -34,3 +34,7 @@ was tried, why it failed, where to resume).
 - M2: Claude driver applies `no-skills` and `plain` via the probed switches; test asserts the argv, plus a live
   canary showing a reduced context.
 - Codex and AGY: support where a probed switch exists, otherwise stay on the M1 error.
+
+## Audit 2026-11-03
+
+Jules audit (PR GH#70, report `reports/jules/1076.md`, checked against b0dcb501, all 5 references held): still valid. `cmd/harnez/agent_run.go:439` forwards `ContextMode`; `claudeRunArgs` (`internal/subagent/claude.go:54`), `CodexDriver.Run` (`codex.go:98`) and `AgyDriver.Run` (`agy.go:121`) never read it; only `pi.go:34` does. Smallest step: reject an unsupported mode in those drivers, or map it to a provider switch.
