@@ -20,7 +20,7 @@ Text-only changes to rules, copyable docs and command help. No web fanout: inter
 |---|---|---|---|---|
 | 1 | 972 | P1 | Verify-first instruction: no claims or implementation from guesses | Closed (8864f881) |
 | 2 | 963 | P2 | Agents ask where a rule belongs before editing AGENTS.md | Open |
-| 3 | 970 | P3 | Mark every `run_in_background` mention as a Claude Code Bash parameter, not a harnez flag | Open |
+| 3 | 970 | P3 | Mark every `run_in_background` mention as a Claude Code Bash parameter, not a harnez flag | Closed (c5078c31) |
 | 4 | 976 | P2 | `harnez issues` help states per-verb commit and staging rules | Closed |
 | 5 | — | — | `/evergreen`, `/wrap` | — |
 
