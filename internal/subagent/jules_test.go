@@ -893,8 +893,8 @@ func TestJulesSyncWarnsOnDivergenceWithoutPushing(t *testing.T) {
 
 	d := JulesDriver{Dir: r.work}
 	warnings := d.syncGitHubBranch(context.Background(), "github", julesSyncSpec)
-	if len(warnings) != 1 || !strings.Contains(warnings[0], "Jules will read github/main at "+g2) {
-		t.Errorf("warnings = %v, want one naming %s", warnings, g2)
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "Jules will read github/main at "+g2) || !strings.Contains(warnings[0], "diverged") {
+		t.Errorf("warnings = %v, want one naming %s and the divergence", warnings, g2)
 	}
 	if got := r.githubMain(t); got != g2 {
 		t.Errorf("github main = %s, want untouched %s", got, g2)
@@ -1064,5 +1064,31 @@ func TestJulesAutoReplyOnlyForUserFeedback(t *testing.T) {
 		if len(fake.messages) != 0 || fake.approvals != 0 {
 			t.Fatalf("%s: messages %v approvals %d", state, fake.messages, fake.approvals)
 		}
+	}
+}
+
+func TestJulesSyncNamesGitHubAhead(t *testing.T) {
+	r := newJulesSyncRepo(t)
+	clone := filepath.Join(t.TempDir(), "gh")
+	julesSyncGit(t, filepath.Dir(clone), "clone", "-q", "-b", "main", r.github, clone)
+	r.commit(t, clone, "g2")
+	julesSyncGit(t, clone, "push", "origin", "main")
+	warnings := JulesDriver{Dir: r.work}.syncGitHubBranch(context.Background(), "github", julesSyncSpec)
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "GitHub is ahead") {
+		t.Errorf("warnings = %v, want GitHub-ahead advice", warnings)
+	}
+}
+
+func TestJulesSyncHintsAtCredentialsOnDeniedPush(t *testing.T) {
+	r := newJulesSyncRepo(t)
+	hook := "#!/bin/sh\necho 'Permission to o/r.git denied to someone' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(r.github, "hooks", "pre-receive"), []byte(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r.commit(t, r.work, "c2")
+	julesSyncGit(t, r.work, "push", "origin", "main")
+	warnings := JulesDriver{Dir: r.work}.syncGitHubBranch(context.Background(), "github", julesSyncSpec)
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "credentials") {
+		t.Errorf("warnings = %v, want a credentials hint", warnings)
 	}
 }

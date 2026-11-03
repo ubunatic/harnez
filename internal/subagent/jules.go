@@ -444,10 +444,19 @@ func (d JulesDriver) syncGitHubBranch(ctx context.Context, github string, spec J
 	}
 	base, err := d.git(ctx, "merge-base", githubHead, canonicalHead)
 	if err != nil || strings.TrimSpace(string(base)) != githubHead {
-		return []string{fmt.Sprintf("%s is at %s and %s/%s at %s; GitHub is not strictly behind, so nothing was pushed; Jules will read %s", githubMain, githubHead, spec.SyncRemote, branch, canonicalHead, julesReads(githubMain, githubHead))}
+		how := "the two have diverged; fetch both, integrate the GitHub-only commits through a normal PR, then retry"
+		if _, berr := d.git(ctx, "merge-base", "--is-ancestor", canonicalHead, githubHead); berr == nil {
+			how = "GitHub is ahead with commits " + spec.SyncRemote + " lacks; bring them to " + spec.SyncRemote + " through a normal PR"
+		}
+		return []string{fmt.Sprintf("%s is at %s and %s/%s at %s: %s. Nothing was pushed; Jules will read %s", githubMain, githubHead, spec.SyncRemote, branch, canonicalHead, how, julesReads(githubMain, githubHead))}
 	}
 	if _, err := d.git(ctx, "push", "--no-force", "--no-follow-tags", "--no-recurse-submodules", github, canonicalHead+":"+ref); err != nil {
-		return []string{fmt.Sprintf("could not push %s/%s (%s) to %s: %s; Jules will read %s", spec.SyncRemote, branch, canonicalHead, githubMain, gitFailure(err), julesReads(githubMain, githubHead))}
+		failure := gitFailure(err)
+		hint := ""
+		if strings.Contains(failure, "denied") || strings.Contains(failure, "403") {
+			hint = "; your git credentials may not push to GitHub, so ask the repository owner to sync it"
+		}
+		return []string{fmt.Sprintf("could not push %s/%s (%s) to %s: %s%s; Jules will read %s", spec.SyncRemote, branch, canonicalHead, githubMain, failure, hint, julesReads(githubMain, githubHead))}
 	}
 	return nil
 }
