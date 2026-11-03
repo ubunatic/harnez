@@ -369,7 +369,10 @@ func (d CodexDriver) Delete(ctx context.Context, id string) error {
 	}
 	start := d.Start
 	if start == nil {
-		start = startProcessIn(d.Dir)
+		// `codex delete` needs no working dir. A session's dir is often a removed
+		// worktree; exec would then fail with a misleading "fork/exec codex: no such
+		// file or directory" (issue 1117), so fall back to the current dir.
+		start = startProcessIn(existingDirOrEmpty(d.Dir))
 	}
 	rd, wait, err := start(ctx, "codex", "delete", "--force", id)
 	if err != nil {
@@ -590,7 +593,24 @@ func startProcessIn(dir string) func(context.Context, string, ...string) (io.Rea
 	}
 }
 
+// existingDirOrEmpty returns dir when it is an existing directory, else "" (the
+// caller's current dir).
+func existingDirOrEmpty(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+		return dir
+	}
+	return ""
+}
+
 func startProcess(ctx context.Context, dir, name string, args ...string) (io.Reader, func() error, error) {
+	// Go reports a missing c.Dir as "fork/exec <binary>: no such file or directory",
+	// which reads like a missing binary (issue 1117); name the dir instead.
+	if dir != "" && existingDirOrEmpty(dir) == "" {
+		return nil, nil, fmt.Errorf("working directory %s does not exist (removed worktree?)", dir)
+	}
 	c := exec.CommandContext(ctx, name, args...)
 	c.Dir = dir
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
