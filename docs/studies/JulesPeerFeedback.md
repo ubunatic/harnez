@@ -42,7 +42,7 @@ lmcoder implements needed one fix in review. voxi's implement needed none.
 | A failed start kept its name; names are global across repos | voxi, loom | 1108 frees failed names; global names stay, and the error now says so |
 | FAILED showed no reason | voxi | Fixed in PR #95 |
 | `git pull`/`git fetch` replaced FETCH_HEAD before the Jules PR was read, giving an empty report | voxi, loom | Open, see wishes |
-| Weak Jules tests: always passing, failing, made-up data; a golden rewrite | lmcoder, loom | Skill now asks for a failing run first and for real formats |
+| Weak Jules work behind a `done` verdict: tests always passing, failing or using made-up data; a golden rewrite; voxi's implement 220 said `done` but left its main item unchanged and compared error strings | lmcoder, loom, voxi | Skill now asks for a failing run first and for real formats |
 | About 6 manual steps per finished run | lmcoder | Open, see wishes |
 | harnez's running count left out a run Jules still showed IN_PROGRESS | lmcoder | Not checked yet |
 | A GitHub collaborator invite stayed pending until accepted through the gh API | voxi | Setup step, not harnez |
