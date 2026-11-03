@@ -39,4 +39,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1109 | [1109-jules-runs-show-two-ids-local-uuid-in-agent-list-numeric-jules-id-elsewhere.md](1109-jules-runs-show-two-ids-local-uuid-in-agent-list-numeric-jules-id-elsewhere.md) | Jules runs show two IDs: local UUID in agent list, numeric Jules ID elsewhere | Open |
 | 1110 | [1110-jules-github-sync-divergence-and-missing-push-permission.md](1110-jules-github-sync-divergence-and-missing-push-permission.md) | Jules GitHub sync: divergence and missing push permission | Open |
 | 1111 | [1111-jules-start-exits-0-while-the-session-still-runs.md](1111-jules-start-exits-0-while-the-session-still-runs.md) | Jules start exits 0 while the session still runs | Open |
+| 1112 | [1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md](1112-auto-mode-refuses-bash-calls-the-gear-shim-hook-rewrote-doubling-tool-calls.md) | Auto mode refuses Bash calls the gear-shim hook rewrote, doubling tool calls | Open |
 <!-- harnez:end issues-active-index -->
