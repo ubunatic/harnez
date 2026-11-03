@@ -36,3 +36,16 @@ rollout may stay behind, and the error says nothing about the half-done state.
 1. Reproduce with a fake start func that returns `fs.ErrNotExist`.
 2. Keep the list entry on backend failure, or say clearly what was and was not removed.
 3. Verify with a unit test and one live delete of a codex agent.
+
+## 4. Result (2026-11-03)
+- Root cause: `taia31-dev`'s working dir `/home/uwe/projects/taia-wt31` was a removed worktree.
+  With harnez's exec shape (`CommandContext`, `Setpgid`, `StdoutPipe`, `Start`), Go reports a
+  missing `c.Dir` as `fork/exec /home/uwe/.local/bin/codex: no such file or directory`
+  (reproduced in a scratch program). The binary was never missing.
+- Fix: `CodexDriver.Delete` runs `codex delete` from the current dir when the session dir is
+  gone; `startProcess` names a missing dir instead of the misleading exec error. Tests:
+  `internal/subagent/codex_dir_test.go`.
+- The "disappears from list" part is by design: a failed delete marks the session
+  `delete-failed`, hidden from the list and retried by `harnez agent delete --retry-failed`.
+- Live: a fresh codex agent (`del-probe`, luna:low) deleted cleanly. taia retries its three
+  stuck sessions with `--retry-failed`.
