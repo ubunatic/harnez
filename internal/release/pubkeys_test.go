@@ -239,4 +239,3 @@ func TestPublishSkipsKeysWhenUnsigned(t *testing.T) {
 		t.Fatalf("unsigned release must not attach keys, output: %s", out.String())
 	}
 }
-
