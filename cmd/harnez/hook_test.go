@@ -1110,3 +1110,30 @@ func TestRunAgyToolHook_SkillInferred(t *testing.T) {
 		t.Fatalf("unexpected skill row: %+v", skillRow)
 	}
 }
+
+// A second native read of one file in a session is denied with its own reason,
+// not the "covers 100 or more lines" text (voxi, 2026-11-03).
+func TestClaudeReadHookRepeatedSliceNamesTheRepeat(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.go")
+	if err := os.WriteFile(path, []byte(strings.Repeat("x\n", 500)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	on := true
+	opts := readHookOptions{BaseDir: dir, StateDir: t.TempDir(), EnforceRead: &on, Insert: func(string, telemetry.ToolCall) error { return nil }}
+	payload := `{"tool_name":"Read","session_id":"s","tool_input":{"file_path":"` + path + `","offset":394,"limit":5}}`
+	var first, second bytes.Buffer
+	if err := runClaudeReadHook(strings.NewReader(payload), &first, opts); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(first.String()) != "{}" {
+		t.Fatalf("first small slice denied: %s", first.String())
+	}
+	if err := runClaudeReadHook(strings.NewReader(payload), &second, opts); err != nil {
+		t.Fatal(err)
+	}
+	got := second.String()
+	if !strings.Contains(got, "already read this file") || strings.Contains(got, "or more lines") || !strings.Contains(got, "-L 394:398") {
+		t.Fatalf("repeat deny = %s", got)
+	}
+}
