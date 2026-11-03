@@ -135,3 +135,7 @@ Out of scope (follow-up tickets if wanted after this lands):
 
 - Replace the session totals in the done line, or keep both (proposal: both, turn first)?
 - Default ratio 20 and context fraction 0.75 acceptable, or start with the check off by default?
+
+## Audit 2026-11-03
+
+Jules audit (PR GH#72, report `reports/jules/985-2.md`, checked against b0dcb501, all 7 references held): still valid. `tokenSummary` (`cmd/harnez/agent_stream.go:249`) prints the turn's fields as-is; the data for deltas exists in `Session.TurnRecords` (`internal/subagent/session.go:76`) and `LastContextTokens()` (`:116`). No cost-check keys in `spec/agent.yaml` yet (would go next to `compact_threshold_tokens`, line 9).

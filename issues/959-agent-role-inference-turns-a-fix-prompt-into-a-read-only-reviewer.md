@@ -24,3 +24,7 @@ on stage this would silently skip the fix step.
 - Prefer imperative edit verbs (fix, implement, add, commit) over role nouns when inferring.
 - Tell the agent the role was inferred, not explicit.
 - Test: the prompt above infers developer, or at least warns about the conflict.
+
+## Audit 2026-11-03
+
+Jules audit (PR GH#66, report `reports/jules/959-2.md`, checked against d8904997, all references held): still open. Inference happens at `internal/agent/core.go:85-88`; `WithProtocol` (`internal/agent/core.go:28-31`) injects `Harnez role: <role>.` with no hint that it was inferred, so the model reads it as explicit. Smallest step: pass an `inferred` flag from `StartRole` into `WithProtocol` and say so in the preamble.

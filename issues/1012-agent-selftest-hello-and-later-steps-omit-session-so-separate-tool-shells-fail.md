@@ -53,3 +53,7 @@ Goal check: the end-to-end host sequence in a non-leaf host session passes with 
 Circuit breaker: if making hello print the id changes session precedence (explicit, env, then parent), stop and ask before changing it. If two attempts at the printed-command fix still fail the cross-shell reproduction, stop and report the state files and process ids instead of adding more fallbacks. Do not change `resolve.Session` precedence or the lock window in this ticket.
 
 Out of scope: the leaf-worker guard (`HARNEZ_AGENT_ROLE`), which stays as it is.
+
+## Audit 2026-11-03
+
+Jules audit (PR GH#64, report `reports/jules/1012-2.md`, checked against d8904997, all references held): still open. The hello step's next actions at `cmd/harnez/agent_selftest.go:185-186` omit `--session`, and the "run hello first" errors (`:192`, `:228`) do not name it; the default session comes from `os.Getppid()` (`internal/resolve/resolve.go:82`).

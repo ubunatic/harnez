@@ -732,6 +732,11 @@ func RestoreIssueIndexes(issuesDir string, snapshot IssueIndexSnapshot) error {
 
 func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []string) error {
 	issuesDir := filepath.Join(dir, "issues")
+	if _, err := os.Stat(issuesDir); os.IsNotExist(err) {
+		// A tracker with no issues/ yet (fresh harnez init) has nothing to lint (issue 1072).
+		fmt.Fprintln(w, "issues lint: no issues/ directory yet, nothing to lint")
+		return nil
+	}
 	files, err := issuecore.Scan(issuesDir)
 	if err != nil {
 		return fmt.Errorf("issues lint: %w", err)

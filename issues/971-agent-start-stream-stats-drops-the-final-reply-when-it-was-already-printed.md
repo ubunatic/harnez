@@ -29,3 +29,7 @@ agy:argon:low advisor no `[reply` line appeared at all. The host had to read `re
 3. Add `harnez agent status --name <s> --reply` (or similar) that prints the stored `response`.
 Verify: tests per provider driver that the stats output contains `[reply` followed by the reply text; a live
 run with sol, luna and argon through `sed -n '/\[reply/,$p'` shows the reply each time.
+
+## Audit 2026-11-03
+
+Jules audit (PR GH#65, report `reports/jules/971-2.md`, checked against d8904997, all references held): partly done. `harnez agent status --reply` exists (`cmd/harnez/agent_manage_cmds.go:179`). Still open: `cmd/harnez/agent_stream.go:231-233` replaces the reply with "(the final message was already shown above)" when `lastShown` is set. The agy missing-`[reply` header part is not verified.

@@ -37,3 +37,7 @@ state still fails.
 
 Verify with a unit test using local bare repos: update the second remote during the sequence, and
 assert that the release continues, while a differing ref still fails.
+
+## Audit 2026-11-03
+
+Jules audit run `jules-audit-1082` (session 10011213719013868384, against b0dcb501) failed: it ended asking whether to ignore a `make check` gofmt failure in `internal/release/pubkeys_test.go` and opened no PR, so no report. Per the one-shot rule it was not answered. The gofmt issue is fixed; re-audit if this ticket still matters.
