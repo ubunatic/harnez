@@ -171,7 +171,7 @@ func powerBoxGoldenView() powerView {
 
 func TestPowerBoxGolden(t *testing.T) {
 	t.Setenv("LOOMCOLOR", "truecolor")
-	box := buildPowerBox(48, powerBoxGoldenView())
+	box := buildPowerBox(powerBoxGoldenView())
 	got := strings.Join(renderWBox(box), "\n") + "\n"
 	path := filepath.Join("testdata", "watch-box-baseline", "power-box.ansi")
 	if *updateWatchBoxGoldens {
@@ -193,17 +193,51 @@ func TestPowerBoxGolden(t *testing.T) {
 }
 
 func TestPowerBoxHeaderAlignsWithValues(t *testing.T) {
-	box := buildPowerBox(60, powerBoxGoldenView())
-	rows := renderWBox(box)
+	rows := renderWBox(buildPowerBox(powerBoxGoldenView()))
 	top := stripANSI(rows[0])
 	valueRow := stripANSI(rows[1])
+	if !strings.HasSuffix(top, " now   peak ─┐") {
+		t.Fatalf("top border must end with \" now   peak ─┐\", got %q", top)
+	}
 	// Columns are counted in runes. The title starts at col 3 ("┌─ "), the
-	// content at col 2 ("│ "). The header's "peak" must end in the same column
-	// as the peak value's last character.
+	// content at col 2 ("│ "). renderWBox keeps one dash after the title, so
+	// the header's "peak" ends one column before the peak value's last digit.
 	peakHeaderCol := len([]rune(top[:strings.Index(top, "peak")+len("peak")-1])) // rune index of 'k'
 	peakValueCol := len([]rune(valueRow[:strings.LastIndex(valueRow, "W")]))     // rune index of the final 'W'
-	if peakHeaderCol != peakValueCol {
-		t.Fatalf("header 'peak' ends at col %d, peak values end at col %d\ntop: %s\nrow: %s",
+	if peakHeaderCol+1 != peakValueCol {
+		t.Fatalf("header 'peak' ends at col %d, peak values end at col %d (want one column left)\ntop: %s\nrow: %s",
 			peakHeaderCol, peakValueCol, top, valueRow)
+	}
+	if strings.HasSuffix(valueRow, "  │") {
+		t.Fatalf("values must end one space before the border, got %q", valueRow)
+	}
+}
+
+// TestPowerBoxLinesMatchTopWidth checks every line is the same width as the
+// top border, with no extra columns on the right.
+func TestPowerBoxLinesMatchTopWidth(t *testing.T) {
+	rows := renderWBox(buildPowerBox(powerBoxGoldenView()))
+	want := visLen(rows[0])
+	for i, row := range rows {
+		if got := visLen(row); got != want {
+			t.Fatalf("row %d width = %d, want %d: %q", i, got, want, stripANSI(row))
+		}
+	}
+}
+
+// TestPowerBoxRAPLCPURow covers a RAPL "cpu" row alone: the box shows one row,
+// with no total, and the row carries the label and values.
+func TestPowerBoxRAPLCPURow(t *testing.T) {
+	view := powerView{Rows: []powerRowView{{Label: "cpu", Now: 12, Series: []float64{9, 12}, Peak: 38}}}
+	rows := renderWBox(buildPowerBox(view))
+	if len(rows) != 3 {
+		t.Fatalf("rows = %d, want top, one row, bottom", len(rows))
+	}
+	line := stripANSI(rows[1])
+	if !strings.HasPrefix(line, "│ cpu") || !strings.Contains(line, " 12W ") || !strings.HasSuffix(line, "38W │") {
+		t.Fatalf("cpu row = %q, want label cpu, now 12W, peak 38W", line)
+	}
+	if strings.Contains(stripANSI(strings.Join(rows, "\n")), "total") {
+		t.Fatal("single cpu row must not draw a total")
 	}
 }

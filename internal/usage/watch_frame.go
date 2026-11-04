@@ -453,8 +453,9 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	// binaries that report it (out of scope for [W]), so remote mode hides it.
 	// It is hidden entirely when no source has a reading.
 	if sec.Power && opt.Host == "" && loadSnapshot != nil {
-		if view, ok := powerBoxFor(sharedPowerMeter(), powerSourcesFrom(*loadSnapshot), now); ok {
-			panels = append(panels, panel{"W", func(w int) wbox { return buildPowerBox(w, view) }})
+		if sources := powerSourcesFrom(*loadSnapshot); len(sources) > 0 {
+			view, _ := powerBoxFor(sharedPowerMeter(), sources, now)
+			panels = append(panels, panel{"W", func(int) wbox { return buildPowerBox(view) }})
 		}
 	}
 	// Only registered when a real audio interface was actually found

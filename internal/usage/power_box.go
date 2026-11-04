@@ -79,6 +79,9 @@ type powerMeter struct {
 	peaks *powerPeakStore
 	hist  map[string]*sampleHistory
 	total sampleHistory
+	// maxSources is the most sources seen in one sample. The total row is
+	// kept once it reaches 2, and a sample with fewer sources is partial.
+	maxSources int
 }
 
 func newPowerMeter(peaks *powerPeakStore) *powerMeter {
@@ -87,7 +90,11 @@ func newPowerMeter(peaks *powerPeakStore) *powerMeter {
 
 // observe records one sample of sources at now and returns the rows to draw.
 // History advances at most once per minLoadSampleInterval, as in the Load box.
-// Peaks update on every call.
+// Per-source peaks update on every call.
+//
+// The total row stays once two sources have been seen. A sample with fewer
+// sources than the most seen is partial: its sum is drawn, but it does not
+// record a total peak, so a missing source cannot inflate the peak.
 func (m *powerMeter) observe(sources []powerSource, now time.Time) powerView {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -108,13 +115,21 @@ func (m *powerMeter) observe(sources []powerSource, now time.Time) powerView {
 		})
 		sum += src.Watts
 	}
-	if len(sources) >= 2 {
+	if len(sources) > m.maxSources {
+		m.maxSources = len(sources)
+	}
+	if m.maxSources >= 2 {
+		complete := len(sources) == m.maxSources
 		series := m.total.appendAt(sum, now, minLoadSampleInterval)
+		peak := m.peaks.Peak("total")
+		if complete {
+			peak = m.peaks.Observe("total", sum)
+		}
 		view.Rows = append(view.Rows, powerRowView{
 			Label:  "total",
 			Now:    sum,
 			Series: series,
-			Peak:   m.peaks.Observe("total", sum),
+			Peak:   peak,
 		})
 	}
 	return view
@@ -152,34 +167,55 @@ func powerSparkPercent(series []float64, peak float64) []float64 {
 // powerChartWidth is the sparkline's glyph count, excluding the brackets.
 const powerChartWidth = rograph.MaxWidth
 
-// powerValueWidth is the width of the "now" and "peak" value fields.
+// The value fields: "now" (watts) then one space then "peak" (watts), both
+// right-aligned, so the peak ends one column before the border.
 const (
 	powerNowWidth  = 5
 	powerPeakWidth = 6
+	// powerHeadTail is the header text drawn over the value columns.
+	powerHeadTail = "now   peak"
 )
 
-// buildPowerBox renders the Power box at width. Its natural width comes from
-// its content and does not depend on width, so the layout planner can measure
-// it. The "now"/"peak" header is laid out to end over the peak values.
-func buildPowerBox(width int, view powerView) wbox {
-	leftW := loadLabelWidth + 1 + powerChartWidth + 2
+// powerLeftWidth is the label and sparkline column: label, a space, the
+// bracketed sparkline, and one column of gap before the values.
+func powerLeftWidth() int {
+	return loadLabelWidth + 1 + powerChartWidth + 3
+}
+
+// powerContentWidth is the width of one row's content, excluding the borders.
+func powerContentWidth() int {
+	return powerLeftWidth() + powerNowWidth + 1 + powerPeakWidth
+}
+
+// powerBoxWidth is the box's fixed width: content plus "│ " and " │".
+// It is independent of the planner's width, so the header and the values
+// stay aligned and no spare columns are added to the right.
+func powerBoxWidth() int {
+	return powerContentWidth() + 4
+}
+
+// buildPowerBox renders the Power box. Its width is fixed (powerBoxWidth), so
+// the layout planner measures and draws the same box.
+//
+// renderWBox draws the top as "┌─ " + title + " " + dashes + "┐", with at
+// least one dash, so the title can be at most powerContentWidth()-2 wide.
+// Its "peak" therefore ends one column before the last digit of the values.
+func buildPowerBox(view powerView) wbox {
 	head := watchBoxSymbol("power") + " Power"
-	// The header's "now" must start at leftW+2, so the title's head plus the
-	// fill dashes take exactly that many columns.
-	fill := leftW + 2 - (visLen(head) + 1)
+	fill := powerContentWidth() - 2 - (visLen(head) + 1) - 1 - len(powerHeadTail)
 	if fill < 1 {
 		fill = 1
 	}
-	title := head + " " + strings.Repeat("─", fill) + "now   peak"
+	title := head + " " + strings.Repeat("─", fill) + " " + powerHeadTail
 
 	lines := make([]string, 0, len(view.Rows))
 	for _, r := range view.Rows {
-		lines = append(lines, powerRowLine(r, leftW))
+		lines = append(lines, powerRowLine(r, powerLeftWidth()))
 	}
-	return wbox{title: title, lines: lines, width: width}
+	return wbox{title: title, lines: lines, width: powerBoxWidth()}
 }
 
-// powerRowLine renders "label [spark]" padded to leftW, then right-aligned
+// powerRowLine renders "label [spark]" padded to leftW, then the right-aligned
 // now and peak values.
 func powerRowLine(r powerRowView, leftW int) string {
 	pct := powerSparkPercent(r.Series, r.Peak)
@@ -198,25 +234,35 @@ func powerRowLine(r powerRowView, leftW int) string {
 	}
 	now := fmt.Sprintf("%*s", powerNowWidth, fmt.Sprintf("%.0fW", r.Now))
 	peak := fmt.Sprintf("%*s", powerPeakWidth, fmt.Sprintf("%.0fW", r.Peak))
-	return left + " " + now + " " + peak
+	return left + now + " " + peak
 }
 
 // Shared meter for the live watch. It is created on first use, so a process
-// that never shows the box never touches the peak file.
+// that never shows the box never touches the peak file. The mutex guards the
+// pointer so the exit flush can check for a meter without creating one.
 var (
-	sharedPowerOnce sync.Once
-	sharedPower     *powerMeter
+	sharedPowerMu sync.Mutex
+	sharedPower   *powerMeter
 )
 
 func sharedPowerMeter() *powerMeter {
-	sharedPowerOnce.Do(func() {
+	sharedPowerMu.Lock()
+	defer sharedPowerMu.Unlock()
+	if sharedPower == nil {
 		sharedPower = newPowerMeter(newPowerPeakStore(powerPeaksPath(), readBootID(powerBootIDPath), time.Now))
-	})
+	}
 	return sharedPower
 }
 
 // flushPowerPeaks writes any pending boot peak. The watch calls it on exit so
-// a peak from the last few seconds is not lost to the save throttle.
+// a peak from the last few seconds is not lost to the save throttle. If the
+// box was never used there is no meter, so nothing is created or written.
 func flushPowerPeaks() error {
-	return sharedPowerMeter().peaks.Flush()
+	sharedPowerMu.Lock()
+	m := sharedPower
+	sharedPowerMu.Unlock()
+	if m == nil {
+		return nil
+	}
+	return m.peaks.Flush()
 }
