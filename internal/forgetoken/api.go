@@ -116,9 +116,35 @@ func (c Client) Create(l Login, name string, scopes []string) (Created, error) {
 	return Created{ID: out.ID, Name: out.Name, Secret: out.SHA1}, nil
 }
 
+// CheckRead probes a read with the token itself: GET /repos/{owner}/{repo}/issues?limit=1.
+// Forgejo lists a token's scopes only with the password, so this is the check a token allows.
+func (c Client) CheckRead(token, ownerRepo string) error {
+	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(c.APIBase, "/")+"/repos/"+ownerRepo+"/issues?limit=1", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return fmt.Errorf("check read: %w", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return apiError("check read of "+ownerRepo, resp.StatusCode, data)
+	}
+	return nil
+}
+
 // Delete revokes the token with id on the forge; 404 counts as already gone.
 func (c Client) Delete(l Login, id int64) error {
-	path := "/users/" + url.PathEscape(l.User) + "/tokens/" + strconv.FormatInt(id, 10)
+	return c.DeleteRef(l, strconv.FormatInt(id, 10))
+}
+
+// DeleteRef revokes a token by id or, when Forgejo finds no such id, by name.
+func (c Client) DeleteRef(l Login, ref string) error {
+	path := "/users/" + url.PathEscape(l.User) + "/tokens/" + url.PathEscape(ref)
 	data, status, err := c.do(http.MethodDelete, path, l, nil)
 	if err != nil {
 		return fmt.Errorf("revoke token: %w", err)

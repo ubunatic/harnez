@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -127,8 +128,88 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 			return printTokenStatus(cmd.OutOrStdout(), st, orDefault(host, sp.DefaultHost))
 		},
 	}
-	cmd.AddCommand(create, rotate, revoke, status)
+	var name, checkRepo string
+	var removeSource bool
+	imp := &cobra.Command{
+		Use:   "import <file>",
+		Short: "Store a token created in the forge's web settings, from a JSON file",
+		Long: `Read {"user": "...", "token": "..."} (optional "name": the token's name on the forge) from
+<file> and store the token like create does. --name overrides the file's name; without a name,
+revoke and rotate cannot delete it on the forge. --check owner/repo first reads that repo's issues
+with the token and stores nothing on failure. Forgejo lists a token's scopes only with the
+password, so the scopes themselves cannot be checked here. The source file is kept unless
+--remove-source is given.`,
+		Args: cobra.ExactArgs(1), SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runForgeTokenImport(cmd.OutOrStdout(), args[0], host, name, checkRepo, removeSource)
+		},
+	}
+	imp.Flags().StringVar(&name, "name", "", "the token's name on the forge (needed for revoke)")
+	imp.Flags().StringVar(&checkRepo, "check", "", "owner/repo whose issues the token must be able to read")
+	imp.Flags().BoolVar(&removeSource, "remove-source", false, "delete <file> after the token is stored")
+	cmd.AddCommand(create, rotate, revoke, status, imp)
 	return cmd
+}
+
+func runForgeTokenImport(w io.Writer, file, host, name, checkRepo string, removeSource bool) error {
+	sp, st, err := forgeTokenStore()
+	if err != nil {
+		return err
+	}
+	host = orDefault(host, sp.DefaultHost)
+	apiBase, timeout, err := forgejoAPIBase(host)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	var in struct {
+		User  string `json:"user"`
+		Token string `json:"token"`
+		Name  string `json:"name"`
+	}
+	if err := json.Unmarshal(data, &in); err != nil {
+		// Never echo the file: it holds the secret.
+		return fmt.Errorf("%s is not JSON with \"user\" and \"token\"", file)
+	}
+	c := forgetoken.Client{HTTP: forgetoken.NewHTTPClient(timeout), APIBase: apiBase}
+	m, err := forgetoken.Import(st, c, host, strings.TrimSpace(in.User), orDefault(name, in.Name), strings.TrimSpace(in.Token), checkRepo, time.Now())
+	if err != nil {
+		return err
+	}
+	printTokenMeta(w, "imported", m, st)
+	if checkRepo != "" {
+		fmt.Fprintf(w, "  check:  read %s issues OK\n", checkRepo)
+	} else {
+		fmt.Fprintln(w, "  check:  skipped (use --check owner/repo)")
+	}
+	if m.Name == "" {
+		fmt.Fprintln(w, "  note:   no token name; revoke on the forge by hand, then `revoke --local-only`")
+	}
+	if removeSource {
+		if err := os.Remove(file); err != nil {
+			return fmt.Errorf("token stored, but removing %s failed: %w", file, err)
+		}
+		fmt.Fprintf(w, "removed %s\n", file)
+	} else {
+		fmt.Fprintf(w, "the token is still in %s; delete that file\n", file)
+	}
+	return nil
+}
+
+func forgejoAPIBase(host string) (string, time.Duration, error) {
+	prSpec, err := prwait.LoadSpec()
+	if err != nil {
+		return "", 0, err
+	}
+	for _, fg := range prSpec.Forges {
+		if fg.Host == host && fg.Kind == "forgejo" {
+			return fg.APIBase, prSpec.RequestTimeout, nil
+		}
+	}
+	return "", 0, fmt.Errorf("%s is not a Forgejo host in spec/pr.yaml", host)
 }
 
 func orDefault(v, def string) string {
@@ -182,18 +263,9 @@ func runForgeToken(host, user string, needStored bool, op func(forgeTokenEnv) er
 		return err
 	}
 	host = orDefault(host, sp.DefaultHost)
-	prSpec, err := prwait.LoadSpec()
+	apiBase, timeout, err := forgejoAPIBase(host)
 	if err != nil {
 		return err
-	}
-	apiBase := ""
-	for _, fg := range prSpec.Forges {
-		if fg.Host == host && fg.Kind == "forgejo" {
-			apiBase = fg.APIBase
-		}
-	}
-	if apiBase == "" {
-		return fmt.Errorf("%s is not a Forgejo host in spec/pr.yaml", host)
 	}
 	m, stored, err := st.Meta(host)
 	if err != nil {
@@ -214,7 +286,7 @@ func runForgeToken(host, user string, needStored bool, op func(forgeTokenEnv) er
 	if err != nil {
 		return err
 	}
-	c := forgetoken.Client{HTTP: forgetoken.NewHTTPClient(prSpec.RequestTimeout), APIBase: apiBase}
+	c := forgetoken.Client{HTTP: forgetoken.NewHTTPClient(timeout), APIBase: apiBase}
 	return op(forgeTokenEnv{spec: sp, store: st, client: c, host: host, login: l, tty: tty})
 }
 

@@ -1,6 +1,6 @@
 # 1118 — harnez forge token: create, store and revoke a read-only Forgejo token
 
-**Status**: In Progress — built, awaiting the owner's live create
+**Status**: Closed — built; live read via stored token works on taia
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -36,5 +36,11 @@ only with a token, and none is set up. Creating one by hand and exporting env va
   names the old one. A failed local store revokes the just-created token again.
 - Tests: `internal/forgetoken/forgetoken_test.go` (fake forge + fake keyring), `TestTokenSourceStoredFirst`.
 
-## 4. Open
-- Live check: the owner runs `harnez forge token create` once, then `harnez issues show` on taia.
+- `import <file> [--name] [--check owner/repo] [--remove-source]` stores a token made in the web UI
+  (`{"user","token","name"}`); `--check` probes a read with the token (scopes are listable only with
+  the password). Revoke/rotate delete by id, else by name; a nameless token refuses with a hint.
+
+## 4. Live result (2026-11-04)
+- The owner made a token by hand; taia stored it in the keyring with meta (name `manual-issue-read`,
+  id 0). `harnez forge token status` shows it and `harnez issues show 17` on private taia works.
+- `create` and `rotate` are not yet live-tested against Codeberg.

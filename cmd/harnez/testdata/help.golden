@@ -1473,6 +1473,7 @@ Usage:
 
 Available Commands:
   create      Create and store a new read-only token
+  import      Store a token created in the forge's web settings, from a JSON file
   revoke      Revoke the stored token on the forge and forget it locally
   rotate      Replace the stored token with a new one and revoke the old one
   status      Show the stored token's name, scopes and store (never the secret)
@@ -1492,6 +1493,26 @@ Usage:
 Flags:
   -h, --help          help for create
       --user string   forge username (prompted when empty)
+
+Global Flags:
+      --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+
+=== harnez forge token import
+Read {"user": "...", "token": "..."} (optional "name": the token's name on the forge) from
+<file> and store the token like create does. --name overrides the file's name; without a name,
+revoke and rotate cannot delete it on the forge. --check owner/repo first reads that repo's issues
+with the token and stores nothing on failure. Forgejo lists a token's scopes only with the
+password, so the scopes themselves cannot be checked here. The source file is kept unless
+--remove-source is given.
+
+Usage:
+  harnez forge token import <file> [flags]
+
+Flags:
+      --check string    owner/repo whose issues the token must be able to read
+  -h, --help            help for import
+      --name string     the token's name on the forge (needed for revoke)
+      --remove-source   delete <file> after the token is stored
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)

@@ -232,6 +232,58 @@ func TestRevoke(t *testing.T) {
 	}
 }
 
+func TestImportChecksReadAndRevokesByName(t *testing.T) {
+	var gotAuth, gotPath string
+	read := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth, gotPath = r.Header.Get("Authorization"), r.URL.Path
+		if r.Header.Get("Authorization") != "token good" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte("[]"))
+	}))
+	t.Cleanup(read.Close)
+	f, c, st, _ := setup(t)
+	rc := Client{HTTP: NewHTTPClient(5 * time.Second), APIBase: read.URL + "/api/v1"}
+	if _, err := Import(st, rc, "codeberg.org", "uwe", "manual", "bad", "harnez/taia", time.Now()); err == nil || !strings.Contains(err.Error(), "HTTP 404") || strings.Contains(err.Error(), "bad") {
+		t.Fatalf("bad token: %v", err)
+	}
+	if _, ok, _ := st.Meta("codeberg.org"); ok {
+		t.Fatal("failed check must store nothing")
+	}
+	m, err := Import(st, rc, "codeberg.org", "uwe", "manual", "good", "harnez/taia", time.Now())
+	if err != nil || gotAuth != "token good" || gotPath != "/api/v1/repos/harnez/taia/issues" || st.Secret("codeberg.org") != "good" || m.ID != 0 {
+		t.Fatalf("%v %q %q %+v", err, gotAuth, gotPath, m)
+	}
+	if _, err := Import(st, rc, "codeberg.org", "uwe", "x", "good", "", time.Now()); err == nil {
+		t.Fatal("second import must refuse")
+	}
+	// Revoke of an imported token deletes it by name.
+	f.live[0] = "manual"
+	var path string
+	c.HTTP.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
+		path = r.URL.Path
+		return http.DefaultTransport.RoundTrip(r)
+	})
+	f.t = &testing.T{} // the fake does not parse names; only the path matters here
+	_, _ = Revoke(st, c, "codeberg.org", Login{User: "uwe", Password: "pw"}, false)
+	if path != "/api/v1/users/uwe/tokens/manual" {
+		t.Fatalf("revoke path %q", path)
+	}
+	// Without a name, revoke refuses before any request.
+	st2 := Store{Dir: t.TempDir()}
+	if _, err := Import(st2, rc, "codeberg.org", "uwe", "", "good", "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Revoke(st2, c, "codeberg.org", Login{User: "uwe", Password: "pw"}, false); err == nil || !strings.Contains(err.Error(), "--local-only") {
+		t.Fatalf("nameless revoke: %v", err)
+	}
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 type fakeKeyring struct {
 	m    map[string]string
 	fail bool

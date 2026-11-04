@@ -53,7 +53,11 @@ func Rotate(spec Spec, st Store, c Client, host string, l Login, now time.Time, 
 			return res, nil
 		}
 	}
-	res.OldErr = c.Delete(l, old.ID)
+	if old.ref() == "" {
+		res.OldErr = fmt.Errorf("it was imported without a name")
+		return res, nil
+	}
+	res.OldErr = c.DeleteRef(l, old.ref())
 	res.OldRevoked = res.OldErr == nil
 	return res, nil
 }
@@ -68,11 +72,42 @@ func Revoke(st Store, c Client, host string, l Login, localOnly bool) (Meta, err
 		return Meta{}, fmt.Errorf("no token for %s is stored", host)
 	}
 	if !localOnly {
-		if err := c.Delete(l, m.ID); err != nil {
+		if m.ref() == "" {
+			return m, fmt.Errorf("the stored token has no forge name or id; delete it in the forge's settings, then run revoke --local-only")
+		}
+		if err := c.DeleteRef(l, m.ref()); err != nil {
 			return m, err
 		}
 	}
 	return m, st.Delete(host)
+}
+
+// ref is how the forge finds the token: its id, else its name (imported tokens have no id).
+func (m Meta) ref() string {
+	if m.ID > 0 {
+		return fmt.Sprint(m.ID)
+	}
+	return m.Name
+}
+
+// Import stores a token created elsewhere (e.g. in the forge's web settings). name is its name
+// on the forge, needed later by revoke. With checkRepo ("owner/repo") it first probes a read
+// with the token and stores nothing when the read fails.
+func Import(st Store, c Client, host, user, name, secret, checkRepo string, now time.Time) (Meta, error) {
+	if secret == "" || user == "" {
+		return Meta{}, fmt.Errorf("import needs a user and a token")
+	}
+	if _, ok, err := st.Meta(host); err != nil {
+		return Meta{}, err
+	} else if ok {
+		return Meta{}, fmt.Errorf("a token for %s is already stored; run `harnez forge token revoke` first", host)
+	}
+	if checkRepo != "" {
+		if err := c.CheckRead(secret, checkRepo); err != nil {
+			return Meta{}, err
+		}
+	}
+	return st.Save(Meta{Host: host, User: user, Name: name, Created: now.UTC()}, secret)
 }
 
 func createAndSave(spec Spec, st Store, c Client, host string, l Login, now time.Time) (Meta, error) {
