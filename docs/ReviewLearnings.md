@@ -121,3 +121,12 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   unstage and report; never bypass it. After `merge=union` conflicts, run `harnez index` on the branch.
 - **Forge fields lag or mislead** (PRs 66, 68): the API showed `changed_files: 0` on a 33-file PR, and
   `mergeable: false` right after a push. Compare the `.diff` and re-check before acting on them.
+- **Go hides a missing working dir as a missing binary** (1117): with `exec.CommandContext` + `Setpgid` +
+  `StdoutPipe` + `Start`, a removed `c.Dir` fails as `fork/exec <binary>: no such file or directory`; a
+  plain `Run` says `chdir`. Reproduce with the exact exec shape before ruling a cause out. `startProcess`
+  now checks the dir first (`internal/subagent/codex_dir_test.go`).
+- **Forgejo `q` is not a substring search** (1116): `q=asskey` returned 37 issues, `q=passkey` 50. Forge
+  tracker find (`internal/forgetracker`) filters client-side within the `open_pr_scan` page budget and
+  reports partial results (`truncated` in JSON). Canary a search API before relying on its semantics.
+- **Review the output contract, not only the logic** (1116, two haiku rounds): reviewers found that
+  `--json` had no truncation signal and that the CLI wiring had no test. Ask for both explicitly.
