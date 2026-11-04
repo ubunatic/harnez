@@ -79,6 +79,10 @@ type wbox struct {
 	title string
 	lines []string
 	width int
+	// titleToCorner draws the top as "┌─ " + title + " ┐", with no dash fill.
+	// The caller must size title to width-5 so the corner lands at width-1.
+	// Only the Power box sets it, because its column header runs to the corner.
+	titleToCorner bool
 }
 
 func renderWBox(b wbox) []string {
@@ -89,7 +93,11 @@ func renderWBox(b wbox) []string {
 	if rem < 1 {
 		rem = 1
 	}
-	res = append(res, "┌─ "+b.title+" "+strings.Repeat("─", rem)+"┐")
+	top := "┌─ " + b.title + " " + strings.Repeat("─", rem) + "┐"
+	if b.titleToCorner {
+		top = "┌─ " + b.title + " ┐"
+	}
+	res = append(res, top)
 
 	contentW := b.width - 4
 	if contentW < 10 {

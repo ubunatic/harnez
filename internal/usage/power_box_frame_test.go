@@ -52,7 +52,7 @@ func TestPowerBoxAppearsInWatchFrameWhenOnWithPower(t *testing.T) {
 	m, _ := newTestPowerMeter(t)
 	useSharedPowerMeterForTest(t, m)
 	text := powerFrameText(powerSectionsOn(true), powerFrameSummary(powerFrameLoadWithPower))
-	if !strings.Contains(text, "[W] Power") || !strings.Contains(text, "now   peak") {
+	if !strings.Contains(text, "[W] Power") || !strings.Contains(text, "now · peak") {
 		t.Fatalf("[W] box missing from frame with power on:\n%s", text)
 	}
 	if !strings.Contains(text, "gpu (Navi 31)") {

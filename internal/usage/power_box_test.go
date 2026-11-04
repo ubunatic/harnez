@@ -3,6 +3,7 @@ package usage
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -192,24 +193,101 @@ func TestPowerBoxGolden(t *testing.T) {
 	}
 }
 
+// runeIndex is the rune column of the first sub in s, or -1 when absent.
+func runeIndex(s, sub string) int {
+	i := strings.Index(s, sub)
+	if i < 0 {
+		return -1
+	}
+	return len([]rune(s[:i]))
+}
+
+// valueStarts returns the rune columns where a row's now and peak values
+// start. Values follow the sparkline's closing bracket.
+func valueStarts(row string) (now, peak int) {
+	r := []rune(stripANSI(row))
+	i := 0
+	for j, c := range r {
+		if c == ']' {
+			i = j
+		}
+	}
+	i++
+	for i < len(r) && r[i] == ' ' {
+		i++
+	}
+	now = i
+	for i < len(r) && r[i] != ' ' {
+		i++
+	}
+	for i < len(r) && r[i] == ' ' {
+		i++
+	}
+	return now, i
+}
+
+// TestPowerBoxHeaderAlignsWithValues checks, for the golden view and for views
+// with wider values, that the header's "now" and "peak" sit above the first
+// character of every row's now and peak values, and that every line keeps the
+// top border's width.
 func TestPowerBoxHeaderAlignsWithValues(t *testing.T) {
+	cases := []struct {
+		name string
+		view powerView
+	}{
+		{"golden", powerBoxGoldenView()},
+		{"4-character values", powerView{Rows: []powerRowView{
+			{Label: "cpu", Now: 1200, Series: []float64{1200}, Peak: 1200},
+			{Label: "gpu (a)", Now: 180, Series: []float64{180}, Peak: 295},
+		}}},
+		{"5-digit peak widens the peak column", powerView{Rows: []powerRowView{
+			{Label: "cpu", Now: 180, Series: []float64{180}, Peak: 12000},
+			{Label: "gpu (a)", Now: 8, Series: []float64{8}, Peak: 40},
+		}}},
+		{"5-digit now widens the now column", powerView{Rows: []powerRowView{
+			{Label: "cpu", Now: 12000, Series: []float64{12000}, Peak: 12000},
+			{Label: "gpu (a)", Now: 8, Series: []float64{8}, Peak: 40},
+		}}},
+	}
+	headerEnd := regexp.MustCompile(`now · +peak +┐$`)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rows := renderWBox(buildPowerBox(tc.view))
+			top := stripANSI(rows[0])
+			if !headerEnd.MatchString(top) {
+				t.Fatalf("top border must end with \"now · peak ┐\" (peak padded to its column), got %q", top)
+			}
+			nowHead, peakHead := runeIndex(top, "now"), runeIndex(top, "peak")
+			for _, row := range rows[1 : len(rows)-1] {
+				now, peak := valueStarts(row)
+				if now != nowHead || peak != peakHead {
+					t.Fatalf("values start at now %d, peak %d; header at now %d, peak %d\ntop: %s\nrow: %s",
+						now, peak, nowHead, peakHead, top, stripANSI(row))
+				}
+			}
+			want := visLen(rows[0])
+			for i, row := range rows {
+				if got := visLen(row); got != want {
+					t.Fatalf("row %d width = %d, want %d: %q", i, got, want, stripANSI(row))
+				}
+			}
+		})
+	}
+}
+
+// TestPowerBoxGoldenValueLayout pins the golden view's text: values are
+// left-aligned under the header, and the peak column ends one space before
+// the border, with the 4-character peak "287W" filling its column.
+func TestPowerBoxGoldenValueLayout(t *testing.T) {
 	rows := renderWBox(buildPowerBox(powerBoxGoldenView()))
-	top := stripANSI(rows[0])
-	valueRow := stripANSI(rows[1])
-	if !strings.HasSuffix(top, " now   peak ─┐") {
-		t.Fatalf("top border must end with \" now   peak ─┐\", got %q", top)
+	if top := stripANSI(rows[0]); !strings.HasSuffix(top, "now · peak ┐") {
+		t.Fatalf("top = %q, want suffix \"now · peak ┐\"", top)
 	}
-	// Columns are counted in runes. The title starts at col 3 ("┌─ "), the
-	// content at col 2 ("│ "). renderWBox keeps one dash after the title, so
-	// the header's "peak" ends one column before the peak value's last digit.
-	peakHeaderCol := len([]rune(top[:strings.Index(top, "peak")+len("peak")-1])) // rune index of 'k'
-	peakValueCol := len([]rune(valueRow[:strings.LastIndex(valueRow, "W")]))     // rune index of the final 'W'
-	if peakHeaderCol+1 != peakValueCol {
-		t.Fatalf("header 'peak' ends at col %d, peak values end at col %d (want one column left)\ntop: %s\nrow: %s",
-			peakHeaderCol, peakValueCol, top, valueRow)
+	if got := stripANSI(rows[1]); !strings.HasSuffix(got, "38W  │") {
+		t.Fatalf("cpu row = %q, want peak 38W in a 4-wide column then \"  │\"", got)
 	}
-	if strings.HasSuffix(valueRow, "  │") {
-		t.Fatalf("values must end one space before the border, got %q", valueRow)
+	if got := stripANSI(rows[2]); !strings.HasSuffix(got, "287W │") {
+		t.Fatalf("gpu row = %q, want peak 287W then \" │\"", got)
 	}
 }
 
@@ -234,7 +312,7 @@ func TestPowerBoxRAPLCPURow(t *testing.T) {
 		t.Fatalf("rows = %d, want top, one row, bottom", len(rows))
 	}
 	line := stripANSI(rows[1])
-	if !strings.HasPrefix(line, "│ cpu") || !strings.Contains(line, " 12W ") || !strings.HasSuffix(line, "38W │") {
+	if !strings.HasPrefix(line, "│ cpu") || !strings.Contains(line, " 12W ") || !strings.HasSuffix(line, "38W  │") {
 		t.Fatalf("cpu row = %q, want label cpu, now 12W, peak 38W", line)
 	}
 	if strings.Contains(stripANSI(strings.Join(rows, "\n")), "total") {

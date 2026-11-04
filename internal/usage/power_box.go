@@ -167,14 +167,50 @@ func powerSparkPercent(series []float64, peak float64) []float64 {
 // powerChartWidth is the sparkline's glyph count, excluding the brackets.
 const powerChartWidth = rograph.MaxWidth
 
-// The value fields: "now" (watts) then one space then "peak" (watts), both
-// right-aligned, so the peak ends one column before the border.
+// The value columns follow the label and sparkline column. Both are
+// left-aligned under their header words: the now value starts under the "n"
+// of "now", the peak value under the "p" of "peak".
 const (
-	powerNowWidth  = 5
-	powerPeakWidth = 6
-	// powerHeadTail is the header text drawn over the value columns.
-	powerHeadTail = "now   peak"
+	// powerNowHead is the header over the now column ("now" then " · ").
+	powerNowHead = "now · "
+	// powerPeakHead is the header over the peak column.
+	powerPeakHead = "peak"
+	// powerNowMin is the now column's minimum width: the header's "now · ".
+	powerNowMin = 6
+	// powerPeakMin is the peak column's minimum width: the header "peak".
+	powerPeakMin = 4
 )
+
+// powerColumns holds the widths of the two value columns for one frame.
+type powerColumns struct {
+	nowW, peakW int
+}
+
+// powerColumnsFor sizes the value columns to the widest value in view. A
+// now value keeps one space before the peak column, so a 5-character value
+// ("1200W") fits the 6-wide now column, and a 6-character one widens it. A
+// peak value widens the peak column when it is wider than "peak".
+func powerColumnsFor(view powerView) powerColumns {
+	c := powerColumns{nowW: powerNowMin, peakW: powerPeakMin}
+	for _, r := range view.Rows {
+		c.nowW = max(c.nowW, visLen(powerWatts(r.Now))+1)
+		c.peakW = max(c.peakW, visLen(powerWatts(r.Peak)))
+	}
+	return c
+}
+
+// powerWatts formats one reading for a value column.
+func powerWatts(w float64) string {
+	return fmt.Sprintf("%.0fW", w)
+}
+
+// powerPad pads s with spaces on the right to visible width w.
+func powerPad(s string, w int) string {
+	if pad := w - visLen(s); pad > 0 {
+		return s + strings.Repeat(" ", pad)
+	}
+	return s
+}
 
 // powerLeftWidth is the label and sparkline column: label, a space, the
 // bracketed sparkline, and one column of gap before the values.
@@ -182,42 +218,37 @@ func powerLeftWidth() int {
 	return loadLabelWidth + 1 + powerChartWidth + 3
 }
 
-// powerContentWidth is the width of one row's content, excluding the borders.
-func powerContentWidth() int {
-	return powerLeftWidth() + powerNowWidth + 1 + powerPeakWidth
-}
-
-// powerBoxWidth is the box's fixed width: content plus "│ " and " │".
-// It is independent of the planner's width, so the header and the values
-// stay aligned and no spare columns are added to the right.
-func powerBoxWidth() int {
-	return powerContentWidth() + 4
-}
-
-// buildPowerBox renders the Power box. Its width is fixed (powerBoxWidth), so
-// the layout planner measures and draws the same box.
+// buildPowerBox renders the Power box. Its width follows the widest value
+// (see powerColumnsFor), so the header and every row share one set of columns.
 //
-// renderWBox draws the top as "┌─ " + title + " " + dashes + "┐", with at
-// least one dash, so the title can be at most powerContentWidth()-2 wide.
-// Its "peak" therefore ends one column before the last digit of the values.
+// The top border is "┌─ " + title + " ┐" (titleToCorner), with no dash
+// between the title and the corner. The title runs from column 3 to the
+// column before the corner, so its "peak" ends right above the last column of
+// the peak values' padding, and "now" starts at the column of the now values.
 func buildPowerBox(view powerView) wbox {
+	leftW := powerLeftWidth()
+	cols := powerColumnsFor(view)
 	head := watchBoxSymbol("power") + " Power"
-	fill := powerContentWidth() - 2 - (visLen(head) + 1) - 1 - len(powerHeadTail)
+	// Title visible width: head, a space, fill dashes, a space, then the
+	// column header. Header "now" lands at column leftW of the content.
+	fill := leftW - 3 - visLen(head)
 	if fill < 1 {
 		fill = 1
 	}
-	title := head + " " + strings.Repeat("─", fill) + " " + powerHeadTail
+	title := head + " " + strings.Repeat("─", fill) + " " +
+		powerPad(powerNowHead, cols.nowW) + powerPad(powerPeakHead, cols.peakW)
 
 	lines := make([]string, 0, len(view.Rows))
 	for _, r := range view.Rows {
-		lines = append(lines, powerRowLine(r, powerLeftWidth()))
+		lines = append(lines, powerRowLine(r, leftW, cols))
 	}
-	return wbox{title: title, lines: lines, width: powerBoxWidth()}
+	contentW := leftW + cols.nowW + cols.peakW
+	return wbox{title: title, lines: lines, width: contentW + 4, titleToCorner: true}
 }
 
-// powerRowLine renders "label [spark]" padded to leftW, then the right-aligned
-// now and peak values.
-func powerRowLine(r powerRowView, leftW int) string {
+// powerRowLine renders "label [spark]" padded to leftW, then the now and peak
+// values, each left-aligned in its column.
+func powerRowLine(r powerRowView, leftW int, cols powerColumns) string {
 	pct := powerSparkPercent(r.Series, r.Peak)
 	nowPct := 0.0
 	if r.Peak > 0 {
@@ -232,9 +263,7 @@ func powerRowLine(r powerRowView, leftW int) string {
 	if pad := leftW - visLen(left); pad > 0 {
 		left += strings.Repeat(" ", pad)
 	}
-	now := fmt.Sprintf("%*s", powerNowWidth, fmt.Sprintf("%.0fW", r.Now))
-	peak := fmt.Sprintf("%*s", powerPeakWidth, fmt.Sprintf("%.0fW", r.Peak))
-	return left + now + " " + peak
+	return left + powerPad(powerWatts(r.Now), cols.nowW) + powerPad(powerWatts(r.Peak), cols.peakW)
 }
 
 // Shared meter for the live watch. It is created on first use, so a process
