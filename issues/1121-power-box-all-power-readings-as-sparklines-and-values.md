@@ -20,6 +20,20 @@ PR #103 adds watts to the Load box as a `(NN°C/NNW)` suffix on the CPU and GPU 
 - dGPU/eGPU: amdgpu hwmon `power1_average`/`power1_input`; NVIDIA `power.draw` from `nvidia-smi`.
 - Not yet read: battery `power_now` (laptops), power caps (`power1_cap`). Decide whether caps show as a limit marker.
 
+## Design (owner, 2026-11-04)
+Layout A: one row per source in the Load box style, plus a total row.
+```
+┌─ [W] Power ─────────────── peak 20s · boot ─┐
+│ cpu+igpu (PPT)   [⣀⣀⣀⣠⣤⣀⣀⣀⣀⣀] 13W  22W   38W │
+│ gpu (Navi 31)    [⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀]  7W   9W   21W │
+│ total            [⣀⣀⣀⣠⣤⣀⣀⣠⣀⣀] 20W  31W   52W │
+└─────────────────────────────────────────────┘
+```
+- Columns: current watts, then the peak in the shown window, then the boot peak.
+- **Chart scale = boot peak.** Each sparkline's top is the highest value harnez has measured for that source since boot, whatever the window length. The sensors keep no history, so the boot peak covers only the times harnez sampled. Keep it in a small state file keyed by `/proc/sys/kernel/random/boot_id`, so restarts keep it and a reboot resets it. Several watchers may write the file at once; write it atomically and take the max on merge.
+- The header names both spans.
+- The key is `[W]` unless the owner picks another.
+
 ## Notes and open points
 - **Key clash:** `[P]` is already the Processes box (`internal/usage/watch_frame.go:445`). The owner must pick: move Processes, or give Power another key such as `[W]`.
 - **No double counting in the total:** the APU PPT figure already includes the iGPU, and RAPL package power overlaps it.
