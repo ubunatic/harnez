@@ -6,17 +6,20 @@ import (
 	"testing"
 )
 
-func TestGPUTempPowerPart(t *testing.T) {
+func TestTempPowerPart(t *testing.T) {
 	for name, tc := range map[string]struct {
-		g    GPU
-		want string
+		temp      float64
+		haveTemp  bool
+		power     float64
+		havePower bool
+		want      string
 	}{
-		"both":       {GPU{TempC: 52.4, HaveTemp: true, PowerW: 15.38, HavePower: true}, " (52°C/15W)"},
-		"temp only":  {GPU{TempC: 52.4, HaveTemp: true}, " (52°C)"},
-		"power only": {GPU{PowerW: 8, HavePower: true}, " (8W)"},
-		"neither":    {GPU{}, ""},
+		"both":       {52.4, true, 15.38, true, " (52°C/15W)"},
+		"temp only":  {52.4, true, 0, false, " (52°C)"},
+		"power only": {0, false, 8, true, " (8W)"},
+		"neither":    {0, false, 0, false, ""},
 	} {
-		if got := gpuTempPowerPart(tc.g); got != tc.want {
+		if got := tempPowerPart(tc.temp, tc.haveTemp, tc.power, tc.havePower); got != tc.want {
 			t.Errorf("%s: got %q, want %q", name, got, tc.want)
 		}
 	}
@@ -37,24 +40,31 @@ func TestReadAMDGPUPower(t *testing.T) {
 	avg := t.TempDir()
 	write(t, avg, "power1_average", "6948000")
 	write(t, avg, "power1_input", "15383000")
-	if w, ok := readAMDGPUPower(avg); !ok || w != 6.948 {
+	if w, _, ok := readAMDGPUPower(avg); !ok || w != 6.948 {
 		t.Errorf("average preferred: got %v/%v, want 6.948", w, ok)
 	}
 
 	input := t.TempDir()
 	write(t, input, "power1_input", "15383000")
-	if w, ok := readAMDGPUPower(input); !ok || w != 15.383 {
+	if w, _, ok := readAMDGPUPower(input); !ok || w != 15.383 {
 		t.Errorf("input fallback: got %v/%v, want 15.383", w, ok)
 	}
 
 	garbage := t.TempDir()
 	write(t, garbage, "power1_average", "not a number")
 	write(t, garbage, "power1_input", "15383000")
-	if w, ok := readAMDGPUPower(garbage); !ok || w != 15.383 {
+	if w, _, ok := readAMDGPUPower(garbage); !ok || w != 15.383 {
 		t.Errorf("garbage average fallback: got %v/%v, want 15.383", w, ok)
 	}
 
-	if _, ok := readAMDGPUPower(t.TempDir()); ok {
+	if _, _, ok := readAMDGPUPower(t.TempDir()); ok {
 		t.Error("no hwmon power files: ok = true, want false")
+	}
+
+	ppt := t.TempDir()
+	write(t, ppt, "power1_input", "15383000")
+	write(t, ppt, "power1_label", "PPT\n")
+	if w, label, ok := readAMDGPUPower(ppt); !ok || w != 15.383 || label != "PPT" {
+		t.Errorf("label: got %v/%q/%v, want 15.383/PPT/true", w, label, ok)
 	}
 }

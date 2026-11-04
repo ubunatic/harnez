@@ -93,6 +93,7 @@ func buildLoadBoxLines(remoteHost string, snapshot *LoadSnapshot) []string {
 		gpus = CurrentGPUs()
 	}
 
+	load, gpus = splitAPUPackagePower(load, gpus)
 	var lines []string
 	if load.NumCPU > 0 {
 		lines = append(lines, formatCPULine(load))
@@ -132,7 +133,7 @@ func padLoadLabel(label string) string {
 	return rograph.PadLabel(label, loadLabelWidth)
 }
 
-// formatCPULine renders the "cpu (N cores) [<chart>] avg% (temp)" line. The
+// formatCPULine renders the "cpu (N cores) [<chart>] avg% (temp/power)" line. The
 // spark is a timeline of recent aggregate real-time % samples, not a
 // per-core snapshot — a spatial snapshot barely changes frame to frame,
 // while a trend over the last ~10 samples actually shows something moving.
@@ -150,10 +151,7 @@ func formatCPULine(load CPULoad) string {
 	if load.CPUPercentOk {
 		avgPart = watchLoadPercent(load.CPUPercent)
 	}
-	tempPart := ""
-	if load.TempOk {
-		tempPart = fmt.Sprintf(" (%.0f°C)", load.TempC)
-	}
+	tempPart := tempPowerPart(load.TempC, load.TempOk, load.PowerW, load.PowerOk)
 	label := padLoadLabel(fmt.Sprintf("cpu (%d cores)", load.NumCPU))
 
 	var chart string
@@ -212,7 +210,7 @@ func formatSystemSwapLine(mem SystemMemory) string {
 	return fmt.Sprintf("%s %s/%sG %s", label, formatGiB(mem.SwapUsedMiB), formatGiB(mem.SwapTotalMiB), watchLoadPercent(pct))
 }
 
-// formatGPULine renders the "gpu (name) [<chart>] avg% (temp)" line. The
+// formatGPULine renders the "gpu (name) [<chart>] avg% (temp/power)" line. The
 // sparkline shows recent history (UtilHistory), or degenerates to a single
 // current-value glyph if no history has been collected yet.
 func formatGPULine(g GPU) string {
@@ -222,7 +220,7 @@ func formatGPULine(g GPU) string {
 	}
 	series = padHistory(series, g.UtilPercent, loadHistoryLen)
 	label := padLoadLabel(fmt.Sprintf("gpu (%s)", g.Name))
-	tempPart := gpuTempPowerPart(g)
+	tempPart := tempPowerPart(g.TempC, g.HaveTemp, g.PowerW, g.HavePower)
 
 	var chart string
 	mode := mustIndicators().LoadCharts.GPUMode()
@@ -234,15 +232,39 @@ func formatGPULine(g GPU) string {
 	return fmt.Sprintf("%s %s %s%s", label, chart, watchLoadPercent(g.UtilPercent), tempPart)
 }
 
-// gpuTempPowerPart renders the GPU line's " (NN°C/NNW)" suffix. Each reading
-// appears only when the driver reports it; with neither, the suffix is empty.
-func gpuTempPowerPart(g GPU) string {
-	var parts []string
-	if g.HaveTemp {
-		parts = append(parts, fmt.Sprintf("%.0f°C", g.TempC))
+// apuPackagePowerLabel is the amdgpu power1_label of an APU. Its reading is
+// the whole package (CPU + iGPU), so it never belongs on the iGPU line.
+const apuPackagePowerLabel = "PPT"
+
+// splitAPUPackagePower keeps an APU's PPT reading off its iGPU line. When
+// the CPU has no RAPL reading, the PPT value becomes the CPU's power instead.
+// It returns copies: the caller's snapshot GPUs are not modified.
+func splitAPUPackagePower(load CPULoad, gpus []GPU) (CPULoad, []GPU) {
+	out := make([]GPU, len(gpus))
+	copy(out, gpus)
+	for i := range out {
+		g := &out[i]
+		if g.Class != GPUClassIGPU || !g.HavePower || g.PowerLabel != apuPackagePowerLabel {
+			continue
+		}
+		if !load.PowerOk {
+			load.PowerW, load.PowerOk = g.PowerW, true
+		}
+		g.HavePower = false
 	}
-	if g.HavePower {
-		parts = append(parts, fmt.Sprintf("%.0fW", g.PowerW))
+	return load, out
+}
+
+// tempPowerPart renders a load line's " (NN°C/NNW)" suffix, shared by the CPU
+// and GPU lines. Each reading appears only when reported; with neither, the
+// suffix is empty.
+func tempPowerPart(tempC float64, haveTemp bool, powerW float64, havePower bool) string {
+	var parts []string
+	if haveTemp {
+		parts = append(parts, fmt.Sprintf("%.0f°C", tempC))
+	}
+	if havePower {
+		parts = append(parts, fmt.Sprintf("%.0fW", powerW))
 	}
 	if len(parts) == 0 {
 		return ""
