@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,6 +46,16 @@ type CPULoad struct {
 	// false where none of those drivers is present.
 	TempC  float64
 	TempOk bool
+
+	// PowerW is the CPU package power in watts, from RAPL (Intel, or the AMD
+	// counterpart under the same powercap name). It is a delta between two
+	// samples, so PowerOk is false until a second sample exists.
+	// RAPLReadable is true when the package zone's energy_uj could be read
+	// (root-only on many systems). It alone decides whether an APU's PPT
+	// reading may stand in for CPU power (see splitAPUPackagePower).
+	PowerW       float64
+	PowerOk      bool
+	RAPLReadable bool
 
 	Memory SystemMemory
 }
@@ -85,6 +96,7 @@ func currentCPULoad(seed bool) CPULoad {
 	load.CPUPercent, load.CPUPercentOk, load.PerCorePercent, load.PerCoreOk = currentCPUPercentsWithSeed(seed)
 	load.PercentHistory = cpuHistory.snapshot()
 	load.TempC, load.TempOk = readCPUTempFromSysfs()
+	load.PowerW, load.PowerOk, load.RAPLReadable = readRAPLPower(raplSysRoot, time.Now)
 	load.Memory = CurrentSystemMemory()
 	return load
 }
@@ -165,6 +177,106 @@ func readCPUTempFromSysfs() (float64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// raplSysRoot is the powercap class directory and raplPackagePrefix the
+// name-file prefix of a CPU package zone. Both are kernel conventions, not
+// configuration. AMD CPUs expose their package counter under the same names.
+const (
+	raplSysRoot       = "/sys/class/powercap"
+	raplPackagePrefix = "package-"
+)
+
+// raplRateInterval is the shortest span between RAPL baselines. Closer calls
+// reuse the last computed power, so frequent callers do not produce noisy
+// readings from tiny energy deltas.
+const raplRateInterval = time.Second
+
+// raplSample is one reading of the package energy counter and its clock.
+type raplSample struct {
+	energyUJ uint64
+	at       time.Time
+}
+
+var (
+	raplMu        sync.Mutex
+	lastRAPL      raplSample
+	haveRAPL      bool
+	lastRAPLWatts float64
+	haveRAPLWatts bool
+)
+
+// findRAPLPackageZone returns the top-level package zone under root: the first
+// intel-rapl:N in sorted order (subzones such as intel-rapl:N:M are skipped)
+// whose name file starts with "package-".
+func findRAPLPackageZone(root string) (string, bool) {
+	zones, err := filepath.Glob(filepath.Join(root, "intel-rapl:*"))
+	if err != nil {
+		return "", false
+	}
+	sort.Strings(zones)
+	for _, zone := range zones {
+		if strings.Count(filepath.Base(zone), ":") != 1 {
+			continue
+		}
+		if strings.HasPrefix(readSysfsLabel(filepath.Join(zone, "name")), raplPackagePrefix) {
+			return zone, true
+		}
+	}
+	return "", false
+}
+
+// readRAPLPower returns the CPU package power in watts from the energy delta
+// between two samples of the package zone under root (the powercap class dir).
+//
+// readable reports whether the zone and its energy_uj could be read at all;
+// it is what decides between RAPL and the APU PPT fallback. ok reports whether
+// a power value exists. The first sample has no delta, so ok is false.
+//
+// Calls less than raplRateInterval after the stored baseline do not advance
+// it; they return the last computed watts (ok only if one exists). The clock
+// and energy_uj are read under the mutex, so stored samples stay in order.
+// A counter that went backwards is one wrap at max_energy_range_uj; without
+// that file the sample only resets the baseline. Failures are silent by
+// design: RAPL is root-only on many systems.
+func readRAPLPower(root string, now func() time.Time) (watts float64, ok, readable bool) {
+	zone, found := findRAPLPackageZone(root)
+	if !found {
+		return 0, false, false
+	}
+
+	raplMu.Lock()
+	defer raplMu.Unlock()
+	at := now()
+	energy, err := readSysfsUint(filepath.Join(zone, "energy_uj"))
+	if err != nil {
+		return 0, false, false
+	}
+	cur := raplSample{energyUJ: energy, at: at}
+	if !haveRAPL {
+		lastRAPL, haveRAPL = cur, true
+		return 0, false, true
+	}
+	dt := at.Sub(lastRAPL.at)
+	if dt < raplRateInterval {
+		return lastRAPLWatts, haveRAPLWatts, true
+	}
+	prev := lastRAPL
+	lastRAPL = cur
+
+	var deltaUJ uint64
+	if energy >= prev.energyUJ {
+		deltaUJ = energy - prev.energyUJ
+	} else {
+		maxRange, err := readSysfsUint(filepath.Join(zone, "max_energy_range_uj"))
+		if err != nil || maxRange <= prev.energyUJ {
+			haveRAPLWatts = false
+			return 0, false, true
+		}
+		deltaUJ = (maxRange - prev.energyUJ) + energy
+	}
+	lastRAPLWatts, haveRAPLWatts = float64(deltaUJ)/1e6/dt.Seconds(), true
+	return lastRAPLWatts, true, true
 }
 
 // cpuStatSample is one reading of a "cpu"/"cpuN" line in /proc/stat:
@@ -436,7 +548,10 @@ func parseMeminfo(text string) (SystemMemory, error) {
 // (or "load average:") segment of `uptime` output.
 // GPU holds one GPU's utilization, VRAM usage, and temperature.
 type GPU struct {
-	Name         string
+	Name string
+	// PCI is the device's PCI address (its history key), used to give each
+	// card a stable identity in the Power box even when cardN renumbers.
+	PCI          string
 	UtilPercent  float64
 	MemUsedMiB   float64
 	MemTotalMiB  float64
@@ -446,10 +561,17 @@ type GPU struct {
 	GTTUsedMiB   float64
 	GTTTotalMiB  float64
 	TempC        float64
+	PowerW       float64
 	HaveMem      bool
 	HaveVRAM     bool
 	HaveGTT      bool
 	HaveTemp     bool
+	HavePower    bool
+
+	// PowerLabel is the hwmon power1_label the power reading came from
+	// ("PPT" on an APU means the whole package, not the iGPU; see
+	// splitAPUPackagePower). Empty when the label is absent.
+	PowerLabel string
 
 	// Class is the internal iGPU/dGPU/eGPU kind. It selects the memory rows
 	// and is never shown (issue 765).
@@ -776,7 +898,7 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 		// Histories are keyed by PCI address, not cardN, which can renumber
 		// when another GPU (e.g. an eGPU) is attached.
 		key := pciAddressOf(deviceDir)
-		g := GPU{Name: amdGPUCodename(deviceDir)}
+		g := GPU{Name: amdGPUCodename(deviceDir), PCI: key}
 
 		if !seed || gpuHistorySeeded(key) {
 			v, err := readSysfsUint(busyPath)
@@ -805,6 +927,7 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 				g.HaveTemp = true
 			}
 		}
+		g.PowerW, g.PowerLabel, g.HavePower = readAMDGPUPower(deviceDir)
 
 		g.Class = classifyGPU(isExternalGPU(deviceDir), isAPUGPU(deviceDir))
 		gpus = append(gpus, g)
@@ -813,6 +936,34 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 		return nil, fmt.Errorf("amdgpu sysfs attributes present but unreadable")
 	}
 	return gpus, nil
+}
+
+// readAMDGPUPower reads the board power from the amdgpu hwmon in microwatts.
+// power1_average is the smoothed value; power1_input (newer kernels and
+// APUs) is the fallback. label is the same hwmon's power1_label (empty when
+// absent). ok is false when neither file is readable.
+func readAMDGPUPower(deviceDir string) (watts float64, label string, ok bool) {
+	for _, name := range []string{"power1_average", "power1_input"} {
+		matches, err := filepath.Glob(filepath.Join(deviceDir, "hwmon", "hwmon*", name))
+		if err != nil || len(matches) == 0 {
+			continue
+		}
+		if microW, err := readSysfsUint(matches[0]); err == nil {
+			hwmon := filepath.Dir(matches[0])
+			return float64(microW) / 1e6, readSysfsLabel(filepath.Join(hwmon, "power1_label")), true
+		}
+	}
+	return 0, "", false
+}
+
+// readSysfsLabel returns the trimmed contents of a sysfs label file, or ""
+// when it is missing or unreadable.
+func readSysfsLabel(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // readAMDGPUMemory fills g's VRAM/GTT fields. key is the GPU's history key

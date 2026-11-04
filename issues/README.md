@@ -38,4 +38,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1114 | [1114-jules-wait-say-a-session-stalled-after-its-replies-instead-of-offering-another-wait.md](1114-jules-wait-say-a-session-stalled-after-its-replies-instead-of-offering-another-wait.md) | Jules wait: say a session stalled after its replies instead of offering another wait | Open |
 | 1115 | [1115-harnez-apply-keeps-docup-skill-dirs-with-extra-files-in-all-five-agent-roots.md](1115-harnez-apply-keeps-docup-skill-dirs-with-extra-files-in-all-five-agent-roots.md) | harnez apply keeps docup skill dirs with extra files in all five agent roots | Open |
 | 1120 | [1120-tests-read-the-global-git-config-two-tests-fail-on-jules-hookspath-insteadof.md](1120-tests-read-the-global-git-config-two-tests-fail-on-jules-hookspath-insteadof.md) | Tests read the global git config: two tests fail on Jules (hooksPath, insteadOf) | Open |
+| 1121 | [1121-power-box-all-power-readings-as-sparklines-and-values.md](1121-power-box-all-power-readings-as-sparklines-and-values.md) | Power box: all power readings as sparklines and values | Open |
 <!-- harnez:end issues-active-index -->

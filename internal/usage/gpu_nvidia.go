@@ -20,9 +20,9 @@ import (
 
 // nvidiaSMIArgs is the nvidia-smi query. parseNVIDIASMI expects its columns in
 // this order: name, pci.bus_id, utilization.gpu, memory.used, memory.total,
-// temperature.gpu. Memory is in MiB (nounits).
+// temperature.gpu, power.draw. Memory is in MiB, power in W (nounits).
 var nvidiaSMIArgs = []string{
-	"--query-gpu=name,pci.bus_id,utilization.gpu,memory.used,memory.total,temperature.gpu",
+	"--query-gpu=name,pci.bus_id,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
 	"--format=csv,noheader,nounits",
 }
 
@@ -95,6 +95,7 @@ func refreshNVIDIAGPUs(timeout time.Duration) []GPU {
 	gpus := make([]GPU, 0, len(rows))
 	for _, row := range rows {
 		g := row.GPU
+		g.PCI = row.PCI
 		// Histories are sampled once per refresh, not per redraw, so a
 		// reading reused from the cache does not inflate the timeline.
 		g.UtilHistory = appendGPUHistory(row.PCI, g.UtilPercent)
@@ -138,7 +139,7 @@ func parseNVIDIASMI(out []byte) ([]nvidiaSMIRow, error) {
 	var rows []nvidiaSMIRow
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		f := strings.Split(line, ",")
-		if len(f) != 6 {
+		if len(f) != 7 {
 			continue
 		}
 		for i := range f {
@@ -163,6 +164,9 @@ func parseNVIDIASMI(out []byte) ([]nvidiaSMIRow, error) {
 		}
 		if t, err := strconv.ParseFloat(f[5], 64); err == nil {
 			g.TempC, g.HaveTemp = t, true
+		}
+		if w, err := strconv.ParseFloat(f[6], 64); err == nil {
+			g.PowerW, g.HavePower = w, true
 		}
 		rows = append(rows, nvidiaSMIRow{GPU: g, PCI: pci})
 	}

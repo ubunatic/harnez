@@ -41,6 +41,13 @@ actions:
     symbol: "[L]"
     category: box
     box: load
+  toggle_power:
+    title: "Power"
+    description: "Toggle the Power box: CPU/GPU watts as sparklines with now and boot-peak values"
+    keys: ["w", "W"]
+    symbol: "[W]"
+    category: box
+    box: power
   toggle_mic:
     title: "Mic"
     description: "Toggle the microphone level/recording box"

@@ -18,7 +18,7 @@ func TestEmbeddedActionsSpecIsValid(t *testing.T) {
 	}
 
 	// Every box id watch.go actually renders must have a symbol.
-	for _, box := range []string{"all_usage", "processes", "load", "mic"} {
+	for _, box := range []string{"all_usage", "processes", "load", "power", "mic"} {
 		if wa.boxTitleSymbol(box) == "" {
 			t.Errorf("expected embedded spec to define a symbol for box %q", box)
 		}
@@ -180,6 +180,7 @@ func TestSpecDrivenDispatchMatchesDocumentedKeys(t *testing.T) {
 		"all_usage": func(s watchSections) bool { return s.AllUsage },
 		"processes": func(s watchSections) bool { return s.Processes },
 		"load":      func(s watchSections) bool { return s.Load },
+		"power":     func(s watchSections) bool { return s.Power },
 		"mic":       func(s watchSections) bool { return s.Mic },
 	}
 
@@ -207,5 +208,31 @@ func TestSpecDrivenDispatchMatchesDocumentedKeys(t *testing.T) {
 		if getField(sec) == before {
 			t.Errorf("expected key %q (action %q) to flip box %q, got unchanged: %+v", a.Keys[0], name, a.Box, sec)
 		}
+	}
+}
+
+// TestPowerBoxKeyTogglesViaSpec checks that [W]/[w] is bound through
+// spec/actions.yaml (not a Go table), shows as [W] in the title, and flips
+// the Power section both through applyWatchSectionKey and dispatchWatchKey.
+func TestPowerBoxKeyTogglesViaSpec(t *testing.T) {
+	wa := mustWatchActions()
+	if wa.actionForKey('w') != "toggle_power" || wa.actionForKey('W') != "toggle_power" {
+		t.Fatalf("expected 'w' and 'W' to map to toggle_power, got %q and %q", wa.actionForKey('w'), wa.actionForKey('W'))
+	}
+	if got := wa.boxTitleSymbol("power"); got != "[W]" {
+		t.Fatalf("power title symbol = %q, want [W]", got)
+	}
+
+	var sec watchSections
+	if !applyWatchSectionKey(&sec, 'w') || !sec.Power {
+		t.Fatalf("'w' did not turn the Power section on: %+v", sec)
+	}
+	if !applyWatchSectionKey(&sec, 'W') || sec.Power {
+		t.Fatalf("'W' did not toggle the Power section off: %+v", sec)
+	}
+
+	st, eff := dispatchWatchKey(watchKeyState{}, 'w', false)
+	if !st.sec.Power || !eff.redraw {
+		t.Fatalf("dispatchWatchKey('w') = power %v redraw %v, want on and redraw", st.sec.Power, eff.redraw)
 	}
 }

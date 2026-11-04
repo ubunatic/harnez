@@ -42,6 +42,7 @@
               "all_usage",
               "processes",
               "load",
+              "power",
               "mic"
             ]
           }
