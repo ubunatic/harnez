@@ -1,6 +1,10 @@
 schema: 1
 keys:
   - id: 804AF0BEE98F1C90
-    maintainer: ubunatic
+    maintainer: flashcoder
     status: active
     added: 2026-11-03
+  - id: 753AD3A15FA606D7
+    maintainer: ubunatic
+    status: active
+    added: 2026-11-04
