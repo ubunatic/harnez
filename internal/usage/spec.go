@@ -42,6 +42,7 @@ type usageSpec struct {
 	RemoteLoadPollDetached   string             `yaml:"remote_load_poll_interval_detached"`
 	RemoteLoadLiveThreshold  string             `yaml:"remote_load_live_threshold"`
 	RemoteLoadStaleness      string             `yaml:"remote_load_staleness"`
+	PowerPeakSaveInterval    string             `yaml:"power_peak_save_interval"`
 	UsageKillLog             usageKillLogSpec   `yaml:"usage_kill_log"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
 }
@@ -391,7 +392,7 @@ func (s usageViewModesSpec) validate() error {
 	}
 	validPanels := map[string]bool{
 		"table": true, "all_usage": true, "processes": true, "load": true,
-		"mic": true, "remote_load": true,
+		"power": true, "mic": true, "remote_load": true,
 	}
 	for _, name := range []string{"normal", "compact", "minimal"} {
 		mode, ok := s.Modes[name]

@@ -424,6 +424,7 @@ func (t *redrawThrottler) Stop() {
 
 func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, opts WatchOptions) error {
 	_ = historyDir // retained for source compatibility; watch no longer writes history.
+	defer func() { _ = flushPowerPeaks() }()
 	if interval < MinWatchInterval {
 		interval = MinWatchInterval
 	}

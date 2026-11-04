@@ -46,6 +46,7 @@ var validBoxIDs = map[string]bool{
 	"all_usage": true,
 	"processes": true,
 	"load":      true,
+	"power":     true,
 	"mic":       true,
 }
 

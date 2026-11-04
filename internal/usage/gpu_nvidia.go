@@ -95,6 +95,7 @@ func refreshNVIDIAGPUs(timeout time.Duration) []GPU {
 	gpus := make([]GPU, 0, len(rows))
 	for _, row := range rows {
 		g := row.GPU
+		g.PCI = row.PCI
 		// Histories are sampled once per refresh, not per redraw, so a
 		// reading reused from the cache does not inflate the timeline.
 		g.UtilHistory = appendGPUHistory(row.PCI, g.UtilPercent)

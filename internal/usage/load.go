@@ -548,7 +548,10 @@ func parseMeminfo(text string) (SystemMemory, error) {
 // (or "load average:") segment of `uptime` output.
 // GPU holds one GPU's utilization, VRAM usage, and temperature.
 type GPU struct {
-	Name         string
+	Name string
+	// PCI is the device's PCI address (its history key), used to give each
+	// card a stable identity in the Power box even when cardN renumbers.
+	PCI          string
 	UtilPercent  float64
 	MemUsedMiB   float64
 	MemTotalMiB  float64
@@ -895,7 +898,7 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 		// Histories are keyed by PCI address, not cardN, which can renumber
 		// when another GPU (e.g. an eGPU) is attached.
 		key := pciAddressOf(deviceDir)
-		g := GPU{Name: amdGPUCodename(deviceDir)}
+		g := GPU{Name: amdGPUCodename(deviceDir), PCI: key}
 
 		if !seed || gpuHistorySeeded(key) {
 			v, err := readSysfsUint(busyPath)

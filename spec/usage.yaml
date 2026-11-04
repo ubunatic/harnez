@@ -49,6 +49,9 @@ remote_load_poll_interval_attached: 10s
 remote_load_poll_interval_detached: 5m
 remote_load_live_threshold: 20s
 remote_load_staleness: 5m
+# Power box (issue 1121): a new boot peak is written to the peak state file at
+# most once per this interval; a pending peak is flushed on exit.
+power_peak_save_interval: 10s
 usage_kill_log:
   path: harnez/usage-kills.jsonl
   max_bytes: 1048576

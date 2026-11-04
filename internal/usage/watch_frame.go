@@ -153,6 +153,8 @@ func initialWatchSections(opts WatchOptions) watchSections {
 			sec.Processes = true
 		case "load":
 			sec.Load = true
+		case "power":
+			sec.Power = true
 		case "mic":
 			sec.Mic = true
 		case "remote_load":
@@ -397,7 +399,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	// width): a live CPU/GPU probe or a process scan must not run twice per
 	// redraw just because the layout planner asked twice.
 	var loadSnapshot *LoadSnapshot
-	if sec.Load {
+	if sec.Load || sec.Power {
 		switch {
 		case summary.Load != nil:
 			loadSnapshot = summary.Load
@@ -446,6 +448,14 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	}
 	if sec.Load {
 		panels = append(panels, panel{"L", func(w int) wbox { return buildLoadBox(w, opt.Host, loadSnapshot) }})
+	}
+	// The Power box is local-only: remote snapshots carry PowerW only from
+	// binaries that report it (out of scope for [W]), so remote mode hides it.
+	// It is hidden entirely when no source has a reading.
+	if sec.Power && opt.Host == "" && loadSnapshot != nil {
+		if view, ok := powerBoxFor(sharedPowerMeter(), powerSourcesFrom(*loadSnapshot), now); ok {
+			panels = append(panels, panel{"W", func(w int) wbox { return buildPowerBox(w, view) }})
+		}
 	}
 	// Only registered when a real audio interface was actually found
 	// (Available) — per issue 244, the box hides itself entirely on a

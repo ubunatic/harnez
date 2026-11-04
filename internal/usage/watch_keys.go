@@ -13,6 +13,7 @@ type watchSections struct {
 	AllUsage   bool
 	Processes  bool
 	Load       bool
+	Power      bool
 	Mic        bool
 	Tokens     bool
 	RemoteLoad bool
@@ -213,6 +214,8 @@ func applyWatchSectionKey(sec *watchSections, key byte) bool {
 		sec.Processes = !sec.Processes
 	case "toggle_load":
 		sec.Load = !sec.Load
+	case "toggle_power":
+		sec.Power = !sec.Power
 	case "toggle_mic":
 		sec.Mic = !sec.Mic
 	case "toggle_tokens":
