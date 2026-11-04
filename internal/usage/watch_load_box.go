@@ -236,9 +236,11 @@ func formatGPULine(g GPU) string {
 // the whole package (CPU + iGPU), so it never belongs on the iGPU line.
 const apuPackagePowerLabel = "PPT"
 
-// splitAPUPackagePower keeps an APU's PPT reading off its iGPU line. When
-// the CPU has no RAPL reading, the PPT value becomes the CPU's power instead.
-// It returns copies: the caller's snapshot GPUs are not modified.
+// splitAPUPackagePower keeps an APU's PPT reading off its iGPU line. PPT
+// stands in for CPU power only when RAPL is unreadable or absent
+// (!RAPLReadable). A readable RAPL zone without a delta yet shows no CPU
+// power rather than switching sources. It returns copies: the caller's
+// snapshot GPUs are not modified.
 func splitAPUPackagePower(load CPULoad, gpus []GPU) (CPULoad, []GPU) {
 	out := make([]GPU, len(gpus))
 	copy(out, gpus)
@@ -247,7 +249,7 @@ func splitAPUPackagePower(load CPULoad, gpus []GPU) (CPULoad, []GPU) {
 		if g.Class != GPUClassIGPU || !g.HavePower || g.PowerLabel != apuPackagePowerLabel {
 			continue
 		}
-		if !load.PowerOk {
+		if !load.RAPLReadable && !load.PowerOk {
 			load.PowerW, load.PowerOk = g.PowerW, true
 		}
 		g.HavePower = false

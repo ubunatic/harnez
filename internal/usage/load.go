@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,13 +47,15 @@ type CPULoad struct {
 	TempC  float64
 	TempOk bool
 
-	// PowerW is the CPU package power in watts, from Intel RAPL (or the
-	// AMD counterpart under the same powercap name). It is a delta between
-	// two samples, so PowerOk is false until a second sample exists, and
-	// false where energy_uj is unreadable (root-only on many systems). An
-	// APU's PPT reading is merged in by buildLoadBoxLines when RAPL is absent.
-	PowerW  float64
-	PowerOk bool
+	// PowerW is the CPU package power in watts, from RAPL (Intel, or the AMD
+	// counterpart under the same powercap name). It is a delta between two
+	// samples, so PowerOk is false until a second sample exists.
+	// RAPLReadable is true when the package zone's energy_uj could be read
+	// (root-only on many systems). It alone decides whether an APU's PPT
+	// reading may stand in for CPU power (see splitAPUPackagePower).
+	PowerW       float64
+	PowerOk      bool
+	RAPLReadable bool
 
 	Memory SystemMemory
 }
@@ -93,7 +96,7 @@ func currentCPULoad(seed bool) CPULoad {
 	load.CPUPercent, load.CPUPercentOk, load.PerCorePercent, load.PerCoreOk = currentCPUPercentsWithSeed(seed)
 	load.PercentHistory = cpuHistory.snapshot()
 	load.TempC, load.TempOk = readCPUTempFromSysfs()
-	load.PowerW, load.PowerOk = readRAPLPower(raplSysRoot, time.Now())
+	load.PowerW, load.PowerOk, load.RAPLReadable = readRAPLPower(raplSysRoot, time.Now)
 	load.Memory = CurrentSystemMemory()
 	return load
 }
@@ -176,13 +179,18 @@ func readCPUTempFromSysfs() (float64, bool) {
 	return 0, false
 }
 
-// raplSysRoot is the powercap class directory. The package zone is
-// intel-rapl:0; AMD CPUs expose their package counter under the same name.
-// These are kernel paths, not configuration.
+// raplSysRoot is the powercap class directory and raplPackagePrefix the
+// name-file prefix of a CPU package zone. Both are kernel conventions, not
+// configuration. AMD CPUs expose their package counter under the same names.
 const (
-	raplSysRoot = "/sys/class/powercap"
-	raplZone    = "intel-rapl:0"
+	raplSysRoot       = "/sys/class/powercap"
+	raplPackagePrefix = "package-"
 )
+
+// raplRateInterval is the shortest span between RAPL baselines. Closer calls
+// reuse the last computed power, so frequent callers do not produce noisy
+// readings from tiny energy deltas.
+const raplRateInterval = time.Second
 
 // raplSample is one reading of the package energy counter and its clock.
 type raplSample struct {
@@ -191,36 +199,70 @@ type raplSample struct {
 }
 
 var (
-	raplMu   sync.Mutex
-	lastRAPL raplSample
-	haveRAPL bool
+	raplMu        sync.Mutex
+	lastRAPL      raplSample
+	haveRAPL      bool
+	lastRAPLWatts float64
+	haveRAPLWatts bool
 )
 
-// readRAPLPower returns the CPU package power in watts: the energy delta
-// since the previous call over the elapsed time, both taken from root (the
-// powercap class dir) and now. The first sample, an unreadable energy_uj,
-// or a non-positive time step yields ok=false. A counter that went backwards
-// is treated as one wrap at max_energy_range_uj; if that file is missing,
-// the sample only resets the baseline. Failures are silent by design: RAPL
-// is root-only on many systems, and the Load box simply omits the reading.
-func readRAPLPower(root string, now time.Time) (watts float64, ok bool) {
-	zone := filepath.Join(root, raplZone)
-	energy, err := readSysfsUint(filepath.Join(zone, "energy_uj"))
+// findRAPLPackageZone returns the top-level package zone under root: the first
+// intel-rapl:N in sorted order (subzones such as intel-rapl:N:M are skipped)
+// whose name file starts with "package-".
+func findRAPLPackageZone(root string) (string, bool) {
+	zones, err := filepath.Glob(filepath.Join(root, "intel-rapl:*"))
 	if err != nil {
-		return 0, false
+		return "", false
+	}
+	sort.Strings(zones)
+	for _, zone := range zones {
+		if strings.Count(filepath.Base(zone), ":") != 1 {
+			continue
+		}
+		if strings.HasPrefix(readSysfsLabel(filepath.Join(zone, "name")), raplPackagePrefix) {
+			return zone, true
+		}
+	}
+	return "", false
+}
+
+// readRAPLPower returns the CPU package power in watts from the energy delta
+// between two samples of the package zone under root (the powercap class dir).
+//
+// readable reports whether the zone and its energy_uj could be read at all;
+// it is what decides between RAPL and the APU PPT fallback. ok reports whether
+// a power value exists. The first sample has no delta, so ok is false.
+//
+// Calls less than raplRateInterval after the stored baseline do not advance
+// it; they return the last computed watts (ok only if one exists). The clock
+// and energy_uj are read under the mutex, so stored samples stay in order.
+// A counter that went backwards is one wrap at max_energy_range_uj; without
+// that file the sample only resets the baseline. Failures are silent by
+// design: RAPL is root-only on many systems.
+func readRAPLPower(root string, now func() time.Time) (watts float64, ok, readable bool) {
+	zone, found := findRAPLPackageZone(root)
+	if !found {
+		return 0, false, false
 	}
 
 	raplMu.Lock()
 	defer raplMu.Unlock()
-	prev, had := lastRAPL, haveRAPL
-	lastRAPL, haveRAPL = raplSample{energyUJ: energy, at: now}, true
-	if !had {
-		return 0, false
+	at := now()
+	energy, err := readSysfsUint(filepath.Join(zone, "energy_uj"))
+	if err != nil {
+		return 0, false, false
 	}
-	dt := now.Sub(prev.at)
-	if dt <= 0 {
-		return 0, false
+	cur := raplSample{energyUJ: energy, at: at}
+	if !haveRAPL {
+		lastRAPL, haveRAPL = cur, true
+		return 0, false, true
 	}
+	dt := at.Sub(lastRAPL.at)
+	if dt < raplRateInterval {
+		return lastRAPLWatts, haveRAPLWatts, true
+	}
+	prev := lastRAPL
+	lastRAPL = cur
 
 	var deltaUJ uint64
 	if energy >= prev.energyUJ {
@@ -228,11 +270,13 @@ func readRAPLPower(root string, now time.Time) (watts float64, ok bool) {
 	} else {
 		maxRange, err := readSysfsUint(filepath.Join(zone, "max_energy_range_uj"))
 		if err != nil || maxRange <= prev.energyUJ {
-			return 0, false
+			haveRAPLWatts = false
+			return 0, false, true
 		}
 		deltaUJ = (maxRange - prev.energyUJ) + energy
 	}
-	return float64(deltaUJ) / 1e6 / dt.Seconds(), true
+	lastRAPLWatts, haveRAPLWatts = float64(deltaUJ)/1e6/dt.Seconds(), true
+	return lastRAPLWatts, true, true
 }
 
 // cpuStatSample is one reading of a "cpu"/"cpuN" line in /proc/stat:
