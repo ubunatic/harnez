@@ -41,3 +41,10 @@ assert that the release continues, while a differing ref still fails.
 ## Audit 2026-11-03
 
 Jules audit run `jules-audit-1082` (session 10011213719013868384, against b0dcb501) failed: it ended asking whether to ignore a `make check` gofmt failure in `internal/release/pubkeys_test.go` and opened no PR, so no report. Per the one-shot rule it was not answered. The gofmt issue is fixed; re-audit if this ticket still matters.
+
+## Audit 2026-11-04
+
+Jules re-audit (session 5341120481487332044, against 70da579e, `reports/jules/1082.md`): still valid, 4 of 4
+references checked. The real push loop (`internal/release/push.go:79-84`) fails on the first rejected
+push with no `git ls-remote` re-check; `internal/release` has no `ls-remote` call. The fan-out skip
+(`selectPushRemotes`/`coveredByKept`, same file) is a different feature and does not cover this race.

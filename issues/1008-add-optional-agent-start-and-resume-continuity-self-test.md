@@ -19,4 +19,9 @@ Issue 964 already proposes an optional dispatch smoke check in an extended skill
 ## 3. Implementation & Verification Plan
 /goal Add and verify an opt-in low-tier agent start/resume continuity check to the self-test skill, or stop and report when blocked on a user decision or denied permission. On a loop, hard blocker, or no progress, clear the goal and record the failure and resume point here.
 
+Audit 2026-11-04 (Jules session 5170244029278063290, against 70da579e, `reports/jules/1008.md`): 3 of 3
+references hold (one 1 line off). Jules said "partly done", but nothing of this ticket exists yet: the
+selftest steps are only hello, background, confirm, confirm-running, verify (`cmd/harnez/agent_selftest.go:171`,
+`:327`), with no start or resume step. So: still valid. Starting point: add an opt-in step there.
+
 Recheck the live skill and issue 964 before implementation. Cover response validation, same-session resumption, optional skip and failure reporting, timeout and cleanup; exercise a live provider when available without weakening the base self-test.
