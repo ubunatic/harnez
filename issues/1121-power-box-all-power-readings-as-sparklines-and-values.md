@@ -21,17 +21,18 @@ PR #103 adds watts to the Load box as a `(NN°C/NNW)` suffix on the CPU and GPU 
 - Not yet read: battery `power_now` (laptops), power caps (`power1_cap`). Decide whether caps show as a limit marker.
 
 ## Design (owner, 2026-11-04)
-Layout A: one row per source in the Load box style, plus a total row.
+Layout A: one row per source in the Load box style, plus a total row. Two values per row: `now` and `peak`.
 ```
-┌─ [W] Power ─────────────── peak 20s · boot ─┐
-│ cpu+igpu (PPT)   [⣀⣀⣀⣠⣤⣀⣀⣀⣀⣀] 13W  22W   38W │
-│ gpu (Navi 31)    [⣀⣀⣀⣀⣀⣀⣀⣠⣀⣀]  7W   9W   21W │
-│ total            [⣀⣀⣀⣠⣤⣀⣀⣠⣀⣀] 20W  31W   52W │
-└─────────────────────────────────────────────┘
+┌─ [W] Power ───────────────────── now   peak ─┐
+│ cpu+igpu (PPT)   [⣀⣀⣀⣠⣤⣀⣀⣀⣀⣀]       13W    38W │
+│ gpu (Navi 31)    [⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀]        7W   287W │
+│ total            [⣀⣀⣀⣀⣠⣀⣀⣀⣀⣀]       20W   311W │
+└──────────────────────────────────────────────┘
 ```
-- Columns: current watts, then the peak in the shown window, then the boot peak.
-- **Chart scale = boot peak.** Each sparkline's top is the highest value harnez has measured for that source since boot, whatever the window length. The sensors keep no history, so the boot peak covers only the times harnez sampled. Keep it in a small state file keyed by `/proc/sys/kernel/random/boot_id`, so restarts keep it and a reboot resets it. Several watchers may write the file at once; write it atomically and take the max on merge.
-- The header names both spans.
+- **now:** a rough recent average, about 1 s, taken as each source gives it: the RAPL energy delta between samples, amdgpu `power1_average`, nvidia `power.draw`. No exact common window is required.
+- **peak:** the highest `now` value harnez has measured for that source since boot. It is also the top of the source's sparkline, whatever the window length. The total row uses the peak of the sum, not the sum of the peaks.
+- The sensors keep no history, so the peak covers only the times harnez sampled. Keep it in a small state file keyed by `/proc/sys/kernel/random/boot_id`, so restarts keep it and a reboot resets it. Several watchers may write the file at once, so write it atomically and take the max when merging.
+- There is no peak column for the shown window; the sparkline shows it.
 - The key is `[W]` unless the owner picks another.
 
 ## Notes and open points
