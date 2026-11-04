@@ -36,8 +36,9 @@ only with a token, and none is set up. Creating one by hand and exporting env va
   names the old one. A failed local store revokes the just-created token again.
 - Tests: `internal/forgetoken/forgetoken_test.go` (fake forge + fake keyring), `TestTokenSourceStoredFirst`.
 
-- `import <file> [--name] [--check owner/repo] [--remove-source]` stores a token made in the web UI
-  (`{"user","token","name"}`); `--check` probes a read with the token (scopes are listable only with
+- `import <file|-> --user <u> [--name] [--check owner/repo] [--remove-source]` stores a token made in
+  the web UI. Input is the bare token, as Codeberg shows it (the owner's JSON file for taia was ad hoc,
+  not a format); `--check` probes a read with the token (scopes are listable only with
   the password). Revoke/rotate delete by id, else by name; a nameless token refuses with a hint.
 
 ## 4. Live result (2026-11-04)

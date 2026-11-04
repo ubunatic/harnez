@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -128,22 +127,25 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 			return printTokenStatus(cmd.OutOrStdout(), st, orDefault(host, sp.DefaultHost))
 		},
 	}
-	var name, checkRepo string
+	var impUser, name, checkRepo string
 	var removeSource bool
 	imp := &cobra.Command{
-		Use:   "import <file>",
-		Short: "Store a token created in the forge's web settings, from a JSON file",
-		Long: `Read {"user": "...", "token": "..."} (optional "name": the token's name on the forge) from
-<file> and store the token like create does. --name overrides the file's name; without a name,
-revoke and rotate cannot delete it on the forge. --check owner/repo first reads that repo's issues
-with the token and stores nothing on failure. Forgejo lists a token's scopes only with the
-password, so the scopes themselves cannot be checked here. The source file is kept unless
---remove-source is given.`,
+		Use:   "import <file|->",
+		Short: "Store a token copied from the forge's web settings",
+		Long: `Read a token as the forge's settings page shows it (only the token, nothing else) from
+<file>, or from stdin with "-", and store it like create does. --user names the forge account
+that owns it. --name is the token's name on the forge; without it, revoke and rotate cannot
+delete it there. --check owner/repo first reads that repo's issues with the token and stores
+nothing on failure. Forgejo lists a token's scopes only with the password, so the scopes
+themselves cannot be checked here. The source file is kept unless --remove-source is given.
+
+  harnez forge token import --user ubunatic --name issue-read --check ubunatic/harnez -`,
 		Args: cobra.ExactArgs(1), SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runForgeTokenImport(cmd.OutOrStdout(), args[0], host, name, checkRepo, removeSource)
+			return runForgeTokenImport(cmd.OutOrStdout(), cmd.InOrStdin(), args[0], host, impUser, name, checkRepo, removeSource)
 		},
 	}
+	imp.Flags().StringVar(&impUser, "user", "", "forge username that owns the token (required)")
 	imp.Flags().StringVar(&name, "name", "", "the token's name on the forge (needed for revoke)")
 	imp.Flags().StringVar(&checkRepo, "check", "", "owner/repo whose issues the token must be able to read")
 	imp.Flags().BoolVar(&removeSource, "remove-source", false, "delete <file> after the token is stored")
@@ -151,7 +153,7 @@ password, so the scopes themselves cannot be checked here. The source file is ke
 	return cmd
 }
 
-func runForgeTokenImport(w io.Writer, file, host, name, checkRepo string, removeSource bool) error {
+func runForgeTokenImport(w io.Writer, stdin io.Reader, file, host, user, name, checkRepo string, removeSource bool) error {
 	sp, st, err := forgeTokenStore()
 	if err != nil {
 		return err
@@ -161,21 +163,25 @@ func runForgeTokenImport(w io.Writer, file, host, name, checkRepo string, remove
 	if err != nil {
 		return err
 	}
-	data, err := os.ReadFile(file)
+	var data []byte
+	if file == "-" {
+		data, err = io.ReadAll(io.LimitReader(stdin, 64<<10))
+		removeSource = false
+	} else {
+		data, err = os.ReadFile(file)
+	}
 	if err != nil {
 		return err
 	}
-	var in struct {
-		User  string `json:"user"`
-		Token string `json:"token"`
-		Name  string `json:"name"`
+	tok, err := parseImportedToken(data)
+	if err != nil {
+		return fmt.Errorf("%s: %w", file, err)
 	}
-	if err := json.Unmarshal(data, &in); err != nil {
-		// Never echo the file: it holds the secret.
-		return fmt.Errorf("%s is not JSON with \"user\" and \"token\"", file)
+	if user == "" {
+		return fmt.Errorf("--user is required: the forge username that owns the token")
 	}
 	c := forgetoken.Client{HTTP: forgetoken.NewHTTPClient(timeout), APIBase: apiBase}
-	m, err := forgetoken.Import(st, c, host, strings.TrimSpace(in.User), orDefault(name, in.Name), strings.TrimSpace(in.Token), checkRepo, time.Now())
+	m, err := forgetoken.Import(st, c, host, user, name, tok, checkRepo, time.Now())
 	if err != nil {
 		return err
 	}
@@ -188,15 +194,30 @@ func runForgeTokenImport(w io.Writer, file, host, name, checkRepo string, remove
 	if m.Name == "" {
 		fmt.Fprintln(w, "  note:   no token name; revoke on the forge by hand, then `revoke --local-only`")
 	}
-	if removeSource {
+	switch {
+	case file == "-":
+	case removeSource:
 		if err := os.Remove(file); err != nil {
 			return fmt.Errorf("token stored, but removing %s failed: %w", file, err)
 		}
 		fmt.Fprintf(w, "removed %s\n", file)
-	} else {
+	default:
 		fmt.Fprintf(w, "the token is still in %s; delete that file\n", file)
 	}
 	return nil
+}
+
+// parseImportedToken accepts what the forge's web UI hands out: the bare token, alone in the
+// input (surrounding whitespace ignored). Errors never echo the input.
+func parseImportedToken(data []byte) (string, error) {
+	tok := strings.TrimSpace(string(data))
+	if tok == "" {
+		return "", fmt.Errorf("no token found")
+	}
+	if strings.ContainsAny(tok, " \t\r\n{}\":") {
+		return "", fmt.Errorf("expected only the token, as copied from the forge's settings page")
+	}
+	return tok, nil
 }
 
 func forgejoAPIBase(host string) (string, time.Duration, error) {
