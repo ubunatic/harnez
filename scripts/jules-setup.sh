@@ -51,7 +51,8 @@ then curl -fsSL "https://go.dev/dl/go${go_version}.linux-${go_arch}.tar.gz" -o /
 fi
 go version
 # A tool whose go.mod needs a newer Go than the repo's fetches that toolchain itself.
-export GOTOOLCHAIN=auto GOWORK=off
+# GOWORK stays on: uman builds through its tracked go.work (with ../loom), as on the owner's machine.
+export GOTOOLCHAIN=auto
 
 # harnez `make test-pi` needs Node 22; any preinstalled Node 22 (Jules has one via nvm) is kept.
 if test -f go.mod && grep -q '^module ubunatic.com/harnez$' go.mod
@@ -79,7 +80,17 @@ done
 harnez --version
 
 if test -f go.mod
-then printf '==> Go modules of %s\n' "$repo"
+then # A `replace ... => ../<name>` (uman uses ../loom) needs the sibling checkout next to the repo.
+     for dir in $(awk '/=> *\.\.\// { print $NF }' go.mod)
+     do sibling=$(realpath -m "$repo/$dir")
+        if ! test -f "$sibling/go.mod"
+        then printf '==> clone %s for a go.mod replace\n' "$sibling"
+             $sudo_cmd mkdir -p "$sibling"
+             $sudo_cmd chown "$(id -u)" "$sibling"
+             git clone -q --depth 1 "https://github.com/ubunatic/$(basename "$sibling")" "$sibling"
+        fi
+     done
+     printf '==> Go modules of %s\n' "$repo"
      go mod download
 fi
 if test -f Makefile && grep -q '^install:' Makefile
