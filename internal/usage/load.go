@@ -446,10 +446,12 @@ type GPU struct {
 	GTTUsedMiB   float64
 	GTTTotalMiB  float64
 	TempC        float64
+	PowerW       float64
 	HaveMem      bool
 	HaveVRAM     bool
 	HaveGTT      bool
 	HaveTemp     bool
+	HavePower    bool
 
 	// Class is the internal iGPU/dGPU/eGPU kind. It selects the memory rows
 	// and is never shown (issue 765).
@@ -805,6 +807,7 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 				g.HaveTemp = true
 			}
 		}
+		g.PowerW, g.HavePower = readAMDGPUPower(deviceDir)
 
 		g.Class = classifyGPU(isExternalGPU(deviceDir), isAPUGPU(deviceDir))
 		gpus = append(gpus, g)
@@ -813,6 +816,22 @@ func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 		return nil, fmt.Errorf("amdgpu sysfs attributes present but unreadable")
 	}
 	return gpus, nil
+}
+
+// readAMDGPUPower reads the board power from the amdgpu hwmon in microwatts.
+// power1_average is the smoothed value; power1_input (newer kernels and
+// APUs) is the fallback. ok is false when neither file is readable.
+func readAMDGPUPower(deviceDir string) (watts float64, ok bool) {
+	for _, name := range []string{"power1_average", "power1_input"} {
+		matches, err := filepath.Glob(filepath.Join(deviceDir, "hwmon", "hwmon*", name))
+		if err != nil || len(matches) == 0 {
+			continue
+		}
+		if microW, err := readSysfsUint(matches[0]); err == nil {
+			return float64(microW) / 1e6, true
+		}
+	}
+	return 0, false
 }
 
 // readAMDGPUMemory fills g's VRAM/GTT fields. key is the GPU's history key

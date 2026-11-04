@@ -2,6 +2,7 @@ package usage
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"ubunatic.com/harnez/internal/rograph"
@@ -221,10 +222,7 @@ func formatGPULine(g GPU) string {
 	}
 	series = padHistory(series, g.UtilPercent, loadHistoryLen)
 	label := padLoadLabel(fmt.Sprintf("gpu (%s)", g.Name))
-	tempPart := ""
-	if g.HaveTemp {
-		tempPart = fmt.Sprintf(" (%.0f°C)", g.TempC)
-	}
+	tempPart := gpuTempPowerPart(g)
 
 	var chart string
 	mode := mustIndicators().LoadCharts.GPUMode()
@@ -234,6 +232,22 @@ func formatGPULine(g GPU) string {
 		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth, mode))
 	}
 	return fmt.Sprintf("%s %s %s%s", label, chart, watchLoadPercent(g.UtilPercent), tempPart)
+}
+
+// gpuTempPowerPart renders the GPU line's " (NN°C/NNW)" suffix. Each reading
+// appears only when the driver reports it; with neither, the suffix is empty.
+func gpuTempPowerPart(g GPU) string {
+	var parts []string
+	if g.HaveTemp {
+		parts = append(parts, fmt.Sprintf("%.0f°C", g.TempC))
+	}
+	if g.HavePower {
+		parts = append(parts, fmt.Sprintf("%.0fW", g.PowerW))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, "/") + ")"
 }
 
 // formatGPUMemoryLines renders GPU memory as a single "gpu vram/gtt" row

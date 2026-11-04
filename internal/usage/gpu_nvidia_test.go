@@ -52,8 +52,8 @@ func fakeNVIDIAPCIRoot(t *testing.T, nvidia bool) string {
 	return root
 }
 
-const nvidiaTwoGPUOutput = "NVIDIA GeForce RTX 3060, 00000000:0A:00.0, 7, 1200, 12288, 30\n" +
-	"NVIDIA GeForce GTX 1650, 00000000:0B:00.0, [N/A], [N/A], 4096, [N/A]\n"
+const nvidiaTwoGPUOutput = "NVIDIA GeForce RTX 3060, 00000000:0A:00.0, 7, 1200, 12288, 30, 41.27\n" +
+	"NVIDIA GeForce GTX 1650, 00000000:0B:00.0, [N/A], [N/A], 4096, [N/A], [N/A]\n"
 
 func TestParseNVIDIASMI(t *testing.T) {
 	rows, err := parseNVIDIASMI([]byte(nvidiaTwoGPUOutput))
@@ -73,9 +73,12 @@ func TestParseNVIDIASMI(t *testing.T) {
 	if !rtx.GPU.HaveTemp || rtx.GPU.TempC != 30 {
 		t.Errorf("row 0 temp = %v/%v, want 30", rtx.GPU.HaveTemp, rtx.GPU.TempC)
 	}
+	if !rtx.GPU.HavePower || rtx.GPU.PowerW != 41.27 {
+		t.Errorf("row 0 power = %v/%v, want 41.27", rtx.GPU.HavePower, rtx.GPU.PowerW)
+	}
 	// [N/A] fields are absent, not zero: no util, no temperature, no VRAM used.
 	gtx := rows[1].GPU
-	if gtx.HaveTemp || gtx.HaveVRAM {
+	if gtx.HaveTemp || gtx.HaveVRAM || gtx.HavePower {
 		t.Errorf("row 1 with [N/A] fields has HaveTemp=%v HaveVRAM=%v, want both false", gtx.HaveTemp, gtx.HaveVRAM)
 	}
 }
@@ -176,7 +179,7 @@ func TestNVIDIAEGPUIsClassifiedExternal(t *testing.T) {
 	if err := os.Symlink(dev, filepath.Join(root, "0000:0a:00.0")); err != nil {
 		t.Fatal(err)
 	}
-	fakeNVIDIASMI(t, root, []byte("NVIDIA GeForce RTX 3060, 00000000:0A:00.0, 0, 1200, 12288, 30\n"), nil)
+	fakeNVIDIASMI(t, root, []byte("NVIDIA GeForce RTX 3060, 00000000:0A:00.0, 0, 1200, 12288, 30, 41.27\n"), nil)
 
 	gpus := currentNVIDIAGPUs()
 	if len(gpus) != 1 || gpus[0].Class != GPUClassEGPU {
