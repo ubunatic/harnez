@@ -401,6 +401,9 @@ func TestJulesWaitDeadlineEndsARealWait(t *testing.T) {
 	if !strings.Contains(res.Response, "keeps running") {
 		t.Errorf("response = %s", res.Response)
 	}
+	if !res.StillRunning {
+		t.Error("StillRunning = false after the wait ran out, want true (issue 1111)")
+	}
 }
 
 func TestJulesCancelledWaitReportsCancellation(t *testing.T) {
@@ -421,6 +424,9 @@ func TestJulesPollErrors(t *testing.T) {
 		if err != nil || !strings.Contains(res.Response, "pull/9") {
 			t.Fatalf("res = %v err = %v", res, err)
 		}
+		if res.StillRunning {
+			t.Error("StillRunning = true for a completed session")
+		}
 	})
 	t.Run("repeated transient errors stop with a warning", func(t *testing.T) {
 		fake := &fakeJules{states: []julesSession{{}}, getStatus: []int{503, 503, 503, 503}}
@@ -429,7 +435,7 @@ func TestJulesPollErrors(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "3 failed requests") || !strings.Contains(res.Response, "keeps running") {
+		if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "3 failed requests") || !strings.Contains(res.Response, "keeps running") || !res.StillRunning {
 			t.Fatalf("res = %+v", res)
 		}
 	})

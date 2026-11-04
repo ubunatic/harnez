@@ -266,6 +266,9 @@ type TurnResult struct {
 	TokensTurn                 int   `json:"tokens_turn"`
 	TokensCumulative           int   `json:"tokens_cumulative"`
 	DurationMS                 int64 `json:"duration_ms"`
+	// StillRunning reports that the wait ended while the provider session
+	// still runs (Jules); the CLI then exits with exitStillRunning (3).
+	StillRunning bool `json:"still_running,omitempty"`
 }
 
 // KnownModels returns the configured shorthand specifications in stable order.

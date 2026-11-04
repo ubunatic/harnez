@@ -712,6 +712,13 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 	}
 	var last julesSession
 	answered := false
+	// stillRunning ends the wait while the session goes on; StillRunning
+	// lets the CLI exit 3, like harnez pr wait (issue 1111).
+	stillRunning := func(warns []string) *TurnResult {
+		r := result(julesStillRunning(id, last, spec, reply.sent && !answered), warns)
+		r.StillRunning = true
+		return r
+	}
 	failures, prPolls := 0, 0
 	for {
 		var session julesSession
@@ -721,7 +728,7 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 		case ctx.Err() != nil:
 			return nil, ctx.Err()
 		case waitCtx.Err() != nil:
-			return result(julesStillRunning(id, last, spec, reply.sent && !answered), warnings), nil
+			return stillRunning(warnings), nil
 		case err == nil:
 			failures = 0
 			last = session
@@ -731,7 +738,7 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 			failures++
 			if failures >= spec.MaxPollErrors {
 				warnings = append(warnings, fmt.Sprintf("stopped polling after %d failed requests: %v", failures, err))
-				return result(julesStillRunning(id, last, spec, reply.sent && !answered), warnings), nil
+				return stillRunning(warnings), nil
 			}
 		}
 		if err == nil {
@@ -773,7 +780,7 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
-			return result(julesStillRunning(id, last, spec, reply.sent && !answered), warnings), nil
+			return stillRunning(warnings), nil
 		}
 	}
 }

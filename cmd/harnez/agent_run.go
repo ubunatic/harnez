@@ -650,17 +650,17 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if streaming {
 		ts.finish(r)
 		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
-		return nil
+		return stillRunningExit(cmd, r, nil)
 	}
 	tl.finishTurn(r, id, out.ReconnectCmd)
 	if req.JSON {
 		err := json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
-		return err
+		return stillRunningExit(cmd, r, err)
 	}
 	err = printAgentMessages(cmd, r.Messages, r.Response)
 	warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
-	return err
+	return stillRunningExit(cmd, r, err)
 }
 
 // runResume runs one more turn on an existing session.
@@ -1000,7 +1000,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	if streaming {
 		ts.finish(r)
 		warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
-		return nil
+		return stillRunningExit(cmd, r, nil)
 	}
 	if compacted {
 		var ack string
@@ -1015,7 +1015,20 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	}
 	err = writeAgentOutput(cmd, req.JSON, out)
 	warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
-	return err
+	return stillRunningExit(cmd, r, err)
+}
+
+// exitStillRunning is the exit code for "the wait ended, the session still
+// runs", the same code harnez pr wait uses for "still open at the timeout".
+const exitStillRunning = 3
+
+// stillRunningExit keeps err, and otherwise turns a still-running turn
+// result into a silent exit 3 after its output was printed (issue 1111).
+func stillRunningExit(cmd *cobra.Command, r *subagent.TurnResult, err error) error {
+	if err != nil || r == nil || !r.StillRunning {
+		return err
+	}
+	return silenceIfExitCode(cmd, &exitCodeError{Code: exitStillRunning})
 }
 
 func writeAgentOutput(cmd *cobra.Command, jsonOut bool, v agentOutput) error {

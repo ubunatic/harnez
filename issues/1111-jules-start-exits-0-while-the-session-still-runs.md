@@ -1,6 +1,6 @@
 # 1111 — Jules start exits 0 while the session still runs
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
@@ -24,3 +24,10 @@ Reported 2026-11-03 by the voxi, lmcoder and loom sessions.
 Jules audit (session 6487310379501879876, against 70da579e, `reports/jules/1111.md`): still valid, references
 checked. All three wait-timeout paths return the "stopped waiting" text with a nil error
 (`internal/subagent/jules.go:724`, `:734`, `:776`; text built at `:836`). Still needs the owner's exit-code pick.
+
+## Resolution 2026-11-04
+Owner picked exit 3 (same as `harnez pr wait` "still open at the timeout"). `TurnResult.StillRunning`
+is set on all three still-running paths in `JulesDriver.track`; `stillRunningExit`
+(`cmd/harnez/agent_run.go`) makes start and resume exit 3 silently after printing, in text, JSON and
+streaming modes. Tests: `TestJulesWaitDeadlineEndsARealWait`, `TestJulesPollErrors`, `TestStillRunningExit`.
+The jules command doc (`docs/commands/jules.md`) now says exit 3 means "keep waiting".
