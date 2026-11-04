@@ -32,8 +32,10 @@ func Create(spec Spec, st Store, c Client, host string, l Login, now time.Time) 
 }
 
 // Rotate creates and stores a new token, then revokes the old one by id. A failed revoke keeps
-// the new token and reports the old name so it can be deleted on the forge by hand.
-func Rotate(spec Spec, st Store, c Client, host string, l Login, now time.Time) (Result, error) {
+// the new token and reports the old name so it can be deleted on the forge by hand. A 2FA code
+// is single-use (Forgejo rejects a replayed TOTP), so with l.OTP set, freshOTP supplies a new
+// code for the revoke.
+func Rotate(spec Spec, st Store, c Client, host string, l Login, now time.Time, freshOTP func() (string, error)) (Result, error) {
 	old, ok, err := st.Meta(host)
 	if err != nil {
 		return Result{}, err
@@ -46,6 +48,11 @@ func Rotate(spec Spec, st Store, c Client, host string, l Login, now time.Time) 
 		return Result{}, err
 	}
 	res := Result{Meta: m, OldName: old.Name}
+	if l.OTP != "" && freshOTP != nil {
+		if l.OTP, res.OldErr = freshOTP(); res.OldErr != nil {
+			return res, nil
+		}
+	}
 	res.OldErr = c.Delete(l, old.ID)
 	res.OldRevoked = res.OldErr == nil
 	return res, nil
@@ -80,7 +87,8 @@ func createAndSave(spec Spec, st Store, c Client, host string, l Login, now time
 	}
 	saved, err := st.Save(m, tok.Secret)
 	if err != nil {
-		// The token exists on the forge but could not be stored; try to take it back.
+		// The token exists on the forge but could not be stored; try to take it back. With 2FA
+		// the code was just used, so this revoke likely fails and the error names the token.
 		if derr := c.Delete(l, tok.ID); derr != nil {
 			return Meta{}, fmt.Errorf("store token: %w; token %q is still live on %s, delete it there", err, name, host)
 		}

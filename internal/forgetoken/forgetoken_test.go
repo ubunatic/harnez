@@ -3,6 +3,7 @@ package forgetoken
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -40,6 +41,7 @@ type fakeForge struct {
 	nextID  int64
 	live    map[int64]string
 	lastOTP string
+	usedOTP map[string]bool
 	created []map[string]any
 	failDel bool
 }
@@ -52,6 +54,14 @@ func (f *fakeForge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f.lastOTP = r.Header.Get("X-Forgejo-OTP")
+	// Like Forgejo, reject a replayed TOTP code.
+	if f.lastOTP != "" {
+		if f.usedOTP[f.lastOTP] {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		f.usedOTP[f.lastOTP] = true
+	}
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/users/uwe/tokens":
 		var body map[string]any
@@ -78,17 +88,42 @@ func (f *fakeForge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func setup(t *testing.T) (*fakeForge, Client, Store, Spec) {
 	t.Helper()
-	f := &fakeForge{t: t, live: map[int64]string{}}
+	f := &fakeForge{t: t, live: map[int64]string{}, usedOTP: map[string]bool{}}
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
 	sp, err := LoadSpec()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return f, Client{HTTP: srv.Client(), APIBase: srv.URL + "/api/v1"}, Store{Dir: filepath.Join(t.TempDir(), "tok")}, sp
+	return f, Client{HTTP: NewHTTPClient(5 * time.Second), APIBase: srv.URL + "/api/v1"}, Store{Dir: filepath.Join(t.TempDir(), "tok")}, sp
 }
 
 var login = Login{User: "uwe", Password: "pw", OTP: "123456"}
+
+// otpSeq returns fresh 2FA codes 000001, 000002, ... and the login using the first.
+func otpSeq() (Login, func() (string, error)) {
+	n := 0
+	next := func() (string, error) { n++; return fmt.Sprintf("%06d", n), nil }
+	first, _ := next()
+	return Login{User: "uwe", Password: "pw", OTP: first}, next
+}
+
+func TestClientRefusesRedirects(t *testing.T) {
+	var hit bool
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit = true }))
+	t.Cleanup(other.Close)
+	redir := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+r.URL.Path, http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(redir.Close)
+	c := Client{HTTP: NewHTTPClient(5 * time.Second), APIBase: redir.URL}
+	if _, err := c.Create(login, "n", []string{"read:issue"}); err == nil || !strings.Contains(err.Error(), "HTTP 307") {
+		t.Fatalf("err = %v", err)
+	}
+	if hit {
+		t.Fatal("basic auth followed a redirect")
+	}
+}
 
 func TestCreateStoresFileTokenWithReadScopes(t *testing.T) {
 	f, c, st, sp := setup(t)
@@ -145,19 +180,29 @@ func TestRotateRevokesOldTokenByID(t *testing.T) {
 	if _, err := Create(sp, st, c, "codeberg.org", login, t0); err != nil {
 		t.Fatal(err)
 	}
-	res, err := Rotate(sp, st, c, "codeberg.org", login, t0.Add(time.Hour))
+	l, next := otpSeq()
+	res, err := Rotate(sp, st, c, "codeberg.org", l, t0.Add(time.Hour), next)
 	if err != nil || !res.OldRevoked {
 		t.Fatalf("rotate: %v %+v", err, res)
 	}
 	if _, live := f.live[1]; live || len(f.live) != 1 || st.Secret("codeberg.org") != "secret2" {
 		t.Fatalf("live %v secret %q", f.live, st.Secret("codeberg.org"))
 	}
+	// Without a fresh code the replayed one is rejected and the old token stays live.
+	l, _ = otpSeq()
+	l.OTP = "999999"
+	res, err = Rotate(sp, st, c, "codeberg.org", l, t0.Add(90*time.Minute), nil)
+	if err != nil || res.OldRevoked {
+		t.Fatalf("replayed 2FA code must fail the revoke: %v %+v", err, res)
+	}
 	f.failDel = true
-	res, err = Rotate(sp, st, c, "codeberg.org", login, t0.Add(2*time.Hour))
-	if err != nil || res.OldRevoked || res.OldName != "harnez-read-codeberg.org-20261104-1000" {
+	l, next = otpSeq()
+	l.OTP, next = "a1", func() (string, error) { return "a2", nil }
+	res, err = Rotate(sp, st, c, "codeberg.org", l, t0.Add(2*time.Hour), next)
+	if err != nil || res.OldRevoked || res.OldName != "harnez-read-codeberg.org-20261104-1030" {
 		t.Fatalf("failed revoke must keep new token and name the old one: %v %+v", err, res)
 	}
-	if st.Secret("codeberg.org") != "secret3" {
+	if st.Secret("codeberg.org") != "secret4" {
 		t.Fatal("new token not stored")
 	}
 }
@@ -168,14 +213,14 @@ func TestRevoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.failDel = true
-	if _, err := Revoke(st, c, "codeberg.org", login, false); err == nil {
+	if _, err := Revoke(st, c, "codeberg.org", Login{User: "uwe", Password: "pw", OTP: "r1"}, false); err == nil {
 		t.Fatal("remote failure must fail revoke")
 	}
 	if st.Secret("codeberg.org") == "" {
 		t.Fatal("failed remote revoke must keep the local token")
 	}
 	f.failDel = false
-	if _, err := Revoke(st, c, "codeberg.org", login, false); err != nil {
+	if _, err := Revoke(st, c, "codeberg.org", Login{User: "uwe", Password: "pw", OTP: "r2"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.live) != 0 || st.Secret("codeberg.org") != "" {
@@ -227,7 +272,8 @@ func TestKeyringPreferredAndFallsBackToFile(t *testing.T) {
 		t.Fatal("lookup through keyring")
 	}
 	kr.fail = true
-	res, err = Rotate(sp, st, c, "codeberg.org", login, time.Now().Add(time.Minute))
+	l, next := otpSeq()
+	res, err = Rotate(sp, st, c, "codeberg.org", l, time.Now().Add(time.Minute), next)
 	if err != nil || res.Meta.Store != "file" || st.Secret("codeberg.org") != "secret2" {
 		t.Fatalf("fallback: %v %+v", err, res.Meta)
 	}

@@ -15,6 +15,7 @@ import (
 
 // Spec holds the settings from spec/forge_token.yaml.
 type Spec struct {
+	DefaultHost    string   `yaml:"default_host"`
 	Scopes         []string `yaml:"scopes"`
 	NamePrefix     string   `yaml:"name_prefix"`
 	KeyringService string   `yaml:"keyring_service"`

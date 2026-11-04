@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Login is the basic-auth identity for the token endpoints. Forgejo's /users/{user}/tokens
@@ -31,6 +32,14 @@ type Created struct {
 type Client struct {
 	HTTP    *http.Client
 	APIBase string
+}
+
+// NewHTTPClient returns a client that never follows redirects, so the basic-auth header cannot
+// travel to another URL.
+func NewHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
 }
 
 func (c Client) do(method, path string, l Login, body any) ([]byte, int, error) {

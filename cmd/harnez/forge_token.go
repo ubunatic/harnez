@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -25,34 +24,46 @@ func newForgeCmd() *cobra.Command {
 	return cmd
 }
 
+// forgeTokenEnv is one forge token run: settings, store, client and the terminal prompter.
+type forgeTokenEnv struct {
+	spec   forgetoken.Spec
+	store  forgetoken.Store
+	client forgetoken.Client
+	host   string
+	login  forgetoken.Login
+	tty    *ttyPrompter
+}
+
 func newForgeTokenCmd() *cobra.Command {
 	var host, user string
 	var localOnly bool
 	cmd := &cobra.Command{
 		Use:   "token",
 		Short: "Create, rotate, revoke or show harnez's read-only Forgejo token",
-		Long: `Manage one read-only Forgejo access token per forge host (scopes and name prefix
-in spec/forge_token.yaml). harnez reads the stored token before CODEBERG_TOKEN/FORGEJO_TOKEN,
-so pr wait and the forge tracker mode (find issues, issues show) can read private repos.
+		Long: `Manage one read-only Forgejo access token per forge host (scopes, name prefix and
+default host in spec/forge_token.yaml). harnez reads the stored token before
+CODEBERG_TOKEN/FORGEJO_TOKEN, so pr wait and the forge tracker mode (find issues,
+issues show) can read private repos.
 
 Forgejo creates and deletes tokens only with your password (basic auth), never with a token.
 create, rotate and revoke prompt for the password, and for a 2FA code, on the terminal; there
-is no flag or env var for them, and neither is ever printed or logged.
+is no flag or env var for them, and neither is ever printed or logged. A 2FA code is
+single-use, so rotate asks for a second code before it revokes the old token.
 
 The token goes into the OS keyring (secret-tool) when one works, else into a 0600 file under
 $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 	}
-	cmd.PersistentFlags().StringVar(&host, "host", "codeberg.org", "forge host from spec/pr.yaml")
+	cmd.PersistentFlags().StringVar(&host, "host", "", "forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)")
 
 	create := &cobra.Command{
 		Use: "create", Short: "Create and store a new read-only token", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runForgeToken(cmd, host, user, func(sp forgetoken.Spec, st forgetoken.Store, c forgetoken.Client, l forgetoken.Login) error {
-				res, err := forgetoken.Create(sp, st, c, host, l, time.Now())
+			return runForgeToken(host, user, false, func(e forgeTokenEnv) error {
+				res, err := forgetoken.Create(e.spec, e.store, e.client, e.host, e.login, time.Now())
 				if err != nil {
 					return err
 				}
-				printTokenMeta(cmd.OutOrStdout(), "created", res.Meta, st)
+				printTokenMeta(cmd.OutOrStdout(), "created", res.Meta, e.store)
 				return nil
 			})
 		},
@@ -62,12 +73,13 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 	rotate := &cobra.Command{
 		Use: "rotate", Short: "Replace the stored token with a new one and revoke the old one", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runForgeToken(cmd, host, "", func(sp forgetoken.Spec, st forgetoken.Store, c forgetoken.Client, l forgetoken.Login) error {
-				res, err := forgetoken.Rotate(sp, st, c, host, l, time.Now())
+			return runForgeToken(host, "", true, func(e forgeTokenEnv) error {
+				fresh := func() (string, error) { return e.tty.line("Next 2FA code, to revoke the old token: ") }
+				res, err := forgetoken.Rotate(e.spec, e.store, e.client, e.host, e.login, time.Now(), fresh)
 				if err != nil {
 					return err
 				}
-				printTokenMeta(cmd.OutOrStdout(), "rotated", res.Meta, st)
+				printTokenMeta(cmd.OutOrStdout(), "rotated", res.Meta, e.store)
 				if !res.OldRevoked {
 					return fmt.Errorf("new token stored, but revoking the old token %q failed: %v; delete it in the forge's settings", res.OldName, res.OldErr)
 				}
@@ -81,23 +93,24 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 		Use: "revoke", Short: "Revoke the stored token on the forge and forget it locally", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if localOnly {
-				_, st, err := forgeTokenStore()
+				sp, st, err := forgeTokenStore()
 				if err != nil {
 					return err
 				}
-				m, err := forgetoken.Revoke(st, forgetoken.Client{}, host, forgetoken.Login{}, true)
+				h := orDefault(host, sp.DefaultHost)
+				m, err := forgetoken.Revoke(st, forgetoken.Client{}, h, forgetoken.Login{}, true)
 				if err != nil {
 					return err
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "forgot %s locally; it is still live on %s until you delete it there\n", m.Name, host)
+				fmt.Fprintf(cmd.OutOrStdout(), "forgot %s locally; it is still live on %s until you delete it there\n", m.Name, h)
 				return nil
 			}
-			return runForgeToken(cmd, host, "", func(_ forgetoken.Spec, st forgetoken.Store, c forgetoken.Client, l forgetoken.Login) error {
-				m, err := forgetoken.Revoke(st, c, host, l, false)
+			return runForgeToken(host, "", true, func(e forgeTokenEnv) error {
+				m, err := forgetoken.Revoke(e.store, e.client, e.host, e.login, false)
 				if err != nil {
 					return err
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "revoked %s on %s and removed it locally\n", m.Name, host)
+				fmt.Fprintf(cmd.OutOrStdout(), "revoked %s on %s and removed it locally\n", m.Name, e.host)
 				return nil
 			})
 		},
@@ -107,28 +120,22 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 	status := &cobra.Command{
 		Use: "status", Short: "Show the stored token's name, scopes and store (never the secret)", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, st, err := forgeTokenStore()
+			sp, st, err := forgeTokenStore()
 			if err != nil {
 				return err
 			}
-			m, ok, err := st.Meta(host)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				fmt.Fprintf(cmd.OutOrStdout(), "no token stored for %s\n", host)
-				return nil
-			}
-			state := "stored"
-			if st.Secret(host) == "" {
-				state = "MISSING (metadata present, secret unreadable)"
-			}
-			printTokenMeta(cmd.OutOrStdout(), state, m, st)
-			return nil
+			return printTokenStatus(cmd.OutOrStdout(), st, orDefault(host, sp.DefaultHost))
 		},
 	}
 	cmd.AddCommand(create, rotate, revoke, status)
 	return cmd
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }
 
 func forgeTokenStore() (forgetoken.Spec, forgetoken.Store, error) {
@@ -140,6 +147,23 @@ func forgeTokenStore() (forgetoken.Spec, forgetoken.Store, error) {
 	return sp, st, err
 }
 
+func printTokenStatus(w io.Writer, st forgetoken.Store, host string) error {
+	m, ok, err := st.Meta(host)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		fmt.Fprintf(w, "no token stored for %s\n", host)
+		return nil
+	}
+	state := "stored"
+	if st.Secret(host) == "" {
+		state = "MISSING (metadata present, secret unreadable)"
+	}
+	printTokenMeta(w, state, m, st)
+	return nil
+}
+
 func printTokenMeta(w io.Writer, state string, m forgetoken.Meta, st forgetoken.Store) {
 	where := "keyring (secret-tool)"
 	if m.Store == "file" {
@@ -149,9 +173,15 @@ func printTokenMeta(w io.Writer, state string, m forgetoken.Meta, st forgetoken.
 		state, m.Name, m.User, m.Host, strings.Join(m.Scopes, ", "), where, m.Created.Format(time.RFC3339))
 }
 
-// runForgeToken resolves the forge's API base, opens the store, prompts for the login on the
-// terminal and runs op. User comes from the flag, else the stored metadata, else a prompt.
-func runForgeToken(cmd *cobra.Command, host, user string, op func(forgetoken.Spec, forgetoken.Store, forgetoken.Client, forgetoken.Login) error) error {
+// runForgeToken resolves the forge's API base, opens the store, checks that a token is stored
+// when needStored, prompts for the login on the terminal and runs op. User comes from the flag,
+// else the stored metadata, else a prompt.
+func runForgeToken(host, user string, needStored bool, op func(forgeTokenEnv) error) error {
+	sp, st, err := forgeTokenStore()
+	if err != nil {
+		return err
+	}
+	host = orDefault(host, sp.DefaultHost)
 	prSpec, err := prwait.LoadSpec()
 	if err != nil {
 		return err
@@ -165,56 +195,84 @@ func runForgeToken(cmd *cobra.Command, host, user string, op func(forgetoken.Spe
 	if apiBase == "" {
 		return fmt.Errorf("%s is not a Forgejo host in spec/pr.yaml", host)
 	}
-	sp, st, err := forgeTokenStore()
+	m, stored, err := st.Meta(host)
 	if err != nil {
 		return err
 	}
-	if user == "" {
-		if m, ok, _ := st.Meta(host); ok {
-			user = m.User
-		}
+	if needStored && !stored {
+		return fmt.Errorf("no token for %s is stored; use `harnez forge token create`", host)
 	}
-	l, err := promptLogin(cmd.ErrOrStderr(), host, user)
+	if user == "" && stored {
+		user = m.User
+	}
+	tty, err := openTTY(host)
 	if err != nil {
 		return err
 	}
-	c := forgetoken.Client{HTTP: &http.Client{Timeout: prSpec.RequestTimeout}, APIBase: apiBase}
-	return op(sp, st, c, l)
+	defer tty.close()
+	l, err := tty.login(host, user)
+	if err != nil {
+		return err
+	}
+	c := forgetoken.Client{HTTP: forgetoken.NewHTTPClient(prSpec.RequestTimeout), APIBase: apiBase}
+	return op(forgeTokenEnv{spec: sp, store: st, client: c, host: host, login: l, tty: tty})
 }
 
-// promptLogin reads user, password (no echo) and an optional 2FA code from /dev/tty.
-func promptLogin(w io.Writer, host, user string) (forgetoken.Login, error) {
-	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
-	if err != nil || !term.IsTerminal(int(tty.Fd())) {
-		return forgetoken.Login{}, fmt.Errorf("a terminal is needed to enter the %s password; run this command yourself", host)
+// ttyPrompter reads answers from /dev/tty. Lines go through one bufio.Reader; the password is
+// read with term.ReadPassword on the raw fd. That is safe because a canonical-mode terminal
+// returns at most one line per read, so the reader never buffers past the line it was asked for.
+type ttyPrompter struct {
+	f  *os.File
+	rd *bufio.Reader
+}
+
+func openTTY(host string) (*ttyPrompter, error) {
+	f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return nil, fmt.Errorf("a terminal is needed to enter the %s password; run this command yourself", host)
 	}
-	defer tty.Close()
-	rd := bufio.NewReader(tty)
+	if !term.IsTerminal(int(f.Fd())) {
+		f.Close()
+		return nil, fmt.Errorf("a terminal is needed to enter the %s password; run this command yourself", host)
+	}
+	return &ttyPrompter{f: f, rd: bufio.NewReader(f)}, nil
+}
+
+func (t *ttyPrompter) close() { _ = t.f.Close() }
+
+func (t *ttyPrompter) line(prompt string) (string, error) {
+	fmt.Fprint(t.f, prompt)
+	s, err := t.rd.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	return strings.TrimSpace(s), nil
+}
+
+// login asks for user (when empty), password without echo and an optional 2FA code.
+func (t *ttyPrompter) login(host, user string) (forgetoken.Login, error) {
 	if user == "" {
-		fmt.Fprintf(tty, "%s username: ", host)
-		line, err := rd.ReadString('\n')
+		u, err := t.line(host + " username: ")
 		if err != nil {
 			return forgetoken.Login{}, err
 		}
-		user = strings.TrimSpace(line)
+		user = u
 	}
 	if user == "" {
 		return forgetoken.Login{}, fmt.Errorf("no username given")
 	}
-	fmt.Fprintf(tty, "%s password for %s (not shown): ", host, user)
-	pw, err := term.ReadPassword(int(tty.Fd()))
-	fmt.Fprintln(tty)
+	fmt.Fprintf(t.f, "%s password for %s (not shown): ", host, user)
+	pw, err := term.ReadPassword(int(t.f.Fd()))
+	fmt.Fprintln(t.f)
 	if err != nil {
 		return forgetoken.Login{}, err
 	}
 	if len(pw) == 0 {
 		return forgetoken.Login{}, fmt.Errorf("no password given")
 	}
-	fmt.Fprint(tty, "2FA code (empty if 2FA is off): ")
-	otp, err := rd.ReadString('\n')
-	if err != nil && err != io.EOF {
+	otp, err := t.line("2FA code (empty if 2FA is off): ")
+	if err != nil {
 		return forgetoken.Login{}, err
 	}
-	_ = w
-	return forgetoken.Login{User: user, Password: string(pw), OTP: strings.TrimSpace(otp)}, nil
+	return forgetoken.Login{User: user, Password: string(pw), OTP: otp}, nil
 }

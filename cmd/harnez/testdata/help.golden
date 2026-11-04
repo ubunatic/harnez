@@ -1455,13 +1455,15 @@ Flags:
 Use "harnez forge [command] --help" for more information about a command.
 
 === harnez forge token
-Manage one read-only Forgejo access token per forge host (scopes and name prefix
-in spec/forge_token.yaml). harnez reads the stored token before CODEBERG_TOKEN/FORGEJO_TOKEN,
-so pr wait and the forge tracker mode (find issues, issues show) can read private repos.
+Manage one read-only Forgejo access token per forge host (scopes, name prefix and
+default host in spec/forge_token.yaml). harnez reads the stored token before
+CODEBERG_TOKEN/FORGEJO_TOKEN, so pr wait and the forge tracker mode (find issues,
+issues show) can read private repos.
 
 Forgejo creates and deletes tokens only with your password (basic auth), never with a token.
 create, rotate and revoke prompt for the password, and for a 2FA code, on the terminal; there
-is no flag or env var for them, and neither is ever printed or logged.
+is no flag or env var for them, and neither is ever printed or logged. A 2FA code is
+single-use, so rotate asks for a second code before it revokes the old token.
 
 The token goes into the OS keyring (secret-tool) when one works, else into a 0600 file under
 $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.
@@ -1477,7 +1479,7 @@ Available Commands:
 
 Flags:
   -h, --help          help for token
-      --host string   forge host from spec/pr.yaml (default "codeberg.org")
+      --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
 
 Use "harnez forge token [command] --help" for more information about a command.
 
@@ -1492,7 +1494,7 @@ Flags:
       --user string   forge username (prompted when empty)
 
 Global Flags:
-      --host string   forge host from spec/pr.yaml (default "codeberg.org")
+      --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
 
 === harnez forge token revoke
 Revoke the stored token on the forge and forget it locally
@@ -1505,7 +1507,7 @@ Flags:
       --local-only   only forget the token locally; no password needed
 
 Global Flags:
-      --host string   forge host from spec/pr.yaml (default "codeberg.org")
+      --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
 
 === harnez forge token rotate
 Replace the stored token with a new one and revoke the old one
@@ -1517,7 +1519,7 @@ Flags:
   -h, --help   help for rotate
 
 Global Flags:
-      --host string   forge host from spec/pr.yaml (default "codeberg.org")
+      --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
 
 === harnez forge token status
 Show the stored token's name, scopes and store (never the secret)
@@ -1529,7 +1531,7 @@ Flags:
   -h, --help   help for status
 
 Global Flags:
-      --host string   forge host from spec/pr.yaml (default "codeberg.org")
+      --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
 
 === harnez guard
 Inspect and verify decide-based rule enforcement and safety guardrails.
