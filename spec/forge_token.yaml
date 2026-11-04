@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=schemas/forge_token.schema.json
+# Settings for `harnez forge token`: the scopes of the read-only Forgejo token it creates, the
+# token name prefix (name = <prefix>-<host>-<YYYYMMDD>), the keyring service for secret-tool,
+# and the fallback directory under the harnez config dir (files are 0600). Issue 1118.
+scopes: [read:repository, read:issue]
+name_prefix: harnez-read
+keyring_service: harnez-forge-token
+token_dir: forge-tokens

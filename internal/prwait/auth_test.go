@@ -35,6 +35,28 @@ func TestTokenSourceOrder(t *testing.T) {
 	}
 }
 
+// The token stored by `harnez forge token create` wins over env vars, for Forgejo only (1118).
+func TestTokenSourceStoredFirst(t *testing.T) {
+	stored := map[string]string{"codeberg.org": "stored-tok"}
+	ts := TokenSource{
+		Getenv:  func(k string) string { return "env-" + k },
+		GHToken: func() (string, error) { return "", errors.New("unused") },
+		Stored:  func(h string) string { return stored[h] },
+	}
+	cb := Forge{Host: "codeberg.org", Kind: "forgejo", TokenEnv: []string{"CODEBERG_TOKEN"}}
+	if got := ts.For(cb); got != "stored-tok" {
+		t.Errorf("forgejo token = %q, want the stored token", got)
+	}
+	delete(stored, "codeberg.org")
+	if got := ts.For(cb); got != "env-CODEBERG_TOKEN" {
+		t.Errorf("forgejo token = %q, want the env fallback", got)
+	}
+	stored["github.com"] = "nope"
+	if got := ts.For(Forge{Host: "github.com", Kind: "github", TokenEnv: []string{"GITHUB_TOKEN"}}); got != "env-GITHUB_TOKEN" {
+		t.Errorf("github token = %q, stored tokens are Forgejo-only", got)
+	}
+}
+
 func TestTokenSourceNoneIsEmpty(t *testing.T) {
 	ts := TokenSource{
 		Getenv:  func(string) string { return "" },
