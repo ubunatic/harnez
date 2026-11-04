@@ -13,3 +13,11 @@
 ## Problem
 
 Reported by the taia session (2026-11-03): `harnez agent selftest` refuses to run from a developer role, so a worker cannot see the real step format it should follow. Allow a read-only form (e.g. print the steps) for developer roles, or explain in the refusal how to get it. Related: 1012, 1008.
+
+## Audit 2026-11-04
+Jules audit (session 10604890370916608907, against 70da579e, `reports/jules/1107.md`): references hold;
+Jules ran `HARNEZ_AGENT_ROLE=developer go run ./cmd/harnez agent selftest` and got the leaf-worker
+refusal. Cause: `guardLeafRole` (`cmd/harnez/agent_run.go:1229-1239`) allows only list, status, models,
+help, agent and send for leaf roles. Jules said "partly done", but nothing of the fix exists: still valid.
+Jules's next step (add `selftest` to that allow list) is too broad, since selftest steps may start
+agents; keep the ticket's read-only form (print the steps) or a refusal that says how to get them.

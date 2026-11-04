@@ -30,3 +30,11 @@ by hand in five places.
 2. If the extras are harnez's own resources, fix apply's ownership check; otherwise ask the user
    before marking the dirs managed.
 3. Verify: `harnez apply` twice, no docup `kept` line, no user content lost.
+
+## Audit 2026-11-04
+Jules audit (session 572906474584759079, against 70da579e, `reports/jules/1115.md`): still valid, 3 of 3
+references hold. Answers the first open question: yes, the bundled docup skill ships
+`references/DocupTesting.md` and `references/DocupArch.md` itself (`config.yaml:442` `resources:`),
+while `skillAdoptionStatus` accepts only a lone `SKILL.md` (`internal/claude/skill_ownership.go:16`).
+So step 2's fix applies: let the check accept the skill's own listed resource targets. The Codex
+copy's local edits (second question) still need the diff in step 1 before anything is overwritten.
