@@ -4,7 +4,8 @@
 # the Jules environment setup of each repo, or run it from a repo root.
 # Installs apt tools (as Containerfile.test, the CI source of truth), Go (the repo's go.mod
 # version, else the latest), then harnez, loom, lmcoder and gokay via go install @latest, linked
-# into /usr/local/bin, and finally the repo's own `make install` if it has one.
+# into /usr/local/bin, and finally the repo's own `make install` if it has one (a failure only
+# warns; SKIP_MAKE_INSTALL=1 skips it, e.g. for voxi, whose install is a desktop install).
 # Idempotent: tools already at the right version are kept.
 set -euo pipefail
 
@@ -93,9 +94,14 @@ then # A `replace ... => ../<name>` (uman uses ../loom) needs the sibling checko
      printf '==> Go modules of %s\n' "$repo"
      go mod download
 fi
-if test -f Makefile && grep -q '^install:' Makefile
+# Some repos' install is a desktop install (voxi: systemd units, speech tools, X keyboard libs),
+# which fails in a cloud VM. The tools above are in place by now, so a failure only warns.
+# SKIP_MAKE_INSTALL=1 skips it.
+if test "${SKIP_MAKE_INSTALL:-0}" != 1 && test -f Makefile && grep -q '^install:' Makefile
 then printf '==> make install in %s\n' "$repo"
-     make install
+     if ! make install
+     then printf 'WARNING: make install failed in %s; the tools above are installed, the repo build is not\n' "$repo" >&2
+     fi
 fi
 
 printf '==> done\n'
