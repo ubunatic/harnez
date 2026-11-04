@@ -47,6 +47,13 @@ func TestReadAMDGPUPower(t *testing.T) {
 		t.Errorf("input fallback: got %v/%v, want 15.383", w, ok)
 	}
 
+	garbage := t.TempDir()
+	write(t, garbage, "power1_average", "not a number")
+	write(t, garbage, "power1_input", "15383000")
+	if w, ok := readAMDGPUPower(garbage); !ok || w != 15.383 {
+		t.Errorf("garbage average fallback: got %v/%v, want 15.383", w, ok)
+	}
+
 	if _, ok := readAMDGPUPower(t.TempDir()); ok {
 		t.Error("no hwmon power files: ok = true, want false")
 	}
