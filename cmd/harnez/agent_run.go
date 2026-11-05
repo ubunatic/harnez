@@ -248,8 +248,8 @@ func workerSelection(sess *subagent.Session, spec string) (subagent.ModelSelecti
 	return subagent.ModelSelection{Model: model, Trait: sess.ModelAlias}, nil
 }
 
-func checkResumeModel(role, spec string, sess *subagent.Session, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) error {
-	selection, err := selectStartSelection(role, spec, false, availability, stderr)
+func checkResumeModel(role, spec string, sess *subagent.Session, override bool, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) error {
+	selection, err := selectStartSelection(role, spec, override, availability, stderr)
 	if err != nil || selection.Model.Provider != sess.Provider || selection.Model.Name != sess.Model || selection.Model.Tier != sess.Tier {
 		return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", spec, sess.Name, sess.Provider, sess.Model, sess.Tier)
 	}
@@ -781,7 +781,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return err
 	}
 	if req.ModelSpec != "" {
-		if err := checkResumeModel(role, req.ModelSpec, sess, d.availability, cmd.ErrOrStderr()); err != nil {
+		if err := checkResumeModel(role, req.ModelSpec, sess, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr()); err != nil {
 			return err
 		}
 	}

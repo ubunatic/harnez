@@ -27,7 +27,8 @@ type interactiveStartRequest struct {
 }
 
 type interactiveResumeRequest struct {
-	Name, Prompt, Dir string
+	Name, Prompt, Dir   string
+	AllowExhaustedQuota bool
 }
 
 func validateInteractiveFlags(cmd *cobra.Command, detached, jsonOut bool, stream string, timeout time.Duration, worker bool) error {
@@ -140,6 +141,9 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 	}
 	if !canManageTarget(d.parent(), sess) {
 		return fmt.Errorf("session %q is outside caller lineage", sess.ID)
+	}
+	if err := rejectBlockedSessionModel(sess, req.AllowExhaustedQuota, nil); err != nil {
+		return err
 	}
 	if err := warnDisabledSessionModel(cmd, sess, d.modelEnabled); err != nil {
 		return err

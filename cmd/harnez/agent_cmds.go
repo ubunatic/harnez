@@ -355,7 +355,7 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 			if err := validateInteractiveFlags(cmd, false, ac.jsonOut, ac.streamMode, ac.agentTimeout, resumeWorkerID != ""); err != nil {
 				return err
 			}
-			return runInteractiveResume(cmd, interactiveDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir}, interactiveResumeRequest{Name: ac.name, Prompt: prompt, Dir: ac.workDir})
+			return runInteractiveResume(cmd, interactiveDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir}, interactiveResumeRequest{Name: ac.name, Prompt: prompt, Dir: ac.workDir, AllowExhaustedQuota: ac.allowExhaustedQuota})
 		}
 		if resumeWorkerID != "" {
 			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: true, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota}, ac.storeDir)

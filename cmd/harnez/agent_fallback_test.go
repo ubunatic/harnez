@@ -108,11 +108,11 @@ func TestResumeTraitFallsBackToSessionModel(t *testing.T) {
 		}
 		return usage.ProviderQuotaAvailability{State: "available"}
 	}
-	if err := checkResumeModel("developer", "smart", session, availability, &notice); err != nil || !strings.Contains(notice.String(), "sol:med: quota exhausted") {
+	if err := checkResumeModel("developer", "smart", session, false, availability, &notice); err != nil || !strings.Contains(notice.String(), "sol:med: quota exhausted") {
 		t.Fatalf("notice=%q err=%v", notice.String(), err)
 	}
 	session.Tier = "low"
-	if err := checkResumeModel("developer", "smart", session, availability, &notice); err == nil || !strings.Contains(err.Error(), "conflicts") {
+	if err := checkResumeModel("developer", "smart", session, false, availability, &notice); err == nil || !strings.Contains(err.Error(), "conflicts") {
 		t.Fatalf("conflict=%v", err)
 	}
 }
@@ -140,7 +140,7 @@ func TestResumeDisabledCandidatePolicyProcess(t *testing.T) {
 	if os.Getenv("TEST_983_CHILD") == "1" {
 		var notice bytes.Buffer
 		s := &subagent.Session{Provider: "claude", Model: "opus", Tier: "med"}
-		err := checkResumeModel("developer", "smart", s, func(string, string) usage.ProviderQuotaAvailability {
+		err := checkResumeModel("developer", "smart", s, false, func(string, string) usage.ProviderQuotaAvailability {
 			return usage.ProviderQuotaAvailability{State: "unknown"}
 		}, &notice)
 		if err != nil || !strings.Contains(notice.String(), "sol:med: disabled by user policy") {
