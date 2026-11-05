@@ -1,6 +1,6 @@
 # 1135 — Jules backlog batch: model discovery and access, 942 children (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, all kept, reports/jules/1135.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
@@ -30,4 +30,4 @@ where a ticket is covered by 1122's plan.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1135 | | | pending |
+| batch audit | jules-batch-1135 | 13214987276064772598 | GH #87 (closed) | done: all kept. Report wrong on 485 (449 moved its quota-ranked selection into 485, `issues/485:41`, not the reverse; `quotaAlternatives` only lists fallbacks after exhaustion). Merging 946-955 into their own epic 942 gains nothing: they are its milestone children. 1122 in progress (branch `issue/1122-models-quota-json`) |

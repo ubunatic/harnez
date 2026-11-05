@@ -1,6 +1,6 @@
 # 1130 — Jules backlog batch: lean-sprint skill tickets (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, all kept, reports/jules/1130.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
@@ -31,4 +31,4 @@ change missing.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1130 | | | pending |
+| batch audit | jules-batch-1130 | 16131954881067761762 | GH #88 (closed) | done: all 8 kept; refs in `docs/commands/lean-sprint.md` held, each gap still open |
