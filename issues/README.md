@@ -39,5 +39,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1115 | [1115-harnez-apply-keeps-docup-skill-dirs-with-extra-files-in-all-five-agent-roots.md](1115-harnez-apply-keeps-docup-skill-dirs-with-extra-files-in-all-five-agent-roots.md) | harnez apply keeps docup skill dirs with extra files in all five agent roots | Open |
 | 1121 | [1121-power-box-all-power-readings-as-sparklines-and-values.md](1121-power-box-all-power-readings-as-sparklines-and-values.md) | Power box: all power readings as sparklines and values | Open |
 | 1129 | [1129-harnez-config-global-with-attribution-as-first-setting-per-repo-override.md](1129-harnez-config-global-with-attribution-as-first-setting-per-repo-override.md) | harnez config --global with attribution as first setting, per-repo override | Open |
-| 1131 | [1131-jules-backlog-batch-lmcoder-and-local-model-runtime-merge-close-assessment.md](1131-jules-backlog-batch-lmcoder-and-local-model-runtime-merge-close-assessment.md) | Jules backlog batch: lmcoder and local model runtime (merge/close assessment) | Open |
 <!-- harnez:end issues-active-index -->

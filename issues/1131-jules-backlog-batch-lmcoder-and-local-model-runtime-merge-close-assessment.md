@@ -1,6 +1,6 @@
 # 1131 — Jules backlog batch: lmcoder and local model runtime (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, all kept, reports/jules/1131.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
@@ -28,4 +28,5 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
+| batch audit | jules-batch-1131 | 1349301400268885726 | GH #92 (closed) | done: all kept. Rejected close of 231: 360 superseded only its mechanism, the ticket keeps the content-authoring work (`issues/231` header). 1031: no `--autocompact` flag; `subagent.AutoCompactMode` (`cmd/harnez/agent_run.go:818`) is per-provider, not a start flag. 167, 722, 730, 1023, 1030, 1032 kept |
 | batch audit | jules-batch-1131 | | | pending |
