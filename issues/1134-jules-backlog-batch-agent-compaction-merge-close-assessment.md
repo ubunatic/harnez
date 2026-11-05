@@ -1,6 +1,6 @@
 # 1134 — Jules backlog batch: agent compaction (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, reports/jules/1134.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
@@ -27,4 +27,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1134 | | | pending |
+| batch audit | jules-batch-1134 | 10325919561618513719 | GH #91 (closed) | done: all 7 kept. Report wrong on 675: `internal/subagent/claude.go:85` resumes with `Model{}`, so `/compact` runs on the default model; that is the bug, not the fix. 646, 685, 764, 869, 969, 1026 kept |

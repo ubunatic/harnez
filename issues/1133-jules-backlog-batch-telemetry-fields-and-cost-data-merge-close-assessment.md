@@ -1,6 +1,6 @@
 # 1133 — Jules backlog batch: telemetry fields and cost data (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, reports/jules/1133.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
@@ -28,4 +28,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1133 | | | pending |
+| batch audit | jules-batch-1133 | 6769701841380360372 | GH #90 (closed) | done: all kept. Rejected closes: 421 (`cli_invocations` from 326, `spec/telemetry.yaml:105`, lacks 421's agent-vs-user feature analytics); 445, 446 (`compaction_economics` is neither rate cards nor reported cost). 458, 461, 463, 487, 609 kept |

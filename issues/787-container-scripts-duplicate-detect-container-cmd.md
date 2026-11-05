@@ -1,6 +1,6 @@
 # 787 — container scripts duplicate detect_container_cmd
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Obsolete: detect_container_cmd now lives only in scripts/install-canary.sh (Jules batch 1132, checked)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

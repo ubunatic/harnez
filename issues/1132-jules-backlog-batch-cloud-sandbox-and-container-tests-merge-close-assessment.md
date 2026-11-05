@@ -1,6 +1,6 @@
 # 1132 — Jules backlog batch: cloud sandbox and container tests (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, reports/jules/1132.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
@@ -31,4 +31,4 @@ real result for 781, 783 and 784.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1132 | | | pending |
+| batch audit | jules-batch-1132 | 963119514191714020 | GH #89 (closed) | done: 787 closed obsolete (`detect_container_cmd` only in `scripts/install-canary.sh`); 784 kept (test moved to `cmd/harnez/agent_wait_test.go`, no evidence it passes in cloud); 785 kept (`scripts/jules-setup.sh` is not the SessionStart hook asked for); 780, 781, 783, 935, 1010 kept |

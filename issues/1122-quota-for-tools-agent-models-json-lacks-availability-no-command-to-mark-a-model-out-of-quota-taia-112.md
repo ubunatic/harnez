@@ -1,6 +1,6 @@
 # 1122 — Quota for tools: agent models --json lacks availability; no command to mark a model out of quota (taia 112)
 
-**Status**: Open
+**Status**: Closed — Done: agent models --json quota/startable/entitlement/block fields (docs/AgentModelsJSON.md, schema in spec/), harnez models block/unblock, auto-block on known quota errors; reviewed by terra:med (3 rounds)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
