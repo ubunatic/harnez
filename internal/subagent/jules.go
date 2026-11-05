@@ -656,15 +656,19 @@ func (r julesReply) reacted(acts []julesActivity) bool {
 
 // answered reports whether Jules has answered the owner's last call: the state
 // moved from the one before the send, or an agent activity came after the baseline.
-func (d JulesDriver) answered(ctx context.Context, client julesClient, name string, reply julesReply, state string) bool {
+// It also returns any activities fetched during the check.
+func (d JulesDriver) answered(ctx context.Context, client julesClient, name string, reply julesReply, state string) (bool, []julesActivity) {
 	if reply.sent && state != reply.pre {
-		return true
+		return true, nil
 	}
 	if !reply.gates(state) {
-		return false
+		return false, nil
 	}
 	acts, err := d.activities(ctx, client, name)
-	return err == nil && reply.reacted(acts)
+	if err != nil {
+		return false, nil
+	}
+	return reply.reacted(acts), acts
 }
 
 // julesCreated parses an activity's createTime. Jules writes microseconds or
@@ -695,6 +699,39 @@ func julesWaitingState(state string) bool {
 	return state == "AWAITING_PLAN_APPROVAL" || state == "AWAITING_USER_FEEDBACK" || state == "PAUSED"
 }
 
+// julesStalledReplies returns the number of user replies since Jules's last message
+// when the session is waiting for feedback and at least two replies received no reaction.
+// It returns 0 when the session is not stalled.
+func julesStalledReplies(state string, acts []julesActivity) int {
+	if !julesWaitingState(state) {
+		return 0
+	}
+	var lastAgent time.Time
+	hasAgent := false
+	for _, a := range acts {
+		if a.Originator == "agent" {
+			t := julesCreated(a)
+			if !hasAgent || t.After(lastAgent) {
+				lastAgent = t
+				hasAgent = true
+			}
+		}
+	}
+	replies := 0
+	for _, a := range acts {
+		if a.Originator == "user" {
+			t := julesCreated(a)
+			if !hasAgent || t.After(lastAgent) {
+				replies++
+			}
+		}
+	}
+	if replies >= 2 {
+		return replies
+	}
+	return 0
+}
+
 // track polls the session until it stops needing no one, or the wait runs out.
 // Only a Jules failure or an API refusal is an error: a session still running or
 // waiting for the owner is a normal result that says how to continue.
@@ -711,11 +748,19 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 		return &TurnResult{SessionID: id, Response: body, Messages: []string{body}, Warnings: warns, DurationMS: time.Since(started).Milliseconds()}
 	}
 	var last julesSession
+	var lastActivities []julesActivity
 	answered := false
 	// stillRunning ends the wait while the session goes on; StillRunning
 	// lets the CLI exit 3, like harnez pr wait (issue 1111).
 	stillRunning := func(warns []string) *TurnResult {
-		r := result(julesStillRunning(id, last, spec, reply.sent && !answered), warns)
+		acts := lastActivities
+		if len(acts) == 0 && julesWaitingState(last.State) && ctx.Err() == nil {
+			if fetched, err := d.activities(ctx, client, name); err == nil {
+				acts = fetched
+			}
+		}
+		stalled := julesStalledReplies(last.State, acts)
+		r := result(julesStillRunning(id, last, spec, reply.sent && !answered, stalled), warns)
 		r.StillRunning = true
 		return r
 	}
@@ -742,7 +787,11 @@ func (d JulesDriver) track(ctx context.Context, client julesClient, spec JulesSp
 			}
 		}
 		if err == nil {
-			answered = d.answered(waitCtx, client, name, reply, session.State)
+			var acts []julesActivity
+			answered, acts = d.answered(waitCtx, client, name, reply, session.State)
+			if acts != nil {
+				lastActivities = acts
+			}
 		}
 		if err == nil && (answered || !reply.gates(session.State)) {
 			switch session.State {
@@ -833,12 +882,21 @@ func julesNeedsOwner(id string, session julesSession, detail string) string {
 	return strings.Join(lines, "\n")
 }
 
-// julesStillRunning says the wait ran out. After a send with no reply yet, it says so,
-// and it never repeats an older message as the answer.
-func julesStillRunning(id string, session julesSession, spec JulesSpec, sentNoReply bool) string {
+// julesStillRunning says the wait ran out. When a session waiting for feedback has had
+// replies without reaction, it reports the session stalled. Otherwise it notes whether
+// a message was sent and offers another wait.
+func julesStillRunning(id string, session julesSession, spec JulesSpec, sentNoReply bool, stalledReplies int) string {
 	state := session.State
 	if state == "" {
 		state = "state unknown"
+	}
+	if stalledReplies > 0 {
+		lines := []string{fmt.Sprintf("Jules session %s: %s; stalled: %d replies since Jules's last message, no reaction", id, state, stalledReplies)}
+		if session.URL != "" {
+			lines = append(lines, "Session: "+session.URL)
+		}
+		lines = append(lines, "Next: stop or restart smaller instead of another wait.")
+		return strings.Join(lines, "\n")
 	}
 	status := "stopped waiting, and the session keeps running on Jules."
 	if sentNoReply {

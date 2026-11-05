@@ -646,6 +646,34 @@ func TestJulesWaitSkipsQuestionBeforeTheOwnersMessage(t *testing.T) {
 	}
 }
 
+// A session waiting for feedback with user replies and no agent reaction reports stalled.
+func TestJulesWaitStalledAfterReplies(t *testing.T) {
+	acts := append(append([]map[string]any{}, julesOldQuestion...),
+		map[string]any{"originator": "user", "createTime": "2026-11-02T21:19:03Z", "userMessaged": map[string]any{"userMessage": "first answer"}},
+		map[string]any{"originator": "user", "createTime": "2026-11-02T21:25:00Z", "userMessaged": map[string]any{"userMessage": "second answer"}},
+	)
+	fake := &fakeJules{
+		states:     []julesSession{{State: "AWAITING_USER_FEEDBACK", URL: "https://jules.test/session/123"}},
+		activities: acts,
+	}
+	h := newJulesHarness(t, fake, julesTestRemotes, julesEqualHeads)
+	endWaitAfter(&h, 3)
+	res, err := h.driver.Resume(context.Background(), "123", "wait", Model{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantStalled := "stalled: 2 replies since Jules's last message, no reaction"
+	if !strings.Contains(res.Response, wantStalled) {
+		t.Errorf("response misses %q:\n%s", wantStalled, res.Response)
+	}
+	if strings.Contains(res.Response, "track it again") {
+		t.Errorf("stalled response unexpectedly offered another wait:\n%s", res.Response)
+	}
+	if !strings.Contains(res.Response, "restart smaller") {
+		t.Errorf("response misses restart recommendation:\n%s", res.Response)
+	}
+}
+
 // Jules writes createTime with mixed precision. As strings, "...23Z" sorts after
 // "...23.1Z" ('Z' > '.'), so the comparison must parse the times.
 func TestJulesReactionComparesTimesNotStrings(t *testing.T) {
