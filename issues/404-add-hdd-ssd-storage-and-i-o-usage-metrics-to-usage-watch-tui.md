@@ -55,3 +55,6 @@ In `harnez usage --watch`:
 - [ ] Disk metrics update reliably on each tick of the usage watch loop.
 - [ ] Cross-platform compilation and runtime compatibility for Linux (primary) and Darwin (macOS).
 - [ ] Unit and telemetry collector tests verify parsing and calculation logic.
+
+## Merged from 343 (2026-11-05, batch 1126)
+343 asked for disk capacity meters in the Load box (NVMe, SATA, USB, VM disk images) with layout options A/B; it is folded in here. Checked: no disk logic in `internal/usage/load.go` today (RAM label at load.go:1047 is the nearest code).

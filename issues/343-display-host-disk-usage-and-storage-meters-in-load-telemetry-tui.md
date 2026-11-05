@@ -1,6 +1,6 @@
 # 343 — Display host disk usage and storage meters in Load telemetry TUI
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Merged into 404 (Jules batch 1126)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

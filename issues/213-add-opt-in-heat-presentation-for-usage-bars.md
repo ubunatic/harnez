@@ -1,6 +1,6 @@
 # 213 — Add opt-in heat presentation for usage bars
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done: usage-bar-presentation heat|monochrome in spec/indicators.yaml:107, parsed in internal/usage/indicatorsspec.go:448 (Jules batch 1124, checked)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

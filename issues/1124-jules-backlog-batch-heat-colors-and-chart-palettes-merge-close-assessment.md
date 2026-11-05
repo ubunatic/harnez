@@ -1,6 +1,6 @@
 # 1124 — Jules backlog batch: heat colors and chart palettes (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, reports/jules/1124.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore

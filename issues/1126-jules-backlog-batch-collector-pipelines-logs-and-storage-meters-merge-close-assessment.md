@@ -1,6 +1,6 @@
 # 1126 — Jules backlog batch: collector pipelines, logs and storage meters (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, reports/jules/1126.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
@@ -29,4 +29,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1126 | | | pending |
+| batch audit | jules-batch-1126 | 10958439946333479539 | GH #85 (closed) | done: refs mostly held, two weak (161, 256 cite unrelated lines); 152 closed obsolete (report said done, but it moved to `harnez server`); 343 merged into 404; 085 kept (report's evidence is the remote-load panel, not daemon status); 111, 113, 161, 255, 256, 404 kept |

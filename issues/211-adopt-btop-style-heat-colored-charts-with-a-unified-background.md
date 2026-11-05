@@ -1,6 +1,6 @@
 # 211 — Adopt btop-style heat-colored charts with a unified background
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done: chart-background and load-chart-presentation heat|monochrome in spec/indicators.yaml:102-103, parsed in internal/usage/indicatorsspec.go:445 (Jules batch 1124, checked)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
