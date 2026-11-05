@@ -1,6 +1,7 @@
 # 1114 — Jules wait: say a session stalled after its replies instead of offering another wait
 
-**Status**: In Progress
+**Status**: Closed — report stalled session when waiting for feedback with unanswered replies, omit track-it-again advice, document in docs/commands/jules.md
+**Closed-By**: session 74ca1fb9-acc8-489e-8717-30157fb7dbed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
