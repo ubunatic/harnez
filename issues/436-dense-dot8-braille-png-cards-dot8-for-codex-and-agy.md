@@ -100,3 +100,11 @@ Dot8 must not be the primary LLM input format
 codex and agy legibility remain unverified by a clean canary. Resume once 444's
 renderer-pitch fix lands and a clean 3x4 readability canary passes 3/3 on at least
 two agents.
+
+## Merged 2026-11-05 (Jules batch 1125)
+On hold, one ticket for all Dot8 work. 444 is done (4a99a5bf: 3px pitch uses the 3x6 `FontDot8`,
+`internal/readcard/dot8_render.go:63`); the remaining resume condition is the readability canary.
+Merged in, to pick up on resume:
+- 440: PNG card header in PNG metadata (`tEXt`/`iTXt`) instead of image pixels; none exists today.
+- 441: Dot8 card reader decoding a card back to text; only the deprecated `Dot8Decode` stub exists.
+- 459: Braille glyph cell margins in `internal/readcard/font.go:82` (`marginX = 1` for width > 2).

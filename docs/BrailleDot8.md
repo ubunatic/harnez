@@ -8,12 +8,12 @@ title: Harnez Braille 8 Convention
 > characters split under the tokenizer so the compression doesn't pay, the
 > larger-dot canary's results were invalidated by fixture contamination (only
 > the 3x4 geometry saves anything), and no agent has passed a clean reading
-> canary yet (haiku failed, codex timed out) while issue 444, an unfixed P1 in
-> the renderer, blocks further work. The `--dot8`/`--dot8-colors`/`--dot8-pitch`
+> canary yet (haiku failed, codex timed out). Issue 444, the renderer cell-pitch
+> bug, is fixed (4a99a5bf); the open Dot8 work is tracked in 436. The `--dot8`/`--dot8-colors`/`--dot8-pitch`
 > CLI flags and the renderer are compiled only with `-tags dot8` (issue 543 M3,
 > 33dd977; `make test-dot8` runs their tests); default builds get `!dot8` stubs.
 > Inside a dot8 build they still need `HARNEZ_DOT8=1`, and the exported `Dot8*`
-> functions in `internal/readcard/dot8.go` are marked Deprecated. Resume condition: fix issue 444, then a clean 3x4 readability
+> functions in `internal/readcard/dot8.go` are marked Deprecated. Resume condition: a clean 3x4 readability
 > canary passing 3/3 on at least two agents. This encoding convention below
 > remains the reference for the encoding itself.
 

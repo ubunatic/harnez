@@ -27,4 +27,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1125 | | | pending |
+| batch audit | jules-batch-1125 | 16251640670236298696 | GH #82 (closed) | done: 7/7 refs held (dot8.go:121 off by 9); 444, 460 closed done; 440, 441, 459 merged into 436 (on hold, not obsolete as the report said); 475 kept |
