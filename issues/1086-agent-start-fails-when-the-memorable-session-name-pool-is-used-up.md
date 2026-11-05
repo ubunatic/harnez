@@ -39,4 +39,4 @@ Jules audit (PR GH#68, report `reports/jules/1086.md`, checked against d8904997;
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| implement | jules-implement-1086 | 9431202035978934268 | pending | running (started 2026-11-06, audited 80429ccd) |
+| implement | jules-implement-1086 | 9431202035978934268 | github #98 (open, not mergeable as is) | done; tests pass, new test fails without fix. Suffix fallback (name.go) OK. Freeing names of completed/failed/stopped sessions (agent_run.go:445) skips the resume-by-name check: Find returns the first name match (session.go:159), so a reused name can resume the old session. Take the fallback only. |
