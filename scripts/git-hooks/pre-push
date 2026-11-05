@@ -9,8 +9,7 @@ printf '%s\n' "$refs" | git lfs pre-push "$@" || exit $?
 # Ticket numbers: a ticket added here must not reuse a number that origin/main gives to another
 # file (issue 1099). A failed fetch only warns; a confirmed collision blocks the push.
 if test -d issues && command -v harnez >/dev/null 2>&1
-then
-    git fetch --quiet origin main 2>/dev/null || echo >&2 "pre-push: could not fetch origin main; ticket numbers checked against the last fetched copy"
+then git fetch --quiet origin main 2>/dev/null || echo >&2 "pre-push: could not fetch origin main; ticket numbers checked against the last fetched copy"
     harnez issues lint --against origin/main || exit $?
 fi
 
@@ -32,8 +31,7 @@ do
     refs/heads/main)
         codeberg_sha=$(git ls-remote origin refs/heads/main | cut -f1)
         if test "$local_sha" != "$codeberg_sha"
-        then
-            echo >&2 "pre-push: GitHub refused: Codeberg main is at ${codeberg_sha:-unknown}, not $local_sha"
+        then echo >&2 "pre-push: GitHub refused: Codeberg main is at ${codeberg_sha:-unknown}, not $local_sha"
             status=1
         fi
         ;;

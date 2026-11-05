@@ -80,9 +80,9 @@ do $sudo_cmd ln -sf "$bin" /usr/local/bin/
 done
 harnez --version
 
+# A `replace ... => ../<name>` (uman uses ../loom) needs the sibling checkout next to the repo.
 if test -f go.mod
-then # A `replace ... => ../<name>` (uman uses ../loom) needs the sibling checkout next to the repo.
-     for dir in $(awk '/=> *\.\.\// { print $NF }' go.mod)
+then for dir in $(awk '/=> *\.\.\// { print $NF }' go.mod)
      do sibling=$(realpath -m "$repo/$dir")
         if ! test -f "$sibling/go.mod"
         then printf '==> clone %s for a go.mod replace\n' "$sibling"
