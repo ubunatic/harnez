@@ -28,3 +28,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
+| batch audit | jules-batch-1146 | 17157263050103068159 | github #101 (closed) | done 10m: 7 keep, 0 close. 3/3 refs hold, but 4 tickets `not verified` without searches; correction on 1042 wrong (2a7c9bee exists), on 1058 right (7248728f missing). No ticket changes |
