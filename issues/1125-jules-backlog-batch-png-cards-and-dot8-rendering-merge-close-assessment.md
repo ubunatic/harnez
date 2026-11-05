@@ -1,6 +1,6 @@
 # 1125 — Jules backlog batch: PNG cards and Dot8 rendering (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — batch applied, reports/jules/1125.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
