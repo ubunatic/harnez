@@ -62,4 +62,4 @@ Jules audit (PR GH#64, report `reports/jules/1012-2.md`, checked against d890499
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| audit | jules-audit-1012 | 16134759427309387497 | pending | running (started 2026-11-06, audited 80429ccd) |
+| audit | jules-audit-1012 | 16134759427309387497 | github #99 (closed) | done: still valid, 6/6 refs hold. Starting points: hello prints next steps without --session (cmd/harnez/agent_selftest.go:185-186); 'run hello first' errors omit it (:192, :228, :252); default session falls back to PPID (internal/resolve/resolve.go:82). |
