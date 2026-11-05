@@ -27,3 +27,17 @@ func TestGenerateSessionNameExhausted(t *testing.T) {
 		t.Fatal("expected exhausted name pool error")
 	}
 }
+
+func TestGenerateSessionNameFallback(t *testing.T) {
+	// Base memorable names should be exhausted, fallback to numeric suffix
+	name, err := GenerateSessionName(func(candidate string) bool {
+		// return true if the name doesn't have a digit
+		return !regexp.MustCompile(`\d`).MatchString(candidate)
+	})
+	if err != nil {
+		t.Fatalf("unexpected error when base names exhausted: %v", err)
+	}
+	if !regexp.MustCompile(`^[a-z]+-[a-z]+-\d+$`).MatchString(name) {
+		t.Fatalf("generated fallback name %q is not memorable adjective-animal-number form", name)
+	}
+}

@@ -442,7 +442,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		}
 		taken := make(map[string]bool, len(sessions)*2)
 		for _, existing := range sessions {
-			taken[existing.Name] = true
+			if existing.Status != "completed" && existing.Status != "failed" && existing.Status != "stopped" {
+				taken[existing.Name] = true
+			}
 			taken[existing.ID] = true
 		}
 		sessName, err = subagent.GenerateSessionName(func(candidate string) bool { return taken[candidate] })
