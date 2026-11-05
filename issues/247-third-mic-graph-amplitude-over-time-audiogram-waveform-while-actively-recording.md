@@ -54,3 +54,10 @@ sequencing.
 
 Not yet planned — sequencing depends on 246's findings (does the live-level capture mechanism
 change?) and reuse of existing graph-rendering primitives rather than a bespoke waveform renderer.
+
+## 5. Merged from 330 (2026-11-05, batch 1123)
+330 is the concrete approach for this ticket: use voxi `audiolevel`'s rolling Braille sparkline
+(`Meter.EnableSparkline`, `Manager.Sparkline`), fed by the same capture stream `internal/usage/miclive.go`
+already drives, under the existing live-level bar (`internal/usage/watch_mic_box.go`, `liveLine`). Bump the
+voxi module version once that API is released. Checked: no sparkline in the Mic box today
+(`reports/jules/1123.md`).
