@@ -53,4 +53,4 @@ push with no `git ls-remote` re-check; `internal/release` has no `ls-remote` cal
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| audit | jules-audit-1082 | 2739167954748901484 | pending | running (started 2026-11-06, audited 80429ccd) |
+| audit | jules-audit-1082 | 2739167954748901484 | github #93 (closed) | done: still valid, 5/5 refs hold, report kept |
