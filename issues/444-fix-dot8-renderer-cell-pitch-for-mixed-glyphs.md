@@ -1,6 +1,6 @@
 # 444 — Fix Dot8 renderer cell pitch for mixed glyphs
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — done (Jules batch 1125): 444 fixed in 4a99a5bf, 460 256-color and truecolor SGR parsed in internal/readcard/ansi.go
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
