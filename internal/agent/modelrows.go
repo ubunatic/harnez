@@ -13,9 +13,10 @@ import (
 type ModelRow struct {
 	Spec     string `json:"spec"`
 	Provider string `json:"provider"`
-	Model    string `json:"model"`
-	// ModelDetail keeps the former `model` object (Provider, Name, Tier, Effort).
-	ModelDetail     subagent.Model `json:"model_detail"`
+	// Model is the unchanged object (Provider, Name, Tier, Effort) that
+	// existing consumers read (ticket 983); ModelName is the plain name.
+	Model           subagent.Model `json:"model"`
+	ModelName       string         `json:"model_name"`
 	Batch           bool           `json:"batch"`
 	Effort          bool           `json:"effort"`
 	Cost            int            `json:"cost"`
@@ -62,7 +63,7 @@ func ModelRows(entries []subagent.ModelEntry, availability map[string]usage.Prov
 			state = "unknown"
 		}
 		row := ModelRow{
-			Spec: e.Spec, Provider: e.Model.Provider, Model: e.Model.Name, ModelDetail: e.Model,
+			Spec: e.Spec, Provider: e.Model.Provider, Model: e.Model, ModelName: e.Model.Name,
 			Batch: e.Batch, Effort: e.Effort, Cost: e.Cost, Eff: e.Eff, Skills: e.Skills,
 			Roles: e.Roles, Use: e.Use, Source: e.Source,
 			Quota: RowQuota{State: state, RemainingPercent: remainingPercent(a), AgeS: int64(a.Age.Seconds()), Scope: quotaScope(e.Model.Provider, a)},

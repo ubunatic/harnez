@@ -47,7 +47,7 @@ func TestModelsJSONCarriesQuotaStartableAndEntitlement(t *testing.T) {
 		t.Fatal("no rows")
 	}
 	for _, r := range rows {
-		if r.Spec == "" || r.Provider == "" || r.Model == "" || r.Quota.State == "" || r.Quota.Scope == "" || r.Entitlement.State == "" {
+		if r.Spec == "" || r.Provider == "" || r.ModelName == "" || r.Model.Name != r.ModelName || r.Quota.State == "" || r.Quota.Scope == "" || r.Entitlement.State == "" {
 			t.Fatalf("incomplete row: %+v", r)
 		}
 		if r.Quota.State == "unknown" && r.Entitlement.State != "denied" && !r.Startable {
@@ -55,6 +55,40 @@ func TestModelsJSONCarriesQuotaStartableAndEntitlement(t *testing.T) {
 		}
 		if r.Entitlement.State == "unverified" && r.Entitlement.Source == "" {
 			t.Fatalf("unverified entitlement needs a source: %+v", r)
+		}
+	}
+}
+
+// Ticket 983 promise: the `model` key stays the object consumers (horg) read.
+func TestModelsJSONKeepsLegacyModelObject(t *testing.T) {
+	isolateModelState(t)
+	cmd := newModelsCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var raw []map[string]json.RawMessage
+	if err := json.Unmarshal(out.Bytes(), &raw); err != nil || len(raw) == 0 {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, row := range raw {
+		var obj map[string]json.RawMessage
+		if err := json.Unmarshal(row["model"], &obj); err != nil {
+			t.Fatalf("model is not an object: %s", row["model"])
+		}
+		for _, k := range []string{"Provider", "Name", "Tier", "Effort"} {
+			if _, ok := obj[k]; !ok {
+				t.Fatalf("model object lacks %q: %s", k, row["model"])
+			}
+		}
+		var name string
+		if err := json.Unmarshal(row["model_name"], &name); err != nil || name == "" {
+			t.Fatalf("model_name = %s", row["model_name"])
+		}
+		if _, ok := row["model_detail"]; ok {
+			t.Fatal("model_detail must not exist")
 		}
 	}
 }
@@ -68,7 +102,7 @@ func TestModelsBlockUnblockRoundTripShowsInJSON(t *testing.T) {
 	}
 	var blocked agent.ModelRow
 	for _, r := range modelsJSON(t) {
-		if r.Provider == target.Provider && r.Model == target.Model && r.Spec == target.Spec {
+		if r.Provider == target.Provider && r.ModelName == target.ModelName && r.Spec == target.Spec {
 			blocked = r
 		}
 	}

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"ubunatic.com/harnez/internal/agent"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
 	"ubunatic.com/harnez/internal/usagestore"
@@ -155,7 +154,7 @@ func TestAgentModelsShowsBatchCapability(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	var models []agent.ModelRow
+	var models []subagent.ModelEntry
 	if err := json.Unmarshal([]byte(jsonOut.String()), &models); err != nil {
 		t.Fatal(err)
 	}

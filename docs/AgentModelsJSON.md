@@ -14,7 +14,8 @@ or `unknown`; ask `harnez usage` to refresh it.
 |---|---|
 | `spec` | Model spec, e.g. `codex:luna:low`. |
 | `provider` | Login id of the provider, e.g. `codex`, `agy`. |
-| `model` | Provider model name (a string). The former `model` object is now `model_detail`. |
+| `model` | Unchanged object `{Provider, Name, Tier, Effort}` that existing consumers read (ticket 983). |
+| `model_name` | The plain provider model name as a string (same as `model.Name`). |
 | `quota.state` | `available`, `exhausted`, `stale` or `unknown`; the same value as the AVAILABILITY text column. |
 | `quota.remaining_percent` | Smallest remaining share over the model's quota windows (0-100), or `null` without window data. |
 | `quota.reset_at` | RFC3339 time the quota returns, set when `state` is `exhausted`, else `null`. |
@@ -27,7 +28,7 @@ or `unknown`; ask `harnez usage` to refresh it.
 | `entitlement.checked_at` | RFC3339 time of the check, or `null`. |
 | `blocked_until`, `block_reason` | Present only while a local block is active. |
 
-Other fields (`batch`, `effort`, `cost`, `eff`, `skills`, `roles`, `use`, `source`, `model_detail`) keep
+Other fields (`batch`, `effort`, `cost`, `eff`, `skills`, `roles`, `use`, `source`) keep
 their former meaning. Today `entitlement.state` is `unverified` or `denied`; `verified` is reserved for
 a future provider-side check.
 

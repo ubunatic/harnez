@@ -7,13 +7,22 @@
   "definitions": {
     "row": {
       "type": "object",
-      "required": ["spec", "provider", "model", "quota", "startable", "entitlement"],
+      "required": ["spec", "provider", "model", "model_name", "quota", "startable", "entitlement"],
       "additionalProperties": true,
       "properties": {
         "spec": { "type": "string", "minLength": 1 },
         "provider": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 },
-        "model_detail": { "type": "object" },
+        "model": {
+          "type": "object",
+          "required": ["Provider", "Name", "Tier"],
+          "properties": {
+            "Provider": { "type": "string" },
+            "Name": { "type": "string" },
+            "Tier": { "type": "string" },
+            "Effort": { "type": ["boolean", "null"] }
+          }
+        },
+        "model_name": { "type": "string", "minLength": 1 },
         "batch": { "type": "boolean" },
         "effort": { "type": "boolean" },
         "cost": { "type": "integer" },
