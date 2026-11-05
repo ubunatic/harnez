@@ -25,4 +25,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1124 | | | pending |
+| batch audit | jules-batch-1124 | 11315339711245130357 | GH #84 (closed) | done: checked refs held; 211, 213 closed done; 214, 219, 447 kept (447's "blocked on 444" is stale: 444 is fixed, Dot8 chain tracked in 436) |
