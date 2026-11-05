@@ -32,4 +32,4 @@ Follow-up to issue 1121 (Power box implementation):
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| implement | jules-implement-1137 | 3651498663032874160 | pending | running (started 2026-11-06, audited 80429ccd) |
+| implement | jules-implement-1137 | 3651498663032874160 | none | failed: COMPLETED after 19m4s with no PR and no last message; changes may be on the session page |
