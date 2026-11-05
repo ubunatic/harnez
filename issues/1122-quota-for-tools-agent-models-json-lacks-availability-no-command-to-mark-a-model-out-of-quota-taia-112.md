@@ -30,5 +30,18 @@ Today (checked 2026-11-05 on b8b6475e):
    expiring record that `CachedProviderQuotaAvailabilities` treats as exhausted; shown in `agent models`.
    Decide: should agent start/resume auto-record it on a known quota error (agy "Individual quota reached",
    codex usage-limit)?
-3. Tests: JSON fields match text; a block expires at its reset; start refuses a blocked model unless
+3. Tests: JSON fields match text;
+
+## 3. Consumer shape (taia, 2026-11-05, for taia#113 M2/M3)
+Per `agent models --json` row:
+- `spec`, `provider` (= login_id, e.g. `codex`), `model`.
+- `quota` {`state`: available|exhausted|stale|unknown, `remaining_percent`, `reset_at`, `age_s`, `scope`: provider|model}.
+- `startable` bool plus `startable_reason` ("quota exhausted", "not authenticated", "blocked until …").
+- `entitlement` {`state`: verified|unverified|denied, `source`, `checked_at}`, separate from quota: being listed in the
+  spec never means accessible.
+- Blocked rows: `blocked_until`, `block_reason`. `block --until` takes a time or a duration, optional `--reason`;
+  expired blocks drop out on their own.
+Fields are stable and documented (doc + JSON schema in `spec/`); `--offline` stays fast and starts no collector.
+
+Old item 3 tests: a block expires at its reset; start refuses a blocked model unless
    `--allow-exhausted-quota`.
