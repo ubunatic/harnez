@@ -1,6 +1,6 @@
 # 1114 — Jules wait: say a session stalled after its replies instead of offering another wait
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
