@@ -1,6 +1,6 @@
 # 1127 — Jules backlog batch: macOS support (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, all kept, reports/jules/1127.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
@@ -26,4 +26,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | batch audit | jules-batch-1127 | 11116387758249995946 | none | failed: "Jules was unable to complete the task", no findings |
-| batch audit | jules-batch-1127b | | | pending (retry) |
+| batch audit | jules-batch-1127b | 5880740049316143743 | GH #86 (closed) | done: refs held; all five kept. 338 not done (its section 3 still lists push triggers and a CLI smoke step); 339 not obsolete (the report itself finds `BatteryOk` and the `load_linux.go` split missing) |
