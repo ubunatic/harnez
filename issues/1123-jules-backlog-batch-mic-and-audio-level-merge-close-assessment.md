@@ -1,6 +1,6 @@
 # 1123 — Jules backlog batch: mic and audio level (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — merged into 247 / batch applied (Jules batch 1123, reports/jules/1123.md)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
