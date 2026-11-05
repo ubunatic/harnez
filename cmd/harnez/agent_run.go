@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"ubunatic.com/harnez/internal/agent"
+	"ubunatic.com/harnez/internal/modelblock"
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/subagent"
@@ -253,6 +254,24 @@ func checkResumeModel(role, spec string, sess *subagent.Session, availability fu
 		return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", spec, sess.Name, sess.Provider, sess.Model, sess.Tier)
 	}
 	return nil
+}
+
+// autoBlockQuotaError records a local model block when a failed turn carries a
+// known quota error (issue 1122), so the next start or resume refuses the
+// model until the reset time. Failures to record never mask the turn error.
+func autoBlockQuotaError(stderr io.Writer, provider, model string, turnErr error) {
+	spec, err := modelblock.LoadSpec()
+	if err != nil || turnErr == nil {
+		return
+	}
+	b, ok, err := modelblock.AutoBlock(modelblock.Path(), spec, provider, model, turnErr.Error(), time.Now())
+	if err != nil {
+		fmt.Fprintf(stderr, "harnez: could not record quota block: %v\n", err)
+		return
+	}
+	if ok {
+		fmt.Fprintf(stderr, "harnez: blocked %s:%s until %s (known quota error); `harnez models unblock` clears it\n", provider, model, b.Until.Format(time.RFC3339))
+	}
 }
 
 func isCodexUsageLimitError(err error) bool {
@@ -605,6 +624,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		if signalled {
 			return fmt.Errorf("agent start %q %s; provider stopped and session %q can be resumed", spec, sig, sessName)
 		}
+		autoBlockQuotaError(cmd.ErrOrStderr(), m.Provider, m.Name, err)
 		return fmt.Errorf("agent start %q failed: %s; verify the provider/model configuration or ask for guidance", spec, shortCause(err))
 	}
 	for _, warning := range r.Warnings {
@@ -939,6 +959,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return fmt.Errorf("agent resume %q %s; provider stopped and session can be resumed", sess.Name, sig)
 		}
 		recordResumeFailure(s, sess, err)
+		autoBlockQuotaError(cmd.ErrOrStderr(), sess.Provider, sess.Model, err)
 		quotaState := "unknown"
 		if d.availability != nil {
 			quotaState = d.availability(sess.Provider, sess.Model).State
