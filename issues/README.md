@@ -42,5 +42,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1124 | [1124-jules-backlog-batch-heat-colors-and-chart-palettes-merge-close-assessment.md](1124-jules-backlog-batch-heat-colors-and-chart-palettes-merge-close-assessment.md) | Jules backlog batch: heat colors and chart palettes (merge/close assessment) | Open |
 | 1126 | [1126-jules-backlog-batch-collector-pipelines-logs-and-storage-meters-merge-close-assessment.md](1126-jules-backlog-batch-collector-pipelines-logs-and-storage-meters-merge-close-assessment.md) | Jules backlog batch: collector pipelines, logs and storage meters (merge/close assessment) | Open |
 | 1127 | [1127-jules-backlog-batch-macos-support-merge-close-assessment.md](1127-jules-backlog-batch-macos-support-merge-close-assessment.md) | Jules backlog batch: macOS support (merge/close assessment) | Open |
-| 1128 | [1128-jules-backlog-batch-codex-hooks-and-status-bar-merge-close-assessment.md](1128-jules-backlog-batch-codex-hooks-and-status-bar-merge-close-assessment.md) | Jules backlog batch: Codex hooks and status bar (merge/close assessment) | Open |
 <!-- harnez:end issues-active-index -->

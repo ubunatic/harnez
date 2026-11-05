@@ -1,6 +1,6 @@
 # 206 — Confirm `tool_input.command` field name against a live Codex PreToolUse call
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done: cmd/harnez/codexhooks.go:31 reads tool_input.command (Jules batch 1128, checked)
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug risk / Verification

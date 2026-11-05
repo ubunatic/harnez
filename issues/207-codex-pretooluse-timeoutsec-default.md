@@ -1,6 +1,6 @@
 # 207 — Determine real Codex `timeoutSec` default for PreToolUse hooks
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done: internal/codex/hooks.go:48 omits timeoutSec on purpose per 199 Q5 (Jules batch 1128, checked)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Research

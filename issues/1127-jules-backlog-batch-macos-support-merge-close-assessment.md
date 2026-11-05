@@ -25,4 +25,5 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1127 | | | pending |
+| batch audit | jules-batch-1127 | 11116387758249995946 | none | failed: "Jules was unable to complete the task", no findings |
+| batch audit | jules-batch-1127b | | | pending (retry) |

@@ -1,6 +1,6 @@
 # 1128 — Jules backlog batch: Codex hooks and status bar (merge/close assessment)
 
-**Status**: Open
+**Status**: Closed — Batch applied, reports/jules/1128.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
@@ -27,4 +27,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1128 | | | pending |
+| batch audit | jules-batch-1128 | 12352351152984640649 | GH #83 (closed) | done: 8/8 refs held; 206, 207 closed done; 383 kept (report wrong: auto_reply is Jules-only, not Codex); 141 kept, not merged (Codex agent count and Claude git status are separate features); 143, 144, 205 kept |
