@@ -24,4 +24,4 @@ Reported by the taia session from horg worker runs (epic horg#6), 2026-11-01. So
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| audit | jules-audit-1081 | 2149295139995505177 | pending | running (started 2026-11-06, audited 80429ccd) |
+| audit | jules-audit-1081 | 2149295139995505177 | none | failed: COMPLETED after 17m34s with no PR and no last message; not re-run |
