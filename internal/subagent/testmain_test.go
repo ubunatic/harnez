@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ubunatic.com/harnez/internal/gittest"
 )
 
 func TestMain(m *testing.M) {
@@ -31,7 +33,9 @@ func TestMain(m *testing.M) {
 			_ = os.Unsetenv(name)
 		}
 	}
+	gitCleanup := gittest.MustIsolate() // hide host git config (issue 1120)
 	code := m.Run()
+	gitCleanup()
 	_ = os.RemoveAll(home)
 	os.Exit(code)
 }

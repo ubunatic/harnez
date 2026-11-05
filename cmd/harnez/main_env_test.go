@@ -14,6 +14,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/gittest"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/sessionstate"
 	"ubunatic.com/harnez/internal/usage"
@@ -62,6 +63,9 @@ func runIsolatedTests(m *testing.M) int {
 	for _, name := range []string{"HARNEZ_AGENT", "CODEX_THREAD_ID", "CODEX_CLI", "CLAUDE_CODE_SESSION_ID", "ANTIGRAVITY_AGENT", "ANTIGRAVITY_AGENTAPI_EXE"} {
 		os.Unsetenv(name)
 	}
+
+	// Hide the host's git config, e.g. a global core.hooksPath (issue 1120).
+	defer gittest.MustIsolate()()
 
 	oldHome, hadHome := os.LookupEnv("HOME")
 	tmpHome, err := os.MkdirTemp("", "harnez-test-*")

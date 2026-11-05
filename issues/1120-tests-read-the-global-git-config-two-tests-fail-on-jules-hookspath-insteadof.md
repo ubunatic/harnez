@@ -1,6 +1,6 @@
 # 1120 — Tests read the global git config: two tests fail on Jules (hooksPath, insteadOf)
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -31,3 +31,12 @@ Jules's VM setup sets global git config before our script runs:
 2. Isolate git in tests: a shared test helper (or TestMain) sets `GIT_CONFIG_GLOBAL=/dev/null` and
    `GIT_CONFIG_NOSYSTEM=1`, with identity set per repo. Apply it to every package that runs git.
 3. Verify with step 1's config file: both tests pass.
+
+## Resolution 2026-11-05
+Reproduced: both failures came from `core.hooksPath=/dev/null` (the refusing hook never ran).
+`internal/gittest.Isolate` points `GIT_CONFIG_GLOBAL` at a temp file holding only a test identity and
+`init.defaultBranch=main`, and disables the system config. Every package whose tests or code under test run
+git calls it from `TestMain` (19 packages, incl. `cmd/harnez`, `internal/lint`, `internal/prwait`).
+`go test -short ./...` passes with a Jules-like global config (hooksPath, insteadOf) and with the normal one.
+Test: `TestIsolateHidesGlobalHooksPath`. Review by agy:sonnet:med was cut off by its quota; test-only change,
+committed as a small fix. A new git-using package must add the same `TestMain`.

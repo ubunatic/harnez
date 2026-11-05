@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"ubunatic.com/harnez/internal/gittest"
 )
 
 func loadTestConfig(t *testing.T) *Config {
@@ -32,7 +34,9 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("failed to set HOME: %v", err))
 	}
 
+	gitCleanup := gittest.MustIsolate() // hide host git config (issue 1120)
 	code := m.Run()
+	gitCleanup()
 
 	os.RemoveAll(tmpHome)
 	if hadHome {
