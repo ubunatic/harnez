@@ -1,6 +1,6 @@
 # 441 — Dot8 PNG card reader: decode card content back to text
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — merged into 436 (Jules batch 1125)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Reading / Tooling (experimental)

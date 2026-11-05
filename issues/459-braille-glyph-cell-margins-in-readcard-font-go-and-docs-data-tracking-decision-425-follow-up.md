@@ -1,6 +1,6 @@
 # 459 — Braille glyph cell margins in readcard `font.go` and docs/data tracking decision (425 follow-up)
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — merged into 436 (Jules batch 1125)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
