@@ -19,8 +19,19 @@ Reference Practice: `@docs/practices/GoRelease.md`
 2. **Push**: `git push`. (Skip under `protected_main`: `harnez release` pushes the branch and
    tag itself. If the forge rejects the push to `main`, stop and report it. See `docs/GoRelease.md`
    for the `release/vX.Y.Z` route.)
-3. **Release**: run `harnez release`.
-4. **On failure**:
+3. **Match the project's setup**: `harnez release` defaults to a patch bump, a minisign
+   signature and a GoReleaser or `make dist` build. Check the project before the first run:
+   - **Bump**: read the last tags (`git tag --sort=-v:refname | head -3`). Choose the step the
+     project uses, for example `-b minor` when tags go v0.19.0 → v0.20.0. Ask the user when
+     the history is unclear. A project with no `version.yaml` is versioned by its tags alone.
+   - **Signing**: a project that ships no minisign-signed archives has no
+     `~/.minisign/<project>.key`. Pass `--skip-sign` only when the project never signs;
+     a missing key in a project that does sign is an auth stop (step 5).
+   - **Build**: with no `.goreleaser.yaml` and no `dist` Make target, pass `--build-cmd`, or
+     `--skip-build` for a tag-only release, and say that no binaries are attached.
+   Then run `harnez release -n` with those flags and read its plan.
+4. **Release**: run `harnez release` with the same flags.
+5. **On failure**:
    - If it fails because a login/auth step is needed (e.g. forge token, minisign
      key), stop and ask the user to complete that step — do not attempt to work
      around auth interactively.
@@ -33,5 +44,5 @@ Reference Practice: `@docs/practices/GoRelease.md`
    - For any other failure, diagnose and fix (failing test, dirty tree, version
      spec issue) and retry once. Escalate to the user if the second attempt
      also fails.
-5. Report the resulting tag/version and confirm the push succeeded
+6. Report the resulting tag/version and confirm the push succeeded
    (`git ls-remote --tags origin <tag>`).
