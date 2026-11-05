@@ -26,4 +26,4 @@ agents; keep the ticket's read-only form (print the steps) or a refusal that say
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| audit | jules-audit-1107 | 2323368347644472118 | pending | running (started 2026-11-06, audited 80429ccd) |
+| audit | jules-audit-1107 | 2323368347644472118 | github #94 (closed) | done: still valid, 1/1 refs hold (guard now at agent_run.go:1292); repeats 2026-11-04 audit, same too-broad next step |
