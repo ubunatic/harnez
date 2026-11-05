@@ -1,6 +1,7 @@
 # 1121 — Power box: all power readings as sparklines and values
 
-**Status**: Open
+**Status**: Closed — delivered [W] Power box with now/peak values, sparklines, boot-peak persistence and confirmed on-demand toggle
+**Closed-By**: session 74ca1fb9-acc8-489e-8717-30157fb7dbed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
