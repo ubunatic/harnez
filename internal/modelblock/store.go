@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -58,48 +59,87 @@ func write(path string, blocks []Block) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	// A unique temp name keeps concurrent writers from clobbering each other's
+	// half-written file; rename is atomic, so readers never see a torn file.
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmp := f.Name()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// locked runs fn holding an exclusive advisory flock on path+".lock", so
+// concurrent block/unblock calls (threads or processes) never lose updates.
+func locked(path string, fn func() error) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	return fn()
 }
 
 // Add records a block, replacing an earlier one for the same model and
 // dropping expired records.
 func Add(path string, b Block, now time.Time) error {
-	blocks, err := read(path)
-	if err != nil {
-		return err
-	}
-	kept := []Block{b}
-	for _, old := range blocks {
-		if old.Active(now) && key(old.Provider, old.Model) != key(b.Provider, b.Model) {
-			kept = append(kept, old)
+	return locked(path, func() error {
+		blocks, err := read(path)
+		if err != nil {
+			return err
 		}
-	}
-	return write(path, kept)
+		kept := []Block{b}
+		for _, old := range blocks {
+			if old.Active(now) && key(old.Provider, old.Model) != key(b.Provider, b.Model) {
+				kept = append(kept, old)
+			}
+		}
+		return write(path, kept)
+	})
 }
 
 // Remove deletes the block for one model and reports whether one existed.
 func Remove(path, provider, model string) (bool, error) {
-	blocks, err := read(path)
-	if err != nil {
-		return false, err
-	}
-	var kept []Block
 	found := false
-	for _, b := range blocks {
-		if key(b.Provider, b.Model) == key(provider, model) {
-			found = true
-			continue
+	err := locked(path, func() error {
+		blocks, err := read(path)
+		if err != nil {
+			return err
 		}
-		kept = append(kept, b)
-	}
-	if !found {
-		return false, nil
-	}
-	return true, write(path, kept)
+		var kept []Block
+		for _, b := range blocks {
+			if key(b.Provider, b.Model) == key(provider, model) {
+				found = true
+				continue
+			}
+			kept = append(kept, b)
+		}
+		if !found {
+			return nil
+		}
+		return write(path, kept)
+	})
+	return found, err
 }
 
 // Active returns the blocks still in force at now, soonest expiry first.

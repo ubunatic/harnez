@@ -45,7 +45,14 @@ availability reports the model as `exhausted`, so `agent start`/`resume` refuse 
 `--allow-exhausted-quota` is given. Expired blocks are ignored and dropped on the next write.
 
 `agent start` and `agent resume` record a block themselves when a failed turn carries a known quota error
-(AGY "Individual quota reached", Codex usage limit). The block lasts until the reset time the error
-names, else `default_duration`. Patterns and the default live in `spec/model_blocks.yaml`
-(schema `spec/schemas/model_blocks.schema.json`). The reset wording in those patterns is unverified
-against live provider output.
+(AGY "Individual quota reached", Codex usage limit). Every `agent resume` also refuses a session whose
+model is blocked, for any provider, unless `--allow-exhausted-quota` is given.
+
+The block lasts until the reset time the error names, else `default_duration`. Patterns and the default
+live in `spec/model_blocks.yaml` (schema `spec/schemas/model_blocks.schema.json`). Each pattern is a regex
+anchored at the start of the driver's error text and spells the provider's own error shape, so an ordinary
+failure that merely mentions "usage limit" never blocks. The Codex reset wording is unverified against live
+provider output; the AGY pattern is tested against `internal/subagent/testdata/agy_quota_error.json`.
+
+The block file is changed under an exclusive file lock with unique temp files, so concurrent `block` and
+`unblock` calls do not lose updates.

@@ -343,6 +343,22 @@ type resumeRequest struct {
 	Prompt, Name, ModelSpec, Dir, StreamMode string
 	SessionID, Selector                      string
 	Continue, JSON, PlanFirst                bool
+	AllowExhaustedQuota                      bool
+}
+
+// rejectBlockedSessionModel refuses a resume while a local model block (issue
+// 1122) covers the session's model, whatever the provider or session state.
+func rejectBlockedSessionModel(sess *subagent.Session, override bool, availability func(string, string) usage.ProviderQuotaAvailability) error {
+	if override {
+		return nil
+	}
+	if availability == nil {
+		availability = providerAvailability
+	}
+	if a := availability(sess.Provider, sess.Model); !a.BlockedUntil.IsZero() {
+		return fmt.Errorf("session %q model %s:%s is blocked until %s (%s); `harnez models unblock` clears it or pass --allow-exhausted-quota", sess.Name, sess.Provider, sess.Model, a.BlockedUntil.Format(time.RFC3339), firstNonEmpty(a.BlockReason, "no reason"))
+	}
+	return nil
 }
 
 // resolveResumeSession picks the session and reports how: name, id, dir or continue.
@@ -749,6 +765,9 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	if sess.CodexQuarantine != nil {
 		return fmt.Errorf("session %q is quarantined: %s; start a fresh session with harnez agent start --name", sess.Name, sess.CodexQuarantine.Reason)
 	}
+	if err := rejectBlockedSessionModel(sess, req.AllowExhaustedQuota, d.availability); err != nil {
+		return err
+	}
 	ctx = observeSessionProcess(ctx, s, sess.ID, sess)
 	if sess.Provider == "codex" && sess.CodexQuotaResumePending && d.availability != nil && d.availability(sess.Provider, sess.Model).State == "exhausted" {
 		return fmt.Errorf("session %q is waiting for Codex quota recovery; resume once quota is available", sess.Name)
@@ -869,7 +888,11 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			if err := s.Save(sess); err != nil {
 				return err
 			}
-			args := []string{"--store-dir", d.storeDir, "agent", "resume", "--worker-session", sess.ID, "--json", "--name", sess.Name, "--role", role, "--dir", sess.WorkingDir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst], "--", req.Prompt}
+			args := []string{"--store-dir", d.storeDir, "agent", "resume", "--worker-session", sess.ID, "--json", "--name", sess.Name, "--role", role, "--dir", sess.WorkingDir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
+			if req.AllowExhaustedQuota {
+				args = append(args, "--allow-exhausted-quota")
+			}
+			args = append(args, "--", req.Prompt)
 			started, err := launchForegroundWorker(cmd, s, sess, args, timeout, req.JSON)
 			if !started && err != nil {
 				*sess = previous

@@ -152,7 +152,7 @@ func (d *quotaFailDriver) RunStream(context.Context, subagent.RunOptions, subage
 func TestAgentStartAutoBlocksOnKnownQuotaErrorAndRefusesNextStart(t *testing.T) {
 	isolateModelState(t)
 	old := agentDriver
-	d := &quotaFailDriver{msg: "You've hit your usage limit. Try again in 3 hours."}
+	d := &quotaFailDriver{msg: "codex turn failed: You've hit your usage limit. Try again in 3 hours."}
 	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
 	t.Setenv("HARNEZ_AGENT_ROLE", "")

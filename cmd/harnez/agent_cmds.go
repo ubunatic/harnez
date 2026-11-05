@@ -358,10 +358,10 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 			return runInteractiveResume(cmd, interactiveDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir}, interactiveResumeRequest{Name: ac.name, Prompt: prompt, Dir: ac.workDir})
 		}
 		if resumeWorkerID != "" {
-			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: true, PlanFirst: planFirst}, ac.storeDir)
+			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: true, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota}, ac.storeDir)
 		}
 		return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-			return runResume(ctx, cmd, agentDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir, dbPath: agentUsageDBPath()}, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, Selector: selector, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: continueResume, JSON: ac.jsonOut, PlanFirst: planFirst})
+			return runResume(ctx, cmd, agentDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir, dbPath: agentUsageDBPath()}, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, Selector: selector, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: continueResume, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
 		})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(ac.storeDir, ac.parent)

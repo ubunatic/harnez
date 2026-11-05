@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/gittest"
+	"ubunatic.com/harnez/internal/modelblock"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/sessionstate"
 	"ubunatic.com/harnez/internal/usage"
@@ -111,6 +112,13 @@ func runIsolatedTests(m *testing.M) int {
 	}
 	code := m.Run()
 	agentTurnQuotaReader = oldQuotaReader
+	// Tests share this isolated state dir. A model block left behind would make
+	// unrelated later runs refuse a model, so a test that blocks must isolate its
+	// own XDG_STATE_HOME (isolateModelState) and leave the shared one empty.
+	if blocks := modelblock.Active(modelblock.Path(), time.Now()); len(blocks) != 0 {
+		fmt.Fprintf(os.Stderr, "FAIL: tests left model blocks in the shared test state dir %s: %+v\n", modelblock.Path(), blocks)
+		code = 1
+	}
 	// Calls to these stubs are safe: they prove a test reached a deterministic
 	// failure shim instead of a host provider binary. TestHostCommandGuardsAndXDGIsolation
 	// verifies normal PATH lookup cannot resolve to the host tools.

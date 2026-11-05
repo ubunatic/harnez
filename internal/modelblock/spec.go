@@ -18,10 +18,11 @@ const specPath = "spec/model_blocks.yaml"
 
 // Pattern is one known quota error, mirroring spec/schemas/model_blocks.schema.json.
 type Pattern struct {
-	Provider     string   `yaml:"provider"`
-	Contains     []string `yaml:"contains"`
-	ResetInRegex string   `yaml:"reset_in_regex"`
-	ResetAtRegex string   `yaml:"reset_at_regex"`
+	Provider     string `yaml:"provider"`
+	Match        string `yaml:"match"`
+	ResetInRegex string `yaml:"reset_in_regex"`
+	ResetAtRegex string `yaml:"reset_at_regex"`
+	match        *regexp.Regexp
 	resetIn      *regexp.Regexp
 	resetAt      *regexp.Regexp
 }
@@ -56,11 +57,14 @@ func parseSpec(data []byte) (*Spec, error) {
 	s.defaultDuration = d
 	for i := range s.Patterns {
 		p := &s.Patterns[i]
-		if p.Provider == "" || len(p.Contains) == 0 {
-			return nil, fmt.Errorf("%s: pattern %d needs provider and contains", specPath, i)
+		if p.Provider == "" || p.Match == "" {
+			return nil, fmt.Errorf("%s: pattern %d needs provider and match", specPath, i)
 		}
-		for j, c := range p.Contains {
-			p.Contains[j] = strings.ToLower(c)
+		if !anchored.MatchString(p.Match) {
+			return nil, fmt.Errorf("%s: pattern %d match must be anchored with ^", specPath, i)
+		}
+		if p.match, err = regexp.Compile(p.Match); err != nil {
+			return nil, fmt.Errorf("%s: pattern %d match: %w", specPath, i, err)
 		}
 		if p.ResetInRegex != "" {
 			if p.resetIn, err = regexp.Compile(p.ResetInRegex); err != nil {
@@ -75,6 +79,10 @@ func parseSpec(data []byte) (*Spec, error) {
 	}
 	return &s, nil
 }
+
+// anchored accepts a match regex that starts at the beginning of the text,
+// optionally after inline flags such as (?i).
+var anchored = regexp.MustCompile(`^(\(\?[a-z]+\))?\^`)
 
 var spanToken = regexp.MustCompile(`(?i)(\d+)\s*(days?|d|hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\b`)
 
@@ -102,31 +110,26 @@ func parseSpan(text string) time.Duration {
 // until when to block: the reset time the error names, else now plus the
 // spec default.
 func (s *Spec) Detect(provider, errText string, now time.Time) (time.Time, bool) {
-	lower := strings.ToLower(errText)
+	errText = strings.TrimSpace(errText)
 	for _, p := range s.Patterns {
-		if p.Provider != provider {
+		if p.Provider != provider || !p.match.MatchString(errText) {
 			continue
 		}
-		for _, c := range p.Contains {
-			if !strings.Contains(lower, c) {
-				continue
-			}
-			if p.resetAt != nil {
-				if m := p.resetAt.FindStringSubmatch(errText); m != nil {
-					if t, err := time.Parse(time.RFC3339, m[1]); err == nil && t.After(now) {
-						return t, true
-					}
+		if p.resetAt != nil {
+			if m := p.resetAt.FindStringSubmatch(errText); m != nil {
+				if t, err := time.Parse(time.RFC3339, m[1]); err == nil && t.After(now) {
+					return t, true
 				}
 			}
-			if p.resetIn != nil {
-				if m := p.resetIn.FindStringSubmatch(errText); m != nil {
-					if d := parseSpan(m[1]); d > 0 {
-						return now.Add(d), true
-					}
-				}
-			}
-			return now.Add(s.defaultDuration), true
 		}
+		if p.resetIn != nil {
+			if m := p.resetIn.FindStringSubmatch(errText); m != nil {
+				if d := parseSpan(m[1]); d > 0 {
+					return now.Add(d), true
+				}
+			}
+		}
+		return now.Add(s.defaultDuration), true
 	}
 	return time.Time{}, false
 }

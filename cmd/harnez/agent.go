@@ -234,7 +234,7 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			}
 			if _, findErr := ac.find(cmd, s, ac.name); findErr == nil {
 				return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst})
+					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
 				})
 			} else if !strings.Contains(findErr.Error(), "not found") {
 				return findErr
@@ -255,7 +255,7 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			candidates := attributable(xs, ac.workDir, ac.parent())
 			if len(candidates) > 0 {
 				return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: true, JSON: ac.jsonOut, PlanFirst: planFirst})
+					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: true, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
 				})
 			}
 		}
