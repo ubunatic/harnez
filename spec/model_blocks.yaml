@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=schemas/model_blocks.schema.json
+#
+# Local model blocks (issue 1122). `harnez models block` and the auto-block on
+# a known quota error write an expiring record; an active record makes
+# CachedProviderQuotaAvailabilities report the model as exhausted.
+#
+# Used when a quota error names no reset time.
+default_duration: 5h
+# Quota-error patterns checked against a failed agent turn's error text.
+# `contains` is matched case-insensitively. `reset_in_regex` captures a span
+# such as "3 hours 20 minutes"; `reset_at_regex` captures an RFC3339 time. The
+# first capture group is used; the reset time is optional.
+# The reset wording is unverified against live provider output (issue 1122).
+patterns:
+  - provider: agy
+    contains: ["individual quota reached"]
+    reset_in_regex: "(?i)(?:reset|try again|available) in ([0-9a-z ,]+)"
+    reset_at_regex: "(?i)(?:resets?|try again) at (\\d{4}-\\d{2}-\\d{2}T[0-9:.+Zz-]+)"
+  - provider: codex
+    contains: ["usage limit", "usage_limit"]
+    reset_in_regex: "(?i)try again in ([0-9a-z ,]+)"
+    reset_at_regex: "(?i)try again at (\\d{4}-\\d{2}-\\d{2}T[0-9:.+Zz-]+)"

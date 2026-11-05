@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"ubunatic.com/harnez/internal/modelblock"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
 )
@@ -58,6 +59,10 @@ type ProviderQuotaAvailability struct {
 	Exhausted bool
 	ResetIn   time.Duration
 	Windows   []usagestore.Window // Model-filtered evidence, with original reading timestamps.
+	// BlockedUntil/BlockReason are set when a local model block (issue 1122)
+	// forced the exhausted state.
+	BlockedUntil time.Time
+	BlockReason  string
 }
 
 // CachedProviderQuotaAvailability reports available, exhausted, stale, or
@@ -71,11 +76,26 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 // from one provider-store lookup.
 func CachedProviderQuotaAvailabilities(provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
 	states := unknownProviderQuotaAvailabilities(models)
-	dbPath, err := telemetry.DefaultDBPath()
-	if err != nil {
-		return states
+	if dbPath, err := telemetry.DefaultDBPath(); err == nil {
+		states = ProviderQuotaAvailabilitiesFromStore(context.Background(), dbPath, provider, models, now)
 	}
-	return ProviderQuotaAvailabilitiesFromStore(context.Background(), dbPath, provider, models, now)
+	return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)
+}
+
+// applyModelBlocks marks every model with an active local block as exhausted
+// until the block ends (issue 1122); expired blocks never reach this point.
+func applyModelBlocks(states map[string]ProviderQuotaAvailability, provider string, blocks []modelblock.Block, now time.Time) map[string]ProviderQuotaAvailability {
+	for _, b := range blocks {
+		state, ok := states[b.Model]
+		if b.Provider != provider || !ok {
+			continue
+		}
+		state.State, state.Exhausted = "exhausted", true
+		state.ResetIn = b.Until.Sub(now)
+		state.BlockedUntil, state.BlockReason = b.Until, b.Reason
+		states[b.Model] = state
+	}
+	return states
 }
 
 // ProviderQuotaAvailabilityFromStore reads normalized quota rows from the
