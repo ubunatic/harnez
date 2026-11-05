@@ -36,4 +36,4 @@ Jules audit (PR GH#69, report `reports/jules/1102.md`, checked against b0dcb501;
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| audit | jules-audit-1102 | 11136811398564624423 | pending | running (started 2026-11-06, audited 80429ccd) |
+| audit | jules-audit-1102 | 11136811398564624423 | github #97 (closed) | done: still valid, 5/5 refs hold; repeats GH#69 audit |
