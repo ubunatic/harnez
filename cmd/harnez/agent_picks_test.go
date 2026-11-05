@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"ubunatic.com/harnez/internal/agent"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -69,7 +70,7 @@ func TestModelPicksCommand(t *testing.T) {
 	if !smart || !ai || !defaultLean {
 		t.Fatalf("missing picks: %+v", picks)
 	}
-	var models []subagent.ModelEntry
+	var models []agent.ModelRow
 	if err := json.Unmarshal([]byte(run("--json")), &models); err != nil || len(models) == 0 {
 		t.Fatalf("model JSON changed: %v", err)
 	}

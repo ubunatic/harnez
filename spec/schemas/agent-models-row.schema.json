@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "harnez agent models --json",
+  "description": "Array of rows printed by `harnez agent models --json` (issue 1122). See docs/AgentModelsJSON.md.",
+  "type": "array",
+  "items": { "$ref": "#/definitions/row" },
+  "definitions": {
+    "row": {
+      "type": "object",
+      "required": ["spec", "provider", "model", "quota", "startable", "entitlement"],
+      "additionalProperties": true,
+      "properties": {
+        "spec": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "model_detail": { "type": "object" },
+        "batch": { "type": "boolean" },
+        "effort": { "type": "boolean" },
+        "cost": { "type": "integer" },
+        "eff": { "type": "string" },
+        "skills": { "type": "string" },
+        "roles": { "type": "string" },
+        "use": { "type": "string" },
+        "source": { "type": "string" },
+        "quota": {
+          "type": "object",
+          "required": ["state", "remaining_percent", "reset_at", "age_s", "scope"],
+          "additionalProperties": false,
+          "properties": {
+            "state": { "enum": ["available", "exhausted", "stale", "unknown"] },
+            "remaining_percent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+            "reset_at": { "type": ["string", "null"], "format": "date-time" },
+            "age_s": { "type": "integer", "minimum": 0 },
+            "scope": { "enum": ["provider", "model"] }
+          }
+        },
+        "startable": { "type": "boolean" },
+        "startable_reason": { "type": "string" },
+        "entitlement": {
+          "type": "object",
+          "required": ["state", "source", "checked_at"],
+          "additionalProperties": false,
+          "properties": {
+            "state": { "enum": ["verified", "unverified", "denied"] },
+            "source": { "type": "string", "minLength": 1 },
+            "checked_at": { "type": ["string", "null"], "format": "date-time" }
+          }
+        },
+        "blocked_until": { "type": "string", "format": "date-time" },
+        "block_reason": { "type": "string" }
+      }
+    }
+  }
+}

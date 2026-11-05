@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/agent"
 	"ubunatic.com/harnez/internal/pickdocs"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
@@ -179,10 +180,16 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 		entries := subagent.ModelEntriesWithDriver(knownEntries, func(m subagent.Model) subagent.Driver {
 			return agentDriver(m, ac.workDir)
 		})
-		if ac.jsonOut {
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(entries)
-		}
 		availabilityByModel := modelProviderAvailabilities(entries, usage.CachedProviderQuotaAvailabilities)
+		if ac.jsonOut {
+			// Reads only cached state; --offline is therefore always true here
+			// and no collector is started (issue 1122).
+			rows := agent.ModelRows(entries, availabilityByModel, func(m subagent.Model) bool {
+				ok, err := subagent.ModelEnabled(m.Provider, m.Name, m.Tier)
+				return err != nil || ok
+			}, time.Now())
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(rows)
+		}
 		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
 		fmt.Fprintln(tw, "SPEC\tMODEL\tSOURCE\tAVAILABILITY\tEFFORT\tCOMPACT\tCOST\tEFF\tSKILLS\tROLES\tUSE")
 		for _, e := range entries {
@@ -233,7 +240,8 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 	models.Flags().BoolVar(&picksOnly, "picks", false, "print role model picks")
 	models.Flags().BoolVar(&markdownOutput, "md", false, "print the embedded picks as Markdown")
 	models.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
-	models.AddCommand(ac.modelsSetCmd())
+	models.Flags().Bool("offline", false, "read cached state only; never start a collector (always the case for this command)")
+	models.AddCommand(ac.modelsSetCmd(), modelsBlockCmd(), modelsUnblockCmd())
 	return models
 }
 

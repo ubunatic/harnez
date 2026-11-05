@@ -265,14 +265,17 @@ Usage:
   harnez agent models [command]
 
 Available Commands:
+  block       Mark a model out of quota until a time; start and resume refuse it until then
   set         Set temporary time-limited default models for agent effort tiers
+  unblock     Remove a model block
 
 Flags:
-  -h, --help    help for models
-      --json    JSON output
-      --md      print the embedded picks as Markdown
-      --names   print only the model specs, one per line
-      --picks   print role model picks
+  -h, --help      help for models
+      --json      JSON output
+      --md        print the embedded picks as Markdown
+      --names     print only the model specs, one per line
+      --offline   read cached state only; never start a collector (always the case for this command)
+      --picks     print role model picks
 
 Global Flags:
       --allow-exhausted-quota   start even when cached provider quota is exhausted
@@ -289,6 +292,30 @@ Global Flags:
 
 Use "harnez agent models [command] --help" for more information about a command.
 
+=== harnez agent models block
+Mark a model out of quota until a time; start and resume refuse it until then
+
+Usage:
+  harnez agent models block <spec|provider:model> --until <RFC3339|duration> [--reason text] [flags]
+
+Flags:
+  -h, --help            help for block
+      --reason string   why the model is blocked
+      --until string    block end: RFC3339 time or duration such as 3h30m
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
 === harnez agent models set
 Set temporary time-limited default models for agent effort tiers
 
@@ -303,6 +330,28 @@ Flags:
       --lean string    model for lean tier
       --smart string   model for smart tier
       --until string   expiry time as HH:MM or RFC3339
+
+Global Flags:
+      --allow-exhausted-quota   start even when cached provider quota is exhausted
+  -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --model string            provider:model[:tier]
+      --name string             session name
+      --role string             agent role for a new session (default from spec/agent.yaml); roles:
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
+                                  orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                                  reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
+      --store-dir string        session store directory (default "$HOME/.harnez/agents")
+      --timeout duration        maximum foreground turn duration (0 waits without a limit)
+
+=== harnez agent models unblock
+Remove a model block
+
+Usage:
+  harnez agent models unblock <spec|provider:model> [flags]
+
+Flags:
+  -h, --help   help for unblock
 
 Global Flags:
       --allow-exhausted-quota   start even when cached provider quota is exhausted
@@ -2241,16 +2290,30 @@ Usage:
   harnez models [command]
 
 Available Commands:
+  block       Mark a model out of quota until a time; start and resume refuse it until then
   set         Set temporary time-limited default models for agent effort tiers
+  unblock     Remove a model block
 
 Flags:
-  -h, --help    help for models
-      --json    JSON output
-      --md      print the embedded picks as Markdown
-      --names   print only the model specs, one per line
-      --picks   print role model picks
+  -h, --help      help for models
+      --json      JSON output
+      --md        print the embedded picks as Markdown
+      --names     print only the model specs, one per line
+      --offline   read cached state only; never start a collector (always the case for this command)
+      --picks     print role model picks
 
 Use "harnez models [command] --help" for more information about a command.
+
+=== harnez models block
+Mark a model out of quota until a time; start and resume refuse it until then
+
+Usage:
+  harnez models block <spec|provider:model> --until <RFC3339|duration> [--reason text] [flags]
+
+Flags:
+  -h, --help            help for block
+      --reason string   why the model is blocked
+      --until string    block end: RFC3339 time or duration such as 3h30m
 
 === harnez models set
 Set temporary time-limited default models for agent effort tiers
@@ -2266,6 +2329,15 @@ Flags:
       --lean string    model for lean tier
       --smart string   model for smart tier
       --until string   expiry time as HH:MM or RFC3339
+
+=== harnez models unblock
+Remove a model block
+
+Usage:
+  harnez models unblock <spec|provider:model> [flags]
+
+Flags:
+  -h, --help   help for unblock
 
 === harnez pi
 Manage Pi integrations
