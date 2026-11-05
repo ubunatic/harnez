@@ -33,4 +33,4 @@ Jules audit (PR GH#66, report `reports/jules/959-2.md`, checked against d8904997
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| audit | jules-audit-959 | 2040706411877601641 | pending | running (started 2026-11-06, audited 80429ccd) |
+| audit | jules-audit-959 | 2040706411877601641 | github #100 (closed) | done: partly done, 4/5 refs hold (wrong: reviewer role text is spec/agent.yaml:349, not :104); repeats 2026-11-03 audit |
