@@ -21,3 +21,9 @@ refusal. Cause: `guardLeafRole` (`cmd/harnez/agent_run.go:1229-1239`) allows onl
 help, agent and send for leaf roles. Jules said "partly done", but nothing of the fix exists: still valid.
 Jules's next step (add `selftest` to that allow list) is too broad, since selftest steps may start
 agents; keep the ticket's read-only form (print the steps) or a refusal that says how to get them.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-1107 | 2323368347644472118 | pending | running (started 2026-11-06, audited 80429ccd) |

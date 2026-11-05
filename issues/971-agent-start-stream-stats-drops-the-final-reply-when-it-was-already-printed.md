@@ -33,3 +33,9 @@ run with sol, luna and argon through `sed -n '/\[reply/,$p'` shows the reply eac
 ## Audit 2026-11-03
 
 Jules audit (PR GH#65, report `reports/jules/971-2.md`, checked against d8904997, all references held): partly done. `harnez agent status --reply` exists (`cmd/harnez/agent_manage_cmds.go:179`). Still open: `cmd/harnez/agent_stream.go:231-233` replaces the reply with "(the final message was already shown above)" when `lastShown` is set. The agy missing-`[reply` header part is not verified.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-971 | 7808375416013930707 | pending | running (started 2026-11-06, audited 80429ccd) |

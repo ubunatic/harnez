@@ -48,3 +48,9 @@ Jules re-audit (session 5341120481487332044, against 70da579e, `reports/jules/10
 references checked. The real push loop (`internal/release/push.go:79-84`) fails on the first rejected
 push with no `git ls-remote` re-check; `internal/release` has no `ls-remote` call. The fan-out skip
 (`selectPushRemotes`/`coveredByKept`, same file) is a different feature and does not cover this race.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-1082 | 2739167954748901484 | pending | running (started 2026-11-06, audited 80429ccd) |

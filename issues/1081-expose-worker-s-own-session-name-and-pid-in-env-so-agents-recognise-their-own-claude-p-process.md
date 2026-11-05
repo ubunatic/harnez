@@ -19,3 +19,9 @@ Reported by the taia session from horg worker runs (epic horg#6), 2026-11-01. So
 ## 3. Implementation & Verification Plan
 - Export the vars for every provider; test they reach the child env.
 - Add a line to the worker preamble on self-recognition.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-1081 | 2149295139995505177 | pending | running (started 2026-11-06, audited 80429ccd) |

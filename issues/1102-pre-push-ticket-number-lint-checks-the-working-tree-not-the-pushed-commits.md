@@ -31,3 +31,9 @@ In the usual flow both sides match: you push the checked-out branch with a clean
 ## Audit 2026-11-03
 
 Jules audit (PR GH#69, report `reports/jules/1102.md`, checked against b0dcb501; the test-file line cited is unrelated): still valid, not "partly done" as the report says. `scripts/git-hooks/pre-push:14` runs `harnez issues lint --against origin/main`, and `CheckAgainst` (`internal/issues/against.go`) scans the working tree for the local side; only the remote side uses `ls-tree`. `internal/githooks/pre_push_test.go` has no collision case. Smallest step: have the hook pass the pushed local sha and make `CheckAgainst` list local tickets from that commit.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-1102 | 11136811398564624423 | pending | running (started 2026-11-06, audited 80429ccd) |

@@ -27,3 +27,9 @@ Follow-up to issue 1121 (Power box implementation):
 - **M1**: Refactor `saveLocked` to use non-blocking lock or asynchronous/non-blocking persist semantics so `Observe` never stalls the watch render loop.
 - **M2**: Add unit tests in `internal/usage/power_peaks_test.go` for corrupt/truncated JSON recovery.
 - **M3**: Add multi-process contention test verifying flock behavior across separate OS processes.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement | jules-implement-1137 | 3651498663032874160 | pending | running (started 2026-11-06, audited 80429ccd) |

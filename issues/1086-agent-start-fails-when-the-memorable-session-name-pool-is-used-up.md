@@ -34,3 +34,9 @@ A numeric suffix fallback in `GenerateSessionName` is a small change, and tests 
 ## Audit 2026-11-03
 
 Jules audit (PR GH#68, report `reports/jules/1086.md`, checked against d8904997; one line off by one): still valid. `internal/subagent/name.go:26` fails with a static "all memorable session names are in use"; `cmd/harnez/agent_run.go:408-410` reserves every session's name, finished ones included. Smallest step: fall back to a numeric suffix when the pool is exhausted, so finished sessions keep resumable names.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement | jules-implement-1086 | 9431202035978934268 | pending | running (started 2026-11-06, audited 80429ccd) |
