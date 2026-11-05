@@ -29,4 +29,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1149 | 8197884588804528726 | pending | running (started 2026-11-06 00:45, audited 9f7dcf78) |
+| batch audit | jules-batch-1149 | 8197884588804528726 | github #102 (closed) | discarded 13m: 2/4 refs hold (references.go:61, claudeskills_test.go:76 wrong). Its close of 1015 is wrong: RewriteReferences rewrites paths (cmd/harnez/issues.go:820), 1015 wants word-bounded number mentions. No ticket changes; re-run only if needed |
