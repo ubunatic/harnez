@@ -43,8 +43,10 @@ func Isolate() (cleanup func(), err error) {
 			return nil, err
 		}
 	}
-	// GIT_CONFIG_COUNT/KEY/VALUE inject config too; drop any inherited ones.
+	// GIT_CONFIG_COUNT/KEY/VALUE and GIT_CONFIG_PARAMETERS (git -c) inject
+	// config too; drop any inherited ones.
 	_ = os.Unsetenv("GIT_CONFIG_COUNT")
+	_ = os.Unsetenv("GIT_CONFIG_PARAMETERS")
 	return func() { _ = os.RemoveAll(dir) }, nil
 }
 

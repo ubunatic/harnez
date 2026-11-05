@@ -21,6 +21,11 @@ func TestIsolateHidesGlobalHooksPath(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", hostile)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "")
 	t.Setenv("GIT_CONFIG_SYSTEM", "")
+	// git -c passes config this way; it must not survive Isolate either.
+	t.Setenv("GIT_CONFIG_PARAMETERS", "'core.hookspath=/dev/null'")
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "core.hooksPath")
+	t.Setenv("GIT_CONFIG_VALUE_0", "/dev/null")
 
 	cleanup, err := Isolate()
 	if err != nil {
