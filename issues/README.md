@@ -72,4 +72,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1168 | [1168-jules-backlog-batch-docs-search-tui-and-testing-merge-close-assessment.md](1168-jules-backlog-batch-docs-search-tui-and-testing-merge-close-assessment.md) | Jules backlog batch: docs, search, TUI and testing (merge/close assessment) | Draft |
 | 1169 | [1169-jules-backlog-batch-miscellaneous-1-of-2-merge-close-assessment.md](1169-jules-backlog-batch-miscellaneous-1-of-2-merge-close-assessment.md) | Jules backlog batch: miscellaneous (1 of 2) (merge/close assessment) | Draft |
 | 1170 | [1170-jules-backlog-batch-miscellaneous-2-of-2-merge-close-assessment.md](1170-jules-backlog-batch-miscellaneous-2-of-2-merge-close-assessment.md) | Jules backlog batch: miscellaneous (2 of 2) (merge/close assessment) | Draft |
+| 1171 | [1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md](1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md) | jules skill: skip recently audited tickets and add a batch audit prompt | Open |
+| 1172 | [1172-draft-tickets-count-toward-the-active-ticket-cap.md](1172-draft-tickets-count-toward-the-active-ticket-cap.md) | Draft tickets count toward the active-ticket cap | Open |
+| 1173 | [1173-jules-config-loader-reports-a-structure-mismatch-as-not-valid-json.md](1173-jules-config-loader-reports-a-structure-mismatch-as-not-valid-json.md) | Jules config loader reports a structure mismatch as not valid JSON | Open |
 <!-- harnez:end issues-active-index -->
