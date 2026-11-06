@@ -1,6 +1,7 @@
 # 1175 — usage watch: debug frame loses lines after a collector refresh (TestBuildWatchFrameAtDebugOverlayUsesCollectorCadence fails on main)
 
-**Status**: Open
+**Status**: Closed — Variable live Load text width changed measured natural width and repacked the compact debug row; TestBuildWatchFrameAtDebugOverlayUsesCollectorCadence passes with stable Load preferred width.
+**Closed-By**: codex:sol:med, session dev-1175
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
