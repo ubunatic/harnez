@@ -1,6 +1,6 @@
 # 739 — Rules header lists Quota.md when quota-1 is not enabled
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done: harnez read reports a missing Quota.md as '(absent, optional)' and exits 0 (live check 2026-11-06)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Init
