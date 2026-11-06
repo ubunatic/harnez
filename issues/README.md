@@ -41,4 +41,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1137 | [1137-usage-non-blocking-power-peak-file-lock-and-tests-for-corrupt-files-and-multi-process-contention.md](1137-usage-non-blocking-power-peak-file-lock-and-tests-for-corrupt-files-and-multi-process-contention.md) | usage: non-blocking power peak file lock and tests for corrupt files and multi-process contention | Open |
 | 1171 | [1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md](1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md) | jules skill: skip recently audited tickets and add a batch audit prompt | Open |
 | 1172 | [1172-draft-tickets-count-toward-the-active-ticket-cap.md](1172-draft-tickets-count-toward-the-active-ticket-cap.md) | Draft tickets count toward the active-ticket cap | Open |
+| 1179 | [1179-edit-guard-flags-append-only-writes-and-edits-inside-scratch-worktrees.md](1179-edit-guard-flags-append-only-writes-and-edits-inside-scratch-worktrees.md) | edit guard flags append-only writes and edits inside scratch worktrees | Open |
 <!-- harnez:end issues-active-index -->
