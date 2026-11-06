@@ -2,15 +2,214 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/resolve"
 )
+
+func TestAgentSelftestGeneratedSessionAcrossShells(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX /bin/sh")
+	}
+	tempDir := t.TempDir()
+	stateDir := filepath.Join(tempDir, "state dir's $; *")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	build := exec.Command("go", "build", "-o", filepath.Join(tempDir, "harnez"), ".")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, output)
+	}
+	env := append(os.Environ(), "PATH="+tempDir+string(os.PathListSeparator)+os.Getenv("PATH"), "HARNEZ_AGENT_ROLE=")
+	for _, name := range resolve.SessionEnvVars {
+		env = append(env, name+"=")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+	command := func(line string) *exec.Cmd {
+		cmd := exec.CommandContext(ctx, "/bin/sh", "-c", line)
+		cmd.Env = env
+		return cmd
+	}
+	run := func(line string) string {
+		t.Helper()
+		output, err := command(line).CombinedOutput()
+		if err != nil {
+			t.Fatalf("command %q: %v\n%s", line, err, output)
+		}
+		return string(output)
+	}
+	oneCommand := func(output string) string {
+		t.Helper()
+		commands := extractSelftestCommands(output)
+		if len(commands) != 1 {
+			t.Fatalf("expected one printed command: %s", output)
+		}
+		return commands[0]
+	}
+	hello := run("harnez agent selftest --step hello --state-dir " + shellQuote(stateDir))
+	files, err := filepath.Glob(filepath.Join(stateDir, "harnez-selftest-*.json"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("hello state files = %v, error = %v", files, err)
+	}
+	state, err := loadSelftestState(files[0])
+	if err != nil || state.SessionID == "" {
+		t.Fatalf("hello state = %+v, error = %v", state, err)
+	}
+	commands := extractSelftestCommands(hello)
+	if len(commands) != 2 {
+		t.Fatalf("expected two hello commands: %s", hello)
+	}
+	for _, line := range commands {
+		if !strings.Contains(line, "--session "+shellQuote(state.SessionID)) {
+			t.Fatalf("command does not carry generated session %q: %s", state.SessionID, line)
+		}
+	}
+	background := command(commands[0])
+	var backgroundOutput bytes.Buffer
+	background.Stdout = &backgroundOutput
+	background.Stderr = &backgroundOutput
+	if err := background.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- background.Wait() }()
+	t.Cleanup(func() { cancel(); <-done })
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		state, err = loadSelftestState(files[0])
+		if err == nil && state.BackgroundStartedAt != nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("background did not start: %v", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+	confirm := run(commands[1])
+	confirmRunning := run(oneCommand(confirm))
+	verify := oneCommand(confirmRunning)
+	select {
+	case err := <-done:
+		done <- err // Leave the result for cleanup.
+		if err != nil {
+			t.Fatalf("background: %v\n%s", err, backgroundOutput.String())
+		}
+	case <-ctx.Done():
+		t.Fatalf("background did not finish: %v", ctx.Err())
+	}
+	if got := oneCommand(backgroundOutput.String()); got != verify {
+		t.Fatalf("verify commands differ: %q and %q", got, verify)
+	}
+	run(verify)
+	state, err = loadSelftestState(files[0])
+	if err != nil || state.SessionID == "" || state.ConfirmAt == nil || state.ConfirmRunningAt == nil || state.BackgroundFinishedAt == nil {
+		t.Fatalf("incomplete final state = %+v, error = %v", state, err)
+	}
+}
+
+func TestSelftestShellQuote(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX /bin/sh")
+	}
+	for _, input := range []string{"", "plain", "with spaces", "apostrophe' and $HOME; *"} {
+		cmd := exec.Command("/bin/sh", "-c", "printf '%s' "+shellQuote(input))
+		got, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("shell quote failed for %q: %v", input, err)
+		}
+		if string(got) != input {
+			t.Errorf("shell quote roundtrip = %q, want %q", got, input)
+		}
+	}
+}
+
+func TestAgentSelftestPrintedCommandsAcrossShells(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX /bin/sh")
+	}
+	tempDir := t.TempDir()
+	stateDir := filepath.Join(tempDir, "state dir's $; *")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(tempDir, "harnez")
+	build := exec.Command("go", "build", "-o", bin, ".")
+	build.Dir = filepath.Join("..", "..", "cmd", "harnez")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, output)
+	}
+	// Derive the unusual session value from shell input, so the quoting test
+	// exercises the real shell's parsing and argument passing.
+	sessionID := "session with ' quote $HOME; *"
+	base := "harnez agent selftest --session " + shellQuote(sessionID) + " --state-dir " + shellQuote(stateDir)
+	call := func(command string) string {
+		return "HTO=0 " + command
+	}
+	sh := func(command string) ([]byte, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		process := exec.CommandContext(ctx, "/bin/sh", "-c", command)
+		process.Env = append(os.Environ(), "PATH="+tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		return process.CombinedOutput()
+	}
+
+	hello, err := sh(call(base + " --step hello"))
+	if err != nil {
+		t.Fatalf("hello: %v\n%s", err, hello)
+	}
+	commands := extractSelftestCommands(string(hello))
+	if len(commands) != 2 {
+		t.Fatalf("hello did not print copyable commands: %s", hello)
+	}
+	for _, command := range commands {
+		if !strings.Contains(command, "--session "+shellQuote(sessionID)) || !strings.Contains(command, "--state-dir "+shellQuote(stateDir)) {
+			t.Errorf("printed command lacks safely quoted session/state dir: %s", command)
+		}
+	}
+	backgroundOutput, err := sh(call(commands[0] + " --duration 1ms"))
+	if err != nil {
+		t.Fatalf("printed background command: %v\n%s", err, backgroundOutput)
+	}
+	backgroundNext := extractSelftestCommands(string(backgroundOutput))
+	if len(backgroundNext) != 1 || !strings.Contains(backgroundNext[0], "--session "+shellQuote(sessionID)) || !strings.Contains(backgroundNext[0], "--state-dir "+shellQuote(stateDir)) {
+		t.Fatalf("background did not print a session/state-dir-aware verify command: %s", backgroundOutput)
+	}
+	// The printed confirm command must resolve the state created in the previous
+	// shell. This path deliberately reaches the expected completed-background
+	// diagnostic, proving both unusual arguments survived shell parsing.
+	confirmOutput, err := sh(call(commands[1]))
+	if err == nil || !strings.Contains(string(confirmOutput), "already finished") {
+		t.Fatalf("printed confirm command did not find shared state: err=%v output=%s", err, confirmOutput)
+	}
+	missingSessionCommand := "harnez agent selftest --step verify --session " + shellQuote(sessionID+"-missing") + " --state-dir " + shellQuote(stateDir)
+	verifyOutput, err := sh(call(missingSessionCommand))
+	if err == nil || !strings.Contains(string(verifyOutput), "run "+selftestCommand("hello", sessionID+"-missing", stateDir)+" first") {
+		t.Fatalf("missing-state recovery omitted quoted session/state directory: err=%v output=%s", err, verifyOutput)
+	}
+}
+
+func extractSelftestCommands(output string) []string {
+	var commands []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "HTO=0 harnez agent selftest ") || strings.HasPrefix(line, "harnez agent selftest ") {
+			commands = append(commands, line)
+		}
+	}
+	return commands
+}
 
 func TestSanitizeSelftestID(t *testing.T) {
 	cases := []struct {
@@ -107,7 +306,15 @@ func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
 	t.Cleanup(func() { release(); selftestBackgroundWait = oldWait })
 	t.Setenv("HTO", "0")
 	tempDir := t.TempDir()
-	sessionID := "test-session-123"
+	sessionID := "test session ' $HOME; *"
+	checkNext := func(output, step string) {
+		t.Helper()
+		commands := extractSelftestCommands(output)
+		want := selftestCommand(step, sessionID, tempDir)
+		if len(commands) != 1 || commands[0] != want {
+			t.Errorf("next command = %q, want %q; output: %s", commands, want, output)
+		}
+	}
 
 	// 1. Run --step hello
 	{
@@ -124,13 +331,18 @@ func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
 	}
 
 	// 2. Launch background task in a goroutine
-	bgDone := make(chan error, 1)
+	type backgroundResult struct {
+		output string
+		err    error
+	}
+	bgDone := make(chan backgroundResult, 1)
 	go func() {
 		cmd := newAgentSelftestCmd()
 		var out bytes.Buffer
 		cmd.SetOut(&out)
 		cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--duration", "1s", "--step", "background"})
-		bgDone <- cmd.Execute()
+		err := cmd.Execute()
+		bgDone <- backgroundResult{out.String(), err}
 	}()
 
 	// Wait for background to record started state
@@ -152,6 +364,7 @@ func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
 		if !strings.Contains(out.String(), "Confirmed background task is currently active") {
 			t.Errorf("unexpected confirm output: %s", out.String())
 		}
+		checkNext(out.String(), "confirm-running")
 	}
 
 	// 4. Run --step confirm-running with separate arg
@@ -166,15 +379,17 @@ func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
 		if !strings.Contains(out.String(), "Recorded background running confirmation (duration: 200ms)") {
 			t.Errorf("unexpected confirm-running output: %s", out.String())
 		}
+		checkNext(out.String(), "verify")
 	}
 	release()
 
 	// Wait for background task goroutine to finish
 	select {
-	case err := <-bgDone:
-		if err != nil {
-			t.Fatalf("background task failed: %v", err)
+	case result := <-bgDone:
+		if result.err != nil {
+			t.Fatalf("background task failed: %v", result.err)
 		}
+		checkNext(result.output, "verify")
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for background task")
 	}
@@ -299,8 +514,9 @@ func TestAgentSelftestErrorConditions(t *testing.T) {
 	{
 		cmd := newAgentSelftestCmd()
 		cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "confirm-running"})
-		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "confirm' first") {
-			t.Fatalf("expected error for confirm-running before confirm, got: %v", err)
+		want := "run " + selftestCommand("confirm", sessionID, tempDir) + " first"
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("expected error containing %q for confirm-running before confirm, got: %v", want, err)
 		}
 	}
 

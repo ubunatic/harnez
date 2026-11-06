@@ -60,6 +60,23 @@ func selftestStateFilePath(stateDir, sessionID string) string {
 	return filepath.Join(stateDir, fmt.Sprintf("harnez-selftest-%s.json", sanitizeSelftestID(sessionID)))
 }
 
+func selftestCommand(step, sessionID, stateDir string) string {
+	var command strings.Builder
+	command.WriteString("harnez agent selftest --step ")
+	command.WriteString(shellQuote(step))
+	command.WriteString(" --session ")
+	command.WriteString(shellQuote(sessionID))
+	if stateDir != "" {
+		command.WriteString(" --state-dir ")
+		command.WriteString(shellQuote(stateDir))
+	}
+	return command.String()
+}
+
+func selftestRecoveryError(step, sessionID, stateDir string) error {
+	return fmt.Errorf("run %s first", selftestCommand(step, sessionID, stateDir))
+}
+
 func loadSelftestState(path string) (*selftestState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -182,14 +199,16 @@ func newAgentSelftestCmd() *cobra.Command {
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "Agent background self-test initialized (session: %s).\n", sessionID)
 				fmt.Fprintln(cmd.OutOrStdout(), "Next actions:")
-				fmt.Fprintln(cmd.OutOrStdout(), "1. FIRST: Run 'HTO=0 harnez agent selftest --step background' in your host's native background as a Task/Job.")
-				fmt.Fprintln(cmd.OutOrStdout(), "2. SECOND: Run 'harnez agent selftest --step confirm' to confirm the task is running in the background.")
+				fmt.Fprintln(cmd.OutOrStdout(), "1. FIRST: Run in your host's native background as a Task/Job:")
+				fmt.Fprintf(cmd.OutOrStdout(), "   HTO=0 %s\n", selftestCommand("background", sessionID, stateDir))
+				fmt.Fprintln(cmd.OutOrStdout(), "2. SECOND: Run to confirm the task is running in the background:")
+				fmt.Fprintf(cmd.OutOrStdout(), "   %s\n", selftestCommand("confirm", sessionID, stateDir))
 				return nil
 
 			case "background":
 				st, err := loadSelftestState(statePath)
 				if err != nil || st.HelloAt == nil {
-					return errors.New("run 'harnez agent selftest --step hello' first")
+					return selftestRecoveryError("hello", sessionID, stateDir)
 				}
 				now := time.Now()
 				st.BackgroundStartedAt = &now
@@ -219,16 +238,17 @@ func newAgentSelftestCmd() *cobra.Command {
 				}
 
 				fmt.Fprintf(cmd.OutOrStdout(), "Background task completed after %v.\n", dur)
-				fmt.Fprintln(cmd.OutOrStdout(), "Next action: Run 'harnez agent selftest --step verify' to validate the execution sequence.")
+				fmt.Fprintln(cmd.OutOrStdout(), "Next action: Run to validate the execution sequence:")
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", selftestCommand("verify", sessionID, stateDir))
 				return nil
 
 			case "confirm":
 				st, err := loadSelftestState(statePath)
 				if err != nil || st.HelloAt == nil {
-					return errors.New("run 'harnez agent selftest --step hello' first")
+					return selftestRecoveryError("hello", sessionID, stateDir)
 				}
 				if st.BackgroundStartedAt == nil {
-					return errors.New("background task was not started; run 'harnez agent selftest --step background' in the background first")
+					return fmt.Errorf("background task was not started; run HTO=0 %s in the background first", selftestCommand("background", sessionID, stateDir))
 				}
 				if st.BackgroundFinishedAt != nil {
 					return errors.New("background task has already finished; background task must run concurrently in the background")
@@ -243,13 +263,13 @@ func newAgentSelftestCmd() *cobra.Command {
 
 				fmt.Fprintln(cmd.OutOrStdout(), "Confirmed background task is currently active.")
 				fmt.Fprintln(cmd.OutOrStdout(), "Next action: Inspect your native background job/task list, then run:")
-				fmt.Fprintln(cmd.OutOrStdout(), "  harnez agent selftest --step confirm-running [<duration>]")
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", selftestCommand("confirm-running", sessionID, stateDir))
 				return nil
 
 			case "confirm-running":
 				st, err := loadSelftestState(statePath)
 				if err != nil || st.ConfirmAt == nil {
-					return errors.New("run 'harnez agent selftest --step confirm' first")
+					return selftestRecoveryError("confirm", sessionID, stateDir)
 				}
 				now := time.Now()
 				st.ConfirmRunningAt = &now
@@ -265,13 +285,14 @@ func newAgentSelftestCmd() *cobra.Command {
 				} else {
 					fmt.Fprintln(cmd.OutOrStdout(), "Recorded background running confirmation.")
 				}
-				fmt.Fprintln(cmd.OutOrStdout(), "Next action: Await background task completion, then run 'harnez agent selftest --step verify'.")
+				fmt.Fprintln(cmd.OutOrStdout(), "Next action: Await background task completion, then run:")
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", selftestCommand("verify", sessionID, stateDir))
 				return nil
 
 			case "verify":
 				st, err := loadSelftestState(statePath)
 				if err != nil {
-					return fmt.Errorf("no selftest state found for session %s (run --step hello first)", sessionID)
+					return fmt.Errorf("no selftest state found for session %s (run %s first)", sessionID, selftestCommand("hello", sessionID, stateDir))
 				}
 
 				var issues []string
