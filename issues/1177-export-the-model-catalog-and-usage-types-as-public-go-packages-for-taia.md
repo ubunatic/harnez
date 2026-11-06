@@ -101,3 +101,20 @@ sites change instead.
 Required in M2: the byte-identity check of `usage.RenderJSON` output before and after the move; `go
 list -deps ./quota` limited to the standard library; move only the `GPUClass` constants `quota` needs;
 the package doc states that untagged field names (`CPULoad`, `GPU`) are the JSON keys.
+
+### M2 delivered (1e4617b2 pre-work and golden, c9e82502 move, 75ac394b doc and test)
+
+Host review: `go list -deps ./quota` is the standard library plus `quota`; the golden
+`internal/usage/testdata/render_json_identity.golden` dates from the pre-move commit and still passes;
+1176 contract test and `TestUsageJSONDecodeAndRoundTrip` pass. Reviewer (codex:terra:low,
+review-1177-m2): no output change; `PopulateStaleness` still runs before rendering (`usage.go:151`).
+
+### Pre-Work / Required Refinements (M2b)
+
+- Golden coverage (`internal/usage/render_json_identity_test.go:10`): set `Error` and a `weekly`
+  window too, regenerate the golden from the current code only after checking the diff adds just those
+  keys, so a rename of `error` or `weekly` fails the test.
+- API scope: move `HasUsageData` (`quota/types.go:110`) out of `quota` into an `internal/usage`
+  function, as decision A did for the staleness methods. Keep `QuotaFetchDurationMS`
+  (`quota/types.go:81`) on the struct, and state in `quota/doc.go` that fields tagged `json:"-"` are
+  internal and outside the stable promise.
