@@ -40,6 +40,8 @@ type Model struct {
 	Preferred bool
 	Effort    *bool
 	Facts     map[string]any
+	// Deprecated: listing guidance has no typed replacement yet. Do not add
+	// new consumers; the replacement is tracked by issue 1177.
 	Guide     LegacyGuide
 	Access    []AccessObservation
 	Policy    *PolicyEntry
@@ -57,6 +59,9 @@ type Identity struct {
 }
 
 // LegacyGuide preserves spec/agent.yaml listing fields until consumers migrate.
+//
+// Deprecated: listing guidance has no typed replacement yet. Do not add new
+// consumers; the replacement is tracked by issue 1177.
 type LegacyGuide struct {
 	Cost              int            `yaml:"cost"`
 	CostByTier        map[string]int `yaml:"cost_by_tier"`
