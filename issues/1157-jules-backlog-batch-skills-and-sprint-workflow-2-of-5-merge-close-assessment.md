@@ -30,4 +30,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1157 | 11850455728972557721 | none | failed: still IN_PROGRESS after 50m (two waits); dropped as stuck per owner rule. Adopt later with `harnez agent resume --model jules --id 11850455728972557721 wait` |
+| batch audit | jules-batch-1157 | 11850455728972557721 | github #121 (closed) | done late (>50m; found COMPLETED on a later status check): 3/3 refs hold; no closes proposed. All kept |
