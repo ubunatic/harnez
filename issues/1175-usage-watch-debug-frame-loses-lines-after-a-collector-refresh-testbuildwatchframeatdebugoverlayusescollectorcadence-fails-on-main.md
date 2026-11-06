@@ -1,6 +1,7 @@
 # 1175 — usage watch: debug frame loses lines after a collector refresh (TestBuildWatchFrameAtDebugOverlayUsesCollectorCadence fails on main)
 
-**Status**: Open — M1 review: Load row clipped live; M2 pre-work
+**Status**: Closed — Stable Load geometry now expands into preceding free columns up to a full normal CPU line; TestBuildWatchFrameLoadRowIsNotTruncatedAt110Columns and TestBuildWatchFrameAtDebugOverlayUsesCollectorCadence pass, and the 110-column live PTY Load row is complete.
+**Closed-By**: codex:sol:med, session dev-1175
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
