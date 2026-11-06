@@ -1,6 +1,6 @@
 # 302 — Research plugin systems for pi agents, DeepSeek Harness, and Prime Agent self-modification
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done: documentation-only research; study docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md delivered. Verified 2026-11-06 (Jules batch 1142)
 **Priority**: P3 (Low)
 **Severity**: N/A (research)
 **Category**: Documentation
