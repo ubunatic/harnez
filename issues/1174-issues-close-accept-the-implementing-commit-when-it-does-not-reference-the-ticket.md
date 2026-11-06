@@ -1,6 +1,6 @@
 # 1174 — issues close: accept the implementing commit when it does not reference the ticket
 
-**Status**: Open
+**Status**: Closed — Done in 74e2ca78: issues close --implemented-by <sha>, tested in cmd/harnez/issues_implemented_by_test.go
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
