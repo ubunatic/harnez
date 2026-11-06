@@ -29,4 +29,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1170 | 712364209445525662 | pending | stuck: IN_PROGRESS after 50m (two waits, status checked); re-check with `harnez agent status --model jules --id 712364209445525662` |
+| batch audit | jules-batch-1170 | 712364209445525662 | github #132 (closed) | done late (COMPLETED on re-check): 2/3 refs hold (haiku study :95 wrong), discarded; no closes proposed. No ticket changes |
