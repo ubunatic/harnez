@@ -31,4 +31,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1148 | 18162044596731323041 | pending | running (started 2026-11-06 00:45, audited 9f7dcf78) |
+| batch audit | jules-batch-1148 | 18162044596731323041 | github #106 (closed) | done 22m: 6/6 refs hold. Closed 702 (verified live: find on a repo without issues/ gives the clear no-tracker message, issues new creates issues/ and its index). 703 kept: lock exclusion only in init (init_agent_file.go:84), not the first-use path. 843 already Closed (my filter matched 'Backlog' in its status text). 8 kept |
