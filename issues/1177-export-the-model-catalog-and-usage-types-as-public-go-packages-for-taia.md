@@ -48,3 +48,19 @@ graph check by the host:
   branch `sprint/1177-1173-1138-1139`.
 - Searcher skipped for 1177: the import-graph findings above were checked live this session and
   name the write set; the developer's plan-only first turn confirms current locations.
+
+### M1 plan accepted (dev-1177, claude:haiku:med)
+
+`Load` exists (`internal/modelcatalog/catalog.go:285`); callers are only in `internal/subagent`; doc
+source `docs/other/Spec.md:102` and root copy `docs/Spec.md:102` name the path. Plan: `git mv` the
+package with `testdata/`, add `doc.go` (stable-API promise) and an external `modelcatalog_test` that
+calls `Load` with temp XDG dirs.
+
+### Pre-Work / Required Refinements (M1)
+
+- Keep every exported name (unexporting after publication would break consumers).
+- Mark `Model.Guide` / `LegacyGuide` with a `// Deprecated:` comment naming the replacement field,
+  so the stable promise starts with the bridge already on its deprecation path.
+- No JSON tags on `Model`/`Policy` now (adding them later is not breaking).
+- Edit the doc source `docs/other/Spec.md`, then sync the root copy as `CLAUDE.md` describes
+  (`make install`, `harnez init -d .`, `git checkout --` unrelated rewrites).
