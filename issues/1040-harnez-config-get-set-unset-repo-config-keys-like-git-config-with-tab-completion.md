@@ -137,3 +137,10 @@ harnez config [-d <repo>] --list                # effective values, defaults mar
     `true`/`false`. Tests run through `__complete`.
   - Docs: the README command list, the help golden, and a short `docs/` mention of setting
     `git.mode`/`protected_main` this way.
+
+## Audit 2026-11-06
+
+Jules batch 1145 (`reports/jules/1145.md`), checked on 9f7dcf78: partly done. `harnez config` get, set,
+`--unset` and `--list` exist (`cmd/harnez/config.go:20`, live `--help`). Left: shell completion. Live
+`harnez __complete config git.` and `harnez __complete config git.mode ""` return no candidates
+(`:0`, ShellCompDirectiveDefault), and the completion test from Done-when is missing.

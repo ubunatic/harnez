@@ -28,4 +28,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1145 | 4281001866076029153 | pending | running (started 2026-11-06 00:45, audited 9f7dcf78) |
+| batch audit | jules-batch-1145 | 4281001866076029153 | github #108 (closed) | done (>25m, one resumed wait): 5/5 refs hold, all 4 closes rejected. 298 asks for a hook, not the doc rule. 836 asks wrap to list unpushed repos. 1018 is the follow-ups. 1040: get/set/unset/list done, completion missing (live `harnez __complete config git.` returns nothing); noted in 1040. 7 kept |
