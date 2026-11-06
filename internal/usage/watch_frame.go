@@ -504,6 +504,13 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 			}
 		}
 		pref := natural
+		if p.key == "L" {
+			// Load readings include live numeric fields whose text width can
+			// change between redraws. Keep that volatility from repacking the
+			// panel row; renderWBox clips any wider values within this stable
+			// preferred width.
+			pref = minBoxWidth + 8
+		}
 		if pref < minBoxWidth {
 			pref = minBoxWidth
 		}

@@ -1795,6 +1795,57 @@ func TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad(t *testing.T) {
 	t.Fatalf("expected All Usage and Load to share one row at 100 columns:\n%s", strings.Join(frame.lines, "\n"))
 }
 
+func TestBuildWatchFrameLoadWidthDoesNotChangePanelPlacement(t *testing.T) {
+	refreshed := time.Now()
+	base := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{{
+			AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+			LastRefreshed: refreshed, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 25},
+		}},
+	}
+	build := func(power float64, now time.Time, rows int, live bool) screenFrame {
+		summary := base
+		summary.Load = &LoadSnapshot{CPU: CPULoad{NumCPU: 4, PowerW: power, PowerOk: true}}
+		return buildWatchFrameAt(summary, nil, DefaultWatchInterval, compactWatchSections(), 90, rows, live,
+			now, WatchOptions{Compact: true, DebugOverlay: true})
+	}
+
+	shortPower := build(1, refreshed, 24, true)
+	longPower := build(1_000_000_000_000, refreshed, 24, true)
+	if len(shortPower.lines) != len(longPower.lines) {
+		t.Fatalf("Load text width changed debug frame geometry: short=%d lines long=%d lines", len(shortPower.lines), len(longPower.lines))
+	}
+	for _, title := range []string{"All Usage", "Load"} {
+		shortAt, longAt := -1, -1
+		for i := range shortPower.lines {
+			if strings.Contains(stripANSI(shortPower.lines[i]), title) {
+				shortAt = i
+			}
+			if strings.Contains(stripANSI(longPower.lines[i]), title) {
+				longAt = i
+			}
+		}
+		if shortAt < 0 || longAt < 0 {
+			t.Fatalf("%s panel missing after Load width change:\nshort:\n%s\nlong:\n%s", title,
+				strings.Join(shortPower.lines, "\n"), strings.Join(longPower.lines, "\n"))
+		}
+		if shortAt != longAt {
+			t.Errorf("%s panel moved after Load width change: short line %d, long line %d", title, shortAt, longAt)
+		}
+	}
+	for _, elapsed := range []time.Duration{0, DefaultCollectorInterval() / 2, DefaultCollectorInterval()} {
+		frame := build(1, refreshed.Add(elapsed), 24, true)
+		if len(frame.lines) != len(shortPower.lines) {
+			t.Errorf("collector offset %s changed frame geometry: got %d lines, want %d", elapsed, len(frame.lines), len(shortPower.lines))
+		}
+	}
+	justFits := build(1, refreshed, len(shortPower.lines), true)
+	if len(justFits.lines) != len(shortPower.lines) {
+		t.Fatalf("frame at exact fitting height lost lines: got %d, want %d", len(justFits.lines), len(shortPower.lines))
+	}
+}
+
 // TestControlsOverlayListsAllActiveCommandsGroupedByPurpose is issue 094's
 // core acceptance criterion: the [?] overlay must list every active
 // keyboard command, grouped by purpose (view modes, panels, data rows,
