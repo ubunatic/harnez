@@ -52,7 +52,7 @@ per-ticket verdict, proposed priority and reason, merges and a top five.
 | Wave | Wrappers | State |
 | --- | --- | --- |
 | 1 | 1140-1149 | done 01:22: 10/10 delivered a PR, 3 needed one resumed wait (>25m) |
-| 2 | 1150-1159 | pending, stricter prompt (below) |
+| 2 | 1150-1159 | done 02:15 on `2cf3be4d`: 8 delivered, 6 needed a resumed wait, 1152 and 1157 stuck (>50m, dropped) |
 | 3 | 1160-1169 | pending |
 | 4 | 1170 | pending |
 
@@ -83,6 +83,32 @@ Prompt change for waves 2-4: a preamble names the role (strict backlog auditor),
 (done-when first: list the `/goal`, `Want` and `Done when` items, cite each) and the task, and a
 `close: done` must quote each required item with the code that does it.
 
+Wave 2 result (stricter prompt):
+
+| Batch | Refs held | Proposed closes | Outcome |
+| --- | --- | --- | --- |
+| 1150 usage 1 | 2/6 | 1 | discarded; 160 rejected (questions answered with function names) |
+| 1151 usage 2 | 4/5 | 2 | both rejected; 587 noted partly done |
+| 1152 usage 3 | - | - | stuck, dropped |
+| 1153 usage 4 | 3/4 | 1 | discarded; 927 unchecked (no gokay on host) |
+| 1154 models 1 | unscored | 1 | 656 rejected (M2, M3 missing) |
+| 1155 models 2 | 6/6 | 1 | 755 verified |
+| 1156 skills 1 | invented quote | 2 | discarded; 233 closed on host check, 286 rejected |
+| 1157 skills 2 | - | - | stuck, dropped |
+| 1158 skills 3 | 6/8 | 2 | discarded; 617, 736 verified |
+| 1159 skills 4 | 5/8 | 1 | discarded; 926 noted partly done |
+
+11 proposed closes, 4 held (233, 617, 736, 755): 36% against 10% in wave 1. Cost: 6 of 10 runs
+ran past 25 minutes (wave 1: 3), and 1156 invented a quote (`docs/lang/Go.md:27` "Use
+golang.org/x/term"; Go.md has no `x/term`). Kept the prompt for waves 3-4: every close is checked
+by the host anyway, so the higher hit rate matters more than the extra noise.
+
+Close gate: 615, 617, 736 and 755 were done in commits that do not name them. 1174 added
+`issues close --implemented-by <sha>` (`74e2ca78`, test `cmd/harnez/issues_implemented_by_test.go`);
+all four closed with it.
+
+Closed so far: 302, 702, 233, 615, 617, 736, 755 (plus 1174).
+
 ## What Went Wrong
 
 - **Missed the backlog.** The first scan used `status:open` and reported 29 tickets; the backlog
@@ -108,7 +134,12 @@ Prompt change for waves 2-4: a preamble names the role (strict backlog auditor),
 - **Batch close claims.** 16 of 21 proposed closes in wave 1 were wrong (see table). Caught by
   checking each against the ticket's goal; prompt tightened for waves 2-4.
 - **Close gate vs. old work.** 615 is done in `ca8bada1`, which does not name it; `issues close`
-  refuses without `--no-code`, which would be false (filed 1174).
+  refuses without `--no-code`, which would be false (filed and shipped as 1174).
+- **Invented quote.** 1156 quoted a line that does not exist anywhere in the cited file. The
+  per-reference check caught it; one invented quote discards the whole report.
+- **Reference format drift.** Reports wrote references as `path:line`, `path:file:line` or bare
+  `file:line` without a quote; the host's checker script had to accept the variants, and unquoted
+  references stay unscored.
 
 ## Learnings
 
@@ -131,5 +162,5 @@ Prompt change for waves 2-4: a preamble names the role (strict backlog auditor),
 - 1172: Draft tickets count toward the active-ticket cap.
 - 1173: Jules config loader says "not valid JSON" for a structure mismatch
   (`internal/subagent/jules.go:275`).
-- 1174: `issues close --implemented-by <sha>` for work done under an unreferencing commit.
+- 1174 (shipped): `issues close --implemented-by <sha>` for work done under an unreferencing commit.
 - Open decision: 1086 fallback-only fix vs. PR #98.
