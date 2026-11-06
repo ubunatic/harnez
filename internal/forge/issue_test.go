@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -31,7 +32,7 @@ func TestIssuesForgejoQueryAndPRFilter(t *testing.T) {
 	}, &seen)
 	defer srv.Close()
 	l := NewPullLister(testScan, nil)
-	got, truncated, err := l.Issues(Forge{Host: "x", Kind: "forgejo", APIBase: srv.URL}, "o", "r", testScan)
+	got, truncated, err := l.Issues(Forge{Host: "x", Kind: "forgejo", APIBase: srv.URL}, "o", "r", "all", testScan)
 	if err != nil || truncated {
 		t.Fatalf("Issues: %v truncated=%v", err, truncated)
 	}
@@ -49,13 +50,32 @@ func TestIssuesForgejoQueryAndPRFilter(t *testing.T) {
 	}
 }
 
+// TestIssuesStateParam checks that the state argument reaches the query as given, and that
+// an empty state means all states.
+func TestIssuesStateParam(t *testing.T) {
+	for _, c := range []struct{ state, want string }{{"open", "open"}, {"closed", "closed"}, {"", "all"}} {
+		var seen []string
+		srv := issueServer(t, []string{`[]`}, &seen)
+		l := NewPullLister(testScan, nil)
+		_, _, err := l.Issues(Forge{Host: "x", Kind: "forgejo", APIBase: srv.URL}, "o", "r", c.state, testScan)
+		srv.Close()
+		if err != nil {
+			t.Fatalf("state %q: %v", c.state, err)
+		}
+		u, err := url.Parse(seen[0])
+		if err != nil || u.Query().Get("state") != c.want {
+			t.Errorf("state %q: request %q, want state=%s", c.state, seen[0], c.want)
+		}
+	}
+}
+
 func TestIssuesGitHubPagingAndTruncation(t *testing.T) {
 	var seen []string
 	full := `[{"number":9,"title":"x"},{"number":8,"title":"y"}]`
 	srv := issueServer(t, []string{full, full, full, full, full}, &seen)
 	defer srv.Close()
 	l := NewPullLister(testScan, nil)
-	got, truncated, err := l.Issues(Forge{Host: "github.com", Kind: "github", APIBase: srv.URL}, "o", "r", testScan)
+	got, truncated, err := l.Issues(Forge{Host: "github.com", Kind: "github", APIBase: srv.URL}, "o", "r", "", testScan)
 	if err != nil {
 		t.Fatal(err)
 	}

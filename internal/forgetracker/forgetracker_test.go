@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +20,8 @@ import (
 type fakeSource struct {
 	issues    []forge.RemoteIssue
 	truncated bool
+	calls     int    // Issues requests received
+	state     string // state argument of the last Issues request
 }
 
 func (f *fakeSource) Issue(_ forge.Forge, _, _ string, n int) (forge.RemoteIssue, error) {
@@ -28,7 +33,9 @@ func (f *fakeSource) Issue(_ forge.Forge, _, _ string, n int) (forge.RemoteIssue
 	return forge.RemoteIssue{}, &forge.APIError{Status: 404, Detail: "not found"}
 }
 
-func (f *fakeSource) Issues(_ forge.Forge, _, _ string, _ forge.ScanOptions) ([]forge.RemoteIssue, bool, error) {
+func (f *fakeSource) Issues(_ forge.Forge, _, _ string, state string, _ forge.ScanOptions) ([]forge.RemoteIssue, bool, error) {
+	f.calls++
+	f.state = state
 	return f.issues, f.truncated, nil
 }
 
@@ -92,10 +99,63 @@ func TestFindMatchesAllTermsCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestFindRejectsFiltersAndNotesTruncation(t *testing.T) {
-	if err := Find(&bytes.Buffer{}, sample(), target, forge.ScanOptions{}, []string{"status:open"}, 10, false, false); err == nil || !strings.Contains(err.Error(), "not supported") {
-		t.Fatalf("want unsupported filter error, got %v", err)
+func TestFindStatusFilterRejectsOtherValuesBeforeFetch(t *testing.T) {
+	for _, term := range []string{"status:backlog", "status:", "status:open status:closed"} {
+		src := sample()
+		err := Find(&bytes.Buffer{}, src, target, forge.ScanOptions{}, []string{term}, 10, false, false)
+		if err == nil || !strings.Contains(err.Error(), "supported values: status:open, status:closed") && !strings.Contains(err.Error(), "only one status") {
+			t.Errorf("term %q: want supported-values error, got %v", term, err)
+		}
+		if src.calls != 0 {
+			t.Errorf("term %q: fetched %d times, want 0", term, src.calls)
+		}
 	}
+	err := Find(&bytes.Buffer{}, sample(), target, forge.ScanOptions{}, []string{"status:backlog"}, 10, false, false)
+	if err == nil || !strings.Contains(err.Error(), "status:backlog is not supported") {
+		t.Errorf("want the rejected value named, got %v", err)
+	}
+}
+
+// stateServer answers each issue request with two open issues and records the state query value.
+func stateServer(t *testing.T, states *[]string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*states = append(*states, r.URL.Query().Get("state"))
+		fmt.Fprint(w, `[{"number":5,"title":"vram leak","state":"open","html_url":"u5"},{"number":4,"title":"gtt docs","state":"open","html_url":"u4"}]`)
+	}))
+}
+
+// TestFindStatusFilterSendsStateToForge runs Find over the real forge reader against a fake
+// forge and checks the state query parameter for open and closed, alone and with a search term.
+func TestFindStatusFilterSendsStateToForge(t *testing.T) {
+	var states []string
+	srv := stateServer(t, &states)
+	defer srv.Close()
+	opts := forge.ScanOptions{PageSize: 50, MaxPages: 4}
+	src := forge.NewPullLister(opts, nil)
+	tg := Target{Forge: forge.Forge{Host: "x", Kind: "forgejo", APIBase: srv.URL}, Owner: "o", Repo: "r"}
+	for _, c := range []struct {
+		terms []string
+		want  string
+	}{
+		{[]string{"status:open"}, "open"},
+		{[]string{"status:closed"}, "closed"},
+		{[]string{"status:open", "vram"}, "open"},
+	} {
+		var out bytes.Buffer
+		if err := Find(&out, src, tg, opts, c.terms, 10, false, false); err != nil {
+			t.Fatalf("%q: %v", c.terms, err)
+		}
+		if got := states[len(states)-1]; got != c.want {
+			t.Errorf("%q sent state=%q, want %q", c.terms, got, c.want)
+		}
+		if len(c.terms) == 2 && (!strings.Contains(out.String(), "5\topen\tvram leak") || strings.Contains(out.String(), "gtt docs")) {
+			t.Errorf("status:open with a search term must also match the term, got:\n%s", out.String())
+		}
+	}
+}
+
+func TestFindRejectsFiltersAndNotesTruncation(t *testing.T) {
 	src := sample()
 	src.truncated = true
 	var out bytes.Buffer

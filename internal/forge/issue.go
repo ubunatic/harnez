@@ -30,14 +30,18 @@ func (l PullLister) Issue(fg Forge, owner, repo string, n int) (RemoteIssue, err
 	return is, err
 }
 
-// Issues lists the issues of owner/repo on fg in every state, newest first, without
-// pull requests. It reads at most opts.MaxPages pages and reports truncated=true when
-// more exist. It sends no server-side search: Forgejo's q is not a substring match
-// (canary 2026-11-03: "asskey" found fewer issues than "passkey"), so callers filter.
-func (l PullLister) Issues(fg Forge, owner, repo string, opts ScanOptions) (issues []RemoteIssue, truncated bool, err error) {
+// Issues lists the issues of owner/repo on fg in the given state ("open", "closed" or "all";
+// "" means all), newest first, without pull requests. It reads at most opts.MaxPages pages
+// and reports truncated=true when more exist. It sends no server-side search: Forgejo's q is
+// not a substring match (canary 2026-11-03: "asskey" found fewer issues than "passkey"), so
+// callers filter.
+func (l PullLister) Issues(fg Forge, owner, repo, state string, opts ScanOptions) (issues []RemoteIssue, truncated bool, err error) {
 	base := strings.TrimSuffix(fg.APIBase, "/") + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo) + "/issues"
+	if state == "" {
+		state = "all"
+	}
 	for page := 1; page <= opts.MaxPages; page++ {
-		q := url.Values{"state": {"all"}}
+		q := url.Values{"state": {state}}
 		if fg.Kind != "github" {
 			q.Set("type", "issues")
 		}

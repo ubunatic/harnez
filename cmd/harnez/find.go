@@ -100,6 +100,9 @@ Query grammar:
                      Draft, and Backlog. Matching ignores case and
                      explanatory status suffixes (e.g. "Blocked — waiting
                      for upstream").
+                      On a forge-tracked repo (no issues/ dir) only
+                      status:open and status:closed are supported; they
+                      map to the forge's issue state.
 
 An unquoted '|' is a shell pipeline operator, so an OR query needs shell
 quoting:

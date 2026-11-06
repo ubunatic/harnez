@@ -33,7 +33,7 @@ func (t Target) String() string { return t.Forge.Host + "/" + t.Owner + "/" + t.
 // Source reads issues; forge.PullLister satisfies it and tests replace it.
 type Source interface {
 	Issue(fg forge.Forge, owner, repo string, n int) (forge.RemoteIssue, error)
-	Issues(fg forge.Forge, owner, repo string, opts forge.ScanOptions) ([]forge.RemoteIssue, bool, error)
+	Issues(fg forge.Forge, owner, repo, state string, opts forge.ScanOptions) ([]forge.RemoteIssue, bool, error)
 }
 
 // ErrNotApplicable means the repo has a local issues/ dir, or no forge origin, so the
@@ -100,17 +100,32 @@ func Show(w io.Writer, src Source, t Target, ticket string, jsonOut bool) error 
 
 // Find prints the forge issues whose title or body contains every term, case-insensitively,
 // newest first, as "<number>\t<state>\t<title>\t<url>". limit caps the rows unless all is set.
+//
+// The only filter is status:open or status:closed, which the forge applies as its issue
+// state; any other status: value is an error before the forge is asked.
 func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []string, limit int, all, jsonOut bool) error {
+	state := "all"
+	statusSet := false
 	var lowered []string
 	for _, term := range terms {
 		for _, f := range strings.Fields(term) {
+			if key, val, ok := strings.Cut(f, ":"); ok && key == "status" {
+				if statusSet {
+					return fmt.Errorf("find issues: only one status: filter is supported for forge tickets")
+				}
+				if val != "open" && val != "closed" {
+					return fmt.Errorf("find issues: %s is not supported for forge tickets; supported values: status:open, status:closed", f)
+				}
+				state, statusSet = val, true
+				continue
+			}
 			if strings.Contains(f, ":") {
 				return fmt.Errorf("find issues: filter %q is not supported for forge tickets; use plain search terms", f)
 			}
 			lowered = append(lowered, strings.ToLower(f))
 		}
 	}
-	list, truncated, err := src.Issues(t.Forge, t.Owner, t.Repo, opts)
+	list, truncated, err := src.Issues(t.Forge, t.Owner, t.Repo, state, opts)
 	if err != nil {
 		return fmt.Errorf("find issues: %s: %w", t, err)
 	}

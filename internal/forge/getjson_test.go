@@ -151,7 +151,7 @@ func TestIssuesRetryIsPerPage(t *testing.T) {
 	srv := newAuthServer(t, f)
 	l := NewPullLister(testScan, func(Forge) string { return sentinelToken })
 
-	issues, truncated, err := l.Issues(forgejoAt(srv.URL), "ubunatic", "harnez", testScan)
+	issues, truncated, err := l.Issues(forgejoAt(srv.URL), "ubunatic", "harnez", "all", testScan)
 	if err != nil {
 		t.Fatalf("paged read must succeed, got %v", err)
 	}

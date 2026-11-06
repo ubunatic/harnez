@@ -21,7 +21,7 @@ func (s *stubForgeSource) Issue(_ forge.Forge, _, _ string, n int) (forge.Remote
 	return forge.RemoteIssue{Number: n, Title: "forge ticket", State: "open", HTMLURL: "https://codeberg.org/o/r/issues/7"}, nil
 }
 
-func (s *stubForgeSource) Issues(forge.Forge, string, string, forge.ScanOptions) ([]forge.RemoteIssue, bool, error) {
+func (s *stubForgeSource) Issues(forge.Forge, string, string, string, forge.ScanOptions) ([]forge.RemoteIssue, bool, error) {
 	s.calls++
 	return []forge.RemoteIssue{{Number: 7, Title: "forge ticket", State: "open"}}, false, nil
 }
