@@ -24,3 +24,9 @@ When calling `harnez_spawn_agent` synchronously without `async: true`, long-runn
 2. Consider defaulting `async: true` for long-running agent actions or adding timeout guards with early detachment.
 3. Test end-to-end agent launching via MCP with async polling.
 
+## Audit 2026-11-06
+
+Jules batch 1151, checked on 2cf3be4d: partly done. Step 1 is done: the `harnez_spawn_agent`
+description tells interactive hosts to run it as a session-background job
+(`internal/mcp/server.go:67`, `sessionBackgroundInstruction` at :64). Left: step 2 (async default or a
+timeout guard) and step 3 (end-to-end MCP launch test with async polling).

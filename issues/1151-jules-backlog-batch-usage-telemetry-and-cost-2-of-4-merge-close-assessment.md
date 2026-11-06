@@ -31,4 +31,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1151 | 6799427426291656610 | pending | running (started 2026-11-06 01:23, audited 2cf3be4d) |
+| batch audit | jules-batch-1151 | 6799427426291656610 | github #112 (closed) | done: 4/5 refs hold (ModelRoles.md:12 wrong). Both closes rejected: 587 partly done (server.go:67 steers to background; async default and MCP e2e test missing); 453 not shown (evidence 'and others'; astra still in reverse-sprint.md:85). 10 kept |
