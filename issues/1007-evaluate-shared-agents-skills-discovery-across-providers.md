@@ -1,6 +1,6 @@
 # 1007 — Evaluate shared .agents skills discovery across providers
 
-**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
+**Status**: Closed — Deinvested 2026-11-06 (owner confirmed in PR 109): covered by taia#126 (.agents/skills layout)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Skill distribution
