@@ -52,6 +52,12 @@ remote_load_staleness: 5m
 # Power box (issue 1121): a new boot peak is written to the peak state file at
 # most once per this interval; a pending peak is flushed on exit.
 power_peak_save_interval: 10s
+# Strata TPS box (issue 1182): local llama-style servers whose GET /metrics JSON
+# feeds the box. The first endpoint that answers wins; none answering hides it.
+strata_endpoints:
+  - http://localhost:8080
+strata_timeout: 1s
+strata_cache_ttl: 2s
 usage_kill_log:
   path: harnez/usage-kills.jsonl
   max_bytes: 1048576
@@ -72,14 +78,14 @@ view_modes:
       hidden_list: false
       overflow_hint: true
     compact:
-      panels: [all_usage, load, remote_load]
+      panels: [all_usage, load, strata, remote_load]
       token_details: true
       title_bar: true
       status_bar: true
       hidden_list: true
       overflow_hint: true
     minimal:
-      panels: [all_usage, load, remote_load]
+      panels: [all_usage, load, strata, remote_load]
       token_details: true
       title_bar: false
       status_bar: false

@@ -43,6 +43,9 @@ type usageSpec struct {
 	RemoteLoadLiveThreshold  string             `yaml:"remote_load_live_threshold"`
 	RemoteLoadStaleness      string             `yaml:"remote_load_staleness"`
 	PowerPeakSaveInterval    string             `yaml:"power_peak_save_interval"`
+	StrataEndpoints          []string           `yaml:"strata_endpoints"`
+	StrataTimeout            string             `yaml:"strata_timeout"`
+	StrataCacheTTL           string             `yaml:"strata_cache_ttl"`
 	UsageKillLog             usageKillLogSpec   `yaml:"usage_kill_log"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
 }
@@ -147,6 +150,7 @@ var (
 	usageSpecRemotePollDetached   time.Duration
 	usageSpecRemoteLiveThreshold  time.Duration
 	usageSpecRemoteStaleness      time.Duration
+	usageSpecStrata               strataPolicy
 	usageSpecCachePolicy          cacheFreshnessPolicy
 )
 
@@ -290,6 +294,9 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 			usageSpecRemotePollDetached, _ = time.ParseDuration(spec.RemoteLoadPollDetached)
 			usageSpecRemoteLiveThreshold, _ = time.ParseDuration(spec.RemoteLoadLiveThreshold)
 			usageSpecRemoteStaleness, _ = time.ParseDuration(spec.RemoteLoadStaleness)
+			usageSpecStrata.endpoints = spec.StrataEndpoints
+			usageSpecStrata.timeout, _ = time.ParseDuration(spec.StrataTimeout)
+			usageSpecStrata.ttl, _ = time.ParseDuration(spec.StrataCacheTTL)
 		}
 	})
 	return usageSpecAge, usageSpecCadence, usageSpecTimeout, usageSpecDedupe, usageSpecStoreBusyTimeout, usageSpecErr
@@ -364,6 +371,15 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	if err != nil || remoteLiveThreshold <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: remote_load_live_threshold must be a positive duration", usageSpecPath)
 	}
+	if len(spec.StrataEndpoints) == 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: strata_endpoints must list at least one URL", usageSpecPath)
+	}
+	if d, err := time.ParseDuration(spec.StrataTimeout); err != nil || d <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: strata_timeout must be a positive duration", usageSpecPath)
+	}
+	if d, err := time.ParseDuration(spec.StrataCacheTTL); err != nil || d <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: strata_cache_ttl must be a positive duration", usageSpecPath)
+	}
 	if hbInterval, err := time.ParseDuration(spec.ClientHeartbeatInterval); err != nil || hbInterval <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: client_heartbeat_interval must be a positive duration", usageSpecPath)
 	}
@@ -392,7 +408,7 @@ func (s usageViewModesSpec) validate() error {
 	}
 	validPanels := map[string]bool{
 		"table": true, "all_usage": true, "processes": true, "load": true,
-		"power": true, "mic": true, "remote_load": true,
+		"power": true, "mic": true, "remote_load": true, "strata": true,
 	}
 	for _, name := range []string{"normal", "compact", "minimal"} {
 		mode, ok := s.Modes[name]

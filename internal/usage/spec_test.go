@@ -78,7 +78,7 @@ func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatal(err)
 	}
-	if len(schema.Required) != 29 || schema.Properties["power_peak_save_interval"] == nil || schema.Properties["remote_load_live_threshold"] == nil || schema.Properties["remote_load_poll_interval_attached"] == nil || schema.Properties["remote_load_poll_interval_detached"] == nil || schema.Properties["remote_load_staleness"] == nil || schema.Properties["usage_kill_log"] == nil || schema.Properties["debug_labels"] == nil || schema.Properties["agent_quota_warn_percent"] == nil || schema.Properties["agent_quota_max_reading_age"] == nil || schema.Properties["agy_quota"] == nil || schema.Properties["cache_staleness_multiplier"] == nil || schema.Properties["display_staleness"] == nil || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["remote_command_timeout"] == nil || schema.Properties["ssh_connect_timeout"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["usage_store_busy_timeout"] == nil || schema.Properties["client_heartbeat_interval"] == nil || schema.Properties["client_timeout"] == nil || schema.Properties["catchup_fetch_threshold"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["passive_update_path"] == nil || schema.Properties["view_modes"] == nil {
+	if len(schema.Required) != 32 || schema.Properties["power_peak_save_interval"] == nil || schema.Properties["remote_load_live_threshold"] == nil || schema.Properties["remote_load_poll_interval_attached"] == nil || schema.Properties["remote_load_poll_interval_detached"] == nil || schema.Properties["remote_load_staleness"] == nil || schema.Properties["usage_kill_log"] == nil || schema.Properties["debug_labels"] == nil || schema.Properties["agent_quota_warn_percent"] == nil || schema.Properties["agent_quota_max_reading_age"] == nil || schema.Properties["agy_quota"] == nil || schema.Properties["cache_staleness_multiplier"] == nil || schema.Properties["display_staleness"] == nil || schema.Properties["nvidia_smi_timeout"] == nil || schema.Properties["nvidia_smi_cache_ttl"] == nil || schema.Properties["remote_command_timeout"] == nil || schema.Properties["ssh_connect_timeout"] == nil || schema.Properties["export_host_key"] == nil || schema.Properties["history_snapshot_interval"] == nil || schema.Properties["usage_store_busy_timeout"] == nil || schema.Properties["client_heartbeat_interval"] == nil || schema.Properties["client_timeout"] == nil || schema.Properties["catchup_fetch_threshold"] == nil || schema.Properties["watch_loading_label"] == nil || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["passive_update_path"] == nil || schema.Properties["view_modes"] == nil {
 		t.Fatalf("usage schema does not define required agy_meter_max_age: %+v", schema)
 	}
 	if schema.Definitions["viewMode"].Properties["panels"].MinItems != 1 {
@@ -110,6 +110,10 @@ remote_load_poll_interval_attached: 10s
 remote_load_poll_interval_detached: 5m
 remote_load_live_threshold: 20s
 remote_load_staleness: 5m
+strata_endpoints:
+  - http://localhost:8080
+strata_timeout: 1s
+strata_cache_ttl: 2s
 watch_loading_label: Collecting usage
 view_modes:
   default: normal
