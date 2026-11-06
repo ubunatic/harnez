@@ -71,4 +71,9 @@ During lean sprints on Loom issues 138 and 140, an interactive AGY host orchestr
    - Direct asynchronous peer messaging between separate host sessions (e.g. `loom` assistant and `cati` media browser) was proven end-to-end using native `send_message` targeting the peer's conversation ID (`fa46cc11-...`).
    - The recipient session successfully received the handoff notice and replied with an instant reactive `pong`, proving that multi-session peer coordination works smoothly without shared polling loops or file locks.
 
+## Audit 2026-11-06
 
+Jules batch 1162, checked on 9e7a8f16: partly done. Item 1 (547 detach) and item 2 (no-polling rule in
+`docs/practices/AgenticLoop.md:130` and `.harnez/rules/Tools.md:92`) are in place. Left: item 3, the
+detach message `cmd/harnez/agent_async.go:149` says the agent is still running but lacks the
+"Do NOT poll. Do NOT schedule timers ... reattach with harnez agent wait <name>" directive.
