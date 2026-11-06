@@ -46,3 +46,10 @@ password).
 ## Done when
 
 - Tests cover both messages, and the 403 case on a public repo no longer drops the open-PR check.
+
+## Decision
+
+- 2026-11-06 lean sprint: on HTTP 403 for a read request sent with a stored or env token, retry once
+  without the token (public repos need none); if that also fails, report that the token lacks a scope
+  and name `harnez forge token rotate` / `import`. Reason: keeps the open-PR check working for public
+  repos without asking the owner to widen a read-only token.
