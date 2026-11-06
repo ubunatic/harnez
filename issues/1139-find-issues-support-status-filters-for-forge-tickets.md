@@ -1,6 +1,7 @@
 # 1139 — find issues: support status filters for forge tickets
 
-**Status**: Open
+**Status**: Closed — find issues status:open and status:closed map to the forge state (Forgejo/GitHub state= query); other status: values error with the supported list before any fetch. Tests: TestIssuesStateParam, TestFindStatusFilterSendsStateToForge, TestFindStatusFilterRejectsOtherValuesBeforeFetch; make test-q1 exit 0, no --- FAIL. Live: find -d ../taia issues status:open lists 4, status:closed lists 75 (commit c4292192).
+**Closed-By**: claude:haiku:med, session dev-1139
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
