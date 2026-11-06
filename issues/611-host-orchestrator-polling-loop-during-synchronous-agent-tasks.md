@@ -1,6 +1,6 @@
 # 611 — Host orchestrator polling loop during synchronous agent tasks
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done: no-polling rule in AgenticLoop.md and Tools.md, detach output carries the Do NOT poll/schedule directive (agent_async.go:123, tested agent_wait_test.go:290); verified 2026-11-06
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Behavior / Experience
