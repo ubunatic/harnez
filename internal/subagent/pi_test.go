@@ -68,6 +68,16 @@ func TestPiLmcoderCoderArgs(t *testing.T) {
 	}
 }
 
+func TestPiStrataCoderArgs(t *testing.T) {
+	model, err := ResolveModel("strata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := piRunArgs(model, "ping"), []string{"--mode", "json", "--model", "qwen3.8-flash-next-coder-iq1_m", "--thinking", "low", "--", "ping"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("piRunArgs(strata) = %#v, want %#v", got, want)
+	}
+}
+
 func TestPiCompactUsesRPC(t *testing.T) {
 	var gotCommand, gotInput string
 	var gotArgs []string

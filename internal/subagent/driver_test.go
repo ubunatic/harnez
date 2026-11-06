@@ -134,13 +134,20 @@ func TestResolveLmcoderCoderThroughCatalog(t *testing.T) {
 			t.Fatalf("ResolveModel(%q) = %#v, want lmcoder:coder:low", spec, m)
 		}
 	}
-	if _, err := ResolveModel("lmcoder:strata"); err == nil {
-		t.Fatal("lmcoder:strata resolved, but it is out of scope for issue 1022")
-	}
-	for _, spec := range KnownModelSpecs() {
-		if strings.HasPrefix(spec, "lmcoder:strata") {
-			t.Fatalf("catalog lists %q, but lmcoder:strata is out of scope for issue 1022", spec)
+}
+
+func TestResolveStrataCoderThroughCatalog(t *testing.T) {
+	for _, spec := range []string{"strata", "strata-coder:qwen3.8-flash-next-coder-iq1_m", "strata-coder:qwen3.8-flash-next-coder-iq1_m:low"} {
+		m, err := ResolveModel(spec)
+		if err != nil {
+			t.Fatalf("ResolveModel(%q): %v", spec, err)
 		}
+		if m.Provider != "strata-coder" || m.Name != "qwen3.8-flash-next-coder-iq1_m" || m.Tier != "low" {
+			t.Fatalf("ResolveModel(%q) = %#v, want the loaded Strata Coder model at low tier", spec, m)
+		}
+	}
+	if _, err := ResolveModel("strata-coder:missing"); err == nil {
+		t.Fatal("unknown Strata model resolved; missing Pi configuration should remain a clear model resolution error")
 	}
 }
 
@@ -167,6 +174,13 @@ func TestLmcoderCoderListedAsPiSupported(t *testing.T) {
 	}
 	if _, ok := StreamDriverFor(Model{Provider: "lmcoder", Name: "coder", Tier: "low"}, "").(PiStreamDriver); !ok {
 		t.Fatal("StreamDriverFor(lmcoder) is not PiStreamDriver")
+	}
+	strata := Model{Provider: "strata-coder", Name: "qwen3.8-flash-next-coder-iq1_m", Tier: "low"}
+	if _, ok := DriverFor(strata, "").(PiDriver); !ok {
+		t.Fatal("DriverFor(strata-coder) is not PiDriver")
+	}
+	if _, ok := StreamDriverFor(strata, "").(PiStreamDriver); !ok {
+		t.Fatal("StreamDriverFor(strata-coder) is not PiStreamDriver")
 	}
 }
 

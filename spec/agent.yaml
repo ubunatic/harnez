@@ -264,6 +264,13 @@ models:
     tier: low
     effort: false
     use: Local coder model served by the local lmcoder proxy; the first call waits while the model loads.
+  strata-coder:qwen3.8-flash-next-coder-iq1_m:
+    aliases: [strata]
+    provider: strata-coder
+    name: qwen3.8-flash-next-coder-iq1_m
+    tier: low
+    effort: false
+    use: Local Strata coder model served through the configured Pi provider.
   jules:jules:
     aliases: [jules]
     provider: jules
