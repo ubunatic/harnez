@@ -64,3 +64,28 @@ calls `Load` with temp XDG dirs.
 - No JSON tags on `Model`/`Policy` now (adding them later is not breaking).
 - Edit the doc source `docs/other/Spec.md`, then sync the root copy as `CLAUDE.md` describes
   (`make install`, `harnez init -d .`, `git checkout --` unrelated rewrites).
+
+### M1 delivered (0d8c9607 move, 88241c72 doc and external test)
+
+Host review: 42 files renamed without content change; only import paths in 5 `internal/subagent`
+files and the Spec doc path (source and copy) changed. `go test ./modelcatalog/... ./internal/subagent`
+green; `make install && harnez init -d .` leaves a clean tree. One-shot reviewer (codex:terra:low,
+review-1177-m1): behaviour-neutral; `go list -deps` shows only the root package; no blockers.
+
+### Pre-Work / Required Refinements (M2)
+
+- Strengthen `modelcatalog/load_external_test.go`: assert a known spec model by identity and fields
+  (for example `claude-haiku-5-5`: provider `claude`, tier `low`), so a loader with one fabricated
+  default fails.
+- Resolve the promise mismatch: `doc.go:4` says a `Deprecated:` comment names its replacement, but
+  `Model.Guide` (`catalog.go:43`, `:63`) has none. Reword the doc to "names its replacement, or says
+  that none exists yet", and keep the Guide marker honest (no pointer to a ticket that does not track
+  a replacement).
+
+### M2 Quota types
+
+Goal: a module-root package `ubunatic.com/harnez/quota` with only the JSON types of `usage --json`
+(`UsageSummary`, agent and window types), importing nothing beyond the standard library, with the
+same package-doc promise. `internal/usage` uses these types (type aliases are fine) so the JSON is
+unchanged; the 1176 contract test (`cmd/harnez/usage_json_contract_test.go`) must still pass
+unchanged. Add an external test that decodes a `usage --json` sample into `quota.UsageSummary`.
