@@ -1,6 +1,6 @@
 # 230 — Android direct-release scaffold (Makefile template, signing, checksums)
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Deinvested 2026-11-06 (owner confirmed in PR 109): app release work for one sibling project, not harnez core or taia
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
