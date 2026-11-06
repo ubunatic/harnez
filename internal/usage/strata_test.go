@@ -129,3 +129,15 @@ func TestStrataSpecLoaded(t *testing.T) {
 // Frame tests must never see a real local Strata server; tests that want a
 // reading install their own source.
 func init() { strataStatusSource = func() *StrataStatus { return nil } }
+
+func TestParseStrataMetricsPrefillIsNotIdle(t *testing.T) {
+	body := `{"live":{"state":"reading","tok_s":null,"prompt_read":4000,"prompt_total":60000,"prefill_tok_s_mean":421.2},"requests":[{"decode_tok_s":52.0}]}`
+	st := parseStrataMetrics([]byte(body))
+	if st == nil || !st.Prefill || st.Idle || st.PromptRead != 4000 || st.PromptTotal != 60000 || st.TPS != 421.2 {
+		t.Fatalf("got %+v, want prefill 4000/60000 at 421.2", st)
+	}
+	line := buildStrataBox(60, *st).lines[0]
+	if !strings.Contains(line, "reading prompt 4000/60000 421 tok/s") || strings.Contains(line, "idle") {
+		t.Fatalf("box line %q", line)
+	}
+}

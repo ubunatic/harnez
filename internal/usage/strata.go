@@ -23,11 +23,21 @@ type StrataStatus struct {
 	Label string
 	TPS   float64
 	Idle  bool
+	// Prefill is true while a request reads its prompt (e.g. compaction): no
+	// decode speed exists yet, so TPS holds the prefill speed when known.
+	Prefill bool
+	// PromptRead and PromptTotal are the prompt progress when the server reports it.
+	PromptRead, PromptTotal int
 }
 
 type strataMetrics struct {
 	Live struct {
-		TokS *float64 `json:"tok_s"`
+		State           string   `json:"state"`
+		TokS            *float64 `json:"tok_s"`
+		PrefillTokS     *float64 `json:"prefill_tok_s"`
+		PrefillTokSMean *float64 `json:"prefill_tok_s_mean"`
+		PromptRead      *int     `json:"prompt_read"`
+		PromptTotal     *int     `json:"prompt_total"`
 	} `json:"live"`
 	Requests []struct {
 		DecodeTokS *float64 `json:"decode_tok_s"`
@@ -43,6 +53,19 @@ func parseStrataMetrics(body []byte) *StrataStatus {
 	}
 	if m.Live.TokS != nil {
 		return &StrataStatus{TPS: *m.Live.TokS}
+	}
+	if st := m.Live.State; st != "" && st != "idle" {
+		// Busy without a decode speed yet: prompt prefill (compaction, long input).
+		out := &StrataStatus{Prefill: true}
+		if m.Live.PrefillTokS != nil {
+			out.TPS = *m.Live.PrefillTokS
+		} else if m.Live.PrefillTokSMean != nil {
+			out.TPS = *m.Live.PrefillTokSMean
+		}
+		if m.Live.PromptRead != nil && m.Live.PromptTotal != nil {
+			out.PromptRead, out.PromptTotal = *m.Live.PromptRead, *m.Live.PromptTotal
+		}
+		return out
 	}
 	if len(m.Requests) > 0 && m.Requests[0].DecodeTokS != nil {
 		return &StrataStatus{TPS: *m.Requests[0].DecodeTokS, Idle: true}
