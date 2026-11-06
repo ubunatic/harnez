@@ -54,7 +54,7 @@ per-ticket verdict, proposed priority and reason, merges and a top five.
 | 1 | 1140-1149 | done 01:22: 10/10 delivered a PR, 3 needed one resumed wait (>25m) |
 | 2 | 1150-1159 | done 02:15 on `2cf3be4d`: 8 delivered, 6 needed a resumed wait, 1152 and 1157 stuck (>50m, dropped) |
 | 3 | 1160-1169 | done on `9e7a8f16`: 10 delivered, 8 needed a resumed wait; 1169 start refused twice (HTTP 400) |
-| 4 | 1170 | running, started on `9e7a8f16` |
+| 4 | 1170 | done late (COMPLETED on re-check after 50m): 2/3 refs, discarded, no closes |
 
 Wave 1 result (87 tickets):
 
@@ -130,7 +130,18 @@ Wave 3 result (skills 5, agent 1-4, harnesses, setup 1-2, docs/search/TUI/testin
 Wave 3 proposed few closes (4 in 10 batches), and the one close it got right came from a ticket done
 under another ticket's number. This part of the backlog is open work, not stale tickets.
 
-Closed so far: 302, 702, 233, 615, 617, 736, 755, 611, 648, 739 (plus 1174).
+Closed by the cleanup: 302, 702, 233, 615, 617, 736, 755, 611, 648, 739 (10 of 260 backlog
+tickets), plus 1174 and 1176 built along the way.
+
+### Follow-up runs for taia (host-chosen; Jules cannot see taia)
+
+taia's `taia-models` plugin reads `harnez usage --json --offline` (`taia-plugins/models/harnez.go:17-40`),
+and taia#113 needs model availability. Two runs:
+
+| Run | Result | Outcome |
+| --- | --- | --- |
+| implement 1176 | PR #133, 1 test file | host switched it to `usage.RenderJSON` (the real `--json` path), saw it pass and fail on renamed `used_percent` and `plan_tier`; closed 1176 |
+| ideas `taia-go-library` | PR #131, 5/5 refs | 5 seams; import check: `internal/modelcatalog` has 2 harnez deps, `internal/usage` 18 (server, telemetry, ssh, loom, voxi). Filed 1177 (M1 catalog, M2 usage types, M3 collectors) |
 
 ## What Went Wrong
 
@@ -196,4 +207,9 @@ Closed so far: 302, 702, 233, 615, 617, 736, 755, 611, 648, 739 (plus 1174).
 - 1173: Jules config loader says "not valid JSON" for a structure mismatch
   (`internal/subagent/jules.go:275`).
 - 1174 (shipped): `issues close --implemented-by <sha>` for work done under an unreferencing commit.
+- 1175: `TestBuildWatchFrameAtDebugOverlayUsesCollectorCadence` fails on main (predates this session).
+- 1176 (shipped): `usage --json` contract test for taia-models.
+- 1177: export the model catalog and usage types as public Go packages for taia; owner decides the
+  module path and stability promise before M1.
+- Deinvest leads for the owner: 230, 350, 518, 619, 763, 914, 960, 1007, 1094.
 - Open decision: 1086 fallback-only fix vs. PR #98.
