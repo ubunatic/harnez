@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -273,12 +274,35 @@ func loadJulesConfig(path string) (julesConfig, error) {
 	}
 	var config julesConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		return julesConfig{}, fmt.Errorf("Jules config %s is not valid JSON", path)
+		return julesConfig{}, julesConfigError(path, err)
 	}
 	if strings.TrimSpace(config.Key) == "" {
 		return julesConfig{}, fmt.Errorf("Jules config %s has no key", path)
 	}
 	return config, nil
+}
+
+// julesConfigError names what is wrong with a config that does not decode. A
+// syntax error gives its byte offset; a type mismatch names the expected shape.
+// The decoder's text is never echoed, so the key cannot leak through it.
+func julesConfigError(path string, err error) error {
+	var syntax *json.SyntaxError
+	if errors.As(err, &syntax) {
+		return fmt.Errorf("Jules config %s is not valid JSON (byte %d)", path, syntax.Offset)
+	}
+	var mismatch *json.UnmarshalTypeError
+	if !errors.As(err, &mismatch) {
+		return fmt.Errorf("Jules config %s is not valid JSON", path)
+	}
+	switch {
+	case mismatch.Field == "github_projects" && mismatch.Type.Kind() == reflect.Slice:
+		return fmt.Errorf(`Jules config %s: github_projects must be a list of {"repo": "<name>"}`, path)
+	case strings.HasPrefix(mismatch.Field, "github_projects"):
+		return fmt.Errorf(`Jules config %s: github_projects entries must be {"repo": "<name>"}`, path)
+	case mismatch.Field == "key":
+		return fmt.Errorf("Jules config %s: key must be a string", path)
+	}
+	return fmt.Errorf(`Jules config %s must be a JSON object with "key" and "github_projects"`, path)
 }
 
 func (d JulesDriver) client() (julesClient, julesConfig, JulesSpec, error) {

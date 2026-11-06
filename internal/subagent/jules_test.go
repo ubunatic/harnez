@@ -326,6 +326,58 @@ func TestJulesConfigRefusesReadableFileAndKeepsKeySecret(t *testing.T) {
 	}
 }
 
+// loadJulesConfigBody writes body as a 0600 config and loads it.
+func loadJulesConfigBody(t *testing.T, body string) error {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loadJulesConfig(path)
+	return err
+}
+
+func TestJulesConfigStringEntriesNameTheShape(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{"string entries", `{"key":"` + julesTestKey + `","github_projects":["harnez"]}`, `github_projects entries must be {"repo": "<name>"}`},
+		{"plain string list", `{"key":"` + julesTestKey + `","github_projects":"harnez"}`, `github_projects must be a list of {"repo": "<name>"}`},
+		{"repo not a string", `{"key":"` + julesTestKey + `","github_projects":[{"repo":5}]}`, `github_projects entries must be {"repo": "<name>"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := loadJulesConfigBody(t, tc.body)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want %q", err, tc.want)
+			}
+			if strings.Contains(err.Error(), "not valid JSON") {
+				t.Fatalf("structure mismatch reported as bad JSON: %v", err)
+			}
+			if strings.Contains(err.Error(), julesTestKey) {
+				t.Fatal("error leaks the key")
+			}
+		})
+	}
+}
+
+func TestJulesConfigBrokenJSONIsSyntaxError(t *testing.T) {
+	err := loadJulesConfigBody(t, `{"key":"`+julesTestKey+`",`)
+	if err == nil || !strings.Contains(err.Error(), "is not valid JSON (byte ") {
+		t.Fatalf("err = %v", err)
+	}
+	if strings.Contains(err.Error(), julesTestKey) {
+		t.Fatal("error leaks the key")
+	}
+}
+
+func TestJulesConfigKeyTypeMismatchHidesKey(t *testing.T) {
+	err := loadJulesConfigBody(t, `{"key":["`+julesTestKey+`"]}`)
+	if err == nil || !strings.Contains(err.Error(), "key must be a string") {
+		t.Fatalf("err = %v", err)
+	}
+	if strings.Contains(err.Error(), julesTestKey) {
+		t.Fatal("error leaks the key")
+	}
+}
+
 func TestJulesFailedSessionIsAnErrorWithReason(t *testing.T) {
 	fake := &fakeJules{
 		states:     []julesSession{{State: "FAILED", URL: "https://jules.test/session/123"}},
