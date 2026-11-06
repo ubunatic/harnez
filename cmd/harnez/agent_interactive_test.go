@@ -93,13 +93,30 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 			_ = conn.Close()
 		}
 	}()
-	// The socket is mocked; use an exited PID instead of a literal that could
-	// belong to an unrelated real process during stop's ownership checks.
-	exited := exec.Command("true")
-	if err := exited.Run(); err != nil {
+	// The socket is mocked. The interactive root must be a live process this
+	// test owns: stop verifies its start time before signalling. cat blocks on
+	// stdin and exits on SIGTERM, so no sleep is needed.
+	if _, err := os.Stat("/proc/self/stat"); err != nil {
+		t.Skip("Linux process identity fixture")
+	}
+	child := exec.Command("cat")
+	childStdin, err := child.StdinPipe()
+	if err != nil {
 		t.Fatal(err)
 	}
-	sess := &subagent.Session{ID: "active-id", ProviderSessionID: "provider-id", Name: "active", Provider: "claude", Model: "haiku", HarnessType: "interactive", Status: "active", ControlSocket: socket, ProcessPID: exited.Process.Pid, ContextTokens: 100, Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}}
+	if err := child.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = childStdin.Close()
+		_ = child.Process.Kill()
+		_ = child.Wait()
+	})
+	childStart := procs.ProcessStarttime(child.Process.Pid)
+	if childStart == 0 {
+		t.Fatalf("cannot read start time of fixture process %d", child.Process.Pid)
+	}
+	sess := &subagent.Session{ID: "active-id", ProviderSessionID: "provider-id", Name: "active", Provider: "claude", Model: "haiku", HarnessType: "interactive", Status: "active", ControlSocket: socket, ProcessPID: child.Process.Pid, ProcessStarttime: childStart, ContextTokens: 100, Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}}
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
