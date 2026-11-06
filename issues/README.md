@@ -42,4 +42,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1171 | [1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md](1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md) | jules skill: skip recently audited tickets and add a batch audit prompt | Open |
 | 1172 | [1172-draft-tickets-count-toward-the-active-ticket-cap.md](1172-draft-tickets-count-toward-the-active-ticket-cap.md) | Draft tickets count toward the active-ticket cap | Open |
 | 1179 | [1179-edit-guard-flags-append-only-writes-and-edits-inside-scratch-worktrees.md](1179-edit-guard-flags-append-only-writes-and-edits-inside-scratch-worktrees.md) | edit guard flags append-only writes and edits inside scratch worktrees | Open |
+| 1180 | [1180-cleanup-remove-all-prime-agent-prime-support.md](1180-cleanup-remove-all-prime-agent-prime-support.md) | cleanup: remove all Prime Agent (~/.prime) support | Open |
 <!-- harnez:end issues-active-index -->
