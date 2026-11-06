@@ -29,6 +29,8 @@ Observed in this repository's `/tmp` state, read-only:
 
 Session precedence in `internal/resolve/resolve.go` (`Session`): an explicit value wins, then the first set variable of `SessionEnvVars` (`CLAUDE_CODE_SESSION_ID` is the confirmed one), then the parent-process lock fallback with a 30-minute window. `agent_selftest.go` applies `--session` first, then `resolve.Session`, then the literal `default`. The state file default directory is `os.TempDir()` (`--state-dir` overrides it).
 
+Taia reproduction (2026-11-06): the installed `/harnez-selftest` skill tells the agent to follow the CLI output, but does not itself say to reuse the session ID. Foreground `hello` printed session `default`; the printed background command failed to find its state, and `confirm` failed. The complete sequence passed when subsequent calls used `--session default`. Harnez's repository-local `Tools.md` already explains session reuse, but that guidance is not necessarily in the host's context. Ensure the skill and CLI guidance are consistent and work without relying on repository-local rules.
+
 Related but distinct: 665 and 666 are closed and cover the step sequence and HTO=0. Neither covers session identity.
 
 ## 3. Implementation & Verification Plan
