@@ -1,6 +1,6 @@
 # 648 — Show Claude 5h and weekly used percent in the default usage view
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done: default harnez usage view shows Claude 5h and weekly used percent (live check 2026-11-06)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
