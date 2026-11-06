@@ -1,6 +1,6 @@
 # 1012 — Agent selftest hello and later steps omit --session so separate tool shells fail
 
-**Status**: Open
+**Status**: Closed — Selftest prints session-aware shell-quoted commands; cross-shell integration and externally run make test pass
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
