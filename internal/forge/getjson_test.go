@@ -3,6 +3,7 @@ package forge
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -134,6 +135,55 @@ func TestGetJSONNotFoundWithTokenIsNotRetried(t *testing.T) {
 	}
 	if len(f.auth) != 1 {
 		t.Fatalf("404 must not retry: want 1 request, got %d", len(f.auth))
+	}
+}
+
+func TestGetJSONAuthFailuresWithTokenAreNotRetried(t *testing.T) {
+	// Only a 403 earns the anonymous retry; 401 and 5xx are reported after one request.
+	for _, status := range []int{http.StatusUnauthorized, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			f := &fakeAuth{answer: func(string, string) (int, string) {
+				return status, `{"message":"nope"}`
+			}}
+			srv := newAuthServer(t, f)
+			l := NewPullLister(testScan, func(Forge) string { return sentinelToken })
+
+			_, err := l.Issue(forgejoAt(srv.URL), "ubunatic", "harnez", 7)
+			if err == nil || !strings.Contains(err.Error(), "HTTP "+strconv.Itoa(status)) {
+				t.Fatalf("want HTTP %d error, got %v", status, err)
+			}
+			if len(f.auth) != 1 || f.auth[0] != "token "+sentinelToken {
+				t.Fatalf("want exactly one token request, got auth sequence %q", f.auth)
+			}
+		})
+	}
+}
+
+func TestGetJSONForbiddenThenAnonymousNotFoundKeepsScopeAdvice(t *testing.T) {
+	// A private repo answers 404 to an anonymous read. The 403 with the token must still win,
+	// so the user is told the token lacks a scope, not sent to the 404 hint.
+	f := &fakeAuth{answer: func(auth, _ string) (int, string) {
+		if auth != "" {
+			return http.StatusForbidden, `{"message":"forbidden"}`
+		}
+		return http.StatusNotFound, `{"message":"not found"}`
+	}}
+	srv := newAuthServer(t, f)
+	l := NewPullLister(testScan, func(Forge) string { return sentinelToken })
+
+	_, err := l.Issue(forgejoAt(srv.URL), "ubunatic", "harnez", 7)
+	apiErr, ok := err.(*APIError)
+	if !ok || apiErr.Status != http.StatusForbidden {
+		t.Fatalf("want 403 APIError, got %T %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "lacks a scope") {
+		t.Fatalf("want scope advice, got %q", err.Error())
+	}
+	if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), sentinelToken) {
+		t.Fatalf("error must not carry the anonymous 404 or the token: %q", err.Error())
+	}
+	if len(f.auth) != 2 {
+		t.Fatalf("want exactly 2 requests (token, then anonymous), got %d", len(f.auth))
 	}
 }
 
