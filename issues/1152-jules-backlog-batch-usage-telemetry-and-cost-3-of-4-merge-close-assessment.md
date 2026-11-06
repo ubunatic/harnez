@@ -31,4 +31,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1152 | 14376408726114950078 | none | failed: still IN_PROGRESS after 50m (two waits); dropped as stuck per owner rule. Adopt later with `harnez agent resume --model jules --id 14376408726114950078 wait` |
+| batch audit | jules-batch-1152 | 14376408726114950078 | github #130 (closed) | done late: was AWAITING_USER_FEEDBACK after the auto-reply; replies: 2 ('Submit what you have as a draft PR now.'). 7/7 refs hold. Closed 648 (live `harnez usage` shows Claude 5h and weekly %, via f343e8ed) and 739 (missing Quota.md prints 'absent, optional', exit 0, via abac77cd). Rest kept |
