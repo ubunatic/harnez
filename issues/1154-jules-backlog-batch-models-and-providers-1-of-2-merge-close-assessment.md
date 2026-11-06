@@ -27,4 +27,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1154 | 10140042147116214806 | pending | running (started 2026-11-06 01:23, audited 2cf3be4d) |
+| batch audit | jules-batch-1154 | 10140042147116214806 | github #114 (closed) | done (>25m, one resumed wait): refs unscored (no quoted lines). Close of 656 rejected: M1 delivered and M4 `harnez agent send` exists (live --help), M2 statusline count and M3 delivery canaries not evidenced. 6 kept |
