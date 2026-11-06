@@ -1956,31 +1956,32 @@ Usage:
   harnez issues <verb> <ticket-number...> [reason...] [flags]
 
 Flags:
-      --against string   with lint: fail when a ticket here reuses a number that REF (e.g. origin/main) gives to another file; warn if REF is missing
-  -a, --all              with 'list': show all matching results
-      --amend-reason     with close/done: amend the reason of an already-Closed ticket
-      --cached           validate the staged Git snapshot (issues lint only)
-      --check            report what would change without writing or committing; exit 1 on drift
-      --commit string    override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
-  -d, --dir string       repo root containing issues/ (default ".")
-      --dry-run          alias for --check
-      --fetch            reconcile: git fetch, then print the plan against the upstream (no changes)
-      --force            with new: create despite strong duplicate matches
-  -h, --help             help for issues
-  -I, --image            render visual PNG card context
-      --json             output a single JSON object instead of a text line
-  -n, --limit int        with 'list': limit results (default: newest 10) (default 10)
-  -l, --list             list open issues (alias for the list verb)
-      --model string     with close/done: record the closing model (defaults to HARNEZ_AGENT_MODEL)
-      --no-code          with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit
-      --no-commit        rewrite the ticket file and README but do not git add/commit
-      --number string    with new: use this ticket number instead of the next free one (refused if it exists)
-      --offline          with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read
-      --pull             reconcile: git fetch + merge the upstream, then renumber colliding local tickets and commit once
-  -r, --raw              output raw text directly to stdout
-      --remote           with new: allocate a permanent GH id using authenticated gh on the github remote
-      --session string   with close/done: record the closing session (defaults to HARNEZ_SESSION_ID)
-  -t, --text             output raw text directly to stdout (alias for --raw)
+      --against string          with lint: fail when a ticket here reuses a number that REF (e.g. origin/main) gives to another file; warn if REF is missing
+  -a, --all                     with 'list': show all matching results
+      --amend-reason            with close/done: amend the reason of an already-Closed ticket
+      --cached                  validate the staged Git snapshot (issues lint only)
+      --check                   report what would change without writing or committing; exit 1 on drift
+      --commit string           override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
+  -d, --dir string              repo root containing issues/ (default ".")
+      --dry-run                 alias for --check
+      --fetch                   reconcile: git fetch, then print the plan against the upstream (no changes)
+      --force                   with new: create despite strong duplicate matches
+  -h, --help                    help for issues
+  -I, --image                   render visual PNG card context
+      --implemented-by string   with close/done: the commit that did the work but does not name the ticket; it must change files outside issues/, and the close commit records it
+      --json                    output a single JSON object instead of a text line
+  -n, --limit int               with 'list': limit results (default: newest 10) (default 10)
+  -l, --list                    list open issues (alias for the list verb)
+      --model string            with close/done: record the closing model (defaults to HARNEZ_AGENT_MODEL)
+      --no-code                 with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit
+      --no-commit               rewrite the ticket file and README but do not git add/commit
+      --number string           with new: use this ticket number instead of the next free one (refused if it exists)
+      --offline                 with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read
+      --pull                    reconcile: git fetch + merge the upstream, then renumber colliding local tickets and commit once
+  -r, --raw                     output raw text directly to stdout
+      --remote                  with new: allocate a permanent GH id using authenticated gh on the github remote
+      --session string          with close/done: record the closing session (defaults to HARNEZ_SESSION_ID)
+  -t, --text                    output raw text directly to stdout (alias for --raw)
 
 === harnez lint
 lint verifies source files, scripts, and documentation against harnez

@@ -56,6 +56,7 @@ type issuesRunOptions struct {
 	NoCommit                       bool
 	AmendReason                    bool
 	NoCode                         bool
+	ImplementedBy                  string // --implemented-by: commit that did the work without naming the ticket
 	CommitMsg                      string // explicit --commit override; empty means "compose the default"
 	Stderr                         io.Writer
 }
@@ -81,6 +82,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var noCommitFlag bool
 	var amendReasonFlag bool
 	var noCodeFlag bool
+	var implementedByFlag string
 	var commitMsgFlag string
 	var closedByModelFlag string
 	var closedBySessionFlag string
@@ -213,6 +215,12 @@ valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if noCodeFlag && (listFlag || len(args) == 0 || (args[0] != "close" && args[0] != "done")) {
 				return fmt.Errorf("issues: --no-code requires close or done")
+			}
+			if implementedByFlag != "" && (listFlag || len(args) == 0 || (args[0] != "close" && args[0] != "done")) {
+				return fmt.Errorf("issues: --implemented-by requires close or done")
+			}
+			if implementedByFlag != "" && noCodeFlag {
+				return fmt.Errorf("issues: --implemented-by and --no-code exclude each other")
 			}
 			if amendReasonFlag && (listFlag || len(args) == 0 || (args[0] != "close" && args[0] != "done")) {
 				return fmt.Errorf("issues: --amend-reason requires close or done")
@@ -372,6 +380,7 @@ valid, exit-0 answer.`,
 				NoCommit:        noCommitFlag,
 				AmendReason:     amendReasonFlag,
 				NoCode:          noCodeFlag,
+				ImplementedBy:   implementedByFlag,
 				CommitMsg:       commitMsgFlag,
 				Stderr:          cmd.ErrOrStderr(),
 			}
@@ -449,6 +458,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVar(&noCommitFlag, "no-commit", false, "rewrite the ticket file and README but do not git add/commit")
 	cmd.Flags().BoolVar(&amendReasonFlag, "amend-reason", false, "with close/done: amend the reason of an already-Closed ticket")
 	cmd.Flags().BoolVar(&noCodeFlag, "no-code", false, "with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit")
+	cmd.Flags().StringVar(&implementedByFlag, "implemented-by", "", "with close/done: the commit that did the work but does not name the ticket; it must change files outside issues/, and the close commit records it")
 	cmd.Flags().StringVar(&closedByModelFlag, "model", "", "with close/done: record the closing model (defaults to HARNEZ_AGENT_MODEL)")
 	cmd.Flags().StringVar(&closedBySessionFlag, "session", "", "with close/done: record the closing session (defaults to HARNEZ_SESSION_ID)")
 	cmd.Flags().StringVar(&commitMsgFlag, "commit", "", `override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")`)
@@ -565,6 +575,7 @@ func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutpu
 func issuesStatusDependencies(opts issuesRunOptions) issues.StatusBatchOptions {
 	return issues.StatusBatchOptions{
 		Dir: opts.Dir, Check: opts.Check, NoCommit: opts.NoCommit, AmendReason: opts.AmendReason, NoCode: opts.NoCode,
+		ImplementedBy: opts.ImplementedBy, CommitTouchesCode: commitTouchesCode,
 		CommitMsg: opts.CommitMsg, ClosedByModel: opts.ClosedByModel, ClosedBySession: opts.ClosedBySession, Stderr: opts.Stderr,
 		UpdateIndexes: func(issuesDir string) (bool, error) {
 			return index.UpdateIssuesReadme(filepath.Join(issuesDir, "README.md"), issuesDir)
@@ -923,6 +934,31 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 // hasImplementationCommit reports whether a commit that changes a path outside
 // issues/ references this exact ticket number. Ticket status and index commits
 // alone therefore do not count. A git error is returned, not treated as absent.
+// commitTouchesCode resolves rev to a full commit sha and reports whether that
+// commit changes any path outside issues/ (issue 1174).
+func commitTouchesCode(dir, rev string) (string, bool, error) {
+	resolve := exec.Command("git", "rev-parse", "--verify", "--quiet", rev+"^{commit}")
+	resolve.Dir = dir
+	out, err := resolve.Output()
+	if err != nil {
+		return "", false, fmt.Errorf("no commit %q in this repository", rev)
+	}
+	sha := strings.TrimSpace(string(out))
+	pathsCmd := exec.Command("git", "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", sha)
+	pathsCmd.Dir = dir
+	paths, err := pathsCmd.Output()
+	if err != nil {
+		return sha, false, fmt.Errorf("git diff-tree %s: %w", sha, err)
+	}
+	for _, path := range strings.Split(string(paths), "\n") {
+		path = strings.TrimSpace(path)
+		if path != "" && !strings.HasPrefix(filepath.ToSlash(path), "issues/") {
+			return sha, true, nil
+		}
+	}
+	return sha, false, nil
+}
+
 func hasImplementationCommit(dir, ticketNumber string) (bool, error) {
 	cmd := exec.Command("git", "log", "--all", "--format=%H%x09%B%x00")
 	cmd.Dir = dir

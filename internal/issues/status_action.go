@@ -40,12 +40,30 @@ type StatusBatchOptions struct {
 	DefaultMessage                 func(verb, number, reason string) string
 	WarnHeaderMismatch             func(io.Writer, string, string, string)
 	HasImplementationCommit        func(dir, ticketNumber string) (bool, error)
+	// ImplementedBy names the commit that did the work when its message does not
+	// reference the ticket (issue 1174). CommitTouchesCode resolves it and reports
+	// whether it changed files outside issues/.
+	ImplementedBy     string
+	CommitTouchesCode func(dir, rev string) (sha string, touches bool, err error)
 }
 
 // requireImplementationCommit refuses to close a ticket unless a commit with
 // changes outside issues/ references it. NoCode skips the check: the caller
 // states that the ticket needed no code.
 func requireImplementationCommit(opts StatusBatchOptions, number string) error {
+	if opts.ImplementedBy != "" {
+		if opts.CommitTouchesCode == nil {
+			return fmt.Errorf("issues: ticket %s: --implemented-by cannot be checked here", number)
+		}
+		_, touches, err := opts.CommitTouchesCode(opts.Dir, opts.ImplementedBy)
+		if err != nil {
+			return fmt.Errorf("issues: ticket %s: --implemented-by %s: %w", number, opts.ImplementedBy, err)
+		}
+		if !touches {
+			return fmt.Errorf("issues: ticket %s: --implemented-by %s changes only issues/, so it is not an implementation commit", number, opts.ImplementedBy)
+		}
+		return nil
+	}
 	if opts.NoCode || opts.HasImplementationCommit == nil {
 		return nil
 	}
@@ -63,7 +81,20 @@ func requireImplementationCommit(opts StatusBatchOptions, number string) error {
 // git history. It stays empty unless --no-code is set and no --commit message
 // replaces the composed one.
 func noCodeNote(opts StatusBatchOptions, numbers ...string) string {
-	if !opts.NoCode || opts.CommitMsg != "" {
+	if opts.CommitMsg != "" {
+		return ""
+	}
+	if opts.ImplementedBy != "" && opts.CommitTouchesCode != nil {
+		sha, _, err := opts.CommitTouchesCode(opts.Dir, opts.ImplementedBy)
+		if err != nil {
+			sha = opts.ImplementedBy
+		}
+		if len(sha) > 12 {
+			sha = sha[:12]
+		}
+		return fmt.Sprintf("\n\nImplemented by %s: ticket(s) %s were done in a commit that does not name them (--implemented-by).", sha, strings.Join(numbers, ", "))
+	}
+	if !opts.NoCode {
 		return ""
 	}
 	return fmt.Sprintf("\n\nNo code change: ticket(s) %s needed no implementation commit (--no-code).", strings.Join(numbers, ", "))
