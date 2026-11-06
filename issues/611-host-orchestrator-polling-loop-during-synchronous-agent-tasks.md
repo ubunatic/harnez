@@ -73,7 +73,8 @@ During lean sprints on Loom issues 138 and 140, an interactive AGY host orchestr
 
 ## Audit 2026-11-06
 
-Jules batch 1162, checked on 9e7a8f16: partly done. Item 1 (547 detach) and item 2 (no-polling rule in
-`docs/practices/AgenticLoop.md:130` and `.harnez/rules/Tools.md:92`) are in place. Left: item 3, the
-detach message `cmd/harnez/agent_async.go:149` says the agent is still running but lacks the
-"Do NOT poll. Do NOT schedule timers ... reattach with harnez agent wait <name>" directive.
+Jules batch 1162, checked on 9e7a8f16: done. Item 1 (547 detach), item 2 (no-polling rule in
+`docs/practices/AgenticLoop.md:130`, `.harnez/rules/Tools.md:92`) and item 3 (detach output prints
+"Do NOT poll. Do NOT schedule timers or cron jobs ..." and `harnez agent wait <name>` via
+`reattachSteps`, `cmd/harnez/agent_async.go:123`, asserted in `cmd/harnez/agent_wait_test.go:290`).
+Implemented in 2559134f (547 M2).

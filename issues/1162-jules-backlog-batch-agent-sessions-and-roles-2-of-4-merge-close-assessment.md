@@ -31,4 +31,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1162 | 18022529935140632501 | github #120 (closed) | done: 5/5 refs hold; all 4 proposals rejected. 510 open because the role is missing, not obsolete. 611 partly done (noted). 548/549 and 623/612 differ in goal. All kept |
+| batch audit | jules-batch-1162 | 18022529935140632501 | github #120 (closed) | done: 5/5 refs hold; all 4 proposals rejected. 510 open because the role is missing, not obsolete. 611 done (closed via 2559134f). 548/549 and 623/612 differ in goal. All kept |
