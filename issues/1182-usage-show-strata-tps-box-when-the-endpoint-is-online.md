@@ -1,6 +1,7 @@
 # 1182 — usage: show Strata TPS box when the endpoint is online
 
-**Status**: Open
+**Status**: Closed — Strata TPS box in usage minimal/compact watch: spec keys strata_endpoints/timeout/ttl, /metrics reader, hidden when offline (unit-tested with httptest: live, idle, unreachable, malformed). Host live tmux 160x50 on installed binary: box 'qwen3.8-flash-next-iq2_xs 33.4 tok/s'. Live offline run not done (would stop the user's server); no toggle key; coder 8081/x600 out of scope
+**Closed-By**: session 148f0fbb-3582-473b-96b3-e12d17e1d9a2
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

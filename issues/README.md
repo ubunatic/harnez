@@ -43,5 +43,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1179 | [1179-edit-guard-flags-append-only-writes-and-edits-inside-scratch-worktrees.md](1179-edit-guard-flags-append-only-writes-and-edits-inside-scratch-worktrees.md) | edit guard flags append-only writes and edits inside scratch worktrees | Open |
 | 1180 | [1180-cleanup-remove-all-prime-agent-prime-support.md](1180-cleanup-remove-all-prime-agent-prime-support.md) | cleanup: remove all Prime Agent (~/.prime) support | Open |
 | 1181 | [1181-isolate-harnez-session-state-and-constrain-installation-destinations.md](1181-isolate-harnez-session-state-and-constrain-installation-destinations.md) | Isolate Harnez session state and constrain installation destinations | Open |
-| 1182 | [1182-usage-show-strata-tps-box-when-the-endpoint-is-online.md](1182-usage-show-strata-tps-box-when-the-endpoint-is-online.md) | usage: show Strata TPS box when the endpoint is online | Open |
 <!-- harnez:end issues-active-index -->
