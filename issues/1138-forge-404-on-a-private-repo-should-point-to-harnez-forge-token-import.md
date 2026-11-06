@@ -53,3 +53,12 @@ password).
   without the token (public repos need none); if that also fails, report that the token lacks a scope
   and name `harnez forge token rotate` / `import`. Reason: keeps the open-PR check working for public
   repos without asking the owner to widen a read-only token.
+
+## Plan accepted (dev-1138, claude:haiku:med, 2026-11-06)
+
+One GET-only helper in `internal/forge` used by `getJSON` and `prwait.Fetch`: token + 403 -> one
+retry without `Authorization`; on a second failure return the original 403 (a private repo answers
+404 anonymously, which would trigger the wrong hint). No retry on 404/401/5xx or without a token. Scope
+advice in `APIError.Detail` (Forgejo: `harnez forge token rotate`/`import`; GitHub: `GITHUB_TOKEN`/`gh
+auth`). 404 hint is kind-specific. 9 tests with a sentinel token. Live check: host runs `issues new`
+in a scratch clone after the commit.
