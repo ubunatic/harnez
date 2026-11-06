@@ -61,3 +61,20 @@ The Searcher's debug-budget explanation was wrong (the refreshed gauge assertion
   must fail before the fix.
 - The fix keeps panel placement stable when real Load text width changes, not only in tests; the
   existing test must pass without stubbing Load inside it.
+
+## M1 delivered (b41b25af): stable Load width, regression test
+
+Host review: the test is sound (deterministic Load at both extremes, cadence points, exact-fit
+height). Live check on the installed binary (`harnez usage --watch --compact`, PTY 110x30): the Load
+row is clipped to `cpu (16 cores) [...] 8% (5...` while the frame row has about 14 free columns. The
+fixed `pref = minBoxWidth + 8` (`watch_frame.go:507-512`) trades geometry stability for lost data.
+
+### Pre-Work / Required Refinements (M2)
+
+- Keep the stable geometry, but give Load a preferred width that fits its full content for the
+  widest normal reading (for example reserve the width of a fixed-format template such as the
+  worst-case CPU/power line), and use the frame's free columns before clipping.
+- Add a test: at width 110 with a normal Load reading, the Load row is not truncated (no `...`),
+  and the existing geometry test still passes.
+- Live check by the developer: render `harnez usage --watch --compact` in a 110-column PTY and quote
+  the Load row.
