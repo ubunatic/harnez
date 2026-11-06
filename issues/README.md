@@ -76,4 +76,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1172 | [1172-draft-tickets-count-toward-the-active-ticket-cap.md](1172-draft-tickets-count-toward-the-active-ticket-cap.md) | Draft tickets count toward the active-ticket cap | Open |
 | 1173 | [1173-jules-config-loader-reports-a-structure-mismatch-as-not-valid-json.md](1173-jules-config-loader-reports-a-structure-mismatch-as-not-valid-json.md) | Jules config loader reports a structure mismatch as not valid JSON | Open |
 | 1175 | [1175-usage-watch-debug-frame-loses-lines-after-a-collector-refresh-testbuildwatchframeatdebugoverlayusescollectorcadence-fails-on-main.md](1175-usage-watch-debug-frame-loses-lines-after-a-collector-refresh-testbuildwatchframeatdebugoverlayusescollectorcadence-fails-on-main.md) | usage watch: debug frame loses lines after a collector refresh (TestBuildWatchFrameAtDebugOverlayUsesCollectorCadence fails on main) | Open |
+| 1176 | [1176-usage-json-contract-test-for-the-fields-taia-models-reads.md](1176-usage-json-contract-test-for-the-fields-taia-models-reads.md) | usage --json: contract test for the fields taia-models reads | Open |
 <!-- harnez:end issues-active-index -->
