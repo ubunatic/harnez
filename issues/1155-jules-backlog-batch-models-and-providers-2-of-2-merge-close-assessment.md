@@ -27,4 +27,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1155 | 11638024735076166476 | pending | running (started 2026-11-06 01:23, audited 2cf3be4d) |
+| batch audit | jules-batch-1155 | 11638024735076166476 | github #117 (closed) | done (>25m, one resumed wait): 6/6 refs hold. Closed 755 (spec/agent.yaml:174-186: claude-haiku-5-5 with tier, roles, cost). Rest kept |

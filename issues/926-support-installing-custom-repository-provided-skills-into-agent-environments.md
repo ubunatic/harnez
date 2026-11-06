@@ -24,3 +24,10 @@ Developers and orchestrators currently have to manually discover, copy, or symli
 ## 3. Implementation & Verification Plan
 - Details and command surface to be refined within the harnez development flow.
 - Verify that running the installer registers a repository skill so that target agent runtimes immediately discover the new skill.
+
+## Audit 2026-11-06
+
+Jules batch 1159, checked live: partly done. `harnez skill install <git-url>[@ref]` (with `--path`,
+`--skill`, `--as`, `--auto`) installs one skill from a git repository into all agent skill dirs.
+Left from section 2: install from a local path, default scan of `./skills/*/SKILL.md`, all skills
+of a repository at once, and link mode for local development.

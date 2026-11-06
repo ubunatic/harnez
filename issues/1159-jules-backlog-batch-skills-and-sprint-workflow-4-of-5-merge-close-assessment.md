@@ -30,4 +30,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1159 | 13540935560186336819 | pending | running (started 2026-11-06 01:23, audited 2cf3be4d) |
+| batch audit | jules-batch-1159 | 13540935560186336819 | github #116 (closed) | discarded (>25m, one resumed wait): 5/8 refs hold (skill.go:49, :264 wrong). 926 partly done: `skill install <git-url>` exists; local path, ./skills scan, all-skills and link mode missing (noted in 926). Rest kept |

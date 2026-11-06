@@ -29,4 +29,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1153 | 4331739076003152553 | pending | running (started 2026-11-06 01:23, audited 2cf3be4d) |
+| batch audit | jules-batch-1153 | 4331739076003152553 | github #118 (closed) | discarded (>25m, one resumed wait): 3/4 refs hold (watch_load_box.go:88 wrong). Close of 927 not checked: gokay not installed on host; kept. Rest kept |
