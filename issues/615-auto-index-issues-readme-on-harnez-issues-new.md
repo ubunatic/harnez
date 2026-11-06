@@ -33,3 +33,9 @@ Automatically keep `issues/README.md` in sync when allocating new tickets.
 ## 4. Outcome
 
 `harnez issues new` now refreshes `issues/README.md` after the race-safe reservation, and reports the refresh on stderr while retaining the existing stdout contract. The generated row contains the placeholder title until content is written; later `issues` verbs refresh it as they update the ticket.
+
+## Audit 2026-11-06
+
+Verified done on 9f7dcf78 (Jules batch 1147, host check): `issues new` keeps stdout `NNN<TAB>path`,
+prints `issues new: README refreshed` on stderr, and the README lists the new ticket. Implemented in
+`ca8bada1`, which does not name 615, so `issues close` refuses; close once 1174 lands.

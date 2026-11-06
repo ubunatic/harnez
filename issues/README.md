@@ -75,4 +75,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1171 | [1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md](1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md) | jules skill: skip recently audited tickets and add a batch audit prompt | Open |
 | 1172 | [1172-draft-tickets-count-toward-the-active-ticket-cap.md](1172-draft-tickets-count-toward-the-active-ticket-cap.md) | Draft tickets count toward the active-ticket cap | Open |
 | 1173 | [1173-jules-config-loader-reports-a-structure-mismatch-as-not-valid-json.md](1173-jules-config-loader-reports-a-structure-mismatch-as-not-valid-json.md) | Jules config loader reports a structure mismatch as not valid JSON | Open |
+| 1174 | [1174-issues-close-accept-the-implementing-commit-when-it-does-not-reference-the-ticket.md](1174-issues-close-accept-the-implementing-commit-when-it-does-not-reference-the-ticket.md) | issues close: accept the implementing commit when it does not reference the ticket | Open |
 <!-- harnez:end issues-active-index -->
