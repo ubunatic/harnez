@@ -1,6 +1,7 @@
 # 1173 — Jules config loader reports a structure mismatch as not valid JSON
 
-**Status**: Open
+**Status**: Closed — Syntax errors now say 'is not valid JSON (byte N)'; string entries say 'github_projects entries must be {"repo": "<name>"}'; a non-list github_projects says 'must be a list of'; a non-string key says 'key must be a string'. The key never appears in any of them. Tests: TestJulesConfigStringEntriesNameTheShape, TestJulesConfigBrokenJSONIsSyntaxError, TestJulesConfigKeyTypeMismatchHidesKey (fix 68d9afaf).
+**Closed-By**: claude:haiku:med, session dev-1173
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug

@@ -43,5 +43,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1139 | [1139-find-issues-support-status-filters-for-forge-tickets.md](1139-find-issues-support-status-filters-for-forge-tickets.md) | find issues: support status filters for forge tickets | Open |
 | 1171 | [1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md](1171-jules-skill-skip-recently-audited-tickets-and-add-a-batch-audit-prompt.md) | jules skill: skip recently audited tickets and add a batch audit prompt | Open |
 | 1172 | [1172-draft-tickets-count-toward-the-active-ticket-cap.md](1172-draft-tickets-count-toward-the-active-ticket-cap.md) | Draft tickets count toward the active-ticket cap | Open |
-| 1173 | [1173-jules-config-loader-reports-a-structure-mismatch-as-not-valid-json.md](1173-jules-config-loader-reports-a-structure-mismatch-as-not-valid-json.md) | Jules config loader reports a structure mismatch as not valid JSON | Open |
 <!-- harnez:end issues-active-index -->
