@@ -1,6 +1,6 @@
 # 617 — Create /respect skill for spec-driven implementation
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done, verified 2026-11-06 in the Jules backlog cleanup (see the ticket's Audit 2026-11-06)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
