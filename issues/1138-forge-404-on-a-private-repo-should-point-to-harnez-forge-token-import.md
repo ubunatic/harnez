@@ -62,3 +62,12 @@ retry without `Authorization`; on a second failure return the original 403 (a pr
 advice in `APIError.Detail` (Forgejo: `harnez forge token rotate`/`import`; GitHub: `GITHUB_TOKEN`/`gh
 auth`). 404 hint is kind-specific. 9 tests with a sentinel token. Live check: host runs `issues new`
 in a scratch clone after the commit.
+
+## Review (review-3fixes, codex:terra:low) and pre-work
+
+No blocker, no secret leak; the retry cannot loop; a 403 body is discarded before decoding. Missing
+tests for promised behaviour (`internal/forge/getjson_test.go`):
+
+- An authenticated 401 and an authenticated 5xx make exactly one request (no anonymous retry).
+- An authenticated 403 followed by an anonymous 404 returns status 403 with the scope advice, not the
+  404 (the private-repo case).
