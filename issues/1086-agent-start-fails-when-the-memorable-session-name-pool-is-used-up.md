@@ -39,4 +39,11 @@ Jules audit (PR GH#68, report `reports/jules/1086.md`, checked against d8904997;
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| implement | jules-implement-1086 | 9431202035978934268 | github #98 (open, not mergeable as is) | done; tests pass, new test fails without fix. Suffix fallback (name.go) OK. Freeing names of completed/failed/stopped sessions (agent_run.go:445) skips the resume-by-name check: Find returns the first name match (session.go:159), so a reused name can resume the old session. Take the fallback only. |
+| implement | jules-implement-1086 | 9431202035978934268 | github #98 (closed; fallback taken) | done; tests pass, new test fails without fix. Suffix fallback (name.go) OK. Freeing names of completed/failed/stopped sessions (agent_run.go:445) skips the resume-by-name check: Find returns the first name match (session.go:159), so a reused name can resume the old session. Take the fallback only. |
+
+## Partly delivered 2026-11-06
+
+Want 1 (numeric suffix fallback) shipped from Jules PR 98, `internal/subagent/name.go`, test
+`TestGenerateSessionNameFallback`. Still open: want 2 (finished sessions stop holding names; first
+check resume-by-name, since `FileSessionStore.Find` returns the first name match at
+`internal/subagent/session.go:159`) and want 3 (say what holds the names if failure stays possible).
