@@ -28,4 +28,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1144 | 9470734212392980745 | pending | running (started 2026-11-06 00:45, audited 9f7dcf78) |
+| batch audit | jules-batch-1144 | 9470734212392980745 | github #105 (closed) | discarded 21m: 2/3 refs hold (AgenticLoop.md:1 is front matter). Close of 246 wrong: /commit (config.yaml:381) lacks the host-vs-subagent commit rule the ticket calls load-bearing. Close of 230 unsupported (no out-of-scope doc found); 230 is a deinvest lead for the owner. No ticket changes |
