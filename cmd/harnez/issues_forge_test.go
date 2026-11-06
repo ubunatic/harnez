@@ -98,10 +98,22 @@ func TestIssuesLocalDirSkipsForge(t *testing.T) {
 }
 
 func TestForgeTrackerHint(t *testing.T) {
-	tg := forgetracker.Target{Forge: forge.Forge{TokenEnv: []string{"CODEBERG_TOKEN", "FORGEJO_TOKEN"}}}
+	tg := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", TokenEnv: []string{"CODEBERG_TOKEN", "FORGEJO_TOKEN"}}}
 	err := forgeTrackerHint(&forge.APIError{Status: 404, Detail: "x"}, tg)
 	if err == nil || !strings.Contains(err.Error(), "CODEBERG_TOKEN, FORGEJO_TOKEN") {
 		t.Fatalf("want token hint, got %v", err)
+	}
+	// The stored-token route comes first; the env vars follow it.
+	msg := err.Error()
+	if i, j := strings.Index(msg, "harnez forge token import"), strings.Index(msg, "CODEBERG_TOKEN"); i < 0 || i > j {
+		t.Fatalf("hint must name harnez forge token import before the env vars, got %q", msg)
+	}
+	if !strings.Contains(msg, "harnez forge token create") {
+		t.Fatalf("hint must name token create too, got %q", msg)
+	}
+	gh := forgetracker.Target{Forge: forge.Forge{Kind: "github", TokenEnv: []string{"GITHUB_TOKEN"}}}
+	if err := forgeTrackerHint(&forge.APIError{Status: 404, Detail: "x"}, gh); err == nil || strings.Contains(err.Error(), "forge token") {
+		t.Fatalf("GitHub has no stored-token route, got %v", err)
 	}
 	plain := errors.New("boom")
 	if got := forgeTrackerHint(plain, tg); got != plain {

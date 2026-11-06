@@ -1,10 +1,8 @@
 package forge
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -109,38 +107,11 @@ func pageParam(fg Forge) string {
 	return "limit"
 }
 
+// getJSON reads one list or item endpoint with the lister's token; GetJSON retries a 403 anonymously.
 func (l PullLister) getJSON(fg Forge, rawURL string, v any) error {
-	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
-	if err != nil {
-		return &APIError{Detail: "building request: " + err.Error()}
-	}
-	req.Header.Set("Accept", "application/json")
-	if fg.Kind == "github" {
-		req.Header.Set("Accept", "application/vnd.github+json")
-		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	}
+	tok := ""
 	if l.Token != nil {
-		if tok := l.Token(fg); tok != "" {
-			if fg.Kind == "github" {
-				req.Header.Set("Authorization", "Bearer "+tok)
-			} else {
-				req.Header.Set("Authorization", "token "+tok)
-			}
-		}
+		tok = l.Token(fg)
 	}
-	resp, err := l.Client.Do(req)
-	if err != nil {
-		// The transport error may name the URL, never the header, so the token cannot leak here.
-		return &APIError{Transient: true, Detail: "request to " + fg.Host + " failed"}
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
-		transient := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
-		return &APIError{Status: resp.StatusCode, Transient: transient, Detail: "API request to " + fg.Host}
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v); err != nil {
-		return &APIError{Status: resp.StatusCode, Detail: "decoding response from " + fg.Host}
-	}
-	return nil
+	return GetJSON(l.Client, fg, rawURL, tok, "API request to "+fg.Host, v)
 }

@@ -1,9 +1,7 @@
 package prwait
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -50,38 +48,13 @@ func PullURL(t Target) string {
 		url.PathEscape(t.Owner), url.PathEscape(t.Repo), t.Number)
 }
 
-// Fetch performs one GET for the pull request and decodes it.
+// Fetch performs one GET for the pull request and decodes it. forge.GetJSON sends the token and
+// retries a 403 anonymously, as the open-PR scan does.
 func (f *HTTPFetcher) Fetch(t Target) (PullInfo, error) {
-	req, err := http.NewRequest(http.MethodGet, PullURL(t), nil)
-	if err != nil {
-		return PullInfo{}, &APIError{Detail: "building request: " + err.Error()}
-	}
-	req.Header.Set("Accept", "application/json")
-	if t.Forge.Kind == "github" {
-		req.Header.Set("Accept", "application/vnd.github+json")
-		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	}
-	if tok := f.tokenFor(t.Forge); tok != "" {
-		if t.Forge.Kind == "github" {
-			req.Header.Set("Authorization", "Bearer "+tok)
-		} else {
-			req.Header.Set("Authorization", "token "+tok)
-		}
-	}
-	resp, err := f.Client.Do(req)
-	if err != nil {
-		// The transport error names the URL, never the header, so the token cannot leak here.
-		return PullInfo{}, &APIError{Transient: true, Detail: "request to " + t.Forge.Host + " failed"}
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
-		transient := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
-		return PullInfo{}, &APIError{Status: resp.StatusCode, Transient: transient, Detail: fmt.Sprintf("for %s/%s#%d on %s", t.Owner, t.Repo, t.Number, t.Forge.Host)}
-	}
+	what := fmt.Sprintf("for %s/%s#%d on %s", t.Owner, t.Repo, t.Number, t.Forge.Host)
 	var info PullInfo
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&info); err != nil {
-		return PullInfo{}, &APIError{Status: resp.StatusCode, Detail: "decoding response from " + t.Forge.Host}
+	if err := forge.GetJSON(f.Client, t.Forge, PullURL(t), f.tokenFor(t.Forge), what, &info); err != nil {
+		return PullInfo{}, err
 	}
 	return info, nil
 }

@@ -1,6 +1,10 @@
 package forge
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -72,4 +76,66 @@ func ghAuthToken() (string, error) {
 		return "", err
 	}
 	return string(out), nil
+}
+
+// GetJSON does one GET of rawURL and decodes the JSON answer into v. It sends token as the
+// bearer header when non-empty. what names the request in errors; it never carries a token.
+//
+// A 403 sent with a token is retried once without it: a token that lacks a scope still reads
+// public repositories anonymously. If that retry fails too, the error is a 403 that says the
+// token likely lacks a scope, and it replaces the retry's error: a private repo answers 404
+// anonymously, and that 404 would send the user to the wrong hint.
+func GetJSON(client *http.Client, fg Forge, rawURL, token, what string, v any) error {
+	err := getOnce(client, fg, rawURL, token, what, v)
+	var apiErr *APIError
+	if token == "" || !errors.As(err, &apiErr) || apiErr.Status != http.StatusForbidden {
+		return err
+	}
+	if getOnce(client, fg, rawURL, "", what, v) == nil {
+		return nil
+	}
+	return &APIError{Status: http.StatusForbidden, Detail: what + "; the token likely lacks a scope: " + scopeAdvice(fg)}
+}
+
+// scopeAdvice says how to fix a token that a forge refused. Forgejo tokens are stored by harnez;
+// GitHub tokens come from the environment or gh.
+func scopeAdvice(fg Forge) string {
+	if fg.Kind == "github" {
+		return "set a token with read access in " + strings.Join(fg.TokenEnv, " or ") + " (or gh auth)"
+	}
+	return "run harnez forge token rotate or harnez forge token import"
+}
+
+func getOnce(client *http.Client, fg Forge, rawURL, token, what string, v any) error {
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return &APIError{Detail: "building request: " + err.Error()}
+	}
+	req.Header.Set("Accept", "application/json")
+	if fg.Kind == "github" {
+		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	}
+	if token != "" {
+		if fg.Kind == "github" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		} else {
+			req.Header.Set("Authorization", "token "+token)
+		}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		// The transport error may name the URL, never the header, so the token cannot leak here.
+		return &APIError{Transient: true, Detail: "request to " + fg.Host + " failed"}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+		transient := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+		return &APIError{Status: resp.StatusCode, Transient: transient, Detail: what}
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v); err != nil {
+		return &APIError{Status: resp.StatusCode, Detail: "decoding response from " + fg.Host}
+	}
+	return nil
 }

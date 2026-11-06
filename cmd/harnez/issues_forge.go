@@ -55,7 +55,17 @@ func forgeTrackerHint(err error, t forgetracker.Target) error {
 	}
 	var apiErr *forge.APIError
 	if errors.As(err, &apiErr) && (apiErr.Status == 404 || apiErr.Status == 401) {
-		return fmt.Errorf("%w (a private repo needs a token: set one of %s)", err, strings.Join(t.Forge.TokenEnv, ", "))
+		return fmt.Errorf("%w (%s)", err, privateRepoHint(t.Forge))
 	}
 	return err
+}
+
+// privateRepoHint says how to give harnez a token for a private repo. Forgejo tokens are
+// stored by harnez, so the stored-token commands come first; the env vars are the fallback.
+func privateRepoHint(fg forge.Forge) string {
+	env := strings.Join(fg.TokenEnv, ", ")
+	if fg.Kind == "forgejo" {
+		return "a private repo needs a token: run harnez forge token import or harnez forge token create, or set one of " + env
+	}
+	return "a private repo needs a token: set one of " + env
 }
