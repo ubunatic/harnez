@@ -40,4 +40,4 @@ harnez refactor can break taia's model picker silently.
 
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| implement | jules-implement-1176 | 7274565587309179823 | pending | running (started 2026-11-06, on 9c362dd3) |
+| implement | jules-implement-1176 | 7274565587309179823 | github #133 (closed, integrated by host) | done: test taken, switched to usage.RenderJSON (the real --json path, with staleness fill-in); host ran it green and saw it fail on renamed used_percent and plan_tier |
