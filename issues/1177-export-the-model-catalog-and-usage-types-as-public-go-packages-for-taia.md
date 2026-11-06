@@ -40,3 +40,11 @@ graph check by the host:
   (`ubunatic.com/harnez/modelcatalog`, `ubunatic.com/harnez/quota`, final names chosen in M1/M2).
   They carry a stable API for taia and other consumers: exported names change only with a
   deprecation step, and the package doc says so.
+
+## Decision
+
+- 2026-11-06 lean sprint (owner: haiku:med developer, terra:low one-shot reviewer/consult). Order:
+  1177 M1 (catalog) and M2 (quota types); M3 decided after M2. Then 1173, 1138, 1139 on the same
+  branch `sprint/1177-1173-1138-1139`.
+- Searcher skipped for 1177: the import-graph findings above were checked live this session and
+  name the write set; the developer's plan-only first turn confirms current locations.
