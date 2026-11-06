@@ -89,7 +89,7 @@ func TestCleanManagedSectionsPreservesUnknownBlocks(t *testing.T) {
 	t.Setenv("HOME", home)
 	path := filepath.Join(home, "CLAUDE.md")
 	unknown := "<!-- harnez:begin Instructions Hierarchy -->\nkeep hierarchy\n<!-- harnez:end Instructions Hierarchy -->\n" +
-		"<!-- harnez:begin Issue Tracker Discovery -->\nkeep tracker\n<!-- harnez:end Issue Tracker Discovery -->\n" +
+		"<!-- harnez:begin Local Tracker Notes -->\nkeep tracker\n<!-- harnez:end Local Tracker Notes -->\n" +
 		"<!-- harnez:begin Agent-Filed Feedback -->\nkeep feedback\n<!-- harnez:end Agent-Filed Feedback -->\n"
 	if err := os.WriteFile(path, []byte(unknown), 0600); err != nil {
 		t.Fatal(err)

@@ -118,6 +118,14 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
     also runs the real flow in a scratch repo and checks `git show HEAD:<file>`. (Sprints 843/847:
     init reverted M3's rules edit; green tests hid a driver that init never installed and merge
     commits missing rows.)
+- **One-shot cheap review (default)**: after the host's own diff review, start one read-only reviewer
+  per milestone diff, `HTO=0 harnez agent start --role reviewer --model <user's pick, else lean> -f
+  <prompt>`, with the commit range, the ticket, 3-4 concrete questions (behaviour change, test
+  strength, contract or API scope, secret leaks) and "reply in under 25 lines with severity". Its
+  findings become pre-work like the host's. Skip it only for a docs-only or one-line change, and say so
+  in the sprint report. (Sprint 1177/1173/1138/1139, 2026-11-06: three codex:terra:low reviews of
+  24-43s each found a real gap the host review had passed: a weak test, golden-coverage gaps and an
+  over-wide stable API, and two untested promised behaviours.)
 - **Strictly No Direct Fixes & No Micro-Task Rounds**:
   - The host does **NOT** modify code files.
   - The host updates the ticket: records milestone $N$ delivery summary, naming the milestone ("M2 delivered: flag and schema gating").

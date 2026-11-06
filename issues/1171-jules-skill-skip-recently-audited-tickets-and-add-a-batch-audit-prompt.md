@@ -25,6 +25,16 @@ files; the skill has no batch kind.
   `Jules audit`, a `## Jules runs` row) newer than the last code change it cites, unless asked.
 - Add a `batch` kind with the batch prompt (per-ticket verdict, proposed priority with reason,
   merges, top five) and the wrapper-ticket format of 1131/1140.
+- Use the done-when-first prompt from waves 2-4 (owner approved 2026-11-06): a preamble naming the
+  role (strict backlog auditor), the approach (list each ticket's `/goal`, `Want`, `Done when` items and
+  cite each) and the task; a `close: done` must quote every required item with the code that does it.
+  Measured: proposed closes that held rose from 2 of 21 (wave 1) to 4 of 11 (wave 2); cost: more runs
+  past 25 minutes and one invented quote, so the host check per reference stays mandatory.
+- Ship the host's reference checker with the kind: extract `path:line` plus the quoted line (accept
+  `path:line`, `path:file:line`), look for the quote within 10 lines at the audited commit, and score
+  N/M; unquoted references count as unscored.
+- Close wrapper tickets with `--no-code` once their batch is applied, and record runs in the wrapper's
+  `## Jules runs` table.
 
 ## Done when
 

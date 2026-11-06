@@ -37,6 +37,7 @@ compute the next ticket number, or allocate one, use `harnez find` / `harnez iss
 instead of `ls issues/`, `find`, or raw grep:
 - `harnez find -d <repo> issues -a status:active` — list active tickets (Open, In Progress, Blocked, Draft) as text.
 - `issues/README.md` is the generated active index; follow its links to `issues/BACKLOG.md` and `issues/CLOSED.md` for other lifecycle groups.
+- `harnez find -d <repo> issues status:backlog` — list parked Backlog tickets; active lists leave them out, so check this before sizing a cleanup or a roadmap.
 - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text.
 - `harnez issues show -d <repo> <n>` — read a single issue as text.
 - Use text for routine issue discovery and document reads. Render PNG cards with
