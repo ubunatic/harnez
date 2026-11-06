@@ -30,5 +30,5 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1169c | 16654191772771631779 | pending | running (started 2026-11-06 02:16, audited 9e7a8f16) |
+| batch audit | jules-batch-1169c | 16654191772771631779 | github #127 (closed) | done (>25m, one resumed wait): 6/6 refs hold; no closes proposed. All kept |
 | batch audit | jules-batch-1169, jules-batch-1169b | - | none | start refused: HTTP 400 Precondition check failed (11 Jules sessions incl. stuck 1152, 1157); restarted as 1169c |
