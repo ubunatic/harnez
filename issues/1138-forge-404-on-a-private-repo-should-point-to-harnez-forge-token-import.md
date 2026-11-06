@@ -1,6 +1,7 @@
 # 1138 — Forge 404 on a private repo should point to harnez forge token import
 
-**Status**: Open
+**Status**: Closed — 403 with a stored/env token retries once anonymously (forge.GetJSON, shared by open-PR scan, find/show/import, pr wait); if that fails the error says the token likely lacks a scope and names rotate/import. Forgejo 404 hint names harnez forge token import/create before env vars. Tests: TestGetJSON*, TestIssuesRetryIsPerPage, TestFetch*, TestForgeTrackerHint. make test-q1: 0 FAIL, exit 0.
+**Closed-By**: claude:haiku:med, session dev-1138
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
