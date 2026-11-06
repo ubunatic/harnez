@@ -29,4 +29,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1140 | 4664725194211660920 | pending | running (started 2026-11-06 00:45, audited 9f7dcf78) |
+| batch audit | jules-batch-1140 | 4664725194211660920 | github #104 (closed) | done 16m: 8 epics keep. 6/6 refs hold; wrong claim on 981 (bug-hunt skill exists, docs/commands/bug-hunt.md). No ticket changes |
