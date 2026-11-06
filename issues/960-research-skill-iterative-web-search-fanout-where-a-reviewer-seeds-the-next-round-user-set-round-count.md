@@ -1,6 +1,6 @@
 # 960 — research skill: iterative web search fanout where a reviewer seeds the next round (user-set round count)
 
-**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
+**Status**: Closed — Deinvested 2026-11-06 (owner confirmed in PR 109): skill idea without a user; can return as a taia skill
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
