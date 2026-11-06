@@ -35,3 +35,9 @@ harnez refactor can break taia's model picker silently.
 ## Done when
 
 - The test passes on main and fails when any listed field is renamed (show one failing run).
+
+## Jules runs
+
+| kind | session | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement | jules-implement-1176 | 7274565587309179823 | pending | running (started 2026-11-06, on 9c362dd3) |

@@ -103,3 +103,9 @@ overrides an assumed capability, cost fields (subscription vs. API).
 semantics, migration and enforcement on every entry point. The rest runs as thin slices, each with one visible
 result, a plan-first cheap developer and one review. 945's snapshot and change-report schemas are provisional:
 948 may change them freely.
+
+## Jules runs
+
+| kind | session | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| ideas | jules-ideas-taia-go-library | 16171648424057503251 | pending | running (started 2026-11-06): library seams in internal/usage and the model catalog for reuse by taia |
