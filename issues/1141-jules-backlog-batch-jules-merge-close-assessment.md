@@ -26,4 +26,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1141 | 12594687266649708746 | pending | running (started 2026-11-06 00:45, audited 9f7dcf78) |
+| batch audit | jules-batch-1141 | 12594687266649708746 | github #103 (closed) | done 15m: 6/6 refs hold, all 3 closes rejected. 1073: script exists, no real-session run shown (partly done). 1091: cut-off still gives generic `decode Jules API response` (jules.go:201). 1093: record saved at agent_async.go:200 before the driver preflight. All 5 kept |
