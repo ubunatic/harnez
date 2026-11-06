@@ -31,3 +31,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
+| batch audit | jules-batch-1150 | 1750402059478393058 | github #111 (closed) | discarded 13m: 2/6 sampled refs hold (watch.go:733, :337, options.go:180 signature, schema.go:5 wrong). Close of 160 rejected: its done-when items are questions answered only by citing function names. No ticket changes |
