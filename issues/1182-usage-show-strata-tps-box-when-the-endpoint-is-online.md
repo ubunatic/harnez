@@ -28,3 +28,23 @@ report here.
 - Endpoint config: spec-driven URL(s) with default `localhost:8080`; also cover the coder port and remote x600?
 - "Current" TPS when idle: show last-run value dimmed, or `idle`.
 - Follow the box conventions of 244 (Mic, hidden when absent) and 765 (spec keys, short timeouts, cache).
+
+## Searcher findings (2026-11-06, live)
+
+- Strata `GET http://localhost:8080/metrics` is JSON (not Prometheus), no flag needed: `live.tok_s` (null while
+  prompt-phase), `requests[0].decode_tok_s` (last finished request, ~52), `totals`, `hardware.tok_s`. `/props` gives
+  `model_alias` and `n_ctx` (label). `/slots` has no timings: do not use it.
+- Panel wiring: `internal/usage/watch_frame.go` (panel select ~158-180, fetch ~417, append ~465), builders like
+  `buildMicBox`, `buildLoadBox` (`watch_load_box.go`), `buildPowerBox` (`power_box.go`). Best pattern for a network
+  endpoint: remote-load shape (`collector_remote_load.go`, `collector.go:121-142`: poll, cache, spec timeouts,
+  `spec/usage.yaml:42-51`); hide the box when unreachable (Mic: `watch_frame.go:465`).
+- Spec rule: add keys to `spec/usage.yaml` AND `spec/schemas/usage.schema.json`, not Go defaults. Tests: see
+  `miclive_test.go`, `cmd/harnez/usage_binary_test.go`, `actionsspec_test.go`. `internal/subagent/driver_test.go`
+  asserts `lmcoder:strata` is out of scope: leave it green, do not touch the model catalog.
+
+## Decision
+
+- Source `/metrics`; show `live.tok_s` while generating, else last `requests[0].decode_tok_s` dimmed with "idle".
+- Config: spec key `strata_endpoints: [http://localhost:8080]` (list, default one entry), 1s timeout, cache like
+  remote load; box hidden when no endpoint answers. Label from `/props` `model_alias`. Local host only (as Mic).
+- Single milestone M1 (Strata TPS box); coder port 8081 and x600 remote stay out of scope (list entries allow it).
