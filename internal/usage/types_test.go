@@ -49,7 +49,7 @@ func TestCollectorStatus(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.agent.CollectorStatus(); got != tc.status {
+			if got := CollectorStatus(tc.agent); got != tc.status {
 				t.Errorf("CollectorStatus() = %q, want %q", got, tc.status)
 			}
 		})
@@ -119,7 +119,7 @@ func TestAgentUsageStaleReasonAndJSON(t *testing.T) {
 		AgentID:       "claude",
 		LastRefreshed: now.Add(-5 * time.Minute),
 	}
-	fresh.PopulateStaleness()
+	PopulateStaleness(&fresh)
 	if fresh.Stale {
 		t.Errorf("expected fresh agent at 5m old to not be stale, got reason %q", fresh.StaleReason)
 	}
@@ -132,7 +132,7 @@ func TestAgentUsageStaleReasonAndJSON(t *testing.T) {
 		AgentID:       "claude",
 		LastRefreshed: now.Add(-11 * time.Minute),
 	}
-	staleAge.PopulateStaleness()
+	PopulateStaleness(&staleAge)
 	if !staleAge.Stale {
 		t.Errorf("expected agent at 11m old to be stale")
 	}
@@ -146,7 +146,7 @@ func TestAgentUsageStaleReasonAndJSON(t *testing.T) {
 		LastRefreshed:   now.Add(-1 * time.Minute),
 		QuotaFetchError: "signal: killed",
 	}
-	staleErr.PopulateStaleness()
+	PopulateStaleness(&staleErr)
 	if !staleErr.Stale {
 		t.Errorf("expected agent with QuotaFetchError to be stale")
 	}

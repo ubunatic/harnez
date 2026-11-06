@@ -86,7 +86,7 @@ func usageTableRows(agents []AgentUsage, rates map[string]agentRate, now time.Ti
 	agents = sortedUsageAgents(agents)
 	var rows []usageTableRow
 	for _, agent := range agents {
-		stale := agent.IsValueStale()
+		stale := IsValueStale(agent)
 		first := usageTableRow{agent: agent.Name, model: agent.ActiveModel, account: agent.Account, stale: stale}
 		if agent.PlanTier != "" {
 			first.account = strings.TrimPrefix(first.account+" · "+agent.PlanTier, " · ")

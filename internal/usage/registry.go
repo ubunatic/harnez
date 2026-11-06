@@ -208,7 +208,7 @@ func (r *Registry) collectWithFilter(ctx context.Context, progress FetchProgress
 			r.mu.Lock()
 			previous, ok := r.lastGood[item.collector.ID]
 			r.mu.Unlock()
-			if ok && previous.hasQuotaSignal() {
+			if ok && hasQuotaSignal(previous) {
 				u = mergeStaticWithLastQuota(u, previous)
 				u.LastRefreshed = previous.LastRefreshed
 				forEachQuotaWindow(&u, func(w *QuotaWindow) { w.Name = staleName(w.Name) })
@@ -295,7 +295,7 @@ func mergeCollectorUsage(primary, additional AgentUsage) AgentUsage {
 		primary = additional
 	}
 	primary.Sources = append(primary.Sources, additional.Sources...)
-	if !primary.hasQuotaSignal() {
+	if !hasQuotaSignal(primary) {
 		primary.Tokens = additional.Tokens
 		primary.Session, primary.Weekly = additional.Session, additional.Weekly
 		primary.ModelGroups, primary.ExtraWindows = additional.ModelGroups, additional.ExtraWindows
@@ -326,7 +326,7 @@ func mergeCollectorUsage(primary, additional AgentUsage) AgentUsage {
 }
 
 func mergeStaticWithLastQuota(current, previous AgentUsage) AgentUsage {
-	if !current.hasQuotaSignal() {
+	if !hasQuotaSignal(current) {
 		current.Tokens = previous.Tokens
 		current.Session, current.Weekly = previous.Session, previous.Weekly
 		current.ModelGroups, current.ExtraWindows = previous.ModelGroups, previous.ExtraWindows
@@ -379,7 +379,7 @@ func newUsageRegistry(homeDir string, client *http.Client, live bool) (*Registry
 				return AgentUsage{AgentID: provider}, err
 			}
 			u := fn(ctx)
-			if cached != nil && cached.Usage.hasQuotaSignal() && !u.hasQuotaSignal() {
+			if cached != nil && hasQuotaSignal(cached.Usage) && !hasQuotaSignal(u) {
 				u = mergeStaticWithLastQuota(u, cached.Usage)
 				u.LastRefreshed = cached.FetchedAt
 				u.Sources = append(u.Sources, fmt.Sprintf("%s (cached, stale)", snapshotPath(stateDir, provider)))

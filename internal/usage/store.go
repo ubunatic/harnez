@@ -821,7 +821,7 @@ func importAgent(s *usagestore.Store, ctx context.Context, provider, source stri
 	freshness := "stale"
 	if source == "collect-all" || source == "registry" {
 		freshness = "fresh"
-		if agent.IsValueStale() || time.Since(at) > DefaultCacheStaleness() {
+		if IsValueStale(agent) || time.Since(at) > DefaultCacheStaleness() {
 			freshness = "stale"
 		}
 	}
@@ -861,7 +861,7 @@ func importAgent(s *usagestore.Store, ctx context.Context, provider, source stri
 func AgentUsageToStoreWindows(agent AgentUsage, observedAt time.Time) []usagestore.Window {
 	provider := agent.AgentID
 	freshness := "fresh"
-	if agent.IsValueStale() {
+	if IsValueStale(agent) {
 		freshness = "stale"
 	}
 	var windows []usagestore.Window

@@ -460,7 +460,7 @@ func TestAgentUsageIsValueStale(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.agent.IsValueStale(); got != tc.want {
+			if got := IsValueStale(tc.agent); got != tc.want {
 				t.Errorf("IsValueStale() = %v, want %v", got, tc.want)
 			}
 		})

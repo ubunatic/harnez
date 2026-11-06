@@ -439,7 +439,7 @@ func latestHistoryQuotaWindowContext(ctx context.Context, dir, agentID string) (
 	}
 	for i := len(entries) - 1; i >= 0; i-- {
 		for _, a := range entries[i].Agents {
-			if a.AgentID == agentID && a.hasQuotaWindowSignal() {
+			if a.AgentID == agentID && hasQuotaWindowSignal(a) {
 				return a, entries[i].Timestamp, true
 			}
 		}
@@ -467,7 +467,7 @@ func fillFromHistoryIfNoQuotaWindows(historyDir string, u AgentUsage) AgentUsage
 }
 
 func fillFromHistoryIfNoQuotaWindowsContext(ctx context.Context, historyDir string, u AgentUsage) AgentUsage {
-	if u.hasQuotaWindowSignal() || ctx.Err() != nil {
+	if hasQuotaWindowSignal(u) || ctx.Err() != nil {
 		return u
 	}
 	hist, at, ok := latestHistoryQuotaWindowContext(ctx, historyDir, u.AgentID)

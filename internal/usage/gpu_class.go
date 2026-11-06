@@ -6,12 +6,6 @@ import (
 	"strings"
 )
 
-// GPUClass is the internal kind of a GPU (issue 765). It only decides which
-// memory rows the Load box draws; it is never printed. The zero value is
-// GPUClassUnknown, so a snapshot from an older remote binary without the
-// field keeps the pre-765 rendering (vram/gtt row whenever GTT is present).
-type GPUClass int
-
 const (
 	GPUClassUnknown GPUClass = iota
 	GPUClassDGPU

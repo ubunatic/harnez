@@ -307,11 +307,11 @@ func writeAgentSnapshotFile(stateDir, agentID string, usage AgentUsage) error {
 // complete reading for the rest of the cache-staleness window, masking
 // whatever a real live collect would have shown (issue 086).
 func PersistAgentSnapshot(stateDir string, agent AgentUsage, offline bool) error {
-	if offline && !agent.hasQuotaWindowSignal() {
+	if offline && !hasQuotaWindowSignal(agent) {
 		return nil
 	}
 	if existing, err := ReadAgentSnapshot(stateDir, agent.AgentID); err == nil && existing != nil {
-		if existing.Usage.hasQuotaSignal() && !agent.hasQuotaSignal() {
+		if hasQuotaSignal(existing.Usage) && !hasQuotaSignal(agent) {
 			return nil
 		}
 	}
@@ -476,7 +476,7 @@ func cacheOrLive(stateDir, agentID string, maxAge time.Duration, collect func() 
 	live := collect()
 	live.LastRefreshed = time.Now()
 
-	if hasCache && snap.Usage.hasQuotaSignal() && !live.hasQuotaSignal() {
+	if hasCache && hasQuotaSignal(snap.Usage) && !hasQuotaSignal(live) {
 		u := snap.Usage
 		u.LastRefreshed = snap.FetchedAt
 		u.Sources = append(u.Sources, fmt.Sprintf("%s (cached, stale)", snapshotPath(stateDir, agentID)))

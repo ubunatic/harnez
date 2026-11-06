@@ -150,7 +150,7 @@ func collectAllWithDiagnostics(ctx context.Context, homeDir string, client *http
 // RenderJSON serializes the UsageSummary to a formatted JSON string.
 func RenderJSON(summary UsageSummary) (string, error) {
 	for i := range summary.Agents {
-		summary.Agents[i].PopulateStaleness()
+		PopulateStaleness(&summary.Agents[i])
 	}
 	data, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
@@ -192,9 +192,9 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 		// quota lines below: distinct from (and much narrower than) the
 		// IsStale/DefaultDisplayStaleness auto-hide check above it -- see
 		// AgentUsage.IsValueStale's doc comment.
-		valueStale := agent.IsValueStale()
+		valueStale := IsValueStale(agent)
 		var lines []string
-		if status := agent.CollectorStatus(); status != "unknown" {
+		if status := CollectorStatus(agent); status != "unknown" {
 			lines = append(lines, "Collector:    "+status)
 		}
 

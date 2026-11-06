@@ -61,7 +61,7 @@ func buildUsageDebugBox(summary UsageSummary, width int, now time.Time) wbox {
 		if !agent.LastRefreshed.IsZero() {
 			at = agent.LastRefreshed.Local().Format(time.RFC3339) + " (" + usageSnapshotAgeLabel(agent.LastRefreshed, now) + ")"
 		}
-		reason := agent.StaleReasonText()
+		reason := StaleReasonText(agent)
 		cause := agent.QuotaFetchCause
 		if agent.QuotaFetchError != "" && cause == "" {
 			cause = labels.Unknown

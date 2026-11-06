@@ -57,7 +57,7 @@ func buildAllUsageBoxAt(summary UsageSummary, width int, debugOverlay bool, now 
 // compact panels and the narrow All Usage table. Unknown legacy snapshots do
 // not get a marker because they carry no reliable provenance signal.
 func collectorStatusMarker(agent AgentUsage) string {
-	status := agent.CollectorStatus()
+	status := CollectorStatus(agent)
 	if status == "unknown" {
 		return ""
 	}
@@ -101,7 +101,7 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		}
 		// Snapshot age and fetch failures affect every value; expired or
 		// explicitly stale windows affect only the row that contains them.
-		stale := agent.IsValueStale()
+		stale := IsValueStale(agent)
 		if len(agent.ModelGroups) > 0 {
 			hasWindow := false
 			labelSuffix := ""
