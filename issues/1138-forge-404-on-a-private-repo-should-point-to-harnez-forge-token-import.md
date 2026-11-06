@@ -1,6 +1,7 @@
 # 1138 — Forge 404 on a private repo should point to harnez forge token import
 
-**Status**: Open — review: two promised behaviours lack tests
+**Status**: Closed — Review pre-work: added TestGetJSONAuthFailuresWithTokenAreNotRetried (401 and 500 with a token make one request, no anonymous retry) and TestGetJSONForbiddenThenAnonymousNotFoundKeepsScopeAdvice (403 with token then anonymous 404 returns 403 scope advice). Both pass on the current code; go test ./internal/forge passes (commit 8c6e875b).
+**Closed-By**: claude:haiku:med, session dev-1138
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
