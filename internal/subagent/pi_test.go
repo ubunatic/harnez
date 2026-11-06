@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -73,8 +74,30 @@ func TestPiStrataCoderArgs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := piRunArgs(model, "ping"), []string{"--mode", "json", "--model", "qwen3.8-flash-next-coder-iq1_m", "--thinking", "low", "--", "ping"}; !reflect.DeepEqual(got, want) {
+	if got, want := piRunArgs(model, "ping"), []string{"--mode", "json", "--model", "strata-coder/qwen3.8-flash-next-coder-iq1_m", "--thinking", "low", "--", "ping"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("piRunArgs(strata) = %#v, want %#v", got, want)
+	}
+}
+
+func TestPiStrataMissingProviderErrorIsReported(t *testing.T) {
+	model, err := ResolveModel("strata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	d := PiDriver{Command: func(_ context.Context, command string, args ...string) ([]byte, error) {
+		if command != "pi" {
+			t.Fatalf("command = %q, want pi", command)
+		}
+		got = args
+		return nil, errors.New("model not found: strata-coder/qwen3.8-flash-next-coder-iq1_m")
+	}}
+	_, err = d.Run(context.Background(), RunOptions{Model: model, Prompt: "ping"})
+	if err == nil || !strings.Contains(err.Error(), "model not found: strata-coder/qwen3.8-flash-next-coder-iq1_m") {
+		t.Fatalf("Pi dispatch error = %v, want missing provider/model error from Pi", err)
+	}
+	if !reflect.DeepEqual(got, piRunArgs(model, "ping")) {
+		t.Fatalf("Pi dispatch args = %#v, want %#v", got, piRunArgs(model, "ping"))
 	}
 }
 

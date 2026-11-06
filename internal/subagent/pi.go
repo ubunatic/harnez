@@ -151,7 +151,11 @@ func piResumeArgs(id, prompt string, model Model) []string {
 func piModelArgs(model Model) []string {
 	var args []string
 	if model.Name != "" && model.Name != "default" {
-		args = append(args, "--model", model.Name)
+		name := model.Name
+		if model.Provider == "strata-coder" {
+			name = model.Provider + "/" + name
+		}
+		args = append(args, "--model", name)
 	}
 	if model.Tier != "" {
 		args = append(args, "--thinking", piThinkingLevel(model.Tier))
