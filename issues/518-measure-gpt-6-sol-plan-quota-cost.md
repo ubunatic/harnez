@@ -1,6 +1,6 @@
 # 518 — Measure gpt-6-sol plan-quota cost
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Deinvested 2026-11-06 (owner confirmed in PR 109): one-off measurement; model data moves to the catalog (942, 1177)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Research
