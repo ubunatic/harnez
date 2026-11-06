@@ -1846,6 +1846,43 @@ func TestBuildWatchFrameLoadWidthDoesNotChangePanelPlacement(t *testing.T) {
 	}
 }
 
+func TestBuildWatchFrameLoadRowIsNotTruncatedAt110Columns(t *testing.T) {
+	load := CPULoad{
+		NumCPU:       16,
+		CPUPercent:   8,
+		CPUPercentOk: true,
+		TempC:        54,
+		TempOk:       true,
+		PowerW:       65,
+		PowerOk:      true,
+	}
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{{
+			AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+			LastRefreshed: testTime, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 25},
+		}},
+		Load: &LoadSnapshot{CPU: load},
+	}
+	frame := buildWatchFrameAt(summary, nil, DefaultWatchInterval, compactWatchSections(), 110, 30, true,
+		testTime, WatchOptions{Compact: true})
+	want := stripANSI(formatCPULine(load))
+	for _, line := range frame.lines {
+		plain := stripANSI(line)
+		if !strings.Contains(plain, "cpu (16 cores)") {
+			continue
+		}
+		if strings.Contains(plain, "...") {
+			t.Fatalf("Load row is truncated at 110 columns: %q", plain)
+		}
+		if !strings.Contains(plain, want) {
+			t.Fatalf("Load row lost content at 110 columns: got %q, want full row %q", plain, want)
+		}
+		return
+	}
+	t.Fatalf("CPU Load row missing at 110 columns; expected %q in:\n%s", want, strings.Join(frame.lines, "\n"))
+}
+
 // TestControlsOverlayListsAllActiveCommandsGroupedByPurpose is issue 094's
 // core acceptance criterion: the [?] overlay must list every active
 // keyboard command, grouped by purpose (view modes, panels, data rows,

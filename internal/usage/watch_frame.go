@@ -495,6 +495,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	// only as many columns as it actually needs, leaving the rest of the
 	// row for panels like Load instead of starving them.
 	boxes := make([]uix.Box, len(panels))
+	precedingPrefWidth := 0
 	for i, p := range panels {
 		measured := p.build(measureWidth)
 		natural := visLen(measured.title) + 6
@@ -507,9 +508,15 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		if p.key == "L" {
 			// Load readings include live numeric fields whose text width can
 			// change between redraws. Keep that volatility from repacking the
-			// panel row; renderWBox clips any wider values within this stable
-			// preferred width.
+			// panel row. Use spare columns after preceding panels to reserve up to
+			// 52 content columns for a normal CPU line; the four extra columns
+			// account for renderWBox's borders and padding. Keep the narrower base
+			// width when space is tight and when Load is the only panel.
 			pref = minBoxWidth + 8
+			available := usable - precedingPrefWidth - boxGap
+			if precedingPrefWidth > 0 && available > pref {
+				pref = min(available, 52+4)
+			}
 		}
 		if pref < minBoxWidth {
 			pref = minBoxWidth
@@ -526,6 +533,10 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 			Order:     i,
 			Enabled:   true,
 		}
+		if i > 0 {
+			precedingPrefWidth += boxGap
+		}
+		precedingPrefWidth += pref
 	}
 	plan := uix.Layout(boxes, uix.Options{Width: usable, Gap: boxGap})
 
