@@ -57,6 +57,12 @@ instead of `ls issues/`, `find`, or raw grep:
 - Commit documentation and `issues/*.md` changes immediately; don't batch them behind
   pending code work.
 
+## Agent-Filed Feedback (harnez feedback)
+- When you observe a genuine harnez bug or a broken or contradictory instruction (not routine
+  friction, and not something you could resolve by asking), record it:
+  `harnez feedback issue "<description>" [--severity bug|instruction]`.
+- Review past entries with `harnez feedback list`.
+
 ## Harnez Agent
 - In interactive hosts, run `harnez_command` start/wait in the host background runner; never synchronously call `harnez_wait_agent` or spawn-and-wait MCP (see the local Subagent Policy).
 - A requested model such as `sol:low` or `luna` is a Harnez agent model (see `harnez agent models`); dispatch it with `harnez agent start --model <name>`, regardless of `subagent_mode`.

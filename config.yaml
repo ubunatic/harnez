@@ -24,6 +24,8 @@ retired_global_sections:
   # Moved to the per-repo rules (.harnez/rules/Tools.md, rendered from agents_md below); the global copy
   # went stale and still recommended status:open, which hides Backlog tickets (2026-11-06).
   - Issue Tracker Discovery
+  # Removed from global_sections in 7ca2481c (#415); its guidance now lives in .harnez/rules/Tools.md.
+  - Agent-Filed Feedback
 global_sections:
   - name: Process hygiene
     content: |
@@ -798,6 +800,12 @@ agents_md:
           - `harnez issues close` refuses unless a commit outside `issues/` references the ticket number; pass `--no-code` when the ticket needed no code.
           - Commit documentation and `issues/*.md` changes immediately; don't batch them behind
             pending code work.
+
+          ## Agent-Filed Feedback (harnez feedback)
+          - When you observe a genuine harnez bug or a broken or contradictory instruction (not routine
+            friction, and not something you could resolve by asking), record it:
+            `harnez feedback issue "<description>" [--severity bug|instruction]`.
+          - Review past entries with `harnez feedback list`.
 
           ## Harnez Agent
           - In interactive hosts, run `harnez_command` start/wait in the host background runner; never synchronously call `harnez_wait_agent` or spawn-and-wait MCP (see the local Subagent Policy).
