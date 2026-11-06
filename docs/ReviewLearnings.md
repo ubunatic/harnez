@@ -130,3 +130,15 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   reports partial results (`truncated` in JSON). Canary a search API before relying on its semantics.
 - **Review the output contract, not only the logic** (1116, two haiku rounds): reviewers found that
   `--json` had no truncation signal and that the CLI wiring had no test. Ask for both explicitly.
+- **A test that reads the live machine fails only on some hosts** (1175): the usage watch frame test
+  passed no `Load`, so host load changed the Load box width and repacked panels. Inject every live
+  input as a fixture; a test that fails on one machine and not in CI is an environment leak first.
+- **Green tests hid a visible regression** (1175 M1): the geometry fix passed every test but clipped the
+  live Load row with free columns left. Render the installed binary in a PTY at more than one width.
+- **A one-shot cheap reviewer pays for itself** (1177, 1138, 2026-11-06): codex:terra:low reviews of
+  24-43s found a weak test, golden-coverage gaps, an over-wide stable API and two untested promised
+  behaviours that host review had passed. Run one per milestone diff.
+- **Batch audits overclaim "done"** (Jules cleanup 1140-1170): 2 of 21 proposed closes held in the first
+  wave; Jules matched titles, not the done-when. Check each close against the ticket's `/goal` and run it
+  live where cheap; many "done" tickets were done under another ticket's commit (close with
+  `--implemented-by`, 1174).

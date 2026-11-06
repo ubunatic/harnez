@@ -70,6 +70,15 @@ Never use a reply to widen the task, ask for fixes or rework a PR. Note each rep
 
 When a wait ends with `stalled: N replies since Jules's last message, no reaction`, Jules has stopped responding after your replies. Do not wait again: count the run as failed in the tracking table, do not send further messages, and stop or restart with a smaller, more focused prompt.
 
+### Long runs and the session cap
+
+A run past its waits is often not stuck: in the 2026-11-06 backlog cleanup, two runs dropped as stuck had
+finished, and one was in `AWAITING_USER_FEEDBACK` after the auto-reply and delivered within minutes of the
+second reply. Before counting a run as failed, read it once with `harnez agent status --model jules --id
+<jules-id>`, and send the second reply when it is waiting. Open sessions, waiting ones included, count
+against the account's cap of about 10: an 11th start failed with HTTP 400 "Precondition check failed"
+until a run finished.
+
 ### Run tracking
 
 Before or right after starting a batch, record each run in a `## Jules runs` table (columns: kind, session name, Jules ID, PR, state) in the target ticket, or for runs with no ticket in a tracking issue filed through `/issue`. With `issues.tracker: none`, keep the table where `.harnez/rules/Index.md` says local tracking goes. Commit it through the repo's normal route. Update a row when its findings are captured (Findings capture); the batch is done when no row is pending.

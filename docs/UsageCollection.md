@@ -26,6 +26,18 @@ retaining compatible snapshots and archives until their consumers have moved.
   the store API only. They do not directly call providers, parse provider files, or interpret cache
   files. An explicit refresh asks the registry to collect, then reads the same API.
 
+## External consumers of `usage --json`
+
+taia's `taia-models` plugin runs `harnez usage --json --offline` and decodes the agents list, per agent
+`agent_id`, `installed`, `authenticated`, `plan_tier`, `stale`, `last_refreshed`, `session`, `weekly`, and per
+window `remaining_percent`, `used_percent`, `reset_at`. These keys are a contract:
+
+- `cmd/harnez/usage_json_contract_test.go` (1176) asserts them through `usage.RenderJSON`, the real
+  `--json` path, and fails on a rename.
+- The types live in the stable package `ubunatic.com/harnez/quota` (1177); `internal/usage` aliases them.
+  `internal/usage/render_json_identity_test.go` keeps the rendered bytes identical across refactors.
+- Change a key only through a deprecation step and a coordinated taia-plugins change.
+
 ## Current client-server boundary (issues 829-831)
 
 `harnez server` is the one process that writes `telemetry.sqlite`. It owns the usage collector,

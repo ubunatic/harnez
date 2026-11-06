@@ -113,6 +113,14 @@ These do not show up in `go list` but bind the subsystems harder than imports do
    Unix socket; `usage` reads read-only and auto-starts it, while statuslines POST passive windows and
    drop failures. `rate`, AGY hooks and Codex telemetry use the server route, with one-file-per-record
    fallback spooling under the spec byte cap and draining at startup and on collector ticks.
+8. **Public Go packages for external consumers (issue 1177, 2026-11-06).** Two module-root packages
+   carry a stable API for taia and other programs: `ubunatic.com/harnez/modelcatalog` (merged model
+   catalog, entry point `Load`) and `ubunatic.com/harnez/quota` (the JSON types of `usage --json`,
+   standard library only). Exported names change only through a `Deprecated:` step; fields tagged
+   `json:"-"` stay outside the promise; untagged field names are JSON keys. No `pkg/` directory: packages
+   get real names at the module root (owner decision). Spec-dependent logic (staleness, display gates)
+   stays in `internal/usage` as functions so it never enters the stable surface. Keep `go list -deps
+   ./quota` at standard library only; a quota collector export is 1178.
 
 ## 3. Use-Case Coverage
 

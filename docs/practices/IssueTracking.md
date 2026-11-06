@@ -113,7 +113,10 @@ the reason in one commit and errors without writing if the ticket is not Closed.
 Closing (`close` or `done`) refuses unless a commit with changes outside `issues/` references the
 ticket number, for example a subject ending in `(issue 42)`. Commits that touch only `issues/` do not
 count. For a ticket that needed no code, pass `--no-code`; the refusal names it, and the close commit
-records that no code change was needed.
+records that no code change was needed. When the work landed in a commit that does not name the
+ticket (often done under another ticket), pass `--implemented-by <sha>` instead: the commit must exist and
+change files outside `issues/`, and the close commit records its sha. Never use `--no-code` for such a
+ticket: it would state something false.
 
 Close attribution is stored as `**Closed-By**: <model>, session <id>` directly
 under Status. Either part may be omitted; if both are empty, no attribution line
