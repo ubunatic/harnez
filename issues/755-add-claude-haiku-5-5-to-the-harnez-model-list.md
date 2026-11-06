@@ -45,3 +45,8 @@ harnez lists Claude Haiku only as `claude:haiku`, which points at the Claude CLI
 2. Add a spec entry in `spec/agent.yaml` for `claude-haiku-5-5` following the `agy:opus` pattern, with aliases and a cost tier chosen from the confirmed data. Use the user's decision on whether `haiku` repoints.
 3. Run `make install`, then `harnez agent models` and confirm the new row appears with the right model ID.
 4. Run the spec tests and any model-list tests, and confirm no Go code duplicates the spec values.
+
+## Audit 2026-11-06
+
+Verified done on 2cf3be4d (Jules batch 1155): `claude-haiku-5-5` in `spec/agent.yaml:174-186` with tier,
+roles and cost. `issues close` refuses: no commit names 755. Close once 1174 lands.
