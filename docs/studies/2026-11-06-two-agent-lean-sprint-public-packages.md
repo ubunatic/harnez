@@ -29,7 +29,19 @@ tickets: [1177, 1173, 1138, 1139]
   field were inside the promise.
 - 1177 M2b (`cc849662`): golden covers `error` and `weekly`; `HasUsageData` moved to `internal/usage`;
   doc excludes `json:"-"` fields. 1177 closed; M3 (exported collector) parked as 1178.
-- 1173 (Jules config error message): fresh `dev-1173` claude:haiku:med, plan turn running.
+- 1173 (Jules config error message), fresh `dev-1173`: plan turn probed `encoding/json` live
+  (`UnmarshalTypeError` vs `SyntaxError`). `68d9afaf`: a syntax error gives its byte offset, a type
+  mismatch names the expected shape, the decoder text is never echoed; four tests incl. key secrecy.
+- 1138 (forge 403/404 hints), fresh `dev-1138`: host decision to retry a 403'd read without the token;
+  the developer improved it: on a second failure return the original 403, since a private repo answers
+  404 anonymously. `dbeaa516` shared `forge.GetJSON`; host live check in a scratch clone: `issues new`
+  with the stored read-only token no longer reports "open PRs not checked ... 403". Review added two
+  missing tests (`8c6e875b`: 401/5xx no retry, 403-then-404 keeps scope advice).
+- 1139 (forge `status:` filters), fresh `dev-1139`: `c4292192` carries `state` to the forge. Host live
+  check: `find -d ../taia issues status:open` lists exactly taia's 4 open issues; `status:closed skills`
+  ANDs both; `status:backlog` names the supported values.
+- One combined one-shot review (codex:terra:low, 24s) for 1173, 1138, 1139: no blocker or secret leak.
+- All touched packages green after the last commit; helpers rated and deleted.
 
 ## What Went Wrong
 
@@ -40,8 +52,13 @@ tickets: [1177, 1173, 1138, 1139]
 
 ## Learnings
 
-To be filled.
+- claude:haiku:med was a good developer for scoped work: every plan turn verified locations live,
+  asked the right API questions, and stayed inside the write set.
+- A one-shot terra:low reviewer (24-43s, about 25-35k new tokens) found a real gap in every review;
+  host review alone would have shipped weaker tests three times.
+- Fresh developers per independent ticket kept each session small, below Haiku's 100k price step.
+- Byte-identity goldens captured before a move are the cheapest proof that a refactor kept output.
 
 ## Follow-Up Tickets
 
-None yet.
+- 1178: export a quota collector without server, telemetry or TUI deps (1177 M3).
