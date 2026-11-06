@@ -43,4 +43,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1172 | [1172-draft-tickets-count-toward-the-active-ticket-cap.md](1172-draft-tickets-count-toward-the-active-ticket-cap.md) | Draft tickets count toward the active-ticket cap | Open |
 | 1179 | [1179-edit-guard-flags-append-only-writes-and-edits-inside-scratch-worktrees.md](1179-edit-guard-flags-append-only-writes-and-edits-inside-scratch-worktrees.md) | edit guard flags append-only writes and edits inside scratch worktrees | Open |
 | 1180 | [1180-cleanup-remove-all-prime-agent-prime-support.md](1180-cleanup-remove-all-prime-agent-prime-support.md) | cleanup: remove all Prime Agent (~/.prime) support | Open |
+| 1181 | [1181-isolate-harnez-session-state-and-constrain-installation-destinations.md](1181-isolate-harnez-session-state-and-constrain-installation-destinations.md) | Isolate Harnez session state and constrain installation destinations | Open |
 <!-- harnez:end issues-active-index -->
