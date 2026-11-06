@@ -30,3 +30,11 @@ The forge API already filters by state (Forgejo `state=open|closed|all`).
 
 - `harnez find -d ../taia issues status:open` lists open taia issues; a test with a fake forge
   checks the `state` query parameter.
+
+## Plan accepted (dev-1139, claude:haiku:med, 2026-11-06)
+
+Cause: `internal/forge/issue.go:40` hardcodes `state=all`; `internal/forgetracker/forgetracker.go:107`
+rejects any `:` term. Plan: a `state` parameter on `PullLister.Issues` and `Source.Issues` (not a
+`ScanOptions` field, which is PR-scan config); `Find` takes `status:open|closed` out of the terms and ANDs
+the rest client-side; other `status:` values fail before any request, listing the supported values.
+`status:all` and OR syntax left out. Live check against ../taia (codeberg.org, read-only token stored).
