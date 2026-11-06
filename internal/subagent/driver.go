@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"ubunatic.com/harnez/internal/modelcatalog"
+	"ubunatic.com/harnez/modelcatalog"
 )
 
 // Driver executes and manages a provider session.

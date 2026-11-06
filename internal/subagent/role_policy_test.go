@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"ubunatic.com/harnez/internal/modelcatalog"
+	"ubunatic.com/harnez/modelcatalog"
 )
 
 func TestPolicyLoadErrorPath(t *testing.T) {

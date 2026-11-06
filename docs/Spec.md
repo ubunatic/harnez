@@ -99,7 +99,7 @@ subscription quota are nonnegative or null: zero means a measured free rate or
 zero quota, while null means unknown. In policy patches, null explicitly clears
 the field. A `version_pin` must equal the version in the same entry's identity
 when both are present; JSON Schema cannot compare those sibling fields, so
-`internal/modelcatalog.ValidatePolicyPins` checks the relationship after schema
+`modelcatalog.ValidatePolicyPins` checks the relationship after schema
 validation.
 
 Each fact may carry `disputed: true` when its evidence producer identifies a

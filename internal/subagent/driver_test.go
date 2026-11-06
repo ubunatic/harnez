@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
-	"ubunatic.com/harnez/internal/modelcatalog"
+	"ubunatic.com/harnez/modelcatalog"
 )
 
 func TestCodexCheckResumable(t *testing.T) {

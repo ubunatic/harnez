@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"ubunatic.com/harnez/internal/modelcatalog"
+	"ubunatic.com/harnez/modelcatalog"
 )
 
 func TestTraitFallback(t *testing.T) {

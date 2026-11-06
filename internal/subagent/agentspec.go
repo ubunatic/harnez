@@ -15,7 +15,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
-	"ubunatic.com/harnez/internal/modelcatalog"
+	"ubunatic.com/harnez/modelcatalog"
 )
 
 const agentSpecPath = "spec/agent.yaml"
