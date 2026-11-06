@@ -53,8 +53,8 @@ per-ticket verdict, proposed priority and reason, merges and a top five.
 | --- | --- | --- |
 | 1 | 1140-1149 | done 01:22: 10/10 delivered a PR, 3 needed one resumed wait (>25m) |
 | 2 | 1150-1159 | done 02:15 on `2cf3be4d`: 8 delivered, 6 needed a resumed wait, 1152 and 1157 stuck (>50m, dropped) |
-| 3 | 1160-1169 | pending |
-| 4 | 1170 | pending |
+| 3 | 1160-1169 | done on `9e7a8f16`: 10 delivered, 8 needed a resumed wait; 1169 start refused twice (HTTP 400) |
+| 4 | 1170 | running, started on `9e7a8f16` |
 
 Wave 1 result (87 tickets):
 
@@ -107,7 +107,30 @@ Close gate: 615, 617, 736 and 755 were done in commits that do not name them. 11
 `issues close --implemented-by <sha>` (`74e2ca78`, test `cmd/harnez/issues_implemented_by_test.go`);
 all four closed with it.
 
-Closed so far: 302, 702, 233, 615, 617, 736, 755 (plus 1174).
+Late wave 2 results: 1157 was COMPLETED with PR #121 when checked again (3/3 refs, all kept). 1152
+was AWAITING_USER_FEEDBACK after harnez's auto-reply; the second reply "Submit what you have as a
+draft PR now." got PR #130 within minutes: 7/7 refs, and both proposed closes held (648 checked live
+in `harnez usage`, 739 live in `harnez read`).
+
+Wave 3 result (skills 5, agent 1-4, harnesses, setup 1-2, docs/search/TUI/testing):
+
+| Batch | Refs held | Proposed closes | Outcome |
+| --- | --- | --- | --- |
+| 1160 skills 5 | unscored | 0 | 7 keep |
+| 1161 agent 1 | 3/3 | 0 | all kept |
+| 1162 agent 2 | 5/5 | 4 | 611 closed (via 547's 2559134f); 510 and two merges rejected |
+| 1163 agent 3 | 1/1 | 0 | 10 keep |
+| 1164 agent 4 | 3/6 | 0 | discarded |
+| 1165 harnesses | 4/4 | 0 | all kept |
+| 1166 setup 1 | 1/2 | 0 | discarded |
+| 1167 setup 2 | 2/2 | 0 | all kept |
+| 1168 docs/search/TUI/testing | 1/5 | 0 | discarded |
+| 1169 misc 1 | 6/6 | 0 | all kept |
+
+Wave 3 proposed few closes (4 in 10 batches), and the one close it got right came from a ticket done
+under another ticket's number. This part of the backlog is open work, not stale tickets.
+
+Closed so far: 302, 702, 233, 615, 617, 736, 755, 611, 648, 739 (plus 1174).
 
 ## What Went Wrong
 
@@ -141,6 +164,12 @@ Closed so far: 302, 702, 233, 615, 617, 736, 755 (plus 1174).
   `file:line` without a quote; the host's checker script had to accept the variants, and unquoted
   references stay unscored.
 
+- **Stuck was waiting.** I dropped 1152 and 1157 as stuck after two waits. 1157 had finished, and
+  1152 was waiting for an answer; both delivered once checked. Check `harnez agent status --model
+  jules --id <id>` before dropping a run, and send the second reply when it is waiting.
+- **Stuck sessions hold slots.** With 1152 and 1157 still open on Jules, the 10th wave 3 start was
+  refused twice with HTTP 400 "Precondition check failed"; it started once a run finished.
+
 ## Learnings
 
 - Count tickets by every status before sizing a cleanup.
@@ -150,6 +179,10 @@ Closed so far: 302, 702, 233, 615, 617, 736, 755 (plus 1174).
   proposed fixes the ticket had already rejected).
 - Start the first run alone when GitHub `main` lags: it syncs, and parallel starts do not race.
 - Batching by title is the only way 260 tickets fit in the days left before 2026-11-11.
+- Jules allows about 10 open sessions per account; a session waiting for feedback still counts.
+- A long run is often waiting for an answer: check status before dropping it.
+- Many "done" tickets were done under another ticket's commit; `--implemented-by` (1174) closes
+  them honestly, which `--no-code` could not.
 - A batch verdict is a lead per ticket, not a decision: in wave 1, 2 of 21 proposed closes held.
   Check each close against the ticket's done-when, and run it live where cheap (702, 615).
 
