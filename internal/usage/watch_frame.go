@@ -159,6 +159,8 @@ func initialWatchSections(opts WatchOptions) watchSections {
 			sec.Mic = true
 		case "remote_load":
 			sec.RemoteLoad = true
+		case "strata":
+			sec.Strata = true
 		}
 	}
 	// --proc is an explicit request for the Processes panel and must win
@@ -464,6 +466,12 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	// empty or error-y panel just because the user's toggle is on.
 	if sec.Mic && micStatus.Available {
 		panels = append(panels, panel{"M", func(w int) wbox { return buildMicBox(w, micStatus) }})
+	}
+	// Hidden entirely when no Strata endpoint answers (issue 1182); local only.
+	if sec.Strata && opt.Host == "" {
+		if st := strataStatusSource(); st != nil {
+			panels = append(panels, panel{"S", func(w int) wbox { return buildStrataBox(w, *st) }})
+		}
 	}
 	if sec.RemoteLoad && opt.RemoteLoadHost != "" {
 		remoteHost, remoteSnap, remoteSource, remoteUpdated := opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadSource, opt.RemoteLoadUpdatedAt

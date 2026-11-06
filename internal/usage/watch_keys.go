@@ -17,6 +17,7 @@ type watchSections struct {
 	Mic        bool
 	Tokens     bool
 	RemoteLoad bool
+	Strata     bool
 }
 
 func defaultWatchSections() watchSections {
