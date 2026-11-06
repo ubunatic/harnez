@@ -31,4 +31,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1147 | 15985040144180438253 | pending | running (started 2026-11-06 00:45, audited 9f7dcf78) |
+| batch audit | jules-batch-1147 | 15985040144180438253 | github #109 (closed) | discarded (>25m, one resumed wait): 2/5 refs hold (index.go:502 is :44, issue.md:126 is :106, init.go:49 is :24). Closed 615 on host verification (live: stdout `NNN<TAB>path`, stderr `README refreshed`, README lists the new ticket). 451 not obsolete: filed 2026-09-20, after roadmap.md's strong-model text (dd78359d, 2026-09-18); still valid |
