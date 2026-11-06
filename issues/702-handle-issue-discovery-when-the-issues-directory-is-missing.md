@@ -1,6 +1,6 @@
 # 702 — Handle issue discovery when the issues directory is missing
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done, verified 2026-11-06 on 9f7dcf78: find on a repo without issues/ reports 'no local issue tracker' with no stat path error (internal/issues/issues.go:426-428); issues new still creates issues/ with README/BACKLOG/CLOSED. Jules batch 1148
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
