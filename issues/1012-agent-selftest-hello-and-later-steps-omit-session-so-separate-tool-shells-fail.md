@@ -60,6 +60,19 @@ Out of scope: the leaf-worker guard (`HARNEZ_AGENT_ROLE`), which stays as it is.
 
 Jules audit (PR GH#64, report `reports/jules/1012-2.md`, checked against d8904997, all references held): still open. The hello step's next actions at `cmd/harnez/agent_selftest.go:185-186` omit `--session`, and the "run hello first" errors (`:192`, `:228`) do not name it; the default session comes from `os.Getppid()` (`internal/resolve/resolve.go:82`).
 
+## Sprint refinement
+
+### Decision
+
+Use one focused milestone: copyable session-aware CLI guidance and regression coverage. Preserve session resolution precedence, the lock window, and the leaf-worker guard. Include a supplied state directory in subsequent copyable commands so isolated runs remain usable.
+
+### M1 — Copyable cross-shell self-test
+
+- Build safely POSIX-shell-quoted commands using the original resolved session ID and supplied state directory for later steps and recovery errors; retain `HTO=0` and background progression.
+- Update the tracked skill source `docs/commands/HarnezSelftest.md` as needed; keep `config.yaml` guidance consistent.
+- Preserve existing assertions. Add tests for separate shell invocations with a temporary state directory, special characters in session and directory arguments, and missing-state/prerequisite recovery diagnostics. Respect the ticket's two-attempt circuit breaker.
+- Searcher confirmed the reported omission and existing explicit-session tests; `terra:med` consultation recommended the above scope and POSIX single-quote escaping.
+
 ## Jules runs
 
 | kind | session name | Jules ID | PR | state |
