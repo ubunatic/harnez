@@ -1,6 +1,6 @@
 # 619 — Explore Phantom Looper concepts for Harnez
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Deinvested 2026-11-06 (owner confirmed in PR 109): open-ended research with no consumer
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
