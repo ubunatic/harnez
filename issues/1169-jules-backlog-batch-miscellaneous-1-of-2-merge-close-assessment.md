@@ -1,6 +1,6 @@
 # 1169 — Jules backlog batch: miscellaneous (1 of 2) (merge/close assessment)
 
-**Status**: Draft
+**Status**: Closed — Batch applied in the 2026-11-06 Jules backlog cleanup; per-ticket results in this ticket's Jules runs table and docs/studies/2026-11-06-jules-backlog-cleanup.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
