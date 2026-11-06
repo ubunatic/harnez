@@ -1,6 +1,6 @@
 # 1177 — Export the model catalog and usage types as public Go packages for taia
 
-**Status**: Open
+**Status**: Closed — M1 and M2 delivered: ubunatic.com/harnez/modelcatalog (moved, Load test asserts claude-haiku-5-5) and ubunatic.com/harnez/quota (usage --json types, stdlib only per go list -deps, golden byte-identity test incl. error and weekly), both with a stable-API package doc. M3 (exported collector) parked in 1178
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
