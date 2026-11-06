@@ -89,3 +89,15 @@ Goal: a module-root package `ubunatic.com/harnez/quota` with only the JSON types
 same package-doc promise. `internal/usage` uses these types (type aliases are fine) so the JSON is
 unchanged; the 1176 contract test (`cmd/harnez/usage_json_contract_test.go`) must still pass
 unchanged. Add an external test that decodes a `usage --json` sample into `quota.UsageSummary`.
+
+### M2 plan accepted (dev-1177)
+
+Decision (host, 2026-11-06): option A. `quota` holds the JSON types and standard-library-only methods;
+`IsValueStale`, `StaleReasonText` and `PopulateStaleness` (`internal/usage/types.go:153`, `:170`) need
+`spec.go` (yaml, root package) and become `internal/usage` package functions taking the value. Reason:
+a spec-dependent threshold on the stable API would be a contract we must keep; about 13 internal call
+sites change instead.
+
+Required in M2: the byte-identity check of `usage.RenderJSON` output before and after the move; `go
+list -deps ./quota` limited to the standard library; move only the `GPUClass` constants `quota` needs;
+the package doc states that untagged field names (`CPULoad`, `GPU`) are the JSON keys.
