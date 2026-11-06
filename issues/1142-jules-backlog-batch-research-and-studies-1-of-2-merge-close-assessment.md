@@ -31,4 +31,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1142 | 5623484547887532994 | pending | running (started 2026-11-06 00:45, audited 9f7dcf78) |
+| batch audit | jules-batch-1142 | 5623484547887532994 | github #110 (closed) | done (>25m, one resumed wait): 10/10 refs hold. Closed 302 (docs-only deliverable: docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md). Rejected: 332 (Testing.md:25 still 'no override today'), 350 (study says candidate ticket, not now; deinvest lead), 465 (partly adopted: plan-first, escalation, .ansi, stop-hook in AgenticLoop.md; review-for-fakes and index.lock missing), 516 (Models.md:140 agy still unmeasured). 9 kept |
