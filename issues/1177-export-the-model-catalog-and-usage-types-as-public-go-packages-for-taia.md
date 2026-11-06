@@ -26,9 +26,9 @@ graph check by the host:
 
 ## Milestones
 
-- **M1 Catalog:** move `internal/modelcatalog` to `pkg/modelcatalog` with a `Load` entry point;
-  internal callers switch imports. Test: a program outside `internal/` loads the catalog.
-- **M2 Usage types:** a `pkg/usage` package with only the JSON types of `usage --json`
+- **M1 Catalog:** move `internal/modelcatalog` to `ubunatic.com/harnez/modelcatalog` with a `Load`
+  entry point; internal callers switch imports. Test: a program outside `internal/` loads the catalog.
+- **M2 Quota types:** a `ubunatic.com/harnez/quota` package with only the JSON types of `usage --json`
   (`UsageSummary`, agent and window types) and no imports beyond the standard library; `internal/usage`
   uses them. Pairs with 1176's contract test.
 - **M3 Collectors (decide after M2):** split provider quota readers from server, telemetry and TUI so a
@@ -36,4 +36,7 @@ graph check by the host:
 
 ## Owner decisions
 
-- Module path and whether `pkg/` carries a stability promise for taia.
+- Decided by the owner, 2026-11-06: no `pkg/` directory; packages get real names at the module root
+  (`ubunatic.com/harnez/modelcatalog`, `ubunatic.com/harnez/quota`, final names chosen in M1/M2).
+  They carry a stable API for taia and other consumers: exported names change only with a
+  deprecation step, and the package doc says so.
