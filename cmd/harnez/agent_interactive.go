@@ -90,7 +90,7 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 			}
 		}
 		now := time.Now()
-		sess = &subagent.Session{ID: uuid.NewString(), Name: sessName, StartPrompt: req.Prompt, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalDir, ParentSessionID: d.parent(), CallerPID: os.Getpid(), HarnessType: "interactive", Status: "active", Role: role, CreatedAt: now, LastActiveAt: now}
+		sess = &subagent.Session{ID: uuid.NewString(), Name: sessName, StartPrompt: req.Prompt, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalDir, ParentSessionID: d.parent(), CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "interactive", Status: "active", Role: role, CreatedAt: now, LastActiveAt: now}
 		sess.ControlSocket = filepath.Join(d.storeDir, sess.ID+".sock")
 		if m.Provider == "claude" {
 			sess.ProviderSessionID = sess.ID

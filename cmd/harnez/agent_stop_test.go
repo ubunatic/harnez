@@ -43,6 +43,76 @@ func TestStopFakeProviderWrapper(t *testing.T) {
 	}
 }
 
+func TestStopUnknownIdentityDoesNotSendInteractiveControl(t *testing.T) {
+	dir := t.TempDir()
+	store, err := subagent.NewSessionStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(dir, "missing-control.sock")
+	sess := &subagent.Session{ID: "unknown", Name: "unknown", HarnessType: "interactive", Status: "active", CallerPID: 987654, ControlSocket: socket}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	cmd := &cobra.Command{}
+	err = stopSession(cmd, store, sess)
+	if err == nil || !strings.Contains(err.Error(), "start time is unknown") {
+		t.Fatalf("stop error = %v; want unknown identity error", err)
+	}
+}
+
+func TestStopInteractiveWithoutRecordedIdentityDoesNotSendControl(t *testing.T) {
+	dir := t.TempDir()
+	store, err := subagent.NewSessionStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{ID: "missing", Name: "missing", HarnessType: "interactive", Status: "active", ControlSocket: filepath.Join(dir, "missing-control.sock")}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	err = stopSession(&cobra.Command{}, store, sess)
+	if err == nil || !strings.Contains(err.Error(), "no recorded process identity") {
+		t.Fatalf("stop error = %v; want missing identity error", err)
+	}
+}
+
+type stopProcReader []procs.ProcInfo
+
+func (r stopProcReader) List() ([]procs.ProcInfo, error) { return r, nil }
+
+func TestStopStaleInteractiveIdentityDoesNotSendControl(t *testing.T) {
+	dir := t.TempDir()
+	store, err := subagent.NewSessionStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{
+		ID: "stale", Name: "stale", HarnessType: "interactive", Status: "active",
+		ProcessPID: 987654, ProcessStarttime: 42,
+		ControlSocket: filepath.Join(dir, "missing-control.sock"),
+	}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	reader := stopProcReader{{PID: 987654, Starttime: 43, State: "S", UIDKnown: true, UID: uint32(os.Getuid())}}
+	err = stopSessionWithReader(&cobra.Command{}, store, sess, reader)
+	if err == nil || !strings.Contains(err.Error(), "does not match the live process") {
+		t.Fatalf("stop error = %v; want stale identity error before control", err)
+	}
+}
+
+func TestSessionRootsIncludesUnknownWorkerAndCallerIdentity(t *testing.T) {
+	sess := &subagent.Session{Status: "running", CallerPID: 123, CallerStarttime: 456, WorkerPID: 789}
+	roots := sessionRoots(sess)
+	if len(roots) != 2 || roots[0] != (procs.TreeRoot{PID: 123, Starttime: 456}) || roots[1] != (procs.TreeRoot{PID: 789}) {
+		t.Fatalf("session roots = %+v; want caller identity and unknown worker", roots)
+	}
+	if err := procs.ValidateTreeRoots(roots); err == nil || !strings.Contains(err.Error(), "789") {
+		t.Fatalf("validation error = %v; want unknown worker identity", err)
+	}
+}
+
 func TestStopProviderTreeAndWrapper(t *testing.T) {
 	skipShort(t, "stops a real provider process tree")
 	if _, err := os.Stat("/proc/self/stat"); err != nil {

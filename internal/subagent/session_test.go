@@ -75,6 +75,7 @@ func TestFileSessionStore_Save(t *testing.T) {
 		WorkingDir:       "/home/user/project",
 		ParentSessionID:  "parent-1",
 		CallerPID:        1234,
+		CallerStarttime:  5678,
 		HarnessType:      "codex-cli",
 		Status:           "running",
 		TokensCumulative: 5000,
@@ -128,6 +129,7 @@ func TestFileSessionStore_Get(t *testing.T) {
 		WorkingDir:       "/home/user/project",
 		ParentSessionID:  "parent-1",
 		CallerPID:        1234,
+		CallerStarttime:  5678,
 		HarnessType:      "codex-cli",
 		Status:           "running",
 		TokensCumulative: 5000,
@@ -151,6 +153,9 @@ func TestFileSessionStore_Get(t *testing.T) {
 	}
 	if retrieved.Name != sess.Name {
 		t.Errorf("Name mismatch: got %q, want %q", retrieved.Name, sess.Name)
+	}
+	if retrieved.CallerStarttime != sess.CallerStarttime {
+		t.Errorf("CallerStarttime mismatch: got %d, want %d", retrieved.CallerStarttime, sess.CallerStarttime)
 	}
 	if retrieved.Provider != sess.Provider {
 		t.Errorf("Provider mismatch: got %q, want %q", retrieved.Provider, sess.Provider)

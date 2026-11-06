@@ -239,6 +239,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-06-deinvest-candidates.md](studies/2026-11-06-deinvest-candidates.md) | Deinvest candidates from the Jules backlog cleanup (for owner confirmation) |
 | [studies/2026-11-06-jules-backlog-cleanup.md](studies/2026-11-06-jules-backlog-cleanup.md) | Jules backlog cleanup, 2026-11-06 (living study) |
 | [studies/2026-11-06-taia-background-selftest.md](studies/2026-11-06-taia-background-selftest.md) | Taia background self-test in Harnez |
+| [studies/2026-11-06-taia-first-long-session.md](studies/2026-11-06-taia-first-long-session.md) | First longer Taia session in Harnez |
 | [studies/2026-11-06-two-agent-lean-sprint-public-packages.md](studies/2026-11-06-two-agent-lean-sprint-public-packages.md) | Lean sprint 1177, 1173, 1138, 1139: public Go packages for taia, then small fixes |
 | [studies/2026-11-06-two-agent-lean-sprint-usage-debug-frame.md](studies/2026-11-06-two-agent-lean-sprint-usage-debug-frame.md) | Lean sprint 1175: usage watch debug frame loses lines after a collector refresh |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |

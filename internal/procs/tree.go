@@ -26,6 +26,50 @@ type TreeOptions struct {
 	Signal                func(int, syscall.Signal) error
 }
 
+// ValidateTreeRoots rejects signal targets whose process identity is unknown.
+// PID values at or below 1 are placeholders and are ignored.
+func ValidateTreeRoots(roots []TreeRoot) error {
+	for _, root := range roots {
+		if root.PID > 1 && root.Starttime == 0 {
+			return fmt.Errorf("cannot stop process %d: start time is unknown; cannot verify the target safely", root.PID)
+		}
+	}
+	return nil
+}
+
+// ValidateTreeRootIdentities confirms that every recorded root is currently
+// visible with its recorded start time. This check is a snapshot only; callers
+// that signal later still have a PID reuse window.
+func ValidateTreeRootIdentities(roots []TreeRoot, reader ProcReader) error {
+	if reader == nil {
+		reader = LinuxProcReader{}
+	}
+	processes, err := reader.List()
+	if err != nil {
+		return fmt.Errorf("cannot inspect process identities: %w", err)
+	}
+	for _, root := range roots {
+		if root.PID <= 1 {
+			continue
+		}
+		found := false
+		for _, process := range processes {
+			if process.PID != root.PID {
+				continue
+			}
+			found = true
+			if process.Starttime != root.Starttime {
+				return fmt.Errorf("cannot stop process %d: recorded start time does not match the live process", root.PID)
+			}
+			break
+		}
+		if !found {
+			return fmt.Errorf("cannot stop process %d: recorded process is not visible", root.PID)
+		}
+	}
+	return nil
+}
+
 func liveProcess(p ProcInfo) bool { return p.State != "Z" && p.State != "X" }
 
 // ProcessStarttime reads the kernel identity of an existing process, or 0
@@ -123,6 +167,9 @@ func TreeMembers(roots []TreeRoot, known map[int]ProcInfo, reader ProcReader) ([
 // StopTree sends TERM, escalates to KILL, and returns surviving PIDs. Zombies
 // have exited and cannot hold a writer; their parent's reap notification may lag.
 func StopTree(ctx context.Context, opts TreeOptions) ([]ProcInfo, error) {
+	if err := ValidateTreeRoots(opts.Roots); err != nil {
+		return nil, err
+	}
 	if opts.Grace <= 0 || opts.KillWait <= 0 || opts.Poll <= 0 {
 		return nil, fmt.Errorf("stop tree: positive shutdown bounds required")
 	}

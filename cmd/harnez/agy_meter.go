@@ -59,7 +59,7 @@ func runAgyMeterSupervised(ctx context.Context, command string, args, environ []
 		return err
 	}
 	now := time.Now()
-	session := &subagent.Session{ID: uuid.NewString(), Name: name, Provider: "agy", Source: "harnez-agy", Model: "agy-default", WorkingDir: dir, CallerPID: os.Getpid(), HarnessType: "interactive", Status: "active", CreatedAt: now, LastActiveAt: now}
+	session := &subagent.Session{ID: uuid.NewString(), Name: name, Provider: "agy", Source: "harnez-agy", Model: "agy-default", WorkingDir: dir, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "interactive", Status: "active", CreatedAt: now, LastActiveAt: now}
 	session.ControlSocket = filepath.Join(storeDir, session.ID+".sock")
 	if err := store.Create(session); err != nil {
 		return err

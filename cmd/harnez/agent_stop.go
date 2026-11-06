@@ -12,16 +12,18 @@ import (
 
 func sessionRoots(x *subagent.Session) []procs.TreeRoot {
 	roots := []procs.TreeRoot{{PID: x.ProcessPID, Starttime: x.ProcessStarttime}}
-	if x.ProcessPID <= 0 && x.Status == "running" && x.CallerPID > 0 {
+	needsCallerRoot := x.Status == "running" || (x.HarnessType == "interactive" && x.Status == "active")
+	if x.ProcessPID <= 0 && needsCallerRoot && x.CallerPID > 0 {
 		roots[0].PID = x.CallerPID
+		roots[0].Starttime = x.CallerStarttime
 	}
 	if x.ProviderPID > 0 {
 		roots = append(roots, procs.TreeRoot{PID: x.ProviderPID, Starttime: x.ProviderStarttime, Group: true})
 	}
 	// A detached worker stays a writer until it exits, even after it cleared
-	// ProcessPID and recorded its terminal status. Require a starttime so a
-	// recycled PID is never mistaken for it.
-	if x.WorkerPID > 0 && x.WorkerStarttime != 0 && x.WorkerPID != x.ProcessPID {
+	// ProcessPID and recorded its terminal status. Keep roots with unknown
+	// starttimes so stop validation rejects the whole session before signalling.
+	if x.WorkerPID > 0 && x.WorkerPID != x.ProcessPID {
 		roots = append(roots, procs.TreeRoot{PID: x.WorkerPID, Starttime: x.WorkerStarttime})
 	}
 	// A PTY provider owns a session/group too.
@@ -53,19 +55,33 @@ func observeSessionProcess(ctx context.Context, store *subagent.FileSessionStore
 }
 
 func stopSession(cmd *cobra.Command, store *subagent.FileSessionStore, x *subagent.Session) error {
+	return stopSessionWithReader(cmd, store, x, nil)
+}
+
+func stopSessionWithReader(cmd *cobra.Command, store *subagent.FileSessionStore, x *subagent.Session, reader procs.ProcReader) error {
 	grace, killWait, poll, err := subagent.StopBounds()
 	if err != nil {
 		return err
+	}
+	roots := sessionRoots(x)
+	if x.HarnessType == "interactive" && x.Status == "active" && roots[0].PID <= 0 {
+		return fmt.Errorf("session %q cannot be stopped safely: active interactive session has no recorded process identity", x.Name)
+	}
+	if err := procs.ValidateTreeRoots(roots); err != nil {
+		return fmt.Errorf("session %q cannot be stopped safely: %w", x.Name, err)
 	}
 	if x.HarnessType == "interactive" {
 		if x.Status != "active" {
 			return fmt.Errorf("session %q is not active", x.Name)
 		}
+		if err := procs.ValidateTreeRootIdentities(roots[:1], reader); err != nil {
+			return fmt.Errorf("session %q cannot be stopped safely: %w", x.Name, err)
+		}
 		if err := subagent.SendControl(cmd.Context(), x.ControlSocket, "stop", ""); err != nil {
 			return reportSessionStop(cmd, store, x, nil, err)
 		}
 	}
-	if x.Status == "running" && sessionRoots(x)[0].PID <= 0 && x.ProviderPID <= 0 {
+	if x.Status == "running" && roots[0].PID <= 0 && x.ProviderPID <= 0 {
 		return reportSessionStop(cmd, store, x, nil, fmt.Errorf("running session has no recorded process identity; cannot confirm exit"))
 	}
 	// PID-less legacy/test drivers still own their provider-side lifecycle.
@@ -75,7 +91,7 @@ func stopSession(cmd *cobra.Command, store *subagent.FileSessionStore, x *subage
 			return err
 		}
 	}
-	live, err := procs.StopTree(agentCommandContext(cmd), procs.TreeOptions{Roots: sessionRoots(x), Grace: grace, KillWait: killWait, Poll: poll})
+	live, err := procs.StopTree(agentCommandContext(cmd), procs.TreeOptions{Roots: roots, Grace: grace, KillWait: killWait, Poll: poll})
 	return reportSessionStop(cmd, store, x, live, err)
 }
 

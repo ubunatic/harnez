@@ -457,6 +457,7 @@ the child/entry, message updates an existing child, and terminate ends it.
   that is often caught only by a human release decision, not tooling. Start with RFC-1918/example values and a credential-source seam from the first commit;
   wire a secret scanner into the project's `check`/`test` target immediately, not retroactively.
 - ❌ **Orphaned Background Tasks**: Leaving background `tail -f`, watch loops, or timers running after work is completed.
+- ❌ **Stopping an Unverified Process**: Require a known start time for every process root before sending stop messages or signals. Legacy sessions with missing identities and hosts that cannot read process start times must fail closed. Start-time checks do not make scanning and signalling atomic; PID reuse can still race with a signal.
 - ❌ **Shell `&` Detaching**: Never append `&` (or use `nohup`/`setsid`/`disown`) to detach a command from a shell tool call. The job escapes the harness's tracking, the user cannot see or stop it, and no completion signal arrives. Use the harness's own background facility (e.g. Claude `run_in_background`) instead.
 - ❌ **Lost Context / Ephemeral-Only Retrospectives**: Discussing important harness friction or bugs in chat without writing them down to a durable project doc or ticket.
 - ❌ **Rubber-Stamp Reviews**: Running a review pass that does not inspect actual test assertions or file diffs.

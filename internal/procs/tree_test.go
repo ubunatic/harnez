@@ -45,22 +45,43 @@ func TestStopTreeSignalEscalationAndConfirmation(t *testing.T) {
 	}
 }
 
-// Characterization: an unknown root starttime accepts a same-UID reused PID.
-func TestStopTreeZeroStarttimeCanSignalReusedPID(t *testing.T) {
+func TestStopTreeUnknownRootIdentityFailsClosed(t *testing.T) {
 	reader := &treeReader{[]ProcInfo{{PID: 987654, PGID: 987654, Starttime: 99, State: "S", UIDKnown: true, UID: uint32(os.Getuid())}}}
-	var signals []syscall.Signal
+	signals := 0
 	live, err := StopTree(context.Background(), TreeOptions{Roots: []TreeRoot{{PID: 987654}}, Reader: reader,
 		Grace: time.Millisecond, KillWait: time.Millisecond, Poll: time.Millisecond,
-		Signal: func(pid int, signal syscall.Signal) error {
-			if pid != 987654 {
-				t.Fatalf("unexpected target %d", pid)
-			}
-			signals = append(signals, signal)
-			reader.processes = nil
+		Signal: func(int, syscall.Signal) error {
+			signals++
 			return nil
 		}})
-	if err != nil || len(live) != 0 || !reflect.DeepEqual(signals, []syscall.Signal{syscall.SIGTERM}) {
-		t.Fatalf("zero starttime stop = %+v, %v, signals=%v; want fake SIGTERM", live, err, signals)
+	if err == nil || len(live) != 0 || signals != 0 {
+		t.Fatalf("unknown identity stop = %+v, %v, signals=%d; want error and no signals", live, err, signals)
+	}
+	if _, err := TreeMembers([]TreeRoot{{PID: 987654}}, make(map[int]ProcInfo), reader); err != nil {
+		t.Fatalf("identity-only inspection rejected unknown root: %v", err)
+	}
+}
+
+func TestStopTreeMixedRootsFailsBeforeAnySignal(t *testing.T) {
+	var signals int
+	_, err := StopTree(context.Background(), TreeOptions{Roots: []TreeRoot{{PID: 100, Starttime: 1}, {PID: 200}},
+		Grace: time.Millisecond, KillWait: time.Millisecond, Poll: time.Millisecond,
+		Reader: &treeReader{[]ProcInfo{{PID: 100, PGID: 100, Starttime: 1, State: "S", UIDKnown: true, UID: uint32(os.Getuid())}}},
+		Signal: func(int, syscall.Signal) error { signals++; return nil },
+	})
+	if err == nil || signals != 0 {
+		t.Fatalf("mixed root stop error=%v signals=%d; want error before any signal", err, signals)
+	}
+}
+
+func TestStopTreeMissingRootsIsNoOp(t *testing.T) {
+	signals := 0
+	live, err := StopTree(context.Background(), TreeOptions{
+		Roots: []TreeRoot{{PID: 0}, {PID: 1}}, Grace: time.Millisecond, KillWait: time.Millisecond, Poll: time.Millisecond,
+		Reader: &treeReader{}, Signal: func(int, syscall.Signal) error { signals++; return nil },
+	})
+	if err != nil || len(live) != 0 || signals != 0 {
+		t.Fatalf("placeholder roots = %+v, %v, signals=%d; want no-op", live, err, signals)
 	}
 }
 

@@ -282,7 +282,7 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	stdoutPath := filepath.Join(storeDir, id+".stdout.log")
 	stderrPath := filepath.Join(storeDir, id+".stderr.log")
 	now := time.Now()
-	sess := &subagent.Session{ID: id, Name: req.Name, StartPrompt: req.StoredPrompt, Provider: model.Provider, Model: model.Name, ModelAlias: selection.Trait, Tier: model.Tier, WorkingDir: dir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "running", Role: role, CreatedAt: now, LastActiveAt: now, StdoutLog: stdoutPath, StderrLog: stderrPath}
+	sess := &subagent.Session{ID: id, Name: req.Name, StartPrompt: req.StoredPrompt, Provider: model.Provider, Model: model.Name, ModelAlias: selection.Trait, Tier: model.Tier, WorkingDir: dir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "running", Role: role, CreatedAt: now, LastActiveAt: now, StdoutLog: stdoutPath, StderrLog: stderrPath}
 	if err := store.Create(sess); err != nil {
 		return err
 	}

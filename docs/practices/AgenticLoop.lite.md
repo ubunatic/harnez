@@ -66,6 +66,7 @@ For a single focused ticket: Host Orchestrator (**zero coding, no exploratory re
 - **Narrow String-Substitution Edits Over Structured Patches** — prefer `apply_patch`/whole-block replacement; measured **11.1%** failure rate for `Edit` vs. **4.2%** for `apply_patch` (2.6×) in the same repo.
 - **Baking Real Credentials In For A Fast Dev Loop** — no real hostnames/MACs/credentials "temporarily"; use RFC-1918/example values + a secret scanner from commit one.
 - **Orphaned Background Tasks** — leftover `tail -f`/watch loops/timers after work is done.
+- **Stopping An Unverified Process** — require known start times for every process root before stop messages/signals; legacy sessions or hosts without readable start times fail closed. Scanning and signalling are not atomic, so PID races remain.
 - **Shell `&` Detaching** — never `&`/`nohup`/`disown` a command; use the harness's tracked background facility.
 - **Machine-Background Workers** — run `HTO=0 harnez agent start/resume` as one session-background job (Claude Code: Bash `run_in_background: true`, finish within 30 minutes; AGY: `run_command` with small `WaitMsBeforeAsync`; Codex: `exec_command` + `write_stdin` until exit). Your own background tool is the only completion signal; no polling. See `harnez agent start --help`. `run_in_background`: Claude Code Bash tool parameter only; not a harnez flag.
 - **Lost Context / Ephemeral-Only Retrospectives** — friction/bugs discussed in chat but never written to a durable doc/ticket.

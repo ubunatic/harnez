@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -201,7 +202,7 @@ func TestAgentInteractiveRegistersBeforeLaunchAndTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sess.Status != "completed" || sess.ProviderSessionID != sess.ID || sess.CallerPID != os.Getpid() || sess.WorkingDir != dir {
+	if sess.Status != "completed" || sess.ProviderSessionID != sess.ID || sess.CallerPID != os.Getpid() || sess.CallerStarttime != procs.ProcessStarttime(os.Getpid()) || sess.WorkingDir != dir {
 		t.Fatalf("saved interactive session = %#v", sess)
 	}
 

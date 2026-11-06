@@ -29,6 +29,7 @@ type Session struct {
 	ParentSessionID   string `json:"parent_session_id,omitempty"`
 	LastHostSessionID string `json:"last_host_session_id,omitempty"`
 	CallerPID         int    `json:"caller_pid"`
+	CallerStarttime   uint64 `json:"caller_starttime,omitempty"`
 	ProcessPID        int    `json:"process_pid,omitempty"`
 	ProcessStarttime  uint64 `json:"process_starttime,omitempty"`
 	ProviderPID       int    `json:"provider_pid,omitempty"`
