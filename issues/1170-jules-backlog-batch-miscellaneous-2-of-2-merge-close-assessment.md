@@ -29,4 +29,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1170 | 712364209445525662 | pending | running (started 2026-11-06, audited 9e7a8f16) |
+| batch audit | jules-batch-1170 | 712364209445525662 | pending | stuck: IN_PROGRESS after 50m (two waits, status checked); re-check with `harnez agent status --model jules --id 712364209445525662` |
