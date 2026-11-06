@@ -51,10 +51,37 @@ per-ticket verdict, proposed priority and reason, merges and a top five.
 
 | Wave | Wrappers | State |
 | --- | --- | --- |
-| 1 | 1140-1149 | running, started 2026-11-06 00:45 on `9f7dcf78` |
-| 2 | 1150-1159 | pending |
+| 1 | 1140-1149 | done 01:22: 10/10 delivered a PR, 3 needed one resumed wait (>25m) |
+| 2 | 1150-1159 | pending, stricter prompt (below) |
 | 3 | 1160-1169 | pending |
 | 4 | 1170 | pending |
+
+Wave 1 result (87 tickets):
+
+| Batch | Refs held | Proposed closes | Outcome |
+| --- | --- | --- | --- |
+| 1140 epics | 6/6 | 0 | 8 keep |
+| 1141 Jules | 6/6 | 3 | all rejected |
+| 1142 research 1 | 10/10 | 5 | 302 closed; 4 rejected |
+| 1143 research 2 | 2/3 | 1 (842 already closed) | discarded |
+| 1144 release | 2/3 | 2 | discarded; both rejected |
+| 1145 git/forge 1 | 5/5 | 4 | all rejected; 1040 noted partly done |
+| 1146 git/forge 2 | 3/3 | 0 | 7 keep |
+| 1147 issues 1 | 2/5 | 2 | discarded; 615 verified done, close blocked (1174) |
+| 1148 issues 2 | 6/6 | 3 (843 already closed) | 702 closed |
+| 1149 issues 3 | 2/4 | 1 | discarded; rejected |
+
+21 proposed closes: 2 closed (302, 702), 1 verified but blocked (615), 2 already closed, 16
+rejected. 4 of 10 reports discarded (<80% refs). Rejections share one cause: Jules matched the
+title against existing code and skipped the ticket's done-when (1015 path vs. number rewrite,
+246 /commit without the ownership rule, 1040 without completion, 516 still "unmeasured").
+
+Deinvest leads (Jules priority `drop`, for the owner): 230 (Android release), research 518, 619,
+763, 914, 960, 1007, 1094, and 350.
+
+Prompt change for waves 2-4: a preamble names the role (strict backlog auditor), the approach
+(done-when first: list the `/goal`, `Want` and `Done when` items, cite each) and the task, and a
+`close: done` must quote each required item with the code that does it.
 
 ## What Went Wrong
 
@@ -75,6 +102,13 @@ per-ticket verdict, proposed priority and reason, merges and a top five.
 - **Duplicate gate on wrappers.** `harnez issues new` blocked the batch wrappers as duplicates of
   the closed 1123-1135 wrappers (similar titles); `--force` was needed.
 - **Draft counts as active.** 31 Draft wrappers raised the cap warning from 31 to 62 (filed 1172).
+- **Status filter matched prose.** My backlog filter matched `Backlog` anywhere in the Status line,
+  so 842, 843 and 1083 (Closed, with "Backlog" in their outcome text) entered batches. Harmless;
+  match a leading `Backlog` instead.
+- **Batch close claims.** 16 of 21 proposed closes in wave 1 were wrong (see table). Caught by
+  checking each against the ticket's goal; prompt tightened for waves 2-4.
+- **Close gate vs. old work.** 615 is done in `ca8bada1`, which does not name it; `issues close`
+  refuses without `--no-code`, which would be false (filed 1174).
 
 ## Learnings
 
@@ -85,6 +119,8 @@ per-ticket verdict, proposed priority and reason, merges and a top five.
   proposed fixes the ticket had already rejected).
 - Start the first run alone when GitHub `main` lags: it syncs, and parallel starts do not race.
 - Batching by title is the only way 260 tickets fit in the days left before 2026-11-11.
+- A batch verdict is a lead per ticket, not a decision: in wave 1, 2 of 21 proposed closes held.
+  Check each close against the ticket's done-when, and run it live where cheap (702, 615).
 
 ## Follow-Up Tickets
 
@@ -95,4 +131,5 @@ per-ticket verdict, proposed priority and reason, merges and a top five.
 - 1172: Draft tickets count toward the active-ticket cap.
 - 1173: Jules config loader says "not valid JSON" for a structure mismatch
   (`internal/subagent/jules.go:275`).
+- 1174: `issues close --implemented-by <sha>` for work done under an unreferencing commit.
 - Open decision: 1086 fallback-only fix vs. PR #98.
