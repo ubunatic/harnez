@@ -1,6 +1,6 @@
 # 1176 — usage --json: contract test for the fields taia-models reads
 
-**Status**: Open
+**Status**: Closed — Done: cmd/harnez/usage_json_contract_test.go asserts every usage --json field taia-models reads, through usage.RenderJSON; fails on a renamed field
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Test
