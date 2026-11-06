@@ -31,4 +31,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1143 | 15205602791363181688 | pending | running (started 2026-11-06 00:45, audited 9f7dcf78) |
+| batch audit | jules-batch-1143 | 15205602791363181688 | github #107 (closed) | discarded 23m: 2/3 refs hold (website.md:21 wrong); absence claim for 763 wrong (DeepSeek Harness covered in docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md). Lead: Jules rates 518, 619, 763, 914, 960, 1007, 1094 priority `drop` (deinvest candidates for the owner). 842 already Closed. No ticket changes |
