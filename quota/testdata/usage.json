@@ -1,0 +1,150 @@
+{
+  "passive_no_quota": {
+    "claude": 3
+  },
+  "timestamp": "2026-11-06T09:30:00Z",
+  "agents": [
+    {
+      "agent_id": "claude",
+      "name": "Claude Code",
+      "installed": true,
+      "authenticated": true,
+      "account": "owner",
+      "plan_tier": "max",
+      "active_model": "claude-haiku-5-5",
+      "tokens": {
+        "input_tokens": 10,
+        "output_tokens": 20,
+        "cache_read_tokens": 30,
+        "cache_write_tokens": 40,
+        "total_tokens": 100,
+        "cost_usd": 1.5
+      },
+      "model_tokens": {
+        "claude-haiku-5-5": 100
+      },
+      "session": {
+        "name": "5h",
+        "source": "api",
+        "used_percent": 40,
+        "remaining_percent": 60,
+        "reset_at": "2100-01-01T00:00:00Z",
+        "duration_left": 3600000000000,
+        "is_active": true,
+        "severity": "ok"
+      },
+      "model_groups": [
+        {
+          "name": "Claude",
+          "description": "all",
+          "windows": [
+            {
+              "name": "7d",
+              "used_percent": 5,
+              "remaining_percent": 95
+            }
+          ]
+        }
+      ],
+      "extra_windows": {
+        "opus": {
+          "name": "opus",
+          "used_percent": 1,
+          "remaining_percent": 99
+        }
+      },
+      "details": {
+        "plan": "max"
+      },
+      "sources": [
+        "~/.claude/projects"
+      ],
+      "quota_fetch_error": "timeout",
+      "quota_fetch_cause": "transport",
+      "stale": true,
+      "stale_reason": "fetch failed: timeout",
+      "last_refreshed": "0001-01-01T00:00:00Z",
+      "monthly": {
+        "name": "Monthly",
+        "source": "api",
+        "used_percent": 10,
+        "remaining_percent": 90,
+        "reset_at": "2100-01-01T00:00:00Z"
+      }
+    },
+    {
+      "agent_id": "codex",
+      "name": "OpenAI Codex",
+      "installed": true,
+      "authenticated": false,
+      "stale": false,
+      "last_refreshed": "0001-01-01T00:00:00Z"
+    }
+  ],
+  "load": {
+    "cpu": {
+      "Load1": 0.5,
+      "Load5": 0.4,
+      "Load15": 0.3,
+      "NumCPU": 8,
+      "Ok": true,
+      "CPUPercent": 12.5,
+      "CPUPercentOk": true,
+      "PerCorePercent": [
+        10,
+        15
+      ],
+      "PerCoreOk": true,
+      "PercentHistory": [
+        11,
+        12
+      ],
+      "TempC": 0,
+      "TempOk": false,
+      "PowerW": 0,
+      "PowerOk": false,
+      "RAPLReadable": false,
+      "Memory": {
+        "UsedMiB": 0,
+        "TotalMiB": 0,
+        "AvailableMiB": 0,
+        "SwapUsedMiB": 0,
+        "SwapTotalMiB": 0,
+        "SwapKnown": false,
+        "Ok": false,
+        "Geometry": "",
+        "PercentHistory": null
+      }
+    },
+    "gpus": [
+      {
+        "Name": "gpu0",
+        "PCI": "0000:03:00.0",
+        "UtilPercent": 33,
+        "MemUsedMiB": 100,
+        "MemTotalMiB": 1000,
+        "MemPercent": 10,
+        "VRAMUsedMiB": 0,
+        "VRAMTotalMiB": 0,
+        "GTTUsedMiB": 0,
+        "GTTTotalMiB": 0,
+        "TempC": 60,
+        "PowerW": 40,
+        "HaveMem": true,
+        "HaveVRAM": false,
+        "HaveGTT": false,
+        "HaveTemp": false,
+        "HavePower": true,
+        "PowerLabel": "PPT",
+        "Class": 2,
+        "UtilHistory": [
+          30,
+          33
+        ],
+        "VRAMPercentHistory": null,
+        "GTTPercentHistory": null
+      }
+    ],
+    "observed_at": "2026-11-06T09:29:00Z"
+  }
+}
