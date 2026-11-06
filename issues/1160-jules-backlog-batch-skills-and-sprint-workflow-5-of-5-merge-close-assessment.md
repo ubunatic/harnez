@@ -28,3 +28,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
+| batch audit | jules-batch-1160 | 11339556584498393820 | pending | running (started 2026-11-06 02:16, audited 9e7a8f16) |
