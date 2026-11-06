@@ -24,3 +24,11 @@ manual structure dump.
 ## Done when
 
 - A test with string entries checks the new message and that the key is absent from it.
+
+## Plan accepted (dev-1173, claude:haiku:med, 2026-11-06)
+
+Probed live with encoding/json: string entries, a plain string and `{"repo":5}` give
+`*json.UnmarshalTypeError` (field `github_projects`/`github_projects.repo`), truncated JSON gives
+`*json.SyntaxError`. Each mismatch gets a message that names the expected shape; the syntax case keeps
+"not valid JSON" with the offset. Existing key-secrecy test stays unchanged. Extra per-field messages
+accepted.
