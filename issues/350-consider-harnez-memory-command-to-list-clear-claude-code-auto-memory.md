@@ -1,6 +1,6 @@
 # 350 — Consider a `harnez memory` command to list/clear Claude Code auto-memory
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Deinvested 2026-11-06 (owner confirmed in PR 109): its study recommends a candidate, not an implementation; Claude-only
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Tooling / Agent Ergonomics
