@@ -1,6 +1,6 @@
 # 763 — Study DeepSeek Harness vs Pi comparison video and adopt useful coding-agent harness practices
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Deinvested 2026-11-06 (owner confirmed in PR 109): partly covered by the 2026-09-10 plugin-systems study
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
