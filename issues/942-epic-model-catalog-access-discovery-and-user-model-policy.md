@@ -108,4 +108,4 @@ result, a plan-first cheap developer and one review. 945's snapshot and change-r
 
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| ideas | jules-ideas-taia-go-library | 16171648424057503251 | pending | running (started 2026-11-06): library seams in internal/usage and the model catalog for reuse by taia |
+| ideas | jules-ideas-taia-go-library | 16171648424057503251 | github #131 (closed) | done: 5/5 refs hold; leads filed as 1177 (catalog export easy, usage needs a types split first) |
