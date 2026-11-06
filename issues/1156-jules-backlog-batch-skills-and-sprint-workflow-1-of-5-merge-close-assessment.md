@@ -30,4 +30,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1156 | 17128585227537363207 | pending | running (started 2026-11-06 01:23, audited 2cf3be4d) |
+| batch audit | jules-batch-1156 | 17128585227537363207 | github #113 (closed) | discarded: invented quote (286 cites docs/lang/Go.md:27 'Use golang.org/x/term'; Go.md has no x/term at all), AGENTS.md:38/40/41 lines wrong. Closed 233 on host check (AGENTS.md:55-56 carries the edit-the-source note outside managed blocks). 286 stays open |
