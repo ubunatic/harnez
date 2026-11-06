@@ -1,6 +1,6 @@
 # 233 — AGENTS.md note: verify doc edits target the right file (repo-local vs docs/practices, lang, other source)
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — Done: AGENTS.md:55-56 ('Edit the source file, never the root copy alone ...') carries the note in the hand-written 'Where Repo Rules Go' section, outside managed blocks; verified 2026-11-06 on 2cf3be4d
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Documentation
