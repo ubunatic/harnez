@@ -69,3 +69,8 @@ Check the live skill, `harnez agent` help and recent commits first; this ticket 
   and skill-registry packages, including skill installation checks. This is relevant evidence,
   but does not replace the pending full-suite run. Evergreen routing guidance is now updated in
   `docs/CommandsPipeline.md`; no real model-selection session was exercised.
+
+## Audit 2026-11-06
+
+Verified done on 2cf3be4d (Jules batch 1158, host check). `issues close` refuses: no commit names 736.
+Close once 1174 (`--implemented-by`) lands.

@@ -19,3 +19,8 @@ Create a skill named `/respect`. It should instruct an agent to explore the requ
 ## 3. Implementation & Verification Plan
 
 **Goal**: Add and document `/respect` so agents can bring implementation in line with the embedded YAML spec. Done when the skill clearly directs this workflow and its scope. Stop and report if the repository's spec structure or ownership of a value is unclear and needs user input.
+
+## Audit 2026-11-06
+
+Verified done on 2cf3be4d (Jules batch 1158, host check). `issues close` refuses: no commit names 617.
+Close once 1174 (`--implemented-by`) lands.

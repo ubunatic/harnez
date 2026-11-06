@@ -30,4 +30,4 @@ below and apply it; or stop and report when blocked on an owner decision.
 ## Jules runs
 | kind | session | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| batch audit | jules-batch-1158 | 2470688027320570256 | github #115 (closed) | discarded (>25m, one resumed wait): 6/8 refs hold (Respect.md:23, issue.md:14 wrong). Closed 617 and 736 on host check: Respect.md + config.yaml:548; harnez-advisor description limits it to explicit reuse (config.yaml:448). Rest kept |
+| batch audit | jules-batch-1158 | 2470688027320570256 | github #115 (closed) | discarded (>25m, one resumed wait): 6/8 refs hold (Respect.md:23, issue.md:14 wrong). Verified 617 and 736 done (close blocked, needs 1174): Respect.md + config.yaml:548; harnez-advisor description limits it to explicit reuse (config.yaml:448). Rest kept |
