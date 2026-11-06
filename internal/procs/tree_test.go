@@ -45,6 +45,25 @@ func TestStopTreeSignalEscalationAndConfirmation(t *testing.T) {
 	}
 }
 
+// Characterization: an unknown root starttime accepts a same-UID reused PID.
+func TestStopTreeZeroStarttimeCanSignalReusedPID(t *testing.T) {
+	reader := &treeReader{[]ProcInfo{{PID: 987654, PGID: 987654, Starttime: 99, State: "S", UIDKnown: true, UID: uint32(os.Getuid())}}}
+	var signals []syscall.Signal
+	live, err := StopTree(context.Background(), TreeOptions{Roots: []TreeRoot{{PID: 987654}}, Reader: reader,
+		Grace: time.Millisecond, KillWait: time.Millisecond, Poll: time.Millisecond,
+		Signal: func(pid int, signal syscall.Signal) error {
+			if pid != 987654 {
+				t.Fatalf("unexpected target %d", pid)
+			}
+			signals = append(signals, signal)
+			reader.processes = nil
+			return nil
+		}})
+	if err != nil || len(live) != 0 || !reflect.DeepEqual(signals, []syscall.Signal{syscall.SIGTERM}) {
+		t.Fatalf("zero starttime stop = %+v, %v, signals=%v; want fake SIGTERM", live, err, signals)
+	}
+}
+
 func TestTreeMembersTracksReparentedProcessesAndRejectsReuse(t *testing.T) {
 	proc := func(pid, ppid, pgid int, start uint64, state string) ProcInfo {
 		return ProcInfo{PID: pid, PPID: ppid, PGID: pgid, Starttime: start, State: state, UIDKnown: true, UID: uint32(os.Getuid())}

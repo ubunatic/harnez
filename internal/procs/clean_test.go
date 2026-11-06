@@ -125,6 +125,27 @@ func TestCleanProcsDryRunAndInjectedSignals(t *testing.T) {
 	}
 }
 
+// Characterization: matching kernel metadata does not authenticate a record.
+func TestCleanProcsForgedRecordCanSignal(t *testing.T) {
+	dir := t.TempDir()
+	writeTestRecord(t, dir, Record{PGID: 42, PIDStarttime: 900, OwnerPID: 999, OwnerStarttime: 100})
+	reader := &fakeProcReader{processes: []ProcInfo{{PID: 42, PGID: 42, UID: 1001, UIDKnown: true, State: "S", Starttime: 900}}}
+	var signals []syscall.Signal
+	actions, err := CleanProcs(CleanOptions{RecordDir: dir, ProcReader: reader, UID: 1001, Kill: true,
+		GroupExists: func(int) bool { return len(reader.processes) != 0 },
+		SignalGroup: func(pgid int, signal syscall.Signal) error {
+			if pgid != 42 {
+				t.Fatalf("unexpected group %d", pgid)
+			}
+			signals = append(signals, signal)
+			reader.processes = nil
+			return nil
+		}, Sleep: func(time.Duration) {}})
+	if err != nil || len(actions) != 1 || actions[0].Status != "killed" || len(signals) != 1 || signals[0] != syscall.SIGTERM {
+		t.Fatalf("forged record cleanup = %+v, %v, signals=%v; want fake SIGTERM", actions, err, signals)
+	}
+}
+
 func TestCleanProcsRefusesMixedUIDAndRemovesReusedPIDRecord(t *testing.T) {
 	dir := t.TempDir()
 	recordDir := filepath.Join(dir, "records")
