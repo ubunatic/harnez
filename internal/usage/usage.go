@@ -177,7 +177,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 
 	shown := 0
 	for _, agent := range summary.Agents {
-		if !agent.HasUsageData() {
+		if !HasUsageData(agent) {
 			continue
 		}
 		// 7+ day stale agents auto-hide (issue 101) — issue 083's

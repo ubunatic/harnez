@@ -98,36 +98,13 @@ type AgentUsage struct {
 // IsStale reports whether this agent's LastRefreshed timestamp is older than
 // maxAge. A zero LastRefreshed — not yet threaded through by the caller that
 // built this AgentUsage — is never considered stale here; such callers rely
-// on HasUsageData() alone for visibility (issue 101's 7-day auto-hide gate
+// internal/usage's HasUsageData alone for visibility (issue 101's 7-day auto-hide gate
 // is additive to, not a replacement for, issue 083's check).
 func (a AgentUsage) IsStale(maxAge time.Duration) bool {
 	if a.LastRefreshed.IsZero() {
 		return false
 	}
 	return time.Since(a.LastRefreshed) > maxAge
-}
-
-// HasUsageData reports whether a collector actually found real local or
-// remote state for this agent — credentials, local token history, quota
-// windows, a live quota-fetch attempt, or at least one inspected source file
-// — as opposed to an agent that simply isn't installed on this machine or
-// has an empty/unconfigured state directory. Installed alone is not enough:
-// a bare, unconfigured config dir still leaves Installed true but carries no
-// other signal. Reuses existing fields rather than adding a new one (issue
-// 083: self-hiding, auto-discovery agent display).
-func (a AgentUsage) HasUsageData() bool {
-	if !a.Installed {
-		return false
-	}
-	return a.Authenticated ||
-		a.Tokens != nil ||
-		a.Session != nil ||
-		a.Weekly != nil ||
-		len(a.ModelGroups) > 0 ||
-		len(a.ModelTokens) > 0 ||
-		len(a.Sources) > 0 ||
-		a.Error != "" ||
-		a.QuotaFetchError != ""
 }
 
 // LoadSnapshot is a compact CPU/GPU load reading carried alongside

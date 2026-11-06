@@ -105,7 +105,7 @@ func TestAgentUsage_HasUsageData(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.agent.HasUsageData(); got != tc.want {
+			if got := HasUsageData(tc.agent); got != tc.want {
 				t.Errorf("HasUsageData() = %v, want %v (agent: %+v)", got, tc.want, tc.agent)
 			}
 		})

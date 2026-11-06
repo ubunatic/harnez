@@ -14,4 +14,8 @@
 // keys, so adding a tag, renaming a field, or changing a field's type is a
 // wire change and goes through the same deprecation step. GPUClass encodes
 // as its integer value.
+//
+// Fields tagged `json:"-"` (for example AgentUsage.QuotaFetchDurationMS) are
+// not part of the wire format. They are internal and outside the stable
+// promise: they may change or be removed without a deprecation step.
 package quota

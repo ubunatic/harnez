@@ -77,6 +77,14 @@
       "name": "OpenAI Codex",
       "installed": true,
       "authenticated": false,
+      "weekly": {
+        "name": "Weekly (7-day)",
+        "source": "api",
+        "used_percent": 20,
+        "remaining_percent": 80,
+        "reset_at": "2100-01-01T00:00:00Z"
+      },
+      "error": "invalid auth.json format",
       "stale": false,
       "last_refreshed": "0001-01-01T00:00:00Z"
     }

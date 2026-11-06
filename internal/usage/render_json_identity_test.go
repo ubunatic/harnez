@@ -50,6 +50,11 @@ func renderJSONIdentitySummary() UsageSummary {
 			AgentID:   "codex",
 			Name:      "OpenAI Codex",
 			Installed: true,
+			Error:     "invalid auth.json format",
+			Weekly: &QuotaWindow{
+				Name: "Weekly (7-day)", Source: "api", UsedPercent: 20, RemainingPercent: 80,
+				ResetAt: &reset,
+			},
 		}},
 		Load: &LoadSnapshot{
 			CPU: CPULoad{

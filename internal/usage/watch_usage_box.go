@@ -96,7 +96,7 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 	var rows []allUsageRow
 	labelWidth := 0
 	for _, agent := range sortedUsageAgents(summary.Agents) {
-		if !agent.HasUsageData() {
+		if !HasUsageData(agent) {
 			continue
 		}
 		// Snapshot age and fetch failures affect every value; expired or

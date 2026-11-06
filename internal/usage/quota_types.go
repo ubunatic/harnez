@@ -24,6 +24,30 @@ type (
 	SystemMemory   = quota.SystemMemory
 )
 
+// HasUsageData reports whether a collector actually found real local or
+// remote state for this agent — credentials, local token history, quota
+// windows, a live quota-fetch attempt, or at least one inspected source file
+// — as opposed to an agent that simply isn't installed on this machine or
+// has an empty/unconfigured state directory. Installed alone is not enough:
+// a bare, unconfigured config dir still leaves Installed true but carries no
+// other signal. Reuses existing fields rather than adding a new one (issue
+// 083: self-hiding, auto-discovery agent display). It lives here, not in
+// package quota, so the stable API carries no visibility policy (issue 1177 M2b).
+func HasUsageData(a AgentUsage) bool {
+	if !a.Installed {
+		return false
+	}
+	return a.Authenticated ||
+		a.Tokens != nil ||
+		a.Session != nil ||
+		a.Weekly != nil ||
+		len(a.ModelGroups) > 0 ||
+		len(a.ModelTokens) > 0 ||
+		len(a.Sources) > 0 ||
+		a.Error != "" ||
+		a.QuotaFetchError != ""
+}
+
 // hasQuotaSignal reports whether this AgentUsage carries any quota/token
 // data — the fields a live recollect can lose when an agent's process isn't
 // currently running, even though static fields (Authenticated, Sources, ...)
