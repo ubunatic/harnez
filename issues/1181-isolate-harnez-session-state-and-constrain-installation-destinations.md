@@ -34,6 +34,10 @@ Independent review of d56189ab: prevent Make recipe shell interpretation of STAG
 
 Independent review of d106b961..f83c5b0e found that the Linux-only staging test is unconditionally part of make check/test and would break macOS verification; skip it clearly on unsupported platforms while retaining explicit installer rejection. Strengthen the shared alias assertion to verify GOBIN/⚙ content and type, not merely its name. Previous direct-script injection and failure reachability findings were addressed; full suite remains blocked before execution by Bubblewrap.
 
+## Next milestone — hidden-file assertion pre-work
+
+Review of 94e4b306 found that shared-directory completeness checks use a glob that omits dotfiles. Strengthen the assertion and add a regression proving an unexpected hidden entry is detected; preserve portability skip behavior and all existing sentinel checks.
+
 ## Session handoff
 
 M1–M3 landed locally through e891dfbc; independent M3 review found no blocking issues. No full suite ran: `make test-q1` failed before tests with `bwrap: Failed to make / slave: Operation not permitted`, including under taia `--allow-bwrap` with /dev and /tmp writable. Resume by diagnosing taia's Bubblewrap broker or running the required suite from a suitable host environment, then review and test the changes before pushing. Constrained installation, broader shared-state handling, and externally enforced cross-session denial tests remain open. Ticket 1183 tracks owner-authorized temporary Quota-1 suspension. Do not claim same-UID isolation.
