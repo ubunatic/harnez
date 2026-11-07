@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+shopt -s dotglob nullglob
 
 test_platform=${HARNEZ_STAGE_TEST_PLATFORM:-$(uname -s)}
 if test "$test_platform" != Linux
@@ -110,6 +111,17 @@ assert_shared_contents() {
    test "$(cat "$tmp/hostile home/.local/share/man/keep")" = sentinel
    test "$(cat "$tmp/hostile home/go/bin/keep")" = sentinel
 }
+assert_shared_contents
+
+printf 'hidden unexpected entry\n' > "$tmp/gobin/.unexpected"
+if output=$(assert_shared_contents 2>&1)
+then printf 'FAIL: shared destination check ignored a hidden file\n' >&2
+     exit 1
+else status=$?
+fi
+test "$status" -eq 1
+printf '%s\n' "$output" | grep -Fq "FAIL: unexpected GOBIN entry: $tmp/gobin/.unexpected"
+rm -- "$tmp/gobin/.unexpected"
 assert_shared_contents
 
 tick='`'
