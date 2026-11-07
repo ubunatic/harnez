@@ -781,11 +781,9 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 	if isReadTool(payload.ToolName) {
 		stateDir := opts.StateDir
 		if stateDir == "" {
-			baseStateDir, err := resolve.StateDir()
-			if err != nil {
-				return err
+			if baseStateDir, err := resolve.StateDir(); err == nil {
+				stateDir = filepath.Join(baseStateDir, "read-hooks")
 			}
-			stateDir = filepath.Join(baseStateDir, "read-hooks")
 		}
 		seen := map[string]bool{}
 		repeated := false

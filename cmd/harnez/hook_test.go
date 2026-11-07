@@ -1138,7 +1138,7 @@ func TestClaudeReadHookRepeatedSliceNamesTheRepeat(t *testing.T) {
 	}
 }
 
-func TestClaudeReadHookRejectsInvalidRunnerStatePath(t *testing.T) {
+func TestClaudeReadHookPreservesReadDenialForInvalidRunnerStatePath(t *testing.T) {
 	runner := t.TempDir()
 	if err := os.Chmod(runner, 0o755); err != nil {
 		t.Fatal(err)
@@ -1146,14 +1146,24 @@ func TestClaudeReadHookRejectsInvalidRunnerStatePath(t *testing.T) {
 	t.Setenv("TAIA_SESSION_DIR", runner)
 	base := t.TempDir()
 	path := filepath.Join(base, "source.go")
-	if err := os.WriteFile(path, []byte("package source\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(strings.Repeat("line\n", 100)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	on := true
 	payload := `{"tool_name":"Read","session_id":"s","tool_input":{"file_path":"` + path + `"}}`
 	var out bytes.Buffer
-	if err := runClaudeReadHook(strings.NewReader(payload), &out, readHookOptions{BaseDir: base, EnforceRead: &on}); err == nil {
-		t.Fatal("read hook accepted a permissive runner directory")
+	if err := runClaudeReadHook(strings.NewReader(payload), &out, readHookOptions{BaseDir: base, EnforceRead: &on}); err != nil {
+		t.Fatalf("read hook returned error instead of policy response: %v", err)
+	}
+	var resp claudeHookOutput
+	if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
+		t.Fatalf("decode hook response %q: %v", out.String(), err)
+	}
+	if resp.HookSpecificOutput.PermissionDecision != "deny" {
+		t.Fatalf("permission decision = %q, want deny; response: %s", resp.HookSpecificOutput.PermissionDecision, out.String())
+	}
+	if !strings.Contains(resp.HookSpecificOutput.PermissionDecisionReason, "violates Reading & Context Discipline") {
+		t.Fatalf("denial reason lost: %q", resp.HookSpecificOutput.PermissionDecisionReason)
 	}
 	if _, err := os.Stat(filepath.Join(runner, "state")); !os.IsNotExist(err) {
 		t.Fatalf("read hook used invalid runner state path, stat err = %v", err)
