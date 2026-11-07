@@ -30,6 +30,8 @@ Independent review of 052b4e65 found that an invalid runner state path could ret
 
 M1–M3 landed locally through e891dfbc; independent M3 review found no blocking issues. No full suite ran: `make test-q1` failed before tests with `bwrap: Failed to make / slave: Operation not permitted`, including under taia `--allow-bwrap` with /dev and /tmp writable. Resume by diagnosing taia's Bubblewrap broker or running the required suite from a suitable host environment, then review and test the changes before pushing. Constrained installation, broader shared-state handling, and externally enforced cross-session denial tests remain open. Ticket 1183 tracks owner-authorized temporary Quota-1 suspension. Do not claim same-UID isolation.
 
+Host `make test` later reached the suite and reported `TestRecordDirUsesRunnerRuntimeForWriterAndCleanup` failing because `CleanProcs` returned `would-remove` while the test expected `removed`. `CleanOptions.Kill` defaults to false (dry-run); this regression is fixed by setting `Kill: true` in the test, which still asserts actual record removal. No other failures were reported. Full-suite status after this fix is pending a host rerun.
+
 ## Initial bounded milestone: current contracts and observations
 
 ## Owner decision and milestone 1: Taia runner-scoped defaults

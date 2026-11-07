@@ -336,7 +336,7 @@ func TestRecordDirUsesRunnerRuntimeForWriterAndCleanup(t *testing.T) {
 	if err != nil || len(entries) != 1 || entries[0].Name() != "73.json" {
 		t.Fatalf("cleanup-visible entries = %v, %v", entries, err)
 	}
-	actions, err := CleanProcs(CleanOptions{RecordDir: dir, ProcReader: &fakeProcReader{}, GroupExists: func(int) bool { return false }})
+	actions, err := CleanProcs(CleanOptions{RecordDir: dir, ProcReader: &fakeProcReader{}, Kill: true, GroupExists: func(int) bool { return false }})
 	if err != nil || len(actions) != 1 || actions[0].Status != "removed" {
 		t.Fatalf("cleanup using writer directory = %+v, %v; want record removed", actions, err)
 	}
