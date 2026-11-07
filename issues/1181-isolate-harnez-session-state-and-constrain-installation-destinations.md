@@ -18,6 +18,10 @@ Agents currently need access to shared `~/.harnez/sessions/` and `/run/user/$UID
 - Document exact read/write needs and coordination with taia's sandbox; test cross-session denial and allowed normal operations. Assess compatibility and migration rather than assuming a particular layout.
 - Investigate separately the observed Bubblewrap `setting up uid map: Permission denied`; filesystem allowlists alone cannot fix namespace policy.
 
+## Milestone 2 — Pre-Work / Required Refinements
+
+Independent review of e437a41d identified: (1) DefaultStateDir consumers bypass runner path validation, including main, hooks and exec; ensure all state writers fail closed for invalid runner paths. (2) An environment-supplied session ID can skip initialization, letting sessionstate create state/sessions with mode 0755, subsequently rejected by runner validation; cover real consumer flows. (3) Runner process record lookup must not depend on legacy HOME or XDG resolution. Add regression tests, preserve explicit overrides and legacy behavior, and do not claim same-UID security. M1's Quota-1 run did not start due to nested Bubblewrap denial; full verification and independent review remain owed.
+
 ## Initial bounded milestone: current contracts and observations
 
 ## Owner decision and milestone 1: Taia runner-scoped defaults
