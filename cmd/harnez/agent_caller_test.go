@@ -99,7 +99,7 @@ func TestCodexWorkersAndUnknownMetadataStayRestricted(t *testing.T) {
 			}
 			for _, verb := range []string{"start", "resume", "selftest"} {
 				err := guardLeafRole(verb)
-				if err == nil || !strings.Contains(err.Error(), "is a leaf worker") || !strings.Contains(err.Error(), "role source: HARNEZ_AGENT_ROLE") {
+				if err == nil || !strings.Contains(err.Error(), "is a leaf worker") || (!strings.Contains(err.Error(), "role source: HARNEZ_AGENT_ROLE") && verb != "selftest") {
 					t.Fatalf("%s: expected contextual refusal, got %v", verb, err)
 				}
 			}
@@ -122,5 +122,17 @@ func TestLauncherProvenanceExportedAndRestored(t *testing.T) {
 	restore()
 	if got := os.Getenv(agentLauncherEnv); got != "previous" {
 		t.Fatalf("restored launcher = %q", got)
+	}
+}
+
+func TestAgentSelftestDeveloperRoleRefusal(t *testing.T) {
+	t.Setenv(agentRoleEnv, "developer")
+	err := guardLeafRole("selftest")
+	if err == nil {
+		t.Fatal("expected refusal for selftest from developer role")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "is a leaf worker") || !strings.Contains(msg, "To read the selftest steps, run") {
+		t.Fatalf("unexpected refusal message: %v", msg)
 	}
 }

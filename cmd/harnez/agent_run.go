@@ -1292,6 +1292,8 @@ func guardLeafRole(verb string) error {
 	switch verb {
 	case "list", "status", "models", "help", "agent", "send":
 		return nil // the root form checks each start/resume/slash itself
+	case "selftest":
+		return fmt.Errorf("%w (role source: %s; worker session: %q; Codex thread: %q; launcher PID: %q). If this is an interactive host, check inherited Harnez variables and restart the host; Harnez cannot change the host-managed sandbox or writable roots. To read the selftest steps, run `harnez agent selftest` from a host shell outside the sandbox", subagent.CheckSpawn(role, "developer"), agentRoleEnv, os.Getenv(agentSessionEnv), os.Getenv("CODEX_THREAD_ID"), os.Getenv(agentLauncherEnv))
 	}
 	return fmt.Errorf("%w (role source: %s; worker session: %q; Codex thread: %q; launcher PID: %q). If this is an interactive host, check inherited Harnez variables and restart the host; Harnez cannot change the host-managed sandbox or writable roots", subagent.CheckSpawn(role, "developer"), agentRoleEnv, os.Getenv(agentSessionEnv), os.Getenv("CODEX_THREAD_ID"), os.Getenv(agentLauncherEnv))
 }
