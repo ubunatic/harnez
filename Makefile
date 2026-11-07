@@ -43,6 +43,13 @@ install: ⚙️ build  # install binary to ~/go/bin (user)
 	./$(BINARY) man --install
 	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
 
+stage-install: ⚙️  # build Harnez and man pages in a new private destination (STAGE_DIR required)
+	@test -n "$(STAGE_DIR)" || (echo "❌ set STAGE_DIR to a new path under a private 0700 directory" && exit 1)
+	VERSION_LDFLAGS='$(VERSION_LDFLAGS)' bash scripts/stage-install.sh "$(STAGE_DIR)"
+
+stage-install-test: ⚙️  # test stage installer path validation and failure cleanup
+	bash scripts/stage-install-test.sh
+
 
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
