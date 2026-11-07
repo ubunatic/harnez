@@ -26,11 +26,7 @@ type Record struct {
 // RecordDir returns the runtime process-record directory.
 func RecordDir() (string, error) {
 	if runnerDir := os.Getenv("TAIA_SESSION_DIR"); runnerDir != "" {
-		legacyDir, err := legacyRecordDir()
-		if err != nil {
-			return "", err
-		}
-		return runstate.ProcessRecordDir(legacyDir)
+		return runstate.ProcessRecordDir("")
 	}
 	return legacyRecordDir()
 }

@@ -36,7 +36,10 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 	if err != nil || sessionID == "" {
 		return nil
 	}
-	stateDir := resolve.DefaultStateDir()
+	stateDir, err := resolve.StateDir()
+	if err != nil {
+		return nil
+	}
 
 	s, err := sessionstate.Load(stateDir, sessionID)
 	if err != nil {

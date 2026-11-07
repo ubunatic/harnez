@@ -1137,3 +1137,25 @@ func TestClaudeReadHookRepeatedSliceNamesTheRepeat(t *testing.T) {
 		t.Fatalf("repeat deny = %s", got)
 	}
 }
+
+func TestClaudeReadHookRejectsInvalidRunnerStatePath(t *testing.T) {
+	runner := t.TempDir()
+	if err := os.Chmod(runner, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runner)
+	base := t.TempDir()
+	path := filepath.Join(base, "source.go")
+	if err := os.WriteFile(path, []byte("package source\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	on := true
+	payload := `{"tool_name":"Read","session_id":"s","tool_input":{"file_path":"` + path + `"}}`
+	var out bytes.Buffer
+	if err := runClaudeReadHook(strings.NewReader(payload), &out, readHookOptions{BaseDir: base, EnforceRead: &on}); err == nil {
+		t.Fatal("read hook accepted a permissive runner directory")
+	}
+	if _, err := os.Stat(filepath.Join(runner, "state")); !os.IsNotExist(err) {
+		t.Fatalf("read hook used invalid runner state path, stat err = %v", err)
+	}
+}

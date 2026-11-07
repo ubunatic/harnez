@@ -915,6 +915,22 @@ func TestRunExecHook_RewritesBashCommand(t *testing.T) {
 	}
 }
 
+func TestRunExecHookRejectsInvalidRunnerStatePath(t *testing.T) {
+	runner := t.TempDir()
+	if err := os.Chmod(runner, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runner)
+	in := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"git status"}}`)
+	var out bytes.Buffer
+	if err := runExecHook(in, &out); err == nil {
+		t.Fatal("runExecHook accepted a permissive runner directory")
+	}
+	if _, err := os.Stat(filepath.Join(runner, "state")); !os.IsNotExist(err) {
+		t.Fatalf("exec hook used invalid runner state path, stat err = %v", err)
+	}
+}
+
 // TestRunExecHook_PreservesShellMetacharacters is the regression check for
 // the bug found reviewing issue 119: Claude Code re-executes the rewritten
 // command via its own outer 'bash -c', so a naive

@@ -1193,7 +1193,11 @@ func formatGearRewrite(command string, distillFlag string) string {
 }
 
 func runExecHook(in io.Reader, out io.Writer) error {
-	return runExecHookWithStateDir(in, out, resolve.DefaultStateDir())
+	stateDir, err := resolve.StateDir()
+	if err != nil {
+		return err
+	}
+	return runExecHookWithStateDir(in, out, stateDir)
 }
 
 func runExecHookWithStateDir(in io.Reader, out io.Writer, stateDir string) error {
@@ -1561,7 +1565,11 @@ func RecordEditGuardFeedback(session, stateDir string) {
 		return
 	}
 	if stateDir == "" {
-		stateDir = resolve.DefaultStateDir()
+		var err error
+		stateDir, err = resolve.StateDir()
+		if err != nil {
+			return
+		}
 	}
 	resetEditGuardFeedback(session, stateDir)
 }

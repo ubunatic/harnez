@@ -270,3 +270,58 @@ func TestSessionTipHookAllowsExplicitSession(t *testing.T) {
 		t.Fatalf("session tip stderr = %q, want a tip for explicit session", got)
 	}
 }
+
+func TestSessionTipHookInitializesRunnerStateForEnvironmentSession(t *testing.T) {
+	runner := t.TempDir()
+	if err := os.Chmod(runner, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runner)
+	for _, name := range resolve.SessionEnvVars {
+		t.Setenv(name, "")
+	}
+	const sessionID = "runner-env-session"
+	t.Setenv(resolve.SessionEnvVars[0], sessionID)
+	oldCounts := sessionTipCounts
+	sessionTipCounts = func(string, string) map[string]int { return nil }
+	t.Cleanup(func() { sessionTipCounts = oldCounts })
+
+	var stderr strings.Builder
+	cmd := newRootCmd()
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"status"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := filepath.Join(runner, "state", "sessions")
+	info, err := os.Stat(stateDir)
+	if err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("runner state directory = %v, %v; want existing mode 0700", info, err)
+	}
+	if _, err := os.Stat(sessionstate.Path(stateDir, sessionID)); err != nil {
+		t.Fatalf("session tip writer did not persist environment session state: %v", err)
+	}
+}
+
+func TestSessionTipHookFailsClosedForInvalidRunnerPath(t *testing.T) {
+	runner := t.TempDir()
+	if err := os.Chmod(runner, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runner)
+	for _, name := range resolve.SessionEnvVars {
+		t.Setenv(name, "")
+	}
+	t.Setenv(resolve.SessionEnvVars[0], "runner-invalid-session")
+
+	var stderr strings.Builder
+	cmd := newRootCmd()
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"status"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(runner, "state")); !os.IsNotExist(err) {
+		t.Fatalf("invalid runner path was used for state writes, stat err = %v", err)
+	}
+}

@@ -18,9 +18,9 @@ Agents currently need access to shared `~/.harnez/sessions/` and `/run/user/$UID
 - Document exact read/write needs and coordination with taia's sandbox; test cross-session denial and allowed normal operations. Assess compatibility and migration rather than assuming a particular layout.
 - Investigate separately the observed Bubblewrap `setting up uid map: Permission denied`; filesystem allowlists alone cannot fix namespace policy.
 
-## Milestone 2 — Pre-Work / Required Refinements
+## Milestone 2 — Runner state validation refinements
 
-Independent review of e437a41d identified: (1) DefaultStateDir consumers bypass runner path validation, including main, hooks and exec; ensure all state writers fail closed for invalid runner paths. (2) An environment-supplied session ID can skip initialization, letting sessionstate create state/sessions with mode 0755, subsequently rejected by runner validation; cover real consumer flows. (3) Runner process record lookup must not depend on legacy HOME or XDG resolution. Add regression tests, preserve explicit overrides and legacy behavior, and do not claim same-UID security. M1's Quota-1 run did not start due to nested Bubblewrap denial; full verification and independent review remain owed.
+Independent review of e437a41d identified three refinements. This milestone adds a validated default state-directory API for real state writers in the session tip, Claude read hook, exec hook, and edit-guard feedback paths; ensures a supplied environment session ID initializes private runner state before writing; and resolves runner process records without consulting legacy HOME/XDG paths. Regression coverage exercises those writer paths, invalid runner roots, legacy process paths, and HOME/XDG being unset. Explicit directory overrides and legacy behavior when `TAIA_SESSION_DIR` is absent remain supported. These checks do not establish a same-UID security boundary. Quota-1 did not start: the wrapper found a prior incomplete run with no live process group. Stale tracker state was released, and this milestone was not rerun. `make install` succeeded. External sandbox denial tests, constrained installation, and the remaining M1 acceptance work remain open.
 
 ## Initial bounded milestone: current contracts and observations
 

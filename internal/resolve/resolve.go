@@ -206,6 +206,13 @@ func DefaultStateDir() string {
 	return legacyStateDir()
 }
 
+// StateDir returns the default session-state directory after validating and
+// initializing the Taia runner path when present. Writers should use this
+// instead of DefaultStateDir.
+func StateDir() (string, error) {
+	return runstate.SessionStateDir(legacyStateDir())
+}
+
 func legacyStateDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {

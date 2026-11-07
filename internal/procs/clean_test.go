@@ -319,6 +319,8 @@ func TestRecordDirUsesRunnerRuntimeForWriterAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("TAIA_SESSION_DIR", runner)
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_RUNTIME_DIR", "")
 	dir, err := RecordDir()
 	if err != nil {
 		t.Fatal(err)
