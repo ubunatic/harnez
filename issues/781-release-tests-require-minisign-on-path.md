@@ -1,6 +1,6 @@
 # 781 — release tests require minisign on PATH
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — five release tests now put a fake minisign on PATH (setupFakeMinisign, internal/release/release_test.go); verified they fail without it and pass with minisign removed from PATH; Jules PR 138
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug / Tests
