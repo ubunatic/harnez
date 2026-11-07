@@ -4,6 +4,11 @@ set -euo pipefail
 
 destination="${1:?Usage: scripts/stage-install.sh ABSOLUTE_NEW_DESTINATION}"
 
+if test "$(uname -s)" != Linux || ! realpath --version 2>/dev/null | grep -Eq '(GNU|uutils) coreutils' || ! stat --version 2>/dev/null | grep -Eq '(GNU|uutils) coreutils'
+then printf 'ERROR: staging requires Linux and GNU or uutils coreutils realpath/stat\n' >&2
+     exit 2
+fi
+
 parent=$(dirname -- "$destination")
 name=$(basename -- "$destination")
 destination_clean=$(realpath -m -- "$destination")

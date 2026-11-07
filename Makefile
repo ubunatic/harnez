@@ -43,10 +43,6 @@ install: ⚙️ build  # install binary to ~/go/bin (user)
 	./$(BINARY) man --install
 	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
 
-stage-install: ⚙️  # build Harnez and man pages in a new private destination (STAGE_DIR required)
-	@test -n "$(STAGE_DIR)" || (echo "❌ set STAGE_DIR to a new path under a private 0700 directory" && exit 1)
-	VERSION_LDFLAGS='$(VERSION_LDFLAGS)' bash scripts/stage-install.sh "$(STAGE_DIR)"
-
 stage-install-test: ⚙️  # test stage installer path validation and failure cleanup
 	bash scripts/stage-install-test.sh
 
@@ -121,7 +117,7 @@ macos-ci: ⚙️  # trigger and watch macos-hello CI workflow on the GitHub mirr
 test-pi: ⚙️  # Pi background-task extension tests (node 22.18+; fails when node is missing)
 	bash scripts/test-pi.sh
 
-check: ⚙️ test-pi  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
+check: ⚙️ test-pi stage-install-test  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
 	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
 	GOWORK=off go test $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) ./...
