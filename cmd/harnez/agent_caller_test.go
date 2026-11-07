@@ -97,11 +97,15 @@ func TestCodexWorkersAndUnknownMetadataStayRestricted(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			for _, verb := range []string{"start", "resume", "selftest"} {
+			for _, verb := range []string{"start", "resume"} {
 				err := guardLeafRole(verb)
 				if err == nil || !strings.Contains(err.Error(), "is a leaf worker") || !strings.Contains(err.Error(), "role source: HARNEZ_AGENT_ROLE") {
 					t.Fatalf("%s: expected contextual refusal, got %v", verb, err)
 				}
+			}
+			// 1107: selftest only prints steps and writes its own state, so workers may read it.
+			if err := guardLeafRole("selftest"); err != nil {
+				t.Fatalf("worker selftest refused: %v", err)
 			}
 			if _, err := startRole("reviewer", "", nil); err == nil {
 				t.Fatal("worker start allowed")
