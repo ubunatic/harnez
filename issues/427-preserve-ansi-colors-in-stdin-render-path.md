@@ -1,6 +1,6 @@
 # 427 — Preserve ANSI colors in stdin render path
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — already done: readcard parses SGR (internal/readcard/ansi.go:35,67), strips escapes for width (render.go:183), plain path unchanged (render.go:307); ANSI tests pass; Jules audit reports/jules/427.md
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
