@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -294,5 +295,74 @@ func TestPublishAssetListUsesManifestPathAndName(t *testing.T) {
 		if want[asset.Name] != asset.Path {
 			t.Errorf("asset %q path=%q, want %q", asset.Name, asset.Path, want[asset.Name])
 		}
+	}
+}
+
+func TestReleaseResumeMissingTag(t *testing.T) {
+	dir := t.TempDir()
+
+	// Initialize git repo
+	runCmd(dir, "git", "init")
+	runCmd(dir, "git", "commit", "--allow-empty", "-m", "initial commit")
+
+	// Set up version.yaml
+	if err := os.WriteFile(filepath.Join(dir, "version.yaml"), []byte("version: 1.0.0\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runCmd(dir, "git", "add", "version.yaml")
+	runCmd(dir, "git", "commit", "-m", "chore: setup version")
+
+	// Mock push behavior via "git remote" locally to dummy remote
+	remoteDir := t.TempDir()
+	runCmd(remoteDir, "git", "init", "--bare")
+	runCmd(dir, "git", "remote", "add", "origin", "git@github.com:dummy/dummy.git")
+	runCmd(dir, "git", "remote", "set-url", "--push", "origin", remoteDir)
+
+	// Create dummy complete dist for the resume
+	if err := os.MkdirAll(filepath.Join(dir, "dist"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	name := "app_1.0.0_linux_amd64.tar.gz"
+	sums := fmt.Sprintf("%x  %s\n", sha256.Sum256([]byte("archive")), name)
+	if err := os.WriteFile(filepath.Join(dir, "dist", name), []byte("archive"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "dist", "SHA256SUMS"), []byte(sums), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "dist", "SHA256SUMS.minisig"), []byte("signature"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// We purposely DO NOT create the tag "v1.0.0", but we tell Run() to continue
+	var out bytes.Buffer
+	opt := Options{
+		Dir:         dir,
+		Continue:    true,
+		SkipBuild:   true,
+		SkipSign:    true, // Skipping real signing because we just mocked the file
+		SkipPublish: true, // Only testing the tag creation & push part
+		Out:         &out,
+	}
+
+	// Running release should recreate tag and attempt to push
+	if err := Run(opt); err != nil {
+		t.Fatalf("Run(continue) failed: %v", err)
+	}
+
+	// Verify tag was created locally
+	if exists, err := tagExists(dir, "v1.0.0"); err != nil || !exists {
+		t.Fatalf("tag v1.0.0 was not recreated locally; exists=%v, err=%v", exists, err)
+	}
+
+	// Verify tag was pushed
+	cmd := exec.Command("git", "ls-remote", "--tags", remoteDir)
+	cmd.Dir = dir
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to list remote tags: %v", err)
+	}
+	if !strings.Contains(string(output), "refs/tags/v1.0.0") {
+		t.Fatalf("tag v1.0.0 was not pushed to remote; output: %s", string(output))
 	}
 }
