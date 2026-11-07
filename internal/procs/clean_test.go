@@ -313,6 +313,53 @@ func TestWriteRecordIsJSON(t *testing.T) {
 	}
 }
 
+func TestRecordDirUsesRunnerRuntimeForWriterAndCleanup(t *testing.T) {
+	runner := t.TempDir()
+	if err := os.Chmod(runner, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runner)
+	dir, err := RecordDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := WriteRecord(dir, Record{PGID: 73})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(path) != dir || dir != filepath.Join(runner, "runtime", "procs") {
+		t.Fatalf("record path = %q, directory = %q", path, dir)
+	}
+	entries, err := os.ReadDir(filepath.Join(runner, "runtime", "procs"))
+	if err != nil || len(entries) != 1 || entries[0].Name() != "73.json" {
+		t.Fatalf("cleanup-visible entries = %v, %v", entries, err)
+	}
+	actions, err := CleanProcs(CleanOptions{RecordDir: dir, ProcReader: &fakeProcReader{}, GroupExists: func(int) bool { return false }})
+	if err != nil || len(actions) != 1 || actions[0].Status != "removed" {
+		t.Fatalf("cleanup using writer directory = %+v, %v; want record removed", actions, err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("cleanup left runner process record, stat err = %v", err)
+	}
+}
+
+func TestRecordDirKeepsLegacyEnvironmentPaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("TAIA_SESSION_DIR", "")
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	dir, err := RecordDir()
+	if err != nil || dir != filepath.Join(home, ".harnez", "run", "procs") {
+		t.Fatalf("legacy home process record dir = %q, %v", dir, err)
+	}
+	runtimeDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	dir, err = RecordDir()
+	if err != nil || dir != filepath.Join(runtimeDir, "harnez", "procs") {
+		t.Fatalf("legacy XDG process record dir = %q, %v", dir, err)
+	}
+}
+
 func TestTreeMembersWithoutRootsSkipsScan(t *testing.T) {
 	reader := &countingProcReader{}
 	members, err := TreeMembers([]TreeRoot{{PID: 0}, {PID: 1}}, map[int]ProcInfo{}, reader)

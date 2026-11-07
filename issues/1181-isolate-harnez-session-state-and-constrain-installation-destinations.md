@@ -18,9 +18,17 @@ Agents currently need access to shared `~/.harnez/sessions/` and `/run/user/$UID
 - Document exact read/write needs and coordination with taia's sandbox; test cross-session denial and allowed normal operations. Assess compatibility and migration rather than assuming a particular layout.
 - Investigate separately the observed Bubblewrap `setting up uid map: Permission denied`; filesystem allowlists alone cannot fix namespace policy.
 
-## Initial bounded milestone: current contracts
+## Initial bounded milestone: current contracts and observations
 
-These are source-level contracts, not a host inspection or proof of isolation. Paths depend on the process environment and OS; no particular sandbox or runtime directory is assumed.
+## Owner decision and milestone 1: Taia runner-scoped defaults
+
+Taia supplies the sandbox boundary through external Landlock enforcement. Harnez provides best-effort runner-scoped state when `TAIA_SESSION_DIR` is present; filesystem modes and path checks are defense in depth and do not provide a same-UID security guarantee. `TAIA_SESSION_DIR` identifies a private runner directory, not a persistent chat identity. With the variable absent, Harnez keeps its legacy paths. Existing explicit directory overrides retain precedence. Invalid runner roots must fail closed rather than silently use shared defaults.
+
+Milestone 1 routes implicit session lock, ticket history, and consumers of the default session-state directory to `$TAIA_SESSION_DIR/state/sessions`; explicit lock/state directory overrides keep precedence. Exec process records and cleanup use `$TAIA_SESSION_DIR/runtime/procs`. The runner and derived directories are validated by implicit session/ticket resolution and process-record lookup before use. This does not route the agent registry/logs, telemetry, or quota state; it does not constrain installation or prove cross-runner denial. Those remain acceptance work, along with sandbox-backed allow/deny tests, migration/compatibility review, symlink/path-substitution analysis for installation, and separate investigation of the Bubblewrap uid-map denial.
+
+The Taia directory contract is external to Harnez. Tests can verify path selection, rejection of malformed roots, explicit override precedence, and writer/cleanup path agreement; they cannot establish the external Landlock policy or a security boundary between same-UID processes.
+
+The source-level contracts below describe the legacy defaults when `TAIA_SESSION_DIR` is absent, not a host inspection or proof of isolation. Paths depend on the process environment and OS.
 
 - Session resolution uses explicit/environment IDs first; its fallback reads, creates and updates PPID-derived lock files under `$HOME/.harnez/sessions` (directory requested as 0755, lock files 0644, subject to umask). Ticket history and session state also use this directory; session state writes JSON with requested mode 0644. These modes do not isolate processes sharing a UID, and existing paths retain their existing permissions.
 - Agent registry defaults to `$HOME/.harnez/agents`, configurable with `--store-dir`. It creates the directory with requested mode 0700, serializes registry operations with `.registry.lock` and flock, and writes session JSON via a temporary file and rename. Async stdout/stderr logs also live in the store. Locks and atomic rename coordinate cooperating writers; they do not authenticate writers or enforce cross-session authorization.

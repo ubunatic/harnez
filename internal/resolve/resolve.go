@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/runstate"
 )
 
 // SessionInactivityWindow is the sliding-window inactivity threshold used
@@ -83,7 +85,11 @@ func Session(opts SessionOptions) (string, error) {
 	}
 	lockDir := opts.LockDir
 	if lockDir == "" {
-		lockDir = DefaultStateDir()
+		var err error
+		lockDir, err = runstate.SessionStateDir(legacyStateDir())
+		if err != nil {
+			return "", fmt.Errorf("resolve: runner session state: %w", err)
+		}
 	}
 	now := opts.Now
 	if now == nil {
@@ -165,7 +171,11 @@ type TicketOptions struct {
 func Ticket(opts TicketOptions) (string, error) {
 	stateDir := opts.StateDir
 	if stateDir == "" {
-		stateDir = DefaultStateDir()
+		var err error
+		stateDir, err = runstate.SessionStateDir(legacyStateDir())
+		if err != nil {
+			return "", fmt.Errorf("resolve: runner session state: %w", err)
+		}
 	}
 
 	if opts.Explicit != "" {
@@ -186,9 +196,17 @@ func Ticket(opts TicketOptions) (string, error) {
 	return "", nil
 }
 
-// DefaultStateDir returns ~/.harnez/sessions, where session lock files and
-// per-session ticket history are stored.
+// DefaultStateDir returns the Taia runner's state directory when present,
+// otherwise ~/.harnez/sessions. Session and ticket resolution validate the
+// Taia path before using it.
 func DefaultStateDir() string {
+	if runnerDir := os.Getenv("TAIA_SESSION_DIR"); runnerDir != "" {
+		return filepath.Join(runnerDir, "state", "sessions")
+	}
+	return legacyStateDir()
+}
+
+func legacyStateDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."

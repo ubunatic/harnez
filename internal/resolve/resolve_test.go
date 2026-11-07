@@ -2,6 +2,7 @@ package resolve_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -98,6 +99,67 @@ func TestSession_ExplicitOverrideWins(t *testing.T) {
 	}
 	if id != "explicit-session" {
 		t.Errorf("Session() = %q, want explicit override", id)
+	}
+}
+
+func TestSessionRunnerStateAndExplicitLockOverride(t *testing.T) {
+	runner := t.TempDir()
+	if err := os.Chmod(runner, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runner)
+	getenv := func(string) string { return "" }
+	id, err := resolve.Session(resolve.SessionOptions{Getenv: getenv, PPID: 73})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(runner, "state", "sessions")); err != nil {
+		t.Fatalf("runner session directory was not created: %v", err)
+	}
+	if resolve.DefaultStateDir() != filepath.Join(runner, "state", "sessions") || id == "" {
+		t.Fatalf("default state dir or session id = %q, %q", resolve.DefaultStateDir(), id)
+	}
+
+	explicit := t.TempDir()
+	t.Setenv("TAIA_SESSION_DIR", filepath.Join(runner, "missing"))
+	if _, err := resolve.Session(resolve.SessionOptions{Getenv: getenv, PPID: 74, LockDir: explicit}); err != nil {
+		t.Fatalf("explicit LockDir should retain precedence over runner env: %v", err)
+	}
+}
+
+func TestTicketExplicitStateDirTakesPrecedenceOverInvalidRunner(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("TAIA_SESSION_DIR", "relative-runner")
+	want := "repo/1181-state"
+	got, err := resolve.Ticket(resolve.TicketOptions{Explicit: want, SessionID: "s", StateDir: state})
+	if err != nil || got != want {
+		t.Fatalf("Ticket with explicit StateDir = %q, %v; want %q", got, err, want)
+	}
+}
+
+func TestRunnerStateDirectoryIsInheritedBySubprocess(t *testing.T) {
+	if os.Getenv("HARNEZ_TEST_RUNNER_CHILD") == "1" {
+		id, err := resolve.Session(resolve.SessionOptions{Getenv: func(string) string { return "" }, PPID: 81})
+		if err != nil || id == "" {
+			t.Fatalf("child Session() = %q, %v", id, err)
+		}
+		if _, err := os.Stat(resolve.DefaultStateDir()); err != nil {
+			t.Fatalf("child runner state dir: %v", err)
+		}
+		return
+	}
+	runner := t.TempDir()
+	if err := os.Chmod(runner, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runner)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRunnerStateDirectoryIsInheritedBySubprocess$")
+	cmd.Env = append(os.Environ(), "HARNEZ_TEST_RUNNER_CHILD=1")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("child test failed: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(filepath.Join(runner, "state", "sessions")); err != nil {
+		t.Fatalf("child did not create runner session dir: %v", err)
 	}
 }
 
