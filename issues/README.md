@@ -44,4 +44,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1180 | [1180-cleanup-remove-all-prime-agent-prime-support.md](1180-cleanup-remove-all-prime-agent-prime-support.md) | cleanup: remove all Prime Agent (~/.prime) support | Open |
 | 1181 | [1181-isolate-harnez-session-state-and-constrain-installation-destinations.md](1181-isolate-harnez-session-state-and-constrain-installation-destinations.md) | Isolate Harnez session state and constrain installation destinations | Open |
 | 1183 | [1183-allow-owner-authorized-temporary-suspension-of-quota-1-for-debugging.md](1183-allow-owner-authorized-temporary-suspension-of-quota-1-for-debugging.md) | Allow owner-authorized temporary suspension of Quota-1 for debugging | Open |
+| 1184 | [1184-harnez-release-continue-fails-if-annotated-git-tag-is-missing.md](1184-harnez-release-continue-fails-if-annotated-git-tag-is-missing.md) | harnez release --continue fails if annotated git tag is missing | Open |
 <!-- harnez:end issues-active-index -->
