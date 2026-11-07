@@ -29,8 +29,11 @@ failure cleanup and exit status, and that hostile `GOBIN`, `GOPATH`, `HOME`,
 and `XDG_DATA_HOME` values do not redirect writes. It invokes the script
 directly with quotes, backticks and literal command-substitution text in the
 quoted destination, verifies no marker was created, and checks shared binary,
-alias and man directories retain only their sentinels. This test is part of
-`make test`. The caller's shell and environment must be trusted; this workflow
+alias and man directories retain only regular-file sentinels, including the
+`⚙` alias location. It tests skip behavior for unsupported platforms and
+coreutils; `make test` prints a `SKIP` message and continues there. The direct
+installer rejects unsupported Linux/coreutils requirements with an error.
+The caller's shell and environment must be trusted; this workflow
 does not protect against arbitrary shell code or hostile `MAKEFLAGS` processed
 before invocation. A real
 staged binary should also be checked for generated man pages. Taia's private directory creation and

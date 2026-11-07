@@ -1,10 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+test_platform=${HARNEZ_STAGE_TEST_PLATFORM:-$(uname -s)}
+if test "$test_platform" != Linux
+then printf 'SKIP: staging tests require Linux (found %s)\n' "$test_platform"
+     exit 0
+fi
+
+if test "${HARNEZ_STAGE_TEST_COREUTILS:-}" = unsupported
+then printf 'SKIP: staging tests require GNU or uutils coreutils realpath/stat\n'
+     exit 0
+fi
+
+realpath_version=$(realpath --version 2>/dev/null || true)
+stat_version=$(stat --version 2>/dev/null || true)
+if ! printf '%s\n' "$realpath_version" | grep -Eq '(GNU|uutils) coreutils' || ! printf '%s\n' "$stat_version" | grep -Eq '(GNU|uutils) coreutils'
+then printf 'SKIP: staging tests require GNU or uutils coreutils realpath/stat\n'
+     exit 0
+fi
+
 repo_root=$(git -C "$(dirname -- "${BASH_SOURCE[0]}")/.." rev-parse --show-toplevel)
 tmp=$(mktemp -d)
 shell_marker=".stage-install-shell-marker-$$"
 trap 'rm -rf -- "$tmp"; rm -f -- "$repo_root/$shell_marker"' EXIT
+
+platform_skip=$(HARNEZ_STAGE_TEST_PLATFORM=Darwin bash "${BASH_SOURCE[0]}")
+test "$platform_skip" = 'SKIP: staging tests require Linux (found Darwin)'
+coreutils_skip=$(HARNEZ_STAGE_TEST_COREUTILS=unsupported bash "${BASH_SOURCE[0]}")
+test "$coreutils_skip" = 'SKIP: staging tests require GNU or uutils coreutils realpath/stat'
 
 private="$tmp/private space"
 mkdir -m 700 -- "$private"
@@ -15,7 +38,7 @@ printf 'sentinel\n' > "$tmp/gobin/keep"
 printf 'sentinel\n' > "$tmp/data/keep"
 printf 'sentinel\n' > "$tmp/hostile home/.local/share/man/keep"
 printf 'sentinel\n' > "$tmp/hostile home/go/bin/keep"
-printf 'sentinel\n' > "$tmp/gobin/⚙"
+printf 'alias sentinel\n' > "$tmp/gobin/⚙"
 
 cat > "$tmp/bin/go" <<'GO'
 #!/usr/bin/env bash
@@ -61,16 +84,27 @@ test "$(cat "$FAKE_LOG")" = "$(printf 'build-attempted\nman-attempted:%s' "$stag
 assert_shared_contents() {
    for dir in "$tmp/gobin" "$tmp/data" "$tmp/hostile home/.local/share/man" "$tmp/hostile home/go/bin"
    do
-      contents=$(find "$dir" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
-      if test "$contents" != keep && test "$dir" != "$tmp/gobin"
-      then printf 'FAIL: unexpected shared contents in %s: %s\n' "$dir" "$contents" >&2
-           exit 1
-      fi
-      if test "$dir" = "$tmp/gobin" && test "$contents" != "$(printf 'keep\n⚙')"
-      then printf 'FAIL: unexpected GOBIN contents: %s\n' "$contents" >&2
-           exit 1
-      fi
+      for entry in "$dir"/*
+      do
+         if ! test -f "$entry" || test -L "$entry"
+         then printf 'FAIL: unexpected non-regular shared entry: %s\n' "$entry" >&2
+              exit 1
+         fi
+         entry_name=${entry##*/}
+         if test "$dir" = "$tmp/gobin"
+         then if test "$entry_name" != keep && test "$entry_name" != ⚙
+              then printf 'FAIL: unexpected GOBIN entry: %s\n' "$entry" >&2
+                   exit 1
+              fi
+         elif test "$entry_name" != keep
+         then printf 'FAIL: unexpected shared entry: %s\n' "$entry" >&2
+              exit 1
+         fi
+      done
    done
+   test -f "$tmp/gobin/keep" && ! test -L "$tmp/gobin/keep"
+   test -f "$tmp/gobin/⚙" && ! test -L "$tmp/gobin/⚙"
+   test "$(cat "$tmp/gobin/⚙")" = 'alias sentinel'
    test "$(cat "$tmp/gobin/keep")" = sentinel
    test "$(cat "$tmp/data/keep")" = sentinel
    test "$(cat "$tmp/hostile home/.local/share/man/keep")" = sentinel
@@ -95,6 +129,44 @@ expect_rejected() {
         exit 1
    fi
 }
+
+unsupported_bin="$tmp/unsupported-bin"
+mkdir -m 700 -- "$unsupported_bin"
+cat > "$unsupported_bin/uname" <<'UNAME'
+#!/usr/bin/env bash
+printf 'Darwin\n'
+UNAME
+chmod 755 "$unsupported_bin/uname"
+if output=$(PATH="$unsupported_bin:$PATH" bash "$repo_root/scripts/stage-install.sh" "$private/unsupported" 2>&1)
+then printf 'FAIL: installer accepted unsupported platform\n' >&2
+     exit 1
+else status=$?
+fi
+test "$status" -eq 2
+printf '%s\n' "$output" | grep -q 'requires Linux and GNU or uutils coreutils'
+
+unsupported_bin="$tmp/unsupported-coreutils-bin"
+mkdir -m 700 -- "$unsupported_bin"
+cat > "$unsupported_bin/uname" <<'UNAME'
+#!/usr/bin/env bash
+printf 'Linux\n'
+UNAME
+cat > "$unsupported_bin/realpath" <<'UNSUPPORTED'
+#!/usr/bin/env bash
+printf 'unsupported realpath\n'
+UNSUPPORTED
+cat > "$unsupported_bin/stat" <<'UNSUPPORTED'
+#!/usr/bin/env bash
+printf 'unsupported stat\n'
+UNSUPPORTED
+chmod 755 "$unsupported_bin/uname" "$unsupported_bin/realpath" "$unsupported_bin/stat"
+if output=$(PATH="$unsupported_bin:$PATH" bash "$repo_root/scripts/stage-install.sh" "$private/unsupported" 2>&1)
+then printf 'FAIL: installer accepted unsupported coreutils\n' >&2
+     exit 1
+else status=$?
+fi
+test "$status" -eq 2
+printf '%s\n' "$output" | grep -q 'requires Linux and GNU or uutils coreutils'
 
 expect_rejected relative destination bash "$repo_root/scripts/stage-install.sh" relative/path
 expect_rejected unclean destination bash "$repo_root/scripts/stage-install.sh" "$private/../escape"
