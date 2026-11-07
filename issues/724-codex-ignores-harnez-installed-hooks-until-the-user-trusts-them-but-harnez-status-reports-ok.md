@@ -33,3 +33,7 @@ security prompt and needs a user decision.
 ## 3. Implementation & Verification Plan
 - Status check: hook installed but untrusted → warning with the fix.
 - Test with a config without `[hooks.state]`; live check in the #723 container.
+
+## Audit 2026-11-08
+
+Jules audit (GitHub PR 139, report `reports/jules/724.md`, checked against d8c61da; all 4 references hold): still valid. `internal/codex/hooks.go:202` `Status` reports only installed/drifted, and `internal/claude/status.go:166-172` prints `ok` with no trust check; no Go code reads `trusted_hash` or `[hooks.state]`. Smallest step: have `codex.Status` also report untrusted harnez hooks from `[hooks.state]` and print a warning with the trust hint in `RunStatus`. Needs a real Codex `config.toml` sample with `[hooks.state]` first (canary).
