@@ -22,6 +22,10 @@ Agents currently need access to shared `~/.harnez/sessions/` and `/run/user/$UID
 
 Independent review of e437a41d identified three refinements. This milestone adds a validated default state-directory API for real state writers in the session tip, Claude read hook, exec hook, and edit-guard feedback paths; ensures a supplied environment session ID initializes private runner state before writing; and resolves runner process records without consulting legacy HOME/XDG paths. Regression coverage exercises those writer paths, invalid runner roots, legacy process paths, and HOME/XDG being unset. Explicit directory overrides and legacy behavior when `TAIA_SESSION_DIR` is absent remain supported. These checks do not establish a same-UID security boundary. Quota-1 did not start: the wrapper found a prior incomplete run with no live process group. Stale tracker state was released, and this milestone was not rerun. `make install` succeeded. External sandbox denial tests, constrained installation, and the remaining M1 acceptance work remain open.
 
+## Milestone 3 — Pre-Work / Required Refinements
+
+Independent review of 052b4e65 found that an invalid runner state path can return from the read hook before emitting an already-computed denial (cmd/harnez/hook.go), potentially allowing a prohibited read. Preserve the denial response even when state writes are unavailable, and add a regression for a prohibited read with an invalid runner root. Quota-1 remains unverified: with taia --allow-bwrap, bwrap failed to make / slave with Operation not permitted before tests started.
+
 ## Initial bounded milestone: current contracts and observations
 
 ## Owner decision and milestone 1: Taia runner-scoped defaults
