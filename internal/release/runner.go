@@ -264,7 +264,9 @@ func Run(opt Options) error {
 			if err != nil {
 				return fmt.Errorf("check tag existence during resume: %w", err)
 			}
-			if !exists {
+			if !exists && opt.DryRun {
+				fmt.Fprintf(opt.Out, "  [dry-run]   Would recreate missing tag: %s\n", tagName)
+			} else if !exists {
 				fmt.Fprintf(opt.Out, "  [git]       Recreating missing tag: %s\n", tagName)
 				tagMsg := fmt.Sprintf("%s %s", projectName, tagName)
 				if err := gitCreateTag(opt.Dir, tagName, tagMsg); err != nil {
