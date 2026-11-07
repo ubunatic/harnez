@@ -1,6 +1,6 @@
 # 1184 — harnez release --continue fails if annotated git tag is missing
 
-**Status**: Open
+**Status**: Closed — release --continue recreates a missing annotated tag before push (internal/release/runner.go step 8; dry-run only reports); TestReleaseResumeMissingTag fails without the fix; Jules PR 137 cherry-picked
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
