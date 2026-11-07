@@ -51,3 +51,7 @@ Checked in the code and on this machine; nothing changed yet.
 ## Progress 2026-11-03
 - Done: `harnez exec` no longer applies its default 60s timeout to `harnez agent start`, `agent resume`, `agent wait` or `pr wait` (`isHarnezAgentWait`, `internal/exec/exec.go`; cases in `TestResolveExecTimeout_HarnezAgentWaitDefaultsUnlimited`). A self-written `⚙` on these no longer needs `HTO=0`. An explicit timeout still wins.
 - Open: the auto-mode refusal itself (canary on `permission_mode` first).
+
+## Audit 2026-11-08 (Jules)
+
+Jules audit (GitHub PR 141, `reports/jules/1112.md`, checked against d8c61da; all 5 references hold): partly done. The timeout exemption (`internal/exec/exec.go:206`) and background `HTO=0` prefix (`exec.go:1257`) are in; the auto-mode refusal is still open. No code reads the hook input's `permission_mode` today. Live evidence the same night: a harnez host session in auto mode hit "a hook changed this call's input after auto mode reviewed it" on about 12 background `harnez agent start/resume` calls and had to reissue each one. Next step: canary first, logging the PreToolUse `permission_mode` value in auto mode (unverified that it is present or what value auto mode uses); then skip the rewrite in `runExecHookWithStateDir` for that mode, with a hook test.
