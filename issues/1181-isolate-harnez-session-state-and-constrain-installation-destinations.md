@@ -26,6 +26,10 @@ Independent review of e437a41d identified three refinements. This milestone adds
 
 Independent review of 052b4e65 found that an invalid runner state path could return from the read hook before emitting an already-computed denial. The hook now skips repeat-read state tracking when its default state path is unavailable while still returning the computed policy denial. A regression uses a prohibited 100-line read and an invalid runner root, and checks the serialized denial response. `make test-q1` again stopped before tests because bwrap failed to make `/` a slave with `Operation not permitted`; no sandbox bypass was attempted. `make install` succeeded. Cross-session sandbox denial, constrained installation and remaining acceptance work are open.
 
+## Next milestone — staging review pre-work
+
+Independent review of d56189ab: prevent Make recipe shell interpretation of STAGE_DIR (test literal quotes, backticks and substitutions); integrate staging tests into normal verification; assert failure injection reaches build and man generation and verify complete shared destination contents including aliases. Address GNU-only realpath/stat portability or explicitly detect and document the supported platform. Preserve trusted-parent scope and do not claim race-safe shared installation. Owner reported `make test` PASS at d106b961; the staging milestone's Quota-1 run failed before tests due to Bubblewrap.
+
 ## Session handoff
 
 M1–M3 landed locally through e891dfbc; independent M3 review found no blocking issues. No full suite ran: `make test-q1` failed before tests with `bwrap: Failed to make / slave: Operation not permitted`, including under taia `--allow-bwrap` with /dev and /tmp writable. Resume by diagnosing taia's Bubblewrap broker or running the required suite from a suitable host environment, then review and test the changes before pushing. Constrained installation, broader shared-state handling, and externally enforced cross-session denial tests remain open. Ticket 1183 tracks owner-authorized temporary Quota-1 suspension. Do not claim same-UID isolation.
