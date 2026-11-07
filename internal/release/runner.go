@@ -259,6 +259,20 @@ func Run(opt Options) error {
 
 	// 8. Remote Git Push
 	if !opt.SkipPush {
+		if opt.Continue {
+			exists, err := tagExists(opt.Dir, tagName)
+			if err != nil {
+				return fmt.Errorf("check tag existence during resume: %w", err)
+			}
+			if !exists {
+				fmt.Fprintf(opt.Out, "  [git]       Recreating missing tag: %s\n", tagName)
+				tagMsg := fmt.Sprintf("%s %s", projectName, tagName)
+				if err := gitCreateTag(opt.Dir, tagName, tagMsg); err != nil {
+					return fmt.Errorf("git create tag %s: %w", tagName, err)
+				}
+			}
+		}
+
 		if err := pushRelease(opt, tagName, forge); err != nil {
 			return err
 		}
