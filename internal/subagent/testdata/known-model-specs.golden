@@ -33,3 +33,5 @@ codex:terra:high
 jules:jules:low
 lmcoder:coder:low
 strata-coder:qwen3.8-flash-next-coder-iq1_m:low
+strata:qwen3.8-flash-next-iq2_xs:low
+strata:qwen3.8-flash-next-iq3_xxs:low

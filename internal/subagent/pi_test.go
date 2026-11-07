@@ -79,6 +79,27 @@ func TestPiStrataCoderArgs(t *testing.T) {
 	}
 }
 
+func TestPiStrataQuantizedArgs(t *testing.T) {
+	for _, tc := range []struct {
+		alias, provider, model string
+	}{
+		{"strata-iq2", "strata", "qwen3.8-flash-next-iq2_xs"},
+		{"strata-iq3", "strata", "qwen3.8-flash-next-iq3_xxs"},
+	} {
+		model, err := ResolveModel(tc.alias)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"--mode", "json", "--model", tc.provider + "/" + tc.model, "--thinking", "low", "--", "ping"}
+		if got := piRunArgs(model, "ping"); !reflect.DeepEqual(got, want) {
+			t.Errorf("piRunArgs(%s) = %#v, want %#v", tc.alias, got, want)
+		}
+		if got, wantResume := piResumeArgs("session", "ping", model), []string{"--mode", "json", "--session", "session", "--model", tc.provider + "/" + tc.model, "--thinking", "low", "--", "ping"}; !reflect.DeepEqual(got, wantResume) {
+			t.Errorf("piResumeArgs(%s) = %#v, want %#v", tc.alias, got, wantResume)
+		}
+	}
+}
+
 func TestPiStrataMissingProviderErrorIsReported(t *testing.T) {
 	model, err := ResolveModel("strata")
 	if err != nil {

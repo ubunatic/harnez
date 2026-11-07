@@ -15,6 +15,8 @@ compact_thresholds:
   claude:haiku:med: 80000
   claude:haiku:high: 80000
   strata-coder:qwen3.8-flash-next-coder-iq1_m: 80000
+  strata:qwen3.8-flash-next-iq2_xs: 80000
+  strata:qwen3.8-flash-next-iq3_xxs: 80000
 # Pi compaction overrides that `harnez apply` writes into Pi's settings.json for
 # each model in Pi's models.json whose contextWindow is below the threshold
 # (issue 1023). Pi's defaults (16384 reserve, 20000 kept) do not fit a 32k window.
@@ -272,6 +274,20 @@ models:
     tier: low
     effort: false
     use: Local Strata coder model served through Pi provider strata-coder; requires that provider and this exact model ID in ~/.pi/agent/models.json.
+  strata:qwen3.8-flash-next-iq2_xs:
+    aliases: [strata-iq2]
+    provider: strata
+    name: qwen3.8-flash-next-iq2_xs
+    tier: low
+    effort: false
+    use: Local Strata IQ2 XS model served through Pi provider strata; requires that provider and this exact model ID in ~/.pi/agent/models.json. Its configured context window is 98304 tokens; Harnez compacts at 80000.
+  strata:qwen3.8-flash-next-iq3_xxs:
+    aliases: [strata-iq3]
+    provider: strata
+    name: qwen3.8-flash-next-iq3_xxs
+    tier: low
+    effort: false
+    use: Local Strata IQ3 XXS model served through Pi provider strata; requires that provider and this exact model ID in ~/.pi/agent/models.json. Its configured context window is 98304 tokens; Harnez compacts at 80000.
   jules:jules:
     aliases: [jules]
     provider: jules

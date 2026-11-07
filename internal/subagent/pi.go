@@ -152,7 +152,7 @@ func piModelArgs(model Model) []string {
 	var args []string
 	if model.Name != "" && model.Name != "default" {
 		name := model.Name
-		if model.Provider == "strata-coder" {
+		if model.Provider == "strata" || model.Provider == "strata-coder" {
 			name = model.Provider + "/" + name
 		}
 		args = append(args, "--model", name)

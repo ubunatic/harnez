@@ -151,6 +151,31 @@ func TestResolveStrataCoderThroughCatalog(t *testing.T) {
 	}
 }
 
+func TestResolveStrataQuantizedModelsThroughCatalog(t *testing.T) {
+	for _, tc := range []struct {
+		alias, model string
+	}{
+		{"strata-iq2", "qwen3.8-flash-next-iq2_xs"},
+		{"strata-iq3", "qwen3.8-flash-next-iq3_xxs"},
+	} {
+		for _, spec := range []string{tc.alias, "strata:" + tc.model + ":low"} {
+			m, err := ResolveModel(spec)
+			if err != nil {
+				t.Fatalf("ResolveModel(%q): %v", spec, err)
+			}
+			if m.Provider != "strata" || m.Name != tc.model || m.Tier != "low" {
+				t.Fatalf("ResolveModel(%q) = %#v, want strata:%s:low", spec, m, tc.model)
+			}
+			if _, ok := DriverFor(m, "").(PiDriver); !ok {
+				t.Errorf("DriverFor(%q) = %T, want PiDriver", spec, DriverFor(m, ""))
+			}
+			if _, ok := StreamDriverFor(m, "").(PiStreamDriver); !ok {
+				t.Errorf("StreamDriverFor(%q) = %T, want PiStreamDriver", spec, StreamDriverFor(m, ""))
+			}
+		}
+	}
+}
+
 func TestLmcoderCoderListedAsPiSupported(t *testing.T) {
 	entries, err := KnownModelEntriesE()
 	if err != nil {

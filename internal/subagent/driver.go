@@ -47,7 +47,7 @@ func DriverFor(m Model, dir string) Driver {
 		return CodexDriver{Dir: dir}
 	case "agy":
 		return AgyDriver{Dir: dir, ModelSpec: m.Spec()}
-	case "pi", "lmcoder", "strata-coder":
+	case "pi", "lmcoder", "strata", "strata-coder":
 		// lmcoder models are served through Pi, which reads the proxy URL from ~/.pi/agent/models.json.
 		return PiDriver{Dir: dir}
 	case "jules":
