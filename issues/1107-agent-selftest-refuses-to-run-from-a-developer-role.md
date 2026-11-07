@@ -1,6 +1,6 @@
 # 1107 — agent selftest refuses to run from a developer role
 
-**Status**: Open
+**Status**: Closed — guardLeafRole allows selftest (cmd/harnez/agent_run.go), since it never starts agents; worker test asserts it (agent_caller_test.go), fails without fix; live HARNEZ_AGENT_ROLE=developer selftest --step hello prints steps, start still refused. Jules PR 140 not taken (refusal text only)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
