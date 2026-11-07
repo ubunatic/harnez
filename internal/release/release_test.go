@@ -274,6 +274,8 @@ func TestResolveMinisignKey(t *testing.T) {
 }
 
 func TestDryRunRelease(t *testing.T) {
+	setupFakeMinisign(t)
+
 	tmpDir := t.TempDir()
 	var buf bytes.Buffer
 
@@ -309,6 +311,8 @@ func TestDryRunRelease(t *testing.T) {
 }
 
 func TestDryRunReleaseContinue(t *testing.T) {
+	setupFakeMinisign(t)
+
 	tmpDir := t.TempDir()
 	var buf bytes.Buffer
 
@@ -670,6 +674,8 @@ func TestDetectForgeInfo(t *testing.T) {
 }
 
 func TestPreflightForgeValidation(t *testing.T) {
+	setupFakeMinisign(t)
+
 	// Missing remote origin
 	dir := setupTestGitRepo(t, "")
 	keyFile := filepath.Join(dir, ".minisign.key")
@@ -791,6 +797,8 @@ func TestSyncLanguageFiles_ManifestAndPackageJSON(t *testing.T) {
 }
 
 func TestTagPrefixFormatting(t *testing.T) {
+	setupFakeMinisign(t)
+
 	tests := []struct {
 		prefix   string
 		version  string
@@ -841,6 +849,8 @@ func TestTagPrefixFormatting(t *testing.T) {
 }
 
 func TestBuildCmdMakefileFallback(t *testing.T) {
+	setupFakeMinisign(t)
+
 	// 1. Fallback to make pack
 	tmpDirPack := t.TempDir()
 	_ = os.WriteFile(filepath.Join(tmpDirPack, "Makefile"), []byte("pack:\n\t@echo 'packing'\n"), 0644)
@@ -1245,4 +1255,13 @@ func TestBuildEnvGOWORK(t *testing.T) {
 			t.Error("buildEnv(true) should not force GOWORK=off")
 		}
 	}
+}
+
+func setupFakeMinisign(t *testing.T) {
+	t.Helper()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "minisign"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
