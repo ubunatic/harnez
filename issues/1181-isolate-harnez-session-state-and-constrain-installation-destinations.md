@@ -30,6 +30,10 @@ Independent review of 052b4e65 found that an invalid runner state path could ret
 
 Independent review of d56189ab: prevent Make recipe shell interpretation of STAGE_DIR (test literal quotes, backticks and substitutions); integrate staging tests into normal verification; assert failure injection reaches build and man generation and verify complete shared destination contents including aliases. Address GNU-only realpath/stat portability or explicitly detect and document the supported platform. Preserve trusted-parent scope and do not claim race-safe shared installation. Owner reported `make test` PASS at d106b961; the staging milestone's Quota-1 run failed before tests due to Bubblewrap.
 
+## Next milestone — staging portability pre-work
+
+Independent review of d106b961..f83c5b0e found that the Linux-only staging test is unconditionally part of make check/test and would break macOS verification; skip it clearly on unsupported platforms while retaining explicit installer rejection. Strengthen the shared alias assertion to verify GOBIN/⚙ content and type, not merely its name. Previous direct-script injection and failure reachability findings were addressed; full suite remains blocked before execution by Bubblewrap.
+
 ## Session handoff
 
 M1–M3 landed locally through e891dfbc; independent M3 review found no blocking issues. No full suite ran: `make test-q1` failed before tests with `bwrap: Failed to make / slave: Operation not permitted`, including under taia `--allow-bwrap` with /dev and /tmp writable. Resume by diagnosing taia's Bubblewrap broker or running the required suite from a suitable host environment, then review and test the changes before pushing. Constrained installation, broader shared-state handling, and externally enforced cross-session denial tests remain open. Ticket 1183 tracks owner-authorized temporary Quota-1 suspension. Do not claim same-UID isolation.
