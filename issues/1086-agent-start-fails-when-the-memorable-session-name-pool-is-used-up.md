@@ -1,6 +1,6 @@
 # 1086 — agent start fails when the memorable session name pool is used up
 
-**Status**: Open
+**Status**: Closed — fallback suffix (name.go, 64x1000 names) makes exhaustion practically impossible; decided to keep finished sessions holding names so resume-by-name (session.go:159 first match) stays safe; want 3 moot. Jules impl rerun 1436399114404695822 failed without PR
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
