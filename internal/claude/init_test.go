@@ -407,7 +407,7 @@ func TestRunInit_IgnoresIssuesLockFilesInTrackedGitignore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, lock := range []string{"/issues/README.md.lock", "/issues/.reserve.lock"} {
+	for _, lock := range []string{"/issues/README.md.lock", "/issues/.reserve.lock", "/.harnez/state/"} {
 		if strings.Count(string(exclude), lock) != 1 {
 			t.Errorf("%s ignore should appear exactly once after two init runs:\n%s", lock, exclude)
 		}

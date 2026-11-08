@@ -81,6 +81,13 @@ func initGitIntegration(ir *initReport, dir string, repoConfig *RepoConfig) erro
 		fmt.Printf("  ignored .harnez/rules/Local.md in .git/info/exclude\n")
 		ir.changes++
 	}
+	// Per-session owner overrides written by /disable (issue 1188).
+	if ignored, err := fsutil.EnsureGitExclude(dir, "/.harnez/state/"); err != nil {
+		return fmt.Errorf("ignore .harnez/state/: %w", err)
+	} else if ignored {
+		fmt.Printf("  ignored .harnez/state/ in .git/info/exclude\n")
+		ir.changes++
+	}
 	if fileExists(filepath.Join(dir, "issues")) {
 		// Lock files left by the README sync and `harnez issues new` (issue 672).
 		locks := []string{"/issues/README.md.lock", "/issues/.reserve.lock"}

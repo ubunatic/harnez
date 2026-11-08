@@ -38,6 +38,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1180 | [1180-cleanup-remove-all-prime-agent-prime-support.md](1180-cleanup-remove-all-prime-agent-prime-support.md) | cleanup: remove all Prime Agent (~/.prime) support | Open |
 | 1181 | [1181-isolate-harnez-session-state-and-constrain-installation-destinations.md](1181-isolate-harnez-session-state-and-constrain-installation-destinations.md) | Isolate Harnez session state and constrain installation destinations | Open |
 | 1185 | [1185-agent-list-drops-a-jules-run-from-running-when-its-local-wait-times-out.md](1185-agent-list-drops-a-jules-run-from-running-when-its-local-wait-times-out.md) | agent list drops a Jules run from running when its local wait times out | Open |
-| 1188 | [1188-add-disable-skill-to-suspend-repo-rules-triggered-skills-or-process-rules-for-a-host-session.md](1188-add-disable-skill-to-suspend-repo-rules-triggered-skills-or-process-rules-for-a-host-session.md) | Add /disable skill to suspend repo rules, triggered skills or process rules for a host session | Open |
 | 1189 | [1189-add-opt-in-agit-doc-via-init-docs-agit.md](1189-add-opt-in-agit-doc-via-init-docs-agit.md) | Add opt-in AGit doc via init --docs agit | Open |
 <!-- harnez:end issues-active-index -->

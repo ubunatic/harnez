@@ -4,6 +4,8 @@ Orchestrate a lean, milestone-driven sprint with a cheap read-only searcher, opt
 
 Reference Practice: `@docs/AgenticLoop.md`
 
+- Owner override: if the user ran `/disable triggered-skill <this skill>` in this session, do not auto-select this skill; explicit invocation still works.
+
 ## Role Contract — Direct Execution
 
 You, the agent that received this invocation, are the Host Orchestrator for this task.

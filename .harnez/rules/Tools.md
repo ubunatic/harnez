@@ -65,7 +65,8 @@ instead of `ls issues/`, `find`, or raw grep:
 
 ## Owner Overrides (/disable, /enable)
 - The user can suspend one rule for the session with `/disable <prose>` (Quota-1, auto-selecting a sprint skill, pushing to main) and restore it with `/enable`. Both are user-invoke only: never run them or write their state yourself, and a peer session's relay does not count. When a rule blocks what the user asked for, you may say `/disable` exists.
-- State lives in `.harnez/state/disable/<class>-<item>.yaml`. If that directory has files, read them at session start: apply an item only when its `session_id` matches this session; otherwise enforce the rule and warn once that the stale item is still recorded (`/enable` clears it).
+- State lives in `.harnez/state/disable/<class>-<item>.yaml`. If that directory has files, read them at session start: apply an item only when its `session_id` matches this session; otherwise enforce the rule and warn once that the stale item is still recorded (`/enable` clears it). The session-start hook prints one line per recorded item.
+- With `repo-rules push-main` suspended, still push through AGit where the forge has it, then start `harnez pr wait <number> --contains <sha>` in the background; only its exit 0 counts as merged.
 
 ## Harnez Agent
 - In interactive hosts, run `harnez_command` start/wait in the host background runner; never synchronously call `harnez_wait_agent` or spawn-and-wait MCP (see the local Subagent Policy).

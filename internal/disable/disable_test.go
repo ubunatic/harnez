@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
 )
@@ -53,6 +54,17 @@ func TestEmbeddedSpecMatchesSchema(t *testing.T) {
 		if _, ok := schema.Properties[key]; !ok {
 			t.Errorf("spec/disable.yaml key %q is not in the schema", key)
 		}
+	}
+	var full jsonschema.Schema
+	if err := json.Unmarshal(data, &full); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := full.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resolved.Validate(values); err != nil {
+		t.Fatalf("spec/disable.yaml violates its schema: %v", err)
 	}
 	s := mustSpec(t)
 	for _, want := range [][2]string{{"process", "quota-1"}, {"triggered-skill", "lean-sprint"}, {"repo-rules", "push-main"}} {
@@ -175,5 +187,22 @@ func TestWriteRefusesUnknownItem(t *testing.T) {
 	}
 	if _, statErr := os.Stat(s.Path(root, "repo-rules", "force-push")); statErr == nil {
 		t.Error("refused item left a state file")
+	}
+}
+
+// The skill text inlines the session variable order because target repos have
+// no spec/disable.yaml; it must match the spec.
+func TestSkillTextListsSessionEnvInSpecOrder(t *testing.T) {
+	s := mustSpec(t)
+	b, err := harnez.DefaultFS.ReadFile("docs/commands/disable.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vars []string
+	for _, v := range s.SessionEnv {
+		vars = append(vars, "$"+v)
+	}
+	if want := strings.Join(vars, ", "); !strings.Contains(string(b), want) {
+		t.Errorf("docs/commands/disable.md lacks the session_env order %q", want)
 	}
 }
