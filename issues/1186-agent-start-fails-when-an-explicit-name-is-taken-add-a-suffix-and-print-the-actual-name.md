@@ -1,6 +1,6 @@
 # 1186 — agent start fails when an explicit --name is taken; add a suffix and print the actual name
 
-**Status**: Open
+**Status**: Closed — Taken explicit --name now gets first free -N suffix with stderr notice (suffixTakenName in cmd/harnez/agent_run.go, SuffixedName in internal/subagent/name.go), in runStart and detached start. TestAgentStartFileOnlyAndNameCollision updated (fails without fix), TestSuffixTakenName added; make test-q1 exit 0. Jules impl-1186 ended without a PR; host implemented.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
