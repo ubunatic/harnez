@@ -57,6 +57,15 @@ func pushRelease(opt Options, tag string, forge *ForgeInfo) error {
 	}
 	branchRef := "refs/heads/" + branch
 	tagRef := "refs/tags/" + tag
+	localBranchSha, err := getGitRef(opt.Dir, branchRef)
+	if err != nil {
+		return fmt.Errorf("get local branch sha: %w", err)
+	}
+	localTagSha, err := getGitRef(opt.Dir, tagRef)
+	if err != nil {
+		return fmt.Errorf("get local tag sha: %w", err)
+	}
+
 	push := func(remote string, dryRun bool) error {
 		args := []string{"push", "--atomic", "--no-force"}
 		if dryRun {
@@ -79,10 +88,53 @@ func pushRelease(opt Options, tag string, forge *ForgeInfo) error {
 	for _, remote := range remotes {
 		fmt.Fprintf(opt.Out, "  [git]       Pushing branch %s and tag %s to %s...\n", branch, tag, remote)
 		if err := push(remote, false); err != nil {
+
+			urls, urlErr := pushURLs(opt.Dir, remote)
+			if urlErr == nil && len(urls) > 0 {
+				allMatched := true
+				for _, url := range urls {
+					cmd := exec.Command("git", "ls-remote", url, branchRef, tagRef)
+					cmd.Dir = opt.Dir
+					if out, lsErr := cmd.CombinedOutput(); lsErr == nil {
+						var remoteBranchSha, remoteTagSha string
+						for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+							parts := strings.Fields(line)
+							if len(parts) == 2 {
+								if parts[1] == branchRef {
+									remoteBranchSha = parts[0]
+								} else if parts[1] == tagRef {
+									remoteTagSha = parts[0]
+								}
+							}
+						}
+						if remoteBranchSha == "" || remoteBranchSha != localBranchSha || remoteTagSha != localTagSha {
+							allMatched = false
+							break
+						}
+					} else {
+						allMatched = false
+						break
+					}
+				}
+				if allMatched {
+					fmt.Fprintf(opt.Out, "  [git]       Remote %s already has the correct branch %s and tag %s (concurrently updated), continuing...\n", remote, branch, tag)
+					continue
+				}
+			}
 			return fmt.Errorf("release push failed; earlier remotes may have been updated, retry with --continue: %w", err)
 		}
 	}
 	return nil
+}
+
+func getGitRef(dir, ref string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", ref)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // pushURLs lists the push URLs of a remote. A remote without an explicit push
