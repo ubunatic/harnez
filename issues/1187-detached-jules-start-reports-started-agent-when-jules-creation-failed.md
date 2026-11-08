@@ -1,6 +1,6 @@
 # 1187 — detached Jules start reports Started agent when Jules creation failed
 
-**Status**: Open
+**Status**: Closed — Detached Jules start now waits for session creation and exits non-zero with the create error (awaitJulesCreate in cmd/harnez/agent_async.go)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
