@@ -233,7 +233,7 @@ func TestGuardReleaseAllowsProtectedMainWithNote(t *testing.T) {
 	if err := GuardRelease(dir); err != nil {
 		t.Fatalf("release on protected main must pass: %v", err)
 	}
-	if want := "branch protection decides"; !strings.Contains(stderr.String(), want) {
+	if want := "goes out as an AGit PR"; !strings.Contains(stderr.String(), want) {
 		t.Fatalf("stderr = %q, want it to contain %q", stderr, want)
 	}
 	// Every other auto-committing command stays refused on the same branch.

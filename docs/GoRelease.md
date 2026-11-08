@@ -162,17 +162,14 @@ Runtime errors suppress usage; auth failures suggest `fj auth login`, followed b
 
 ### Protected main (`git.protected_main`)
 
-A plain `harnez release` still runs on the default branch, and also pushes any other unpushed
-commits there. Harnez does not check who runs it; the forge's branch protection decides whether the
-push is accepted. After a rejection, `harnez release --continue` finishes once the push is allowed.
+A plain `harnez release` on the default branch builds and signs locally, pushes the bump commit as
+an AGit PR (`refs/for/<default>/release-vX.Y.Z`) and pauses with the tag local. Merge it with a
+merge commit or fast-forward (not squash/rebase), wait with `harnez pr wait <n> --contains <sha>`,
+then `harnez release --continue` pushes the tag, mirrors the other remotes and publishes. Before
+the merge, `--continue` only updates the PR.
 
-If you cannot push the default branch, release from `release/vX.Y.Z`; the bump commit and tag are
-made there and both are pushed. Open the PR and rebase-merge or fast-forward it so the tag stays on
-`main`'s history (a merge or squash commit leaves the tag off `main`). Harnez does not tag after
-the merge.
-
-To finish a rejected release through a PR, keep its local bump commit and tag: run
-`git switch -c release/vX.Y.Z`, `harnez release --continue`, then `git branch -f main origin/main`.
+On GitHub (no AGit), release from `release/vX.Y.Z`; the bump commit and tag are made there and
+both are pushed. Rebase-merge or fast-forward that PR so the tag stays on `main`'s history.
 
 ### 4.1 `go.work` and local co-development
 
