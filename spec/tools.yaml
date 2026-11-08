@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=schemas/tools.schema.json
+# Companion tools `harnez apply --tools` installs and `--profiles` groups
+# (issue 1190). Each install source was verified with `go version -m` or the
+# cargo crates list on the owner's machine (2026-11-08).
+tools:
+  - name: gokay
+    installer: go
+    package: ubunatic.com/gokay@latest
+    binary: gokay
+  - name: loom
+    installer: go
+    package: ubunatic.com/loom/cmd/loom@latest
+    binary: loom
+  - name: fj
+    installer: cargo
+    package: forgejo-cli
+    binary: fj
+# installer name -> argv prefix; the package is appended.
+installers:
+  go: [go, install]
+  cargo: [cargo, install]
+# A profile groups docs (config.yaml doc keys), tools (names above) and,
+# optionally, harnez components (see docs/HarnezComponents.md).
+profiles:
+  go:
+    docs: [golang, make]
+    tools: [gokay]
+  rust:
+    docs: [rust]
+  codeberg:
+    docs: [agit]
+    tools: [fj]
+  github: {}
+  web:
+    docs: [website]
+  minimal:
+    components: [docs-only]

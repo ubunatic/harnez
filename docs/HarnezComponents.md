@@ -535,3 +535,15 @@ Tests:
 
 Still open: `--save` to `~/.config/harnez/local.yaml` (needs `LoadLocalConfig` moved out of
 `internal/usage`), dispatch-mode clamping (493), project-level selection (494).
+
+## 9. Profiles and companion tools (issue 1190)
+
+`harnez apply --profiles go,codeberg` is the user-facing selector. A profile in `spec/tools.yaml`
+names docs (config.yaml doc keys), companion tools and, optionally, components, so the old presets
+become profiles (`minimal` = `docs-only`). `--components` still works but is hidden from `--help`;
+deprecate it once no caller needs a component the profiles do not cover.
+
+`--tools gokay,loom,fj` installs companion tools with the installer named in the spec (`go install`,
+`cargo install`). A tool already on PATH is skipped unless `--upgrade-tools`; a missing installer or a
+failed install prints a warning and apply continues. Profiles are not yet remembered between runs:
+pass them again, or follow up by storing them in config.yaml like `components:`.

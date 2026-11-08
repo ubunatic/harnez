@@ -48,6 +48,15 @@ user-facing selector:
 - `--components` keeps working but is hidden from `--help`; deprecate it once profiles cover the
   presets. The component registry stays as the install/prune/diff engine under profiles.
 
+## Delivered
+
+- `spec/tools.yaml` + schema: gokay, loom (go install @latest), fj (cargo install forgejo-cli), installers,
+  profiles go, rust, codeberg, github, web, minimal.
+- `apply --tools`, `--profiles`, `--upgrade-tools`; `--components` hidden from help.
+- Decisions (decide mode): one `--tools` flag, not per-ecosystem; `@latest`, no pinning yet.
+- Deferred: remembering profiles in config.yaml (needs a writable user config; plain apply uses the
+  embedded one). Follow-up when wanted.
+
 ## Open questions
 
 - One flag (`--tools`) or per-ecosystem flags (`--go-tools`, `--rust-tools`)? The ticket assumes
