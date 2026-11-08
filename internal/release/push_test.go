@@ -2,6 +2,7 @@ package release
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 
 // All push URLs are local bare repositories; forge URLs are discovery metadata only.
 func TestReleasePushAllRemotes(t *testing.T) {
-	for _, scenario := range []string{"two-remotes", "single-remote", "diverged-branch", "conflicting-tag"} {
+	for _, scenario := range []string{"two-remotes", "single-remote", "diverged-branch", "conflicting-tag", "race-success", "race-fail"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := setupGitRepoWithVersion(t, "1.0.0", false)
 			runGitCmd(t, dir, "branch", "-M", "main")
@@ -41,6 +42,19 @@ func TestReleasePushAllRemotes(t *testing.T) {
 				if i == 1 && scenario == "conflicting-tag" {
 					runGitCmd(t, bare, "tag", "v1.0.1", "main")
 				}
+				if i == 1 && (scenario == "race-success" || scenario == "race-fail") {
+					// We match $5 to the remote NAME which is 'name'
+					wrapper := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = push ] && [ \"$2\" = \"--atomic\" ] && [ \"$3\" = \"--no-force\" ] && [ \"$4\" = \"--\" ] && [ \"$5\" = \"%s\" ]; then\n", name)
+					if scenario == "race-success" {
+						wrapper += fmt.Sprintf("\t/usr/bin/git -C %q push %q main:refs/heads/main v1.0.1:refs/tags/v1.0.1\n", dir, bare)
+					} else {
+						wrapper += fmt.Sprintf("\tother=$(mktemp -d)\n\t/usr/bin/git clone --branch main %q \"$other\"\n\t/usr/bin/git -C \"$other\" -c user.name=test -c user.email=test@example.com commit --allow-empty -m \"race\"\n\t/usr/bin/git -C \"$other\" push %q main:refs/heads/main\n", bare, bare)
+					}
+					wrapper += "\techo 'remote rejected' >&2\n\texit 1\nfi\nexec /usr/bin/git \"$@\"\n"
+					if err := os.WriteFile(bin+"/git", []byte(wrapper), 0755); err != nil {
+						t.Fatal(err)
+					}
+				}
 			}
 			var before []string
 			for _, bare := range remotes {
@@ -56,6 +70,12 @@ func TestReleasePushAllRemotes(t *testing.T) {
 					if got := pushTestRefs(t, bare); got != before[i] {
 						t.Errorf("remote %d changed after refusal: before %s, after %s", i, before[i], got)
 					}
+				}
+				return
+			}
+			if scenario == "race-fail" {
+				if err == nil || !strings.Contains(err.Error(), "earlier remotes may have been updated") {
+					t.Fatalf("expected earlier remotes updated error, got: %v", err)
 				}
 				return
 			}
