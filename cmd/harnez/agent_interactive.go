@@ -52,7 +52,7 @@ func validateInteractiveFlags(cmd *cobra.Command, detached, jsonOut bool, stream
 
 func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveStartRequest) error {
 	spec := req.ModelSpec
-	role, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
+	role, _, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 		taken[sessName] = true
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Interactive: %s (%s)\n", sess.Name, sess.ID)
-	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, req.Prompt)
+	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false))
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 		return err
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Resumed Interactively: %s (%s)\n", sess.Name, sess.ID)
-	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, req.Prompt)
+	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false))
 	if err != nil {
 		return err
 	}

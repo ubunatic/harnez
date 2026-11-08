@@ -44,7 +44,7 @@ func TestResumeNoteRequiresIdleSessionAboveSpecThreshold(t *testing.T) {
 			}
 		})
 	}
-	if strings.Contains(withProtocol("prompt", false, "developer"), note) {
+	if strings.Contains(withProtocol("prompt", false, "developer", false), note) {
 		t.Fatal("new session protocol contains a resume note")
 	}
 }

@@ -24,10 +24,17 @@ func CheckStreamMode(mode string) error {
 	return nil
 }
 
-func WithProtocol(prompt string, planFirst bool, role string) string {
+// inferredRoleNote tells the agent its role is a guess from the prompt (959),
+// so a conflict with the task is reported instead of silently skipping it.
+const inferredRoleNote = "This role was inferred from the prompt, not requested with --role. If the task asks for work this role forbids, do not do it and do not skip it silently: say that the task needs another role (for example `--role developer`) and stop.\n\n"
+
+func WithProtocol(prompt string, planFirst bool, role string, inferred bool) string {
 	pre := protocolPreamble
 	if rules, err := subagent.RoleRules(role); err == nil && rules != "" {
 		pre += "Harnez role: " + role + ". " + rules + "\n\n"
+		if inferred {
+			pre += inferredRoleNote
+		}
 	}
 	if planFirst {
 		pre += planFirstPreamble
@@ -70,12 +77,13 @@ func FirstPromptSentence(prompt string) string {
 	return prompt
 }
 
-func StartRole(requested, prompt, callerRole string, errOut io.Writer) (string, error) {
+func StartRole(requested, prompt, callerRole string, errOut io.Writer) (string, bool, error) {
 	role := requested
+	inferredRole := false
 	if role != "" {
 		resolved, classified, err := subagent.ResolveRoleDynamic(role)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		if classified && errOut != nil {
 			fmt.Fprintf(errOut, "harnez: resolved --role %q to %q\n", role, resolved)
@@ -84,21 +92,22 @@ func StartRole(requested, prompt, callerRole string, errOut io.Writer) (string, 
 	} else if sentence := FirstPromptSentence(prompt); sentence != "" {
 		if inferred, _, err := subagent.ResolveRoleDynamic(sentence); err == nil {
 			role = inferred
+			inferredRole = true
 			if errOut != nil {
-				fmt.Fprintf(errOut, "harnez: inferred role %q from prompt\n", role)
+				fmt.Fprintf(errOut, "harnez: inferred role %q from prompt; pass --role to set it explicitly\n", role)
 			}
 		}
 	}
 	if role == "" {
 		var err error
 		if role, err = subagent.DefaultRole(); err != nil {
-			return "", err
+			return "", false, err
 		}
 	}
 	if err := subagent.CheckSpawn(callerRole, role); err != nil {
-		return "", err
+		return "", false, err
 	}
-	return role, nil
+	return role, inferredRole, nil
 }
 
 func ResumeRole(requested string, sess *subagent.Session, callerRole string) (string, error) {

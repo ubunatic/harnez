@@ -233,7 +233,7 @@ func TestAgentInteractiveRegistersBeforeLaunchAndTransitions(t *testing.T) {
 	if runner.attachID != sess.ID {
 		t.Fatalf("attach provider ID = %q, want %q", runner.attachID, sess.ID)
 	}
-	if runner.opts.Prompt != "continue interactively" {
+	if !strings.HasSuffix(runner.opts.Prompt, "continue interactively") {
 		t.Fatalf("resume opening prompt = %q", runner.opts.Prompt)
 	}
 }
@@ -303,7 +303,7 @@ func TestAgentInteractivePromptAndFlagConflicts(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if runner.opts.Prompt != "opening line" {
+	if !strings.HasSuffix(runner.opts.Prompt, "opening line") {
 		t.Fatalf("opening prompt = %q", runner.opts.Prompt)
 	}
 

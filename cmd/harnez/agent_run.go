@@ -401,7 +401,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if err := checkStreamMode(req.StreamMode); err != nil {
 		return err
 	}
-	role, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
+	role, inferred, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}
@@ -533,7 +533,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if streaming {
 		ts = newTurnStream(cmd, req.StreamMode, false)
 		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, req.PlanFirst
-		opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role)
+		opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role, inferred)
 		ts.watch()
 		watchCtx, cancelWatch := context.WithCancel(ctx)
 		defer cancelWatch()
@@ -932,7 +932,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		watchdog := &subagent.TokenWatchdog{Threshold: threshold}
 		watchdogCrossed := false
 		observedTokens := 0
-		resumeTurn.Opts.Prompt = withResumeNote(withProtocol(req.Prompt, req.PlanFirst, role), resumeIdle)
+		resumeTurn.Opts.Prompt = withResumeNote(withProtocol(req.Prompt, req.PlanFirst, role, false), resumeIdle)
 		resumeTurn.OnFresh = func(note string) { freshNote = note; ts.printf("[%s]\n", note) }
 		resumeTurn.Events = func(ev subagent.Event) {
 			if tokens, crossed := watchdog.Observe(ev); crossed {
@@ -1244,7 +1244,7 @@ const (
 
 // startRole picks the role of a new session and checks that the caller's own
 // role (from the environment harnez gave it) may start it.
-func startRole(requested, prompt string, errOut io.Writer) (string, error) {
+func startRole(requested, prompt string, errOut io.Writer) (string, bool, error) {
 	return agent.StartRole(requested, prompt, callerAgentRole(), errOut)
 }
 

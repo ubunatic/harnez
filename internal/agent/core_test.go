@@ -12,14 +12,14 @@ import (
 
 func TestStartRoleUsesInjectedCallerRole(t *testing.T) {
 	var notice bytes.Buffer
-	role, err := StartRole("advisor", "task", "orchestrator", &notice)
+	role, _, err := StartRole("advisor", "task", "orchestrator", &notice)
 	if err != nil || role != "advisor" {
 		t.Fatalf("StartRole = %q, %v", role, err)
 	}
 	if notice.Len() != 0 {
 		t.Fatalf("unexpected classifier notice: %q", notice.String())
 	}
-	if _, err := StartRole("orchestrator", "task", "developer", &notice); err == nil {
+	if _, _, err := StartRole("orchestrator", "task", "developer", &notice); err == nil {
 		t.Fatal("developer caller unexpectedly started orchestrator")
 	}
 }
@@ -66,5 +66,17 @@ func TestCheckStreamMode(t *testing.T) {
 	}
 	if err := CheckStreamMode("quiet"); err == nil {
 		t.Fatal("invalid stream mode accepted")
+	}
+}
+
+// 959: an inferred role is marked as a guess so the agent reports a conflict
+// instead of calling it explicit; an explicit role carries no such note.
+func TestWithProtocolMarksInferredRole(t *testing.T) {
+	inferred := WithProtocol("task", false, "reviewer", true)
+	if !strings.Contains(inferred, "inferred from the prompt") || !strings.Contains(inferred, "--role developer") {
+		t.Fatalf("inferred role not marked:\n%s", inferred)
+	}
+	if explicit := WithProtocol("task", false, "reviewer", false); strings.Contains(explicit, "inferred from the prompt") {
+		t.Fatalf("explicit role marked as inferred:\n%s", explicit)
 	}
 }
