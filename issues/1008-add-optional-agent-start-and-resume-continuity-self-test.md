@@ -25,3 +25,7 @@ selftest steps are only hello, background, confirm, confirm-running, verify (`cm
 `:327`), with no start or resume step. So: still valid. Starting point: add an opt-in step there.
 
 Recheck the live skill and issue 964 before implementation. Cover response validation, same-session resumption, optional skip and failure reporting, timeout and cleanup; exercise a live provider when available without weakening the base self-test.
+
+## Audit 2026-11-08 (Jules)
+
+Jules audit (GitHub PR 145, `reports/jules/1008.md`, checked against d8c61da; 1/1 code reference holds): still valid. `harnez agent selftest` steps today are `hello`, `background`, `confirm`, `confirm-running`, `verify` (`cmd/harnez/agent_selftest.go:188-292`); no start-and-resume continuity step. Coordination with 964 not verified. Starting point: a new step in that switch.
