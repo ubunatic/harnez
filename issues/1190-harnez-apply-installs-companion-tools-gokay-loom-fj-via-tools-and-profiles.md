@@ -35,6 +35,19 @@ machine. No `apply` flag installs them; `--components` and `--docs` cover only h
   not `init`.
 - Skip a tool already on PATH unless asked to upgrade; never run an installer that is not on PATH.
 
+## Profiles absorb --components
+
+`--components` (internal/claude/components.go, docs/HarnezComponents.md) picks which parts of harnez
+itself apply installs: docs, skills, telemetry, agents, usage, with presets full, docs-only,
+telemetry-only, agents-only. No script, Makefile or Containerfile in this repo uses it. Profiles become the
+user-facing selector:
+
+- A profile may also name components, so `docs-only` or `minimal` become profiles.
+- Selected profiles are stored in config.yaml the way `components:` is, so a later plain `apply`
+  keeps them (this answers the "remembered" question below).
+- `--components` keeps working but is hidden from `--help`; deprecate it once profiles cover the
+  presets. The component registry stays as the install/prune/diff engine under profiles.
+
 ## Open questions
 
 - One flag (`--tools`) or per-ecosystem flags (`--go-tools`, `--rust-tools`)? The ticket assumes
