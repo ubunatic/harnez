@@ -471,10 +471,6 @@ func sparkRange(values []float64, opts SparklineOptions) (float64, float64, bool
 	return minimum, maximum, false
 }
 
-func sparkGlyph(value, minimum, maximum float64, flat bool) rune {
-	return sparkGlyphWithGlyphs(value, minimum, maximum, flat, nil)
-}
-
 func sparkGlyphWithGlyphs(value, minimum, maximum float64, flat bool, glyphs []rune) rune {
 	if len(glyphs) == 0 {
 		glyphs = percentSparkChars

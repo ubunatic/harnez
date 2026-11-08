@@ -15,12 +15,6 @@ import (
 	"ubunatic.com/harnez/internal/usage"
 )
 
-func hasSettingsKey(path, key string) bool {
-	m := jsonc.Read(path)
-	_, ok := m[key]
-	return ok
-}
-
 // RunStatus prints the current applied status of configuration parameters.
 func RunStatus(configPath string, cfg *Config, target string, selection Set) error {
 	if _, err := os.Stat("issues"); err == nil {

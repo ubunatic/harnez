@@ -253,18 +253,6 @@ var (
 // collects twenty observations.
 const historyBurstInterval = 50 * time.Millisecond
 
-// currentCPUPercents reports aggregate and per-core CPU busy% since the last
-// call, computed from the delta between two /proc/stat frames (btop-style
-// "real" CPU, distinct from the kernel's minute-scale load averages). The
-// first call in a process has no prior sample to diff against, so it burst-
-// samples (see historyBurstInterval) to both get an immediate reading and
-// seed cpuHistory with a full timeline instead of growing one glyph per
-// redraw; every later call in the same `--watch` process reuses the
-// previous frame's sample instead.
-func currentCPUPercents() (float64, bool, []float64, bool) {
-	return currentCPUPercentsWithSeed(true)
-}
-
 func currentCPUPercentsWithSeed(seed bool) (float64, bool, []float64, bool) {
 	cur, err := readCPUStatFrame("/proc/stat")
 	if err != nil {
@@ -767,20 +755,8 @@ func parseLspciCodename(out []byte, pci string) (string, error) {
 	return "", fmt.Errorf("no AMD VGA/3D/display device %s found in lspci output", pci)
 }
 
-// readAMDSysfs reads AMD GPU utilization, VRAM/GTT, and temperature straight
-// from the kernel's amdgpu sysfs attributes, with no subprocess involved.
-// Card enumeration (cardN) and hwmon enumeration (hwmonN) are both
-// driver-assigned at runtime, so both are globbed rather than assumed.
-func readAMDSysfs() ([]GPU, error) {
-	return readAMDSysfsWithSeed(true)
-}
-
 func readAMDSysfsWithSeed(seed bool) ([]GPU, error) {
 	return readAMDSysfsFromGlobWithSeed("/sys/class/drm/card*/device/gpu_busy_percent", seed)
-}
-
-func readAMDSysfsFromGlob(pattern string) ([]GPU, error) {
-	return readAMDSysfsFromGlobWithSeed(pattern, true)
 }
 
 func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {

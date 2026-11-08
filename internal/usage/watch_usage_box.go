@@ -253,25 +253,6 @@ func modelGroupLabel(name string) string {
 	return name
 }
 
-func formatAllUsageLine(label string, windows []QuotaWindow, contentW, labelWidth int) string {
-	return formatAllUsageTableLine(label, windows, contentW, labelWidth)
-}
-
-func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labelWidth int) string {
-	return formatAllUsageTableLineWithPresentation(label, windows, contentW, labelWidth, mustIndicators().usageBarPresentation())
-}
-
-func formatAllUsageTableLineWithPresentation(label string, windows []QuotaWindow, contentW, labelWidth int, presentation UsageBarPresentation) string {
-	midWidth := 10
-	if len(windows) > 0 {
-		duration := compactDurationText(firstAllUsageWindow(windows))
-		if duration != "" {
-			midWidth = max(midWidth, 4+1+visLen(duration))
-		}
-	}
-	return formatAllUsageTableLineWithMidWidth(label, windows, contentW, labelWidth, midWidth, presentation)
-}
-
 func formatAllUsageTableLineWithMidWidth(label string, windows []QuotaWindow, contentW, labelWidth, midWidth int, presentation UsageBarPresentation) string {
 	if len(windows) == 0 {
 		return formatCompactGroupLineWithLabelWidth(label, windows, contentW, labelWidth)
@@ -351,25 +332,6 @@ func firstAllUsageWindow(windows []QuotaWindow) QuotaWindow {
 // "no data" placeholder, not a 0% reading.
 func blankBarPlaceholder() string {
 	return "[" + strings.Repeat(" ", 4) + "]"
-}
-
-// formatAllUsageSingleWindowLine renders a row that has exactly one
-// QuotaWindow (e.g. the AGY "Claude/GPT" group when its 5-hour window is
-// absent) using the same prefix + bar + midStr column layout as
-// formatAllUsageTableLine's two-window rows, but with a blank placeholder
-// bracket standing in for the missing second bar. This keeps the row's
-// second-bracket column aligned with its box-mates instead of the row simply
-// being shorter (issue 172).
-func formatAllUsageSingleWindowLine(label string, w QuotaWindow, contentW, labelWidth int) string {
-	return formatAllUsageSingleWindowLineWithPresentation(label, w, contentW, labelWidth, mustIndicators().usageBarPresentation())
-}
-
-func formatAllUsageSingleWindowLineWithPresentation(label string, w QuotaWindow, contentW, labelWidth int, presentation UsageBarPresentation) string {
-	midWidth := 10
-	if duration := compactDurationText(w); duration != "" {
-		midWidth = max(midWidth, 4+1+visLen(duration))
-	}
-	return formatAllUsageSingleWindowLineWithMidWidth(label, w, contentW, labelWidth, midWidth, presentation)
 }
 
 func formatAllUsageSingleWindowLineWithMidWidth(label string, w QuotaWindow, contentW, labelWidth, midWidth int, presentation UsageBarPresentation) string {

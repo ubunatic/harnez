@@ -271,7 +271,7 @@ func (r *Registry) logFetchFailureDetails(c Collector, elapsed time.Duration, er
 }
 
 func fetchFailureCause(_ Collector, _ time.Duration, err, ctxErr error) string {
-	cause := "unknown"
+	var cause string
 	errMsg := strings.ToLower(err.Error())
 	switch {
 	case errors.Is(ctxErr, context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded):

@@ -323,7 +323,6 @@ func ensurePhonySentinel(content, sentinel, phonyFix string) (string, bool) {
 				}
 				newHeader := name + ": " + sentinel + strings.TrimPrefix(header, name+":")
 				content = content[:loc[0]] + strings.Replace(content[loc[0]:loc[1]], header, newHeader, 1) + content[loc[1]:]
-				changed = true
 			}
 			content = strings.Replace(content, l, "", 1)
 			changed = true

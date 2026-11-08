@@ -685,14 +685,6 @@ func attributable(sessions []*subagent.Session, dir, callerParent string) []*sub
 	return result
 }
 
-func candidateSummary(sessions []*subagent.Session) string {
-	items := make([]string, len(sessions))
-	for i, sess := range sessions {
-		items[i] = fmt.Sprintf("%s (%s, %s)", sess.Name, sess.LastActiveAt.Format(time.RFC3339), sess.Provider+":"+sess.Model)
-	}
-	return strings.Join(items, ", ")
-}
-
 type agentRepoStatus struct {
 	Policy   agentpolicy.State   `json:"policy"`
 	Sessions []*subagent.Session `json:"sessions"`

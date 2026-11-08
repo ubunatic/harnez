@@ -327,15 +327,6 @@ func quotaAlternatives(selected subagent.Model, availability func(string, string
 	return agent.QuotaAlternatives(selected, availability)
 }
 
-func quotaModelCost(model subagent.Model) int {
-	for _, entry := range subagent.KnownModelEntries() {
-		if entry.Model.Provider == model.Provider && entry.Model.Name == model.Name {
-			return entry.Cost
-		}
-	}
-	return 0
-}
-
 // resumeRequest describes one turn on an existing session: chosen by Name,
 // else by attribution in Dir (Continue picks the most recent).
 type resumeRequest struct {
@@ -709,7 +700,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	quotaTurnStarted := time.Now().Add(-time.Hour)
 
 	sessionName := req.Name
-	resolved := "name"
+	var resolved string
 	var sess *subagent.Session
 	if req.Continue && sessionName != "" {
 		return fmt.Errorf("resume: --continue cannot be combined with --name")
@@ -1249,10 +1240,6 @@ const (
 // role (from the environment harnez gave it) may start it.
 func startRole(requested, prompt string, errOut io.Writer) (string, bool, error) {
 	return agent.StartRole(requested, prompt, callerAgentRole(), errOut)
-}
-
-func firstPromptSentence(prompt string) string {
-	return agent.FirstPromptSentence(prompt)
 }
 
 // resumeRole returns the stored role of sess (default role for old records),

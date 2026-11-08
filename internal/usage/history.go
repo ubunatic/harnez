@@ -421,17 +421,6 @@ func readHistoryFiles(dir string) ([]HistoryEntry, error) {
 	return entries, nil
 }
 
-// latestHistoryQuotaWindow scans dir's recorded history entries (see
-// ReadHistory) for the most recent entry for agentID that carries actual
-// quota-window data (Session/Weekly/ModelGroups — see hasQuotaWindowSignal;
-// Tokens alone doesn't count, matching PersistAgentSnapshot's offline
-// guard). ok is false when there is no history, or no entry for this agent
-// ever had quota-window data. ReadHistory returns entries sorted oldest
-// first, so this walks backwards to find the most recent qualifying one.
-func latestHistoryQuotaWindow(dir, agentID string) (usage AgentUsage, at time.Time, ok bool) {
-	return latestHistoryQuotaWindowContext(context.Background(), dir, agentID)
-}
-
 func latestHistoryQuotaWindowContext(ctx context.Context, dir, agentID string) (usage AgentUsage, at time.Time, ok bool) {
 	entries, err := readHistoryContext(ctx, dir)
 	if err != nil {

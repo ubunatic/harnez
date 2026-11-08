@@ -261,7 +261,7 @@ func TestIssuesCmd_BacklogRefusesClosedAndPromoteRequiresBacklog(t *testing.T) {
 		}
 	}
 
-	dir, ticket = issuesFixtureRepo(t, sampleTicket)
+	dir, _ = issuesFixtureRepo(t, sampleTicket)
 	cmd := newIssuesCmd()
 	cmd.SetArgs([]string{"promote", "42", "-d", dir, "--no-commit"})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "Backlog") {

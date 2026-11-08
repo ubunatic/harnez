@@ -1451,7 +1451,7 @@ func installIssuesGitIntegration(dir string) (int, error) {
 		return 0, fmt.Errorf("read %s: %w", hook, err)
 	}
 	hookText := string(hookContent)
-	wantHook := hookText
+	var wantHook string
 	const hookStart = "# harnez:begin issues-index-lint"
 	const hookEnd = "# harnez:end issues-index-lint"
 	if start := strings.Index(hookText, hookStart); start >= 0 {
@@ -1507,7 +1507,7 @@ func installManagedHookBlock(path, startMarker, endMarker, block string) (bool, 
 		return false, fmt.Errorf("read %s: %w", path, err)
 	}
 	hookText := string(hookContent)
-	wantHook := hookText
+	var wantHook string
 	if start := strings.Index(hookText, startMarker); start >= 0 {
 		endRel := strings.Index(hookText[start:], endMarker)
 		if endRel < 0 {

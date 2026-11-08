@@ -26,8 +26,6 @@ const DefaultWatchInterval = 60 * time.Second
 // Codex) with requests far more often than the data actually changes.
 const MinWatchInterval = 30 * time.Second
 
-var sparkRunes = []rune{' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
-
 const rateHistoryLen = 12
 
 const minBoxWidth = 34

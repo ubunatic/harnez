@@ -196,7 +196,7 @@ func TestRotateRevokesOldTokenByID(t *testing.T) {
 		t.Fatalf("replayed 2FA code must fail the revoke: %v %+v", err, res)
 	}
 	f.failDel = true
-	l, next = otpSeq()
+	l, _ = otpSeq()
 	l.OTP, next = "a1", func() (string, error) { return "a2", nil }
 	res, err = Rotate(sp, st, c, "codeberg.org", l, t0.Add(2*time.Hour), next)
 	if err != nil || res.OldRevoked || res.OldName != "harnez-read-codeberg.org-20261104-1030" {

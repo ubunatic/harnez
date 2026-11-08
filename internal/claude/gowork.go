@@ -165,9 +165,7 @@ func reconcileGoWorkspace(dir string, optIn bool) (bool, error) {
 		if err := os.Symlink("go.work.example", workPath); err != nil {
 			return false, fmt.Errorf("symlink %s: %w", workPath, err)
 		}
-		if gitignoreChanged, err := ensureGitignoreEntries(dir, "/go.work", "/go.work.sum"); err == nil && gitignoreChanged {
-			changed = true
-		}
+		_, _ = ensureGitignoreEntries(dir, "/go.work", "/go.work.sum")
 		fmt.Printf("  migrated tracked go.work to go.work.example and created symlink\n")
 		return true, nil
 	}
@@ -189,9 +187,7 @@ func reconcileGoWorkspace(dir string, optIn bool) (bool, error) {
 		if err := os.Symlink("go.work.example", workPath); err != nil {
 			return false, fmt.Errorf("symlink %s: %w", workPath, err)
 		}
-		if gitignoreChanged, err := ensureGitignoreEntries(dir, "/go.work", "/go.work.sum"); err == nil && gitignoreChanged {
-			changed = true
-		}
+		_, _ = ensureGitignoreEntries(dir, "/go.work", "/go.work.sum")
 		fmt.Printf("  migrated go.work to go.work.example and created symlink\n")
 		return true, nil
 	}

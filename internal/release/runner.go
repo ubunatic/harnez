@@ -654,7 +654,6 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 	return nil
 }
 
-var artifactVersionPattern = regexp.MustCompile(`v?\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?`)
 var artifactVersionCorePattern = regexp.MustCompile(`v?\d+\.\d+(?:\.\d+)?`)
 
 func artifactMatchesVersion(name, target string) bool {

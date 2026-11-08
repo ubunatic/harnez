@@ -42,7 +42,7 @@ func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
 // short diagnostic row; a nil snapshot keeps the unavailable placeholder.
 func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot, source string, updatedAt, now time.Time) wbox {
 	_ = source
-	age := "age unknown"
+	var age string
 	if snapshot == nil {
 		age = "unavailable"
 	} else if updatedAt.IsZero() {

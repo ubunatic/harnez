@@ -44,11 +44,6 @@ func applySectionMD(path, section, content string) (applyResult, error) {
 	return applyResult{changed: changed, notes: notes}, nil
 }
 
-// diffSectionMD prints unified diff of a managed markdown section.
-func diffSectionMD(path, section, content string) (bool, error) {
-	return markdown.Diff(path, section, content)
-}
-
 // cleanSectionMD cleans/removes a managed section and prints status.
 func cleanSectionMD(path, section string) error {
 	removed, cleaned, err := markdown.Clean(path, section)
@@ -73,14 +68,6 @@ func ensureSymlink(linkPath, target string) (applyResult, error) {
 
 func writeFileIfChanged(dst string, data []byte) (applyResult, error) {
 	changed, err := fsutil.WriteIfChanged(dst, data)
-	if err != nil {
-		return applyResult{}, err
-	}
-	return applyResult{changed: changed}, nil
-}
-
-func copyFile(src, dst string) (applyResult, error) {
-	changed, err := fsutil.Copy(src, dst)
 	if err != nil {
 		return applyResult{}, err
 	}
@@ -307,18 +294,6 @@ func piAgentRoot(cfg *Config) string {
 		return fsutil.ExpandHome(cfg.PiAgentTarget)
 	}
 	return ""
-}
-
-// sortedAgentIDs returns the keys of an agents_md.agents map in stable
-// (alphabetical) order, so repeated applies iterate agent profiles in a
-// deterministic sequence despite Go's randomized map iteration.
-func sortedAgentIDs(agents map[string]AgentsMDTarget) []string {
-	ids := make([]string, 0, len(agents))
-	for id := range agents {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	return ids
 }
 
 func appendUniquePath(paths []string, path string) []string {
