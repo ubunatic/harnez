@@ -143,6 +143,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
 - Agentic Loop Practices @docs/AgenticLoop.md,
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
+- AGit @docs/AGit.md,
+  this repo uses AGit: push HEAD:refs/for/<default>/<topic>, no branch; merged topic opens a new PR; harnez pr wait for the merge
 - Bash/Shell @docs/Bash.md,
   Read before multi-line shell: Make recipes, embedded scripts
   No ";", break before then/else/docs

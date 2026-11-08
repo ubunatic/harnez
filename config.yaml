@@ -1019,6 +1019,14 @@ agents_md:
       target: ~/.claude/docs/GTK4.md
       local: ./docs/GTK4.md
       default: false
+    agit:
+      name: "AGit"
+      ref: "@docs/AGit.md"
+      hint: "this repo uses AGit: push HEAD:refs/for/<default>/<topic>, no branch; merged topic opens a new PR; harnez pr wait for the merge"
+      source: docs/practices/AGit.md
+      target: ~/.claude/docs/AGit.md
+      local: ./docs/AGit.md
+      default: false
     canary:
       name: "Canary-first development"
       ref: "@docs/Canary.md"

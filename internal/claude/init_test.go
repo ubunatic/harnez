@@ -1000,3 +1000,41 @@ func TestRunInit_AllowsCodingRepositories(t *testing.T) {
 		})
 	}
 }
+
+// TestRunInit_DocsAgitInstallsAndLinks covers issue 1189: `init --docs agit`
+// copies the AGit doc and links it from AGENTS.md; it is opt-in.
+func TestRunInit_DocsAgitInstallsAndLinks(t *testing.T) {
+	cfg := claude.LoadTestConfig(t)
+	plain := t.TempDir()
+	mkGo := func(d string) {
+		if err := os.WriteFile(filepath.Join(d, "go.mod"), []byte("module example.com/agit\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mkGo(plain)
+	if err := claude.RunInitWithVariant(plain, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(plain, "AGENTS.md")); strings.Contains(string(b), "@docs/AGit.md") {
+		t.Fatalf("AGit doc linked without opt-in:\n%s", b)
+	}
+	dir := t.TempDir()
+	mkGo(dir)
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{Docs: []string{"agit"}, AssumeYes: true}); err != nil {
+		t.Fatal(err)
+	}
+	agents, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(agents), "@docs/AGit.md") {
+		t.Errorf("AGENTS.md lacks the AGit link:\n%s", agents)
+	}
+	doc, err := os.ReadFile(filepath.Join(dir, "docs", "AGit.md"))
+	if err != nil {
+		t.Fatalf("docs/AGit.md not copied: %v", err)
+	}
+	if !strings.Contains(string(doc), "refs/for/") || !strings.Contains(string(doc), "harnez pr wait") {
+		t.Errorf("docs/AGit.md lacks the refspec or merge signal:\n%s", doc)
+	}
+}
