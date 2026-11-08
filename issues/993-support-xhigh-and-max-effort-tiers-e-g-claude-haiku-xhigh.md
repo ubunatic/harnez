@@ -42,3 +42,7 @@ max 36; xhigh not shown.
    cost estimates; keep `max` opt-in.
 4. Test: tier parsing, the claude effort mapping, and a `models.yaml` chain containing
    `haiku:xhigh`; `make test-q1` green; `make install`; live `harnez agent models` check.
+
+## Audit 2026-11-08 (Jules)
+
+Jules audit (GitHub PR 146, `reports/jules/993.md`, checked against d8c61da; 5/5 references hold): still valid. Tiers are closed to `low|med|high` in `spec/schemas/agent.schema.json:14,240` (ticket said 189; it moved), `spec/schemas/model-policy.schema.json:28,45` and `isTier` (`internal/subagent/driver.go:897`); `claude.go:78` maps `med` to `medium`. The `claude --help` claim stays not verified. Next: extend the enums, pattern and Go tier lists with `xhigh`/`max`, and decide how non-Claude providers treat them.
