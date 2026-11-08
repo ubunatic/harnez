@@ -156,7 +156,7 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 		return fmt.Errorf("check session writer: %w", err)
 	}
 	if len(writers) > 0 {
-		return fmt.Errorf("session %q has a writer still alive (PID %d); stop it or run `harnez agent wait --name %s` before resuming interactively", sess.Name, writers[0].PID, sess.Name)
+		return fmt.Errorf("session %q has a writer still alive (PID %d); stop it or run `harnez agent wait %s` before resuming interactively", sess.Name, writers[0].PID, sess.Name)
 	}
 	if sess.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)

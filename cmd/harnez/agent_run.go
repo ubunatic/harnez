@@ -751,7 +751,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return fmt.Errorf("check session writer: %w", err)
 		}
 		if len(writers) > 0 {
-			return fmt.Errorf("session %q already has a resume turn running (PID %d); writer is still alive; stop it or run `harnez agent wait --name %s` before resuming", sess.Name, writers[0].PID, sess.Name)
+			return fmt.Errorf("session %q already has a resume turn running (PID %d); writer is still alive; stop it or run `harnez agent wait %s` before resuming", sess.Name, writers[0].PID, sess.Name)
 		}
 	}
 	if sess.Status == "running" && req.SessionID == "" {

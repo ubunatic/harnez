@@ -102,9 +102,9 @@ func reportSessionStop(cmd *cobra.Command, store *subagent.FileSessionStore, x *
 			pid = live[0].PID
 		}
 		if stopErr != nil {
-			return fmt.Errorf("stop requested: %d still exiting; run `harnez agent wait --name %s`: %w", pid, x.Name, stopErr)
+			return fmt.Errorf("stop requested: %d still exiting; run `harnez agent wait %s`: %w", pid, x.Name, stopErr)
 		}
-		return fmt.Errorf("stop requested: %d still exiting; run `harnez agent wait --name %s`", pid, x.Name)
+		return fmt.Errorf("stop requested: %d still exiting; run `harnez agent wait %s`", pid, x.Name)
 	}
 	x.Status = "stopped"
 	x.ProcessPID, x.ProcessStarttime, x.ProviderPID, x.ProviderStarttime = 0, 0, 0, 0

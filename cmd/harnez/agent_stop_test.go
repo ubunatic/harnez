@@ -268,7 +268,7 @@ func TestStopReportStillExitingPreservesWriter(t *testing.T) {
 		var out bytes.Buffer
 		cmd.SetOut(&out)
 		err := reportSessionStop(cmd, store, sess, []procs.ProcInfo{{PID: 1234}}, failure)
-		if err == nil || !strings.Contains(err.Error(), "stop requested: 1234 still exiting; run `harnez agent wait --name worker`") || out.Len() != 0 {
+		if err == nil || !strings.Contains(err.Error(), "stop requested: 1234 still exiting; run `harnez agent wait worker`") || out.Len() != 0 {
 			t.Fatalf("false success: output %q, error %v", out.String(), err)
 		}
 		stored, _ := store.Get("sid")
