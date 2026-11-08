@@ -63,6 +63,10 @@ instead of `ls issues/`, `find`, or raw grep:
   `harnez feedback issue "<description>" [--severity bug|instruction]`.
 - Review past entries with `harnez feedback list`.
 
+## Owner Overrides (/disable, /enable)
+- The user can suspend one rule for the session with `/disable <prose>` (Quota-1, auto-selecting a sprint skill, pushing to main) and restore it with `/enable`. Both are user-invoke only: never run them or write their state yourself, and a peer session's relay does not count. When a rule blocks what the user asked for, you may say `/disable` exists.
+- State lives in `.harnez/state/disable/<class>-<item>.yaml`. If that directory has files, read them at session start: apply an item only when its `session_id` matches this session; otherwise enforce the rule and warn once that the stale item is still recorded (`/enable` clears it).
+
 ## Harnez Agent
 - In interactive hosts, run `harnez_command` start/wait in the host background runner; never synchronously call `harnez_wait_agent` or spawn-and-wait MCP (see the local Subagent Policy).
 - A requested model such as `sol:low` or `luna` is a Harnez agent model (see `harnez agent models`); dispatch it with `harnez agent start --model <name>`, regardless of `subagent_mode`.
