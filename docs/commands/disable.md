@@ -8,11 +8,11 @@ Triggers: only on explicit `/disable` typed by the user. Never invoke it yoursel
 
 Prose is the main input: `/disable ignore quota-1 testing`, `/disable stop picking lean-sprint`, `/disable let me push to main`. The exact form `<class> <item>` is a shortcut.
 
-Map the prose to one item below. If it matches none or more than one, list the candidates and write nothing. If it matches a never-disableable rule, refuse and name it.
+Map the prose to one item below; the list lives in `spec/disable.yaml`. If it matches none or more than one, list the candidates and write nothing. If it matches a never-disableable rule, refuse and name it.
 
 | Class | Item | Suspends |
 |---|---|---|
-| `process` | `quota-1` | Quota-1 single-run limit and rerun block (`.harnez/rules/Quota.md`). Bypass flags stay forbidden and `harnez exec --quota-1` does not read this state yet (ticket 1188 M3): run the repo's plain test target (`make test`), not `make test-q1`. |
+| `process` | `quota-1` | Quota-1 single-run limit and rerun block (`.harnez/rules/Quota.md`). `harnez exec --quota-1` (and so `make test-q1`) reads this state and skips the check in the session that wrote it. Bypass flags stay forbidden. |
 | `triggered-skill` | `<skill name>` | Auto-selecting that skill (e.g. `lean-sprint`, `sprint`, `factory-sprint`). The user can still invoke it with `/<name>`. |
 | `repo-rules` | `push-main` | "Do not push the default branch" in the repo instructions. Pushing a reviewed topic commit straight to the default branch (`git push origin <sha>:refs/heads/main`) is allowed. Committing on the default branch stays refused by harnez, local git hooks still run, and the forge's branch protection still decides. |
 
@@ -27,7 +27,7 @@ Never disableable: the force-push ban, forge branch protection, rules for destru
    class: process
    item: quota-1
    set_at: 2026-11-08T21:30:00+01:00
-   session_id: <first set of CLAUDE_CODE_SESSION_ID, CODEX_SESSION_ID, ANTIGRAVITY_SESSION_ID, HARNEZ_SESSION_ID; empty if none>
+   session_id: <first set of the session_env variables in spec/disable.yaml; empty if none>
    reason: <the user's prose>
    ```
 

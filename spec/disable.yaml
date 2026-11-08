@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=schemas/disable.schema.json
+# Owner overrides for /disable and /enable (issue 1188). The skills map the
+# owner's prose to one item below and write one state file per item.
+state_dir: .harnez/state/disable
+# The first non-empty variable names the current session. A state file is
+# applied only when its session_id equals this value. HARNEZ_SESSION_ID comes
+# first: harnez agent workers get their own value but inherit the host's
+# CLAUDE_CODE_SESSION_ID, so a host /disable must not reach them.
+session_env:
+  - HARNEZ_SESSION_ID
+  - CLAUDE_CODE_SESSION_ID
+  - CODEX_SESSION_ID
+  - ANTIGRAVITY_CONVERSATION_ID
+items:
+  - class: process
+    item: quota-1
+    description: Quota-1 single-run limit and rerun block; harnez exec --quota-1 runs the command without the check.
+  - class: triggered-skill
+    item: "*"
+    description: Auto-selecting the named skill; the user can still invoke it explicitly.
+  - class: repo-rules
+    item: push-main
+    description: The rule against pushing to the default branch; harnez commit guard, git hooks and forge protection still apply.
+never:
+  - force-push ban
+  - forge branch protection
+  - destructive or irreversible actions
+  - secret handling
+  - spending money

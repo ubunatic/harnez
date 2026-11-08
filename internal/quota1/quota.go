@@ -38,6 +38,10 @@ type CheckOptions struct {
 
 	// Now provides the current time (nil defaults to time.Now).
 	Now func() time.Time
+
+	// OwnerSuspended allows the run and still records it, because the owner
+	// ran /disable process quota-1 in this session (issue 1188).
+	OwnerSuspended bool
 }
 
 // Result describes the outcome of a Quota-1 check.
@@ -358,13 +362,17 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 	}
 
 	// 1. Check bypass
-	if isBypass(opts.Getenv) {
+	if opts.OwnerSuspended || isBypass(opts.Getenv) {
 		if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
 			return Result{}, fmt.Errorf("write quota-1 state: %w", err)
 		}
+		msg := "Quota-1: bypass active via environment variable; test execution allowed"
+		if opts.OwnerSuspended {
+			msg = "Quota-1: suspended by the owner for this session; test execution allowed"
+		}
 		return Result{
 			Allowed:   true,
-			Message:   "Quota-1: bypass active via environment variable; test execution allowed",
+			Message:   msg,
 			StateFile: stateFile,
 		}, nil
 	}
