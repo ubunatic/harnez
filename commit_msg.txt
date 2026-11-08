@@ -1,0 +1,7 @@
+fix: agent role inference warns user
+
+Fixes #959 by allowing `agent.StartRole` to pass a flag indicating that
+the role was dynamically inferred from the prompt (instead of explicitly
+requested). `agent.WithProtocol` consumes this flag to inject a note
+into the preamble telling the agent it was inferred and can be deviated
+from if incorrect.

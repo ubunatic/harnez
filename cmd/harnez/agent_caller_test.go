@@ -44,7 +44,7 @@ func TestInteractiveCodexIgnoresInheritedWorkerIdentity(t *testing.T) {
 					t.Fatalf("host %s: %v", verb, err)
 				}
 			}
-			if _, err := startRole("reviewer", "", nil); err != nil {
+			if _, _, err := startRole("reviewer", "", nil); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := resumeRole("", &subagent.Session{Role: "reviewer"}); err != nil {
@@ -103,7 +103,7 @@ func TestCodexWorkersAndUnknownMetadataStayRestricted(t *testing.T) {
 					t.Fatalf("%s: expected contextual refusal, got %v", verb, err)
 				}
 			}
-			if _, err := startRole("reviewer", "", nil); err == nil {
+			if _, _, err := startRole("reviewer", "", nil); err == nil {
 				t.Fatal("worker start allowed")
 			}
 			if _, err := resumeRole("", &subagent.Session{Role: "reviewer"}); err == nil {

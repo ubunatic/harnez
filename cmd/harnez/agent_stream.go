@@ -47,8 +47,8 @@ const planFirstPreamble = "This is a plan-first turn: after your `CONFIRM:` mess
 
 // withProtocol prepends the dispatch protocol, the rules of the session's role
 // (spec/agent.yaml) and, for plan-first turns, the review gate to the prompt.
-func withProtocol(prompt string, planFirst bool, role string) string {
-	return agent.WithProtocol(prompt, planFirst, role)
+func withProtocol(prompt string, planFirst bool, role string, inferred bool) string {
+	return agent.WithProtocol(prompt, planFirst, role, inferred)
 }
 
 func withResumeNote(prompt string, idle time.Duration) string {

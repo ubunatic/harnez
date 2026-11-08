@@ -24,10 +24,13 @@ func CheckStreamMode(mode string) error {
 	return nil
 }
 
-func WithProtocol(prompt string, planFirst bool, role string) string {
+func WithProtocol(prompt string, planFirst bool, role string, inferred bool) string {
 	pre := protocolPreamble
 	if rules, err := subagent.RoleRules(role); err == nil && rules != "" {
 		pre += "Harnez role: " + role + ". " + rules + "\n\n"
+		if inferred {
+			pre += "(This role was inferred from your prompt and not explicitly requested. You may deviate from its rules if you are sure it is incorrect.)\n\n"
+		}
 	}
 	if planFirst {
 		pre += planFirstPreamble
@@ -70,12 +73,13 @@ func FirstPromptSentence(prompt string) string {
 	return prompt
 }
 
-func StartRole(requested, prompt, callerRole string, errOut io.Writer) (string, error) {
+func StartRole(requested, prompt, callerRole string, errOut io.Writer) (string, bool, error) {
 	role := requested
+	inferredRole := false
 	if role != "" {
 		resolved, classified, err := subagent.ResolveRoleDynamic(role)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		if classified && errOut != nil {
 			fmt.Fprintf(errOut, "harnez: resolved --role %q to %q\n", role, resolved)
@@ -84,6 +88,7 @@ func StartRole(requested, prompt, callerRole string, errOut io.Writer) (string, 
 	} else if sentence := FirstPromptSentence(prompt); sentence != "" {
 		if inferred, _, err := subagent.ResolveRoleDynamic(sentence); err == nil {
 			role = inferred
+			inferredRole = true
 			if errOut != nil {
 				fmt.Fprintf(errOut, "harnez: inferred role %q from prompt\n", role)
 			}
@@ -92,13 +97,13 @@ func StartRole(requested, prompt, callerRole string, errOut io.Writer) (string, 
 	if role == "" {
 		var err error
 		if role, err = subagent.DefaultRole(); err != nil {
-			return "", err
+			return "", false, err
 		}
 	}
 	if err := subagent.CheckSpawn(callerRole, role); err != nil {
-		return "", err
+		return "", false, err
 	}
-	return role, nil
+	return role, inferredRole, nil
 }
 
 func ResumeRole(requested string, sess *subagent.Session, callerRole string) (string, error) {

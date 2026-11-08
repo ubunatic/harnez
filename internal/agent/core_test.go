@@ -12,14 +12,14 @@ import (
 
 func TestStartRoleUsesInjectedCallerRole(t *testing.T) {
 	var notice bytes.Buffer
-	role, err := StartRole("advisor", "task", "orchestrator", &notice)
+	role, _, err := StartRole("advisor", "task", "orchestrator", &notice)
 	if err != nil || role != "advisor" {
 		t.Fatalf("StartRole = %q, %v", role, err)
 	}
 	if notice.Len() != 0 {
 		t.Fatalf("unexpected classifier notice: %q", notice.String())
 	}
-	if _, err := StartRole("orchestrator", "task", "developer", &notice); err == nil {
+	if _, _, err := StartRole("orchestrator", "task", "developer", &notice); err == nil {
 		t.Fatal("developer caller unexpectedly started orchestrator")
 	}
 }

@@ -175,7 +175,7 @@ func TestStartRoleInfersFromPromptAndLogsNotice(t *testing.T) {
 	}
 	t.Setenv("PATH", binDir)
 	var stderr bytes.Buffer
-	role, err := startRole("", "Audit the patch. Then summarize findings.", &stderr)
+	role, _, err := startRole("", "Audit the patch. Then summarize findings.", &stderr)
 	if err != nil || role != "reviewer" {
 		t.Fatalf("startRole() = %q, %v; want reviewer", role, err)
 	}
@@ -183,18 +183,18 @@ func TestStartRoleInfersFromPromptAndLogsNotice(t *testing.T) {
 		t.Fatalf("notice = %q, want %q", got, want)
 	}
 	stderr.Reset()
-	role, err = startRole("reviewer", "do the task", &stderr)
+	role, _, err = startRole("reviewer", "do the task", &stderr)
 	if err != nil || role != "reviewer" || stderr.Len() != 0 {
 		t.Fatalf("explicit canonical role = %q, %v, notice=%q", role, err, stderr.String())
 	}
 	if err := os.WriteFile(neus, []byte("#!/bin/sh\nexit 4\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	role, err = startRole("", "Unclear request.", &stderr)
+	role, _, err = startRole("", "Unclear request.", &stderr)
 	if err != nil || role != "developer" {
 		t.Fatalf("ambiguous prompt fallback = %q, %v; want developer", role, err)
 	}
-	if _, err := startRole("wizard", "", &stderr); err == nil || !strings.Contains(err.Error(), "known roles:") {
+	if _, _, err := startRole("wizard", "", &stderr); err == nil || !strings.Contains(err.Error(), "known roles:") {
 		t.Fatalf("unknown requested role error = %v; want role catalog", err)
 	}
 }

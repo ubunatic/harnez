@@ -240,7 +240,7 @@ func launchForegroundWorker(cmd *cobra.Command, store *subagent.FileSessionStore
 
 func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir, parentID string, check func(context.Context) error) error {
 	modelSpec := req.ModelSpec
-	role, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
+	role, _, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}
