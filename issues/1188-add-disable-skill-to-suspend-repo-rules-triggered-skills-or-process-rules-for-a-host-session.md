@@ -10,7 +10,7 @@
 
 ## Goal
 
-/goal Add user-invoke-only `/disable <class> <item>` and `/enable [<class> [<item>]]` skills backed by a git-ignored state file, so the owner can suspend one named rule for the current host session and restore it explicitly. Verify both the agent-facing text and the runtime checks honour the state, that stale state is never applied silently, and that agents cannot invoke either skill; or stop and report when blocked on a user decision or denied permission. On a loop, hard architectural or OS blocker, or no progress, clear the goal and record what was tried, why it failed, and the resume point.
+/goal Add user-invoke-only `/disable` and `/enable` skills that take prose or an exact `<class> <item>`, backed by a git-ignored state file, so the owner can suspend one named rule for the current host session and restore it explicitly. Verify both the agent-facing text and the runtime checks honour the state, that stale state is never applied silently, and that agents cannot invoke either skill; or stop and report when blocked on a user decision or denied permission. On a loop, hard architectural or OS blocker, or no progress, clear the goal and record what was tried, why it failed, and the resume point.
 
 ## 1. Problem & Motivation
 
@@ -27,6 +27,8 @@ In a host session the owner sometimes has to talk the model out of rules that fi
 | `/disable repo-rules push-main` | "do not push the default branch" | repo instructions, Repo Setup |
 
 `/enable <class> <item>` clears one item; `/enable` alone clears all. The list of items lives in a spec file (per `docs/Spec.md`), not in Go defaults or skill text.
+
+**Prose is the main input.** The owner should not have to know the class or item names. `/disable ignore quota-1 testing`, `/disable stop picking lean-sprint` or `/disable let me push to main` all work: the skill maps the prose to items from the spec list, repeats the match in one line (e.g. `disabling process quota-1 for this session`), and writes state. `<class> <item>` stays as an exact shortcut. If the prose matches no item, or more than one, the skill lists the candidates and writes nothing. If it matches a never-disableable rule, it refuses. `/enable` accepts prose the same way.
 
 ### Never disableable
 
