@@ -1,6 +1,6 @@
 # 1190 — harnez apply installs companion tools (gokay, loom, fj) via --tools and --profiles
 
-**Status**: Open
+**Status**: Closed — apply --tools/--profiles/--upgrade-tools (a587d6c1); argon:low review fixed; make test-q1 exit 0; deferred: remembered profiles, diff/status --profiles
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
