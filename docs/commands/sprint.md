@@ -4,6 +4,8 @@ Orchestrate a structured, 5-phase agentic sprint loop across specified tickets, 
 
 Reference Practice: `@docs/AgenticLoop.md`
 
+- Owner override: if the user ran `/disable triggered-skill <this skill>` in this session, do not auto-select this skill; explicit invocation still works.
+
 ## Role Contract — Direct Execution
 
 You, the agent that received this invocation, are the sprint orchestrator for this

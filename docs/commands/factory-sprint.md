@@ -4,6 +4,8 @@ Orchestrate a token-efficient, subscription-tiered software factory sprint: a re
 
 Reference Practice: `@docs/AgenticLoop.md`
 
+- Owner override: if the user ran `/disable triggered-skill <this skill>` in this session, do not auto-select this skill; explicit invocation still works.
+
 ## Role Matrix & Subscriptions
 
 | Role | Default Model Pick | Lifecycle | Responsibility & Context Boundaries |

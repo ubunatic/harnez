@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
 )
@@ -53,6 +54,17 @@ func TestEmbeddedSpecMatchesSchema(t *testing.T) {
 		if _, ok := schema.Properties[key]; !ok {
 			t.Errorf("spec/disable.yaml key %q is not in the schema", key)
 		}
+	}
+	var full jsonschema.Schema
+	if err := json.Unmarshal(data, &full); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := full.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resolved.Validate(values); err != nil {
+		t.Fatalf("spec/disable.yaml violates its schema: %v", err)
 	}
 	s := mustSpec(t)
 	for _, want := range [][2]string{{"process", "quota-1"}, {"triggered-skill", "lean-sprint"}, {"repo-rules", "push-main"}} {

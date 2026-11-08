@@ -64,6 +64,6 @@ Rule text and enforcement must agree: `harnez exec --quota-1` must honour an app
 ## 3. Implementation & Verification Plan
 
 - M1: spec file with classes, items and the never-list; state read/write in `internal/<feature>` with tests for applied, stale, refused and cleared.
-- M2: `/disable` and `/enable` skills, `.harnez/rules/Disable.md`, pointers in Quota.md and the sprint skills, session-start hook line.
+- M2: `/disable` and `/enable` skills, pointers in Quota.md and the sprint skills, session-start hook line. The rule text lives in Tools.md (Owner Overrides) instead of a separate `Disable.md`: Tools.md is in the always-read rule list, a new file would not be. push-main points to `harnez pr wait` for the merge signal.
 - M3: `harnez exec --quota-1` honours an applied item; tests for normal enforcement, suspended, stale and restored.
 - Close 1183 as superseded once M3 lands.
