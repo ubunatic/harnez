@@ -1233,7 +1233,8 @@ func runExecHookWithStateDir(in io.Reader, out io.Writer, stateDir string) error
 		return nil
 	}
 	warning := ""
-	if root, ok := repoRoot(payload.Cwd); ok && scriptedRepoWrite(command, root) {
+	wd, _ := os.Getwd()
+	if root, ok := repoRoot(wd); ok && scriptedRepoWrite(command, root, payload.Cwd) {
 		warning = editGuardWarning(payload.SessionID, stateDir)
 	}
 
@@ -1313,7 +1314,7 @@ func loadEditGuardSpec() editGuardSpec {
 
 // scriptedRepoWrite conservatively recognizes in-place sed/perl and simple
 // shell output redirections. Ambiguous shell syntax is ignored.
-func scriptedRepoWrite(command, root string) bool {
+func scriptedRepoWrite(command, root, cwd string) bool {
 	command = heredocCommandHeader(command)
 	for _, segment := range shellCommandSegments(command) {
 		words := strings.Fields(segment)
@@ -1333,7 +1334,7 @@ func scriptedRepoWrite(command, root string) bool {
 		}
 		if inPlace {
 			operand := strings.Trim(words[len(words)-1], "'\"")
-			if pathInRoot(operand, root) {
+			if pathInRoot(operand, root, cwd) {
 				return true
 			}
 		}
@@ -1356,7 +1357,9 @@ func scriptedRepoWrite(command, root string) bool {
 			continue
 		}
 		j := i + 1
+		isAppend := false
 		if command[j] == '>' {
+			isAppend = true
 			j++
 		}
 		for j < len(command) && (command[j] == ' ' || command[j] == '\t') {
@@ -1370,7 +1373,7 @@ func scriptedRepoWrite(command, root string) bool {
 				continue
 			}
 			dest := command[j : j+k]
-			if pathInRoot(dest, root) {
+			if !isAppend && pathInRoot(dest, root, cwd) {
 				return true
 			}
 			i = j + k
@@ -1380,7 +1383,7 @@ func scriptedRepoWrite(command, root string) bool {
 		for k < len(command) && !strings.ContainsRune(" \t\n;&|", rune(command[k])) {
 			k++
 		}
-		if k > j && pathInRoot(command[j:k], root) {
+		if k > j && !isAppend && pathInRoot(command[j:k], root, cwd) {
 			return true
 		}
 	}
@@ -1489,13 +1492,17 @@ func shellCommandSegments(command string) []string {
 	return out
 }
 
-func pathInRoot(dest, root string) bool {
+func pathInRoot(dest, root, cwd string) bool {
 	if dest == "" || strings.ContainsAny(dest, "$`*?[]") || strings.HasPrefix(dest, "~") || strings.HasPrefix(dest, "/dev/") {
 		return false
 	}
 	full := dest
 	if !filepath.IsAbs(full) {
-		full = filepath.Join(root, full)
+		if cwd != "" {
+			full = filepath.Join(cwd, full)
+		} else {
+			full = filepath.Join(root, full)
+		}
 	}
 	full, err := filepath.Abs(full)
 	if err != nil {

@@ -36,7 +36,7 @@ func TestScriptedRepoWriteConservative(t *testing.T) {
 		{"perl -i -pe 's/a/b/' file.txt", true},
 		{"sed -i 's/a/b/' /tmp/file.txt", false},
 		{"cat <<EOF > file.txt\nhello\nEOF", true},
-		{"echo hi >>file.txt", true},
+		{"echo hi >>file.txt", false},
 		{"sed -n '1,3p' file.txt", false},
 		{"echo hi >/tmp/file.txt", false},
 		{"echo hi >/dev/null", false},
@@ -45,7 +45,7 @@ func TestScriptedRepoWriteConservative(t *testing.T) {
 		{"echo '>'", false},
 	}
 	for _, tc := range tests {
-		if got := scriptedRepoWrite(tc.command, root); got != tc.want {
+		if got := scriptedRepoWrite(tc.command, root, root); got != tc.want {
 			t.Errorf("scriptedRepoWrite(%q)=%v, want %v", tc.command, got, tc.want)
 		}
 	}
@@ -89,10 +89,32 @@ func TestExecHookEditGuardM2Cases(t *testing.T) {
 		{"variable redirect", `echo x > $VAR`, true, false},
 		{"quoted variable redirect", `echo x > "$out"`, true, false},
 		{"missing session still warns", "echo x > tracked.txt", false, true},
+		{"write in secondary worktree (cwd != main)", "sed -i s/a/b/ file.txt", false, false},
 	}
+
+	wd, _ := os.Getwd()
+	wdRoot, _ := repoRoot(wd)
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			payload := map[string]any{"cwd": root, "tool_name": "Bash", "tool_input": map[string]any{"command": tc.command, "custom": "preserved"}}
+
+			cmd := tc.command
+			cwd := root // By default, root is a temp dir (which simulates a secondary worktree)
+
+			if tc.name == "absolute repo path" {
+				cmd = "sed -i s/a/b/ " + filepath.Join(wdRoot, "tracked.txt")
+				cwd = wdRoot
+			} else if tc.name == "missing session still warns" {
+				cwd = wdRoot // Needs to be in the main worktree to warn
+			} else if tc.name == "write in secondary worktree (cwd != main)" {
+				cwd = root // root is not wdRoot, so it should not warn
+			} else {
+				// To maintain previous behavior where it doesn't warn for valid reasons (e.g. read only),
+				// we run them inside wdRoot.
+				cwd = wdRoot
+			}
+
+			payload := map[string]any{"cwd": cwd, "tool_name": "Bash", "tool_input": map[string]any{"command": cmd, "custom": "preserved"}}
 			if tc.session {
 				payload["session_id"] = "m2-" + tc.name
 			}
