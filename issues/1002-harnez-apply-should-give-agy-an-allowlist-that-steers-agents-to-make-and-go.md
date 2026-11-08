@@ -204,3 +204,7 @@ replaced), so a user who switches toolPermission back keeps the rules.
 
 One headless `agy:flash38:low` developer turn with commands not on the allowlist: `uptime`,
 `printenv HOME`, `id -un`, plus `cat go.mod`. All ran (status 3), no prompt, reply correct.
+
+## Audit 2026-11-08 (Jules)
+
+Jules PR 148: already done. 9 refs checked, all within 4 lines of the cited text at d8c61da (internal/agy/permissions.go:46,53,55,111,173,193; spec/agy_tools.yaml:14); apply wires it at cmd/harnez/apply_cmd.go:113. Canaries 4 and 5 above confirm on host. Left open, not blocking: interactive harnez-agy check and an mcp(harnez/*) mapping for mcp__harnez__*.
