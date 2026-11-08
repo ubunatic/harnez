@@ -326,7 +326,8 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 		_ = store.Save(sess)
 		return err
 	}
-	go func() { _ = worker.Wait() }()
+	exited := make(chan error, 1)
+	go func() { exited <- worker.Wait() }()
 	sess.ProcessPID = worker.Process.Pid
 	sess.ProcessStarttime = procs.ProcessStarttime(sess.ProcessPID)
 	sess.WorkerPID, sess.WorkerStarttime = sess.ProcessPID, sess.ProcessStarttime
@@ -335,11 +336,53 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 		_ = worker.Wait()
 		return err
 	}
+	if model.Provider == "jules" {
+		created, err := awaitJulesCreate(store, sess.ID, exited)
+		if err != nil {
+			return fmt.Errorf("agent start %s: %w", sess.Name, err)
+		}
+		sess = created
+	}
 	if req.JSON {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(sess)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Started agent %s (%s)\n", sess.Name, sess.ID)
 	return nil
+}
+
+// awaitJulesCreate waits for a detached Jules worker to create its session. It
+// returns the stored session once ProviderSessionID is recorded, and the
+// worker's own failure once the worker has exited without one. A detached
+// start must not report success for a Jules session that was never created.
+func awaitJulesCreate(store *subagent.FileSessionStore, id string, exited <-chan error) (*subagent.Session, error) {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		sess, err := store.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		if sess.ProviderSessionID != "" {
+			return sess, nil
+		}
+		select {
+		case <-exited:
+			// The worker records its failure before it exits, so one re-read
+			// sees the final state.
+			sess, err = store.Get(id)
+			if err != nil {
+				return nil, err
+			}
+			if sess.ProviderSessionID != "" {
+				return sess, nil
+			}
+			if sess.LastError != "" {
+				return nil, errors.New(sess.LastError)
+			}
+			return nil, errors.New("detached worker ended before creating the Jules session")
+		case <-ticker.C:
+		}
+	}
 }
 
 func runDetachedWorker(cmd *cobra.Command, req startRequest, storeDir string) error {
