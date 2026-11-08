@@ -1,6 +1,6 @@
 # 1189 — Add opt-in AGit doc via init --docs agit
 
-**Status**: Open
+**Status**: Closed — AGit doc via init --docs agit (50009dd5); test covers opt-in and link; make test-q1 exit 0
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Docs
