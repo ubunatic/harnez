@@ -36,7 +36,9 @@ func TestScriptedRepoWriteConservative(t *testing.T) {
 		{"perl -i -pe 's/a/b/' file.txt", true},
 		{"sed -i 's/a/b/' /tmp/file.txt", false},
 		{"cat <<EOF > file.txt\nhello\nEOF", true},
-		{"echo hi >>file.txt", true},
+		{"echo hi >>file.txt", false},
+		{"printf '| row |' >> file.txt", false},
+		{"echo hi >> a.txt && echo x > file.txt", true},
 		{"sed -n '1,3p' file.txt", false},
 		{"echo hi >/tmp/file.txt", false},
 		{"echo hi >/dev/null", false},
@@ -89,10 +91,27 @@ func TestExecHookEditGuardM2Cases(t *testing.T) {
 		{"variable redirect", `echo x > $VAR`, true, false},
 		{"quoted variable redirect", `echo x > "$out"`, true, false},
 		{"missing session still warns", "echo x > tracked.txt", false, true},
+		{"linked worktree in-place edit", "sed -i s/a/b/ tracked.txt", true, false},
+		{"submodule in-place edit", "sed -i s/a/b/ tracked.txt", true, true},
+	}
+	// 1179: a linked worktree's .git file points into <common>/worktrees/; a submodule's into modules/.
+	worktree, submodule := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: /repo/.git/worktrees/scratch\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(submodule, ".git"), []byte("gitdir: ../.git/modules/sub\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			payload := map[string]any{"cwd": root, "tool_name": "Bash", "tool_input": map[string]any{"command": tc.command, "custom": "preserved"}}
+			cwd := root
+			switch tc.name {
+			case "linked worktree in-place edit":
+				cwd = worktree
+			case "submodule in-place edit":
+				cwd = submodule
+			}
+			payload := map[string]any{"cwd": cwd, "tool_name": "Bash", "tool_input": map[string]any{"command": tc.command, "custom": "preserved"}}
 			if tc.session {
 				payload["session_id"] = "m2-" + tc.name
 			}

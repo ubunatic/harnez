@@ -1233,7 +1233,7 @@ func runExecHookWithStateDir(in io.Reader, out io.Writer, stateDir string) error
 		return nil
 	}
 	warning := ""
-	if root, ok := repoRoot(payload.Cwd); ok && scriptedRepoWrite(command, root) {
+	if root, ok := repoRoot(payload.Cwd); ok && !linkedWorktree(root) && scriptedRepoWrite(command, root) {
 		warning = editGuardWarning(payload.SessionID, stateDir)
 	}
 
@@ -1357,7 +1357,7 @@ func scriptedRepoWrite(command, root string) bool {
 		}
 		j := i + 1
 		if command[j] == '>' {
-			j++
+			continue // append: cannot clobber existing content (1179)
 		}
 		for j < len(command) && (command[j] == ' ' || command[j] == '\t') {
 			j++
@@ -1503,6 +1503,19 @@ func pathInRoot(dest, root string) bool {
 	}
 	rel, err := filepath.Rel(root, full)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// linkedWorktree reports whether root is a linked `git worktree` (its .git is
+// a file pointing into <common>/worktrees/). Scratch worktrees are throwaway,
+// so the edit guard skips them (1179). Submodules also use a .git file but
+// point into modules/, so they stay guarded.
+func linkedWorktree(root string) bool {
+	data, err := os.ReadFile(filepath.Join(root, ".git"))
+	if err != nil {
+		return false
+	}
+	gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(data)), "gitdir:")
+	return ok && strings.Contains(filepath.ToSlash(strings.TrimSpace(gitdir)), "/worktrees/")
 }
 
 func repoRoot(cwd string) (string, bool) {
