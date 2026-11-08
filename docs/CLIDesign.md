@@ -11,7 +11,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 
 | Command | Scope | What it touches |
 |---------|-------|-----------------|
-| `apply` | Global harnesses | Claude settings/rules/commands plus Prime Agent rules/prompts/skills/docs |
+| `apply` | Global harnesses | Claude settings/rules/commands plus Prime Agent rules/prompts/skills/docs; companion tools on PATH via `--tools`/`--profiles` (spec/tools.yaml) |
 | `init`  | Project (cwd / `-d`) | `AGENTS.md`, `CLAUDE.md` symlink, `.harnez/rules/*.md`, `docs/<name>.md` copy, `Makefile` |
 | `diff`  | Global / Project | Preview of what `apply` would change; `--capture-docs` writes project drift to inbox |
 | `scan-docs` | Workspace | Read-only scan of child projects for managed doc drift |

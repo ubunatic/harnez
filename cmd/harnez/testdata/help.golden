@@ -696,7 +696,6 @@ Flags:
       --agy-target string                      Antigravity config directory (default: agy_target from config.yaml)
       --clean-docs                             remove unmanaged global docs from ~/.claude/docs/ and ~/.prime/agent/docs/
       --codex-target string                    Codex config.toml path (default: codex_hooks_target from config.yaml)
-      --components strings                     component(s) to install, comma-separated or repeated (e.g. docs-only,telemetry); scoped: components not named are left untouched unless --prune is set
   -c, --config string                          path to config YAML file (default: embedded)
       --debloat                                apply the minimal Claude, Codex, and Antigravity context-saving preset from config.yaml
       --debloat-cron                           also deny CronCreate/CronDelete/CronList
@@ -711,11 +710,14 @@ Flags:
       --force-docs                             overwrite existing docs with bundled versions
   -h, --help                                   help for apply
       --no-docs                                do not install global docs, removing any previously installed global docs
+      --profiles strings                       profile(s) adding docs, tools and components, comma-separated (go,rust,codeberg,github,minimal; see spec/tools.yaml)
       --prune                                  with --components: also remove what the selection leaves out (desired state); without it a --components run leaves components outside the selection untouched
       --remove-docs                            remove all global docs from ~/.claude/docs/ and ~/.prime/agent/docs/
   -s, --shell                                  inject harnez environment source into ~/.bashrc and ~/.zshrc
       --systemd harnez server install          write the harnez-agent-collector systemd --user unit; use harnez server install to enable and start it
   -t, --target string                          Claude config directory (default: ~/.claude)
+      --tools strings                          companion tool(s) to install, comma-separated (see spec/tools.yaml: gokay,loom,fj); a missing installer or failed install only warns
+      --upgrade-tools                          reinstall companion tools that are already on PATH
       --variant string                         doc variant to install: lite or full (docs without a lite variant fall back to full) (default "full")
 
 === harnez assess

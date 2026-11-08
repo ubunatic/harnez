@@ -15,6 +15,7 @@ docs:
         - manpages
         - prototyping-features
         - website
+        - agit
 rules:
     quota: true
 make:

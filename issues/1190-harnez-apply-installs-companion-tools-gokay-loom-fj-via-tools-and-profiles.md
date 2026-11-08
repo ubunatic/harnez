@@ -1,6 +1,6 @@
 # 1190 — harnez apply installs companion tools (gokay, loom, fj) via --tools and --profiles
 
-**Status**: Open
+**Status**: Closed — apply --tools/--profiles/--upgrade-tools (a587d6c1); argon:low review fixed; make test-q1 exit 0; deferred: remembered profiles, diff/status --profiles
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -47,6 +47,17 @@ user-facing selector:
   keeps them (this answers the "remembered" question below).
 - `--components` keeps working but is hidden from `--help`; deprecate it once profiles cover the
   presets. The component registry stays as the install/prune/diff engine under profiles.
+
+## Delivered
+
+- `spec/tools.yaml` + schema: gokay, loom (go install @latest), fj (cargo install forgejo-cli), installers,
+  profiles go, rust, codeberg, github, minimal (web dropped: placeholder until the website skill overhaul).
+- `apply --tools`, `--profiles`, `--upgrade-tools`; `--components` hidden from help.
+- Decisions (decide mode): one `--tools` flag, not per-ecosystem; `@latest`, no pinning yet.
+- Review (argon:low): schema validation + strict decode + duplicate check at load, spec loaded once,
+  mixing component-narrowing profiles refused, installer timeout, CLI wiring test. Deferred: `diff`/`status --profiles`.
+- Deferred: remembering profiles in config.yaml (needs a writable user config; plain apply uses the
+  embedded one). Follow-up when wanted.
 
 ## Open questions
 
