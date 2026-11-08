@@ -624,20 +624,9 @@ func watchUsagePercentWithPresentation(presentation UsageBarPresentation, value 
 	return "\x1b[" + heatForegroundANSI(value) + "m" + label + "\x1b[0m"
 }
 
-// padWatchUsagePercent adds leading display cells without including ANSI
-// bytes in the width calculation, so compact quota columns stay aligned in
-// both presentation modes.
-func padWatchUsagePercent(value float64, width int) string {
-	return padWatchUsagePercentWithPresentation(mustIndicators().usageBarPresentation(), value, width)
-}
-
 func padWatchUsagePercentWithPresentation(presentation UsageBarPresentation, value float64, width int) string {
 	label := watchUsagePercentWithPresentation(presentation, value)
 	return strings.Repeat(" ", max(0, width-visLen(label))) + label
-}
-
-func watchUsagePercentWithDuration(value float64, duration string) string {
-	return watchUsagePercentWithDurationAndPresentation(mustIndicators().usageBarPresentation(), value, duration)
 }
 
 func watchUsagePercentWithDurationAndPresentation(presentation UsageBarPresentation, value float64, duration string) string {
@@ -646,10 +635,6 @@ func watchUsagePercentWithDurationAndPresentation(presentation UsageBarPresentat
 		return label
 	}
 	return label + " " + duration
-}
-
-func padWatchUsagePercentWithDuration(value float64, duration string, width int) string {
-	return padWatchUsagePercentWithDurationAndPresentation(mustIndicators().usageBarPresentation(), value, duration, width)
 }
 
 func padWatchUsagePercentWithDurationAndPresentation(presentation UsageBarPresentation, value float64, duration string, width int) string {

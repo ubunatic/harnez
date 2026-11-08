@@ -131,7 +131,6 @@ func TestSetMode_Lifecycle(t *testing.T) {
 		t.Errorf("Expected dry run note, got: %s", res.FileUpdate)
 	}
 	// Verify file was NOT modified
-	content, _ = os.ReadFile(agentsFile)
 	if !markdown.ContainsSection(agentsFile, mode.ConciseModeSection) {
 		t.Errorf("AGENTS.md section was removed during dry run!")
 	}

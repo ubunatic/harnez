@@ -412,10 +412,3 @@ func newBenchResultsCmd() *cobra.Command {
 	cmd.Flags().IntVar(&recent, "recent", 0, "also list the newest N runs")
 	return cmd
 }
-
-func truncateBench(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n]) + "…"
-	}
-	return s
-}

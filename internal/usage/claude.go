@@ -356,13 +356,11 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 			out, cmdErr := runClaudeUsageCmdFn(ctx)
 			if cmdErr == nil {
 				if refreshed, readErr := readClaudeOAuthCredentials(credsPath); readErr == nil && refreshed.AccessToken != "" {
-					refetched, retryStatus, retryErr := fetchClaudeQuota(ctx, client, ClaudeCredentials{ClaudeAiOauth: refreshed})
+					refetched, _, retryErr := fetchClaudeQuota(ctx, client, ClaudeCredentials{ClaudeAiOauth: refreshed})
 					if retryErr == nil {
 						fetched = refetched
 						fetchErr = nil
 						usage.Sources = append(usage.Sources, "api.anthropic.com/api/oauth/usage (after claude -p /usage refresh)")
-					} else {
-						status = retryStatus
 					}
 				}
 			}

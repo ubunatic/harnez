@@ -149,9 +149,8 @@ func staleValueANSI(s string) string {
 // package init, so watch.go/usage.go call sites can concatenate them into
 // format strings without a lookup per render.
 var (
-	ansiBold     = ansiOpen("bold")
-	ansiDimGrey  = ansiOpen("dim-grey")
-	ansiDimFaint = ansiOpen("dim-faint")
+	ansiBold    = ansiOpen("bold")
+	ansiDimGrey = ansiOpen("dim-grey")
 )
 
 // init wires rograph's ANSI background default to the "background" color

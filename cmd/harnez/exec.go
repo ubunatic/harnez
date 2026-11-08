@@ -2,7 +2,6 @@ package main
 
 import (
 	"io"
-	"time"
 
 	"github.com/spf13/cobra"
 	internalexec "ubunatic.com/harnez/internal/exec"
@@ -59,10 +58,6 @@ func runExecHook(in io.Reader, out io.Writer) error {
 	return internalexec.RunHook(in, out)
 }
 
-func resolveExecTimeout(opts execOptions, args []string) time.Duration {
-	return internalexec.ResolveTimeout(opts, args)
-}
-
 func exitCodeFromError(err error) int { return internalexec.ExitCodeFromError(err) }
 
 func inferToolFromArgs(args []string, fallback string) string {
@@ -71,37 +66,15 @@ func inferToolFromArgs(args []string, fallback string) string {
 
 func validateToolName(tool string) error { return internalexec.ValidateToolName(tool) }
 
-func detectExpectFailure(opts execOptions, args []string) bool {
-	return internalexec.DetectExpectFailure(opts, args)
-}
-
-func detectQuota1(opts execOptions, args []string) bool { return internalexec.DetectQuota1(opts, args) }
-
-func hasExplicitExecTimeout(opts execOptions, args []string) bool {
-	return internalexec.HasExplicitTimeout(opts, args)
-}
-
-func isQuota1SandboxMarker(value string) bool { return internalexec.IsQuota1SandboxMarker(value) }
-
-func quota1SandboxArgs(args []string, cwd, goCache, goModCache, runtimeDir string) []string {
-	return internalexec.Quota1SandboxArgs(args, cwd, goCache, goModCache, runtimeDir)
-}
-
 func alreadyRoutedThroughExec(command string) bool {
 	return internalexec.AlreadyRoutedThroughExec(command)
 }
-
-func isSimpleShellCommand(command string) bool { return internalexec.IsSimpleShellCommand(command) }
 
 func formatGearRewrite(command, distillFlag string) string {
 	return internalexec.FormatGearRewrite(command, distillFlag)
 }
 
 func shellQuote(s string) string { return internalexec.ShellQuote(s) }
-
-func distillAutopipeRewrite(command string) (string, bool) {
-	return internalexec.DistillAutopipeRewrite(command)
-}
 
 func debugLog(format string, args ...any) { internalexec.DebugLog(format, args...) }
 

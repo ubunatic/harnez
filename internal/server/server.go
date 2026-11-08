@@ -283,10 +283,6 @@ func compareBuild(versionA, identityA, versionB, identityB string) int {
 	return 0
 }
 
-func writeStatus(w http.ResponseWriter, version, identity string, ready bool) {
-	writeStatusWithStart(w, version, identity, ready, time.Time{})
-}
-
 func writeStatusWithStart(w http.ResponseWriter, version, identity string, ready bool, startedAt time.Time) {
 	writeStatusWithStartAndClients(w, version, identity, ready, startedAt, nil)
 }
@@ -307,9 +303,4 @@ func writeStatusWithReasonAndDiagnostics(w http.ResponseWriter, version, identit
 	}
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(statusInfo{Health: health, Server: "harnez", Version: version, BuildIdentity: identity, PID: os.Getpid(), StartedAt: startedAt, Clients: clients, PassiveNoQuota: noQuota, PassiveAccepted: accepted, Reason: reason})
-}
-
-func statusHandler(version string) http.HandlerFunc { return statusHandlerReady(version, true) }
-func statusHandlerReady(version string, ready bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) { writeStatus(w, version, "test-identity", ready) }
 }

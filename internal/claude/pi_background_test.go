@@ -945,13 +945,6 @@ func writeTestFile(t *testing.T, path string, data []byte) {
 	}
 }
 
-func mustMkdir(t *testing.T, path string) {
-	t.Helper()
-	if err := os.MkdirAll(path, 0755); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func mustSymlink(t *testing.T, target, link string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(link), 0755); err != nil {

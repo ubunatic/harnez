@@ -116,7 +116,7 @@ func BuildExportLevel(rows []ToolCall, now time.Time, level privacy.Level, sanit
 func BuildExportWithCategories(rows []ToolCall, now time.Time, level privacy.Level, sanitized map[string]string, categories []ActivityCategory) Export {
 	out := Export{GeneratedAt: now}
 	for i, r := range rows {
-		cat := CategoryOther
+		var cat ActivityCategory
 		if i < len(categories) && categories[i].IsValid() {
 			cat = categories[i]
 		} else {

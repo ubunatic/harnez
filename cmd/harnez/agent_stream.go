@@ -35,16 +35,6 @@ var (
 	heartbeatRepeat   = 5 * time.Minute
 )
 
-// protocolPreamble is prepended to every streamed turn so the agent confirms
-// before working and marks its plan; harnez maps the tags to labels.
-const protocolPreamble = "Harnez dispatch protocol: before any tool call, file read or other work, your very first message must be one line starting with `CONFIRM:` that states what you will do. " +
-	"If your task asks you to plan first, send the plan as a message starting with `PLAN:`. Then continue with your task.\n\n"
-
-// planFirstPreamble turns the turn into a review gate: the intervention window
-// is the turn boundary, not a sleep inside the agent.
-const planFirstPreamble = "This is a plan-first turn: after your `CONFIRM:` message, inspect read-only if you must, send your plan as a message starting with `PLAN:`, and then end your turn. " +
-	"Do not modify anything or start executing; the caller reviews the plan and resumes you with the go-ahead.\n\n"
-
 // withProtocol prepends the dispatch protocol, the rules of the session's role
 // (spec/agent.yaml) and, for plan-first turns, the review gate to the prompt.
 func withProtocol(prompt string, planFirst bool, role string, inferred bool) string {
