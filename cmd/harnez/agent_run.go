@@ -452,7 +452,10 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	}
 	if req.Name != "" && req.SessionID == "" {
 		if existing, findErr := resolveSession(s, req.Name, ""); findErr == nil && !releaseFailedStartName(s, existing) {
-			return fmt.Errorf("session name %q is already in use by %s in %s (names are global across repos); pick another --name, e.g. %s-2", req.Name, existing.ID, existing.WorkingDir, req.Name)
+			// 1186: names are global across repos; suffix a taken explicit name.
+			if sessName, err = suffixTakenName(s, req.Name, cmd.ErrOrStderr()); err != nil {
+				return err
+			}
 		}
 	}
 	canonicalWorkDir, err := filepath.Abs(req.Dir)
@@ -1311,4 +1314,26 @@ func releaseFailedStartName(s *subagent.FileSessionStore, existing *subagent.Ses
 	}
 	existing.Name = existing.Name + "-failed-" + short
 	return s.Save(existing) == nil
+}
+
+// suffixTakenName picks the first free "<name>-N" for a taken explicit --name
+// and says so on stderr, so the host resumes by the real name (1186).
+func suffixTakenName(s *subagent.FileSessionStore, name string, errOut io.Writer) (string, error) {
+	sessions, err := s.List("", true)
+	if err != nil {
+		return "", err
+	}
+	taken := make(map[string]bool, len(sessions)*2)
+	for _, existing := range sessions {
+		taken[existing.Name] = true
+		taken[existing.ID] = true
+	}
+	free, err := subagent.SuffixedName(name, func(c string) bool { return taken[c] })
+	if err != nil {
+		return "", err
+	}
+	if errOut != nil {
+		fmt.Fprintf(errOut, "harnez: name %s taken; using %s\n", name, free)
+	}
+	return free, nil
 }

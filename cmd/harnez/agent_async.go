@@ -271,8 +271,10 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 			return err
 		}
 	}
-	if existing, err := store.Find(req.Name); err == nil {
-		return fmt.Errorf("session name %q is already in use by %s", req.Name, existing.ID)
+	if _, err := store.Find(req.Name); err == nil {
+		if req.Name, err = suffixTakenName(store, req.Name, cmd.ErrOrStderr()); err != nil {
+			return err
+		}
 	}
 	dir, err := filepath.Abs(req.Dir)
 	if err != nil {

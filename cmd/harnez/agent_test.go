@@ -341,12 +341,20 @@ func TestAgentStartFileOnlyAndNameCollision(t *testing.T) {
 	if err != nil || !strings.Contains(sess.StartPrompt, file+" (16 bytes)") || strings.Contains(sess.StartPrompt, "full file prompt") {
 		t.Fatalf("stored prompt = %#v, err=%v", sess, err)
 	}
+	// 1186: a taken explicit name is suffixed instead of refused.
 	cmd = newAgentCmd()
+	var stderr bytes.Buffer
 	cmd.SetOut(new(bytes.Buffer))
-	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetErr(&stderr)
 	cmd.SetArgs([]string{"start", "--role", "advisor", "--model", "codex:luna", "--name", "named", "again", "--store-dir", storeDir})
-	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "recorded") || !strings.Contains(err.Error(), sess.WorkingDir) {
-		t.Fatalf("collision error = %v", err)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("second start with taken name: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "name named taken; using named-2") {
+		t.Fatalf("stderr lacks suffix notice:\n%s", stderr.String())
+	}
+	if _, err := store.Find("named-2"); err != nil {
+		t.Fatalf("suffixed session not stored: %v", err)
 	}
 }
 

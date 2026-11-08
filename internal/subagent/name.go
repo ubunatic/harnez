@@ -30,3 +30,14 @@ func GenerateSessionName(taken func(string) bool) (string, error) {
 	}
 	return "", fmt.Errorf("all memorable session names are in use")
 }
+
+// SuffixedName returns base with the first free "-N" suffix (N >= 2), for an
+// explicit --name that is already taken (1186).
+func SuffixedName(base string, taken func(string) bool) (string, error) {
+	for n := 2; n <= 1000; n++ {
+		if name := fmt.Sprintf("%s-%d", base, n); !taken(name) {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("no free suffix for session name %q", base)
+}
