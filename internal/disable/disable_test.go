@@ -189,3 +189,20 @@ func TestWriteRefusesUnknownItem(t *testing.T) {
 		t.Error("refused item left a state file")
 	}
 }
+
+// The skill text inlines the session variable order because target repos have
+// no spec/disable.yaml; it must match the spec.
+func TestSkillTextListsSessionEnvInSpecOrder(t *testing.T) {
+	s := mustSpec(t)
+	b, err := harnez.DefaultFS.ReadFile("docs/commands/disable.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vars []string
+	for _, v := range s.SessionEnv {
+		vars = append(vars, "$"+v)
+	}
+	if want := strings.Join(vars, ", "); !strings.Contains(string(b), want) {
+		t.Errorf("docs/commands/disable.md lacks the session_env order %q", want)
+	}
+}

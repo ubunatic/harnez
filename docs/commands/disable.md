@@ -8,7 +8,7 @@ Triggers: only on explicit `/disable` typed by the user. Never invoke it yoursel
 
 Prose is the main input: `/disable ignore quota-1 testing`, `/disable stop picking lean-sprint`, `/disable let me push to main`. The exact form `<class> <item>` is a shortcut.
 
-Map the prose to one item below; the list lives in `spec/disable.yaml`. If it matches none or more than one, list the candidates and write nothing. If it matches a never-disableable rule, refuse and name it.
+Map the prose to items below; this table is the full list, so never read the harnez source. If it matches none, or is ambiguous between items, list the candidates and write nothing. A plural group the owner names ("the sprint skills") is allowed: write one file per member and list every file you wrote. If it matches a never-disableable rule, refuse and name it.
 
 | Class | Item | Suspends |
 |---|---|---|
@@ -21,13 +21,13 @@ Never disableable: the force-push ban, forge branch protection, rules for destru
 ## Steps
 
 1. Resolve the item. Say it in one line: `disabling <class> <item> for this session`.
-2. Write `.harnez/state/disable/<class>-<item>.yaml` (create the directory; `.harnez/*` is git-ignored):
+2. Write `.harnez/state/disable/<class>-<item>.yaml` (create the directory; `harnez init` adds `/.harnez/state/` to `.git/info/exclude`; if `git status` still shows it, add that line there):
 
    ```yaml
    class: process
    item: quota-1
    set_at: 2026-11-08T21:30:00+01:00
-   session_id: <first set of the session_env variables in spec/disable.yaml; empty if none>
+   session_id: <first non-empty of $HARNEZ_SESSION_ID, $CLAUDE_CODE_SESSION_ID, $CODEX_SESSION_ID, $ANTIGRAVITY_CONVERSATION_ID; empty if none>
    reason: <the user's prose>
    ```
 
