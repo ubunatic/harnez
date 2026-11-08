@@ -1,9 +1,9 @@
 # 927 — lint: gokay check fails on usagestore store_test.go errcheck and spec schema conformance
 
-**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
+**Status**: Open
 **Priority**: P3 (Low)
 **Severity**: Minor
-**Category**: Bug
+**Category**: Epic
 **Related**: 924, 919, study `docs/studies/2026-10-25-epic-921-server-monitor-sprint.md`
 
 ---
@@ -63,3 +63,17 @@ The spec-conformance diagnostics cannot be reproduced. gokay's spec step is `ski
 4. Separately: `TestGoldenFontAssets` in `internal/readcard` needs `go run ./scripts/generate-golden-fonts.go`. Track it in its own ticket.
 
 Working files for this report: `/tmp/gokay-all-927.log`, `/tmp/gl-usagestore-full-927.log`, `/tmp/gl-all-full-927.log`.
+
+## Update 2026-11-09 (gokay run, main 579ccf5a): now an Epic
+
+golangci-lint v2.15.0 is on PATH. Uncapped: 1403 issues (errcheck 1193, staticcheck 155, unused 42,
+ineffassign 13). Of the errcheck findings, 450 are `Close`/`Rollback`/`Release`/`Flock`; 743 are others
+(mostly `os.WriteFile`/`os.MkdirAll` in tests, `fmt.Fprint*`, `w.Write`). No finding was a real bug.
+
+Decision (decide mode, reversible): option 1, per the recommendation above.
+
+- M1 — 1193: remove `unused` and `ineffassign` findings.
+- M2 — add `.golangci.yml`: exclude errcheck for `Close`, `Rollback`, `Release`, `Flock`, `fmt.Fprint*`;
+  re-count.
+- M3 — fix the remaining errcheck in tests (`t.Fatal` on setup errors) and staticcheck, per package.
+- M4 — wire golangci-lint into `make lint`.
