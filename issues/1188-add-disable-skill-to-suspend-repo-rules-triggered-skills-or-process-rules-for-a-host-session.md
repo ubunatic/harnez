@@ -1,6 +1,6 @@
 # 1188 — Add /disable skill to suspend repo rules, triggered skills or process rules for a host session
 
-**Status**: Open
+**Status**: Closed — Delivered M1-M3: spec+state, skills, hints, session-start notice, Quota-1 suspension; make test-q1 exit 0, 0 FAIL (23acc869)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
