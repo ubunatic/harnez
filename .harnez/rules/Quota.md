@@ -9,3 +9,4 @@
 - **Report Untested Edits**: If you edit code after your single test run, say in your report that the committed code is untested after that run and name the changed files, so the host runs the suite.
 
 - **Media & Demo Verification Gate**: Get explicit user confirmation before publishing recordings or screenshots.
+- **Owner Suspension**: Only the user can suspend these rules for a session, with `/disable` (see Owner Overrides in Tools.md).
