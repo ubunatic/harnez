@@ -198,23 +198,20 @@ is broken.
 Release only when the user or active `/goal` asks for a release; otherwise recommend the release and proposed bump, then wait. Releases push commits and tags and publish artifacts. Before releasing, ensure the tree is clean and docs/tickets are committed and indexed, then pass `make lint` and `make test-q1` (`make release` itself depends on `check`, which runs gofmt, vet, and all Go tests). Use **patch** for compatible fixes, docs, and refactors; **minor** for new backward-compatible capabilities; **major** for breaking public APIs.
 
 ### Protected Main (`git.protected_main`)
-Under protected main, a plain `harnez release` still runs on the default branch: it bumps, tags,
-and pushes the branch and the tag. It also pushes any other unpushed commits on that branch, so
-start from a branch level with the remote. Harnez does not check who runs it; the forge's branch
-protection decides whether the push is accepted. If a remote rejects it, the error names the
-reason and `harnez release --continue` finishes once the push is allowed. Protection answers only
-on the real push, because `git push --dry-run` runs no server hooks.
+Under protected main, a plain `harnez release` on the default branch bumps, tags, builds and signs
+locally, then pushes the bump commit as an AGit PR (`refs/for/<default>/release-vX.Y.Z`) and
+pauses; the tag stays local. Merge the PR with a merge commit or fast-forward (squash or rebase
+drops the bump commit), wait with `harnez pr wait <n> --contains <sha>`, then run
+`harnez release --continue`: it checks that the bump commit is on the remote default branch,
+pushes the tag, mirrors the merged branch and tag to the other remotes, and publishes. Before the
+merge, `--continue` only updates the PR. No direct push to the protected branch is needed. GitHub
+has no AGit: there, use the `release/vX.Y.Z` route below.
 
-If you cannot push the default branch, release from `release/vX.Y.Z`
+On GitHub, or to release from a branch, use `release/vX.Y.Z`
 (`git switch -c release/vX.Y.Z`): the bump commit and the tag are made there, and the branch and
 the tag are pushed. Open the PR and **rebase-merge or fast-forward** it so the tag stays on
 `main`'s history; a merge or squash commit leaves the tag off `main`. Harnez does not tag after
 the merge.
-
-If the forge rejected a release on the default branch, the bump commit and tag exist only locally.
-To finish through a PR instead, keep them: run `git switch -c release/vX.Y.Z`, then
-`harnez release --continue`, then `git branch -f main origin/main`. A plain `harnez release` there
-stops with "nothing to release".
 
 ### Standard Release (Bumps Patch by default)
 ```bash

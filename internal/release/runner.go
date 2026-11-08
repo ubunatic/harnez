@@ -275,7 +275,16 @@ func Run(opt Options) error {
 			}
 		}
 
-		if err := pushRelease(opt, tagName, forge); err != nil {
+		if branch, ok := gitflow.ProtectedReleaseBranch(opt.Dir); ok {
+			err := pushReleaseViaPR(opt, tagName, branch, forge)
+			if errors.Is(err, errAwaitingMerge) {
+				fmt.Fprintf(opt.Out, "==> Release %s paused: waiting for the release PR to merge\n", tagName)
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+		} else if err := pushRelease(opt, tagName, forge); err != nil {
 			return err
 		}
 	}

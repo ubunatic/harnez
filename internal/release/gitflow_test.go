@@ -72,13 +72,46 @@ func wantRemoteMatchesLocal(t *testing.T, dir, bare string, refs ...string) {
 	}
 }
 
-func TestReleaseOnProtectedMainPushesMainAndTag(t *testing.T) {
+// Protected main: the first run pushes the bump commit as an AGit PR and
+// pauses without the tag; --continue after the merge pushes the tag.
+func TestReleaseOnProtectedMainGoesThroughPR(t *testing.T) {
 	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	protectRemoteMain(t, bare)
 	var out bytes.Buffer
 	if err := Run(gitflowReleaseOptions(dir, &out)); err != nil {
 		t.Fatalf("release on protected main: %v\n%s", err, out.String())
 	}
-	wantRemoteMatchesLocal(t, dir, bare, "refs/heads/main", "refs/tags/v1.0.1")
+	if !strings.Contains(out.String(), "paused") {
+		t.Errorf("no pause notice:\n%s", out.String())
+	}
+	bump := pushTestGitOutput(t, dir, "rev-parse", "v1.0.1^{commit}")
+	if got := pushTestGitOutput(t, bare, "rev-parse", "refs/for/main/release-v1.0.1"); got != bump {
+		t.Errorf("PR ref = %q, want bump %s", got, bump)
+	}
+	if strings.Contains(pushTestRefs(t, bare), "refs/tags/v1.0.1") {
+		t.Fatal("tag pushed before the merge")
+	}
+
+	// Not merged yet: --continue only updates the PR.
+	out.Reset()
+	opt := gitflowReleaseOptions(dir, &out)
+	opt.Continue = true
+	if err := Run(opt); err != nil || !strings.Contains(out.String(), "paused") {
+		t.Fatalf("--continue before merge: %v\n%s", err, out.String())
+	}
+	if strings.Contains(pushTestRefs(t, bare), "refs/tags/v1.0.1") {
+		t.Fatal("tag pushed before the merge")
+	}
+
+	// The forge merges the PR with a merge commit.
+	merge := pushTestGitOutput(t, dir, "commit-tree", bump+"^{tree}", "-p", bump+"^", "-p", bump, "-m", "Merge release PR")
+	runGitCmd(t, dir, "push", "origin", merge+":refs/heads/merge-tmp")
+	runGitCmd(t, bare, "update-ref", "refs/heads/main", merge)
+	out.Reset()
+	if err := Run(opt); err != nil {
+		t.Fatalf("--continue after merge: %v\n%s", err, out.String())
+	}
+	wantRemoteMatchesLocal(t, dir, bare, "refs/tags/v1.0.1", "refs/heads/main")
 }
 
 func TestReleaseDryRunOnProtectedMainChangesNothing(t *testing.T) {
@@ -147,23 +180,6 @@ func TestReleaseOnBranchPushesBranchAndTag(t *testing.T) {
 	}
 }
 
-func TestReleaseContinuePushesProtectedMain(t *testing.T) {
-	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
-	// A bumped, tagged release sitting on main, as a failed push leaves it.
-	if err := os.WriteFile(filepath.Join(dir, "version.yaml"), []byte("version: 1.0.1\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	runGitCmd(t, dir, "commit", "-am", "chore(release): bump version to v1.0.1")
-	runGitCmd(t, dir, "tag", "-a", "v1.0.1", "-m", "v1.0.1")
-	var out bytes.Buffer
-	opt := gitflowReleaseOptions(dir, &out)
-	opt.Continue = true
-	if err := Run(opt); err != nil {
-		t.Fatalf("--continue on protected main: %v\n%s", err, out.String())
-	}
-	wantRemoteMatchesLocal(t, dir, bare, "refs/heads/main", "refs/tags/v1.0.1")
-}
-
 // protectRemoteMain installs an update hook that rejects only refs/heads/main,
 // as a forge's branch protection does. Without --atomic the tag would still land.
 func protectRemoteMain(t *testing.T, bare string) (hook string) {
@@ -229,38 +245,6 @@ func TestReleasePushLaterRemoteRejectionCanRetry(t *testing.T) {
 		t.Fatalf("retry after the rejection: %v", err)
 	}
 	wantRemoteMatchesLocal(t, dir, second, "refs/heads/main", "refs/tags/v9.9.9")
-}
-
-// A forge's branch protection answers only on the real push: --dry-run does not
-// run server hooks. The failure must name the remote's reason, leave the tag off
-// the remote, and let --continue finish once the push is allowed.
-func TestReleaseRejectedByRemoteProtectionCanContinue(t *testing.T) {
-	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
-	hook := protectRemoteMain(t, bare)
-	remoteRefs := pushTestRefs(t, bare)
-	var out bytes.Buffer
-	err := Run(gitflowReleaseOptions(dir, &out))
-	if err == nil {
-		t.Fatalf("want the remote's rejection, got success\n%s", out.String())
-	}
-	for _, want := range []string{"branch main is protected", "--continue"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not contain %q", err, want)
-		}
-	}
-	if got := pushTestRefs(t, bare); got != remoteRefs {
-		t.Errorf("rejected push changed the remote:\nbefore %s\nafter  %s", remoteRefs, got)
-	}
-	if err := os.Remove(hook); err != nil {
-		t.Fatal(err)
-	}
-	out.Reset()
-	opt := gitflowReleaseOptions(dir, &out)
-	opt.Continue = true
-	if err := Run(opt); err != nil {
-		t.Fatalf("--continue after the rejection: %v\n%s", err, out.String())
-	}
-	wantRemoteMatchesLocal(t, dir, bare, "refs/heads/main", "refs/tags/v1.0.1")
 }
 
 // wantSoloReleaseOutput was recorded from a solo release on main before the
