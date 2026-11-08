@@ -140,6 +140,32 @@ func TestRemoveAndCheckRejectUnsafeNames(t *testing.T) {
 	}
 }
 
+func TestNoticeReportsAppliedAndStale(t *testing.T) {
+	s := mustSpec(t)
+	root := t.TempDir()
+	if got := s.Notice(root, env(nil)); len(got) != 0 {
+		t.Fatalf("no state: Notice = %q", got)
+	}
+	for _, st := range []State{
+		{Class: "process", Item: "quota-1", SetAt: time.Now(), SessionID: "s1"},
+		{Class: "triggered-skill", Item: "lean-sprint", SetAt: time.Now(), SessionID: "old"},
+	} {
+		if err := s.Write(root, st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := s.Notice(root, env(map[string]string{"CLAUDE_CODE_SESSION_ID": "s1"}))
+	if len(got) != 2 {
+		t.Fatalf("Notice = %q, want 2 lines", got)
+	}
+	if !strings.Contains(got[0], "process quota-1 is suspended") {
+		t.Errorf("applied line = %q", got[0])
+	}
+	if !strings.Contains(got[1], "triggered-skill lean-sprint") || !strings.Contains(got[1], "NOT applied") {
+		t.Errorf("stale line = %q", got[1])
+	}
+}
+
 func TestWriteRefusesUnknownItem(t *testing.T) {
 	s := mustSpec(t)
 	root := t.TempDir()

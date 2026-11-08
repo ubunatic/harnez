@@ -161,6 +161,28 @@ type Status struct {
 	State   *State // the recorded state, nil if none
 }
 
+// Notice returns one session-start line per recorded item: applied items
+// remind the agent of the owner's suspension, stale ones warn that the rule
+// is enforced and the owner should /enable or re-/disable it. Empty when no
+// state exists.
+func (s Spec) Notice(root string, getenv func(string) string) []string {
+	states, err := s.List(root)
+	if err != nil {
+		return nil
+	}
+	var lines []string
+	for _, st := range states {
+		status := s.Check(root, st.Class, st.Item, getenv)
+		switch {
+		case status.Applied:
+			lines = append(lines, fmt.Sprintf("Harnez /disable: %s %s is suspended by the owner for this session; /enable restores it. Agents must not change this state.", st.Class, st.Item))
+		case status.Stale:
+			lines = append(lines, fmt.Sprintf("Harnez /disable: %s %s from %s belongs to another session and is NOT applied; the rule is enforced. Tell the owner: /enable clears it, /disable re-applies it.", st.Class, st.Item, st.SetAt.Format(time.RFC3339)))
+		}
+	}
+	return lines
+}
+
 // Check reports whether class/item is suspended for the current session.
 func (s Spec) Check(root, class, item string, getenv func(string) string) Status {
 	if !namePattern.MatchString(class) || !namePattern.MatchString(item) {
