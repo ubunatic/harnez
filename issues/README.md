@@ -12,7 +12,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 |---|------|-------|--------|
 | 857 | [857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md](857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md) | Support external issue providers (GitHub, GitLab, Codeberg, Trello, Jira) | Open |
 | 942 | [942-epic-model-catalog-access-discovery-and-user-model-policy.md](942-epic-model-catalog-access-discovery-and-user-model-policy.md) | Epic: model catalog, access discovery and user model policy | Open |
-| 959 | [959-agent-role-inference-turns-a-fix-prompt-into-a-read-only-reviewer.md](959-agent-role-inference-turns-a-fix-prompt-into-a-read-only-reviewer.md) | agent role inference turns a fix prompt into a read-only reviewer | Open |
 | 971 | [971-agent-start-stream-stats-drops-the-final-reply-when-it-was-already-printed.md](971-agent-start-stream-stats-drops-the-final-reply-when-it-was-already-printed.md) | agent start --stream stats drops the final reply when it was already printed | Open |
 | 979 | [979-epic-agent-instructions-and-help-text.md](979-epic-agent-instructions-and-help-text.md) | Epic: agent instructions and help text | Open |
 | 980 | [980-epic-harnez-agent-command-fixes-review-and-isolation.md](980-epic-harnez-agent-command-fixes-review-and-isolation.md) | Epic: harnez agent command fixes, review and isolation | Open |

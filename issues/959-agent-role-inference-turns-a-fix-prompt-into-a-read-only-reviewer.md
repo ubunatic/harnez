@@ -1,6 +1,6 @@
 # 959 — agent role inference turns a fix prompt into a read-only reviewer
 
-**Status**: Open
+**Status**: Closed — Inferred role is now marked as a guess: WithProtocol adds a note telling the agent to report a conflict with the task and stop instead of skipping it (internal/agent/core.go inferredRoleNote); stderr notice names --role. TestWithProtocolMarksInferredRole fails without fix; make test-q1 exit 0. Verb-over-noun preference not done (role classifier is an LLM call); the ticket's 'at least warns' path. Jules PR 147 plumbing used, closed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
