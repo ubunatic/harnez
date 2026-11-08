@@ -1,6 +1,6 @@
 # 1183 — Allow owner-authorized temporary suspension of Quota-1 for debugging
 
-**Status**: Open
+**Status**: Closed — superseded by 1188 (/disable process quota-1)
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

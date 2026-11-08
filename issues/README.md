@@ -37,7 +37,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1172 | [1172-draft-tickets-count-toward-the-active-ticket-cap.md](1172-draft-tickets-count-toward-the-active-ticket-cap.md) | Draft tickets count toward the active-ticket cap | Open |
 | 1180 | [1180-cleanup-remove-all-prime-agent-prime-support.md](1180-cleanup-remove-all-prime-agent-prime-support.md) | cleanup: remove all Prime Agent (~/.prime) support | Open |
 | 1181 | [1181-isolate-harnez-session-state-and-constrain-installation-destinations.md](1181-isolate-harnez-session-state-and-constrain-installation-destinations.md) | Isolate Harnez session state and constrain installation destinations | Open |
-| 1183 | [1183-allow-owner-authorized-temporary-suspension-of-quota-1-for-debugging.md](1183-allow-owner-authorized-temporary-suspension-of-quota-1-for-debugging.md) | Allow owner-authorized temporary suspension of Quota-1 for debugging | Open |
 | 1185 | [1185-agent-list-drops-a-jules-run-from-running-when-its-local-wait-times-out.md](1185-agent-list-drops-a-jules-run-from-running-when-its-local-wait-times-out.md) | agent list drops a Jules run from running when its local wait times out | Open |
 | 1188 | [1188-add-disable-skill-to-suspend-repo-rules-triggered-skills-or-process-rules-for-a-host-session.md](1188-add-disable-skill-to-suspend-repo-rules-triggered-skills-or-process-rules-for-a-host-session.md) | Add /disable skill to suspend repo rules, triggered skills or process rules for a host session | Open |
 <!-- harnez:end issues-active-index -->
