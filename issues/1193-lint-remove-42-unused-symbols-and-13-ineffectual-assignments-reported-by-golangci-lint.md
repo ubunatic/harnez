@@ -1,6 +1,6 @@
 # 1193 — lint: remove 42 unused symbols and 13 ineffectual assignments reported by golangci-lint
 
-**Status**: Open
+**Status**: Closed — 18a5359f: golangci-lint unused 0, ineffassign 0 (1403 -> 1347); make test and make lint green
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore
