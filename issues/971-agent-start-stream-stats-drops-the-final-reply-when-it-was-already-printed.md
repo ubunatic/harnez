@@ -39,3 +39,4 @@ Jules audit (PR GH#65, report `reports/jules/971-2.md`, checked against d8904997
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | audit | jules-audit-971 | 7808375416013930707 | github #96 (closed) | done: partly done, 3/3 refs hold; repeats 2026-11-03 audit |
+| implement | harnez-jules-impl-971 | 8076505807217153207 | none | failed 2026-11-08: stalled after 2 replies, no PR |

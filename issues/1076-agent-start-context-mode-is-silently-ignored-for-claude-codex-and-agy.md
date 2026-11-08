@@ -44,3 +44,4 @@ Jules audit (PR GH#70, report `reports/jules/1076.md`, checked against b0dcb501,
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | audit | jules-audit-1076 | 8540512660876518399 | github #95 (closed) | done: still valid, 5/5 refs hold; repeats 2026-11-03 audit |
+| implement | harnez-jules-impl-1076 | 12946028318458480440 | none | failed 2026-11-08: no PR after 2 replies; last message (lead, unverified): added contextMode to Resume/ResumeStream in internal/subagent/driver.go |

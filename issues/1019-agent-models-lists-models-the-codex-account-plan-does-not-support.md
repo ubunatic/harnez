@@ -31,3 +31,9 @@ So the failure is already visible when the model runs, but the models command do
 ## Audit 2026-11-03
 
 Jules audit (PR GH#71, report `reports/jules/1019-2.md`, checked against b0dcb501, all references held): partly done. The error shape is recorded in `docs/studies/2026-10-25-canary-model-access-discovery.md:15`. Still open: `candidateUnavailable` (`internal/subagent/driver.go:523`) has no "unsupported for this account" case, and `shortCause` (`cmd/harnez/agent_run.go:279`) truncates start errors to one line of 180 runes.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | harnez-jules-audit-1019 | 15569656316218008222 | none | failed 2026-11-08: stuck IN_PROGRESS finalizing report, stopped |
