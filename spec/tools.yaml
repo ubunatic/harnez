@@ -31,7 +31,5 @@ profiles:
     docs: [agit]
     tools: [fj]
   github: {}
-  web:
-    docs: [website]
   minimal:
     components: [docs-only]

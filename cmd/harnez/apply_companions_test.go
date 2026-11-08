@@ -1,6 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"errors"
+	"io"
+	"slices"
+	"strings"
 	"testing"
 
 	"ubunatic.com/harnez/internal/claude"
@@ -38,5 +43,37 @@ func TestResolveCompanionsWithoutProfilesKeepsFlags(t *testing.T) {
 	}
 	if len(sel.Docs) != 1 || sel.Docs[0] != "canary" || len(sel.Components) != 1 || len(sel.Tools) != 0 {
 		t.Errorf("sel = %+v", sel)
+	}
+}
+
+// The apply wiring: profiles feed docs and components, and install runs the
+// resolved tools through the env (issue 1190 review).
+func TestCompanionPlanProfilesAndInstall(t *testing.T) {
+	plan, err := resolveCompanions([]string{"go", "codeberg"}, []string{"canary"}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(plan.Docs, []string{"canary", "golang", "make", "agit"}) {
+		t.Errorf("docs = %v", plan.Docs)
+	}
+	var ran []string
+	env := companion.Env{
+		LookPath: func(b string) (string, error) {
+			if b == "go" {
+				return "/bin/go", nil
+			}
+			return "", errors.New("missing")
+		},
+		Run: func(argv []string, _ io.Writer) error { ran = append(ran, strings.Join(argv, " ")); return nil },
+	}
+	var out, warn bytes.Buffer
+	if n := plan.install(env, &out, &warn); n != 1 {
+		t.Errorf("warnings = %d, want 1 (cargo missing for fj); warn %q", n, warn.String())
+	}
+	if !slices.Equal(ran, []string{"go install ubunatic.com/gokay@latest"}) {
+		t.Errorf("ran = %v", ran)
+	}
+	if !strings.Contains(warn.String(), "apply continued") {
+		t.Errorf("warn lacks summary: %q", warn.String())
 	}
 }

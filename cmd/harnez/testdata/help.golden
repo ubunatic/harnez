@@ -710,7 +710,7 @@ Flags:
       --force-docs                             overwrite existing docs with bundled versions
   -h, --help                                   help for apply
       --no-docs                                do not install global docs, removing any previously installed global docs
-      --profiles strings                       profile(s) adding docs, tools and components, comma-separated (go,rust,codeberg,github,web,minimal)
+      --profiles strings                       profile(s) adding docs, tools and components, comma-separated (go,rust,codeberg,github,minimal; see spec/tools.yaml)
       --prune                                  with --components: also remove what the selection leaves out (desired state); without it a --components run leaves components outside the selection untouched
       --remove-docs                            remove all global docs from ~/.claude/docs/ and ~/.prime/agent/docs/
   -s, --shell                                  inject harnez environment source into ~/.bashrc and ~/.zshrc

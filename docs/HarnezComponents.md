@@ -545,5 +545,11 @@ deprecate it once no caller needs a component the profiles do not cover.
 
 `--tools gokay,loom,fj` installs companion tools with the installer named in the spec (`go install`,
 `cargo install`). A tool already on PATH is skipped unless `--upgrade-tools`; a missing installer or a
-failed install prints a warning and apply continues. Profiles are not yet remembered between runs:
+failed install prints a warning and apply continues; each installer run times out after 15 minutes.
+Profiles that narrow components (`minimal`) cannot be combined with ones that do not; `diff` and
+`status` do not take `--profiles` yet.
+
+`--profiles` differs from `--docs core|dev|full`: those are doc-only groups in config.yaml
+`docs_profiles`; `--profiles` adds tools and components. `harnez install <name>` (spec/dependencies.yaml)
+installs one optional dependency with a bootstrap step; companion tools need none. Profiles are not yet remembered between runs:
 pass them again, or follow up by storing them in config.yaml like `components:`.

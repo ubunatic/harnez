@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
@@ -122,5 +123,27 @@ func TestResolveProfiles(t *testing.T) {
 	}
 	if _, err := s.Resolve(nil, nil, []string{"nope"}, nil); err == nil {
 		t.Error("unknown tool accepted")
+	}
+	if _, err := s.Resolve([]string{"minimal", "go"}, nil, nil, nil); err == nil || !strings.Contains(err.Error(), "cannot be combined") {
+		t.Errorf("minimal+go: err = %v, want refusal", err)
+	}
+}
+
+func TestLoadSpecRejectsInvalid(t *testing.T) {
+	schema, err := harnez.DefaultFS.ReadFile("spec/schemas/tools.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]string{
+		"unknown field":     "tools: [{name: a, installer: go, package: p, binary: a, extra: 1}]\ninstallers: {go: [go, install]}\nprofiles: {}\n",
+		"duplicate tool":    "tools: [{name: a, installer: go, package: p, binary: a}, {name: a, installer: go, package: q, binary: a}]\ninstallers: {go: [go, install]}\nprofiles: {}\n",
+		"unknown installer": "tools: [{name: a, installer: npm, package: p, binary: a}]\ninstallers: {go: [go, install]}\nprofiles: {}\n",
+		"unknown tool":      "tools: [{name: a, installer: go, package: p, binary: a}]\ninstallers: {go: [go, install]}\nprofiles: {x: {tools: [b]}}\n",
+	}
+	for name, spec := range cases {
+		fsys := fstest.MapFS{"t.yaml": {Data: []byte(spec)}, "s.json": {Data: schema}}
+		if _, err := loadSpecFrom(fsys, "t.yaml", "s.json"); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

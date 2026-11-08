@@ -51,9 +51,11 @@ user-facing selector:
 ## Delivered
 
 - `spec/tools.yaml` + schema: gokay, loom (go install @latest), fj (cargo install forgejo-cli), installers,
-  profiles go, rust, codeberg, github, web, minimal.
+  profiles go, rust, codeberg, github, minimal (web dropped: placeholder until the website skill overhaul).
 - `apply --tools`, `--profiles`, `--upgrade-tools`; `--components` hidden from help.
 - Decisions (decide mode): one `--tools` flag, not per-ecosystem; `@latest`, no pinning yet.
+- Review (argon:low): schema validation + strict decode + duplicate check at load, spec loaded once,
+  mixing component-narrowing profiles refused, installer timeout, CLI wiring test. Deferred: `diff`/`status --profiles`.
 - Deferred: remembering profiles in config.yaml (needs a writable user config; plain apply uses the
   embedded one). Follow-up when wanted.
 

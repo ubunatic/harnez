@@ -9,6 +9,7 @@ import (
 	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/codex"
+	"ubunatic.com/harnez/internal/companion"
 	"ubunatic.com/harnez/internal/fsutil"
 )
 
@@ -94,7 +95,9 @@ func newApplyCmd() *cobra.Command {
 			if err := applyPiCompaction(claude.PiAgentRoot(cfg), cmd.ErrOrStderr()); err != nil {
 				return err
 			}
-			installCompanionTools(companions.Tools, upgradeTools, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			toolEnv := companion.DefaultEnv()
+			toolEnv.Upgrade = upgradeTools
+			companions.install(toolEnv, os.Stdout, cmd.ErrOrStderr())
 			if cfg.AgyTarget != "" && set.Has(claude.Usage) {
 				agyStatusLinePath := agy.StatusLineSettingsPath(fsutil.ExpandHome(cfg.AgyTarget))
 				if cfg.StatusLine {
@@ -223,7 +226,7 @@ func newApplyCmd() *cobra.Command {
 	apply.Flags().StringSliceVar(&componentNames, "components", nil, "component(s) to install, comma-separated or repeated (e.g. docs-only,telemetry); scoped: components not named are left untouched unless --prune is set")
 	_ = apply.Flags().MarkHidden("components") // issue 1190: profiles are the user-facing selector
 	apply.Flags().StringSliceVar(&applyTools, "tools", nil, "companion tool(s) to install, comma-separated (see spec/tools.yaml: gokay,loom,fj); a missing installer or failed install only warns")
-	apply.Flags().StringSliceVar(&applyProfiles, "profiles", nil, "profile(s) adding docs, tools and components, comma-separated (go,rust,codeberg,github,web,minimal)")
+	apply.Flags().StringSliceVar(&applyProfiles, "profiles", nil, "profile(s) adding docs, tools and components, comma-separated (go,rust,codeberg,github,minimal; see spec/tools.yaml)")
 	apply.Flags().BoolVar(&upgradeTools, "upgrade-tools", false, "reinstall companion tools that are already on PATH")
 	apply.Flags().BoolVar(&pruneComponents, "prune", false, "with --components: also remove what the selection leaves out (desired state); without it a --components run leaves components outside the selection untouched")
 	apply.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
