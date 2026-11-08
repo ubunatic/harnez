@@ -1,6 +1,6 @@
 # 1002 — harnez apply should give agy an allowlist that steers agents to make and Go
 
-**Status**: Open
+**Status**: Closed — Implemented: TranslateClaudeRule + spec allowlist + toolPermission always-proceed (internal/agy/permissions.go, spec/agy_tools.yaml), wired in harnez apply (cmd/harnez/apply_cmd.go:113); canaries 4-5 confirm on host. Jules PR 148 audit verified. Leftovers (interactive check, mcp mapping) not blocking.
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Feature
