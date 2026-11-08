@@ -1,6 +1,6 @@
 # 1082 — release: push fails when a forge push mirror updates another remote first
 
-**Status**: Open
+**Status**: Closed — Remote that already holds the pushed branch and tag is accepted (internal/release/push.go, ls-remote check after a failed push); TestReleasePushAllRemotes race-success fails without fix, race-fail still errors. make test-q1 exit 0. From Jules PR 143 (closed, cherry-picked).
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
