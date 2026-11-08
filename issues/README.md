@@ -39,4 +39,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1181 | [1181-isolate-harnez-session-state-and-constrain-installation-destinations.md](1181-isolate-harnez-session-state-and-constrain-installation-destinations.md) | Isolate Harnez session state and constrain installation destinations | Open |
 | 1185 | [1185-agent-list-drops-a-jules-run-from-running-when-its-local-wait-times-out.md](1185-agent-list-drops-a-jules-run-from-running-when-its-local-wait-times-out.md) | agent list drops a Jules run from running when its local wait times out | Open |
 | 1189 | [1189-add-opt-in-agit-doc-via-init-docs-agit.md](1189-add-opt-in-agit-doc-via-init-docs-agit.md) | Add opt-in AGit doc via init --docs agit | Open |
+| 1190 | [1190-harnez-apply-installs-companion-tools-gokay-loom-fj-via-tools-and-profiles.md](1190-harnez-apply-installs-companion-tools-gokay-loom-fj-via-tools-and-profiles.md) | harnez apply installs companion tools (gokay, loom, fj) via --tools and --profiles | Open |
 <!-- harnez:end issues-active-index -->
