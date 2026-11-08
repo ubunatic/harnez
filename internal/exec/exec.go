@@ -46,6 +46,7 @@ import (
 	harnez "ubunatic.com/harnez"
 
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/disable"
 	"ubunatic.com/harnez/internal/distill"
 	"ubunatic.com/harnez/internal/logging"
 	"ubunatic.com/harnez/internal/procs"
@@ -581,8 +582,9 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	quotaStateFile := ""
 	if quota1Active {
 		res, err := quota1.CheckAndRecord(quota1.CheckOptions{
-			Dir:    opts.Quota1Dir,
-			Getenv: opts.Getenv,
+			Dir:            opts.Quota1Dir,
+			Getenv:         opts.Getenv,
+			OwnerSuspended: quota1SuspendedByOwner(opts, errOut),
 		})
 		if err != nil {
 			return 1, fmt.Errorf("exec: %w", err)
@@ -1676,4 +1678,28 @@ func distillAutopipeRewrite(command string) (string, bool) {
 // in a shell command line, escaping any embedded single quotes.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// quota1SuspendedByOwner reports whether the owner ran `/disable process
+// quota-1` in this session (issue 1188). A state file from another session is
+// stale: Quota-1 stays enforced and a one-line warning names it.
+func quota1SuspendedByOwner(opts execOptions, errOut io.Writer) bool {
+	spec, err := disable.LoadSpec()
+	if err != nil {
+		logging.Debugf("quota-1: %v", err)
+		return false
+	}
+	_, root, err := quota1.ResolveStateFile(opts.Quota1Dir)
+	if err != nil {
+		return false
+	}
+	st := spec.Check(root, "process", "quota-1", opts.Getenv)
+	switch {
+	case st.Applied:
+		fmt.Fprintln(errOut, "quota-1: suspended by the owner for this session (/disable process quota-1); /enable restores it")
+		return true
+	case st.Stale:
+		fmt.Fprintf(errOut, "quota-1: enforced; /disable process quota-1 from %s is from another session (/enable clears it, /disable re-applies it)\n", st.State.SetAt.Format(time.RFC3339))
+	}
+	return false
 }
