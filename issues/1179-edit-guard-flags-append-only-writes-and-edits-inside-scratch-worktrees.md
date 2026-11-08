@@ -1,6 +1,6 @@
 # 1179 — edit guard flags append-only writes and edits inside scratch worktrees
 
-**Status**: Open
+**Status**: Closed — Edit guard no longer warns on >> appends or inside linked worktrees (.git file into /worktrees/; linkedWorktree in internal/exec/exec.go); submodules and main-tree rewrites still warn. New cases in TestScriptedRepoWriteConservative and TestExecHookEditGuardM2Cases fail without fix. make test-q1 exit 0. Jules PR 144 partly used (append), closed.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
