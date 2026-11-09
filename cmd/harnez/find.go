@@ -47,8 +47,8 @@ Entities:
            archived tickets are in scope by default; use a status filter to
            narrow lifecycle state. Without a local issues/ dir, plain term
            searches read the origin forge (spec/pr.yaml) instead: every term
-           must match title or body; terms with ':' (status: filters) are
-           rejected and subcommands like next stay local-only. It reads at
+           must match title or body; ':' terms other than status: filters
+           are rejected and subcommands like next stay local-only. It reads at
            most the spec's open_pr_scan page budget and notes when older
            tickets may exist (JSON: "truncated").
   code     searches source files through configured finders (neus first,
@@ -164,16 +164,21 @@ Output formatting:
 					return fmt.Errorf("find code: outside a Git worktree; use -d/--dir <directory> to select the search scope")
 				}
 			}
-			if args[0] == "issues" && !nextFlag {
+			// history reads the telemetry DB, not issues/, so it never goes to the forge.
+			if args[0] == "issues" && !(len(args) > 1 && args[1] == "history") {
 				t, src, spec, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir)
 				if err != nil {
 					return err
 				}
 				if ok {
-					if len(args) > 1 && findIssuesLocalOnly[args[1]] {
-						return forgeLocalOnlyError(args[1])
+					if nextFlag {
+						return forgeLocalOnlyError("--next")
 					}
-					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.OpenPRScan, forgeFindArgs(args[1:]), limitFlag, allFlag, jsonFlag), t)
+					words := forgeFindArgs(args[1:])
+					if len(words) > 0 && findIssuesLocalOnly[words[0]] {
+						return forgeLocalOnlyError(words[0])
+					}
+					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.OpenPRScan, forgeFindTerms(words), limitFlag, allFlag, jsonFlag), t)
 				}
 			}
 			opts := find.FindRunOptions{

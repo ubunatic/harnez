@@ -20,7 +20,7 @@ import (
 // forge repo they are refused with forgeLocalOnlyError; closed is not in the set because it
 // maps to status:closed (issue 1198).
 var findIssuesLocalOnly = map[string]bool{
-	"next": true, "last": true, "history": true, "similar": true,
+	"next": true, "last": true, "similar": true,
 	"open": true, "blocked": true, "draft": true,
 }
 
@@ -37,13 +37,19 @@ func forgeLocalOnlyError(word string) error {
 	}
 }
 
-// forgeFindArgs rewrites the leading bare word closed to status:closed, so it is a state
-// filter on the forge rather than a search term (issue 1198). args excludes "issues".
+// forgeFindArgs splits args into words, as forgetracker.Find does, so a quoted query like
+// "closed bug" is read the same as closed bug. args excludes "issues".
 func forgeFindArgs(args []string) []string {
-	if len(args) > 0 && args[0] == "closed" {
-		return append([]string{"status:closed"}, args[1:]...)
+	return strings.Fields(strings.Join(args, " "))
+}
+
+// forgeFindTerms rewrites the leading bare word closed to status:closed, so it is a state
+// filter on the forge rather than a search term (issue 1198). words come from forgeFindArgs.
+func forgeFindTerms(words []string) []string {
+	if len(words) > 0 && words[0] == "closed" {
+		return append([]string{"status:closed"}, words[1:]...)
 	}
-	return args
+	return words
 }
 
 // forgeTrackerSource is the live forge reader; tests replace it.

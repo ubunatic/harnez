@@ -122,7 +122,7 @@ func TestFindStatusFilterRejectsOtherValuesBeforeFetch(t *testing.T) {
 	for _, term := range []string{"status:backlog", "status:", "status:open status:closed"} {
 		src := sample()
 		err := Find(&bytes.Buffer{}, src, target, forge.ScanOptions{}, []string{term}, 10, false, false)
-		if err == nil || !strings.Contains(err.Error(), "supported values: status:open, status:closed") && !strings.Contains(err.Error(), "only one status") {
+		if err == nil || !strings.Contains(err.Error(), "supported values: status:open, status:closed, status:active") && !strings.Contains(err.Error(), "only one status") {
 			t.Errorf("term %q: want supported-values error, got %v", term, err)
 		}
 		if src.calls != 0 {
@@ -161,6 +161,8 @@ func TestFindStatusFilterSendsStateToForge(t *testing.T) {
 		{[]string{"status:closed"}, "closed"},
 		{[]string{"status:open", "vram"}, "open"},
 		{[]string{"status:active"}, "open"}, // issue 1198: the local tracker's active set maps to open
+		{[]string{"status:active", "vram"}, "open"},
+		{[]string{"vram", "status:closed"}, "closed"}, // the filter need not lead
 	} {
 		var out bytes.Buffer
 		if err := Find(&out, src, tg, opts, c.terms, 10, false, false); err != nil {
