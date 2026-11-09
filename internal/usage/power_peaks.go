@@ -193,15 +193,15 @@ func writeFileAtomic(path string, data []byte) error {
 	tmpName := tmp.Name()
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName) // best-effort cleanup; failure does not change the result
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName) // best-effort cleanup; failure does not change the result
 		return err
 	}
 	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName) // best-effort cleanup; failure does not change the result
 		return err
 	}
 	return nil

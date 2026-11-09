@@ -145,7 +145,7 @@ func Open(path string) (*DB, error) {
 				sqlDB.Close()
 				lastErr = connErr
 			} else if _, connErr = conn.ExecContext(context.Background(), "BEGIN IMMEDIATE"); connErr != nil {
-				conn.Close()
+				_ = conn.Close() // best-effort cleanup; failure does not change the result
 				sqlDB.Close()
 				lastErr = connErr
 			} else {
@@ -166,7 +166,7 @@ func Open(path string) (*DB, error) {
 				} else {
 					_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
 				}
-				conn.Close()
+				_ = conn.Close() // best-effort cleanup; failure does not change the result
 				if stepErr == nil {
 					return &DB{sql: sqlDB, migrations: migrations}, nil
 				}

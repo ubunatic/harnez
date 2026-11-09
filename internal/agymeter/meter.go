@@ -576,7 +576,7 @@ func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model,
 			m.debugf("gzip side-reader failed: %v", err)
 			return
 		}
-		defer gz.Close()
+		defer gz.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 		src = gz
 	} else if encoding != "" && !strings.EqualFold(encoding, "identity") {
 		m.debugf("unsupported content encoding for side-reader")

@@ -217,7 +217,7 @@ func runCollectorWithDeps(ctx context.Context, homeDir, dbPath string, interval 
 	for {
 		select {
 		case <-ctx.Done():
-			<-writerDone
+			<-writerDone //nolint:errcheck // cancel path returns nil by design; the writer error is not reported here
 			return nil
 		case err := <-writerDone:
 			if err != nil {

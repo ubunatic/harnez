@@ -55,7 +55,7 @@ func capturePassiveNoQuota(provider string, payload []byte, reason string) {
 	if err != nil {
 		return
 	}
-	defer os.Remove(f.Name())
+	defer os.Remove(f.Name()) //nolint:errcheck // best-effort cleanup; error not actionable
 	_, writeErr := f.Write(data)
 	closeErr := f.Close()
 	if writeErr == nil && closeErr == nil {

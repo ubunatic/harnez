@@ -107,7 +107,7 @@ func (d *DB) withLegacy(ctx context.Context, paths []string, fn func(*sql.Conn, 
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	attached := make([]attachedLegacy, 0, len(paths))
 	defer func() {
 		for _, a := range attached {

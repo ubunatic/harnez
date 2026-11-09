@@ -13,16 +13,34 @@ func TestDiscoverDocFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a nested file hierarchy
-	os.MkdirAll(filepath.Join(tmpDir, "docs", "lang"), 0755)
-	os.MkdirAll(filepath.Join(tmpDir, "docs", "practices"), 0755)
-	os.MkdirAll(filepath.Join(tmpDir, "docs", "empty"), 0755)
-	os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "docs", "lang"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, "docs", "practices"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, "docs", "empty"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
 
-	os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("agents"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Go.md"), []byte("go"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Rust.md"), []byte("rust"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "docs", "practices", "Sprint.md"), []byte("sprint"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "docs", "ignore.bin"), []byte{0x00, 0x01}, 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("agents"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Go.md"), []byte("go"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Rust.md"), []byte("rust"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "practices", "Sprint.md"), []byte("sprint"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "ignore.bin"), []byte{0x00, 0x01}, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Default targets: docs, AGENTS.md
 	files, err := DiscoverDocFiles(tmpDir, nil)
@@ -207,12 +225,18 @@ func TestExtractMultiDocHistoryIntegration(t *testing.T) {
 	runGit("config", "user.name", "Test")
 	runGit("config", "user.email", "test@example.com")
 
-	os.MkdirAll(filepath.Join(tmpDir, "docs", "lang"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agents\nSome configuration rules.\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "docs", "lang"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agents\nSome configuration rules.\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	runGit("add", "AGENTS.md")
 	runGit("commit", "-m", "initial agents")
 
-	os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Go.md"), []byte("# Go\nConventions for Go code.\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Go.md"), []byte("# Go\nConventions for Go code.\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	runGit("add", "docs/lang/Go.md")
 	runGit("commit", "-m", "add go docs")
 

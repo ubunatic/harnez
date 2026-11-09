@@ -82,7 +82,7 @@ func (d *DB) PutCachedNotes(ctx context.Context, entries map[string]string, now 
 	if err != nil {
 		return fmt.Errorf("telemetry: prepare note_sanitization_cache upsert: %w", err)
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 
 	createdAt := now.Format(time.RFC3339Nano)
 	for hash, clean := range entries {

@@ -60,9 +60,9 @@ func RunLoadStream(ctx context.Context, out io.Writer, in io.Reader) error {
 		snap.ObservedAt = time.Now().UTC()
 		data, err := json.Marshal(snap)
 		if err == nil {
-			w.Write(data)
-			w.WriteByte('\n')
-			w.Flush()
+			_, _ = w.Write(data)
+			_ = w.WriteByte('\n')
+			_ = w.Flush()
 		}
 
 		select {
@@ -142,7 +142,7 @@ func newControlMaster(host string) (*controlMaster, error) {
 
 	cmd := sshControlMasterStartCmd(ctlPath, host)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir) // best-effort cleanup; failure does not change the result
 		msg := strings.TrimSpace(string(out))
 		if msg == "" {
 			msg = err.Error()
@@ -166,7 +166,7 @@ func (cm *controlMaster) Close() {
 	// cancelled, and an already-cancelled context would stop this cleanup
 	// exec.Cmd before "-O exit" ever ran — exactly backwards.
 	_ = sshControlMasterExitCmd(cm.ctlPath, cm.host).Run()
-	os.RemoveAll(cm.dir)
+	_ = os.RemoveAll(cm.dir) // best-effort cleanup; failure does not change the result
 	cm.dir = ""
 }
 

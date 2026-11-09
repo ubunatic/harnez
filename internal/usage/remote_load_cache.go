@@ -78,7 +78,7 @@ func WriteCachedRemoteLoad(host string, snapshot *LoadSnapshot) error {
 		return err
 	}
 	tempName := temp.Name()
-	defer os.Remove(tempName)
+	defer os.Remove(tempName) //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := temp.Chmod(0o600); err != nil {
 		temp.Close()
 		return err

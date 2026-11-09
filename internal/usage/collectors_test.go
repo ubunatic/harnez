@@ -57,7 +57,7 @@ func TestCollectClaude(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"five_hour": {
 				"utilization": 80.0,
 				"resets_at": "2026-08-17T23:00:00Z"
