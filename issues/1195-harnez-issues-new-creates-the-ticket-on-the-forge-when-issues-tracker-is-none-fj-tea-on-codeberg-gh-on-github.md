@@ -1,6 +1,6 @@
 # 1195 — harnez issues new creates the ticket on the forge when issues.tracker is none (fj/tea on Codeberg, gh on GitHub)
 
-**Status**: Open
+**Status**: Closed — forge create via tea/fj/gh with dry run, labels, no commit; make test-q1 exit 0; argon:low review fixed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
