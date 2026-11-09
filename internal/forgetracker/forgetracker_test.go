@@ -99,6 +99,25 @@ func TestFindMatchesAllTermsCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestFindAllHintOnlyWhenRowsAreCut: the --all hint appears only when the limit hides rows.
+func TestFindAllHintOnlyWhenRowsAreCut(t *testing.T) {
+	src := sample()
+	var out bytes.Buffer
+	if err := Find(&out, src, target, forge.ScanOptions{}, []string{"loader"}, 10, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "--all") || !strings.Contains(out.String(), "showing 2\n") {
+		t.Fatalf("all rows shown, want no --all hint:\n%s", out.String())
+	}
+	out.Reset()
+	if err := Find(&out, src, target, forge.ScanOptions{}, []string{"loader"}, 1, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "showing 1 (use --all to show all)\n") {
+		t.Fatalf("rows cut, want --all hint:\n%s", out.String())
+	}
+}
+
 func TestFindStatusFilterRejectsOtherValuesBeforeFetch(t *testing.T) {
 	for _, term := range []string{"status:backlog", "status:", "status:open status:closed"} {
 		src := sample()

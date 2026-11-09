@@ -167,7 +167,11 @@ func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []str
 			Rows      []issueJSON `json:"rows"`
 		}{total, truncated, rows})
 	}
-	if _, err := fmt.Fprintf(w, "# %d matches on %s, showing %d (use --all to show all)\n", total, t, len(rows)); err != nil {
+	hint := ""
+	if len(rows) < total {
+		hint = " (use --all to show all)"
+	}
+	if _, err := fmt.Fprintf(w, "# %d matches on %s, showing %d%s\n", total, t, len(rows), hint); err != nil {
 		return err
 	}
 	if truncated {
