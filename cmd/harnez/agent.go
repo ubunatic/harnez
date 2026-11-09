@@ -667,7 +667,7 @@ func attributable(sessions []*subagent.Session, dir, callerParent string) []*sub
 	want, _ := filepath.Abs(dir)
 	result := make([]*subagent.Session, 0, len(sessions))
 	for _, sess := range sessions {
-		if sess.Status != "completed" && !(sess.Status == "active" && sess.HarnessType == "interactive") {
+		if sess.Status != "completed" && (sess.Status != "active" || sess.HarnessType != "interactive") {
 			continue
 		}
 		have, _ := filepath.Abs(sess.WorkingDir)

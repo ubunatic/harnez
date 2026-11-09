@@ -679,7 +679,7 @@ func importCompatibility(s *usagestore.Store, ctx context.Context, homeDir strin
 			FetchedAt time.Time       `json:"fetched_at"`
 			Payload   json.RawMessage `json:"payload"`
 		}
-		if len(data) > 0 && json.Unmarshal(data, &cache) == nil && cache.FetchedAt.IsZero() == false {
+		if len(data) > 0 && json.Unmarshal(data, &cache) == nil && !cache.FetchedAt.IsZero() {
 			u := AgentUsage{AgentID: item.id, LastRefreshed: cache.FetchedAt}
 			switch item.id {
 			case "claude":

@@ -22,7 +22,7 @@ func TestRewritePluralCommands(t *testing.T) {
 		{"", ""},
 	} {
 		got := rewritePluralCommands(root, strings.Fields(tc.in))
-		if want := strings.Fields(tc.want); !reflect.DeepEqual(got, want) && !(len(got) == 0 && len(want) == 0) {
+		if want := strings.Fields(tc.want); !reflect.DeepEqual(got, want) && (len(got) != 0 || len(want) != 0) {
 			t.Errorf("%q -> %q, want %q", tc.in, got, want)
 		}
 	}

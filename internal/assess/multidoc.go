@@ -658,7 +658,7 @@ func RenderStackedBar(categoryTok map[string]int, totalTokens int, width int, us
 			continue
 		}
 		if useColor {
-			b.WriteString(fmt.Sprintf("\x1b[%sm%s\x1b[0m", s.color, strings.Repeat("█", s.chars)))
+			fmt.Fprintf(&b, "\x1b[%sm%s\x1b[0m", s.color, strings.Repeat("█", s.chars))
 		} else {
 			b.WriteString(strings.Repeat(s.glyph, s.chars))
 		}
@@ -691,8 +691,8 @@ func RenderMultiDocHistory(res *MultiDocResult, opts ...RenderMultiDocOptions) s
 	if totalAccesses > 0 {
 		hitRate = float64(res.CacheHits) / float64(totalAccesses) * 100.0
 	}
-	b.WriteString(fmt.Sprintf("Documents: %d analyzed | Commits: %d | Unique Blobs: %d | Cache Hits: %d (%.1f%%) | Latency: %v\n",
-		len(res.ResolvedFiles), res.TotalCommits, res.UniqueBlobs, res.CacheHits, hitRate, res.Duration.Round(time.Millisecond)))
+	fmt.Fprintf(&b, "Documents: %d analyzed | Commits: %d | Unique Blobs: %d | Cache Hits: %d (%.1f%%) | Latency: %v\n",
+		len(res.ResolvedFiles), res.TotalCommits, res.UniqueBlobs, res.CacheHits, hitRate, res.Duration.Round(time.Millisecond))
 
 	// 2. Aggregate Sparkline & Overview
 	tokensSeries := make([]int, len(res.Timeline))
@@ -715,8 +715,8 @@ func RenderMultiDocHistory(res *MultiDocResult, opts ...RenderMultiDocOptions) s
 		sign = ""
 	}
 	sparkline := RenderSparkline(tokensSeries, 40)
-	b.WriteString(fmt.Sprintf("Aggregate Sparkline: [%s]  (%s → %s tokens, %s%.1f%% | Peak: %s)\n\n",
-		sparkline, formatNumber(startTok), formatNumber(endTok), sign, pctChange, formatNumber(peakTok)))
+	fmt.Fprintf(&b, "Aggregate Sparkline: [%s]  (%s → %s tokens, %s%.1f%% | Peak: %s)\n\n",
+		sparkline, formatNumber(startTok), formatNumber(endTok), sign, pctChange, formatNumber(peakTok))
 
 	// 3. Category Proportions Over Milestones (Stacked Breakdown)
 	milestones := SampleMilestones(res.Timeline, 5)
@@ -756,22 +756,22 @@ func RenderMultiDocHistory(res *MultiDocResult, opts ...RenderMultiDocOptions) s
 			}
 		}
 
-		b.WriteString(fmt.Sprintf("Legend: %s\n", strings.Join(legendParts, "  ")))
-		b.WriteString(fmt.Sprintf("%-20s  %-30s  %10s  %6s\n", "MILESTONE", "PROPORTION BAR", "TOKENS", "DOCS"))
+		fmt.Fprintf(&b, "Legend: %s\n", strings.Join(legendParts, "  "))
+		fmt.Fprintf(&b, "%-20s  %-30s  %10s  %6s\n", "MILESTONE", "PROPORTION BAR", "TOKENS", "DOCS")
 		b.WriteString(strings.Repeat("─", 74) + "\n")
 
 		for _, m := range milestones {
 			bar := RenderStackedBar(m.CategoryTok, m.TotalTokens, 30, useColor)
-			b.WriteString(fmt.Sprintf("%-20s  [%s]  %10s  %6d\n",
-				m.Label, bar, formatNumber(m.TotalTokens), m.ActiveDocs))
+			fmt.Fprintf(&b, "%-20s  [%s]  %10s  %6d\n",
+				m.Label, bar, formatNumber(m.TotalTokens), m.ActiveDocs)
 		}
 		b.WriteString("\n")
 	}
 
 	// 4. Per-Document Summary Table
 	b.WriteString("── Document Summary (Sorted by Current Token Footprint) ────────────\n")
-	b.WriteString(fmt.Sprintf("%-36s  %10s  %8s  %8s  %8s  %6s  %s\n",
-		"DOCUMENT", "CATEGORY", "START", "PEAK", "CURRENT", "% TOT", "TREND"))
+	fmt.Fprintf(&b, "%-36s  %10s  %8s  %8s  %8s  %6s  %s\n",
+		"DOCUMENT", "CATEGORY", "START", "PEAK", "CURRENT", "% TOT", "TREND")
 	b.WriteString(strings.Repeat("─", 94) + "\n")
 
 	for _, s := range res.DocSummaries {
@@ -780,15 +780,14 @@ func RenderMultiDocHistory(res *MultiDocResult, opts ...RenderMultiDocOptions) s
 			dispPath = "..." + dispPath[len(dispPath)-33:]
 		}
 
-		b.WriteString(fmt.Sprintf("%-36s  %-10s  %8s  %8s  %8s  %5.1f%%  [%s]\n",
+		fmt.Fprintf(&b, "%-36s  %-10s  %8s  %8s  %8s  %5.1f%%  [%s]\n",
 			dispPath,
 			s.Category,
 			formatNumber(s.StartTokens),
 			formatNumber(s.PeakTokens),
 			formatNumber(s.CurrentTokens),
 			s.PctOfTotal,
-			s.Sparkline,
-		))
+			s.Sparkline)
 	}
 
 	return b.String()

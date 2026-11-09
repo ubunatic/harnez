@@ -163,7 +163,7 @@ func FormatTextCadence(res *ReadResult, mode string) (string, error) {
 		if i != 0 && lineNum%cadence != 0 {
 			label = "."
 		}
-		sb.WriteString(fmt.Sprintf("%*s │ %s\n", digits, label, l))
+		fmt.Fprintf(&sb, "%*s │ %s\n", digits, label, l)
 	}
 
 	return strings.TrimRight(sb.String(), "\n"), nil

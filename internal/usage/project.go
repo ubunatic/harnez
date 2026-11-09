@@ -492,8 +492,8 @@ func RenderProjectUsageCard(res *ProjectUsageResult) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Project AI Telemetry: %s (%s)\n", res.RepoName, res.RepoDir))
-	sb.WriteString(fmt.Sprintf("Lifetime Attributed Tokens: %s tokens\n", formatTokenMagnitude(res.LifetimeTokens)))
+	fmt.Fprintf(&sb, "Project AI Telemetry: %s (%s)\n", res.RepoName, res.RepoDir)
+	fmt.Fprintf(&sb, "Lifetime Attributed Tokens: %s tokens\n", formatTokenMagnitude(res.LifetimeTokens))
 
 	// Sort agent keys
 	agentKeys := make([]string, 0, len(res.Agents))
@@ -508,7 +508,7 @@ func RenderProjectUsageCard(res *ProjectUsageResult) string {
 			continue
 		}
 
-		sb.WriteString(fmt.Sprintf("  - %-14s %s tokens", a.Name+":", formatTokenMagnitude(a.Tokens.TotalTokens)))
+		fmt.Fprintf(&sb, "  - %-14s %s tokens", a.Name+":", formatTokenMagnitude(a.Tokens.TotalTokens))
 
 		// Model breakdown if available
 		if len(a.ModelTokens) > 0 {
@@ -534,7 +534,7 @@ func RenderProjectUsageCard(res *ProjectUsageResult) string {
 				}
 			}
 			if len(modelParts) > 0 {
-				sb.WriteString(fmt.Sprintf(" (%s)", strings.Join(modelParts, ", ")))
+				fmt.Fprintf(&sb, " (%s)", strings.Join(modelParts, ", "))
 			}
 		}
 		sb.WriteString("\n")
@@ -544,15 +544,15 @@ func RenderProjectUsageCard(res *ProjectUsageResult) string {
 		coc := res.CostOfChange
 		sb.WriteString("\nCost of Change:\n")
 		if coc.NetCodeLOC > 0 {
-			sb.WriteString(fmt.Sprintf("  - Net Code Lines: +%s LOC (~%s tokens / LOC)\n",
-				formatLOC(coc.NetCodeLOC), formatNumberWithCommas(int64(math.Round(coc.TokensPerLOC)))))
+			fmt.Fprintf(&sb, "  - Net Code Lines: +%s LOC (~%s tokens / LOC)\n",
+				formatLOC(coc.NetCodeLOC), formatNumberWithCommas(int64(math.Round(coc.TokensPerLOC))))
 		}
 		if coc.ClosedTickets > 0 {
-			sb.WriteString(fmt.Sprintf("  - Shipped Tickets: %d closed tickets (~%s tokens / ticket)\n",
-				coc.ClosedTickets, formatTokenMagnitude(int64(math.Round(coc.TokensPerTicket)))))
+			fmt.Fprintf(&sb, "  - Shipped Tickets: %d closed tickets (~%s tokens / ticket)\n",
+				coc.ClosedTickets, formatTokenMagnitude(int64(math.Round(coc.TokensPerTicket))))
 		}
 		if coc.CacheReadEfficiency > 0 {
-			sb.WriteString(fmt.Sprintf("  - Prompt Cache Leverage: %.1f%% cache read efficiency\n", coc.CacheReadEfficiency))
+			fmt.Fprintf(&sb, "  - Prompt Cache Leverage: %.1f%% cache read efficiency\n", coc.CacheReadEfficiency)
 		}
 	}
 

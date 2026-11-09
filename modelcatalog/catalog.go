@@ -604,9 +604,7 @@ func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
 		known = true
 		providers = append(providers, strings.ToLower(model.Identity.Harness), strings.ToLower(model.Identity.Provider))
 		aliases = append(aliases, model.Key, model.Identity.Model)
-		for _, alias := range model.Aliases {
-			aliases = append(aliases, alias)
-		}
+		aliases = append(aliases, model.Aliases...)
 	}
 	for policyID, entry := range c.policy.Models {
 		identityMatches := entry.Identity != nil && (strings.EqualFold(entry.Identity.Harness, provider) || strings.EqualFold(entry.Identity.Provider, provider)) && entry.Identity.Model == modelName && (entry.Identity.Tier == "" || strings.EqualFold(entry.Identity.Tier, tier))

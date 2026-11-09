@@ -102,8 +102,7 @@ func (ac *agentCLI) listCmd() *cobra.Command {
 				}
 			}
 		}
-		if ac.children && !ac.all { /* List already scopes to direct children. */
-		}
+		// List already scopes to direct children when --children is set.
 		if ac.jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(xs)
 		}

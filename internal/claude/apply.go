@@ -784,11 +784,12 @@ func ApplyAllVariant(target string, cfg *Config, opts ApplyOptions) error {
 	if len(r.removals) > 0 {
 		r.addStat("removed", strings.Join(r.removals, "; "))
 	}
-	if r.changes == 0 {
+	switch r.changes {
+	case 0:
 		fmt.Println("No changes.")
-	} else if r.changes == 1 {
+	case 1:
 		fmt.Println("1 change.")
-	} else {
+	default:
 		fmt.Printf("%d changes.\n", r.changes)
 	}
 	for _, s := range r.stats {

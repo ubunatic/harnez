@@ -456,7 +456,7 @@ func TestAgentSelftestVerifyMissingHTOFails(t *testing.T) {
 	_ = cmd.Execute()
 	release()
 
-	_ = <-bgDone
+	<-bgDone
 
 	// 5. Verify -> must fail because HTO was not set
 	cmd = newAgentSelftestCmd()

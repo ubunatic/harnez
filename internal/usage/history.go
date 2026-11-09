@@ -218,24 +218,24 @@ func RenderHistoryStatsText(stats HistorySummaryData, dir string) string {
 		if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(displayDir, home) {
 			displayDir = "~" + strings.TrimPrefix(displayDir, home)
 		}
-		sb.WriteString(fmt.Sprintf("Directory:     %s\n", displayDir))
+		fmt.Fprintf(&sb, "Directory:     %s\n", displayDir)
 	}
 	fileWord := "files"
 	if stats.FileCount == 1 {
 		fileWord = "file"
 	}
-	sb.WriteString(fmt.Sprintf("Files:         %d %s (%s)\n", stats.FileCount, fileWord, FormatBytes(stats.TotalBytes)))
-	sb.WriteString(fmt.Sprintf("Snapshots:     %d\n", stats.TotalEntries))
+	fmt.Fprintf(&sb, "Files:         %d %s (%s)\n", stats.FileCount, fileWord, FormatBytes(stats.TotalBytes))
+	fmt.Fprintf(&sb, "Snapshots:     %d\n", stats.TotalEntries)
 	if stats.TotalEntries > 0 {
-		sb.WriteString(fmt.Sprintf("Timespan:      %s\n", FormatDuration(stats.Duration)))
-		sb.WriteString(fmt.Sprintf("Tokens Start:  %s\n", FormatNumber(stats.StartTokens)))
-		sb.WriteString(fmt.Sprintf("Tokens End:    %s\n", FormatNumber(stats.EndTokens)))
-		sb.WriteString(fmt.Sprintf("Tokens Used:   +%s\n", FormatNumber(stats.TotalUsed)))
+		fmt.Fprintf(&sb, "Timespan:      %s\n", FormatDuration(stats.Duration))
+		fmt.Fprintf(&sb, "Tokens Start:  %s\n", FormatNumber(stats.StartTokens))
+		fmt.Fprintf(&sb, "Tokens End:    %s\n", FormatNumber(stats.EndTokens))
+		fmt.Fprintf(&sb, "Tokens Used:   +%s\n", FormatNumber(stats.TotalUsed))
 		if stats.Duration >= time.Minute {
-			sb.WriteString(fmt.Sprintf("Burn Rate:     %s /hr · %s /day\n", FormatNumber(stats.RatePerHour), FormatNumber(stats.RatePerDay)))
+			fmt.Fprintf(&sb, "Burn Rate:     %s /hr · %s /day\n", FormatNumber(stats.RatePerHour), FormatNumber(stats.RatePerDay))
 		}
 		if stats.Sparkline != "" {
-			sb.WriteString(fmt.Sprintf("Trajectory:    [%s]\n", stats.Sparkline))
+			fmt.Fprintf(&sb, "Trajectory:    [%s]\n", stats.Sparkline)
 		}
 	}
 	return sb.String()
@@ -485,7 +485,7 @@ func RenderTimelineText(entries []HistoryEntry) string {
 		return "No usage history recorded yet. Run `harnez usage history record` (or `--watch`) to start recording.\n"
 	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%-20s %-16s %-8s %9s %9s %14s\n", "TIME", "HOST", "AGENT", "SESSION%", "WEEKLY%", "TOKENS"))
+	fmt.Fprintf(&sb, "%-20s %-16s %-8s %9s %9s %14s\n", "TIME", "HOST", "AGENT", "SESSION%", "WEEKLY%", "TOKENS")
 	for _, e := range entries {
 		ts := e.Timestamp.Local().Format("2006-01-02 15:04:05")
 		for _, a := range e.Agents {
@@ -502,7 +502,7 @@ func RenderTimelineText(entries []HistoryEntry) string {
 			if a.Tokens != nil {
 				tok = FormatNumber(a.Tokens.TotalTokens)
 			}
-			sb.WriteString(fmt.Sprintf("%-20s %-16s %-8s %9s %9s %14s\n", ts, e.Hostname, a.AgentID, sess, week, tok))
+			fmt.Fprintf(&sb, "%-20s %-16s %-8s %9s %9s %14s\n", ts, e.Hostname, a.AgentID, sess, week, tok)
 		}
 	}
 
@@ -654,7 +654,7 @@ func RenderTimelineSparklinesWidth(entries []HistoryEntry, termWidth int) string
 		// Prefix: "  %-20s" -> 22 chars
 		sparkW := calcSparkW(22, visLen(stats))
 		spark := RenderSparklineInt64Width(toks, sparkW)
-		sb.WriteString(fmt.Sprintf("  %-20s [%s]   %s\n", name, spark, stats))
+		fmt.Fprintf(&sb, "  %-20s [%s]   %s\n", name, spark, stats)
 
 		models := agentModelTokens[aid]
 		if len(models) > 0 {
@@ -670,7 +670,7 @@ func RenderTimelineSparklinesWidth(entries []HistoryEntry, termWidth int) string
 				// Prefix: "    ↳ %-16s" -> 4 + 2 (↳ + space) + 16 = 22 chars
 				mSparkW := calcSparkW(22, visLen(mStats))
 				mSpark := RenderSparklineInt64Width(mToks, mSparkW)
-				sb.WriteString(fmt.Sprintf("    ↳ %-16s [%s]   %s\n", m, mSpark, mStats))
+				fmt.Fprintf(&sb, "    ↳ %-16s [%s]   %s\n", m, mSpark, mStats)
 			}
 		}
 	}

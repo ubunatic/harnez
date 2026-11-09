@@ -701,7 +701,7 @@ func RenderMultiTrackCard(res *MultiTrackHistoryResult, opts ...RenderMultiTrack
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Repo Evolution (%s · %d commits · %dd)\n", res.RepoName, res.TotalCommits, res.DaysSpan))
+	fmt.Fprintf(&sb, "Repo Evolution (%s · %d commits · %dd)\n", res.RepoName, res.TotalCommits, res.DaysSpan)
 
 	for _, track := range AllTrackTypes {
 		te, ok := res.Tracks[track]
@@ -713,11 +713,12 @@ func RenderMultiTrackCard(res *MultiTrackHistoryResult, opts ...RenderMultiTrack
 		if useColor && len(te.Points) > 0 {
 			sparkValues := make([]float64, len(te.Points))
 			for j, p := range te.Points {
-				if track == TrackIssues {
+				switch track {
+				case TrackIssues:
 					sparkValues[j] = float64(p.Files)
-				} else if track == TrackCode || track == TrackTests {
+				case TrackCode, TrackTests:
 					sparkValues[j] = float64(p.Lines)
-				} else {
+				default:
 					sparkValues[j] = float64(p.Tokens)
 				}
 			}
@@ -731,20 +732,20 @@ func RenderMultiTrackCard(res *MultiTrackHistoryResult, opts ...RenderMultiTrack
 		case TrackCode:
 			locStr := formatK(te.CurrentLines)
 			tokStr := formatK(te.CurrentTokens)
-			sb.WriteString(fmt.Sprintf("%-8s [%s] %s LOC (%s tokens)\n", "Code:", spark, locStr, tokStr))
+			fmt.Fprintf(&sb, "%-8s [%s] %s LOC (%s tokens)\n", "Code:", spark, locStr, tokStr)
 		case TrackTests:
 			locStr := formatK(te.CurrentLines)
 			tokStr := formatK(te.CurrentTokens)
-			sb.WriteString(fmt.Sprintf("%-8s [%s] %s LOC (%s tokens) · %.2f test/code ratio\n", "Tests:", spark, locStr, tokStr, res.TestCodeRatio))
+			fmt.Fprintf(&sb, "%-8s [%s] %s LOC (%s tokens) · %.2f test/code ratio\n", "Tests:", spark, locStr, tokStr, res.TestCodeRatio)
 		case TrackDocs:
 			tokStr := formatK(te.CurrentTokens)
-			sb.WriteString(fmt.Sprintf("%-8s [%s] %s tokens (%d files)\n", "Docs:", spark, tokStr, te.CurrentFiles))
+			fmt.Fprintf(&sb, "%-8s [%s] %s tokens (%d files)\n", "Docs:", spark, tokStr, te.CurrentFiles)
 		case TrackSkills:
 			tokStr := formatK(te.CurrentTokens)
-			sb.WriteString(fmt.Sprintf("%-8s [%s] %d skills (%s tokens)\n", "Skills:", spark, te.CurrentFiles, tokStr))
+			fmt.Fprintf(&sb, "%-8s [%s] %d skills (%s tokens)\n", "Skills:", spark, te.CurrentFiles, tokStr)
 		case TrackIssues:
 			totalTickets := te.CurrentFiles
-			sb.WriteString(fmt.Sprintf("%-8s [%s] %d tickets (%d open · %d closed)\n", "Issues:", spark, totalTickets, te.OpenTickets, te.ClosedTickets))
+			fmt.Fprintf(&sb, "%-8s [%s] %d tickets (%d open · %d closed)\n", "Issues:", spark, totalTickets, te.OpenTickets, te.ClosedTickets)
 		}
 	}
 
@@ -770,7 +771,7 @@ func RenderMultiTrackHistoryTableWithDiffs(result *MultiTrackHistoryResult, opts
 
 	useColor := opts.Color
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Repo Evolution Diffs (%s · %d commits · %dd)\n", result.RepoName, result.TotalCommits, result.DaysSpan))
+	fmt.Fprintf(&sb, "Repo Evolution Diffs (%s · %d commits · %dd)\n", result.RepoName, result.TotalCommits, result.DaysSpan)
 
 	plusTag := "[+]"
 	minusTag := "[-]"
@@ -874,24 +875,24 @@ func RenderMultiTrackHistoryTableWithDiffs(result *MultiTrackHistoryResult, opts
 			fmtRms = "\x1b[31m" + fmtRms + "\x1b[0m"
 		}
 
-		sb.WriteString(fmt.Sprintf("%s:\n", string(track)))
-		sb.WriteString(fmt.Sprintf("  %s Adds: [%s] %s %s\n", plusTag, addSpark, fmtAdd, unit))
-		sb.WriteString(fmt.Sprintf("  %s Rms:  [%s] %s %s\n", minusTag, removeSpark, fmtRms, unit))
+		fmt.Fprintf(&sb, "%s:\n", string(track))
+		fmt.Fprintf(&sb, "  %s Adds: [%s] %s %s\n", plusTag, addSpark, fmtAdd, unit)
+		fmt.Fprintf(&sb, "  %s Rms:  [%s] %s %s\n", minusTag, removeSpark, fmtRms, unit)
 
 		switch track {
 		case TrackCode:
 			tokStr := formatK(te.CurrentTokens)
-			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%s tokens)\n", eqTag, netSpark, fmtNet, unit, tokStr))
+			fmt.Fprintf(&sb, "  %s Net:  [%s] %s %s (%s tokens)\n", eqTag, netSpark, fmtNet, unit, tokStr)
 		case TrackTests:
 			tokStr := formatK(te.CurrentTokens)
-			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%s tokens) · %.2f test/code ratio\n", eqTag, netSpark, fmtNet, unit, tokStr, result.TestCodeRatio))
+			fmt.Fprintf(&sb, "  %s Net:  [%s] %s %s (%s tokens) · %.2f test/code ratio\n", eqTag, netSpark, fmtNet, unit, tokStr, result.TestCodeRatio)
 		case TrackDocs:
-			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%d files)\n", eqTag, netSpark, fmtNet, unit, te.CurrentFiles))
+			fmt.Fprintf(&sb, "  %s Net:  [%s] %s %s (%d files)\n", eqTag, netSpark, fmtNet, unit, te.CurrentFiles)
 		case TrackSkills:
 			tokStr := formatK(te.CurrentTokens)
-			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%s tokens)\n", eqTag, netSpark, fmtNet, unit, tokStr))
+			fmt.Fprintf(&sb, "  %s Net:  [%s] %s %s (%s tokens)\n", eqTag, netSpark, fmtNet, unit, tokStr)
 		case TrackIssues:
-			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%d open · %d closed)\n", eqTag, netSpark, fmtNet, unit, te.OpenTickets, te.ClosedTickets))
+			fmt.Fprintf(&sb, "  %s Net:  [%s] %s %s (%d open · %d closed)\n", eqTag, netSpark, fmtNet, unit, te.OpenTickets, te.ClosedTickets)
 		}
 	}
 

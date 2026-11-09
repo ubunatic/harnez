@@ -78,6 +78,6 @@ func Run(spec Spec, deps Deps, req Request) Report {
 		Remote:    remote,
 		Branch:    spec.DefaultBranch,
 	}
-	res := Waiter{Fetch: deps.Fetch, Clock: deps.Clock, Git: deps.Git}.Wait(opt)
+	res := Waiter(deps).Wait(opt)
 	return Report{Outcome: res.Outcome, Line: res.Summary(target, opt), Err: res.Err}
 }
