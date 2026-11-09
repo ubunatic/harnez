@@ -112,6 +112,8 @@ in managed agent environments / PATH (`~/.claude/bin/⚙`, `~/go/bin/⚙`, etc.)
   Claude Bash's native `timeout` is forwarded to `harnez exec --timeout`;
   `run_in_background: true` removes the implicit timeout.
 - **Config**: Managed via `harnez apply`.
+- **Shell**: Claude Code runs the hook result in zsh or bash, and `harnez exec` runs `bash -c`;
+  see [AgentShell.md](AgentShell.md).
 
 `harnez exec` timeout precedence is `HTO=<duration|0>` (alias:
 `HARNEZ_TIMEOUT=<duration|0>`) on the command,
