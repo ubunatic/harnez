@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -43,7 +45,7 @@ func resolveForgeTracker(stderr io.Writer, dir string) (forgetracker.Target, for
 	if err != nil {
 		return t, nil, spec, false, err
 	}
-	fmt.Fprintf(stderr, "no local issues/ dir: reading tickets from %s (read-only)\n", t)
+	fmt.Fprintf(stderr, "no local issues/ dir: tickets live on %s\n", t)
 	return t, forgeTrackerSource(spec), spec, true, nil
 }
 
@@ -68,4 +70,53 @@ func privateRepoHint(fg forge.Forge) string {
 		return "a private repo needs a token: run harnez forge token import or harnez forge token create, or set one of " + env
 	}
 	return "a private repo needs a token: set one of " + env
+}
+
+// issueCLILookPath and issueCLIRun find and run the forge CLI; tests replace them.
+var (
+	issueCLILookPath = exec.LookPath
+	issueCLIRun      = func(dir string, c forgetracker.Command) ([]byte, error) {
+		cmd := exec.Command(c.Tool, c.Args...)
+		cmd.Dir = dir
+		cmd.Stdin = nil
+		return cmd.CombinedOutput()
+	}
+)
+
+// runIssuesNewForge files a ticket on the forge with its CLI (issue 1195). It makes no
+// commit. With dryRun it prints the command and creates nothing.
+func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Target, req forgetracker.CreateRequest, dryRun, jsonOut bool) error {
+	if req.BodyFile != "" {
+		// The CLI runs in dir, so a relative path must be resolved here first.
+		abs, err := filepath.Abs(req.BodyFile)
+		if err != nil {
+			return fmt.Errorf("issues new: body file: %w", err)
+		}
+		req.BodyFile = abs
+		if _, err := os.Stat(req.BodyFile); err != nil {
+			return fmt.Errorf("issues new: body file: %w", err)
+		}
+	}
+	c, err := forgetracker.PlanCreate(t, req, issueCLILookPath)
+	if err != nil {
+		return err
+	}
+	if dryRun {
+		fmt.Fprintf(stdout, "dry run, would file on %s: %s\n", t, c)
+		return nil
+	}
+	fmt.Fprintf(stderr, "issues new: filing on %s with %s\n", t, c.Tool)
+	out, err := issueCLIRun(dir, c)
+	if err != nil {
+		return fmt.Errorf("issues new: %s failed: %w\n%s", c.Tool, err, strings.TrimSpace(string(out)))
+	}
+	n, url, ok := forgetracker.ParseCreated(t, string(out))
+	if !ok {
+		return fmt.Errorf("issues new: %s ran but printed no ticket number; check %s before retrying\n%s", c.Tool, t, strings.TrimSpace(string(out)))
+	}
+	if jsonOut {
+		return json.NewEncoder(stdout).Encode(map[string]any{"number": n, "url": url, "forge": t.String(), "tool": c.Tool})
+	}
+	fmt.Fprintf(stdout, "filed as #%d at %s; no commit\n", n, url)
+	return nil
 }

@@ -18,6 +18,9 @@ type Forge struct {
 	Kind     string   `yaml:"kind"`
 	APIBase  string   `yaml:"api_base"`
 	TokenEnv []string `yaml:"token_env"`
+	// IssueCLI lists the CLIs `harnez issues new` tries, in order, to file a ticket on
+	// this forge when the repo has no local issues/ dir (issue 1195).
+	IssueCLI []string `yaml:"issue_cli"`
 }
 
 // APIError is a failed forge API call. Transient errors (network, 429, 5xx) may be retried.

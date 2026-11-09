@@ -19,6 +19,21 @@ issue-tracking guidance before acting, then runs the filing workflow end to end:
 
 If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md` for the local-tracker/session fallback.
 
+### Forge tracker (no `issues/` dir, origin on Codeberg/Forgejo or GitHub)
+
+Harnez reads and files tickets on the origin's forge; each command names the forge repo.
+
+```bash
+harnez find -d <repo> issues "<search terms>"   # title search only, no body search; a private repo needs a forge token
+harnez issues show -d <repo> <n>
+harnez issues new -d <repo> "<title>" -F <body-file> --label <label> --dry-run   # shows the tea/fj/gh command
+harnez issues new -d <repo> "<title>" -F <body-file> --label <label>
+```
+
+- Use only labels that exist on the forge (`tea labels` or `gh label list`); `fj` cannot set labels, so labels need `tea` or `gh`.
+- When an existing ticket partly covers the request, say so and ask before filing or commenting. Comment on other tickets only with the user's OK.
+- Report "filed as #N at <URL>; no commit". Publish Promptly below applies only to file-based trackers.
+
 ```bash
 harnez find -d <repo> issues -a status:active
 harnez find -d <repo> issues "<search terms>"

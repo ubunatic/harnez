@@ -30,7 +30,8 @@
           "host": { "type": "string", "minLength": 1 },
           "kind": { "type": "string", "enum": ["forgejo", "github"] },
           "api_base": { "type": "string", "pattern": "^https://" },
-          "token_env": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          "token_env": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "issue_cli": { "type": "array", "items": { "type": "string", "enum": ["gh", "tea", "fj"] } }
         },
         "additionalProperties": false
       }

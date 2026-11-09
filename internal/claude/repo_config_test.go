@@ -118,7 +118,7 @@ func TestRunInitGatesContainerTargetAndWritesNotices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, notice := range []string{"This repo does not use file-based issues; skip those steps and use the repo's own tracker.", "This repo does not use indexed studies; skip those steps."} {
+	for _, notice := range []string{"This repo does not use file-based issues; skip those steps and use the repo's own tracker.", "This repo does not use indexed studies; skip those steps.", "file with `harnez issues new \"<title>\" -F <body-file> [--label L]`", "report \"filed as #N at <URL>; no commit\""} {
 		if !strings.Contains(string(index), notice) {
 			t.Errorf("Index.md missing notice %q:\n%s", notice, index)
 		}

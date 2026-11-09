@@ -540,7 +540,10 @@ func writeRules(dir string, rules RulesConfig, quota bool, repoConfig *RepoConfi
 	if repoConfig != nil {
 		repo := repoConfig
 		if repo.Issues.Tracker == "none" {
-			index += "\n> This repo does not use file-based issues; skip those steps and use the repo's own tracker.\n"
+			index += "\n> This repo does not use file-based issues; skip those steps and use the repo's own tracker.\n" +
+				"> When its tickets live on the forge of the origin remote (no issues/ dir), search with `harnez find -d . issues \"<terms>\"`,\n" +
+				"> read with `harnez issues show N`, and file with `harnez issues new \"<title>\" -F <body-file> [--label L]`;\n" +
+				"> each prints the forge repo. Ask before commenting on an existing ticket, and report \"filed as #N at <URL>; no commit\".\n"
 		}
 		if !repo.Docs.Studies {
 			index += "\n> This repo does not use indexed studies; skip those steps.\n"
