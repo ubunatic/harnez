@@ -34,6 +34,8 @@ func (t Target) String() string { return t.Forge.Host + "/" + t.Owner + "/" + t.
 type Source interface {
 	Issue(fg forge.Forge, owner, repo string, n int) (forge.RemoteIssue, error)
 	Issues(fg forge.Forge, owner, repo, state string, opts forge.ScanOptions) ([]forge.RemoteIssue, bool, error)
+	// Repo probes the repo itself; nil means it is reachable with the token in use (issue 1199).
+	Repo(fg forge.Forge, owner, repo string) error
 }
 
 // ErrNotApplicable means the repo has a local issues/ dir, or no forge origin, so the
@@ -86,6 +88,13 @@ func Show(w io.Writer, src Source, t Target, ticket string, jsonOut bool) error 
 	}
 	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
 	if err != nil {
+		// A 404 on the issue of a reachable repo means the issue is missing (issue 1199). The
+		// result is a plain error, not an APIError, so the private-repo token hint is skipped.
+		// Any other probe result keeps the original error and its hint.
+		var apiErr *forge.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == 404 && src.Repo(t.Forge, t.Owner, t.Repo) == nil {
+			return fmt.Errorf("issue #%d not found on %s", n, t)
+		}
 		return fmt.Errorf("issues show: %s#%d: %w", t, n, err)
 	}
 	if is.PullRequest != nil {
@@ -102,7 +111,8 @@ func Show(w io.Writer, src Source, t Target, ticket string, jsonOut bool) error 
 // newest first, as "<number>\t<state>\t<title>\t<url>". limit caps the rows unless all is set.
 //
 // The only filter is status:open or status:closed, which the forge applies as its issue
-// state; any other status: value is an error before the forge is asked.
+// state; status:active is an alias for open (issue 1198: forges have no In Progress, Blocked
+// or Draft). Any other status: value is an error before the forge is asked.
 func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []string, limit int, all, jsonOut bool) error {
 	state := "all"
 	statusSet := false
@@ -113,8 +123,11 @@ func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []str
 				if statusSet {
 					return fmt.Errorf("find issues: only one status: filter is supported for forge tickets")
 				}
-				if val != "open" && val != "closed" {
-					return fmt.Errorf("find issues: %s is not supported for forge tickets; supported values: status:open, status:closed", f)
+				if val != "open" && val != "closed" && val != "active" {
+					return fmt.Errorf("find issues: %s is not supported for forge tickets; supported values: status:open, status:closed, status:active", f)
+				}
+				if val == "active" {
+					val = "open"
 				}
 				state, statusSet = val, true
 				continue
@@ -154,7 +167,11 @@ func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []str
 			Rows      []issueJSON `json:"rows"`
 		}{total, truncated, rows})
 	}
-	if _, err := fmt.Fprintf(w, "# %d matches on %s, showing %d (use --all to show all)\n", total, t, len(rows)); err != nil {
+	hint := ""
+	if len(rows) < total {
+		hint = " (use --all to show all)"
+	}
+	if _, err := fmt.Fprintf(w, "# %d matches on %s, showing %d%s\n", total, t, len(rows), hint); err != nil {
 		return err
 	}
 	if truncated {

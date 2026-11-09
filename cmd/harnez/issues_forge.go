@@ -16,11 +16,34 @@ import (
 	"ubunatic.com/harnez/internal/prwait"
 )
 
-// findIssuesLocalOnly lists `find issues` subcommands that the forge reader does not
-// serve; they keep the local behaviour and its "no local issue tracker" error.
+// findIssuesLocalOnly lists `find issues` words that the forge reader does not serve. On a
+// forge repo they are refused with forgeLocalOnlyError; closed is not in the set because it
+// maps to status:closed (issue 1198).
 var findIssuesLocalOnly = map[string]bool{
 	"next": true, "last": true, "history": true, "similar": true,
-	"open": true, "blocked": true, "closed": true, "draft": true,
+	"open": true, "blocked": true, "draft": true,
+}
+
+// forgeLocalOnlyError refuses a local-only find word on a forge repo and names the forge
+// form that does work (issue 1198).
+func forgeLocalOnlyError(word string) error {
+	switch word {
+	case "open":
+		return fmt.Errorf("find issues open: not supported for forge tickets; use find issues status:open")
+	case "blocked", "draft":
+		return fmt.Errorf("find issues %s: forge tickets have only open and closed states; use status:open or status:closed", word)
+	default:
+		return fmt.Errorf("find issues %s: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms", word)
+	}
+}
+
+// forgeFindArgs rewrites the leading bare word closed to status:closed, so it is a state
+// filter on the forge rather than a search term (issue 1198). args excludes "issues".
+func forgeFindArgs(args []string) []string {
+	if len(args) > 0 && args[0] == "closed" {
+		return append([]string{"status:closed"}, args[1:]...)
+	}
+	return args
 }
 
 // forgeTrackerSource is the live forge reader; tests replace it.

@@ -1,6 +1,7 @@
 # 1199 — issues show on a forge: report a missing issue as not found instead of a token hint
 
-**Status**: Open
+**Status**: Closed — Fixed in a3172f7e: a 404 on the issue now probes the repo once; reachable repo gives 'issue #N not found on host/owner/repo' with no token hint, any other probe result keeps the original error and hint. Live: 'harnez issues show -d /home/alfiz/projects/taia 99999' prints 'Error: issue #99999 not found on codeberg.org/harnez/taia'. Tests: TestRepoProbeReportsRepoReachability, TestShowMissingIssue*, TestShowProbesRepoThroughForgeReader, TestIssuesShowMissingIssueOnForge. make test-q1 exit 0, 76 packages ok, 0 FAIL.
+**Closed-By**: claude:haiku:med, session dev-1198
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug

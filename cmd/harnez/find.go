@@ -101,8 +101,15 @@ Query grammar:
                      explanatory status suffixes (e.g. "Blocked — waiting
                      for upstream").
                       On a forge-tracked repo (no issues/ dir) only
-                      status:open and status:closed are supported; they
-                      map to the forge's issue state.
+                      status:open, status:closed and status:active are
+                      supported; they map to the forge's issue state
+                      (status:active is open: forges have no In Progress,
+                      Blocked or Draft). A leading bare word 'closed' is
+                      status:closed; only the first term is rewritten, so
+                      'closed' later in the query is a search term. The
+                      words open, blocked, draft, next, last, history and
+                      similar are local-only and are refused on a forge
+                      repo, naming the forge form.
 
 An unquoted '|' is a shell pipeline operator, so an OR query needs shell
 quoting:
@@ -157,13 +164,16 @@ Output formatting:
 					return fmt.Errorf("find code: outside a Git worktree; use -d/--dir <directory> to select the search scope")
 				}
 			}
-			if args[0] == "issues" && !nextFlag && (len(args) < 2 || !findIssuesLocalOnly[args[1]]) {
+			if args[0] == "issues" && !nextFlag {
 				t, src, spec, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir)
 				if err != nil {
 					return err
 				}
 				if ok {
-					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.OpenPRScan, args[1:], limitFlag, allFlag, jsonFlag), t)
+					if len(args) > 1 && findIssuesLocalOnly[args[1]] {
+						return forgeLocalOnlyError(args[1])
+					}
+					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.OpenPRScan, forgeFindArgs(args[1:]), limitFlag, allFlag, jsonFlag), t)
 				}
 			}
 			opts := find.FindRunOptions{
