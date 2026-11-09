@@ -39,3 +39,13 @@ to relax branch protection.
 
 - Squash or rebase merge drops the bump commit; `--continue` keeps pausing. Detect and say so?
 - Forgejo tag protection, if enabled, would refuse the tag push; unverified on Codeberg.
+
+## Field report 2026-11-09 (loom session)
+
+- `HTO=0 harnez release -b minor` in loom (protected_main, v0.12.0 -> v0.13.0) pushed main directly; Codeberg
+  refused: "Not allowed to push to protected branch main (pre-receive hook declined)". Build and signing were fine.
+- `harnez release -n` gave no warning that the push would hit a protected branch; the plan should say so.
+- Workaround that published: `git switch -c release/v0.13.0`, `harnez release --continue -b minor`,
+  `git branch -f main origin/main`; bump PR loom#83 needs rebase-merge so the tag stays on main.
+- The /release skill claims harnez pushes branch and tag itself under protected_main; fix the skill with this ticket.
+- Also seen: "no keys/minisign/keys.yaml" warning persists (unrelated; check whether it needs its own ticket).
