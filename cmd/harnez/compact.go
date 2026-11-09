@@ -137,7 +137,7 @@ func runCompact(ctx context.Context, out io.Writer, backend decide.Backend, o *c
 		closeDest = f.Close
 	}
 	if closeDest != nil {
-		defer closeDest()
+		defer closeDest() //nolint:errcheck // best-effort cleanup; error not actionable
 	}
 
 	if strings.ToLower(o.format) == "summary" {

@@ -247,7 +247,7 @@ A pinned ref (install url@ref) stays pinned unless --latest is given.`,
 				if err != nil {
 					return err
 				}
-				defer os.RemoveAll(tmp)
+				defer os.RemoveAll(tmp) //nolint:errcheck // best-effort cleanup; error not actionable
 				var ref string
 				url, ref = skillreg.ParseSource(args[0])
 				dir = filepath.Join(tmp, "repo")

@@ -28,7 +28,7 @@ func TestLocalServerPIDReadsPeerCredentialsFromRealSocket(t *testing.T) {
 	}()
 	defer func() {
 		_ = listener.Close()
-		<-done
+		<-done //nolint:errcheck // wait for goroutine or process exit; the value is not needed
 	}()
 
 	got := localServerPID(context.Background(), server.Config{HTTPClientTimeout: time.Second}, socketPath)

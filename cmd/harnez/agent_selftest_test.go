@@ -83,7 +83,10 @@ func TestAgentSelftestGeneratedSessionAcrossShells(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() { done <- background.Wait() }()
-	t.Cleanup(func() { cancel(); <-done })
+	t.Cleanup(func() {
+		cancel()
+		<-done //nolint:errcheck // wait only; the value is not needed
+	})
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 	for {

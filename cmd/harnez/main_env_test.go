@@ -51,18 +51,32 @@ func runIsolatedTests(m *testing.M) int {
 	if err := preserveGoCaches(); err != nil {
 		panic(fmt.Sprintf("preserve Go caches: %v", err))
 	}
-	os.Unsetenv(agentRoleEnv)
-	os.Unsetenv(agentModelEnv)
-	os.Unsetenv(agentSessionEnv)
-	os.Unsetenv(agentLauncherEnv)
+	if err := os.Unsetenv(agentRoleEnv); err != nil {
+		panic(err)
+	}
+	if err := os.Unsetenv(agentModelEnv); err != nil {
+		panic(err)
+	}
+	if err := os.Unsetenv(agentSessionEnv); err != nil {
+		panic(err)
+	}
+	if err := os.Unsetenv(agentLauncherEnv); err != nil {
+		panic(err)
+	}
 	// The Pi agent dir would otherwise bypass the temp HOME and reach the real ~/.pi.
-	os.Unsetenv("PI_CODING_AGENT_DIR")
+	if err := os.Unsetenv("PI_CODING_AGENT_DIR"); err != nil {
+		panic(err)
+	}
 	for _, name := range resolve.SessionEnvVars {
-		os.Unsetenv(name)
+		if err := os.Unsetenv(name); err != nil {
+			panic(err)
+		}
 	}
 	// Host detection picks detach guidance wording (detachHost); keep it generic.
 	for _, name := range []string{"HARNEZ_AGENT", "CODEX_THREAD_ID", "CODEX_CLI", "CLAUDE_CODE_SESSION_ID", "ANTIGRAVITY_AGENT", "ANTIGRAVITY_AGENTAPI_EXE"} {
-		os.Unsetenv(name)
+		if err := os.Unsetenv(name); err != nil {
+			panic(err)
+		}
 	}
 
 	// Hide the host's git config, e.g. a global core.hooksPath (issue 1120).
@@ -73,7 +87,7 @@ func runIsolatedTests(m *testing.M) int {
 	if err != nil {
 		panic(fmt.Sprintf("failed to create temp HOME: %v", err))
 	}
-	defer os.RemoveAll(tmpHome)
+	defer os.RemoveAll(tmpHome) //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := os.Setenv("HOME", tmpHome); err != nil {
 		panic(fmt.Sprintf("failed to set HOME: %v", err))
 	}
@@ -95,7 +109,7 @@ func runIsolatedTests(m *testing.M) int {
 	if err != nil {
 		panic(fmt.Sprintf("failed to create temp XDG_RUNTIME_DIR: %v", err))
 	}
-	defer os.RemoveAll(tmpRuntime)
+	defer os.RemoveAll(tmpRuntime) //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := os.Setenv("XDG_RUNTIME_DIR", tmpRuntime); err != nil {
 		panic(fmt.Sprintf("failed to set temp XDG_RUNTIME_DIR: %v", err))
 	}
@@ -124,9 +138,13 @@ func runIsolatedTests(m *testing.M) int {
 	// verifies normal PATH lookup cannot resolve to the host tools.
 
 	if hadHome {
-		os.Setenv("HOME", oldHome)
+		if err := os.Setenv("HOME", oldHome); err != nil {
+			panic(err)
+		}
 	} else {
-		os.Unsetenv("HOME")
+		if err := os.Unsetenv("HOME"); err != nil {
+			panic(err)
+		}
 	}
 
 	return code

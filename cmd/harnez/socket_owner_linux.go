@@ -13,7 +13,7 @@ func socketPeerPID(path string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	raw, err := conn.SyscallConn()
 	if err != nil {
 		return 0, err

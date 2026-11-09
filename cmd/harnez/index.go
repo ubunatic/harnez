@@ -383,7 +383,7 @@ func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir str
 				return fmt.Errorf("index --check: %w", err)
 			}
 			if orig == nil {
-				os.Remove(t.path)
+				_ = os.Remove(t.path) // best-effort cleanup; failure does not change the result
 			} else if err := os.WriteFile(t.path, orig, 0o644); err != nil {
 				return fmt.Errorf("index --check: restore %s: %w", t.path, err)
 			}
@@ -419,13 +419,13 @@ func printUnifiedDiff(w io.Writer, label string, oldContent, newContent []byte) 
 	if err != nil {
 		return err
 	}
-	defer os.Remove(oldFile)
+	defer os.Remove(oldFile) //nolint:errcheck // best-effort cleanup; error not actionable
 
 	newFile, err := writeTemp(newContent)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(newFile)
+	defer os.Remove(newFile) //nolint:errcheck // best-effort cleanup; error not actionable
 
 	cmd := exec.Command("diff", "-u", "--label", label, "--label", label, oldFile, newFile)
 	cmd.Stdout = w

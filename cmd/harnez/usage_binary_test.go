@@ -378,7 +378,7 @@ func usageTestDirs(t *testing.T) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(runtimeDir) })
+	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) }) // best-effort test cleanup
 	for _, dir := range []string{home, runtimeDir, filepath.Join(runtimeDir, "harnez")} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			t.Fatal(err)

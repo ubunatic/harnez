@@ -42,14 +42,22 @@ func createDocHistoryFixture(t *testing.T) string {
 	}
 
 	// Commit 1: Add AGENTS.md and docs/lang/Go.md
-	os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# AGENTS\nInitial content\n"), 0o644)
-	os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Go.md"), []byte("# Go Guidelines\nUse standard formatting.\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# AGENTS\nInitial content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Go.md"), []byte("# Go Guidelines\nUse standard formatting.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	runGit("add", ".")
 	runGit("commit", "-m", "init docs")
 
 	// Commit 2: Update docs/lang/Go.md and add docs/practices/Git.md
-	os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Go.md"), []byte("# Go Guidelines\nUse standard formatting.\n\n## Concurrency\nPrefer channels and goroutines.\n"), 0o644)
-	os.WriteFile(filepath.Join(tmpDir, "docs", "practices", "Git.md"), []byte("# Git Practices\nWrite clear commit messages.\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "lang", "Go.md"), []byte("# Go Guidelines\nUse standard formatting.\n\n## Concurrency\nPrefer channels and goroutines.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "practices", "Git.md"), []byte("# Git Practices\nWrite clear commit messages.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	runGit("add", ".")
 	runGit("commit", "-m", "update go guidelines and add git practices")
 

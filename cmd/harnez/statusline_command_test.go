@@ -217,7 +217,7 @@ func TestAGYStatuslineLockedStoreStillPrintsWithinBudget(t *testing.T) {
 		http.Error(w, "collector busy", http.StatusServiceUnavailable)
 	})}
 	go func() { _ = collector.Serve(listener) }()
-	defer collector.Close()
+	defer collector.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	address := listener.Addr().String()
 	path, err := usage.PassiveUpdatePath()
 	if err != nil {
