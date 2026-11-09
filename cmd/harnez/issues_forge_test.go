@@ -123,3 +123,99 @@ func TestForgeTrackerHint(t *testing.T) {
 		t.Fatal("nil must stay nil")
 	}
 }
+
+func stubIssueCLI(t *testing.T, out string) *[]forgetracker.Command {
+	t.Helper()
+	var ran []forgetracker.Command
+	oldLook, oldRun := issueCLILookPath, issueCLIRun
+	issueCLILookPath = func(name string) (string, error) {
+		if name == "tea" {
+			return "/usr/bin/tea", nil
+		}
+		return "", exec.ErrNotFound
+	}
+	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
+		ran = append(ran, c)
+		return []byte(out), nil
+	}
+	t.Cleanup(func() { issueCLILookPath, issueCLIRun = oldLook, oldRun })
+	return &ran
+}
+
+func TestIssuesNewFilesOnForgeWithoutIssuesDir(t *testing.T) {
+	ran := stubIssueCLI(t, "#42 Forge bug\n")
+	dir := forgeRepo(t)
+	body := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(body, []byte("details"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runHarnez(t, "issues", "new", "-d", dir, "Forge bug", "-F", body, "--label", "bug", "--dry-run")
+	if err != nil || !strings.Contains(out, "dry run, would file on codeberg.org/o/r: tea issues create --repo o/r --title \"Forge bug\"") || len(*ran) != 0 {
+		t.Fatalf("dry run: %v ran=%d\n%s", err, len(*ran), out)
+	}
+	out, err = runHarnez(t, "issues", "new", "-d", dir, "Forge bug", "-F", body, "--label", "bug")
+	if err != nil || !strings.Contains(out, "filed as #42 at https://codeberg.org/o/r/issues/42; no commit") || len(*ran) != 1 {
+		t.Fatalf("create: %v ran=%d\n%s", err, len(*ran), out)
+	}
+	if got := strings.Join((*ran)[0].Args, " "); !strings.Contains(got, "--labels bug") {
+		t.Fatalf("labels not passed: %s", got)
+	}
+	out, err = runHarnez(t, "issues", "new", "-d", dir, "Forge bug", "-F", body, "--json")
+	if err != nil || !strings.Contains(out, `"number":42`) || !strings.Contains(out, `"url":"https://codeberg.org/o/r/issues/42"`) {
+		t.Fatalf("json: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "issues")); !os.IsNotExist(err) {
+		t.Fatalf("forge create must not make issues/: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "log", "--oneline").CombinedOutput(); err == nil {
+		t.Fatalf("forge create must not commit, got log %s", out)
+	}
+}
+
+func TestIssuesNewForgeErrors(t *testing.T) {
+	stubIssueCLI(t, "")
+	dir := forgeRepo(t)
+	if _, err := runHarnez(t, "issues", "new", "-d", dir, "T", "-F", filepath.Join(dir, "absent.md")); err == nil || !strings.Contains(err.Error(), "body file") {
+		t.Fatalf("absent body: %v", err)
+	}
+	body := filepath.Join(dir, "b.md")
+	if err := os.WriteFile(body, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runHarnez(t, "issues", "new", "-d", dir, "T", "-F", body); err == nil || !strings.Contains(err.Error(), "printed no ticket number") {
+		t.Fatalf("silent CLI: %v", err)
+	}
+	if _, err := runHarnez(t, "issues", "show", "-d", dir, "-F", body, "7"); err == nil || !strings.Contains(err.Error(), "require new") {
+		t.Fatalf("-F outside new: %v", err)
+	}
+}
+
+func TestIssuesNewLocalRefusesForgeFlags(t *testing.T) {
+	dir := forgeRepo(t)
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runHarnez(t, "issues", "new", "-d", dir, "T", "--label", "bug"); err == nil || !strings.Contains(err.Error(), "apply only when tickets live on the forge") {
+		t.Fatalf("local --label: %v", err)
+	}
+}
+
+func TestIssuesNewWithoutForgeSignalStaysLocal(t *testing.T) {
+	ran := stubIssueCLI(t, "#1 x\n")
+	dir := forgeRepo(t)
+	if _, err := runHarnez(t, "issues", "new", "-d", dir, "First ticket", "--offline"); err != nil {
+		t.Fatalf("fresh repo local new: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "issues")); err != nil || len(*ran) != 0 {
+		t.Fatalf("fresh repo must adopt issues/ (issue 853), ran=%d err=%v", len(*ran), err)
+	}
+}
+
+func TestIssuesNewTrackerNoneUsesForge(t *testing.T) {
+	stubIssueCLI(t, "")
+	dir := forgeRepo(t)
+	writeIndexRepoConfig(t, dir, "none", false)
+	if _, err := runHarnez(t, "issues", "new", "-d", dir, "No body"); err == nil || !strings.Contains(err.Error(), "--body-file is required") {
+		t.Fatalf("tracker none without -F: %v", err)
+	}
+}

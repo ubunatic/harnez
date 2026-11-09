@@ -1,7 +1,7 @@
 // Package forgetracker reads tickets from the repository's forge (Codeberg/Forgejo or
-// GitHub) for repos that keep no local issues/ dir (issue 1116). It is read-only:
-// `harnez issues show` and `harnez find issues` use it; creating and closing stay with
-// the forge's own tools.
+// GitHub) for repos that keep no local issues/ dir (issue 1116). `harnez issues show`
+// and `harnez find issues` read through it; `harnez issues new` files a ticket through
+// the forge's own CLI (issue 1195); closing stays with the forge's tools.
 package forgetracker
 
 import (

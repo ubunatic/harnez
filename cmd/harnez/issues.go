@@ -68,6 +68,8 @@ func newIssuesCmd() *cobra.Command {
 func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var remoteFlag bool
 	var forceFlag bool
+	var bodyFileFlag string
+	var labelFlags []string
 	var numberFlag string
 	var offlineFlag bool
 	var againstFlag string
@@ -234,6 +236,9 @@ valid, exit-0 answer.`,
 			if numberFlag != "" && (len(args) == 0 || args[0] != "new" || remoteFlag) {
 				return fmt.Errorf("issues: --number requires local new (not --remote)")
 			}
+			if (bodyFileFlag != "" || len(labelFlags) > 0) && (len(args) == 0 || args[0] != "new") {
+				return fmt.Errorf("issues: -F/--body-file and --label require new")
+			}
 			if forceFlag && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --force requires new")
 			}
@@ -342,6 +347,19 @@ valid, exit-0 answer.`,
 			}
 			if args[0] == "new" {
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
+				// The forge path needs an explicit signal (-F/--label or tracker: none), so a
+				// fresh repo with a forge origin still adopts a local issues/ dir (issue 853).
+				_, remoteEnvSet := os.LookupEnv("CLAUDE_CODE_REMOTE")
+				if !remoteFlag && !remoteEnvSet && numberFlag == "" && (bodyFileFlag != "" || len(labelFlags) > 0 || trackerIsNone(dir)) {
+					if t, _, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
+						return err
+					} else if ok {
+						return runIssuesNewForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, t, forgetracker.CreateRequest{Title: title, BodyFile: bodyFileFlag, Labels: labelFlags}, checkFlag || dryRunFlag, jsonFlag)
+					}
+				}
+				if bodyFileFlag != "" || len(labelFlags) > 0 {
+					return fmt.Errorf("issues new: -F/--body-file and --label apply only when tickets live on the forge (no local issues/ dir)")
+				}
 				_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
 				if remoteFlag || remoteEnv {
 					fmt.Fprintln(cmd.ErrOrStderr(), "issues new: remote mode")
@@ -442,6 +460,8 @@ valid, exit-0 answer.`,
 	}
 	cmd.Flags().BoolVar(&remoteFlag, "remote", false, "with new: allocate a permanent GH id using authenticated gh on the github remote")
 	cmd.Flags().StringVar(&numberFlag, "number", "", "with new: use this ticket number instead of the next free one (refused if it exists)")
+	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new on a forge tracker (no local issues/ dir): the ticket body file")
+	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")
 	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: create despite strong duplicate matches")
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")

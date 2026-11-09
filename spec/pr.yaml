@@ -18,7 +18,10 @@ forges:
     kind: forgejo
     api_base: https://codeberg.org/api/v1
     token_env: [CODEBERG_TOKEN, FORGEJO_TOKEN]
+    # CLIs that `issues new` tries in order when the repo keeps its tickets on the forge.
+    issue_cli: [tea, fj]
   - host: github.com
     kind: github
     api_base: https://api.github.com
     token_env: [GITHUB_TOKEN]
+    issue_cli: [gh]
