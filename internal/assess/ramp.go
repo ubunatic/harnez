@@ -554,7 +554,8 @@ func AssessRAMPWithProjected(repoDir string, projectedFiles []string) (*RAMPProf
 	}
 
 	var alerts []string
-	if evalLevel == RAMPLevelL4 {
+	switch evalLevel {
+	case RAMPLevelL4:
 		hasL3 := catMap[RAMPCatNamedAgents] || catMap[RAMPCatReusableCommands] || catMap[RAMPCatDomainSkills]
 		hasL2 := catMap[RAMPCatAIRules] || catMap[RAMPCatToolConfig] || catMap[RAMPCatAgentStandards]
 		if !hasL3 {
@@ -563,7 +564,7 @@ func AssessRAMPWithProjected(repoDir string, projectedFiles []string) (*RAMPProf
 		if !hasL2 {
 			alerts = append(alerts, fmt.Sprintf("Coherence warning: Level %s (%s) evidenced without %s (%s) baseline rules", RAMPLevelL4, LevelDescription(RAMPLevelL4), RAMPLevelL2, LevelDescription(RAMPLevelL2)))
 		}
-	} else if evalLevel == RAMPLevelL3 {
+	case RAMPLevelL3:
 		hasL2 := catMap[RAMPCatAIRules] || catMap[RAMPCatToolConfig] || catMap[RAMPCatAgentStandards]
 		if !hasL2 {
 			alerts = append(alerts, fmt.Sprintf("Coherence warning: Level %s (%s) evidenced without %s (%s) baseline rules", RAMPLevelL3, LevelDescription(RAMPLevelL3), RAMPLevelL2, LevelDescription(RAMPLevelL2)))

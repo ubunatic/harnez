@@ -126,8 +126,6 @@ func Parse(raw string) (Status, error) {
 			s.ConflictFiles = append(s.ConflictFiles, fields[10])
 		case strings.HasPrefix(line, "? "):
 			s.UntrackedFiles = append(s.UntrackedFiles, strings.TrimPrefix(line, "? "))
-		case strings.HasPrefix(line, "! "):
-			// ignored file, only present with --ignored (not passed here)
 		}
 	}
 	return s, nil

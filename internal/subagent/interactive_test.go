@@ -236,7 +236,7 @@ func TestControlBrokerPromptCompactAndStop(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	select {
-	case <-done:
+	case <-done: //nolint:errcheck // completion signal only; the value is not needed
 	case <-time.After(time.Second):
 		_ = cmd.Process.Kill()
 		t.Fatal("stop control did not terminate owned process")

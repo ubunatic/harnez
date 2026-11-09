@@ -175,7 +175,7 @@ func loadMergedModelCatalog() error {
 		}
 		key := provider + ":" + name
 		aliases[key] = modelAlias{Model: model, Aliases: modelAliases, Preferred: entry.Preferred}
-		guide := ModelGuide{Cost: entry.Guide.Cost, CostByTier: entry.Guide.CostByTier, Eff: entry.Guide.Eff, Skills: entry.Guide.Skills, Roles: entry.Guide.Roles, Use: entry.Guide.Use, UseMed: entry.Guide.UseMed, GuidanceSourceURL: entry.Guide.GuidanceSourceURL}
+		guide := ModelGuide{Cost: entry.Guide.Cost, CostByTier: entry.Guide.CostByTier, Eff: entry.Guide.Eff, Skills: entry.Guide.Skills, Roles: entry.Guide.Roles, Use: entry.Guide.Use, UseMed: entry.Guide.UseMed, GuidanceSourceURL: entry.Guide.GuidanceSourceURL} //nolint:staticcheck // SA1019: no typed replacement for model guidance yet; do not add new consumers
 		if value, ok := entry.Overrides["purpose"]; ok {
 			if value == nil {
 				guide.Use = ""

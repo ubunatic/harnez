@@ -175,7 +175,7 @@ func printDecideTable(w io.Writer, req *decide.Request, resp *decide.Response) {
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", id, a.Type, a.Value(), level)
 	}
-	tw.Flush()
+	_ = tw.Flush() // stdout flush; write errors are not actionable here
 }
 
 // decideRequest builds the request from -f or from one quick question.

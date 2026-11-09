@@ -218,7 +218,7 @@ func (d *DB) PutCachedCategories(ctx context.Context, entries map[string]Activit
 	if err != nil {
 		return fmt.Errorf("telemetry: prepare note_category_cache upsert: %w", err)
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 
 	createdAt := now.Format(time.RFC3339Nano)
 	for hash, cat := range entries {

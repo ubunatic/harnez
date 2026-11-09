@@ -61,7 +61,9 @@ func TestInitCmd_Quota1Flag(t *testing.T) {
 
 func TestInitCmd_RAMPReport(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0644)
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd := newInitCmd()
 	var stdout, stderr bytes.Buffer
@@ -82,7 +84,9 @@ func TestInitCmd_RAMPReport(t *testing.T) {
 
 func TestInitCmd_RAMPJSON(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0644)
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd := newInitCmd()
 	var stdout, stderr bytes.Buffer

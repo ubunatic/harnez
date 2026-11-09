@@ -658,7 +658,7 @@ func TestOpenReadOnlyReadsWALDatabaseInReadOnlyDir(t *testing.T) {
 	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // best-effort test cleanup
 	readonly, err := OpenReadOnly(path)
 	if err != nil {
 		t.Fatal(err)

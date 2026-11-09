@@ -37,7 +37,7 @@ func loadJevCompactionSpec(source fs.FS) (jevCompactionSpec, error) {
 	if err != nil {
 		return jevCompactionSpec{}, err
 	}
-	defer data.Close()
+	defer data.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	var spec jevCompactionSpec
 	decoder := yaml.NewDecoder(data)
 	decoder.KnownFields(true)
@@ -325,7 +325,7 @@ func validateJevSpecSchema(source fs.FS) error {
 	if err != nil {
 		return err
 	}
-	defer data.Close()
+	defer data.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	var spec jevCompactionSpec
 	decoder := yaml.NewDecoder(data)
 	decoder.KnownFields(true)
@@ -339,7 +339,7 @@ func validateJevSpecSchema(source fs.FS) error {
 	if err != nil {
 		return err
 	}
-	defer schema.Close()
+	defer schema.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	var document map[string]any
 	if err := json.NewDecoder(schema).Decode(&document); err != nil {
 		return err

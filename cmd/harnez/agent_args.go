@@ -62,7 +62,7 @@ func hostSessionTrackingLine(store *subagent.FileSessionStore, hostSessionID str
 	// keeps the full list.
 	var names []string
 	for _, s := range sessions {
-		if s.Status != "running" && !(s.Status == "active" && s.HarnessType == "interactive") {
+		if s.Status != "running" && (s.Status != "active" || s.HarnessType != "interactive") {
 			continue
 		}
 		if s.Name != "" {

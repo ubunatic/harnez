@@ -67,7 +67,7 @@ func runControlMasterSection(host string) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir) //nolint:errcheck // best-effort cleanup; error not actionable
 	ctl := dir + "/cm"
 
 	// Start master
@@ -159,7 +159,7 @@ func streamSurvives(host string, stdinKeepOpen bool, probeWindow time.Duration) 
 	if err != nil {
 		return false, nil, err
 	}
-	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir) //nolint:errcheck // best-effort cleanup; error not actionable
 	ctl := dir + "/cm"
 
 	if out, cmErr := exec.Command("ssh",
@@ -195,7 +195,7 @@ func streamSurvives(host string, stdinKeepOpen bool, probeWindow time.Duration) 
 	if startErr := cmd.Start(); startErr != nil {
 		stdout.Close()
 		if stdinPW != nil {
-			stdinPW.Close()
+			_ = stdinPW.Close() // best-effort cleanup; failure does not change the result
 		}
 		return false, nil, fmt.Errorf("start ssh child: %w", startErr)
 	}

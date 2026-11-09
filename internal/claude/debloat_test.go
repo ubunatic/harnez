@@ -59,9 +59,7 @@ func readSettings(t *testing.T, dir string) map[string]any {
 func denyOf(m map[string]any) []string {
 	perms, _ := m["permissions"].(map[string]any)
 	var out []string
-	for _, v := range denySlice(perms) {
-		out = append(out, v)
-	}
+	out = append(out, denySlice(perms)...)
 	sort.Strings(out)
 	return out
 }

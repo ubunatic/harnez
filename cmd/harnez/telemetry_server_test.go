@@ -317,11 +317,11 @@ func TestTelemetryOfflineSpoolDoesNotAcquireStoreWriteLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	if _, err := conn.ExecContext(context.Background(), "BEGIN IMMEDIATE"); err != nil {
 		t.Fatal(err)
 	}
-	defer conn.ExecContext(context.Background(), "ROLLBACK")
+	defer conn.ExecContext(context.Background(), "ROLLBACK") //nolint:errcheck // best-effort cleanup; error not actionable
 	config, err := server.LoadConfig()
 	if err != nil {
 		t.Fatal(err)

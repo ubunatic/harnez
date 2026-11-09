@@ -444,8 +444,8 @@ func RenderDocHistoryTable(res *DocHistoryResult) string {
 	if totalAccesses > 0 {
 		hitRate = float64(res.CacheHits) / float64(totalAccesses) * 100.0
 	}
-	b.WriteString(fmt.Sprintf("Commits: %d | Unique Blobs: %d | Cache Hits: %d (%.1f%%) | Latency: %v\n",
-		res.TotalCommits, res.UniqueBlobs, res.CacheHits, hitRate, res.Duration.Round(time.Millisecond)))
+	fmt.Fprintf(&b, "Commits: %d | Unique Blobs: %d | Cache Hits: %d (%.1f%%) | Latency: %v\n",
+		res.TotalCommits, res.UniqueBlobs, res.CacheHits, hitRate, res.Duration.Round(time.Millisecond))
 
 	// Sparkline
 	tokens := make([]int, len(res.Snapshots))
@@ -465,12 +465,12 @@ func RenderDocHistoryTable(res *DocHistoryResult) string {
 		sign = ""
 	}
 
-	b.WriteString(fmt.Sprintf("Sparkline (Tokens): [%s]  (%s → %s tokens, %s%.1f%%)\n\n",
-		sparkline, formatNumber(startTok), formatNumber(endTok), sign, pctChange))
+	fmt.Fprintf(&b, "Sparkline (Tokens): [%s]  (%s → %s tokens, %s%.1f%%)\n\n",
+		sparkline, formatNumber(startTok), formatNumber(endTok), sign, pctChange)
 
 	// Table Header
-	b.WriteString(fmt.Sprintf("%-10s  %-8s  %-12s  %7s  %7s  %5s  %5s  %4s  %s\n",
-		"DATE", "COMMIT", "DELTA (TOK)", "TOKENS", "BYTES", "LINES", "WORDS", "HEAD", "SUBJECT"))
+	fmt.Fprintf(&b, "%-10s  %-8s  %-12s  %7s  %7s  %5s  %5s  %4s  %s\n",
+		"DATE", "COMMIT", "DELTA (TOK)", "TOKENS", "BYTES", "LINES", "WORDS", "HEAD", "SUBJECT")
 	b.WriteString(strings.Repeat("─", 88) + "\n")
 
 	prevTokens := 0
@@ -492,7 +492,7 @@ func RenderDocHistoryTable(res *DocHistoryResult) string {
 			subj = subj[:31] + "..."
 		}
 
-		b.WriteString(fmt.Sprintf("%-10s  %-8s  %11s   %7s  %7s  %5d  %5d  %4d  %s\n",
+		fmt.Fprintf(&b, "%-10s  %-8s  %11s   %7s  %7s  %5d  %5d  %4d  %s\n",
 			dateStr,
 			commitShort,
 			deltaStr,
@@ -501,8 +501,7 @@ func RenderDocHistoryTable(res *DocHistoryResult) string {
 			s.Lines,
 			s.Words,
 			s.Headings,
-			subj,
-		))
+			subj)
 		prevTokens = s.EstTokens
 	}
 

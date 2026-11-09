@@ -366,7 +366,7 @@ func awaitJulesCreate(store *subagent.FileSessionStore, id string, exited <-chan
 			return sess, nil
 		}
 		select {
-		case <-exited:
+		case <-exited: //nolint:errcheck // failure is recorded before exit and re-read below
 			// The worker records its failure before it exits, so one re-read
 			// sees the final state.
 			sess, err = store.Get(id)

@@ -18,9 +18,9 @@ func strataServer(t *testing.T, metrics string) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/metrics":
-			w.Write([]byte(metrics))
+			_, _ = w.Write([]byte(metrics))
 		case "/props":
-			w.Write([]byte(`{"model_alias":"qwen-coder"}`))
+			_, _ = w.Write([]byte(`{"model_alias":"qwen-coder"}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -87,11 +87,13 @@ func TestCurrentStrataStatusCachesWithinTTL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/metrics" {
 			hits++
-			w.Write([]byte(strataLiveJSON))
+			_, _ = w.Write([]byte(strataLiveJSON))
 		}
 	}))
 	defer srv.Close()
-	usageDurations()
+	if _, _, _, _, _, err := usageDurations(); err != nil {
+		t.Fatal(err)
+	}
 	old := usageSpecStrata
 	usageSpecStrata = strataPolicy{endpoints: []string{srv.URL}, timeout: time.Second, ttl: time.Minute}
 	strataCache.Lock()
@@ -114,7 +116,9 @@ func TestCurrentStrataStatusCachesWithinTTL(t *testing.T) {
 }
 
 func TestStrataSpecLoaded(t *testing.T) {
-	usageDurations()
+	if _, _, _, _, _, err := usageDurations(); err != nil {
+		t.Fatal(err)
+	}
 	p := usageSpecStrata
 	if len(p.endpoints) != 1 || p.endpoints[0] != "http://localhost:8080" || p.timeout != time.Second || p.ttl != 2*time.Second {
 		t.Errorf("strata policy = %+v", p)

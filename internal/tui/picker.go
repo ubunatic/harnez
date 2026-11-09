@@ -221,7 +221,7 @@ func wordStartHit(name, q string) bool {
 	for i := range nr {
 		if i > 0 {
 			prev, cur := nr[i-1], nr[i]
-			if !strings.ContainsRune("/_-. ", prev) && !(unicode.IsLower(prev) && unicode.IsUpper(cur)) {
+			if !strings.ContainsRune("/_-. ", prev) && (!unicode.IsLower(prev) || !unicode.IsUpper(cur)) {
 				continue
 			}
 		}

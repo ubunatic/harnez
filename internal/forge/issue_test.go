@@ -15,7 +15,7 @@ func issueServer(t *testing.T, pages []string, seen *[]string) *httptest.Server 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		*seen = append(*seen, r.URL.String())
 		var p int
-		fmt.Sscanf(r.URL.Query().Get("page"), "%d", &p)
+		_, _ = fmt.Sscanf(r.URL.Query().Get("page"), "%d", &p) // a parse failure leaves the target at its zero value
 		if p < 1 || p > len(pages) {
 			fmt.Fprint(w, "[]")
 			return

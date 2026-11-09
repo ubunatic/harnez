@@ -72,10 +72,18 @@ func TestAssessPath(t *testing.T) {
 	bashOversized := "#!/bin/bash\n" + strings.Repeat("echo \"step\"\n", 160)
 	doc := strings.Repeat("# Documentation\nDetails\n", 20)
 
-	os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(goCode), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "main_test.go"), []byte(goTest), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "tool.sh"), []byte(bashOversized), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte(doc), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(goCode), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "main_test.go"), []byte(goTest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "tool.sh"), []byte(bashOversized), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte(doc), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	report, err := AssessPath(tmpDir)
 	if err != nil {
@@ -117,7 +125,9 @@ func TestAssessPath(t *testing.T) {
 func TestAssessSingleFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "script.sh")
-	os.WriteFile(filePath, []byte("#!/bin/bash\necho ok\n"), 0755)
+	if err := os.WriteFile(filePath, []byte("#!/bin/bash\necho ok\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	report, err := AssessPath(filePath)
 	if err != nil {

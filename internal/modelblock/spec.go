@@ -91,7 +91,7 @@ func parseSpan(text string) time.Duration {
 	var total time.Duration
 	for _, m := range spanToken.FindAllStringSubmatch(text, -1) {
 		var n int
-		fmt.Sscan(m[1], &n)
+		_, _ = fmt.Sscan(m[1], &n) // a parse failure leaves the target at its zero value
 		switch strings.ToLower(m[2][:1]) {
 		case "d":
 			total += time.Duration(n) * 24 * time.Hour

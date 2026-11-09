@@ -83,7 +83,10 @@ func TestAgentSelftestGeneratedSessionAcrossShells(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() { done <- background.Wait() }()
-	t.Cleanup(func() { cancel(); <-done })
+	t.Cleanup(func() {
+		cancel()
+		<-done //nolint:errcheck // wait only; the value is not needed
+	})
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -456,7 +459,7 @@ func TestAgentSelftestVerifyMissingHTOFails(t *testing.T) {
 	_ = cmd.Execute()
 	release()
 
-	_ = <-bgDone
+	_ = <-bgDone //nolint:staticcheck // S1005: explicit discard satisfies errcheck
 
 	// 5. Verify -> must fail because HTO was not set
 	cmd = newAgentSelftestCmd()

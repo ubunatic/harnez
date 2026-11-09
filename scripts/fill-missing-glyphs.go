@@ -79,7 +79,7 @@ func fillFile(path, bdf, charset string, dryRun bool) (bool, error) {
 		return false, err
 	}
 	var missing []string
-	for _, r := range []rune(charset) {
+	for _, r := range charset {
 		if r >= 0x2800 && r <= 0x28ff {
 			continue // Braille cells are drawn procedurally, never from a matrix.
 		}

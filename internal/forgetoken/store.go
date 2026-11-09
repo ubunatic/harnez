@@ -168,7 +168,7 @@ func writePrivate(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	defer os.Remove(tmp.Name()) //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := tmp.Chmod(0o600); err != nil {
 		tmp.Close()
 		return err

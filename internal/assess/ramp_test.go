@@ -35,9 +35,15 @@ func TestRAMP_L1_Unconfigured(t *testing.T) {
 	initGitRepo(t, tmpDir)
 
 	// Add normal code and human docs (no AI artifacts)
-	os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte("# My Project\nHuman description.\n"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "Makefile"), []byte("test:\n\tgo test ./...\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte("# My Project\nHuman description.\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "Makefile"), []byte("test:\n\tgo test ./...\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, tmpDir, "Initial commit")
 
 	profile, err := AssessRAMP(tmpDir)
@@ -60,9 +66,15 @@ func TestRAMP_L2_GroundedPrompting(t *testing.T) {
 	tmpDir := t.TempDir()
 	initGitRepo(t, tmpDir)
 
-	os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n- Rule 1\n"), 0644)
-	os.MkdirAll(filepath.Join(tmpDir, ".claude"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, ".claude", "settings.json"), []byte(`{"permissions": {}}`), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n- Rule 1\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".claude"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".claude", "settings.json"), []byte(`{"permissions": {}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, tmpDir, "Add AI instructions")
 
 	profile, err := AssessRAMP(tmpDir)
@@ -89,13 +101,23 @@ func TestRAMP_L3_AgentAugmented(t *testing.T) {
 	initGitRepo(t, tmpDir)
 
 	// L2 baseline
-	os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	// L3 domain skill
-	os.MkdirAll(filepath.Join(tmpDir, "skills", "test-skill"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "skills", "test-skill", "SKILL.md"), []byte("---\nname: test-skill\ndescription: A test skill\n---\n# Test Skill\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "skills", "test-skill"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "skills", "test-skill", "SKILL.md"), []byte("---\nname: test-skill\ndescription: A test skill\n---\n# Test Skill\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	// L3 reusable command
-	os.MkdirAll(filepath.Join(tmpDir, ".claude", "commands"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, ".claude", "commands", "review.md"), []byte("# Reusable review command\nRun review procedure.\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".claude", "commands"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".claude", "commands", "review.md"), []byte("# Reusable review command\nRun review procedure.\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, tmpDir, "Add L2 and L3 artifacts")
 
 	profile, err := AssessRAMP(tmpDir)
@@ -119,16 +141,30 @@ func TestRAMP_L4_Orchestration(t *testing.T) {
 	initGitRepo(t, tmpDir)
 
 	// L2
-	os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	// L3
-	os.MkdirAll(filepath.Join(tmpDir, "skills", "audit"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "skills", "audit", "SKILL.md"), []byte("---\nname: audit\ndescription: Audit skill\n---\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "skills", "audit"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "skills", "audit", "SKILL.md"), []byte("---\nname: audit\ndescription: Audit skill\n---\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	// L4: committed transcripts
-	os.MkdirAll(filepath.Join(tmpDir, ".system_generated", "logs"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, ".system_generated", "logs", "transcript.jsonl"), []byte(`{"step_index":1,"type":"USER_INPUT"}`+"\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".system_generated", "logs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".system_generated", "logs", "transcript.jsonl"), []byte(`{"step_index":1,"type":"USER_INPUT"}`+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	// L4: multi-agent flow
-	os.MkdirAll(filepath.Join(tmpDir, "flows"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "flows", "triage.yaml"), []byte("workflow: triage\nagents:\n  - role: triage\n  - role: planner\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "flows"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "flows", "triage.yaml"), []byte("workflow: triage\nagents:\n  - role: triage\n  - role: planner\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, tmpDir, "Add full L1-L4 artifacts")
 
 	profile, err := AssessRAMP(tmpDir)
@@ -152,8 +188,12 @@ func TestRAMP_MissingLowerLevels_CoherenceAlert(t *testing.T) {
 	initGitRepo(t, tmpDir)
 
 	// Only L3 skill without L2 AGENTS.md / AI rules
-	os.MkdirAll(filepath.Join(tmpDir, "skills", "helper"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "skills", "helper", "SKILL.md"), []byte("---\nname: helper\ndescription: helper skill\n---\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "skills", "helper"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "skills", "helper", "SKILL.md"), []byte("---\nname: helper\ndescription: helper skill\n---\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, tmpDir, "Add skill only")
 
 	profile, err := AssessRAMP(tmpDir)
@@ -186,8 +226,12 @@ func TestRAMP_L4_MissingL2AndL3_CoherenceAlert(t *testing.T) {
 	initGitRepo(t, tmpDir)
 
 	// Only L4 session transcript without L2 or L3
-	os.MkdirAll(filepath.Join(tmpDir, "transcripts"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "transcripts", "session-001.jsonl"), []byte(`{"step_index":1}`+"\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "transcripts"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "transcripts", "session-001.jsonl"), []byte(`{"step_index":1}`+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, tmpDir, "Add transcript only")
 
 	profile, err := AssessRAMP(tmpDir)
@@ -208,13 +252,27 @@ func TestRAMP_AvoidFalsePromotions(t *testing.T) {
 	initGitRepo(t, tmpDir)
 
 	// Add files that should NOT be classified as AI artifacts
-	os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte("# Human Docs\nArchitecture overview.\n"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "Makefile"), []byte("test-q1:\n\tharnez exec --quota-1 -- make test\n"), 0644)
-	os.MkdirAll(filepath.Join(tmpDir, ".github", "workflows"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, ".github", "workflows", "ci.yml"), []byte("name: CI\non: [push]\n"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "service.service"), []byte("[Unit]\nDescription=App service\n"), 0644)
-	os.MkdirAll(filepath.Join(tmpDir, "docs"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "docs", "architecture.md"), []byte("# Architecture\nDetailed components.\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte("# Human Docs\nArchitecture overview.\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "Makefile"), []byte("test-q1:\n\tharnez exec --quota-1 -- make test\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".github", "workflows"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".github", "workflows", "ci.yml"), []byte("name: CI\non: [push]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "service.service"), []byte("[Unit]\nDescription=App service\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, "docs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "architecture.md"), []byte("# Architecture\nDetailed components.\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, tmpDir, "Add ordinary project files")
 
 	profile, err := AssessRAMP(tmpDir)
@@ -234,8 +292,12 @@ func TestRAMP_AmbiguousPaths_MarkedUnknown(t *testing.T) {
 	tmpDir := t.TempDir()
 	initGitRepo(t, tmpDir)
 
-	os.MkdirAll(filepath.Join(tmpDir, "scripts"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "scripts", "agent_helper.sh"), []byte("#!/bin/bash\necho helper\n"), 0755)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "scripts"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "scripts", "agent_helper.sh"), []byte("#!/bin/bash\necho helper\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, tmpDir, "Add ambiguous script")
 
 	profile, err := AssessRAMP(tmpDir)
@@ -260,11 +322,15 @@ func TestRAMP_BaselineVsProjectedAndUncommitted(t *testing.T) {
 	initGitRepo(t, tmpDir)
 
 	// Clean commit with L1
-	os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, tmpDir, "Initial commit")
 
 	// Create uncommitted working-tree AGENTS.md
-	os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	profile, err := AssessRAMP(tmpDir)
 	if err != nil {
@@ -308,7 +374,9 @@ func TestRAMP_BaselineVsProjectedAndUncommitted(t *testing.T) {
 func TestRAMP_NonGitDirectory(t *testing.T) {
 	tmpDir := t.TempDir() // Not a git repo
 
-	os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Agent Guidelines\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	profile, err := AssessRAMP(tmpDir)
 	if err != nil {

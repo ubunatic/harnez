@@ -400,11 +400,11 @@ func unifiedDocDiff(sourcePath, localPath string, source, current []byte) (strin
 		}
 		if _, err := file.Write(data); err != nil {
 			file.Close()
-			os.Remove(file.Name())
+			_ = os.Remove(file.Name()) // best-effort cleanup; failure does not change the result
 			return "", err
 		}
 		if err := file.Close(); err != nil {
-			os.Remove(file.Name())
+			_ = os.Remove(file.Name()) // best-effort cleanup; failure does not change the result
 			return "", err
 		}
 		return file.Name(), nil
@@ -413,12 +413,12 @@ func unifiedDocDiff(sourcePath, localPath string, source, current []byte) (strin
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(oldFile)
+	defer os.Remove(oldFile) //nolint:errcheck // best-effort cleanup; error not actionable
 	newFile, err := writeTemp(current)
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(newFile)
+	defer os.Remove(newFile) //nolint:errcheck // best-effort cleanup; error not actionable
 	cmd := exec.Command("diff", "-u", "--label", sourcePath, "--label", localPath, oldFile, newFile)
 	var output bytes.Buffer
 	cmd.Stdout = &output

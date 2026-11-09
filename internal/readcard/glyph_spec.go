@@ -78,7 +78,7 @@ func glyphBitmaps(size string, width, height int) map[rune][]byte {
 		result[r] = bits
 	}
 	if fallback := result['?']; fallback != nil {
-		for _, r := range []rune(glyphCharset) {
+		for _, r := range glyphCharset {
 			if _, ok := result[r]; !ok {
 				result[r] = fallback
 			}

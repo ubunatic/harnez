@@ -110,7 +110,7 @@ func publishForgejoAssetsWithConfig(dir, tag, title, body string, attachments []
 		if err != nil {
 			return err
 		}
-		defer os.RemoveAll(tmp)
+		defer os.RemoveAll(tmp) //nolint:errcheck // best-effort cleanup; error not actionable
 		path := filepath.Join(tmp, "SHA256SUMS")
 		data, err := run("release", "asset", "download", title, "SHA256SUMS", "--output", path)
 		if err != nil {

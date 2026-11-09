@@ -753,7 +753,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 				normalExit = nil
 			} else {
 				var childExit *exec.ExitError
-				if errors.As(runErr, &childExit) && childExit.ProcessState != nil && childExit.ProcessState.Exited() {
+				if errors.As(runErr, &childExit) && childExit.ProcessState != nil && childExit.Exited() {
 					code := childExit.ExitCode()
 					normalExit = &code
 				}
@@ -1617,7 +1617,7 @@ func writeEditGuardState(path string, state editGuardState) error {
 		return err
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp)
+	defer os.Remove(tmp) //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := f.Chmod(0600); err != nil {
 		f.Close()
 		return err

@@ -50,7 +50,9 @@ func TestDecideRequestStateSources(t *testing.T) {
 
 func TestDecideRequestFile(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "gate.yaml")
-	os.WriteFile(p, []byte("state: {branch: main}\nquestions:\n  risk:\n    type: choice\n    instructions: Classify\n    criteria: {safe: ok, danger: bad}\n"), 0o644)
+	if err := os.WriteFile(p, []byte("state: {branch: main}\nquestions:\n  risk:\n    type: choice\n    instructions: Classify\n    criteria: {safe: ok, danger: bad}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	req, err := decideRequest(&decideOpts{file: p}, nil, strings.NewReader(""))
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +66,9 @@ func TestDecideRequestFile(t *testing.T) {
 // --state still replaces the file's state.
 func TestDecideRequestFileStateSkipsStdin(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "gate.yaml")
-	os.WriteFile(p, []byte("state: from file\nquestions: {q: {type: noul, instructions: x}}\n"), 0o644)
+	if err := os.WriteFile(p, []byte("state: from file\nquestions: {q: {type: noul, instructions: x}}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	req, err := decideRequest(&decideOpts{file: p}, nil, panicReader{})
 	if err != nil || req.State != "from file" {
 		t.Fatalf("state %#v %v", req, err)
@@ -105,7 +109,7 @@ func TestDecideCmdThreshold(t *testing.T) {
 			w.WriteHeader(500)
 			return
 		}
-		w.Write([]byte(`{"answers":{"q":{"type":"noul","noul":0.3}}}`))
+		_, _ = w.Write([]byte(`{"answers":{"q":{"type":"noul","noul":0.3}}}`))
 	}))
 	defer srv.Close()
 	t.Setenv("TYPESAFE_API_KEY", "k")

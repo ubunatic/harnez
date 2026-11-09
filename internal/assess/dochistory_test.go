@@ -130,11 +130,15 @@ func TestExtractDocHistoryTempRepo(t *testing.T) {
 	runGit("config", "user.email", "test@example.com")
 
 	docFile := filepath.Join(tmpDir, "doc.md")
-	os.WriteFile(docFile, []byte("# Initial Doc\nLine 1\n"), 0644)
+	if err := os.WriteFile(docFile, []byte("# Initial Doc\nLine 1\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	runGit("add", "doc.md")
 	runGit("commit", "-m", "initial doc")
 
-	os.WriteFile(docFile, []byte("# Initial Doc\nLine 1\nLine 2 with more tokens\n"), 0644)
+	if err := os.WriteFile(docFile, []byte("# Initial Doc\nLine 1\nLine 2 with more tokens\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	runGit("add", "doc.md")
 	runGit("commit", "-m", "update doc")
 

@@ -156,9 +156,10 @@ func ClassifyFile(relPath string) (category FileCategory, language string, isTes
 	if info, ok := specialFiles[base]; ok {
 		category = info.Category
 		language = info.Language
-		if category == CategoryDocs {
+		switch category {
+		case CategoryDocs:
 			isDoc = true
-		} else if category == CategoryConfig {
+		case CategoryConfig:
 			isConfig = true
 		}
 		return

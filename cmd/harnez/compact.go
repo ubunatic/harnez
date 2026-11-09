@@ -125,7 +125,7 @@ func runCompact(ctx context.Context, out io.Writer, backend decide.Backend, o *c
 		return fmt.Errorf("compact transcript: %w", err)
 	}
 
-	var dest io.Writer = out
+	var dest = out
 	var closeDest func() error
 
 	if o.output != "" {
@@ -137,7 +137,7 @@ func runCompact(ctx context.Context, out io.Writer, backend decide.Backend, o *c
 		closeDest = f.Close
 	}
 	if closeDest != nil {
-		defer closeDest()
+		defer closeDest() //nolint:errcheck // best-effort cleanup; error not actionable
 	}
 
 	if strings.ToLower(o.format) == "summary" {

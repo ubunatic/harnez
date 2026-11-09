@@ -190,7 +190,7 @@ func RenderIssuesMatrixCard(items []IssueCardItem, opts IssueMatrixOptions) (*Re
 		}
 		font.DrawString(img, pathLine, colX+6, itemY+itemHeaderHeight+lineHeight+4, theme.Comment)
 
-		allTextBuilder.WriteString(fmt.Sprintf("%s\t%s\t%s\t%s\n", item.Number, item.RawStatus, item.PlainTitle, item.Path))
+		fmt.Fprintf(&allTextBuilder, "%s\t%s\t%s\t%s\n", item.Number, item.RawStatus, item.PlainTitle, item.Path)
 	}
 
 	outPath := opts.OutputPath

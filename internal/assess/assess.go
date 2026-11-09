@@ -269,21 +269,23 @@ func AssessPath(targetPath string) (*AssessmentReport, error) {
 
 		// Track code vs test directories
 		dirOfFile := filepath.ToSlash(filepath.Dir(rel))
-		if m.Category == CategoryCode {
+		switch m.Category {
+		case CategoryCode:
 			codeFilesPerDir[dirOfFile]++
-		} else if m.Category == CategoryTests {
+		case CategoryTests:
 			testFilesPerDir[dirOfFile]++
 		}
 
 		// Language breakdown (for Code)
 		groupKey := m.Language
-		if m.Category == CategoryCode {
+		switch m.Category {
+		case CategoryCode:
 			groupKey = "Code (" + m.Language + ")"
-		} else if m.Category == CategoryTests {
+		case CategoryTests:
 			groupKey = "Tests"
-		} else if m.Category == CategoryDocs {
+		case CategoryDocs:
 			groupKey = "Docs"
-		} else if m.Category == CategoryConfig {
+		case CategoryConfig:
 			groupKey = "Config"
 		}
 

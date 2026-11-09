@@ -173,7 +173,7 @@ func (s Server) Run(ctx context.Context) error {
 	// start a scan while the old index command is still being canceled.
 	for remainingServices > 0 {
 		select {
-		case <-serviceErr:
+		case <-serviceErr: //nolint:errcheck // join only; the loop counts completions and ignores the value
 			remainingServices--
 		case <-shutdownCtx.Done():
 			_ = httpServer.Close()

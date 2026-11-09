@@ -339,13 +339,13 @@ func diffSettingsJSON(path string, doc map[string]any) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer os.Remove(oldFile)
+	defer os.Remove(oldFile) //nolint:errcheck // best-effort cleanup; error not actionable
 
 	newFile, err := writeTemp(newData)
 	if err != nil {
 		return false, err
 	}
-	defer os.Remove(newFile)
+	defer os.Remove(newFile) //nolint:errcheck // best-effort cleanup; error not actionable
 
 	label := fmt.Sprintf("%s [settings]", path)
 	cmd := exec.Command("diff", "-u", "--label", label, "--label", label, oldFile, newFile)

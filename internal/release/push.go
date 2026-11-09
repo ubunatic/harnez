@@ -100,9 +100,10 @@ func pushRelease(opt Options, tag string, forge *ForgeInfo) error {
 						for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 							parts := strings.Fields(line)
 							if len(parts) == 2 {
-								if parts[1] == branchRef {
+								switch parts[1] {
+								case branchRef:
 									remoteBranchSha = parts[0]
-								} else if parts[1] == tagRef {
+								case tagRef:
 									remoteTagSha = parts[0]
 								}
 							}

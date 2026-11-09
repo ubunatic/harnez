@@ -69,7 +69,7 @@ func (e *Editor) Edit(text string) (string, error) {
 		return "", fmt.Errorf("editor temp file: %w", err)
 	}
 	path := f.Name()
-	defer os.Remove(path)
+	defer os.Remove(path) //nolint:errcheck // best-effort cleanup; error not actionable
 	_, werr := f.WriteString(text)
 	if cerr := f.Close(); werr == nil {
 		werr = cerr

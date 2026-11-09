@@ -35,8 +35,8 @@ func TestLoadStreamCommandEmitsTimestampedSample(t *testing.T) {
 	cmd.SetContext(ctx)
 	cmd.SetOut(&out)
 	stdin, stdinWriter := io.Pipe()
-	defer stdin.Close()
-	defer stdinWriter.Close()
+	defer stdin.Close()       //nolint:errcheck // best-effort cleanup; error not actionable
+	defer stdinWriter.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	cmd.SetIn(stdin)
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)

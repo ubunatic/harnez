@@ -272,13 +272,13 @@ func DiffContent(label, oldBlock, newBlock string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer os.Remove(oldFile)
+	defer os.Remove(oldFile) //nolint:errcheck // best-effort cleanup; error not actionable
 
 	newFile, err := writeTemp(newBlock)
 	if err != nil {
 		return false, err
 	}
-	defer os.Remove(newFile)
+	defer os.Remove(newFile) //nolint:errcheck // best-effort cleanup; error not actionable
 
 	cmd := exec.Command("diff", "-u", "--label", label, "--label", label, oldFile, newFile)
 	cmd.Stdout = os.Stdout

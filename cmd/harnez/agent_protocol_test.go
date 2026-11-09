@@ -181,7 +181,7 @@ func TestSilentAgentGetsWarning(t *testing.T) {
 		releaseDriver()
 		if !joined {
 			select {
-			case <-done:
+			case <-done: //nolint:errcheck // completion signal only; the value is not needed
 			case <-time.After(5 * time.Second):
 				t.Error("silent warning test command did not join")
 			}

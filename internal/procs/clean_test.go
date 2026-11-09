@@ -246,7 +246,7 @@ func TestCleanProcsKillsOnlyChildItSpawned(t *testing.T) {
 	defer func() {
 		if !waited {
 			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			<-wait
+			<-wait //nolint:errcheck // wait for goroutine or process exit; the value is not needed
 		}
 	}()
 

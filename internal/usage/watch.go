@@ -104,7 +104,7 @@ func readWatchKey(r io.Reader) (byte, error) {
 		return readByte()
 	}
 	if hasDeadline {
-		defer deadliner.SetReadDeadline(time.Time{})
+		defer deadliner.SetReadDeadline(time.Time{}) //nolint:errcheck // best-effort cleanup; error not actionable
 	}
 
 	first, err := readContinuation()

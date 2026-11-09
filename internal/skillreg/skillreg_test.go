@@ -468,8 +468,12 @@ func TestSetFrontmatterReplacesInPlace(t *testing.T) {
 
 func TestMentionsUsesWordBoundaries(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: \"alpha\"\n---\nalphabet soup\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, "ref.md"), []byte("run /alpha now\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: \"alpha\"\n---\nalphabet soup\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ref.md"), []byte("run /alpha now\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if got := mentions(dir, "alpha"); len(got) != 1 || got[0] != "ref.md" {
 		t.Errorf("mentions: %v", got)
 	}

@@ -75,7 +75,7 @@ func TestQuestionMarkFallbackUsesUpstreamOrSpec(t *testing.T) {
 		if want, ok := upstream['?']; ok && string(tc.font['?']) != string(want) {
 			t.Errorf("%s does not use the upstream question mark", tc.size)
 		}
-		for _, r := range []rune(glyphCharset) {
+		for _, r := range glyphCharset {
 			if _, ok := tc.font[r]; !ok {
 				t.Errorf("%s has no fallback matrix for %q", tc.size, r)
 			}
@@ -88,7 +88,7 @@ func TestDot8Editable3x5SpecCoversCharset(t *testing.T) {
 	if _, ok := spec.Glyphs["?"]; !ok {
 		t.Fatal("3x5 spec is missing the editable '?' fallback")
 	}
-	for _, r := range []rune(glyphCharset) {
+	for _, r := range glyphCharset {
 		if r >= 0x2800 && r <= 0x28ff {
 			if _, ok := spec.Glyphs[string(r)]; ok {
 				t.Errorf("procedural Braille cell %q must not be in 3x5 YAML", r)
@@ -121,7 +121,7 @@ func TestDot8SpecCoversCharset(t *testing.T) {
 	if _, ok := spec.Glyphs["?"]; !ok {
 		t.Fatal("dot8 spec is missing the '?' fallback")
 	}
-	for _, r := range []rune(glyphCharset) {
+	for _, r := range glyphCharset {
 		if r >= 0x2800 && r <= 0x28ff {
 			if _, ok := spec.Glyphs[string(r)]; ok {
 				t.Errorf("procedural Braille cell %q must not be in dot8 YAML", r)
@@ -154,7 +154,7 @@ func TestDot8Custom3x5SpecCoversCharset(t *testing.T) {
 	if _, ok := spec.Glyphs["?"]; !ok {
 		t.Fatal("3x5-custom spec is missing the '?' fallback")
 	}
-	for _, r := range []rune(glyphCharset) {
+	for _, r := range glyphCharset {
 		if r >= 0x2800 && r <= 0x28ff {
 			if _, ok := spec.Glyphs[string(r)]; ok {
 				t.Errorf("procedural Braille cell %q must not be in 3x5-custom YAML", r)

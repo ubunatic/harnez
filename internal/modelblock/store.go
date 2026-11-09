@@ -68,15 +68,15 @@ func write(path string, blocks []Block) error {
 	tmp := f.Name()
 	if _, err := f.Write(data); err != nil {
 		f.Close()
-		os.Remove(tmp)
+		_ = os.Remove(tmp) // best-effort cleanup; failure does not change the result
 		return err
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp) // best-effort cleanup; failure does not change the result
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp) // best-effort cleanup; failure does not change the result
 		return err
 	}
 	return nil

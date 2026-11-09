@@ -28,7 +28,7 @@ type docHistoryOptions struct {
 
 func newDocHistoryCmd() *cobra.Command {
 	var dir string
-	var color bool = true
+	var color = true
 	var noColor bool
 	var jsonOut bool
 	var tracks bool
@@ -80,7 +80,7 @@ Invocations:
 
 func newRepoHistoryCmd() *cobra.Command {
 	var dir string
-	var color bool = true
+	var color = true
 	var noColor bool
 	var jsonOut bool
 	var diff bool

@@ -307,7 +307,7 @@ func replaceManagedBlock(content, id, generated string, legacyStart, legacyEnd i
 	begin, end := markdown.MDMarkers.Begin(id), markdown.MDMarkers.End(id)
 	beginAt, endAt := strings.Index(content, begin), strings.Index(content, end)
 	if beginAt >= 0 || endAt >= 0 {
-		if beginAt < 0 || endAt < beginAt || strings.Index(content[beginAt+len(begin):], begin) >= 0 {
+		if beginAt < 0 || endAt < beginAt || strings.Contains(content[beginAt+len(begin):], begin) {
 			return "", fmt.Errorf("malformed generated block %q", id)
 		}
 		lineStart := strings.LastIndex(content[:beginAt], "\n") + 1

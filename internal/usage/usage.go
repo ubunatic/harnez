@@ -173,7 +173,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 	var sb strings.Builder
 
 	sb.WriteString("Agentic Coding Usage & Quota Monitor\n")
-	sb.WriteString(fmt.Sprintf("Snapshot taken at: %s (%s)\n\n", summary.Timestamp.Format("2006-01-02 15:04:05 MST"), usageSnapshotAgeLabel(summary.Timestamp, now)))
+	fmt.Fprintf(&sb, "Snapshot taken at: %s (%s)\n\n", summary.Timestamp.Format("2006-01-02 15:04:05 MST"), usageSnapshotAgeLabel(summary.Timestamp, now))
 
 	shown := 0
 	for _, agent := range summary.Agents {
@@ -376,7 +376,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 				if padding < 0 {
 					padding = 0
 				}
-				sb.WriteString(fmt.Sprintf("│  %s%s│\n", l, strings.Repeat(" ", padding)))
+				fmt.Fprintf(&sb, "│  %s%s│\n", l, strings.Repeat(" ", padding))
 			}
 		}
 
@@ -414,7 +414,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 			for _, sl := range sourceLines {
 				// dim-grey, not dim-faint (issue 107 reconciliation) -- see
 				// staleValueANSI's doc comment in colorsspec.go.
-				sb.WriteString(fmt.Sprintf("%s%s\033[0m\n", ansiDimGrey, sl))
+				fmt.Fprintf(&sb, "%s%s\033[0m\n", ansiDimGrey, sl)
 			}
 		}
 		sb.WriteString("\n")

@@ -501,10 +501,8 @@ func deliverInbox(ctx context.Context, inbox *Inbox, state *TurnState, terminal 
 		case <-inbox.wake:
 		case <-ticker.C:
 		}
-		for {
-			if ctx.Err() != nil || !state.Idle(time.Now(), quiet, typingGuard) {
-				break
-			}
+		for ctx.Err() == nil && state.Idle(time.Now(), quiet, typingGuard) {
+
 			msg := inbox.Next()
 			if msg == nil {
 				break

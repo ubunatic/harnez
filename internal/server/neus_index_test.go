@@ -181,7 +181,7 @@ func TestNeusIndexerBackgroundChildHoldingStdoutDoesNotBlock(t *testing.T) {
 		}
 	case <-watchdog.Done():
 		stopSleeper()
-		<-done
+		<-done //nolint:errcheck // wait for goroutine or process exit; the value is not needed
 		t.Fatal("neus child holding stdout blocked command completion")
 	}
 }

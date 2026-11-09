@@ -109,10 +109,10 @@ func generateGoWorkExample(dir string, moduleArgs []string) string {
 	b.WriteString(managedWorkspaceMarker + "\n")
 	b.WriteString("// Example Go workspace for local co-development.\n")
 	b.WriteString("// Symlinked or copied to go.work locally (untracked).\n")
-	b.WriteString(fmt.Sprintf("go %s\n\n", version))
+	fmt.Fprintf(&b, "go %s\n\n", version)
 	b.WriteString("use (\n")
 	for _, arg := range moduleArgs {
-		b.WriteString(fmt.Sprintf("\t%s\n", arg))
+		fmt.Fprintf(&b, "\t%s\n", arg)
 	}
 	b.WriteString(")\n")
 	return b.String()

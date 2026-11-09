@@ -39,7 +39,7 @@ func upstreamBitmaps(size string, width, height int) map[rune][]byte {
 	if err != nil {
 		panic(fmt.Sprintf("readcard BDF %s: %v", size, err))
 	}
-	defer b.Close()
+	defer b.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	font, err := parseEmbeddedBDF(b)
 	if err != nil {
 		panic(fmt.Sprintf("readcard BDF %s: %v", size, err))

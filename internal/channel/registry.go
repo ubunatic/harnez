@@ -76,7 +76,7 @@ func processAlive(pid int) bool {
 	if err != nil {
 		return false
 	}
-	defer process.Release()
+	defer process.Release() //nolint:errcheck // best-effort cleanup; error not actionable
 	err = process.Signal(syscall.Signal(0))
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
@@ -179,7 +179,7 @@ func register(ctx context.Context, cfg Config, reg registration) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(file.Name())
+	defer os.Remove(file.Name()) //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := json.NewEncoder(file).Encode(reg); err != nil {
 		file.Close()
 		return err

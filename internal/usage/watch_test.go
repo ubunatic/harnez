@@ -327,7 +327,9 @@ func TestFitClipsToViewport(t *testing.T) {
 // must therefore carry its own erase-to-end-of-line.
 func TestPaintClearsEachLine(t *testing.T) {
 	var sb strings.Builder
-	fit([]string{"a", "", "c"}, 20, 5).paint(&sb)
+	if err := fit([]string{"a", "", "c"}, 20, 5).paint(&sb); err != nil {
+		t.Fatal(err)
+	}
 	out := sb.String()
 
 	if !strings.HasPrefix(out, "\x1b[H") {

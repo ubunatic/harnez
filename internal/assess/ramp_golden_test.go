@@ -17,14 +17,15 @@ func TestRAMPOutputGolden(t *testing.T) {
 				initGitRepo(t, dir)
 			}
 			files := map[string]string{}
-			if scenario == "complete" || scenario == "nongit" {
+			switch scenario {
+			case "complete", "nongit":
 				files = map[string]string{
 					"AGENTS.md": "# Agent Guidelines", ".claude/settings.json": "{}",
 					"docs/AgenticLoop.md": "# Practices", ".claude/agents/helper.md": "# Helper",
 					".claude/commands/check.md": "# Check", "skills/check/SKILL.md": "# Skill",
 					"flows/team.yaml": "agents: []", "agent-sessions/run.jsonl": "{}",
 				}
-			} else if scenario == "incoherent" {
+			case "incoherent":
 				files["flows/team.yaml"] = "agents: []"
 			}
 			for path, content := range files {

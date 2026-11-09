@@ -83,9 +83,13 @@ revert-managed: ⚙️ build  # remove managed blocks from the Claude Code confi
 status: ⚙️ build  # show config summary and applied state
 	./$(BINARY) status -c $(CONFIG) -t $(TARGET)
 
-lint: ⚙️ build  # gofmt, go vet, harnez lint --check on tracked files, docs/commands registration
+lint: ⚙️ build  # gofmt, go vet, golangci-lint (skipped if absent), harnez lint --check, docs/commands registration
 	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
+	if ! command -v golangci-lint >/dev/null 2>&1; \
+	then echo "warning: golangci-lint not installed, skipping (install: https://golangci-lint.run)"; \
+	else GOWORK=off golangci-lint run ./...; \
+	fi
 	./$(BINARY) lint --check
 	bash scripts/lint.sh
 

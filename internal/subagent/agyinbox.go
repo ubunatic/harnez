@@ -179,7 +179,7 @@ func (inbox *Inbox) write(msg *InboxMessage) error {
 		return fmt.Errorf("create inbox message temp file: %w", err)
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer os.Remove(tmpName) //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("secure inbox message temp file: %w", err)

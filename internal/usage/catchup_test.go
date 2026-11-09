@@ -169,7 +169,7 @@ func TestCollectorSkipsInitialFetchWhenNoClients(t *testing.T) {
 	}
 
 	cancel()
-	<-done
+	<-done //nolint:errcheck // wait for goroutine or process exit; the value is not needed
 }
 
 // TestCollectorReadyBeforeFirstFetch guards the startup deadlock: clients wait
@@ -199,7 +199,7 @@ func TestCollectorReadyBeforeFirstFetch(t *testing.T) {
 	}
 
 	cancel()
-	<-done
+	<-done //nolint:errcheck // wait for goroutine or process exit; the value is not needed
 }
 
 // An empty store must not wait a full cadence for its first snapshot just
@@ -236,5 +236,5 @@ func TestCollectorInitialFetchWhenStoreEmptyEvenWithoutClients(t *testing.T) {
 		t.Fatalf("initial fetches = %d, want 1", got)
 	}
 	cancel()
-	<-done
+	<-done //nolint:errcheck // wait for goroutine or process exit; the value is not needed
 }

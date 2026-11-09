@@ -846,7 +846,7 @@ func runIssuesLintCached(w io.Writer, dir string) error {
 	if err != nil {
 		return fmt.Errorf("issues lint --cached: %w", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer os.RemoveAll(tmp) //nolint:errcheck // best-effort cleanup; error not actionable
 	prefix := tmp + string(os.PathSeparator)
 	if _, err := gitOutput(dir, "checkout-index", "--all", "--prefix="+prefix); err != nil {
 		return fmt.Errorf("issues lint --cached: materialize index: %w", err)

@@ -269,7 +269,7 @@ func writeAtomic(path string, data []byte, mode fs.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	defer os.Remove(tmp.Name()) //nolint:errcheck // best-effort cleanup; error not actionable
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return err

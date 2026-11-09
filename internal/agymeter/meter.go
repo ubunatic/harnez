@@ -303,7 +303,7 @@ func (m *Meter) handle(w http.ResponseWriter, r *http.Request) {
 func (m *Meter) tunnel(w http.ResponseWriter, r *http.Request) {
 	dst, e := net.DialTimeout("tcp", r.Host, 5*time.Second)
 	if e != nil {
-		http.Error(w, "upstream unavailable", 502)
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		return
 	}
 	hj, ok := w.(http.Hijacker)
@@ -569,14 +569,14 @@ func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model,
 	if m.observer != nil {
 		defer func() { m.observer.ResponseFinished(functionCall) }()
 	}
-	var src io.Reader = raw
+	var src = raw
 	if strings.EqualFold(strings.TrimSpace(encoding), "gzip") {
 		gz, err := gzip.NewReader(raw)
 		if err != nil {
 			m.debugf("gzip side-reader failed: %v", err)
 			return
 		}
-		defer gz.Close()
+		defer gz.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 		src = gz
 	} else if encoding != "" && !strings.EqualFold(encoding, "identity") {
 		m.debugf("unsupported content encoding for side-reader")
