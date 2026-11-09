@@ -34,6 +34,8 @@ func (t Target) String() string { return t.Forge.Host + "/" + t.Owner + "/" + t.
 type Source interface {
 	Issue(fg forge.Forge, owner, repo string, n int) (forge.RemoteIssue, error)
 	Issues(fg forge.Forge, owner, repo, state string, opts forge.ScanOptions) ([]forge.RemoteIssue, bool, error)
+	// Repo probes the repo itself; nil means it is reachable with the token in use (issue 1199).
+	Repo(fg forge.Forge, owner, repo string) error
 }
 
 // ErrNotApplicable means the repo has a local issues/ dir, or no forge origin, so the
@@ -86,6 +88,13 @@ func Show(w io.Writer, src Source, t Target, ticket string, jsonOut bool) error 
 	}
 	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
 	if err != nil {
+		// A 404 on the issue of a reachable repo means the issue is missing (issue 1199). The
+		// result is a plain error, not an APIError, so the private-repo token hint is skipped.
+		// Any other probe result keeps the original error and its hint.
+		var apiErr *forge.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == 404 && src.Repo(t.Forge, t.Owner, t.Repo) == nil {
+			return fmt.Errorf("issue #%d not found on %s", n, t)
+		}
 		return fmt.Errorf("issues show: %s#%d: %w", t, n, err)
 	}
 	if is.PullRequest != nil {

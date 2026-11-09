@@ -135,6 +135,23 @@ func TestIssuesLocalDirSkipsForge(t *testing.T) {
 	}
 }
 
+// TestIssuesShowMissingIssueOnForge (issue 1199): a missing issue on a reachable repo is
+// reported as not found without the token hint; a missing repo keeps the hint.
+func TestIssuesShowMissingIssueOnForge(t *testing.T) {
+	stub := stubForge(t)
+	stub.missing = true
+	dir := forgeRepo(t)
+	_, err := runHarnez(t, "issues", "show", "-d", dir, "99")
+	if err == nil || !strings.Contains(err.Error(), "issue #99 not found on codeberg.org/o/r") || strings.Contains(err.Error(), "private repo") {
+		t.Fatalf("reachable repo: want not-found without the hint, got %v", err)
+	}
+	stub.repoErr = &forge.APIError{Status: 404, Detail: "repo"}
+	_, err = runHarnez(t, "issues", "show", "-d", dir, "99")
+	if err == nil || !strings.Contains(err.Error(), "a private repo needs a token") {
+		t.Fatalf("missing repo: want the token hint, got %v", err)
+	}
+}
+
 func TestForgeTrackerHint(t *testing.T) {
 	tg := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", TokenEnv: []string{"CODEBERG_TOKEN", "FORGEJO_TOKEN"}}}
 	err := forgeTrackerHint(&forge.APIError{Status: 404, Detail: "x"}, tg)
