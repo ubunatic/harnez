@@ -99,7 +99,9 @@ func TestSystemOneRoundTrip(t *testing.T) {
 		if r.URL.Path != "/v1/systemone" {
 			t.Errorf("path %s", r.URL.Path)
 		}
-		_ = json.NewDecoder(r.Body).Decode(&got)
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
 		_, _ = w.Write([]byte(`{"model":"jev-1.13.0","answers":{"blocked":{"type":"noul","noul":0.93}},"usage":{"input_tokens":3,"output_tokens":1}}`))
 	}))
 	defer srv.Close()

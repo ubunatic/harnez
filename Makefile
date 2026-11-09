@@ -88,7 +88,7 @@ lint: ⚙️ build  # gofmt, go vet, golangci-lint (skipped if absent), harnez l
 	GOWORK=off go vet ./...
 	if ! command -v golangci-lint >/dev/null 2>&1; \
 	then echo "warning: golangci-lint not installed, skipping (install: https://golangci-lint.run)"; \
-	else golangci-lint run ./...; \
+	else GOWORK=off golangci-lint run ./...; \
 	fi
 	./$(BINARY) lint --check
 	bash scripts/lint.sh
