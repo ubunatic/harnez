@@ -50,13 +50,23 @@ func TestFindForgeClosedWordAndActiveAlias(t *testing.T) {
 		t.Fatalf("find -a issues status:active: state=%q err=%v\n%s", stub.state, err, out)
 	}
 	calls := stub.calls
-	for _, word := range []string{"blocked", "draft", "open", "next", "last"} {
-		out, err := runHarnez(t, "find", "-d", dir, "issues", word)
+	refused := []struct{ word, want string }{
+		{"open", "find issues open: not supported for forge tickets; use find issues status:open"},
+		{"blocked", "find issues blocked: forge tickets have only open and closed states; use status:open or status:closed"},
+		{"draft", "find issues draft: forge tickets have only open and closed states; use status:open or status:closed"},
+		{"next", "find issues next: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
+		{"last", "find issues last: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
+		{"history", "find issues history: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
+		{"similar", "find issues similar: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
+	}
+	for _, c := range refused {
+		out, err := runHarnez(t, "find", "-d", dir, "issues", c.word)
 		if err == nil {
-			t.Errorf("find issues %s on a forge repo must be refused, got:\n%s", word, out)
+			t.Errorf("find issues %s on a forge repo must be refused, got:\n%s", c.word, out)
+			continue
 		}
-		if err != nil && word == "open" && !strings.Contains(err.Error(), "status:open") {
-			t.Errorf("find issues open must name status:open, got %v", err)
+		if err.Error() != c.want {
+			t.Errorf("find issues %s: error\n got: %q\nwant: %q", c.word, err.Error(), c.want)
 		}
 	}
 	if stub.calls != calls {

@@ -1434,10 +1434,12 @@ Query grammar:
                       status:open, status:closed and status:active are
                       supported; they map to the forge's issue state
                       (status:active is open: forges have no In Progress,
-                      Blocked or Draft). The bare word 'closed' is
-                      status:closed. The words open, blocked, draft, next,
-                      last, history and similar are local-only and are
-                      refused on a forge repo, naming the forge form.
+                      Blocked or Draft). A leading bare word 'closed' is
+                      status:closed; only the first term is rewritten, so
+                      'closed' later in the query is a search term. The
+                      words open, blocked, draft, next, last, history and
+                      similar are local-only and are refused on a forge
+                      repo, naming the forge form.
 
 An unquoted '|' is a shell pipeline operator, so an OR query needs shell
 quoting:
