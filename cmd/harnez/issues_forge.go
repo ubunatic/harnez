@@ -72,13 +72,23 @@ func privateRepoHint(fg forge.Forge) string {
 	return "a private repo needs a token: set one of " + env
 }
 
+// trackerIsNone reports whether .harnez/repo.yaml sets issues.tracker: none.
+// A missing repo.yaml is not "none": a fresh repo still adopts a local tracker.
+func trackerIsNone(dir string) bool {
+	if _, err := os.Stat(filepath.Join(dir, ".harnez", "repo.yaml")); err != nil {
+		return false
+	}
+	cfg, err := loadIndexRepoConfig(dir)
+	return err == nil && cfg != nil && cfg.Issues.Tracker == "none"
+}
+
 // issueCLILookPath and issueCLIRun find and run the forge CLI; tests replace them.
 var (
 	issueCLILookPath = exec.LookPath
 	issueCLIRun      = func(dir string, c forgetracker.Command) ([]byte, error) {
 		cmd := exec.Command(c.Tool, c.Args...)
 		cmd.Dir = dir
-		cmd.Stdin = nil
+		cmd.Stdin = os.Stdin // -F - reads the body from stdin
 		return cmd.CombinedOutput()
 	}
 )
@@ -86,7 +96,7 @@ var (
 // runIssuesNewForge files a ticket on the forge with its CLI (issue 1195). It makes no
 // commit. With dryRun it prints the command and creates nothing.
 func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Target, req forgetracker.CreateRequest, dryRun, jsonOut bool) error {
-	if req.BodyFile != "" {
+	if req.BodyFile != "" && req.BodyFile != "-" {
 		// The CLI runs in dir, so a relative path must be resolved here first.
 		abs, err := filepath.Abs(req.BodyFile)
 		if err != nil {
@@ -110,7 +120,7 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	if err != nil {
 		return fmt.Errorf("issues new: %s failed: %w\n%s", c.Tool, err, strings.TrimSpace(string(out)))
 	}
-	n, url, ok := forgetracker.ParseCreated(t, string(out))
+	n, url, ok := forgetracker.ParseCreated(t, string(out), req.Title)
 	if !ok {
 		return fmt.Errorf("issues new: %s ran but printed no ticket number; check %s before retrying\n%s", c.Tool, t, strings.TrimSpace(string(out)))
 	}

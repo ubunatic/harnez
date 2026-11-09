@@ -160,6 +160,10 @@ func TestIssuesNewFilesOnForgeWithoutIssuesDir(t *testing.T) {
 	if got := strings.Join((*ran)[0].Args, " "); !strings.Contains(got, "--labels bug") {
 		t.Fatalf("labels not passed: %s", got)
 	}
+	out, err = runHarnez(t, "issues", "new", "-d", dir, "Forge bug", "-F", body, "--json")
+	if err != nil || !strings.Contains(out, `"number":42`) || !strings.Contains(out, `"url":"https://codeberg.org/o/r/issues/42"`) {
+		t.Fatalf("json: %v\n%s", err, out)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "issues")); !os.IsNotExist(err) {
 		t.Fatalf("forge create must not make issues/: %v", err)
 	}
@@ -171,9 +175,6 @@ func TestIssuesNewFilesOnForgeWithoutIssuesDir(t *testing.T) {
 func TestIssuesNewForgeErrors(t *testing.T) {
 	stubIssueCLI(t, "")
 	dir := forgeRepo(t)
-	if _, err := runHarnez(t, "issues", "new", "-d", dir, "No body"); err == nil || !strings.Contains(err.Error(), "--body-file is required") {
-		t.Fatalf("missing body: %v", err)
-	}
 	if _, err := runHarnez(t, "issues", "new", "-d", dir, "T", "-F", filepath.Join(dir, "absent.md")); err == nil || !strings.Contains(err.Error(), "body file") {
 		t.Fatalf("absent body: %v", err)
 	}
@@ -196,5 +197,25 @@ func TestIssuesNewLocalRefusesForgeFlags(t *testing.T) {
 	}
 	if _, err := runHarnez(t, "issues", "new", "-d", dir, "T", "--label", "bug"); err == nil || !strings.Contains(err.Error(), "apply only when tickets live on the forge") {
 		t.Fatalf("local --label: %v", err)
+	}
+}
+
+func TestIssuesNewWithoutForgeSignalStaysLocal(t *testing.T) {
+	ran := stubIssueCLI(t, "#1 x\n")
+	dir := forgeRepo(t)
+	if _, err := runHarnez(t, "issues", "new", "-d", dir, "First ticket", "--offline"); err != nil {
+		t.Fatalf("fresh repo local new: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "issues")); err != nil || len(*ran) != 0 {
+		t.Fatalf("fresh repo must adopt issues/ (issue 853), ran=%d err=%v", len(*ran), err)
+	}
+}
+
+func TestIssuesNewTrackerNoneUsesForge(t *testing.T) {
+	stubIssueCLI(t, "")
+	dir := forgeRepo(t)
+	writeIndexRepoConfig(t, dir, "none", false)
+	if _, err := runHarnez(t, "issues", "new", "-d", dir, "No body"); err == nil || !strings.Contains(err.Error(), "--body-file is required") {
+		t.Fatalf("tracker none without -F: %v", err)
 	}
 }

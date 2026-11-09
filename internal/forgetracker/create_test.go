@@ -81,9 +81,10 @@ func TestParseCreated(t *testing.T) {
 		{"#218 New ticket\nstate: open", 218, "https://codeberg.org/o/r/issues/218", true},
 		{"see https://codeberg.org/o/r/issues/5.", 5, "https://codeberg.org/o/r/issues/5", true},
 		{"error-free but silent", 0, "", false},
+		{"#219 Follow-up to #182\n", 219, "https://codeberg.org/o/r/issues/219", true},
 	}
 	for _, c := range cases {
-		n, url, ok := ParseCreated(cbTarget, c.out)
+		n, url, ok := ParseCreated(cbTarget, c.out, "Follow-up to #182")
 		if n != c.n || url != c.url || ok != c.ok {
 			t.Errorf("%q: got %d %q %v", c.out, n, url, ok)
 		}

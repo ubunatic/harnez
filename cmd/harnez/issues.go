@@ -347,7 +347,10 @@ valid, exit-0 answer.`,
 			}
 			if args[0] == "new" {
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
-				if !remoteFlag && numberFlag == "" {
+				// The forge path needs an explicit signal (-F/--label or tracker: none), so a
+				// fresh repo with a forge origin still adopts a local issues/ dir (issue 853).
+				_, remoteEnvSet := os.LookupEnv("CLAUDE_CODE_REMOTE")
+				if !remoteFlag && !remoteEnvSet && numberFlag == "" && (bodyFileFlag != "" || len(labelFlags) > 0 || trackerIsNone(dir)) {
 					if t, _, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
 						return err
 					} else if ok {

@@ -42,3 +42,8 @@ Field report from filing taia#217 (2026-11-09, `/tmp/issue-skill-feedback.md`):
 ## Open questions
 
 - Does `harnez find issues` on a private forge repo work with the 1118 token in taia today (1116 notes 404 without one)?
+
+## Decision
+
+- No `repo.yaml` forge/cli field: the forge comes from origin and the CLI list from `spec/pr.yaml` `issue_cli` (1195). Skill `docs/commands/issue.md` gains a "Forge tracker" section; the tracker-none Index.md notice names find/show/new, the overlap rule and the report form.
+- Open question (private repo with the 1118 token in taia) is not verified here.

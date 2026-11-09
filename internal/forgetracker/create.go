@@ -87,8 +87,12 @@ var (
 )
 
 // ParseCreated reads the ticket number and URL from the CLI's output. When the output
-// has only "#N", the URL is built from the target.
-func ParseCreated(t Target, out string) (int, string, bool) {
+// has only "#N", the URL is built from the target. The title is removed first, so a
+// title such as "Follow-up to #182" cannot be read as the new ticket's number.
+func ParseCreated(t Target, out, title string) (int, string, bool) {
+	if title != "" {
+		out = strings.ReplaceAll(out, title, "")
+	}
 	if m := createdURLRe.FindStringSubmatch(out); m != nil {
 		n, _ := strconv.Atoi(m[1])
 		return n, strings.TrimRight(m[0], ".,)"), true
