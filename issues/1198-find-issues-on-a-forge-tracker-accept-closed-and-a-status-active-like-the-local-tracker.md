@@ -1,6 +1,7 @@
 # 1198 — find issues on a forge tracker: accept closed and -a status:active like the local tracker
 
-**Status**: Open
+**Status**: Closed — Fixed in 89679380: closed maps to status:closed and -a status:active to open on forge repos; local-only words are refused with forge-specific errors. Tests TestFindForgeClosedWordAndActiveAlias and TestFindStatusFilterSendsStateToForge pass (targeted go test). make test-q1 run after the help golden update: no failure summary; exit code not captured.
+**Closed-By**: claude:haiku:med, session dev-1198
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

@@ -141,6 +141,7 @@ func TestFindStatusFilterSendsStateToForge(t *testing.T) {
 		{[]string{"status:open"}, "open"},
 		{[]string{"status:closed"}, "closed"},
 		{[]string{"status:open", "vram"}, "open"},
+		{[]string{"status:active"}, "open"}, // issue 1198: the local tracker's active set maps to open
 	} {
 		var out bytes.Buffer
 		if err := Find(&out, src, tg, opts, c.terms, 10, false, false); err != nil {
