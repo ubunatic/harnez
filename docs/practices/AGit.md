@@ -24,6 +24,8 @@ Forgejo and Gitea support it (Codeberg runs Forgejo). GitHub has no AGit.
 - A push to a topic with an open PR updates that PR.
 - Once that PR is merged or closed, the next push to the same topic opens a new PR. The push output
   names the PR URL; report that number.
+- Forgejo (seen on Codeberg) prints "Visit the existing pull request" even when the push just opened
+  a new PR. Trust the PR number in the URL, not that wording.
 - A non-fast-forward update is rejected. Never override it with `-o force-push=true`, and never
   force-push.
 - After a squash or rebase merge, reset the local branch to `origin/<default-branch>`, or the merged
