@@ -35,3 +35,6 @@ body is left with the agent.
   each forge and browser accepts. Canary both on codeberg.org before building (docs/Canary.md).
 - Telling "not logged in" from other CLI failures may need per-CLI stderr matching; a simple first cut offers the
   link on any CLI failure.
+- Field report (taia, 2026-11-09): first real filing worked (taia#223 via tea 0.16.0). `--label bug` on a repo
+  with no labels passes `--dry-run` unchecked; consider a label pre-check (`tea labels list` / `gh label list`)
+  in the same error path, so a missing label fails with a clear message before filing.
