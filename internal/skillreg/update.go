@@ -53,7 +53,7 @@ func (r *Registry) PlanUpdate(name string, latest bool) (UpdatePlan, error) {
 	if err != nil {
 		return UpdatePlan{}, err
 	}
-	defer os.RemoveAll(tmp)
+	defer os.RemoveAll(tmp) //nolint:errcheck // best-effort cleanup; error not actionable
 	clone := filepath.Join(tmp, "repo")
 	if plan.Commit, err = Clone(e.URL, plan.Ref, clone); err != nil {
 		return UpdatePlan{}, err

@@ -188,7 +188,7 @@ func runWithTimeout(cmd *exec.Cmd, d time.Duration) error {
 		return err
 	case <-time.After(d):
 		cmd.Process.Kill() //nolint:errcheck
-		<-done
+		<-done             //nolint:errcheck // wait for goroutine or process exit; the value is not needed
 		return nil
 	}
 }

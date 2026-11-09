@@ -38,7 +38,7 @@ func TestDistillReadOutputBoundedAndImages(t *testing.T) {
 			if _, err := os.Stat(path); err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { os.RemoveAll(filepath.Dir(path)) })
+			t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(path)) }) // best-effort test cleanup
 		}
 	}
 	unicodeResult, err := DistillReadOutput(ReadOutputRequest{Text: strings.Repeat("世", 100), MaxTokens: 7})

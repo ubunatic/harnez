@@ -72,7 +72,7 @@ func DistillReadOutput(req ReadOutputRequest) (ReadOutput, error) {
 			opts.OutputPath = filepath.Join(dir, "read.png")
 			rendered, err := readcard.RenderFileToCards(lines, req.Path, opts)
 			if err != nil {
-				os.RemoveAll(dir)
+				_ = os.RemoveAll(dir) // best-effort cleanup; failure does not change the result
 				return result, err
 			}
 			result.Images = rendered.Files

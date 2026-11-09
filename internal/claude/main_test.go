@@ -38,11 +38,17 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	gitCleanup()
 
-	os.RemoveAll(tmpHome)
+	if err := os.RemoveAll(tmpHome); err != nil {
+		panic(err)
+	}
 	if hadHome {
-		os.Setenv("HOME", oldHome)
+		if err := os.Setenv("HOME", oldHome); err != nil {
+			panic(err)
+		}
 	} else {
-		os.Unsetenv("HOME")
+		if err := os.Unsetenv("HOME"); err != nil {
+			panic(err)
+		}
 	}
 
 	os.Exit(code)

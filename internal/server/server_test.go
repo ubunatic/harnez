@@ -233,7 +233,7 @@ func TestStaleSocketIsReplacedAndForeignListenerErrors(t *testing.T) {
 	defer listener.Close()
 	foreign := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "foreign", http.StatusOK) })}
 	go func() { _ = foreign.Serve(listener) }()
-	defer foreign.Close()
+	defer foreign.Close() //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := (Server{Config: cfg, Version: "1.0.0", BuildIdentity: "a"}).Run(context.Background()); err == nil || errors.Is(err, errAlreadyRunning) {
 		t.Fatalf("foreign listener result = %v", err)
 	}

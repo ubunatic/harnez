@@ -302,21 +302,35 @@ func TestReleaseResumeMissingTag(t *testing.T) {
 	dir := t.TempDir()
 
 	// Initialize git repo
-	runCmd(dir, "git", "init")
-	runCmd(dir, "git", "commit", "--allow-empty", "-m", "initial commit")
+	if err := runCmd(dir, "git", "init"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(dir, "git", "commit", "--allow-empty", "-m", "initial commit"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Set up version.yaml
 	if err := os.WriteFile(filepath.Join(dir, "version.yaml"), []byte("version: 1.0.0\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	runCmd(dir, "git", "add", "version.yaml")
-	runCmd(dir, "git", "commit", "-m", "chore: setup version")
+	if err := runCmd(dir, "git", "add", "version.yaml"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(dir, "git", "commit", "-m", "chore: setup version"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Mock push behavior via "git remote" locally to dummy remote
 	remoteDir := t.TempDir()
-	runCmd(remoteDir, "git", "init", "--bare")
-	runCmd(dir, "git", "remote", "add", "origin", "git@github.com:dummy/dummy.git")
-	runCmd(dir, "git", "remote", "set-url", "--push", "origin", remoteDir)
+	if err := runCmd(remoteDir, "git", "init", "--bare"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(dir, "git", "remote", "add", "origin", "git@github.com:dummy/dummy.git"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(dir, "git", "remote", "set-url", "--push", "origin", remoteDir); err != nil {
+		t.Fatal(err)
+	}
 
 	// Create dummy complete dist for the resume
 	if err := os.MkdirAll(filepath.Join(dir, "dist"), 0755); err != nil {

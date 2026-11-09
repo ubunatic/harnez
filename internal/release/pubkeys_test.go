@@ -130,7 +130,9 @@ func TestLoadPublicKeysRejects(t *testing.T) {
 		"date":        {index: strings.Replace(validIndex, "added: 2026-11-02", "added: 11/02/2026", 1), want: "YYYY-MM-DD"},
 		"unknown key": {index: validIndex + "extra: 1\n", want: "extra"},
 		"missing pub": {index: validIndex, setup: func(t *testing.T, dir string) {
-			os.Remove(filepath.Join(dir, "keys", "minisign", retiredID+".pub"))
+			if err := os.Remove(filepath.Join(dir, "keys", "minisign", retiredID+".pub")); err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
 		}, want: retiredID + ".pub"},
 		"id mismatch": {index: validIndex, setup: func(t *testing.T, dir string) {
 			writePub(t, dir, retiredID+".pub", activeID)
@@ -230,7 +232,9 @@ func TestPublishBodyNamesSigner(t *testing.T) {
 func TestPublishSkipsKeysWhenUnsigned(t *testing.T) {
 	dir := keysProject(t, validIndex)
 	keySignedDist(t, dir, activeID)
-	os.Remove(filepath.Join(dir, "dist", "SHA256SUMS.minisig"))
+	if err := os.Remove(filepath.Join(dir, "dist", "SHA256SUMS.minisig")); err != nil {
+		t.Fatal(err)
+	}
 	var out bytes.Buffer
 	if err := runPublishStep(Options{Dir: dir, DryRun: true, Out: &out}, "loom", "v1.0.0", nil); err != nil {
 		t.Fatal(err)

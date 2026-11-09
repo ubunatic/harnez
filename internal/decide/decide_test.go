@@ -99,8 +99,8 @@ func TestSystemOneRoundTrip(t *testing.T) {
 		if r.URL.Path != "/v1/systemone" {
 			t.Errorf("path %s", r.URL.Path)
 		}
-		json.NewDecoder(r.Body).Decode(&got)
-		w.Write([]byte(`{"model":"jev-1.13.0","answers":{"blocked":{"type":"noul","noul":0.93}},"usage":{"input_tokens":3,"output_tokens":1}}`))
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{"model":"jev-1.13.0","answers":{"blocked":{"type":"noul","noul":0.93}},"usage":{"input_tokens":3,"output_tokens":1}}`))
 	}))
 	defer srv.Close()
 
@@ -126,7 +126,7 @@ func TestLocalBackendNoKey(t *testing.T) {
 	var auth = "unset"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth = r.Header.Get("Authorization")
-		w.Write([]byte(`{"answers":{"blocked":{"type":"noul","noul":0.1}}}`))
+		_, _ = w.Write([]byte(`{"answers":{"blocked":{"type":"noul","noul":0.1}}}`))
 	}))
 	defer srv.Close()
 	b, err := testSpec(srv.URL).Open("local", env(nil))
@@ -145,14 +145,14 @@ func TestSystemOneErrors(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") == "Bearer bad" {
 			w.WriteHeader(401)
-			w.Write([]byte(`{"detail":{"error_type":"authentication_error","message":"check your API key"}}`))
+			_, _ = w.Write([]byte(`{"detail":{"error_type":"authentication_error","message":"check your API key"}}`))
 			return
 		}
 		if r.Header.Get("Authorization") == "Bearer wrongtype" {
-			w.Write([]byte(`{"answers":{"blocked":{"type":"choice","choice":"x"}}}`))
+			_, _ = w.Write([]byte(`{"answers":{"blocked":{"type":"choice","choice":"x"}}}`))
 			return
 		}
-		w.Write([]byte(`{"answers":{}}`))
+		_, _ = w.Write([]byte(`{"answers":{}}`))
 	}))
 	defer srv.Close()
 	s := testSpec(srv.URL)

@@ -47,7 +47,7 @@ func Vendor(src VendorSource) (VendorReport, error) {
 	if err != nil {
 		return rep, err
 	}
-	defer os.RemoveAll(tmp)
+	defer os.RemoveAll(tmp) //nolint:errcheck // best-effort cleanup; error not actionable
 	clone := filepath.Join(tmp, "repo")
 	if rep.Commit, err = Clone(src.URL, src.Commit, clone); err != nil {
 		return rep, err

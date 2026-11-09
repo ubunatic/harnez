@@ -87,7 +87,7 @@ func syncOne(t Target, s Bundled) (changed, note string, err error) {
 		return "", fmt.Sprintf("skipped bundled skill %s in %s: %s", s.Name, t.Dir, how), nil
 	}
 	st := filepath.Join(t.Dir, "."+s.Name+".harnez-staging")
-	defer os.RemoveAll(st)
+	defer os.RemoveAll(st) //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := os.RemoveAll(st); err != nil {
 		return "", "", err
 	}

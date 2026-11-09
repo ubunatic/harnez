@@ -378,7 +378,7 @@ func (d CodexDriver) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("codex delete: %w", err)
 	}
-	io.Copy(io.Discard, rd)
+	_, _ = io.Copy(io.Discard, rd) // drain only; the exit status is checked by wait()
 	if err := wait(); err != nil {
 		return fmt.Errorf("codex delete: %w", err)
 	}

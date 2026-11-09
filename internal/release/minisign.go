@@ -89,7 +89,7 @@ func TestMinisignKey(keyPath string) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFile.Name())
+	defer os.Remove(tmpFile.Name()) //nolint:errcheck // best-effort cleanup; error not actionable
 
 	if _, err := tmpFile.WriteString("harnez-key-test"); err != nil {
 		return err
@@ -100,7 +100,7 @@ func TestMinisignKey(keyPath string) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(sigFile)
+	defer os.Remove(sigFile) //nolint:errcheck // best-effort cleanup; error not actionable
 
 	return nil
 }

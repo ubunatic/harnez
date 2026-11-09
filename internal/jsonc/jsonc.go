@@ -95,7 +95,7 @@ func MarshalPretty(v any) []byte {
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
-	enc.Encode(v)
+	_ = enc.Encode(v) // MarshalPretty has no error return; unsupported values give empty output, as before
 	return bytes.TrimRight(buf.Bytes(), "\n")
 }
 

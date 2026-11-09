@@ -65,7 +65,7 @@ func AppendTelemetrySpool(dir string, record []byte, maxBytes int64) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer os.Remove(tmpName) //nolint:errcheck // best-effort cleanup; error not actionable
 	if _, err := tmp.Write(record); err != nil {
 		tmp.Close()
 		return err

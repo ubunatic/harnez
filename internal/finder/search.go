@@ -470,7 +470,7 @@ func parseRG(b []byte, root string) []Result {
 			continue
 		}
 		var ln int
-		fmt.Sscan(n, &ln)
+		_, _ = fmt.Sscan(n, &ln) // a parse failure leaves the target at its zero value
 		rs = append(rs, Result{Path: relative(p, root), Line: ln, Title: filepath.Base(p), Snippet: text, Kind: "code"})
 	}
 	return rs

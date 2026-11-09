@@ -1617,7 +1617,7 @@ func writeEditGuardState(path string, state editGuardState) error {
 		return err
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp)
+	defer os.Remove(tmp) //nolint:errcheck // best-effort cleanup; error not actionable
 	if err := f.Chmod(0600); err != nil {
 		f.Close()
 		return err

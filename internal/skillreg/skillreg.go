@@ -180,7 +180,7 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
-	defer os.RemoveAll(tmp)
+	defer os.RemoveAll(tmp) //nolint:errcheck // best-effort cleanup; error not actionable
 	clone := filepath.Join(tmp, "repo")
 	commit, err := Clone(opts.URL, opts.Ref, clone)
 	if err != nil {
