@@ -77,3 +77,9 @@ Decision (decide mode, reversible): option 1, per the recommendation above.
   re-count.
 - M3 — fix the remaining errcheck in tests (`t.Fatal` on setup errors) and staticcheck, per package.
 - M4 — wire golangci-lint into `make lint`.
+
+## Decision (lean sprint, 2026-11-10)
+
+- `(*os.File).Close` stays excluded from errcheck: idiomatic, mostly read paths and tests; accepted risk.
+- ST1005 excluded in `.golangci.yml` with a comment: the error strings are user-visible, rewording is a behaviour change.
+- M3 split: errcheck in 3 commits by package group, staticcheck in 1; SA1019 gets `//nolint` with reason.
