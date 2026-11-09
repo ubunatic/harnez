@@ -142,3 +142,9 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   wave; Jules matched titles, not the done-when. Check each close against the ticket's `/goal` and run it
   live where cheap; many "done" tickets were done under another ticket's commit (close with
   `--implemented-by`, 1174).
+- **A routing check on raw args misses quoted and flag forms** (1198, argon review 2026-11-09): the forge
+  path matched `args[1]` against local-only words, so `"closed bug"`, `--next` and the DB-only
+  `history` took the wrong branch. Split args into words before matching, route flags too, and send
+  subcommands that never read `issues/` past the forge switch. Tests: `TestFindForgeClosedWordAndActiveAlias`.
+- **Gemini argon:low as one-shot reviewer** (2026-11-09): 6 min, 3 real medium findings in a diff a
+  Haiku reviewer and the host had passed. Slower than codex low reviews; worth it for a whole-session sweep.
