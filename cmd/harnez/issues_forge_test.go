@@ -56,7 +56,6 @@ func TestFindForgeClosedWordAndActiveAlias(t *testing.T) {
 		{"draft", "find issues draft: forge tickets have only open and closed states; use status:open or status:closed"},
 		{"next", "find issues next: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
 		{"last", "find issues last: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
-		{"history", "find issues history: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
 		{"similar", "find issues similar: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
 	}
 	for _, c := range refused {
@@ -69,8 +68,25 @@ func TestFindForgeClosedWordAndActiveAlias(t *testing.T) {
 			t.Errorf("find issues %s: error\n got: %q\nwant: %q", c.word, err.Error(), c.want)
 		}
 	}
+	// A quoted query is split into words first (argon review): "open bug" is refused like open bug.
+	if _, err := runHarnez(t, "find", "-d", dir, "issues", "open bug"); err == nil || !strings.Contains(err.Error(), "find issues open: not supported") {
+		t.Errorf(`find issues "open bug" must be refused like open, got %v`, err)
+	}
+	if _, err := runHarnez(t, "find", "-d", dir, "--next", "issues"); err == nil || err.Error() != "find issues --next: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms" {
+		t.Errorf("find --next issues on a forge repo: got %v", err)
+	}
 	if stub.calls != calls {
 		t.Errorf("local-only words reached the forge: %d extra calls", stub.calls-calls)
+	}
+	// history reads the telemetry DB, so the forge path must leave it alone.
+	if _, err := runHarnez(t, "find", "-d", dir, "issues", "history"); err != nil && strings.Contains(err.Error(), "needs a local issues/ dir") {
+		t.Errorf("find issues history must not be refused on a forge repo: %v", err)
+	}
+	if stub.calls != calls {
+		t.Errorf("find issues history reached the forge: %d extra calls", stub.calls-calls)
+	}
+	if out, err := runHarnez(t, "find", "-d", dir, "issues", "closed bug"); err != nil || stub.state != "closed" {
+		t.Errorf(`find issues "closed bug": state=%q err=%v\n%s`, stub.state, err, out)
 	}
 }
 
