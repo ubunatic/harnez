@@ -102,7 +102,8 @@ func Show(w io.Writer, src Source, t Target, ticket string, jsonOut bool) error 
 // newest first, as "<number>\t<state>\t<title>\t<url>". limit caps the rows unless all is set.
 //
 // The only filter is status:open or status:closed, which the forge applies as its issue
-// state; any other status: value is an error before the forge is asked.
+// state; status:active is an alias for open (issue 1198: forges have no In Progress, Blocked
+// or Draft). Any other status: value is an error before the forge is asked.
 func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []string, limit int, all, jsonOut bool) error {
 	state := "all"
 	statusSet := false
@@ -113,8 +114,11 @@ func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []str
 				if statusSet {
 					return fmt.Errorf("find issues: only one status: filter is supported for forge tickets")
 				}
-				if val != "open" && val != "closed" {
-					return fmt.Errorf("find issues: %s is not supported for forge tickets; supported values: status:open, status:closed", f)
+				if val != "open" && val != "closed" && val != "active" {
+					return fmt.Errorf("find issues: %s is not supported for forge tickets; supported values: status:open, status:closed, status:active", f)
+				}
+				if val == "active" {
+					val = "open"
 				}
 				state, statusSet = val, true
 				continue

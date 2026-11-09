@@ -14,16 +14,54 @@ import (
 	"ubunatic.com/harnez/internal/prwait"
 )
 
-type stubForgeSource struct{ calls int }
+type stubForgeSource struct {
+	calls   int
+	state   string // state argument of the last Issues request
+	repoErr error  // Repo probe result; nil means the repo is reachable
+	missing bool   // Issue answers 404 for every number
+}
 
 func (s *stubForgeSource) Issue(_ forge.Forge, _, _ string, n int) (forge.RemoteIssue, error) {
 	s.calls++
+	if s.missing {
+		return forge.RemoteIssue{}, &forge.APIError{Status: 404, Detail: "issue not found"}
+	}
 	return forge.RemoteIssue{Number: n, Title: "forge ticket", State: "open", HTMLURL: "https://codeberg.org/o/r/issues/7"}, nil
 }
 
-func (s *stubForgeSource) Issues(forge.Forge, string, string, string, forge.ScanOptions) ([]forge.RemoteIssue, bool, error) {
+func (s *stubForgeSource) Issues(_ forge.Forge, _, _ string, state string, _ forge.ScanOptions) ([]forge.RemoteIssue, bool, error) {
 	s.calls++
+	s.state = state
 	return []forge.RemoteIssue{{Number: 7, Title: "forge ticket", State: "open"}}, false, nil
+}
+
+func (s *stubForgeSource) Repo(forge.Forge, string, string) error { return s.repoErr }
+
+// TestFindForgeClosedWordAndActiveAlias checks that the bare word closed and -a status:active
+// reach the forge as its issue state (issue 1198), and that local-only words are refused
+// before any forge call.
+func TestFindForgeClosedWordAndActiveAlias(t *testing.T) {
+	stub := stubForge(t)
+	dir := forgeRepo(t)
+	if out, err := runHarnez(t, "find", "-d", dir, "issues", "closed"); err != nil || stub.state != "closed" {
+		t.Fatalf("find issues closed: state=%q err=%v\n%s", stub.state, err, out)
+	}
+	if out, err := runHarnez(t, "find", "-d", dir, "issues", "-a", "status:active"); err != nil || stub.state != "open" {
+		t.Fatalf("find -a issues status:active: state=%q err=%v\n%s", stub.state, err, out)
+	}
+	calls := stub.calls
+	for _, word := range []string{"blocked", "draft", "open", "next", "last"} {
+		out, err := runHarnez(t, "find", "-d", dir, "issues", word)
+		if err == nil {
+			t.Errorf("find issues %s on a forge repo must be refused, got:\n%s", word, out)
+		}
+		if err != nil && word == "open" && !strings.Contains(err.Error(), "status:open") {
+			t.Errorf("find issues open must name status:open, got %v", err)
+		}
+	}
+	if stub.calls != calls {
+		t.Errorf("local-only words reached the forge: %d extra calls", stub.calls-calls)
+	}
 }
 
 func forgeRepo(t *testing.T) string {
