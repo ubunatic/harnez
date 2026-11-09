@@ -1,6 +1,6 @@
 # 927 — lint: gokay check fails on usagestore store_test.go errcheck and spec schema conformance
 
-**Status**: Open
+**Status**: Closed — golangci-lint 1403 -> 0 findings with .golangci.yml (narrow errcheck exclusions, ST1005 off per Decision); make lint runs it (GOWORK=off, skips if absent); make test-q1 exit 0; argon:low review: 4 low, fixed in edad1410
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Epic
