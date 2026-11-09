@@ -1,6 +1,6 @@
 # 1194 — /issue skill: forge-tracker path for issues.tracker none (search, create, labels, overlap, reporting)
 
-**Status**: Open
+**Status**: Closed — skill Forge tracker section + Index.md notice point to harnez issues new -F; make test-q1 exit 0
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Docs
