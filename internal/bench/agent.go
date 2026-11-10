@@ -94,19 +94,26 @@ func ParseModels(value string) ([]subagent.Model, error) {
 	return models, nil
 }
 
-// DefaultModelForProvider uses the shared model spec to select a provider default.
+// DefaultModelForProvider selects the cheapest enabled model tier for a provider.
 func DefaultModelForProvider(provider string) (subagent.Model, error) {
-	global, err := subagent.DefaultModel()
+	entries, err := subagent.KnownModelEntriesE()
 	if err != nil {
 		return subagent.Model{}, err
 	}
-	if global.Provider == provider {
-		return global, nil
-	}
-	for _, model := range subagent.KnownModels() {
-		if model.Provider == provider {
-			return model, nil
+	return cheapestModelForProvider(provider, entries)
+}
+
+func cheapestModelForProvider(provider string, entries []subagent.ModelEntry) (subagent.Model, error) {
+	var best subagent.ModelEntry
+	found := false
+	for _, entry := range entries {
+		// Equal costs retain the existing catalog order.
+		if entry.Model.Provider == provider && (!found || entry.Cost < best.Cost) {
+			best, found = entry, true
 		}
+	}
+	if found {
+		return best.Model, nil
 	}
 	return subagent.Model{}, fmt.Errorf("bench: no model configured for provider %q", provider)
 }

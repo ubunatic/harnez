@@ -45,6 +45,15 @@ func TestCodexCheckResumable(t *testing.T) {
 }
 
 func TestResolveModel(t *testing.T) {
+	for _, spec := range []string{"fable", "claude:fable:low"} {
+		m, err := ResolveModel(spec)
+		if err != nil || m.Provider != "claude" || m.Name != "claude-fable-5-2" || m.Tier != "low" {
+			t.Errorf("ResolveModel(%q) = %#v, %v; want claude:claude-fable-5-2:low", spec, m, err)
+		}
+	}
+	if _, err := ResolveModel("fable:bogus"); err == nil || !strings.Contains(err.Error(), "unknown model tier") {
+		t.Errorf("ResolveModel(fable:bogus) error = %v; want unknown model tier", err)
+	}
 	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "low"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "claude-haiku-5-5", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "claude-haiku-5-5", "low"}, {"agy:flash37:low", "agy", "gemini-3.7-flash", "low"}, {"agy:gemini-3.7-flash:low", "agy", "gemini-3.7-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
 		m, err := ResolveModel(tc.spec)
 		if err != nil {

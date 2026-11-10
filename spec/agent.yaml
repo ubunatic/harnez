@@ -198,6 +198,17 @@ models:
     eff: "~"
     skills: Go~ TUI~ SQL~
     use: cross-vendor advisor or reviewer; strong tool use
+  claude:fable:
+    aliases: [fable]
+    provider: claude
+    name: claude-fable-5-2
+    tier: low
+    roles: orchestrator, reviewer
+    cost: 40
+    eff: "?"
+    skills: Go? TUI? SQL?
+    use: "Cost estimate based on published API prices: twice Claude Opus 5.5."
+    guidance_source_url: https://platform.claude.com/docs/en/about-claude/pricing
   claude:opus:
     aliases: [opus, opus:low]
     preferred: true

@@ -9,6 +9,9 @@ agy:flash38:med
 agy:flash38:high
 agy:opus:low
 agy:sonnet:low
+claude:fable:low
+claude:fable:med
+claude:fable:high
 claude:haiku:low
 claude:haiku:med
 claude:haiku:high

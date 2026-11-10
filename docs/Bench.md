@@ -15,6 +15,7 @@ database is separate from the telemetry store.
   runs the selected model × read-mode × order × task × repeat matrix. `--order` applies to read tasks
   and defaults to today's prompt without an order sentence. Model specs use the same names as
   `harnez agent models`; `--agent` remains as a deprecated provider selector for default-model runs.
+  Provider defaults select the enabled model tier with the lowest spec cost, retaining catalog order on ties.
   `--docs` defaults to `lite`. One table summarizes only runs from this invocation.
 - `harnez bench results [--recent N]` summarizes pass rate, average tokens, and cost by condition.
 

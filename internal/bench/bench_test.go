@@ -12,9 +12,23 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez/internal/agymeter"
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 const claudeJSON = `{"result":"ready","is_error":false,"total_cost_usd":0.03,"usage":{"input_tokens":10,"output_tokens":48,"cache_read_input_tokens":5,"cache_creation_input_tokens":100}}`
+
+func TestDefaultModelIgnoresMoreExpensiveAddition(t *testing.T) {
+	entries := subagent.KnownModelEntries()
+	want, err := cheapestModelForProvider(AgentClaude, entries)
+	if err != nil || want.Name != "claude-haiku-5-5" || want.Tier != "low" {
+		t.Fatalf("Claude default = %#v, %v", want, err)
+	}
+	entries = append([]subagent.ModelEntry{{Model: subagent.Model{Provider: AgentClaude, Name: "fake", Tier: "low"}, Cost: 99}}, entries...)
+	got, err := cheapestModelForProvider(AgentClaude, entries)
+	if err != nil || got != want {
+		t.Fatalf("Claude default after addition = %#v, %v; want %#v", got, err, want)
+	}
+}
 
 const codexJSONL = `Reading additional input from stdin...
 {"type":"thread.started","thread_id":"x"}

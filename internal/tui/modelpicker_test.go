@@ -194,7 +194,7 @@ func TestModelPickerMarkersAndRenderAt80Cols(t *testing.T) {
 		return ""
 	})
 	app.openModelPicker()
-	rows := RenderCanvas(app, 80, 24)
+	rows := RenderCanvas(app, 80, 48)
 	mp := app.Spec.ModelPicker
 	top, bottom := -1, -1
 	found := map[string]string{}
