@@ -2,12 +2,11 @@ package forge
 
 import (
 	"context"
-	"os"
-
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -132,6 +131,9 @@ func getOnce(client *http.Client, fg Forge, rawURL, token, what, settingName str
 	resp, err := client.Do(req)
 	if err != nil {
 		// The transport error may name the URL, never the header, so the token cannot leak here.
+		if isTimeout(err) {
+			return &APIError{Transient: true, Detail: "request to " + fg.Host + " " + timedOut(settingName)}
+		}
 		return &APIError{Transient: true, Detail: "request to " + fg.Host + " failed"}
 	}
 	defer resp.Body.Close()
@@ -141,16 +143,26 @@ func getOnce(client *http.Client, fg Forge, rawURL, token, what, settingName str
 		return &APIError{Status: resp.StatusCode, Transient: transient, Detail: what}
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
-			hint := "timeout"
-			if settingName != "" {
-				hint = "timed out (raise " + settingName + ")"
-			} else {
-				hint = "timed out"
-			}
-			return &APIError{Status: resp.StatusCode, Transient: true, Detail: "decoding response from " + fg.Host + ": " + hint}
+		if isTimeout(err) {
+			return &APIError{Status: resp.StatusCode, Transient: true, Detail: "decoding response from " + fg.Host + ": " + timedOut(settingName)}
 		}
 		return &APIError{Status: resp.StatusCode, Detail: "decoding response from " + fg.Host}
 	}
 	return nil
+}
+
+// isTimeout reports whether err comes from a request deadline, either while waiting for the
+// response or while reading its body (issue 1201).
+func isTimeout(err error) bool {
+	var te interface{ Timeout() bool }
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) ||
+		(errors.As(err, &te) && te.Timeout())
+}
+
+// timedOut names the spec setting that bounds the request, so the user knows what to raise.
+func timedOut(settingName string) string {
+	if settingName == "" {
+		return "timed out"
+	}
+	return "timed out (raise spec/pr.yaml " + settingName + ")"
 }
