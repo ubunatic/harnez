@@ -2,13 +2,13 @@ package usage
 
 import (
 	"bytes"
+	"github.com/mattn/go-runewidth"
 	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
-	"unicode/utf8"
 	"unsafe"
 )
 
@@ -37,7 +37,7 @@ func stripANSI(s string) string {
 }
 
 func visLen(s string) int {
-	return utf8.RuneCountInString(stripANSI(s))
+	return runewidth.StringWidth(stripANSI(s))
 }
 
 func truncateVisible(s string, maxWidth int) string {
@@ -68,7 +68,7 @@ func truncateVisible(s string, maxWidth int) string {
 			break
 		}
 		sb.WriteRune(r)
-		count++
+		count += runewidth.StringWidth(string(r))
 	}
 	sb.WriteString("...\x1b[0m")
 	return sb.String()
