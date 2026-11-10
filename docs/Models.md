@@ -64,7 +64,7 @@ ratios. The retired GPT-5.6 Terra value is omitted; the new Terra estimate is ab
 | `codex:terra` | 15 | 24 | 36 |
 | `codex:astra` | 182 | 342 | 384 |
 | `claude:fable` ([price-based estimate](https://platform.claude.com/docs/en/about-claude/pricing); 2× Opus) | 40 | 40 | 40 |
-| `claude:haiku` | 12 | 12 | 12 |
+| `claude:haiku` | 4 | 4 | 7 |
 | `claude:sonnet` | 15 | 15 | 15 |
 | `claude:opus` | 20 | 20 | 20 |
 | `agy:flash37` | 4 | 4 | 4 |

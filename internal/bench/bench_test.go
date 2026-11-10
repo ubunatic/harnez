@@ -30,6 +30,19 @@ func TestDefaultModelIgnoresMoreExpensiveAddition(t *testing.T) {
 	}
 }
 
+func TestCheapestModelKeepsCatalogOrderOnTie(t *testing.T) {
+	first := subagent.Model{Provider: AgentClaude, Name: "first", Tier: "low"}
+	second := subagent.Model{Provider: AgentClaude, Name: "second", Tier: "low"}
+	entries := []subagent.ModelEntry{{Model: first, Cost: 4}, {Model: second, Cost: 4}}
+	for _, want := range []subagent.Model{first, second} {
+		got, err := cheapestModelForProvider(AgentClaude, entries)
+		if err != nil || got != want {
+			t.Fatalf("cheapest = %#v, %v; want %#v", got, err, want)
+		}
+		entries[0], entries[1] = entries[1], entries[0]
+	}
+}
+
 const codexJSONL = `Reading additional input from stdin...
 {"type":"thread.started","thread_id":"x"}
 {"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"draft"}}

@@ -250,6 +250,39 @@ func TestModelPickerMarkersAndRenderAt80Cols(t *testing.T) {
 	}
 }
 
+func TestModelPickerScrollsAt80x24(t *testing.T) {
+	app, _, _ := newModelApp(t, nil)
+	app.openModelPicker()
+	app.picker.sel = len(app.picker.matches) - 1
+	want := app.picker.matches[app.picker.sel].Name
+	first := app.picker.matches[0].Name
+	rows := RenderCanvas(app, 80, 24)
+	top, bottom := -1, -1
+	selected, firstVisible := false, false
+	for i, row := range rows {
+		plain := stripANSI(row)
+		if strings.Contains(plain, "┌") && strings.Contains(plain, app.Spec.ModelPicker.Title) {
+			top = i
+		}
+		if top >= 0 && bottom < 0 && strings.Contains(plain, "└") {
+			bottom = i
+		}
+		for _, field := range strings.Fields(plain) {
+			selected = selected || field == want
+			firstVisible = firstVisible || field == first
+		}
+	}
+	if !selected || firstVisible {
+		t.Fatalf("selected %q visible = %v; first %q visible = %v:\n%s", want, selected, first, firstVisible, strings.Join(rows, "\n"))
+	}
+	if top < 0 || bottom <= top {
+		t.Fatalf("no complete overlay box:\n%s", strings.Join(rows, "\n"))
+	}
+	if err := loom.ValidateAnsiBox(strings.Join(rows[top:bottom+1], "\n")); err != nil {
+		t.Fatalf("invalid overlay box: %v", err)
+	}
+}
+
 // TestKeybindingsDoNotConflict checks every spec binding: open_models shares
 // no key with any other action and avoids terminal aliases of Enter/Tab/
 // Backspace/Esc; the actions live while the prompt has focus are pairwise
