@@ -245,6 +245,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-06-two-agent-lean-sprint-usage-debug-frame.md](studies/2026-11-06-two-agent-lean-sprint-usage-debug-frame.md) | Lean sprint 1175: usage watch debug frame loses lines after a collector refresh |
 | [studies/2026-11-09-forge-rough-edges-session.md](studies/2026-11-09-forge-rough-edges-session.md) | Forge rough edges, release v0.5.7, agent shell |
 | [studies/2026-11-10-two-agent-lean-sprint-fable-model.md](studies/2026-11-10-two-agent-lean-sprint-fable-model.md) | Lean sprint 1204: add Claude Fable 5.2 (2026-11-10) |
+| [studies/2026-11-10-two-agent-lean-sprint-official-model-names.md](studies/2026-11-10-two-agent-lean-sprint-official-model-names.md) | Lean sprint 1203: accept official model names (2026-11-10) |
 | [studies/2026-11-10-two-agent-lean-sprint-push-main-unlock.md](studies/2026-11-10-two-agent-lean-sprint-push-main-unlock.md) | Lean sprint 1205: --push-main and /disable push-main unlock ticket commits (2026-11-10) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
