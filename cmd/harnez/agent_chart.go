@@ -170,8 +170,12 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 	// Map all points and draw series
 	for _, key := range seriesOrder {
 		s := seriesMap[key]
+		// Sort points within series by cost ascending, then tier rank ascending (highest tier last)
 		sort.Slice(s.points, func(i, j int) bool {
-			return s.points[i].cost < s.points[j].cost
+			if s.points[i].cost != s.points[j].cost {
+				return s.points[i].cost < s.points[j].cost
+			}
+			return tierRank(s.points[i].tier) < tierRank(s.points[j].tier)
 		})
 
 		colorCode, err := scores.ProviderColor(s.provider)
@@ -207,36 +211,52 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 			}
 		}
 
-		// Label series near highest cost point: drop label if it cannot be placed without collision
-		last := s.points[len(s.points)-1]
-		labelCellX := (last.x / 2) + 1
-		labelCellY := (canvas.HeightCells() - 1) - (last.y / 4)
-		if labelCellX+len(s.alias) >= canvas.WidthCells() {
-			labelCellX = (last.x / 2) - len(s.alias) - 1
+		// Label series next to its last (highest-tier) point within 2 cells.
+		// If it cannot be placed without collision, drop the label.
+		highestTierPoint := s.points[len(s.points)-1]
+		ptCellX := highestTierPoint.x / 2
+		ptCellY := (canvas.HeightCells() - 1) - (highestTierPoint.y / 4)
+		labelLen := len(s.alias)
+
+		type candidatePos struct {
+			cx, cy int
+		}
+		candidates := []candidatePos{
+			{cx: ptCellX + 1, cy: ptCellY},            // right
+			{cx: ptCellX - labelLen, cy: ptCellY},     // left
+			{cx: ptCellX + 1, cy: ptCellY - 1},        // above-right
+			{cx: ptCellX + 1, cy: ptCellY + 1},        // below-right
+			{cx: ptCellX - labelLen, cy: ptCellY - 1}, // above-left
+			{cx: ptCellX - labelLen, cy: ptCellY + 1}, // below-left
+			{cx: ptCellX, cy: ptCellY - 1},            // above
+			{cx: ptCellX, cy: ptCellY + 1},            // below
 		}
 
-		candidates := []int{labelCellY}
-		if labelCellY > 0 {
-			candidates = append(candidates, labelCellY-1)
-		}
-		if labelCellY < canvas.HeightCells()-1 {
-			candidates = append(candidates, labelCellY+1)
-		}
-		for _, cy := range candidates {
-			// Check with 1-cell padding around label to avoid concatenated text like "argonterra"
-			checkX := labelCellX - 1
-			checkLen := len(s.alias) + 2
-			if checkX < 0 {
-				checkX = 0
-				checkLen = len(s.alias) + 1
+		for _, cand := range candidates {
+			if cand.cx < 0 || cand.cx+labelLen > canvas.WidthCells() {
+				continue
 			}
-			if checkX+checkLen > canvas.WidthCells() {
-				checkLen = canvas.WidthCells() - checkX
+			if cand.cy < 0 || cand.cy >= canvas.HeightCells() {
+				continue
 			}
-			if labelCellX >= 0 && labelCellX+len(s.alias) <= canvas.WidthCells() && !canvas.IsOccupied(checkX, cy, checkLen) {
-				canvas.Text(labelCellX, cy, s.alias, colorCode)
-				break
+			distX := cand.cx - ptCellX
+			if distX < 0 {
+				distX = ptCellX - (cand.cx + labelLen - 1)
 			}
+			if distX > 2 || abs(cand.cy-ptCellY) > 1 {
+				continue
+			}
+			if canvas.IsOccupied(cand.cx, cand.cy, labelLen) {
+				continue
+			}
+			if cand.cx > 0 && canvas.HasText(cand.cx-1, cand.cy) {
+				continue
+			}
+			if cand.cx+labelLen < canvas.WidthCells() && canvas.HasText(cand.cx+labelLen, cand.cy) {
+				continue
+			}
+			canvas.Text(cand.cx, cand.cy, s.alias, colorCode)
+			break
 		}
 	}
 
@@ -374,6 +394,26 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 	return nil
 }
 
+func tierRank(tier string) int {
+	switch strings.ToLower(tier) {
+	case "low":
+		return 1
+	case "med", "medium":
+		return 2
+	case "high":
+		return 3
+	default:
+		return 4
+	}
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func computeParetoFrontier(points []chartPoint) []chartPoint {
 	if len(points) == 0 {
 		return nil
@@ -384,7 +424,10 @@ func computeParetoFrontier(points []chartPoint) []chartPoint {
 		if sorted[i].cost != sorted[j].cost {
 			return sorted[i].cost < sorted[j].cost
 		}
-		return sorted[i].rating > sorted[j].rating
+		if sorted[i].rating != sorted[j].rating {
+			return sorted[i].rating > sorted[j].rating
+		}
+		return tierRank(sorted[i].tier) < tierRank(sorted[j].tier)
 	})
 
 	var frontier []chartPoint
@@ -396,7 +439,18 @@ func computeParetoFrontier(points []chartPoint) []chartPoint {
 			maxRating = pt.rating
 			lastCost = pt.cost
 		} else if pt.rating == maxRating && pt.cost == lastCost {
-			frontier = append(frontier, pt)
+			// Different models tied on cost and rating are kept;
+			// same model tied on cost and rating is collapsed (lowest tier already added first)
+			alreadyAddedSameModel := false
+			for _, f := range frontier {
+				if f.provider == pt.provider && f.alias == pt.alias && f.cost == pt.cost && f.rating == pt.rating {
+					alreadyAddedSameModel = true
+					break
+				}
+			}
+			if !alreadyAddedSameModel {
+				frontier = append(frontier, pt)
+			}
 		}
 	}
 	return frontier

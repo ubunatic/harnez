@@ -158,6 +158,14 @@ func (c *Canvas) IsOccupied(cellX, cellY, length int) bool {
 	return false
 }
 
+// HasText reports whether the character cell at (cellX, cellY) contains text.
+func (c *Canvas) HasText(cellX, cellY int) bool {
+	if cellX < 0 || cellX >= c.widthCells || cellY < 0 || cellY >= c.heightCells {
+		return false
+	}
+	return c.textCells[cellY][cellX] != 0
+}
+
 // Text places string text starting at character cell (cellX, cellY), where cellY=0 is top row.
 func (c *Canvas) Text(cellX, cellY int, text string, colorCode ...string) {
 	if cellY < 0 || cellY >= c.heightCells {

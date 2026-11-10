@@ -1,12 +1,12 @@
 Cost vs Capability Chart (raw API cost, Log Scale)
 Y: Capability Rating (1-5 stars) · X: Relative Cost · Pareto Frontier Marked (bold)
 
-5.0 ┤                                      opus⠤⠔⠒⢹⠁      sol               ⢀⠟
-    │                                    ⢠⡦⠒⠊⠉    ⢼⠄    ⣠⡦                ⢀⡠⡮ 
+5.0 ┤                                        fable⢹⠁                        ⢀⠟
+    │                                    ⢠⡦opus   ⢼⠄    ⣠⡦sol             ⢀⡠⡮ 
     │                                 ⢀⡠⠒⠁     ⢀    ⢀⣀⠔⠊            ⢀⢀⡠⠤⠒⠉⠁   
-4.0 ┤                  flash38⣀⣀⠤⠤⠤⠒⠒⠊⠙⠁     argon⡠⠔⠛⠁              ⠙⠁        
-    │                ⢀⣴flash37         ⢴⠄  ⠠⡦ ⢴⠔opus                          
-    │              ⡠⠒⠁⣸⡀     ⣠⡀            ⢀⣇⠤⠒⠉  terra                       
+4.0 ┤                        ⢀⣀⣀sonnet⠙⠁   opus⠙⠁⢀⡠⠔⠛⠁              ⠙⠁        
+    │          flash38⣴⠤⠒⠒⠒⠉⠉⠁   sonnet⢴⠄  ⠠⡦argon                            
+    │          flash37⣸⡀haiku⣠⡀            ⢀⣇⠤⠒⠉  terra                       
 3.0 ┤           ⡠⠔⠉   ⢸ ⢀⡠⠤⠒⠉⠈          ⣀⠤⠒⠉⠁                                 
     │        ⣀⠔⠉      ⢺⠊⠁⢀⡠⠾⠂         ⠺⠋                                      
 2.0 ┤     ⣀⠔⠊        ⢀⣸⡤⠒⠁  luna                                              
@@ -17,7 +17,7 @@ Y: Capability Rating (1-5 stars) · X: Relative Cost · Pareto Frontier Marked (
      1       2        4        10         25       50      100     200     400
      Relative Cost (raw API, codex:luna:low = 1)
 
-Pareto frontier: codex:luna:low (cost 1, ★1.5) → agy:flash38:high (cost 4, ★3.5) → claude:sonnet:low (cost 15, ★4.0) → claude:sonnet:high (cost 15, ★4.0) → claude:sonnet:med (cost 15, ★4.0) → claude:opus:low (cost 20, ★4.5) → claude:opus:high (cost 20, ★4.5) → claude:opus:med (cost 20, ★4.5) → claude:fable:med (cost 40, ★5.0) → claude:fable:high (cost 40, ★5.0)
+Pareto frontier: codex:luna:low (cost 1, ★1.5) → agy:flash38:high (cost 4, ★3.5) → claude:sonnet:low (cost 15, ★4.0) → claude:opus:low (cost 20, ★4.5) → claude:fable:med (cost 40, ★5.0)
 
 Providers: [agy]  [claude]  [codex]
 Rating source: spec/model_scores.yaml (owner estimate, unverified)
