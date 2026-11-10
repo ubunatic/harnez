@@ -1899,6 +1899,9 @@ then the README is regenerated and the batch is committed once.
                     branch. Unlike every
                     other verb, 'new' takes no ticket number (there isn't one
                     yet) and never commits.
+  comment <number> -F <file>  Comment on a forge issue through fj after checking
+                    its state; --dry-run prints the command and --closed permits
+                    closed issues. Pull requests are always refused.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -1972,9 +1975,10 @@ Flags:
       --against string          with lint: fail when a ticket here reuses a number that REF (e.g. origin/main) gives to another file; warn if REF is missing
   -a, --all                     with 'list': show all matching results
       --amend-reason            with close/done: amend the reason of an already-Closed ticket
-  -F, --body-file string        with new on a forge tracker (no local issues/ dir): the ticket body file
+  -F, --body-file string        with new or comment on a forge tracker: the body file
       --cached                  validate the staged Git snapshot (issues lint only)
       --check                   report what would change without writing or committing; exit 1 on drift
+      --closed                  with comment: allow a closed issue
       --commit string           override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
   -d, --dir string              repo root containing issues/ (default ".")
       --dry-run                 alias for --check

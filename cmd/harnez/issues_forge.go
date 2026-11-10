@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"ubunatic.com/harnez/internal/forge"
@@ -121,6 +122,62 @@ var (
 		return cmd.CombinedOutput()
 	}
 )
+
+// runIssuesComment checks the issue before invoking fj with an explicit target.
+func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forgetracker.Source, number, body string, dryRun, allowClosed bool) error {
+	n, err := strconv.Atoi(number)
+	if err != nil || n <= 0 {
+		return fmt.Errorf("issues comment: invalid issue number %q", number)
+	}
+	if body == "-" {
+		return fmt.Errorf("issues comment: -F must name a body file")
+	}
+	body, err = filepath.Abs(body)
+	if err != nil {
+		return fmt.Errorf("issues comment: body file: %w", err)
+	}
+	if info, err := os.Stat(body); err != nil {
+		return fmt.Errorf("issues comment: body file: %w", err)
+	} else if !info.Mode().IsRegular() {
+		return fmt.Errorf("issues comment: body file must be a regular file")
+	}
+	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
+	if err != nil {
+		var apiErr *forge.APIError
+		if errors.As(err, &apiErr) && (apiErr.Status == 401 || apiErr.Status == 403 || apiErr.Status == 404) {
+			return fmt.Errorf("issues comment: preflight: %w; if the API requires authentication, %s; for fj login run fj -H %s auth login", err, privateRepoHint(t.Forge), t.Forge.Host)
+		}
+		return fmt.Errorf("issues comment: preflight: %w", err)
+	}
+	target := fmt.Sprintf("%s/%s#%d", t.Owner, t.Repo, n)
+	if is.PullRequest != nil {
+		return fmt.Errorf("issues comment: %s is a pull request", target)
+	}
+	if !strings.EqualFold(is.State, "open") && !(allowClosed && strings.EqualFold(is.State, "closed")) {
+		return fmt.Errorf("issues comment: %s has state %q; closed issues require --closed", target, is.State)
+	}
+	c := forgetracker.Command{Tool: "fj", Args: []string{"--host", t.Forge.Host, "issue", "comment", target, "--body-file", body}}
+	if dryRun {
+		_, err = fmt.Fprintf(w, "dry run: %s\n", c)
+		return err
+	}
+	if _, err := issueCLILookPath("fj"); err != nil {
+		return fmt.Errorf("issues comment: fj not found: %w", err)
+	}
+	if _, err := fmt.Fprintf(w, "commenting on %s %s: %s\n", t.Forge.Host, target, is.Title); err != nil {
+		return err
+	}
+	out, err := issueCLIRun(dir, c)
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if strings.Contains(strings.ToLower(msg), "401") || strings.Contains(strings.ToLower(msg), "token is required") {
+			return fmt.Errorf("issues comment: fj authentication failed; run fj -H %s auth login", t.Forge.Host)
+		}
+		return fmt.Errorf("issues comment: fj failed: %w: %s", err, msg)
+	}
+	_, err = w.Write(out)
+	return err
+}
 
 // runIssuesNewForge files a ticket on the forge with its CLI (issue 1195). It makes no
 // commit. With dryRun it prints the command and creates nothing.

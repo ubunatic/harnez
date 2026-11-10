@@ -28,6 +28,8 @@ harnez find -d <repo> issues "<search terms>"   # title search only, no body sea
 harnez issues show -d <repo> <n>
 harnez issues new -d <repo> "<title>" -F <body-file> --label <label> --dry-run   # shows the tea/fj/gh command
 harnez issues new -d <repo> "<title>" -F <body-file> --label <label>
+harnez issues comment -d <repo> <n> -F <body-file> --dry-run
+harnez issues comment -d <repo> <n> -F <body-file>  # add --closed for a closed issue
 ```
 
 - Use only labels that exist on the forge (`tea labels` or `gh label list`); `fj` cannot set labels, so labels need `tea` or `gh`.

@@ -69,6 +69,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var remoteFlag bool
 	var forceFlag bool
 	var bodyFileFlag string
+	var closedFlag bool
 	var labelFlags []string
 	var numberFlag string
 	var offlineFlag bool
@@ -150,6 +151,9 @@ then the README is regenerated and the batch is committed once.
                     branch. Unlike every
                     other verb, 'new' takes no ticket number (there isn't one
                     yet) and never commits.
+  comment <number> -F <file>  Comment on a forge issue through fj after checking
+                    its state; --dry-run prints the command and --closed permits
+                    closed issues. Pull requests are always refused.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -237,8 +241,14 @@ valid, exit-0 answer.`,
 			if numberFlag != "" && (len(args) == 0 || args[0] != "new" || remoteFlag) {
 				return fmt.Errorf("issues: --number requires local new (not --remote)")
 			}
-			if (bodyFileFlag != "" || len(labelFlags) > 0) && (len(args) == 0 || args[0] != "new") {
-				return fmt.Errorf("issues: -F/--body-file and --label require new")
+			if bodyFileFlag != "" && (len(args) == 0 || (args[0] != "new" && args[0] != "comment")) {
+				return fmt.Errorf("issues: -F/--body-file and --label require new; -F also supports comment")
+			}
+			if len(labelFlags) > 0 && (len(args) == 0 || args[0] != "new") {
+				return fmt.Errorf("issues: --label requires new")
+			}
+			if closedFlag && (len(args) == 0 || args[0] != "comment") {
+				return fmt.Errorf("issues: --closed requires comment")
 			}
 			if forceFlag && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --force requires new")
@@ -261,6 +271,12 @@ valid, exit-0 answer.`,
 			if args[0] == "import" {
 				if len(args) != 2 {
 					return fmt.Errorf("issues import: requires exactly 1 issue URL argument")
+				}
+				return nil
+			}
+			if args[0] == "comment" {
+				if len(args) != 2 || bodyFileFlag == "" {
+					return fmt.Errorf("issues comment: requires exactly one issue number and -F/--body-file")
 				}
 				return nil
 			}
@@ -380,6 +396,16 @@ valid, exit-0 answer.`,
 				warnNumberAhead(cmd.ErrOrStderr(), dir, numberFlag, offlineFlag)
 				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag, offlineFlag)
 			}
+			if args[0] == "comment" {
+				t, src, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return fmt.Errorf("issues comment: requires a forge tracker (no local issues/ dir)")
+				}
+				return runIssuesComment(cmd.OutOrStdout(), dir, t, src, args[1], bodyFileFlag, dryRunFlag || checkFlag, closedFlag)
+			}
 			if args[0] == "import" {
 				return runIssuesImport(cmd.OutOrStdout(), dir, args[1], jsonFlag, offlineFlag, nil)
 			}
@@ -472,7 +498,8 @@ valid, exit-0 answer.`,
 	}
 	cmd.Flags().BoolVar(&remoteFlag, "remote", false, "with new: allocate a permanent GH id using authenticated gh on the github remote")
 	cmd.Flags().StringVar(&numberFlag, "number", "", "with new: use this ticket number instead of the next free one (refused if it exists)")
-	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new on a forge tracker (no local issues/ dir): the ticket body file")
+	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new or comment on a forge tracker: the body file")
+	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment: allow a closed issue")
 	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")
 	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: create despite strong duplicate matches")
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")
