@@ -28,3 +28,15 @@ done. Empty state: `internal/usage/watch_frame.go:383-389` prints "no agent usag
 (`internal/usage/usagetable.go:45-46`) and the table branch (`watch_frame.go:392`) then adds nothing.
 Check whether the existing line already covers the table-only case before adding a second message.
 Report: `reports/jules/690.md` (github#152).
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement | jules-impl-690 | 7897340296191755096 | github#160 | done: kept, host fixed truncation and added the CJK table test |
+
+Host check: Jules switched `visLen` to `runewidth.StringWidth` (already a dependency) and showed the
+existing "no agent usage detected" line in the empty table view (`watch_frame.go:383`). Its
+`truncateVisible` still overshot by one column when a wide rune straddled the limit; the host fixed that
+and added `TestTruncateVisibleKeepsDisplayWidth` plus `TestUsageTableAlignsCJKModelName` (the done-when's
+CJK model name). All three tests fail on main and pass with the fix; `make test-q1` passed.

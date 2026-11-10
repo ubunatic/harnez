@@ -2,7 +2,6 @@ package usage
 
 import (
 	"bytes"
-	"github.com/mattn/go-runewidth"
 	"io"
 	"os"
 	"os/exec"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"github.com/mattn/go-runewidth"
 )
 
 func renderSparkline(values []float64) string {
@@ -64,11 +65,12 @@ func truncateVisible(s string, maxWidth int) string {
 			}
 			continue
 		}
-		if count >= target {
+		w := runewidth.RuneWidth(r)
+		if count+w > target {
 			break
 		}
 		sb.WriteRune(r)
-		count += runewidth.StringWidth(string(r))
+		count += w
 	}
 	sb.WriteString("...\x1b[0m")
 	return sb.String()
