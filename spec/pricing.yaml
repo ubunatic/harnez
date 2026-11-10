@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=schemas/pricing.schema.json
+gpt-5:
+  model: "gpt-5"
+  revision: "harnez-2026-09-18"
+  rates:
+    cached_input_micros_per_million: 125000
+    uncached_input_micros_per_million: 1250000
+    output_micros_per_million: 10000000
+    reasoning_micros_per_million: 10000000

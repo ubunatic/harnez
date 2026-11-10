@@ -31,3 +31,17 @@ Harnez tracks token counts across agent runs, but local agent sessions (routed v
 2. Update telemetry ingestion/DB storage to record calculated counterfactual costs for agent sessions.
 3. Update `harnez usage` and `harnez stats` formatters to surface cost metrics.
 4. Add unit tests for pricing calculations and spec validation.
+
+## Progress 2026-11-11
+
+Slice 1 done: the recorded gpt-5 rate card moved from a Go literal into `spec/pricing.yaml` with
+`spec/schemas/pricing.schema.json`; `LoadPricingCatalog` reads the embedded spec, `HARNEZ_PRICING_FILE`
+still overrides it with JSON. Left: rate cards for the listed Gemini, Claude and Codex models (each with a
+source URL and date), stored costs per record, and cost columns in `harnez usage` and `harnez stats`.
+`RecordedPricingRevision` stays a Go constant; a test checks that the spec matches it.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement (slice 1) | jules-impl-445 | 1775817591799112817 | github #163 (closed, cherry-picked) | done; host checked: schema test fails without the change |
