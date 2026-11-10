@@ -1,6 +1,6 @@
 # 1091 — Jules driver: sync fetch can miss the compared commit, and cut-off responses give a vague error
 
-**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
+**Status**: Closed — obsolete: Google stops accepting new Jules work on 2026-11-11 and shuts Jules down on 2026-12-31 (see the jules skill); this fixes a Jules start/driver path that will not run again
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
