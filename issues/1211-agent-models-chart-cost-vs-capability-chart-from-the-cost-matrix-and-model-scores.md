@@ -49,11 +49,20 @@ rollout in brackets): GPT-6 Luna ~22 ($0.17), GPT-6.1 Sol ~39 ($1.0), GPT-6 Astr
 ## Decision
 
 - 2026-11-10 owner: the chart uses harnez's own numbers, not FrontierCode's.
-- 2026-11-10 host (decide mode): "own numbers" = the per-model skill marks already shown by `agent models`
-  (Go/TUI/SQL: `+` = 2, `~` = 1, `-` = 0; sum 0-6; `?` = no data, model listed below the chart). Mapping
-  lives in spec with schema, not Go. X = relative cost per tier from `spec/agent.yaml` (log scale), one
-  series per model across its tiers, colored by provider. `--chart --json` is refused with a clear error.
-  Owner may swap the score source later; keep it one spec mapping.
+- 2026-11-10 owner (supersedes the host's skill-mark sum): a Pareto chart built only from harnez data, no
+  external data to refresh. FrontierCode is an example and a hint to sanity-check our numbers.
+  - Capability: define our own assessment. harnez has no score or star rating today (only Go/TUI/SQL skill
+    marks). Start simple: one capability rating per model and effort tier in spec (with schema), e.g. a
+    1-5 star scale with half steps; finer per-category ratings can come later.
+  - Cost: the relative cost matrix in `spec/agent.yaml` (luna:low = 1) is the raw API cost.
+  - Subscription multiplier: new per-provider factor in spec (none exists today) that turns raw API cost
+    into effective cost on the owner's subscription. A flag toggles raw vs effective, e.g.
+    `--chart --cost raw|effective` (default decided in the plan).
+- 2026-11-10 host (decide mode): initial ratings and multipliers are seeded by the developer from existing
+  harnez evidence (picks, skill marks, cost tiers), each value marked "owner estimate, unverified";
+  FrontierCode reference scores may only be used to check the ordering, not copied. Seeded values are
+  listed in the ticket for owner review before close. X = cost (log), Y = rating, one series per model
+  across tiers, colored by provider, Pareto frontier marked. `--chart --json` is refused.
 
 ## Searcher findings (s1211, agy:argon:low, 4m33s)
 
