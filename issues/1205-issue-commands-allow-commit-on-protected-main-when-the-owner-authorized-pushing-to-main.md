@@ -78,3 +78,17 @@ write a failure report here.
    → refused, and the message names both unlocks. The flag never touches the release path.
 8. Whether disable state has an expiry, and whether an agent can write it, is unverified:
    report what `internal/disable` does; do not add expiry unless it already exists.
+
+## M1 delivered: guard options, --push-main, /disable unlock (772952e2)
+
+Edge case 8: disable state has no expiry; it is a file under `.harnez/state/disable/`, so any process
+with write access could create it. Only the owner's `/disable` invocation writes it by convention.
+
+## M2 Pre-Work (reviewer r1205, codex:terra:low)
+
+1. P2: the unlock test counts the phrase "ticket commit unlocked"; assert stderr has exactly one line
+   containing it and that the line equals the expected text.
+2. P2: add CLI-level tests (through the cobra command, not the handler) proving `--push-main` reaches
+   the guard for `issues close`, `issues mv` and one of `rebase`/`reconcile`.
+3. P3, host decision: `--push-main` with `--check`, `--dry-run` or `--no-commit` stays accepted as a
+   harmless no-op; no change. Reason: rejecting adds flag-conflict code for no safety gain.
