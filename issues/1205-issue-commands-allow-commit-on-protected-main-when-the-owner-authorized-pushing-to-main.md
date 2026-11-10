@@ -1,6 +1,6 @@
 # 1205 — Issue commands: allow --commit on protected main when the owner authorized pushing to main
 
-**Status**: Open
+**Status**: Closed — Flag --push-main or /disable repo-rules push-main for the live session unlocks ticket commits on protected main, one stderr line names the unlock; release and plain git unchanged; make test-q1 ok=206 FAIL=0 (772952e2, ddfcb934)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
