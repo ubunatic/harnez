@@ -6,6 +6,9 @@ scale:
   step: 0.5
   unit: "stars"
 
+cost_ticks: [0.1, 0.25, 0.5, 1, 2, 4, 10, 25, 50, 100, 200, 400]
+frontier_style: "chart-frontier"
+
 subscription_multipliers:
   codex: 0.25
   claude: 1.0
@@ -14,15 +17,8 @@ subscription_multipliers:
   lmcoder: 0.0
   strata: 0.0
   strata-coder: 0.0
-  default: 1.0
 
 multiplier_source: "owner estimate, unverified"
-
-provider_colors:
-  codex: "32"
-  claude: "33"
-  agy: "36"
-  default: "37"
 
 models:
   codex:luna:

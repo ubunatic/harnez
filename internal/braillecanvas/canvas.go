@@ -141,14 +141,17 @@ func (c *Canvas) Line(x0, y0, x1, y1 int, colorCode ...string) {
 	}
 }
 
-// IsOccupied checks if any character cell from (cellX, cellY) to (cellX+length-1, cellY) contains text.
+// IsOccupied checks if any character cell from (cellX, cellY) to (cellX+length-1, cellY) contains text or Braille dots.
 func (c *Canvas) IsOccupied(cellX, cellY, length int) bool {
 	if cellY < 0 || cellY >= c.heightCells {
 		return true
 	}
 	for i := 0; i < length; i++ {
 		x := cellX + i
-		if x >= 0 && x < c.widthCells && c.textCells[cellY][x] != 0 {
+		if x < 0 || x >= c.widthCells {
+			return true
+		}
+		if c.textCells[cellY][x] != 0 || c.dots[cellY][x] != 0 {
 			return true
 		}
 	}

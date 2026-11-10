@@ -6,8 +6,9 @@
   "required": [
     "version",
     "scale",
+    "cost_ticks",
+    "frontier_style",
     "subscription_multipliers",
-    "provider_colors",
     "models"
   ],
   "properties": {
@@ -26,16 +27,19 @@
       },
       "additionalProperties": false
     },
+    "cost_ticks": {
+      "type": "array",
+      "items": { "type": "number" }
+    },
+    "frontier_style": {
+      "type": "string"
+    },
     "subscription_multipliers": {
       "type": "object",
       "additionalProperties": { "type": "number" }
     },
     "multiplier_source": {
       "type": "string"
-    },
-    "provider_colors": {
-      "type": "object",
-      "additionalProperties": { "type": "string" }
     },
     "models": {
       "type": "object",

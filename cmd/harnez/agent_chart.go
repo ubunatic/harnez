@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/term"
@@ -65,7 +66,11 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 		rawCost := float64(e.Cost)
 		cost := rawCost
 		if costMode == "effective" {
-			cost = rawCost * scores.Multiplier(e.Model.Provider)
+			mult, err := scores.Multiplier(e.Model.Provider)
+			if err != nil {
+				return err
+			}
+			cost = rawCost * mult
 		}
 
 		if cost <= 0 {
@@ -104,10 +109,6 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 
 	// Calculate Pareto frontier
 	pareto := computeParetoFrontier(plotted)
-	paretoSpecs := make(map[string]bool, len(pareto))
-	for _, p := range pareto {
-		paretoSpecs[p.spec] = true
-	}
 
 	// Determine cost bounds
 	minCost := plotted[0].cost
@@ -140,10 +141,6 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 
 	scaleMin := scores.Scale.Min
 	scaleMax := scores.Scale.Max
-	if scaleMax <= scaleMin {
-		scaleMin = 1.0
-		scaleMax = 5.0
-	}
 
 	mapX := func(cost float64) int {
 		if cost <= 0 {
@@ -177,7 +174,10 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 			return s.points[i].cost < s.points[j].cost
 		})
 
-		colorCode := scores.ProviderColor(s.provider)
+		colorCode, err := scores.ProviderColor(s.provider)
+		if err != nil {
+			return err
+		}
 		for i := range s.points {
 			s.points[i].x = mapX(s.points[i].cost)
 			s.points[i].y = mapY(s.points[i].rating)
@@ -193,7 +193,6 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 		// Set point dots
 		for _, p := range s.points {
 			canvas.Set(p.x, p.y, colorCode)
-			// Small cross/dot to make points visible
 			if p.x > 0 {
 				canvas.Set(p.x-1, p.y, colorCode)
 			}
@@ -208,33 +207,51 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 			}
 		}
 
-		// Label series near highest cost point
+		// Label series near highest cost point: drop label if it cannot be placed without collision
 		last := s.points[len(s.points)-1]
 		labelCellX := (last.x / 2) + 1
 		labelCellY := (canvas.HeightCells() - 1) - (last.y / 4)
 		if labelCellX+len(s.alias) >= canvas.WidthCells() {
 			labelCellX = (last.x / 2) - len(s.alias) - 1
 		}
-		if canvas.IsOccupied(labelCellX, labelCellY, len(s.alias)) {
-			if labelCellY > 0 && !canvas.IsOccupied(labelCellX, labelCellY-1, len(s.alias)) {
-				labelCellY--
-			} else if labelCellY < canvas.HeightCells()-1 && !canvas.IsOccupied(labelCellX, labelCellY+1, len(s.alias)) {
-				labelCellY++
-			}
+
+		candidates := []int{labelCellY}
+		if labelCellY > 0 {
+			candidates = append(candidates, labelCellY-1)
 		}
-		if labelCellX >= 0 && labelCellX < canvas.WidthCells() {
-			canvas.Text(labelCellX, labelCellY, s.alias, colorCode)
+		if labelCellY < canvas.HeightCells()-1 {
+			candidates = append(candidates, labelCellY+1)
+		}
+		for _, cy := range candidates {
+			// Check with 1-cell padding around label to avoid concatenated text like "argonterra"
+			checkX := labelCellX - 1
+			checkLen := len(s.alias) + 2
+			if checkX < 0 {
+				checkX = 0
+				checkLen = len(s.alias) + 1
+			}
+			if checkX+checkLen > canvas.WidthCells() {
+				checkLen = canvas.WidthCells() - checkX
+			}
+			if labelCellX >= 0 && labelCellX+len(s.alias) <= canvas.WidthCells() && !canvas.IsOccupied(checkX, cy, checkLen) {
+				canvas.Text(labelCellX, cy, s.alias, colorCode)
+				break
+			}
 		}
 	}
 
 	// Draw Pareto frontier line
+	frontierStyle, err := scores.FrontierColor()
+	if err != nil {
+		return err
+	}
 	if len(pareto) > 1 {
 		for i := 0; i < len(pareto)-1; i++ {
 			px0 := mapX(pareto[i].cost)
 			py0 := mapY(pareto[i].rating)
 			px1 := mapX(pareto[i+1].cost)
 			py1 := mapY(pareto[i+1].rating)
-			canvas.Line(px0, py0, px1, py1, "1;37") // bold white line
+			canvas.Line(px0, py0, px1, py1, frontierStyle)
 		}
 	}
 
@@ -271,7 +288,7 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 	var axisLine strings.Builder
 	axisLine.WriteString("    └")
 
-	ticks := generateLogTicks(minCost, maxCost)
+	ticks := generateLogTicks(minCost, maxCost, scores.CostTicks)
 	tickCols := make(map[int]string)
 	for _, t := range ticks {
 		norm := (math.Log10(t) - logMin) / (logMax - logMin)
@@ -310,7 +327,7 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 	// X-axis label
 	xLabel := "Relative Cost (raw API, codex:luna:low = 1)"
 	if costMode == "effective" {
-		xLabel = "Effective Cost (subscription-adjusted, codex:luna:low = 1)"
+		xLabel = "Effective Cost (subscription-adjusted, raw codex:luna:low = 1)"
 	}
 	fmt.Fprintf(out, "     %s\n\n", xLabel)
 
@@ -321,12 +338,24 @@ func renderModelsChart(out io.Writer, entries []subagent.ModelEntry, width int, 
 	}
 	fmt.Fprintf(out, "Pareto frontier: %s\n\n", strings.Join(paretoSummaries, " → "))
 
-	// Legend & sources
+	// Legend & sources: derive provider list from providers present in plotted points
+	presentProviders := make(map[string]bool)
+	for _, p := range plotted {
+		presentProviders[p.provider] = true
+	}
+	var provList []string
+	for p := range presentProviders {
+		provList = append(provList, p)
+	}
+	sort.Strings(provList)
+
 	fmt.Fprint(out, "Providers: ")
-	provList := []string{"codex", "claude", "agy"}
 	var provBadges []string
 	for _, p := range provList {
-		color := scores.ProviderColor(p)
+		color, err := scores.ProviderColor(p)
+		if err != nil {
+			return err
+		}
 		if colorEnabled {
 			provBadges = append(provBadges, fmt.Sprintf("\x1b[%sm■ %s\x1b[0m", color, p))
 		} else {
@@ -349,7 +378,6 @@ func computeParetoFrontier(points []chartPoint) []chartPoint {
 	if len(points) == 0 {
 		return nil
 	}
-	// Sort primarily by cost ascending, secondarily by rating descending
 	sorted := make([]chartPoint, len(points))
 	copy(sorted, points)
 	sort.Slice(sorted, func(i, j int) bool {
@@ -361,19 +389,22 @@ func computeParetoFrontier(points []chartPoint) []chartPoint {
 
 	var frontier []chartPoint
 	maxRating := -1.0
+	lastCost := -1.0
 	for _, pt := range sorted {
 		if pt.rating > maxRating {
 			frontier = append(frontier, pt)
 			maxRating = pt.rating
+			lastCost = pt.cost
+		} else if pt.rating == maxRating && pt.cost == lastCost {
+			frontier = append(frontier, pt)
 		}
 	}
 	return frontier
 }
 
-func generateLogTicks(minCost, maxCost float64) []float64 {
-	bases := []float64{0.1, 0.25, 0.5, 1, 2, 4, 10, 25, 50, 100, 200, 400}
+func generateLogTicks(minCost, maxCost float64, specTicks []float64) []float64 {
 	var ticks []float64
-	for _, b := range bases {
+	for _, b := range specTicks {
 		if b >= minCost*0.95 && b <= maxCost*1.05 {
 			ticks = append(ticks, b)
 		}
@@ -392,6 +423,11 @@ func formatTickVal(val float64) string {
 }
 
 func terminalWidth(out io.Writer) int {
+	if cols := os.Getenv("COLUMNS"); cols != "" {
+		if w, err := strconv.Atoi(strings.TrimSpace(cols)); err == nil && w > 0 {
+			return w
+		}
+	}
 	if file, ok := out.(*os.File); ok {
 		if w, _, err := term.GetSize(int(file.Fd())); err == nil && w > 0 {
 			return w

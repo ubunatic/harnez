@@ -46,3 +46,23 @@ colors:
   dim-faint:
     title: "Dim (faint attribute)"
     sgr: "2"
+  provider-codex:
+    title: "Codex provider chart color"
+    description: "Green color for Codex series in cost vs capability chart"
+    sgr: "32"
+  provider-claude:
+    title: "Claude provider chart color"
+    description: "Yellow color for Claude series in cost vs capability chart"
+    sgr: "33"
+  provider-agy:
+    title: "AGY provider chart color"
+    description: "Cyan color for AGY series in cost vs capability chart"
+    sgr: "36"
+  provider-default:
+    title: "Default provider chart color"
+    description: "White color for unlisted providers in cost vs capability chart"
+    sgr: "37"
+  chart-frontier:
+    title: "Pareto frontier line style"
+    description: "Bold white line style for Pareto frontier curve"
+    sgr: "1;37"

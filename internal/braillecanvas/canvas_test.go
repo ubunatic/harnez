@@ -96,3 +96,39 @@ func TestCanvasOutOfBounds(t *testing.T) {
 	c.Text(-5, 0, "hello")
 	c.Text(10, 0, "world")
 }
+
+func TestCanvasIsOccupied(t *testing.T) {
+	c := New(10, 5)
+
+	// Empty canvas
+	if c.IsOccupied(0, 0, 4) {
+		t.Fatal("expected empty canvas cells not to be occupied")
+	}
+
+	// Place text at (2, 1) length 4
+	c.Text(2, 1, "test")
+	if !c.IsOccupied(2, 1, 4) {
+		t.Fatal("expected text cell to be occupied")
+	}
+	if !c.IsOccupied(1, 1, 3) { // overlapping cell (2, 1)
+		t.Fatal("expected overlapping text cell to be occupied")
+	}
+	if c.IsOccupied(2, 0, 4) { // different row
+		t.Fatal("expected different row not to be occupied by text")
+	}
+
+	// Set Braille dot in cell (5, 3) -> cellY = 3, so cellYFromBottom = (5-1) - 3 = 1 -> py = 1*4 = 4
+	// cellX = 5 -> px = 5*2 = 10
+	c.Set(10, 4)
+	if !c.IsOccupied(5, 3, 1) {
+		t.Fatal("expected cell with Braille dot to be occupied")
+	}
+	if !c.IsOccupied(4, 3, 2) {
+		t.Fatal("expected range overlapping Braille dot to be occupied")
+	}
+
+	// Boundary check
+	if !c.IsOccupied(8, 0, 5) {
+		t.Fatal("expected out-of-bounds range to be reported as occupied")
+	}
+}
