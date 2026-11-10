@@ -37,3 +37,24 @@ Jules audit (PR GH#71, report `reports/jules/1019-2.md`, checked against b0dcb50
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | audit | harnez-jules-audit-1019 | 15569656316218008222 | none | failed 2026-11-08: stuck IN_PROGRESS finalizing report, stopped |
+
+## Searcher findings (s1019, codex:luna:low)
+
+- `candidateUnavailable` `internal/subagent/driver.go:562`: disabled, latest access `denied`, or exhausted quota;
+  access observations read by `latestAccess` :575 (model catalog). `agent models` availability:
+  `cmd/harnez/agent_cmds.go:183-184` via `CachedProviderQuotaAvailabilities`.
+- Error shape (study `docs/studies/2026-10-25-canary-model-access-discovery.md:15`): HTTP 400 `model_not_found`,
+  "The '<model>' model is not supported when using Codex with a ChatGPT account." No parser or fixture exists.
+- `shortCause` `cmd/harnez/agent_run.go:300`: first line, 180 runes; only caller is start-error reporting.
+- Tests: `internal/subagent/fallback_test.go:68`, `internal/agent/modelrows_test.go:25`,
+  `cmd/harnez/agent_test.go:256`, `cmd/harnez/agent_resume_test.go:920`.
+
+## Decision
+
+- 2026-11-10 host (decide mode): one milestone. When a codex start/resume fails with the "not supported when
+  using Codex" text (or `model_not_found`), record a model-catalog access observation with a new status
+  `unsupported` (account-specific, same store as `denied`). `candidateUnavailable` treats it as unavailable;
+  `agent models` shows "unsupported for this account" for that model. A later successful turn on that model
+  records normal access and clears it (latest observation wins). Start errors print the full provider
+  message (no 180-rune cut; keep a first-line summary only where a one-line status is required). Tests use
+  a fake codex emitting the study's exact text; never the network.
