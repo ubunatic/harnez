@@ -47,6 +47,12 @@ write a failure report here.
 - Scope: harnez ticket/issue commit paths only. Plain `git commit`, the git hooks and `harnez
   release` (its own exemption, `GuardRelease`) stay unchanged. No force-push.
 
+- 2026-11-10 owner, superseding "No `--push-main` flag" above: A+B. Either unlocks a ticket
+  commit on protected main: a `--push-main` flag on the issue commit commands, or the
+  `/disable repo-rules push-main` state for the live session. Reason (owner): a non-force push to
+  main is always safe; force-push stays forbidden; a push or commit to main is never a release.
+  Each override prints one stderr line naming which unlock was used.
+
 ## Searcher findings (s1205, codex:luna:low)
 
 - Guard: `internal/gitflow/gitflow.go:237` `GuardCommit`, refusal at 261-266. Callers:
@@ -68,5 +74,7 @@ write a failure report here.
 4. Matching session → commit succeeds; one stderr line names the rule and session.
 5. State in another repo root → no effect here.
 6. Release tests unchanged; refusal message names the `/disable repo-rules push-main` override.
-7. Whether disable state has an expiry, and whether an agent can write it, is unverified:
+7. `--push-main` flag alone → commit succeeds (stderr line says "flag"); without flag or state
+   → refused, and the message names both unlocks. The flag never touches the release path.
+8. Whether disable state has an expiry, and whether an agent can write it, is unverified:
    report what `internal/disable` does; do not add expiry unless it already exists.
