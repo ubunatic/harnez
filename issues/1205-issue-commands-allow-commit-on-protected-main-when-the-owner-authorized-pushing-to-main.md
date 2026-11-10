@@ -38,3 +38,35 @@ write a failure report here.
   it is unverified (a quick grep found no link). Reusing it avoids a second consent mechanism, but
   `/disable` is user-invoke only, so an agent-passed flag must not stand in for that consent.
 - Check the live guard and recent commits before starting.
+
+## Decision
+
+- 2026-11-10 host (decide mode, smart advisor a1205 agreed): option A. `GuardCommit` honours the
+  user-only `/disable repo-rules push-main` state when `disable.Spec.Check` matches the live
+  session ID. No `--push-main` flag: any agent could pass it, so it can't carry owner consent.
+- Scope: harnez ticket/issue commit paths only. Plain `git commit`, the git hooks and `harnez
+  release` (its own exemption, `GuardRelease`) stay unchanged. No force-push.
+
+## Searcher findings (s1205, codex:luna:low)
+
+- Guard: `internal/gitflow/gitflow.go:237` `GuardCommit`, refusal at 261-266. Callers:
+  `internal/issues/status_action.go:146-150`, `cmd/harnez/issues.go:888-891` (mv) and 1053-1057
+  (gitAddAndCommit), `internal/issues/maintenance/rebase.go:244`, `reconcile.go:112`.
+- Release: `GuardRelease` gitflow.go:219, tests `internal/gitflow/gitflow_test.go:209-242`.
+- Disable: `spec/disable.yaml:4-22` (state dir, session env priority, item push-main);
+  `internal/disable/disable.go:186-203` `Spec.Check(root, class, item, getenv)`. No production
+  code reads push-main today. Host check: `CLAUDE_CODE_SESSION_ID` is set in agent Bash.
+- Tests: `cmd/harnez/issues_gitflow_test.go:35-130`. Docs: `docs/commands/disable.md:17` (says
+  commits on default stay refused; must change), `docs/commands/issue.md:52-60`, `docs/lang/Git.md:25-29`
+  (source; root copy `docs/Git.md`, sync via make install + harnez init -d .).
+
+## M1 (guard honours push-main) edge cases to test
+
+1. No session ID in env → refused as today.
+2. State for another session ID (stale) → refused.
+3. `/enable` after `/disable` (state removed) → refused.
+4. Matching session → commit succeeds; one stderr line names the rule and session.
+5. State in another repo root → no effect here.
+6. Release tests unchanged; refusal message names the `/disable repo-rules push-main` override.
+7. Whether disable state has an expiry, and whether an agent can write it, is unverified:
+   report what `internal/disable` does; do not add expiry unless it already exists.
