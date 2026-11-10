@@ -74,8 +74,11 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 		if startPrompt != "" {
 			words = append([]string{startPrompt}, words...)
 		}
-		if ac.rootPrompt != "" && strings.HasPrefix(ac.rootPrompt, "--") {
-			return fmt.Errorf("-p needs prompt text but got flag %q; put -p last or use -- \"<text>\"", ac.rootPrompt)
+		if strings.HasPrefix(startPrompt, "--") {
+			return promptFlagError(startPrompt)
+		}
+		if strings.HasPrefix(ac.rootPrompt, "--") {
+			return promptFlagError(ac.rootPrompt)
 		}
 		if ac.modelSpec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
@@ -398,4 +401,8 @@ func dryPromptSource(files []string, prompt string) string {
 		return "-p"
 	}
 	return "arguments"
+}
+
+func promptFlagError(prompt string) error {
+	return fmt.Errorf("-p needs prompt text but got flag %q (%d bytes); put -p last or use -- \"<text>\"", strings.Fields(prompt)[0], len(prompt))
 }

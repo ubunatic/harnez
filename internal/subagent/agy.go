@@ -123,7 +123,7 @@ func (d AgyDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 		return nil, errors.New("agy: refusing to run with an empty Dir (agy would write to ~/.gemini scratch)")
 	}
 	start := time.Now()
-	args := d.turnArgs("", o.Prompt, o.Model)
+	args := d.turnArgs("", o.Prompt, o.Model, false)
 	b, err := d.command(ctx, args...)
 	r, parseErr := parseAgyWithQuota(ctx, b, o.Model.Name, cachedAgyQuotaAvailable)
 	if err != nil {
@@ -144,7 +144,7 @@ func (d AgyDriver) Resume(ctx context.Context, id, prompt string, model Model) (
 	if d.Dir == "" {
 		return nil, errors.New("agy: refusing to resume with an empty Dir (agy would write to ~/.gemini scratch)")
 	}
-	args := d.turnArgs(id, prompt, model)
+	args := d.turnArgs(id, prompt, model, true)
 	b, err := d.command(ctx, args...)
 	r, parseErr := parseAgyWithQuota(ctx, b, model.Name, cachedAgyQuotaAvailable)
 	if err != nil {
@@ -157,9 +157,9 @@ func (d AgyDriver) Resume(ctx context.Context, id, prompt string, model Model) (
 }
 
 // turnArgs builds the same arguments for execution and previews.
-func (d AgyDriver) turnArgs(id, prompt string, model Model) []string {
+func (d AgyDriver) turnArgs(id, prompt string, model Model, resume bool) []string {
 	var args []string
-	if id != "" {
+	if resume {
 		args = append(args, "--conversation", id)
 	}
 	args = append(args, "--add-dir", d.Dir)

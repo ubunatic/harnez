@@ -116,8 +116,11 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 		return names, cobra.ShellCompDirectiveNoFileComp
 	})
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		if err := sessionTipHook(cmd, args); err != nil {
-			return err
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		if !dryRun {
+			if err := sessionTipHook(cmd, args); err != nil {
+				return err
+			}
 		}
 		return guardLeafRole(cmd.Name())
 	}
@@ -185,7 +188,7 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			return cmd.Help()
 		}
 		if ac.rootPrompt != "" && strings.HasPrefix(ac.rootPrompt, "--") {
-			return fmt.Errorf("-p needs prompt text but got flag %q; put -p last or use -- \"<text>\"", ac.rootPrompt)
+			return promptFlagError(ac.rootPrompt)
 		}
 		if ac.modelSpec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")

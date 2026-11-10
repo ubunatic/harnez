@@ -467,3 +467,33 @@ func TestParseAgyEmptyReplyAfterOutputIsError(t *testing.T) {
 }
 
 var _ Driver = AgyDriver{}
+
+func TestAgyEmptyConversationArgs(t *testing.T) {
+	d := AgyDriver{Dir: "/work"}
+	for _, tc := range []struct {
+		resume bool
+		want   []string
+	}{
+		{false, []string{"--add-dir", "/work", "--output-format", "json", "-p", "p"}},
+		{true, []string{"--conversation", "", "--add-dir", "/work", "--output-format", "json", "-p", "p"}},
+	} {
+		var got []string
+		d.Command = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			got = args
+			return []byte(`{"status":"SUCCESS","response":"ok"}`), nil
+		}
+		var err error
+		if tc.resume {
+			_, err = d.Resume(context.Background(), "", "p", Model{})
+		} else {
+			_, err = d.Run(context.Background(), RunOptions{Prompt: "p"})
+		}
+		if err != nil || !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("resume=%v args=%q want=%q err=%v", tc.resume, got, tc.want, err)
+		}
+		preview, err := PreviewArgs(Model{Provider: "agy"}, "/work", "", "p", "", false, tc.resume)
+		if err != nil || !reflect.DeepEqual(preview[1:], tc.want) {
+			t.Fatalf("preview=%q err=%v", preview, err)
+		}
+	}
+}

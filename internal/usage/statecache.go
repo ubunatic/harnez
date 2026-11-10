@@ -12,6 +12,7 @@ import (
 	"ubunatic.com/harnez/internal/modelblock"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
+	"ubunatic.com/harnez/internal/xdgpath"
 )
 
 // stateCacheDirEnv is the XDG Base Directory env var that, when set,
@@ -82,6 +83,15 @@ func CachedProviderQuotaAvailabilities(provider string, models []string, now tim
 	return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)
 }
 
+// CachedProviderQuotaAvailabilityReadOnly reads existing quota evidence without
+// creating or migrating telemetry storage, for side-effect-free previews.
+func CachedProviderQuotaAvailabilityReadOnly(provider, model string, now time.Time) ProviderQuotaAvailability {
+	models := []string{model}
+	path := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
+	states := providerQuotaAvailabilitiesFromStore(context.Background(), path, provider, models, now, true)
+	return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)[model]
+}
+
 // applyModelBlocks marks every model with an active local block as exhausted
 // until the block ends (issue 1122); expired blocks never reach this point.
 func applyModelBlocks(states map[string]ProviderQuotaAvailability, provider string, blocks []modelblock.Block, now time.Time) map[string]ProviderQuotaAvailability {
@@ -107,14 +117,26 @@ func ProviderQuotaAvailabilityFromStore(ctx context.Context, dbPath, provider, m
 // ProviderQuotaAvailabilitiesFromStore reads provider quota rows once and
 // applies model-specific pool selection to each requested model.
 func ProviderQuotaAvailabilitiesFromStore(ctx context.Context, dbPath, provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
+	return providerQuotaAvailabilitiesFromStore(ctx, dbPath, provider, models, now, false)
+}
+
+func providerQuotaAvailabilitiesFromStore(ctx context.Context, dbPath, provider string, models []string, now time.Time, readOnly bool) map[string]ProviderQuotaAvailability {
 	states := unknownProviderQuotaAvailabilities(models)
-	store, err := usagestore.Open(dbPath)
+	var store *usagestore.Store
+	var err error
+	if readOnly {
+		store, err = usagestore.OpenReadOnly(dbPath)
+	} else {
+		store, err = usagestore.Open(dbPath)
+	}
 	if err != nil {
 		return states
 	}
 	defer store.Close()
-	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
-		return states
+	if !readOnly {
+		if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+			return states
+		}
 	}
 	windows, err := store.CurrentFor(ctx, provider)
 	if err != nil {

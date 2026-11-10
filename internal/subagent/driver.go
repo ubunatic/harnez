@@ -75,7 +75,7 @@ func PreviewArgs(model Model, dir, id, prompt, mode string, approve bool, resume
 			args = codexRunArgs(model, prompt)
 		}
 	case "agy":
-		args = (AgyDriver{Dir: dir, AutoApproveTools: approve}).turnArgs(id, prompt, model)
+		args = (AgyDriver{Dir: dir, AutoApproveTools: approve}).turnArgs(id, prompt, model, resume)
 	case "pi", "lmcoder", "strata", "strata-coder":
 		command = "pi"
 		if resume {

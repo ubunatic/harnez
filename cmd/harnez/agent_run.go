@@ -400,6 +400,11 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if err != nil {
 		return err
 	}
+	if req.DryRun && d.availability == nil {
+		d.availability = func(provider, model string) usage.ProviderQuotaAvailability {
+			return usage.CachedProviderQuotaAvailabilityReadOnly(provider, model, time.Now())
+		}
+	}
 	var selection subagent.ModelSelection
 	if req.SessionID != "" {
 		store, storeErr := d.store()
@@ -731,6 +736,11 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return err
 	}
 	if req.DryRun {
+		if d.availability == nil {
+			d.availability = func(provider, model string) usage.ProviderQuotaAvailability {
+				return usage.CachedProviderQuotaAvailabilityReadOnly(provider, model, time.Now())
+			}
+		}
 		role, err := resumeRole(req.Role, sess)
 		if err != nil {
 			return err
