@@ -53,3 +53,18 @@ official name maps to more than one entry and the right choice is the owner's.
 - 2026-11-10 host (decide mode): existing keys and aliases match first; the official `name` is tried
   only when nothing else matched. Ambiguity is tested with a synthetic duplicate entry. Close matches
   rank by edit distance over keys, aliases and names (top 3). Reason: keeps every current resolution unchanged.
+
+## M1 delivered: official-name resolution in the shared resolver (169e1c4a)
+
+Host ran the owed full `make test-q1` after the help-golden fix: 206 ok, 0 FAIL.
+
+## M2 Pre-Work (host live check + reviewer r1203, codex:terra:low)
+
+1. P2: `internal/subagent/driver.go:478` role gate replaces resolver errors for colonless input with
+   "unknown trait or model". Live: `harnez agent start --role advisor --model gemini-4-argom` shows only
+   known traits. Keep the trait list and append the resolver's close matches / ambiguity candidates.
+2. P2: tests through the role-selection path (no model start): `--model gemini-4-argon` and `:low` resolve
+   for advisor; `gemini-4-argom` error contains close match `gemini-4-argon`; ambiguous bare name lists
+   candidates. Add one dispatch-spec or model-pick case using an official name.
+3. P3: an ambiguous alias must stay an ambiguity error even when it equals a unique official name;
+   add a test for that.
