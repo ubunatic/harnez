@@ -94,3 +94,11 @@ Seeded multipliers (owner review pending): codex 0.25, claude 1.0, agy 0.33, jul
    "argonterra"; regenerate the golden and add a collision unit test.
 5. NO_COLOR test goes through `agentListColorEnabled` with the env var set.
 6. Effective mode axis label must not claim "luna:low = 1" (state the base, e.g. "raw luna:low = 1").
+
+## M3 Pre-Work (host review of M2, live 80-col run)
+
+1. Labels are attached to the wrong points: "opus" sits at the 5.0 fable peak and again at ~3.8, fable and
+   sonnet have no label. A label must sit next to its own series' last (highest-tier) point; test that each
+   placed label's cell is within 2 cells of its point.
+2. Pareto list repeats ties (sonnet:low/high/med all cost 15 ★4.0, opus x3, fable x2): collapse equal
+   (cost, rating) points to one entry per model (lowest tier), and assert it in the Pareto test.
