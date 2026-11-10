@@ -1,6 +1,6 @@
 # 1208 — agent start --dry-run: resolve model, role and prompt without starting an agent
 
-**Status**: Open
+**Status**: Closed — agent start/resume --dry-run prints provider:model:tier, role, name, dir and argv (prompt as byte count) and exits before launch; make test-q1 206 ok 0 FAIL; cobra test proves no session, telemetry DB or provider run; live dry runs agy/claude/codex correct (5a440c8b, 23d51793)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
