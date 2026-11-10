@@ -53,6 +53,7 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 	var startFiles []string
 	var startPrompt string
 	var startInteractive bool
+	var startDryRun bool
 	start := &cobra.Command{Use: "start [role] [name] [prompt...]", Short: "Start a new agent session", Long: "Start a new agent session. A leading role or alias may be positional; add a session name before the prompt when needed.\n\n" + sessionBackgroundHelp, Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"\n  harnez agent start explorer \"audit SQLite queries\"\n  harnez agent start coder my-worker \"implement ticket 041\"\n  harnez agent start -i --model claude:haiku --name chat", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(ac.planSpec)
 		if err != nil {
@@ -86,13 +87,16 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 				return err
 			}
 		}
+		if startDryRun && (startInteractive || ac.detach || ac.workerID != "") {
+			return fmt.Errorf("--dry-run cannot be combined with interactive or detached execution")
+		}
 		if startInteractive {
 			if err := validateInteractiveFlags(cmd, ac.detach, ac.jsonOut, ac.streamMode, ac.agentTimeout, ac.workerID != ""); err != nil {
 				return err
 			}
 			return runInteractiveStart(cmd, interactiveDeps{store: ac.store, parent: ac.parent, storeDir: ac.storeDir}, interactiveStartRequest{Prompt: prompt, Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, Role: startRoleSpec, AllowExhaustedQuota: ac.allowExhaustedQuota})
 		}
-		req := startRequest{Role: startRoleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, SessionID: ac.workerID, AllowExhaustedQuota: ac.allowExhaustedQuota, ContextMode: ac.contextMode}
+		req := startRequest{DryRun: startDryRun, PromptSource: dryPromptSource(startFiles, startPrompt), Role: startRoleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, SessionID: ac.workerID, AllowExhaustedQuota: ac.allowExhaustedQuota, ContextMode: ac.contextMode}
 		if ac.workerID != "" {
 			return runDetachedWorker(cmd, req, ac.storeDir)
 		}
@@ -103,6 +107,7 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 			return runStart(ctx, cmd, agentDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir, dbPath: agentUsageDBPath()}, req)
 		})
 	}}
+	start.Flags().BoolVar(&startDryRun, "dry-run", false, "preview the resolved provider command without starting it")
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	start.Flags().StringVarP(&startPrompt, "prompt", "p", "", "prompt text")
 	start.Flags().BoolVarP(&startInteractive, "interactive", "i", false, "launch the provider's interactive terminal")
@@ -307,6 +312,7 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 	var continueResume bool
 	var resumePrompt string
 	var resumeInteractive bool
+	var resumeDryRun bool
 	var resumeJulesID string
 	resume := &cobra.Command{Use: "resume [session] [prompt...]", Short: "Resume an existing agent session", Long: "Resume an existing agent session.\n\n" + sessionBackgroundHelp, Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume <id> \"next step\"\n  harnez agent resume -i --name w\n  harnez agent resume --model jules --id <jules-session-id> wait", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(ac.planSpec)
@@ -341,6 +347,9 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 				return err
 			}
 		}
+		if resumeDryRun && (resumeInteractive || resumeWorkerID != "" || resumeJulesID != "") {
+			return fmt.Errorf("--dry-run cannot be combined with interactive, worker or Jules adoption")
+		}
 		if resumeJulesID != "" {
 			if resumeInteractive || continueResume || resumeWorkerID != "" {
 				return fmt.Errorf("--id cannot be combined with --interactive, --continue or --worker-session")
@@ -361,10 +370,11 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: true, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota}, ac.storeDir)
 		}
 		return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-			return runResume(ctx, cmd, agentDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir, dbPath: agentUsageDBPath()}, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, Selector: selector, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: continueResume, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
+			return runResume(ctx, cmd, agentDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir, dbPath: agentUsageDBPath()}, resumeRequest{DryRun: resumeDryRun, PromptSource: dryPromptSource(resumeFiles, resumePrompt), Role: ac.roleSpec, Prompt: prompt, Name: ac.name, Selector: selector, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: continueResume, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
 		})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(ac.storeDir, ac.parent)
+	resume.Flags().BoolVar(&resumeDryRun, "dry-run", false, "preview the resolved provider command without starting it")
 	resume.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
 	resume.Flags().StringVar(&resumeWorkerID, "worker-session", "", "internal detached worker session ID")
 	resume.Flags().StringVar(&ac.planSpec, "plan", "no", "planning gate: yes or no")
@@ -378,4 +388,14 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 	resume.Flags().BoolVarP(&continueResume, "continue", "c", false, "resume the most recently active attributable session")
 	withHostTrackingLine(resume, ac.store, ac.parent, func() bool { return resumeWorkerID != "" })
 	return resume
+}
+
+func dryPromptSource(files []string, prompt string) string {
+	if len(files) > 0 {
+		return "-f " + strings.Join(files, ", ")
+	}
+	if prompt != "" {
+		return "-p"
+	}
+	return "arguments"
 }

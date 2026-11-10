@@ -24,7 +24,7 @@ These come from the 2026-09-24 retro (`docs/feedback/2026-09-24-lean-sprints-cle
 2. **CPU check only for CPU-relevant changes.** Add a lean-sprint review item: when a diff adds or
    changes a wait, a poll, a loop, a ticker, a watcher or streaming, the host measures CPU (and RSS) of
    the real command (`ps -o %cpu,rss` while it waits). Other diffs skip this.
-3. **`harnez agent start/-p --dry-run`.** It resolves the model, role, session and working directory,
+3. **`harnez agent start/-p --dry-run` (implemented in 1208).** It resolves the model, role, session and working directory,
    prints them, and exits without launching a provider. Use it for alias probes (540).
 4. **Host-only ticket close.** `harnez issues close` refuses when it runs inside a developer or reviewer
    leaf session (as detected by the harnez agent role env), with a message to report back to the host

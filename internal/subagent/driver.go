@@ -57,6 +57,38 @@ func DriverFor(m Model, dir string) Driver {
 	}
 }
 
+// PreviewArgs returns the provider command and arguments without executing it.
+func PreviewArgs(model Model, dir, id, prompt, mode string, approve bool, resume bool) ([]string, error) {
+	var args []string
+	command := model.Provider
+	switch model.Provider {
+	case "claude":
+		if resume {
+			args = claudeResumeArgs(id, prompt, model)
+		} else {
+			args = claudeRunArgs(model, prompt)
+		}
+	case "codex":
+		if resume {
+			args = codexResumeArgs(id, prompt, model)
+		} else {
+			args = codexRunArgs(model, prompt)
+		}
+	case "agy":
+		args = (AgyDriver{Dir: dir, AutoApproveTools: approve}).turnArgs(id, prompt, model)
+	case "pi", "lmcoder", "strata", "strata-coder":
+		command = "pi"
+		if resume {
+			args = piResumeArgs(id, prompt, model)
+		} else {
+			args = piRunArgs(model, prompt, mode)
+		}
+	default:
+		return nil, fmt.Errorf("batch agent lifecycle is not supported for provider %q", model.Provider)
+	}
+	return append([]string{command}, args...), nil
+}
+
 // StreamDriverFor is DriverFor for interactive callers (harnez tui): claude
 // and pi get drivers that also implement StreamingDriver. Batch callers keep
 // DriverFor, whose claude and pi drivers do not stream.

@@ -123,15 +123,7 @@ func (d AgyDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 		return nil, errors.New("agy: refusing to run with an empty Dir (agy would write to ~/.gemini scratch)")
 	}
 	start := time.Now()
-	args := []string{"--add-dir", d.Dir}
-	if o.Model.Name != "" {
-		args = append(args, "--model", o.Model.Name)
-		if o.Model.SupportsEffort() && o.Model.Tier != "" {
-			args = append(args, "--effort", agyEffort(o.Model.Tier))
-		}
-	}
-	args = append(args, d.approvalArgs()...)
-	args = append(args, "--output-format", "json", "-p", o.Prompt)
+	args := d.turnArgs("", o.Prompt, o.Model)
 	b, err := d.command(ctx, args...)
 	r, parseErr := parseAgyWithQuota(ctx, b, o.Model.Name, cachedAgyQuotaAvailable)
 	if err != nil {
@@ -152,15 +144,7 @@ func (d AgyDriver) Resume(ctx context.Context, id, prompt string, model Model) (
 	if d.Dir == "" {
 		return nil, errors.New("agy: refusing to resume with an empty Dir (agy would write to ~/.gemini scratch)")
 	}
-	args := []string{"--conversation", id, "--add-dir", d.Dir}
-	if model.Name != "" {
-		args = append(args, "--model", model.Name)
-		if model.SupportsEffort() && model.Tier != "" {
-			args = append(args, "--effort", agyEffort(model.Tier))
-		}
-	}
-	args = append(args, d.approvalArgs()...)
-	args = append(args, "--output-format", "json", "-p", prompt)
+	args := d.turnArgs(id, prompt, model)
 	b, err := d.command(ctx, args...)
 	r, parseErr := parseAgyWithQuota(ctx, b, model.Name, cachedAgyQuotaAvailable)
 	if err != nil {
@@ -170,6 +154,23 @@ func (d AgyDriver) Resume(ctx context.Context, id, prompt string, model Model) (
 		return nil, agyRunError("agy resume", b, err)
 	}
 	return r, parseErr
+}
+
+// turnArgs builds the same arguments for execution and previews.
+func (d AgyDriver) turnArgs(id, prompt string, model Model) []string {
+	var args []string
+	if id != "" {
+		args = append(args, "--conversation", id)
+	}
+	args = append(args, "--add-dir", d.Dir)
+	if model.Name != "" {
+		args = append(args, "--model", model.Name)
+		if model.SupportsEffort() && model.Tier != "" {
+			args = append(args, "--effort", agyEffort(model.Tier))
+		}
+	}
+	args = append(args, d.approvalArgs()...)
+	return append(args, "--output-format", "json", "-p", prompt)
 }
 
 // Compact invokes agy's native slash command (1.3.5+), inheriting the saved

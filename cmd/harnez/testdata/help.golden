@@ -426,6 +426,7 @@ Examples:
 
 Flags:
   -c, --continue                resume the most recently active attributable session
+      --dry-run                 preview the resolved provider command without starting it
   -f, --file strings            prompt file (repeatable; - reads stdin)
   -h, --help                    help for resume
       --id string               adopt and resume a Jules session by its ID (requires --model jules); records it once
@@ -522,6 +523,7 @@ Examples:
 Flags:
       --allow-exhausted-quota   start even when cached provider quota is exhausted
       --context-mode string     agent context mode (e.g. plain, no-skills, default)
+      --dry-run                 preview the resolved provider command without starting it
   -f, --file strings            prompt file (repeatable; - reads stdin)
   -h, --help                    help for start
   -i, --interactive             launch the provider's interactive terminal

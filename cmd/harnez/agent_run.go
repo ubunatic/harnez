@@ -193,6 +193,8 @@ func warnQuota1Changes(cmd *cobra.Command, dir string, turnStarted time.Time) {
 // startRequest describes one new agent turn. Prompt is sent to the agent;
 // StoredPrompt is what the session records (files as "path (N bytes)").
 type startRequest struct {
+	DryRun                                                                    bool
+	PromptSource                                                              string
 	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode, Role, ContextMode string
 	JSON, PlanFirst, AllowExhaustedQuota                                      bool
 	SessionID                                                                 string
@@ -330,6 +332,8 @@ func quotaAlternatives(selected subagent.Model, availability func(string, string
 // resumeRequest describes one turn on an existing session: chosen by Name,
 // else by attribution in Dir (Continue picks the most recent).
 type resumeRequest struct {
+	DryRun                                   bool
+	PromptSource                             string
 	Role                                     string // must match the stored role when given
 	Prompt, Name, ModelSpec, Dir, StreamMode string
 	SessionID, Selector                      string
@@ -442,7 +446,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		}
 	}
 	if req.Name != "" && req.SessionID == "" {
-		if existing, findErr := resolveSession(s, req.Name, ""); findErr == nil && !releaseFailedStartName(s, existing) {
+		if existing, findErr := resolveSession(s, req.Name, ""); findErr == nil && (req.DryRun || !releaseFailedStartName(s, existing)) {
 			// 1186: names are global across repos; suffix a taken explicit name.
 			if sessName, err = suffixTakenName(s, req.Name, cmd.ErrOrStderr()); err != nil {
 				return err
@@ -456,6 +460,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	autoApprove, err := subagent.RoleAutoApproveTools(role)
 	if err != nil {
 		return err
+	}
+	if req.DryRun {
+		return printAgentPreview(cmd, m, role, sessName, canonicalWorkDir, "", req.Prompt, req.PromptSource, req.ContextMode, autoApprove, false)
 	}
 	baseDriver := withAgyAutoApprove(agentDriver(m, canonicalWorkDir), autoApprove)
 	if err := preflightCodex(ctx, m.Provider, baseDriver, d.preflight); err != nil {
@@ -722,6 +729,23 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	sess, resolved, err = resolveResumeSession(cmd, d, s, req)
 	if err != nil {
 		return err
+	}
+	if req.DryRun {
+		role, err := resumeRole(req.Role, sess)
+		if err != nil {
+			return err
+		}
+		if req.ModelSpec != "" {
+			if err := checkResumeModel(role, req.ModelSpec, sess, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr()); err != nil {
+				return err
+			}
+		}
+		approve, err := subagent.RoleAutoApproveTools(role)
+		if err != nil {
+			return err
+		}
+		m := subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}
+		return printAgentPreview(cmd, m, role, sess.Name, sess.WorkingDir, sess.ProviderID(), req.Prompt, req.PromptSource, "", approve, true)
 	}
 	resumeIdle := time.Duration(0)
 	if err := warnDisabledSessionModel(cmd, sess, d.modelEnabled); err != nil {
@@ -1337,4 +1361,18 @@ func suffixTakenName(s *subagent.FileSessionStore, name string, errOut io.Writer
 		fmt.Fprintf(errOut, "harnez: name %s taken; using %s\n", name, free)
 	}
 	return free, nil
+}
+
+func printAgentPreview(cmd *cobra.Command, model subagent.Model, role, name, dir, id, prompt, source, mode string, approve, resume bool) error {
+	placeholder := fmt.Sprintf("<prompt: %d bytes from %s>", len(prompt), source)
+	args, err := subagent.PreviewArgs(model, dir, id, placeholder, mode, approve, resume)
+	if err != nil {
+		return err
+	}
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		quoted[i] = strconv.Quote(arg)
+	}
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "dry-run: %s\nrole: %s\nname: %s\ndir: %s\nargv: %s\n", model.Spec(), role, name, dir, strings.Join(quoted, " "))
+	return err
 }
