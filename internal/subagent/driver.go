@@ -456,6 +456,10 @@ func ResolveModelForCanonicalRole(roleName, modelSpec string) (Model, error) {
 }
 
 func resolveCanonicalRoleModel(spec agentSpec, roleName, modelSpec string) (Model, error) {
+	return resolveCanonicalRoleModelIn(spec, roleName, modelSpec, modelAliases)
+}
+
+func resolveCanonicalRoleModelIn(spec agentSpec, roleName, modelSpec string, aliases map[string]modelAlias) (Model, error) {
 	role, ok := spec.Roles[roleName]
 	if !ok {
 		return Model{}, fmt.Errorf("unknown canonical role %q", roleName)
@@ -476,13 +480,13 @@ func resolveCanonicalRoleModel(spec agentSpec, roleName, modelSpec string) (Mode
 			return Model{}, err
 		}
 	} else if !strings.Contains(modelSpec, ":") {
-		if _, err := resolveModelIn(modelAliases, modelSpec); err != nil {
+		if _, err := resolveModelIn(aliases, modelSpec); err != nil {
 			traits := make([]string, 0, len(role.Models))
 			for trait := range role.Models {
 				traits = append(traits, trait)
 			}
 			sort.Strings(traits)
-			return Model{}, fmt.Errorf("unknown trait or model %q for role %q; known traits: %s", modelSpec, roleName, strings.Join(traits, ", "))
+			return Model{}, fmt.Errorf("unknown trait or model %q for role %q; known traits: %s; %w", modelSpec, roleName, strings.Join(traits, ", "), err)
 		}
 	}
 	return ResolveModel(modelSpec)
@@ -723,6 +727,18 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 		return m, nil
 	}
 	parts := strings.Split(strings.ToLower(strings.TrimSpace(spec)), ":")
+	if len(parts) == 1 || (len(parts) == 2 && isTier(normalizeTier(parts[1]))) {
+		var aliasMatches []string
+		for key, entry := range aliases {
+			if modelHasAlias(entry, parts[0]) {
+				aliasMatches = append(aliasMatches, key)
+			}
+		}
+		if len(aliasMatches) > 1 {
+			sort.Strings(aliasMatches)
+			return Model{}, fmt.Errorf("ambiguous model alias %q; candidates: %s", parts[0], strings.Join(aliasMatches, ", "))
+		}
+	}
 	if len(parts) <= 2 && parts[0] != "" {
 		var matches []string
 		for key, entry := range aliases {

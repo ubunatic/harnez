@@ -119,6 +119,20 @@ func TestUnknownModelSuggestsOfficialNames(t *testing.T) {
 	}
 }
 
+func TestAmbiguousAliasPrecedesUniqueOfficialName(t *testing.T) {
+	aliases := map[string]modelAlias{
+		"a:first":  {Model: Model{Provider: "a", Name: "first-model", Tier: "low"}, Aliases: []string{"shared"}},
+		"b:second": {Model: Model{Provider: "b", Name: "second-model", Tier: "low"}, Aliases: []string{"shared"}},
+		"c:third":  {Model: Model{Provider: "c", Name: "shared", Tier: "low"}},
+	}
+	for _, spec := range []string{"shared", "shared:low"} {
+		_, err := resolveModelIn(aliases, spec)
+		if err == nil || !strings.Contains(err.Error(), `ambiguous model alias "shared"; candidates: a:first, b:second`) {
+			t.Errorf("resolveModelIn(%q) error = %v", spec, err)
+		}
+	}
+}
+
 func TestKnownModelSpecsGoldenWithoutPolicy(t *testing.T) {
 	got, err := KnownModelSpecsE()
 	if err != nil {

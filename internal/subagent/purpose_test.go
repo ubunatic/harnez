@@ -42,6 +42,45 @@ func TestCanonicalRoleModelResolution(t *testing.T) {
 	}
 }
 
+func TestRoleSelectionOfficialModelDiagnostics(t *testing.T) {
+	for _, name := range []string{"gemini-4-argon", "gemini-4-argon:low"} {
+		selection, err := ResolveModelWithAvailability("advisor", name, nil, false)
+		if err != nil || selection.Model.Provider != "agy" || selection.Model.Name != "gemini-4-argon" || selection.Model.Tier != "low" {
+			t.Errorf("selection for %q = %+v, %v", name, selection, err)
+		}
+	}
+	_, err := ResolveModelWithAvailability("advisor", "gemini-4-argom", nil, false)
+	if err == nil || !strings.Contains(err.Error(), "known traits:") || !strings.Contains(err.Error(), "close matches: gemini-4-argon") {
+		t.Fatalf("unknown model diagnostics = %v", err)
+	}
+	spec := agentSpec{Roles: map[string]RoleSpec{"advisor": {Models: map[string][]string{"smart": {"first"}}}}}
+	aliases := map[string]modelAlias{
+		"a:first":  {Model: Model{Provider: "a", Name: "shared-model", Tier: "low"}},
+		"b:second": {Model: Model{Provider: "b", Name: "shared-model", Tier: "low"}},
+	}
+	_, err = resolveCanonicalRoleModelIn(spec, "advisor", "shared-model", aliases)
+	if err == nil || !strings.Contains(err.Error(), "known traits: smart") || !strings.Contains(err.Error(), "candidates: a:first, b:second") {
+		t.Fatalf("ambiguous model diagnostics = %v", err)
+	}
+}
+
+func TestOfficialNameInModelPick(t *testing.T) {
+	spec := agentSpec{Roles: map[string]RoleSpec{"advisor": {Models: map[string][]string{"smart": {"gemini-4-argon"}}}}}
+	aliases, err := modelAliasMap()
+	if err != nil {
+		t.Fatal(err)
+	}
+	picks := modelPicksIn(spec, func(role, trait string) (Model, error) {
+		selection, err := resolveRoleSelection(spec, role, trait, func(target string) (Model, error) {
+			return resolveModelIn(aliases, target)
+		}, func(Model) string { return "" })
+		return selection.Model, err
+	})
+	if len(picks) != 1 || picks[0].Resolved != "agy:argon:low" || picks[0].Error != "" {
+		t.Fatalf("picks = %+v", picks)
+	}
+}
+
 func TestModelPickErrors(t *testing.T) {
 	spec := agentSpec{Roles: map[string]RoleSpec{"developer": {Models: map[string][]string{"ai": {}, "smart": {"sol:med"}}}}}
 	picks := modelPicksIn(spec, func(role, trait string) (Model, error) { return Model{}, fmt.Errorf("model disabled by user policy") })
