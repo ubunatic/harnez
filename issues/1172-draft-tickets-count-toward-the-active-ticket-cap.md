@@ -1,6 +1,6 @@
 # 1172 — Draft tickets count toward the active-ticket cap
 
-**Status**: Open
+**Status**: Closed — works as designed: spec/issues.yaml lists Draft with filters [draft, active], and warnActiveTicketCap in internal/issues/maintenance/rebase.go counts active := open + draft deliberately (843 M3 made Draft part of the active index); Jules audit PR github#149, reports/jules/1172.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
