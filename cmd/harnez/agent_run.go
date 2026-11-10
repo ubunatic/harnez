@@ -22,6 +22,7 @@ import (
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
 	"ubunatic.com/harnez/internal/usagestore"
+	"ubunatic.com/harnez/modelcatalog"
 )
 
 // This file holds the turn logic behind `agent start` and `agent resume`.
@@ -276,6 +277,23 @@ func autoBlockQuotaError(stderr io.Writer, provider, model string, turnErr error
 	}
 }
 
+func recordCodexAccess(stderr io.Writer, provider, model string, turnErr error) {
+	if provider != "codex" {
+		return
+	}
+	status := "accessible"
+	if turnErr != nil {
+		message := strings.ToLower(turnErr.Error())
+		if !strings.Contains(message, "not supported when using codex") && !strings.Contains(message, "model_not_found") {
+			return
+		}
+		status = "unsupported"
+	}
+	if err := modelcatalog.RecordAccess(provider, model, status); err != nil {
+		fmt.Fprintf(stderr, "harnez: could not record model access: %v\n", err)
+	}
+}
+
 func isCodexUsageLimitError(err error) bool {
 	if err == nil {
 		return false
@@ -295,25 +313,6 @@ func recordCodexResumeFailure(sess *subagent.Session, err error, quotaState stri
 	}
 	sess.CodexQuotaResumePending = true
 	return true
-}
-
-func shortCause(err error) string {
-	if err == nil {
-		return "provider failed"
-	}
-	const maxCause = 180
-	for _, line := range strings.Split(err.Error(), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		runes := []rune(line)
-		if len(runes) > maxCause {
-			line = string(runes[:maxCause-3]) + "..."
-		}
-		return line
-	}
-	return "provider failed"
 }
 
 func firstNonEmpty(values ...string) string {
@@ -640,15 +639,17 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 			sess.LastError = err.Error()
 			sess.LastActiveAt = time.Now()
 			if saveErr := s.Save(sess); saveErr != nil {
-				return fmt.Errorf("agent start %q failed: %s; session recovery record failed: %w", spec, shortCause(err), saveErr)
+				return fmt.Errorf("agent start %q failed: %s; session recovery record failed: %w", spec, err, saveErr)
 			}
 		}
 		if signalled {
 			return fmt.Errorf("agent start %q %s; provider stopped and session %q can be resumed", spec, sig, sessName)
 		}
+		recordCodexAccess(cmd.ErrOrStderr(), m.Provider, m.Name, err)
 		autoBlockQuotaError(cmd.ErrOrStderr(), m.Provider, m.Name, err)
-		return fmt.Errorf("agent start %q failed: %s; verify the provider/model configuration or ask for guidance", spec, shortCause(err))
+		return fmt.Errorf("agent start %q failed: %s; verify the provider/model configuration or ask for guidance", spec, err)
 	}
+	recordCodexAccess(cmd.ErrOrStderr(), m.Provider, m.Name, nil)
 	for _, warning := range r.Warnings {
 		fmt.Fprintln(cmd.ErrOrStderr(), warning)
 	}
@@ -1018,6 +1019,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return fmt.Errorf("agent resume %q %s; provider stopped and session can be resumed", sess.Name, sig)
 		}
 		recordResumeFailure(s, sess, err)
+		recordCodexAccess(cmd.ErrOrStderr(), sess.Provider, sess.Model, err)
 		autoBlockQuotaError(cmd.ErrOrStderr(), sess.Provider, sess.Model, err)
 		quotaState := "unknown"
 		if d.availability != nil {
@@ -1028,6 +1030,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		}
 		return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
 	}
+	recordCodexAccess(cmd.ErrOrStderr(), sess.Provider, sess.Model, nil)
 	for _, warning := range r.Warnings {
 		fmt.Fprintln(cmd.ErrOrStderr(), warning)
 	}

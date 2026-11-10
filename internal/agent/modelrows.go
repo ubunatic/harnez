@@ -5,6 +5,7 @@ import (
 
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
+	"ubunatic.com/harnez/modelcatalog"
 )
 
 // ModelRow is one `harnez agent models --json` element (issue 1122). Fields
@@ -73,6 +74,14 @@ func ModelRows(entries []subagent.ModelEntry, availability map[string]usage.Prov
 			row.Quota.ResetAt = &reset
 		}
 		row.Entitlement = RowEntitlement{State: "unverified", Source: "spec"}
+		if access, checked, err := modelcatalog.LatestModelAccess(e.Model.Provider, e.Model.Name); err == nil {
+			if access == "unsupported" || access == "denied" {
+				row.Entitlement = RowEntitlement{State: "denied", Source: "model-access", CheckedAt: checked}
+			}
+			if access == "accessible" {
+				row.Entitlement = RowEntitlement{State: "verified", Source: "model-access", CheckedAt: checked}
+			}
+		}
 		if enabled != nil && !enabled(e.Model) {
 			row.Entitlement = RowEntitlement{State: "denied", Source: "model-policy"}
 		}
@@ -84,6 +93,8 @@ func ModelRows(entries []subagent.ModelEntry, availability map[string]usage.Prov
 			row.Startable, row.StartableReason = false, "blocked until "+until.Format(time.RFC3339)
 		case state == "exhausted":
 			row.Startable, row.StartableReason = false, "quota exhausted"
+		case row.Entitlement.Source == "model-access" && row.Entitlement.State == "denied":
+			row.Startable, row.StartableReason = false, "unsupported for this account"
 		case row.Entitlement.State == "denied":
 			row.Startable, row.StartableReason = false, "model disabled by policy"
 		}

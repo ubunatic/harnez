@@ -4,7 +4,7 @@ Machine-readable per-model view for tools such as taia (issue 1122). The output 
 contract is `spec/schemas/agent-models-row.schema.json`, checked by a test against real output.
 `harnez models --json` is the same command.
 
-The command reads cached state only (the usage store and the local block file). It never starts a
+The command reads cached state only (the usage store, local block file, and model access observations). It never starts a
 collector, so `--offline` is accepted and is always in effect. Quota evidence can therefore be `stale`
 or `unknown`; ask `harnez usage` to refresh it.
 
@@ -21,16 +21,15 @@ or `unknown`; ask `harnez usage` to refresh it.
 | `quota.reset_at` | RFC3339 time the quota returns, set when `state` is `exhausted`, else `null`. |
 | `quota.age_s` | Seconds since the newest reading. |
 | `quota.scope` | `model` when the evidence is per model (a local block, AGY pools), else `provider`. |
-| `startable` | `true` unless quota is exhausted (including a block) or the model is disabled by policy. |
-| `startable_reason` | Present when not startable: `quota exhausted`, `blocked until <RFC3339>`, `model disabled by policy`. |
+| `startable` | `true` unless quota is exhausted (including a block) the model is disabled by policy, or account access is unsupported. |
+| `startable_reason` | Present when not startable: `quota exhausted`, `blocked until <RFC3339>`, `model disabled by policy`, `unsupported for this account`. |
 | `entitlement.state` | `verified`, `unverified` or `denied`. Separate from quota; being in the spec never means access. |
-| `entitlement.source` | Where the state came from: `spec` (nothing verified) or `model-policy` (disabled by policy). |
+| `entitlement.source` | Where the state came from: `spec` (nothing verified) or `model-policy` (disabled by policy), or `model-access` (observed turn). |
 | `entitlement.checked_at` | RFC3339 time of the check, or `null`. |
 | `blocked_until`, `block_reason` | Present only while a local block is active. |
 
 Other fields (`batch`, `effort`, `cost`, `eff`, `skills`, `roles`, `use`, `source`) keep
-their former meaning. Today `entitlement.state` is `unverified` or `denied`; `verified` is reserved for
-a future provider-side check.
+their former meaning. A successful Codex turn records verified access; a matching account-unsupported failure records denied access. The latest observation wins. Text output shows `unsupported for this account`. Observations are stored in `$XDG_STATE_HOME/harnez/models/access.yaml` (default `~/.local/state/harnez/models/access.yaml`).
 
 ## Blocking a model
 

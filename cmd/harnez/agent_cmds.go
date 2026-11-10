@@ -16,6 +16,7 @@ import (
 	"ubunatic.com/harnez/internal/pickdocs"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
+	"ubunatic.com/harnez/modelcatalog"
 )
 
 // agentCLI holds the `harnez agent` flag values and helpers shared by its
@@ -220,6 +221,9 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 				marker = fmt.Sprintf("exhausted (resets %s)", quotaAgeLabel(availability.ResetIn))
 			} else if marker == "stale" {
 				marker = fmt.Sprintf("stale (%s)", quotaAgeLabel(availability.Age))
+			}
+			if access, _, err := modelcatalog.LatestModelAccess(e.Model.Provider, e.Model.Name); err == nil && access == "unsupported" {
+				marker = "unsupported for this account"
 			}
 			threshold, err := subagent.CompactThreshold(e.Model)
 			if err != nil {

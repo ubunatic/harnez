@@ -549,6 +549,9 @@ func ResolveModelWithAvailability(roleName, modelSpec string, exhausted func(Mod
 		access := "unknown"
 		if entry, ok := findCatalogModel(mergedModelCatalog, m); ok {
 			access = latestAccess(entry.Access)
+			if current, _, err := modelcatalog.LatestModelAccess(m.Provider, m.Name); err == nil {
+				access = current
+			}
 		}
 		quota := "unknown"
 		if !override && exhausted != nil && exhausted(m) {
@@ -562,6 +565,9 @@ func ResolveModelWithAvailability(roleName, modelSpec string, exhausted func(Mod
 func candidateUnavailable(enabled bool, access, quota string, override bool) string {
 	if !enabled {
 		return "disabled by user policy"
+	}
+	if access == "unsupported" {
+		return "unsupported for this account"
 	}
 	if access == "denied" {
 		return "access denied"

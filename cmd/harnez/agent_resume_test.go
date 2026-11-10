@@ -933,8 +933,8 @@ func TestAgentStartFailureKeepsSessionAndResumeSelector(t *testing.T) {
 	if recovered == nil || recovered.ProviderSessionID != "provider-thread" || recovered.Status == "completed" || !strings.Contains(recovered.LastError, "temporary provider failure") {
 		t.Fatalf("failed session record = %#v", recovered)
 	}
-	if strings.Contains(startErr.Error(), "raw generated source") || strings.Contains(startErr.Error(), "traceback line 2") {
-		t.Fatalf("failure exposed raw tool output: %v", startErr)
+	if !strings.Contains(startErr.Error(), strings.Repeat("x", 220)+"\nraw generated source\ntraceback line 2") {
+		t.Fatalf("failure omitted provider output: %v", startErr)
 	}
 
 	for _, selector := range []string{"crashed", recovered.ID[:8], "provider-thread"} {
@@ -994,7 +994,7 @@ func (d *failedStartStreamDriver) Run(ctx context.Context, opts subagent.RunOpti
 
 func (d *failedStartStreamDriver) RunStream(_ context.Context, _ subagent.RunOptions, emit subagent.EventFunc) (*subagent.TurnResult, error) {
 	emit(subagent.Event{Kind: "session", Text: "provider-thread"})
-	return nil, errors.New("temporary provider failure\nraw generated source\ntraceback line 2")
+	return nil, errors.New("temporary provider failure " + strings.Repeat("x", 220) + "\nraw generated source\ntraceback line 2")
 }
 
 func (d *failedStartStreamDriver) ResumeStream(ctx context.Context, id, prompt string, model subagent.Model, emit subagent.EventFunc) (*subagent.TurnResult, error) {
