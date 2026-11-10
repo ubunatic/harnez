@@ -1,6 +1,6 @@
 # 903 — init validates copyable docs from a stale binary before its stale-docs warning
 
-**Status**: Backlog
+**Status**: Closed — fixed in PR #153 (395e22f8)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
