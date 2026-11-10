@@ -1,6 +1,6 @@
 # 1171 — jules skill: skip recently audited tickets and add a batch audit prompt
 
-**Status**: Open
+**Status**: Closed — obsolete: Google stops accepting new Jules work on 2026-11-11, so jules skill improvements will not be used; the batch audit prompt was tried ad hoc in the 2026-11-10 sweep
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Chore
