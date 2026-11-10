@@ -27,7 +27,13 @@ failure report here.
 - A `claude:fable` entry in `spec/agent.yaml` (schema-valid) modeled on the 755 Haiku entry.
 - `harnez agent models` shows `claude:fable:low|med|high`; a dry run or resolver test resolves
   `--model fable` to it.
-- A live one-turn dispatch succeeds, or the ticket records why it could not run.
+- No live call to Fable (owner, 2026-11-10). Verify by resolver/dry-run tests only.
+- Cost values are estimates, marked as such in the spec entry's comment or source field, with
+  the basis stated (e.g. relative to the existing Opus/Sonnet cost values and any published price).
+
+## Decision
+
+- 2026-11-10 owner: do not call the model; add it and estimate the costs.
 
 ## 4. Notes / Unverified
 
