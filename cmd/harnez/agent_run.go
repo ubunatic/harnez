@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -284,7 +285,9 @@ func recordCodexAccess(stderr io.Writer, provider, model string, turnErr error) 
 	status := "accessible"
 	if turnErr != nil {
 		message := strings.ToLower(turnErr.Error())
-		if !strings.Contains(message, "not supported when using codex") && !strings.Contains(message, "model_not_found") {
+		modelPattern := `(^|[^a-z0-9._-])` + regexp.QuoteMeta(strings.ToLower(model)) + `($|[^a-z0-9._-])`
+		modelFound, _ := regexp.MatchString(modelPattern, message)
+		if !strings.Contains(message, "not supported when using codex") && !(model != "" && modelFound && strings.Contains(message, "model_not_found")) {
 			return
 		}
 		status = "unsupported"
@@ -292,6 +295,15 @@ func recordCodexAccess(stderr io.Writer, provider, model string, turnErr error) 
 	if err := modelcatalog.RecordAccess(provider, model, status); err != nil {
 		fmt.Fprintf(stderr, "harnez: could not record model access: %v\n", err)
 	}
+}
+
+func providerErrorLine(err error) string {
+	for _, line := range strings.Split(err.Error(), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			return line
+		}
+	}
+	return "provider failed"
 }
 
 func isCodexUsageLimitError(err error) bool {
@@ -639,7 +651,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 			sess.LastError = err.Error()
 			sess.LastActiveAt = time.Now()
 			if saveErr := s.Save(sess); saveErr != nil {
-				return fmt.Errorf("agent start %q failed: %s; session recovery record failed: %w", spec, err, saveErr)
+				return fmt.Errorf("agent start %q failed: %s; session recovery record failed: %w", spec, providerErrorLine(err), saveErr)
 			}
 		}
 		if signalled {
@@ -647,7 +659,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		}
 		recordCodexAccess(cmd.ErrOrStderr(), m.Provider, m.Name, err)
 		autoBlockQuotaError(cmd.ErrOrStderr(), m.Provider, m.Name, err)
-		return fmt.Errorf("agent start %q failed: %s; verify the provider/model configuration or ask for guidance", spec, err)
+		return fmt.Errorf("agent start %q failed: %s; verify the provider/model configuration or ask for guidance", spec, providerErrorLine(err))
 	}
 	recordCodexAccess(cmd.ErrOrStderr(), m.Provider, m.Name, nil)
 	for _, warning := range r.Warnings {

@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"io/fs"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -22,7 +23,16 @@ func entry(provider, name string) subagent.ModelEntry {
 
 func key(e subagent.ModelEntry) string { return e.Model.Provider + "\x00" + e.Model.Name }
 
+func isolateModelRows(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+}
+
 func TestModelRowsFieldsFollowAvailability(t *testing.T) {
+	isolateModelRows(t)
 	avail, exhausted, blocked, stale, unknown := entry("codex", "a"), entry("codex", "b"), entry("agy", "c"), entry("codex", "d"), entry("codex", "e")
 	reset := now.Add(time.Hour)
 	until := now.Add(3 * time.Hour)
@@ -53,6 +63,7 @@ func TestModelRowsFieldsFollowAvailability(t *testing.T) {
 }
 
 func TestModelRowsValidateAgainstSchema(t *testing.T) {
+	isolateModelRows(t)
 	e := entry("codex", "a")
 	rows := ModelRows([]subagent.ModelEntry{e, entry("agy", "b")}, map[string]usage.ProviderQuotaAvailability{
 		key(e): {State: "exhausted", Exhausted: true, ResetIn: time.Hour, BlockedUntil: now.Add(time.Hour), BlockReason: "x"},

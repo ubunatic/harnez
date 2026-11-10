@@ -8,19 +8,12 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez/internal/xdgpath"
 )
 
 // RecordAccess appends observations to the user's catalog without losing concurrent writes.
 func RecordAccess(provider, model, status string) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	base := os.Getenv("XDG_STATE_HOME")
-	if base == "" {
-		base = filepath.Join(home, ".local", "state")
-	}
-	dir := filepath.Join(base, "harnez", "models")
+	dir := filepath.Join(xdgpath.StateHome(), "harnez", "models")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
@@ -48,6 +41,9 @@ func RecordAccess(provider, model, status string) error {
 	catalog, err := Load()
 	if err != nil {
 		return err
+	}
+	if current, _ := latestModelAccess(catalog, provider, model); current == status {
+		return nil
 	}
 	observations, ok := doc["observations"].([]any)
 	if !ok {
@@ -87,6 +83,11 @@ func LatestModelAccess(provider, model string) (string, *time.Time, error) {
 	if err != nil {
 		return "", nil, err
 	}
+	status, at := latestModelAccess(c, provider, model)
+	return status, at, nil
+}
+
+func latestModelAccess(c *Catalog, provider, model string) (string, *time.Time) {
 	var latest time.Time
 	status := "unknown"
 	for _, o := range c.Access() {
@@ -99,7 +100,7 @@ func LatestModelAccess(provider, model string) (string, *time.Time, error) {
 		}
 	}
 	if latest.IsZero() {
-		return status, nil, nil
+		return status, nil
 	}
-	return status, &latest, nil
+	return status, &latest
 }

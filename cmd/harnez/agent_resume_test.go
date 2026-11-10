@@ -933,8 +933,12 @@ func TestAgentStartFailureKeepsSessionAndResumeSelector(t *testing.T) {
 	if recovered == nil || recovered.ProviderSessionID != "provider-thread" || recovered.Status == "completed" || !strings.Contains(recovered.LastError, "temporary provider failure") {
 		t.Fatalf("failed session record = %#v", recovered)
 	}
-	if !strings.Contains(startErr.Error(), strings.Repeat("x", 220)+"\nraw generated source\ntraceback line 2") {
+	if !strings.Contains(startErr.Error(), strings.Repeat("x", 220)) {
 		t.Fatalf("failure omitted provider output: %v", startErr)
+	}
+
+	if strings.Contains(startErr.Error(), "raw generated source") || strings.Contains(startErr.Error(), "traceback line 2") {
+		t.Fatalf("failure included raw output: %v", startErr)
 	}
 
 	for _, selector := range []string{"crashed", recovered.ID[:8], "provider-thread"} {

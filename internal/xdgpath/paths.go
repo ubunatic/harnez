@@ -7,6 +7,7 @@ import (
 )
 
 func DataHome() string  { return home("XDG_DATA_HOME", ".local/share") }
+func StateHome() string { return home("XDG_STATE_HOME", ".local/state") }
 func CacheHome() string { return home("XDG_CACHE_HOME", ".cache") }
 
 func home(variable, fallback string) string {

@@ -14,6 +14,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/xdgpath"
 )
 
 const (
@@ -296,10 +297,7 @@ func Load() (*Catalog, error) {
 	if configBase == "" {
 		configBase = filepath.Join(home, ".config")
 	}
-	stateBase := os.Getenv("XDG_STATE_HOME")
-	if stateBase == "" {
-		stateBase = filepath.Join(home, ".local", "state")
-	}
+	stateBase := xdgpath.StateHome()
 	return LoadFromDirs(filepath.Join(stateBase, "harnez", "models"), filepath.Join(configBase, "harnez"))
 }
 
