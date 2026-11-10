@@ -38,3 +38,15 @@ failure report here.
 - The table's relative cost (luna:low = 1) differs from the chart's USD per rollout; keep relative units
   and label the axis accordingly.
 - Existing Braille chart code (218, 191) may be reusable; check before writing new rendering.
+
+## Searcher findings (s1211, agy:argon:low, 4m33s)
+
+- `agent models`: `modelsCmd` `cmd/harnez/agent_cmds.go:142-258` (flags `--names --picks --md --json --offline`;
+  JSON :193-201 via `agent.ModelRows`; table :202-236). Cost per tier: `subagent.CostForTier`
+  `internal/subagent/driver.go:265`, used in `KnownModelEntriesE` :395-430; source `spec/agent.yaml:127-150`.
+- Charts: `internal/rograph` (`RenderSparkline`, `RenderBar`) and `internal/assess/braille.go` draw only
+  one-row sparklines/bars; no 2D canvas, log axis, multi-series or labels. A new 2D Braille canvas is needed.
+- Color: `agentListColorEnabled` `cmd/harnez/agent.go:329-344` (always/never/auto, NO_COLOR, TTY); width
+  via `term.GetSize` (`cmd/harnez/tui.go:107-119`); palette `spec/colors.yaml`.
+- Spec pattern: `spec/disable.yaml` + `spec/schemas/disable.schema.json`, test
+  `internal/disable/disable_test.go:28-78`. Golden: `TestModelPicksGolden` `cmd/harnez/agent_picks_test.go:13-30`.
