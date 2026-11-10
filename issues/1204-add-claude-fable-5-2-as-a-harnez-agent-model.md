@@ -56,6 +56,18 @@ failure report here.
    rewriting the test, and say which you chose.
 3. Apply the cost 40 decision above; docs/Models.md shows 40 with the pricing URL.
 
+## M1 Pre-Work, round 2 (host review of the uncommitted diff)
+
+1. Rejected: `cmd/harnez/bench_test.go` and `internal/bench/bench_test.go` now expect `fable`.
+   Bench picked the first sorted Claude model, so adding Fable silently moved bench's default from
+   Haiku (cheapest) to Fable (most expensive, 2x Opus). Revert both test edits. Find where bench
+   picks its Claude model and make Haiku the explicit choice without relying on sort order, from
+   spec where a field fits (no new Go default; see docs/Spec.md). If no spec field fits, stop and
+   report the options instead of adding one.
+2. Add a test that fails if adding a new Claude model changes bench's Claude choice.
+3. `internal/tui/modelpicker_test.go` 24 -> 48 rows: say whether at 80x24 the picker now scrolls
+   or cuts rows. If rows are cut without scrolling, that's a bug to report, not hide by height.
+
 ## Searcher findings (s1204, codex:luna:low)
 
 - Template: `claude:opus` in `spec/agent.yaml:201-211`; Haiku at 177-189 shows `guidance_source_url`.
