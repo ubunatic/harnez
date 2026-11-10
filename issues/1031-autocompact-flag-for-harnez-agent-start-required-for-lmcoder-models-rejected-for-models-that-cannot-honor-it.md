@@ -1,6 +1,6 @@
 # 1031 — Autocompact flag for harnez agent start, required for lmcoder models, rejected for models that cannot honor it
 
-**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
+**Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -12,6 +12,12 @@
 When agents call `harnez agent` with lmcoder models, they MUST give the context window, either directly or by
 setting `--autocompact` (a flag adopted from Claude). A custom `--autocompact` works for every agent and model
 that can support it; passing it for a model that cannot honor it fails with a clear error.
+
+## Promoted (owner, 2026-11-10)
+Flag shape decided: `--autocompact 100k|100000|<num>|auto` on `harnez agent` (start and resume).
+`<num>` is a token limit; a `k` suffix means ×1000; `auto` uses the spec/provider default (969 thresholds).
+`0`, negative, malformed values (`100kk`, `1.5k` unless decided otherwise) fail before launch. No new flag for
+the context window; the lmcoder "must specify" rule is met by `--autocompact <num>`.
 
 ## Why
 Local lmcoder models have small, changing windows (32k, 64k, 96k planned). Runs that relied on defaults ended
