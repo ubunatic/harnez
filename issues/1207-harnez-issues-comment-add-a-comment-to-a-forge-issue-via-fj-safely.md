@@ -42,3 +42,23 @@ changes what "safe" means. On a loop or no progress, clear the goal and write a 
 
 - Whether `fj issue comment` accepts `--body-file` (its help mentions it) is unverified on this fj version.
 - Check the live forgetracker code and recent commits before starting.
+
+## Searcher findings (s1207, codex:luna:low)
+
+- Host/slug: `forgetracker.Resolve` (`internal/forgetracker/forgetracker.go:45`) uses `git remote get-url`
+  and `spec/pr.yaml` forges, independent of fj's repo detection. CLI pick: `PlanCreate`, `create.go:35`.
+- `issues new` wiring `cmd/harnez/issues.go:359`, `--dry-run` :483, forge path `issues_forge.go:125`.
+- fj: `issue comment` takes positional issue, optional body, `--body-file`, `-H`; `fj -H codeberg.org issue
+  view harnez/taia#253` works (title, Open state). fj help does not promise PR detection.
+- Preflight reuse: `internal/forge/issue.go:12,25` `RemoteIssue` (title, state, pull_request) via
+  `PullLister.Issue`; `issues import` (`issues_import.go:33`) and `issues show` (`forgetracker.go:83`) reject PRs.
+- Tests: `internal/forgetracker/create_test.go:28` (PlanCreate), help golden `cmd/harnez/help_golden_test.go:13`.
+
+## Decision
+
+- 2026-11-10 host (decide mode): preflight with the existing forge API (`PullLister.Issue`): refuse PRs
+  always, refuse closed issues unless `--closed`; print `commenting on <host> <owner/repo>#<n>: <title>`.
+  Then run `fj --host <host> issue comment <owner/repo>#<n> --body-file <file>` (exact form to verify
+  from fj help; harnez's own `-F` maps to fj's `--body-file`). fj only; gh/tea skipped and recorded.
+  Missing fj login (401 / "token is required") maps to an error naming `fj -H <host> auth login`.
+  Tests use a fake API and a fake fj on PATH, never the real forge.
