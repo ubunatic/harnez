@@ -71,6 +71,54 @@ func TestResolveModel(t *testing.T) {
 	}
 }
 
+func TestResolveOfficialModelNames(t *testing.T) {
+	for _, spec := range []string{"gemini-4-argon", "gemini-4-argon:low", "gemini-4-argon:HIGH"} {
+		m, err := ResolveModel(spec)
+		wantTier := "low"
+		if strings.HasSuffix(spec, ":HIGH") {
+			wantTier = "high"
+		}
+		if err != nil || m.Provider != "agy" || m.Name != "gemini-4-argon" || m.Tier != wantTier {
+			t.Errorf("ResolveModel(%q) = %#v, %v; want agy:argon:%s", spec, m, err, wantTier)
+		}
+	}
+}
+
+func TestOfficialModelAmbiguityAndPrecedence(t *testing.T) {
+	aliases := map[string]modelAlias{
+		"a:first":  {Model: Model{Provider: "a", Name: "vendor-model", Tier: "low"}, Aliases: []string{"first"}},
+		"b:second": {Model: Model{Provider: "b", Name: "vendor-model", Tier: "low"}, Aliases: []string{"second"}},
+	}
+	for _, spec := range []string{"vendor-model", "vendor-model:low"} {
+		_, err := resolveModelIn(aliases, spec)
+		if err == nil || err.Error() != `ambiguous official model "vendor-model"; candidates: a:first, b:second` {
+			t.Errorf("resolveModelIn(%q) error = %v", spec, err)
+		}
+	}
+	aliases["a:first"] = modelAlias{Model: Model{Provider: "a", Name: "vendor-model", Tier: "low"}, Aliases: []string{"vendor-model"}}
+	for _, spec := range []string{"vendor-model", "vendor-model:low"} {
+		m, err := resolveModelIn(aliases, spec)
+		if err != nil || m.Provider != "a" {
+			t.Errorf("existing alias %q = %#v, %v", spec, m, err)
+		}
+	}
+}
+
+func TestUnknownModelSuggestsOfficialNames(t *testing.T) {
+	aliases := map[string]modelAlias{
+		"a:first": {Model: Model{Provider: "a", Name: "gemini-4-argon", Tier: "low"}, Aliases: []string{"argon"}},
+	}
+	_, err := resolveModelIn(aliases, "gemini-4-argom")
+	if err == nil || !strings.Contains(err.Error(), "close matches: gemini-4-argon") {
+		t.Fatalf("error = %v; want official name first", err)
+	}
+	if got := strings.Join(closeModelMatches(map[string]modelAlias{
+		"a:cat": {Model: Model{Name: "bat"}, Aliases: []string{"hat", "bat", "rat"}},
+	}, "mat"), ", "); got != "bat, hat, rat" {
+		t.Fatalf("ranked matches = %q", got)
+	}
+}
+
 func TestKnownModelSpecsGoldenWithoutPolicy(t *testing.T) {
 	got, err := KnownModelSpecsE()
 	if err != nil {
@@ -384,7 +432,7 @@ func TestModelPolicyDisableAllButNAndResolvedAliases(t *testing.T) {
 	if _, err := resolveModelWithCatalog(aliases, catalog, "codex:luna:high"); err != nil {
 		t.Fatalf("ResolveModel(high) error = %v", err)
 	}
-	for _, spec := range []string{"luna:low", "codex:gpt-6-luna:low", "pi:OpenAI/gpt-5.6-Sol:high"} {
+	for _, spec := range []string{"luna:low", "gpt-6-luna", "gpt-6-luna:low", "codex:gpt-6-luna:low", "pi:OpenAI/gpt-5.6-Sol:high"} {
 		if _, err := resolveModelWithCatalog(aliases, catalog, spec); err == nil || !strings.Contains(err.Error(), "disabled by user policy") {
 			t.Fatalf("ResolveModel(%q) error = %v, want policy denial", spec, err)
 		}

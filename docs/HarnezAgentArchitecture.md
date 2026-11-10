@@ -432,6 +432,11 @@ table (SPEC, MODEL, EFFORT, ROLES, USE); `--names` prints bare specs for scripts
 completion. Each effort-capable codex/agy model also lists a `:med` variant. Evidence behind
 the guidance: `docs/Models.md`.
 
+Model inputs also accept an official model name from the spec, such as
+`gemini-4-argon` or `gemini-4-argon:low`. Existing keys and aliases take
+precedence; if an official name belongs to multiple entries, the error lists
+their provider keys so the caller can choose one.
+
 The guidance is loaded separately from `subagent.Model` (`ModelGuide`) so session records
 never carry it and `Model` stays comparable.
 

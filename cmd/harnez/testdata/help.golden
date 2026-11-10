@@ -80,7 +80,8 @@ Short forms:
   harnez agent --model luna:low --role advisor -p "how does X work?"
 
 Models: run "harnez agent models" for the known names. --model takes
-provider:name[:tier], a short alias (luna, opus) or alias:tier (luna:low).
+provider:name[:tier], a short alias (luna, opus), or an official model name
+(gemini-4-argon); aliases and official names can also take :tier.
 The model default comes from spec/agent.yaml. Agents run with -d <dir> as their
 working directory (default: cwd); resume reuses the session's directory.
 Sessions are chosen by --name, attribution in -d, or -c. Use -- to send text

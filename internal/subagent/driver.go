@@ -718,6 +718,93 @@ func findCatalogModel(catalog *modelcatalog.Catalog, model Model) (modelcatalog.
 }
 
 func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
+	m, err := resolveExistingModelIn(aliases, spec)
+	if err == nil {
+		return m, nil
+	}
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(spec)), ":")
+	if len(parts) <= 2 && parts[0] != "" {
+		var matches []string
+		for key, entry := range aliases {
+			if strings.EqualFold(entry.Model.Name, parts[0]) {
+				matches = append(matches, key)
+			}
+		}
+		sort.Strings(matches)
+		if len(matches) > 1 {
+			return Model{}, fmt.Errorf("ambiguous official model %q; candidates: %s", parts[0], strings.Join(matches, ", "))
+		}
+		if len(matches) == 1 {
+			m = aliases[matches[0]].Model
+			if len(parts) == 2 {
+				tier := normalizeTier(parts[1])
+				if !isTier(tier) {
+					return Model{}, fmt.Errorf("unknown model tier in requested spec %q; known specs: %s", spec, knownModelSpecs())
+				}
+				m.Tier = tier
+			}
+			return m, nil
+		}
+	}
+	if strings.Contains(err.Error(), "unknown") {
+		if matches := closeModelMatches(aliases, strings.ToLower(strings.TrimSpace(spec))); len(matches) > 0 {
+			return Model{}, fmt.Errorf("%w; close matches: %s", err, strings.Join(matches, ", "))
+		}
+	}
+	return Model{}, err
+}
+
+// closeModelMatches ranks the distinct configured spellings by edit distance.
+func closeModelMatches(aliases map[string]modelAlias, query string) []string {
+	names := make(map[string]bool)
+	for key, entry := range aliases {
+		names[key] = true
+		names[entry.Model.Name] = true
+		for _, alias := range entry.Aliases {
+			names[alias] = true
+		}
+	}
+	delete(names, "")
+	matches := make([]string, 0, len(names))
+	for name := range names {
+		matches = append(matches, name)
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		a, b := modelEditDistance(query, strings.ToLower(matches[i])), modelEditDistance(query, strings.ToLower(matches[j]))
+		if a != b {
+			return a < b
+		}
+		return matches[i] < matches[j]
+	})
+	if len(matches) > 3 {
+		matches = matches[:3]
+	}
+	return matches
+}
+
+func modelEditDistance(a, b string) int {
+	x, y := []rune(a), []rune(b)
+	row := make([]int, len(y)+1)
+	for j := range row {
+		row[j] = j
+	}
+	for i, left := range x {
+		previous := row[0]
+		row[0] = i + 1
+		for j, right := range y {
+			old := row[j+1]
+			cost := 0
+			if left != right {
+				cost = 1
+			}
+			row[j+1] = min(row[j+1]+1, row[j]+1, previous+cost)
+			previous = old
+		}
+	}
+	return row[len(y)]
+}
+
+func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 	original := strings.TrimSpace(spec)
 	if m, ok := resolvePiModel(aliases, original); ok {
 		return m, nil
@@ -740,7 +827,7 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 		}
 		clean = strings.Join(parts, ":")
 		if len(parts) == 3 && isTier(parts[2]) {
-			m, err := resolveModelIn(aliases, parts[0]+":"+parts[1])
+			m, err := resolveExistingModelIn(aliases, parts[0]+":"+parts[1])
 			if err == nil {
 				m.Tier = parts[2]
 				return m, nil
@@ -755,7 +842,7 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 				return m, nil
 			}
 			if isTier(parts[1]) {
-				if m, err := resolveModelIn(aliases, parts[0]); err == nil {
+				if m, err := resolveExistingModelIn(aliases, parts[0]); err == nil {
 					m.Tier = parts[1]
 					return m, nil
 				}
