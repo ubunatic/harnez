@@ -380,7 +380,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	// No agent had any real recorded usage found on this machine — say so
 	// explicitly rather than silently rendering a screen with no agent
 	// boxes at all (issue 083).
-	if len(discovered) == 0 && len(summary.Agents) > 0 {
+	if len(discovered) == 0 && (len(summary.Agents) > 0 || sec.Table) {
 		body = append(body,
 			ansiDimGrey+"no agent usage detected — install/configure Claude Code, Codex, or AGY\x1b[0m",
 			ansiDimGrey+"or run `harnez agent-collector --once` to collect a fresh snapshot\x1b[0m",

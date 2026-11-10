@@ -8,8 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"unicode/utf8"
 	"unsafe"
+
+	"github.com/mattn/go-runewidth"
 )
 
 func renderSparkline(values []float64) string {
@@ -37,7 +38,7 @@ func stripANSI(s string) string {
 }
 
 func visLen(s string) int {
-	return utf8.RuneCountInString(stripANSI(s))
+	return runewidth.StringWidth(stripANSI(s))
 }
 
 func truncateVisible(s string, maxWidth int) string {
@@ -64,11 +65,12 @@ func truncateVisible(s string, maxWidth int) string {
 			}
 			continue
 		}
-		if count >= target {
+		w := runewidth.RuneWidth(r)
+		if count+w > target {
 			break
 		}
 		sb.WriteRune(r)
-		count++
+		count += w
 	}
 	sb.WriteString("...\x1b[0m")
 	return sb.String()
