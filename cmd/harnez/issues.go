@@ -39,6 +39,7 @@ import (
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
 	issuesmaintenance "ubunatic.com/harnez/internal/issues/maintenance"
+	"ubunatic.com/harnez/internal/prwait"
 	"ubunatic.com/harnez/internal/readcard"
 )
 
@@ -70,6 +71,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var forceFlag bool
 	var bodyFileFlag string
 	var closedFlag bool
+	var forgeFlag bool
 	var labelFlags []string
 	var numberFlag string
 	var offlineFlag bool
@@ -153,7 +155,8 @@ then the README is regenerated and the batch is committed once.
                     yet) and never commits.
   comment <number> -F <file>  Comment on a forge issue through fj after checking
                     its state; --dry-run prints the command and --closed permits
-                    closed issues. Pull requests are always refused.
+                    closed issues. With a local tracker, --forge is required.
+                    Pull requests are always refused.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -249,6 +252,9 @@ valid, exit-0 answer.`,
 			}
 			if closedFlag && (len(args) == 0 || args[0] != "comment") {
 				return fmt.Errorf("issues: --closed requires comment")
+			}
+			if forgeFlag && (len(args) == 0 || args[0] != "comment") {
+				return fmt.Errorf("issues: --forge requires comment")
 			}
 			if forceFlag && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --force requires new")
@@ -397,12 +403,23 @@ valid, exit-0 answer.`,
 				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag, offlineFlag)
 			}
 			if args[0] == "comment" {
+				if forgeFlag {
+					spec, err := prwait.LoadSpec()
+					if err != nil {
+						return err
+					}
+					t, err := forgetracker.ResolveRemote(dir, spec)
+					if err != nil {
+						return fmt.Errorf("issues comment: cannot resolve forge remote: %w", err)
+					}
+					return runIssuesComment(cmd.OutOrStdout(), dir, t, forgeTrackerSource(spec), args[1], bodyFileFlag, dryRunFlag || checkFlag, closedFlag)
+				}
 				t, src, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir)
 				if err != nil {
 					return err
 				}
 				if !ok {
-					return fmt.Errorf("issues comment: requires a forge tracker (no local issues/ dir)")
+					return fmt.Errorf("issues comment: requires a forge tracker; with a local issues/ dir use --forge")
 				}
 				return runIssuesComment(cmd.OutOrStdout(), dir, t, src, args[1], bodyFileFlag, dryRunFlag || checkFlag, closedFlag)
 			}
@@ -500,6 +517,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().StringVar(&numberFlag, "number", "", "with new: use this ticket number instead of the next free one (refused if it exists)")
 	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new or comment on a forge tracker: the body file")
 	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment: allow a closed issue")
+	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "with comment: target the forge even with a local issues/ dir")
 	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")
 	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: create despite strong duplicate matches")
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")

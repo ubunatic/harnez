@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -61,7 +62,8 @@ func TestIssuesCommentOffline(t *testing.T) {
 		return runHarnez(t, append(args, flags...)...)
 	}
 	out, err := run("--dry-run")
-	if err != nil || !strings.Contains(out, "fj --host codeberg.org issue comment o/r#7 --body-file") {
+	wantDry := "dry run: fj --host codeberg.org issue comment o/r#7 --body-file " + strconv.Quote(body) + "\n"
+	if err != nil || !strings.HasPrefix(out, wantDry) {
 		t.Fatalf("dry run: %s %v", out, err)
 	}
 	if _, err := os.Stat(log); !os.IsNotExist(err) {
@@ -71,9 +73,15 @@ func TestIssuesCommentOffline(t *testing.T) {
 	if _, err := run("--closed"); err == nil || !strings.Contains(err.Error(), "pull request") {
 		t.Fatalf("PR: %v", err)
 	}
+	if _, err := os.Stat(log); !os.IsNotExist(err) {
+		t.Fatal("PR refusal executed fj")
+	}
 	pull, state = false, "closed"
 	if _, err := run(); err == nil || !strings.Contains(err.Error(), "--closed") {
 		t.Fatalf("closed: %v", err)
+	}
+	if _, err := os.Stat(log); !os.IsNotExist(err) {
+		t.Fatal("closed refusal executed fj")
 	}
 	out, err = run("--closed")
 	if err != nil || !strings.Contains(out, "commenting on codeberg.org o/r#7: A ticket") {
@@ -88,11 +96,40 @@ func TestIssuesCommentOffline(t *testing.T) {
 		t.Fatalf("API auth: %v", err)
 	}
 	status, state = http.StatusOK, "open"
-	if err := os.WriteFile(filepath.Join(bin, "fj"), []byte("#!/bin/sh\necho 'token is required' >&2\nexit 1\n"), 0o755); err != nil {
+	for _, message := range []string{"token is required", "401 Unauthorized"} {
+		if err := os.WriteFile(filepath.Join(bin, "fj"), []byte("#!/bin/sh\necho '"+message+"' >&2\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := run(); err == nil || !strings.Contains(err.Error(), "fj -H codeberg.org auth login") {
+			t.Fatalf("fj auth %q: %v", message, err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := run(); err == nil || !strings.Contains(err.Error(), "fj -H codeberg.org auth login") {
-		t.Fatalf("fj auth: %v", err)
+	if _, err := run("--dry-run"); err == nil || !strings.Contains(err.Error(), "--forge") {
+		t.Fatalf("local tracker refusal: %v", err)
+	}
+	out, err = run("--forge", "--dry-run")
+	if err != nil || out != wantDry {
+		t.Fatalf("local tracker --forge: %q %v", out, err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "fj"), []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FJ_TEST_LOG\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(log); err != nil {
+		t.Fatal(err)
+	}
+	out, err = run("--forge")
+	if err != nil || !strings.Contains(out, "commenting on codeberg.org o/r#7: A ticket") {
+		t.Fatalf("local tracker comment: %q %v", out, err)
+	}
+	got, err = os.ReadFile(log)
+	if err != nil || string(got) != strings.Join([]string{"--host", "codeberg.org", "issue", "comment", "o/r#7", "--body-file", body, ""}, "\n") {
+		t.Fatalf("local tracker argv: %q %v", got, err)
+	}
+	if _, err := runHarnez(t, "issues", "show", "-d", dir, "7", "--forge"); err == nil || !strings.Contains(err.Error(), "--forge requires comment") {
+		t.Fatalf("forge flag on show: %v", err)
 	}
 }
 

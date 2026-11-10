@@ -48,6 +48,11 @@ func Resolve(dir string, spec prwait.Spec) (Target, error) {
 	if _, err := os.Stat(filepath.Join(dir, "issues")); !errors.Is(err, fs.ErrNotExist) {
 		return Target{}, ErrNotApplicable
 	}
+	return ResolveRemote(dir, spec)
+}
+
+// ResolveRemote resolves the configured remote even when a local tracker exists.
+func ResolveRemote(dir string, spec prwait.Spec) (Target, error) {
 	remote := spec.DefaultRemote
 	if remote == "" {
 		remote = "origin"

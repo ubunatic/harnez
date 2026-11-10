@@ -32,6 +32,7 @@ harnez issues comment -d <repo> <n> -F <body-file> --dry-run
 harnez issues comment -d <repo> <n> -F <body-file>  # add --closed for a closed issue
 ```
 
+- When the repo has a local `issues/` directory, add `--forge` to comment on a forge issue; the number then identifies the forge issue.
 - Use only labels that exist on the forge (`tea labels` or `gh label list`); `fj` cannot set labels, so labels need `tea` or `gh`.
 - When an existing ticket partly covers the request, say so and ask before filing or commenting. Comment on other tickets only with the user's OK.
 - Report "filed as #N at <URL>; no commit". Publish Promptly below applies only to file-based trackers.

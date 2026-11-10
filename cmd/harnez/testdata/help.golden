@@ -1901,7 +1901,8 @@ then the README is regenerated and the batch is committed once.
                     yet) and never commits.
   comment <number> -F <file>  Comment on a forge issue through fj after checking
                     its state; --dry-run prints the command and --closed permits
-                    closed issues. Pull requests are always refused.
+                    closed issues. With a local tracker, --forge is required.
+                    Pull requests are always refused.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -1984,6 +1985,7 @@ Flags:
       --dry-run                 alias for --check
       --fetch                   reconcile: git fetch, then print the plan against the upstream (no changes)
       --force                   with new: create despite strong duplicate matches
+      --forge                   with comment: target the forge even with a local issues/ dir
   -h, --help                    help for issues
   -I, --image                   render visual PNG card context
       --implemented-by string   with close/done: the commit that did the work but does not name the ticket; it must change files outside issues/, and the close commit records it
