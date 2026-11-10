@@ -1,6 +1,6 @@
 # 906 — issues new prints local mode while adopting the harnez tracker
 
-**Status**: Backlog
+**Status**: Closed — fixed in PR #152 (4aced713)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
