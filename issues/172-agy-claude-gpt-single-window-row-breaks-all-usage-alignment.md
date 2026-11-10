@@ -171,3 +171,11 @@ alternative hypothesis that must be ruled out.
 
 **Small.** Step 1 is ~5 lines plus a fixture; Step 2 is either a small parser fix or a small spec-
 driven placeholder. The cost here is calendar time waiting for the upstream state, not engineering.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Partly done. The grid alignment is fixed: commit 61505ba0 pads single-window rows with
+`blankBarPlaceholder()` (`internal/usage/watch_usage_box.go:334`, used in
+`formatAllUsageSingleWindowLineWithMidWidth` at `:337`). Still open: Step 1, the env-gated raw capture of
+`agy -p "/usage"` (no `HARNEZ_AGY_DUMP` anywhere in code; parser at `internal/usage/agy.go:199`), and
+whether AGY drops the five-hour line upstream. Report: `reports/jules/172.md` (github#152).

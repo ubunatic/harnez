@@ -18,3 +18,13 @@ Two follow-ups from the 689 review:
 ## 2. Done when
 Table columns stay aligned for wide characters (test with a CJK model name), and the empty table
 view shows a short "no agent usage found" line.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Still valid; the report's `partly done` does not hold. `visLen` still counts runes
+(`internal/usage/watch_layout.go:40`: `utf8.RuneCountInString(stripANSI(s))`), so the width part is not
+done. Empty state: `internal/usage/watch_frame.go:383-389` prints "no agent usage detected …" only when
+`len(discovered) == 0 && len(summary.Agents) > 0`; `usageTableLines` returns nil for no rows
+(`internal/usage/usagetable.go:45-46`) and the table branch (`watch_frame.go:392`) then adds nothing.
+Check whether the existing line already covers the table-only case before adding a second message.
+Report: `reports/jules/690.md` (github#152).

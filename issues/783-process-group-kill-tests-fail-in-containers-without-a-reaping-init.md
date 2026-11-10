@@ -23,3 +23,10 @@ reaping init. Hypothesis (unverified): the killed orphan stays a zombie, which
 - If confirmed, a shared test helper treats state `Z` as dead.
 - If not, fix the real leak in the process-group kill.
 - Verify in a cloud session and locally.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Still valid. Correction: `TestRunExecWrapper_TimeoutKillsProcessGroupDescendant` moved to
+`internal/exec/exec_test.go:715`, and its liveness probe is `syscall.Kill(pid, 0)` at `:735`;
+`TestFallbackChainTimeoutKillsProcessGroup` is now at `internal/sound/sound_test.go:325`.
+Report: `reports/jules/783.md` (github#154).

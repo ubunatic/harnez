@@ -21,3 +21,10 @@ The zero-byte lock files remained after the Tilix `harnez issues new` and `harne
 ## 3. Implementation & Verification Plan
 
 Extend the first-use path so projects initialized before their tracker existed receive the same lock exclusions as projects that already had `issues/` during init. In a clean consumer repo, run `harnez init`, create the first ticket, update the index, and confirm `git status` shows only the intended ticket and index changes.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Still valid. The lock ignores are added only by init, and only when `issues/` already exists
+(`internal/claude/init_agent_file.go:91-93`); no other non-test code writes them, and the reserve path that
+creates `.reserve.lock` (`internal/issues/issues.go:741`) does not touch `.gitignore` or
+`.git/info/exclude`. Report: `reports/jules/703.md` (github#150).

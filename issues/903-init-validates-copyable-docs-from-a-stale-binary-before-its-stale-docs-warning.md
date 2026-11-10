@@ -24,3 +24,9 @@ embedded source). The 891 stale-docs warning never appeared because validation e
 
 - Order fix: run the stale check (embedded vs on-disk `config.yaml` and doc sources) before validation.
 - Scope: only when the target dir is the harnez source repo (`go.mod` module `ubunatic.com/harnez`).
+
+## Jules audit (2026-11-10, af9688e0)
+
+Still valid. `internal/claude/init.go:1192` calls `ValidateCopyableDocCatalog` (its destination error at
+`init.go:404`) before `initDocPreflight` at `init.go:1237`, which runs `staleEmbeddedDocError`
+(`internal/claude/init_doc_preflight.go:51`). Report: `reports/jules/903.md` (github#154).

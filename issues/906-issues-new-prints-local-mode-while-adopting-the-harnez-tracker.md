@@ -19,3 +19,11 @@ write a failure report here.
 issues new: local mode
 issues new: adopted file-based tracker (tracker: harnez)
 ```
+
+## Jules audit (2026-11-10, af9688e0)
+
+Still valid. `cmd/harnez/issues.go:401` prints "issues new: local mode" unconditionally before the local
+flow; the adoption line comes from `cmd/harnez/issues.go:783`. The test
+`TestRunIssuesNewAdoptsOnlyNewIssuesDirectory` (`cmd/harnez/issues_test.go:744`) asserts that "local mode"
+is printed in the fresh-repo case, so the fix must change that assertion. Report: `reports/jules/906.md`
+(github#150).

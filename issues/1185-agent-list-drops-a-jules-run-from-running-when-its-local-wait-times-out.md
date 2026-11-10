@@ -34,3 +34,9 @@ Workaround in use: re-attach `harnez agent resume --name <session> wait` after e
 Not verified in code yet where `list` derives the state; check `harnez agent list` and the Jules
 session record before changing anything. Whether `list` may call the Jules API per row (cost,
 latency) is open; a cached remote state written by `status`/`resume` may be enough.
+
+Starting point (checked 2026-11-10 at af9688e0, after a discarded Jules report with drifted references):
+`cmd/harnez/agent_manage_cmds.go:91` filters rows on the local `x.Status == "running" || x.Status ==
+"active"`; the RESUME column comes from `resumeState(x)` (`agent_manage_cmds.go:121`) and does not affect
+the filter. `TurnResult.StillRunning` (`internal/subagent/driver.go:304`) marks a wait that ended while
+Jules runs on.

@@ -31,3 +31,12 @@ Harnez currently lacks pre-push hooks, git config helpers, or tooling to safely 
 - Recommend or configure `pull.ff = only` for AGit repositories so `git pull` safely fast-forwards and prevents merge commit pollution.
 - Support dynamic or managed AGit topics (or a `harnez pr` / git alias) so contributors do not hit closed-topic collision errors.
 - Document safe AGit setup in `docs/lang/Git.md` and `docs/commands/issue.md`.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Partly done, mostly still valid. Checked: no pre-push ancestor guard and no `pull.ff` setting anywhere in
+code (`internal/githooks/` holds only the LFS/GitHub guard); the only managed AGit topic is the release
+one (`internal/release/push_pr.go:84`), not contributor topics. Docs: `docs/lang/Git.md:108` shows the
+`remote.origin.push HEAD:refs/for/main/<topic>` setup, and `docs/commands/issue.md:74` documents the
+manual post-push `merge-base --is-ancestor` check. Overlaps 1206 (pull setup for AGit repos).
+Report: `reports/jules/1062.md` (github#150).

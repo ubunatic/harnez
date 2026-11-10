@@ -22,3 +22,9 @@ worker compacts with a larger model). That can cost more quota per compaction.
 - Test: Compact's argv carries the session's `--model`.
 - Live check with `claude:haiku:low` only (docs/Canary.md): force a compaction on a haiku worker and
   confirm the verified drop.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Still valid. `ClaudeDriver.Compact` calls `d.Resume(ctx, id, "/compact", Model{})`
+(`internal/subagent/claude.go:85`), and `claudeModelArgs` drops an empty model (`claude.go:64-66`), so the
+resume carries no `--model`. Report: `reports/jules/675.md` (github#151).

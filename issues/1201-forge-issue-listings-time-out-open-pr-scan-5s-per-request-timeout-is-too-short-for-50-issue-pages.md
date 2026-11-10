@@ -32,3 +32,10 @@ Codeberg moment exceeds 5 s. Not caused by PR #140 (that change only alters the 
 ## Notes
 
 - Unverified: whether Codeberg latency or body size dominates; measure a page at 50 vs 20 before picking values.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Still valid; nothing of Want is done (the report said `partly done`, which its own evidence does not
+support). Starting points, checked: `spec/pr.yaml:12` has only `open_pr_scan` (no `issue_scan` in `spec/`
+or `internal/`); `internal/forge/api.go:142` maps any decode error, including a deadline mid-body, to
+"decoding response from <host>". Report: `reports/jules/1201.md` (github#150).
