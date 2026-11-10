@@ -39,6 +39,22 @@ failure report here.
   and label the axis accordingly.
 - Existing Braille chart code (218, 191) may be reusable; check before writing new rendering.
 
+## Reference scores (FrontierCode 2.0, owner screenshot 2026-11-10; NOT used by the chart)
+
+Approximate best score per model, read off the chart at https://cognition.com/frontiercode (avg USD per
+rollout in brackets): GPT-6 Luna ~22 ($0.17), GPT-6.1 Sol ~39 ($1.0), GPT-6 Astra ~43 ($6.7), Haiku 5.5 ~28
+($0.37), Sonnet 5.5 ~41 ($20), Opus 5.5 ~45.5 ($13), Fable 5.2 ~49 ($17; ~45.5 at $55), Gemini 4 Carbon ~40
+($4.1), Gemini 4 Argon ~26 ($6.5). Kept for comparison only.
+
+## Decision
+
+- 2026-11-10 owner: the chart uses harnez's own numbers, not FrontierCode's.
+- 2026-11-10 host (decide mode): "own numbers" = the per-model skill marks already shown by `agent models`
+  (Go/TUI/SQL: `+` = 2, `~` = 1, `-` = 0; sum 0-6; `?` = no data, model listed below the chart). Mapping
+  lives in spec with schema, not Go. X = relative cost per tier from `spec/agent.yaml` (log scale), one
+  series per model across its tiers, colored by provider. `--chart --json` is refused with a clear error.
+  Owner may swap the score source later; keep it one spec mapping.
+
 ## Searcher findings (s1211, agy:argon:low, 4m33s)
 
 - `agent models`: `modelsCmd` `cmd/harnez/agent_cmds.go:142-258` (flags `--names --picks --md --json --offline`;
