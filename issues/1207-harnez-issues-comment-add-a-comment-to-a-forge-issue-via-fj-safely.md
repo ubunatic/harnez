@@ -62,3 +62,17 @@ changes what "safe" means. On a loop or no progress, clear the goal and write a 
   from fj help; harnez's own `-F` maps to fj's `--body-file`). fj only; gh/tea skipped and recorded.
   Missing fj login (401 / "token is required") maps to an error naming `fj -H <host> auth login`.
   Tests use a fake API and a fake fj on PATH, never the real forge.
+
+## M1 delivered: issues comment with API preflight and fj (c22f0118)
+
+Host: owed full `make test-q1` after the developer's wording fix: 206 ok, 0 FAIL. Live dry runs in taia
+(SHA256 repo): closed #253 refused without `--closed`; with it, argv
+`fj --host codeberg.org issue comment harnez/taia#253 --body-file <file>`.
+
+## M2 Pre-Work (reviewer r1207, codex:terra:low)
+
+1. P2, host decision: repos with a local `issues/` dir (like harnez itself) may comment on their forge
+   issues too, but only with `--forge`, because a bare number there means a local ticket. Without
+   `--forge` keep today's refusal and name the flag in the error.
+2. P3: dry-run test asserts the exact full argv line; PR and closed-issue cases assert the fake fj was never
+   run; add fj "401 Unauthorized" output to the login-error mapping test.
