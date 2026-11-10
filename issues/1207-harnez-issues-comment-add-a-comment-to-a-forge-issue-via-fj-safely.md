@@ -1,6 +1,6 @@
 # 1207 — harnez issues comment: add a comment to a forge issue via fj, safely
 
-**Status**: Open
+**Status**: Closed — harnez issues comment -F file adds a comment via fj after an API preflight (PR refused, closed needs --closed, --forge in local-tracker repos, login error names fj auth login); live dry runs on taia#253 (SHA256) and harnez#150 behaved; make test-q1 206 ok 0 FAIL (c22f0118, 33cb9b92)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
