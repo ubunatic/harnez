@@ -49,7 +49,7 @@ Entities:
            searches read the origin forge (spec/pr.yaml) instead: every term
            must match title or body; ':' terms other than status: filters
            are rejected and subcommands like next stay local-only. It reads at
-           most the spec's open_pr_scan page budget and notes when older
+           most the spec's issue_scan page budget and notes when older
            tickets may exist (JSON: "truncated").
   code     searches source files through configured finders (neus first,
            with rg as the code fallback when neus is unavailable).
@@ -178,7 +178,7 @@ Output formatting:
 					if len(words) > 0 && findIssuesLocalOnly[words[0]] {
 						return forgeLocalOnlyError(words[0])
 					}
-					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.OpenPRScan, forgeFindTerms(words), limitFlag, allFlag, jsonFlag), t)
+					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.IssueScan, forgeFindTerms(words), limitFlag, allFlag, jsonFlag), t)
 				}
 			}
 			opts := find.FindRunOptions{

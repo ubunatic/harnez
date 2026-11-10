@@ -74,7 +74,7 @@ func ResolveRemote(dir string, spec prwait.Spec) (Target, error) {
 
 // NewSource builds the live forge reader from the spec and the system token sources.
 func NewSource(spec prwait.Spec) Source {
-	return forge.NewPullLister(spec.OpenPRScan, forge.SystemTokenSource(os.Getenv).For)
+	return forge.NewPullLister(spec.IssueScan, forge.SystemTokenSource(os.Getenv).For)
 }
 
 type issueJSON struct {
@@ -180,7 +180,7 @@ func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []str
 		return err
 	}
 	if truncated {
-		if _, err := fmt.Fprintf(w, "# searched the newest %d issues and pull requests; older ones may exist (spec/pr.yaml open_pr_scan page budget)\n", opts.PageSize*opts.MaxPages); err != nil {
+		if _, err := fmt.Fprintf(w, "# searched the newest %d issues and pull requests; older ones may exist (spec/pr.yaml issue_scan page budget)\n", opts.PageSize*opts.MaxPages); err != nil {
 			return err
 		}
 	}

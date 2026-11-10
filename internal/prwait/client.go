@@ -53,7 +53,7 @@ func PullURL(t Target) string {
 func (f *HTTPFetcher) Fetch(t Target) (PullInfo, error) {
 	what := fmt.Sprintf("for %s/%s#%d on %s", t.Owner, t.Repo, t.Number, t.Forge.Host)
 	var info PullInfo
-	if err := forge.GetJSON(f.Client, t.Forge, PullURL(t), f.tokenFor(t.Forge), what, &info); err != nil {
+	if err := forge.GetJSON(f.Client, t.Forge, PullURL(t), f.tokenFor(t.Forge), what, "", &info); err != nil {
 		return PullInfo{}, err
 	}
 	return info, nil
