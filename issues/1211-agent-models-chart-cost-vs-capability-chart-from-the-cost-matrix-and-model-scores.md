@@ -1,6 +1,6 @@
 # 1211 — agent models --chart: cost vs capability chart from the cost matrix and model scores
 
-**Status**: Open
+**Status**: Closed — agent models --chart draws log cost vs own 1-5 star rating with Pareto frontier, --cost raw|effective; Codex multiplier 0.19 measured from codex state DB (others owner estimates, unverified; 1213); touched packages green, init clean, live chart checked at 80/50 cols
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
