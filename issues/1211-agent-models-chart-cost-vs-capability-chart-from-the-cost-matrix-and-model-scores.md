@@ -75,3 +75,22 @@ rollout in brackets): GPT-6 Luna ~22 ($0.17), GPT-6.1 Sol ~39 ($1.0), GPT-6 Astr
   via `term.GetSize` (`cmd/harnez/tui.go:107-119`); palette `spec/colors.yaml`.
 - Spec pattern: `spec/disable.yaml` + `spec/schemas/disable.schema.json`, test
   `internal/disable/disable_test.go:28-78`. Golden: `TestModelPicksGolden` `cmd/harnez/agent_picks_test.go:13-30`.
+
+## M1 delivered (e991c49d): canvas, spec + loader, --chart/--cost, golden
+
+Seeded multipliers (owner review pending): codex 0.25, claude 1.0, agy 0.33, jules 1.0, local 0.
+
+## M2 Pre-Work / Required Refinements (host review + r1211 argon:low)
+
+1. Pareto test must fail on a wrong implementation (e.g. `points[:1]`): assert the full frontier list for a
+   fixture with a dominated point, a tie on cost and a tie on rating.
+2. Width: honor `COLUMNS` when not a TTY; test the <60 refusal through the cobra command, not only
+   `renderModelsChart`.
+3. Spec: drop `provider_colors`; take provider colours from `spec/colors.yaml`. No Go defaults for scale,
+   ticks, frontier style, legend provider list, fallback multiplier/colour: derive from spec (scale from
+   `scores.Scale`, legend from providers present). Missing multiplier = validation error, not 1.0.
+4. Labels: `IsOccupied` must also check dots; a label that cannot be placed without collision is
+   dropped from the canvas (still named in the Pareto/legend text). No concatenated labels like
+   "argonterra"; regenerate the golden and add a collision unit test.
+5. NO_COLOR test goes through `agentListColorEnabled` with the env var set.
+6. Effective mode axis label must not claim "luna:low = 1" (state the base, e.g. "raw luna:low = 1").
