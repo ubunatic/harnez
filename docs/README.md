@@ -245,6 +245,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-06-two-agent-lean-sprint-usage-debug-frame.md](studies/2026-11-06-two-agent-lean-sprint-usage-debug-frame.md) | Lean sprint 1175: usage watch debug frame loses lines after a collector refresh |
 | [studies/2026-11-09-forge-rough-edges-session.md](studies/2026-11-09-forge-rough-edges-session.md) | Forge rough edges, release v0.5.7, agent shell |
 | [studies/2026-11-10-two-agent-lean-sprint-agent-dry-run.md](studies/2026-11-10-two-agent-lean-sprint-agent-dry-run.md) | Lean sprint 1208: agent start/resume --dry-run |
+| [studies/2026-11-10-two-agent-lean-sprint-codex-unsupported-models.md](studies/2026-11-10-two-agent-lean-sprint-codex-unsupported-models.md) | Lean sprint 1019: Codex models unsupported for the account |
 | [studies/2026-11-10-two-agent-lean-sprint-fable-model.md](studies/2026-11-10-two-agent-lean-sprint-fable-model.md) | Lean sprint 1204: add Claude Fable 5.2 (2026-11-10) |
 | [studies/2026-11-10-two-agent-lean-sprint-issues-comment.md](studies/2026-11-10-two-agent-lean-sprint-issues-comment.md) | Lean sprint 1207: harnez issues comment via fj (2026-11-10) |
 | [studies/2026-11-10-two-agent-lean-sprint-official-model-names.md](studies/2026-11-10-two-agent-lean-sprint-official-model-names.md) | Lean sprint 1203: accept official model names (2026-11-10) |
