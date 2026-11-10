@@ -23,6 +23,9 @@ func (d ClaudeDriver) commandLines(ctx context.Context, fn func([]byte), args ..
 }
 
 func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := checkContextMode("claude", o.ContextMode); err != nil {
+		return nil, err
+	}
 	start := time.Now()
 	b, err := d.command(ctx, claudeRunArgs(o.Model, o.Prompt)...)
 	if err != nil {

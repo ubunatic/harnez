@@ -1066,3 +1066,26 @@ func TestDriverForRunsProviderInDir(t *testing.T) {
 		})
 	}
 }
+
+func TestContextModeFailsForUnsupportedProviders(t *testing.T) {
+	drivers := []struct {
+		name   string
+		driver interface {
+			Run(context.Context, RunOptions) (*TurnResult, error)
+		}
+	}{
+		{"claude", ClaudeDriver{}},
+		{"codex", CodexDriver{}},
+		{"agy", AgyDriver{}},
+		{"jules", JulesDriver{}},
+	}
+
+	for _, tc := range drivers {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.driver.Run(context.Background(), RunOptions{ContextMode: "plain"})
+			if err == nil || !strings.Contains(err.Error(), "unsupported context mode \"plain\"") {
+				t.Fatalf("expected unsupported context mode error, got: %v", err)
+			}
+		})
+	}
+}

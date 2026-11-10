@@ -121,6 +121,13 @@ func (d UnsupportedDriver) Compact(context.Context, string) (*TurnResult, error)
 func (d UnsupportedDriver) Stop(context.Context, string) error   { return d.unsupported() }
 func (d UnsupportedDriver) Delete(context.Context, string) error { return d.unsupported() }
 
+func checkContextMode(provider, mode string) error {
+	if mode != "" && mode != "default" && provider != "pi" {
+		return fmt.Errorf("unsupported context mode %q; only pi supports context modes", mode)
+	}
+	return nil
+}
+
 // RunOptions describes a new provider turn.
 type RunOptions struct {
 	Prompt      string

@@ -96,6 +96,9 @@ func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error
 	return providerOutput(ctx, c)
 }
 func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := checkContextMode("codex", o.ContextMode); err != nil {
+		return nil, err
+	}
 	start := time.Now()
 	args := codexRunArgs(o.Model, o.Prompt)
 	b, err := d.command(ctx, args...)
@@ -653,6 +656,9 @@ func lastLines(s string, n int) string {
 }
 
 func (d CodexDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
+	if err := checkContextMode("codex", o.ContextMode); err != nil {
+		return nil, err
+	}
 	start := time.Now()
 	r, err := d.stream(ctx, fn, codexRunArgs(o.Model, o.Prompt)...)
 	if err != nil {
