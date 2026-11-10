@@ -28,3 +28,13 @@ worker compacts with a larger model). That can cost more quota per compaction.
 Still valid. `ClaudeDriver.Compact` calls `d.Resume(ctx, id, "/compact", Model{})`
 (`internal/subagent/claude.go:85`), and `claudeModelArgs` drops an empty model (`claude.go:64-66`), so the
 resume carries no `--model`. Report: `reports/jules/675.md` (github#151).
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement | jules-impl-675 | 8668048582263024478 | none | failed: asked for plan approval twice (replies: 2), no PR |
+
+Lead from its plan (unverified): add a `Model` parameter to `Compact` on the `Driver` interface and every
+driver, pass it to `d.Resume` in `ClaudeDriver.Compact`, and pass the session model from the callers in
+`cmd/harnez/agent_run.go`.

@@ -30,3 +30,15 @@ embedded source). The 891 stale-docs warning never appeared because validation e
 Still valid. `internal/claude/init.go:1192` calls `ValidateCopyableDocCatalog` (its destination error at
 `init.go:404`) before `initDocPreflight` at `init.go:1237`, which runs `staleEmbeddedDocError`
 (`internal/claude/init_doc_preflight.go:51`). Report: `reports/jules/903.md` (github#154).
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement | jules-impl-903 | 1717377685233823178 | github#156 | done: fix kept, host added the order test |
+
+Host check: Jules's fix moves the stale check into `checkStaleHarnezSource` (`internal/claude/init.go`), run
+before `ValidateCopyableDocCatalog`. Its own test calls the new helper directly, so it cannot fail without
+the fix. The host added `TestRunInitReportsStaleHarnezSourceBeforeCatalogValidation`, which runs
+`RunInitWithVariant` on the repro: it fails at a10e719d with the "assumes project destination" error and
+passes with the fix; a non-harnez repo still gets the validation error. `make test-q1` passed.

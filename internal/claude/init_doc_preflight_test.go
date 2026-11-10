@@ -117,3 +117,49 @@ func TestCheckStaleHarnezSource(t *testing.T) {
 		})
 	}
 }
+
+// Issue 903: in the harnez checkout, a stale binary must report "run make install" before the
+// copyable-doc catalog validation rejects text the on-disk source already fixed; other repos
+// still get the validation error.
+func TestRunInitReportsStaleHarnezSourceBeforeCatalogValidation(t *testing.T) {
+	for _, harnezRepo := range []bool{true, false} {
+		t.Run(map[bool]string{true: "harnez checkout", false: "other repo"}[harnezRepo], func(t *testing.T) {
+			dir := t.TempDir()
+			files := map[string]string{"go.mod": "module example.com/other\n"}
+			if harnezRepo {
+				files = map[string]string{"go.mod": "module ubunatic.com/harnez\n", "config.yaml": "agents_md: {}\n"}
+			}
+			for path, data := range files {
+				if err := os.WriteFile(filepath.Join(dir, path), []byte(data), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			source := "docs/practices/AgenticLoop.md"
+			for _, sub := range []string{"issues", filepath.Dir(source)} {
+				if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(dir, source), []byte("Write findings to the feedback folder when present.\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			cfg := &Config{
+				FS: fstest.MapFS{
+					source:        {Data: []byte("Write findings to `docs/feedback/`.\n")},
+					"config.yaml": {Data: []byte("agents_md: {}\n")},
+				},
+				AgentsMD: AgentsMD{Languages: map[string]Language{
+					"agentic-loop": {Source: source, Local: "./docs/AgenticLoop.md"},
+				}},
+			}
+			err := RunInitWithVariant(dir, cfg, InitOptions{Docs: []string{"agentic-loop"}, AssumeYes: true})
+			want := `assumes project destination "docs/feedback/"`
+			if harnezRepo {
+				want = "run make install"
+			}
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("init error = %v; want %q", err, want)
+			}
+		})
+	}
+}
