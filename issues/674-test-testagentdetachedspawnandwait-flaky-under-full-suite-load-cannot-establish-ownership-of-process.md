@@ -24,3 +24,10 @@ start time or pid file not yet written) when the machine is busy.
 
 Reproduce with `go test -run TestAgentDetachedSpawnAndWait -count=50 ./cmd/harnez` under parallel
 load, find the race, fix the wait/ownership handshake, not the assertion.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Still valid as far as checked; the race itself is not verified. Starting points: the test is at
+`cmd/harnez/agent_wait_test.go:179`; the error comes from `internal/procs/tree.go:131`, raised when a
+process's UID is unknown or differs (`!p.UIDKnown || p.UID != uint32(os.Getuid())`), which suggests a
+process read before its UID was known. Report: `reports/jules/674.md` (github#152).
