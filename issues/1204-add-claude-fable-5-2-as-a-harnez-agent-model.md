@@ -1,6 +1,6 @@
 # 1204 — Add Claude Fable 5.2 as a harnez agent model
 
-**Status**: Open
+**Status**: Closed — claude:fable (claude-fable-5-2) added with cost 40 = 2x Opus from the official pricing page; bench picks cheapest model per provider (owner B, Haiku for Claude), tie and 80x24 picker tests added; make test-q1 green, no live call (b4e03dde, 036b4f95)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
