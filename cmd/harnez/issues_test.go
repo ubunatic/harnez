@@ -741,8 +741,8 @@ func TestRunIssuesNewAdoptsOnlyNewIssuesDirectory(t *testing.T) {
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("issues new: %v (stderr: %s)", err, stderr.String())
 		}
-		if !strings.Contains(stderr.String(), "local mode") {
-			t.Fatalf("issues new did not select local mode: %q", stderr.String())
+		if strings.Contains(stderr.String(), "local mode") {
+			t.Fatalf("issues new on fresh repo should not print local mode while adopting tracker: %q", stderr.String())
 		}
 		config, err := claude.LoadRepoConfig(dir)
 		if err != nil {

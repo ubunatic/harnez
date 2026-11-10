@@ -398,7 +398,9 @@ valid, exit-0 answer.`,
 					fmt.Fprintln(cmd.ErrOrStderr(), "issues new: remote mode")
 					return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
 				}
-				fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
+				if dirExists(filepath.Join(dir, "issues")) {
+					fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
+				}
 				warnNumberAhead(cmd.ErrOrStderr(), dir, numberFlag, offlineFlag)
 				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag, offlineFlag)
 			}
