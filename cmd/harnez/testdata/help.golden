@@ -1992,6 +1992,7 @@ Flags:
       --number string           with new: use this ticket number instead of the next free one (refused if it exists)
       --offline                 with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read
       --pull                    reconcile: git fetch + merge the upstream, then renumber colliding local tickets and commit once
+      --push-main               allow issue commits on protected main
   -r, --raw                     output raw text directly to stdout
       --remote                  with new: allocate a permanent GH id using authenticated gh on the github remote
       --session string          with close/done: record the closing session (defaults to HARNEZ_SESSION_ID)

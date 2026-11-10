@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ubunatic.com/harnez/internal/disable"
 )
 
 const gitflowRepoYAML = `version: 1
@@ -157,5 +159,71 @@ func TestIssuesMvCommitsOnTopicBranch(t *testing.T) {
 	result, _, err := runIssuesMv(&out, "issues/096-b.md", "", issuesRunOptions{Dir: dir})
 	if err != nil || !result.Committed {
 		t.Fatalf("mv on a topic branch: committed=%v err=%v", result.Committed, err)
+	}
+}
+
+func TestIssuesProtectedMainUnlocks(t *testing.T) {
+	spec, err := disable.LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, current, recorded      string
+		flag, remove, other, allowed bool
+	}{
+		{name: "missing session", recorded: "owner"},
+		{name: "stale session", current: "worker", recorded: "owner"},
+		{name: "enabled", current: "owner", recorded: "owner", remove: true},
+		{name: "other repository", current: "owner", recorded: "owner", other: true},
+		{name: "matching session", current: "owner", recorded: "owner", allowed: true},
+		{name: "flag", flag: true, allowed: true},
+		{name: "default"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, _ := closableFixture(t)
+			for _, env := range spec.SessionEnv {
+				t.Setenv(env, "")
+			}
+			t.Setenv(spec.SessionEnv[0], tc.current)
+			if tc.recorded != "" {
+				root := dir
+				if tc.other {
+					root = t.TempDir()
+				}
+				if err := spec.Write(root, disable.State{Class: "repo-rules", Item: "push-main", SessionID: tc.recorded}); err != nil {
+					t.Fatal(err)
+				}
+				if tc.remove {
+					if err := spec.Remove(root, "repo-rules", "push-main"); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			head := repoRunGitOutput(t, dir, "rev-parse", "HEAD")
+			var out, stderr bytes.Buffer
+			_, _, err := runIssuesVerb(&out, "close", "42", nil, issuesRunOptions{Dir: dir, Stderr: &stderr, PushMain: tc.flag})
+			if !tc.allowed {
+				if err == nil || !strings.Contains(err.Error(), "--push-main") || !strings.Contains(err.Error(), "/disable repo-rules push-main") {
+					t.Fatalf("expected refusal with both overrides: %v", err)
+				}
+				if got := repoRunGitOutput(t, dir, "rev-parse", "HEAD"); got != head {
+					t.Fatal("refusal committed")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := repoRunGitOutput(t, dir, "rev-parse", "HEAD"); got == head {
+				t.Fatal("commit missing")
+			}
+			want := "/disable repo-rules push-main for session owner"
+			if tc.flag {
+				want = "--push-main flag"
+			}
+			if !strings.Contains(stderr.String(), want) || strings.Count(stderr.String(), "ticket commit unlocked") != 1 {
+				t.Fatalf("stderr: %q", stderr.String())
+			}
+		})
 	}
 }

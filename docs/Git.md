@@ -24,8 +24,7 @@ commonly stored in an `AGENTS.md` file at the repository root.
       work others push to, long sprints that need rebasing, forks, and GitHub, which has no AGit.
   - `protected_main` (team/fork only): do not commit to or push the default branch unless the
     repository admin explicitly authorizes it in the current session, and never force-push.
-    `harnez issues` and other auto-committing commands refuse on it and print the `git switch -c`
-    command to run. `harnez release` is the exception: the admin, or an agent asked to release,
+    `harnez issues` commits may use `--push-main` or matching-session `/disable repo-rules push-main` when authorized; otherwise they refuse and print the `git switch -c` command. Other auto-committing commands remain guarded. `harnez release` is the exception: the admin, or an agent asked to release,
     may run it there; the forge's branch protection decides whether the push is accepted.
 - Commit proactively:
   - Default preference: commit autonomously after intermediate steps once tests are clean, after finished features (with review pass), between iteration attempts on a stuck bug, and immediately after filing issue-tracker entries.

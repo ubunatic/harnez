@@ -55,7 +55,7 @@ type issuesRunOptions struct {
 	JSON                           bool
 	NoCommit                       bool
 	AmendReason                    bool
-	NoCode                         bool
+	NoCode, PushMain               bool
 	ImplementedBy                  string // --implemented-by: commit that did the work without naming the ticket
 	CommitMsg                      string // explicit --commit override; empty means "compose the default"
 	Stderr                         io.Writer
@@ -84,6 +84,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var noCommitFlag bool
 	var amendReasonFlag bool
 	var noCodeFlag bool
+	var pushMainFlag bool
 	var implementedByFlag string
 	var commitMsgFlag string
 	var closedByModelFlag string
@@ -303,6 +304,16 @@ valid, exit-0 answer.`,
 		},
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if pushMainFlag {
+				if len(args) == 0 || listFlag {
+					return fmt.Errorf("--push-main applies only to issue commit commands")
+				}
+				switch args[0] {
+				case "open", "start", "block", "close", "done", "draft", "backlog", "promote", "mv", "rebase", "reconcile":
+				default:
+					return fmt.Errorf("issues %s: --push-main applies only to issue commit commands", args[0])
+				}
+			}
 			if listFlag {
 				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, nil, jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}
@@ -324,14 +335,14 @@ valid, exit-0 answer.`,
 				if checkFlag && pullFlag {
 					return fmt.Errorf("issues reconcile: --check/--dry-run cannot be combined with --pull (it would merge first); use --fetch to preview")
 				}
-				return issuesmaintenance.RunIssuesReconcileOpts(cmd.OutOrStdout(), dir, issuesmaintenance.ReconcileOptions{Ref: ref, DryRun: dryRunFlag || checkFlag, Fetch: fetchFlag, Pull: pullFlag})
+				return issuesmaintenance.RunIssuesReconcileOpts(cmd.OutOrStdout(), dir, issuesmaintenance.ReconcileOptions{Ref: ref, DryRun: dryRunFlag || checkFlag, Fetch: fetchFlag, Pull: pullFlag, Guard: gitflow.IssueCommitOptions{PushMain: pushMainFlag, Stderr: cmd.ErrOrStderr()}})
 			}
 			if args[0] == "rebase" {
 				upstream := "@{upstream}"
 				if len(args) == 2 {
 					upstream = args[1]
 				}
-				return issuesmaintenance.RunIssuesRebase(cmd.OutOrStdout(), dir, upstream, checkFlag || dryRunFlag)
+				return issuesmaintenance.RunIssuesRebaseWithGuard(cmd.OutOrStdout(), dir, upstream, checkFlag || dryRunFlag, gitflow.IssueCommitOptions{PushMain: pushMainFlag, Stderr: cmd.ErrOrStderr()})
 			}
 			if args[0] == "lint" {
 				if againstFlag != "" {
@@ -398,6 +409,7 @@ valid, exit-0 answer.`,
 				NoCommit:        noCommitFlag,
 				AmendReason:     amendReasonFlag,
 				NoCode:          noCodeFlag,
+				PushMain:        pushMainFlag,
 				ImplementedBy:   implementedByFlag,
 				CommitMsg:       commitMsgFlag,
 				Stderr:          cmd.ErrOrStderr(),
@@ -475,6 +487,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVarP(&rawFlag, "raw", "r", false, "output raw text directly to stdout")
 	cmd.Flags().BoolVarP(&textFlag, "text", "t", false, "output raw text directly to stdout (alias for --raw)")
 	cmd.Flags().BoolVarP(&imageFlag, "image", "I", false, "render visual PNG card context")
+	cmd.Flags().BoolVar(&pushMainFlag, "push-main", false, "allow issue commits on protected main")
 	cmd.Flags().BoolVar(&noCommitFlag, "no-commit", false, "rewrite the ticket file and README but do not git add/commit")
 	cmd.Flags().BoolVar(&amendReasonFlag, "amend-reason", false, "with close/done: amend the reason of an already-Closed ticket")
 	cmd.Flags().BoolVar(&noCodeFlag, "no-code", false, "with close/done: the ticket needed no code change, so skip the commit check and record that in the close commit")
@@ -594,7 +607,7 @@ func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutpu
 // changed tickets, regenerates the README once, and makes at most one commit.
 func issuesStatusDependencies(opts issuesRunOptions) issues.StatusBatchOptions {
 	return issues.StatusBatchOptions{
-		Dir: opts.Dir, Check: opts.Check, NoCommit: opts.NoCommit, AmendReason: opts.AmendReason, NoCode: opts.NoCode,
+		Dir: opts.Dir, Check: opts.Check, NoCommit: opts.NoCommit, AmendReason: opts.AmendReason, NoCode: opts.NoCode, PushMain: opts.PushMain,
 		ImplementedBy: opts.ImplementedBy, CommitTouchesCode: commitTouchesCode,
 		CommitMsg: opts.CommitMsg, ClosedByModel: opts.ClosedByModel, ClosedBySession: opts.ClosedBySession, Stderr: opts.Stderr,
 		UpdateIndexes: func(issuesDir string) (bool, error) {
@@ -611,7 +624,7 @@ func issuesStatusDependencies(opts issuesRunOptions) issues.StatusBatchOptions {
 			return issuesmaintenance.RestoreIssueIndexes(issuesDir, indexSnapshot)
 		},
 		IndexPaths:              issuesmaintenance.IssueIndexRelPaths,
-		Commit:                  gitAddAndCommit,
+		Commit:                  gitAddAndCommitUnguarded,
 		PathsChanged:            gitPathsChanged,
 		DefaultMessage:          defaultCommitMessage,
 		WarnHeaderMismatch:      warnIssueHeaderMismatch,
@@ -886,7 +899,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 	}
 
 	if !opts.NoCommit {
-		if err := gitflow.GuardCommit(opts.Dir, "renumber ticket "+f.Number); err != nil {
+		if err := gitflow.GuardIssueCommit(opts.Dir, "renumber ticket "+f.Number, gitflow.IssueCommitOptions{PushMain: opts.PushMain, Stderr: opts.Stderr}); err != nil {
 			return issuesResult{}, false, fmt.Errorf("issues mv: %w", err)
 		}
 	}
@@ -940,7 +953,7 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 			}
 			paths = append(paths, filepath.ToSlash(rel))
 		}
-		sha, err := gitAddAndCommit(opts.Dir, paths, msg)
+		sha, err := gitAddAndCommitUnguarded(opts.Dir, paths, msg)
 		if err != nil {
 			return issuesResult{}, false, fmt.Errorf("issues mv: commit: %w", err)
 		}
@@ -1055,6 +1068,10 @@ func gitAddAndCommit(dir string, paths []string, message string) (string, error)
 	if err := gitflow.GuardCommit(dir, "commit"); err != nil {
 		return "", err
 	}
+	return gitAddAndCommitUnguarded(dir, paths, message)
+}
+
+func gitAddAndCommitUnguarded(dir string, paths []string, message string) (string, error) {
 	trackedCmd := exec.Command("git", append([]string{"ls-files", "--cached", "--"}, paths...)...)
 	trackedCmd.Dir = dir
 	trackedOut, err := trackedCmd.Output()

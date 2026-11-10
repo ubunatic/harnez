@@ -22,6 +22,7 @@ func defaultReconcileRef(dir string) string {
 
 // ReconcileOptions configures RunIssuesReconcileOpts.
 type ReconcileOptions struct {
+	Guard  gitflow.IssueCommitOptions
 	Ref    string // ref merged into HEAD; default: merged parent, else origin/main
 	DryRun bool   // print the plan only
 	Fetch  bool   // git fetch, then print the plan against the upstream; implies DryRun
@@ -72,13 +73,17 @@ func RunIssuesReconcileOpts(w io.Writer, dir string, o ReconcileOptions) error {
 		// After the merge, upstream..HEAD is exactly the local commits, also on a fast-forward.
 		o.Ref = "@{upstream}"
 	}
-	return RunIssuesReconcile(w, dir, o.Ref, o.DryRun)
+	return runIssuesReconcile(w, dir, o.Ref, o.DryRun, o.Guard)
 }
 
 // RunIssuesReconcile renumbers this branch's own colliding tickets after a
 // merge of ref, rewrites references, repairs the indexes and commits once.
 // Ownership is shared with rebase: tickets added in ref..HEAD.
 func RunIssuesReconcile(w io.Writer, dir, ref string, dryRun bool) error {
+	return runIssuesReconcile(w, dir, ref, dryRun, gitflow.IssueCommitOptions{})
+}
+
+func runIssuesReconcile(w io.Writer, dir, ref string, dryRun bool, guard gitflow.IssueCommitOptions) error {
 	if ref == "" {
 		ref = defaultReconcileRef(dir)
 	}
@@ -109,7 +114,7 @@ func RunIssuesReconcile(w io.Writer, dir, ref string, dryRun bool) error {
 		return nil
 	}
 	if !dryRun {
-		if err := gitflow.GuardCommit(dir, "reconcile tickets"); err != nil {
+		if err := gitflow.GuardIssueCommit(dir, "reconcile tickets", guard); err != nil {
 			return fmt.Errorf("issues reconcile: %w", err)
 		}
 	}

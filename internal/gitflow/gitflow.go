@@ -18,6 +18,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/disable"
 )
 
 // Mode is the repo's git workflow: solo commits on the default branch, team
@@ -240,6 +241,20 @@ func GuardRelease(dir string) error {
 // repos warn when committing on the default branch or a detached HEAD; with
 // protected_main they refuse, naming the command that fixes it.
 func GuardCommit(dir, action string) error {
+	return guardCommit(dir, action, nil)
+}
+
+// IssueCommitOptions enables owner-authorized overrides only for issue commits.
+type IssueCommitOptions struct {
+	PushMain bool
+	Stderr   io.Writer
+}
+
+func GuardIssueCommit(dir, action string, opts IssueCommitOptions) error {
+	return guardCommit(dir, action, &opts)
+}
+
+func guardCommit(dir, action string, opts *IssueCommitOptions) error {
 	cfg, err := Load(dir)
 	if err != nil {
 		return err
@@ -262,6 +277,30 @@ func GuardCommit(dir, action string) error {
 		return nil
 	}
 	if cfg.ProtectedMain {
+		if opts != nil {
+			writer := opts.Stderr
+			if writer == nil {
+				writer = Stderr
+			}
+			if opts.PushMain {
+				fmt.Fprintln(writer, "git.protected_main: ticket commit unlocked by --push-main flag")
+				return nil
+			}
+			spec, err := disable.LoadSpec()
+			if err != nil {
+				return err
+			}
+			root, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+			if err != nil {
+				return fmt.Errorf("resolve repository root: %w", err)
+			}
+			status := spec.Check(strings.TrimSpace(string(root)), "repo-rules", "push-main", nil)
+			if status.Applied {
+				fmt.Fprintf(writer, "git.protected_main: ticket commit unlocked by /disable repo-rules push-main for session %s\n", status.State.SessionID)
+				return nil
+			}
+			return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing to %s on '%s'; use --push-main or /disable repo-rules push-main, or run: git switch -c issue/<n>-<slug>", action, branch)
+		}
 		return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing to %s on '%s'; run: git switch -c issue/<n>-<slug>", action, branch)
 	}
 	fmt.Fprintf(Stderr, "git.mode=%s: committing on %s; use a topic branch\n", cfg.Mode, branch)

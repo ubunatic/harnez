@@ -20,7 +20,7 @@ items:
     description: Auto-selecting the named skill; the user can still invoke it explicitly.
   - class: repo-rules
     item: push-main
-    description: The rule against pushing to the default branch; harnez commit guard, git hooks and forge protection still apply.
+    description: The rule against pushing to the default branch; issue commits on protected main are also allowed in the matching session; git hooks and forge protection still apply.
 never:
   - force-push ban
   - forge branch protection

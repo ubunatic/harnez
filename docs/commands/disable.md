@@ -14,7 +14,7 @@ Map the prose to items below; this table is the full list, so never read the har
 |---|---|---|
 | `process` | `quota-1` | Quota-1 single-run limit and rerun block (`.harnez/rules/Quota.md`). `harnez exec --quota-1` (and so `make test-q1`) reads this state and skips the check in the session that wrote it. Bypass flags stay forbidden. |
 | `triggered-skill` | `<skill name>` | Auto-selecting that skill (e.g. `lean-sprint`, `sprint`, `factory-sprint`). The user can still invoke it with `/<name>`. |
-| `repo-rules` | `push-main` | "Do not push the default branch" in the repo instructions. Pushing a reviewed topic commit straight to the default branch (`git push origin <sha>:refs/heads/main`) is allowed. Committing on the default branch stays refused by harnez, local git hooks still run, and the forge's branch protection still decides. On an AGit forge the push goes to `refs/for/main/<topic>`; learn the merge with `harnez pr wait <number> --contains <sha>` in the background, never from chat. |
+| `repo-rules` | `push-main` | "Do not push the default branch" in the repo instructions. Pushing a reviewed topic commit straight to the default branch (`git push origin <sha>:refs/heads/main`) is allowed. Harnez issue commits on protected main are allowed in the matching session; local git hooks still run, and the forge's branch protection still decides. On an AGit forge the push goes to `refs/for/main/<topic>`; learn the merge with `harnez pr wait <number> --contains <sha>` in the background, never from chat. |
 
 Never disableable: the force-push ban, forge branch protection, rules for destructive or irreversible actions, secret handling, spending money.
 

@@ -29,7 +29,7 @@ type StatusBatchOptions struct {
 	Dir, CommitMsg                 string
 	ClosedByModel, ClosedBySession string
 	Check, NoCommit, AmendReason   bool
-	NoCode                         bool
+	NoCode, PushMain               bool
 	Stderr                         io.Writer
 	UpdateIndexes                  func(issuesDir string) (bool, error)
 	SnapshotIndexes                func(issuesDir string) (any, error)
@@ -145,7 +145,7 @@ func ApplyStatus(verb, ticketArg, reason string, opts StatusBatchOptions) (Statu
 	}
 	if !opts.Check && !opts.NoCommit {
 		// Refuse before any write; a no-op close above never reaches this.
-		if err := gitflow.GuardCommit(opts.Dir, fmt.Sprintf("%s ticket %s", verb, result.Number)); err != nil {
+		if err := gitflow.GuardIssueCommit(opts.Dir, fmt.Sprintf("%s ticket %s", verb, result.Number), gitflow.IssueCommitOptions{PushMain: opts.PushMain, Stderr: opts.Stderr}); err != nil {
 			return StatusResult{}, false, fmt.Errorf("issues: %w", err)
 		}
 	}
@@ -342,6 +342,11 @@ func ApplyStatusBatch(verb string, ticketArgs, reasonArgs []string, opts StatusB
 	}
 	if len(changed) == 0 {
 		return results(), false, nil
+	}
+	if !opts.Check && !opts.NoCommit {
+		if err := gitflow.GuardIssueCommit(opts.Dir, verb+" tickets", gitflow.IssueCommitOptions{PushMain: opts.PushMain, Stderr: opts.Stderr}); err != nil {
+			return nil, false, fmt.Errorf("issues: %w", err)
+		}
 	}
 	if opts.SnapshotIndexes == nil || opts.RestoreIndexes == nil || opts.UpdateIndexes == nil {
 		return nil, false, fmt.Errorf("issues: status batch index operations are not configured")

@@ -223,7 +223,7 @@ func collectLocalTickets(dir, upstream string) (rebaseState, error) {
 	return state, nil
 }
 
-func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
+func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool, guard ...gitflow.IssueCommitOptions) error {
 	if _, err := gitOutput(dir, "symbolic-ref", "-q", "HEAD"); err != nil {
 		return fmt.Errorf("issues rebase: detached HEAD is unsupported; check out a branch and retry")
 	}
@@ -241,7 +241,11 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	}
 	if !dryRun {
 		// Every path that later commits repairs runs through here first.
-		if err := gitflow.GuardCommit(dir, "repair tickets"); err != nil {
+		opts := gitflow.IssueCommitOptions{}
+		if len(guard) > 0 {
+			opts = guard[0]
+		}
+		if err := gitflow.GuardIssueCommit(dir, "repair tickets", opts); err != nil {
 			return fmt.Errorf("issues rebase: %w", err)
 		}
 	}
@@ -984,4 +988,9 @@ func RunIssuesMergeDriver(currentPath, targetPath string) error {
 // RunIssuesMergeDriverVersions merges versions of a generated index.
 func RunIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPath string) error {
 	return runIssuesMergeDriverVersions(ancestorPath, currentPath, otherPath, targetPath)
+}
+
+// RunIssuesRebaseWithGuard supplies the issue commit authorization.
+func RunIssuesRebaseWithGuard(w io.Writer, dir, upstream string, dryRun bool, guard gitflow.IssueCommitOptions) error {
+	return runIssuesRebase(w, dir, upstream, dryRun, guard)
 }

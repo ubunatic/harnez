@@ -61,6 +61,8 @@ Routes, in order:
 
 `<sha>` is the intended issue commit: the commit that `harnez issues open --commit` made for this ticket.
 
+On protected main, an authorized ticket commit can use `harnez issues open --push-main`, or a matching-session `/disable repo-rules push-main`. These unlock issue commits only; follow the applicable authorization and publishing rules above.
+
 Direct route:
 
 - `git -C <repo> fetch origin main`
