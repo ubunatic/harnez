@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/procs"
 )
 
 func TestEmbeddedSpecLoads(t *testing.T) {
@@ -369,8 +370,7 @@ func TestFallbackChainTimeoutKillsProcessGroup(t *testing.T) {
 	dead := false
 	deadline := time.Now().Add(1 * time.Second)
 	for time.Now().Before(deadline) {
-		err := syscall.Kill(childPid, 0)
-		if errors.Is(err, syscall.ESRCH) {
+		if !procs.IsAlive(childPid) {
 			dead = true
 			break
 		}

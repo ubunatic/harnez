@@ -732,7 +732,7 @@ func TestRunExecWrapper_TimeoutKillsProcessGroupDescendant(t *testing.T) {
 	}
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
-		if err := syscall.Kill(pid, 0); err != nil {
+		if !procs.IsAlive(pid) {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
