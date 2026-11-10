@@ -39,6 +39,23 @@ failure report here.
   and `skills` unknown (`?`), and say "estimate, unverified" in `use`. Reason: same vendor
   flagship tier; reversible once a price is measured.
 
+- 2026-11-10 host, superseding the estimate above: web search (w1204, haiku:med) found the
+  official price on https://platform.claude.com/docs/en/about-claude/pricing: Fable 5.2 $8 in /
+  $40 out per MTok, exactly 2x Opus 5.5 ($4/$20). Set `cost: 40` (2x Opus's 20) and replace the
+  "estimate, unverified" note with that source. Context 1M tokens, effort low..max
+  (https://platform.claude.com/docs/en/models/fable-5-2/overview).
+
+## M1 Pre-Work / Required Refinements (after the first failed make test-q1)
+
+1. Re-run covers the already-applied `skills` schema fix (it caused most of the schema failures:
+   TestKnownErrorChecksMatchAgentSchema, TestPurposeAliasSchema, TestAgentSpecLmcoder..., TestLegacy...).
+2. TestBenchSetupRunResults, TestStoreRunTasksAndSummaries, TestModelPickerMarkersAndRenderAt80Cols
+   assumed the first Claude model or picker layout. Updating their expectations is authorized; keep
+   each assertion as strict as before (same exact-match form, no Contains for Equal). If a test
+   reads "first Claude model" as a default, prefer keeping that default (e.g. entry order) over
+   rewriting the test, and say which you chose.
+3. Apply the cost 40 decision above; docs/Models.md shows 40 with the pricing URL.
+
 ## Searcher findings (s1204, codex:luna:low)
 
 - Template: `claude:opus` in `spec/agent.yaml:201-211`; Haiku at 177-189 shows `guidance_source_url`.
