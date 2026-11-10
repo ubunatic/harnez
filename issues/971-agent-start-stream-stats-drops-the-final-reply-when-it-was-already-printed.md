@@ -1,6 +1,6 @@
 # 971 — agent start --stream stats drops the final reply when it was already printed
 
-**Status**: Open
+**Status**: Closed — Stats mode prints the returned reply after [reply] for codex, claude and agy; full mode adds it unless it equals the last shown message; live codex stats run showed the reply; make test-q1 206 ok 0 FAIL (3f1178a9, 71cc6ae8)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
