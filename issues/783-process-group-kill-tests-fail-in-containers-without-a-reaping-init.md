@@ -30,3 +30,17 @@ Still valid. Correction: `TestRunExecWrapper_TimeoutKillsProcessGroupDescendant`
 `internal/exec/exec_test.go:715`, and its liveness probe is `syscall.Kill(pid, 0)` at `:735`;
 `TestFallbackChainTimeoutKillsProcessGroup` is now at `internal/sound/sound_test.go:325`.
 Report: `reports/jules/783.md` (github#154).
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement | jules-impl-783 | 16439477145470403845 | github#159 | done: kept, host reworked the helper and test |
+
+Host check: Jules added `procs.IsAlive` (`internal/procs/alive.go`), which treats /proc state Z or X as
+dead, and used it in both tests. Its version reported every live process as dead where /proc is missing
+(macOS); the host now keeps the signal-0 answer when /proc/<pid>/stat cannot be read and reuses
+`parseStat`. Jules's only test checked the own process. The host added
+`TestIsAliveTreatsUnreapedZombieAsDead`: a killed, unwaited child is a zombie, signal 0 still succeeds for
+it, and the test fails without the state check. That confirms the mechanism locally; the cloud-container
+run in the plan is still unverified. `make test-q1` passed.
