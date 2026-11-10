@@ -269,6 +269,9 @@ func TestTurnStreamReturnedReply(t *testing.T) {
 			if strings.Contains(got, marker) != tc.wantReply {
 				t.Fatalf("reply marker presence = %v, want %v:\n%s", strings.Contains(got, marker), tc.wantReply, got)
 			}
+			if tc.name == "full same" && strings.Count(got, tc.response) != 1 {
+				t.Fatalf("expected reply exactly once:\n%s", got)
+			}
 		})
 	}
 }
