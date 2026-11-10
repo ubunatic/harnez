@@ -28,3 +28,7 @@ Open question: is running plain `harnez init` on a pre-701 layout a supported mi
 ## 3. Verification
 
 Focused init test with the loom fixture; re-run init in loom and confirm Quota.md contains each current Quota-1 rule exactly once, and AGENTS.md Go line mentions Cobra.
+
+Starting point (checked 2026-11-10 at af9688e0, after a discarded Jules report with drifted references):
+the Go summary hint at `config.yaml:940` still omits Cobra, while `docs/lang/Go.md:70` requires Cobra for
+every Go app. The Quota-1 merge half was not re-checked.

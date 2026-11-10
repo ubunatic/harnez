@@ -40,3 +40,12 @@ report with the reason.`
 Check live hook and skill code first. Verify with a goal that names `/lean-sprint`: the agent
 either runs the sprint or stops with one clear request to the owner, and the hook does not force
 direct implementation.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Partly done; the report's `still valid` missed this. Commit 2ff9264f (issue 1037 M1) made `lean-sprint`
+and `factory-sprint` auto-trigger: the installed copies in `~/.claude/skills/` no longer carry
+`disable-model-invocation: true`, so the verify step with `/lean-sprint` no longer reproduces. `/epic` is
+still invoke-only (`docs/commands/epic.md:2`), so the conflict remains for goals that name `/epic`. The
+goal guidance in `.harnez/rules/Tools.md` (Harnez Agent, `/goal` exit clause) covers the "stop and
+report when blocked" wording. Report: `reports/jules/1035.md` (github#153).
