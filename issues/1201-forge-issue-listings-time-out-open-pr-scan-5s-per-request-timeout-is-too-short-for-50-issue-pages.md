@@ -1,6 +1,6 @@
 # 1201 — forge issue listings time out: open_pr_scan 5s per-request timeout is too short for 50-issue pages
 
-**Status**: Open
+**Status**: Closed — fixed by PR #154 (33dacc94)
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
