@@ -58,3 +58,23 @@ Jules audit (PR GH#71, report `reports/jules/1019-2.md`, checked against b0dcb50
   records normal access and clears it (latest observation wins). Start errors print the full provider
   message (no 180-rune cut; keep a first-line summary only where a one-line status is required). Tests use
   a fake codex emitting the study's exact text; never the network.
+
+## M1 delivered: unsupported access state and untruncated errors (8440796b)
+
+Developer: `make test-q1` green, no `--- FAIL`. Host diff review plus reviewer r1019 (codex:terra:low).
+
+## M2 Pre-Work (host + reviewer r1019)
+
+1. P2: narrow the match. Mark `unsupported` only for the study phrase "not supported when using Codex", or
+   `model_not_found` together with the model id in the same message. Test a message with `model_not_found`
+   but another model id: not marked.
+2. P2: bounded state. Write an observation only when the status changes from the latest one for that model
+   (a success after success writes nothing). Test: two successes leave the file unchanged.
+3. P2, host decision: show the first non-empty provider line in full (no rune cap), drop later raw lines
+   (tracebacks, generated source). Restore the resume test's "no raw output" assertion and add a check that a
+   220-char first line is not cut.
+4. P2: end-to-end tests through cobra with a fake codex on PATH: a start failing with the study text, then
+   `agent models` table shows "unsupported for this account" and JSON shows the new values; a later
+   successful start clears it.
+5. P3: isolate `internal/agent/modelrows_test.go` from the host's state (temp HOME/XDG_STATE_HOME).
+6. P3: use the existing `internal/xdgpath` helper for the state dir instead of reading XDG_STATE_HOME by hand.
