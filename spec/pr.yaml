@@ -13,6 +13,10 @@ open_pr_scan:
   timeout: 5s
   page_size: 50
   max_pages: 4
+issue_scan:
+  timeout: 10s
+  page_size: 20
+  max_pages: 10
 forges:
   - host: codeberg.org
     kind: forgejo

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Pull request wait settings",
   "type": "object",
-  "required": ["default_remote", "default_branch", "poll_interval", "default_timeout", "request_timeout", "max_consecutive_errors", "open_pr_scan", "forges"],
+  "required": ["default_remote", "default_branch", "poll_interval", "default_timeout", "request_timeout", "max_consecutive_errors", "open_pr_scan", "issue_scan", "forges"],
   "properties": {
     "default_remote": { "type": "string", "minLength": 1 },
     "default_branch": { "type": "string", "minLength": 1 },
@@ -11,6 +11,16 @@
     "request_timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m|h)$" },
     "max_consecutive_errors": { "type": "integer", "minimum": 1, "maximum": 20 },
     "open_pr_scan": {
+      "type": "object",
+      "required": ["timeout", "page_size", "max_pages"],
+      "properties": {
+        "timeout": { "type": "string", "pattern": "^[1-9][0-9]*(ms|s|m|h)$" },
+        "page_size": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "max_pages": { "type": "integer", "minimum": 1, "maximum": 20 }
+      },
+      "additionalProperties": false
+    },
+    "issue_scan": {
       "type": "object",
       "required": ["timeout", "page_size", "max_pages"],
       "properties": {

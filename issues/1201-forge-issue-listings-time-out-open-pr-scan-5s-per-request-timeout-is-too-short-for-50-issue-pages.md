@@ -39,3 +39,18 @@ Still valid; nothing of Want is done (the report said `partly done`, which its o
 support). Starting points, checked: `spec/pr.yaml:12` has only `open_pr_scan` (no `issue_scan` in `spec/`
 or `internal/`); `internal/forge/api.go:142` maps any decode error, including a deadline mid-body, to
 "decoding response from <host>". Report: `reports/jules/1201.md` (github#150).
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement | jules-impl-1201 | 421527005146663221 | github#158 | done: kept, host reworked the timeout errors and test |
+
+Host check: Jules added `issue_scan` to `spec/pr.yaml` and its schema, used it for forge issue find, import
+and `forgetracker.NewSource`, and added the setting name to mid-body timeouts. The host also gave the
+request-phase timeout (the 4/4 "request to codeberg.org failed" in the repro) the same "timed out (raise
+spec/pr.yaml issue_scan.timeout)" detail, and replaced the test's sleep with a handler that blocks until the
+client gives up. `TestGetJSONTimeoutNamesSetting` fails without the fix with the repro's two messages and
+passes with it; `make test-q1` passed. Unverified: the values (10s, page size 20, 10 pages, the same
+200-item budget) were not measured against Codeberg as the Notes ask; live check: run `harnez find -d .
+issues closed` on taia.

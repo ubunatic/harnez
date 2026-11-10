@@ -31,7 +31,7 @@ func runIssuesImport(w io.Writer, dir, rawURL string, jsonOutput, offline bool, 
 		return fmt.Errorf("issues import: %s is not a configured forge (spec/pr.yaml forges)", host)
 	}
 	if fetch == nil {
-		fetch = forge.NewPullLister(spec.OpenPRScan, forge.SystemTokenSource(os.Getenv).For).Issue
+		fetch = forge.NewPullLister(spec.IssueScan, forge.SystemTokenSource(os.Getenv).For).Issue
 	}
 	is, err := fetch(fg, owner, repo, n)
 	if err != nil {

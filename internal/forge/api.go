@@ -1,10 +1,12 @@
 package forge
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -88,13 +90,13 @@ func ghAuthToken() (string, error) {
 // public repositories anonymously. If that retry fails too, the error is a 403 that says the
 // token likely lacks a scope, and it replaces the retry's error: a private repo answers 404
 // anonymously, and that 404 would send the user to the wrong hint.
-func GetJSON(client *http.Client, fg Forge, rawURL, token, what string, v any) error {
-	err := getOnce(client, fg, rawURL, token, what, v)
+func GetJSON(client *http.Client, fg Forge, rawURL, token, what, settingName string, v any) error {
+	err := getOnce(client, fg, rawURL, token, what, settingName, v)
 	var apiErr *APIError
 	if token == "" || !errors.As(err, &apiErr) || apiErr.Status != http.StatusForbidden {
 		return err
 	}
-	if getOnce(client, fg, rawURL, "", what, v) == nil {
+	if getOnce(client, fg, rawURL, "", what, settingName, v) == nil {
 		return nil
 	}
 	return &APIError{Status: http.StatusForbidden, Detail: what + "; the token likely lacks a scope: " + scopeAdvice(fg)}
@@ -109,7 +111,7 @@ func scopeAdvice(fg Forge) string {
 	return "run harnez forge token rotate or harnez forge token import"
 }
 
-func getOnce(client *http.Client, fg Forge, rawURL, token, what string, v any) error {
+func getOnce(client *http.Client, fg Forge, rawURL, token, what, settingName string, v any) error {
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
 		return &APIError{Detail: "building request: " + err.Error()}
@@ -129,6 +131,9 @@ func getOnce(client *http.Client, fg Forge, rawURL, token, what string, v any) e
 	resp, err := client.Do(req)
 	if err != nil {
 		// The transport error may name the URL, never the header, so the token cannot leak here.
+		if isTimeout(err) {
+			return &APIError{Transient: true, Detail: "request to " + fg.Host + " " + timedOut(settingName)}
+		}
 		return &APIError{Transient: true, Detail: "request to " + fg.Host + " failed"}
 	}
 	defer resp.Body.Close()
@@ -138,7 +143,26 @@ func getOnce(client *http.Client, fg Forge, rawURL, token, what string, v any) e
 		return &APIError{Status: resp.StatusCode, Transient: transient, Detail: what}
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v); err != nil {
+		if isTimeout(err) {
+			return &APIError{Status: resp.StatusCode, Transient: true, Detail: "decoding response from " + fg.Host + ": " + timedOut(settingName)}
+		}
 		return &APIError{Status: resp.StatusCode, Detail: "decoding response from " + fg.Host}
 	}
 	return nil
+}
+
+// isTimeout reports whether err comes from a request deadline, either while waiting for the
+// response or while reading its body (issue 1201).
+func isTimeout(err error) bool {
+	var te interface{ Timeout() bool }
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) ||
+		(errors.As(err, &te) && te.Timeout())
+}
+
+// timedOut names the spec setting that bounds the request, so the user knows what to raise.
+func timedOut(settingName string) string {
+	if settingName == "" {
+		return "timed out"
+	}
+	return "timed out (raise spec/pr.yaml " + settingName + ")"
 }

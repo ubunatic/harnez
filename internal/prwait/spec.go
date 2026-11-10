@@ -26,6 +26,7 @@ type Spec struct {
 	RequestTimeout       time.Duration
 	MaxConsecutiveErrors int
 	OpenPRScan           forge.ScanOptions
+	IssueScan            forge.ScanOptions
 	Forges               []Forge
 }
 
@@ -43,6 +44,7 @@ type rawSpec struct {
 	RequestTimeout       string  `yaml:"request_timeout"`
 	MaxConsecutiveErrors int     `yaml:"max_consecutive_errors"`
 	OpenPRScan           rawScan `yaml:"open_pr_scan"`
+	IssueScan            rawScan `yaml:"issue_scan"`
 	Forges               []Forge `yaml:"forges"`
 }
 
@@ -96,6 +98,10 @@ func loadSpecFrom(fsys fs.FS, specPath, schemaPath string) (Spec, error) {
 	if err != nil {
 		return Spec{}, fmt.Errorf("%s: invalid open_pr_scan.timeout: %w", specPath, err)
 	}
+	issueScanTimeout, err := time.ParseDuration(raw.IssueScan.Timeout)
+	if err != nil {
+		return Spec{}, fmt.Errorf("%s: invalid issue_scan.timeout: %w", specPath, err)
+	}
 	return Spec{
 		DefaultRemote:        raw.DefaultRemote,
 		DefaultBranch:        raw.DefaultBranch,
@@ -104,9 +110,16 @@ func loadSpecFrom(fsys fs.FS, specPath, schemaPath string) (Spec, error) {
 		RequestTimeout:       reqTimeout,
 		MaxConsecutiveErrors: raw.MaxConsecutiveErrors,
 		OpenPRScan: forge.ScanOptions{
-			Timeout:  scanTimeout,
-			PageSize: raw.OpenPRScan.PageSize,
-			MaxPages: raw.OpenPRScan.MaxPages,
+			Timeout:     scanTimeout,
+			PageSize:    raw.OpenPRScan.PageSize,
+			MaxPages:    raw.OpenPRScan.MaxPages,
+			SettingName: "open_pr_scan.timeout",
+		},
+		IssueScan: forge.ScanOptions{
+			Timeout:     issueScanTimeout,
+			PageSize:    raw.IssueScan.PageSize,
+			MaxPages:    raw.IssueScan.MaxPages,
+			SettingName: "issue_scan.timeout",
 		},
 		Forges: raw.Forges,
 	}, nil
