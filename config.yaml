@@ -454,13 +454,17 @@ skills:
 
   - name: docup
     license: AGPL-3.0-or-later
-    description: "Review and update bounded repository documentation by category (testing, architecture)"
+    description: "Review and update bounded repository documentation by category (testing, architecture, CLI, configuration)"
     file: docs/commands/Docup.md
     resources:
       - source: docs/commands/DocupTesting.md
         target: references/DocupTesting.md
       - source: docs/commands/DocupArch.md
         target: references/DocupArch.md
+      - source: docs/commands/DocupCli.md
+        target: references/DocupCli.md
+      - source: docs/commands/DocupConfig.md
+        target: references/DocupConfig.md
 
   - name: harnez-advisor
     license: AGPL-3.0-or-later

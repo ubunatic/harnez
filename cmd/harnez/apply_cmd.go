@@ -132,7 +132,9 @@ func newApplyCmd() *cobra.Command {
 						fmt.Printf("  updated %s [permissions: %d allow, %d deny; toolPermission: %s]\n",
 							agyPermPath, len(rules.Allow), len(rules.Deny), rules.ToolPermission)
 					}
-					if len(unmapped) > 0 {
+					// Report the gap only when the file changes, so an
+					// unchanged apply stays quiet about a known gap.
+					if changed && len(unmapped) > 0 {
 						fmt.Printf("  agy permissions: %d Claude rule(s) have no agy equivalent: %v\n", len(unmapped), unmapped)
 					}
 				}

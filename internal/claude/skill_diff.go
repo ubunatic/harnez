@@ -73,7 +73,7 @@ func diffSkills(cfg *Config, selection Set) (bool, error) {
 					continue
 				}
 				if _, err := os.Lstat(skillDir); err == nil && !isManagedSkill(skillDir) {
-					adopt, reason := skillAdoptionStatus(skillDir, skill.Name)
+					adopt, reason := skillAdoptionStatus(skillDir, skill.Name, resources)
 					if !adopt {
 						reportUnmanagedSkill(skillDir, reason)
 						anyChanged = true

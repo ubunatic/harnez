@@ -166,7 +166,7 @@ func applySkills(r *applyReport, cfg *Config, selection Set, disableRateFeedback
 					continue
 				}
 				if _, err := os.Lstat(skillDir); err == nil && !isManagedSkill(skillDir) {
-					adopt, reason := skillAdoptionStatus(skillDir, skill.Name)
+					adopt, reason := skillAdoptionStatus(skillDir, skill.Name, resources)
 					if !adopt {
 						reportUnmanagedSkill(skillDir, reason)
 						continue
