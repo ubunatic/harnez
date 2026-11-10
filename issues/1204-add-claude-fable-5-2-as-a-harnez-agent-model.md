@@ -78,6 +78,15 @@ failure report here.
 3. Answer the picker question from round 2 item 3 (does 80x24 scroll or cut rows?).
 4. Document the rule where bench is documented (find it; one sentence).
 
+## M1 delivered: Fable spec entry, bench picks cheapest model (b4e03dde)
+
+## M2 Pre-Work (reviewer r1204, codex:terra:low)
+
+1. P2: `docs/Models.md` Haiku row says 12/12/12; spec says 4/4/7. Fix the row from the spec.
+2. P3: add a test for the equal-cost tie rule (two same-cost entries keep catalog order).
+3. P3: keep the 48-row check, and add an 80x24 assertion that the picker scrolls to the selected
+   row (selected row visible, no row cut mid-line), so the 24-row case stays covered.
+
 ## Searcher findings (s1204, codex:luna:low)
 
 - Template: `claude:opus` in `spec/agent.yaml:201-211`; Haiku at 177-189 shows `guidance_source_url`.
