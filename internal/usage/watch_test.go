@@ -3268,3 +3268,14 @@ func TestRedrawThrottlerStop(t *testing.T) {
 		t.Fatalf("triggers after Stop() = %d, want 0", got)
 	}
 }
+
+func TestEmptyTableShowsNoAgentUsage(t *testing.T) {
+	summary := UsageSummary{Timestamp: testTime}
+	sec := watchSections{Table: true}
+	opts := WatchOptions{Mode: "normal"}
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, opts)
+	frameText := strings.Join(frame.lines, "\n")
+	if !strings.Contains(frameText, "no agent usage detected") {
+		t.Errorf("expected empty table view to display 'no agent usage detected', got:\n%s", frameText)
+	}
+}
