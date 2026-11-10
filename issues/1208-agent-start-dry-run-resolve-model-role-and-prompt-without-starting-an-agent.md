@@ -35,3 +35,21 @@ write a failure report here.
 
 - Whether resume can dry-run without reading a live session is unverified.
 - Check the live start path and recent commits (971 changed stream output) before starting.
+
+## Searcher findings (s1208, codex:luna:low)
+
+- Start (`cmd/harnez/agent_run.go`): role :395, model :402, Codex preflight :457, session record :501,
+  quota capture :389/:636, launch :680. Resume: session lookup :717, stale repair write :748, role/model
+  :782/:787, preflight :803/:808, compaction :835, running state :943, launch :974.
+- Argv: pure builders for claude (`internal/subagent/claude.go:54`), codex (`codex.go:124`), pi (`pi.go:113`);
+  agy builds inline (`agy.go:121`, :155).
+- Output precedent: release dry run (`internal/release/runner.go:56`). Fake CLI: `installFakeCLI`
+  (`internal/subagent/claude_stream_test.go:49`), PATH fakes in `cmd/harnez/agent_signal_test.go:125`.
+
+## Decision
+
+- 2026-11-10 host (decide mode): one milestone. Start dry run returns after role/model resolution and
+  argv building, before Codex preflight (:457). Resume dry run does a read-only session lookup and
+  returns before stale repair (:748). Extract a pure argv builder for agy so all drivers print argv.
+  Output: lines `dry-run: provider:model:tier`, `role`, `name`, `dir`, `argv` (prompt shown as
+  `<prompt: N bytes from -p|-f path>`, not inline), then exit 0.
