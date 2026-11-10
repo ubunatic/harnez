@@ -24,3 +24,26 @@ loom sessions maybe never parsed (different dir or harness).
 /goal harnez per-session Codex token totals match Codex's own thread totals (state DB / last `token_count`
 event) within 1%, including sessions in other repos. A test with a fixture rollout of several turns and a
 resume pins it. On a loop or no progress, clear the goal and write a failure report.
+
+## Audit 2026-11-11
+
+Jules audit (PR GH#162, report `reports/jules/1214.md`, checked against 33dacc94, 6 of 7 references
+held; `internal/usage/codex.go:137` is really line 156). Verdict "partly done"; read as still valid, with leads:
+
+- `harnez usage` project scan sums every rollout file: `internal/usage/project.go:317-327` walks
+  `rollout-*.jsonl` and adds each file's breakdown, while `internal/usage/codex.go:156` keys the latest
+  value per session ID. If a resume writes a new rollout file carrying prior totals, this overcounts.
+  Unverified: whether Codex resumes write a new file with cumulative totals.
+- `agent list` totals come from `internal/subagent/codex.go`: `TokensTurn` (line 491) sums only
+  `turn.completed` usage (line 465); `token_count` events set only `ContextTokens` (line 476).
+  A run with no `turn.completed` events records 0 tokens, a plausible cause of the loom zeros
+  (unverified: needs a loom run's captured output). The fixture `codex-987-rollout.jsonl` has 3
+  `token_count` and 0 `turn.completed` events.
+- The ~3x overcount on `agent list` is not explained by the report; next step is to compare one
+  terra session's recorded `input_tokens_total` with its rollout's last `total_token_usage`.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-1214 | 10577886768464323199 | github #162 (closed) | done: partly done, 6/7 refs hold |

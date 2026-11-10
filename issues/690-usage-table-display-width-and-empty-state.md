@@ -1,6 +1,6 @@
 # 690 — Usage table display width and empty state
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — fixed by PR #156 (c8d3ee27)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
