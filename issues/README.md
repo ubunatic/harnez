@@ -47,4 +47,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1202 | [1202-harnez-issues-has-no-way-to-edit-a-forge-issue-body-agents-fall-back-to-tea.md](1202-harnez-issues-has-no-way-to-edit-a-forge-issue-body-agents-fall-back-to-tea.md) | harnez issues has no way to edit a forge issue body; agents fall back to tea | Open |
 | 1203 | [1203-accept-official-model-names-gemini-4-argon-claude-opus-5-5-wherever-harnez-takes-a-model.md](1203-accept-official-model-names-gemini-4-argon-claude-opus-5-5-wherever-harnez-takes-a-model.md) | Accept official model names (gemini-4-argon, claude-opus-5-5) wherever harnez takes a model | Open |
 | 1204 | [1204-add-claude-fable-5-2-as-a-harnez-agent-model.md](1204-add-claude-fable-5-2-as-a-harnez-agent-model.md) | Add Claude Fable 5.2 as a harnez agent model | Open |
+| 1205 | [1205-issue-commands-allow-commit-on-protected-main-when-the-owner-authorized-pushing-to-main.md](1205-issue-commands-allow-commit-on-protected-main-when-the-owner-authorized-pushing-to-main.md) | Issue commands: allow --commit on protected main when the owner authorized pushing to main | Open |
 <!-- harnez:end issues-active-index -->
