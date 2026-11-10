@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ModelCapabilityScores",
+  "description": "Model capability ratings and provider subscription multipliers for cost vs capability charting",
+  "type": "object",
+  "required": [
+    "version",
+    "scale",
+    "subscription_multipliers",
+    "provider_colors",
+    "models"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [1]
+    },
+    "scale": {
+      "type": "object",
+      "required": ["min", "max", "step", "unit"],
+      "properties": {
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "step": { "type": "number" },
+        "unit": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "subscription_multipliers": {
+      "type": "object",
+      "additionalProperties": { "type": "number" }
+    },
+    "multiplier_source": {
+      "type": "string"
+    },
+    "provider_colors": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["source", "ratings"],
+        "properties": {
+          "source": { "type": "string" },
+          "ratings": {
+            "type": "object",
+            "additionalProperties": { "type": "number" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

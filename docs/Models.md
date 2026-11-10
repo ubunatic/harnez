@@ -1,5 +1,22 @@
 # Model Assessment
 
+## 2026-11-10 Cost vs Capability Chart (issue 1211)
+
+`harnez agent models --chart` renders a 2D Braille terminal chart mapping relative cost
+(log scale on X, anchored at `codex:luna:low = 1`) against capability rating (1–5 stars
+on Y, half steps).
+
+- **Multi-tier series**: each model's effort tiers (low, med, high) are plotted as connected
+  points colored by provider.
+- **Spec-driven ratings**: capability scores live in `spec/model_scores.yaml` (schema
+  `spec/schemas/model_scores.schema.json`), seeded from harnez evidence (picks, skill marks,
+  cost tiers) and marked `owner estimate, unverified`.
+- **Cost basis (`--cost raw|effective`)**: defaults to `raw` (direct API cost matrix from
+  `spec/agent.yaml`). `--cost effective` applies per-provider subscription multipliers from
+  `spec/model_scores.yaml` to model marginal usage costs under active subscription plans.
+- **Pareto frontier**: non-dominated points are highlighted on the canvas and summarized in
+  the footer.
+
 ## 2026-10-27 GPT-6.1 Terra (issue 974)
 
 The [OpenAI model page](https://developers.openai.com/api/docs/models/gpt-6.1-terra)

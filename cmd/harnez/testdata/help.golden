@@ -271,12 +271,14 @@ Available Commands:
   unblock     Remove a model block
 
 Flags:
-  -h, --help      help for models
-      --json      JSON output
-      --md        print the embedded picks as Markdown
-      --names     print only the model specs, one per line
-      --offline   read cached state only; never start a collector (always the case for this command)
-      --picks     print role model picks
+      --chart         display cost vs capability chart
+      --cost string   cost basis for --chart: raw (default) or effective (subscription-adjusted) (default "raw")
+  -h, --help          help for models
+      --json          JSON output
+      --md            print the embedded picks as Markdown
+      --names         print only the model specs, one per line
+      --offline       read cached state only; never start a collector (always the case for this command)
+      --picks         print role model picks
 
 Global Flags:
       --allow-exhausted-quota   start even when cached provider quota is exhausted
@@ -2320,12 +2322,14 @@ Available Commands:
   unblock     Remove a model block
 
 Flags:
-  -h, --help      help for models
-      --json      JSON output
-      --md        print the embedded picks as Markdown
-      --names     print only the model specs, one per line
-      --offline   read cached state only; never start a collector (always the case for this command)
-      --picks     print role model picks
+      --chart         display cost vs capability chart
+      --cost string   cost basis for --chart: raw (default) or effective (subscription-adjusted) (default "raw")
+  -h, --help          help for models
+      --json          JSON output
+      --md            print the embedded picks as Markdown
+      --names         print only the model specs, one per line
+      --offline       read cached state only; never start a collector (always the case for this command)
+      --picks         print role model picks
 
 Use "harnez models [command] --help" for more information about a command.
 

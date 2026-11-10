@@ -143,7 +143,34 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 	var modelNamesOnly bool
 	var picksOnly bool
 	var markdownOutput bool
+	var chartOutput bool
+	var costMode string
 	models := &cobra.Command{Use: "models", Short: "List known agent models with roles and when to use them", RunE: func(cmd *cobra.Command, _ []string) error {
+		if chartOutput {
+			if ac.jsonOut {
+				return fmt.Errorf("--chart cannot be combined with --json")
+			}
+			if picksOnly || modelNamesOnly || markdownOutput {
+				return fmt.Errorf("--chart cannot be combined with --picks, --names, or --md")
+			}
+			costMode = strings.ToLower(strings.TrimSpace(costMode))
+			if costMode != "raw" && costMode != "effective" {
+				return fmt.Errorf("invalid --cost %q: choose raw or effective", costMode)
+			}
+			colorEnabled, err := agentListColorEnabled(ac.listColorMode, cmd.OutOrStdout())
+			if err != nil {
+				return err
+			}
+			knownEntries, err := subagent.KnownModelEntriesE()
+			if err != nil {
+				return err
+			}
+			entries := subagent.ModelEntriesWithDriver(knownEntries, func(m subagent.Model) subagent.Driver {
+				return agentDriver(m, ac.workDir)
+			})
+			width := terminalWidth(cmd.OutOrStdout())
+			return renderModelsChart(cmd.OutOrStdout(), entries, width, costMode, colorEnabled)
+		}
 		if markdownOutput {
 			if !picksOnly || modelNamesOnly || ac.jsonOut {
 				return fmt.Errorf("--md requires --picks and cannot be combined with --json or --names")
@@ -251,6 +278,8 @@ func (ac *agentCLI) modelsCmd() *cobra.Command {
 	models.Flags().BoolVar(&modelNamesOnly, "names", false, "print only the model specs, one per line")
 	models.Flags().BoolVar(&picksOnly, "picks", false, "print role model picks")
 	models.Flags().BoolVar(&markdownOutput, "md", false, "print the embedded picks as Markdown")
+	models.Flags().BoolVar(&chartOutput, "chart", false, "display cost vs capability chart")
+	models.Flags().StringVar(&costMode, "cost", "raw", "cost basis for --chart: raw (default) or effective (subscription-adjusted)")
 	models.Flags().BoolVar(&ac.jsonOut, "json", false, "JSON output")
 	models.Flags().Bool("offline", false, "read cached state only; never start a collector (always the case for this command)")
 	models.AddCommand(ac.modelsSetCmd(), modelsBlockCmd(), modelsUnblockCmd())

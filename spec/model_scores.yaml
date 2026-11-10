@@ -1,0 +1,117 @@
+# yaml-language-server: $schema=schemas/model_scores.schema.json
+version: 1
+scale:
+  min: 1.0
+  max: 5.0
+  step: 0.5
+  unit: "stars"
+
+subscription_multipliers:
+  codex: 0.25
+  claude: 1.0
+  agy: 0.33
+  jules: 1.0
+  lmcoder: 0.0
+  strata: 0.0
+  strata-coder: 0.0
+  default: 1.0
+
+multiplier_source: "owner estimate, unverified"
+
+provider_colors:
+  codex: "32"
+  claude: "33"
+  agy: "36"
+  default: "37"
+
+models:
+  codex:luna:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 1.5
+      med: 2.0
+      high: 2.5
+  codex:terra:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 2.5
+      med: 3.0
+      high: 3.5
+  codex:sol:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 3.5
+      med: 4.0
+      high: 4.5
+  codex:astra:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 4.0
+      med: 4.5
+      high: 5.0
+  claude:haiku:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 2.0
+      med: 2.5
+      high: 3.0
+  claude:sonnet:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 4.0
+  claude:fable:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 4.5
+      med: 5.0
+      high: 5.0
+  claude:opus:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 4.5
+  agy:flash37:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 2.0
+      med: 2.5
+      high: 3.0
+  agy:flash38:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 2.5
+      med: 3.0
+      high: 3.5
+  agy:argon:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 3.0
+      med: 3.5
+      high: 3.5
+  agy:sonnet:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 3.5
+  agy:opus:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 4.0
+  jules:jules:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 2.5
+  lmcoder:coder:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 1.0
+  strata-coder:qwen3.8-flash-next-coder-iq1_m:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 1.0
+  strata:qwen3.8-flash-next-iq2_xs:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 1.0
+  strata:qwen3.8-flash-next-iq3_xxs:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 1.0

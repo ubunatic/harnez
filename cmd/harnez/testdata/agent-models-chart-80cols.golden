@@ -1,0 +1,26 @@
+Cost vs Capability Chart (raw API cost, Log Scale)
+Y: Capability Rating (1-5 stars) · X: Relative Cost · Pareto Frontier Marked (bold)
+
+5.0 ┤                                         ⣀⠤⠔⠒⢹fable               astra⢀⠟
+    │                                    ⢠⡦opus   ⢼⠄    ⣠⡦sol             ⢀⡠⡮ 
+    │                                 ⢀sonnet  ⢀    ⢀⣀⠔⠊            ⢀⢀⡠⠤⠒⠉⠁   
+4.0 ┤                        ⢀⣀⣀⠤⠤⠤⠒⠒⠊⠙⠁sonnet ⠙opus⠛⠁              ⠙⠁        
+    │                ⢀⣴flash38         ⢴⠄  ⠠⡦argonterra                       
+    │              ⡠⠒⠁⣸flash37haiku        ⢀⣇⠤⠒⠉                              
+3.0 ┤           ⡠⠔⠉   ⢸ ⢀⡠⠤⠒⠉⠈          ⣀⠤⠒⠉⠁                                 
+    │        ⣀⠔⠉      ⢺⠊⠁⢀⡠⠾luna      ⠺⠋                                      
+2.0 ┤     ⣀⠔⠊        ⢀⣸⡤⠒⠁                                                    
+    │  ⢀⠤⠊⢀⣀⣀⠤⠤⠤⠒⠒⠊⠉⠉⠁⠈                                                       
+    │ ⠟⠋⠉⠉⠁                                                                   
+1.0 ┤                                                                         
+    └┬───────┬────────┬─────────┬──────────┬────────┬───────┬───────┬───────┬
+     1       2        4        10         25       50      100     200     400
+     Relative Cost (raw API, codex:luna:low = 1)
+
+Pareto frontier: codex:luna:low (cost 1, ★1.5) → agy:flash38:high (cost 4, ★3.5) → claude:sonnet:low (cost 15, ★4.0) → claude:opus:low (cost 20, ★4.5) → claude:fable:med (cost 40, ★5.0)
+
+Providers: [codex]  [claude]  [agy]
+Rating source: spec/model_scores.yaml (owner estimate, unverified)
+Cost source: spec/agent.yaml cost matrix (raw API cost)
+
+Models not plotted (5): jules:jules:low (cost <= 0), lmcoder:coder:low (cost <= 0), strata-coder:qwen3.8-flash-next-coder-iq1_m:low (cost <= 0), strata:qwen3.8-flash-next-iq2_xs:low (cost <= 0), strata:qwen3.8-flash-next-iq3_xxs:low (cost <= 0)
