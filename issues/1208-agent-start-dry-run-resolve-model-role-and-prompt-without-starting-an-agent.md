@@ -69,3 +69,12 @@ Host: owed full `make test-q1` after the developer's golden fix: 206 ok, 0 FAIL.
 3. P3, host decision: restore the old agy resume argv for an empty conversation ID (`--conversation ""`)
    so real runs keep exact behaviour; a test pins both forms.
 4. P3, host decision: `MkdirAll` of the session-store dir in dry run is accepted (no session data written).
+
+## M2 Pre-Work, round 2 (host full run after the developer's post-run fixes)
+
+1. Host `make test-q1`: 205 ok, 1 FAIL: `TestDryRunCobraLeavesStoreAndTelemetryUntouched`
+   (`cmd/harnez/agent_dry_run_test.go:154`): `data/harnez/telemetry.sqlite` was created. The log shows a
+   session timeline "[resume] one synchronous turn on fake:model ... [done] turn finished" in that test:
+   find whether a dry run (likely resume via cobra) still reaches the turn runner or only opens telemetry
+   early; fix the code, not the assertion. Then rerun only `go test ./cmd/harnez/ ./internal/subagent/`
+   and report; the host runs the full suite.
