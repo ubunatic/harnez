@@ -142,3 +142,15 @@ For that role, merge fields from lowest to highest precedence:
 
 - Standalone files override inline profiles within each scope; arrays replace instead of union. This makes one winning source explain each field and prevents inherited tools from silently expanding a restricted role.
 - This refinement defines a proposed contract without code exploration; the implementation must verify existing config/driver entry points before editing them while retaining these observable semantics.
+
+## Audit 2026-11-11
+
+Jules audit (PR GH#164, report `reports/jules/1068.md`, checked against e8b0c7ce, 2 of 2 references held;
+the absence search for role profiles repeated by the host, also empty): still valid, M1 not started.
+`internal/subagent/agentspec.go:39` has only `ContextModes`; no profile schema, resolution or tests.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-1068 | 3700776250448050743 | github #164 (closed) | done: still valid, 2/2 refs hold |
