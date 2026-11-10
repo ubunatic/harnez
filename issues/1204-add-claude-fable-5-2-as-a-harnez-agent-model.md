@@ -68,6 +68,16 @@ failure report here.
 3. `internal/tui/modelpicker_test.go` 24 -> 48 rows: say whether at 80x24 the picker now scrolls
    or cuts rows. If rows are cut without scrolling, that's a bug to report, not hide by height.
 
+## M1 Pre-Work, round 3 (owner decision B, 2026-11-10)
+
+1. Bench picks the cheapest model per provider by the spec `cost` value (use `cost_by_tier` for
+   the tier when present). Tie rule: on equal cost keep the current sorted order, and say so in a
+   code comment. No new spec field, no Go default.
+2. Revert the two bench test edits so they expect `haiku` again, and add a test that adding a
+   more expensive Claude model (e.g. a fake cost-99 entry) does not change bench's choice.
+3. Answer the picker question from round 2 item 3 (does 80x24 scroll or cut rows?).
+4. Document the rule where bench is documented (find it; one sentence).
+
 ## Searcher findings (s1204, codex:luna:low)
 
 - Template: `claude:opus` in `spec/agent.yaml:201-211`; Haiku at 177-189 shows `guidance_source_url`.
