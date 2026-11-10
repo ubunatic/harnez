@@ -40,3 +40,16 @@ Jules audit (PR GH#65, report `reports/jules/971-2.md`, checked against d8904997
 | --- | --- | --- | --- | --- |
 | audit | jules-audit-971 | 7808375416013930707 | github #96 (closed) | done: partly done, 3/3 refs hold; repeats 2026-11-03 audit |
 | implement | harnez-jules-impl-971 | 8076505807217153207 | none | failed 2026-11-08: stalled after 2 replies, no PR |
+
+## Developer plan findings (d971, codex:terra:low, 2026-11-10; searcher skipped: ticket cites file:line)
+
+- Codex/Claude stats: the reply after `[reply]` is replaced by the note when the last live message was
+  labeled confirmation or plan. Full mode: Codex prints the reply only as a live event; Claude's result
+  can differ from the last streamed text, so full mode can omit the real final response.
+- agy uses the non-streaming path, so stats never prints a `[reply]` marker.
+
+## Decision
+
+- 2026-11-10 host (decide mode): stats always prints the returned reply after the marker, for every
+  provider. Full mode prints the returned reply after the live events unless it equals the last shown
+  message exactly. Plan-first turns keep their gate. Reason: the returned reply is the source of truth.
