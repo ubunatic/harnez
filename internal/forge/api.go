@@ -1,6 +1,9 @@
 package forge
 
 import (
+	"context"
+	"os"
+
 	"encoding/json"
 	"errors"
 	"io"
@@ -88,13 +91,13 @@ func ghAuthToken() (string, error) {
 // public repositories anonymously. If that retry fails too, the error is a 403 that says the
 // token likely lacks a scope, and it replaces the retry's error: a private repo answers 404
 // anonymously, and that 404 would send the user to the wrong hint.
-func GetJSON(client *http.Client, fg Forge, rawURL, token, what string, v any) error {
-	err := getOnce(client, fg, rawURL, token, what, v)
+func GetJSON(client *http.Client, fg Forge, rawURL, token, what, settingName string, v any) error {
+	err := getOnce(client, fg, rawURL, token, what, settingName, v)
 	var apiErr *APIError
 	if token == "" || !errors.As(err, &apiErr) || apiErr.Status != http.StatusForbidden {
 		return err
 	}
-	if getOnce(client, fg, rawURL, "", what, v) == nil {
+	if getOnce(client, fg, rawURL, "", what, settingName, v) == nil {
 		return nil
 	}
 	return &APIError{Status: http.StatusForbidden, Detail: what + "; the token likely lacks a scope: " + scopeAdvice(fg)}
@@ -109,7 +112,7 @@ func scopeAdvice(fg Forge) string {
 	return "run harnez forge token rotate or harnez forge token import"
 }
 
-func getOnce(client *http.Client, fg Forge, rawURL, token, what string, v any) error {
+func getOnce(client *http.Client, fg Forge, rawURL, token, what, settingName string, v any) error {
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
 		return &APIError{Detail: "building request: " + err.Error()}
@@ -138,6 +141,15 @@ func getOnce(client *http.Client, fg Forge, rawURL, token, what string, v any) e
 		return &APIError{Status: resp.StatusCode, Transient: transient, Detail: what}
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
+			hint := "timeout"
+			if settingName != "" {
+				hint = "timed out (raise " + settingName + ")"
+			} else {
+				hint = "timed out"
+			}
+			return &APIError{Status: resp.StatusCode, Transient: true, Detail: "decoding response from " + fg.Host + ": " + hint}
+		}
 		return &APIError{Status: resp.StatusCode, Detail: "decoding response from " + fg.Host}
 	}
 	return nil

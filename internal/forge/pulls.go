@@ -13,9 +13,10 @@ import (
 // ScanOptions bounds the open-pull-request listing: the per-request timeout, the page size
 // and the page budget. They come from spec/pr.yaml open_pr_scan.
 type ScanOptions struct {
-	Timeout  time.Duration
-	PageSize int
-	MaxPages int
+	Timeout     time.Duration
+	PageSize    int
+	MaxPages    int
+	SettingName string
 }
 
 // OpenPull is one open pull request and the file paths it changes, as the forge reports them.
@@ -31,13 +32,14 @@ var ErrTooManyPages = errors.New("more open pull requests than the scan page bud
 // PullLister lists open pull requests through a forge REST API. Token returns the bearer
 // token for a forge, or "" when none is configured.
 type PullLister struct {
-	Client *http.Client
-	Token  func(Forge) string
+	Client      *http.Client
+	Token       func(Forge) string
+	SettingName string
 }
 
 // NewPullLister builds a lister whose requests share the per-request timeout from opts.
 func NewPullLister(opts ScanOptions, token func(Forge) string) PullLister {
-	return PullLister{Client: &http.Client{Timeout: opts.Timeout}, Token: token}
+	return PullLister{Client: &http.Client{Timeout: opts.Timeout}, Token: token, SettingName: opts.SettingName}
 }
 
 type pullItem struct {
@@ -113,5 +115,5 @@ func (l PullLister) getJSON(fg Forge, rawURL string, v any) error {
 	if l.Token != nil {
 		tok = l.Token(fg)
 	}
-	return GetJSON(l.Client, fg, rawURL, tok, "API request to "+fg.Host, v)
+	return GetJSON(l.Client, fg, rawURL, tok, "API request to "+fg.Host, l.SettingName, v)
 }
