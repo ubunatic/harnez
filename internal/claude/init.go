@@ -1189,6 +1189,9 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 		if err := validateDocNames(cfg, docs); err != nil {
 			return err
 		}
+		if err := checkStaleHarnezSource(dir, cfg); err != nil {
+			return err
+		}
 		if err := ValidateCopyableDocCatalog(cfg); err != nil {
 			return err
 		}
@@ -1787,4 +1790,34 @@ func CheckProjectDrift(dir string) []string {
 	}
 
 	return warnings
+}
+
+func checkStaleHarnezSource(dir string, cfg *Config) error {
+	if !isHarnezRepo(dir) {
+		return nil
+	}
+	checkFile := func(source string) error {
+		bundled, err := fs.ReadFile(cfg.FS, source)
+		if err != nil {
+			return nil
+		}
+		return staleEmbeddedDocError(dir, source, bundled)
+	}
+	if err := checkFile("config.yaml"); err != nil {
+		return err
+	}
+	for _, name := range docNamesInOrder(cfg) {
+		lang := cfg.AgentsMD.Languages[name]
+		if lang.Source != "" {
+			if err := checkFile(lang.Source); err != nil {
+				return err
+			}
+		}
+		if lang.LiteSource != "" {
+			if err := checkFile(lang.LiteSource); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

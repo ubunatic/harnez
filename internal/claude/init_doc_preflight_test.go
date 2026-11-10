@@ -72,10 +72,21 @@ func TestInitDocPreflightChecksEveryDocWithoutWriting(t *testing.T) {
 	}
 }
 
-func TestInitDocPreflightStaleSourceOnlyInHarnezCheckout(t *testing.T) {
+func TestCheckStaleHarnezSource(t *testing.T) {
 	for _, staleSource := range []bool{false, true} {
 		t.Run(map[bool]string{false: "project without sources", true: "stale checkout source"}[staleSource], func(t *testing.T) {
 			dir := t.TempDir()
+			// Mock harnez repo
+			if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module ubunatic.com/harnez\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(""), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
 			source := "docs/lang/Git.md"
 			if staleSource {
 				if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, source)), 0o755); err != nil {
@@ -85,15 +96,69 @@ func TestInitDocPreflightStaleSourceOnlyInHarnezCheckout(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			cfg := &Config{FS: fstest.MapFS{source: {Data: []byte("bundled source\n")}},
-				AgentsMD: AgentsMD{Languages: map[string]Language{"git": {Source: source, Local: "docs/Git.md"}}}}
-			_, err := initDocPreflight(cfg, dir, []string{"git"}, "")
+
+			cfg := &Config{
+				FS: fstest.MapFS{
+					source:        {Data: []byte("bundled source\n")},
+					"config.yaml": {Data: []byte("")},
+				},
+				AgentsMD: AgentsMD{Languages: map[string]Language{"git": {Source: source, Local: "docs/Git.md"}}},
+			}
+
+			err := checkStaleHarnezSource(dir, cfg)
+
 			if staleSource {
 				if err == nil || !strings.Contains(err.Error(), "run make install") {
 					t.Fatalf("expected actionable stale-source error, got %v", err)
 				}
 			} else if err != nil {
 				t.Fatalf("project without copyable source failed preflight: %v", err)
+			}
+		})
+	}
+}
+
+// Issue 903: in the harnez checkout, a stale binary must report "run make install" before the
+// copyable-doc catalog validation rejects text the on-disk source already fixed; other repos
+// still get the validation error.
+func TestRunInitReportsStaleHarnezSourceBeforeCatalogValidation(t *testing.T) {
+	for _, harnezRepo := range []bool{true, false} {
+		t.Run(map[bool]string{true: "harnez checkout", false: "other repo"}[harnezRepo], func(t *testing.T) {
+			dir := t.TempDir()
+			files := map[string]string{"go.mod": "module example.com/other\n"}
+			if harnezRepo {
+				files = map[string]string{"go.mod": "module ubunatic.com/harnez\n", "config.yaml": "agents_md: {}\n"}
+			}
+			for path, data := range files {
+				if err := os.WriteFile(filepath.Join(dir, path), []byte(data), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			source := "docs/practices/AgenticLoop.md"
+			for _, sub := range []string{"issues", filepath.Dir(source)} {
+				if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(dir, source), []byte("Write findings to the feedback folder when present.\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			cfg := &Config{
+				FS: fstest.MapFS{
+					source:        {Data: []byte("Write findings to `docs/feedback/`.\n")},
+					"config.yaml": {Data: []byte("agents_md: {}\n")},
+				},
+				AgentsMD: AgentsMD{Languages: map[string]Language{
+					"agentic-loop": {Source: source, Local: "./docs/AgenticLoop.md"},
+				}},
+			}
+			err := RunInitWithVariant(dir, cfg, InitOptions{Docs: []string{"agentic-loop"}, AssumeYes: true})
+			want := `assumes project destination "docs/feedback/"`
+			if harnezRepo {
+				want = "run make install"
+			}
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("init error = %v; want %q", err, want)
 			}
 		})
 	}
