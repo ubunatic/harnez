@@ -34,6 +34,20 @@ failure report here.
 ## Decision
 
 - 2026-11-10 owner: do not call the model; add it and estimate the costs.
+- 2026-11-10 host: no published Fable price, effort or context source was found (searcher
+  s1204). Estimate cost = Opus value (20) and copy Opus's effort/compaction handling; mark `eff`
+  and `skills` unknown (`?`), and say "estimate, unverified" in `use`. Reason: same vendor
+  flagship tier; reversible once a price is measured.
+
+## Searcher findings (s1204, codex:luna:low)
+
+- Template: `claude:opus` in `spec/agent.yaml:201-211`; Haiku at 177-189 shows `guidance_source_url`.
+- Driver passes `--model <name> --effort <tier>` (`internal/subagent/claude.go:64`); `claude --help`
+  accepts the alias `fable` and full names. Use `name: claude-fable-5-2`.
+- Goldens: `internal/subagent/testdata/known-model-specs.golden`, maybe
+  `cmd/harnez/testdata/agent-picks.golden` (picks unchanged, so likely untouched).
+- 755 also touched resolution asserts in `cmd/harnez/agent_test.go`,
+  `internal/bench/bench_test.go`, `internal/subagent/driver_test.go`; docs table `docs/Models.md:66`.
 
 ## 4. Notes / Unverified
 
