@@ -217,12 +217,68 @@ func TestIssuesProtectedMainUnlocks(t *testing.T) {
 			if got := repoRunGitOutput(t, dir, "rev-parse", "HEAD"); got == head {
 				t.Fatal("commit missing")
 			}
-			want := "/disable repo-rules push-main for session owner"
+			want := "git.protected_main: ticket commit unlocked by /disable repo-rules push-main for session owner"
 			if tc.flag {
-				want = "--push-main flag"
+				want = "git.protected_main: ticket commit unlocked by --push-main flag"
 			}
-			if !strings.Contains(stderr.String(), want) || strings.Count(stderr.String(), "ticket commit unlocked") != 1 {
-				t.Fatalf("stderr: %q", stderr.String())
+			assertUnlockLine(t, stderr.String(), want)
+		})
+	}
+}
+
+// assertUnlockLine ignores other diagnostics but requires exactly one complete unlock line.
+func assertUnlockLine(t *testing.T, stderr, want string) {
+	t.Helper()
+	var lines []string
+	for _, line := range strings.Split(stderr, "\n") {
+		if strings.Contains(line, "ticket commit unlocked") {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) != 1 || lines[0] != want {
+		t.Fatalf("unlock lines = %q, want [%q]; stderr = %q", lines, want, stderr)
+	}
+}
+
+func TestIssuesPushMainCLI(t *testing.T) {
+	spec, err := disable.LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, env := range spec.SessionEnv {
+		t.Setenv(env, "")
+	}
+	for _, verb := range []string{"close", "mv", "rebase"} {
+		t.Run(verb, func(t *testing.T) {
+			var dir string
+			var args []string
+			switch verb {
+			case "close":
+				dir, _ = closableFixture(t)
+				args = []string{"close", "42"}
+			case "mv":
+				dir = duplicateRepo(t, 2)
+				protectMain(t, dir)
+				args = []string{"mv", "issues/096-b.md"}
+			case "rebase":
+				dir, _ = closableFixture(t)
+				writeDuplicateFile(t, dir, ".gitattributes", "issues/README.md merge=union\n")
+				repoRunGit(t, dir, "add", ".gitattributes")
+				repoRunGit(t, dir, "commit", "-qm", "configure issue merge")
+				args = []string{"rebase", "HEAD"}
+			}
+			head := repoRunGitOutput(t, dir, "rev-parse", "HEAD")
+			cmd := newIssuesCmd()
+			var out, stderr bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&stderr)
+			cmd.SetArgs(append(args, "-d", dir, "--push-main"))
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("%s --push-main: %v; stdout=%q stderr=%q", verb, err, out.String(), stderr.String())
+			}
+			assertUnlockLine(t, stderr.String(), "git.protected_main: ticket commit unlocked by --push-main flag")
+			if verb != "rebase" && repoRunGitOutput(t, dir, "rev-parse", "HEAD") == head {
+				t.Fatal("issue commit did not advance HEAD")
 			}
 		})
 	}
