@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "required": ["model", "revision", "rates"],
+    "properties": {
+      "model": { "type": "string" },
+      "revision": { "type": "string" },
+      "rates": {
+        "type": "object",
+        "properties": {
+          "cached_input_micros_per_million": { "type": "integer" },
+          "uncached_input_micros_per_million": { "type": "integer" },
+          "output_micros_per_million": { "type": "integer" },
+          "reasoning_micros_per_million": { "type": "integer" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "additionalProperties": false
+  }
+}
