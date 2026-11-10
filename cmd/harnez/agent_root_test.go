@@ -122,7 +122,7 @@ func (d *slashDriver) Resume(context.Context, string, string, subagent.Model) (*
 	return nil, errors.New("provider Resume called")
 }
 
-func (d *slashDriver) Compact(_ context.Context, id string) (*subagent.TurnResult, error) {
+func (d *slashDriver) Compact(_ context.Context, id string, model subagent.Model) (*subagent.TurnResult, error) {
 	d.compacted = append(d.compacted, id)
 	return &subagent.TurnResult{ContextTokensBeforeCompact: 70000, ContextTokens: 20000, Response: "status"}, nil
 }

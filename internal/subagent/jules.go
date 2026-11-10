@@ -1039,7 +1039,7 @@ func (d JulesDriver) waitingDetail(ctx context.Context, client julesClient, name
 }
 
 // Compact is refused: Jules manages its own context on its side.
-func (d JulesDriver) Compact(context.Context, string) (*TurnResult, error) {
+func (d JulesDriver) Compact(context.Context, string, Model) (*TurnResult, error) {
 	return nil, errors.New("Jules sessions cannot be compacted; Jules manages its own context")
 }
 

@@ -176,7 +176,7 @@ func (d AgyDriver) turnArgs(id, prompt string, model Model, resume bool) []strin
 // Compact invokes agy's native slash command (1.3.5+), inheriting the saved
 // conversation's model and effort. agy 1.4.2 returns an empty successful response
 // and unchanged usage; neither acknowledges a measurable context drop (issue 823).
-func (d AgyDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
+func (d AgyDriver) Compact(ctx context.Context, id string, model Model) (*TurnResult, error) {
 	if d.Dir == "" {
 		return nil, errors.New("agy: refusing to compact with an empty Dir")
 	}

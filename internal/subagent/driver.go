@@ -15,7 +15,7 @@ import (
 type Driver interface {
 	Run(context.Context, RunOptions) (*TurnResult, error)
 	Resume(context.Context, string, string, Model) (*TurnResult, error)
-	Compact(context.Context, string) (*TurnResult, error)
+	Compact(context.Context, string, Model) (*TurnResult, error)
 	Stop(context.Context, string) error
 	Delete(context.Context, string) error
 }
@@ -115,7 +115,7 @@ func (d UnsupportedDriver) Run(context.Context, RunOptions) (*TurnResult, error)
 func (d UnsupportedDriver) Resume(context.Context, string, string, Model) (*TurnResult, error) {
 	return nil, d.unsupported()
 }
-func (d UnsupportedDriver) Compact(context.Context, string) (*TurnResult, error) {
+func (d UnsupportedDriver) Compact(context.Context, string, Model) (*TurnResult, error) {
 	return nil, d.unsupported()
 }
 func (d UnsupportedDriver) Stop(context.Context, string) error   { return d.unsupported() }

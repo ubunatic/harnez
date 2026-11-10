@@ -879,7 +879,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			}
 			return nil, nil // interactive output has no verified completion/token signal
 		}
-		return driver.Compact(ctx, sess.ProviderID())
+		return driver.Compact(ctx, sess.ProviderID(), subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
 	}
 	// Interactive sessions are guarded above; native compaction is verified after resume.
 	if contextTokens >= 0 && (compactMode == "manual" || interactive) {
@@ -1169,7 +1169,7 @@ func compactSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagen
 		return fmt.Errorf("session %q cannot be compacted: %s did not expose a provider session ID", x.Name, x.Provider)
 	}
 	driver := withAgyMeterSession(agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}, x.WorkingDir), x.ID)
-	result, err := driver.Compact(cmd.Context(), x.ProviderID())
+	result, err := driver.Compact(cmd.Context(), x.ProviderID(), subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier})
 	if err != nil {
 		return err
 	}

@@ -439,7 +439,7 @@ func (d *recordingAgentDriver) Resume(context.Context, string, string, subagent.
 	return &subagent.TurnResult{}, nil
 }
 
-func (d *recordingAgentDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
+func (d *recordingAgentDriver) Compact(context.Context, string, subagent.Model) (*subagent.TurnResult, error) {
 	return &subagent.TurnResult{Response: "Context compacted.", InputTokens: 1000, ContextTokens: 1000}, nil
 }
 
@@ -546,7 +546,7 @@ type codexAutoCompactDriver struct {
 	result       subagent.TurnResult
 }
 
-func (d *codexAutoCompactDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
+func (d *codexAutoCompactDriver) Compact(context.Context, string, subagent.Model) (*subagent.TurnResult, error) {
 	d.compactCalls++
 	return nil, errors.New("manual compact must not be called")
 }
@@ -651,7 +651,7 @@ type unverifiedCompactDriver struct {
 	resumes int
 }
 
-func (d *unverifiedCompactDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
+func (d *unverifiedCompactDriver) Compact(context.Context, string, subagent.Model) (*subagent.TurnResult, error) {
 	return &subagent.TurnResult{Response: "Context compacted.", ContextTokens: 200}, nil
 }
 

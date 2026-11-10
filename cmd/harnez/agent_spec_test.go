@@ -171,7 +171,7 @@ func (testBatchAgentDriver) Run(context.Context, subagent.RunOptions) (*subagent
 func (testBatchAgentDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
 	return nil, nil
 }
-func (testBatchAgentDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
+func (testBatchAgentDriver) Compact(context.Context, string, subagent.Model) (*subagent.TurnResult, error) {
 	return nil, nil
 }
 func (testBatchAgentDriver) Stop(context.Context, string) error   { return nil }

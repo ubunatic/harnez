@@ -131,7 +131,7 @@ func TestClaudeCompactOmitsEmptyModelArgs(t *testing.T) {
 		got = args
 		return []byte(`{"type":"result","subtype":"success","result":"Compacted","usage":{}}`), nil
 	}}
-	if _, err := d.Compact(context.Background(), "s1"); err != nil {
+	if _, err := d.Compact(context.Background(), "s1", Model{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range got {
