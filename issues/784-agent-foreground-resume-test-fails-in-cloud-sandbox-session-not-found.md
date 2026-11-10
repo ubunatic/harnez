@@ -22,3 +22,9 @@ being too short on a slow container.
 - Reproduce in a fresh cloud session with `go test ./cmd/harnez -run TestForegroundStartAndResume -v`.
 - Isolate `HOME`/XDG dirs in the test if state leaks.
 - Verify: passes in a cloud session and locally.
+
+## Jules audit (2026-11-10, af9688e0)
+
+Still valid; the cause is not verified. Correction: the test is
+`TestForegroundStartAndResumeDetachIntoWaitableWorkers` in `cmd/harnez/agent_wait_test.go:229`, not
+`agent_test.go`. Report: `reports/jules/784.md` (github#154).
