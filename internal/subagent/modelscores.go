@@ -33,6 +33,7 @@ type ModelScoresSpec struct {
 	FrontierStyle           string                     `yaml:"frontier_style" json:"frontier_style"`
 	SubscriptionMultipliers map[string]float64         `yaml:"subscription_multipliers" json:"subscription_multipliers"`
 	MultiplierSource        string                     `yaml:"multiplier_source" json:"multiplier_source"`
+	MultiplierSources       map[string]string          `yaml:"multiplier_sources,omitempty" json:"multiplier_sources,omitempty"`
 	Models                  map[string]ModelScoreEntry `yaml:"models" json:"models"`
 }
 
@@ -108,6 +109,22 @@ func (s *ModelScoresSpec) Multiplier(provider string) (float64, error) {
 		return m, nil
 	}
 	return 0, fmt.Errorf("missing subscription multiplier for provider %q in spec/model_scores.yaml", provider)
+}
+
+// MultiplierSourceFor returns the recorded source for a provider's subscription multiplier.
+func (s *ModelScoresSpec) MultiplierSourceFor(provider string) string {
+	if s.MultiplierSources != nil {
+		if src, ok := s.MultiplierSources[provider]; ok && src != "" {
+			return src
+		}
+		if def, ok := s.MultiplierSources["default"]; ok && def != "" {
+			return def
+		}
+	}
+	if s.MultiplierSource != "" {
+		return s.MultiplierSource
+	}
+	return "owner estimate, unverified"
 }
 
 type colorsSpec struct {

@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -24,8 +25,16 @@ func TestLoadModelScores(t *testing.T) {
 
 	// Verify subscription multipliers
 	m, err := spec.Multiplier("codex")
-	if err != nil || m != 0.25 {
-		t.Fatalf("expected codex multiplier 0.25, got %v (err: %v)", m, err)
+	if err != nil || m != 0.19 {
+		t.Fatalf("expected codex multiplier 0.19, got %v (err: %v)", m, err)
+	}
+	codexSource := spec.MultiplierSourceFor("codex")
+	if !strings.HasPrefix(codexSource, "measured 2026-11-10: Codex Plus") {
+		t.Fatalf("unexpected codex multiplier source: %q", codexSource)
+	}
+	claudeSource := spec.MultiplierSourceFor("claude")
+	if claudeSource != "owner estimate, unverified" {
+		t.Fatalf("unexpected claude multiplier source: %q", claudeSource)
 	}
 	m, err = spec.Multiplier("claude")
 	if err != nil || m != 1.0 {

@@ -41,6 +41,10 @@
     "multiplier_source": {
       "type": "string"
     },
+    "multiplier_sources": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
     "models": {
       "type": "object",
       "additionalProperties": {

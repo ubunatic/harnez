@@ -10,7 +10,8 @@ cost_ticks: [0.1, 0.25, 0.5, 1, 2, 4, 10, 25, 50, 100, 200, 400]
 frontier_style: "chart-frontier"
 
 subscription_multipliers:
-  codex: 0.25
+  # measured 2026-11-10: Codex Plus ($20/mo), 10 threads since weekly drop 09:57Z, 19.4M tokens from ~/.codex/state_5.sqlite priced at OpenAI API list prices = ~$3.20 for 13 weekly points -> ~$25/week vs $4.60/week; one sample, unverified
+  codex: 0.19
   claude: 1.0
   agy: 0.33
   jules: 1.0
@@ -19,6 +20,10 @@ subscription_multipliers:
   strata-coder: 0.0
 
 multiplier_source: "owner estimate, unverified"
+
+multiplier_sources:
+  codex: "measured 2026-11-10: Codex Plus ($20/mo), 10 threads since weekly drop 09:57Z, 19.4M tokens from ~/.codex/state_5.sqlite priced at OpenAI API list prices = ~$3.20 for 13 weekly points -> ~$25/week vs $4.60/week; one sample, unverified"
+  default: "owner estimate, unverified"
 
 models:
   codex:luna:
