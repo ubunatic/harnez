@@ -1,6 +1,6 @@
 # 1203 — Accept official model names (gemini-4-argon, claude-opus-5-5) wherever harnez takes a model
 
-**Status**: Open
+**Status**: Closed — Official spec names resolve with optional tier (gemini-4-argon:low -> agy:argon), ambiguous names list candidates, unknown names show close matches through the role gate; make test-q1 206 ok 0 FAIL (169e1c4a, 4cbc33c7)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
