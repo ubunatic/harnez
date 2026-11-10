@@ -102,3 +102,11 @@ Seeded multipliers (owner review pending): codex 0.25, claude 1.0, agy 0.33, jul
    placed label's cell is within 2 cells of its point.
 2. Pareto list repeats ties (sonnet:low/high/med all cost 15 ★4.0, opus x3, fable x2): collapse equal
    (cost, rating) points to one entry per model (lowest tier), and assert it in the Pareto test.
+
+## M4 Pre-Work (owner go, 2026-11-10): measured Codex multiplier
+
+Set `subscription_multipliers.codex: 0.19` in `spec/model_scores.yaml` and record its source (comment or
+source field): "measured 2026-11-10: Codex Plus ($20/mo), 10 threads since weekly drop 09:57Z, 19.4M tokens
+from ~/.codex/state_5.sqlite priced at OpenAI API list prices = ~$3.20 for 13 weekly points -> ~$25/week vs
+$4.60/week; one sample, unverified". Other multipliers stay "owner estimate, unverified". Follow-ups: 1213
+(week-long measurement), 1214 (harnez codex token overcount).
