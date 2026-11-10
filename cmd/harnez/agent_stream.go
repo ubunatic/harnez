@@ -76,11 +76,10 @@ type turnStream struct {
 	// confirmed is set by the first non-ack message; violated and warned make
 	// the protocol notices fire once.
 	confirmed, violated, warned, planSeen bool
-	// lastShown is true when the most recent message was already printed live
-	// (always in full mode; confirmation and plan in stats mode).
-	lastShown bool
-	stop      chan struct{}
-	done      sync.WaitGroup
+	lastShown                             string
+	shown                                 bool
+	stop                                  chan struct{}
+	done                                  sync.WaitGroup
 }
 
 func newTurnStream(cmd *cobra.Command, mode string, compacted bool) *turnStream {
@@ -151,8 +150,8 @@ func (t *turnStream) onEvent(ev subagent.Event) {
 		t.last = "message"
 		// Confirmation and plan are the caller's chance to intervene, so they
 		// print in every mode.
-		t.lastShown = t.mode == streamFull || label == "confirmation" || label == "plan"
-		if t.lastShown {
+		if t.mode == streamFull || label == "confirmation" || label == "plan" {
+			t.lastShown, t.shown = text, true
 			fmt.Fprintf(t.w, "[%s: %s]\n%s\n", label, shortDur(time.Since(t.began)), text)
 		}
 	case "activity":
@@ -218,12 +217,11 @@ func (t *turnStream) finish(r *subagent.TurnResult) {
 		size += len(m)
 	}
 	if t.mode == streamStats {
-		reply := r.Response
-		if t.lastShown {
-			reply = "(the final message was already shown above)"
-		}
-		t.printf("[reply: %s]\n%s\n[done: %d messages (only the reply is shown), %d bytes, %s, %s]\n", shortDur(time.Since(t.began)), reply, len(r.Messages), size, tokenSummary(r), shortDur(time.Since(t.began)))
+		t.printf("[reply: %s]\n%s\n[done: %d messages (only the reply is shown), %d bytes, %s, %s]\n", shortDur(time.Since(t.began)), r.Response, len(r.Messages), size, tokenSummary(r), shortDur(time.Since(t.began)))
 		return
+	}
+	if !t.shown || t.lastShown != r.Response {
+		t.printf("[reply: %s]\n%s\n", shortDur(time.Since(t.began)), r.Response)
 	}
 	t.printf("[done: %d messages, last message is the reply, %d bytes, %s, %s]\n", len(r.Messages), size, tokenSummary(r), shortDur(time.Since(t.began)))
 }

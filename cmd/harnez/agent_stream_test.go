@@ -212,14 +212,64 @@ func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
 	}
 }
 
-func TestStatsModeDoesNotRepeatAnAlreadyShownFinalMessage(t *testing.T) {
-	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will do it")}}} // the only message is also the reply
-	got := zeroElapsed(runScripted(t, d, "start", "--model", "luna", "task", "--name", "w", "--stream", "stats"))
-	if strings.Count(got, "will do it") != 1 || strings.Contains(got, "CONFIRM:") {
-		t.Fatalf("final message repeated or raw tag shown:\n%s", got)
+func TestStatsModeRepeatsAnAlreadyShownFinalMessage(t *testing.T) {
+	for _, model := range []string{"codex:luna", "claude:sonnet"} {
+		t.Run(model, func(t *testing.T) {
+			d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will do it")}}}
+			got := zeroElapsed(runScripted(t, d, "start", "--model", model, "task", "--name", "w", "--stream", "stats"))
+			if !strings.Contains(got, "[reply: 0s]\nCONFIRM: will do it\n") {
+				t.Fatalf("missing reply marker:\n%s", got)
+			}
+		})
 	}
-	if !strings.Contains(got, "[reply: 0s]\n(the final message was already shown above)\n") {
-		t.Fatalf("missing reply marker:\n%s", got)
+}
+
+type batchReplyDriver struct{ recordingAgentDriver }
+
+func (*batchReplyDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
+	return &subagent.TurnResult{Response: "batch reply"}, nil
+}
+
+func TestAgyStatsStartAndResume(t *testing.T) {
+	d := &batchReplyDriver{}
+	storeDir := t.TempDir()
+	got, err := runWithStore(t, d, storeDir, "start", "--role", "advisor", "--model", "agy:argon:low", "--name", "worker", "--stream", "stats", "task")
+	if err != nil || !strings.Contains(zeroElapsed(got), "[reply: 0s]\nok\n") {
+		t.Fatalf("start: err=%v output=%s", err, got)
+	}
+	got, err = runWithStore(t, d, storeDir, "resume", "--name", "worker", "--stream", "stats", "task")
+	if err != nil || !strings.Contains(zeroElapsed(got), "[reply: 0s]\nbatch reply\n") {
+		t.Fatalf("resume: err=%v output=%s", err, got)
+	}
+}
+
+func TestTurnStreamReturnedReply(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode, event, response string
+		wantReply                   bool
+	}{
+		{"codex stats confirmation", streamStats, "CONFIRM: hello", "CONFIRM: hello", true},
+		{"claude stats plan", streamStats, "PLAN: hello", "PLAN: hello", true},
+		{"full same", streamFull, "hello", "hello", false},
+		{"full different", streamFull, "draft", "final", true},
+		{"full absent", streamFull, "", "final", true},
+		{"full transformed confirmation", streamFull, "CONFIRM: hello", "CONFIRM: hello", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			cmd := newAgentCmd()
+			cmd.SetOut(&out)
+			ts := newTurnStream(cmd, tc.mode, false)
+			if tc.event != "" {
+				ts.onEvent(msg(tc.event))
+			}
+			ts.finish(&subagent.TurnResult{Response: tc.response})
+			got := zeroElapsed(out.String())
+			marker := "[reply: 0s]\n" + tc.response + "\n"
+			if strings.Contains(got, marker) != tc.wantReply {
+				t.Fatalf("reply marker presence = %v, want %v:\n%s", strings.Contains(got, marker), tc.wantReply, got)
+			}
+		})
 	}
 }
 

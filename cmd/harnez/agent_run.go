@@ -683,6 +683,13 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)
 	}
+	if !req.JSON && req.StreamMode == streamStats && !req.PlanFirst {
+		ts = newTurnStream(cmd, streamStats, false)
+		ts.began = turnStarted
+		ts.finish(r)
+		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
+		return stillRunningExit(cmd, r, nil)
+	}
 	tl.finishTurn(r, id, out.ReconnectCmd)
 	if req.JSON {
 		err := json.NewEncoder(cmd.OutOrStdout()).Encode(out)
@@ -1037,6 +1044,13 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return err
 	}
 	if streaming {
+		ts.finish(r)
+		warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
+		return stillRunningExit(cmd, r, nil)
+	}
+	if !req.JSON && req.StreamMode == streamStats && !req.PlanFirst {
+		ts = newTurnStream(cmd, streamStats, false)
+		ts.began = turnStarted
 		ts.finish(r)
 		warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)
