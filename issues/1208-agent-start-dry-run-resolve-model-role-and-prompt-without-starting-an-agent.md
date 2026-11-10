@@ -53,3 +53,19 @@ write a failure report here.
   returns before stale repair (:748). Extract a pure argv builder for agy so all drivers print argv.
   Output: lines `dry-run: provider:model:tier`, `role`, `name`, `dir`, `argv` (prompt shown as
   `<prompt: N bytes from -p|-f path>`, not inline), then exit 0.
+
+## M1 delivered: agent start/resume --dry-run (5a440c8b)
+
+Host: owed full `make test-q1` after the developer's golden fix: 206 ok, 0 FAIL. Live dry runs for
+`gemini-4-argon:low`, `claude:fable:high`, `codex:luna:low` printed provider, role, name, dir, argv with
+`<prompt: 5 bytes from -p>`; `~/.harnez/agents` count unchanged (1556).
+
+## M2 Pre-Work (reviewer r1208, codex:terra:low)
+
+1. P2: `cmd/harnez/agent_cmds.go:77` echoes the raw prompt in an error when it starts with `--` (any mode).
+   Show only its first token (the would-be flag) and the byte count, never the full prompt.
+2. P2: add a dry-run test through the cobra command (start and resume): fake provider fails the test if run;
+   session dir entries exactly unchanged; stored session file bytes unchanged on resume; no telemetry DB.
+3. P3, host decision: restore the old agy resume argv for an empty conversation ID (`--conversation ""`)
+   so real runs keep exact behaviour; a test pins both forms.
+4. P3, host decision: `MkdirAll` of the session-store dir in dry run is accepted (no session data written).
