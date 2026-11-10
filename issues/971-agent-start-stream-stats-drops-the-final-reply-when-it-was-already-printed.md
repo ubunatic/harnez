@@ -53,3 +53,13 @@ Jules audit (PR GH#65, report `reports/jules/971-2.md`, checked against d8904997
 - 2026-11-10 host (decide mode): stats always prints the returned reply after the marker, for every
   provider. Full mode prints the returned reply after the live events unless it equals the last shown
   message exactly. Plan-first turns keep their gate. Reason: the returned reply is the source of truth.
+
+## M1 delivered: stats and full mode print the returned reply (3f1178a9)
+
+Host live check: codex luna advisor in `--stream stats` piped through `sed -n '/\[reply/,$p'` printed the reply.
+
+## M2 Pre-Work (reviewer r971, codex:terra:low)
+
+1. P3: `cmd/harnez/agent_stream_test.go:253` full-mode dedupe case checks only that the `[reply]` marker is
+   absent; also assert the message text appears exactly once (strings.Count == 1).
+2. Host decision: the raw `CONFIRM:` tag after `[reply]` in stats mode stays (verbatim returned reply, per Decision).
