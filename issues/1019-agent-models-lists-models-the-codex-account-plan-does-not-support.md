@@ -1,6 +1,6 @@
 # 1019 — agent models lists models the Codex account plan does not support
 
-**Status**: Open
+**Status**: Closed — codex start/resume failing with 'not supported when using Codex' (or model_not_found naming the model) records an unsupported access observation; agent models table and JSON show it, a later success clears it, writes only on status change; start errors show the full first provider line; cobra e2e test with fake codex; make test-q1 green (8440796b, bb4bcf6a)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
