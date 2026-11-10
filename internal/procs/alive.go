@@ -1,26 +1,23 @@
 package procs
 
 import (
-	"fmt"
 	"os"
-	"strings"
+	"strconv"
 	"syscall"
 )
 
-// IsAlive checks if a process is still alive. A zombie process is considered dead.
+// IsAlive reports whether pid still runs. Signal 0 alone also succeeds for a zombie that no
+// init reaped (issue 783: containers whose PID 1 is not a reaping init), so on Linux a process
+// in state Z (zombie) or X (dead) counts as gone. Without a readable /proc/<pid>/stat (other
+// systems, or a race with the exit) the signal-0 answer stands.
 func IsAlive(pid int) bool {
-	if err := syscall.Kill(pid, 0); err != nil {
+	if pid <= 0 || syscall.Kill(pid, 0) != nil {
 		return false
 	}
-	statData, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 	if err != nil {
-		return !os.IsNotExist(err)
+		return true
 	}
-	statStr := string(statData)
-	idx := strings.LastIndexByte(statStr, ')')
-	if idx != -1 && idx+2 < len(statStr) {
-		state := statStr[idx+2 : idx+3]
-		return state != "Z" && state != "X"
-	}
-	return true
+	info, ok := parseStat(pid, string(stat))
+	return !ok || (info.State != "Z" && info.State != "X")
 }
