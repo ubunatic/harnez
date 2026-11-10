@@ -37,3 +37,19 @@ official name maps to more than one entry and the right choice is the owner's.
 - Check the live resolver and recent commits before starting; the alias code may have moved.
 - Unverified: whether several entries share one `name` (e.g. the same Claude model on two
   providers); decide the tie rule only after listing them.
+
+## Searcher findings (s1203, codex:luna:low)
+
+- One shared resolver: `internal/subagent/driver.go:720` `resolveModelIn`; agent start via
+  `cmd/harnez/agent_run.go:222`; dispatch defaults/role targets `internal/subagent/agentspec.go:282`; picks :196.
+- Aliases: `modelHasAlias` driver.go:881. Unknown-model errors driver.go:790 and :822 list all known specs,
+  no ranked close matches.
+- No duplicate `name:` values in `spec/agent.yaml` today.
+- Tests: `internal/subagent/driver_test.go:47`, `agentspec_test.go:394`, `purpose_test.go:18`; golden
+  `internal/subagent/testdata/known-model-specs.golden`.
+
+## Decision
+
+- 2026-11-10 host (decide mode): existing keys and aliases match first; the official `name` is tried
+  only when nothing else matched. Ambiguity is tested with a synthetic duplicate entry. Close matches
+  rank by edit distance over keys, aliases and names (top 3). Reason: keeps every current resolution unchanged.
