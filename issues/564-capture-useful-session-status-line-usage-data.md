@@ -26,3 +26,20 @@ Done when supported status-line signals are mapped into the shared usage data mo
 - Define how session observations enter the Usage System and coexist with API/proxy collector snapshots, including freshness and source provenance.
 - Capture useful fractional quota values and context occupancy inputs where available; retain raw token counts and window size so derived fractions remain interpretable.
 - Add focused parsing/mapping tests and verify that status-line collection does not cause additional API requests.
+
+## Audit 2026-11-11
+
+Jules audit (PR GH#172, report `reports/jules/564.md`, checked against 5c1fe0a9, 3 of 3 references held).
+Verdict "partly done" holds: the passive parser reads Claude `rate_limits.*.used_percentage`
+(`internal/usage/passive.go:21`) and AGY `quota.*.remaining_fraction` (`passive.go:26`) into
+`usagestore.Window` (`passive.go:110-130`), but reads no `context_window` fields, so no context tokens or
+window size are captured, although `usagestore.Window` already has token fields
+(`internal/usagestore/store.go:33-36`). Left: map `context_window` token counts and size into the window.
+Rejected lead: "allow `codex` in `ObserveStatuslineTo`" (`passive.go:54`); Codex sends Harnez no
+status-line payload, and the Goal forbids fabricated values.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-564 | 11042793315084216759 | github #172 (closed) | done: partly done, 3/3 refs hold |
