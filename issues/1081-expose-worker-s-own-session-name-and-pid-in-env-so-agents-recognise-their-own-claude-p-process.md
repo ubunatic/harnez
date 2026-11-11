@@ -1,6 +1,6 @@
 # 1081 — Expose worker's own session name and pid in env so agents recognise their own claude -p process
 
-**Status**: Open
+**Status**: Closed — export already existed (setAgentEnv); preamble line added
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Enhancement
