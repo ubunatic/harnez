@@ -165,3 +165,18 @@ ticket — no production code changes.
 ### Scope
 
 Medium (two audit runs, one study write-up, N small follow-up tickets; no code).
+
+## Audit 2026-11-11
+
+Jules audit (PR GH#181, report `reports/jules/128.md`, checked against db49110d, all references held).
+Partly done: the procedure and the clean-session baselines exist for Claude Code
+(`docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md`, `claude -p` call at line 26)
+and agy (`docs/studies/2026-08-31-agy-clean-session-system-prompt-audit.md`, missed by the report). Left:
+the with-project-docs passes for both, the combined write-up, and follow-up trim tickets (none filed).
+The findings are from 2026-08-31; rerun before filing trims.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-128 | 18122075531426099817 | github #181 (closed) | done: partly done, refs hold |
