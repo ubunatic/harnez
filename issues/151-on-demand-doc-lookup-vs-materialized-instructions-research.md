@@ -231,3 +231,17 @@ it changes whether "per-repo-per-agent" is a natural generalization or a second 
 **Large** (research effort, not code) — one focused session for steps 1-3 (measurement), a second
 for steps 4-7 (the doc). Each individual step is small; the deliverable is long and the reasoning
 is the deliverable.
+
+## Audit 2026-11-11
+
+Jules audit (PR GH#180, report `reports/jules/151.md`, checked against fed9cfb3, 2 of 2 references held).
+Still valid: the design doc does not exist under `docs/studies/`, and step 1 cannot be measured from
+telemetry: `tool_calls` stores `tool_name` but no path (`spec/telemetry.yaml:12`), and
+`cli_invocations.args` has absolute paths redacted at write time (`spec/telemetry.yaml:101-111`). Step 1
+needs another source (transcripts) or a new path column.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-151 | 12873805910202074687 | github #180 (closed) | done: still valid, 2/2 refs hold |
