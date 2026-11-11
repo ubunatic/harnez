@@ -88,12 +88,25 @@ type CodexQuarantine struct {
 
 // TurnRecord stores the usage and optional human rating for one provider turn.
 type TurnRecord struct {
-	Turn              int    `json:"turn"`
-	NewInputTokens    int    `json:"new_input_tokens"`
-	CachedInputTokens int    `json:"cached_input_tokens"`
-	OutputTokens      int    `json:"output_tokens"`
-	Rating            *int   `json:"rating,omitempty"`
-	RatingReason      string `json:"rating_reason,omitempty"`
+	Turn              int `json:"turn"`
+	NewInputTokens    int `json:"new_input_tokens"`
+	CachedInputTokens int `json:"cached_input_tokens"`
+	OutputTokens      int `json:"output_tokens"`
+	// ReasoningTokens is nil when the provider did not report reasoning tokens
+	// (unknown), so a stored 0 always means a reported zero (ticket 1215).
+	ReasoningTokens *int   `json:"reasoning_tokens,omitempty"`
+	Rating          *int   `json:"rating,omitempty"`
+	RatingReason    string `json:"rating_reason,omitempty"`
+}
+
+// NewTurnRecord builds the per-turn usage record from a provider turn result.
+func NewTurnRecord(turn int, r *TurnResult) TurnRecord {
+	rec := TurnRecord{Turn: turn, NewInputTokens: CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}
+	if r.ReasoningTokensKnown {
+		n := r.ReasoningTokens
+		rec.ReasoningTokens = &n
+	}
+	return rec
 }
 
 // ReplyRecord stores the final reply produced during one agent turn.
