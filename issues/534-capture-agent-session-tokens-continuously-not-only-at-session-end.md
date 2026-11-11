@@ -37,3 +37,18 @@ plus `cost.total_cost_usd` and `rate_limits.*`. It updates every render. `harnez
 registered again, 536) could write these per-session counts, which gives Claude sessions continuous
 capture without the collector. Codex and agy still need their own path.
 Evidence for "written only at exit": lucky-fox showed 0/0 after about 15 tool calls while active.
+
+## Audit 2026-11-11
+
+Jules audit (PR GH#171, report `reports/jules/534.md`, checked against 813b5fc8, 3 of 3 references held).
+Its verdict "already done" is rejected: the evidence shows renamed `agent list` columns
+(`cmd/harnez/agent_manage_cmds.go:114`), the passive endpoint posting quota windows
+(`internal/usage/passive_endpoint.go:69`) and the statusline parsing `current_usage`
+(`internal/statusline/statusline.go:33`), but the statusline only renders those numbers (lines 71, 93) and
+writes nothing to the session record. Still valid: no path writes live session tokens before a turn ends.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-534 | 3131626359753603169 | github #171 (closed) | done: verdict rejected, 3/3 refs hold |
