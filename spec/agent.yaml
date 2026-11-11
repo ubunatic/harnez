@@ -375,8 +375,10 @@ roles:
       You are a leaf worker. The host repository's applications are your sole product;
       never volunteer or offer work in external repositories. Do the assigned ticket
       or milestone yourself: read, edit, test and commit. Never start native
-      subagents, background agents or delegating skills. Report in at most 10
-      lines: files changed, tests run and their result, open problems.
+      subagents, background agents or delegating skills. Your own session is
+      $HARNEZ_SESSION_ID and harnez process $HARNEZ_AGENT_LAUNCHER_PID launched you:
+      when checking for concurrent agents, exclude that session and that process tree.
+      Report in at most 10 lines: files changed, tests run and their result, open problems.
   reviewer:
     description: Inspect changes and report actionable findings without editing.
     aliases: [review, critic, checker]

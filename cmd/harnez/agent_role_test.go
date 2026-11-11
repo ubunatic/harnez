@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -55,6 +56,25 @@ func TestAgentRoleStoredEnvAndPreamble(t *testing.T) {
 	}
 	if _, err := runWithStore(t, d, storeDir, "resume", "--name", "boss", "--role", "developer", "x"); err == nil || !strings.Contains(err.Error(), "conflicts with session") {
 		t.Fatalf("conflicting --role err = %v", err)
+	}
+}
+
+// Issue 1081: a worker that checks for concurrent agents must recognise its own process. The env
+// names its session and launcher, and the developer preamble says to exclude them.
+func TestDeveloperWorkerCanRecogniseItsOwnProcess(t *testing.T) {
+	t.Setenv(agentRoleEnv, "")
+	installUnclassifiedNeus(t)
+	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+	if _, err := runWithStore(t, d, t.TempDir(), "start", "--name", "w1", "task"); err != nil {
+		t.Fatal(err)
+	}
+	if d.envSession != "w1" || d.envLauncher != strconv.Itoa(os.Getpid()) {
+		t.Fatalf("child env session=%q launcher=%q; want w1 and %d", d.envSession, d.envLauncher, os.Getpid())
+	}
+	for _, v := range []string{"$" + agentSessionEnv, "$" + agentLauncherEnv} {
+		if !strings.Contains(d.prompt, v) {
+			t.Errorf("developer preamble does not name %s:\n%s", v, d.prompt)
+		}
 	}
 }
 

@@ -27,7 +27,7 @@ type scriptDriver struct {
 	sid     string   // session id returned by a turn; "thread-1" when empty
 	resumed []string // provider ids passed to ResumeStream
 	// environment the provider process would inherit during the turn
-	envRole, envSession string
+	envRole, envSession, envLauncher string
 }
 
 type warningGateDriver struct {
@@ -93,7 +93,7 @@ func (d *scriptDriver) play(fn subagent.EventFunc) *subagent.TurnResult {
 
 func (d *scriptDriver) RunStream(_ context.Context, o subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	d.prompt = o.Prompt
-	d.envRole, d.envSession = os.Getenv(agentRoleEnv), os.Getenv(agentSessionEnv)
+	d.envRole, d.envSession, d.envLauncher = os.Getenv(agentRoleEnv), os.Getenv(agentSessionEnv), os.Getenv(agentLauncherEnv)
 	return d.play(fn), nil
 }
 
