@@ -31,3 +31,10 @@ When running `harnez release` across different repositories:
 - **M1**: Implement tag history inspection in `internal/release` to determine the predominant recent bump type when `--bump` flag is unset.
 - **M2**: Add warning for missing `version.yaml` and clarify the no-build detection output in `runBuildStep`.
 - **M3**: Add unit tests in `internal/release` testing bump inference across various git tag sequences (minor-step, patch-step, initial release) and missing build / missing spec scenarios.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-1136 | - | - | failed: start refused, HTTP 400 "Precondition check failed" (06:33) |
+| audit | jules-audit-1136b | - | - | failed: same refusal 3 min later, with 1 session open; likely the 2026-11-11 stop on new Jules work |
