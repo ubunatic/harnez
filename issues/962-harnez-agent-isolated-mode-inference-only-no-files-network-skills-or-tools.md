@@ -36,3 +36,19 @@ clear the goal and write a failure report here.
 
 A canary per provider: an isolated prompt asking the model to read a file, list a directory and
 fetch a URL must fail each attempt and still return a text answer.
+
+## Audit 2026-11-11
+
+Jules audit (PR GH#179, report `reports/jules/962.md`, checked against 703ce7ff, 3 of 3 references held).
+Still valid: every driver starts with permissions skipped, codex with
+`--dangerously-bypass-approvals-and-sandbox` (`internal/subagent/codex.go:125`), claude with
+`--dangerously-skip-permissions` (`internal/subagent/claude.go:55`), agy with
+`--dangerously-skip-permissions --sandbox` (`internal/subagent/agy.go:37`), and no isolated mode exists
+(the only "isolated" hit outside tests is a process-group comment in `internal/subagent/watchdog.go:22`).
+Related: 1216 (tool-only mode) also needs a per-model switch on these same run-arg builders.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-962 | 8313455151916030535 | github #179 (closed) | done: still valid, 3/3 refs hold |
