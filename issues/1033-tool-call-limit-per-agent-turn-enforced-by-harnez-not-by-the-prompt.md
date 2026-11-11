@@ -168,3 +168,9 @@ have no tools, so the limit never fires. Subagent (Task) calls in Claude do not 
 /goal Enforce a per-turn tool-call limit as specified above, at least for Pi/lmcoder, or stop and report when a
 provider gives no way to block or count calls. Circuit breaker: on a loop or no progress, clear the goal and write a
 failure report. Re-check live code and Pi's version first (Findings are from Pi 1.4.0); refined 2026-10-31.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement (M1) | jules-impl-1033 | 10891694979554508594 | none | failed 2026-11-11: stalled after 2 replies; it had added schema and yaml for the limit and asked about a `--max-tool-calls` flag and an `Event.ToolCall` field (lead: the ticket text names both; decide whether M1 includes them) |
