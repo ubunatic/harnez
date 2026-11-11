@@ -46,3 +46,12 @@ max 36; xhigh not shown.
 ## Audit 2026-11-08 (Jules)
 
 Jules audit (GitHub PR 146, `reports/jules/993.md`, checked against d8c61da; 5/5 references hold): still valid. Tiers are closed to `low|med|high` in `spec/schemas/agent.schema.json:14,240` (ticket said 189; it moved), `spec/schemas/model-policy.schema.json:28,45` and `isTier` (`internal/subagent/driver.go:897`); `claude.go:78` maps `med` to `medium`. The `claude --help` claim stays not verified. Next: extend the enums, pattern and Go tier lists with `xhigh`/`max`, and decide how non-Claude providers treat them.
+
+Re-audit 2026-11-11 (github#184, checked against 5882420e; 6/6 references hold): same verdict. The second
+`agent.schema.json` tier enum is now at line 275 and `isTier` at `driver.go:1039`. The earlier report is kept.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-993 | 10749928295299853226 | github #184 (closed) | done: still valid, 6/6 refs hold; repeat |
