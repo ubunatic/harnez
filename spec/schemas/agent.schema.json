@@ -5,105 +5,332 @@
   "$defs": {
     "modelIdentity": {
       "type": "object",
-      "required": ["harness", "provider", "model", "version"],
+      "required": [
+        "harness",
+        "provider",
+        "model",
+        "version"
+      ],
       "properties": {
-        "harness": { "type": "string", "minLength": 1 },
-        "provider": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 },
-        "version": { "type": "string", "minLength": 1 },
-        "tier": { "type": "string", "enum": ["low", "med", "high"] }
+        "harness": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tier": {
+          "type": "string",
+          "enum": [
+            "low",
+            "med",
+            "high"
+          ]
+        }
       },
       "additionalProperties": false
     },
     "fact": {
       "type": "object",
-      "required": ["value", "source", "observed_at", "evidence"],
+      "required": [
+        "value",
+        "source",
+        "observed_at",
+        "evidence"
+      ],
       "properties": {
         "value": {},
-        "source": { "type": "string", "enum": ["spec-default", "web", "discovered", "measured", "user-declared"] },
-        "source_url": { "type": "string", "format": "uri" },
-        "method": { "type": "string", "minLength": 1 },
-        "disputed": { "type": "boolean", "description": "Set by the evidence producer on an individual fact when credible observations conflict; readers retain and surface all facts and do not select one by array order." },
+        "source": {
+          "type": "string",
+          "enum": [
+            "spec-default",
+            "web",
+            "discovered",
+            "measured",
+            "user-declared"
+          ]
+        },
+        "source_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disputed": {
+          "type": "boolean",
+          "description": "Set by the evidence producer on an individual fact when credible observations conflict; readers retain and surface all facts and do not select one by array order."
+        },
         "observed_at": {
           "type": "string",
           "format": "date-time",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"
         },
-        "account": { "type": "string", "minLength": 1 },
-        "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        "account": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       },
       "allOf": [
-        { "if": { "properties": { "source": { "const": "web" } }, "required": ["source"] }, "then": { "required": ["source_url"] } },
-        { "if": { "properties": { "source": { "const": "discovered" } }, "required": ["source"] }, "then": { "required": ["method", "account"] } }
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "web"
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          "then": {
+            "required": [
+              "source_url"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "discovered"
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          "then": {
+            "required": [
+              "method",
+              "account"
+            ]
+          }
+        }
       ],
       "additionalProperties": false
     },
     "apiCost": {
       "type": "object",
-      "required": ["input_per_million", "output_per_million", "cache_per_million", "effective_date"],
+      "required": [
+        "input_per_million",
+        "output_per_million",
+        "cache_per_million",
+        "effective_date"
+      ],
       "properties": {
-        "input_per_million": { "type": ["number", "null"], "minimum": 0 },
-        "output_per_million": { "type": ["number", "null"], "minimum": 0 },
-        "cache_per_million": { "type": ["number", "null"], "minimum": 0 },
-        "effective_date": { "type": "string", "format": "date" }
+        "input_per_million": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "output_per_million": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "cache_per_million": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "effective_date": {
+          "type": "string",
+          "format": "date"
+        }
       },
       "additionalProperties": false
     },
     "subscriptionCost": {
       "type": "object",
-      "required": ["plan", "currency", "period", "quota"],
+      "required": [
+        "plan",
+        "currency",
+        "period",
+        "quota"
+      ],
       "properties": {
-        "plan": { "type": ["string", "null"] },
-        "currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },
-        "period": { "type": ["string", "null"], "enum": ["day", "month", "year", null] },
-        "quota": { "type": ["number", "null"], "minimum": 0 }
+        "plan": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z]{3}$"
+        },
+        "period": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "day",
+            "month",
+            "year",
+            null
+          ]
+        },
+        "quota": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
       },
       "additionalProperties": false
     }
   },
-  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "pi_compaction", "context_modes", "default_role", "models", "roles", "stop", "external_sessions", "model_traits", "jules"],
+  "required": [
+    "default_model",
+    "role_classify_timeout_ms",
+    "reply_history_limit",
+    "compact_threshold_tokens",
+    "auto_compact",
+    "pi_compaction",
+    "context_modes",
+    "default_role",
+    "models",
+    "roles",
+    "stop",
+    "external_sessions",
+    "model_traits",
+    "jules"
+  ],
   "properties": {
-    "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
-    "reply_history_limit": { "type": "integer", "minimum": 1 },
-    "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
-    "compact_thresholds": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": "Model-specific default compaction thresholds." },
+    "role_classify_timeout_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reply_history_limit": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "compact_threshold_tokens": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Default context token threshold for automatic agent compaction."
+    },
+    "compact_thresholds": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "description": "Model-specific default compaction thresholds."
+    },
     "cost_check": {
       "type": "object",
       "description": "Thresholds for alerting on expensive long-running sessions.",
-      "required": ["cached_to_new_ratio", "context_usage_fraction", "min_turns"],
+      "required": [
+        "cached_to_new_ratio",
+        "context_usage_fraction",
+        "min_turns"
+      ],
       "properties": {
-        "cached_to_new_ratio": { "type": "number", "minimum": 0 },
-        "context_usage_fraction": { "type": "number", "minimum": 0 },
-        "min_turns": { "type": "integer", "minimum": 0 }
+        "cached_to_new_ratio": {
+          "type": "number",
+          "minimum": 0
+        },
+        "context_usage_fraction": {
+          "type": "number",
+          "minimum": 0
+        },
+        "min_turns": {
+          "type": "integer",
+          "minimum": 0
+        }
       },
       "additionalProperties": false
     },
     "pi_compaction": {
       "type": "object",
       "description": "Pi compaction overrides written by harnez apply for small-window models; the loader also rejects reserve_fraction + keep_recent_fraction >= 1.",
-      "required": ["small_window_threshold_tokens", "reserve_fraction", "keep_recent_fraction"],
+      "required": [
+        "small_window_threshold_tokens",
+        "reserve_fraction",
+        "keep_recent_fraction"
+      ],
       "properties": {
-        "small_window_threshold_tokens": { "type": "integer", "minimum": 1 },
-        "reserve_fraction": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
-        "keep_recent_fraction": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 }
+        "small_window_threshold_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reserve_fraction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        },
+        "keep_recent_fraction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        }
       },
       "additionalProperties": false
     },
     "context_modes": {
       "type": "object",
       "description": "Selectable context modes for agent runs (issue 1027).",
-      "required": ["default", "plain", "no-skills"],
+      "required": [
+        "default",
+        "plain",
+        "no-skills"
+      ],
       "additionalProperties": {
         "type": "object",
-        "required": ["description"],
+        "required": [
+          "description"
+        ],
         "properties": {
-          "description": { "type": "string", "minLength": 1 },
-          "skills": { "type": "boolean" },
-          "mcp": { "type": "boolean" },
-          "context_files": { "type": "boolean" },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "skills": {
+            "type": "boolean"
+          },
+          "mcp": {
+            "type": "boolean"
+          },
+          "context_files": {
+            "type": "boolean"
+          },
           "tools": {
             "type": "array",
-            "items": { "type": "string", "minLength": 1 },
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
             "uniqueItems": true
           }
         },
@@ -112,89 +339,236 @@
     },
     "auto_compact": {
       "type": "object",
-      "required": ["default_mode", "provider_modes", "watchdog_grace_ms", "legacy_growth_threshold_tokens", "codex_on_demand_limit_tokens", "codex_status_prompt"],
+      "required": [
+        "default_mode",
+        "provider_modes",
+        "watchdog_grace_ms",
+        "legacy_growth_threshold_tokens",
+        "codex_on_demand_limit_tokens",
+        "codex_status_prompt"
+      ],
       "properties": {
-        "default_mode": { "type": "string", "enum": ["manual", "native", "disabled"] },
-        "provider_modes": { "type": "object", "additionalProperties": { "type": "string", "enum": ["manual", "native", "disabled"] } },
-        "watchdog_grace_ms": { "type": "integer", "minimum": 1 },
-        "legacy_growth_threshold_tokens": { "type": "integer", "minimum": 1 },
-        "codex_on_demand_limit_tokens": { "type": "integer", "minimum": 1 },
-        "codex_status_prompt": { "type": "string", "minLength": 1, "pattern": "\\S" }
+        "default_mode": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "native",
+            "disabled"
+          ]
+        },
+        "provider_modes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "native",
+              "disabled"
+            ]
+          }
+        },
+        "watchdog_grace_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "legacy_growth_threshold_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "codex_on_demand_limit_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "codex_status_prompt": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
       },
       "additionalProperties": false
     },
     "model_probe_budget": {
       "type": "object",
-      "required": ["max_calls_per_update", "max_output_tokens_per_call", "timeout_seconds"],
+      "required": [
+        "max_calls_per_update",
+        "max_output_tokens_per_call",
+        "timeout_seconds"
+      ],
       "properties": {
-        "max_calls_per_update": { "type": "integer", "minimum": 1 },
-        "max_output_tokens_per_call": { "type": "integer", "minimum": 1 },
-        "timeout_seconds": { "type": "integer", "minimum": 1 }
+        "max_calls_per_update": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_output_tokens_per_call": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1
+        }
       },
       "additionalProperties": false
     },
     "jules": {
       "type": "object",
       "description": "Google Jules REST API settings; a wait that runs out leaves the session running.",
-      "required": ["base_url", "config_path", "poll_interval_ms", "wait_timeout_ms", "request_timeout_ms", "max_poll_errors", "completed_pr_polls", "sync_remote", "sync_branch", "sync_timeout_ms"],
+      "required": [
+        "base_url",
+        "config_path",
+        "poll_interval_ms",
+        "wait_timeout_ms",
+        "request_timeout_ms",
+        "max_poll_errors",
+        "completed_pr_polls",
+        "sync_remote",
+        "sync_branch",
+        "sync_timeout_ms"
+      ],
       "properties": {
-        "base_url": { "type": "string", "minLength": 1 },
-        "config_path": { "type": "string", "minLength": 1 },
-        "poll_interval_ms": { "type": "integer", "minimum": 1 },
-        "wait_timeout_ms": { "type": "integer", "minimum": 1 },
-        "request_timeout_ms": { "type": "integer", "minimum": 1 },
-        "max_poll_errors": { "type": "integer", "minimum": 1 },
-        "completed_pr_polls": { "type": "integer", "minimum": 0 },
-        "sync_remote": { "type": "string", "minLength": 1, "description": "Canonical remote (Codeberg) whose sync_branch the GitHub copy is fast-forwarded to before a session." },
-        "sync_branch": { "type": "string", "minLength": 1 },
-        "sync_timeout_ms": { "type": "integer", "minimum": 1 },
-        "auto_reply": { "type": "string", "description": "Sent once per session when Jules first waits for feedback; empty turns it off." }
+        "base_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "poll_interval_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "wait_timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "request_timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_poll_errors": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "completed_pr_polls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sync_remote": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Canonical remote (Codeberg) whose sync_branch the GitHub copy is fast-forwarded to before a session."
+        },
+        "sync_branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sync_timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "auto_reply": {
+          "type": "string",
+          "description": "Sent once per session when Jules first waits for feedback; empty turns it off."
+        }
       },
       "additionalProperties": false
     },
     "stale_session_errors": {
       "type": "object",
       "description": "Per provider: verified CLI stderr line prefixes that mean the resumed session is gone.",
-      "additionalProperties": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     },
     "known_error_checks": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["provider", "match_text", "check", "warning"],
+        "required": [
+          "provider",
+          "match_text",
+          "check",
+          "warning"
+        ],
         "properties": {
-          "provider": { "type": "string", "minLength": 1 },
-          "match_text": { "type": "string", "minLength": 1 },
-          "check": { "type": "string", "enum": ["quota_available"] },
-          "warning": { "type": "string", "minLength": 1 }
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "match_text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "check": {
+            "type": "string",
+            "enum": [
+              "quota_available"
+            ]
+          },
+          "warning": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "additionalProperties": false
       }
     },
     "resume_note": {
       "type": "object",
-      "required": ["idle_threshold", "text"],
+      "required": [
+        "idle_threshold",
+        "text"
+      ],
       "properties": {
-        "idle_threshold": { "type": "string", "minLength": 1 },
-        "text": { "type": "string", "minLength": 1 }
+        "idle_threshold": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
       },
       "additionalProperties": false
     },
     "stop": {
       "type": "object",
-      "required": ["grace_ms", "kill_wait_ms", "poll_ms"],
+      "required": [
+        "grace_ms",
+        "kill_wait_ms",
+        "poll_ms"
+      ],
       "properties": {
-        "grace_ms": { "type": "integer", "minimum": 1 },
-        "kill_wait_ms": { "type": "integer", "minimum": 1 },
-        "poll_ms": { "type": "integer", "minimum": 1 }
+        "grace_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kill_wait_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "poll_ms": {
+          "type": "integer",
+          "minimum": 1
+        }
       },
       "additionalProperties": false
     },
     "selftest": {
       "type": "object",
-      "required": ["background_duration_ms"],
+      "required": [
+        "background_duration_ms"
+      ],
       "properties": {
-        "background_duration_ms": { "type": "integer", "minimum": 1 }
+        "background_duration_ms": {
+          "type": "integer",
+          "minimum": 1
+        }
       },
       "additionalProperties": false
     },
@@ -203,28 +577,99 @@
       "minProperties": 1,
       "additionalProperties": {
         "type": "object",
-        "required": ["root", "pattern", "format", "record_type_path", "record_type", "max_record_bytes", "active_match_window_seconds", "name_prefix", "available_status", "fields"],
+        "required": [
+          "root",
+          "pattern",
+          "format",
+          "record_type_path",
+          "record_type",
+          "max_record_bytes",
+          "active_match_window_seconds",
+          "name_prefix",
+          "available_status",
+          "fields"
+        ],
         "properties": {
-          "root": { "type": "string", "minLength": 1 },
-          "pattern": { "type": "string", "minLength": 1 },
-          "format": { "type": "string", "enum": ["jsonl"] },
-          "record_type_path": { "type": "string", "minLength": 1 },
-          "record_type": { "type": "string", "minLength": 1 },
-          "max_record_bytes": { "type": "integer", "minimum": 1 },
-          "active_match_window_seconds": { "type": "integer", "minimum": 1 },
-          "name_prefix": { "type": "string", "minLength": 1 },
-          "available_status": { "type": "string", "minLength": 1 },
-          "interactive_sources": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pattern": {
+            "type": "string",
+            "minLength": 1
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "jsonl"
+            ]
+          },
+          "record_type_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "record_type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "max_record_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "active_match_window_seconds": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "name_prefix": {
+            "type": "string",
+            "minLength": 1
+          },
+          "available_status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "interactive_sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
           "fields": {
             "type": "object",
-            "required": ["id", "working_dir", "model_provider", "source", "created_at"],
+            "required": [
+              "id",
+              "working_dir",
+              "model_provider",
+              "source",
+              "created_at"
+            ],
             "properties": {
-              "id": { "type": "string", "minLength": 1 },
-              "provider_session_id": { "type": "string", "minLength": 1 },
-              "working_dir": { "type": "string", "minLength": 1 },
-              "model_provider": { "type": "string", "minLength": 1 },
-              "source": { "type": "string", "minLength": 1 },
-              "created_at": { "type": "string", "minLength": 1 }
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provider_session_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "working_dir": {
+                "type": "string",
+                "minLength": 1
+              },
+              "model_provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "created_at": {
+                "type": "string",
+                "minLength": 1
+              }
             },
             "additionalProperties": false
           }
@@ -232,42 +677,118 @@
         "additionalProperties": false
       }
     },
-    "default_model": { "type": "string", "minLength": 1 },
-    "default_role": { "type": "string", "minLength": 1 },
-    "models_legend": { "type": "string" },
+    "default_model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "default_role": {
+      "type": "string",
+      "minLength": 1
+    },
+    "models_legend": {
+      "type": "string"
+    },
     "model_traits": {
-      "type": "object", "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
-      "additionalProperties": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" }
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[^\\r\\n]+$"
+      }
     },
     "models": {
       "type": "object",
       "minProperties": 1,
       "additionalProperties": {
         "type": "object",
-        "required": ["provider", "name", "tier"],
+        "required": [
+          "provider",
+          "name",
+          "tier"
+        ],
         "properties": {
-          "provider": { "type": "string", "minLength": 1 },
-          "name": { "type": "string", "minLength": 1 },
-          "tier": { "type": "string", "enum": ["low", "med", "high"] },
-          "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-          "preferred": { "type": "boolean" },
-          "effort": { "type": "boolean" },
-          "roles": { "type": "string" },
-          "cost": { "type": "integer", "minimum": 1 },
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "low",
+              "med",
+              "high"
+            ]
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "preferred": {
+            "type": "boolean"
+          },
+          "effort": {
+            "type": "boolean"
+          },
+          "roles": {
+            "type": "string"
+          },
+          "cost": {
+            "type": "integer",
+            "minimum": 1
+          },
           "cost_by_tier": {
             "type": "object",
             "properties": {
-              "low": { "type": "integer", "minimum": 1 },
-              "med": { "type": "integer", "minimum": 1 },
-              "high": { "type": "integer", "minimum": 1 }
+              "low": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "med": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "high": {
+                "type": "integer",
+                "minimum": 1
+              }
             },
             "additionalProperties": false
           },
-          "eff": { "type": "string", "enum": ["+", "~", "-", "?"] },
-          "skills": { "type": "string", "pattern": "^(Go|TUI|SQL)[-+~?]( (Go|TUI|SQL)[-+~?])*$" },
-          "use": { "type": "string" },
-          "use_med": { "type": "string" },
-          "guidance_source_url": { "type": "string", "format": "uri", "description": "Source for factual claims in this model's listing guidance; owner rankings and estimates are labeled as owner guidance." }
+          "eff": {
+            "type": "string",
+            "enum": [
+              "+",
+              "~",
+              "-",
+              "?"
+            ]
+          },
+          "skills": {
+            "type": "string",
+            "pattern": "^(Go|TUI|SQL)[-+~?]( (Go|TUI|SQL)[-+~?])*$"
+          },
+          "use": {
+            "type": "string"
+          },
+          "use_med": {
+            "type": "string"
+          },
+          "guidance_source_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Source for factual claims in this model's listing guidance; owner rankings and estimates are labeled as owner guidance."
+          }
         },
         "additionalProperties": false
       }
@@ -277,21 +798,67 @@
       "minProperties": 1,
       "additionalProperties": {
         "type": "object",
-        "required": ["description", "spawns", "rules"],
+        "required": [
+          "description",
+          "spawns",
+          "rules"
+        ],
         "properties": {
-          "description": { "type": "string", "minLength": 1 },
-          "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-          "spawns": { "type": "array", "items": { "type": "string" } },
-          "auto_approve_tools": { "type": "boolean", "description": "Agy sessions of this role run tools unattended (--dangerously-skip-permissions --sandbox), because headless print mode cannot approve a call. Other providers ignore it. Default false." },
-          "default_model": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-          "models": {
-            "type": "object", "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
-            "additionalProperties": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+          "description": {
+            "type": "string",
+            "minLength": 1
           },
-          "rules": { "type": "string", "minLength": 1 }
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "spawns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "auto_approve_tools": {
+            "type": "boolean",
+            "description": "Agy sessions of this role run tools unattended (--dangerously-skip-permissions --sandbox), because headless print mode cannot approve a call. Other providers ignore it. Default false."
+          },
+          "default_model": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "models": {
+            "type": "object",
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9-]*$"
+            },
+            "additionalProperties": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "rules": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "additionalProperties": false
       }
+    },
+    "costly_models": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
     }
   },
   "additionalProperties": false

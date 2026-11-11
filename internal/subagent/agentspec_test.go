@@ -657,3 +657,30 @@ external_sessions:
     available_status: available
     fields: {id: payload.id, working_dir: payload.cwd, model_provider: payload.model_provider, source: payload.source, created_at: payload.timestamp}
 `
+
+func TestIsCostlyModel(t *testing.T) {
+	tests := []struct {
+		name      string
+		modelSpec string
+		want      bool
+	}{
+		{"cheap model", "codex:luna:low", false},
+		{"costly sol", "codex:sol:high", true},
+		{"costly argon", "agy:argon:high", true},
+		{"costly astra wildcard matches explicitly", "codex:astra:high", true},
+		{"costly fable explicitly", "claude:fable:high", true},
+		{"alias to costly model", "sol:high", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := IsCostlyModel(tc.modelSpec)
+			if err != nil {
+				t.Fatalf("IsCostlyModel(%q) unexpected error: %v", tc.modelSpec, err)
+			}
+			if got != tc.want {
+				t.Errorf("IsCostlyModel(%q) = %v, want %v", tc.modelSpec, got, tc.want)
+			}
+		})
+	}
+}

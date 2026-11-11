@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -26,6 +27,7 @@ type agentSpec struct {
 	DefaultRole           string                         `yaml:"default_role"`
 	RoleClassifyTimeoutMS int                            `yaml:"role_classify_timeout_ms"`
 	ModelsLegend          string                         `yaml:"models_legend"`
+	CostlyModels          []string                       `yaml:"costly_models"`
 	Models                map[string]modelAlias          `yaml:"models"`
 	Roles                 map[string]RoleSpec            `yaml:"roles"`
 	Stop                  StopSpec                       `yaml:"stop"`
@@ -846,4 +848,42 @@ func roleCatalog(spec agentSpec) string {
 		lines = append(lines, "  "+line+": "+strings.TrimSpace(role.Description))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// IsCostlyModel reports whether a resolved model spec matches any pattern
+// in the agent.yaml costly_models list. It accepts wildcards (e.g. codex:astra:*).
+func IsCostlyModel(modelSpec string) (bool, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return false, err
+	}
+	m, err := ResolveModel(modelSpec)
+	if err != nil {
+		return false, err
+	}
+	target := m.Spec()
+	for _, pattern := range spec.CostlyModels {
+		if matched, _ := filepath.Match(pattern, target); matched {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ModelCost resolves a model spec and returns its relative cost.
+func ModelCost(modelSpec string) (int, error) {
+	m, err := ResolveModel(modelSpec)
+	if err != nil {
+		return 0, err
+	}
+	entries, err := KnownModelEntriesE()
+	if err != nil {
+		return 0, err
+	}
+	for _, e := range entries {
+		if e.Model.Spec() == m.Spec() {
+			return e.Cost, nil
+		}
+	}
+	return 0, fmt.Errorf("model %q not found in guide", m.Spec())
 }

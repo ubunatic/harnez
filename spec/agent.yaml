@@ -118,6 +118,12 @@ external_sessions:
 #   roles  roles the model is suggested for; a recommendation shown here, not enforced.
 #          Spawn rights come from roles.<role>.spawns below.
 # Evidence: docs/Models.md.
+costly_models:
+  - codex:sol:high
+  - agy:argon:high
+  - "codex:astra:*"
+  - claude:fable:high
+
 models_legend: "COST is an owner-guided relative estimate by effort tier; codex:luna:low = 1 · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
 model_traits:
   lean: Efficient standard work.
