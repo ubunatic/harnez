@@ -243,7 +243,7 @@ func (d mockAgentDeleteDriver) Resume(context.Context, string, string, subagent.
 	return nil, nil
 }
 
-func (d mockAgentDeleteDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
+func (d mockAgentDeleteDriver) Compact(context.Context, string, subagent.Model) (*subagent.TurnResult, error) {
 	return nil, nil
 }
 

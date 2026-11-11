@@ -33,8 +33,13 @@ resume carries no `--model`. Report: `reports/jules/675.md` (github#151).
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| implement | jules-impl-675 | 8668048582263024478 | none | failed: asked for plan approval twice (replies: 2), no PR |
+| implement | jules-impl-675 | 8668048582263024478 | github #157 (closed, code taken) | late PR after the run was counted failed; merged by the host |
 
-Lead from its plan (unverified): add a `Model` parameter to `Compact` on the `Driver` interface and every
-driver, pass it to `d.Resume` in `ClaudeDriver.Compact`, and pass the session model from the callers in
-`cmd/harnez/agent_run.go`.
+## Progress 2026-11-11
+
+Code done from Jules PR GH#157: `Driver.Compact` takes the session `Model`; `ClaudeDriver.Compact` passes it
+to `Resume`, and both callers in `cmd/harnez/agent_run.go` (`runResume`, `compactSession`) pass the session's
+provider, model and tier. Other drivers accept the parameter and do not use it. The host added
+`TestClaudeCompactPassesSessionModel` (`internal/subagent/claude_test.go`), which fails with the old
+`Model{}` call; `make test-q1` exit 0; advisor review: no blockers. Left: the live `claude:haiku:low`
+compaction check from the plan.

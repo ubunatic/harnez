@@ -129,7 +129,7 @@ func TestPiCompactUsesRPC(t *testing.T) {
 		gotCommand, gotInput, gotArgs = command, input, args
 		return []byte(`{"id":"harnez-compact","type":"response","command":"compact","success":true,"data":{"estimatedTokensAfter":1200,"usage":{"input":300,"output":40,"cacheRead":10,"cacheWrite":2}}}` + "\n"), nil
 	}}
-	r, err := d.Compact(context.Background(), "session-123")
+	r, err := d.Compact(context.Background(), "session-123", Model{})
 	if err != nil {
 		t.Fatal(err)
 	}

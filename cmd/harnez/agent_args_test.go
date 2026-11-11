@@ -204,7 +204,7 @@ func (m mockDriver) Run(ctx context.Context, o subagent.RunOptions) (*subagent.T
 func (m mockDriver) Resume(ctx context.Context, id, prompt string, model subagent.Model) (*subagent.TurnResult, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (m mockDriver) Compact(ctx context.Context, id string) (*subagent.TurnResult, error) {
+func (m mockDriver) Compact(ctx context.Context, id string, model subagent.Model) (*subagent.TurnResult, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 func (m mockDriver) Stop(ctx context.Context, id string) error {

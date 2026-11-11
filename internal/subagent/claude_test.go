@@ -131,12 +131,28 @@ func TestClaudeCompactOmitsEmptyModelArgs(t *testing.T) {
 		got = args
 		return []byte(`{"type":"result","subtype":"success","result":"Compacted","usage":{}}`), nil
 	}}
-	if _, err := d.Compact(context.Background(), "s1"); err != nil {
+	if _, err := d.Compact(context.Background(), "s1", Model{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range got {
 		if a == "" || a == "--model" || a == "--effort" {
 			t.Fatalf("compact args must omit empty model/effort, got %q", got)
 		}
+	}
+}
+
+// Issue 675: /compact runs on the session's model, not Claude's default.
+func TestClaudeCompactPassesSessionModel(t *testing.T) {
+	var got []string
+	d := ClaudeDriver{Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		got = args
+		return []byte(`{"type":"result","subtype":"success","result":"Compacted","usage":{}}`), nil
+	}}
+	if _, err := d.Compact(context.Background(), "s1", Model{Provider: "claude", Name: "haiku", Tier: "low"}); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(got, " ")
+	if !strings.Contains(joined, "--model haiku") || !strings.Contains(joined, "--effort low") {
+		t.Fatalf("compact args must carry the session model and effort, got %q", got)
 	}
 }

@@ -746,9 +746,9 @@ func (testBatchDriver) Run(context.Context, RunOptions) (*TurnResult, error) { r
 func (testBatchDriver) Resume(context.Context, string, string, Model) (*TurnResult, error) {
 	return nil, nil
 }
-func (testBatchDriver) Compact(context.Context, string) (*TurnResult, error) { return nil, nil }
-func (testBatchDriver) Stop(context.Context, string) error                   { return nil }
-func (testBatchDriver) Delete(context.Context, string) error                 { return nil }
+func (testBatchDriver) Compact(context.Context, string, Model) (*TurnResult, error) { return nil, nil }
+func (testBatchDriver) Stop(context.Context, string) error                          { return nil }
+func (testBatchDriver) Delete(context.Context, string) error                        { return nil }
 
 func TestCodexDriver(t *testing.T) {
 	d := CodexDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
@@ -966,7 +966,7 @@ func TestCodexCompactRolloutConfirmation(t *testing.T) {
 				}
 				return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"status"}}` + "\n"), nil
 			}}
-			got, err := d.Compact(context.Background(), "session")
+			got, err := d.Compact(context.Background(), "session", Model{})
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("error = %v", err)
@@ -994,7 +994,7 @@ func TestCodexCompactBelowLimitDoesNotInvokeCodex(t *testing.T) {
 		t.Fatal("unexpected Codex call")
 		return nil, nil
 	}}
-	if _, err := d.Compact(context.Background(), "session"); err == nil || !strings.Contains(err.Error(), "nothing to compact") {
+	if _, err := d.Compact(context.Background(), "session", Model{}); err == nil || !strings.Contains(err.Error(), "nothing to compact") {
 		t.Fatalf("error = %v", err)
 	}
 }

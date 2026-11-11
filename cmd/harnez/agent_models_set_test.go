@@ -25,7 +25,7 @@ func (d *helloProbeDriver) Resume(ctx context.Context, id, prompt string, m suba
 	return nil, nil
 }
 
-func (d *helloProbeDriver) Compact(ctx context.Context, id string) (*subagent.TurnResult, error) {
+func (d *helloProbeDriver) Compact(ctx context.Context, id string, model subagent.Model) (*subagent.TurnResult, error) {
 	return nil, nil
 }
 

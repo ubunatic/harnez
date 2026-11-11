@@ -325,7 +325,7 @@ func TestAgyCompactUsesResumeWithSlashCompact(t *testing.T) {
 		args = gotArgs
 		return []byte("{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"e4872c5a-c04b-4f25-b654-18343245f52b\",\"step_index\":4,\"state\":\"DONE\",\"step_type\":\"checkpoint\",\"duration_seconds\":10.008097519}}\n{\"event\":\"result\",\"result\":{\"conversation_id\":\"e4872c5a-c04b-4f25-b654-18343245f52b\",\"status\":\"SUCCESS\",\"response\":\"\",\"duration_seconds\":27.059836371,\"num_turns\":2,\"usage\":{\"input_tokens\":9608,\"output_tokens\":5,\"thinking_tokens\":0,\"cache_read_tokens\":0,\"total_tokens\":9613}}}"), nil
 	}}
-	r, err := d.Compact(context.Background(), "abc")
+	r, err := d.Compact(context.Background(), "abc", Model{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestAgyCompactRequiresCheckpoint(t *testing.T) {
 	d := AgyDriver{Dir: "/d", Command: func(context.Context, string, ...string) ([]byte, error) {
 		return []byte(`{"event":"result","result":{"status":"SUCCESS"}}`), nil
 	}}
-	if _, err := d.Compact(context.Background(), "abc"); err == nil {
+	if _, err := d.Compact(context.Background(), "abc", Model{}); err == nil {
 		t.Fatal("expected missing checkpoint error")
 	}
 }

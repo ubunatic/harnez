@@ -81,8 +81,8 @@ func claudeEffort(tier string) string {
 	return tier
 }
 
-func (d ClaudeDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
-	return d.Resume(ctx, id, "/compact", Model{})
+func (d ClaudeDriver) Compact(ctx context.Context, id string, model Model) (*TurnResult, error) {
+	return d.Resume(ctx, id, "/compact", model)
 }
 func (d ClaudeDriver) Stop(ctx context.Context, id string) error {
 	return nil

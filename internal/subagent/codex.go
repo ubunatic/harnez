@@ -268,7 +268,7 @@ func codexRolloutUsageAtPath(path, providerID string) (codexRolloutUsage, int, e
 	}
 	return usage, compactions, nil
 }
-func (d CodexDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
+func (d CodexDriver) Compact(ctx context.Context, id string, model Model) (*TurnResult, error) {
 	spec, err := agentSpecOnce()
 	if err != nil {
 		return nil, err

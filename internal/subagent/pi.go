@@ -170,7 +170,7 @@ func piThinkingLevel(tier string) string {
 	return tier
 }
 
-func (d PiDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
+func (d PiDriver) Compact(ctx context.Context, id string, model Model) (*TurnResult, error) {
 	start := time.Now()
 	input := "{\"id\":\"harnez-compact\",\"type\":\"compact\"}\n"
 	var b []byte
