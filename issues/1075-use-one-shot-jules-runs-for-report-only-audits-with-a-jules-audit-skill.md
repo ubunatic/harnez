@@ -61,7 +61,7 @@ Worth keeping, best first:
 
 1. **Independent drafts of a failing test.** Three runs on 1017 cost almost no review, because running a test checks it. They exposed the real defect: `issues rebase` cannot repair tickets numbered 1000 or above. Neither the ticket nor the code audit had found that.
 2. **Ticket audits.** They are useful for finding what is stale. Two of 20 tickets were already done (951, 1053) and 2 had an out-of-date claim (923, 971). Most verdicts only say a ticket is still valid, so the value is in the `path:line` starting points. Jules's reasoning about what to change next is the weakest part.
-3. **Docs check.** It found 5 real mismatches in `docs/CLIDesign.md`. The corrections are not applied yet.
+3. **Docs check.** It found 5 real mismatches in `docs/CLIDesign.md`. Applied 2026-11-11 after its late PR GH#165 (closed) gave the line references.
 4. **Code audit.** It gave one minor finding and missed the defect above, so it is the least useful.
 
 Applied from the reports: closed 951 and 1053; corrected 923 and 971; rewrote the cause in 1017 and raised it to P2. Everything else stays a lead in `reports/jules/`.

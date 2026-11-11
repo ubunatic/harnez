@@ -143,7 +143,7 @@ project-local work lives in `init`, which defaults to cwd and has no `-t` flag a
    - A: Validate-only (error if `--setup` without `-p`)
    - B: Merge project work into `init` ← **chosen**
    - C: New `project` subcommand
-4. **Current** — `apply` is global-only; `init -l <lang>` owns all project setup.
+4. **Current** — `apply` is global-only; `init` (with `--docs <name>` for project docs) owns all project setup.
 
 Option B was chosen because `init` already existed as a "bootstrap this project" command
 and extending it was natural, while `apply` became a clean "maintain my Claude install"
@@ -153,7 +153,8 @@ by-product: there is no `--project` flag anymore.
 ## init flow
 
 ```
-harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [--force]
+harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [-m <solo|fork|team>] [--quota-1] [--force]
+        (main flags only; `harnez init --help` lists all, e.g. --all, --protected-main, --variant)
         │
         ├── validate target directory (refuses $HOME, root, or non-coding dirs without --force)
         ├── load and validate .harnez/repo.yaml, or detect the project layout and write it once
@@ -236,7 +237,8 @@ The lock-file rule is local to each clone and leaves the project's shared
 ## apply flow
 
 ```
-harnez apply [-t <dir>] [-d <name|profile>...] [--clean-docs] [--force-docs] [--debloat | --debloat-preset <minimal|aggressive>] [--codex-target <file>]
+harnez apply [-t <dir>] [-d <name|profile>...] [--clean-docs] [--force-docs] [--debloat | --debloat-preset <minimal|aggressive>] [--codex-target <file>] [--agy-target <dir>]
+        (main flags only; `harnez apply --help` lists all, e.g. --remove-docs, --profiles, --tools, --systemd)
         │
         ├── merge managed keys into settings.json
         ├── write ~/.claude/commands/<name>.md for each command
@@ -250,7 +252,8 @@ harnez apply [-t <dir>] [-d <name|profile>...] [--clean-docs] [--force-docs] [--
         │       any other unmarked dir is kept and reported by apply and diff with a takeover hint;
         │       SKILL.md gets one frontmatter block, source keys win over generated name/description (728)
         ├── install opt-in docs to ~/.claude/docs/ and ~/.prime/agent/docs/ if specified via -d/--docs (default: 0 global docs; profiles: core, dev, full)
-        ├── if --clean-docs / --no-docs: prune unmanaged docs from ~/.claude/docs/ and ~/.prime/agent/docs/
+        ├── --clean-docs: remove unmanaged global docs; --no-docs: install none and remove previously installed ones;
+        │   --remove-docs: remove all global docs (each from ~/.claude/docs/ and ~/.prime/agent/docs/)
         └── if --debloat / --debloat-preset: merge the selected Claude and Antigravity presets and spec-listed Codex features
 ```
 
@@ -273,7 +276,9 @@ are declared in `spec/schemas/config.schema.json`:
 - `preset_disable_bundled_skills: true` sets `disableBundledSkills: true`.
 - `preset_disable_claude_ai_connectors: true` sets
   `disableClaudeAiConnectors: true` under either preset. The standalone
-  `--debloat-disable-claude-ai-connectors` flag also remains available.
+  `--debloat-disable-claude-ai-connectors` flag also remains available, next to the other standalone
+  `--debloat-*` flags (`-cron`, `-notebook-edit`, `-disable-artifact`, `-disable-bundled-skills`,
+  `-disable-remote-control`, `-disable-workflows`; see `harnez apply --help`).
 - `preset_denied_mcp_servers: [harnez, codebase-memory-mcp]` adds named objects
   to `settings.json`'s `deniedMcpServers`. Claude stops loading those servers;
   their registrations stay intact. Harnez CLI commands remain available.
