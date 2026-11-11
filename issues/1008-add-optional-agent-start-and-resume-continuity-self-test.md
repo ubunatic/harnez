@@ -29,3 +29,12 @@ Recheck the live skill and issue 964 before implementation. Cover response valid
 ## Audit 2026-11-08 (Jules)
 
 Jules audit (GitHub PR 145, `reports/jules/1008.md`, checked against d8c61da; 1/1 code reference holds): still valid. `harnez agent selftest` steps today are `hello`, `background`, `confirm`, `confirm-running`, `verify` (`cmd/harnez/agent_selftest.go:188-292`); no start-and-resume continuity step. Coordination with 964 not verified. Starting point: a new step in that switch.
+
+Re-audit 2026-11-11 (github#185, checked against 7332ae6a; 1/1 reference holds, the step list is at
+`cmd/harnez/agent_selftest.go:348`): same verdict. The earlier report is kept.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-1008 | 18420875481352534278 | github #185 (closed) | done: still valid, 1/1 ref holds; repeat |
