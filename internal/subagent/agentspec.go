@@ -39,6 +39,7 @@ type agentSpec struct {
 	CostCheck             CostCheckSpec                  `yaml:"cost_check"`
 	AutoCompact           AutoCompactSpec                `yaml:"auto_compact"`
 	PiCompaction          PiCompactionSpec               `yaml:"pi_compaction"`
+	ToolCallLimits        ToolCallLimitsSpec             `yaml:"tool_call_limits"`
 	ContextModes          map[string]ContextModeSpec     `yaml:"context_modes"`
 	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
 	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
@@ -269,6 +270,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if spec.AutoCompact.CodexOnDemandLimitTokens <= 0 || strings.TrimSpace(spec.AutoCompact.CodexStatusPrompt) == "" {
 		return agentSpec{}, fmt.Errorf("agent spec: auto_compact requires positive codex_on_demand_limit_tokens and nonempty codex_status_prompt")
+	}
+	if err := spec.ToolCallLimits.validate(); err != nil {
+		return agentSpec{}, err
 	}
 	if err := spec.PiCompaction.validate(); err != nil {
 		return agentSpec{}, err

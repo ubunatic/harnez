@@ -78,6 +78,24 @@
       },
       "additionalProperties": false
     },
+    "tool_call_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default", "models", "native_backstop_calls", "synthesis_prompt"],
+      "properties": {
+        "default": { "type": "integer", "minimum": 0 },
+        "models": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "native_backstop_calls": { "type": "integer", "minimum": 1 },
+        "synthesis_prompt": { "type": "string", "minLength": 1 }
+      }
+    },
     "pi_compaction": {
       "type": "object",
       "description": "Pi compaction overrides written by harnez apply for small-window models; the loader also rejects reserve_fraction + keep_recent_fraction >= 1.",

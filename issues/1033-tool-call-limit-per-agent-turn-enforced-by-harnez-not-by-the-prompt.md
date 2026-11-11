@@ -173,4 +173,18 @@ failure report. Re-check live code and Pi's version first (Findings are from Pi 
 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
-| implement (M1) | jules-impl-1033 | 10891694979554508594 | none | failed 2026-11-11: stalled after 2 replies; it had added schema and yaml for the limit and asked about a `--max-tool-calls` flag and an `Event.ToolCall` field (lead: the ticket text names both; decide whether M1 includes them) |
+| implement (M1) | jules-impl-1033 | 10891694979554508594 | github #170 (closed) | stalled after 2 replies, but the PR arrived later; partly taken by host (see Progress) |
+
+## Progress
+
+- M1 part 1 (2026-11-11, host from Jules GH#170): `tool_call_limits` in `spec/agent.yaml` and schema,
+  Go validation (an absent section means off), `ToolCallLimiter` (`internal/subagent/toollimit.go`; a repeated
+  call id repeats its first decision), `Event.ToolCall`/`CallID`, and the spec lookup
+  `ToolCallLimitsSpec.Limit` / `ToolCallLimit(model, role)` (`toollimit_spec.go`): the first matching model key
+  (spec, provider:name, provider) wins, then the role, then its `default`, else the section default. The PR's
+  lookup test re-implemented the lookup inside the test; replaced by tests on the embedded spec. Advisor
+  review (codex:luna:low): the repeated-id defect was fixed; "schema rejects an empty section, Go accepts it" is
+  accepted, since Go cannot tell an empty section from an absent one and the schema check covers it.
+- M1 left: `--max-tool-calls` with precedence over `~/.harnez/config.yaml`, worker and MCP forwarding, the
+  silent `--json` observer, and `tool_calls`/`tool_call_limit`/`tool_call_limit_reached` in `TurnResult`,
+  `TurnRecord` and the output.
