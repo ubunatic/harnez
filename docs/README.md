@@ -252,6 +252,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-10-two-agent-lean-sprint-official-model-names.md](studies/2026-11-10-two-agent-lean-sprint-official-model-names.md) | Lean sprint 1203: accept official model names (2026-11-10) |
 | [studies/2026-11-10-two-agent-lean-sprint-push-main-unlock.md](studies/2026-11-10-two-agent-lean-sprint-push-main-unlock.md) | Lean sprint 1205: --push-main and /disable push-main unlock ticket commits (2026-11-10) |
 | [studies/2026-11-10-two-agent-lean-sprint-stats-reply.md](studies/2026-11-10-two-agent-lean-sprint-stats-reply.md) | Lean sprint 971: stats stream always prints the final reply (2026-11-10) |
+| [studies/2026-11-11-jules-final-sweep-story.md](studies/2026-11-11-jules-final-sweep-story.md) | Story: the last Jules sweep (2026-11-10/11) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
