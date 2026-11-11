@@ -392,6 +392,8 @@ type Event struct {
 	Bytes int    // raw size of the provider event, for token estimates
 	// ContextTokens is the latest provider-reported full input size, when present.
 	ContextTokens int
+	ToolCall      bool   // whether this event represents a tool call attempt
+	CallID        string // unique ID of the tool call, for deduplication
 }
 
 // EventFunc receives events while a turn is running.

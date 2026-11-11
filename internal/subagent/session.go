@@ -88,12 +88,14 @@ type CodexQuarantine struct {
 
 // TurnRecord stores the usage and optional human rating for one provider turn.
 type TurnRecord struct {
-	Turn              int    `json:"turn"`
-	NewInputTokens    int    `json:"new_input_tokens"`
-	CachedInputTokens int    `json:"cached_input_tokens"`
-	OutputTokens      int    `json:"output_tokens"`
-	Rating            *int   `json:"rating,omitempty"`
-	RatingReason      string `json:"rating_reason,omitempty"`
+	Turn                 int    `json:"turn"`
+	NewInputTokens       int    `json:"new_input_tokens"`
+	CachedInputTokens    int    `json:"cached_input_tokens"`
+	OutputTokens         int    `json:"output_tokens"`
+	Rating               *int   `json:"rating,omitempty"`
+	RatingReason         string `json:"rating_reason,omitempty"`
+	ToolCalls            int    `json:"tool_calls,omitempty"`
+	ToolCallLimitReached bool   `json:"tool_call_limit_reached,omitempty"`
 }
 
 // ReplyRecord stores the final reply produced during one agent turn.

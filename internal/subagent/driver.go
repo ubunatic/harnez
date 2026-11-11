@@ -300,7 +300,9 @@ type TurnResult struct {
 	DurationMS                 int64 `json:"duration_ms"`
 	// StillRunning reports that the wait ended while the provider session
 	// still runs (Jules); the CLI then exits with exitStillRunning (3).
-	StillRunning bool `json:"still_running,omitempty"`
+	StillRunning         bool `json:"still_running,omitempty"`
+	ToolCalls            int  `json:"tool_calls,omitempty"`
+	ToolCallLimitReached bool `json:"tool_call_limit_reached,omitempty"`
 }
 
 // KnownModels returns the configured shorthand specifications in stable order.

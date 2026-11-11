@@ -24,6 +24,13 @@ compact_thresholds:
 # Pi compaction overrides that `harnez apply` writes into Pi's settings.json for
 # each model in Pi's models.json whose contextWindow is below the threshold
 # (issue 1023). Pi's defaults (16384 reserve, 20000 kept) do not fit a 32k window.
+tool_call_limits:
+  default: 0
+  models:
+    lmcoder:coder: {default: 40, advisor: 15, reviewer: 15}
+  native_backstop_calls: 20
+  synthesis_prompt: "Tool-call limit reached. No more tools are available. Answer now with what you have, and say what you could not check."
+
 pi_compaction:
   small_window_threshold_tokens: 65536
   reserve_fraction: 0.4

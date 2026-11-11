@@ -37,6 +37,7 @@ type agentSpec struct {
 	CostCheck             CostCheckSpec                  `yaml:"cost_check"`
 	AutoCompact           AutoCompactSpec                `yaml:"auto_compact"`
 	PiCompaction          PiCompactionSpec               `yaml:"pi_compaction"`
+	ToolCallLimits        ToolCallLimitsSpec             `yaml:"tool_call_limits"`
 	ContextModes          map[string]ContextModeSpec     `yaml:"context_modes"`
 	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
 	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
@@ -270,6 +271,11 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if err := spec.PiCompaction.validate(); err != nil {
 		return agentSpec{}, err
+	}
+	if spec.ToolCallLimits.SynthesisPrompt != "" {
+		if err := spec.ToolCallLimits.validate(); err != nil {
+			return agentSpec{}, err
+		}
 	}
 	if err := validateContextModes(spec.ContextModes); err != nil {
 		return agentSpec{}, err
@@ -846,4 +852,32 @@ func roleCatalog(spec agentSpec) string {
 		lines = append(lines, "  "+line+": "+strings.TrimSpace(role.Description))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// ToolCallLimitsSpec defines the boundaries for the ToolCallLimiter (issue 1033).
+type ToolCallLimitsSpec struct {
+	Default             int                       `yaml:"default"`
+	Models              map[string]map[string]int `yaml:"models"`
+	NativeBackstopCalls int                       `yaml:"native_backstop_calls"`
+	SynthesisPrompt     string                    `yaml:"synthesis_prompt"`
+}
+
+func (s ToolCallLimitsSpec) validate() error {
+	if s.Default < 0 {
+		return fmt.Errorf("tool_call_limits.default must not be negative")
+	}
+	if s.NativeBackstopCalls <= 0 {
+		return fmt.Errorf("tool_call_limits.native_backstop_calls must be positive")
+	}
+	if strings.TrimSpace(s.SynthesisPrompt) == "" {
+		return fmt.Errorf("tool_call_limits.synthesis_prompt is required")
+	}
+	for model, overrides := range s.Models {
+		for role, limit := range overrides {
+			if limit < 0 {
+				return fmt.Errorf("tool_call_limits.models[%s][%s] must not be negative", model, role)
+			}
+		}
+	}
+	return nil
 }
