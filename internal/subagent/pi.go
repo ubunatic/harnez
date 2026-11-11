@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -204,6 +205,15 @@ func piCompactArgs(id string) []string {
 func (d PiDriver) runPiCompactRPC(ctx context.Context, input, id string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "pi", piCompactArgs(id)...)
 	cmd.Dir = d.Dir
+	if sessionID := os.Getenv("HARNEZ_SESSION_ID"); sessionID != "" {
+		cmd.Env = append(os.Environ(), "HARNEZ_AGENT_SESSION="+sessionID)
+	}
+	if launcherPID := os.Getenv("HARNEZ_AGENT_LAUNCHER_PID"); launcherPID != "" {
+		if cmd.Env == nil {
+			cmd.Env = os.Environ()
+		}
+		cmd.Env = append(cmd.Env, "HARNEZ_AGENT_PID="+launcherPID)
+	}
 	IsolateProcess(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

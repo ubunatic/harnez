@@ -196,6 +196,18 @@ func runInteractivePTY(ctx context.Context, command string, args []string, opts 
 	if environ != nil {
 		cmd.Env = environ
 	}
+	if sessionID := os.Getenv("HARNEZ_SESSION_ID"); sessionID != "" {
+		if cmd.Env == nil {
+			cmd.Env = os.Environ()
+		}
+		cmd.Env = append(cmd.Env, "HARNEZ_AGENT_SESSION="+sessionID)
+	}
+	if launcherPID := os.Getenv("HARNEZ_AGENT_LAUNCHER_PID"); launcherPID != "" {
+		if cmd.Env == nil {
+			cmd.Env = os.Environ()
+		}
+		cmd.Env = append(cmd.Env, "HARNEZ_AGENT_PID="+launcherPID)
+	}
 	listener, err := listenControl(opts.ControlSocket)
 	if err != nil {
 		return err

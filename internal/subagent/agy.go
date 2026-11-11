@@ -56,6 +56,12 @@ func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) 
 		env = replaceEnvironmentValue(env, "HARNEZ_SESSION_ID", d.SessionID)
 		env = replaceEnvironmentValue(env, "HARNEZ_AGY_METER_SESSION_ID", d.SessionID)
 	}
+	if sessionID := os.Getenv("HARNEZ_SESSION_ID"); sessionID != "" {
+		env = replaceEnvironmentValue(env, "HARNEZ_AGENT_SESSION", sessionID)
+	}
+	if launcherPID := os.Getenv("HARNEZ_AGENT_LAUNCHER_PID"); launcherPID != "" {
+		env = replaceEnvironmentValue(env, "HARNEZ_AGENT_PID", launcherPID)
+	}
 	var stdout, stderr bytes.Buffer
 	err = agymeter.RunWithEnvDir(ctx, home, "agy", args, env, d.Dir, nil, &stdout, &stderr)
 	if err != nil && stderr.Len() > 0 {

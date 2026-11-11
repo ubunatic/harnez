@@ -93,6 +93,15 @@ func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error
 	}
 	c := exec.CommandContext(ctx, "codex", args...)
 	c.Dir = d.Dir
+	if sessionID := os.Getenv("HARNEZ_SESSION_ID"); sessionID != "" {
+		c.Env = append(os.Environ(), "HARNEZ_AGENT_SESSION="+sessionID)
+	}
+	if launcherPID := os.Getenv("HARNEZ_AGENT_LAUNCHER_PID"); launcherPID != "" {
+		if c.Env == nil {
+			c.Env = os.Environ()
+		}
+		c.Env = append(c.Env, "HARNEZ_AGENT_PID="+launcherPID)
+	}
 	return providerOutput(ctx, c)
 }
 func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
@@ -613,6 +622,15 @@ func startProcess(ctx context.Context, dir, name string, args ...string) (io.Rea
 	}
 	c := exec.CommandContext(ctx, name, args...)
 	c.Dir = dir
+	if sessionID := os.Getenv("HARNEZ_SESSION_ID"); sessionID != "" {
+		c.Env = append(os.Environ(), "HARNEZ_AGENT_SESSION="+sessionID)
+	}
+	if launcherPID := os.Getenv("HARNEZ_AGENT_LAUNCHER_PID"); launcherPID != "" {
+		if c.Env == nil {
+			c.Env = os.Environ()
+		}
+		c.Env = append(c.Env, "HARNEZ_AGENT_PID="+launcherPID)
+	}
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Cancel = func() error {
 		return KillGroup(c.Process.Pid, syscall.SIGINT)
