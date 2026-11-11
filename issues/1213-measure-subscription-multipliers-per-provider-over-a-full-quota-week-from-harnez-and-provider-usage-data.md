@@ -27,3 +27,17 @@ source. Stop and ask on plan-price choices. On a loop or no progress, clear the 
 
 - Exclude usage not billed on the subscription (taia uses the OpenAI API directly).
 - Depends on correct token counts (1214) or reads provider logs directly.
+
+## Audit 2026-11-11
+
+Jules audit (PR GH#173, report `reports/jules/1213.md`, checked against 1e382b83, 3 of 3 references held;
+`spec/model_scores.yaml:23` is really line 26). Still valid: multipliers are owner estimates
+(`spec/model_scores.yaml:26`), Codex has the one sample (`spec/model_scores.yaml:14`), the timeline command
+exists (`cmd/harnez/usage_cmd.go:286`), and no command or procedure computes effective/raw yet (only this
+ticket mentions it). Plan prices are still the owner's open input (shared with 1215).
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-1213 | 11144179675677796244 | github #173 (closed) | done: still valid, 3/3 refs hold |
