@@ -7,6 +7,10 @@ reply_history_limit: 20
 # session before the next prompt; model-specific values take precedence over global values,
 # and user configuration takes precedence over the spec at the same specificity.
 compact_threshold_tokens: 200000
+cost_check:
+  cached_to_new_ratio: 20
+  context_usage_fraction: 0.75
+  min_turns: 3
 compact_thresholds:
   codex:gpt-6.1-terra: 100000
   codex:gpt-6.1-sol: 100000

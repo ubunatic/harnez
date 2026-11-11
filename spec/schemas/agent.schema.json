@@ -67,6 +67,17 @@
     "reply_history_limit": { "type": "integer", "minimum": 1 },
     "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
     "compact_thresholds": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": "Model-specific default compaction thresholds." },
+    "cost_check": {
+      "type": "object",
+      "description": "Thresholds for alerting on expensive long-running sessions.",
+      "required": ["cached_to_new_ratio", "context_usage_fraction", "min_turns"],
+      "properties": {
+        "cached_to_new_ratio": { "type": "number", "minimum": 0 },
+        "context_usage_fraction": { "type": "number", "minimum": 0 },
+        "min_turns": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
     "pi_compaction": {
       "type": "object",
       "description": "Pi compaction overrides written by harnez apply for small-window models; the loader also rejects reserve_fraction + keep_recent_fraction >= 1.",

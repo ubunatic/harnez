@@ -87,15 +87,7 @@ func newTurnStream(cmd *cobra.Command, mode string, compacted bool) *turnStream 
 }
 
 // humanCount renders 1230742 as 1.2M and 32700 as 32.7k.
-func humanCount(n int) string {
-	switch {
-	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM", float64(n)/1e6)
-	case n >= 10_000:
-		return fmt.Sprintf("%.1fk", float64(n)/1e3)
-	}
-	return fmt.Sprint(n)
-}
+func humanCount(n int) string { return subagent.HumanCount(n) }
 
 // shortDur renders 1m0s as 1m and 1h0m0s as 1h.
 func shortDur(d time.Duration) string {

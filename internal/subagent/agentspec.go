@@ -34,6 +34,7 @@ type agentSpec struct {
 	ReplyHistoryLimit     int                            `yaml:"reply_history_limit"`
 	CompactThreshold      int                            `yaml:"compact_threshold_tokens"`
 	CompactThresholds     map[string]int                 `yaml:"compact_thresholds"`
+	CostCheck             CostCheckSpec                  `yaml:"cost_check"`
 	AutoCompact           AutoCompactSpec                `yaml:"auto_compact"`
 	PiCompaction          PiCompactionSpec               `yaml:"pi_compaction"`
 	ContextModes          map[string]ContextModeSpec     `yaml:"context_modes"`
@@ -41,6 +42,13 @@ type agentSpec struct {
 	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
 	ResumeNote            ResumeNoteSpec                 `yaml:"resume_note"`
 	Jules                 JulesSpec                      `yaml:"jules"`
+}
+
+// CostCheckSpec holds the spec/agent.yaml cost_check thresholds (issue 985); zero disables a trigger.
+type CostCheckSpec struct {
+	CachedToNewRatio     float64 `yaml:"cached_to_new_ratio"`
+	ContextUsageFraction float64 `yaml:"context_usage_fraction"`
+	MinTurns             int     `yaml:"min_turns"`
 }
 
 // ContextModeSpec defines settings for an agent context mode (issue 1027).
@@ -249,6 +257,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 		if threshold <= 0 {
 			return agentSpec{}, fmt.Errorf("agent spec: compact_thresholds.%s must be positive", key)
 		}
+	}
+	if spec.CostCheck.CachedToNewRatio < 0 || spec.CostCheck.ContextUsageFraction < 0 || spec.CostCheck.MinTurns < 0 {
+		return agentSpec{}, fmt.Errorf("agent spec: cost_check values must not be negative")
 	}
 	validMode := func(mode string) bool { return mode == "manual" || mode == "native" || mode == "disabled" }
 	if !validMode(spec.AutoCompact.DefaultMode) || spec.AutoCompact.ProviderModes == nil || spec.AutoCompact.WatchdogGraceMS <= 0 || spec.AutoCompact.LegacyGrowthThresholdTokens <= 0 {

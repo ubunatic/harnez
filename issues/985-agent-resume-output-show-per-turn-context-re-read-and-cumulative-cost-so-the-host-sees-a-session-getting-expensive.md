@@ -139,3 +139,17 @@ Out of scope (follow-up tickets if wanted after this lands):
 ## Audit 2026-11-03
 
 Jules audit (PR GH#72, report `reports/jules/985-2.md`, checked against b0dcb501, all 7 references held): still valid. `tokenSummary` (`cmd/harnez/agent_stream.go:249`) prints the turn's fields as-is; the data for deltas exists in `Session.TurnRecords` (`internal/subagent/session.go:76`) and `LastContextTokens()` (`:116`). No cost-check keys in `spec/agent.yaml` yet (would go next to `compact_threshold_tokens`, line 9).
+
+## Progress 2026-11-11: M4 function and spec keys
+
+`spec/agent.yaml` `cost_check` (ratio 20, context fraction 0.75, min turns 3, the proposed values; the
+owner question "on or off by default" is still open) with schema, and the pure
+`subagent.CheckCost(spec, CostCheckInput)` in `internal/subagent/cost_check.go`, table-tested. Unknown
+values (<= 0) never trigger and print `unknown`; the suggested command uses the session's role and model.
+Not wired into the done line yet (M3), and the quota-unknown note is still open.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement (M4) | jules-impl-985 | 411425169937321039 | github #167 (closed, cherry-picked) | done, replies: 2; host rewrote CheckCost (real role, fresh-start input, unknown handling, shared HumanCount) |
