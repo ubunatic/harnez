@@ -154,3 +154,4 @@ the absence search for role profiles repeated by the host, also empty): still va
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | audit | jules-audit-1068 | 3700776250448050743 | github #164 (closed) | done: still valid, 2/2 refs hold |
+| implement (M1) | jules-impl-1068 | 10591465571964893443 | none | failed 2026-11-11: Jules side "unable to complete the task" after about 45 minutes, no PR, no question asked |
