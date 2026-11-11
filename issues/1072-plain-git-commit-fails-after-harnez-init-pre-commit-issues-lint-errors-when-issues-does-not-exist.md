@@ -35,3 +35,13 @@ Related behaviour:
 Re-check the current code first. Options to decide between: init creates and indexes `issues/` when it records the Harnez tracker, or lint treats a missing `issues/` as an empty tracker. Either way, `harnez index` should not report "nothing to do" for a repo whose tracker is enabled.
 
 Verify with a regression test covering the steps in section 2: the first commit succeeds with the hook active and without `--no-verify`.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-1072-audit | 14066435479314044408 | github #166 (closed) | discarded: claims "still valid", but the fix is in |
+
+Checked 2026-11-11: in an empty git repo, `harnez issues lint --cached` prints "issues lint: no issues/ directory
+yet, nothing to lint" and exits 0, so the closure stands. The report claimed it ran `harnez init`, which Jules
+cannot do.

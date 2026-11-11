@@ -45,4 +45,10 @@ Jules audit (PR GH#70, report `reports/jules/1076.md`, checked against b0dcb501,
 | --- | --- | --- | --- | --- |
 | audit | jules-audit-1076 | 8540512660876518399 | github #95 (closed) | done: still valid, 5/5 refs hold; repeats 2026-11-03 audit |
 | implement | harnez-jules-impl-1076 | 12946028318458480440 | none | failed 2026-11-08: no PR after 2 replies; last message (lead, unverified): added contextMode to Resume/ResumeStream in internal/subagent/driver.go |
-| implement (M1 slice) | jules-impl-1076 | 5881870373175353258 | none | failed 2026-11-10: stalled awaiting plan approval after 2 replies, no PR |
+| implement (M1 slice) | jules-impl-1076 | 5881870373175353258 | github #161 (closed) | late PR 2026-11-10 after the run was counted failed; not merged, see below |
+
+Jules PR GH#161 (M1 slice, checked 2026-11-11, not merged): adds `checkContextMode` in `driver.go` and calls it
+from the `Run` of the claude, codex, agy and jules drivers (codex `RunStream` too). Blocker: `harnez models`
+probes every provider with `ContextMode: "plain"` (`cmd/harnez/models_cmd.go:214`), so every non-Pi probe would
+fail. Do M1 at the CLI instead (`runStart` in `cmd/harnez/agent_run.go`, where `req.ContextMode` is read at line
+491), and drop `"plain"` from the probe for providers without a context mode, or make the probe pass the mode only to pi.
