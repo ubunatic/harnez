@@ -28,3 +28,12 @@ Still valid. The lock ignores are added only by init, and only when `issues/` al
 (`internal/claude/init_agent_file.go:91-93`); no other non-test code writes them, and the reserve path that
 creates `.reserve.lock` (`internal/issues/issues.go:741`) does not touch `.gitignore` or
 `.git/info/exclude`. Report: `reports/jules/703.md` (github#150).
+
+Re-audit 2026-11-11 (github#182, checked against d5a8b62f): same verdict, both references still hold;
+the earlier report is kept.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| audit | jules-audit-703 | 13915432805744488109 | github #182 (closed) | done: still valid, refs hold |
