@@ -148,3 +148,10 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   subcommands that never read `issues/` past the forge switch. Tests: `TestFindForgeClosedWordAndActiveAlias`.
 - **Gemini argon:low as one-shot reviewer** (2026-11-09): 6 min, 3 real medium findings in a diff a
   Haiku reviewer and the host had passed. Slower than codex low reviews; worth it for a whole-session sweep.
+- **Callers of a changed contract** (2026-11-11): Jules PR #161 made non-Pi drivers refuse a context mode;
+  its own test passed, but `harnez models` probes every provider with `ContextMode: "plain"`
+  (`cmd/harnez/models_cmd.go:214`), so every probe would have failed. Before merging a change to what a field
+  or method accepts, `rg` the field's users and run their tests. Issue 1076.
+- **A signature change is not a fix** (2026-11-11): Jules PR #157 threaded the session model through
+  `Driver.Compact` in 18 files but tested only the old empty-model case. Require a test of the behaviour the
+  ticket names (`TestClaudeCompactPassesSessionModel`) and see it fail without the fix. Issue 675.
