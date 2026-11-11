@@ -55,3 +55,12 @@ Checked in the code and on this machine; nothing changed yet.
 ## Audit 2026-11-08 (Jules)
 
 Jules audit (GitHub PR 141, `reports/jules/1112.md`, checked against d8c61da; all 5 references hold): partly done. The timeout exemption (`internal/exec/exec.go:206`) and background `HTO=0` prefix (`exec.go:1257`) are in; the auto-mode refusal is still open. No code reads the hook input's `permission_mode` today. Live evidence the same night: a harnez host session in auto mode hit "a hook changed this call's input after auto mode reviewed it" on about 12 background `harnez agent start/resume` calls and had to reissue each one. Next step: canary first, logging the PreToolUse `permission_mode` value in auto mode (unverified that it is present or what value auto mode uses); then skip the rewrite in `runExecHookWithStateDir` for that mode, with a hook test.
+
+## More evidence 2026-11-11
+
+- loom session (loom `docs/studies/2026-11-11-tuios-research-and-jules-sweep-story.md`, sections 4 and 7): 11
+  refusals in one session, all on reviewer and Jules `harnez agent start` calls rewritten to
+  `HTO=0 ⚙ bash -c 'cd <dir> && HTO=0 harnez agent start ...'`. Its proposal: leave the input unchanged when it
+  already has the `HTO=0`/`⚙` form, or have agents send the rewritten form first.
+- harnez host session 2cd64224: 4 tool results with the same refusal
+  ("auto mode classifier gave no verdict ... a hook changed this call's input").
