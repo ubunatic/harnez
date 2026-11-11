@@ -40,3 +40,23 @@ and write a failure report here.
   the choice in a Decision section.
 - Check how picks (`--model smart`) map to these models today; a pick resolving to a costly model must
   also need the flag.
+
+## Decision
+
+A list, not a cost threshold: `costly_models` in `spec/agent.yaml` holds `filepath.Match` patterns
+(the owner's initial set), so a pattern like `codex:astra:*` covers every tier.
+
+## Progress
+
+- Slice 1 (2026-11-11, from Jules GH#174): `costly_models` in `spec/agent.yaml` plus schema;
+  `subagent.IsCostlyModel(spec)` resolves aliases and official names, then matches the patterns.
+  `TestIsCostlyModel` fails without the spec list. The host dropped an untested `ModelCost` helper and the
+  PR's full reformat of `agent.schema.json`.
+- Left: the `--accept-cost` flag on `agent start`/`resume`, the refusal message (model, relative cost,
+  quota left), pick-chain handling, `--dry-run`, docs.
+
+## Jules runs
+
+| kind | session name | Jules ID | PR | state |
+| --- | --- | --- | --- | --- |
+| implement | jules-impl-1210 | 14138873191632194740 | github #174 (closed) | slice 1 taken by host; replies: 2 |
