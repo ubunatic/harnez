@@ -103,6 +103,62 @@ func TestUsageRegistryKeepsAGYMeterSeparateAndMergesOnce(t *testing.T) {
 	}
 }
 
+// TestMergeCollectorUsageKeepsOneCopyOfSharedModelGroup covers AGY's live CLI
+// and meter reporting the same model groups at different precision and reading
+// times. The usage box showed each shared group twice. Each group must appear
+// once, from the newer reading; a group only one collector reports is kept.
+func TestMergeCollectorUsageKeepsOneCopyOfSharedModelGroup(t *testing.T) {
+	t0 := time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
+	group := func(name, source string, pct float64) ModelGroup {
+		return ModelGroup{Name: name, Windows: []QuotaWindow{{Name: "Weekly", Source: source, UsedPercent: pct}}}
+	}
+	findGroup := func(t *testing.T, groups []ModelGroup, name string) ModelGroup {
+		t.Helper()
+		var found []ModelGroup
+		for _, g := range groups {
+			if g.Name == name {
+				found = append(found, g)
+			}
+		}
+		if len(found) != 1 {
+			t.Fatalf("%q appears %d times, want once in %+v", name, len(found), groups)
+		}
+		return found[0]
+	}
+	live := AgentUsage{AgentID: "agy", Name: "Antigravity (AGY)", LastRefreshed: t0, ModelGroups: []ModelGroup{
+		group("Gemini Models", "agy", 76),
+		group("Claude and GPT models", "agy", 100),
+	}}
+
+	newer := AgentUsage{AgentID: "agy", LastRefreshed: t0.Add(time.Minute), ModelGroups: []ModelGroup{
+		group("Gemini Models", "agy-meter", 75.96),
+		group("Claude and GPT models", "agy-meter", 100),
+		group("Only Meter", "agy-meter", 5),
+	}}
+	merged := mergeCollectorUsage(live, newer)
+	if len(merged.ModelGroups) != 3 {
+		t.Fatalf("merged groups = %d, want 3: %+v", len(merged.ModelGroups), merged.ModelGroups)
+	}
+	if got := findGroup(t, merged.ModelGroups, "Gemini Models").Windows[0]; got.Source != "agy-meter" || got.UsedPercent != 75.96 {
+		t.Errorf("newer reading not kept for Gemini Models: %+v", got)
+	}
+	findGroup(t, merged.ModelGroups, "Only Meter")
+
+	older := AgentUsage{AgentID: "agy", LastRefreshed: t0.Add(-time.Minute), ModelGroups: []ModelGroup{
+		group("Gemini Models", "agy-meter", 50),
+	}}
+	merged = mergeCollectorUsage(live, older)
+	if len(merged.ModelGroups) != 2 {
+		t.Fatalf("merged groups = %d, want 2: %+v", len(merged.ModelGroups), merged.ModelGroups)
+	}
+	if got := findGroup(t, merged.ModelGroups, "Gemini Models").Windows[0]; got.Source != "agy" || got.UsedPercent != 76 {
+		t.Errorf("older reading replaced the newer one: %+v", got)
+	}
+	if live.ModelGroups[0].Windows[0].UsedPercent != 76 {
+		t.Errorf("merge changed the primary's groups: %+v", live.ModelGroups)
+	}
+}
+
 func TestUsageRegistryWritesRemoteLoadObservation(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
