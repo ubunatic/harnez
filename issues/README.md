@@ -50,4 +50,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1216 | [1216-tool-only-mode-for-local-models-one-json-envelope-per-turn-parsed-and-run-by-harnez.md](1216-tool-only-mode-for-local-models-one-json-envelope-per-turn-parsed-and-run-by-harnez.md) | Tool-only mode for local models: one JSON envelope per turn, parsed and run by harnez | Open |
 | 1217 | [1217-per-model-family-start-resume-preamble-from-spec.md](1217-per-model-family-start-resume-preamble-from-spec.md) | Per-model-family start/resume preamble from spec | Open |
 | 1218 | [1218-agent-status-for-a-running-jules-session-warns-decode-jules-api-response-unexpected-end-of-json-input.md](1218-agent-status-for-a-running-jules-session-warns-decode-jules-api-response-unexpected-end-of-json-input.md) | agent status for a running Jules session warns: decode Jules API response: unexpected end of JSON input | Open |
+| 1219 | [1219-usage-read-intel-igpu-load-and-memory-uhd-730-i915.md](1219-usage-read-intel-igpu-load-and-memory-uhd-730-i915.md) | usage: read Intel iGPU load and memory (UHD 730, i915) | Open |
 <!-- harnez:end issues-active-index -->
