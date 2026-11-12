@@ -382,8 +382,14 @@ committing to a letter.
 config (`~/.codex/config.toml`); `--codex-target <file>` redirects that file for
 `apply`, `status`, and `revert`. Neither flag redirects the `⚙` binary symlinks
 (`~/.claude/bin`, `~/go/bin`, `~/.local/bin`, `~/.prime/agent/bin`), the bash
-shim/env script (`~/.harnez/shims`, `~/.harnez/env.sh`). Those paths remain global because `apply` is a global
-operation (see "Why the separation matters" above). Running `harnez apply -t
+shim/env script (`~/.harnez/shims`, `~/.harnez/env.sh`), or the PATH entry in shell startup files. Those paths remain global because `apply` is a global
+operation (see "Why the separation matters" above).
+
+`apply` puts the directory of the running `harnez` binary (normally `~/go/bin`) on PATH for each
+installed shell: `~/.zshenv` for zsh, `~/.bashrc` when it exists, and `~/.config/fish/conf.d/harnez-path.fish`
+for fish. It needs no flag and runs in every `apply`, because the Claude Code hooks run through
+`/bin/sh` and rely on the PATH that the login shell hands over. Shells started before the
+first `apply` keep their old PATH until restarted. Running `harnez apply -t
 /tmp/some-test-dir` for a "quick isolated smoke test" still mutates the real, live
 harness install.
 
