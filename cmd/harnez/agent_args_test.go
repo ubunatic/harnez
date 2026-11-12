@@ -81,7 +81,7 @@ func TestAgentRootVerbAndPromptDispatch(t *testing.T) {
 		{name: "dash prompt", args: []string{"--", "foo"}, wantPrompt: "foo"},
 		{name: "prompt flag", args: []string{"-p", "foo"}, wantPrompt: "foo"},
 		{name: "prompt consumes flag", args: []string{"-p", "--model"}, wantError: `-p needs prompt text but got flag "--model"`},
-		{name: "context mode flag", args: []string{"--context-mode", "plain", "-p", "foo"}, wantPrompt: "foo"},
+		{name: "context mode flag", args: []string{"--model", "claude:haiku:low", "--context-mode", "plain", "-p", "foo"}, wantPrompt: "foo"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -223,11 +223,30 @@ func TestAgentStartContextModePassThrough(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "--store-dir", t.TempDir(), "--context-mode", "plain", "-p", "review task"})
+	cmd.SetArgs([]string{"start", "--store-dir", t.TempDir(), "--model", "claude:haiku:low", "--context-mode", "plain", "-p", "review task"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
 	if driver.contextMode != "plain" {
 		t.Fatalf("driver.contextMode = %q, want %q", driver.contextMode, "plain")
+	}
+}
+
+func TestAgentStartRejectsUnsupportedContextMode(t *testing.T) {
+	old := agentDriver
+	driver := &recordingAgentDriver{}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "--store-dir", t.TempDir(), "--model", "codex:luna:low", "--context-mode", "plain", "-p", "review task"})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "not supported") || !strings.Contains(err.Error(), "claude") {
+		t.Fatalf("expected unsupported context mode error naming supported providers, got %v", err)
+	}
+	if driver.contextMode != "" {
+		t.Fatalf("driver should not run when context mode is unsupported, got %q", driver.contextMode)
 	}
 }

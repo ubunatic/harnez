@@ -119,6 +119,7 @@ func collectCodexTokensContext(ctx context.Context, codexDir string) (*TokenBrea
 		sessionID := path
 		var latest codexTokenUsage
 		scanner := bufio.NewScanner(f)
+		scanner.Buffer(make([]byte, 4096), 8<<20)
 		for scanner.Scan() {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -126,6 +127,7 @@ func collectCodexTokensContext(ctx context.Context, codexDir string) (*TokenBrea
 			var record struct {
 				Type    string `json:"type"`
 				Payload struct {
+					ID        string `json:"id"`
 					SessionID string `json:"session_id"`
 					Type      string `json:"type"`
 					Info      struct {
@@ -142,8 +144,12 @@ func collectCodexTokensContext(ctx context.Context, codexDir string) (*TokenBrea
 			if json.Unmarshal(scanner.Bytes(), &record) != nil {
 				continue
 			}
-			if record.Type == "session_meta" && record.Payload.SessionID != "" {
-				sessionID = record.Payload.SessionID
+			if record.Type == "session_meta" {
+				if record.Payload.ID != "" {
+					sessionID = record.Payload.ID
+				} else if record.Payload.SessionID != "" {
+					sessionID = record.Payload.SessionID
+				}
 			}
 			if record.Type == "event_msg" && record.Payload.Type == "token_count" {
 				t := record.Payload.Info.Total
@@ -153,7 +159,9 @@ func collectCodexTokensContext(ctx context.Context, codexDir string) (*TokenBrea
 			}
 		}
 		if latest.Total > 0 {
-			bySession[sessionID] = latest
+			if prev, ok := bySession[sessionID]; !ok || latest.Total >= prev.Total {
+				bySession[sessionID] = latest
+			}
 			rollouts++
 		}
 		return nil

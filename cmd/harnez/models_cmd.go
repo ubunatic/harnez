@@ -206,12 +206,16 @@ func runHelloProbes(ctx context.Context, out, errOut io.Writer, workDir string, 
 			probeModel.Tier = "low"
 		}
 
+		contextMode := ""
+		if subagent.SupportsContextMode(probeModel.Provider) {
+			contextMode = "plain"
+		}
 		driver := agentDriver(probeModel, workDir)
 		res, err := driver.Run(ctx, subagent.RunOptions{
 			Prompt:      "hello",
 			Model:       probeModel,
 			Dir:         workDir,
-			ContextMode: "plain",
+			ContextMode: contextMode,
 		})
 		if err != nil {
 			fmt.Fprintf(tw, "%s\t%s\tfail\t%v\n", tier, probeModel.Spec(), err)

@@ -96,6 +96,9 @@ func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error
 	return providerOutput(ctx, c)
 }
 func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := ValidateContextMode("codex", o.ContextMode); err != nil {
+		return nil, err
+	}
 	start := time.Now()
 	args := codexRunArgs(o.Model, o.Prompt)
 	b, err := d.command(ctx, args...)
@@ -149,7 +152,7 @@ func (d CodexDriver) Resume(ctx context.Context, id, prompt string, model Model)
 	return d.runResume(ctx, id, prompt, model)
 }
 func (d CodexDriver) runResume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
-	beforeCompactions, beforeErr := codexRolloutCompactions(id)
+	beforeUsage, beforeCompactions, beforeErr := codexRolloutUsageByID(id)
 	b, err := d.command(ctx, codexResumeArgs(id, prompt, model)...)
 	if err != nil {
 		if turnErr := codexTurnErrorFrom(b); turnErr != nil {
@@ -161,27 +164,78 @@ func (d CodexDriver) runResume(ctx context.Context, id, prompt string, model Mod
 	if err != nil {
 		return nil, err
 	}
-	setCodexResumeRolloutState(r, id, beforeCompactions, beforeErr)
+	setCodexResumeRolloutState(r, id, beforeUsage, beforeCompactions, beforeErr)
 	return r, nil
 }
 
-func setCodexResumeRolloutState(result *TurnResult, providerID string, beforeCompactions int, beforeErr error) {
-	tokens, windowSize, afterCompactions, stateErr := codexRolloutMetrics(providerID)
+func setCodexResumeRolloutState(result *TurnResult, providerID string, beforeUsage codexRolloutUsage, beforeCompactions int, beforeErr error) {
+	afterUsage, afterCompactions, stateErr := codexRolloutUsageByID(providerID)
 	if stateErr != nil {
 		result.ContextTokens = -1 // unknown is never treated as under the threshold
-		return
+	} else {
+		result.ContextTokens = afterUsage.ContextTokens
+		result.ContextWindowSize = afterUsage.ContextWindowSize
+		result.CompactionObserved = beforeErr == nil && afterCompactions > beforeCompactions
 	}
-	result.ContextTokens = tokens
-	result.ContextWindowSize = windowSize
-	result.CompactionObserved = beforeErr == nil && afterCompactions > beforeCompactions
+	applyCodexRolloutTotals(result, beforeUsage, afterUsage, beforeErr == nil || beforeUsage.SessionUsedKnown)
 }
 
 func setCodexRolloutContext(result *TurnResult, providerID string) {
 	result.ContextTokens = -1 // a failed rollout read is unknown, not zero
-	if tokens, windowSize, _, err := codexRolloutMetrics(providerID); err == nil {
-		result.ContextTokens = tokens
-		result.ContextWindowSize = windowSize
+	usage, _, err := codexRolloutUsageByID(providerID)
+	if err == nil {
+		result.ContextTokens = usage.ContextTokens
+		result.ContextWindowSize = usage.ContextWindowSize
 	}
+	applyCodexRolloutTotals(result, codexRolloutUsage{}, usage, false)
+}
+
+func applyCodexRolloutTotals(result *TurnResult, before, after codexRolloutUsage, hasBefore bool) {
+	afterInput, afterCached, afterOutput, afterReasoning := after.InputTokens, after.CachedTokens, after.OutputTokens, after.ReasoningTokens
+	reasoningKnown := after.ReasoningTokensKnown
+	if afterInput == 0 && afterOutput == 0 && result.CumulativeTotalsKnown {
+		afterInput = result.CumulativeInputTokens
+		afterCached = result.CumulativeCachedTokens
+		afterOutput = result.CumulativeOutputTokens
+		afterReasoning = result.CumulativeReasoningTokens
+		reasoningKnown = result.ReasoningTokensKnown
+	} else if result.CumulativeTotalsKnown && result.CumulativeInputTokens > afterInput {
+		// Prefer stream totals if the rollout file has not flushed the latest turn yet.
+		afterInput = result.CumulativeInputTokens
+		afterCached = result.CumulativeCachedTokens
+		afterOutput = result.CumulativeOutputTokens
+		afterReasoning = result.CumulativeReasoningTokens
+		reasoningKnown = result.ReasoningTokensKnown
+	}
+	if afterInput <= 0 && afterOutput <= 0 {
+		return
+	}
+	result.CumulativeTotalsKnown = true
+	result.CumulativeInputTokens = afterInput
+	result.CumulativeCachedTokens = afterCached
+	result.CumulativeOutputTokens = afterOutput
+	result.CumulativeReasoningTokens = afterReasoning
+	if reasoningKnown {
+		result.ReasoningTokensKnown = true
+	}
+	if hasBefore && (before.InputTokens > 0 || before.OutputTokens > 0) {
+		result.InputTokens = max(afterInput-before.InputTokens, 0)
+		result.CachedTokens = max(afterCached-before.CachedTokens, 0)
+		result.OutputTokens = max(afterOutput-before.OutputTokens, 0)
+		if result.ReasoningTokensKnown {
+			result.ReasoningTokens = max(afterReasoning-before.ReasoningTokens, 0)
+		}
+		result.TokensTurn = result.InputTokens + result.OutputTokens
+	} else if !hasBefore {
+		result.InputTokens = afterInput
+		result.CachedTokens = afterCached
+		result.OutputTokens = afterOutput
+		if result.ReasoningTokensKnown {
+			result.ReasoningTokens = afterReasoning
+		}
+		result.TokensTurn = result.InputTokens + result.OutputTokens
+	}
+	result.TokensCumulative = afterInput + afterOutput
 }
 
 func codexRolloutCompactions(providerID string) (int, error) {
@@ -195,11 +249,16 @@ func codexRolloutState(providerID string) (int, int, error) {
 }
 
 func codexRolloutMetrics(providerID string) (int, int, int, error) {
+	usage, compactions, err := codexRolloutUsageByID(providerID)
+	return usage.ContextTokens, usage.ContextWindowSize, compactions, err
+}
+
+func codexRolloutUsageByID(providerID string) (codexRolloutUsage, int, error) {
 	path, err := codexRolloutPath(providerID)
 	if err != nil {
-		return 0, 0, 0, err
+		return codexRolloutUsage{}, 0, err
 	}
-	return codexRolloutMetricsAtPath(path, providerID)
+	return codexRolloutUsageAtPath(path, providerID)
 }
 
 func codexRolloutMetricsAtPath(path, providerID string) (int, int, int, error) {
@@ -208,10 +267,15 @@ func codexRolloutMetricsAtPath(path, providerID string) (int, int, int, error) {
 }
 
 type codexRolloutUsage struct {
-	ContextTokens     int
-	ContextWindowSize int
-	SessionUsedTokens int
-	SessionUsedKnown  bool
+	ContextTokens        int
+	ContextWindowSize    int
+	SessionUsedTokens    int
+	SessionUsedKnown     bool
+	InputTokens          int
+	CachedTokens         int
+	OutputTokens         int
+	ReasoningTokens      int
+	ReasoningTokensKnown bool
 }
 
 func codexRolloutUsageAtPath(path, providerID string) (codexRolloutUsage, int, error) {
@@ -236,9 +300,10 @@ func codexRolloutUsageAtPath(path, providerID string) (codexRolloutUsage, int, e
 						Cached int `json:"cached_input_tokens"`
 					} `json:"last_token_usage"`
 					TotalTokenUsage struct {
-						Input  int `json:"input_tokens"`
-						Cached int `json:"cached_input_tokens"`
-						Output int `json:"output_tokens"`
+						Input     int  `json:"input_tokens"`
+						Cached    int  `json:"cached_input_tokens"`
+						Output    int  `json:"output_tokens"`
+						Reasoning *int `json:"reasoning_output_tokens"`
 					} `json:"total_token_usage"`
 				} `json:"info"`
 			} `json:"payload"`
@@ -248,7 +313,9 @@ func codexRolloutUsageAtPath(path, providerID string) (codexRolloutUsage, int, e
 				compactions++
 			}
 			if event.Type == "event_msg" && event.Payload.Type == "token_count" {
-				usage.ContextTokens = event.Payload.Info.LastTokenUsage.Input
+				if event.Payload.Info.LastTokenUsage.Input > 0 {
+					usage.ContextTokens = event.Payload.Info.LastTokenUsage.Input
+				}
 				usage.ContextWindowSize = event.Payload.Info.ModelContextWindow
 				totalInput := event.Payload.Info.TotalTokenUsage.Input
 				totalCached := event.Payload.Info.TotalTokenUsage.Cached
@@ -256,6 +323,13 @@ func codexRolloutUsageAtPath(path, providerID string) (codexRolloutUsage, int, e
 				if totalInput > 0 || totalOutput > 0 {
 					usage.SessionUsedTokens = max(totalInput-totalCached, 0) + totalOutput
 					usage.SessionUsedKnown = true
+					usage.InputTokens = totalInput
+					usage.CachedTokens = totalCached
+					usage.OutputTokens = totalOutput
+					if event.Payload.Info.TotalTokenUsage.Reasoning != nil {
+						usage.ReasoningTokens = *event.Payload.Info.TotalTokenUsage.Reasoning
+						usage.ReasoningTokensKnown = true
+					}
 				}
 			}
 		}
@@ -410,8 +484,21 @@ type StreamingDriver interface {
 
 // codexParser folds Codex JSONL lines into a TurnResult and live events.
 type codexParser struct {
-	r         TurnResult
-	turnError string
+	r                  TurnResult
+	turnError          string
+	hasTurnCompleted   bool
+	hasTokenCountTotal bool
+	hasTokenCountLast  bool
+	tokenCountTotal    codexTokenUsageBlock
+	tokenCountLastSum  codexTokenUsageBlock
+}
+
+type codexTokenUsageBlock struct {
+	input          int
+	cached         int
+	output         int
+	reasoning      int
+	reasoningKnown bool
 }
 
 func (p *codexParser) feed(line []byte) (Event, bool) {
@@ -438,8 +525,17 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 			} `json:"error"`
 			Info struct {
 				LastTokenUsage struct {
-					Input int `json:"input_tokens"`
+					Input     int  `json:"input_tokens"`
+					Cached    int  `json:"cached_input_tokens"`
+					Output    int  `json:"output_tokens"`
+					Reasoning *int `json:"reasoning_output_tokens"`
 				} `json:"last_token_usage"`
+				TotalTokenUsage struct {
+					Input     int  `json:"input_tokens"`
+					Cached    int  `json:"cached_input_tokens"`
+					Output    int  `json:"output_tokens"`
+					Reasoning *int `json:"reasoning_output_tokens"`
+				} `json:"total_token_usage"`
 			} `json:"info"`
 		} `json:"payload"`
 	}
@@ -466,21 +562,49 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 		ev.Kind, ev.Text = "activity", "running "+e.Item.Command
 	}
 	if e.Type == "turn.completed" {
-		p.r.InputTokens += e.Usage.Input
-		p.r.OutputTokens += e.Usage.Output
-		p.r.CachedTokens += e.Usage.Cached
+		// Codex turn.completed usage is cumulative over the session (docs/CodexEvents.md).
+		p.hasTurnCompleted = true
+		p.r.InputTokens = e.Usage.Input
+		p.r.OutputTokens = e.Usage.Output
+		p.r.CachedTokens = max(e.Usage.Cached, e.Usage.Details.Cached)
 		if e.Usage.Reasoning != nil {
-			p.r.ReasoningTokens += *e.Usage.Reasoning
+			p.r.ReasoningTokens = *e.Usage.Reasoning
 			p.r.ReasoningTokensKnown = true
-		}
-		if e.Usage.Details.Cached > p.r.CachedTokens {
-			p.r.CachedTokens = e.Usage.Details.Cached
+		} else {
+			p.r.ReasoningTokens = 0
+			p.r.ReasoningTokensKnown = false
 		}
 	}
-	if e.Payload.Type == "token_count" && e.Payload.Info.LastTokenUsage.Input > 0 {
-		p.r.ContextTokens = e.Payload.Info.LastTokenUsage.Input
-		ev.ContextTokens = p.r.ContextTokens
-		ev.Kind = "tokens"
+	if e.Payload.Type == "token_count" {
+		last := e.Payload.Info.LastTokenUsage
+		if last.Input > 0 || last.Output > 0 {
+			p.hasTokenCountLast = true
+			p.tokenCountLastSum.input += last.Input
+			p.tokenCountLastSum.cached += last.Cached
+			p.tokenCountLastSum.output += last.Output
+			if last.Reasoning != nil {
+				p.tokenCountLastSum.reasoning += *last.Reasoning
+				p.tokenCountLastSum.reasoningKnown = true
+			}
+		}
+		tot := e.Payload.Info.TotalTokenUsage
+		if tot.Input > 0 || tot.Output > 0 {
+			p.hasTokenCountTotal = true
+			p.tokenCountTotal = codexTokenUsageBlock{
+				input:          tot.Input,
+				cached:         tot.Cached,
+				output:         tot.Output,
+				reasoningKnown: tot.Reasoning != nil,
+			}
+			if tot.Reasoning != nil {
+				p.tokenCountTotal.reasoning = *tot.Reasoning
+			}
+		}
+		if last.Input > 0 {
+			p.r.ContextTokens = last.Input
+			ev.ContextTokens = p.r.ContextTokens
+			ev.Kind = "tokens"
+		}
 	}
 	return ev, true
 }
@@ -492,8 +616,30 @@ func (p *codexParser) result() (*TurnResult, error) {
 	if p.r.Response == "" {
 		return nil, fmt.Errorf("codex output has no agent_message")
 	}
+	if !p.hasTurnCompleted {
+		var fallback *codexTokenUsageBlock
+		if p.hasTokenCountTotal {
+			fallback = &p.tokenCountTotal
+		} else if p.hasTokenCountLast {
+			fallback = &p.tokenCountLastSum
+		}
+		if fallback != nil {
+			p.r.InputTokens = fallback.input
+			p.r.CachedTokens = fallback.cached
+			p.r.OutputTokens = fallback.output
+			p.r.ReasoningTokens = fallback.reasoning
+			p.r.ReasoningTokensKnown = fallback.reasoningKnown
+		}
+	}
 	p.r.TokensTurn = p.r.InputTokens + p.r.OutputTokens
 	p.r.TokensCumulative = p.r.TokensTurn
+	if (p.hasTurnCompleted || p.hasTokenCountTotal) && (p.r.InputTokens > 0 || p.r.OutputTokens > 0) {
+		p.r.CumulativeTotalsKnown = true
+		p.r.CumulativeInputTokens = p.r.InputTokens
+		p.r.CumulativeCachedTokens = p.r.CachedTokens
+		p.r.CumulativeOutputTokens = p.r.OutputTokens
+		p.r.CumulativeReasoningTokens = p.r.ReasoningTokens
+	}
 	return &p.r, nil
 }
 
@@ -657,6 +803,9 @@ func lastLines(s string, n int) string {
 }
 
 func (d CodexDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
+	if err := ValidateContextMode("codex", o.ContextMode); err != nil {
+		return nil, err
+	}
 	start := time.Now()
 	r, err := d.stream(ctx, fn, codexRunArgs(o.Model, o.Prompt)...)
 	if err != nil {
@@ -668,13 +817,44 @@ func (d CodexDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) 
 }
 
 func (d CodexDriver) ResumeStream(ctx context.Context, id, prompt string, model Model, fn EventFunc) (*TurnResult, error) {
-	beforeCompactions, beforeErr := codexRolloutCompactions(id)
+	beforeUsage, beforeCompactions, beforeErr := codexRolloutUsageByID(id)
 	r, err := d.stream(ctx, fn, codexResumeArgs(id, prompt, model)...)
 	if err != nil {
 		return nil, fmt.Errorf("codex resume: %w", err)
 	}
-	setCodexResumeRolloutState(r, id, beforeCompactions, beforeErr)
+	setCodexResumeRolloutState(r, id, beforeUsage, beforeCompactions, beforeErr)
 	return r, nil
+}
+
+// SyncCodexRolloutTotals fills session token totals from a Codex rollout file
+// when available (e.g. after a failed or interrupted run before TurnResult was saved).
+func SyncCodexRolloutTotals(sess *Session) bool {
+	if sess == nil || sess.Provider != "codex" || sess.ProviderID() == "" {
+		return false
+	}
+	usage, _, _ := codexRolloutUsageByID(sess.ProviderID())
+	if usage.InputTokens <= 0 && usage.OutputTokens <= 0 {
+		return false
+	}
+	if usage.ContextTokens > 0 {
+		sess.ContextTokens = usage.ContextTokens
+	}
+	if usage.ContextWindowSize > 0 {
+		sess.ContextWindowSize = usage.ContextWindowSize
+	}
+	if usage.SessionUsedKnown {
+		sess.SessionUsedTokens = usage.SessionUsedTokens
+		sess.SessionUsedKnown = true
+	}
+	sess.InputTokensTotal = usage.InputTokens
+	sess.CachedTokensTotal = usage.CachedTokens
+	sess.OutputTokensTotal = usage.OutputTokens
+	sess.ReasoningTokensTotal = usage.ReasoningTokens
+	sess.ReasoningTokensKnown = usage.ReasoningTokensKnown
+	sess.TokensCumulative = usage.InputTokens + usage.OutputTokens
+	sess.CachedTokens = usage.CachedTokens
+	sess.TokenTotalsKnown = true
+	return true
 }
 
 var _ StreamingDriver = CodexDriver{}

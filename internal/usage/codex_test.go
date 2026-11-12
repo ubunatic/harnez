@@ -147,6 +147,31 @@ malformed
 	}
 }
 
+func TestCollectCodexTokens_DeduplicatesSessionMetaID(t *testing.T) {
+	dir := t.TempDir()
+	rolloutDir := filepath.Join(dir, "sessions", "2026", "11", "11")
+	if err := os.MkdirAll(rolloutDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	first := `{"type":"session_meta","payload":{"id":"sess-dup"}}` + "\n" +
+		`{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":10,"total_tokens":110}}}}` + "\n"
+	resumed := `{"type":"session_meta","payload":{"id":"sess-dup"}}` + "\n" +
+		`{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":150,"cached_input_tokens":30,"output_tokens":15,"total_tokens":165}}}}` + "\n"
+	if err := os.WriteFile(filepath.Join(rolloutDir, "rollout-1.jsonl"), []byte(first), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rolloutDir, "rollout-2.jsonl"), []byte(resumed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, count := collectCodexTokens(dir)
+	if count != 2 || got == nil {
+		t.Fatalf("collectCodexTokens() = %+v, %d; want 2 scanned rollouts", got, count)
+	}
+	if got.InputTokens != 150 || got.CacheReadTokens != 30 || got.OutputTokens != 15 || got.TotalTokens != 165 {
+		t.Fatalf("deduped token totals = %+v, want 150/30/15/165 (not summed 250)", got)
+	}
+}
+
 func TestCollectCodex_RateLimitWindowAssignment(t *testing.T) {
 	now := time.Now()
 	resp := CodexWhamUsageResponse{

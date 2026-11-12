@@ -436,6 +436,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		return startModelError(spec, selection, err)
 	}
 	m := selection.Model
+	if err := subagent.ValidateContextMode(m.Provider, req.ContextMode); err != nil {
+		return err
+	}
 	if spec == "" {
 		spec = m.Spec()
 	}
@@ -615,6 +618,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 					sess.LastError = "runtime token watchdog interrupted the active turn"
 					sess.LastActiveAt = now
 					sess.Turn = turn
+					subagent.SyncCodexRolloutTotals(sess)
 					if saveErr := s.Save(sess); saveErr != nil {
 						return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", spec, observedTokens, threshold, saveErr)
 					}
@@ -652,6 +656,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 			sess.ProcessPID, sess.ProcessStarttime = 0, 0
 			sess.LastError = err.Error()
 			sess.LastActiveAt = time.Now()
+			subagent.SyncCodexRolloutTotals(sess)
 			if saveErr := s.Save(sess); saveErr != nil {
 				return fmt.Errorf("agent start %q failed: %s; session recovery record failed: %w", spec, providerErrorLine(err), saveErr)
 			}
@@ -1000,6 +1005,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 				sess.ProcessPID = 0
 				sess.LastError = fmt.Sprintf("runtime token watchdog interrupted the active turn at %d tokens (limit %d)", observedTokens, threshold)
 				sess.LastActiveAt = time.Now()
+				subagent.SyncCodexRolloutTotals(sess)
 				if saveErr := s.Save(sess); saveErr != nil {
 					return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", sess.Name, observedTokens, threshold, saveErr)
 				}
@@ -1027,6 +1033,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			sess.Status, sess.LastError = "stopped", sig.Error()
 			sess.ProcessPID, sess.ProviderPID, sess.ProviderStarttime = 0, 0, 0
 			sess.LastActiveAt = time.Now()
+			subagent.SyncCodexRolloutTotals(sess)
 			if saveErr := s.Save(sess); saveErr != nil {
 				return fmt.Errorf("agent resume %q %s; session recovery record failed: %w", sess.Name, sig, saveErr)
 			}
@@ -1040,6 +1047,9 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			quotaState = d.availability(sess.Provider, sess.Model).State
 		}
 		if recordCodexResumeFailure(sess, err, quotaState, time.Now()) {
+			_ = s.Save(sess)
+		}
+		if subagent.SyncCodexRolloutTotals(sess) {
 			_ = s.Save(sess)
 		}
 		return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
@@ -1067,17 +1077,39 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	sess.ProcessPID = 0
 	sess.CodexQuotaResumePending = false
 	sess.ResumeFailures = 0
-	sess.TokensTurn = r.TokensTurn
-	sess.TokensCumulative += r.TokensTurn
+	if r.CumulativeTotalsKnown {
+		// Codex reports monotonic session totals across turns; convert to a
+		// turn delta if no rollout baseline already subtracted prior turns,
+		// and store the cumulative total directly instead of summing.
+		if r.InputTokens == r.CumulativeInputTokens && (sess.InputTokensTotal > 0 || sess.OutputTokensTotal > 0) {
+			r.InputTokens = max(r.CumulativeInputTokens-sess.InputTokensTotal, 0)
+			r.CachedTokens = max(r.CumulativeCachedTokens-sess.CachedTokensTotal, 0)
+			r.OutputTokens = max(r.CumulativeOutputTokens-sess.OutputTokensTotal, 0)
+			if r.ReasoningTokensKnown {
+				r.ReasoningTokens = max(r.CumulativeReasoningTokens-sess.ReasoningTokensTotal, 0)
+			}
+			r.TokensTurn = r.InputTokens + r.OutputTokens
+		}
+		sess.TokensTurn = r.TokensTurn
+		sess.TokensCumulative = r.CumulativeInputTokens + r.CumulativeOutputTokens
+		sess.InputTokensTotal = r.CumulativeInputTokens
+		sess.CachedTokensTotal = r.CumulativeCachedTokens
+		sess.OutputTokensTotal = r.CumulativeOutputTokens
+		sess.ReasoningTokensTotal = r.CumulativeReasoningTokens
+		sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
+	} else {
+		sess.TokensTurn = r.TokensTurn
+		sess.TokensCumulative += r.TokensTurn
+		sess.ReasoningTokensTotal += r.ReasoningTokens
+		sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
+		sess.InputTokensTotal += r.InputTokens
+		sess.CachedTokensTotal += r.CachedTokens
+		sess.OutputTokensTotal += r.OutputTokens
+	}
 	sess.TokensSinceCompact += subagent.CompactionTokens(r)
-	sess.ReasoningTokensTotal += r.ReasoningTokens
-	sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
 	sess.ContextTokens = r.ContextTokens
 	sess.ContextWindowSize = r.ContextWindowSize
 	sess.CachedTokens = r.CachedTokens
-	sess.InputTokensTotal += r.InputTokens
-	sess.CachedTokensTotal += r.CachedTokens
-	sess.OutputTokensTotal += r.OutputTokens
 	sess.TokenTotalsKnown = true
 	sess.LastActiveAt = time.Now()
 	sess.Status = "completed"

@@ -114,3 +114,38 @@ func TestRenderProjectUsageCard(t *testing.T) {
 		t.Errorf("card missing cache efficiency: %s", card)
 	}
 }
+
+func TestScanCodexProjectUsage_DeduplicatesResumedRollouts(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoPath := filepath.Join(tmpDir, "myrepo")
+	rolloutDir := filepath.Join(tmpDir, ".codex", "sessions", "2026", "11", "10")
+	if err := os.MkdirAll(rolloutDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	turn1 := strings.Join([]string{
+		`{"type":"session_meta","payload":{"id":"thread-1","cwd":"` + repoPath + `"}}`,
+		`{"type":"turn_context","payload":{"model":"gpt-5.6-terra"}}`,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":800,"output_tokens":50,"total_tokens":1050}}}}`,
+	}, "\n") + "\n"
+	turn2 := strings.Join([]string{
+		`{"type":"session_meta","payload":{"id":"thread-1","cwd":"` + repoPath + `"}}`,
+		`{"type":"turn_context","payload":{"model":"gpt-5.6-terra"}}`,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":2500,"cached_input_tokens":2000,"output_tokens":120,"total_tokens":2620}}}}`,
+	}, "\n") + "\n"
+
+	if err := os.WriteFile(filepath.Join(rolloutDir, "rollout-2026-11-10T10-00-00-thread-1.jsonl"), []byte(turn1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rolloutDir, "rollout-2026-11-10T10-05-00-thread-1.jsonl"), []byte(turn2), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	attr := scanCodexProjectUsage(filepath.Join(tmpDir, ".codex"), repoPath)
+	if attr.MatchedSessions != 1 {
+		t.Fatalf("MatchedSessions = %d, want 1", attr.MatchedSessions)
+	}
+	if attr.Tokens.InputTokens != 2500 || attr.Tokens.CacheReadTokens != 2000 || attr.Tokens.OutputTokens != 120 || attr.Tokens.TotalTokens != 2620 {
+		t.Fatalf("Tokens = %+v, want max cumulative rollout totals without summing resume files", attr.Tokens)
+	}
+}

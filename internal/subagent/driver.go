@@ -297,7 +297,15 @@ type TurnResult struct {
 	ContextTokensBeforeCompact int   `json:"context_tokens_before_compact,omitempty"`
 	TokensTurn                 int   `json:"tokens_turn"`
 	TokensCumulative           int   `json:"tokens_cumulative"`
-	DurationMS                 int64 `json:"duration_ms"`
+	// CumulativeTotalsKnown reports that the provider gave monotonic session-wide
+	// totals (Codex turn.completed / rollout total_token_usage) rather than a
+	// per-turn delta; start/resume must not add these across turns.
+	CumulativeTotalsKnown     bool  `json:"-"`
+	CumulativeInputTokens     int   `json:"-"`
+	CumulativeOutputTokens    int   `json:"-"`
+	CumulativeCachedTokens    int   `json:"-"`
+	CumulativeReasoningTokens int   `json:"-"`
+	DurationMS                int64 `json:"duration_ms"`
 	// StillRunning reports that the wait ended while the provider session
 	// still runs (Jules); the CLI then exits with exitStillRunning (3).
 	StillRunning bool `json:"still_running,omitempty"`

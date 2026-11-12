@@ -144,6 +144,16 @@ func populateCodexContextMetrics(session *Session) {
 		session.SessionUsedTokens = usage.SessionUsedTokens
 		session.SessionUsedKnown = true
 	}
+	if usage.InputTokens > 0 || usage.OutputTokens > 0 {
+		session.InputTokensTotal = usage.InputTokens
+		session.CachedTokensTotal = usage.CachedTokens
+		session.OutputTokensTotal = usage.OutputTokens
+		session.ReasoningTokensTotal = usage.ReasoningTokens
+		session.ReasoningTokensKnown = usage.ReasoningTokensKnown
+		session.TokensCumulative = usage.InputTokens + usage.OutputTokens
+		session.CachedTokens = usage.CachedTokens
+		session.TokenTotalsKnown = true
+	}
 	if err != nil && usage.ContextTokens <= 0 {
 		session.ContextTokens = -1
 	}

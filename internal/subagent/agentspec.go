@@ -586,6 +586,33 @@ func ResolveContextMode(name string) (ContextModeSpec, error) {
 	return mode, nil
 }
 
+// SupportsContextMode reports whether provider honours non-default
+// --context-mode settings (issue 1076).
+func SupportsContextMode(provider string) bool {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "pi", "lmcoder", "claude":
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidateContextMode checks that mode is a configured context mode and, when
+// non-default, is supported by provider (issue 1076).
+func ValidateContextMode(provider, mode string) error {
+	mode = strings.TrimSpace(mode)
+	if mode == "" || mode == "default" {
+		return nil
+	}
+	if _, err := ResolveContextMode(mode); err != nil {
+		return err
+	}
+	if !SupportsContextMode(provider) {
+		return fmt.Errorf("context mode %q is not supported for provider %q; supported providers: claude, lmcoder, pi", mode, provider)
+	}
+	return nil
+}
+
 func validateRoles(spec agentSpec) error {
 	if _, ok := spec.Roles[spec.DefaultRole]; !ok {
 		return fmt.Errorf("agent spec: default_role %q is not defined in roles", spec.DefaultRole)

@@ -119,6 +119,9 @@ func agyEffort(tier string) string {
 }
 
 func (d AgyDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := ValidateContextMode("agy", o.ContextMode); err != nil {
+		return nil, err
+	}
 	if d.Dir == "" {
 		return nil, errors.New("agy: refusing to run with an empty Dir (agy would write to ~/.gemini scratch)")
 	}

@@ -30,6 +30,9 @@ func (d PiDriver) commandLines(ctx context.Context, fn func([]byte), args ...str
 }
 
 func (d PiDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := ValidateContextMode("pi", o.ContextMode); err != nil {
+		return nil, err
+	}
 	start := time.Now()
 	b, err := d.command(ctx, piRunArgs(o.Model, o.Prompt, o.ContextMode)...)
 	if err != nil {
@@ -57,6 +60,9 @@ func (d PiDriver) Resume(ctx context.Context, id, prompt string, model Model) (*
 type PiStreamDriver struct{ PiDriver }
 
 func (d PiStreamDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
+	if err := ValidateContextMode("pi", o.ContextMode); err != nil {
+		return nil, err
+	}
 	start := time.Now()
 	b, err := d.commandLines(ctx, piLineFunc(fn), piRunArgs(o.Model, o.Prompt, o.ContextMode)...)
 	if err != nil {

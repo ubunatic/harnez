@@ -980,6 +980,101 @@ func TestCodexCompactRolloutConfirmation(t *testing.T) {
 	}
 }
 
+func TestCodexTokenCountFallbackAndCumulativeResumeTotals(t *testing.T) {
+	// Case 1: stream/rollout with token_count events and zero turn.completed (issue 1214).
+	fixture, err := os.ReadFile(filepath.Join("testdata", "codex-987-rollout.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parser := &codexParser{}
+	for _, line := range strings.Split(strings.TrimSpace(string(fixture)), "\n") {
+		parser.feed([]byte(line))
+	}
+	parser.feed([]byte(`{"type":"item.completed","item":{"type":"agent_message","text":"done"}}`))
+	gotFallback, err := parser.result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotFallback.InputTokens != 49322 || gotFallback.CachedTokens != 41216 || gotFallback.OutputTokens != 18 || gotFallback.TokensTurn != 49340 {
+		t.Fatalf("token_count fallback = %+v, want final total_token_usage (49322/41216/18)", gotFallback)
+	}
+
+	// Case 2: multi-turn Run + Resume where turn.completed and rollout total_token_usage are cumulative.
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	rolloutPath := filepath.Join(home, "sessions", "2026", "11", "10", "rollout-2026-11-10T10-00-00-thread-cum.jsonl")
+	if err := os.MkdirAll(filepath.Dir(rolloutPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	turn1Rollout := `{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":16479,"cached_input_tokens":16128},"total_token_usage":{"input_tokens":32786,"cached_input_tokens":28672,"output_tokens":12}}}}` + "\n"
+	turn2Rollout := turn1Rollout + `{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":16536,"cached_input_tokens":12544},"total_token_usage":{"input_tokens":49322,"cached_input_tokens":41216,"output_tokens":18}}}}` + "\n"
+
+	turn := 0
+	d := CodexDriver{Command: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+		turn++
+		if turn == 1 {
+			if err := os.WriteFile(rolloutPath, []byte(turn1Rollout), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return []byte(`{"type":"thread.started","thread_id":"thread-cum"}` + "\n" +
+				`{"type":"item.completed","item":{"type":"agent_message","text":"t1"}}` + "\n" +
+				`{"type":"turn.completed","usage":{"input_tokens":32786,"cached_input_tokens":28672,"output_tokens":12}}`), nil
+		}
+		if err := os.WriteFile(rolloutPath, []byte(turn2Rollout), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"t2"}}` + "\n" +
+			`{"type":"turn.completed","usage":{"input_tokens":32786,"cached_input_tokens":28672,"output_tokens":12}}` + "\n" +
+			`{"type":"turn.completed","usage":{"input_tokens":49322,"cached_input_tokens":41216,"output_tokens":18}}`), nil
+	}}
+
+	r1, err := d.Run(context.Background(), RunOptions{Prompt: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r1.InputTokens != 32786 || r1.OutputTokens != 12 || r1.TokensCumulative != 32798 {
+		t.Fatalf("turn 1 = %+v, want 32786 in / 12 out / 32798 cum", r1)
+	}
+
+	r2, err := d.Resume(context.Background(), "thread-cum", "two", Model{Name: "gpt-5.6-terra"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r2.InputTokens != 16536 || r2.CachedTokens != 12544 || r2.OutputTokens != 6 || r2.TokensTurn != 16542 {
+		t.Fatalf("turn 2 delta = %+v, want 16536 in / 12544 cached / 6 out / 16542 turn", r2)
+	}
+	if !r2.CumulativeTotalsKnown || r2.CumulativeInputTokens != 49322 || r2.TokensCumulative != 49340 {
+		t.Fatalf("turn 2 cumulative = %+v, want 49322 in / 49340 total", r2)
+	}
+
+	// Case 3: post-compaction token_count with last_token_usage.input_tokens == 0 preserves ContextTokens and Resume delta.
+	compactedRollout := `{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":32786,"cached_input_tokens":28672,"output_tokens":12},"last_token_usage":{"input_tokens":16479,"cached_input_tokens":14000,"output_tokens":6}}}}` + "\n" +
+		`{"type":"compacted","payload":{"message":"compacted"}}` + "\n" +
+		`{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":32786,"cached_input_tokens":28672,"output_tokens":12},"last_token_usage":{"input_tokens":0,"cached_input_tokens":0,"output_tokens":0}}}}` + "\n"
+	compactedPath := filepath.Join(filepath.Dir(rolloutPath), "rollout-thread-compact.jsonl")
+	if err := os.WriteFile(compactedPath, []byte(compactedRollout), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r3, err := (CodexDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
+		afterRollout := compactedRollout +
+			`{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":39786,"cached_input_tokens":33672,"output_tokens":17},"last_token_usage":{"input_tokens":7000,"cached_input_tokens":5000,"output_tokens":5}}}}` + "\n"
+		if err := os.WriteFile(compactedPath, []byte(afterRollout), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"t3"}}` + "\n" +
+			`{"type":"turn.completed","usage":{"input_tokens":39786,"cached_input_tokens":33672,"output_tokens":17}}`), nil
+	}}).Resume(context.Background(), "thread-compact", "three", Model{Name: "gpt-5.6-terra"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r3.InputTokens != 7000 || r3.OutputTokens != 5 || r3.TokensTurn != 7005 {
+		t.Fatalf("post-compaction resume delta = %+v, want 7000 in / 5 out / 7005 turn", r3)
+	}
+	if r3.ContextTokens != 7000 {
+		t.Fatalf("post-compaction state = %+v, want ContextTokens 7000", r3)
+	}
+}
+
 func TestCodexCompactBelowLimitDoesNotInvokeCodex(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CODEX_HOME", home)
