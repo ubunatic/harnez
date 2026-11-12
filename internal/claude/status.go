@@ -277,6 +277,19 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 			})
 		}
 	}
+	if home, err := os.UserHomeDir(); err == nil {
+		if dir := HarnezPathDir(); dir != "" {
+			for _, t := range pathTargets(home) {
+				if !t.wanted {
+					continue
+				}
+				checks = append(checks, entry{
+					label: fsutil.ContractHome(t.path) + " [PATH " + fsutil.ContractHome(dir) + "]",
+					state: pathStateOf(t, home, dir),
+				})
+			}
+		}
+	}
 	for _, link := range GearSymlinkTargets(target, cfg) {
 		link := link
 		checks = append(checks, entry{

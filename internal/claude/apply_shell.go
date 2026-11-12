@@ -68,6 +68,12 @@ func applyShellIntegration(r *applyReport, target string, cfg *Config, shellOpt 
 		}
 	}
 
+	if home, err := os.UserHomeDir(); err == nil {
+		if err := applyPathIntegration(r, home, HarnezPathDir()); err != nil {
+			return err
+		}
+	}
+
 	if shellOpt {
 		for _, rcPath := range ShellRCPaths() {
 			changed, existed, err := markdown.ApplyMK(rcPath, "env", HarnezShellRCSnippet)
