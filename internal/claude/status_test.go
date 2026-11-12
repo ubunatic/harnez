@@ -158,7 +158,7 @@ func TestRunStatus_BashShimCodexAndAgyHooks(t *testing.T) {
 		t.Fatalf("ApplyAll failed: %v", err)
 	}
 
-	// After apply -> ok
+	// After apply -> codex hooks are installed but untrusted until approved in Codex (issue 724)
 	out, err = CaptureTestStdout(func() error {
 		return RunStatus("(test)", cfg, dir, nil)
 	})
@@ -168,10 +168,37 @@ func TestRunStatus_BashShimCodexAndAgyHooks(t *testing.T) {
 	if !strings.Contains(out, shimPath) || !strings.Contains(out, "ok") {
 		t.Errorf("expected bash shim ok, got:\n%s", out)
 	}
-	if !strings.Contains(out, codexTarget+" [hooks.harnez]") || !strings.Contains(out, "ok") {
-		t.Errorf("expected codex hooks ok, got:\n%s", out)
+	if !strings.Contains(out, codexTarget+" [hooks.harnez]") || !strings.Contains(out, "untrusted") {
+		t.Errorf("expected codex hooks untrusted when [hooks.state] is absent, got:\n%s", out)
 	}
 	if !strings.Contains(out, agyTarget+" [harnez]") || !strings.Contains(out, "ok") {
 		t.Errorf("expected agy hooks ok, got:\n%s", out)
+	}
+
+	// Simulate Codex hook-trust hashes recorded under [hooks.state] -> ok
+	var trustTOML strings.Builder
+	trustTOML.WriteString("\n[hooks.state]\n")
+	for _, ev := range []string{"pre_tool_use", "post_tool_use", "pre_compact", "post_compact", "session_start", "stop", "session_end"} {
+		trustTOML.WriteString("  [hooks.state.\"")
+		trustTOML.WriteString(codexTarget)
+		trustTOML.WriteByte(':')
+		trustTOML.WriteString(ev)
+		trustTOML.WriteString(":0:0\"]\n    trusted_hash = \"sha256:approved\"\n")
+	}
+	existingCodex, err := os.ReadFile(codexTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexTarget, append(existingCodex, []byte(trustTOML.String())...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err = CaptureTestStdout(func() error {
+		return RunStatus("(test)", cfg, dir, nil)
+	})
+	if err != nil {
+		t.Fatalf("RunStatus post-trust failed: %v", err)
+	}
+	if strings.Contains(out, "untrusted") || !strings.Contains(out, codexTarget+" [hooks.harnez]") {
+		t.Errorf("expected codex hooks ok after [hooks.state] trust entries, got:\n%s", out)
 	}
 }

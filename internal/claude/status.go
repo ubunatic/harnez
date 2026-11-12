@@ -162,6 +162,8 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 		if installed {
 			if drifted {
 				state = "drifted"
+			} else if trusted, untrusted, total := codex.TrustStatus(hooksPath); !trusted {
+				state = fmt.Sprintf("untrusted (%d/%d; run interactive codex to trust hooks)", untrusted, total)
 			} else {
 				state = "ok"
 			}

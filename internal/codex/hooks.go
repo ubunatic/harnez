@@ -219,6 +219,73 @@ func Status(path string) (installed bool, drifted bool) {
 	return true, string(wantData) != string(gotData)
 }
 
+// TrustStatus reports whether every harnez-owned hook handler at path has a
+// trusted_hash recorded under [hooks.state] (issue 724).
+func TrustStatus(path string) (trusted bool, untrusted int, total int) {
+	doc := readTOML(path)
+	hooks, ok := doc["hooks"].(map[string]any)
+	if !ok {
+		return false, 0, 0
+	}
+	state, _ := hooks["state"].(map[string]any)
+	for event, v := range hooks {
+		if event == "state" || event == HookName {
+			continue
+		}
+		snake := codexHookEventKey(event)
+		for gi, group := range tableArray(v) {
+			if !isHarnezGroup(group) {
+				continue
+			}
+			for hi := range tableArray(group["hooks"]) {
+				total++
+				if !hasHookTrustHash(state, path, snake, gi, hi) {
+					untrusted++
+				}
+			}
+		}
+	}
+	return total > 0 && untrusted == 0, untrusted, total
+}
+
+func codexHookEventKey(event string) string {
+	var b strings.Builder
+	for i, r := range event {
+		if r >= 'A' && r <= 'Z' {
+			if i > 0 {
+				b.WriteByte('_')
+			}
+			b.WriteByte(byte(r + ('a' - 'A')))
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func hasHookTrustHash(state map[string]any, path, snakeEvent string, groupIdx, hookIdx int) bool {
+	if len(state) == 0 {
+		return false
+	}
+	suffix := fmt.Sprintf(":%s:%d:%d", snakeEvent, groupIdx, hookIdx)
+	if entry, ok := state[path+suffix].(map[string]any); ok {
+		if h, _ := entry["trusted_hash"].(string); strings.TrimSpace(h) != "" {
+			return true
+		}
+	}
+	for k, raw := range state {
+		if !strings.HasSuffix(k, suffix) {
+			continue
+		}
+		if entry, ok := raw.(map[string]any); ok {
+			if h, _ := entry["trusted_hash"].(string); strings.TrimSpace(h) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Summary returns a compact operator-facing description of the managed Codex hooks.
 func Summary(path string) string {
 	doc := readTOML(path)
