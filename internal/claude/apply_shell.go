@@ -69,7 +69,7 @@ func applyShellIntegration(r *applyReport, target string, cfg *Config, shellOpt 
 	}
 
 	if home, err := os.UserHomeDir(); err == nil {
-		if err := applyPathIntegration(r, home, HarnezPathDir()); err != nil {
+		if err := applyShellSetup(r, home); err != nil {
 			return err
 		}
 	}

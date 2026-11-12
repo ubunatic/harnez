@@ -287,7 +287,9 @@ func recordCodexAccess(stderr io.Writer, provider, model string, turnErr error) 
 		message := strings.ToLower(turnErr.Error())
 		modelPattern := `(^|[^a-z0-9._-])` + regexp.QuoteMeta(strings.ToLower(model)) + `($|[^a-z0-9._-])`
 		modelFound, _ := regexp.MatchString(modelPattern, message)
-		if !strings.Contains(message, "not supported when using codex") && !(model != "" && modelFound && strings.Contains(message, "model_not_found")) {
+		unsupportedCodex := strings.Contains(message, "not supported when using codex")
+		modelNotFound := model != "" && modelFound && strings.Contains(message, "model_not_found")
+		if !unsupportedCodex && !modelNotFound {
 			return
 		}
 		status = "unsupported"

@@ -165,7 +165,7 @@ Output formatting:
 				}
 			}
 			// history reads the telemetry DB, not issues/, so it never goes to the forge.
-			if args[0] == "issues" && !(len(args) > 1 && args[1] == "history") {
+			if args[0] == "issues" && (len(args) < 2 || args[1] != "history") {
 				t, src, spec, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir)
 				if err != nil {
 					return err

@@ -148,6 +148,7 @@ func newRootCmd() *cobra.Command {
 
 	root.AddCommand(newChannelCmd(), newComposeCmd(), newInstallCmd(), newSessionCmd(), newPiCmd())
 	root.AddCommand(newApplyCmd(), newDiffCmd(), newScanDocsCmd(), newStatusCmd(), newRevertCmd(), newCleanCmd(), newUsageCmd(), newLoadStreamCmd(), newInitCmd(), newAssessCmd(), newCollectorCmd(), newServerCmd(), newDistillCmd(), newModeCmd(), newReleaseCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newPRCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newCodexTelemetryCmd(), newHookCmd(), newStatuslineCmd(), newAGYStatuslineCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd(), newAgentCmd(), newModelsCmd(), newMCPCmd(), newBenchCmd(), newSkillCmd(), newSkillsCmd(), newDecideCmd(), newGuardCmd(), newCompactCmd(), newTUICmd(), newConfigCmd(), newForgeCmd(), newManCmd(root))
+	claude.SetCompletionRenderer(completionRenderer(root))
 	return root
 }
 

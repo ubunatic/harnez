@@ -937,7 +937,7 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 			}
 		}
 	}
-	if home, err := os.UserHomeDir(); err == nil && diffPathIntegration(home, HarnezPathDir()) {
+	if home, err := os.UserHomeDir(); err == nil && shellSetupPending(home) {
 		anyChanged = true
 	}
 
@@ -1076,7 +1076,7 @@ func CleanAll(target string, cfg *Config) error {
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		cleanPathIntegration(home)
+		cleanShellSetup(home)
 	}
 	for _, link := range GearSymlinkTargets(target, cfg) {
 		if err := os.Remove(link); err == nil {

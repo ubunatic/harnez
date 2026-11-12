@@ -153,7 +153,9 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	if is.PullRequest != nil {
 		return fmt.Errorf("issues comment: %s is a pull request", target)
 	}
-	if !strings.EqualFold(is.State, "open") && !(allowClosed && strings.EqualFold(is.State, "closed")) {
+	isOpen := strings.EqualFold(is.State, "open")
+	closedAllowed := allowClosed && strings.EqualFold(is.State, "closed")
+	if !isOpen && !closedAllowed {
 		return fmt.Errorf("issues comment: %s has state %q; closed issues require --closed", target, is.State)
 	}
 	c := forgetracker.Command{Tool: "fj", Args: []string{"--host", t.Forge.Host, "issue", "comment", target, "--body-file", body}}
