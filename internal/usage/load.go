@@ -653,7 +653,9 @@ func currentGPUs(seed bool) []GPU {
 	if amd, err := readAMDSysfsWithSeed(seed); err == nil {
 		gpus = amd
 	}
-	// NVIDIA cards come after AMD; the probe is gated and cached in gpu_nvidia.go.
+	// Intel comes after AMD (issue 1219); NVIDIA cards come last, and their
+	// probe is gated and cached in gpu_nvidia.go.
+	gpus = append(gpus, currentIntelGPUs()...)
 	return append(gpus, currentNVIDIAGPUs()...)
 }
 
@@ -734,6 +736,20 @@ func readAMDCodenameFromLspci(pci string) (string, error) {
 // function whose slot equals pci. Other AMD functions in the output are
 // skipped, so each GPU gets its own name.
 func parseLspciCodename(out []byte, pci string) (string, error) {
+	device, err := lspciDeviceField(out, pci)
+	if err != nil {
+		return "", fmt.Errorf("no AMD VGA/3D/display device %s found in lspci output", pci)
+	}
+	if idx := strings.Index(device, " ["); idx >= 0 {
+		device = device[:idx]
+	}
+	return strings.TrimSpace(device), nil
+}
+
+// lspciDeviceField returns the full device string (e.g. "Alder Lake-S GT1
+// [UHD Graphics 730]") of the VGA/3D/display-class function whose slot equals
+// pci, from `lspci -D -mm` output. It serves every vendor's GPU reader.
+func lspciDeviceField(out []byte, pci string) (string, error) {
 	for _, line := range strings.Split(string(out), "\n") {
 		// lspci -mm quotes each field: Slot "Class" "Vendor" "Device" ...
 		fields := strings.Split(line, `"`)
@@ -744,15 +760,11 @@ func parseLspciCodename(out []byte, pci string) (string, error) {
 		if !strings.Contains(class, "VGA") && !strings.Contains(class, "3D controller") && !strings.Contains(class, "Display controller") {
 			continue
 		}
-		device := fields[5]
-		if idx := strings.Index(device, " ["); idx >= 0 {
-			device = device[:idx]
-		}
-		if device = strings.TrimSpace(device); device != "" {
+		if device := strings.TrimSpace(fields[5]); device != "" {
 			return device, nil
 		}
 	}
-	return "", fmt.Errorf("no AMD VGA/3D/display device %s found in lspci output", pci)
+	return "", fmt.Errorf("no VGA/3D/display device %s found in lspci output", pci)
 }
 
 func readAMDSysfsWithSeed(seed bool) ([]GPU, error) {

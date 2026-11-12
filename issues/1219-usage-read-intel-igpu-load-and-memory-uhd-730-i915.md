@@ -22,8 +22,11 @@ The GPU readers in `internal/usage` cover AMD (`amdgpu` `gpu_metrics`, `gpu_busy
 
 - Goal scope is the local iGPU class first. Same-class Intel iGPUs (UHD/Iris Xe on `i915` or `xe`) should work by design, but only this machine is verified.
 - The memory row differs from AMD. On an iGPU the memory is system RAM, so the VRAM/GTT split of 765 may not apply. Decide what the row shows before implementing.
-- Unverified: which sysfs or PMU source gives busy percent for `i915`. Candidates are the i915 perf PMU under `/sys/devices` and DRM `fdinfo`. Probe the live host before choosing. The `xe` driver exposes different surfaces.
-- Unverified: whether the existing iGPU class logic (`classifyGPU`, `boot_vga`) already fits Intel, or needs a vendor check.
+- Busy source (probed on this host, kernel 7.3.3): the i915 perf PMU exposes `rcs0-busy`, but `perf_event_open` for it returns EACCES for an unprivileged user (`perf_event_paranoid` 2, no CAP_PERFMON). Rejected for now. `gt/gt0/rc6_residency_ms` is world-readable, so the reader uses busy = 100 × (1 − ΔRC6 / Δwall) per GPU. This is a proxy for "GT awake", not an engine counter. DRM `fdinfo` (`drm-engine-render`) only shows this user's own clients, so it is partial and not used.
+- Class: `classifyGPU` takes the PCI address instead of `boot_vga`. The Intel iGPU is the display function at `0000:00:02.0`, and other Intel display functions are dGPUs. Verified on this host only.
+- Name: lspci's bracketed name, shortened: `UHD 730`.
+- Still open: the memory row. The reader reports no VRAM/GTT, so the box draws no memory row for the iGPU. Decide what, if anything, it shows (system RAM used by GPU clients, or nothing).
+- Seed cost: the first reading for each GPU sleeps 0.5 s (`intelSeedWindow`), so the first dashboard frame and one-shot `harnez usage` take about 0.5 s longer on this host. A shorter window would be noisier, and a 1 s window broke the watch startup test.
 
 ## 3. Implementation & Verification Plan
 
