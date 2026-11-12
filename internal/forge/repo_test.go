@@ -15,7 +15,7 @@ func TestRepoProbeReportsRepoReachability(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.URL.Path)
 		if r.URL.Path == "/repos/o/r" {
-			w.Write([]byte(`{"name":"r"}`))
+			_, _ = w.Write([]byte(`{"name":"r"}`))
 			return
 		}
 		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)

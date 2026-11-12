@@ -1107,19 +1107,12 @@ func defaultCommitMessage(verb, ticketNumber, reason string) string {
 	return msg
 }
 
-// gitAddAndCommit stages exactly paths and commits them with message,
-// returning the resulting commit's short sha. Attribution (Co-Authored-By
+// gitAddAndCommitUnguarded stages exactly paths and commits them with message,
+// returning the resulting commit's short sha. Callers guard with
+// gitflow.GuardCommit before their first write. Attribution (Co-Authored-By
 // trailers etc.) is deliberately not added here -- this tool is meant to be
 // used by any agent or human caller, and attribution is a caller-session
 // concern, not something baked into the command (issue 232).
-func gitAddAndCommit(dir string, paths []string, message string) (string, error) {
-	// Backstop: callers that write files first guard before their first write.
-	if err := gitflow.GuardCommit(dir, "commit"); err != nil {
-		return "", err
-	}
-	return gitAddAndCommitUnguarded(dir, paths, message)
-}
-
 func gitAddAndCommitUnguarded(dir string, paths []string, message string) (string, error) {
 	trackedCmd := exec.Command("git", append([]string{"ls-files", "--cached", "--"}, paths...)...)
 	trackedCmd.Dir = dir

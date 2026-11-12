@@ -393,6 +393,21 @@ first `apply` keep their old PATH until restarted. Running `harnez apply -t
 /tmp/some-test-dir` for a "quick isolated smoke test" still mutates the real, live
 harness install.
 
+`apply` also installs tab completion for each installed shell, from the same
+command tree that `harnez completion <shell>` prints. It writes
+`~/.harnez/completions/harnez.bash` and `harnez.zsh`, and sources them from a
+managed `completion` section in `~/.bashrc` and `~/.zshrc` when those files exist.
+For zsh the section loads `compinit` first if nothing has done so. Fish autoloads
+`~/.config/fish/completions/harnez.fish`, so it needs no rc edit. The scripts are
+written once per `apply`, not generated at each shell start, so opening a terminal
+spawns no process and records no `cli_invocations` row. Re-run `harnez apply`
+after upgrading harnez so the scripts match the new verbs.
+
+The PATH entry and the completion wiring are written by `dev/shellsetup`, a standard-library
+package that takes a command name, a completion renderer, a PATH directory and the shells to
+wire. harnez passes its own values to it; `apply`, `status`, `diff` and `revert` call it. The
+package keeps no harnez-specific code, so another app can reuse it.
+
 This bit a real session (issue 316, 2026-09-15): a debloat-feature smoke test using
 `-t` pointed the real `⚙` symlinks at a throwaway temp binary, which was then deleted,
 leaving them dangling until a real `harnez apply` (no `-t`) was re-run to fix them. If
