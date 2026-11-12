@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -301,27 +302,22 @@ func mergeCollectorUsage(primary, additional AgentUsage) AgentUsage {
 		primary.ModelGroups, primary.ExtraWindows = additional.ModelGroups, additional.ExtraWindows
 		return primary
 	}
+	// Two collectors of one provider can report the same model group, for
+	// example AGY's live CLI and its meter. Their percentages differ in
+	// precision and reading time, so a group is matched by name alone and only
+	// one copy is kept: the one from the newer reading.
+	groups := slices.Clone(primary.ModelGroups)
 	for _, group := range additional.ModelGroups {
-		duplicate := false
-		for _, have := range primary.ModelGroups {
-			if have.Name != group.Name || len(have.Windows) != len(group.Windows) {
-				continue
-			}
-			duplicate = true
-			for i := range have.Windows {
-				if have.Windows[i].Name != group.Windows[i].Name || have.Windows[i].UsedPercent != group.Windows[i].UsedPercent {
-					duplicate = false
-					break
-				}
-			}
-			if duplicate {
-				break
-			}
+		idx := slices.IndexFunc(groups, func(have ModelGroup) bool { return have.Name == group.Name })
+		if idx < 0 {
+			groups = append(groups, group)
+			continue
 		}
-		if !duplicate {
-			primary.ModelGroups = append(primary.ModelGroups, group)
+		if additional.LastRefreshed.After(primary.LastRefreshed) {
+			groups[idx] = group
 		}
 	}
+	primary.ModelGroups = groups
 	return primary
 }
 
