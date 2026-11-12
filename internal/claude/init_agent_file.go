@@ -88,25 +88,18 @@ func initGitIntegration(ir *initReport, dir string, repoConfig *RepoConfig) erro
 		fmt.Printf("  ignored .harnez/state/ in .git/info/exclude\n")
 		ir.changes++
 	}
-	if fileExists(filepath.Join(dir, "issues")) {
-		// Lock files left by the README sync and `harnez issues new` (issue 672).
-		locks := []string{"/issues/README.md.lock", "/issues/.reserve.lock"}
-		// Tracked .gitignore too: .git/info/exclude is clone-local (issue 1066).
-		if changed, err := ensureGitignoreSection(dir, "# harnez issue-index lock files", locks...); err != nil {
-			return fmt.Errorf("ignore issue locks in .gitignore: %w", err)
-		} else if changed {
+	if fileExists(filepath.Join(dir, "issues")) || (repoConfig != nil && repoConfig.Issues.Tracker == "harnez") {
+		addedGitignore, addedExcludes, err := ensureIssueLockIgnores(dir)
+		if err != nil {
+			return err
+		}
+		if addedGitignore {
 			fmt.Printf("  ignored issue lock files in .gitignore\n")
 			ir.changes++
 		}
-		for _, lock := range locks {
-			ignored, err := fsutil.EnsureGitExclude(dir, lock)
-			if err != nil {
-				return fmt.Errorf("ignore %s: %w", lock, err)
-			}
-			if ignored {
-				fmt.Printf("  ignored %s in .git/info/exclude\n", lock)
-				ir.changes++
-			}
+		for _, lock := range addedExcludes {
+			fmt.Printf("  ignored %s in .git/info/exclude\n", lock)
+			ir.changes++
 		}
 	}
 	var gitChanges int
@@ -120,4 +113,24 @@ func initGitIntegration(ir *initReport, dir string, repoConfig *RepoConfig) erro
 	}
 	ir.changes += gitChanges
 	return nil
+}
+
+// ensureIssueLockIgnores adds issue-tracker lock exclusions to .gitignore and
+// .git/info/exclude (issues 672, 703, 1066).
+func ensureIssueLockIgnores(dir string) (addedGitignore bool, addedExcludes []string, err error) {
+	locks := []string{"/issues/README.md.lock", "/issues/.reserve.lock"}
+	addedGitignore, err = ensureGitignoreSection(dir, "# harnez issue-index lock files", locks...)
+	if err != nil {
+		return false, nil, fmt.Errorf("ignore issue locks in .gitignore: %w", err)
+	}
+	for _, lock := range locks {
+		ignored, err := fsutil.EnsureGitExclude(dir, lock)
+		if err != nil {
+			return addedGitignore, addedExcludes, fmt.Errorf("ignore %s: %w", lock, err)
+		}
+		if ignored {
+			addedExcludes = append(addedExcludes, lock)
+		}
+	}
+	return addedGitignore, addedExcludes, nil
 }

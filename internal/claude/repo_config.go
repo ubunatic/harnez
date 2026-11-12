@@ -193,7 +193,14 @@ func AdoptRepoIssuesTracker(dir string) error {
 	}
 	cfg.Issues.Tracker = "harnez"
 	cfg.Issues.MergeDriver = true
-	return writeRepoConfig(dir, cfg)
+	if err := writeRepoConfig(dir, cfg); err != nil {
+		return err
+	}
+	// Configure lock-file ignores when the tracker is created after `harnez init` (issue 703).
+	if _, _, err := ensureIssueLockIgnores(dir); err != nil {
+		return err
+	}
+	return nil
 }
 
 func containsRepoDoc(docs []string, name string) bool {
