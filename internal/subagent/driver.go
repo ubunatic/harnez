@@ -309,6 +309,9 @@ type TurnResult struct {
 	CumulativeCachedTokens    int   `json:"-"`
 	CumulativeReasoningTokens int   `json:"-"`
 	DurationMS                int64 `json:"duration_ms"`
+	ToolCalls                 *int  `json:"tool_calls,omitempty"`
+	ToolCallLimit             int   `json:"tool_call_limit,omitempty"`
+	ToolCallLimitReached      bool  `json:"tool_call_limit_reached,omitempty"`
 	// StillRunning reports that the wait ended while the provider session
 	// still runs (Jules); the CLI then exits with exitStillRunning (3).
 	StillRunning bool `json:"still_running,omitempty"`

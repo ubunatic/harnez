@@ -308,6 +308,9 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	if req.AcceptCost {
 		args = append(args, "--accept-cost")
 	}
+	if req.MaxToolCallsSet {
+		args = append(args, "--max-tool-calls", fmt.Sprint(req.MaxToolCalls))
+	}
 	args = append(args, "--", req.Prompt)
 	worker := exec.Command(exe, args...)
 	worker.Env = os.Environ()

@@ -1,6 +1,10 @@
 package subagent
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -78,4 +82,127 @@ func TestToolCallLimiter(t *testing.T) {
 			t.Errorf("expected 0 attempted, got %d", l.Attempted())
 		}
 	})
+}
+
+func TestEffectiveToolCallConfigPrecedence(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	lm := Model{Provider: "lmcoder", Name: "coder", Tier: "low"}
+
+	// Baseline from spec/agent.yaml.
+	cfg, err := EffectiveToolCallConfig(lm, "reviewer", 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Limit != 15 || cfg.NativeBackstopCalls <= 0 || strings.TrimSpace(cfg.SynthesisPrompt) == "" {
+		t.Fatalf("unexpected spec baseline: %+v", cfg)
+	}
+
+	// ~/.harnez/config.yaml overrides spec.
+	harnezDir := filepath.Join(home, ".harnez")
+	if err := os.MkdirAll(harnezDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfgYAML := `agent:
+  tool_call_limits:
+    default: 9
+    native_backstop_calls: 7
+    synthesis_prompt: "custom synthesis"
+    models:
+      lmcoder:coder:
+        reviewer: 4
+        default: 6
+`
+	if err := os.WriteFile(filepath.Join(harnezDir, "config.yaml"), []byte(cfgYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = EffectiveToolCallConfig(lm, "reviewer", 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Limit != 4 || cfg.NativeBackstopCalls != 7 || cfg.SynthesisPrompt != "custom synthesis" {
+		t.Fatalf("user config override = %+v", cfg)
+	}
+
+	// --max-tool-calls 0 explicitly disables even when user config sets 4.
+	cfg, err = EffectiveToolCallConfig(lm, "reviewer", 0, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Limit != 0 {
+		t.Fatalf("flag 0 override = %d, want 0", cfg.Limit)
+	}
+
+	// Negative flag rejected.
+	if _, err := EffectiveToolCallConfig(lm, "reviewer", -1, true); err == nil {
+		t.Fatal("expected error for negative --max-tool-calls")
+	}
+}
+
+func TestPiEmptyResponseAndToolExecutionEvent(t *testing.T) {
+	var events []Event
+	line := `{"type":"tool_execution_start","toolCallId":"pi-tc-1","toolName":"read"}`
+	piLineFunc(func(e Event) { events = append(events, e) })([]byte(line))
+	if len(events) != 1 || !events[0].ToolCall || events[0].CallID != "pi-tc-1" {
+		t.Fatalf("piLineFunc events = %+v", events)
+	}
+
+	raw := strings.Join([]string{
+		`{"type":"session","id":"pi-sess-1"}`,
+		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"partial finding"}],"usage":{"input":10,"output":5,"cacheRead":2,"cacheWrite":0,"totalTokens":17}}}`,
+		`{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"stop","usage":{"input":12,"output":1,"cacheRead":0,"cacheWrite":0,"totalTokens":13}}}`,
+		`{"type":"agent_settled"}`,
+	}, "\n")
+	res, err := parsePi([]byte(raw))
+	if res != nil {
+		t.Fatalf("expected nil TurnResult on empty final response, got %+v", res)
+	}
+	var emptyErr *PiEmptyResponseError
+	if !errors.As(err, &emptyErr) || emptyErr.Result == nil {
+		t.Fatalf("expected PiEmptyResponseError with partial result, got %v", err)
+	}
+	if len(emptyErr.Result.Messages) != 1 || emptyErr.Result.Messages[0] != "partial finding" || emptyErr.Result.Response != "" {
+		t.Fatalf("partial messages mismatch: %+v", emptyErr.Result)
+	}
+}
+
+func TestClaudeAndCodexToolCallEvents(t *testing.T) {
+	// Claude emits tool_use with CallID for main thread only, excludes subagents.
+	cs := &claudeStreamer{}
+	claudeEvents := cs.feed([]byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]}}`))
+	claudeEvents = append(claudeEvents, cs.feed([]byte(`{"type":"assistant","parent_tool_use_id":"toolu_parent","message":{"content":[{"type":"tool_use","id":"toolu_sub","name":"Read","input":{}}]}}`))...)
+	toolCalls := 0
+	for _, ev := range claudeEvents {
+		if ev.ToolCall {
+			toolCalls++
+			if ev.CallID != "toolu_1" {
+				t.Fatalf("unexpected claude CallID = %q", ev.CallID)
+			}
+		}
+	}
+	if toolCalls != 1 {
+		t.Fatalf("claude tool calls = %d, want 1 (%+v)", toolCalls, claudeEvents)
+	}
+
+	// Codex maps tool item types across started+completed and deduplicates via ToolCallLimiter.
+	cp := &codexParser{}
+	var codexEvents []Event
+	for _, rawLine := range []string{
+		`{"type":"item.started","item":{"id":"cmd1","type":"command_execution","command":"pwd"}}`,
+		`{"type":"item.completed","item":{"id":"cmd1","type":"command_execution","command":"pwd"}}`,
+		`{"type":"item.started","item":{"id":"mcp1","type":"mcp_tool_call"}}`,
+		`{"type":"item.completed","item":{"id":"fc1","type":"file_change"}}`,
+		`{"type":"item.completed","item":{"id":"msg1","type":"agent_message","text":"done"}}`,
+	} {
+		if ev, ok := cp.feed([]byte(rawLine)); ok {
+			codexEvents = append(codexEvents, ev)
+		}
+	}
+	limiter := NewToolCallLimiter(10)
+	for _, ev := range codexEvents {
+		limiter.Observe(ev)
+	}
+	if limiter.Attempted() != 3 {
+		t.Fatalf("codex unique tool calls = %d, want 3 (events=%+v)", limiter.Attempted(), codexEvents)
+	}
 }

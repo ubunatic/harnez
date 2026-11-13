@@ -247,3 +247,58 @@ func TestInteractiveAgentToolsRecommendHostBackgroundRunner(t *testing.T) {
 		t.Errorf("tool %s not found", name)
 	}
 }
+
+func TestHarnezCommandAndSpawnMaxToolCalls(t *testing.T) {
+	server := Server{Command: "harnez"}
+	got, err := server.call(context.Background(), toolCall{
+		Name:      "harnez_command",
+		Arguments: map[string]any{"action": "start", "prompt": "go", "max_tool_calls": 0.0},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmdStr := got.(map[string]string)["command"]
+	if !strings.Contains(cmdStr, "'--max-tool-calls' '0'") {
+		t.Fatalf("start missing explicit 0 max-tool-calls: %s", cmdStr)
+	}
+	got, err = server.call(context.Background(), toolCall{
+		Name:      "harnez_command",
+		Arguments: map[string]any{"action": "resume", "session_id": "s1", "prompt": "next", "max_tool_calls": 7.0},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got.(map[string]string)["command"], "'--max-tool-calls' '7'") {
+		t.Fatalf("resume missing max-tool-calls 7: %v", got)
+	}
+	for _, bad := range []any{-1.0, 1.5, "7"} {
+		if _, err := server.call(context.Background(), toolCall{
+			Name:      "harnez_command",
+			Arguments: map[string]any{"action": "start", "prompt": "go", "max_tool_calls": bad},
+		}); err == nil {
+			t.Fatalf("expected validation error for max_tool_calls=%v", bad)
+		}
+	}
+
+	dir := t.TempDir()
+	argsFile := filepath.Join(dir, "args.txt")
+	fakeBin := filepath.Join(dir, "harnez")
+	script := "#!/usr/bin/env bash\nprintf '%s\n' \"$@\" > " + shellQuote(argsFile) + "\nprintf '{\"response\":\"ok\"}'\n"
+	if err := os.WriteFile(fakeBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	spawnServer := Server{Command: fakeBin}
+	if _, err := spawnServer.call(context.Background(), toolCall{
+		Name:      "harnez_spawn_agent",
+		Arguments: map[string]any{"prompt": "hi", "max_tool_calls": 5.0},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "--max-tool-calls\n5\n") {
+		t.Fatalf("spawn argv missing --max-tool-calls 5:\n%s", string(b))
+	}
+}

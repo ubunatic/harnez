@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -222,6 +223,8 @@ type startRequest struct {
 	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode, Role, ContextMode string
 	JSON, PlanFirst, AllowExhaustedQuota, AcceptCost                          bool
 	SessionID                                                                 string
+	MaxToolCalls                                                              int
+	MaxToolCallsSet                                                           bool
 }
 
 func providerAvailability(provider, model string) usage.ProviderQuotaAvailability {
@@ -386,6 +389,8 @@ type resumeRequest struct {
 	SessionID, Selector                      string
 	Continue, JSON, PlanFirst                bool
 	AllowExhaustedQuota, AcceptCost          bool
+	MaxToolCalls                             int
+	MaxToolCallsSet                          bool
 }
 
 // rejectBlockedSessionModel refuses a resume while a local model block (issue
@@ -471,6 +476,10 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	}
 	m := selection.Model
 	if err := subagent.ValidateContextMode(m.Provider, req.ContextMode); err != nil {
+		return err
+	}
+	tcGuard, err := newToolCallGuard(m, role, req.MaxToolCalls, req.MaxToolCallsSet, cmd.ErrOrStderr())
+	if err != nil {
 		return err
 	}
 	if !req.DryRun {
@@ -565,6 +574,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 			if req.AcceptCost {
 				args = append(args, "--accept-cost")
 			}
+			if req.MaxToolCallsSet {
+				args = append(args, "--max-tool-calls", fmt.Sprint(req.MaxToolCalls))
+			}
 			args = append(args, "--", req.Prompt)
 			started, err := launchForegroundWorker(cmd, s, sess, args, timeout, req.JSON)
 			if !started && err != nil {
@@ -586,8 +598,16 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	}
 	ctx = observeSessionProcess(ctx, s, id, nil)
 	driver := withAgyMeterSession(baseDriver, id)
-	sd, streaming := driver.(subagent.StreamingDriver)
-	streaming = streaming && !req.JSON
+	if tcGuard != nil {
+		driver = asStreamingDriverForToolLimit(driver)
+		if tcGuard.isPi {
+			driver = subagent.WithToolCallLimit(driver, tcGuard.cfg.Limit)
+			defer setToolCallEnv(tcGuard.cfg)()
+		}
+	}
+	sd, canStream := driver.(subagent.StreamingDriver)
+	streaming := canStream && !req.JSON
+	useStream := canStream && (streaming || tcGuard != nil)
 	turn := 1
 	turnStarted := time.Now().UTC()
 	quotaUnknown := warnModelQuota(cmd, d.availability, m.Provider, m.Name, turnStarted.Local())
@@ -596,11 +616,13 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	var ts *turnStream
 	var r *subagent.TurnResult
 	observedSessionID := ""
-	if streaming {
-		ts = newTurnStream(cmd, req.StreamMode, false)
-		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, req.PlanFirst
-		opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role, inferred)
-		ts.watch()
+	if useStream {
+		if streaming {
+			ts = newTurnStream(cmd, req.StreamMode, false)
+			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, req.PlanFirst
+			opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role, inferred)
+			ts.watch()
+		}
 		watchCtx, cancelWatch := context.WithCancel(ctx)
 		defer cancelWatch()
 		threshold, thresholdErr := subagent.CompactThreshold(m)
@@ -621,53 +643,85 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 					_ = s.Save(sess)
 				}
 			}
-			if thresholdErr == nil {
+			if streaming && thresholdErr == nil {
 				if tokens, crossed := watchdog.Observe(ev); crossed {
 					watchdogCrossed = true
 					observedTokens = tokens
 					cancelWatch()
 				}
 			}
-			if ev.Kind == "session" {
-				extra := []string{fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir)}
-				modelLine := "model: " + m.Spec()
-				if selection.Trait != "" {
-					modelLine = "model: " + selection.Trait + " → " + m.Spec()
-				}
-				if req.ModelSpec == "" {
-					modelLine += " (default)"
-				}
-				extra = append(extra, modelLine)
-				ts.info(ev.Text, m.Provider+":"+m.Name, "start", "new", append(extra, "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")...)
+			if tcGuard != nil && tcGuard.observe(ev) {
+				cancelWatch()
 			}
-			ts.onEvent(ev)
+			if streaming {
+				if ev.Kind == "session" {
+					extra := []string{fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir)}
+					modelLine := "model: " + m.Spec()
+					if selection.Trait != "" {
+						modelLine = "model: " + selection.Trait + " → " + m.Spec()
+					}
+					if req.ModelSpec == "" {
+						modelLine += " (default)"
+					}
+					extra = append(extra, modelLine)
+					ts.info(ev.Text, m.Provider+":"+m.Name, "start", "new", append(extra, "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")...)
+				}
+				ts.onEvent(ev)
+			}
 		})
 		if err != nil {
-			ts.abort()
-			if watchdogCrossed {
-				providerSessionID := observedSessionID
-				if providerSessionID != "" {
+			synthRes, partialRes, handled, toolErr := tcGuard.handleStoppedError(ctx, sd, observedSessionID, m, opts, ts, err)
+			if handled {
+				if toolErr == nil && synthRes != nil {
+					r, err = synthRes, nil
+				} else {
+					if ts != nil {
+						ts.abort()
+					}
+					before := <-beforeCapture
+					baselineCacheAt := turnQuotaBaseline(turnStarted, before)
+					storeTurnQuota(d.dbPath, id, m.Provider, turn, "before", before)
+					recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 					if req.SessionID != "" {
 						id = req.SessionID
 					}
-					now := time.Now()
 					sess, getErr := s.Get(id)
 					if getErr != nil {
 						sess = initialSession("stopped")
 						id = sess.ID
 					}
-					sess.ProviderSessionID = providerSessionID
-					sess.Status = "stopped"
-					sess.ProcessPID, sess.ProcessStarttime = 0, 0
-					sess.LastError = "runtime token watchdog interrupted the active turn"
-					sess.LastActiveAt = now
-					sess.Turn = turn
-					subagent.SyncCodexRolloutTotals(sess)
-					if saveErr := s.Save(sess); saveErr != nil {
-						return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", spec, observedTokens, threshold, saveErr)
-					}
+					sess.ProviderSessionID = firstNonEmpty(sess.ProviderSessionID, observedSessionID)
+					return saveStoppedToolLimitTurn(s, sess, turn, partialRes, tcGuard, "start", sessName)
 				}
-				return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session %q can be resumed", spec, observedTokens, threshold, sessName)
+			} else {
+				if ts != nil {
+					ts.abort()
+				}
+				if watchdogCrossed {
+					providerSessionID := observedSessionID
+					if providerSessionID != "" {
+						if req.SessionID != "" {
+							id = req.SessionID
+						}
+						now := time.Now()
+						sess, getErr := s.Get(id)
+						if getErr != nil {
+							sess = initialSession("stopped")
+							id = sess.ID
+						}
+						sess.ProviderSessionID = providerSessionID
+						sess.Status = "stopped"
+						sess.ProcessPID, sess.ProcessStarttime = 0, 0
+						sess.LastError = "runtime token watchdog interrupted the active turn"
+						sess.LastActiveAt = now
+						sess.Turn = turn
+						subagent.SyncCodexRolloutTotals(sess)
+						if saveErr := s.Save(sess); saveErr != nil {
+							return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", spec, observedTokens, threshold, saveErr)
+						}
+					}
+					return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session %q can be resumed", spec, observedTokens, threshold, sessName)
+				}
 			}
 		}
 	} else {
@@ -713,6 +767,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		return fmt.Errorf("agent start %q failed: %s; verify the provider/model configuration or ask for guidance", spec, providerErrorLine(err))
 	}
 	recordCodexAccess(cmd.ErrOrStderr(), m.Provider, m.Name, nil)
+	tcGuard.attachResult(r)
 	for _, warning := range r.Warnings {
 		fmt.Fprintln(cmd.ErrOrStderr(), warning)
 	}
@@ -753,7 +808,15 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if req.SessionID == "" && reservedID != id {
 		_ = s.Delete(reservedID)
 	}
-	out := agentOutput{Session: sess, Response: r.Response, Messages: r.Messages, ReconnectCmd: "harnez agent resume " + id + " \"<prompt>\""}
+	out := agentOutput{
+		Session:              sess,
+		Response:             r.Response,
+		Messages:             r.Messages,
+		ReconnectCmd:         "harnez agent resume " + id + " \"<prompt>\"",
+		ToolCalls:            r.ToolCalls,
+		ToolCallLimit:        r.ToolCallLimit,
+		ToolCallLimitReached: r.ToolCallLimitReached,
+	}
 	if streaming {
 		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
 		ts.finish(r)
@@ -892,7 +955,12 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return err
 		}
 	}
-	defer setAgentEnv(role, sess.Name, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}.Spec())()
+	model := subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}
+	tcGuard, err := newToolCallGuard(model, role, req.MaxToolCalls, req.MaxToolCallsSet, cmd.ErrOrStderr())
+	if err != nil {
+		return err
+	}
+	defer setAgentEnv(role, sess.Name, model.Spec())()
 	interactive := sess.Status == "active" && sess.HarnessType == "interactive"
 	if sess.HarnessType == "interactive" && sess.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
@@ -903,11 +971,18 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		if err != nil {
 			return err
 		}
-		baseDriver := withAgyAutoApprove(agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir), autoApprove)
+		baseDriver := withAgyAutoApprove(agentDriver(model, sess.WorkingDir), autoApprove)
 		if err := preflightCodex(ctx, sess.Provider, baseDriver, d.preflight); err != nil {
 			return fmt.Errorf("agent resume %q preflight: %w", sess.Name, err)
 		}
 		driver = withAgyMeterSession(baseDriver, sess.ID)
+		if tcGuard != nil {
+			driver = asStreamingDriverForToolLimit(driver)
+			if tcGuard.isPi {
+				driver = subagent.WithToolCallLimit(driver, tcGuard.cfg.Limit)
+				defer setToolCallEnv(tcGuard.cfg)()
+			}
+		}
 		// CheckResumable cannot tell a gone session from a lookup in another
 		// CODEX_HOME, so it refuses instead of starting fresh (issue 791).
 		if checker, ok := driver.(subagent.ResumeChecker); ok {
@@ -976,10 +1051,10 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	}
 	var ts *turnStream
 	var r *subagent.TurnResult
-	_, streaming := driver.(subagent.StreamingDriver)
-	streaming = streaming && !req.JSON
+	sd, canStream := driver.(subagent.StreamingDriver)
+	streaming := canStream && !req.JSON
+	useStream := canStream && (streaming || tcGuard != nil)
 	turn := sess.Turn + 1
-	model := subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}
 	// resumeTurn resumes the provider session natively (no history replay);
 	// a verified stale one starts a new session with the same prompt (issue 791).
 	previousID := sess.ProviderID()
@@ -1001,6 +1076,9 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			}
 			if req.AcceptCost {
 				args = append(args, "--accept-cost")
+			}
+			if req.MaxToolCallsSet {
+				args = append(args, "--max-tool-calls", fmt.Sprint(req.MaxToolCalls))
 			}
 			args = append(args, "--", req.Prompt)
 			started, err := launchForegroundWorker(cmd, s, sess, args, timeout, req.JSON)
@@ -1028,42 +1106,81 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	quotaUnknown := warnModelQuota(cmd, d.availability, sess.Provider, sess.Model, turnStarted.Local())
 	beforeCapture, stopCapture := startTurnQuotaCapture(ctx, d.quota, sess.Provider)
 	defer stopCapture()
-	if streaming {
-		ts = newTurnStream(cmd, req.StreamMode, compacted)
-		ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume", resolved)
-		if compacted {
-			ts.printf("[compact: %s]\n", compactNote)
+	observedSessionID := ""
+	if useStream {
+		if streaming {
+			ts = newTurnStream(cmd, req.StreamMode, compacted)
+			ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume", resolved)
+			if compacted {
+				ts.printf("[compact: %s]\n", compactNote)
+			}
+			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, req.PlanFirst
+			ts.watch()
+			resumeTurn.Opts.Prompt = withResumeNote(withProtocol(req.Prompt, req.PlanFirst, role, false), resumeIdle)
+			resumeTurn.OnFresh = func(note string) { freshNote = note; ts.printf("[%s]\n", note) }
+		} else {
+			if compacted {
+				tl.log("compact", "%s", compactNote)
+			}
+			tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
+			resumeTurn.OnFresh = func(note string) { freshNote = note; tl.log("resume", "%s", note) }
 		}
-		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, req.PlanFirst
-		ts.watch()
 		watchCtx, cancelWatch := context.WithCancel(ctx)
 		defer cancelWatch()
 		watchdog := &subagent.TokenWatchdog{Threshold: threshold}
 		watchdogCrossed := false
 		observedTokens := 0
-		resumeTurn.Opts.Prompt = withResumeNote(withProtocol(req.Prompt, req.PlanFirst, role, false), resumeIdle)
-		resumeTurn.OnFresh = func(note string) { freshNote = note; ts.printf("[%s]\n", note) }
 		resumeTurn.Events = func(ev subagent.Event) {
-			if tokens, crossed := watchdog.Observe(ev); crossed {
-				watchdogCrossed = true
-				observedTokens = tokens
+			if ev.Kind == "session" {
+				observedSessionID = ev.Text
+			}
+			if streaming {
+				if tokens, crossed := watchdog.Observe(ev); crossed {
+					watchdogCrossed = true
+					observedTokens = tokens
+					cancelWatch()
+				}
+			}
+			if tcGuard != nil && tcGuard.observe(ev) {
 				cancelWatch()
 			}
-			ts.onEvent(ev)
+			if streaming {
+				ts.onEvent(ev)
+			}
 		}
 		r, resumed, err = resumeTurn.Do(watchCtx)
 		if err != nil {
-			ts.abort()
-			if watchdogCrossed {
-				sess.Status = "stopped"
-				sess.ProcessPID = 0
-				sess.LastError = fmt.Sprintf("runtime token watchdog interrupted the active turn at %d tokens (limit %d)", observedTokens, threshold)
-				sess.LastActiveAt = time.Now()
-				subagent.SyncCodexRolloutTotals(sess)
-				if saveErr := s.Save(sess); saveErr != nil {
-					return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", sess.Name, observedTokens, threshold, saveErr)
+			providerID := firstNonEmpty(observedSessionID, sess.ProviderID())
+			synthRes, partialRes, handled, toolErr := tcGuard.handleStoppedError(ctx, sd, providerID, model, resumeTurn.Opts, ts, err)
+			if handled {
+				if toolErr == nil && synthRes != nil {
+					r, err = synthRes, nil
+				} else {
+					if ts != nil {
+						ts.abort()
+					}
+					before := <-beforeCapture
+					baselineCacheAt := turnQuotaBaseline(turnStarted, before)
+					storeTurnQuota(d.dbPath, sess.ID, sess.Provider, turn, "before", before)
+					recordTurnQuota(d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt)
+					sess.ProviderSessionID = firstNonEmpty(sess.ProviderSessionID, observedSessionID)
+					return saveStoppedToolLimitTurn(s, sess, turn, partialRes, tcGuard, "resume", sess.Name)
 				}
-				return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session can be resumed", sess.Name, observedTokens, threshold)
+			} else {
+				if ts != nil {
+					ts.abort()
+				}
+				if watchdogCrossed {
+					sess.Status = "stopped"
+					sess.ProcessPID = 0
+					sess.LastError = fmt.Sprintf("runtime token watchdog interrupted the active turn at %d tokens (limit %d)", observedTokens, threshold)
+					sess.LastActiveAt = time.Now()
+					subagent.SyncCodexRolloutTotals(sess)
+					if saveErr := s.Save(sess); saveErr != nil {
+						return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", sess.Name, observedTokens, threshold, saveErr)
+					}
+					return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session can be resumed", sess.Name, observedTokens, threshold)
+				}
 			}
 		}
 	} else {
@@ -1109,6 +1226,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
 	}
 	recordCodexAccess(cmd.ErrOrStderr(), sess.Provider, sess.Model, nil)
+	tcGuard.attachResult(r)
 	for _, warning := range r.Warnings {
 		fmt.Fprintln(cmd.ErrOrStderr(), warning)
 	}
@@ -1212,7 +1330,14 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		}
 	}
 	tl.finishTurn(r, sess.ID, "harnez agent resume "+sess.ID+" \"<prompt>\"")
-	out := agentOutput{Session: sess, Response: r.Response, Messages: r.Messages}
+	out := agentOutput{
+		Session:              sess,
+		Response:             r.Response,
+		Messages:             r.Messages,
+		ToolCalls:            r.ToolCalls,
+		ToolCallLimit:        r.ToolCallLimit,
+		ToolCallLimitReached: r.ToolCallLimitReached,
+	}
 	if !resumed {
 		out.Resumed, out.PreviousSessionID, out.Note = &resumed, previousID, freshNote
 	}
@@ -1412,11 +1537,10 @@ func resumeRole(requested string, sess *subagent.Session) (string, error) {
 	return agent.ResumeRole(requested, sess, callerAgentRole())
 }
 
-// setAgentEnv gives the provider process it is about to spawn its role and its
-// session name (the parent id of anything it starts) and returns a restore func.
-func setAgentEnv(role, name, model string) func() {
-	prev := map[string]*string{}
-	for _, kv := range [][2]string{{agentRoleEnv, role}, {agentSessionEnv, name}, {agentModelEnv, model}, {agentLauncherEnv, strconv.Itoa(os.Getpid())}} {
+// setEnvWithRestore sets pairs in the process environment and returns a restore func.
+func setEnvWithRestore(pairs [][2]string) func() {
+	prev := make(map[string]*string, len(pairs))
+	for _, kv := range pairs {
 		if v, ok := os.LookupEnv(kv[0]); ok {
 			old := v
 			prev[kv[0]] = &old
@@ -1434,6 +1558,188 @@ func setAgentEnv(role, name, model string) func() {
 			}
 		}
 	}
+}
+
+// setAgentEnv gives the provider process it is about to spawn its role and its
+// session name (the parent id of anything it starts) and returns a restore func.
+func setAgentEnv(role, name, model string) func() {
+	return setEnvWithRestore([][2]string{{agentRoleEnv, role}, {agentSessionEnv, name}, {agentModelEnv, model}, {agentLauncherEnv, strconv.Itoa(os.Getpid())}})
+}
+
+func isPiProvider(provider string) bool {
+	return provider == "pi" || provider == "lmcoder" || provider == "strata" || provider == "strata-coder"
+}
+
+func asStreamingDriverForToolLimit(d subagent.Driver) subagent.Driver {
+	switch v := d.(type) {
+	case subagent.ClaudeDriver:
+		return subagent.ClaudeStreamDriver{ClaudeDriver: v}
+	case subagent.PiDriver:
+		return subagent.PiStreamDriver{PiDriver: v}
+	default:
+		return d
+	}
+}
+
+func setToolCallEnv(cfg subagent.ToolCallConfig) func() {
+	if cfg.Limit <= 0 {
+		return func() {}
+	}
+	return setEnvWithRestore([][2]string{
+		{"HARNEZ_TOOL_CALL_LIMIT", strconv.Itoa(cfg.Limit)},
+		{"HARNEZ_TOOL_CALL_LIMIT_PROMPT", cfg.SynthesisPrompt},
+	})
+}
+
+type toolCallGuard struct {
+	cfg     subagent.ToolCallConfig
+	limiter *subagent.ToolCallLimiter
+	isPi    bool
+	crossed bool
+}
+
+func newToolCallGuard(m subagent.Model, role string, flagMax int, flagSet bool, errOut io.Writer) (*toolCallGuard, error) {
+	cfg, err := subagent.EffectiveToolCallConfig(m, role, flagMax, flagSet)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Limit <= 0 {
+		return nil, nil
+	}
+	if m.Provider == "agy" {
+		if errOut != nil {
+			fmt.Fprintf(errOut, "harnez: warning: %s does not enforce --max-tool-calls; limit %d is informational only\n", m.Provider, cfg.Limit)
+		}
+		return nil, nil
+	}
+	isPi := isPiProvider(m.Provider)
+	streamLimit := cfg.Limit
+	if isPi {
+		streamLimit = cfg.Limit + cfg.NativeBackstopCalls
+	}
+	return &toolCallGuard{
+		cfg:     cfg,
+		limiter: subagent.NewToolCallLimiter(streamLimit),
+		isPi:    isPi,
+	}, nil
+}
+
+func (g *toolCallGuard) observe(ev subagent.Event) bool {
+	if g == nil {
+		return false
+	}
+	if g.limiter.Observe(ev) {
+		g.crossed = true
+		return true
+	}
+	return false
+}
+
+func (g *toolCallGuard) attempted() int {
+	if g == nil {
+		return 0
+	}
+	return g.limiter.Attempted()
+}
+
+func (g *toolCallGuard) reached() bool {
+	if g == nil {
+		return false
+	}
+	return g.attempted() > g.cfg.Limit || g.crossed
+}
+
+func (g *toolCallGuard) attachResult(r *subagent.TurnResult) {
+	if g == nil || r == nil {
+		return
+	}
+	n := g.attempted()
+	r.ToolCalls = &n
+	r.ToolCallLimit = g.cfg.Limit
+	r.ToolCallLimitReached = g.reached()
+}
+
+func (g *toolCallGuard) handleStoppedError(ctx context.Context, sd subagent.StreamingDriver, providerSessionID string, model subagent.Model, opts subagent.RunOptions, ts *turnStream, err error) (*subagent.TurnResult, *subagent.TurnResult, bool, error) {
+	if g == nil {
+		return nil, nil, false, err
+	}
+	var emptyErr *subagent.PiEmptyResponseError
+	if errors.As(err, &emptyErr) && g.reached() {
+		return nil, emptyErr.Result, true, err
+	}
+	if !g.crossed {
+		return nil, nil, false, err
+	}
+	if g.isPi {
+		return nil, nil, true, err
+	}
+	if sd != nil && providerSessionID != "" && ctx.Err() == nil {
+		if ts != nil {
+			ts.printf("[tool-call limit %d reached; requesting final answer]\n", g.cfg.Limit)
+		}
+		synthCtx, cancelSynth := context.WithCancel(ctx)
+		defer cancelSynth()
+		synthToolCalled := false
+		synthRes, synthErr := sd.ResumeStream(synthCtx, providerSessionID, g.cfg.SynthesisPrompt, model, func(ev subagent.Event) {
+			if ev.ToolCall {
+				synthToolCalled = true
+				g.limiter.Observe(ev)
+				cancelSynth()
+				return
+			}
+			if ts != nil {
+				ts.onEvent(ev)
+			}
+		})
+		if synthErr == nil && !synthToolCalled && synthRes != nil && strings.TrimSpace(synthRes.Response) != "" {
+			return synthRes, nil, true, nil
+		}
+		var partial *subagent.TurnResult
+		if synthRes != nil && len(synthRes.Messages) > 0 {
+			partial = synthRes
+		}
+		return nil, partial, true, err
+	}
+	return nil, nil, true, err
+}
+
+func saveStoppedToolLimitTurn(s *subagent.FileSessionStore, sess *subagent.Session, turn int, partial *subagent.TurnResult, tcGuard *toolCallGuard, verb, target string) error {
+	now := time.Now()
+	sess.Status = "stopped"
+	sess.ProcessPID, sess.ProcessStarttime = 0, 0
+	sess.ProviderPID, sess.ProviderStarttime = 0, 0
+	attempted := tcGuard.attempted()
+	sess.LastError = fmt.Sprintf("tool-call limit reached: %d calls (limit %d), no answer; session can be resumed", attempted, tcGuard.cfg.Limit)
+	sess.LastActiveAt = now
+	sess.Turn = turn
+	recordRes := &subagent.TurnResult{ContextTokens: -1}
+	if partial != nil {
+		if partial.SessionID != "" {
+			sess.ProviderSessionID = partial.SessionID
+		}
+		copyRes := *partial
+		copyRes.Response = ""
+		recordRes = &copyRes
+		if len(partial.Messages) > 0 {
+			sess.Messages = append([]string(nil), partial.Messages...)
+		}
+		sess.Response = ""
+		if partial.ContextTokens >= 0 {
+			sess.ContextTokens = partial.ContextTokens
+		}
+		if partial.ContextWindowSize > 0 {
+			sess.ContextWindowSize = partial.ContextWindowSize
+		}
+	} else {
+		sess.Response = ""
+	}
+	tcGuard.attachResult(recordRes)
+	sess.TurnRecords = append(sess.TurnRecords, subagent.NewTurnRecord(turn, recordRes))
+	subagent.SyncCodexRolloutTotals(sess)
+	if saveErr := s.Save(sess); saveErr != nil {
+		return fmt.Errorf("agent %s %q %s; session recovery record failed: %w", verb, target, sess.LastError, saveErr)
+	}
+	return fmt.Errorf("agent %s %q %s", verb, target, sess.LastError)
 }
 
 // guardLeafRole refuses mutating agent verbs when the caller is a leaf worker.

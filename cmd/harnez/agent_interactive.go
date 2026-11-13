@@ -48,6 +48,9 @@ func validateInteractiveFlags(cmd *cobra.Command, detached, jsonOut bool, stream
 	if worker {
 		return fmt.Errorf("--interactive cannot be used by a detached worker")
 	}
+	if cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls") {
+		return fmt.Errorf("--interactive cannot be combined with --max-tool-calls")
+	}
 	return nil
 }
 

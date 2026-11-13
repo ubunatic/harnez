@@ -272,6 +272,13 @@ func (t *turnStream) doneLineTail(r *subagent.TurnResult) string {
 		tokenSummary(r, t.doneMeta.sess),
 		contextSummary(r, t.doneMeta.compactLimit),
 	}
+	if r != nil && r.ToolCallLimit > 0 && r.ToolCalls != nil {
+		tc := fmt.Sprintf("tool calls: %d/%d", *r.ToolCalls, r.ToolCallLimit)
+		if r.ToolCallLimitReached {
+			tc += " (limit reached)"
+		}
+		parts = append(parts, tc)
+	}
 	if t.doneMeta.quotaUnknown {
 		parts = append(parts, "quota unknown: cost check is the only signal")
 	}

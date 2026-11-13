@@ -35,6 +35,7 @@ type agentCLI struct {
 	includeDead         bool
 	jsonOut             bool
 	listColorMode       string
+	maxToolCalls        int
 	modelSpec           string
 	name                string
 	parent              func() string
@@ -101,7 +102,7 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 			}
 			return runInteractiveStart(cmd, interactiveDeps{store: ac.store, parent: ac.parent, storeDir: ac.storeDir}, interactiveStartRequest{Prompt: prompt, Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, Role: startRoleSpec, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost})
 		}
-		req := startRequest{DryRun: startDryRun, PromptSource: dryPromptSource(startFiles, startPrompt), Role: startRoleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, SessionID: ac.workerID, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, ContextMode: ac.contextMode}
+		req := startRequest{DryRun: startDryRun, PromptSource: dryPromptSource(startFiles, startPrompt), Role: startRoleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, SessionID: ac.workerID, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, ContextMode: ac.contextMode, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls")}
 		if ac.workerID != "" {
 			return runDetachedWorker(cmd, req, ac.storeDir)
 		}
@@ -403,11 +404,12 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 			}
 			return runInteractiveResume(cmd, interactiveDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir}, interactiveResumeRequest{Name: ac.name, Prompt: prompt, Dir: ac.workDir, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost})
 		}
+		maxToolCallsSet := cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls")
 		if resumeWorkerID != "" {
-			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: true, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost}, ac.storeDir)
+			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: true, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet}, ac.storeDir)
 		}
 		return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-			return runResume(ctx, cmd, agentDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir, dbPath: agentUsageDBPath()}, resumeRequest{DryRun: resumeDryRun, PromptSource: dryPromptSource(resumeFiles, resumePrompt), Role: ac.roleSpec, Prompt: prompt, Name: ac.name, Selector: selector, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: continueResume, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost})
+			return runResume(ctx, cmd, agentDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir, dbPath: agentUsageDBPath()}, resumeRequest{DryRun: resumeDryRun, PromptSource: dryPromptSource(resumeFiles, resumePrompt), Role: ac.roleSpec, Prompt: prompt, Name: ac.name, Selector: selector, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: continueResume, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet})
 		})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(ac.storeDir, ac.parent)

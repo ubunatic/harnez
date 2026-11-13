@@ -523,7 +523,7 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 		Error    struct {
 			Message string `json:"message"`
 		} `json:"error"`
-		Item  struct{ Type, Text, Command string } `json:"item"`
+		Item  struct{ ID, Type, Text, Command string } `json:"item"`
 		Usage struct {
 			Input     int  `json:"input_tokens"`
 			Output    int  `json:"output_tokens"`
@@ -573,8 +573,14 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 		p.r.Response = e.Item.Text
 		p.r.Messages = append(p.r.Messages, e.Item.Text)
 		ev.Kind, ev.Text = "message", e.Item.Text
-	case e.Type == "item.started" && e.Item.Type == "command_execution":
-		ev.Kind, ev.Text = "activity", "running "+e.Item.Command
+	case isCodexToolItem(e.Item.Type) && (e.Type == "item.started" || e.Type == "item.completed"):
+		ev.ToolCall = true
+		ev.CallID = e.Item.ID
+		if e.Type == "item.started" && e.Item.Type == "command_execution" {
+			ev.Kind, ev.Text = "activity", "running "+e.Item.Command
+		} else if e.Type == "item.started" {
+			ev.Kind, ev.Text = "activity", "calling "+e.Item.Type
+		}
 	}
 	if e.Type == "turn.completed" {
 		// Codex turn.completed usage is cumulative over the session (docs/CodexEvents.md).
@@ -659,6 +665,14 @@ func (p *codexParser) result() (*TurnResult, error) {
 		p.r.CumulativeReasoningTokens = p.r.ReasoningTokens
 	}
 	return &p.r, nil
+}
+
+func isCodexToolItem(itemType string) bool {
+	switch itemType {
+	case "command_execution", "mcp_tool_call", "file_change", "web_search", "collab_tool_call", "custom_tool_call", "local_shell_call":
+		return true
+	}
+	return strings.HasSuffix(itemType, "_call")
 }
 
 func codexTurnFailure(message string) error {

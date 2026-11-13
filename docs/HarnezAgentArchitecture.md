@@ -515,6 +515,14 @@ and the session keeps running, and `harnez agent delete` removes only the local 
   - On the next `harnez agent resume`, `harnez agent` detects that cache re-use savings are 0% and logs the re-ingestion cost.
   - If cumulative tokens exceed 50k and cache is expired, `harnez agent` can advise or auto-spawn a fresh subagent to avoid paying the full re-ingestion cost on stale history.
 
+### 4.3 Per-Turn Tool-Call Limits (issue 1033)
+- **Precedence & Configuration**: `--max-tool-calls N` (`agent start`/`resume`, forwarded to detached workers and MCP `harnez_spawn_agent`/`harnez_command`, rejected on `-i`) > `~/.harnez/config.yaml` (`agent.tool_call_limits`) > `spec/agent.yaml` (`tool_call_limits`), matching model then role (`0` disables).
+- **Provider Enforcement**:
+  - `pi` / `lmcoder`: embedded `tool-call-limit.ts` extension passed via `-e <path>` blocks call `N+1+` with the synthesis prompt on the first crossing batch, then sets `terminate: true` on any tool call in a later assistant turn; harnez also enforces a live stream backstop at `N + native_backstop_calls` without synthesis.
+  - `claude` / `codex`: harnez observes live tool events (`tool_use` block IDs on Claude; tool item types on Codex, including on `--json` turns via silent stream observation), cancels the turn process group when `attempted > N`, and runs one synthesis `ResumeStream` whose first tool call cancels immediately.
+  - `agy`: no live stream exists; harnez prints a stderr warning and omits `tool_calls`.
+- **Outcome**: If an answer arrives, the turn finishes `completed` with `tool_calls`, `tool_call_limit`, and `tool_call_limit_reached: true` in `TurnResult`, `TurnRecord`, JSON output, and the `[done: ...]` line. If no answer arrives (or backstop triggers), harnez saves `Status=stopped`, preserves any partial `Messages` (not `Response`), sets `LastError="tool-call limit reached: <attempted> calls (limit <N>), no answer; session can be resumed"`, and exits non-zero.
+
 ---
 
 ## 5. Native Subagent Replacement & Opt-In Feature Switch

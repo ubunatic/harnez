@@ -118,6 +118,7 @@ Flags:
   -f, --file strings            prompt file (repeatable; - reads stdin)
   -h, --help                    help for agent
       --json                    JSON output
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --plan string             planning gate: yes or no (default "no")
@@ -146,6 +147,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -176,6 +178,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -200,6 +203,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -224,6 +228,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -254,6 +259,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -290,6 +296,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -317,6 +324,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -346,6 +354,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -369,6 +378,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -392,6 +402,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -454,6 +465,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -491,6 +503,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -549,17 +562,18 @@ Flags:
       --worker-session string   internal detached worker session ID
 
 Global Flags:
-      --accept-cost        allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
-  -d, --dir string         agent working directory (all providers) and session scope (default ".")
-      --model string       provider:model[:tier]
-      --name string        session name
-      --role string        agent role for a new session (default from spec/agent.yaml); roles:
-                             advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
-                             developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
-                             orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
-                             reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
-      --store-dir string   session store directory (default "$HOME/.harnez/agents")
-      --timeout duration   maximum foreground turn duration (0 waits without a limit)
+      --accept-cost          allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
+  -d, --dir string           agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int   maximum tool calls per turn (0 disables limit)
+      --model string         provider:model[:tier]
+      --name string          session name
+      --role string          agent role for a new session (default from spec/agent.yaml); roles:
+                               advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                               developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
+                               orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
+                               reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
+      --store-dir string     session store directory (default "$HOME/.harnez/agents")
+      --timeout duration     maximum foreground turn duration (0 waits without a limit)
 
 === harnez agent status
 Show agent session status
@@ -579,6 +593,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -604,6 +619,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
@@ -629,6 +645,7 @@ Global Flags:
       --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
+      --max-tool-calls int      maximum tool calls per turn (0 disables limit)
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:

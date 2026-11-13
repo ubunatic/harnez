@@ -95,22 +95,33 @@ type TurnRecord struct {
 	OutputTokens      int `json:"output_tokens"`
 	// ReasoningTokens is nil when the provider did not report reasoning tokens
 	// (unknown), so a stored 0 always means a reported zero (ticket 1215).
-	ReasoningTokens *int   `json:"reasoning_tokens,omitempty"`
-	TokensUnknown   bool   `json:"tokens_unknown,omitempty"`
-	Rating          *int   `json:"rating,omitempty"`
-	RatingReason    string `json:"rating_reason,omitempty"`
+	ReasoningTokens      *int   `json:"reasoning_tokens,omitempty"`
+	TokensUnknown        bool   `json:"tokens_unknown,omitempty"`
+	ToolCalls            *int   `json:"tool_calls,omitempty"`
+	ToolCallLimit        int    `json:"tool_call_limit,omitempty"`
+	ToolCallLimitReached bool   `json:"tool_call_limit_reached,omitempty"`
+	Rating               *int   `json:"rating,omitempty"`
+	RatingReason         string `json:"rating_reason,omitempty"`
 }
 
 // NewTurnRecord builds the per-turn usage record from a provider turn result.
 func NewTurnRecord(turn int, r *TurnResult) TurnRecord {
+	var rec TurnRecord
 	if r.TurnTokensUnknown {
-		return TurnRecord{Turn: turn, TokensUnknown: true}
+		rec = TurnRecord{Turn: turn, TokensUnknown: true}
+	} else {
+		rec = TurnRecord{Turn: turn, NewInputTokens: CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}
+		if r.ReasoningTokensKnown {
+			n := r.ReasoningTokens
+			rec.ReasoningTokens = &n
+		}
 	}
-	rec := TurnRecord{Turn: turn, NewInputTokens: CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}
-	if r.ReasoningTokensKnown {
-		n := r.ReasoningTokens
-		rec.ReasoningTokens = &n
+	if r.ToolCalls != nil {
+		calls := *r.ToolCalls
+		rec.ToolCalls = &calls
 	}
+	rec.ToolCallLimit = r.ToolCallLimit
+	rec.ToolCallLimitReached = r.ToolCallLimitReached
 	return rec
 }
 

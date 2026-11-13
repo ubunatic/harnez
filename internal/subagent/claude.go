@@ -326,6 +326,7 @@ func (s *claudeStreamer) feed(line []byte) []Event {
 		}
 		var blocks []struct {
 			Type  string                     `json:"type"`
+			ID    string                     `json:"id"`
 			Text  string                     `json:"text"`
 			Name  string                     `json:"name"`
 			Input map[string]json.RawMessage `json:"input"`
@@ -337,7 +338,7 @@ func (s *claudeStreamer) feed(line []byte) []Event {
 				s.texts++
 				evs = append(evs, Event{Kind: "message", Text: b.Text})
 			case b.Type == "tool_use" && b.Name != "":
-				evs = append(evs, Event{Kind: "activity", Text: claudeToolActivity(b.Name, b.Input)})
+				evs = append(evs, Event{Kind: "activity", Text: claudeToolActivity(b.Name, b.Input), ToolCall: true, CallID: b.ID})
 			}
 		}
 		if u := e.Message.Usage; u != nil && u.Input+u.CacheRead+u.CacheCreate > 0 {

@@ -67,6 +67,15 @@ was learned on these models (issues 1023, 1024, 1029):
   step before the real task is tracked in 1032.
 - **Stopping a run.** Since 1029, a signal to `agent start`/`resume` also stops the `pi` child and
   saves the session as `stopped` (see `HarnezAgentArchitecture.md`).
+- **Per-turn tool-call limit (1033).** When an effective limit `N > 0` applies (precedence:
+  `--max-tool-calls N` > `~/.harnez/config.yaml` `agent.tool_call_limits` > `spec/agent.yaml`),
+  `agent start`/`resume` embeds `internal/subagent/tool-call-limit.ts` atomically into `$XDG_STATE_HOME/harnez/pi/`,
+  passes `-e <path>` to `pi` (which loads even under `--no-extensions`), and sets `HARNEZ_TOOL_CALL_LIMIT`
+  and `HARNEZ_TOOL_CALL_LIMIT_PROMPT`. Calls after `N` in the crossing batch return `{block: true, reason}`
+  without `terminate` so the model can synthesize a final answer; any tool call in a subsequent assistant
+  turn returns `{terminate: true}`. `harnez` also runs a stream backstop at `N + native_backstop_calls`
+  and stops without synthesis if exceeded; `parsePi` returns `*subagent.PiEmptyResponseError` so an empty
+  terminated run saves as `Status=stopped` with partial `Messages` instead of looking completed.
 
 ## Interactive Project Extensions and Background Tasks
 
