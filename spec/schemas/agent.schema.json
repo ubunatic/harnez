@@ -65,6 +65,19 @@
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
+    "plan_prices": {
+      "type": "object",
+      "description": "Default monthly subscription plan prices in micro-USD per provider (ticket 1215). Weekly share = monthly_usd_micros * 12 / 52.",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": {
+        "type": ["object", "null"],
+        "properties": {
+          "plan": { "type": "string" },
+          "monthly_usd_micros": { "type": ["integer", "null"], "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
     "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
     "compact_thresholds": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": "Model-specific default compaction thresholds." },
     "cost_check": {

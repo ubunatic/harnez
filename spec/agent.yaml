@@ -3,6 +3,19 @@
 default_model: codex:luna:high
 role_classify_timeout_ms: 1500
 reply_history_limit: 20
+# Default monthly subscription plan prices in micro-USD per provider (ticket 1215).
+# Weekly value for quota share = monthly_usd_micros * 12 / 52.
+# Users can override or null out entries via ~/.harnez/config.yaml under agent.plan_prices.
+plan_prices:
+  codex:
+    plan: "Plus"
+    monthly_usd_micros: 20000000
+  claude:
+    plan: "Max 5x"
+    monthly_usd_micros: 100000000
+  agy:
+    plan: "Pro"
+    monthly_usd_micros: 20000000
 # Context tokens (last call's full input) above which harnez agent compacts a
 # session before the next prompt; model-specific values take precedence over global values,
 # and user configuration takes precedence over the spec at the same specificity.

@@ -25,8 +25,9 @@ func (d *DB) ReconcileCompactionEconomics(sessionID, model string, catalog Prici
 			return nil
 		}
 		pricing := catalog.PricingFor(model)
-		economics := CalculateCompactionEconomics(model, pricing, EconomicsInput{})
-		return d.InsertCompactionEconomics(persistedEconomics(sessionID, nil, pricing, economics))
+		input := EconomicsInput{}
+		economics := CalculateCompactionEconomics(model, pricing, input)
+		return d.InsertCompactionEconomics(persistedEconomics(sessionID, nil, pricing, input, economics))
 	}
 	var existing int
 	if err := d.sql.QueryRow(`SELECT COUNT(*) FROM compaction_economics WHERE compaction_event_id = ?`, eventID).Scan(&existing); err != nil {
@@ -80,18 +81,20 @@ func (d *DB) ReconcileCompactionEconomics(sessionID, model string, catalog Prici
 		input.NoCompactionBase = &u
 	}
 	economics := CalculateCompactionEconomics(model, pricing, input)
+	persisted := persistedEconomics(sessionID, &eventID, pricing, input, economics)
 	if existing > 0 {
-		persisted := persistedEconomics(sessionID, &eventID, pricing, economics)
-		_, err := d.sql.Exec(`UPDATE compaction_economics SET model = ?, pricing_revision = ?, cached_input_micros_per_million = ?, uncached_input_micros_per_million = ?, output_micros_per_million = ?, reasoning_micros_per_million = ?, status = ?, compaction_cost_micros = ?, post_compaction_cost_micros = ?, baseline_cost_micros = ?, savings_micros = ?, note = ? WHERE session_id = ?`, persisted.Model, persisted.PricingRevision, persisted.Rates.CachedInputMicrosPerMillion, persisted.Rates.UncachedInputMicrosPerMillion, persisted.Rates.OutputMicrosPerMillion, persisted.Rates.ReasoningMicrosPerMillion, persisted.Status, persisted.CompactionCostMicros, persisted.PostCompactionCostMicros, persisted.BaselineCostMicros, persisted.SavingsMicros, persisted.Note, sessionID)
-		return err
+		return d.updateCompactionEconomics(sessionID, persisted)
 	}
-	if err := d.InsertCompactionEconomics(persistedEconomics(sessionID, &eventID, pricing, economics)); err != nil {
+	if err := d.InsertCompactionEconomics(persisted); err != nil {
 		return err
 	}
 	// A prior compaction may have been recorded before the session baseline
 	// existed. Refresh all rows so every boundary has the final session evidence.
-	persisted := persistedEconomics(sessionID, &eventID, pricing, economics)
-	_, err = d.sql.Exec(`UPDATE compaction_economics SET model = ?, pricing_revision = ?, cached_input_micros_per_million = ?, uncached_input_micros_per_million = ?, output_micros_per_million = ?, reasoning_micros_per_million = ?, status = ?, compaction_cost_micros = ?, post_compaction_cost_micros = ?, baseline_cost_micros = ?, savings_micros = ?, note = ? WHERE session_id = ?`, persisted.Model, persisted.PricingRevision, persisted.Rates.CachedInputMicrosPerMillion, persisted.Rates.UncachedInputMicrosPerMillion, persisted.Rates.OutputMicrosPerMillion, persisted.Rates.ReasoningMicrosPerMillion, persisted.Status, persisted.CompactionCostMicros, persisted.PostCompactionCostMicros, persisted.BaselineCostMicros, persisted.SavingsMicros, persisted.Note, sessionID)
+	return d.updateCompactionEconomics(sessionID, persisted)
+}
+
+func (d *DB) updateCompactionEconomics(sessionID string, p PersistedEconomics) error {
+	_, err := d.sql.Exec(`UPDATE compaction_economics SET model = ?, effort = ?, pricing_revision = ?, cached_input_tokens = ?, uncached_input_tokens = ?, output_tokens = ?, reasoning_tokens = ?, cached_input_micros_per_million = ?, uncached_input_micros_per_million = ?, output_micros_per_million = ?, reasoning_micros_per_million = ?, status = ?, compaction_cost_micros = ?, post_compaction_cost_micros = ?, baseline_cost_micros = ?, savings_micros = ?, note = ? WHERE session_id = ?`, p.Model, p.Effort, p.PricingRevision, p.CachedInputTokens, p.UncachedInputTokens, p.OutputTokens, p.ReasoningTokens, p.Rates.CachedInputMicrosPerMillion, p.Rates.UncachedInputMicrosPerMillion, p.Rates.OutputMicrosPerMillion, p.Rates.ReasoningMicrosPerMillion, p.Status, p.CompactionCostMicros, p.PostCompactionCostMicros, p.BaselineCostMicros, p.SavingsMicros, p.Note, sessionID)
 	return err
 }
 
@@ -156,7 +159,7 @@ func (d *DB) latestSnapshot(sessionID, source string) (TokenSnapshot, bool, erro
 	return s, true, nil
 }
 
-func persistedEconomics(sessionID string, eventID *int64, pricing ModelPricing, economics CompactionEconomics) PersistedEconomics {
+func persistedEconomics(sessionID string, eventID *int64, pricing ModelPricing, input EconomicsInput, economics CompactionEconomics) PersistedEconomics {
 	var compaction, post, baseline, savings *int64
 	if economics.CompactionCost != nil {
 		compaction = &economics.CompactionCost.TotalMicros
@@ -168,5 +171,16 @@ func persistedEconomics(sessionID string, eventID *int64, pricing ModelPricing, 
 		baseline = &economics.BaselineCost.TotalMicros
 	}
 	savings = economics.SavingsMicros
-	return PersistedEconomics{SessionID: sessionID, CompactionEventID: eventID, Model: economics.Model, PricingRevision: economics.PricingRevision, Rates: pricing.Rates, Status: economics.Status, CompactionCostMicros: compaction, PostCompactionCostMicros: post, BaselineCostMicros: baseline, SavingsMicros: savings, Note: economics.Note}
+	p := PersistedEconomics{SessionID: sessionID, CompactionEventID: eventID, Model: economics.Model, PricingRevision: economics.PricingRevision, Rates: pricing.Rates, Status: economics.Status, CompactionCostMicros: compaction, PostCompactionCostMicros: post, BaselineCostMicros: baseline, SavingsMicros: savings, Note: economics.Note}
+	src := input.Compaction
+	if src == nil {
+		src = input.PostCompaction
+	}
+	if src != nil {
+		p.CachedInputTokens = src.CachedInputTokens
+		p.UncachedInputTokens = src.UncachedInputTokens
+		p.OutputTokens = src.OutputTokens
+		p.ReasoningTokens = src.ReasoningTokens
+	}
+	return p
 }

@@ -11,7 +11,7 @@ func (d *DB) InsertCompactionEconomics(estimate PersistedEconomics) error {
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	_, err := d.sql.Exec(mustTelemetrySQL().Statements["insert_compaction_economics"], createdAt.Format(time.RFC3339Nano), estimate.SessionID, estimate.CompactionEventID, estimate.Model, estimate.PricingRevision, estimate.Rates.CachedInputMicrosPerMillion, estimate.Rates.UncachedInputMicrosPerMillion, estimate.Rates.OutputMicrosPerMillion, estimate.Rates.ReasoningMicrosPerMillion, estimate.Status, estimate.CompactionCostMicros, estimate.PostCompactionCostMicros, estimate.BaselineCostMicros, estimate.SavingsMicros, estimate.Note)
+	_, err := d.sql.Exec(mustTelemetrySQL().Statements["insert_compaction_economics"], createdAt.Format(time.RFC3339Nano), estimate.SessionID, estimate.CompactionEventID, estimate.Model, estimate.Effort, estimate.PricingRevision, estimate.CachedInputTokens, estimate.UncachedInputTokens, estimate.OutputTokens, estimate.ReasoningTokens, estimate.Rates.CachedInputMicrosPerMillion, estimate.Rates.UncachedInputMicrosPerMillion, estimate.Rates.OutputMicrosPerMillion, estimate.Rates.ReasoningMicrosPerMillion, estimate.Status, estimate.CompactionCostMicros, estimate.PostCompactionCostMicros, estimate.BaselineCostMicros, estimate.SavingsMicros, estimate.Note)
 	if err != nil {
 		return fmt.Errorf("telemetry: insert compaction economics: %w", err)
 	}

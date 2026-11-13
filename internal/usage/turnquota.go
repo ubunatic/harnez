@@ -3,9 +3,11 @@ package usage
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"ubunatic.com/harnez/internal/usagestore"
@@ -13,14 +15,15 @@ import (
 
 // TurnQuotaReading is a bounded, best-effort quota observation for one agent turn.
 type TurnQuotaReading struct {
-	CapturedAt      time.Time           `json:"captured_at"`
-	CacheAgeMS      int64               `json:"cache_age_ms"`
-	HasCache        bool                `json:"has_cache"`
-	ProbeDurationMS int64               `json:"probe_duration_ms,omitempty"`
-	Source          string              `json:"source,omitempty"`
-	StoreWindows    []usagestore.Window `json:"store_windows,omitempty"`
-	Windows         []QuotaHistoryEntry `json:"windows,omitempty"`
-	Error           string              `json:"error,omitempty"`
+	CapturedAt                   time.Time           `json:"captured_at"`
+	CacheAgeMS                   int64               `json:"cache_age_ms"`
+	HasCache                     bool                `json:"has_cache"`
+	ProbeDurationMS              int64               `json:"probe_duration_ms,omitempty"`
+	Source                       string              `json:"source,omitempty"`
+	StoreWindows                 []usagestore.Window `json:"store_windows,omitempty"`
+	Windows                      []QuotaHistoryEntry `json:"windows,omitempty"`
+	SubscriptionPriceShareMicros *int64              `json:"subscription_price_share_micros,omitempty"`
+	Error                        string              `json:"error,omitempty"`
 }
 
 const TurnQuotaTimeout = 1800 * time.Millisecond
@@ -128,4 +131,102 @@ func readProviderQuotaCache(provider, path string) time.Time {
 		return time.Time{}
 	}
 	return at
+}
+
+type quotaWindowSample struct {
+	pool, key string
+	used      float64
+	resetAt   *time.Time
+}
+
+func extractQuotaSamples(r TurnQuotaReading) []quotaWindowSample {
+	if len(r.StoreWindows) > 0 {
+		out := make([]quotaWindowSample, 0, len(r.StoreWindows))
+		for _, w := range r.StoreWindows {
+			if strings.EqualFold(w.Pool, "tokens") {
+				continue
+			}
+			key := w.Key
+			if key == "" {
+				key = usagestore.NormalizeWindowKey(w.Provider, w.Pool, w.Name)
+			}
+			out = append(out, quotaWindowSample{pool: w.Pool, key: key, used: w.UsedFraction, resetAt: w.ResetAt})
+		}
+		return out
+	}
+	out := make([]quotaWindowSample, 0, len(r.Windows))
+	for _, w := range r.Windows {
+		key := usagestore.NormalizeWindowKey(w.Agent, w.Group, w.Window)
+		out = append(out, quotaWindowSample{pool: w.Group, key: key, used: float64(w.UsedPercent) / 100.0, resetAt: w.ResetAt})
+	}
+	return out
+}
+
+func sameResetMarker(a, b *time.Time) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Equal(*b)
+}
+
+func isWeeklyQuotaKey(key string) bool {
+	return key == "weekly" || key == "seven_day"
+}
+
+// ComputeTurnQuotaShare compares non-error before/after turn quota readings and
+// returns the matched window name, before/after usage percentages, and the
+// prorated weekly subscription share in micro-USD when a weekly window moved
+// monotonically without reset and monthlyUSDMicros is known (> 0).
+// Unknown or uncomparable inputs keep share as nil (never 0).
+func ComputeTurnQuotaShare(before, after TurnQuotaReading, monthlyUSDMicros *int64) (share *int64, window string, beforePct, afterPct *float64) {
+	if before.Error != "" || after.Error != "" || before.CapturedAt.IsZero() || !after.CapturedAt.After(before.CapturedAt) {
+		return nil, "", nil, nil
+	}
+	beforeSamples := extractQuotaSamples(before)
+	afterSamples := extractQuotaSamples(after)
+	type pair struct {
+		before, after quotaWindowSample
+	}
+	var weeklyMatch *pair
+	var fallbackMatch *pair
+	for _, b := range beforeSamples {
+		for _, a := range afterSamples {
+			if a.pool != b.pool || a.key != b.key {
+				continue
+			}
+			if isWeeklyQuotaKey(b.key) && weeklyMatch == nil {
+				p := pair{before: b, after: a}
+				weeklyMatch = &p
+			} else if fallbackMatch == nil {
+				p := pair{before: b, after: a}
+				fallbackMatch = &p
+			}
+		}
+	}
+	chosen := weeklyMatch
+	if chosen == nil {
+		chosen = fallbackMatch
+	}
+	if chosen == nil {
+		return nil, "", nil, nil
+	}
+	bPct := math.Round(chosen.before.used*10000) / 100
+	aPct := math.Round(chosen.after.used*10000) / 100
+	windowName := chosen.before.key
+	if chosen.before.pool != "" {
+		windowName = chosen.before.pool + ":" + chosen.before.key
+	}
+	if !isWeeklyQuotaKey(chosen.before.key) || !sameResetMarker(chosen.before.resetAt, chosen.after.resetAt) || chosen.after.used < chosen.before.used {
+		return nil, windowName, &bPct, &aPct
+	}
+	if monthlyUSDMicros == nil || *monthlyUSDMicros <= 0 {
+		return nil, windowName, &bPct, &aPct
+	}
+	weeklyMicros := (*monthlyUSDMicros * 12) / 52
+	delta := chosen.after.used - chosen.before.used
+	val := int64(math.Round(delta * float64(weeklyMicros)))
+	return &val, windowName, &bPct, &aPct
 }

@@ -23,7 +23,8 @@ package telemetry
 // 9: current schema marker after the compaction_events model migration.
 // 10: additive tool_calls.skill_name column (issue 735).
 // 11: additive issue_status_snapshots.backlog_count column (issue 843 M2).
-const schemaVersion = 11
+// 12: additive compaction_economics.effort and token columns (issue 1215).
+const schemaVersion = 12
 
 // schemaDDL is the single source of truth for the tool_calls table shape
 // (per docs/other/Spec.md's "spec files are the single source of truth"

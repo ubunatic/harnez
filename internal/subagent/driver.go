@@ -319,13 +319,15 @@ type TurnResult struct {
 	Response  string `json:"response"`
 	// Messages holds every agent message of the turn in arrival order;
 	// Response is the last one.
-	Messages             []string `json:"messages,omitempty"`
-	Warnings             []string `json:"warnings,omitempty"`
-	InputTokens          int      `json:"input_tokens"`
-	OutputTokens         int      `json:"output_tokens"`
-	CachedTokens         int      `json:"cached_tokens"`
-	ReasoningTokens      int      `json:"reasoning_tokens,omitempty"`
-	ReasoningTokensKnown bool     `json:"reasoning_tokens_known,omitempty"`
+	Messages              []string `json:"messages,omitempty"`
+	Warnings              []string `json:"warnings,omitempty"`
+	InputTokens           int      `json:"input_tokens"`
+	OutputTokens          int      `json:"output_tokens"`
+	CachedTokens          int      `json:"cached_tokens"`
+	CacheWriteTokens      int      `json:"cache_write_tokens,omitempty"`
+	CacheWriteTokensKnown bool     `json:"cache_write_tokens_known,omitempty"`
+	ReasoningTokens       int      `json:"reasoning_tokens,omitempty"`
+	ReasoningTokensKnown  bool     `json:"reasoning_tokens_known,omitempty"`
 	// TurnTokensUnknown reports that per-turn deltas are unavailable (e.g. a
 	// provider omitted usage or cumulative counters dropped after compaction).
 	TurnTokensUnknown bool `json:"turn_tokens_unknown,omitempty"`

@@ -15,6 +15,23 @@ func (c PricingCatalog) PricingFor(model string) ModelPricing {
 	return ModelPricing{Model: model, Revision: "unknown"}
 }
 
+// Lookup returns an exact catalog entry and true when present.
+func (c PricingCatalog) Lookup(model string) (ModelPricing, bool) {
+	pricing, ok := c[model]
+	return pricing, ok
+}
+
+// CalculateTurnCost estimates one turn's API cost in micro-USD using pricing rates.
+// Returns (nil, false) when no priced components can be computed.
+func CalculateTurnCost(rates PricingRates, usage TokenUsage) (*int64, bool) {
+	cost, _ := estimateCost(usage, rates)
+	if cost == nil {
+		return nil, false
+	}
+	total := cost.TotalMicros
+	return &total, true
+}
+
 // UsageFromSnapshot extracts cumulative provider counters without modifying
 // the append-only evidence row.
 func UsageFromSnapshot(snapshot TokenSnapshot) TokenUsage {

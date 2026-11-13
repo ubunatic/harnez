@@ -74,6 +74,20 @@ func PersistTurnQuotaBoundary(ctx context.Context, dbPath string, boundary usage
 	return nil
 }
 
+// PersistTurnQuotaShare updates subscription_price_share_micros on the paired
+// weekly quota delta row for one session turn when known.
+func PersistTurnQuotaShare(ctx context.Context, dbPath, sessionID string, turn int, provider, window string, shareMicros *int64) error {
+	if shareMicros == nil || window == "" || dbPath == "" {
+		return nil
+	}
+	store, err := openTurnUsageStore(ctx, dbPath)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	return store.UpdateTurnQuotaShare(ctx, sessionID, turn, provider, window, shareMicros)
+}
+
 // TurnQuotaBoundaryFromReading normalizes one provider capture for durable
 // turn storage while keeping legacy rounded windows as an import fallback.
 func TurnQuotaBoundaryFromReading(sessionID, provider string, turn int, boundary string, reading TurnQuotaReading) usagestore.TurnQuotaBoundary {

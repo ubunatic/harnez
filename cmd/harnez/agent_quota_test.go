@@ -198,3 +198,186 @@ func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
 		})
 	}
 }
+
+type fixtureCostDriver struct {
+	results []*subagent.TurnResult
+}
+
+func (d *fixtureCostDriver) Run(_ context.Context, _ subagent.RunOptions) (*subagent.TurnResult, error) {
+	r := d.results[0]
+	d.results = d.results[1:]
+	return r, nil
+}
+func (d *fixtureCostDriver) Resume(_ context.Context, _, _ string, _ subagent.Model) (*subagent.TurnResult, error) {
+	return d.Run(context.Background(), subagent.RunOptions{})
+}
+func (d *fixtureCostDriver) Compact(context.Context, string, subagent.Model) (*subagent.TurnResult, error) {
+	return &subagent.TurnResult{}, nil
+}
+func (d *fixtureCostDriver) Stop(context.Context, string) error   { return nil }
+func (d *fixtureCostDriver) Delete(context.Context, string) error { return nil }
+
+func TestRunStartRecordsFullCostRecordForPricedAndUnpricedModels(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	pricingFile := filepath.Join(t.TempDir(), "pricing.json")
+	if err := os.WriteFile(pricingFile, []byte(`{
+  "gpt-6-luna": {
+    "model": "gpt-6-luna",
+    "revision": "test-2026-11",
+    "rates": {
+      "cached_input_micros_per_million": 100000,
+      "uncached_input_micros_per_million": 1000000,
+      "output_micros_per_million": 8000000,
+      "reasoning_micros_per_million": 8000000
+    }
+  }
+}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HARNEZ_PRICING_FILE", pricingFile)
+
+	storeDir := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reset := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
+	runAt := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	mkReadings := func(provider string, beforeUsed, afterUsed float64) func(context.Context, string, bool) usage.TurnQuotaReading {
+		idx := 0
+		return func(_ context.Context, _ string, _ bool) usage.TurnQuotaReading {
+			idx++
+			used := beforeUsed
+			at := runAt
+			if idx > 1 {
+				used = afterUsed
+				at = runAt.Add(30 * time.Second)
+			}
+			return usage.TurnQuotaReading{
+				CapturedAt: at, Source: "test-fixture", HasCache: true,
+				StoreWindows: []usagestore.Window{{Provider: provider, Key: "weekly", UsedFraction: used, ResetAt: &reset, ObservedAt: at}},
+			}
+		}
+	}
+
+	// Case 1: Codex gpt-6-luna (priced in HARNEZ_PRICING_FILE) + reasoning tokens + weekly quota delta ($20/mo => $4,615,384/wk).
+	codexDriver := &fixtureCostDriver{results: []*subagent.TurnResult{{
+		SessionID: "codex-1", Response: "ok", Messages: []string{"ok"},
+		InputTokens: 1000, CachedTokens: 5000, OutputTokens: 200,
+		ReasoningTokens: 100, ReasoningTokensKnown: true, TokensTurn: 6300,
+	}}}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return codexDriver }
+	defer func() { agentDriver = old }()
+
+	cmd := &cobra.Command{}
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = runStart(t.Context(), cmd, agentDeps{
+		store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" },
+		quota: mkReadings("codex", 0.10, 0.12), dbPath: dbPath,
+	}, startRequest{Role: "advisor", Prompt: "p", StoredPrompt: "p", ModelSpec: "codex:luna:low", Dir: ".", StreamMode: streamFull, JSON: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Case 2: Claude haiku (unpriced in pricingFile -> CostMicros nil!) + cache_creation_input_tokens + $100/mo weekly delta.
+	claudeDriver := &fixtureCostDriver{results: []*subagent.TurnResult{{
+		SessionID: "claude-1", Response: "ok", Messages: []string{"ok"},
+		InputTokens: 34, CachedTokens: 66409, CacheWriteTokens: 5269, CacheWriteTokensKnown: true, OutputTokens: 393,
+		TokensTurn: 66836,
+	}}}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return claudeDriver }
+	out.Reset()
+	err = runStart(t.Context(), cmd, agentDeps{
+		store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" },
+		quota: mkReadings("claude", 0.20, 0.21), dbPath: dbPath,
+	}, startRequest{Role: "advisor", Prompt: "p", StoredPrompt: "p", ModelSpec: "claude:haiku:high", Dir: ".", StreamMode: streamFull, JSON: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	codexSess, err := store.Get("codex-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// API cost = 1000*1 + 5000*0.1 + 200*8 + 100*8 = 1000 + 500 + 1600 + 800 = 3900 micros.
+	if len(codexSess.TurnRecords) != 1 || codexSess.TurnRecords[0].CostMicros == nil || *codexSess.TurnRecords[0].CostMicros != 3900 || codexSess.TurnRecords[0].PricingRevision != "test-2026-11" {
+		t.Fatalf("codex turn record cost = %+v, want CostMicros=3900", codexSess.TurnRecords)
+	}
+	if codexSess.TurnRecords[0].CacheWriteTokens != nil {
+		t.Fatalf("codex CacheWriteTokens = %v, want nil (unknown)", codexSess.TurnRecords[0].CacheWriteTokens)
+	}
+	// Share = 0.02 * ((20_000_000 * 12) / 52) = 0.02 * 4_615_384 = 92_308 micros.
+	if codexSess.TurnRecords[0].SubscriptionPriceShareMicros == nil || *codexSess.TurnRecords[0].SubscriptionPriceShareMicros != 92308 || codexSess.TotalSubscriptionShareMicros == nil || *codexSess.TotalSubscriptionShareMicros != 92308 {
+		t.Fatalf("codex share = %+v, session total=%v, want 92308", codexSess.TurnRecords[0].SubscriptionPriceShareMicros, codexSess.TotalSubscriptionShareMicros)
+	}
+
+	claudeSess, err := store.Get("claude-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claudeSess.TurnRecords[0].CostMicros != nil || claudeSess.TotalCostMicros != nil || claudeSess.TurnRecords[0].PricingRevision != "" {
+		t.Fatalf("unpriced claude must omit API cost (nil), got rec=%+v total=%v", claudeSess.TurnRecords[0], claudeSess.TotalCostMicros)
+	}
+	if claudeSess.TurnRecords[0].CacheWriteTokens == nil || *claudeSess.TurnRecords[0].CacheWriteTokens != 5269 {
+		t.Fatalf("claude CacheWriteTokens = %v, want 5269", claudeSess.TurnRecords[0].CacheWriteTokens)
+	}
+	// Share = 0.01 * ((100_000_000 * 12) / 52) = 230_769 micros.
+	if claudeSess.TurnRecords[0].SubscriptionPriceShareMicros == nil || *claudeSess.TurnRecords[0].SubscriptionPriceShareMicros != 230769 {
+		t.Fatalf("claude share = %v, want 230769", claudeSess.TurnRecords[0].SubscriptionPriceShareMicros)
+	}
+
+	usageStore, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer usageStore.Close()
+	codexRows, err := usageStore.TurnTokenUsages(context.Background(), "codex-1")
+	if err != nil || len(codexRows) != 2 || codexRows[1].CounterKind != "delta" || codexRows[1].CostMicros == nil || *codexRows[1].CostMicros != 3900 || codexRows[1].Effort != "low" {
+		t.Fatalf("codex DB token rows = %+v, err=%v", codexRows, err)
+	}
+	claudeRows, err := usageStore.TurnTokenUsages(context.Background(), "claude-1")
+	if err != nil || len(claudeRows) != 2 || claudeRows[1].CounterKind != "delta" || claudeRows[1].CostMicros != nil || claudeRows[1].CacheWriteTokens == nil || *claudeRows[1].CacheWriteTokens != 5269 {
+		t.Fatalf("claude DB token rows = %+v, err=%v", claudeRows, err)
+	}
+	claudeDeltas, err := usageStore.TurnQuotaDeltasForSession(context.Background(), "claude-1")
+	if err != nil || len(claudeDeltas) != 1 || claudeDeltas[0].SubscriptionPriceShareMicros == nil || *claudeDeltas[0].SubscriptionPriceShareMicros != 230769 {
+		t.Fatalf("claude DB quota deltas = %+v, err=%v", claudeDeltas, err)
+	}
+
+	// Case 3: Resume codex-1 on turn 2 with another priced turn and quota delta -> accumulates Session totals.
+	codexResumeDriver := &fixtureCostDriver{results: []*subagent.TurnResult{{
+		SessionID: "codex-1", Response: "ok2", Messages: []string{"ok2"},
+		InputTokens: 1000, CachedTokens: 0, OutputTokens: 100,
+		ReasoningTokens: 0, ReasoningTokensKnown: true, TokensTurn: 1100,
+	}}}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return codexResumeDriver }
+	err = runResume(t.Context(), cmd, agentDeps{
+		store: func() (*subagent.FileSessionStore, error) { return store, nil },
+		find: func(_ *cobra.Command, s *subagent.FileSessionStore, name string) (*subagent.Session, error) {
+			return s.Get(name)
+		},
+		parent: func() string { return "" },
+		quota:  mkReadings("codex", 0.12, 0.13), dbPath: dbPath,
+	}, resumeRequest{Name: "codex-1", Prompt: "next", StreamMode: streamFull, JSON: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumedSess, err := store.Get("codex-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Turn 2 API cost = 1000*1 + 100*8 = 1800 micros; total = 3900 + 1800 = 5700 micros.
+	if len(resumedSess.TurnRecords) != 2 || resumedSess.TurnRecords[1].CostMicros == nil || *resumedSess.TurnRecords[1].CostMicros != 1800 || resumedSess.TotalCostMicros == nil || *resumedSess.TotalCostMicros != 5700 {
+		t.Fatalf("resumed codex totals = %v, turn2 = %+v", resumedSess.TotalCostMicros, resumedSess.TurnRecords)
+	}
+	// Turn 2 share = 0.01 * 4_615_384 = 46_154; total share = 92_308 + 46_154 = 138_462.
+	if resumedSess.TotalSubscriptionShareMicros == nil || *resumedSess.TotalSubscriptionShareMicros != 138462 {
+		t.Fatalf("resumed TotalSubscriptionShareMicros = %v, want 138462", resumedSess.TotalSubscriptionShareMicros)
+	}
+}

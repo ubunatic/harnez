@@ -230,7 +230,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 		return nil, fmt.Errorf("claude: %s", strings.TrimSpace(res.Result))
 	}
 	v := res.Usage
-	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate}
+	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate, CacheWriteTokens: v.CacheCreate, CacheWriteTokensKnown: true}
 	r.CompactionObserved = postCompact > 0
 	r.ContextTokensBeforeCompact = preCompact
 	r.Messages = append(r.Messages, localOut...)

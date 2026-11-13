@@ -79,7 +79,7 @@ func preflightCodex(ctx context.Context, provider string, driver subagent.Driver
 	return check(ctx)
 }
 
-func recordTurnQuota(dbPath string, capture func(context.Context, string, bool) usage.TurnQuotaReading, sessionID, provider string, turn int, boundary string, force bool, turnStarted, baselineCacheAt time.Time) {
+func recordTurnQuota(dbPath string, capture func(context.Context, string, bool) usage.TurnQuotaReading, sessionID, provider string, turn int, boundary string, force bool, turnStarted, baselineCacheAt time.Time) usage.TurnQuotaReading {
 	ctx, cancel := context.WithTimeout(context.Background(), usage.TurnQuotaTimeoutForProvider(provider))
 	defer cancel()
 	var reading usage.TurnQuotaReading
@@ -92,6 +92,7 @@ func recordTurnQuota(dbPath string, capture func(context.Context, string, bool) 
 	if dbPath != "" {
 		_ = usage.PersistTurnQuotaBoundary(context.Background(), dbPath, stored)
 	}
+	return reading
 }
 
 func captureTurnQuota(parent context.Context, capture func(context.Context, string, bool) usage.TurnQuotaReading, provider string, force bool, turnStarted time.Time) usage.TurnQuotaReading {
@@ -113,22 +114,80 @@ func storeTurnQuota(dbPath, sessionID, provider string, turn int, boundary strin
 	}
 }
 
+func populateTurnCostRecord(dbPath string, sess *subagent.Session, turn int, r *subagent.TurnResult, before, after usage.TurnQuotaReading) *subagent.TurnRecord {
+	if sess == nil || len(sess.TurnRecords) == 0 {
+		return nil
+	}
+	rec := &sess.TurnRecords[len(sess.TurnRecords)-1]
+	rec.Model = sess.Model
+	rec.Effort = sess.Tier
+	if r != nil && !r.TurnTokensUnknown {
+		if catalog, err := telemetry.LoadPricingCatalog(""); err == nil {
+			if pricing, ok := catalog.Lookup(sess.Model); ok {
+				uncached := int64(r.InputTokens)
+				cached := int64(r.CachedTokens)
+				if r.CacheWriteTokensKnown && cached >= int64(r.CacheWriteTokens) {
+					cached -= int64(r.CacheWriteTokens)
+				}
+				output := int64(r.OutputTokens)
+				usageVec := telemetry.TokenUsage{
+					UncachedInputTokens: &uncached,
+					CachedInputTokens:   &cached,
+					OutputTokens:        &output,
+				}
+				if r.ReasoningTokensKnown {
+					reasoning := int64(r.ReasoningTokens)
+					usageVec.ReasoningTokens = &reasoning
+				}
+				if costMicros, costOK := telemetry.CalculateTurnCost(pricing.Rates, usageVec); costOK {
+					rec.CostMicros = costMicros
+					rec.PricingRevision = pricing.Revision
+				}
+			}
+		}
+	}
+	monthlyPrice, _ := subagent.PlanPriceFor(sess.Provider)
+	share, window, beforePct, afterPct := usage.ComputeTurnQuotaShare(before, after, monthlyPrice)
+	rec.QuotaWindow = window
+	rec.QuotaBeforeUsedPercent = beforePct
+	rec.QuotaAfterUsedPercent = afterPct
+	rec.SubscriptionPriceShareMicros = share
+	if share != nil && dbPath != "" && window != "" {
+		_ = usage.PersistTurnQuotaShare(context.Background(), dbPath, sess.ID, turn, sess.Provider, window, share)
+	}
+	subagent.RecomputeSessionCostTotals(sess)
+	return rec
+}
+
 func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *subagent.TurnResult, observedAt time.Time) {
 	if session == nil || result == nil || dbPath == "" {
 		return
+	}
+	var rec *subagent.TurnRecord
+	if n := len(session.TurnRecords); n > 0 && session.TurnRecords[n-1].Turn == session.Turn {
+		rec = &session.TurnRecords[n-1]
 	}
 	if !result.TurnTokensUnknown {
 		input, cached, output := int64(result.InputTokens), int64(result.CachedTokens), int64(result.OutputTokens)
 		token := usagestore.TurnTokenUsage{
 			SessionID: session.ID, Turn: session.Turn, Provider: session.Provider, CounterKind: "delta",
+			Model: session.Model, Effort: session.Tier,
 			InputTokens: &input, CachedInputTokens: &cached, OutputTokens: &output,
 			InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
 			ObservedAt: observedAt,
+		}
+		if result.CacheWriteTokensKnown {
+			cw := int64(result.CacheWriteTokens)
+			token.CacheWriteTokens = &cw
 		}
 		if result.ReasoningTokensKnown {
 			reasoning := int64(result.ReasoningTokens)
 			token.ReasoningTokens = &reasoning
 			token.ReasoningQuality = "measured"
+		}
+		if rec != nil {
+			token.CostMicros = rec.CostMicros
+			token.PricingRevision = rec.PricingRevision
 		}
 		_ = usage.PersistTurnTokenUsage(context.Background(), dbPath, token)
 	}
@@ -137,6 +196,7 @@ func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *su
 	}
 	cumulative := usagestore.TurnTokenUsage{
 		SessionID: session.ID, Turn: session.Turn, Provider: session.Provider, CounterKind: "cumulative",
+		Model: session.Model, Effort: session.Tier,
 		InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
 		ObservedAt: observedAt,
 	}
@@ -146,6 +206,13 @@ func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *su
 		reasoning := int64(session.ReasoningTokensTotal)
 		cumulative.ReasoningTokens = &reasoning
 		cumulative.ReasoningQuality = "measured"
+	}
+	if session.TotalCostMicros != nil {
+		totalCost := *session.TotalCostMicros
+		cumulative.CostMicros = &totalCost
+		if rec != nil {
+			cumulative.PricingRevision = rec.PricingRevision
+		}
 	}
 	_ = usage.PersistTurnTokenUsage(context.Background(), dbPath, cumulative)
 }
@@ -779,10 +846,11 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	before := <-beforeCapture
 	baselineCacheAt := turnQuotaBaseline(turnStarted, before)
 	storeTurnQuota(d.dbPath, id, m.Provider, turn, "before", before)
-	recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
+	after := recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 	now := time.Now()
 	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: !r.TurnTokensUnknown || r.CumulativeTotalsKnown, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, FreshStartContextTokens: max(r.ContextTokens, 0), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{subagent.NewTurnRecord(turn, r)}}
 	sess.ContextWindowSize = r.ContextWindowSize
+	populateTurnCostRecord(d.dbPath, sess, turn, r, before, after)
 	persistAgentTurnTokens(d.dbPath, sess, r, now)
 	if current, getErr := s.Get(reservedID); getErr == nil {
 		sess.ProviderPID, sess.ProviderStarttime = current.ProviderPID, current.ProviderStarttime
@@ -1304,7 +1372,8 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	before := <-beforeCapture
 	baselineCacheAt := turnQuotaBaseline(turnStarted, before)
 	storeTurnQuota(d.dbPath, sess.ID, sess.Provider, turn, "before", before)
-	recordTurnQuota(d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt)
+	after := recordTurnQuota(d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt)
+	populateTurnCostRecord(d.dbPath, sess, turn, r, before, after)
 	persistAgentTurnTokens(d.dbPath, sess, r, sess.LastActiveAt)
 	if err = s.SaveQueuedTurn(sess, queuedMessages); err != nil {
 		return err
