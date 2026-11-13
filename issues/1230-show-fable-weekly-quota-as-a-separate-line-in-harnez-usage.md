@@ -1,6 +1,7 @@
 # 1230 — Show Fable weekly quota as a separate line in harnez usage
 
-**Status**: Open
+**Status**: Closed — f8ff825e + tests: Fable weekly line in table, compact, detailed and JSON (extra_windows.fable); live-verified 2026-11-13
+**Closed-By**: session 77baa296-b04d-4941-bc73-3791a6b9b1e3
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
