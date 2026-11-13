@@ -82,6 +82,20 @@ func TestResolveOfficialModelNames(t *testing.T) {
 			t.Errorf("ResolveModel(%q) = %#v, %v; want agy:argon:%s", spec, m, err, wantTier)
 		}
 	}
+	for spec, wantTier := range map[string]string{
+		"hydrogen":               "low",
+		"agy:hydrogen":           "low",
+		"agy:hydrogen:med":       "med",
+		"gemini-4-hydrogen":      "low",
+		"gemini-4-hydrogen:low":  "low",
+		"gemini-4-hydrogen:med":  "med",
+		"gemini-4-hydrogen:HIGH": "high",
+	} {
+		m, err := ResolveModel(spec)
+		if err != nil || m.Provider != "agy" || m.Name != "gemini-4-hydrogen" || m.Tier != wantTier {
+			t.Errorf("ResolveModel(%q) = %#v, %v; want agy:hydrogen:%s", spec, m, err, wantTier)
+		}
+	}
 }
 
 func TestOfficialModelAmbiguityAndPrecedence(t *testing.T) {

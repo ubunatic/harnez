@@ -7,6 +7,9 @@ agy:flash37:high
 agy:flash38:low
 agy:flash38:med
 agy:flash38:high
+agy:hydrogen:low
+agy:hydrogen:med
+agy:hydrogen:high
 agy:opus:low
 agy:sonnet:low
 claude:fable:low

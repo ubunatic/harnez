@@ -89,6 +89,12 @@ models:
       low: 3.0
       med: 3.5
       high: 3.5
+  agy:hydrogen:
+    source: "owner estimate, unverified"
+    ratings:
+      low: 3.0
+      med: 3.5
+      high: 3.5
   agy:sonnet:
     source: "owner estimate, unverified"
     ratings:

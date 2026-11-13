@@ -285,6 +285,16 @@ models:
     eff: "?"
     skills: Go? TUI? SQL?
     use: premium Gemini 4 Argon; scarce weekly quota, measured at low effort only
+  agy:hydrogen:
+    aliases: [hydrogen, hydrogen:low]
+    provider: agy
+    name: gemini-4-hydrogen
+    tier: low
+    roles: advisor, reviewer
+    cost: 24
+    eff: "?"
+    skills: Go? TUI? SQL?
+    use: Gemini 4 Hydrogen; cost unmeasured (estimated at Argon cost)
   agy:sonnet:
     provider: agy
     name: claude-sonnet-5-5
