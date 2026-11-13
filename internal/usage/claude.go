@@ -91,6 +91,24 @@ type ClaudeOauthUsageResponse struct {
 type claudeQuotaPayload struct {
 	Session *QuotaWindow `json:"session,omitempty"`
 	Weekly  *QuotaWindow `json:"weekly,omitempty"`
+	// Fable is the separate weekly Fable-model window, when Claude reports one.
+	Fable *QuotaWindow `json:"fable,omitempty"`
+}
+
+// ClaudeFableWindowKey is the AgentUsage.ExtraWindows key of the Fable weekly window.
+const ClaudeFableWindowKey = "fable_weekly"
+
+const claudeFableWindowName = "Weekly Fable (7-day)"
+
+// applyClaudeFable stores the Fable window of a payload in usage.ExtraWindows.
+func applyClaudeFable(usage *AgentUsage, w *QuotaWindow) {
+	if w == nil {
+		return
+	}
+	if usage.ExtraWindows == nil {
+		usage.ExtraWindows = map[string]QuotaWindow{}
+	}
+	usage.ExtraWindows[ClaudeFableWindowKey] = *w
 }
 
 type claudeQuotaFetch struct {
@@ -163,22 +181,36 @@ func fetchClaudeQuota(ctx context.Context, client *http.Client, oauth ClaudeCred
 		}
 		result.payload.Weekly = &qw
 	}
+	for _, l := range oauthUsage.Limits {
+		if !strings.Contains(strings.ToLower(l.Group+" "+l.Kind), "fable") || strings.Contains(strings.ToLower(l.Kind), "session") {
+			continue
+		}
+		qw := QuotaWindow{Name: claudeFableWindowName, UsedPercent: l.Percent, RemainingPercent: max(0, 100-l.Percent)}
+		if t, err := time.Parse(time.RFC3339Nano, l.ResetsAt); err == nil {
+			qw.ResetAt = &t
+			if t.After(now) {
+				qw.DurationLeft = t.Sub(now)
+			}
+		}
+		result.payload.Fable = &qw
+		break
+	}
 	if oauthUsage.ExtraUsage != nil && oauthUsage.ExtraUsage.IsEnabled {
 		result.extraUsage = fmt.Sprintf("%.2f %s", oauthUsage.ExtraUsage.UsedCredits, oauthUsage.ExtraUsage.Currency)
 	}
 	return result, resp.StatusCode, nil
 }
 
-var claudeUsagePercentRE = regexp.MustCompile(`(?i)^Current (session|week).*?([0-9]+(?:\.[0-9]+)?)% used`)
+var claudeUsagePercentRE = regexp.MustCompile(`(?i)^Current (session|week)(?: \(([^)]*)\))?.*?([0-9]+(?:\.[0-9]+)?)% used`)
 
 func parseClaudeUsageOutput(out []byte) claudeQuotaPayload {
 	var payload claudeQuotaPayload
 	for _, line := range strings.Split(string(out), "\n") {
 		match := claudeUsagePercentRE.FindStringSubmatch(strings.TrimSpace(line))
-		if len(match) != 3 {
+		if len(match) != 4 {
 			continue
 		}
-		percent, err := strconv.ParseFloat(match[2], 64)
+		percent, err := strconv.ParseFloat(match[3], 64)
 		if err != nil {
 			continue
 		}
@@ -186,7 +218,12 @@ func parseClaudeUsageOutput(out []byte) claudeQuotaPayload {
 		if window.RemainingPercent < 0 {
 			window.RemainingPercent = 0
 		}
-		if match[1] == "session" {
+		if qualifier := strings.ToLower(match[2]); strings.Contains(qualifier, "fable") {
+			window.Name = claudeFableWindowName
+			payload.Fable = window
+		} else if qualifier != "" && !strings.Contains(qualifier, "all models") {
+			continue // another per-model weekly limit must not replace the all-models window
+		} else if strings.EqualFold(match[1], "session") {
 			window.Name = "Session (5-hour)"
 			payload.Session = window
 		} else {
@@ -198,7 +235,7 @@ func parseClaudeUsageOutput(out []byte) claudeQuotaPayload {
 }
 
 func claudeQuotaPayloadHasWindows(payload claudeQuotaPayload) bool {
-	return payload.Session != nil || payload.Weekly != nil
+	return payload.Session != nil || payload.Weekly != nil || payload.Fable != nil
 }
 
 func readClaudeOAuthCredentials(path string) (claudeOAuthCredentials, error) {
@@ -319,11 +356,15 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		cache := (*liveFetchCache[claudeQuotaPayload])(nil)
 		if !cacheAt.IsZero() {
 			cache = &liveFetchCache[claudeQuotaPayload]{FetchedAt: cacheAt, Payload: claudeQuotaPayload{Session: cachedUsage.Session, Weekly: cachedUsage.Weekly}}
+			if w, ok := cachedUsage.ExtraWindows[ClaudeFableWindowKey]; ok {
+				cache.Payload.Fable = &w
+			}
 		}
 
 		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
 			usage.Session = cache.Payload.Session
 			usage.Weekly = cache.Payload.Weekly
+			applyClaudeFable(&usage, cache.Payload.Fable)
 			usage.Sources = append(usage.Sources, cachePath)
 			return usage
 		}
@@ -344,6 +385,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		if fetchErr == nil {
 			usage.Session = fetched.payload.Session
 			usage.Weekly = fetched.payload.Weekly
+			applyClaudeFable(&usage, fetched.payload.Fable)
 			if fetched.extraUsage != "" {
 				usage.Details["extra_usage"] = fetched.extraUsage
 			}
@@ -379,6 +421,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		} else {
 			usage.Session = fetched.payload.Session
 			usage.Weekly = fetched.payload.Weekly
+			applyClaudeFable(&usage, fetched.payload.Fable)
 			if fetched.extraUsage != "" {
 				usage.Details["extra_usage"] = fetched.extraUsage
 			}
@@ -406,6 +449,9 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 			}
 			if cache.Payload.Weekly != nil {
 				usage.Weekly = staleQuotaWindow(cache.Payload.Weekly)
+			}
+			if cache.Payload.Fable != nil {
+				applyClaudeFable(&usage, staleQuotaWindow(cache.Payload.Fable))
 			}
 			usage.Sources = append(usage.Sources, cachePath+" (stale)")
 		}

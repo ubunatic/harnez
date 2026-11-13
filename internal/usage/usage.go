@@ -262,6 +262,20 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 				lines = append(lines, line)
 			}
 
+			if fw, ok := agent.ExtraWindows[ClaudeFableWindowKey]; ok {
+				lines = append(lines, "", fmt.Sprintf("%s Limit:", fw.Name))
+				bar := rograph.RenderProgressBar(fw.UsedPercent, rograph.MaxWidth)
+				resetInfo := ""
+				if fw.ResetAt != nil {
+					resetInfo = " · Resets " + fw.ResetAt.Local().Format("Jan 02, 15:04 (MST)")
+				}
+				line := fmt.Sprintf("  %s %5.1f%% used%s", bar, fw.UsedPercent, resetInfo)
+				if valueStale || quotaWindowIsStale(fw, now) {
+					line = staleValueANSI(line)
+				}
+				lines = append(lines, line)
+			}
+
 			// Live quota fetch failed: surface it explicitly rather than
 			// leaving Session/Weekly silently absent (indistinguishable from
 			// "this plan has no such window").

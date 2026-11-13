@@ -158,6 +158,14 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 			if n := visLen(label); n > labelWidth {
 				labelWidth = n
 			}
+			// Fable's weekly quota gets its own line below the agent row.
+			if fw, ok := agent.ExtraWindows[ClaudeFableWindowKey]; ok {
+				fableLabel := label + " fable"
+				rows = append(rows, allUsageRow{label: fableLabel, windows: []QuotaWindow{fw}, lastRefreshed: agent.LastRefreshed, stale: stale || quotaWindowIsStale(fw, now)})
+				if n := visLen(fableLabel); n > labelWidth {
+					labelWidth = n
+				}
+			}
 		} else if marker := collectorStatusMarker(agent); marker != "" {
 			// Keep a collector with evidence but no quota windows visible in the
 			// aggregate. The marker and name distinguish a failed/empty fetch from

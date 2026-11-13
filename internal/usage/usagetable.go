@@ -160,6 +160,9 @@ func usageTableWindows(agent AgentUsage, now time.Time) []namedWindow {
 	if agent.Session != nil {
 		out = append(out, namedWindow{label: "5h", w: *agent.Session})
 	}
+	if w, ok := agent.ExtraWindows[ClaudeFableWindowKey]; ok {
+		out = append(out, namedWindow{label: "fable weekly", w: w})
+	}
 	return out
 }
 
