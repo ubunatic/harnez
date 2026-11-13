@@ -201,7 +201,8 @@ models:
     tier: low
     roles: developer, reviewer, mechanical, advisor
     cost: 4
-    cost_by_tier: {med: 4, high: 7}
+    cost_by_tier: {med: 4, high: 7, xhigh: 10}
+    extra_tiers: [xhigh]
     eff: "-"
     skills: Go~ TUI~ SQL~
     use: Owner guidance — haiku:med for easy tasks and haiku:low for very simple, repetitive tasks. Haiku 5.5 input above 100k tokens costs 5x; harnez compacts Haiku at 80k by default; override via agent.compact_thresholds (issue 969, docs/AutoCompaction.md). High thinking effort fills that budget quickly; see guidance_source_url.

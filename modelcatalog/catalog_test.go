@@ -290,6 +290,27 @@ func TestCustomIdentityVersionPinMismatchRejected(t *testing.T) {
 	}
 }
 
+func TestExplicitlyEnabledExtraTiers(t *testing.T) {
+	configDir := t.TempDir()
+	writeCatalogFile(t, filepath.Join(configDir, "models.yaml"), "version: 1\ndefault_enabled: true\nenabled: [claude:haiku:max]\nmodels:\n  agy:argon:xhigh:\n    kind: patch\n    enabled: true\n")
+	cat, err := LoadFromDirs(t.TempDir(), configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cat.ExplicitlyEnabled("claude", "claude-haiku-5-5", "max") {
+		t.Fatal("expected claude:haiku:max to be explicitly enabled")
+	}
+	if cat.ExplicitlyEnabled("claude", "claude-haiku-5-5", "xhigh") {
+		t.Fatal("claude:haiku:xhigh should not be treated as explicitly enabled by unrelated policy")
+	}
+	if !cat.ExplicitlyEnabled("agy", "gemini-4-argon", "xhigh") {
+		t.Fatal("expected agy:argon:xhigh to be explicitly enabled via models patch")
+	}
+	if cat.ExplicitlyEnabled("agy", "gemini-4-argon", "max") {
+		t.Fatal("agy:argon:max should remain opt-in")
+	}
+}
+
 func writeCatalogFile(t *testing.T, filename, contents string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {

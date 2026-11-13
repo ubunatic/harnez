@@ -150,6 +150,7 @@ type modelAlias struct {
 type ModelGuide struct {
 	Cost              int            `yaml:"cost"` // fallback relative cost when no tier override exists
 	CostByTier        map[string]int `yaml:"cost_by_tier"`
+	ExtraTiers        []string       `yaml:"extra_tiers"`
 	Eff               string         `yaml:"eff"`    // tokens per goal: + ~ - ?
 	Skills            string         `yaml:"skills"` // e.g. "Go+ TUI~ SQL?"
 	Roles             string         `yaml:"roles"`
@@ -207,7 +208,7 @@ func loadMergedModelCatalog() error {
 		}
 		key := provider + ":" + name
 		aliases[key] = modelAlias{Model: model, Aliases: modelAliases, Preferred: entry.Preferred}
-		guide := ModelGuide{Cost: entry.Guide.Cost, CostByTier: entry.Guide.CostByTier, Eff: entry.Guide.Eff, Skills: entry.Guide.Skills, Roles: entry.Guide.Roles, Use: entry.Guide.Use, UseMed: entry.Guide.UseMed, GuidanceSourceURL: entry.Guide.GuidanceSourceURL} //nolint:staticcheck // SA1019: no typed replacement for model guidance yet; do not add new consumers
+		guide := ModelGuide{Cost: entry.Guide.Cost, CostByTier: entry.Guide.CostByTier, ExtraTiers: entry.Guide.ExtraTiers, Eff: entry.Guide.Eff, Skills: entry.Guide.Skills, Roles: entry.Guide.Roles, Use: entry.Guide.Use, UseMed: entry.Guide.UseMed, GuidanceSourceURL: entry.Guide.GuidanceSourceURL} //nolint:staticcheck // SA1019: no typed replacement for model guidance yet; do not add new consumers
 		if value, ok := entry.Overrides["purpose"]; ok {
 			if value == nil {
 				guide.Use = ""
@@ -273,6 +274,43 @@ func (g ModelGuide) CostForTier(tier string) int {
 // passed for this model. Unset (nil) means supported.
 func (m Model) SupportsEffort() bool {
 	return m.Effort == nil || *m.Effort
+}
+
+// SupportsEffortTier reports whether provider supports tier. Standard tiers
+// (low, med, high) work everywhere unless the model disables effort; xhigh and
+// max are supported for claude and agy only.
+func SupportsEffortTier(provider, tier string) bool {
+	switch strings.ToLower(strings.TrimSpace(tier)) {
+	case "", "low", "med", "high":
+		return true
+	case "xhigh", "max":
+		switch strings.ToLower(strings.TrimSpace(provider)) {
+		case "claude", "agy":
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+// ValidateEffortTier checks whether m's configured tier is valid for m.
+func ValidateEffortTier(m Model, requested string) error {
+	if m.Tier == "" || m.Tier == "low" || m.Tier == "med" || m.Tier == "high" {
+		return nil
+	}
+	label := requested
+	if label == "" {
+		label = m.String()
+	}
+	if !m.SupportsEffort() {
+		return fmt.Errorf("model %q disables effort levels and does not support %q", label, m.Tier)
+	}
+	if !SupportsEffortTier(m.Provider, m.Tier) {
+		return fmt.Errorf("model %q does not support effort tier %q (%s supports low/med/high; xhigh/max are supported for claude and agy)", label, m.Tier, m.Provider)
+	}
+	return nil
 }
 
 // TurnResult is the normalized result of a provider turn.
@@ -426,6 +464,19 @@ func KnownModelEntriesE() ([]ModelEntry, error) {
 		tiers := []string{m.Tier}
 		if effort {
 			tiers = []string{"low", "med", "high"}
+			seen := map[string]bool{"low": true, "med": true, "high": true}
+			for _, extra := range guide.ExtraTiers {
+				if !seen[extra] && SupportsEffortTier(m.Provider, extra) {
+					tiers = append(tiers, extra)
+					seen[extra] = true
+				}
+			}
+			for _, optIn := range []string{"xhigh", "max"} {
+				if !seen[optIn] && SupportsEffortTier(m.Provider, optIn) && mergedModelCatalog.ExplicitlyEnabled(m.Provider, m.Name, optIn) {
+					tiers = append(tiers, optIn)
+					seen[optIn] = true
+				}
+			}
 		}
 		for _, tier := range tiers {
 			if !mergedModelCatalog.IsEnabled(m.Provider, m.Name, tier) {
@@ -905,7 +956,9 @@ func modelEditDistance(a, b string) int {
 
 func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 	original := strings.TrimSpace(spec)
-	if m, ok := resolvePiModel(aliases, original); ok {
+	if m, ok, err := resolvePiModelWithError(aliases, original); err != nil {
+		return Model{}, err
+	} else if ok {
 		return m, nil
 	}
 	clean := strings.ToLower(original)
@@ -929,6 +982,9 @@ func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, 
 			m, err := resolveExistingModelIn(aliases, parts[0]+":"+parts[1])
 			if err == nil {
 				m.Tier = parts[2]
+				if err := ValidateEffortTier(m, spec); err != nil {
+					return Model{}, err
+				}
 				return m, nil
 			}
 		}
@@ -938,17 +994,26 @@ func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, 
 				if isTier(parts[1]) {
 					m.Tier = parts[1]
 				}
+				if err := ValidateEffortTier(m, spec); err != nil {
+					return Model{}, err
+				}
 				return m, nil
 			}
 			if isTier(parts[1]) {
 				if m, err := resolveExistingModelIn(aliases, parts[0]); err == nil {
 					m.Tier = parts[1]
+					if err := ValidateEffortTier(m, spec); err != nil {
+						return Model{}, err
+					}
 					return m, nil
 				}
 				for _, candidate := range aliases {
 					if modelHasAlias(candidate, parts[0]+":"+parts[1]) {
 						m := candidate.Model
 						m.Tier = parts[1]
+						if err := ValidateEffortTier(m, spec); err != nil {
+							return Model{}, err
+						}
 						return m, nil
 					}
 				}
@@ -1012,10 +1077,13 @@ func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, 
 		if parts[0] == "claude" && parts[1] == "haiku" && parts[2] == "latest" {
 			return m, nil
 		}
-		if parts[2] != "low" && parts[2] != "med" && parts[2] != "high" {
+		if !isTier(parts[2]) {
 			return Model{}, fmt.Errorf("unknown model tier in requested spec %q; known specs: %s", spec, knownModelSpecs())
 		}
 		m.Tier = parts[2]
+		if err := ValidateEffortTier(m, spec); err != nil {
+			return Model{}, err
+		}
 	}
 	return m, nil
 }
@@ -1036,32 +1104,44 @@ func normalizeTier(tier string) string {
 // resolvePiModel permits Pi model IDs to be selected directly even when they
 // are not listed in Harnez's static model guide. Preserve ID case for Pi's
 // case-sensitive provider/model identifiers.
-func resolvePiModel(aliases map[string]modelAlias, spec string) (Model, bool) {
+func resolvePiModelWithError(aliases map[string]modelAlias, spec string) (Model, bool, error) {
 	parts := strings.Split(spec, ":")
 	if len(parts) == 1 && strings.EqualFold(parts[0], "pi") {
-		return Model{Provider: "pi", Name: "default", Tier: "low"}, true
+		return Model{Provider: "pi", Name: "default", Tier: "low"}, true, nil
 	}
 	if len(parts) < 2 || len(parts) > 3 || !strings.EqualFold(parts[0], "pi") {
-		return Model{}, false
+		return Model{}, false, nil
 	}
 	if len(parts) == 2 && strings.EqualFold(parts[1], "default") {
-		return Model{Provider: "pi", Name: "default", Tier: "low"}, true
+		return Model{Provider: "pi", Name: "default", Tier: "low"}, true, nil
 	}
 	if entry, ok := aliases["pi:"+strings.ToLower(parts[1])]; ok && len(parts) == 2 {
-		return entry.Model, true
+		return entry.Model, true, nil
 	}
 	name := strings.TrimSpace(parts[1])
 	if name == "" {
-		return Model{}, false
+		return Model{}, false, nil
 	}
 	tier := "low"
 	if len(parts) == 3 {
 		if !isTier(strings.ToLower(parts[2])) {
-			return Model{}, false
+			return Model{}, false, nil
 		}
 		tier = strings.ToLower(parts[2])
 	}
-	return Model{Provider: "pi", Name: name, Tier: tier}, true
+	m := Model{Provider: "pi", Name: name, Tier: tier}
+	if err := ValidateEffortTier(m, spec); err != nil {
+		return Model{}, false, err
+	}
+	return m, true, nil
+}
+
+func resolvePiModel(aliases map[string]modelAlias, spec string) (Model, bool) {
+	m, ok, err := resolvePiModelWithError(aliases, spec)
+	if err != nil {
+		return Model{}, false
+	}
+	return m, ok
 }
 
 func modelHasAlias(m modelAlias, alias string) bool {
@@ -1081,5 +1161,5 @@ func (m Model) String() string { return m.Provider + ":" + m.Name + ":" + m.Tier
 
 // isTier reports whether s is a reasoning tier rather than a model name.
 func isTier(s string) bool {
-	return s == "low" || s == "med" || s == "high"
+	return s == "low" || s == "med" || s == "high" || s == "xhigh" || s == "max"
 }

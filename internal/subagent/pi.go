@@ -61,6 +61,9 @@ func (d PiDriver) toolCallExtArgs() ([]string, error) {
 }
 
 func (d PiDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := ValidateEffortTier(o.Model, ""); err != nil {
+		return nil, err
+	}
 	if err := ValidateContextMode("pi", o.ContextMode); err != nil {
 		return nil, err
 	}
@@ -82,6 +85,9 @@ func (d PiDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 }
 
 func (d PiDriver) Resume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
+	if err := ValidateEffortTier(model, ""); err != nil {
+		return nil, err
+	}
 	extArgs, err := d.toolCallExtArgs()
 	if err != nil {
 		return nil, fmt.Errorf("pi tool-call limit extension: %w", err)

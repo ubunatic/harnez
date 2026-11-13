@@ -101,7 +101,7 @@ func TestAgentSpecLmcoderCoderEntryRejectsBadFields(t *testing.T) {
 		name   string
 		mutate func(map[string]any)
 	}{
-		{"unknown tier", func(e map[string]any) { e["tier"] = "xhigh" }},
+		{"unknown tier", func(e map[string]any) { e["tier"] = "ultra" }},
 		{"missing name", func(e map[string]any) { delete(e, "name") }},
 		{"missing tier", func(e map[string]any) { delete(e, "tier") }},
 		{"missing provider", func(e map[string]any) { delete(e, "provider") }},
@@ -122,6 +122,7 @@ func TestPolicyRolePickSchema(t *testing.T) {
 		valid     bool
 	}{
 		{"valid", "roles: {developer: {models: {smart: [opus:med], custom: [], extra: [luna:med]}}}\nmodel_traits: {custom: Custom work}", true},
+		{"valid xhigh max picks", "roles: {developer: {models: {smart: [claude:haiku:xhigh, claude:haiku:max, agy:argon:xhigh]}}}", true},
 		{"bad list", "roles: {developer: {models: {smart: [opus:med, opus:med]}}}", false},
 		{"bad role field", "roles: {developer: {default_model: smart}}", false},
 		{"empty description", "model_traits: {smart: ''}", false},
@@ -136,6 +137,13 @@ func TestPolicyRolePickSchema(t *testing.T) {
 				t.Fatalf("schema: %v", err)
 			}
 		})
+	}
+	var fullDoc any
+	if err := yaml.Unmarshal([]byte("version: 1\ndefault_enabled: true\nenabled: [claude:haiku:xhigh, claude:haiku:max, agy:argon:xhigh]\nmodels:\n  claude:haiku:max:\n    kind: patch\n    enabled: true\n    fields: {tier: max}\n"), &fullDoc); err != nil {
+		t.Fatal(err)
+	}
+	if err := validate(t, "model-policy.schema.json", fullDoc); err != nil {
+		t.Fatalf("model-policy.schema.json rejected xhigh/max: %v", err)
 	}
 }
 

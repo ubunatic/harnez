@@ -1177,3 +1177,79 @@ func TestDriverForRunsProviderInDir(t *testing.T) {
 		})
 	}
 }
+
+func TestXHighAndMaxEffortTiers(t *testing.T) {
+	for _, tc := range []struct {
+		spec, provider, name, tier, effort string
+	}{
+		{"claude:haiku:xhigh", "claude", "claude-haiku-5-5", "xhigh", "xhigh"},
+		{"claude:haiku:max", "claude", "claude-haiku-5-5", "max", "max"},
+		{"haiku:xhigh", "claude", "claude-haiku-5-5", "xhigh", "xhigh"},
+		{"claude:opus:max", "claude", "opus", "max", "max"},
+		{"agy:argon:xhigh", "agy", "gemini-4-argon", "xhigh", "xhigh"},
+		{"agy:argon:max", "agy", "gemini-4-argon", "max", "max"},
+		{"argon:xhigh", "agy", "gemini-4-argon", "xhigh", "xhigh"},
+	} {
+		m, err := ResolveModel(tc.spec)
+		if err != nil {
+			t.Fatalf("ResolveModel(%q) failed: %v", tc.spec, err)
+		}
+		if m.Provider != tc.provider || m.Name != tc.name || m.Tier != tc.tier {
+			t.Fatalf("ResolveModel(%q) = %+v, want %s:%s:%s", tc.spec, m, tc.provider, tc.name, tc.tier)
+		}
+		if tc.provider == "claude" {
+			args := claudeRunArgs(m, "p")
+			if !strings.Contains(strings.Join(args, " "), "--effort "+tc.effort) {
+				t.Fatalf("claudeRunArgs(%q) = %q, want --effort %s", tc.spec, args, tc.effort)
+			}
+		}
+	}
+
+	for _, bad := range []string{"codex:luna:xhigh", "codex:luna:max", "luna:xhigh", "pi:local:xhigh", "lmcoder:coder:max", "agy:sonnet:xhigh"} {
+		if _, err := ResolveModel(bad); err == nil {
+			t.Errorf("ResolveModel(%q) succeeded, want error", bad)
+		}
+	}
+
+	entries, err := KnownModelEntriesE()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var foundXHigh bool
+	for _, entry := range entries {
+		if entry.Spec == "claude:haiku:xhigh" {
+			foundXHigh = true
+			if entry.Cost != 10 {
+				t.Errorf("claude:haiku:xhigh cost = %d, want 10", entry.Cost)
+			}
+		}
+		if strings.HasSuffix(entry.Spec, ":max") {
+			t.Errorf("max tier should stay opt-in without user policy, listed %q", entry.Spec)
+		}
+	}
+	if !foundXHigh {
+		t.Fatal("claude:haiku:xhigh missing from KnownModelEntriesE")
+	}
+
+	for _, drv := range []struct {
+		name string
+		run  func() error
+	}{
+		{"codex run", func() error {
+			_, err := (CodexDriver{}).Run(context.Background(), RunOptions{Prompt: "p", Model: Model{Provider: "codex", Name: "gpt-6-luna", Tier: "xhigh"}})
+			return err
+		}},
+		{"pi run", func() error {
+			_, err := (PiDriver{}).Run(context.Background(), RunOptions{Prompt: "p", Model: Model{Provider: "pi", Name: "local", Tier: "max"}})
+			return err
+		}},
+		{"interactive", func() error {
+			_, err := InteractiveArgv(Model{Provider: "codex", Name: "gpt-6-luna", Tier: "xhigh"}, t.TempDir(), "")
+			return err
+		}},
+	} {
+		if err := drv.run(); err == nil {
+			t.Errorf("%s accepted unsupported effort tier", drv.name)
+		}
+	}
+}

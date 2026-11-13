@@ -96,6 +96,9 @@ func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error
 	return providerOutput(ctx, c)
 }
 func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := ValidateEffortTier(o.Model, ""); err != nil {
+		return nil, err
+	}
 	if err := ValidateContextMode("codex", o.ContextMode); err != nil {
 		return nil, err
 	}
@@ -152,6 +155,9 @@ func (d CodexDriver) Resume(ctx context.Context, id, prompt string, model Model)
 	return d.runResume(ctx, id, prompt, model)
 }
 func (d CodexDriver) runResume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
+	if err := ValidateEffortTier(model, ""); err != nil {
+		return nil, err
+	}
 	beforeUsage, beforeCompactions, beforeErr := codexRolloutUsageByID(id)
 	b, err := d.command(ctx, codexResumeArgs(id, prompt, model)...)
 	if err != nil {
