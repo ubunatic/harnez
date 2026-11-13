@@ -1,6 +1,7 @@
 # 1231 — Allow agents to run harnez usage without harnez exec killing it
 
-**Status**: Open
+**Status**: Closed — 0866f697: terminal size via TIOCGWINSZ instead of stty; live: harnez usage prints under agent exec
+**Closed-By**: session 77baa296-b04d-4941-bc73-3791a6b9b1e3
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
