@@ -26,8 +26,10 @@ Record sizes before changing anything; in a Claude session `/context` shows what
 ## 2. Baseline
 
 Before the first edit, write one fixed task that makes an agent use the rules in scope, and a
-list of checks you can observe in its output files and executed commands. The task forbids
-repository changes; sessions write to a scratch directory. Run it on a cheap model at `low` and
+list of checks you can observe in its output files and executed commands. Pick checks the
+current text sometimes fails; a baseline with full marks cannot show a loss. Prepare fixtures
+yourself so every session starts from the same state. The task forbids repository changes;
+sessions write to a scratch directory. Run it on a cheap model at `low` and
 at `high` effort (`harnez agent models` shows cost); add a second vendor when the rules reach
 more than one harness.
 
@@ -36,9 +38,10 @@ HTO=0 harnez agent start --name <n> --role developer --model <model>:<effort> -f
 harnez agent resume --name <n> -- "<question>"
 ```
 
-Start sessions as background tasks. Score from the artifacts, never from the session's own
-summary. Then ask each session which rules it read, where, and which it set aside; resume a
-Claude session with `/context` for its loaded sizes.
+Start sessions as background tasks. Score from the output files and the harness's command log,
+never from a summary or transcript the session writes. A check you could not observe is not
+applicable, not a pass. Then ask each session which rules it read, where, and which it set
+aside; resume a Claude session with `/context` for its loaded sizes.
 
 ## 3. Rewrite
 
@@ -47,19 +50,21 @@ Write for a capable agent that knows git, Go, Make and shell.
 - Keep what is the owner's own: house style, harnez commands, invariants, limits. Drop standard
   practice, motivation, and whatever `harnez <verb> --help` prints.
 - One short imperative per rule, stated once. No answer formats, no templates.
-- Name a `harnez` command only in a form you ran successfully.
+- Add a `harnez` command only in a form you ran successfully; for one already in the text the
+  `--help` check is enough.
 - Edit sources, not generated content (`harnez:begin/end` blocks, bundled doc copies, installed
   skills). In the harnez repository change the source and its lite variant, then reinstall as
   `AGENTS.md` says; anywhere else file an issue for harnez.
-- Before deleting a phrase, grep the tests for it. A test that asserts prose is a finding to
-  report, not a reason to keep the prose.
+- Before deleting a phrase, grep the tests for it. If a test asserts the prose, leave that
+  passage as it was and file a ticket to loosen the test; never bend new wording to fit it.
 - One pass per run. Stop when the next cut would need a design decision; file it.
 
 ## 4. Retest
 
 Rerun the baseline task after each change and compare check by check. A lost check means fix
 or revert before the next cut. One run is a hypothesis: when a result decides something, repeat
-it three times on the cheapest tier.
+it three times on the cheapest tier. The session budget wins over reruns: say which results are
+single runs and which change went untested.
 
 ## 5. Record
 

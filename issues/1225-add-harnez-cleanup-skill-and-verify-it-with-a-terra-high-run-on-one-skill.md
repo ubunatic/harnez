@@ -104,3 +104,24 @@ Cleanup workflow ambiguities and limits observed:
   inspected and scratch runs exercised init.
 - Retest after each change conflicts with the fixed four-session ceiling after a post-retest
   assertion repair; no behavioral session was added for the final adjustment.
+
+### Host review of the run
+
+The run (`terra:high` orchestrator, four `luna` test sessions, one developer helper, 16 minutes,
+76k new tokens for the orchestrator) followed the skill end to end, and the orchestrator role
+worked: it measured, delegated the rewrite and started the test sessions itself.
+
+- The 28-line rewrite (`8ca13cf6`) is the version the four sessions tested. The helper then
+  re-added six headings and reworded sentences only to satisfy
+  `TestHarnezInitSkillInstallToEveryConfiguredTarget`, which asserted 22 literal phrases. That
+  test now checks four names the skill depends on (1224), and the 28-line version is restored
+  as the final one.
+- The baseline scored 5/5 on both efforts, so this run shows no loss, not a gain. The checks
+  were too easy to separate a good skill from a poor one.
+- Skill changes taken from the run's findings: fixtures are prepared by the runner so sessions
+  start equal; scoring uses output files and the harness's command log, not a transcript the
+  session writes; an unobservable check is not applicable; the budget wins over reruns and the
+  report names single runs and untested changes; a kept command needs only the `--help` check;
+  a prose-asserting test means leaving that passage alone and filing a ticket.
+- Not taken: a fixed scoring rubric. The checks depend on the rules in scope.
+- The skill is 80 lines, 4156 bytes, above the 60-line target set in the plan.
