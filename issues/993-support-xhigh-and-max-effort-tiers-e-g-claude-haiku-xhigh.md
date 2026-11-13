@@ -53,6 +53,9 @@ with `-c`, and which values it accepts is still unverified. Acceptance is assume
 
 ## 4. Decision (owner + advisor plan, 2026-11-07)
 
+Note 2026-11-13: sections 2b, 4 and 5 sat on an unpushed local branch and reached `main` only
+after this ticket was closed. The implementation did not see them; 1229 lists where it differs.
+
 Owner decisions, recorded before coding:
 
 1. **xhigh is never a shipped default.** It is allowed when requested and reachable through a
