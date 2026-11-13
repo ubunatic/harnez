@@ -259,11 +259,6 @@ func applyCodexRolloutTotals(result *TurnResult, before, after codexRolloutUsage
 	result.TokensCumulative = afterInput + afterOutput
 }
 
-func codexRolloutCompactions(providerID string) (int, error) {
-	_, count, err := codexRolloutState(providerID)
-	return count, err
-}
-
 func codexRolloutState(providerID string) (int, int, error) {
 	tokens, _, compactions, err := codexRolloutMetrics(providerID)
 	return tokens, compactions, err

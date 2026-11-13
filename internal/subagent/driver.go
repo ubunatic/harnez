@@ -1103,7 +1103,7 @@ func normalizeTier(tier string) string {
 	}
 }
 
-// resolvePiModel permits Pi model IDs to be selected directly even when they
+// resolvePiModelWithError permits Pi model IDs to be selected directly even when they
 // are not listed in Harnez's static model guide. Preserve ID case for Pi's
 // case-sensitive provider/model identifiers.
 func resolvePiModelWithError(aliases map[string]modelAlias, spec string) (Model, bool, error) {
@@ -1136,14 +1136,6 @@ func resolvePiModelWithError(aliases map[string]modelAlias, spec string) (Model,
 		return Model{}, false, err
 	}
 	return m, true, nil
-}
-
-func resolvePiModel(aliases map[string]modelAlias, spec string) (Model, bool) {
-	m, ok, err := resolvePiModelWithError(aliases, spec)
-	if err != nil {
-		return Model{}, false
-	}
-	return m, ok
 }
 
 func modelHasAlias(m modelAlias, alias string) bool {
