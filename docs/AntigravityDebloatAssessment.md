@@ -2,6 +2,11 @@
 
 **Scope**: Assessment of Antigravity (`agy`) context usage breakdown, customization surfaces, per-tool upfront token costs, and how the `harnez apply --debloat` feature can be ported and adapted from Claude Code to Antigravity setups.
 
+> [!NOTE]
+> **Canary Update (2026-11-13):** Live `agy --model claude-sonnet-5-5` A/B runs comparing `--settings '{"permissions":{"deny":["schedule","generate_image","ask_question","define_subagent"]}}'` (`19,988` input tokens) against `deny: []` (`12,636` uncached + `7,345` cache-read = `19,981` input tokens) returned the exact same 14 `default_api` tool declarations (`read_file`, `run_command`, `manage_task`, `send_message`, `schedule`, `invoke_subagent`, `define_subagent`, `manage_subagents`, `write_file`, `edit_file`, `search_web`, `run_workflow`, `swarm`, `ask_question`).
+>
+> Unlike Claude Code (`#968`), Antigravity `permissions.deny` blocks execution at call time without removing tool schemas from the prompt, so moving `define_subagent` or `manage_subagents` into `minimal_deny` yields 0 token savings (both remain in `aggressive_extra_deny` as behavioral guardrails). Current `agy` also moved image generation out of `default_api` (`image-generator` subagent) and added `run_workflow` and `swarm`.
+
 ---
 
 ## 1. Measured Antigravity Context Baseline
