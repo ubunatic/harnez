@@ -143,6 +143,10 @@ debloat:
     apps: false
     plugins: false
   # Antigravity target debloat definitions (issue 372).
+  # Note (2026-11-13 canary): AGY permissions.deny enforces call-time blocking
+  # only and does not strip tool schemas from prompt input tokens; keep
+  # define_subagent and manage_subagents in aggressive_extra_deny so minimal
+  # still allows native invoke_subagent cleanup.
   agy:
     minimal_deny:
       - schedule
