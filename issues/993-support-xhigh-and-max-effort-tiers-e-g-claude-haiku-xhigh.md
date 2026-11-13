@@ -32,6 +32,14 @@ max 36; xhigh not shown.
 - Other providers: whether codex/agy offer comparable tiers is unknown; scope to claude unless
   a canary shows support.
 
+## 2b. Provider addendum (host, 2026-11-07)
+
+Help text only, no flag run: `agy --help` lists `--effort low|medium|high|xhigh|max`, so the
+"unknown" above is answered for agy. `pi --help` lists `--thinking off, minimal, low, medium,
+high, xhigh, max`. `codex exec --help` has **no** effort flag; harnez sets `model_reasoning_effort`
+with `-c`, and which values it accepts is still unverified. Acceptance is assumed, not canaried
+(owner decision 7); the per-model `tiers` field below is the lever to disable a broken combo later.
+
 ## 3. Plan
 
 1. Canary: `claude --effort xhigh` and `--effort max` with Haiku 5.5 in harnez's headless mode;
@@ -42,6 +50,63 @@ max 36; xhigh not shown.
    cost estimates; keep `max` opt-in.
 4. Test: tier parsing, the claude effort mapping, and a `models.yaml` chain containing
    `haiku:xhigh`; `make test-q1` green; `make install`; live `harnez agent models` check.
+
+## 4. Decision (owner + advisor plan, 2026-11-07)
+
+Owner decisions, recorded before coding:
+
+1. **xhigh is never a shipped default.** It is allowed when requested and reachable through a
+   `models.yaml` chain, but shipped role picks stay on `low`/`med`/`high`.
+2. **`xhigh` and `max` are allowed by default**, i.e. listed in `harnez agent models` and
+   accepted by parsing/policy; they are not gated behind an opt-in switch.
+3. **No sourced xhigh/max cost data exists** in the repo (checked `reports/`, `docs/studies/`,
+   `docs/Models.md`, `spec/agent.yaml`, 517/969/973). Current shipped anchors are relative costs
+   anchored at `codex:luna:low = 1`: Haiku 5.5 `low 4 / med 4 / high 7` (`spec/agent.yaml:181-182`),
+   Sonnet `low 15` (`:194`), Opus `low 20` (`:205`). The Artificial Analysis figures in §1 are
+   quality scores (high 30, max 36), not costs.
+   **Estimate used (owner will replace after measurement):** per-tier multiplier `1.75` (the
+   observed Haiku med->high ratio), `low = med`, `xhigh = round(high x 1.75)`, `max = round(xhigh x 1.75)`:
+   Haiku `xhigh 12 / max 21`; Sonnet `med 15 / high 26 / xhigh 46 / max 80`; Opus `med 20 / high 35 / xhigh 61 / max 107`.
+   These only rank fallback order, so monotonic increase matters more than the absolute number.
+   Each entry gets a spec comment marking it as an estimate to be replaced.
+4. **Sonnet and Opus get the tiers too**, not only Haiku.
+5. **Provider scope: claude plus codex, agy and pi.** agy sends `--effort`, pi sends `--thinking`,
+   codex keeps `-c model_reasoning_effort=`. `off`/`minimal` (pi) stay out of scope.
+6. **Per-model `tiers` list wins over one global enum** — providers and models differ (pi has extra
+   levels, codex acceptance unknown), and the field is how a broken combo gets disabled. Default
+   stays `[low, med, high]` so existing entries keep today's behaviour.
+7. **No canary runs.** Acceptance is assumed for this pass; broken combinations get flagged and
+   disabled later once observed.
+
+## 5. Milestones (refined by the architect plan, 2026-11-07)
+
+- **M1 Spec + schema:** one tier enum in `spec/schemas/agent.schema.json` (`$defs/tier`) used at the
+  model tier and `cost_by_tier` places; add optional `cost_by_tier.xhigh/.max`; new per-model
+  `tiers` list defaulting to `[low, med, high]`; widen `spec/schemas/model-policy.schema.json`
+  regex to `(:(low|med|high|xhigh|max))?$` and its tier enum; declare the tier list once in
+  `spec/agent.yaml` so Go never redefines it.
+- **M2 Parsing + mapping:** `AllTiers` read from the spec plus `Model.SupportedTiers()` replacing the
+  hard-coded lists in `internal/subagent/driver.go` (`isTier`, the spec tier check, the `models`
+  listing, `modelEnabledAtAnyTier`) and `modelcatalog/catalog.go` (`policyIDTier`, tier fan-out);
+  collapse the five effort mappers (`claudeEffort`, `codexEffort`, `agyEffort`, `piThinkingLevel`,
+  `providerEffort`) into one `effortLevel(tier)` keeping `med` -> `medium`. Distinct errors:
+  unknown tier stays `unknown model tier in requested spec %q`; unsupported-but-valid tier gets
+  `model %q does not support effort tier %q (supported: ...)`.
+- **M3 Model entries + costs:** `tiers` plus `cost_by_tier` estimates from §4 item 3 for Haiku,
+  Sonnet, Opus (and codex/agy/pi where the tier is plausible), `compact_thresholds` for each new
+  tier key (`spec/agent.yaml:14-16`, validated in `agentspec.go:250`).
+- **M4 Help + listing + fixtures:** listing follows `SupportedTiers()`; regenerate
+  `internal/subagent/testdata/known-model-specs.golden` and re-grep other tier listings.
+- **M5 Tests (table-driven, no sleeps):** resolve `claude:haiku:xhigh`; reject a tier a model does
+  not support; `bogus` tier still hits the unknown-tier error; `effortLevel` mapping plus argv
+  showing `--effort xhigh`; a `models.yaml` chain containing `haiku:xhigh` validates and resolves;
+  catalog `IsEnabled("claude","haiku","xhigh")`. Gate `make test-q1`, then `make install`.
+- **M6 Docs:** edit the copyable **sources** in `docs/practices/` and `docs/lang/` (not root copies),
+  then `make install` -> `harnez init -d .` -> `git checkout --` unrelated rewrites; add a note that
+  higher tiers fill Haiku's 80k compaction budget faster (see 969/973).
+- **M7 Live check:** `harnez agent models` shows the xhigh/max rows; one trivial
+  `claude:haiku:xhigh` turn proves `--effort xhigh` reached the argv; one rejection run for an
+  unsupported model/tier; close 993.
 
 ## Audit 2026-11-08 (Jules)
 
