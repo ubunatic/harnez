@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/agent"
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/subagent"
 )
@@ -23,12 +24,12 @@ type interactiveDeps struct {
 
 type interactiveStartRequest struct {
 	Prompt, Name, ModelSpec, Dir, Role string
-	AllowExhaustedQuota                bool
+	AllowExhaustedQuota, AcceptCost    bool
 }
 
 type interactiveResumeRequest struct {
-	Name, Prompt, Dir   string
-	AllowExhaustedQuota bool
+	Name, Prompt, Dir               string
+	AllowExhaustedQuota, AcceptCost bool
 }
 
 func validateInteractiveFlags(cmd *cobra.Command, detached, jsonOut bool, stream string, timeout time.Duration, worker bool) error {
@@ -47,6 +48,9 @@ func validateInteractiveFlags(cmd *cobra.Command, detached, jsonOut bool, stream
 	if worker {
 		return fmt.Errorf("--interactive cannot be used by a detached worker")
 	}
+	if cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls") {
+		return fmt.Errorf("--interactive cannot be combined with --max-tool-calls")
+	}
 	return nil
 }
 
@@ -56,11 +60,16 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 	if err != nil {
 		return err
 	}
-	selection, err := selectStartSelection(role, spec, req.AllowExhaustedQuota, nil, cmd.ErrOrStderr())
+	selection, err := selectStartSelectionWithOptions(role, spec, req.AllowExhaustedQuota, req.AcceptCost, nil, cmd.ErrOrStderr())
 	if err != nil {
 		return startModelError(spec, selection, err)
 	}
 	m := selection.Model
+	if warning, err := agent.CheckCostlyModel(m, req.AcceptCost, nil, time.Now()); err != nil {
+		return err
+	} else if warning != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), warning)
+	}
 	canonicalDir, err := filepath.Abs(req.Dir)
 	if err != nil {
 		return fmt.Errorf("resolve working directory: %w", err)
@@ -105,7 +114,7 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 		taken[sessName] = true
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Interactive: %s (%s)\n", sess.Name, sess.ID)
-	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false))
+	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false, sess.Provider))
 	if err != nil {
 		return err
 	}
@@ -145,6 +154,11 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 	if err := rejectBlockedSessionModel(sess, req.AllowExhaustedQuota, nil); err != nil {
 		return err
 	}
+	if warning, err := agent.CheckCostlyModel(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, req.AcceptCost, nil, time.Now()); err != nil {
+		return err
+	} else if warning != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), warning)
+	}
 	if err := warnDisabledSessionModel(cmd, sess, d.modelEnabled); err != nil {
 		return err
 	}
@@ -178,7 +192,7 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 		return err
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Resumed Interactively: %s (%s)\n", sess.Name, sess.ID)
-	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false))
+	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false, ""))
 	if err != nil {
 		return err
 	}

@@ -31,27 +31,11 @@ A `/trial` audit must be grounded in primary project evidence, not subjective op
 
 ## 3. Output Format
 
-Format the audit with sharp contrast, zero opening/closing pleasantries, and exact markdown links to code symbols, commits, and issue tickets:
-
-```markdown
-# ⚖️ Capability Trial: <Scope / Product Name>
-
-### Ten Things We Can Do Now
-
-1. **<Feature / Capability Name>** — <Brief description of what works, citing exact CLI command or flag and linking commit/ticket>.
-2. **<Feature / Capability Name>** — <Brief description, linking commit/ticket>.
-...
-10. **<Feature / Capability Name>** — <Brief description, linking commit/ticket>.
-
----
-
-### Five Things We Cannot Do Yet
-
-1. **<Limitation / Gap Name>** — <Concrete description of what fails, what is blocked, or what command does not exist, linking open ticket>.
-2. **<Limitation / Gap Name>** — <Concrete description, linking open ticket>.
-...
-5. **<Limitation / Gap Name>** — <Concrete description, linking open ticket>.
-```
+- format the audit concise and structured with zero opening/closing prose
+- use exact markdown links to code symbols, commits, and issue tickets
+- if applicable say what the **user** can do with the new product features or cannot do yet
+- if applicable say what the outcome of using the new features is
+- add a final conclusion how much the changes brought the product forward
 
 ---
 

@@ -66,6 +66,7 @@ type Identity struct {
 type LegacyGuide struct {
 	Cost              int            `yaml:"cost"`
 	CostByTier        map[string]int `yaml:"cost_by_tier"`
+	ExtraTiers        []string       `yaml:"extra_tiers"`
 	Eff               string         `yaml:"eff"`
 	Skills            string         `yaml:"skills"`
 	Roles             string         `yaml:"roles"`
@@ -523,8 +524,11 @@ func (c *Catalog) validatePolicyEnablement(policy Policy) error {
 
 func policyIDTier(policyID string) string {
 	parts := strings.Split(policyID, ":")
-	if len(parts) == 3 && (parts[2] == "low" || parts[2] == "med" || parts[2] == "high") {
-		return parts[2]
+	if len(parts) == 3 {
+		switch parts[2] {
+		case "low", "med", "high", "xhigh", "max":
+			return parts[2]
+		}
 	}
 	return ""
 }
@@ -533,10 +537,15 @@ func findPolicyIdentity(c Catalog, policyID string) Identity {
 	var found Identity
 	for _, model := range c.models {
 		aliases := append(append([]string(nil), model.Aliases...), model.Key, model.Identity.Model)
-		matches := model.Identity.Harness+":"+model.Identity.Model == policyID || model.Identity.Provider+":"+model.Identity.Model == policyID || policyKey(model) == policyID ||
-			policyIDMatches(model.Identity.Harness, aliases, "low", policyID) || policyIDMatches(model.Identity.Provider, aliases, "low", policyID) ||
-			policyIDMatches(model.Identity.Harness, aliases, "med", policyID) || policyIDMatches(model.Identity.Provider, aliases, "med", policyID) ||
-			policyIDMatches(model.Identity.Harness, aliases, "high", policyID) || policyIDMatches(model.Identity.Provider, aliases, "high", policyID)
+		matches := model.Identity.Harness+":"+model.Identity.Model == policyID || model.Identity.Provider+":"+model.Identity.Model == policyID || policyKey(model) == policyID
+		for _, tier := range []string{"low", "med", "high", "xhigh", "max"} {
+			if matches {
+				break
+			}
+			if policyIDMatches(model.Identity.Harness, aliases, tier, policyID) || policyIDMatches(model.Identity.Provider, aliases, tier, policyID) {
+				matches = true
+			}
+		}
 		if !matches {
 			continue
 		}
@@ -638,6 +647,60 @@ func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
 		}
 	}
 	return c.policy.DefaultEnabled
+}
+
+// ExplicitlyEnabled reports whether user policy names provider:model:tier explicitly.
+func (c *Catalog) ExplicitlyEnabled(provider, modelName, tier string) bool {
+	if c == nil || c.policy == nil || tier == "" {
+		return false
+	}
+	provider, tier = strings.ToLower(provider), strings.ToLower(tier)
+	providers := []string{provider}
+	aliases := []string{modelName}
+	for _, model := range c.models {
+		if !strings.EqualFold(model.Identity.Harness, provider) && !strings.EqualFold(model.Identity.Provider, provider) {
+			continue
+		}
+		matches := model.Identity.Model == modelName || model.Key == modelName
+		for _, alias := range model.Aliases {
+			base := alias
+			if index := strings.IndexByte(base, ':'); index >= 0 {
+				base = base[:index]
+			}
+			if alias == modelName || base == modelName {
+				matches = true
+			}
+		}
+		if !matches {
+			continue
+		}
+		providers = append(providers, strings.ToLower(model.Identity.Harness), strings.ToLower(model.Identity.Provider))
+		aliases = append(aliases, model.Key, model.Identity.Model)
+		aliases = append(aliases, model.Aliases...)
+	}
+	for _, policyID := range c.policy.Enabled {
+		parts := strings.Split(policyID, ":")
+		if len(parts) == 3 && strings.EqualFold(parts[2], tier) && enabledModelID([]string{policyID}, providers, aliases, tier) {
+			return true
+		}
+	}
+	for policyID, entry := range c.policy.Models {
+		if entry.Enabled != nil && !*entry.Enabled {
+			continue
+		}
+		parts := strings.Split(policyID, ":")
+		if len(parts) == 3 && strings.EqualFold(parts[2], tier) {
+			for _, prefix := range providers {
+				if policyIDMatches(prefix, aliases, tier, policyID) {
+					return true
+				}
+			}
+		}
+		if entry.Identity != nil && (strings.EqualFold(entry.Identity.Harness, provider) || strings.EqualFold(entry.Identity.Provider, provider)) && entry.Identity.Model == modelName && strings.EqualFold(entry.Identity.Tier, tier) {
+			return true
+		}
+	}
+	return false
 }
 
 func policyIDMatches(provider string, aliases []string, tier, policyID string) bool {

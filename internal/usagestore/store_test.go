@@ -669,3 +669,74 @@ func TestOpenReadOnlyReadsWALDatabaseInReadOnlyDir(t *testing.T) {
 		t.Fatalf("read rows=%d err=%v", len(rows), err)
 	}
 }
+
+func TestTurnTokenUsageAndQuotaSharePersistNullForUnknowns(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "cost.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, q string) error { return s.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	input, cached, cacheWrite, output, cost := int64(34), int64(66409), int64(5269), int64(393), int64(42100)
+	if err := s.WriteTurnTokenUsage(ctx, TurnTokenUsage{
+		SessionID: "cost-1", Turn: 1, Provider: "claude", CounterKind: "delta",
+		Model: "claude-haiku-4-5-20251001", Effort: "xhigh",
+		InputTokens: &input, CachedInputTokens: &cached, CacheWriteTokens: &cacheWrite,
+		OutputTokens: &output, CostMicros: &cost, PricingRevision: "test-rev",
+		InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
+		ObservedAt: time.Date(2026, 11, 13, 11, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteTurnTokenUsage(ctx, TurnTokenUsage{
+		SessionID: "cost-1", Turn: 2, Provider: "codex", CounterKind: "delta",
+		Model: "gpt-6-luna", Effort: "low",
+		InputTokens: &input, CachedInputTokens: &cached, OutputTokens: &output,
+		InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
+		ObservedAt: time.Date(2026, 11, 13, 11, 1, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.TurnTokenUsages(ctx, "cost-1")
+	if err != nil || len(got) != 2 {
+		t.Fatalf("TurnTokenUsages = %+v, err=%v", got, err)
+	}
+	if got[0].Model != "claude-haiku-4-5-20251001" || got[0].Effort != "xhigh" || got[0].CacheWriteTokens == nil || *got[0].CacheWriteTokens != 5269 || got[0].CostMicros == nil || *got[0].CostMicros != 42100 || got[0].PricingRevision != "test-rev" || got[0].ReasoningTokens != nil {
+		t.Fatalf("turn 1 row = %+v", got[0])
+	}
+	if got[1].CacheWriteTokens != nil || got[1].CostMicros != nil || got[1].PricingRevision != "" {
+		t.Fatalf("turn 2 unknown cost/cache_write must remain nil, got %+v", got[1])
+	}
+
+	t0 := time.Date(2026, 11, 13, 11, 0, 0, 0, time.UTC)
+	reset := t0.Add(72 * time.Hour)
+	for _, item := range []struct {
+		boundary string
+		at       time.Time
+		used     float64
+	}{
+		{"before", t0, 0.20},
+		{"after", t0.Add(time.Minute), 0.23},
+	} {
+		if _, err := s.WriteTurnQuotaBoundary(ctx, TurnQuotaBoundary{
+			SessionID: "cost-1", Turn: 1, Boundary: item.boundary, Provider: "claude", CapturedAt: item.at,
+			Windows: []Window{{Provider: "claude", Source: "claude-api", Freshness: "fresh", Key: "weekly", Name: "7-day", UsedFraction: item.used, ResetAt: &reset, ObservedAt: item.at}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.PairTurnQuotaDeltas(ctx, "cost-1", 1, "claude"); err != nil {
+		t.Fatal(err)
+	}
+	share := int64(692308)
+	if err := s.UpdateTurnQuotaShare(ctx, "cost-1", 1, "claude", "weekly", &share); err != nil {
+		t.Fatal(err)
+	}
+	deltas, err := s.TurnQuotaDeltas(ctx, "cost-1", 1)
+	if err != nil || len(deltas) != 1 || deltas[0].SubscriptionPriceShareMicros == nil || *deltas[0].SubscriptionPriceShareMicros != share {
+		t.Fatalf("deltas = %+v, err=%v", deltas, err)
+	}
+}

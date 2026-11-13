@@ -1,6 +1,6 @@
 # 1033 — Tool-call limit per agent turn, enforced by harnez, not by the prompt
 
-**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
+**Status**: Open — M1–M3 implemented and tested in c6d9a828 (feat/jules-batch-b); live lmcoder:coder acceptance deferred (pi absent / proxy 127.0.0.1:8735 offline)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -188,3 +188,17 @@ failure report. Re-check live code and Pi's version first (Findings are from Pi 
 - M1 left: `--max-tool-calls` with precedence over `~/.harnez/config.yaml`, worker and MCP forwarding, the
   silent `--json` observer, and `tool_calls`/`tool_call_limit`/`tool_call_limit_reached` in `TurnResult`,
   `TurnRecord` and the output.
+- M1 complete, M2 and M3 (fake-provider + node extension tests) implemented (2026-11-13):
+  - Config & flags (`toollimit_spec.go`, `agent.go`, `agent_cmds.go`, `agent_interactive.go`, `agent_async.go`, `agent_run.go`, `internal/mcp/server.go`):
+    `EffectiveToolCallConfig` enforces `--max-tool-calls` > `~/.harnez/config.yaml` `agent.tool_call_limits` > `spec/agent.yaml`;
+    `-i` rejects `--max-tool-calls`; detached workers and MCP (`harnez_spawn_agent`, `harnez_command`) forward it;
+    `--json` runs upgrade to `StreamingDriver` silently (`useStream` vs `streaming`) when limit > 0.
+  - Drivers & Pi extension (`tool-call-limit.ts`, `toollimit_embed.go`, `pi.go`, `claude.go`, `codex.go`):
+    embedded `tool-call-limit.ts` written atomically to content-hashed path in `$XDG_STATE_HOME/harnez/pi/` and passed via `pi -e <path>` with `HARNEZ_TOOL_CALL_LIMIT` / `HARNEZ_TOOL_CALL_LIMIT_PROMPT` only when limit > 0;
+    `parsePi` returns `*PiEmptyResponseError` preserving partial `Messages` on terminated empty runs; `piLineFunc` emits `tool_execution_start`;
+    `claudeStreamer` includes `tool_use` block `ID` on main-thread calls; `codexParser` emits tool item events (`command_execution`, `mcp_tool_call`, `file_change`, `web_search`, `collab_tool_call`, `custom_tool_call`, `local_shell_call`, `*_call`).
+  - Enforcement & output (`agent_run.go`, `agent_stream.go`, `driver.go`, `session.go`):
+    `toolCallGuard` wraps `ClaudeStreamDriver` / `PiStreamDriver` when limit > 0, runs Pi backstop at `limit + native_backstop_calls`, cancels Claude/Codex and runs one synthesis `ResumeStream` cancelling on first tool call, records `tool_calls`/`tool_call_limit`/`tool_call_limit_reached` on `TurnResult`, `TurnRecord`, JSON output, and `[done: ...]` stream tail, and saves `Status=stopped` with `LastError="tool-call limit reached: <attempted> calls (limit <N>), no answer; session can be resumed"` on no answer.
+    `agy` warns on stderr and omits `tool_calls`.
+  - Docs updated (`docs/PiAgent.md`, `docs/HarnezAgentArchitecture.md`).
+  - Environment probe & live verification status: `pi` binary is absent on `PATH`, `HARNEZ_PI_PACKAGE_DIR` is unset, and `127.0.0.1:8735` (`lmcoder` proxy) is not listening in this session. Live `lmcoder:coder` acceptance run (1024 review diff) could not run here and remains open until run against a live Pi + `lmcoder` environment; unit tests, `test/pi/tool-call-limit.test.ts` (`make test-pi`), and real-subprocess fake-provider CLI tests (`cmd/harnez/agent_toollimit_test.go`) all pass.

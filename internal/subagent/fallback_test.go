@@ -106,3 +106,30 @@ func TestLatestAccess(t *testing.T) {
 		t.Fatalf("empty %s", got)
 	}
 }
+
+func TestResolveModelWithOptionsSkipsCostlyWithoutAcceptCost(t *testing.T) {
+	base, err := agentSpecOnce()
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases, err := modelAliasMap()
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := &modelcatalog.Policy{Roles: map[string]modelcatalog.RolePolicy{
+		"advisor": {Models: map[string][]string{"smart": {"sol:high", "luna:low"}}},
+	}}
+	merged, err := mergeRolePolicy(base, policy, aliases, "/tmp/models.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sel, err := resolveRoleSelection(merged, "advisor", "smart", func(target string) (Model, error) { return resolveModelIn(aliases, target) }, func(m Model) string {
+		if costly, _ := IsCostlyModelFor(m); costly {
+			return "costly model (pass --accept-cost)"
+		}
+		return ""
+	})
+	if err != nil || sel.Model.Spec() != "codex:luna:low" || !strings.Contains(strings.Join(sel.Skipped, "; "), "sol:high: costly model (pass --accept-cost)") {
+		t.Fatalf("selection=%+v err=%v", sel, err)
+	}
+}

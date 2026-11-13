@@ -1,6 +1,6 @@
 # 724 — Codex ignores harnez-installed hooks until the user trusts them, but harnez status reports ok
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — resolved in 7ff38f18
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -37,3 +37,13 @@ security prompt and needs a user decision.
 ## Audit 2026-11-08
 
 Jules audit (GitHub PR 139, report `reports/jules/724.md`, checked against d8c61da; all 4 references hold): still valid. `internal/codex/hooks.go:202` `Status` reports only installed/drifted, and `internal/claude/status.go:166-172` prints `ok` with no trust check; no Go code reads `trusted_hash` or `[hooks.state]`. Smallest step: have `codex.Status` also report untrusted harnez hooks from `[hooks.state]` and print a warning with the trust hint in `RunStatus`. Needs a real Codex `config.toml` sample with `[hooks.state]` first (canary).
+
+## Resolution 2026-11-13 (`7ff38f18`)
+
+- Inspected live `~/.codex/config.toml` `[hooks.state."<path>:<snake_event>:0:0"]` entries (`trusted_hash`).
+- Added `codex.TrustStatus(path)` in `internal/codex/hooks.go` (without writing `trusted_hash` entries) and
+  wired untrusted warnings/hints into `RunStatus` (`internal/claude/status.go`) and `apply` summary
+  (`internal/claude/apply_phases.go`).
+- Covered by `TestTrustStatusDetectsUntrustedAndTrustedHooks` (`internal/codex/hooks_test.go`) and
+  `internal/claude/status_test.go`. (Note: presence of `trusted_hash` is checked; exact hash recomputation
+  and in-container verification remain deferred.)

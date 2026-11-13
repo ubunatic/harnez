@@ -16,9 +16,29 @@ import (
 // PiDriver runs the Pi coding-agent CLI in JSON mode. Pi owns persisted
 // sessions; the provider session ID is the ID from its JSON session header.
 type PiDriver struct {
-	Command      func(context.Context, string, ...string) ([]byte, error)
-	CommandInput func(context.Context, string, string, ...string) ([]byte, error)
-	Dir          string
+	Command       func(context.Context, string, ...string) ([]byte, error)
+	CommandInput  func(context.Context, string, string, ...string) ([]byte, error)
+	Dir           string
+	ToolCallLimit int
+}
+
+// WithToolCallLimit configures d with a per-turn tool-call limit when d is a
+// Pi driver. Other drivers leave it untouched because harnez observes their
+// stream events directly.
+func WithToolCallLimit(d Driver, limit int) Driver {
+	if limit <= 0 {
+		return d
+	}
+	switch drv := d.(type) {
+	case PiDriver:
+		drv.ToolCallLimit = limit
+		return drv
+	case PiStreamDriver:
+		drv.ToolCallLimit = limit
+		return drv
+	default:
+		return d
+	}
 }
 
 func (d PiDriver) command(ctx context.Context, args ...string) ([]byte, error) {
@@ -29,9 +49,30 @@ func (d PiDriver) commandLines(ctx context.Context, fn func([]byte), args ...str
 	return runProviderCLI(ctx, "pi", d.Dir, d.Command, fn, args)
 }
 
+func (d PiDriver) toolCallExtArgs() ([]string, error) {
+	if d.ToolCallLimit <= 0 {
+		return nil, nil
+	}
+	extPath, err := piToolCallLimitExtPath()
+	if err != nil {
+		return nil, err
+	}
+	return []string{"-e", extPath}, nil
+}
+
 func (d PiDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := ValidateEffortTier(o.Model, ""); err != nil {
+		return nil, err
+	}
+	if err := ValidateContextMode("pi", o.ContextMode); err != nil {
+		return nil, err
+	}
+	extArgs, err := d.toolCallExtArgs()
+	if err != nil {
+		return nil, fmt.Errorf("pi tool-call limit extension: %w", err)
+	}
 	start := time.Now()
-	b, err := d.command(ctx, piRunArgs(o.Model, o.Prompt, o.ContextMode)...)
+	b, err := d.command(ctx, piRunArgsWithExtra(o.Model, o.Prompt, o.ContextMode, extArgs)...)
 	if err != nil {
 		return nil, fmt.Errorf("pi: %w", err)
 	}
@@ -44,7 +85,14 @@ func (d PiDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 }
 
 func (d PiDriver) Resume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
-	b, err := d.command(ctx, piResumeArgs(id, prompt, model)...)
+	if err := ValidateEffortTier(model, ""); err != nil {
+		return nil, err
+	}
+	extArgs, err := d.toolCallExtArgs()
+	if err != nil {
+		return nil, fmt.Errorf("pi tool-call limit extension: %w", err)
+	}
+	b, err := d.command(ctx, piResumeArgsWithExtra(id, prompt, model, extArgs)...)
 	if err != nil {
 		return nil, fmt.Errorf("pi resume: %w", err)
 	}
@@ -57,8 +105,15 @@ func (d PiDriver) Resume(ctx context.Context, id, prompt string, model Model) (*
 type PiStreamDriver struct{ PiDriver }
 
 func (d PiStreamDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
+	if err := ValidateContextMode("pi", o.ContextMode); err != nil {
+		return nil, err
+	}
+	extArgs, err := d.toolCallExtArgs()
+	if err != nil {
+		return nil, fmt.Errorf("pi tool-call limit extension: %w", err)
+	}
 	start := time.Now()
-	b, err := d.commandLines(ctx, piLineFunc(fn), piRunArgs(o.Model, o.Prompt, o.ContextMode)...)
+	b, err := d.commandLines(ctx, piLineFunc(fn), piRunArgsWithExtra(o.Model, o.Prompt, o.ContextMode, extArgs)...)
 	if err != nil {
 		return nil, fmt.Errorf("pi: %w", err)
 	}
@@ -71,7 +126,11 @@ func (d PiStreamDriver) RunStream(ctx context.Context, o RunOptions, fn EventFun
 }
 
 func (d PiStreamDriver) ResumeStream(ctx context.Context, id, prompt string, model Model, fn EventFunc) (*TurnResult, error) {
-	b, err := d.commandLines(ctx, piLineFunc(fn), piResumeArgs(id, prompt, model)...)
+	extArgs, err := d.toolCallExtArgs()
+	if err != nil {
+		return nil, fmt.Errorf("pi tool-call limit extension: %w", err)
+	}
+	b, err := d.commandLines(ctx, piLineFunc(fn), piResumeArgsWithExtra(id, prompt, model, extArgs)...)
 	if err != nil {
 		return nil, fmt.Errorf("pi resume: %w", err)
 	}
@@ -93,6 +152,13 @@ func piLineFunc(fn EventFunc) func([]byte) {
 		switch {
 		case e.Type == "session" && e.ID != "":
 			ev.Kind, ev.Text = "session", e.ID
+		case e.Type == "tool_execution_start":
+			ev.Kind, ev.ToolCall, ev.CallID = "activity", true, e.ToolCallID
+			if e.ToolName != "" {
+				ev.Text = "calling " + e.ToolName
+			} else {
+				ev.Text = "tool call"
+			}
 		case e.Type == "message_end" && e.Message.Role == "assistant":
 			var blocks []piTextBlock
 			_ = json.Unmarshal(e.Message.Content, &blocks)
@@ -111,13 +177,18 @@ func piLineFunc(fn EventFunc) func([]byte) {
 }
 
 func piRunArgs(model Model, prompt string, contextMode ...string) []string {
-	args := []string{"--mode", "json"}
-	args = append(args, piModelArgs(model)...)
 	var mode string
 	if len(contextMode) > 0 {
 		mode = contextMode[0]
 	}
-	args = append(args, piContextModeArgs(mode)...)
+	return piRunArgsWithExtra(model, prompt, mode, nil)
+}
+
+func piRunArgsWithExtra(model Model, prompt, contextMode string, extra []string) []string {
+	args := []string{"--mode", "json"}
+	args = append(args, piModelArgs(model)...)
+	args = append(args, piContextModeArgs(contextMode)...)
+	args = append(args, extra...)
 	return append(args, "--", prompt)
 }
 
@@ -143,8 +214,13 @@ func piContextModeArgs(mode string) []string {
 }
 
 func piResumeArgs(id, prompt string, model Model) []string {
+	return piResumeArgsWithExtra(id, prompt, model, nil)
+}
+
+func piResumeArgsWithExtra(id, prompt string, model Model, extra []string) []string {
 	args := []string{"--mode", "json", "--session", id}
 	args = append(args, piModelArgs(model)...)
+	args = append(args, extra...)
 	return append(args, "--", prompt)
 }
 
@@ -265,11 +341,24 @@ func isPiCompactResponse(line []byte) bool {
 func (PiDriver) Stop(context.Context, string) error   { return nil }
 func (PiDriver) Delete(context.Context, string) error { return nil }
 
+// PiEmptyResponseError reports that a settled Pi invocation ended with an
+// assistant message containing no text (for example when an extension terminated
+// the agent loop after blocked tool calls). Result retains any partial messages.
+type PiEmptyResponseError struct {
+	Result *TurnResult
+}
+
+func (e *PiEmptyResponseError) Error() string {
+	return "parse pi JSONL: assistant produced no text response"
+}
+
 // piEvent is the subset of Pi's JSONL protocol needed to normalize a turn.
 type piEvent struct {
-	Type    string `json:"type"`
-	ID      string `json:"id"`
-	Message struct {
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	ToolCallID string `json:"toolCallId"`
+	ToolName   string `json:"toolName"`
+	Message    struct {
 		Role         string          `json:"role"`
 		Content      json.RawMessage `json:"content"`
 		StopReason   string          `json:"stopReason"`
@@ -344,7 +433,12 @@ func parsePi(data []byte) (*TurnResult, error) {
 				}
 			}
 			response := text.String()
-			result.Messages = append(result.Messages, response)
+			if strings.TrimSpace(response) != "" {
+				result.Messages = append(result.Messages, response)
+			}
+			// Always reflect the final assistant message on Response so an
+			// empty terminated tool-call turn never presents earlier partial
+			// chatter as the final answer.
 			result.Response = response
 			usage := event.Message.Usage
 			result.InputTokens += usage.Input
@@ -371,6 +465,9 @@ func parsePi(data []byte) (*TurnResult, error) {
 	}
 	if assistantError != "" {
 		return nil, fmt.Errorf("%s", assistantError)
+	}
+	if strings.TrimSpace(result.Response) == "" {
+		return nil, &PiEmptyResponseError{Result: result}
 	}
 	return result, nil
 }

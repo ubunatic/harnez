@@ -95,6 +95,9 @@ func InteractiveEnv(command string) ([]string, error) {
 }
 
 func interactiveCommand(opts InteractiveOptions, providerID string) (string, []string, error) {
+	if err := ValidateEffortTier(opts.Model, ""); err != nil {
+		return "", nil, err
+	}
 	var command string
 	var args []string
 	switch opts.Model.Provider {

@@ -1,6 +1,6 @@
 # 993 — Support xhigh and max effort tiers (e.g. claude:haiku:xhigh)
 
-**Status**: Open
+**Status**: Closed — resolved on feat/jules-batch-c (unit, schema, catalog, driver, and CLI chart/listing tests pass; claude & agy --help verified; live claude/agy network turn skipped to preserve weekly quota)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -55,3 +55,10 @@ Re-audit 2026-11-11 (github#184, checked against 5882420e; 6/6 references hold):
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | audit | jules-audit-993 | 10749928295299853226 | github #184 (closed) | done: still valid, 6/6 refs hold; repeat |
+
+## Progress 2026-11-13
+
+- Canary (`claude --help`, `agy --help`): both confirm `--effort` accepts `(low, medium, high, xhigh, max)`.
+- Implemented `xhigh` and `max` tiers in `spec/schemas/agent.schema.json`, `spec/schemas/model-policy.schema.json`, `modelcatalog` (`ExplicitlyEnabled`, `LegacyGuide.ExtraTiers`), and `internal/subagent` (`SupportsEffortTier`, `ValidateEffortTier`, `KnownModelEntriesE`, `resolveExistingModelIn`, `resolvePiModelWithError`, driver & interactive guards).
+- Added `claude:haiku:xhigh` (`cost_by_tier.xhigh: 10`, `extra_tiers: [xhigh]`, `spec/model_scores.yaml` `xhigh: 3.5`), kept `max` opt-in, rejected `xhigh`/`max` on unsupported providers (`codex`, `pi`, etc.) and `effort: false` models.
+- Updated `TestKnownModelSpecsGoldenWithoutPolicy`, `agent-models-chart-80cols.golden`, `modelcatalog` schema/policy tests, and added `TestXHighAndMaxEffortTiers`.

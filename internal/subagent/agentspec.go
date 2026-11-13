@@ -25,11 +25,13 @@ type agentSpec struct {
 	ModelTraits           map[string]string              `yaml:"model_traits"`
 	DefaultModel          string                         `yaml:"default_model"`
 	DefaultRole           string                         `yaml:"default_role"`
+	Preambles             map[string]string              `yaml:"preambles"`
 	RoleClassifyTimeoutMS int                            `yaml:"role_classify_timeout_ms"`
 	ModelsLegend          string                         `yaml:"models_legend"`
 	CostlyModels          []string                       `yaml:"costly_models"`
 	Models                map[string]modelAlias          `yaml:"models"`
 	Roles                 map[string]RoleSpec            `yaml:"roles"`
+	PlanPrices            map[string]*PlanPriceSpec      `yaml:"plan_prices"`
 	Stop                  StopSpec                       `yaml:"stop"`
 	Selftest              SelftestSpec                   `yaml:"selftest"`
 	ExternalSessions      map[string]ExternalSessionSpec `yaml:"external_sessions"`
@@ -586,6 +588,33 @@ func ResolveContextMode(name string) (ContextModeSpec, error) {
 	return mode, nil
 }
 
+// SupportsContextMode reports whether provider honours non-default
+// --context-mode settings (issue 1076).
+func SupportsContextMode(provider string) bool {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "pi", "lmcoder", "claude":
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidateContextMode checks that mode is a configured context mode and, when
+// non-default, is supported by provider (issue 1076).
+func ValidateContextMode(provider, mode string) error {
+	mode = strings.TrimSpace(mode)
+	if mode == "" || mode == "default" {
+		return nil
+	}
+	if _, err := ResolveContextMode(mode); err != nil {
+		return err
+	}
+	if !SupportsContextMode(provider) {
+		return fmt.Errorf("context mode %q is not supported for provider %q; supported providers: claude, lmcoder, pi", mode, provider)
+	}
+	return nil
+}
+
 func validateRoles(spec agentSpec) error {
 	if _, ok := spec.Roles[spec.DefaultRole]; !ok {
 		return fmt.Errorf("agent spec: default_role %q is not defined in roles", spec.DefaultRole)
@@ -738,6 +767,19 @@ func RoleRules(role string) (string, error) {
 	return strings.TrimSpace(r.Rules), nil
 }
 
+// FamilyPreamble returns the optional spec/agent.yaml preamble for provider.
+func FamilyPreamble(provider string) (string, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return "", err
+	}
+	key := strings.ToLower(strings.TrimSpace(provider))
+	if key == "" {
+		return "", nil
+	}
+	return strings.TrimSpace(spec.Preambles[key]), nil
+}
+
 // RoleAutoApproveTools reports whether role runs agy tools unattended.
 func RoleAutoApproveTools(role string) (bool, error) {
 	spec, err := agentSpecOnce()
@@ -854,14 +896,9 @@ func roleCatalog(spec agentSpec) string {
 	return strings.Join(lines, "\n")
 }
 
-// IsCostlyModel reports whether a resolved model spec matches any pattern
-// in the agent.yaml costly_models list. It accepts wildcards (e.g. codex:astra:*).
-func IsCostlyModel(modelSpec string) (bool, error) {
+// IsCostlyModelFor reports whether m matches any pattern in spec/agent.yaml costly_models.
+func IsCostlyModelFor(m Model) (bool, error) {
 	spec, err := agentSpecOnce()
-	if err != nil {
-		return false, err
-	}
-	m, err := ResolveModel(modelSpec)
 	if err != nil {
 		return false, err
 	}
@@ -872,4 +909,14 @@ func IsCostlyModel(modelSpec string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// IsCostlyModel reports whether a resolved model spec matches any pattern
+// in the agent.yaml costly_models list. It accepts wildcards (e.g. codex:astra:*).
+func IsCostlyModel(modelSpec string) (bool, error) {
+	m, err := ResolveModel(modelSpec)
+	if err != nil {
+		return false, err
+	}
+	return IsCostlyModelFor(m)
 }

@@ -516,6 +516,9 @@ func julesTitle(prompt string) string {
 
 // Run submits the prompt as a new Jules session and waits for it in a bounded way.
 func (d JulesDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := ValidateContextMode("jules", o.ContextMode); err != nil {
+		return nil, err
+	}
 	started := time.Now()
 	prompt := strings.TrimSpace(o.Prompt)
 	if prompt == "" {

@@ -1,6 +1,6 @@
 # 675 — agent: claude compaction runs on the default model instead of the session model
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — live claude:haiku:low compaction verified
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
@@ -43,3 +43,10 @@ provider, model and tier. Other drivers accept the parameter and do not use it. 
 `TestClaudeCompactPassesSessionModel` (`internal/subagent/claude_test.go`), which fails with the old
 `Model{}` call; `make test-q1` exit 0; advisor review: no blockers. Left: the live `claude:haiku:low`
 compaction check from the plan.
+
+## Live Verification 2026-11-13
+
+- Started a `claude:haiku:low` session (`2f010512-edb1-43df-8c14-4155490223b7`, `model: claude-haiku-5-5`) and
+  resumed it with `--model claude-haiku-5-5 --effort low ... "/compact"`.
+- Command exited 0 (`"local_command":"compact","subtype":"success"`, hooks `PreCompact`/`PostCompact` ran),
+  with `modelUsage` keyed solely by `"claude-haiku-5-5"`.

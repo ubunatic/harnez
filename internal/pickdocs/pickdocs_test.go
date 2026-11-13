@@ -38,7 +38,7 @@ func TestMarkdownAndManagedBlock(t *testing.T) {
 }
 
 func TestNoModelPicksInPractice(t *testing.T) {
-	re := regexp.MustCompile(`\b(luna|sol|terra|opus|haiku|argon):(low|med|high)\b`)
+	re := regexp.MustCompile(`\b(luna|sol|terra|opus|haiku|argon):(low|med|high|xhigh|max)\b`)
 	check := func(s string) bool { return re.MatchString(WithoutBlocks(s)) }
 	if !check("Use luna:med") || check(Begin+"\nluna:med\n"+End) {
 		t.Fatal("guard or block exemption failed")

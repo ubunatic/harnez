@@ -23,8 +23,11 @@ func (d ClaudeDriver) commandLines(ctx context.Context, fn func([]byte), args ..
 }
 
 func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := ValidateContextMode("claude", o.ContextMode); err != nil {
+		return nil, err
+	}
 	start := time.Now()
-	b, err := d.command(ctx, claudeRunArgs(o.Model, o.Prompt)...)
+	b, err := d.command(ctx, claudeRunArgs(o.Model, o.Prompt, o.ContextMode)...)
 	if err != nil {
 		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
 			return nil, parseErr
@@ -51,9 +54,61 @@ func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string, model Model
 
 // claudeRunArgs and claudeResumeArgs are shared by the batch and streaming
 // paths: both read --output-format stream-json lines.
-func claudeRunArgs(model Model, prompt string) []string {
+func claudeRunArgs(model Model, prompt string, contextMode ...string) []string {
 	args := append([]string{"-p", "--dangerously-skip-permissions"}, claudeModelArgs(model)...)
+	var mode string
+	if len(contextMode) > 0 {
+		mode = contextMode[0]
+	}
+	args = append(args, claudeContextModeArgs(mode)...)
 	return append(args, "--output-format", "stream-json", "--verbose", prompt)
+}
+
+func claudeContextModeArgs(mode string) []string {
+	if mode == "" || mode == "default" {
+		return nil
+	}
+	spec, err := ResolveContextMode(mode)
+	if err != nil {
+		return nil
+	}
+	var args []string
+	if spec.Skills != nil && !*spec.Skills {
+		args = append(args, "--disable-slash-commands")
+	}
+	if spec.MCP != nil && !*spec.MCP {
+		args = append(args, "--strict-mcp-config")
+	}
+	if spec.ContextFiles != nil && !*spec.ContextFiles {
+		args = append(args, "--setting-sources", "")
+	}
+	if len(spec.Tools) > 0 {
+		mapped := make([]string, 0, len(spec.Tools))
+		for _, tool := range spec.Tools {
+			mapped = append(mapped, claudeToolName(tool))
+		}
+		args = append(args, "--tools", strings.Join(mapped, ","))
+	}
+	return args
+}
+
+func claudeToolName(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "read":
+		return "Read"
+	case "edit":
+		return "Edit"
+	case "write":
+		return "Write"
+	case "grep":
+		return "Grep"
+	case "find":
+		return "Glob"
+	case "bash":
+		return "Bash"
+	default:
+		return name
+	}
 }
 
 func claudeResumeArgs(id, prompt string, model Model) []string {
@@ -175,7 +230,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 		return nil, fmt.Errorf("claude: %s", strings.TrimSpace(res.Result))
 	}
 	v := res.Usage
-	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate}
+	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate, CacheWriteTokens: v.CacheCreate, CacheWriteTokensKnown: true}
 	r.CompactionObserved = postCompact > 0
 	r.ContextTokensBeforeCompact = preCompact
 	r.Messages = append(r.Messages, localOut...)
@@ -200,8 +255,11 @@ type ClaudeStreamDriver struct{ ClaudeDriver }
 // RunStream runs a new claude turn and reports events while it runs. The
 // arguments and the final result are those of Run.
 func (d ClaudeStreamDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
+	if err := ValidateContextMode("claude", o.ContextMode); err != nil {
+		return nil, err
+	}
 	start := time.Now()
-	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeRunArgs(o.Model, o.Prompt)...)
+	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeRunArgs(o.Model, o.Prompt, o.ContextMode)...)
 	if err != nil {
 		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
 			return nil, parseErr
@@ -268,6 +326,7 @@ func (s *claudeStreamer) feed(line []byte) []Event {
 		}
 		var blocks []struct {
 			Type  string                     `json:"type"`
+			ID    string                     `json:"id"`
 			Text  string                     `json:"text"`
 			Name  string                     `json:"name"`
 			Input map[string]json.RawMessage `json:"input"`
@@ -279,7 +338,7 @@ func (s *claudeStreamer) feed(line []byte) []Event {
 				s.texts++
 				evs = append(evs, Event{Kind: "message", Text: b.Text})
 			case b.Type == "tool_use" && b.Name != "":
-				evs = append(evs, Event{Kind: "activity", Text: claudeToolActivity(b.Name, b.Input)})
+				evs = append(evs, Event{Kind: "activity", Text: claudeToolActivity(b.Name, b.Input), ToolCall: true, CallID: b.ID})
 			}
 		}
 		if u := e.Message.Usage; u != nil && u.Input+u.CacheRead+u.CacheCreate > 0 {

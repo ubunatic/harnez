@@ -1,6 +1,6 @@
 # 985 — agent resume output: show per-turn context re-read and cumulative cost so the host sees a session getting expensive
 
-**Status**: Open
+**Status**: Closed — resolved in 4aacf57b
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -147,6 +147,7 @@ owner question "on or off by default" is still open) with schema, and the pure
 `subagent.CheckCost(spec, CostCheckInput)` in `internal/subagent/cost_check.go`, table-tested. Unknown
 values (<= 0) never trigger and print `unknown`; the suggested command uses the session's role and model.
 Not wired into the done line yet (M3), and the quota-unknown note is still open.
+- Completed (2026-11-13, resolved in `4aacf57b`): wired per-turn vs cumulative usage, `context usage`, compaction limit, `quota unknown` note, `[check: ...]` summary, `CONTEXT_USAGE`/`CONTEXT_WINDOW` headers, and `docs/HarnezAgentArchitecture.md` / `docs/AutoCompaction.md` docs; verified in `make test-q1`.
 
 ## Jules runs
 

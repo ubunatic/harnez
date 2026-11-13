@@ -25,12 +25,12 @@
     },
     "enabled": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._/-]*(:(low|med|high))?$" },
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._/-]*(:(low|med|high|xhigh|max))?$" },
       "uniqueItems": true
     },
     "models": {
       "type": "object",
-      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._/-]*(:(low|med|high))?$" },
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._/-]*(:(low|med|high|xhigh|max))?$" },
       "additionalProperties": {
         "type": "object",
         "required": ["kind"],
@@ -42,7 +42,7 @@
           "fields": {
             "type": "object",
             "properties": {
-              "tier": { "type": ["string", "null"], "enum": ["low", "med", "high", null] },
+              "tier": { "type": ["string", "null"], "enum": ["low", "med", "high", "xhigh", "max", null] },
               "aliases": { "type": ["array", "null"], "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
               "purpose": { "type": ["string", "null"] }
             },

@@ -15,6 +15,7 @@ claude:fable:high
 claude:haiku:low
 claude:haiku:med
 claude:haiku:high
+claude:haiku:xhigh
 claude:opus:low
 claude:opus:med
 claude:opus:high

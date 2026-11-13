@@ -178,7 +178,12 @@ type PersistedEconomics struct {
 	SessionID                string
 	CompactionEventID        *int64
 	Model                    string
+	Effort                   string
 	PricingRevision          string
+	CachedInputTokens        *int64
+	UncachedInputTokens      *int64
+	OutputTokens             *int64
+	ReasoningTokens          *int64
 	Rates                    PricingRates
 	Status                   EconomicsStatus
 	CompactionCostMicros     *int64

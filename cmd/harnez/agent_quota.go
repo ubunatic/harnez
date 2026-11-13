@@ -11,15 +11,18 @@ import (
 
 var agentTurnQuotaReader = usage.CaptureTurnQuotaSinceCache
 
-// warnModelQuota reuses the cached model-availability reader. It never probes
-// the provider or waits for the concurrent before-turn capture.
-func warnModelQuota(cmd *cobra.Command, availability func(string, string) usage.ProviderQuotaAvailability, provider, model string, now time.Time) {
+// warnModelQuota reuses the cached model-availability reader and returns
+// whether pre-turn quota availability was unknown. It never probes the provider
+// or waits for the concurrent before-turn capture.
+func warnModelQuota(cmd *cobra.Command, availability func(string, string) usage.ProviderQuotaAvailability, provider, model string, now time.Time) bool {
 	if availability == nil {
 		availability = providerAvailability
 	}
-	if line := usage.QuotaNotice(provider, availability(provider, model), now); line != "" {
+	avail := availability(provider, model)
+	if line := usage.QuotaNotice(provider, avail, now); line != "" {
 		fmt.Fprintln(cmd.ErrOrStderr(), line)
 	}
+	return avail.State != "available" && avail.State != "exhausted"
 }
 
 // startTurnQuotaCapture overlaps the before-turn reading with the provider turn.

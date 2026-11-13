@@ -150,6 +150,7 @@ type modelAlias struct {
 type ModelGuide struct {
 	Cost              int            `yaml:"cost"` // fallback relative cost when no tier override exists
 	CostByTier        map[string]int `yaml:"cost_by_tier"`
+	ExtraTiers        []string       `yaml:"extra_tiers"`
 	Eff               string         `yaml:"eff"`    // tokens per goal: + ~ - ?
 	Skills            string         `yaml:"skills"` // e.g. "Go+ TUI~ SQL?"
 	Roles             string         `yaml:"roles"`
@@ -207,7 +208,7 @@ func loadMergedModelCatalog() error {
 		}
 		key := provider + ":" + name
 		aliases[key] = modelAlias{Model: model, Aliases: modelAliases, Preferred: entry.Preferred}
-		guide := ModelGuide{Cost: entry.Guide.Cost, CostByTier: entry.Guide.CostByTier, Eff: entry.Guide.Eff, Skills: entry.Guide.Skills, Roles: entry.Guide.Roles, Use: entry.Guide.Use, UseMed: entry.Guide.UseMed, GuidanceSourceURL: entry.Guide.GuidanceSourceURL} //nolint:staticcheck // SA1019: no typed replacement for model guidance yet; do not add new consumers
+		guide := ModelGuide{Cost: entry.Guide.Cost, CostByTier: entry.Guide.CostByTier, ExtraTiers: entry.Guide.ExtraTiers, Eff: entry.Guide.Eff, Skills: entry.Guide.Skills, Roles: entry.Guide.Roles, Use: entry.Guide.Use, UseMed: entry.Guide.UseMed, GuidanceSourceURL: entry.Guide.GuidanceSourceURL} //nolint:staticcheck // SA1019: no typed replacement for model guidance yet; do not add new consumers
 		if value, ok := entry.Overrides["purpose"]; ok {
 			if value == nil {
 				guide.Use = ""
@@ -275,29 +276,82 @@ func (m Model) SupportsEffort() bool {
 	return m.Effort == nil || *m.Effort
 }
 
+// SupportsEffortTier reports whether provider supports tier. Standard tiers
+// (low, med, high) work everywhere unless the model disables effort; xhigh and
+// max are supported for claude and agy only.
+func SupportsEffortTier(provider, tier string) bool {
+	switch strings.ToLower(strings.TrimSpace(tier)) {
+	case "", "low", "med", "high":
+		return true
+	case "xhigh", "max":
+		switch strings.ToLower(strings.TrimSpace(provider)) {
+		case "claude", "agy":
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+// ValidateEffortTier checks whether m's configured tier is valid for m.
+func ValidateEffortTier(m Model, requested string) error {
+	if m.Tier == "" || m.Tier == "low" || m.Tier == "med" || m.Tier == "high" {
+		return nil
+	}
+	label := requested
+	if label == "" {
+		label = m.String()
+	}
+	if !m.SupportsEffort() {
+		return fmt.Errorf("model %q disables effort levels and does not support %q", label, m.Tier)
+	}
+	if !SupportsEffortTier(m.Provider, m.Tier) {
+		return fmt.Errorf("model %q does not support effort tier %q (%s supports low/med/high; xhigh/max are supported for claude and agy)", label, m.Tier, m.Provider)
+	}
+	return nil
+}
+
 // TurnResult is the normalized result of a provider turn.
 type TurnResult struct {
 	SessionID string `json:"session_id,omitempty"`
 	Response  string `json:"response"`
 	// Messages holds every agent message of the turn in arrival order;
 	// Response is the last one.
-	Messages             []string `json:"messages,omitempty"`
-	Warnings             []string `json:"warnings,omitempty"`
-	InputTokens          int      `json:"input_tokens"`
-	OutputTokens         int      `json:"output_tokens"`
-	CachedTokens         int      `json:"cached_tokens"`
-	ReasoningTokens      int      `json:"reasoning_tokens,omitempty"`
-	ReasoningTokensKnown bool     `json:"reasoning_tokens_known,omitempty"`
+	Messages              []string `json:"messages,omitempty"`
+	Warnings              []string `json:"warnings,omitempty"`
+	InputTokens           int      `json:"input_tokens"`
+	OutputTokens          int      `json:"output_tokens"`
+	CachedTokens          int      `json:"cached_tokens"`
+	CacheWriteTokens      int      `json:"cache_write_tokens,omitempty"`
+	CacheWriteTokensKnown bool     `json:"cache_write_tokens_known,omitempty"`
+	ReasoningTokens       int      `json:"reasoning_tokens,omitempty"`
+	ReasoningTokensKnown  bool     `json:"reasoning_tokens_known,omitempty"`
+	// TurnTokensUnknown reports that per-turn deltas are unavailable (e.g. a
+	// provider omitted usage or cumulative counters dropped after compaction).
+	TurnTokensUnknown bool `json:"turn_tokens_unknown,omitempty"`
 	// ContextTokens is the provider's input-token count for the last turn,
 	// including cached input. It measures the full context the model read.
 	ContextTokens     int `json:"context_tokens"`
 	ContextWindowSize int `json:"context_window_size,omitempty"`
 	// CompactionObserved reports a new provider compaction record during this turn.
-	CompactionObserved         bool  `json:"compaction_observed,omitempty"`
-	ContextTokensBeforeCompact int   `json:"context_tokens_before_compact,omitempty"`
-	TokensTurn                 int   `json:"tokens_turn"`
-	TokensCumulative           int   `json:"tokens_cumulative"`
-	DurationMS                 int64 `json:"duration_ms"`
+	CompactionObserved         bool `json:"compaction_observed,omitempty"`
+	ContextTokensBeforeCompact int  `json:"context_tokens_before_compact,omitempty"`
+	TokensTurn                 int  `json:"tokens_turn"`
+	TokensCumulative           int  `json:"tokens_cumulative"`
+	// CumulativeTotalsKnown reports that the provider gave monotonic session-wide
+	// totals (Codex turn.completed / rollout total_token_usage) rather than a
+	// per-turn delta; start/resume must not add these across turns.
+	CumulativeTotalsKnown     bool  `json:"-"`
+	CumulativeInputTokens     int   `json:"-"`
+	CumulativeOutputTokens    int   `json:"-"`
+	CumulativeCachedTokens    int   `json:"-"`
+	CumulativeReasoningTokens int   `json:"-"`
+	DurationMS                int64 `json:"duration_ms"`
+	ToolCalls                 *int  `json:"tool_calls,omitempty"`
+	ToolCallLimit             int   `json:"tool_call_limit,omitempty"`
+	ToolCallLimitReached      bool  `json:"tool_call_limit_reached,omitempty"`
 	// StillRunning reports that the wait ended while the provider session
 	// still runs (Jules); the CLI then exits with exitStillRunning (3).
 	StillRunning bool `json:"still_running,omitempty"`
@@ -412,6 +466,19 @@ func KnownModelEntriesE() ([]ModelEntry, error) {
 		tiers := []string{m.Tier}
 		if effort {
 			tiers = []string{"low", "med", "high"}
+			seen := map[string]bool{"low": true, "med": true, "high": true}
+			for _, extra := range guide.ExtraTiers {
+				if !seen[extra] && SupportsEffortTier(m.Provider, extra) {
+					tiers = append(tiers, extra)
+					seen[extra] = true
+				}
+			}
+			for _, optIn := range []string{"xhigh", "max"} {
+				if !seen[optIn] && SupportsEffortTier(m.Provider, optIn) && mergedModelCatalog.ExplicitlyEnabled(m.Provider, m.Name, optIn) {
+					tiers = append(tiers, optIn)
+					seen[optIn] = true
+				}
+			}
 		}
 		for _, tier := range tiers {
 			if !mergedModelCatalog.IsEnabled(m.Provider, m.Name, tier) {
@@ -427,6 +494,15 @@ func KnownModelEntriesE() ([]ModelEntry, error) {
 		}
 	}
 	return entries, nil
+}
+
+// ModelCost returns the owner-guided relative cost (codex:luna:low = 1) for m's tier.
+func ModelCost(m Model) (int, bool) {
+	if err := ensureModelCatalog(); err != nil {
+		return 0, false
+	}
+	cost := modelGuides[m.Provider+":"+modelAliasName(m)].CostForTier(m.Tier)
+	return cost, cost > 0
 }
 
 func (m Model) Spec() string {
@@ -534,9 +610,23 @@ type ModelSelection struct {
 	Skipped []string
 }
 
+// ResolveOptions configures candidate filtering for ResolveModelWithOptions.
+type ResolveOptions struct {
+	Exhausted  func(Model) bool
+	Override   bool
+	AcceptCost bool
+}
+
 // ResolveModelWithAvailability chooses a role trait using stored access and
 // the caller's cached quota check. A nil quota check treats quota as unknown.
 func ResolveModelWithAvailability(roleName, modelSpec string, exhausted func(Model) bool, override bool) (ModelSelection, error) {
+	return ResolveModelWithOptions(roleName, modelSpec, ResolveOptions{Exhausted: exhausted, Override: override})
+}
+
+// ResolveModelWithOptions chooses a role trait using stored access, quota, and
+// costly-model policy. Costly models in pick/fallback chains are skipped unless
+// AcceptCost is true (issue 1210).
+func ResolveModelWithOptions(roleName, modelSpec string, opts ResolveOptions) (ModelSelection, error) {
 	spec, err := agentSpecOnce()
 	if err != nil {
 		return ModelSelection{}, err
@@ -554,10 +644,18 @@ func ResolveModelWithAvailability(roleName, modelSpec string, exhausted func(Mod
 			}
 		}
 		quota := "unknown"
-		if !override && exhausted != nil && exhausted(m) {
+		if !opts.Override && opts.Exhausted != nil && opts.Exhausted(m) {
 			quota = "exhausted"
 		}
-		return candidateUnavailable(mergedModelCatalog.IsEnabled(m.Provider, m.Name, m.Tier), access, quota, override)
+		if reason := candidateUnavailable(mergedModelCatalog.IsEnabled(m.Provider, m.Name, m.Tier), access, quota, opts.Override); reason != "" {
+			return reason
+		}
+		if !opts.AcceptCost {
+			if costly, err := IsCostlyModelFor(m); err == nil && costly {
+				return "costly model (pass --accept-cost)"
+			}
+		}
+		return ""
 	}
 	return resolveRoleSelection(spec, roleName, modelSpec, resolve, available)
 }
@@ -860,7 +958,9 @@ func modelEditDistance(a, b string) int {
 
 func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 	original := strings.TrimSpace(spec)
-	if m, ok := resolvePiModel(aliases, original); ok {
+	if m, ok, err := resolvePiModelWithError(aliases, original); err != nil {
+		return Model{}, err
+	} else if ok {
 		return m, nil
 	}
 	clean := strings.ToLower(original)
@@ -884,6 +984,9 @@ func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, 
 			m, err := resolveExistingModelIn(aliases, parts[0]+":"+parts[1])
 			if err == nil {
 				m.Tier = parts[2]
+				if err := ValidateEffortTier(m, spec); err != nil {
+					return Model{}, err
+				}
 				return m, nil
 			}
 		}
@@ -893,17 +996,26 @@ func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, 
 				if isTier(parts[1]) {
 					m.Tier = parts[1]
 				}
+				if err := ValidateEffortTier(m, spec); err != nil {
+					return Model{}, err
+				}
 				return m, nil
 			}
 			if isTier(parts[1]) {
 				if m, err := resolveExistingModelIn(aliases, parts[0]); err == nil {
 					m.Tier = parts[1]
+					if err := ValidateEffortTier(m, spec); err != nil {
+						return Model{}, err
+					}
 					return m, nil
 				}
 				for _, candidate := range aliases {
 					if modelHasAlias(candidate, parts[0]+":"+parts[1]) {
 						m := candidate.Model
 						m.Tier = parts[1]
+						if err := ValidateEffortTier(m, spec); err != nil {
+							return Model{}, err
+						}
 						return m, nil
 					}
 				}
@@ -967,10 +1079,13 @@ func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, 
 		if parts[0] == "claude" && parts[1] == "haiku" && parts[2] == "latest" {
 			return m, nil
 		}
-		if parts[2] != "low" && parts[2] != "med" && parts[2] != "high" {
+		if !isTier(parts[2]) {
 			return Model{}, fmt.Errorf("unknown model tier in requested spec %q; known specs: %s", spec, knownModelSpecs())
 		}
 		m.Tier = parts[2]
+		if err := ValidateEffortTier(m, spec); err != nil {
+			return Model{}, err
+		}
 	}
 	return m, nil
 }
@@ -988,35 +1103,39 @@ func normalizeTier(tier string) string {
 	}
 }
 
-// resolvePiModel permits Pi model IDs to be selected directly even when they
+// resolvePiModelWithError permits Pi model IDs to be selected directly even when they
 // are not listed in Harnez's static model guide. Preserve ID case for Pi's
 // case-sensitive provider/model identifiers.
-func resolvePiModel(aliases map[string]modelAlias, spec string) (Model, bool) {
+func resolvePiModelWithError(aliases map[string]modelAlias, spec string) (Model, bool, error) {
 	parts := strings.Split(spec, ":")
 	if len(parts) == 1 && strings.EqualFold(parts[0], "pi") {
-		return Model{Provider: "pi", Name: "default", Tier: "low"}, true
+		return Model{Provider: "pi", Name: "default", Tier: "low"}, true, nil
 	}
 	if len(parts) < 2 || len(parts) > 3 || !strings.EqualFold(parts[0], "pi") {
-		return Model{}, false
+		return Model{}, false, nil
 	}
 	if len(parts) == 2 && strings.EqualFold(parts[1], "default") {
-		return Model{Provider: "pi", Name: "default", Tier: "low"}, true
+		return Model{Provider: "pi", Name: "default", Tier: "low"}, true, nil
 	}
 	if entry, ok := aliases["pi:"+strings.ToLower(parts[1])]; ok && len(parts) == 2 {
-		return entry.Model, true
+		return entry.Model, true, nil
 	}
 	name := strings.TrimSpace(parts[1])
 	if name == "" {
-		return Model{}, false
+		return Model{}, false, nil
 	}
 	tier := "low"
 	if len(parts) == 3 {
 		if !isTier(strings.ToLower(parts[2])) {
-			return Model{}, false
+			return Model{}, false, nil
 		}
 		tier = strings.ToLower(parts[2])
 	}
-	return Model{Provider: "pi", Name: name, Tier: tier}, true
+	m := Model{Provider: "pi", Name: name, Tier: tier}
+	if err := ValidateEffortTier(m, spec); err != nil {
+		return Model{}, false, err
+	}
+	return m, true, nil
 }
 
 func modelHasAlias(m modelAlias, alias string) bool {
@@ -1036,5 +1155,5 @@ func (m Model) String() string { return m.Provider + ":" + m.Name + ":" + m.Tier
 
 // isTier reports whether s is a reasoning tier rather than a model name.
 func isTier(s string) bool {
-	return s == "low" || s == "med" || s == "high"
+	return s == "low" || s == "med" || s == "high" || s == "xhigh" || s == "max"
 }

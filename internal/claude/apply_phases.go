@@ -263,7 +263,11 @@ func applyCodexHooks(r *applyReport, cfg *Config, selection Set) error {
 				fmt.Printf("  wrote %s\n", hooksPath)
 				fmt.Println("  note: Codex will prompt for hook-trust review before this hook becomes active (see its /hooks panel).")
 			}
-			r.addStat("codex hooks", codex.Summary(hooksPath))
+			summary := codex.Summary(hooksPath)
+			if trusted, untrusted, total := codex.TrustStatus(hooksPath); total > 0 && !trusted {
+				summary += fmt.Sprintf(" (untrusted %d/%d; run interactive codex /hooks to approve)", untrusted, total)
+			}
+			r.addStat("codex hooks", summary)
 		} else if !selection.Scoped() {
 			changed, err := codex.Remove(hooksPath)
 			if err != nil {

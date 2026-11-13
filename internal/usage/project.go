@@ -313,38 +313,57 @@ func scanCodexProjectUsage(codexDir, targetRepo string) *AgentProjectAttribution
 		ModelTokens: make(map[string]int64),
 	}
 
+	type sessionTotals struct {
+		breakdown   TokenBreakdown
+		modelTokens map[string]int64
+	}
+	bySession := make(map[string]sessionTotals)
+
 	root := filepath.Join(codexDir, "sessions")
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil || info.IsDir() || !strings.HasPrefix(info.Name(), "rollout-") || !strings.HasSuffix(info.Name(), ".jsonl") {
 			return nil
 		}
 
-		matched, breakdown, modelTokens := parseCodexRollout(path, targetRepo)
-		if matched {
-			attr.MatchedSessions++
-			attr.Tokens.InputTokens += breakdown.InputTokens
-			attr.Tokens.OutputTokens += breakdown.OutputTokens
-			attr.Tokens.CacheReadTokens += breakdown.CacheReadTokens
-			attr.Tokens.CacheWriteTokens += breakdown.CacheWriteTokens
-			attr.Tokens.TotalTokens += breakdown.TotalTokens
-			for m, toks := range modelTokens {
-				attr.ModelTokens[m] += toks
-			}
+		sessionID, matched, breakdown, modelTokens := parseCodexRollout(path, targetRepo)
+		if !matched {
+			return nil
+		}
+		key := sessionID
+		if key == "" {
+			key = path
+		}
+		if prev, ok := bySession[key]; !ok || breakdown.TotalTokens >= prev.breakdown.TotalTokens {
+			bySession[key] = sessionTotals{breakdown: breakdown, modelTokens: modelTokens}
 		}
 		return nil
 	})
 
+	attr.MatchedSessions = len(bySession)
+	for _, entry := range bySession {
+		attr.Tokens.InputTokens += entry.breakdown.InputTokens
+		attr.Tokens.OutputTokens += entry.breakdown.OutputTokens
+		attr.Tokens.CacheReadTokens += entry.breakdown.CacheReadTokens
+		attr.Tokens.CacheWriteTokens += entry.breakdown.CacheWriteTokens
+		attr.Tokens.TotalTokens += entry.breakdown.TotalTokens
+		for m, toks := range entry.modelTokens {
+			attr.ModelTokens[m] += toks
+		}
+	}
+
 	return attr
 }
 
-func parseCodexRollout(filePath, targetRepo string) (bool, TokenBreakdown, map[string]int64) {
+func parseCodexRollout(filePath, targetRepo string) (string, bool, TokenBreakdown, map[string]int64) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return false, TokenBreakdown{}, nil
+		return "", false, TokenBreakdown{}, nil
 	}
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 4096), 8<<20)
+	sessionID := ""
 	matched := false
 	var latestBreakdown TokenBreakdown
 	modelTokens := make(map[string]int64)
@@ -354,10 +373,12 @@ func parseCodexRollout(filePath, targetRepo string) (bool, TokenBreakdown, map[s
 		var record struct {
 			Type    string `json:"type"`
 			Payload struct {
-				Cwd   string `json:"cwd"`
-				Model string `json:"model"`
-				Type  string `json:"type"`
-				Info  struct {
+				ID        string `json:"id"`
+				SessionID string `json:"session_id"`
+				Cwd       string `json:"cwd"`
+				Model     string `json:"model"`
+				Type      string `json:"type"`
+				Info      struct {
 					Total struct {
 						Input      int64 `json:"input_tokens"`
 						Cached     int64 `json:"cached_input_tokens"`
@@ -372,6 +393,13 @@ func parseCodexRollout(filePath, targetRepo string) (bool, TokenBreakdown, map[s
 			continue
 		}
 
+		if record.Type == "session_meta" {
+			if record.Payload.ID != "" {
+				sessionID = record.Payload.ID
+			} else if record.Payload.SessionID != "" {
+				sessionID = record.Payload.SessionID
+			}
+		}
 		if record.Payload.Cwd != "" && pathMatches(record.Payload.Cwd, targetRepo) {
 			matched = true
 		}
@@ -397,7 +425,7 @@ func parseCodexRollout(filePath, targetRepo string) (bool, TokenBreakdown, map[s
 		modelTokens[activeModel] = latestBreakdown.TotalTokens
 	}
 
-	return matched, latestBreakdown, modelTokens
+	return sessionID, matched, latestBreakdown, modelTokens
 }
 
 func pathMatches(candidate, target string) bool {

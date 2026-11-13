@@ -72,11 +72,33 @@ func TestCheckStreamMode(t *testing.T) {
 // 959: an inferred role is marked as a guess so the agent reports a conflict
 // instead of calling it explicit; an explicit role carries no such note.
 func TestWithProtocolMarksInferredRole(t *testing.T) {
-	inferred := WithProtocol("task", false, "reviewer", true)
+	inferred := WithProtocol("task", false, "reviewer", true, "")
 	if !strings.Contains(inferred, "inferred from the prompt") || !strings.Contains(inferred, "--role developer") {
 		t.Fatalf("inferred role not marked:\n%s", inferred)
 	}
-	if explicit := WithProtocol("task", false, "reviewer", false); strings.Contains(explicit, "inferred from the prompt") {
+	if explicit := WithProtocol("task", false, "reviewer", false, ""); strings.Contains(explicit, "inferred from the prompt") {
 		t.Fatalf("explicit role marked as inferred:\n%s", explicit)
+	}
+}
+
+func TestWithProtocolFamilyPreamble(t *testing.T) {
+	baseline := WithProtocol("task", false, "developer", false, "")
+	for _, provider := range []string{"claude", "codex", "agy"} {
+		want, err := subagent.FamilyPreamble(provider)
+		if err != nil || want == "" {
+			t.Fatalf("FamilyPreamble(%q) = %q, %v", provider, want, err)
+		}
+		got := WithProtocol("task", false, "developer", false, provider)
+		if !strings.Contains(got, want) {
+			t.Errorf("WithProtocol(%q) missing family preamble %q:\n%s", provider, want, got)
+		}
+	}
+	for _, without := range []string{"", "lmcoder", "unknown"} {
+		if pre, err := subagent.FamilyPreamble(without); err != nil || pre != "" {
+			t.Fatalf("FamilyPreamble(%q) = %q, %v; want empty", without, pre, err)
+		}
+		if got := WithProtocol("task", false, "developer", false, without); got != baseline {
+			t.Errorf("WithProtocol(%q) altered baseline text:\n%s", without, got)
+		}
 	}
 }

@@ -138,3 +138,49 @@ func TestInsertCompactionEconomicsPersistsPricingRevisionAndRates(t *testing.T) 
 		t.Fatalf("persisted pricing = %q %d %q %q", revision, storedRate, status, note)
 	}
 }
+
+func TestCalculateTurnCostAndReconcileEconomicsEffortTokens(t *testing.T) {
+	p := fullPricing()
+	cached, uncached, output, reasoning := int64(1_000_000), int64(500_000), int64(250_000), int64(100_000)
+	// 1M*1 + 0.5M*2 + 0.25M*3 + 0.1M*4 = 1_000_000 + 1_000_000 + 750_000 + 400_000 = 3_150_000
+	got, ok := CalculateTurnCost(p.Rates, TokenUsage{
+		CachedInputTokens:   &cached,
+		UncachedInputTokens: &uncached,
+		OutputTokens:        &output,
+		ReasoningTokens:     &reasoning,
+	})
+	if !ok || got == nil || *got != 3_150_000 {
+		t.Fatalf("CalculateTurnCost = %v, ok=%v; want 3150000", got, ok)
+	}
+	if _, found := (PricingCatalog{"gpt-test": p}).Lookup("missing-model"); found {
+		t.Fatal("Lookup unexpectedly matched missing-model")
+	}
+
+	db := openTestDB(t)
+	if err := db.ValidateSchema(); err != nil {
+		t.Fatalf("ValidateSchema failed: %v", err)
+	}
+	if _, err := db.InsertCompactionEvent(CompactionEvent{SessionID: "rec-1", EventType: "precompact", TurnID: "t1", Model: "gpt-test", Source: "hook"}); err != nil {
+		t.Fatal(err)
+	}
+	inTok := cached + uncached
+	for _, snap := range []TokenSnapshot{
+		{SessionID: "rec-1", Source: "precompact", InputTokens: &inTok, CachedInputTokens: &cached, UncachedInputTokens: &uncached, OutputTokens: &output, ReasoningTokens: &reasoning},
+		{SessionID: "rec-1", Source: "postcompact", InputTokens: &inTok, CachedInputTokens: &cached, UncachedInputTokens: &uncached, OutputTokens: &output, ReasoningTokens: &reasoning},
+	} {
+		if err := db.InsertTokenSnapshot(snap); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.ReconcileCompactionEconomics("rec-1", "gpt-test", PricingCatalog{"gpt-test": p}); err != nil {
+		t.Fatal(err)
+	}
+	var gotEffort string
+	var gotCached, gotUncached, gotOut, gotReason int64
+	if err := db.sql.QueryRow(`SELECT effort, cached_input_tokens, uncached_input_tokens, output_tokens, reasoning_tokens FROM compaction_economics WHERE session_id = ?`, "rec-1").Scan(&gotEffort, &gotCached, &gotUncached, &gotOut, &gotReason); err != nil {
+		t.Fatal(err)
+	}
+	if gotEffort != "" || gotCached != cached || gotUncached != uncached || gotOut != output || gotReason != reasoning {
+		t.Fatalf("persisted breakdown = effort=%q cached=%d uncached=%d out=%d reason=%d", gotEffort, gotCached, gotUncached, gotOut, gotReason)
+	}
+}

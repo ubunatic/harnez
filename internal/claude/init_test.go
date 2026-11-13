@@ -440,6 +440,31 @@ func TestRunInit_IgnoresIssuesLockFilesInTrackedGitignore(t *testing.T) {
 	}
 }
 
+// Issue 703: init runs before issues/ exists, then adopting the tracker ignores lock files.
+func TestAdoptTrackerAfterInitIgnoresIssueLockFiles(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "init", dir).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, out)
+	}
+	if err := claude.RunInitWithVariant(dir, nil, claude.InitOptions{}); err != nil {
+		t.Fatalf("RunInit failed: %v", err)
+	}
+	if err := claude.AdoptRepoIssuesTracker(dir); err != nil {
+		t.Fatalf("AdoptRepoIssuesTracker failed: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, lock := range []string{"issues/README.md.lock", "issues/.reserve.lock"} {
+		if err := os.WriteFile(filepath.Join(dir, lock), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.Command("git", "-C", dir, "check-ignore", lock).CombinedOutput(); err != nil {
+			t.Fatalf("%s is not ignored after tracker adoption: %v (%s)", lock, err, out)
+		}
+	}
+}
+
 func TestRunInit_IssuesGitDefaultsOnAndIsRemovable(t *testing.T) {
 	dir := t.TempDir()
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {

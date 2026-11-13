@@ -11,7 +11,7 @@
         "provider": { "type": "string", "minLength": 1 },
         "model": { "type": "string", "minLength": 1 },
         "version": { "type": "string", "minLength": 1 },
-        "tier": { "type": "string", "enum": ["low", "med", "high"] }
+        "tier": { "type": "string", "enum": ["low", "med", "high", "xhigh", "max"] }
       },
       "additionalProperties": false
     },
@@ -65,6 +65,19 @@
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
+    "plan_prices": {
+      "type": "object",
+      "description": "Default monthly subscription plan prices in micro-USD per provider (ticket 1215). Weekly share = monthly_usd_micros * 12 / 52.",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": {
+        "type": ["object", "null"],
+        "properties": {
+          "plan": { "type": "string" },
+          "monthly_usd_micros": { "type": ["integer", "null"], "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
     "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
     "compact_thresholds": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": "Model-specific default compaction thresholds." },
     "cost_check": {
@@ -252,6 +265,12 @@
     },
     "default_model": { "type": "string", "minLength": 1 },
     "default_role": { "type": "string", "minLength": 1 },
+    "preambles": {
+      "type": "object",
+      "description": "Optional per-provider preamble prepended on agent start (issue 1217).",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
     "models_legend": { "type": "string" },
     "costly_models": {
       "description": "Model specs (filepath.Match patterns, e.g. codex:astra:*) that agent start must refuse without an explicit accept-cost flag (ticket 1210).",
@@ -272,7 +291,8 @@
         "properties": {
           "provider": { "type": "string", "minLength": 1 },
           "name": { "type": "string", "minLength": 1 },
-          "tier": { "type": "string", "enum": ["low", "med", "high"] },
+          "tier": { "type": "string", "enum": ["low", "med", "high", "xhigh", "max"] },
+          "extra_tiers": { "type": "array", "items": { "type": "string", "enum": ["xhigh", "max"] }, "uniqueItems": true },
           "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
           "preferred": { "type": "boolean" },
           "effort": { "type": "boolean" },
@@ -283,7 +303,9 @@
             "properties": {
               "low": { "type": "integer", "minimum": 1 },
               "med": { "type": "integer", "minimum": 1 },
-              "high": { "type": "integer", "minimum": 1 }
+              "high": { "type": "integer", "minimum": 1 },
+              "xhigh": { "type": "integer", "minimum": 1 },
+              "max": { "type": "integer", "minimum": 1 }
             },
             "additionalProperties": false
           },

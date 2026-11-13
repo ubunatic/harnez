@@ -1,6 +1,6 @@
 # 703 — Ignore issue tracker lock files in consumer repositories
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — resolved in 1d77d9f1
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
@@ -37,3 +37,9 @@ the earlier report is kept.
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | audit | jules-audit-703 | 13915432805744488109 | github #182 (closed) | done: still valid, refs hold |
+
+## Resolution 2026-11-13 (`1d77d9f1`)
+
+- Extracted `ensureIssueLockIgnores(dir)` in `internal/claude/init_agent_file.go` and invoked it from
+  `AdoptRepoIssuesTracker(dir)` (`internal/claude/repo_config.go`) when creating `issues/` after `harnez init`.
+- Added `TestAdoptTrackerAfterInitIgnoresIssueLockFiles` (`internal/claude/init_test.go`).

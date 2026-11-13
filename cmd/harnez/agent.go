@@ -38,13 +38,17 @@ type agentOutput struct {
 	ReconnectCmd string   `json:"reconnect_cmd,omitempty"`
 	// Resumed is false (and set) only when a resume found its provider
 	// session gone and started a new one; PreviousSessionID and Note say which and why.
-	Resumed           *bool  `json:"resumed,omitempty"`
-	PreviousSessionID string `json:"previous_session_id,omitempty"`
-	Note              string `json:"note,omitempty"`
+	Resumed              *bool  `json:"resumed,omitempty"`
+	PreviousSessionID    string `json:"previous_session_id,omitempty"`
+	Note                 string `json:"note,omitempty"`
+	ToolCalls            *int   `json:"tool_calls,omitempty"`
+	ToolCallLimit        int    `json:"tool_call_limit,omitempty"`
+	ToolCallLimitReached bool   `json:"tool_call_limit_reached,omitempty"`
 }
 
 // MarshalJSON keeps the session's own JSON (its MarshalJSON is promoted and
-// would hide the fields above) and appends the fresh-session fields when set.
+// would hide the fields above) and appends the fresh-session and tool-call
+// limit fields when set.
 func (o agentOutput) MarshalJSON() ([]byte, error) {
 	var base []byte
 	var err error
@@ -53,14 +57,17 @@ func (o agentOutput) MarshalJSON() ([]byte, error) {
 	} else {
 		base, err = json.Marshal(struct{}{})
 	}
-	if err != nil || o.Resumed == nil {
+	if err != nil || (o.Resumed == nil && o.ToolCalls == nil && o.ToolCallLimit == 0 && !o.ToolCallLimitReached) {
 		return base, err
 	}
 	extra, err := json.Marshal(struct {
-		Resumed           *bool  `json:"resumed"`
-		PreviousSessionID string `json:"previous_session_id,omitempty"`
-		Note              string `json:"note,omitempty"`
-	}{o.Resumed, o.PreviousSessionID, o.Note})
+		Resumed              *bool  `json:"resumed,omitempty"`
+		PreviousSessionID    string `json:"previous_session_id,omitempty"`
+		Note                 string `json:"note,omitempty"`
+		ToolCalls            *int   `json:"tool_calls,omitempty"`
+		ToolCallLimit        int    `json:"tool_call_limit,omitempty"`
+		ToolCallLimitReached bool   `json:"tool_call_limit_reached,omitempty"`
+	}{o.Resumed, o.PreviousSessionID, o.Note, o.ToolCalls, o.ToolCallLimit, o.ToolCallLimitReached})
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +116,10 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 	root.PersistentFlags().StringVar(&ac.name, "name", "", "session name")
 	root.PersistentFlags().StringVar(&ac.modelSpec, "model", "", "provider:model[:tier]")
 	root.PersistentFlags().BoolVar(&ac.allowExhaustedQuota, "allow-exhausted-quota", false, "start even when cached provider quota is exhausted")
+	root.PersistentFlags().BoolVar(&ac.acceptCost, "accept-cost", false, "allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning")
 	root.PersistentFlags().StringVar(&ac.roleSpec, "role", "", roleUsage)
 	root.PersistentFlags().DurationVar(&ac.agentTimeout, "timeout", 0, "maximum foreground turn duration (0 waits without a limit)")
+	root.PersistentFlags().IntVar(&ac.maxToolCalls, "max-tool-calls", 0, "maximum tool calls per turn (0 disables limit)")
 	_ = root.RegisterFlagCompletionFunc("role", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		names, _ := subagent.RoleNames()
 		return names, cobra.ShellCompDirectiveNoFileComp
@@ -236,17 +245,19 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			if e != nil {
 				return e
 			}
+			maxToolCallsSet := cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls")
 			if _, findErr := ac.find(cmd, s, ac.name); findErr == nil {
 				return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
+					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet})
 				})
 			} else if !strings.Contains(findErr.Error(), "not found") {
 				return findErr
 			}
 			return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-				return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, ContextMode: ac.contextMode})
+				return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, ContextMode: ac.contextMode, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet})
 			})
 		}
+		maxToolCallsSet := cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls")
 		if rootContinue {
 			s, e := ac.store()
 			if e != nil {
@@ -259,12 +270,12 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			candidates := attributable(xs, ac.workDir, ac.parent())
 			if len(candidates) > 0 {
 				return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: true, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
+					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: true, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet})
 				})
 			}
 		}
 		return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-			return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, ContextMode: ac.contextMode})
+			return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, ContextMode: ac.contextMode, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet})
 		})
 	}
 

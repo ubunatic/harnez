@@ -270,6 +270,36 @@ func TestRemoveKeepsUserGroupsAndFeature(t *testing.T) {
 	}
 }
 
+func TestTrustStatusDetectsUntrustedAndTrustedHooks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if _, err := Apply(path); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	trusted, untrusted, total := TrustStatus(path)
+	if trusted || total != 7 || untrusted != 7 {
+		t.Fatalf("TrustStatus before approval = (%v, %d, %d), want (false, 7, 7)", trusted, untrusted, total)
+	}
+
+	var stateTOML strings.Builder
+	stateTOML.WriteString("\n[hooks.state]\n")
+	for _, ev := range []string{"pre_tool_use", "post_tool_use", "pre_compact", "post_compact", "session_start", "stop", "session_end"} {
+		stateTOML.WriteString("  [hooks.state.\"")
+		stateTOML.WriteString(path)
+		stateTOML.WriteByte(':')
+		stateTOML.WriteString(ev)
+		stateTOML.WriteString(":0:0\"]\n    trusted_hash = \"sha256:deadbeef\"\n")
+	}
+	data := mustRead(t, path) + stateTOML.String()
+	if err := os.WriteFile(path, []byte(data), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	trusted, untrusted, total = TrustStatus(path)
+	if !trusted || untrusted != 0 || total != 7 {
+		t.Fatalf("TrustStatus after approval = (%v, %d, %d), want (true, 0, 7)", trusted, untrusted, total)
+	}
+}
+
 func mustRead(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)

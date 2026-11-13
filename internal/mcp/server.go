@@ -64,8 +64,8 @@ type toolDefinition struct {
 const sessionBackgroundInstruction = "Run it as one session-background job: Claude Code Bash with run_in_background: true; AGY run_command with a small WaitMsBeforeAsync; Codex exec_command, then write_stdin until an exit code. Never poll its status or logs. `run_in_background`: Claude Code Bash tool parameter only; not a harnez flag."
 
 var tools = []toolDefinition{
-	{"harnez_spawn_agent", "Start a Harnez subagent through MCP and wait for its result and session record. For interactive hosts, do not synchronously spawn or wait in chat: use harnez_command with HTO=0 in the host's background runner (session background). " + sessionBackgroundInstruction, schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name")}, "prompt")},
-	{"harnez_command", "Format a safely shell-quoted harnez agent command without executing it. For interactive hosts, run the returned command in the host's own background runner for visible, non-blocking execution and reactive completion; this is canonical for start and wait. " + sessionBackgroundInstruction + " Do not use synchronous MCP spawn/wait calls in chat.", schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"start", "resume", "wait", "status"}, "description": "Agent lifecycle action"}, "prompt": stringProp("Required for start and resume"), "model": stringProp("Optional provider:model[:tier] for start or resume"), "role": stringProp("Optional role for start or resume"), "dir": stringProp("Optional working directory"), "name": stringProp("Session name for start; may identify the session for resume, wait, or status"), "session_id": stringProp("Session ID or name for resume, wait, or status"), "stream": map[string]any{"type": "string", "enum": []string{"full", "stats"}, "description": "Output stream mode for start or resume (default: stats)"}}, "action")},
+	{"harnez_spawn_agent", "Start a Harnez subagent through MCP and wait for its result and session record. For interactive hosts, do not synchronously spawn or wait in chat: use harnez_command with HTO=0 in the host's background runner (session background). " + sessionBackgroundInstruction, schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name"), "max_tool_calls": map[string]any{"type": "integer", "minimum": 0, "description": "Optional per-turn tool-call limit (0 disables limit)"}}, "prompt")},
+	{"harnez_command", "Format a safely shell-quoted harnez agent command without executing it. For interactive hosts, run the returned command in the host's own background runner for visible, non-blocking execution and reactive completion; this is canonical for start and wait. " + sessionBackgroundInstruction + " Do not use synchronous MCP spawn/wait calls in chat.", schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"start", "resume", "wait", "status"}, "description": "Agent lifecycle action"}, "prompt": stringProp("Required for start and resume"), "model": stringProp("Optional provider:model[:tier] for start or resume"), "role": stringProp("Optional role for start or resume"), "dir": stringProp("Optional working directory"), "name": stringProp("Session name for start; may identify the session for resume, wait, or status"), "session_id": stringProp("Session ID or name for resume, wait, or status"), "stream": map[string]any{"type": "string", "enum": []string{"full", "stats"}, "description": "Output stream mode for start or resume (default: stats)"}, "max_tool_calls": map[string]any{"type": "integer", "minimum": 0, "description": "Optional per-turn tool-call limit for start or resume (0 disables limit)"}}, "action")},
 	{"harnez_wait_agent", "Wait for an agent session and return its terminal result. Do NOT call from interactive chat sessions; it blocks chat. Use harnez_command wait and run it in the host's background runner.", schema(map[string]any{"session_id": stringProp("Session ID or name"), "timeout_seconds": map[string]string{"type": "integer", "description": "Maximum wait in seconds; omit to wait indefinitely"}}, "session_id")},
 	{"harnez_list_agents", "List agent sessions visible to the caller.", schema(map[string]any{"dir": stringProp("Optional working directory filter")})},
 	{"harnez_agent_status", "Get the status record for a session in the caller's lineage.", schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
@@ -181,6 +181,13 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 		}
 		return v, nil
 	}
+	intArg := func(raw any, key string) (int, error) {
+		n, valid := raw.(float64)
+		if !valid || n < 0 || n != float64(int(n)) {
+			return 0, fmt.Errorf("%s must be a non-negative integer", key)
+		}
+		return int(n), nil
+	}
 	base := []string{"agent"}
 	switch c.Name {
 	case "harnez_find":
@@ -254,6 +261,13 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 				base = append(base, flag, v)
 			}
 		}
+		if raw, exists := a["max_tool_calls"]; exists {
+			n, err := intArg(raw, "max_tool_calls")
+			if err != nil {
+				return nil, err
+			}
+			base = append(base, "--max-tool-calls", fmt.Sprint(n))
+		}
 		base = append(base, "--", prompt)
 	case "harnez_command":
 		action, e := arg("action", true)
@@ -304,6 +318,13 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 					return nil, e
 				}
 				commandArgs = append(commandArgs, "--name", id)
+			}
+			if raw, exists := a["max_tool_calls"]; exists {
+				n, err := intArg(raw, "max_tool_calls")
+				if err != nil {
+					return nil, err
+				}
+				commandArgs = append(commandArgs, "--max-tool-calls", fmt.Sprint(n))
 			}
 			commandArgs = append(commandArgs, "--", prompt)
 		case "wait":

@@ -3,6 +3,7 @@ package subagent
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -154,5 +155,45 @@ func TestClaudeCompactPassesSessionModel(t *testing.T) {
 	joined := strings.Join(got, " ")
 	if !strings.Contains(joined, "--model haiku") || !strings.Contains(joined, "--effort low") {
 		t.Fatalf("compact args must carry the session model and effort, got %q", got)
+	}
+}
+
+func TestClaudeRunContextModes(t *testing.T) {
+	model := Model{Provider: "claude", Name: "haiku", Tier: "low"}
+	cases := []struct {
+		mode string
+		want []string
+	}{
+		{"", []string{"-p", "--dangerously-skip-permissions", "--model", "haiku", "--effort", "low", "--output-format", "stream-json", "--verbose", "go"}},
+		{"default", []string{"-p", "--dangerously-skip-permissions", "--model", "haiku", "--effort", "low", "--output-format", "stream-json", "--verbose", "go"}},
+		{"no-skills", []string{"-p", "--dangerously-skip-permissions", "--model", "haiku", "--effort", "low", "--disable-slash-commands", "--strict-mcp-config", "--output-format", "stream-json", "--verbose", "go"}},
+		{"plain", []string{"-p", "--dangerously-skip-permissions", "--model", "haiku", "--effort", "low", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", "", "--tools", "Read,Edit,Write,Grep,Glob,Bash", "--output-format", "stream-json", "--verbose", "go"}},
+	}
+	for _, tc := range cases {
+		var got []string
+		d := ClaudeDriver{Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			got = args
+			return []byte(`{"type":"result","subtype":"success","session_id":"s1","result":"ok","usage":{}}`), nil
+		}}
+		if _, err := d.Run(context.Background(), RunOptions{Prompt: "go", Model: model, ContextMode: tc.mode}); err != nil {
+			t.Fatalf("mode %q failed: %v", tc.mode, err)
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Fatalf("mode %q args = %q, want %q", tc.mode, got, tc.want)
+		}
+	}
+}
+
+func TestDriversRejectUnsupportedContextMode(t *testing.T) {
+	drivers := map[string]Driver{
+		"codex": CodexDriver{},
+		"agy":   AgyDriver{Dir: t.TempDir()},
+		"jules": JulesDriver{},
+	}
+	for name, d := range drivers {
+		_, err := d.Run(context.Background(), RunOptions{Prompt: "go", ContextMode: "plain"})
+		if err == nil || !strings.Contains(err.Error(), "not supported") || !strings.Contains(err.Error(), "claude") {
+			t.Fatalf("%s Run(plain) = %v, want error naming supported providers", name, err)
+		}
 	}
 }

@@ -159,8 +159,8 @@ func TestOpenMigratesIssueSnapshotBacklogCount(t *testing.T) {
 		t.Fatalf("Open v10 database: %v", err)
 	}
 	defer db.Close()
-	if version, err := db.SchemaVersion(); err != nil || version != 11 {
-		t.Fatalf("schema version = %d, err=%v; want 11", version, err)
+	if version, err := db.SchemaVersion(); err != nil || version != schemaVersion {
+		t.Fatalf("schema version = %d, err=%v; want %d", version, err, schemaVersion)
 	}
 	rows, err := db.QueryIssueSnapshots("legacy")
 	if err != nil || len(rows) != 1 || rows[0].BacklogCount != 0 {

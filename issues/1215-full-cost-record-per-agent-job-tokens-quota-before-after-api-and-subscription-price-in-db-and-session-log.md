@@ -1,6 +1,6 @@
 # 1215 — Full cost record per agent job: tokens, quota before/after, API and subscription price in DB and session log
 
-**Status**: Open
+**Status**: Closed — resolved in Batch C (`feat/jules-batch-c`)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -43,6 +43,12 @@ quota before/after, API cost with pricing revision, and subscription share, in t
 telemetry DB, with unknown values stored as unknown, never 0; tests pin each field from a real captured
 sample. Stop and report when a provider gives no such number or when plan prices need an owner decision.
 On a loop or no progress, clear the goal and write a failure report here.
+
+## Resolution
+- Added `plan_prices` in `spec/agent.yaml` + `spec/schemas/agent.schema.json` (Codex `$20/mo`, Claude `$100/mo`, AGY `$20/mo`, unknown when unset) with `~/.harnez/config.yaml` (`agent.plan_prices`) overrides in `internal/subagent/planprice.go`.
+- Extended `TurnResult` (`CacheWriteTokens`, `CacheWriteTokensKnown`), `TurnRecord` (`Model`, `Effort`, `CacheWriteTokens`, `CostMicros`, `PricingRevision`, `QuotaBeforeUsedPercent`, `QuotaAfterUsedPercent`, `QuotaWindow`, `SubscriptionPriceShareMicros`), and `Session` (`TotalCostMicros`, `TotalSubscriptionShareMicros`) while preserving unknown values as `nil`.
+- Added `usage.ComputeTurnQuotaShare` (`monthly * 12 / 52 * delta`), `telemetry.CalculateTurnCost`, SQLite v12 `compaction_economics` effort + token columns (`spec/telemetry.yaml`), `turn_token_usage` (`model`, `effort`, `cache_write_tokens`, `cost_micros`, `pricing_revision`), and `turn_quota_deltas.subscription_price_share_micros`, wired into both `runStart` and `runResume` (`cmd/harnez/agent_run.go`).
+- Unpriced models omit API cost (`nil`/`NULL`); quota errors, resets, and missing plan prices leave subscription share `nil`/`NULL`. Pinned by `TestPlanPriceDefaultsAndOverrides`, `TestComputeTurnQuotaShare`, `TestCalculateTurnCostAndReconcileEconomicsEffortTokens`, `TestTurnTokenUsageAndQuotaSharePersistNullForUnknowns`, and `TestRunStartRecordsFullCostRecordForPricedAndUnpricedModels`.
 
 ## Owner-idea runs
 

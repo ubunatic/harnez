@@ -28,8 +28,11 @@ func CheckStreamMode(mode string) error {
 // so a conflict with the task is reported instead of silently skipping it.
 const inferredRoleNote = "This role was inferred from the prompt, not requested with --role. If the task asks for work this role forbids, do not do it and do not skip it silently: say that the task needs another role (for example `--role developer`) and stop.\n\n"
 
-func WithProtocol(prompt string, planFirst bool, role string, inferred bool) string {
+func WithProtocol(prompt string, planFirst bool, role string, inferred bool, provider string) string {
 	pre := protocolPreamble
+	if familyPre, err := subagent.FamilyPreamble(provider); err == nil && familyPre != "" {
+		pre += familyPre + "\n\n"
+	}
 	if rules, err := subagent.RoleRules(role); err == nil && rules != "" {
 		pre += "Harnez role: " + role + ". " + rules + "\n\n"
 		if inferred {
@@ -240,10 +243,52 @@ func QuotaAlternatives(selected subagent.Model, availability func(string, string
 }
 
 func quotaModelCost(model subagent.Model) int {
-	for _, entry := range subagent.KnownModelEntries() {
-		if entry.Model.Provider == model.Provider && entry.Model.Name == model.Name {
-			return entry.Cost
-		}
+	if cost, ok := subagent.ModelCost(model); ok {
+		return cost
 	}
 	return 0
+}
+
+func formatCostlyModelDetails(model subagent.Model, availability func(string, string) usage.ProviderQuotaAvailability, now time.Time) (string, string) {
+	costLabel := "unknown"
+	if cost, ok := subagent.ModelCost(model); ok {
+		costLabel = fmt.Sprintf("%d (codex:luna:low = 1)", cost)
+	}
+	if availability == nil {
+		availability = func(p, m string) usage.ProviderQuotaAvailability {
+			return usage.CachedProviderQuotaAvailability(p, m, now)
+		}
+	}
+	return costLabel, usage.QuotaRemainingSummary(availability(model.Provider, model.Name), now)
+}
+
+// CheckCostlyModel enforces `--accept-cost` for models matching spec costly_models.
+// When acceptCost is true, it returns a single stderr warning line; when false,
+// it returns an error naming the model, relative cost, remaining quota, and flag.
+func CheckCostlyModel(model subagent.Model, acceptCost bool, availability func(string, string) usage.ProviderQuotaAvailability, now time.Time) (string, error) {
+	costly, err := subagent.IsCostlyModelFor(model)
+	if err != nil {
+		return "", err
+	}
+	if !costly {
+		return "", nil
+	}
+	costLabel, quotaLeft := formatCostlyModelDetails(model, availability, now)
+	if !acceptCost {
+		return "", fmt.Errorf("model %s is costly (relative cost %s, quota left: %s); pass --accept-cost to proceed", model.Spec(), costLabel, quotaLeft)
+	}
+	return fmt.Sprintf("Warning: using costly model %s (relative cost %s, quota left: %s)", model.Spec(), costLabel, quotaLeft), nil
+}
+
+// CostlyModelDryRunLine describes whether --accept-cost is needed for a --dry-run preview.
+func CostlyModelDryRunLine(model subagent.Model, acceptCost bool, availability func(string, string) usage.ProviderQuotaAvailability, now time.Time) string {
+	costly, err := subagent.IsCostlyModelFor(model)
+	if err != nil || !costly {
+		return "not required"
+	}
+	costLabel, quotaLeft := formatCostlyModelDetails(model, availability, now)
+	if acceptCost {
+		return fmt.Sprintf("accepted (relative cost %s, quota left: %s)", costLabel, quotaLeft)
+	}
+	return fmt.Sprintf("required (pass --accept-cost; relative cost %s, quota left: %s)", costLabel, quotaLeft)
 }

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -44,8 +46,18 @@ func TestResumeNoteRequiresIdleSessionAboveSpecThreshold(t *testing.T) {
 			}
 		})
 	}
-	if strings.Contains(withProtocol("prompt", false, "developer", false), note) {
+	if strings.Contains(withProtocol("prompt", false, "developer", false, ""), note) {
 		t.Fatal("new session protocol contains a resume note")
+	}
+	codexPre, err := subagent.FamilyPreamble("codex")
+	if err != nil || codexPre == "" {
+		t.Fatalf("FamilyPreamble(codex) = %q, %v", codexPre, err)
+	}
+	if start := withProtocol("prompt", false, "developer", false, "codex"); !strings.Contains(start, codexPre) {
+		t.Fatalf("start protocol missing codex family preamble: %q", start)
+	}
+	if resumed := withProtocol("prompt", false, "developer", false, ""); strings.Contains(resumed, codexPre) {
+		t.Fatalf("resume protocol repeated family preamble: %q", resumed)
 	}
 }
 
@@ -174,8 +186,19 @@ func TestShortDur(t *testing.T) {
 
 func TestTokenSummarySeparatesNewFromCached(t *testing.T) {
 	r := &subagent.TurnResult{InputTokens: 1230000, OutputTokens: 1200, CachedTokens: 1198000, TokensTurn: 1231200}
-	if got, want := tokenSummary(r), "tokens: 33.2k new (1200 out), 1.2M cached"; got != want {
+	if got, want := tokenSummary(r, nil), "tokens: turn 33.2k new (1200 out), 1.2M cached; session 33.2k new, 1.2M cached"; got != want {
 		t.Fatalf("tokenSummary = %q, want %q", got, want)
+	}
+	sess := &subagent.Session{TokenTotalsKnown: true, TokensCumulative: 55000000, CachedTokensTotal: 47100000}
+	if got, want := tokenSummary(r, sess), "tokens: turn 33.2k new (1200 out), 1.2M cached; session 7.9M new, 47.1M cached"; got != want {
+		t.Fatalf("tokenSummary(sess) = %q, want %q", got, want)
+	}
+	unknownTurn := &subagent.TurnResult{TurnTokensUnknown: true}
+	if got, want := tokenSummary(unknownTurn, sess), "tokens: turn unknown; session 7.9M new, 47.1M cached"; got != want {
+		t.Fatalf("tokenSummary(unknown turn) = %q, want %q", got, want)
+	}
+	if got, want := tokenSummary(unknownTurn, nil), "tokens: turn unknown; session unknown"; got != want {
+		t.Fatalf("tokenSummary(unknown both) = %q, want %q", got, want)
 	}
 	for in, want := range map[int]string{999: "999", 12300: "12.3k", 1230742: "1.2M"} {
 		if got := humanCount(in); got != want {
@@ -281,5 +304,151 @@ func TestZeroElapsed(t *testing.T) {
 	want := "[heartbeat: 0s, ~70 tokens]\n[reply: 0s]\nall done\n[session info: id=sid]\n[done: 2 messages]"
 	if got := zeroElapsed(in); got != want {
 		t.Fatalf("zeroElapsed = %q, want %q", got, want)
+	}
+}
+
+type doneSummaryDriver struct {
+	recordingAgentDriver
+	res *subagent.TurnResult
+}
+
+func (d *doneSummaryDriver) Run(_ context.Context, _ subagent.RunOptions) (*subagent.TurnResult, error) {
+	return d.res, nil
+}
+func (d *doneSummaryDriver) RunStream(_ context.Context, _ subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+	fn(subagent.Event{Kind: "session", Text: d.res.SessionID})
+	fn(subagent.Event{Kind: "message", Text: d.res.Response})
+	return d.res, nil
+}
+func (d *doneSummaryDriver) ResumeStream(_ context.Context, _, _ string, _ subagent.Model, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+	fn(subagent.Event{Kind: "message", Text: d.res.Response})
+	return d.res, nil
+}
+
+func TestDoneLineContextUsageCostCheckAndQuotaUnknown(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Turn 1 (cumulative provider): defaults must not trigger [check:], quota unknown note appears.
+	drv := &doneSummaryDriver{res: &subagent.TurnResult{
+		SessionID: "cum-1", Response: "ok1", Messages: []string{"ok1"},
+		InputTokens: 20000, CachedTokens: 10000, OutputTokens: 1000, TokensTurn: 21000, TokensCumulative: 21000,
+		CumulativeTotalsKnown: true, CumulativeInputTokens: 20000, CumulativeCachedTokens: 10000, CumulativeOutputTokens: 1000,
+		ContextTokens: 20000, ContextWindowSize: 400000,
+	}}
+	oldDrv := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return drv }
+	defer func() { agentDriver = oldDrv }()
+
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "--role", "developer", "--model", "codex:luna", "--name", "w985", "--store-dir", storeDir, "step 1"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got1 := out.String()
+	for _, want := range []string{
+		"tokens: turn 11.0k new (1000 out), 10.0k cached; session 11.0k new, 10.0k cached",
+		"context usage 20.0k of 400.0k window, compaction limit 100.0k",
+		"quota unknown: cost check is the only signal",
+	} {
+		if !strings.Contains(got1, want) {
+			t.Fatalf("turn 1 missing %q in:\n%s", want, got1)
+		}
+	}
+	if strings.Contains(got1, "[check:") {
+		t.Fatalf("short session unexpectedly emitted check:\n%s", got1)
+	}
+
+	// Lower thresholds in ~/.harnez/config.yaml; resume cumulative turn triggers [check:] naming role and model.
+	if err := os.MkdirAll(filepath.Join(home, ".harnez"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".harnez", "config.yaml"), []byte("agent:\n  cost_check:\n    cached_to_new_ratio: 5\n    min_turns: 2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	drv.res = &subagent.TurnResult{
+		SessionID: "cum-1", Response: "ok2", Messages: []string{"ok2"},
+		InputTokens: 230000, CachedTokens: 210000, OutputTokens: 2000, TokensTurn: 232000, TokensCumulative: 232000,
+		CumulativeTotalsKnown: true, CumulativeInputTokens: 230000, CumulativeCachedTokens: 210000, CumulativeOutputTokens: 2000,
+		ContextTokens: 80000, ContextWindowSize: 400000,
+	}
+	out.Reset()
+	cmd = newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"resume", "--name", "w985", "--store-dir", storeDir, "step 2"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got2 := out.String()
+	for _, want := range []string{
+		"tokens: turn 11.0k new (1000 out), 200.0k cached; session 22.0k new, 210.0k cached",
+		"context usage 80.0k of 400.0k window, compaction limit 100.0k",
+		"[check: turn re-read 200.0k cached for 11.0k new (18x); context usage 80.0k; fresh start ~20.0k; consider: harnez agent start --role developer --model codex:",
+	} {
+		if !strings.Contains(got2, want) {
+			t.Fatalf("turn 2 missing %q in:\n%s", want, got2)
+		}
+	}
+
+	// Compaction drop (cumulative counters smaller than stored totals): must print turn unknown, no negative delta.
+	drv.res = &subagent.TurnResult{
+		SessionID: "cum-1", Response: "ok3", Messages: []string{"ok3"},
+		InputTokens: 50000, CachedTokens: 40000, OutputTokens: 500, TokensTurn: 50500, TokensCumulative: 50500,
+		CumulativeTotalsKnown: true, CumulativeInputTokens: 50000, CumulativeCachedTokens: 40000, CumulativeOutputTokens: 500,
+		ContextTokens: 15000, ContextWindowSize: 400000,
+	}
+	out.Reset()
+	cmd = newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"resume", "--name", "w985", "--store-dir", storeDir, "step 3"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got3 := out.String()
+	if !strings.Contains(got3, "tokens: turn unknown; session 10.5k new, 40.0k cached") {
+		t.Fatalf("compaction drop missing turn unknown in:\n%s", got3)
+	}
+
+	// agy-like unknown context & missing usage: no false ratio check.
+	if err := store.Save(&subagent.Session{ID: "agy-1", Name: "agy985", Provider: "agy", Model: "gemini-4-argon", Role: "developer", WorkingDir: t.TempDir(), Status: "completed", HarnessType: "harnez", Turn: 3}); err != nil {
+		t.Fatal(err)
+	}
+	drv.res = &subagent.TurnResult{SessionID: "agy-1", Response: "agy ok", Messages: []string{"agy ok"}, ContextTokens: -1, TurnTokensUnknown: true}
+	out.Reset()
+	cmd = newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"resume", "--name", "agy985", "--store-dir", storeDir, "step 4"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got4 := out.String()
+	if !strings.Contains(got4, "context usage unknown") || !strings.Contains(got4, "turn unknown") || strings.Contains(got4, "[check:") {
+		t.Fatalf("agy output invalid:\n%s", got4)
+	}
+
+	// agent list headers use CONTEXT_USAGE and CONTEXT_WINDOW.
+	out.Reset()
+	cmd = newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"list", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "CONTEXT_USAGE\tCONTEXT_WINDOW") {
+		t.Fatalf("agent list missing renamed headers:\n%s", out.String())
 	}
 }

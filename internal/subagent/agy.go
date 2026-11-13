@@ -119,6 +119,9 @@ func agyEffort(tier string) string {
 }
 
 func (d AgyDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if err := ValidateContextMode("agy", o.ContextMode); err != nil {
+		return nil, err
+	}
 	if d.Dir == "" {
 		return nil, errors.New("agy: refusing to run with an empty Dir (agy would write to ~/.gemini scratch)")
 	}
@@ -299,6 +302,9 @@ func decodeAgy(data []byte) (*TurnResult, error) {
 	if v.Usage.Think != nil {
 		r.ReasoningTokens = *v.Usage.Think
 		r.ReasoningTokensKnown = true
+	}
+	if v.Usage.Input == 0 && v.Usage.Output == 0 && valueOrZero(v.Usage.Think) == 0 && v.Usage.Cache == 0 {
+		r.TurnTokensUnknown = true
 	}
 	r.ContextTokens = -1 // agy's usage totals the whole turn, not the last-call context.
 	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens

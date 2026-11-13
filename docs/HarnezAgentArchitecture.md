@@ -130,6 +130,17 @@ quota: claude 5h 86% (read 10:41:07, 40s ago, resets 11:52)
 quota: claude 5h unknown, last reading 23m old (read 10:18:47)
 ```
 
+### Costly model confirmation (`--accept-cost`)
+
+`spec/agent.yaml` lists `costly_models` (for example `codex:sol:high`,
+`agy:argon:high`, `codex:astra:*`, and `claude:fable:high`). Starting or resuming
+one without `--accept-cost` exits non-zero and prints the resolved model,
+relative cost, remaining 5h/weekly quota (or `unknown` when stale), and
+`--accept-cost`. Passing `--accept-cost` prints one stderr warning line with the
+cost and remaining quota, then proceeds; `--dry-run` shows whether `--accept-cost`
+would be required. Fallback and pick chains never select a costly model silently
+without `--accept-cost`. Helpers stay on cheap models by default.
+
 ### 2.11 MCP server for Codex
 
 `harnez mcp` serves the agent lifecycle tools over newline-delimited JSON-RPC
@@ -495,6 +506,7 @@ and the session keeps running, and `harnez agent delete` removes only the local 
 1. **Context Threshold**: When the session's context usage (last call's full input, see §2.10; not the cumulative turn total) exceeds the configured threshold (default 80,000 for Haiku and 200,000 for other models from `spec/agent.yaml`), `harnez agent` compacts before the next resume prompt.
 2. **Turn-Boundary Compaction**: The agent persists its decisions and code pointers to disk/ticket, then compacts its history before accepting the next milestone prompt.
 3. **Manual Override**: Callers can disable auto-compaction per run using `--no-compact`.
+4. **Done-Line Token & Cost Signal (issue 985)**: At turn completion, `[done: ...]` reports `tokens: turn <N> new (<O> out), <C> cached; session <SN> new, <SC> cached`, `context usage <U> of <W> window[, compaction limit <L>]` (or `unknown` when unavailable), and `quota unknown: cost check is the only signal` when pre-turn quota availability is unknown. If a cumulative counter drops after compaction or a provider omits usage, per-turn counts print `unknown` rather than guessing. When `agent.cost_check` thresholds in `spec/agent.yaml` (or `~/.harnez/config.yaml` under `agent.cost_check`) are crossed after `min_turns`, harnez prints a trailing `[check: ...]` line suggesting a fresh start for the session's role and model. `harnez agent list` exposes `CONTEXT_USAGE` and `CONTEXT_WINDOW` columns matching these definitions (see [AutoCompaction.md](AutoCompaction.md)).
 
 ### 4.2 Idle KV-Cache Freshness Detection
 - LLM providers typically retain KV prefix caches for 5 to 10 minutes of inactivity.
@@ -502,6 +514,14 @@ and the session keeps running, and `harnez agent delete` removes only the local 
   - `harnez agent status` reports `CACHED: EXPIRED`.
   - On the next `harnez agent resume`, `harnez agent` detects that cache re-use savings are 0% and logs the re-ingestion cost.
   - If cumulative tokens exceed 50k and cache is expired, `harnez agent` can advise or auto-spawn a fresh subagent to avoid paying the full re-ingestion cost on stale history.
+
+### 4.3 Per-Turn Tool-Call Limits (issue 1033)
+- **Precedence & Configuration**: `--max-tool-calls N` (`agent start`/`resume`, forwarded to detached workers and MCP `harnez_spawn_agent`/`harnez_command`, rejected on `-i`) > `~/.harnez/config.yaml` (`agent.tool_call_limits`) > `spec/agent.yaml` (`tool_call_limits`), matching model then role (`0` disables).
+- **Provider Enforcement**:
+  - `pi` / `lmcoder`: embedded `tool-call-limit.ts` extension passed via `-e <path>` blocks call `N+1+` with the synthesis prompt on the first crossing batch, then sets `terminate: true` on any tool call in a later assistant turn; harnez also enforces a live stream backstop at `N + native_backstop_calls` without synthesis.
+  - `claude` / `codex`: harnez observes live tool events (`tool_use` block IDs on Claude; tool item types on Codex, including on `--json` turns via silent stream observation), cancels the turn process group when `attempted > N`, and runs one synthesis `ResumeStream` whose first tool call cancels immediately.
+  - `agy`: no live stream exists; harnez prints a stderr warning and omits `tool_calls`.
+- **Outcome**: If an answer arrives, the turn finishes `completed` with `tool_calls`, `tool_call_limit`, and `tool_call_limit_reached: true` in `TurnResult`, `TurnRecord`, JSON output, and the `[done: ...]` line. If no answer arrives (or backstop triggers), harnez saves `Status=stopped`, preserves any partial `Messages` (not `Response`), sets `LastError="tool-call limit reached: <attempted> calls (limit <N>), no answer; session can be resumed"`, and exits non-zero.
 
 ---
 

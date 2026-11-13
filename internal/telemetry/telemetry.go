@@ -345,6 +345,13 @@ func checkAndMigrateSchema(sqlDB schemaExecutor, path string, preexisting bool) 
 		if backlogCountMigrated {
 			migrations = append(migrations, "issue_status_snapshots.backlog_count")
 		}
+		economicsMigrated, err := migrateCompactionEconomics(sqlDB)
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: migrate compaction_economics: %w", err)
+		}
+		if economicsMigrated {
+			migrations = append(migrations, "compaction_economics.effort")
+		}
 		// Version 5 is additive: schemaDDL creates compaction_events and
 		// session_boundaries for existing databases before this check.
 		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
@@ -366,6 +373,13 @@ func checkAndMigrateSchema(sqlDB schemaExecutor, path string, preexisting bool) 
 		}
 		if backlogCountMigrated {
 			migrations = append(migrations, "issue_status_snapshots.backlog_count")
+		}
+		economicsMigrated, err := migrateCompactionEconomics(sqlDB)
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: repair compaction_economics: %w", err)
+		}
+		if economicsMigrated {
+			migrations = append(migrations, "compaction_economics.effort")
 		}
 	}
 	return migrations, nil
@@ -401,6 +415,48 @@ func migrateIssueSnapshotBacklogCount(sqlDB schemaExecutor) (bool, error) {
 	}
 	_, err = sqlDB.Exec(statements["issue_snapshots_add_backlog_count"])
 	return err == nil, err
+}
+
+func migrateCompactionEconomics(sqlDB schemaExecutor) (bool, error) {
+	statements := mustTelemetrySQL().Statements
+	rows, err := sqlDB.Query(statements["compaction_economics_columns"])
+	if err != nil {
+		return false, err
+	}
+	present := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return false, err
+		}
+		present[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return false, err
+	}
+	if err := rows.Close(); err != nil {
+		return false, err
+	}
+	changed := false
+	for _, col := range []struct {
+		name, stmtKey string
+	}{
+		{"effort", "compaction_economics_add_effort"},
+		{"cached_input_tokens", "compaction_economics_add_cached_input_tokens"},
+		{"uncached_input_tokens", "compaction_economics_add_uncached_input_tokens"},
+		{"output_tokens", "compaction_economics_add_output_tokens"},
+		{"reasoning_tokens", "compaction_economics_add_reasoning_tokens"},
+	} {
+		if !present[col.name] {
+			if _, err := sqlDB.Exec(statements[col.stmtKey]); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+				return false, err
+			}
+			changed = true
+		}
+	}
+	return changed, nil
 }
 
 // migrateToolCallsSkillName adds the version-10 skill_name column; older
@@ -497,7 +553,7 @@ func (d *DB) ValidateSchema() error {
 		"compaction_events":    {"model"},
 		"session_boundaries":   nil,
 		"token_snapshots":      nil,
-		"compaction_economics": {"model", "pricing_revision", "status"},
+		"compaction_economics": {"model", "effort", "pricing_revision", "status"},
 	}
 	for table, columns := range required {
 		var present int

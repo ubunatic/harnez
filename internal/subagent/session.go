@@ -37,27 +37,30 @@ type Session struct {
 	// WorkerPID/WorkerStarttime identify the last detached worker process.
 	// Unlike ProcessPID, the worker never clears them: it records its terminal
 	// status before it exits, so wait must keep watching this identity.
-	WorkerPID            int    `json:"worker_pid,omitempty"`
-	WorkerStarttime      uint64 `json:"worker_starttime,omitempty"`
-	ControlSocket        string `json:"control_socket,omitempty"`
-	HarnessType          string `json:"harness_type"`
-	Status               string `json:"status"`
-	TokensCumulative     int    `json:"tokens_cumulative"`
-	SessionUsedTokens    int    `json:"session_used_tokens,omitempty"`
-	SessionUsedKnown     bool   `json:"session_used_known,omitempty"`
-	InputTokensTotal     int    `json:"input_tokens_total,omitempty"`
-	CachedTokensTotal    int    `json:"cached_tokens_total,omitempty"`
-	OutputTokensTotal    int    `json:"output_tokens_total,omitempty"`
-	ReasoningTokensTotal int    `json:"reasoning_tokens_total,omitempty"`
-	ReasoningTokensKnown bool   `json:"reasoning_tokens_known,omitempty"`
-	TokenTotalsKnown     bool   `json:"token_totals_known,omitempty"`
+	WorkerPID                    int    `json:"worker_pid,omitempty"`
+	WorkerStarttime              uint64 `json:"worker_starttime,omitempty"`
+	ControlSocket                string `json:"control_socket,omitempty"`
+	HarnessType                  string `json:"harness_type"`
+	Status                       string `json:"status"`
+	TokensCumulative             int    `json:"tokens_cumulative"`
+	SessionUsedTokens            int    `json:"session_used_tokens,omitempty"`
+	SessionUsedKnown             bool   `json:"session_used_known,omitempty"`
+	InputTokensTotal             int    `json:"input_tokens_total,omitempty"`
+	CachedTokensTotal            int    `json:"cached_tokens_total,omitempty"`
+	OutputTokensTotal            int    `json:"output_tokens_total,omitempty"`
+	ReasoningTokensTotal         int    `json:"reasoning_tokens_total,omitempty"`
+	ReasoningTokensKnown         bool   `json:"reasoning_tokens_known,omitempty"`
+	TokenTotalsKnown             bool   `json:"token_totals_known,omitempty"`
+	TotalCostMicros              *int64 `json:"total_cost_micros,omitempty"`
+	TotalSubscriptionShareMicros *int64 `json:"total_subscription_share_micros,omitempty"`
 	// TokensSinceCompact tracks accumulated new tokens for telemetry only.
 	TokensSinceCompact int `json:"tokens_since_compact,omitempty"`
-	// ContextTokens is the full input size of the last provider turn, including
+	// ContextTokens is the full input usage of the last provider turn, including
 	// cached input; it is the source for pre-prompt compaction decisions.
 	CompactionCount         int              `json:"compaction_count"`
 	ContextTokens           int              `json:"context_tokens,omitempty"`
 	ContextWindowSize       int              `json:"context_window_size,omitempty"`
+	FreshStartContextTokens int              `json:"fresh_start_context_tokens,omitempty"`
 	TokensTurn              int              `json:"tokens_turn"`
 	CachedTokens            int              `json:"cached_tokens"`
 	CreatedAt               time.Time        `json:"created_at"`
@@ -91,22 +94,87 @@ type TurnRecord struct {
 	Turn              int `json:"turn"`
 	NewInputTokens    int `json:"new_input_tokens"`
 	CachedInputTokens int `json:"cached_input_tokens"`
-	OutputTokens      int `json:"output_tokens"`
+	// CacheWriteTokens is nil when the provider did not separately report cache
+	// creation tokens (unknown stays unknown, never 0; ticket 1215).
+	CacheWriteTokens *int `json:"cache_write_tokens,omitempty"`
+	OutputTokens     int  `json:"output_tokens"`
 	// ReasoningTokens is nil when the provider did not report reasoning tokens
 	// (unknown), so a stored 0 always means a reported zero (ticket 1215).
-	ReasoningTokens *int   `json:"reasoning_tokens,omitempty"`
-	Rating          *int   `json:"rating,omitempty"`
-	RatingReason    string `json:"rating_reason,omitempty"`
+	ReasoningTokens              *int     `json:"reasoning_tokens,omitempty"`
+	TokensUnknown                bool     `json:"tokens_unknown,omitempty"`
+	Model                        string   `json:"model,omitempty"`
+	Effort                       string   `json:"effort,omitempty"`
+	CostMicros                   *int64   `json:"cost_micros,omitempty"`
+	PricingRevision              string   `json:"pricing_revision,omitempty"`
+	QuotaBeforeUsedPercent       *float64 `json:"quota_before_used_percent,omitempty"`
+	QuotaAfterUsedPercent        *float64 `json:"quota_after_used_percent,omitempty"`
+	QuotaWindow                  string   `json:"quota_window,omitempty"`
+	SubscriptionPriceShareMicros *int64   `json:"subscription_price_share_micros,omitempty"`
+	ToolCalls                    *int     `json:"tool_calls,omitempty"`
+	ToolCallLimit                int      `json:"tool_call_limit,omitempty"`
+	ToolCallLimitReached         bool     `json:"tool_call_limit_reached,omitempty"`
+	Rating                       *int     `json:"rating,omitempty"`
+	RatingReason                 string   `json:"rating_reason,omitempty"`
 }
 
 // NewTurnRecord builds the per-turn usage record from a provider turn result.
 func NewTurnRecord(turn int, r *TurnResult) TurnRecord {
-	rec := TurnRecord{Turn: turn, NewInputTokens: CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}
-	if r.ReasoningTokensKnown {
-		n := r.ReasoningTokens
-		rec.ReasoningTokens = &n
+	var rec TurnRecord
+	if r.TurnTokensUnknown {
+		rec = TurnRecord{Turn: turn, TokensUnknown: true}
+	} else {
+		rec = TurnRecord{Turn: turn, NewInputTokens: CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}
+		if r.CacheWriteTokensKnown {
+			cw := r.CacheWriteTokens
+			rec.CacheWriteTokens = &cw
+		}
+		if r.ReasoningTokensKnown {
+			n := r.ReasoningTokens
+			rec.ReasoningTokens = &n
+		}
 	}
+	if r.ToolCalls != nil {
+		calls := *r.ToolCalls
+		rec.ToolCalls = &calls
+	}
+	rec.ToolCallLimit = r.ToolCallLimit
+	rec.ToolCallLimitReached = r.ToolCallLimitReached
 	return rec
+}
+
+// RecomputeSessionCostTotals updates TotalCostMicros and
+// TotalSubscriptionShareMicros when every recorded turn has a known value;
+// partial or missing turns leave the corresponding total nil (unknown).
+func RecomputeSessionCostTotals(sess *Session) {
+	if sess == nil || len(sess.TurnRecords) == 0 {
+		return
+	}
+	var totalCost int64
+	costKnown := true
+	var totalShare int64
+	shareKnown := true
+	for _, rec := range sess.TurnRecords {
+		if rec.CostMicros == nil {
+			costKnown = false
+		} else {
+			totalCost += *rec.CostMicros
+		}
+		if rec.SubscriptionPriceShareMicros == nil {
+			shareKnown = false
+		} else {
+			totalShare += *rec.SubscriptionPriceShareMicros
+		}
+	}
+	if costKnown {
+		sess.TotalCostMicros = &totalCost
+	} else {
+		sess.TotalCostMicros = nil
+	}
+	if shareKnown {
+		sess.TotalSubscriptionShareMicros = &totalShare
+	} else {
+		sess.TotalSubscriptionShareMicros = nil
+	}
 }
 
 // ReplyRecord stores the final reply produced during one agent turn.
@@ -141,7 +209,7 @@ func (s *Session) LastContextTokens() int {
 	return 0
 }
 
-// MarshalJSON omits unknown context sizes from status and list output.
+// MarshalJSON omits unknown context usage from status and list output.
 func (s Session) MarshalJSON() ([]byte, error) {
 	type sessionJSON Session
 	var contextTokens *int

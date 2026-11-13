@@ -157,7 +157,7 @@ func TestAgyLaunchEnvSetsMarkerAndPrependsShimToOriginalPath(t *testing.T) {
 }
 
 func TestAgyEffortMapping(t *testing.T) {
-	for _, tc := range []struct{ tier, want string }{{"low", "low"}, {"med", "medium"}, {"high", "high"}} {
+	for _, tc := range []struct{ tier, want string }{{"low", "low"}, {"med", "medium"}, {"high", "high"}, {"xhigh", "xhigh"}, {"max", "max"}} {
 		var args []string
 		d := AgyDriver{Dir: "/d", Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
 			args = gotArgs

@@ -15,7 +15,9 @@ Each fact is marked **measured** (owner or canary run, with version), **docs** (
   a turn that grows past it (592). Absolute tokens only, no percent yet (969).
 - `auto_compact` in `spec/agent.yaml` selects manual, native, or disabled routing by provider: Claude uses manual,
   Codex uses native, and agy is disabled until reliable context counts are available (644, 869). The same spec sets
-  the watchdog's shutdown grace and the legacy growth-telemetry threshold.
+  the watchdog's shutdown grace and the legacy growth-telemetry threshold. Turn-end `[done: ...]` output also
+  shows `context usage`, `compaction limit`, per-turn vs. session tokens, and `[check: ...]` cost warnings
+  (`agent.cost_check`, documented in [HarnezAgentArchitecture.md](HarnezAgentArchitecture.md#L508-L509)).
 - **The CLI's own trigger,** below. Whichever comes first wins, so harnez values only work if the CLI's trigger is
   set at or above them.
 

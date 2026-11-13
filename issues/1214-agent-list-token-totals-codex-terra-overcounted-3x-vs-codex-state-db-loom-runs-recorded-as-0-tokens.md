@@ -1,6 +1,6 @@
 # 1214 — agent list token totals: codex terra overcounted ~3x vs codex state DB, loom runs recorded as 0 tokens
 
-**Status**: Open
+**Status**: Closed — resolved in 432af6c8
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
@@ -47,3 +47,16 @@ held; `internal/usage/codex.go:137` is really line 156). Verdict "partly done"; 
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | audit | jules-audit-1214 | 10577886768464323199 | github #162 (closed) | done: partly done, 6/7 refs hold |
+
+## Resolution 2026-11-13 (`432af6c8`)
+
+- Updated `internal/subagent/codex.go`, `driver.go`, `external_sessions.go`, and `cmd/harnez/agent_run.go`:
+  `turn.completed` overwrites cumulative totals instead of summing, `event_msg/token_count` populates fallback
+  totals when `turn.completed` is absent (loom / incomplete runs), resumes compute deltas from rollout
+  `total_token_usage` (`after - before`), post-compaction `last_token_usage.input_tokens == 0` preserves prior
+  `ContextTokens` and `before` totals, `runStart`/`runResume` store cumulative totals without double-counting,
+  and `SyncCodexRolloutTotals` runs on failed/interrupted start and resume paths.
+- Deduplicated resumed rollouts by `sessionID` (`payload.id` / `payload.session_id`, 8 MiB scanner buffer) in
+  `internal/usage/project.go` and `internal/usage/codex.go`.
+- Covered by `TestCodexTokenCountFallbackAndCumulativeResumeTotals`,
+  `TestScanCodexProjectUsage_DeduplicatesResumedRollouts`, and `TestCollectCodexTokens_DeduplicatesSessionMetaID`.

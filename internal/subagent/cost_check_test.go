@@ -1,6 +1,10 @@
 package subagent
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestCheckCost(t *testing.T) {
 	spec := CostCheckSpec{CachedToNewRatio: 20, ContextUsageFraction: 0.75, MinTurns: 3}
@@ -66,5 +70,37 @@ func TestCostCheckSpecValuesLoad(t *testing.T) {
 	}
 	if spec.CostCheck.CachedToNewRatio <= 0 || spec.CostCheck.ContextUsageFraction <= 0 || spec.CostCheck.MinTurns <= 0 {
 		t.Fatalf("spec/agent.yaml cost_check not loaded: %+v", spec.CostCheck)
+	}
+}
+
+func TestEffectiveCostCheckSpecOverrides(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	base, err := EffectiveCostCheckSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.CachedToNewRatio <= 0 || base.MinTurns <= 0 {
+		t.Fatalf("base = %+v", base)
+	}
+	cfgDir := filepath.Join(home, ".harnez")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("agent:\n  cost_check:\n    cached_to_new_ratio: 5\n    min_turns: 0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	overridden, err := EffectiveCostCheckSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overridden.CachedToNewRatio != 5 || overridden.MinTurns != 0 || overridden.ContextUsageFraction != base.ContextUsageFraction {
+		t.Fatalf("overridden = %+v, want ratio=5 min_turns=0 fraction=%v", overridden, base.ContextUsageFraction)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("agent:\n  cost_check:\n    cached_to_new_ratio: -1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := EffectiveCostCheckSpec(); err == nil {
+		t.Fatal("expected error for negative cached_to_new_ratio")
 	}
 }

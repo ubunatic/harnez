@@ -1,6 +1,6 @@
 # 1076 — agent start --context-mode is silently ignored for Claude, Codex and AGY
 
-**Status**: Open
+**Status**: Closed — resolved in 432af6c8
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -52,3 +52,15 @@ from the `Run` of the claude, codex, agy and jules drivers (codex `RunStream` to
 probes every provider with `ContextMode: "plain"` (`cmd/harnez/models_cmd.go:214`), so every non-Pi probe would
 fail. Do M1 at the CLI instead (`runStart` in `cmd/harnez/agent_run.go`, where `req.ContextMode` is read at line
 491), and drop `"plain"` from the probe for providers without a context mode, or make the probe pass the mode only to pi.
+
+## Resolution 2026-11-13 (`432af6c8`)
+
+- **M1**: Added `SupportsContextMode` / `ValidateContextMode` in `internal/subagent/agentspec.go`, enforced them
+  in `runStart` (`cmd/harnez/agent_run.go`) and all drivers (`claude`, `pi`, `codex`, `agy`, `jules`), and updated
+  `harnez models` probe (`cmd/harnez/models_cmd.go`) to pass `ContextMode: "plain"` only for supporting providers.
+- **M2 (Claude)**: Added `claudeContextModeArgs` (`--disable-slash-commands`, `--strict-mcp-config`,
+  `--setting-sources ""`, `--tools Read,Edit,Write,Grep,Glob,Bash`) for `no-skills`/`plain` in `internal/subagent/claude.go`;
+  Codex and AGY remain on the M1 error.
+- Covered by `TestClaudeRunContextModes`, `TestDriversRejectUnsupportedContextMode`,
+  `TestAgentStartContextModePassThrough`, and `TestAgentStartRejectsUnsupportedContextMode` (live Claude flags
+  also exercised in the #675 canary).
