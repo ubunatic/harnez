@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -174,7 +173,7 @@ func ttySize(f *os.File) (cols, rows int, ok bool) {
 }
 
 // terminalSize resolves the usable geometry for the watch grid, trying out's
-// own fd first (most reliable), then os.Stdout, then a /dev/tty stty query,
+// own fd first (most reliable), then os.Stdout, then a /dev/tty TIOCGWINSZ query,
 // then $COLUMNS/$LINES, before giving up on fixed defaults.
 //
 // Rows matter as much as columns: the redraw loop must know how tall the
@@ -201,14 +200,14 @@ func terminalSize(out io.Writer) (cols, rows int) {
 		return clamp(c, r)
 	}
 
-	if raw, err := exec.Command("stty", "-F", "/dev/tty", "size").Output(); err == nil {
-		parts := strings.Fields(string(raw))
-		if len(parts) >= 2 {
-			r, errR := strconv.Atoi(parts[0])
-			c, errC := strconv.Atoi(parts[1])
-			if errR == nil && errC == nil && c > 0 && r > 0 {
-				return clamp(c, r)
-			}
+	// Query the controlling terminal with TIOCGWINSZ, not `stty -F /dev/tty size`:
+	// stty can raise SIGTTOU in a background process group (every `harnez exec`
+	// child), which stops the group and gets it killed (issue 1231).
+	if tty, err := os.OpenFile("/dev/tty", os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOCTTY, 0); err == nil {
+		c, r, ok := ttySize(tty)
+		_ = tty.Close()
+		if ok {
+			return clamp(c, r)
 		}
 	}
 
