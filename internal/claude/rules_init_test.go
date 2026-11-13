@@ -115,6 +115,10 @@ func TestRunInit_GeneratedToolsMCPAndSelftestGuidance(t *testing.T) {
 			t.Errorf("generated Tools.md missing %q", want)
 		}
 	}
+	// `index_repository` writes to the server's index, so the consent rule must survive a trim.
+	if !strings.Contains(strings.ToLower(tools), "authoriz") {
+		t.Error("generated Tools.md no longer ties index_repository to user authorization")
+	}
 	if n := strings.Count(tools, "harnez agent selftest --step hello"); n != 1 {
 		t.Errorf("generated Tools.md must name the self-test exactly once, got %d", n)
 	}

@@ -81,8 +81,11 @@ the owner asked for the method as a skill, tested by a `terra:high` agent on one
   the text to the test.
 - A commanded cleanup works in the `orchestrator` role; no role that both edits and spawns was
   needed.
-- A baseline that scores full marks cannot show a regression. Pick checks the current text
-  sometimes fails.
+- Checks that every session passes detect nothing. Pick checks the current text sometimes
+  fails.
+- A fresh reviewer on the loosened tests was worth its 42 seconds: it found that the rewritten
+  command test could pass on a YAML comment alone, and that dropping every phrase had also
+  dropped the consent rule for `index_repository`.
 
 ## 5. Follow-Up Tickets
 

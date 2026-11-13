@@ -114,7 +114,7 @@ worked: it measured, delegated the rewrite and started the test sessions itself.
 - The 28-line rewrite (`8ca13cf6`) is the version the four sessions tested. The helper then
   re-added six headings and reworded sentences only to satisfy
   `TestHarnezInitSkillInstallToEveryConfiguredTarget`, which asserted 22 literal phrases. That
-  test now checks four names the skill depends on (1224), and the 28-line version is restored
+  test now checks five names the skill depends on (1224), and the 28-line version is restored
   as the final one.
 - The baseline scored 5/5 on both efforts, so this run shows no loss, not a gain. The checks
   were too easy to separate a good skill from a poor one.
@@ -124,4 +124,6 @@ worked: it measured, delegated the rewrite and started the test sessions itself.
   report names single runs and untested changes; a kept command needs only the `--help` check;
   a prose-asserting test means leaving that passage alone and filing a ticket.
 - Not taken: a fixed scoring rubric. The checks depend on the rules in scope.
-- The skill is 80 lines, 4156 bytes, above the 60-line target set in the plan.
+- A reviewer pass on the skill text found a reversed sentence about full-mark baselines and an
+  unclear session count; both are corrected.
+- The skill is 82 lines, above the 60-line target set in the plan.

@@ -41,14 +41,25 @@ The owner judged the wording tests too rigid. They now check names agents type a
 not sentences:
 
 - `TestManagedAgentExamplesParseAgainstCobra` parses every `` `harnez agent ...` `` example in
-  `config.yaml` against the CLI. The two heading anchors and five required sentences are gone.
+  `config.yaml` against the CLI and requires at least one in the parsed rule files, plus the
+  names `subagent_mode` and `/goal clear`. The two heading anchors and five required sentences
+  are gone.
 - `TestRunInit_GeneratedToolsMCPAndSelftestGuidance` keeps tool and command names
   (`list_projects`, `index_status`, `index_repository`, `harnez find code|docs`, `rg`,
-  `background_task_list`, `--session <id>`, the self-test exactly once) and drops six phrases.
+  `background_task_list`, `--session <id>`, the self-test exactly once) and one stem,
+  "authoriz", for the `index_repository` consent rule. Five phrases are dropped.
 - `TestRunInit_GeneratesHarnezRules` keeps the rules read command, "once per session" and the
   ban on routine issue images; three header sentences and the PNG sentence are no longer asserted.
-- `TestHarnezInitSkillInstallToEveryConfiguredTarget` checks four names instead of 22 phrases
+- `TestHarnezInitSkillInstallToEveryConfiguredTarget` checks five names instead of 22 phrases
   (found by the 1225 run).
+
+Reviewer pass (`codex:sol:low`, read-only): it found that the first rewrite of the command test
+could pass on a YAML comment alone, and that the consent rule for `index_repository` had lost
+its only check; both are fixed as described above. Accepted risk, not fixed: unit tests no
+longer notice when a trim drops the goal exit guidance, the three-state MCP distinction, the
+"absent optional files are skipped" sentence, the PNG-on-request sentence or the init skill's
+stop-and-confirm guard. Those are rules for agents; `/harnez-cleanup` test sessions are the
+check for them. The command test still does not validate positional arguments.
 
 Not touched: the other `internal/claude/*_skill_test.go` files (handoff, issue, review, decide,
 next, wrap, peer-assistant, advisor). Loosen each when its skill is trimmed.

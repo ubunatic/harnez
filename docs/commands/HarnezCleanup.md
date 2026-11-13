@@ -27,7 +27,7 @@ Record sizes before changing anything; in a Claude session `/context` shows what
 
 Before the first edit, write one fixed task that makes an agent use the rules in scope, and a
 list of checks you can observe in its output files and executed commands. Pick checks the
-current text sometimes fails; a baseline with full marks cannot show a loss. Prepare fixtures
+current text sometimes fails; checks that every session passes detect nothing. Prepare fixtures
 yourself so every session starts from the same state. The task forbids repository changes;
 sessions write to a scratch directory. Run it on a cheap model at `low` and
 at `high` effort (`harnez agent models` shows cost); add a second vendor when the rules reach
@@ -62,8 +62,8 @@ Write for a capable agent that knows git, Go, Make and shell.
 ## 4. Retest
 
 Rerun the baseline task after each change and compare check by check. A lost check means fix
-or revert before the next cut. One run is a hypothesis: when a result decides something, repeat
-it three times on the cheapest tier. The session budget wins over reruns: say which results are
+or revert before the next cut. One run is a hypothesis: when a result decides something, run
+it three times in total on the cheapest tier. The session budget wins over reruns: say which results are
 single runs and which change went untested.
 
 ## 5. Record
@@ -75,7 +75,8 @@ single runs and which change went untested.
 
 ## Limits
 
-- Say how many test sessions you will run before starting; eight is the default ceiling.
+- Say how many test sessions you will run before starting. Eight is the default ceiling for
+  the whole run, repeats and second vendor included; spend it on the cheapest tier first.
 - Files outside this repository are reported, and edited only with the owner's go.
 - A role that cannot edit hands the rewrite to one developer helper through the ticket. A role
   that cannot start agents stops after Measure and reports.

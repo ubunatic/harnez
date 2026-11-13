@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -52,18 +53,33 @@ func TestAgentCommandSurface(t *testing.T) {
 }
 
 func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
-	config, err := os.ReadFile("../../config.yaml")
+	raw, err := os.ReadFile("../../config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Every `harnez agent ...` example in the generated rules and skills config must be a
-	// command the CLI accepts. The test checks commands, not the prose around them (1224).
-	examples := regexp.MustCompile("`(harnez agent [^`]+)`").FindAllStringSubmatch(string(config), -1)
-	if len(examples) == 0 {
-		t.Fatal("no harnez agent examples found in config.yaml")
+	cfg, err := claude.LoadConfig("../../config.yaml")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, example := range examples {
-		fields := strings.Fields(example[1])
+	var rules strings.Builder
+	for _, file := range cfg.AgentsMD.Rules.Files {
+		rules.WriteString(file.Content)
+		rules.WriteString("\n")
+	}
+	// The test checks names agents type (commands, flags, config keys), not the prose around
+	// them (1224). It resolves subcommands and flags; positional arguments are not validated,
+	// because fragments such as `harnez agent start --model <name>` are deliberate.
+	example := regexp.MustCompile("`(harnez agent [^`]+)`")
+	if len(example.FindAllString(rules.String(), -1)) == 0 {
+		t.Fatal("no harnez agent examples found in the generated rule files")
+	}
+	for _, name := range []string{"`subagent_mode`", "`/goal clear`"} {
+		if !strings.Contains(rules.String(), name) {
+			t.Errorf("generated rule files no longer name %s", name)
+		}
+	}
+	for _, match := range example.FindAllStringSubmatch(string(raw), -1) {
+		fields := strings.Fields(match[1])
 		if len(fields) < 3 {
 			continue
 		}
@@ -72,15 +88,15 @@ func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
 			args := append([]string{sub}, fields[3:]...)
 			cmd, remaining, err := newAgentCmd().Find(args)
 			if err != nil {
-				t.Errorf("%q: resolve Cobra command: %v", example[1], err)
+				t.Errorf("%q: resolve Cobra command: %v", match[1], err)
 				continue
 			}
 			if cmd.Name() != sub && !cmd.HasAlias(sub) {
-				t.Errorf("%q: %q is not a harnez agent subcommand", example[1], sub)
+				t.Errorf("%q: %q is not a harnez agent subcommand", match[1], sub)
 				continue
 			}
 			if err := cmd.ParseFlags(remaining); err != nil && !errors.Is(err, pflag.ErrHelp) {
-				t.Errorf("%q: parse Cobra flags: %v", example[1], err)
+				t.Errorf("%q: parse Cobra flags: %v", match[1], err)
 			}
 		}
 	}
