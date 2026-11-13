@@ -126,6 +126,8 @@ code and the environment in all three tickets. Check:
 | Worker cannot run podman ("namespace cloning denied") | the quota-1 sandbox blocks rootless podman | the host runs `make container-test` itself before closing the CI ticket |
 | `harnez agent send` cannot reach a running worker | send supports live Claude/Codex/AGY TUI sessions, not exec-mode turns | queue the follow-up as the worker's next round prompt |
 | `gh run view --log-failed` returns HTTP 403 | the local `gh` token lacks admin rights for log download | CI writes failures as annotations (shown by `gh run view`); or use the cloud agent's GitHub MCP `get_job_logs` |
+| Helper bends a rewrite to fit a failing test (1225: 28-line skill back to 45 lines for 22 asserted phrases) | the task forbade test edits and the suite had to pass | when a test asserts prose, the host loosens the test first; a commanded agent leaves the passage alone and files a ticket |
+| Quota hook reports "files changed after the last quota-1 run" on unchanged code (2026-11-13) | seen after `git checkout main` and a fast-forward merge of the tested branch; content equal to the tested commit (`git diff` empty) | compare with the tested commit before rerunning; ticket 1227 |
 | Worker closes a ticket with green tests, host live check fails (2026-10-20: 815, 818, 820, 826) | unit fixtures miss real state: completed batch sessions, legacy global blocks, unreadable `/proc/1/ns/user`, goreleaser subdir binaries | host runs the real command (`harnez diff` before `apply`, real `dist/`, live send/resume) before pushing; reopen with M2 pre-work in the same ticket |
 
 ## 5. Finding out what agents ran
@@ -133,6 +135,12 @@ code and the environment in all three tickets. Check:
 - Authoritative: Codex rollout logs, `~/.codex/sessions/YYYY/MM/DD/rollout-*<thread id>.jsonl`
   (every tool call with its command text). Identify a thread by the role text in its first
   prompt. Count `harnez agent` calls per thread to prove the delegation depth.
+- Claude sessions: `~/.claude/projects/<cwd with slashes as dashes>/<session id>.jsonl`; the
+  commands are the `tool_use` blocks of assistant messages. The session id is in the
+  `[session info: id=...]` line that `harnez agent start` prints. Issue 1221 scored nine test
+  sessions this way with a throwaway script; no `harnez agent` verb prints the list (1226).
+- Score test sessions from these files, not from a transcript the session writes about itself:
+  in the 1225 run four sessions self-reported and their scores could not be compared.
 - Telemetry `~/.harnez/tool_catalog.sqlite` (`tool_calls`, `cli_invocations`, `harnez stats`)
   has per-thread `tool_calls`, but no role or parent column and no nested `harnez`
   subcommands of workers (ticket 487).

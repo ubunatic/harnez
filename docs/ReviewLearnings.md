@@ -155,3 +155,16 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **A signature change is not a fix** (2026-11-11): Jules PR #157 threaded the session model through
   `Driver.Compact` in 18 files but tested only the old empty-model case. Require a test of the behaviour the
   ticket names (`TestClaudeCompactPassesSessionModel`) and see it fail without the fix. Issue 675.
+- **Tests that assert sentences** (2026-11-13, issues 1221, 1224, 1225): tests required exact sentences and
+  headings of generated rule files and skills. A doc trim failed them twice, and a helper bent a 28-line
+  skill back to 45 lines to match 22 phrases. Assert names agents type (commands, flags, tool names, config
+  keys) and structure; check rule following with test sessions (`/harnez-cleanup`).
+- **Loosening assertions needs its own review** (2026-11-13, issue 1224, `codex:sol:low` in 42 s): the
+  rewritten command test scanned raw `config.yaml` and could pass on a YAML comment alone; take examples
+  from the parsed fields and require a minimum there. Dropping every phrase had also dropped the only check
+  on a consent rule (`index_repository` only when authorized); list what each removed assertion guarded and
+  keep one for rules with side effects.
+- **Checks every session passes** (2026-11-13, issue 1225): a skill rewrite was "verified" by sessions that
+  scored 5 of 5 before and after on fixtures each had built itself. Pick checks the current text sometimes
+  fails, prepare the fixtures, and read the executed commands from the provider transcript
+  (`docs/OrchestratedAgentFlow.md`, section 5).

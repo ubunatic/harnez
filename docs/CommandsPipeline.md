@@ -17,7 +17,7 @@ commands:
     content: |
       Run `git log --since=midnight --oneline` and summarize what was done.
 
-  # file reference — content lives in commands/<name>.md in the repo
+  # file reference — content lives in docs/commands/<name>.md in the repo
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
     file: commands/evergreen.md
@@ -74,8 +74,8 @@ so unmeasured speeds stay labelled as estimates.
 
 ## Adding a new command
 
-1. Write `commands/<name>.md` in the repo.
-2. Add an entry to `config.yaml` → `commands:` with `file: commands/<name>.md`.
+1. Write `docs/commands/<name>.md` in the repo.
+2. Add an entry to `config.yaml` → `commands:` with `file: docs/commands/<name>.md`.
 3. Run `make apply`.
 4. Verify with `make status` — the name should appear in the `commands:` line.
 
@@ -124,7 +124,7 @@ outputs. Prime prompt templates reuse command format unchanged because both form
 
 ### Adding a new skill
 
-1. Write or reuse `commands/<name>.md` as the body.
+1. Write or reuse `docs/commands/<name>.md` as the body.
 2. Add an entry to `config.yaml` → `skills:`.
 3. Run `make apply`.
 4. Verify: the `skills:` summary line and `make status` should show the name in every
@@ -149,6 +149,24 @@ the installer rejects absolute paths and parent traversal.
 Pitfall: agents without a native skill copy (Gemini, Prime; see `docs/ExternalSkills.md`) load
 skills via `harnez skill show`, which prints only `SKILL.md`. They cannot reach resources
 (issue 727). Prefer a self-contained `SKILL.md`.
+
+### Writing, trimming and testing skill bodies
+
+- Write for a capable agent: one short imperative per rule, the owner's own rules only, no
+  answer formats or templates, nothing that `harnez <verb> --help` prints. Add a `harnez`
+  command only in a form that was run successfully.
+- `/harnez-cleanup <scope>` (`docs/commands/HarnezCleanup.md`, issue 1225) is the method for
+  measuring, shrinking and retesting skills, docs and rules: baseline on a fixed task, a cheap
+  model at `low` and `high` effort, scoring from artifacts, retest after each change. The scope
+  is prose: repository rules by default, skill names, or "full sweep".
+- A commanded run uses `--role orchestrator`: it may start the test sessions and hands the
+  rewrite to one developer helper through the ticket. Do not cap its sessions below what one
+  retest after the last change needs (the 1225 run tested a version it then had to change).
+- The per-skill tests in `internal/claude/*_skill_test.go` check registration, installation to
+  every target and the names a skill depends on. Do not add phrase or heading lists; the
+  `harnez-init` test had 22 and blocked a trim (issue 1224). The other skill tests still carry
+  phrase lists; loosen each when its skill is trimmed.
+- First run and what it showed: `docs/studies/2026-11-13-core-docs-trim-and-cleanup-skill.md`.
 
 ### Spec-rendered skill bodies
 
@@ -187,7 +205,7 @@ help keywords can attract accidental skill selection even inside an exclusion.
 
 ### Source reuse
 
-A single `commands/<name>.md` file can back both a Claude command (`commands:` entry) and
+A single `docs/commands/<name>.md` file can back both a Claude command (`commands:` entry) and
 an Antigravity, Codex, or Prime Agent skill (`skills:` entry). The frontmatter is generated
 differently by `genCommandContent` vs `genSkillContent`; the body is identical.
 

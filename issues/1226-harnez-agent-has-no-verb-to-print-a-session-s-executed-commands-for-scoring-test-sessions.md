@@ -27,6 +27,12 @@ their own transcripts and the scores rest on self-reported evidence.
   `local_shell_call` payloads for Codex.
 - Unverified: where harnez records the transcript path per session, and whether the stats
   stream already carries the executed commands.
+- Found after filing (the host had not read it first): `docs/OrchestratedAgentFlow.md`,
+  section 5 "Finding out what agents ran", already names the Codex rollout logs and the
+  telemetry database (`~/.harnez/tool_catalog.sqlite`, `harnez stats`) as sources. The Claude
+  transcript path was added there on 2026-11-13. So the data is reachable by hand; what is
+  missing is one command an orchestrator can name in a task. Whether `harnez stats` can list one
+  session's commands was not checked.
 
 ## 3. Implementation & Verification Plan
 

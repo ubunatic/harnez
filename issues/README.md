@@ -56,4 +56,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1223 | [1223-generated-git-hint-says-work-on-the-default-branch-in-a-protected-main-team-repo.md](1223-generated-git-hint-says-work-on-the-default-branch-in-a-protected-main-team-repo.md) | Generated Git hint says work on the default branch in a protected-main team repo | Open |
 | 1224 | [1224-core-agent-docs-trim-iteration-2.md](1224-core-agent-docs-trim-iteration-2.md) | Core agent docs trim, iteration 2 | Open |
 | 1226 | [1226-harnez-agent-has-no-verb-to-print-a-session-s-executed-commands-for-scoring-test-sessions.md](1226-harnez-agent-has-no-verb-to-print-a-session-s-executed-commands-for-scoring-test-sessions.md) | harnez agent has no verb to print a session's executed commands for scoring test sessions | Open |
+| 1227 | [1227-quota-1-untested-code-warning-fires-after-a-branch-switch-although-the-code-equals-the-tested-commit.md](1227-quota-1-untested-code-warning-fires-after-a-branch-switch-although-the-code-equals-the-tested-commit.md) | Quota-1 untested-code warning fires after a branch switch although the code equals the tested commit | Open |
 <!-- harnez:end issues-active-index -->

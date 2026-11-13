@@ -93,9 +93,37 @@ requires the copy to equal what init would write (`prepareManagedDoc`). All copy
 in this repo's init doc set, including `ConciseMode.md`, `Containerfile.md`, and `Website.md`,
 are checked; no root copy is currently skipped (issue 669).
 
+## Doc list references and Claude Code imports
+
+The doc list in `AGENTS.md` is rendered by `internal/claude/apply.go`: `- <name> <ref>` and, when
+the doc has a hint, a comma and the indented hint lines. The comma decides what Claude Code does
+with the `@docs/X.md` reference. Canary of 2026-11-13 (scratch project, symlinked instruction
+file, checked with `/context`; issue 1224):
+
+| Form | Imported into the session |
+|---|---|
+| `- Doc A @docs/A.md,` (trailing comma) | no |
+| `- Doc B @docs/B.md` (end of line) | yes |
+| `- See @docs/C.md for more.` | yes |
+| `` `@docs/D.md` `` (code span) | no |
+
+- Every doc in this repository's list has a hint, so none is imported; sessions see the hint lines
+  only. Removing the comma would import all listed docs (about 115 KB here) into every Claude
+  session. Other harnesses read `@path` as plain text.
+- The hint line is therefore the only text an agent is sure to see for a doc. Write it as the
+  rule itself, not as a pointer: the Bash hint "break before then/else" was read as "`then` alone
+  on a line" until it was rewritten (issue 1221).
+- A hand-written `@docs/X.md` in a global instruction file is imported in full. Two such lines
+  cost 10.3k tokens per session before 1221.
+- The read guard blocks a native read of a file with 100 lines or more. A lite doc meant to be
+  read on demand stays under 100 lines; `docs/Bash.md` at 104 lines was given up on by a
+  `haiku:high` session. No test enforces this yet (1224).
+- Open design (1224): make the comma a per-doc choice between import and hint, and deliver rules
+  per harness, model tier and role.
+
 ## Lint check
 
-`make lint` / `scripts/lint.sh` verifies that every `commands/*.md` file has a matching
+`make lint` / `scripts/lint.sh` verifies that every `docs/commands/*.md` file has a matching
 `- name:` entry in `config.yaml`. Runs forward only (file → config); the reverse direction
 (config entry → file exists) is enforced by `apply`, which errors on missing `file:` paths.
 
