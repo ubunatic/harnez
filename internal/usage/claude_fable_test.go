@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -34,7 +35,7 @@ func fableAgent(withFable bool) AgentUsage {
 	now := time.Now()
 	reset := now.Add(20 * time.Hour)
 	a := AgentUsage{
-		AgentID: "claude", Name: "Claude", Authenticated: true, LastRefreshed: now,
+		AgentID: "claude", Name: "Claude", Installed: true, Authenticated: true, LastRefreshed: now,
 		Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 98, RemainingPercent: 2, ResetAt: &reset, DurationLeft: time.Hour},
 		Weekly:  &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 97, RemainingPercent: 3, ResetAt: &reset, DurationLeft: 20 * time.Hour},
 	}
@@ -115,5 +116,61 @@ func TestFableWindowStoreRoundTrip(t *testing.T) {
 	fw, ok := got.ExtraWindows[ClaudeFableWindowKey]
 	if !ok || fw.UsedPercent != 96 {
 		t.Fatalf("fable window = %+v (ok=%v), want 96%%", fw, ok)
+	}
+}
+
+// Offline guards: no network, no real home, no collector.
+
+func TestFableWindowInUsageJSON(t *testing.T) {
+	data, err := json.Marshal(fableAgent(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back struct {
+		Weekly       *QuotaWindow           `json:"weekly"`
+		ExtraWindows map[string]QuotaWindow `json:"extra_windows"`
+	}
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Weekly == nil || back.Weekly.UsedPercent != 97 {
+		t.Fatalf("weekly must stay the all-models window: %s", data)
+	}
+	if fw, ok := back.ExtraWindows["fable"]; !ok || fw.UsedPercent != 96 || fw.Name != "Fable" {
+		t.Fatalf(`extra_windows["fable"] = %+v (ok=%v) in %s`, fw, ok, data)
+	}
+	data, _ = json.Marshal(fableAgent(false))
+	if strings.Contains(string(data), "fable") {
+		t.Fatalf("no Fable limit must emit no fable key: %s", data)
+	}
+}
+
+func TestCompactUsageViewHasSeparateFableLine(t *testing.T) {
+	now := time.Now()
+	lines := allUsageLinesAt(UsageSummary{Agents: []AgentUsage{fableAgent(true)}}, 100, false, now, time.Minute)
+	var plain []string
+	for _, l := range lines {
+		plain = append(plain, stripANSI(l))
+	}
+	fable := -1
+	for i, l := range plain {
+		if strings.Contains(strings.ToLower(l), "fable") {
+			fable = i
+		}
+	}
+	if len(plain) != 2 || fable != 1 || !strings.Contains(plain[fable], "96%") || !strings.Contains(plain[0], "97%") {
+		t.Fatalf("want agent row (97%%) then separate fable row (96%%), got %q", plain)
+	}
+
+	lines = allUsageLinesAt(UsageSummary{Agents: []AgentUsage{fableAgent(false)}}, 100, false, now, time.Minute)
+	if len(lines) != 1 {
+		t.Fatalf("no Fable limit must add no row, got %q", lines)
+	}
+}
+
+func TestDetailedUsageViewShowsFableLimit(t *testing.T) {
+	out := stripANSI(RenderText(UsageSummary{Agents: []AgentUsage{fableAgent(true)}}))
+	if !strings.Contains(out, "Fable Weekly Limit:") {
+		t.Fatalf("detailed view lacks the Fable limit:\n%s", out)
 	}
 }
