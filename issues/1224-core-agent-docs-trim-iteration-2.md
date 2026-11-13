@@ -69,15 +69,20 @@ lower-case stems for rules with side effects. What each test dropped and what it
 
 | Skill | Dropped (headings and sentences) | Kept |
 |---|---|---|
-| `decide` | "## Rules", "Very critical only", "relayed answer does not count", "Circuit breaker" | `--model cheap`, `--model smart`, `docs/lang/Git.md`; stems "force-push", "no release" |
+| `decide` | "## Rules", "Very critical only", "Circuit breaker" | `--model cheap`, `--model smart`, `docs/lang/Git.md`; stems "force-push", "no release", "destructive or irreversible", "spending money", "publishing outside", "relayed answer does not count" |
 | `next` | three headings | the `harnez find` command; stem "ask the user to choose" |
-| `peer-assistant` | four headings, five sentences on watching, messaging and cleanup | three commands; stem "writer per shared workspace"; identical copies in all targets |
+| `peer-assistant` | four headings, five sentences on watching, messaging and cleanup | three commands; stems "writer per shared workspace", "stop or delete it"; identical copies in all targets |
 | `wrap` | one heading, "issue index", "partial or broken", "handoff issue", "curates", "learnings" | `disable-model-invocation: true`, `/evergreen`; stem "stop background helpers" |
 | `review` | five step headings | `git diff`, `git status`, `harnez issues new`; idempotent second apply |
-| `issue` | "## TL;DR", two goal sentences, eleven publication sentences, the PNG sentence | five commands, `/goal`, `--force`; stems "do not fall back to a direct push", "never delete or overwrite", "stop and report"; route order; no routine image flags |
+| `issue` | "## TL;DR", two goal sentences, eleven publication sentences, the PNG sentence | five commands, `/goal`, `--force`; stems "strictest rule wins", "standing consent is insufficient", "never use `--force`", "do not fall back to a direct push", "never delete or overwrite", "denied permission", "unrelated commit or file"; route order; no routine image flags |
 | `harnez-handoff` | five headings, six sentences | request words, profile names, four command fragments; every spec line; banned strings |
 | `harnez-init` | (loosened earlier) | five names; new stem "if not initialized, stop" |
 | `harnez-advisor` | "There are no portable skill flags." | five targets, identical copies |
+
+Reviewer pass (`codex:sol:low`, read-only, 41 s): four findings, all taken. The first version
+kept too few stems for `decide` (the stop-and-ask cases), `issue` (publication authorization,
+the `--force` ban, the two stop conditions) and `peer-assistant` (helper cleanup); the table
+above shows the final lists. No vacuous pass and no lost structural check were found.
 
 Also done in this pass:
 

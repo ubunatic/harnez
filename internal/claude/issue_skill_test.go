@@ -22,9 +22,13 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		},
 		// The skill publishes commits: the limits on that must survive a trim.
 		rules: []string{
+			"strictest rule wins",
+			"standing consent is insufficient",
+			"never use `--force`",
 			"do not fall back to a direct push",
 			"never delete or overwrite",
-			"stop and report",
+			"denied permission",
+			"unrelated commit or file",
 		},
 	})
 	for i, skillsRoot := range skillTargets(cfg) {

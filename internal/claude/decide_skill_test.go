@@ -9,7 +9,14 @@ func TestDecideSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		file:     "docs/commands/decide.md",
 		override: "user-invocable-only",
 		names:    []string{"--model cheap", "--model smart", "docs/lang/Git.md"},
-		// /decide grants push authority: the two limits on it must survive a trim.
-		rules: []string{"force-push", "no release"},
+		// /decide grants push authority: its limits and the stop-and-ask cases must survive a trim.
+		rules: []string{
+			"force-push",
+			"no release",
+			"destructive or irreversible",
+			"spending money",
+			"publishing outside",
+			"relayed answer does not count",
+		},
 	})
 }
