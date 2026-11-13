@@ -1,6 +1,6 @@
 # 1033 — Tool-call limit per agent turn, enforced by harnez, not by the prompt
 
-**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
+**Status**: Open — M1–M3 implemented and tested in c6d9a828 (feat/jules-batch-b); live lmcoder:coder acceptance deferred (pi absent / proxy 127.0.0.1:8735 offline)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

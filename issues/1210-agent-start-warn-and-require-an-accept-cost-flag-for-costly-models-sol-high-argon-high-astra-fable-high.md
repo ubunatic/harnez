@@ -1,6 +1,6 @@
 # 1210 — agent start: warn and require an accept-cost flag for costly models (sol:high, argon:high, astra, fable:high)
 
-**Status**: Open
+**Status**: Closed — resolved in 20682de5
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Feature
@@ -52,8 +52,7 @@ A list, not a cost threshold: `costly_models` in `spec/agent.yaml` holds `filepa
   `subagent.IsCostlyModel(spec)` resolves aliases and official names, then matches the patterns.
   `TestIsCostlyModel` fails without the spec list. The host dropped an untested `ModelCost` helper and the
   PR's full reformat of `agent.schema.json`.
-- Left: the `--accept-cost` flag on `agent start`/`resume`, the refusal message (model, relative cost,
-  quota left), pick-chain handling, `--dry-run`, docs.
+- Slice 2 (2026-11-13, resolved in `20682de5`): `--accept-cost` flag on `agent start`/`resume` and interactive mode, pick-chain resolution before guarding, refusal message with resolved model/relative cost/quota remaining, `--dry-run` warning, docs, tests, `make test-q1` pass.
 
 ## Jules runs
 
