@@ -6,8 +6,8 @@
 (log scale on X, anchored at `codex:luna:low = 1`) against capability rating (1–5 stars
 on Y, half steps).
 
-- **Multi-tier series**: each model's effort tiers (low, med, high) are plotted as connected
-  points colored by provider.
+- **Multi-tier series**: each model's effort tiers (`low`, `med`, `high`, plus `xhigh` where enabled, e.g. `claude:haiku:xhigh`, issue 993) are plotted as connected
+  points colored by provider. (`claude` and `agy` effort-capable models also accept `:xhigh` and opt-in `:max`; `codex`/`pi` reject them — see issue 1229 for unshipped 2026-11-07 owner decisions.)
 - **Spec-driven ratings**: capability scores live in `spec/model_scores.yaml` (schema
   `spec/schemas/model_scores.schema.json`), seeded from harnez evidence (picks, skill marks,
   cost tiers) and marked `owner estimate, unverified`.

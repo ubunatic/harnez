@@ -1,6 +1,6 @@
 # 1033 — Tool-call limit per agent turn, enforced by harnez, not by the prompt
 
-**Status**: Open — M1–M3 implemented and tested in c6d9a828 (feat/jules-batch-b); live lmcoder:coder acceptance deferred (pi absent / proxy 127.0.0.1:8735 offline)
+**Status**: Open — M1–M3 implemented and tested on `main` (`3d9183ea`, PR #166); live lmcoder:coder acceptance deferred (pi absent / proxy 127.0.0.1:8735 offline)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

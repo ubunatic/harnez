@@ -28,6 +28,9 @@ Forgejo and Gitea support it (Codeberg runs Forgejo). GitHub has no AGit.
   a new PR. Trust the PR number in the URL, not that wording.
 - A non-fast-forward update is rejected. Never override it with `-o force-push=true`, and never
   force-push.
+- After rebasing an open AGit PR onto an updated `<default-branch>`, pushing the rebased commits
+  to the same topic is rejected as non-fast-forward; push to a new topic suffix (e.g.
+  `<topic>-2`) to open a clean replacement PR, and close the superseded PR.
 - After a squash or rebase merge, reset the local branch to `origin/<default-branch>`, or the merged
   commits reappear in the next PR.
 
