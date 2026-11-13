@@ -6,10 +6,7 @@ Rationale and a do/don't table: `harnez docs variant bash full`.
 
 ## 1. Header
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-```
+Every script starts with `#!/usr/bin/env bash` and, on line two, `set -euo pipefail`.
 
 ## 2. Conditionals: `if test`, never brackets (top rule)
 
@@ -25,19 +22,15 @@ then stmt1
 else fail "not found"
 fi
 
-while test "$x" != "$y"
-do step "$x"
-done
-
 for item in "${items[@]}"
 do process_item "$item" || fail "item $item"
    log_item "$item"
 done
 ```
 
-- Never `[ ... ]` or `[[ ... ]]`; `test` is a command like any other.
+- Never `[ ... ]` or `[[ ... ]]`; `test` is a command like any other, also after `while`.
 - Never `; then` or `; do`: break the line. Avoid `;` everywhere else too.
-- The first command sits on the `then`/`else`/`do` line and later commands align under it. No `then` alone on a line.
+- The first command sits on the `then`/`else`/`do` line and later commands align under it. Never leave `then`, `else` or `do` alone on a line.
 - No `a && b || c` as control flow; write the 4-line `if-then-else-fi`.
 - Aim for 3-line `if` blocks and loops; move a longer body into a function.
 
@@ -50,7 +43,7 @@ result=$(some_command |
 ```
 
 - Break after `|`, `&&` and `||`, then align under the start of the chain.
-- Function bodies indent by 3. Alignment wins over the fixed indent.
+- Function bodies indent by 3 spaces, never tabs. Alignment wins over the fixed indent.
 
 ## 4. Variables, functions, output
 
@@ -64,10 +57,6 @@ process_item() {
    printf '%s\n' "$out"
 }
 
-pass() {
-   printf '  ✓ %s\n' "$*"
-}
-
 fail() {
    printf 'ERROR: %s\n' "$*" >&2
    exit 1
@@ -75,15 +64,14 @@ fail() {
 ```
 
 - `local out` first, then assign: `local out=$(cmd)` hides the exit code.
-- `printf` over `echo` for variables. Errors and logs go to stderr.
+- `printf`, not `echo`. Errors and logs go to stderr. Status helpers: `pass` prints `'  ✓ %s\n'`, `fail` as above.
 - Functions return status (`return 0`/`return 1`), never printed booleans. Define them before the first call.
 - `source file`, never `. file`.
 
 ## 5. Commands & traps
 
-- `command -v tool`, not `which`.
-- Temp files: `tmp=$(mktemp)` plus `trap 'rm -f "$tmp"' EXIT`.
-- Wrap a command of uncertain duration that has no timeout of its own (network probe, lock wait, external call): `timeout 30 curl -sf URL`. Size the seconds per command. Exit 124 means `timeout` killed it.
+- `command -v tool`, not `which`. Temp files: `tmp=$(mktemp)` plus `trap 'rm -f "$tmp"' EXIT`.
+- Wrap a command of uncertain duration that has no timeout of its own (network probe, lock wait): `timeout 30 curl -sf URL`. Size the seconds per command. Exit 124 means `timeout` killed it.
 
 ## 6. Directory scoping: `-C` over `cd`
 

@@ -15,8 +15,8 @@ Harnez-only rules in .harnez/rules/. Flags and details: `harnez <verb> --help`.
   multi-line edits enough context to match once.
 - Codex `apply_patch`: one file per call, and re-read the exact lines (`harnez read -L`) right
   before patching. Stale context fails the patch and can end the turn.
-- Files over 100 lines: `harnez read -L <range>` or `harnez read -n`. A hook may block larger
-  native reads (`reading_discipline.enforce`).
+- Files of 100 lines or more: `harnez read -L <range>` or `harnez read -n`. A hook may block
+  native reads of that size (`reading_discipline.enforce`).
 - Docs and tickets are read as text. Render PNG cards only when the user explicitly requests image output.
 
 ## Harnez Agent

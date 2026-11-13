@@ -50,7 +50,7 @@ Normal engineering practice is assumed and not restated. Command details live in
 6. **Context Discipline**
    - Never whole-file-read `AGENTS.md` or other files already in the active prompt. In-file
      warning banners do not help once the file is in the history.
-   - For files over 100 lines use `harnez read -L <range>` or `harnez read -n`
+   - For files of 100 lines or more use `harnez read -L <range>` or `harnez read -n`
      (`harnez read -I` is paused until issue 543 is fixed). Hooks may enforce this when
      `reading_discipline.enforce` is set in `~/.harnez/config.yaml` or via `HARNEZ_READ_ENFORCE`.
    - Global instruction files (`~/.claude/CLAUDE.md`, `~/.prime/agent/AGENTS.md`) cite docs as

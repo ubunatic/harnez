@@ -775,8 +775,8 @@ agents_md:
             multi-line edits enough context to match once.
           - Codex `apply_patch`: one file per call, and re-read the exact lines (`harnez read -L`) right
             before patching. Stale context fails the patch and can end the turn.
-          - Files over 100 lines: `harnez read -L <range>` or `harnez read -n`. A hook may block larger
-            native reads (`reading_discipline.enforce`).
+          - Files of 100 lines or more: `harnez read -L <range>` or `harnez read -n`. A hook may block
+            native reads of that size (`reading_discipline.enforce`).
           - Docs and tickets are read as text. Render PNG cards only when the user explicitly requests image output.
 
           ## Harnez Agent
@@ -913,10 +913,10 @@ agents_md:
       name: "Bash/Shell"
       ref: "@docs/Bash.md"
       hint: |
-        Read before multi-line shell: Make recipes, embedded scripts
-        No ";", break before then/else/docs
-        No "if [[]]", No "if []", Use "if test"
-        smart indent!
+        Read docs/Bash.md before writing shell (scripts, Make recipes, embedded shell): house style, not common Bash
+        Header `set -euo pipefail`; `if test`, never `[ ]` or `[[ ]]`; no `;`
+        First command on the `then`/`else`/`do` line, later ones aligned under it; never `then` or `do` alone on a line
+        Function bodies indent 3 spaces, no tabs; `printf`, not `echo`
         Use git -C/make -C, not cd
       source: docs/lang/Bash.md
       lite_source: docs/lang/Bash.lite.md

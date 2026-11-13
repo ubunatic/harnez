@@ -100,10 +100,10 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 - AGit @docs/AGit.md,
   this repo uses AGit: push HEAD:refs/for/<default>/<topic>, no branch; merged topic opens a new PR; harnez pr wait for the merge
 - Bash/Shell @docs/Bash.md,
-  Read before multi-line shell: Make recipes, embedded scripts
-  No ";", break before then/else/docs
-  No "if [[]]", No "if []", Use "if test"
-  smart indent!
+  Read docs/Bash.md before writing shell (scripts, Make recipes, embedded shell): house style, not common Bash
+  Header `set -euo pipefail`; `if test`, never `[ ]` or `[[ ]]`; no `;`
+  First command on the `then`/`else`/`do` line, later ones aligned under it; never `then` or `do` alone on a line
+  Function bodies indent 3 spaces, no tabs; `printf`, not `echo`
   Use git -C/make -C, not cd
 - Canary-first development @docs/Canary.md,
   probe external mechanisms before building features on them

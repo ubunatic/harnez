@@ -78,7 +78,7 @@ process_item() {
 }
 ```
 
-Function bodies indent by 3. Alignment wins over the fixed indent, so statements after the first
+Function bodies indent by 3 spaces, never tabs. Alignment wins over the fixed indent, so statements after the first
 one in a `then` block sit 5 columns in from the `if`.
 
 ## 4. Variables, functions, output
@@ -104,7 +104,7 @@ fail() {
 ```
 
 - `local out` first, then assign: `local out=$(cmd)` returns the status of `local` and hides the command's exit code.
-- `printf` over `echo` for variables. Errors and logs go to stderr.
+- `printf`, not `echo`. Errors and logs go to stderr.
 - Functions return status (`return 0`/`return 1`), never printed booleans. Define them before the first call.
 - `source file`, never `. file`: `source` is greppable and cannot be confused with `./script.sh` or lost in whitespace. This includes dotfiles (`source ~/.bashrc`).
 
