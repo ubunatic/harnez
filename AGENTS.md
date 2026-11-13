@@ -1,4 +1,4 @@
-**Once per session, before your first task, read all Harnez rules in one call: `harnez read .harnez/rules/Tools.md .harnez/rules/Issues.md .harnez/rules/Quota.md .harnez/rules/Subagents.md .harnez/rules/Output.md .harnez/rules/Local.md`. Absent optional files are skipped. Skip this if you already read them in this session. This follows Index.md order; Local.md overrides the other rules.**
+**Once per session, before your first task, read all Harnez rules in one call: `harnez read .harnez/rules/Tools.md .harnez/rules/Issues.md .harnez/rules/Quota.md .harnez/rules/Subagents.md .harnez/rules/Output.md .harnez/rules/Local.md`. Read the whole output; never pipe it through `head` or cut it off. Absent optional files are skipped. Skip this if you already read them in this session. This follows Index.md order; Local.md overrides the other rules.**
 
 <!-- Keep this file token-efficient: use bullet lists, not tables; no redundant prose. -->
 <!-- AGENTS.md is the canonical source; CLAUDE.md is a symlink to it. Edit AGENTS.md only. -->
