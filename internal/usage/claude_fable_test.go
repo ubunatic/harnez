@@ -1,6 +1,9 @@
 package usage
 
 import (
+	"context"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -51,5 +54,66 @@ func TestUsageTableFableLine(t *testing.T) {
 	}
 	if n := len(usageTableWindows(fableAgent(false), time.Now())); n != 2 {
 		t.Fatalf("no fable window must add no line, got %d windows", n)
+	}
+}
+
+type fixtureTransport string
+
+func (f fixtureTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(string(f)))}, nil
+}
+
+// Shape of the live api.anthropic.com/api/oauth/usage response (2026-11-13).
+const fableOAuthFixture = `{
+ "five_hour": {"utilization": 0.0, "resets_at": null},
+ "seven_day": {"utilization": 98.0, "resets_at": "2026-11-14T17:00:00.023747+00:00"},
+ "limits": [
+  {"kind": "session", "group": "session", "percent": 0, "resets_at": null, "scope": null, "is_active": false},
+  {"kind": "weekly_all", "group": "weekly", "percent": 98, "resets_at": "2026-11-14T17:00:00.023747+00:00", "scope": null, "is_active": true},
+  {"kind": "weekly_scoped", "group": "weekly", "percent": 96, "resets_at": "2026-11-14T17:00:00.024103+00:00",
+   "scope": {"model": {"id": null, "display_name": "Fable"}, "surface": null}, "is_active": false},
+  {"kind": "weekly_scoped", "group": "weekly", "percent": 10, "resets_at": "2026-11-14T17:00:00.024103+00:00",
+   "scope": {"model": {"id": null, "display_name": "Opus"}, "surface": null}, "is_active": false}
+ ]}`
+
+func TestFetchClaudeQuotaFableFromOAuthLimits(t *testing.T) {
+	client := &http.Client{Transport: fixtureTransport(fableOAuthFixture)}
+	got, _, err := fetchClaudeQuota(context.Background(), client, ClaudeCredentials{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.payload.Weekly == nil || got.payload.Weekly.UsedPercent != 98 {
+		t.Fatalf("weekly = %+v", got.payload.Weekly)
+	}
+	if got.payload.Fable == nil || got.payload.Fable.UsedPercent != 96 || got.payload.Fable.ResetAt == nil {
+		t.Fatalf("fable = %+v, want 96%% with a reset time", got.payload.Fable)
+	}
+
+	none := &http.Client{Transport: fixtureTransport(`{"seven_day": {"utilization": 5}, "limits": []}`)}
+	got, _, err = fetchClaudeQuota(context.Background(), none, ClaudeCredentials{})
+	if err != nil || got.payload.Fable != nil {
+		t.Fatalf("no Fable limit must give no Fable window: %+v, %v", got.payload.Fable, err)
+	}
+}
+
+// The Fable window must survive the SQLite store round trip without colliding
+// with (or replacing) the all-models weekly window, whatever the row order.
+func TestFableWindowStoreRoundTrip(t *testing.T) {
+	isolateUsageTestStorage(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	seedProviderSnapshot(t, "claude", now, fableAgent(true))
+	_, got, err := ProviderSnapshotFromStore(context.Background(), "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Weekly == nil || got.Weekly.UsedPercent != 97 {
+		t.Fatalf("weekly = %+v, want the all-models 97%%", got.Weekly)
+	}
+	if got.Session == nil || got.Session.UsedPercent != 98 {
+		t.Fatalf("session = %+v, want 98%%", got.Session)
+	}
+	fw, ok := got.ExtraWindows[ClaudeFableWindowKey]
+	if !ok || fw.UsedPercent != 96 {
+		t.Fatalf("fable window = %+v (ok=%v), want 96%%", fw, ok)
 	}
 }

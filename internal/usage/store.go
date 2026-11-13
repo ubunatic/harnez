@@ -599,7 +599,12 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 		}
 		name := strings.ToLower(r.Name)
 		neutral := strings.HasPrefix(name, "quota") && r.Key != "weekly" && r.Key != "monthly"
-		if neutral && agent.Weekly != nil {
+		if r.Key == ClaudeFableWindowKey {
+			if agent.ExtraWindows == nil {
+				agent.ExtraWindows = map[string]QuotaWindow{}
+			}
+			agent.ExtraWindows[r.Key] = w
+		} else if neutral && agent.Weekly != nil {
 			// A neutral unknown-length window never displaces a real one.
 			if agent.ExtraWindows == nil {
 				agent.ExtraWindows = map[string]QuotaWindow{}

@@ -78,6 +78,11 @@ type ClaudeOauthUsageResponse struct {
 		Severity string  `json:"severity"`
 		ResetsAt string  `json:"resets_at"`
 		IsActive bool    `json:"is_active"`
+		Scope    *struct {
+			Model *struct {
+				DisplayName string `json:"display_name"`
+			} `json:"model"`
+		} `json:"scope"`
 	} `json:"limits"`
 	ExtraUsage *struct {
 		IsEnabled   bool    `json:"is_enabled"`
@@ -96,9 +101,11 @@ type claudeQuotaPayload struct {
 }
 
 // ClaudeFableWindowKey is the AgentUsage.ExtraWindows key of the Fable weekly window.
-const ClaudeFableWindowKey = "fable_weekly"
+const ClaudeFableWindowKey = "fable"
 
-const claudeFableWindowName = "Weekly Fable (7-day)"
+// The name must not contain "week" or "7-day": usagestore.NormalizeWindowKey
+// would map it to the all-models "weekly" key and the two windows would collide.
+const claudeFableWindowName = "Fable"
 
 // applyClaudeFable stores the Fable window of a payload in usage.ExtraWindows.
 func applyClaudeFable(usage *AgentUsage, w *QuotaWindow) {
@@ -181,8 +188,11 @@ func fetchClaudeQuota(ctx context.Context, client *http.Client, oauth ClaudeCred
 		}
 		result.payload.Weekly = &qw
 	}
+	// A "weekly_scoped" limit whose scope names the Fable model is the separate
+	// Fable weekly quota (live response shape observed 2026-11-13).
 	for _, l := range oauthUsage.Limits {
-		if !strings.Contains(strings.ToLower(l.Group+" "+l.Kind), "fable") || strings.Contains(strings.ToLower(l.Kind), "session") {
+		if l.Kind != "weekly_scoped" || l.Scope == nil || l.Scope.Model == nil ||
+			!strings.EqualFold(l.Scope.Model.DisplayName, "Fable") {
 			continue
 		}
 		qw := QuotaWindow{Name: claudeFableWindowName, UsedPercent: l.Percent, RemainingPercent: max(0, 100-l.Percent)}

@@ -263,7 +263,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 			}
 
 			if fw, ok := agent.ExtraWindows[ClaudeFableWindowKey]; ok {
-				lines = append(lines, "", fmt.Sprintf("%s Limit:", fw.Name))
+				lines = append(lines, "", "Fable Weekly Limit:")
 				bar := rograph.RenderProgressBar(fw.UsedPercent, rograph.MaxWidth)
 				resetInfo := ""
 				if fw.ResetAt != nil {
