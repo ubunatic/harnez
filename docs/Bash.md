@@ -1,73 +1,60 @@
 <!-- harnez:variant=lite -->
 # Bash Rules (Lite)
 
+House style. It overrides common Bash habits; where it is silent, write normal careful Bash.
+Rationale and a do/don't table: `harnez docs variant bash full`.
+
 ## 1. Header
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail   # -e exit on non-zero; -u exit on unset var; -o pipefail last non-zero wins
-```
+Every script starts with `#!/usr/bin/env bash` and, on line two, `set -euo pipefail`.
 
-## 2. Sourcing
-
-DO `source f` — readable, greppable (`grep 'source '`), distinct from `./script.sh`.
-DON'T `. f` — dot is lost in whitespace, confusable with paths, ungreppable.
+## 2. Conditionals: `if test`, never brackets (top rule)
 
 ```bash
-source ~/.bashrc   # ✅
-. ~/.bashrc        # ❌
-```
-
-## 3. Conditionals — TOP RULE: `if test`, never brackets
-
-```bash
-if test -f "$file"                    # ✅ 3-line if-then-fi
-then printf 'Found %s\n' "$file"
+if test -f "$file"
+then printf 'found %s\n' "$file"
 fi
 
-if test "$a" = "$b"                   # ✅ 4-line if-then-else-fi
-then printf 'Equal\n'
-else printf 'Not equal\n'
+if test "$a" = "$b" &&
+   test -d "$dir"
+then stmt1
+     stmt2
+else fail "not found"
 fi
 
-if test -d "$dir"                     # ✅ multi-cmd: 1st cmd on `then` line, rest aligned under it
-then printf 'Entering %s\n' "$dir"
-     process_dir "$dir"
-fi
-
-while test "$x" != "$y"               # ✅ 1st cmd on `do` line
-do process "$x"
+for item in "${items[@]}"
+do process_item "$item" || fail "item $item"
+   log_item "$item"
 done
 ```
 
-DON'T (all forbidden, no exceptions, forget legacy usage):
+- Never `[ ... ]` or `[[ ... ]]`; `test` is a command like any other, also after `while`.
+- Never `; then` or `; do`: break the line. Avoid `;` everywhere else too.
+- The first command sits on the `then`/`else`/`do` line and later commands align under it. Never leave `then`, `else` or `do` alone on a line.
+- No `a && b || c` as control flow; write the 4-line `if-then-else-fi`.
+- Aim for 3-line `if` blocks and loops; move a longer body into a function.
 
-- `[ x = y ]` single brackets
-- `[[ x == y ]]` double brackets
-- `; then` / `; do` — break the line instead
-- `then` alone on its line (dangling) — 1st cmd goes on the `then` line
-- `test x = y && do_a || do_b` logic ops as control flow – use 4-line `if-then-else-fi`
-
-## 4. Variables
+## 3. Continuation: align, no fixed indent
 
 ```bash
-"$var" "${var}"                            # quote EVERY expansion
-pattern="${1:?Usage: script.sh PATTERN}"   # required arg
-f() {
-   local name="$1"        # literal -> assign inline
-   local result           # cmd substitution -> declare FIRST,
-   result=$(cmd args)     # then assign; else `local` masks cmd exit code
-}
+result=$(some_command |
+         grep "pattern" |
+         awk '{print $2}')
 ```
 
-## 5. Output
+- Break after `|`, `&&` and `||`, then align under the start of the chain.
+- Function bodies indent by 3 spaces, never tabs. Alignment wins over the fixed indent.
+
+## 4. Variables, functions, output
 
 ```bash
-printf '%s\n' "$var"              # printf > echo for variables
-printf 'ERROR: %s\n' "$msg" >&2   # errors -> stderr
+pattern="${1:?Usage: script.sh PATTERN}"
 
-pass() {
-   printf '  ✓ %s\n' "$*"
+process_item() {
+   local item="$1"
+   local out
+   out=$(tool "$item")
+   printf '%s\n' "$out"
 }
 
 fail() {
@@ -76,89 +63,30 @@ fail() {
 }
 ```
 
-## 6. Continuation — align, never fixed indent
+- `local out` first, then assign: `local out=$(cmd)` hides the exit code.
+- `printf`, not `echo`. Errors and logs go to stderr. Status helpers: `pass` prints `'  ✓ %s\n'`, `fail` as above.
+- Functions return status (`return 0`/`return 1`), never printed booleans. Define them before the first call.
+- `source file`, never `. file`.
 
-```bash
-result=$(some_command |        # pipeline: break after `|`, align under chain start
-         grep "pattern" |
-         awk '{print $2}')
+## 5. Commands & traps
 
-if test -f "$a" &&             # condition: break after `&&`/`||`, align under 1st test
-   test -d "$b"
-then stmt1
-     stmt2
-else fail "not found"
-fi
+- `command -v tool`, not `which`. Temp files: `tmp=$(mktemp)` plus `trap 'rm -f "$tmp"' EXIT`.
+- Wrap a command of uncertain duration that has no timeout of its own (network probe, lock wait): `timeout 30 curl -sf URL`. Size the seconds per command. Exit 124 means `timeout` killed it.
 
-for item in "${array[@]}"      # then/else/do: 1st cmd on keyword line, rest aligned
-do process_item "$item" || fail "err"
-   log_item "$item"
-done
-```
+## 6. Directory scoping: `-C` over `cd`
 
-Function body: base indent 3 inside `{ }`. Alignment continuation > fixed indent for conditionals.
+The shell's cwd persists across tool calls and may be the user's own terminal, so a stray `cd` silently retargets later calls.
 
-## 7. Commands & traps
+- `git -C DIR`, `make -C DIR`, `go -C DIR`, `npm --prefix DIR`, `cargo --manifest-path DIR/Cargo.toml`.
+- No such flag: subshell, `(cd DIR && tool)`.
+- Never a bare `cd` that carries into a later call. If one is unavoidable, `cd` back before the call ends.
 
-```bash
-command -v tool   # not `which`
-out=$(cmd 2>&1)   # capture
-cmd > f           # write
-cmd >> f          # append
-cmd 2>/dev/null   # drop errors
-tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT   # always trap-clean temps
+## 7. Background tasks & `HTO=0`
 
-timeout 30 curl -sf https://example.com/health
-# wrap any uncertain-duration cmd lacking its own client-side timeout (net probe,
-# lock wait, external call). Size seconds per command, not one global value.
-# timeout exits 124 on kill -> branch on it separately from the cmd's own codes.
-# Per-invocation only; background jobs -> AgenticLoop.md "Blocking sleep Waits" /
-# "Buffered Long-Running Output".
-```
+Set `HTO=0` on every background task or job (`HTO=0 make test-q1`, `HTO=0 harnez ...`); otherwise `harnez exec` kills it after 60 seconds. Then wait for the completion notification: no polling, no `sleep` loops.
 
-## 8. Functions
+## 8. Awk portability
 
-Define before first use. Status via `return 0`/`return 1` — never printed booleans.
-
-## 9. Directory scoping — `-C` over `cd`
-
-Rule: command has a directory flag -> use it; never `cd` just for scoping. cwd persists
-across tool calls, so a stray `cd` silently retargets the *next* unrelated call (e.g.
-`git status` on the wrong repo) with no error.
-
-```bash
-git -C DIR status                  # git    -C DIR
-make -C DIR test                   # make   -C DIR
-go -C DIR build ./...              # go     -C DIR (1.20+)
-npm --prefix DIR install           # npm    --prefix DIR
-cargo build --manifest-path DIR/Cargo.toml   # cargo --manifest-path FILE
-
-(cd DIR && some-tool --flag)   # ✅ no flag exists -> subshell, cwd auto-restored
-cd DIR && some-tool --flag     # ⚠️ leaks cwd through rest of THIS call only; keep in ONE call
-                               # ❌ bare `cd` meant to carry into a LATER call
-```
-
-Shared-shell caveat: where the shell is shared with the user's interactive terminal, an
-agent's `cd` outlives the call and moves the human's prompt too. Advisory, not enforceable
-(issue 095) — the shell reaches anywhere the OS user can. Prefer `-C`/absolute paths/subshell;
-if a bare `cd` is unavoidable (tool takes relative paths only), capture and restore:
-
-```bash
-orig=$(pwd)
-cd DIR
-some-tool --relative-only-flag
-cd "$orig"
-```
-
-See issue 095 (cwd leak, trust boundary), issue 222 (multi-repo wrong-repo failure).
-
-## 10. Background Tasks, Jobs & `HTO=0`
-
-Always set `HTO=0` (e.g. `HTO=0 make test-q1`, `HTO=0 harnez ...`) when running background tasks/jobs to prevent `harnez exec` 60s timeout kills. Never poll status or run `sleep` loops; rely on reactive completion notifications.
-
-## 11. Awk Portability (rarely needed)
-
-Default is mawk, not gawk — no 3-arg `match(str, /re/, arr)` (use `split()`/`sub()`/`gsub()`),
-no `strtonum()` (write a manual `h2d()`), no `gensub()` (use `sub()`/`gsub()` + a temp var).
+The default `awk` is mawk, not gawk: no 3-argument `match()`, no `strtonum()`, no `gensub()`.
 
 <!-- harnez:stop -->
