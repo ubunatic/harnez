@@ -303,6 +303,9 @@ func decodeAgy(data []byte) (*TurnResult, error) {
 		r.ReasoningTokens = *v.Usage.Think
 		r.ReasoningTokensKnown = true
 	}
+	if v.Usage.Input == 0 && v.Usage.Output == 0 && valueOrZero(v.Usage.Think) == 0 && v.Usage.Cache == 0 {
+		r.TurnTokensUnknown = true
+	}
 	r.ContextTokens = -1 // agy's usage totals the whole turn, not the last-call context.
 	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens
 	r.TokensCumulative = r.TokensTurn

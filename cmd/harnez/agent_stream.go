@@ -78,8 +78,16 @@ type turnStream struct {
 	confirmed, violated, warned, planSeen bool
 	lastShown                             string
 	shown                                 bool
+	doneMeta                              turnDoneMeta
 	stop                                  chan struct{}
 	done                                  sync.WaitGroup
+}
+
+type turnDoneMeta struct {
+	sess         *subagent.Session
+	compactLimit int
+	quotaUnknown bool
+	costSpec     subagent.CostCheckSpec
 }
 
 func newTurnStream(cmd *cobra.Command, mode string, compacted bool) *turnStream {
@@ -209,13 +217,15 @@ func (t *turnStream) finish(r *subagent.TurnResult) {
 		size += len(m)
 	}
 	if t.mode == streamStats {
-		t.printf("[reply: %s]\n%s\n[done: %d messages (only the reply is shown), %d bytes, %s, %s]\n", shortDur(time.Since(t.began)), r.Response, len(r.Messages), size, tokenSummary(r), shortDur(time.Since(t.began)))
+		t.printf("[reply: %s]\n%s\n[done: %d messages (only the reply is shown), %d bytes, %s]\n", shortDur(time.Since(t.began)), r.Response, len(r.Messages), size, t.doneLineTail(r))
+		t.emitCostCheck(r)
 		return
 	}
 	if !t.shown || t.lastShown != r.Response {
 		t.printf("[reply: %s]\n%s\n", shortDur(time.Since(t.began)), r.Response)
 	}
-	t.printf("[done: %d messages, last message is the reply, %d bytes, %s, %s]\n", len(r.Messages), size, tokenSummary(r), shortDur(time.Since(t.began)))
+	t.printf("[done: %d messages, last message is the reply, %d bytes, %s]\n", len(r.Messages), size, t.doneLineTail(r))
+	t.emitCostCheck(r)
 }
 
 // abort stops the heartbeat goroutine when the turn failed.
@@ -224,10 +234,84 @@ func (t *turnStream) abort() {
 	t.done.Wait()
 }
 
-// tokenSummary separates tokens the turn added from input re-read from the
-// provider cache, so long-context sessions do not look expensive.
-func tokenSummary(r *subagent.TurnResult) string {
-	return fmt.Sprintf("tokens: %s new (%s out), %s cached", humanCount(subagent.CompactionTokens(r)), humanCount(r.OutputTokens), humanCount(r.CachedTokens))
+// tokenSummary reports per-turn and cumulative session tokens separately so the
+// host can spot high cached re-read relative to new work added on the turn.
+func tokenSummary(r *subagent.TurnResult, sess *subagent.Session) string {
+	turnPart := "turn unknown"
+	if r != nil && !r.TurnTokensUnknown {
+		turnPart = fmt.Sprintf("turn %s new (%s out), %s cached", humanCount(subagent.CompactionTokens(r)), humanCount(r.OutputTokens), humanCount(r.CachedTokens))
+	}
+	sessPart := "session unknown"
+	if sess != nil {
+		if sess.TokenTotalsKnown {
+			sessNew := max(sess.TokensCumulative-sess.CachedTokensTotal, 0)
+			sessPart = fmt.Sprintf("session %s new, %s cached", humanCount(sessNew), humanCount(sess.CachedTokensTotal))
+		}
+	} else if r != nil && !r.TurnTokensUnknown {
+		sessPart = fmt.Sprintf("session %s new, %s cached", humanCount(subagent.CompactionTokens(r)), humanCount(r.CachedTokens))
+	}
+	return fmt.Sprintf("tokens: %s; %s", turnPart, sessPart)
+}
+
+func contextSummary(r *subagent.TurnResult, compactLimit int) string {
+	if r == nil || r.ContextTokens <= 0 {
+		return "context usage unknown"
+	}
+	base := "context usage " + humanCount(r.ContextTokens)
+	if r.ContextWindowSize > 0 {
+		base = fmt.Sprintf("context usage %s of %s window", humanCount(r.ContextTokens), humanCount(r.ContextWindowSize))
+	}
+	if compactLimit > 0 {
+		base += ", compaction limit " + humanCount(compactLimit)
+	}
+	return base
+}
+
+func (t *turnStream) doneLineTail(r *subagent.TurnResult) string {
+	parts := []string{
+		tokenSummary(r, t.doneMeta.sess),
+		contextSummary(r, t.doneMeta.compactLimit),
+	}
+	if t.doneMeta.quotaUnknown {
+		parts = append(parts, "quota unknown: cost check is the only signal")
+	}
+	parts = append(parts, shortDur(time.Since(t.began)))
+	return strings.Join(parts, ", ")
+}
+
+func (t *turnStream) emitCostCheck(r *subagent.TurnResult) {
+	if line := costCheckLine(r, t.doneMeta); line != "" {
+		t.printf("%s\n", line)
+	}
+}
+
+func costCheckLine(r *subagent.TurnResult, meta turnDoneMeta) string {
+	if r == nil || meta.sess == nil || meta.sess.Role == "" {
+		return ""
+	}
+	newTokens, cachedTokens := 0, 0
+	if !r.TurnTokensUnknown {
+		newTokens = subagent.CompactionTokens(r)
+		cachedTokens = r.CachedTokens
+	}
+	freshStart := meta.sess.FreshStartContextTokens
+	if freshStart <= 0 && meta.sess.Turn == 1 && r.ContextTokens > 0 {
+		freshStart = r.ContextTokens
+	}
+	line, ok := subagent.CheckCost(meta.costSpec, subagent.CostCheckInput{
+		Role:         meta.sess.Role,
+		Model:        meta.sess.Provider + ":" + meta.sess.Model,
+		Turn:         meta.sess.Turn,
+		CachedTokens: cachedTokens,
+		NewTokens:    newTokens,
+		ContextUsage: r.ContextTokens,
+		CompactLimit: meta.compactLimit,
+		FreshStart:   freshStart,
+	})
+	if !ok {
+		return ""
+	}
+	return line
 }
 
 // finishPlanFirst ends a plan-first turn: the plan was already printed live,
@@ -237,5 +321,6 @@ func (t *turnStream) finishPlanFirst(r *subagent.TurnResult) {
 		t.printf("[warning: plan-first turn ended without a PLAN: message; the last message was: %s]\n", firstLine(r.Response))
 	}
 	t.printf("[gate: plan-first turn ended, nothing was executed; to proceed: harnez agent resume %s \"go ahead\"]\n", t.name)
-	t.printf("[done: %d messages, %s, %s]\n", len(r.Messages), tokenSummary(r), shortDur(time.Since(t.began)))
+	t.printf("[done: %d messages, %s]\n", len(r.Messages), t.doneLineTail(r))
+	t.emitCostCheck(r)
 }

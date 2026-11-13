@@ -208,6 +208,9 @@ func applyCodexRolloutTotals(result *TurnResult, before, after codexRolloutUsage
 		reasoningKnown = result.ReasoningTokensKnown
 	}
 	if afterInput <= 0 && afterOutput <= 0 {
+		if !result.CumulativeTotalsKnown && result.InputTokens == 0 && result.OutputTokens == 0 && result.CachedTokens == 0 {
+			result.TurnTokensUnknown = true
+		}
 		return
 	}
 	result.CumulativeTotalsKnown = true
@@ -219,14 +222,26 @@ func applyCodexRolloutTotals(result *TurnResult, before, after codexRolloutUsage
 		result.ReasoningTokensKnown = true
 	}
 	if hasBefore && (before.InputTokens > 0 || before.OutputTokens > 0) {
-		result.InputTokens = max(afterInput-before.InputTokens, 0)
-		result.CachedTokens = max(afterCached-before.CachedTokens, 0)
-		result.OutputTokens = max(afterOutput-before.OutputTokens, 0)
-		if result.ReasoningTokensKnown {
-			result.ReasoningTokens = max(afterReasoning-before.ReasoningTokens, 0)
+		if afterInput < before.InputTokens || afterCached < before.CachedTokens || afterOutput < before.OutputTokens {
+			result.TurnTokensUnknown = true
+			result.InputTokens = 0
+			result.CachedTokens = 0
+			result.OutputTokens = 0
+			result.ReasoningTokens = 0
+			result.ReasoningTokensKnown = false
+			result.TokensTurn = 0
+		} else {
+			result.TurnTokensUnknown = false
+			result.InputTokens = afterInput - before.InputTokens
+			result.CachedTokens = afterCached - before.CachedTokens
+			result.OutputTokens = afterOutput - before.OutputTokens
+			if result.ReasoningTokensKnown {
+				result.ReasoningTokens = max(afterReasoning-before.ReasoningTokens, 0)
+			}
+			result.TokensTurn = result.InputTokens + result.OutputTokens
 		}
-		result.TokensTurn = result.InputTokens + result.OutputTokens
 	} else if !hasBefore {
+		result.TurnTokensUnknown = false
 		result.InputTokens = afterInput
 		result.CachedTokens = afterCached
 		result.OutputTokens = afterOutput
@@ -633,6 +648,9 @@ func (p *codexParser) result() (*TurnResult, error) {
 	}
 	p.r.TokensTurn = p.r.InputTokens + p.r.OutputTokens
 	p.r.TokensCumulative = p.r.TokensTurn
+	if !p.hasTurnCompleted && !p.hasTokenCountTotal && !p.hasTokenCountLast {
+		p.r.TurnTokensUnknown = true
+	}
 	if (p.hasTurnCompleted || p.hasTokenCountTotal) && (p.r.InputTokens > 0 || p.r.OutputTokens > 0) {
 		p.r.CumulativeTotalsKnown = true
 		p.r.CumulativeInputTokens = p.r.InputTokens

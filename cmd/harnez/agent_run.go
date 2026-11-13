@@ -116,19 +116,24 @@ func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *su
 	if session == nil || result == nil || dbPath == "" {
 		return
 	}
-	input, cached, output := int64(result.InputTokens), int64(result.CachedTokens), int64(result.OutputTokens)
-	token := usagestore.TurnTokenUsage{
-		SessionID: session.ID, Turn: session.Turn, Provider: session.Provider, CounterKind: "delta",
-		InputTokens: &input, CachedInputTokens: &cached, OutputTokens: &output,
-		InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
-		ObservedAt: observedAt,
+	if !result.TurnTokensUnknown {
+		input, cached, output := int64(result.InputTokens), int64(result.CachedTokens), int64(result.OutputTokens)
+		token := usagestore.TurnTokenUsage{
+			SessionID: session.ID, Turn: session.Turn, Provider: session.Provider, CounterKind: "delta",
+			InputTokens: &input, CachedInputTokens: &cached, OutputTokens: &output,
+			InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
+			ObservedAt: observedAt,
+		}
+		if result.ReasoningTokensKnown {
+			reasoning := int64(result.ReasoningTokens)
+			token.ReasoningTokens = &reasoning
+			token.ReasoningQuality = "measured"
+		}
+		_ = usage.PersistTurnTokenUsage(context.Background(), dbPath, token)
 	}
-	if result.ReasoningTokensKnown {
-		reasoning := int64(result.ReasoningTokens)
-		token.ReasoningTokens = &reasoning
-		token.ReasoningQuality = "measured"
+	if !session.TokenTotalsKnown {
+		return
 	}
-	_ = usage.PersistTurnTokenUsage(context.Background(), dbPath, token)
 	cumulative := usagestore.TurnTokenUsage{
 		SessionID: session.ID, Turn: session.Turn, Provider: session.Provider, CounterKind: "cumulative",
 		InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
@@ -142,6 +147,23 @@ func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *su
 		cumulative.ReasoningQuality = "measured"
 	}
 	_ = usage.PersistTurnTokenUsage(context.Background(), dbPath, cumulative)
+}
+
+func buildTurnDoneMeta(sess *subagent.Session, quotaUnknown bool) turnDoneMeta {
+	meta := turnDoneMeta{sess: sess, quotaUnknown: quotaUnknown}
+	if spec, err := subagent.EffectiveCostCheckSpec(); err == nil {
+		meta.costSpec = spec
+	}
+	if sess == nil {
+		return meta
+	}
+	mode, modeErr := subagent.AutoCompactMode(sess.Provider)
+	if modeErr == nil && mode != "disabled" {
+		if limit, err := subagent.CompactThreshold(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}); err == nil && limit > 0 {
+			meta.compactLimit = limit
+		}
+	}
+	return meta
 }
 
 func agentCommandContext(cmd *cobra.Command) context.Context {
@@ -568,7 +590,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	streaming = streaming && !req.JSON
 	turn := 1
 	turnStarted := time.Now().UTC()
-	warnModelQuota(cmd, d.availability, m.Provider, m.Name, turnStarted.Local())
+	quotaUnknown := warnModelQuota(cmd, d.availability, m.Provider, m.Name, turnStarted.Local())
 	beforeCapture, stopCapture := startTurnQuotaCapture(ctx, d.quota, m.Provider)
 	defer stopCapture()
 	var ts *turnStream
@@ -704,7 +726,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	storeTurnQuota(d.dbPath, id, m.Provider, turn, "before", before)
 	recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 	now := time.Now()
-	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{subagent.NewTurnRecord(turn, r)}}
+	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: !r.TurnTokensUnknown || r.CumulativeTotalsKnown, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, FreshStartContextTokens: max(r.ContextTokens, 0), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{subagent.NewTurnRecord(turn, r)}}
 	sess.ContextWindowSize = r.ContextWindowSize
 	persistAgentTurnTokens(d.dbPath, sess, r, now)
 	if current, getErr := s.Get(reservedID); getErr == nil {
@@ -733,6 +755,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	}
 	out := agentOutput{Session: sess, Response: r.Response, Messages: r.Messages, ReconnectCmd: "harnez agent resume " + id + " \"<prompt>\""}
 	if streaming {
+		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
 		ts.finish(r)
 		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)
@@ -740,6 +763,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if !req.JSON && req.StreamMode == streamStats && !req.PlanFirst {
 		ts = newTurnStream(cmd, streamStats, false)
 		ts.began = turnStarted
+		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
 		ts.finish(r)
 		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)
@@ -1001,7 +1025,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	}
 	resumeTurn.Opts.Prompt = withResumeNote(req.Prompt, resumeIdle)
 	turnStarted := time.Now().UTC()
-	warnModelQuota(cmd, d.availability, sess.Provider, sess.Model, turnStarted.Local())
+	quotaUnknown := warnModelQuota(cmd, d.availability, sess.Provider, sess.Model, turnStarted.Local())
 	beforeCapture, stopCapture := startTurnQuotaCapture(ctx, d.quota, sess.Provider)
 	defer stopCapture()
 	if streaming {
@@ -1111,14 +1135,24 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		// Codex reports monotonic session totals across turns; convert to a
 		// turn delta if no rollout baseline already subtracted prior turns,
 		// and store the cumulative total directly instead of summing.
-		if r.InputTokens == r.CumulativeInputTokens && (sess.InputTokensTotal > 0 || sess.OutputTokensTotal > 0) {
-			r.InputTokens = max(r.CumulativeInputTokens-sess.InputTokensTotal, 0)
-			r.CachedTokens = max(r.CumulativeCachedTokens-sess.CachedTokensTotal, 0)
-			r.OutputTokens = max(r.CumulativeOutputTokens-sess.OutputTokensTotal, 0)
-			if r.ReasoningTokensKnown {
-				r.ReasoningTokens = max(r.CumulativeReasoningTokens-sess.ReasoningTokensTotal, 0)
+		if !r.TurnTokensUnknown {
+			if r.CumulativeInputTokens < sess.InputTokensTotal || r.CumulativeCachedTokens < sess.CachedTokensTotal || r.CumulativeOutputTokens < sess.OutputTokensTotal {
+				r.TurnTokensUnknown = true
+				r.InputTokens = 0
+				r.CachedTokens = 0
+				r.OutputTokens = 0
+				r.ReasoningTokens = 0
+				r.ReasoningTokensKnown = false
+				r.TokensTurn = 0
+			} else if r.InputTokens == r.CumulativeInputTokens && (sess.InputTokensTotal > 0 || sess.OutputTokensTotal > 0) {
+				r.InputTokens = r.CumulativeInputTokens - sess.InputTokensTotal
+				r.CachedTokens = r.CumulativeCachedTokens - sess.CachedTokensTotal
+				r.OutputTokens = r.CumulativeOutputTokens - sess.OutputTokensTotal
+				if r.ReasoningTokensKnown {
+					r.ReasoningTokens = max(r.CumulativeReasoningTokens-sess.ReasoningTokensTotal, 0)
+				}
+				r.TokensTurn = r.InputTokens + r.OutputTokens
 			}
-			r.TokensTurn = r.InputTokens + r.OutputTokens
 		}
 		sess.TokensTurn = r.TokensTurn
 		sess.TokensCumulative = r.CumulativeInputTokens + r.CumulativeOutputTokens
@@ -1127,7 +1161,8 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		sess.OutputTokensTotal = r.CumulativeOutputTokens
 		sess.ReasoningTokensTotal = r.CumulativeReasoningTokens
 		sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
-	} else {
+		sess.TokenTotalsKnown = true
+	} else if !r.TurnTokensUnknown {
 		sess.TokensTurn = r.TokensTurn
 		sess.TokensCumulative += r.TokensTurn
 		sess.ReasoningTokensTotal += r.ReasoningTokens
@@ -1135,12 +1170,12 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		sess.InputTokensTotal += r.InputTokens
 		sess.CachedTokensTotal += r.CachedTokens
 		sess.OutputTokensTotal += r.OutputTokens
+		sess.TokenTotalsKnown = true
 	}
 	sess.TokensSinceCompact += subagent.CompactionTokens(r)
 	sess.ContextTokens = r.ContextTokens
 	sess.ContextWindowSize = r.ContextWindowSize
 	sess.CachedTokens = r.CachedTokens
-	sess.TokenTotalsKnown = true
 	sess.LastActiveAt = time.Now()
 	sess.Status = "completed"
 	sess.Turn = turn
@@ -1157,6 +1192,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return err
 	}
 	if streaming {
+		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
 		ts.finish(r)
 		warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)
@@ -1164,6 +1200,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	if !req.JSON && req.StreamMode == streamStats && !req.PlanFirst {
 		ts = newTurnStream(cmd, streamStats, false)
 		ts.began = turnStarted
+		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
 		ts.finish(r)
 		warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)

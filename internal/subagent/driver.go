@@ -288,6 +288,9 @@ type TurnResult struct {
 	CachedTokens         int      `json:"cached_tokens"`
 	ReasoningTokens      int      `json:"reasoning_tokens,omitempty"`
 	ReasoningTokensKnown bool     `json:"reasoning_tokens_known,omitempty"`
+	// TurnTokensUnknown reports that per-turn deltas are unavailable (e.g. a
+	// provider omitted usage or cumulative counters dropped after compaction).
+	TurnTokensUnknown bool `json:"turn_tokens_unknown,omitempty"`
 	// ContextTokens is the provider's input-token count for the last turn,
 	// including cached input. It measures the full context the model read.
 	ContextTokens     int `json:"context_tokens"`

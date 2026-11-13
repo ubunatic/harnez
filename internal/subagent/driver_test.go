@@ -1075,6 +1075,22 @@ func TestCodexTokenCountFallbackAndCumulativeResumeTotals(t *testing.T) {
 	}
 }
 
+func TestApplyCodexRolloutTotalsCounterDropMarksTurnUnknown(t *testing.T) {
+	r := &TurnResult{}
+	before := codexRolloutUsage{InputTokens: 50000, CachedTokens: 40000, OutputTokens: 500}
+	after := codexRolloutUsage{InputTokens: 12000, CachedTokens: 8000, OutputTokens: 100}
+	applyCodexRolloutTotals(r, before, after, true)
+	if !r.TurnTokensUnknown {
+		t.Fatalf("expected TurnTokensUnknown after counter drop: %+v", r)
+	}
+	if r.InputTokens != 0 || r.CachedTokens != 0 || r.OutputTokens != 0 || r.TokensTurn != 0 {
+		t.Fatalf("unexpected non-zero per-turn delta after counter drop: %+v", r)
+	}
+	if !r.CumulativeTotalsKnown || r.CumulativeInputTokens != 12000 || r.CumulativeCachedTokens != 8000 || r.TokensCumulative != 12100 {
+		t.Fatalf("session cumulative totals lost: %+v", r)
+	}
+}
+
 func TestCodexCompactBelowLimitDoesNotInvokeCodex(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CODEX_HOME", home)

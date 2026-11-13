@@ -111,9 +111,9 @@ func (ac *agentCLI) listCmd() *cobra.Command {
 			return err
 		}
 		if colorEnabled {
-			fmt.Fprintln(cmd.OutOrStdout(), agentListColor("\x1b[1m", "NAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USED\tCONTEXT_SIZE\tSESSION_USED\tWORKING_DIR\tMODEL", true))
+			fmt.Fprintln(cmd.OutOrStdout(), agentListColor("\x1b[1m", "NAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USAGE\tCONTEXT_WINDOW\tSESSION_USED\tWORKING_DIR\tMODEL", true))
 		} else {
-			fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USED\tCONTEXT_SIZE\tSESSION_USED\tSOURCE\tWORKING_DIR\tMODEL")
+			fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USAGE\tCONTEXT_WINDOW\tSESSION_USED\tSOURCE\tWORKING_DIR\tMODEL")
 		}
 		for _, x := range xs {
 			model := subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}.Spec()

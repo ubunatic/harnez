@@ -53,11 +53,12 @@ type Session struct {
 	TokenTotalsKnown     bool   `json:"token_totals_known,omitempty"`
 	// TokensSinceCompact tracks accumulated new tokens for telemetry only.
 	TokensSinceCompact int `json:"tokens_since_compact,omitempty"`
-	// ContextTokens is the full input size of the last provider turn, including
+	// ContextTokens is the full input usage of the last provider turn, including
 	// cached input; it is the source for pre-prompt compaction decisions.
 	CompactionCount         int              `json:"compaction_count"`
 	ContextTokens           int              `json:"context_tokens,omitempty"`
 	ContextWindowSize       int              `json:"context_window_size,omitempty"`
+	FreshStartContextTokens int              `json:"fresh_start_context_tokens,omitempty"`
 	TokensTurn              int              `json:"tokens_turn"`
 	CachedTokens            int              `json:"cached_tokens"`
 	CreatedAt               time.Time        `json:"created_at"`
@@ -95,12 +96,16 @@ type TurnRecord struct {
 	// ReasoningTokens is nil when the provider did not report reasoning tokens
 	// (unknown), so a stored 0 always means a reported zero (ticket 1215).
 	ReasoningTokens *int   `json:"reasoning_tokens,omitempty"`
+	TokensUnknown   bool   `json:"tokens_unknown,omitempty"`
 	Rating          *int   `json:"rating,omitempty"`
 	RatingReason    string `json:"rating_reason,omitempty"`
 }
 
 // NewTurnRecord builds the per-turn usage record from a provider turn result.
 func NewTurnRecord(turn int, r *TurnResult) TurnRecord {
+	if r.TurnTokensUnknown {
+		return TurnRecord{Turn: turn, TokensUnknown: true}
+	}
 	rec := TurnRecord{Turn: turn, NewInputTokens: CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}
 	if r.ReasoningTokensKnown {
 		n := r.ReasoningTokens
@@ -141,7 +146,7 @@ func (s *Session) LastContextTokens() int {
 	return 0
 }
 
-// MarshalJSON omits unknown context sizes from status and list output.
+// MarshalJSON omits unknown context usage from status and list output.
 func (s Session) MarshalJSON() ([]byte, error) {
 	type sessionJSON Session
 	var contextTokens *int
