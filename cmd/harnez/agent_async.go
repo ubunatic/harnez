@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/agent"
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/subagent"
 )
@@ -244,11 +245,16 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	if err != nil {
 		return err
 	}
-	selection, err := selectStartSelection(role, modelSpec, req.AllowExhaustedQuota, providerAvailability, cmd.ErrOrStderr())
+	selection, err := selectStartSelectionWithOptions(role, modelSpec, req.AllowExhaustedQuota, req.AcceptCost, providerAvailability, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}
 	model := selection.Model
+	if warning, err := agent.CheckCostlyModel(model, req.AcceptCost, providerAvailability, time.Now()); err != nil {
+		return err
+	} else if warning != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), warning)
+	}
 	if err := preflightCodex(cmd.Context(), model.Provider, nil, check); err != nil {
 		return fmt.Errorf("agent start preflight: %w", err)
 	}
@@ -298,6 +304,9 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	args := []string{"--store-dir", storeDir, "agent", "start", "--worker-session", id, "--json", "--model", model.Spec(), "--role", role, "--name", req.Name, "--dir", dir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
 	if req.AllowExhaustedQuota {
 		args = append(args, "--allow-exhausted-quota")
+	}
+	if req.AcceptCost {
+		args = append(args, "--accept-cost")
 	}
 	args = append(args, "--", req.Prompt)
 	worker := exec.Command(exe, args...)

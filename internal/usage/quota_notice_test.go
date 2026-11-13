@@ -109,3 +109,37 @@ func TestQuotaNoticePolicyValidation(t *testing.T) {
 		t.Fatalf("custom policy=%g,%v,%v", percent, age, err)
 	}
 }
+
+func TestQuotaRemainingSummary(t *testing.T) {
+	now := time.Date(2026, 11, 13, 1, 0, 0, 0, time.UTC)
+	fresh := ProviderQuotaAvailability{
+		State: "available",
+		Windows: []usagestore.Window{
+			{Pool: "tokens", Key: "cumulative", UsedFraction: 1, ObservedAt: now, Freshness: "fresh"},
+			{Key: "weekly", UsedFraction: 0.35, ObservedAt: now.Add(-time.Minute), Freshness: "fresh"},
+			{Key: "five_hour", UsedFraction: 0.18, ObservedAt: now.Add(-30 * time.Second), Freshness: "fresh"},
+		},
+	}
+	if got, want := QuotaRemainingSummary(fresh, now), "5h 82%, weekly 65%"; got != want {
+		t.Fatalf("fresh summary = %q, want %q", got, want)
+	}
+	partial := ProviderQuotaAvailability{
+		State: "available",
+		Windows: []usagestore.Window{
+			{Key: "five_hour", UsedFraction: 0.2, ObservedAt: now.Add(-30 * time.Second), Freshness: "fresh"},
+			{Key: "weekly", UsedFraction: 0.5, ObservedAt: now.Add(-10 * time.Minute), Freshness: "fresh"},
+		},
+	}
+	if got, want := QuotaRemainingSummary(partial, now), "5h 80%, weekly unknown"; got != want {
+		t.Fatalf("partial summary = %q, want %q", got, want)
+	}
+	for _, st := range []ProviderQuotaAvailability{
+		{State: "stale", Windows: fresh.Windows},
+		{State: "unknown"},
+		{},
+	} {
+		if got := QuotaRemainingSummary(st, now); got != "unknown" {
+			t.Fatalf("state %+v summary = %q, want unknown", st, got)
+		}
+	}
+}

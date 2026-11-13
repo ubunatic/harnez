@@ -293,10 +293,10 @@ type TurnResult struct {
 	ContextTokens     int `json:"context_tokens"`
 	ContextWindowSize int `json:"context_window_size,omitempty"`
 	// CompactionObserved reports a new provider compaction record during this turn.
-	CompactionObserved         bool  `json:"compaction_observed,omitempty"`
-	ContextTokensBeforeCompact int   `json:"context_tokens_before_compact,omitempty"`
-	TokensTurn                 int   `json:"tokens_turn"`
-	TokensCumulative           int   `json:"tokens_cumulative"`
+	CompactionObserved         bool `json:"compaction_observed,omitempty"`
+	ContextTokensBeforeCompact int  `json:"context_tokens_before_compact,omitempty"`
+	TokensTurn                 int  `json:"tokens_turn"`
+	TokensCumulative           int  `json:"tokens_cumulative"`
 	// CumulativeTotalsKnown reports that the provider gave monotonic session-wide
 	// totals (Codex turn.completed / rollout total_token_usage) rather than a
 	// per-turn delta; start/resume must not add these across turns.
@@ -437,6 +437,15 @@ func KnownModelEntriesE() ([]ModelEntry, error) {
 	return entries, nil
 }
 
+// ModelCost returns the owner-guided relative cost (codex:luna:low = 1) for m's tier.
+func ModelCost(m Model) (int, bool) {
+	if err := ensureModelCatalog(); err != nil {
+		return 0, false
+	}
+	cost := modelGuides[m.Provider+":"+modelAliasName(m)].CostForTier(m.Tier)
+	return cost, cost > 0
+}
+
 func (m Model) Spec() string {
 	return m.Provider + ":" + modelAliasName(m) + ":" + m.Tier
 }
@@ -542,9 +551,23 @@ type ModelSelection struct {
 	Skipped []string
 }
 
+// ResolveOptions configures candidate filtering for ResolveModelWithOptions.
+type ResolveOptions struct {
+	Exhausted  func(Model) bool
+	Override   bool
+	AcceptCost bool
+}
+
 // ResolveModelWithAvailability chooses a role trait using stored access and
 // the caller's cached quota check. A nil quota check treats quota as unknown.
 func ResolveModelWithAvailability(roleName, modelSpec string, exhausted func(Model) bool, override bool) (ModelSelection, error) {
+	return ResolveModelWithOptions(roleName, modelSpec, ResolveOptions{Exhausted: exhausted, Override: override})
+}
+
+// ResolveModelWithOptions chooses a role trait using stored access, quota, and
+// costly-model policy. Costly models in pick/fallback chains are skipped unless
+// AcceptCost is true (issue 1210).
+func ResolveModelWithOptions(roleName, modelSpec string, opts ResolveOptions) (ModelSelection, error) {
 	spec, err := agentSpecOnce()
 	if err != nil {
 		return ModelSelection{}, err
@@ -562,10 +585,18 @@ func ResolveModelWithAvailability(roleName, modelSpec string, exhausted func(Mod
 			}
 		}
 		quota := "unknown"
-		if !override && exhausted != nil && exhausted(m) {
+		if !opts.Override && opts.Exhausted != nil && opts.Exhausted(m) {
 			quota = "exhausted"
 		}
-		return candidateUnavailable(mergedModelCatalog.IsEnabled(m.Provider, m.Name, m.Tier), access, quota, override)
+		if reason := candidateUnavailable(mergedModelCatalog.IsEnabled(m.Provider, m.Name, m.Tier), access, quota, opts.Override); reason != "" {
+			return reason
+		}
+		if !opts.AcceptCost {
+			if costly, err := IsCostlyModelFor(m); err == nil && costly {
+				return "costly model (pass --accept-cost)"
+			}
+		}
+		return ""
 	}
 	return resolveRoleSelection(spec, roleName, modelSpec, resolve, available)
 }

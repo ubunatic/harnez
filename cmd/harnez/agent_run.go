@@ -198,7 +198,7 @@ type startRequest struct {
 	DryRun                                                                    bool
 	PromptSource                                                              string
 	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode, Role, ContextMode string
-	JSON, PlanFirst, AllowExhaustedQuota                                      bool
+	JSON, PlanFirst, AllowExhaustedQuota, AcceptCost                          bool
 	SessionID                                                                 string
 }
 
@@ -220,10 +220,18 @@ func selectStartModel(role, spec string, override bool, availability func(string
 }
 
 func selectStartSelection(role, spec string, override bool, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) (subagent.ModelSelection, error) {
+	return selectStartSelectionWithOptions(role, spec, override, false, availability, stderr)
+}
+
+func selectStartSelectionWithOptions(role, spec string, override, acceptCost bool, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) (subagent.ModelSelection, error) {
 	if availability == nil {
 		availability = providerAvailability
 	}
-	selection, err := subagent.ResolveModelWithAvailability(role, spec, func(m subagent.Model) bool { return availability(m.Provider, m.Name).State == "exhausted" }, override)
+	selection, err := subagent.ResolveModelWithOptions(role, spec, subagent.ResolveOptions{
+		Exhausted:  func(m subagent.Model) bool { return availability(m.Provider, m.Name).State == "exhausted" },
+		Override:   override,
+		AcceptCost: acceptCost,
+	})
 	if err != nil {
 		return selection, err
 	}
@@ -253,7 +261,11 @@ func workerSelection(sess *subagent.Session, spec string) (subagent.ModelSelecti
 }
 
 func checkResumeModel(role, spec string, sess *subagent.Session, override bool, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) error {
-	selection, err := selectStartSelection(role, spec, override, availability, stderr)
+	return checkResumeModelWithCost(role, spec, sess, override, false, availability, stderr)
+}
+
+func checkResumeModelWithCost(role, spec string, sess *subagent.Session, override, acceptCost bool, availability func(string, string) usage.ProviderQuotaAvailability, stderr io.Writer) error {
+	selection, err := selectStartSelectionWithOptions(role, spec, override, acceptCost, availability, stderr)
 	if err != nil || selection.Model.Provider != sess.Provider || selection.Model.Name != sess.Model || selection.Model.Tier != sess.Tier {
 		return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", spec, sess.Name, sess.Provider, sess.Model, sess.Tier)
 	}
@@ -351,7 +363,7 @@ type resumeRequest struct {
 	Prompt, Name, ModelSpec, Dir, StreamMode string
 	SessionID, Selector                      string
 	Continue, JSON, PlanFirst                bool
-	AllowExhaustedQuota                      bool
+	AllowExhaustedQuota, AcceptCost          bool
 }
 
 // rejectBlockedSessionModel refuses a resume while a local model block (issue
@@ -430,7 +442,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		}
 		selection, err = workerSelection(sess, spec)
 	} else {
-		selection, err = selectStartSelection(role, spec, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr())
+		selection, err = selectStartSelectionWithOptions(role, spec, req.AllowExhaustedQuota, req.AcceptCost, d.availability, cmd.ErrOrStderr())
 	}
 	if err != nil {
 		return startModelError(spec, selection, err)
@@ -438,6 +450,13 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	m := selection.Model
 	if err := subagent.ValidateContextMode(m.Provider, req.ContextMode); err != nil {
 		return err
+	}
+	if !req.DryRun {
+		if warning, err := agent.CheckCostlyModel(m, req.AcceptCost, d.availability, time.Now()); err != nil {
+			return err
+		} else if warning != "" && req.SessionID == "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), warning)
+		}
 	}
 	if spec == "" {
 		spec = m.Spec()
@@ -483,7 +502,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		return err
 	}
 	if req.DryRun {
-		return printAgentPreview(cmd, m, role, sessName, canonicalWorkDir, "", req.Prompt, req.PromptSource, req.ContextMode, autoApprove, false)
+		return printAgentPreview(cmd, m, role, sessName, canonicalWorkDir, "", req.Prompt, req.PromptSource, req.ContextMode, autoApprove, false, req.AcceptCost, d.availability)
 	}
 	baseDriver := withAgyAutoApprove(agentDriver(m, canonicalWorkDir), autoApprove)
 	if err := preflightCodex(ctx, m.Provider, baseDriver, d.preflight); err != nil {
@@ -520,6 +539,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 			}
 			if req.AllowExhaustedQuota {
 				args = append(args, "--allow-exhausted-quota")
+			}
+			if req.AcceptCost {
+				args = append(args, "--accept-cost")
 			}
 			args = append(args, "--", req.Prompt)
 			started, err := launchForegroundWorker(cmd, s, sess, args, timeout, req.JSON)
@@ -766,7 +788,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return err
 		}
 		if req.ModelSpec != "" {
-			if err := checkResumeModel(role, req.ModelSpec, sess, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr()); err != nil {
+			if err := checkResumeModelWithCost(role, req.ModelSpec, sess, req.AllowExhaustedQuota, req.AcceptCost, d.availability, cmd.ErrOrStderr()); err != nil {
 				return err
 			}
 		}
@@ -775,7 +797,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return err
 		}
 		m := subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}
-		return printAgentPreview(cmd, m, role, sess.Name, sess.WorkingDir, sess.ProviderID(), req.Prompt, req.PromptSource, "", approve, true)
+		return printAgentPreview(cmd, m, role, sess.Name, sess.WorkingDir, sess.ProviderID(), req.Prompt, req.PromptSource, "", approve, true, req.AcceptCost, d.availability)
 	}
 	resumeIdle := time.Duration(0)
 	if err := warnDisabledSessionModel(cmd, sess, d.modelEnabled); err != nil {
@@ -796,6 +818,11 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 				return fmt.Errorf("session %q uses unavailable model %s; start a new session with harnez agent start: %w", sess.Name, modelSpec, err)
 			}
 		}
+	}
+	if warning, err := agent.CheckCostlyModel(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, req.AcceptCost, d.availability, time.Now()); err != nil {
+		return err
+	} else if warning != "" && req.SessionID == "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), warning)
 	}
 	if req.SessionID == "" && (sess.HarnessType != "interactive" || sess.Status != "active") {
 		writers, err := sessionWriters(sess)
@@ -837,7 +864,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return err
 	}
 	if req.ModelSpec != "" {
-		if err := checkResumeModel(role, req.ModelSpec, sess, req.AllowExhaustedQuota, d.availability, cmd.ErrOrStderr()); err != nil {
+		if err := checkResumeModelWithCost(role, req.ModelSpec, sess, req.AllowExhaustedQuota, req.AcceptCost, d.availability, cmd.ErrOrStderr()); err != nil {
 			return err
 		}
 	}
@@ -947,6 +974,9 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			args := []string{"--store-dir", d.storeDir, "agent", "resume", "--worker-session", sess.ID, "--json", "--name", sess.Name, "--role", role, "--dir", sess.WorkingDir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
 			if req.AllowExhaustedQuota {
 				args = append(args, "--allow-exhausted-quota")
+			}
+			if req.AcceptCost {
+				args = append(args, "--accept-cost")
 			}
 			args = append(args, "--", req.Prompt)
 			started, err := launchForegroundWorker(cmd, s, sess, args, timeout, req.JSON)
@@ -1422,7 +1452,7 @@ func suffixTakenName(s *subagent.FileSessionStore, name string, errOut io.Writer
 	return free, nil
 }
 
-func printAgentPreview(cmd *cobra.Command, model subagent.Model, role, name, dir, id, prompt, source, mode string, approve, resume bool) error {
+func printAgentPreview(cmd *cobra.Command, model subagent.Model, role, name, dir, id, prompt, source, mode string, approve, resume, acceptCost bool, availability func(string, string) usage.ProviderQuotaAvailability) error {
 	placeholder := fmt.Sprintf("<prompt: %d bytes from %s>", len(prompt), source)
 	args, err := subagent.PreviewArgs(model, dir, id, placeholder, mode, approve, resume)
 	if err != nil {
@@ -1432,6 +1462,7 @@ func printAgentPreview(cmd *cobra.Command, model subagent.Model, role, name, dir
 	for i, arg := range args {
 		quoted[i] = strconv.Quote(arg)
 	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "dry-run: %s\nrole: %s\nname: %s\ndir: %s\nargv: %s\n", model.Spec(), role, name, dir, strings.Join(quoted, " "))
+	acceptLine := agent.CostlyModelDryRunLine(model, acceptCost, availability, time.Now())
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "dry-run: %s\nrole: %s\nname: %s\ndir: %s\naccept-cost: %s\nargv: %s\n", model.Spec(), role, name, dir, acceptLine, strings.Join(quoted, " "))
 	return err
 }

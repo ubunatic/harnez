@@ -881,14 +881,9 @@ func roleCatalog(spec agentSpec) string {
 	return strings.Join(lines, "\n")
 }
 
-// IsCostlyModel reports whether a resolved model spec matches any pattern
-// in the agent.yaml costly_models list. It accepts wildcards (e.g. codex:astra:*).
-func IsCostlyModel(modelSpec string) (bool, error) {
+// IsCostlyModelFor reports whether m matches any pattern in spec/agent.yaml costly_models.
+func IsCostlyModelFor(m Model) (bool, error) {
 	spec, err := agentSpecOnce()
-	if err != nil {
-		return false, err
-	}
-	m, err := ResolveModel(modelSpec)
 	if err != nil {
 		return false, err
 	}
@@ -899,4 +894,14 @@ func IsCostlyModel(modelSpec string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// IsCostlyModel reports whether a resolved model spec matches any pattern
+// in the agent.yaml costly_models list. It accepts wildcards (e.g. codex:astra:*).
+func IsCostlyModel(modelSpec string) (bool, error) {
+	m, err := ResolveModel(modelSpec)
+	if err != nil {
+		return false, err
+	}
+	return IsCostlyModelFor(m)
 }

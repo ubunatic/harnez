@@ -240,10 +240,52 @@ func QuotaAlternatives(selected subagent.Model, availability func(string, string
 }
 
 func quotaModelCost(model subagent.Model) int {
-	for _, entry := range subagent.KnownModelEntries() {
-		if entry.Model.Provider == model.Provider && entry.Model.Name == model.Name {
-			return entry.Cost
-		}
+	if cost, ok := subagent.ModelCost(model); ok {
+		return cost
 	}
 	return 0
+}
+
+func formatCostlyModelDetails(model subagent.Model, availability func(string, string) usage.ProviderQuotaAvailability, now time.Time) (string, string) {
+	costLabel := "unknown"
+	if cost, ok := subagent.ModelCost(model); ok {
+		costLabel = fmt.Sprintf("%d (codex:luna:low = 1)", cost)
+	}
+	if availability == nil {
+		availability = func(p, m string) usage.ProviderQuotaAvailability {
+			return usage.CachedProviderQuotaAvailability(p, m, now)
+		}
+	}
+	return costLabel, usage.QuotaRemainingSummary(availability(model.Provider, model.Name), now)
+}
+
+// CheckCostlyModel enforces `--accept-cost` for models matching spec costly_models.
+// When acceptCost is true, it returns a single stderr warning line; when false,
+// it returns an error naming the model, relative cost, remaining quota, and flag.
+func CheckCostlyModel(model subagent.Model, acceptCost bool, availability func(string, string) usage.ProviderQuotaAvailability, now time.Time) (string, error) {
+	costly, err := subagent.IsCostlyModelFor(model)
+	if err != nil {
+		return "", err
+	}
+	if !costly {
+		return "", nil
+	}
+	costLabel, quotaLeft := formatCostlyModelDetails(model, availability, now)
+	if !acceptCost {
+		return "", fmt.Errorf("model %s is costly (relative cost %s, quota left: %s); pass --accept-cost to proceed", model.Spec(), costLabel, quotaLeft)
+	}
+	return fmt.Sprintf("Warning: using costly model %s (relative cost %s, quota left: %s)", model.Spec(), costLabel, quotaLeft), nil
+}
+
+// CostlyModelDryRunLine describes whether --accept-cost is needed for a --dry-run preview.
+func CostlyModelDryRunLine(model subagent.Model, acceptCost bool, availability func(string, string) usage.ProviderQuotaAvailability, now time.Time) string {
+	costly, err := subagent.IsCostlyModelFor(model)
+	if err != nil || !costly {
+		return "not required"
+	}
+	costLabel, quotaLeft := formatCostlyModelDetails(model, availability, now)
+	if acceptCost {
+		return fmt.Sprintf("accepted (relative cost %s, quota left: %s)", costLabel, quotaLeft)
+	}
+	return fmt.Sprintf("required (pass --accept-cost; relative cost %s, quota left: %s)", costLabel, quotaLeft)
 }

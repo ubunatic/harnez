@@ -110,6 +110,7 @@ Available Commands:
   wait        Wait for an agent session to finish
 
 Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
       --context-mode string     agent context mode (e.g. plain, no-skills, default)
   -c, --continue                resume the most recently active attributable session
@@ -142,6 +143,7 @@ Flags:
   -h, --help   help for compact
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -171,6 +173,7 @@ Flags:
       --retry-failed    retry unresolved provider deletions
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -194,6 +197,7 @@ Flags:
       --persist   accepted for compatibility; policy stays in .harnez/rules/Local.md
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -217,6 +221,7 @@ Flags:
       --persist   accepted for compatibility; policy stays in .harnez/rules/Local.md
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -246,6 +251,7 @@ Flags:
       --json           JSON output
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -281,6 +287,7 @@ Flags:
       --picks         print role model picks
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -307,6 +314,7 @@ Flags:
       --until string    block end: RFC3339 time or duration such as 3h30m
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -335,6 +343,7 @@ Flags:
       --until string   expiry time as HH:MM or RFC3339
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -357,6 +366,7 @@ Flags:
   -h, --help   help for unblock
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -379,6 +389,7 @@ Flags:
   -h, --help   help for rate
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -440,6 +451,7 @@ Flags:
       --worker-session string   internal detached worker session ID
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -476,6 +488,7 @@ Flags:
       --wait               wait for optional Claude receipt confirmation
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -536,6 +549,7 @@ Flags:
       --worker-session string   internal detached worker session ID
 
 Global Flags:
+      --accept-cost        allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
   -d, --dir string         agent working directory (all providers) and session scope (default ".")
       --model string       provider:model[:tier]
       --name string        session name
@@ -562,6 +576,7 @@ Flags:
       --turn int    show the saved reply for turn N
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -586,6 +601,7 @@ Flags:
   -h, --help       help for stop
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]
@@ -610,6 +626,7 @@ Flags:
       --timeout duration   maximum wait duration (0 waits indefinitely)
 
 Global Flags:
+      --accept-cost             allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning
       --allow-exhausted-quota   start even when cached provider quota is exhausted
   -d, --dir string              agent working directory (all providers) and session scope (default ".")
       --model string            provider:model[:tier]

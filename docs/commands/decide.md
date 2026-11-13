@@ -13,7 +13,7 @@ Triggers: only on explicit `/decide`.
 
 1. **Simple questions**: answer them yourself and state the decision and its reason in one line.
 2. **Second opinion**: one-shot advisor, `HTO=0 harnez agent start --role advisor --name <name> --model cheap -p "<question>"`. Wait for its exit, read its answer, then stop it if it still runs.
-3. **Major decisions**: the same, with `--model smart`. Model names live in `spec/agent.yaml`; use only these two aliases.
+3. **Major decisions**: the same, with `--model smart`. Model names live in `spec/agent.yaml`; use only these two aliases. Helpers stay on cheap models by default; costly models listed in `spec/agent.yaml` (`costly_models`) require `--accept-cost`.
 4. **Push**: when a feature is ready or a milestone is reached, push without asking. This is the admin's current-session authorization in `docs/lang/Git.md`. It covers AGit PR pushes (`git push origin HEAD:refs/for/<default>/<topic>`) and merging your own PR once tests and required review pass. When the next step needs the merge, wait with `harnez pr wait <number> --contains <sha>` in the background instead of asking. Branch protection has the final word: if the forge refuses, report it and stop. Never force-push.
 5. **Very critical only**: stop and ask the user before any of these:
    - a destructive or irreversible action on data or history;

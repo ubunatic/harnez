@@ -109,6 +109,7 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 	root.PersistentFlags().StringVar(&ac.name, "name", "", "session name")
 	root.PersistentFlags().StringVar(&ac.modelSpec, "model", "", "provider:model[:tier]")
 	root.PersistentFlags().BoolVar(&ac.allowExhaustedQuota, "allow-exhausted-quota", false, "start even when cached provider quota is exhausted")
+	root.PersistentFlags().BoolVar(&ac.acceptCost, "accept-cost", false, "allow costly models (e.g. sol:high, argon:high, astra, fable:high) with a stderr warning")
 	root.PersistentFlags().StringVar(&ac.roleSpec, "role", "", roleUsage)
 	root.PersistentFlags().DurationVar(&ac.agentTimeout, "timeout", 0, "maximum foreground turn duration (0 waits without a limit)")
 	_ = root.RegisterFlagCompletionFunc("role", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
@@ -238,13 +239,13 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			}
 			if _, findErr := ac.find(cmd, s, ac.name); findErr == nil {
 				return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
+					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost})
 				})
 			} else if !strings.Contains(findErr.Error(), "not found") {
 				return findErr
 			}
 			return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-				return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, ContextMode: ac.contextMode})
+				return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, ContextMode: ac.contextMode})
 			})
 		}
 		if rootContinue {
@@ -259,12 +260,12 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			candidates := attributable(xs, ac.workDir, ac.parent())
 			if len(candidates) > 0 {
 				return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: true, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota})
+					return runResume(ctx, cmd, deps, resumeRequest{Role: ac.roleSpec, Prompt: prompt, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: true, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost})
 				})
 			}
 		}
 		return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-			return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, ContextMode: ac.contextMode})
+			return runStart(ctx, cmd, deps, startRequest{Role: ac.roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, ContextMode: ac.contextMode})
 		})
 	}
 

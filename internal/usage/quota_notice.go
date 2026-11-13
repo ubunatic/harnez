@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -78,4 +79,77 @@ func quotaNoticeAge(age time.Duration) string {
 		return fmt.Sprintf("%dm", int64(age/time.Minute))
 	}
 	return fmt.Sprintf("%dh%dm", int64(age/time.Hour), int64(age%time.Hour/time.Minute))
+}
+
+// QuotaRemainingSummary formats the remaining 5h/weekly quota percentages for
+// state as known to `harnez agent models`, returning "unknown" when stale or missing.
+func QuotaRemainingSummary(state ProviderQuotaAvailability, now time.Time) string {
+	if state.State != "available" && state.State != "exhausted" {
+		return "unknown"
+	}
+	var maxAge time.Duration
+	if data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath); err == nil {
+		var spec usageSpec
+		if yaml.Unmarshal(data, &spec) == nil {
+			_, maxAge, _ = spec.quotaNoticePolicy()
+		}
+	}
+	type windowSummary struct {
+		label string
+		text  string
+		fresh bool
+	}
+	var items []windowSummary
+	anyFresh := false
+	for _, window := range state.Windows {
+		if window.Pool == "tokens" || window.Key == "" {
+			continue
+		}
+		label := window.Key
+		if label == "five_hour" {
+			label = "5h"
+		}
+		staleWindow := window.Freshness != "fresh"
+		if !window.ObservedAt.IsZero() && (window.ObservedAt.After(now) || (maxAge > 0 && now.Sub(window.ObservedAt) > maxAge)) {
+			staleWindow = true
+		}
+		if staleWindow || math.IsNaN(window.UsedFraction) || math.IsInf(window.UsedFraction, 0) {
+			items = append(items, windowSummary{label: label, text: label + " unknown"})
+			continue
+		}
+		anyFresh = true
+		rem := math.Round((1 - window.UsedFraction) * 100)
+		if rem < 0 {
+			rem = 0
+		}
+		if rem > 100 {
+			rem = 100
+		}
+		items = append(items, windowSummary{label: label, text: fmt.Sprintf("%s %.0f%%", label, rem), fresh: true})
+	}
+	if !anyFresh {
+		return "unknown"
+	}
+	rank := func(label string) int {
+		switch label {
+		case "5h":
+			return 0
+		case "weekly":
+			return 1
+		default:
+			return 2
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		ri, rj := rank(items[i].label), rank(items[j].label)
+		if ri != rj {
+			return ri < rj
+		}
+		return items[i].label < items[j].label
+	})
+	parts := make([]string, len(items))
+	for i, item := range items {
+		parts[i] = item.text
+	}
+	return strings.Join(parts, ", ")
 }

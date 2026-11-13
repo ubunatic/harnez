@@ -684,3 +684,27 @@ func TestIsCostlyModel(t *testing.T) {
 		})
 	}
 }
+
+func TestModelCost(t *testing.T) {
+	for _, tc := range []struct {
+		spec     string
+		wantCost int
+		wantOK   bool
+	}{
+		{"codex:luna:low", 1, true},
+		{"codex:astra:low", 182, true},
+		{"codex:astra:med", 342, true},
+		{"codex:astra:high", 384, true},
+		{"gpt-6-astra:med", 342, true},
+		{"codex:sol:high", 71, true},
+	} {
+		m, err := ResolveModel(tc.spec)
+		if err != nil {
+			t.Fatalf("ResolveModel(%q): %v", tc.spec, err)
+		}
+		got, ok := ModelCost(m)
+		if got != tc.wantCost || ok != tc.wantOK {
+			t.Errorf("ModelCost(%q) = (%d, %v), want (%d, %v)", tc.spec, got, ok, tc.wantCost, tc.wantOK)
+		}
+	}
+}

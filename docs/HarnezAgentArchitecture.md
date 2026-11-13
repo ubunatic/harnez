@@ -130,6 +130,17 @@ quota: claude 5h 86% (read 10:41:07, 40s ago, resets 11:52)
 quota: claude 5h unknown, last reading 23m old (read 10:18:47)
 ```
 
+### Costly model confirmation (`--accept-cost`)
+
+`spec/agent.yaml` lists `costly_models` (for example `codex:sol:high`,
+`agy:argon:high`, `codex:astra:*`, and `claude:fable:high`). Starting or resuming
+one without `--accept-cost` exits non-zero and prints the resolved model,
+relative cost, remaining 5h/weekly quota (or `unknown` when stale), and
+`--accept-cost`. Passing `--accept-cost` prints one stderr warning line with the
+cost and remaining quota, then proceeds; `--dry-run` shows whether `--accept-cost`
+would be required. Fallback and pick chains never select a costly model silently
+without `--accept-cost`. Helpers stay on cheap models by default.
+
 ### 2.11 MCP server for Codex
 
 `harnez mcp` serves the agent lifecycle tools over newline-delimited JSON-RPC
