@@ -117,7 +117,10 @@ file, checked with `/context`; issue 1224):
   cost 10.3k tokens per session before 1221.
 - The read guard blocks a native read of a file with 100 lines or more. A lite doc meant to be
   read on demand stays under 100 lines; `docs/Bash.md` at 104 lines was given up on by a
-  `haiku:high` session. No test enforces this yet (1224).
+  `haiku:high` session. `TestLiteDocsStayUnderReadLimit` enforces it for every `lite_source`,
+  counting the copy as init installs it against `max_lines` in `spec/reading_discipline.yaml`.
+  `Make.lite.md` (118 lines) and `GoRelease.lite.md` (278) are listed there as known
+  exceptions until they are trimmed (1224).
 - Open design (1224): make the comma a per-doc choice between import and hint, and deliver rules
   per harness, model tier and role.
 

@@ -13,27 +13,11 @@ import (
 )
 
 func TestHarnezHandoffSkillInstallToEveryConfiguredTarget(t *testing.T) {
-	cfg := loadTestConfig(t)
-	targetDir := t.TempDir()
-
-	var skill *Command
+	cfg, _ := applySkillsForTest(t)
 	for i := range cfg.Skills {
-		if cfg.Skills[i].Name == "harnez-handoff" {
-			skill = &cfg.Skills[i]
-			break
+		if cfg.Skills[i].Name == "harnez-handoff" && len(cfg.Skills[i].Resources) != 0 {
+			t.Fatalf("harnez-handoff resources = %#v, want none: the spec is rendered into SKILL.md", cfg.Skills[i].Resources)
 		}
-	}
-	if skill == nil {
-		t.Fatal("harnez-handoff skill not registered in embedded config")
-	}
-	if skill.File != "docs/commands/HarnezHandoff.md" {
-		t.Fatalf("harnez-handoff skill file = %q, want docs/commands/HarnezHandoff.md", skill.File)
-	}
-	if len(skill.Resources) != 0 {
-		t.Fatalf("harnez-handoff resources = %#v, want none: the spec is rendered into SKILL.md", skill.Resources)
-	}
-	if override := cfg.Debloat.PresetSkillOverrides["harnez-handoff"]; override != "user-invocable-only" {
-		t.Errorf("PresetSkillOverrides[harnez-handoff] = %q, want user-invocable-only", override)
 	}
 	spec, err := handoff.LoadSpec()
 	if err != nil {
@@ -41,60 +25,28 @@ func TestHarnezHandoffSkillInstallToEveryConfiguredTarget(t *testing.T) {
 	}
 	specLines := specStrings(spec)
 
-	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
-	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
-	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")
-	cfg.AgyHooksTarget = filepath.Join(t.TempDir(), "gemini", "config", "hooks.json")
-	cfg.ClaudeSkillsTarget = filepath.Join(t.TempDir(), "claude-skills")
-	cfg.PrimeAgentTarget = filepath.Join(t.TempDir(), "prime-agent")
-	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "AGENTS.md")
-	cfg.AgentsMD.Global.Symlink = ""
-	cfg.AgentsMD.Agents = nil
-	cfg.DistillAutopipe.PiExtensionTarget = filepath.Join(t.TempDir(), "pi", "harnez-distill.ts")
-	cfg.DistillAutopipe.OpenCodePluginTarget = filepath.Join(t.TempDir(), "opencode", "harnez-distill.ts")
-
-	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
-		t.Fatalf("ApplyAll failed: %v", err)
-	}
-
-	for _, skillsRoot := range skillTargets(cfg) {
-		dir := filepath.Join(skillsRoot, "harnez-handoff")
-		data, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
-		if err != nil {
-			t.Fatalf("expected harnez-handoff skill in %s: %v", dir, err)
-		}
-		content := string(data)
-		if !strings.HasPrefix(content, "---\nname: \"harnez-handoff\"\ndescription:") {
-			t.Errorf("expected skill frontmatter in %s, got:\n%s", dir, content)
-		}
-		for _, want := range []string{
+	contents := checkInstalledSkill(t, cfg, skillCheck{
+		name:     "harnez-handoff",
+		file:     "docs/commands/HarnezHandoff.md",
+		override: "user-invocable-only",
+		// Request words, profile names and the commands the skill tells agents to run.
+		names: []string{
 			"disable-model-invocation: true",
-			"## 1. Read the Request",
 			"`this work`",
 			"`explore`",
-			"Ask the user **once**",
 			"`local Jules`",
-			"## 2. Profiles and Known Agents",
-			"### Profile `local`",
-			"### Profile `cloud`",
-			"## 3. Explore Mode",
-			"if the working directory is a git repo",
+			"`local`",
+			"`cloud`",
 			"rev-list --count <remote>/<branch>..HEAD",
 			"--since=3.days",
 			"`14.days`",
-			"user excludes",
-			"merge-conflict risk",
-			"## 4. Write Each Prompt",
-			"no memory of this session",
 			"/goal",
-			"renumbered on merge",
-			"## 5. Output",
 			"git -C <repo> fetch <remote>",
-		} {
-			if !strings.Contains(content, want) {
-				t.Errorf("expected %s/SKILL.md to contain %q", dir, want)
-			}
-		}
+		},
+	})
+	for i, skillsRoot := range skillTargets(cfg) {
+		dir := filepath.Join(skillsRoot, "harnez-handoff")
+		content := contents[i]
 		for _, want := range specLines {
 			if !strings.Contains(content, want) {
 				t.Errorf("expected %s/SKILL.md to contain spec text %q", dir, want)

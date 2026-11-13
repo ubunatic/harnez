@@ -28,6 +28,11 @@ Harnez-only rules in .harnez/rules/. Flags and details: `harnez <verb> --help`.
   spawn-and-wait MCP synchronously.
 - Then: `harnez agent list`, `harnez agent status --name <session>`, `harnez agent wait <session>`,
   `harnez agent resume --name <session> <prompt>`, `harnez agent stop --name <session>`.
+- Read a worker's output in full; never pipe it through `head` or `cut`.
+- To see what a worker ran, read its provider transcript, not its own summary: Codex
+  `~/.codex/sessions/YYYY/MM/DD/rollout-*<id>.jsonl`, Claude
+  `~/.claude/projects/<cwd, slashes as dashes>/<id>.jsonl`; `<id>` is in the
+  `[session info: id=...]` line of the start output.
 - When a `/goal` without an exit clause is set (e.g. typed by the user), say so in the first reply and offer `/goal ... or stop and report when blocked on a user decision or denied permission`; once blocked on the user, suggest `/goal clear` instead of repeating the wait message. On a loop, a hard blocker or no progress, clear the goal and write a failure report (tried, why it failed, resume point) in the ticket.
 
 ## Code and Documentation Search

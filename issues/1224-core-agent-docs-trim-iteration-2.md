@@ -61,8 +61,34 @@ longer notice when a trim drops the goal exit guidance, the three-state MCP dist
 stop-and-confirm guard. Those are rules for agents; `/harnez-cleanup` test sessions are the
 check for them. The command test still does not validate positional arguments.
 
-Not touched: the other `internal/claude/*_skill_test.go` files (handoff, issue, review, decide,
-next, wrap, peer-assistant, advisor). Loosen each when its skill is trimmed.
+### Skill tests on one helper (2026-11-13, second pass)
+
+All per-skill tests now use `checkInstalledSkill` (`internal/claude/skill_install_test.go`):
+registration, installation to every target, `names` matched verbatim and `rules`, short
+lower-case stems for rules with side effects. What each test dropped and what it keeps:
+
+| Skill | Dropped (headings and sentences) | Kept |
+|---|---|---|
+| `decide` | "## Rules", "Very critical only", "relayed answer does not count", "Circuit breaker" | `--model cheap`, `--model smart`, `docs/lang/Git.md`; stems "force-push", "no release" |
+| `next` | three headings | the `harnez find` command; stem "ask the user to choose" |
+| `peer-assistant` | four headings, five sentences on watching, messaging and cleanup | three commands; stem "writer per shared workspace"; identical copies in all targets |
+| `wrap` | one heading, "issue index", "partial or broken", "handoff issue", "curates", "learnings" | `disable-model-invocation: true`, `/evergreen`; stem "stop background helpers" |
+| `review` | five step headings | `git diff`, `git status`, `harnez issues new`; idempotent second apply |
+| `issue` | "## TL;DR", two goal sentences, eleven publication sentences, the PNG sentence | five commands, `/goal`, `--force`; stems "do not fall back to a direct push", "never delete or overwrite", "stop and report"; route order; no routine image flags |
+| `harnez-handoff` | five headings, six sentences | request words, profile names, four command fragments; every spec line; banned strings |
+| `harnez-init` | (loosened earlier) | five names; new stem "if not initialized, stop" |
+| `harnez-advisor` | "There are no portable skill flags." | five targets, identical copies |
+
+Also done in this pass:
+
+- `TestLiteDocsStayUnderReadLimit`: every `lite_source` must install with fewer lines than
+  `max_lines` in `spec/reading_discipline.yaml`. `Make.lite.md` (118) and `GoRelease.lite.md`
+  (278) are listed as exceptions; the test fails for an exception that no longer applies.
+- `Tools.md`, Harnez Agent: read a worker's output in full; where the provider transcripts are.
+  The pointer names the paths, not `docs/OrchestratedAgentFlow.md`, because the rule file is
+  installed in projects that do not have that doc.
+- `AGENTS.md`, Local Context Links: "read `@<file>` links immediately" is now "read a doc before
+  the work it covers". The renderer comma as a per-doc choice stays open.
 
 ### Why no session read the `@docs/...` links (canary, 2026-11-13)
 
@@ -107,8 +133,9 @@ session-start hook output reaches the model's context.
   injected at session start against three runs as now, scored with the 1221 checks.
 - Make the renderer's comma a decision: a doc marked inline gets a clean `@docs/X.md`, every
   other doc a form that Claude Code does not import.
-- Decide the `@<file>` rule with the owner first; it changes what every session reads.
+- Done 2026-11-13: the `@<file>` rule is reworded (owner's go). Still open: the renderer comma.
 - Trim one doc at a time and rerun the 1221 task (prompt and 15 checks are recorded there) on
   `haiku:low` and `luna:low`, three runs each, because single haiku runs vary.
-- Consider a test that fails when a `*.lite.md` source reaches 98 lines.
+- Done 2026-11-13: `TestLiteDocsStayUnderReadLimit`. Still open: trim `Make.lite.md` and
+  `GoRelease.lite.md` under the limit and delete their exceptions.
 - Run `make test-q1` once per change. A test should assert commands and structure, not sentences.

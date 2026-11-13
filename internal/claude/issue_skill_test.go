@@ -8,42 +8,34 @@ import (
 )
 
 func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
-	cfg := loadTestConfig(t)
-	targetDir := t.TempDir()
-
-	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
-	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
-	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")
-	cfg.AgyHooksTarget = filepath.Join(t.TempDir(), "gemini", "config", "hooks.json")
-	cfg.ClaudeSkillsTarget = filepath.Join(t.TempDir(), "claude-skills")
-	cfg.PrimeAgentTarget = filepath.Join(t.TempDir(), "prime-agent")
-	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "AGENTS.md")
-	cfg.AgentsMD.Global.Symlink = ""
-	cfg.AgentsMD.Agents = nil // issue 149: keep tests off the real ~/.codex path
-	cfg.DistillAutopipe.PiExtensionTarget = filepath.Join(t.TempDir(), "pi", "harnez-distill.ts")
-	cfg.DistillAutopipe.OpenCodePluginTarget = filepath.Join(t.TempDir(), "opencode", "harnez-distill.ts")
-
-	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
-		t.Fatalf("ApplyAll failed: %v", err)
-	}
-
-	for _, skillsRoot := range skillTargets(cfg) {
-		path := filepath.Join(skillsRoot, "issue", "SKILL.md")
-		content := readIssueInstall(t, path)
-		if !strings.HasPrefix(content, "---\nname: \"issue\"\ndescription:") {
-			t.Errorf("expected skill frontmatter in %s, got:\n%s", path, content)
-		}
-		assertIssueTLDR(t, path, content)
-		assertIssueGoalExitClause(t, path, content)
-		assertIssuePublicationGuidance(t, path, content)
-		assertIssueRouteOrder(t, path, content)
+	cfg, targetDir := applySkillsForTest(t)
+	contents := checkInstalledSkill(t, cfg, skillCheck{
+		name: "issue",
+		names: []string{
+			`harnez find -d <repo> issues "<search terms>"`,
+			`harnez issues new -d <repo> "<title>"`,
+			"`/goal`",
+			"git -C <repo> push origin HEAD:refs/for/main/<topic>",
+			"git -C <repo> merge-base --is-ancestor <sha> origin/main",
+			"harnez pr wait <number> --contains <sha>",
+			"`--force`",
+		},
+		// The skill publishes commits: the limits on that must survive a trim.
+		rules: []string{
+			"do not fall back to a direct push",
+			"never delete or overwrite",
+			"stop and report",
+		},
+	})
+	for i, skillsRoot := range skillTargets(cfg) {
+		assertIssueRouteOrder(t, filepath.Join(skillsRoot, "issue", "SKILL.md"), contents[i])
 		for _, name := range []string{"issue", "review", "roadmap"} {
 			path := filepath.Join(skillsRoot, name, "SKILL.md")
-			content := readIssueInstall(t, path)
-			if !strings.Contains(content, "only when the user explicitly") || !strings.Contains(content, "requests image output") {
-				t.Errorf("%s must reserve PNG rendering for explicit user requests", path)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("expected %s skill at %s: %v", name, path, err)
 			}
-			for _, line := range strings.Split(content, "\n") {
+			for _, line := range strings.Split(string(data), "\n") {
 				if strings.Contains(line, "`harnez") || strings.HasPrefix(line, "harnez ") {
 					if strings.Contains(line, " -I") || strings.Contains(line, " --image") {
 						t.Errorf("%s recommends routine image rendering: %s", path, line)
@@ -64,45 +56,7 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 	}
 }
 
-func assertIssueGoalExitClause(t *testing.T, path, content string) {
-	t.Helper()
-	for _, want := range []string{
-		"Always define a `/goal` with an exit clause",
-		"stop and report when blocked on a user decision or denied permission",
-	} {
-		if !strings.Contains(content, want) {
-			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)
-		}
-	}
-}
-
-func assertIssuePublicationGuidance(t *testing.T, path, content string) {
-	t.Helper()
-	for _, want := range []string{
-		"## Publish Promptly",
-		"**Direct push to `main`**, preferred whenever",
-		"The strictest rule wins",
-		"Never use `--force` or a `+` refspec.",
-		"git -C <repo> push origin HEAD:refs/for/main/<topic>",
-		"Several issues may share one topic and one PR.",
-		"git -C <repo> merge-base --is-ancestor <sha> origin/main",
-		"Equality is not required",
-		"Do not fall back to a direct push.",
-		"Never delete or overwrite content.",
-		"not on `main` until it is merged",
-		"harnez pr wait <number> --contains <sha>",
-		"its exit code is the only merge signal",
-		"Say \"published\" or \"on main\" only after the remote confirms it.",
-		"Where applicable policy requires authorization in the current session, standing consent is insufficient",
-		"`<sha>` is the intended issue commit",
-		"If any unrelated commit or file is included, stop and report it.",
-	} {
-		if !strings.Contains(content, want) {
-			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)
-		}
-	}
-}
-
+// The three publication routes are tried in this order; the order is structure, not wording.
 func assertIssueRouteOrder(t *testing.T, path, content string) {
 	t.Helper()
 	routes := []string{
@@ -120,27 +74,5 @@ func assertIssueRouteOrder(t *testing.T, path, content string) {
 			t.Errorf("route %q must come after the previous route in %s", route, path)
 		}
 		last = idx
-	}
-}
-
-func readIssueInstall(t *testing.T, path string) string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("expected issue workflow at %s: %v", path, err)
-	}
-	return string(data)
-}
-
-func assertIssueTLDR(t *testing.T, path, content string) {
-	t.Helper()
-	for _, want := range []string{
-		"## TL;DR",
-		`harnez find -d <repo> issues "<search terms>"`,
-		`harnez issues new -d <repo> "<title>"`,
-	} {
-		if !strings.Contains(content, want) {
-			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)
-		}
 	}
 }

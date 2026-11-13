@@ -53,7 +53,4 @@ func TestHarnezAdvisorSkillInstallsIdenticallyToEveryAgentTarget(t *testing.T) {
 			t.Errorf("skill content in %s differs from the other targets", path)
 		}
 	}
-	if !strings.Contains(want, "There are no portable skill flags.") {
-		t.Errorf("skill does not state the prose-only contract:\n%s", want)
-	}
 }

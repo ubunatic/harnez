@@ -162,10 +162,11 @@ skills via `harnez skill show`, which prints only `SKILL.md`. They cannot reach 
 - A commanded run uses `--role orchestrator`: it may start the test sessions and hands the
   rewrite to one developer helper through the ticket. Do not cap its sessions below what one
   retest after the last change needs (the 1225 run tested a version it then had to change).
-- The per-skill tests in `internal/claude/*_skill_test.go` check registration, installation to
-  every target and the names a skill depends on. Do not add phrase or heading lists; the
-  `harnez-init` test had 22 and blocked a trim (issue 1224). The other skill tests still carry
-  phrase lists; loosen each when its skill is trimmed.
+- The per-skill tests in `internal/claude/*_skill_test.go` use one helper,
+  `checkInstalledSkill` (`skill_install_test.go`): registration, installation to every target,
+  `names` (commands, flags, paths and markers, verbatim) and `rules` (short lower-case stems for
+  rules with side effects, such as "force-push" for `/decide`). Do not add phrase or heading
+  lists; the `harnez-init` test had 22 and blocked a trim (issue 1224).
 - First run and what it showed: `docs/studies/2026-11-13-core-docs-trim-and-cleanup-skill.md`.
 
 ### Spec-rendered skill bodies

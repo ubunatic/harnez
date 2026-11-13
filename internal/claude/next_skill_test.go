@@ -1,66 +1,14 @@
 package claude
 
-import (
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-)
+import "testing"
 
 func TestNextSkillInstallToEveryConfiguredTarget(t *testing.T) {
-	cfg := loadTestConfig(t)
-	targetDir := t.TempDir()
-
-	var next *Command
-	for i := range cfg.Skills {
-		if cfg.Skills[i].Name == "next" {
-			next = &cfg.Skills[i]
-			break
-		}
-	}
-	if next == nil {
-		t.Fatal("next skill not registered in embedded config")
-	}
-	if next.File != "docs/commands/Next.md" {
-		t.Fatalf("next skill file = %q, want docs/commands/Next.md", next.File)
-	}
-
-	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
-	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
-	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")
-	cfg.AgyHooksTarget = filepath.Join(t.TempDir(), "gemini", "config", "hooks.json")
-	cfg.ClaudeSkillsTarget = filepath.Join(t.TempDir(), "claude-skills")
-	cfg.PrimeAgentTarget = filepath.Join(t.TempDir(), "prime-agent")
-	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "AGENTS.md")
-	cfg.AgentsMD.Global.Symlink = ""
-	cfg.AgentsMD.Agents = nil
-	cfg.DistillAutopipe.PiExtensionTarget = filepath.Join(t.TempDir(), "pi", "harnez-distill.ts")
-	cfg.DistillAutopipe.OpenCodePluginTarget = filepath.Join(t.TempDir(), "opencode", "harnez-distill.ts")
-
-	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
-		t.Fatalf("ApplyAll failed: %v", err)
-	}
-
-	for _, skillsRoot := range skillTargets(cfg) {
-		path := filepath.Join(skillsRoot, "next", "SKILL.md")
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("expected next skill at %s: %v", path, err)
-		}
-		content := string(data)
-		if !strings.HasPrefix(content, "---\nname: \"next\"\ndescription:") {
-			t.Errorf("expected skill frontmatter in %s, got:\n%s", path, content)
-		}
-		for _, want := range []string{
-			"## Workflow Detection",
-			"## Target Discovery",
-			"## Execution Contract",
-			"harnez find -d . issues -a status:active",
-			"ask the user to choose before execution",
-		} {
-			if !strings.Contains(content, want) {
-				t.Errorf("expected %s to contain %q", path, want)
-			}
-		}
-	}
+	cfg, _ := applySkillsForTest(t)
+	checkInstalledSkill(t, cfg, skillCheck{
+		name:  "next",
+		file:  "docs/commands/Next.md",
+		names: []string{"harnez find -d . issues -a status:active"},
+		// /next starts work: it must ask before executing an ambiguous target.
+		rules: []string{"ask the user to choose"},
+	})
 }

@@ -5,8 +5,8 @@
 
 ## Local Context Links
 
-- Read local `@<file>` links immediately.
-- Read local `See <file>` links before working on their corresponding tasks.
+- Read a local `@<file>` or `See <file>` doc before the work it covers. The doc list below
+  gives one hint line per doc; the hint is not the doc.
 - Local `@<image>` and `See <image>` links are cheat sheets containing the full
   document content as token-efficient PNG cards; inspect them as documentation.
 
