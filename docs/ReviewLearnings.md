@@ -168,3 +168,16 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   scored 5 of 5 before and after on fixtures each had built itself. Pick checks the current text sometimes
   fails, prepare the fixtures, and read the executed commands from the provider transcript
   (`docs/OrchestratedAgentFlow.md`, section 5).
+- **Post-refactor dead helpers fail `golangci-lint`, not `go test`** (2026-11-13, issues 993, 1033, commit `5187f723`):
+  switching callers to an error-returning helper (e.g. `resolvePiModelWithError`) can leave the original
+  unreferenced helper behind; `go test ./...` passes while `make lint` rejects unused functions. Run
+  `make lint` after refactors before pushing.
+- **Rebasing an open AGit PR requires a new topic and index re-sync** (2026-11-13, PR #165 → #166):
+  rebasing commits onto moved `origin/main` breaks fast-forward on the existing AGit topic PR (never use
+  `-o force-push=true`). Push a new suffixed topic (`<topic>-2`), close the superseded PR, and re-run
+  `harnez index && harnez issues lint --against origin/main` because `issues/CLOSED.md` ordering shifts
+  against newer `main` commits.
+- **Keep mock/unit passes distinct from offline or quota-skipped live runs** (2026-11-13, issues 993, 1033):
+  132 Pi extension tests and mock driver suites can pass cleanly while live `lmcoder:coder` (`pi` absent,
+  proxy offline) or quota-preserving live `claude:haiku:xhigh`/`agy` turns are deferred. Record exact live
+  skips in ticket status instead of marking end-to-end acceptance done.

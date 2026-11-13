@@ -248,8 +248,10 @@ connection status. Claude Code stores user-scope MCP servers in
 
 Prompt parts are joined with one blank line, in this order: prompt files in
 flag order (`-f -` reads stdin), `-p` text, positional words, and the text after
-`--`. The protocol preamble is added only when sending the prompt. A stored
-start prompt records file paths and byte sizes rather than file contents.
+`--`. On `start`, the protocol preamble includes any provider-family note from
+`spec/agent.yaml` (`preambles.<provider>`, issue 1217); `resume` omits the
+family note, and the preamble is added only at send time. A stored start prompt
+records file paths and byte sizes rather than file contents.
 
 ### 2.3 Session selection and attribution
 
@@ -455,9 +457,9 @@ How a spec reaches the provider CLI (batch drivers):
 
 | Provider | Invocation | Tier handling |
 |---|---|---|
-| codex | `codex exec --json --dangerously-bypass-approvals-and-sandbox -m <name> -c model_reasoning_effort=<tier>` | `low`/`med`/`high` → reasoning effort |
-| claude | `claude -p --dangerously-skip-permissions --model <name> [--effort <tier>] --output-format json` | explicit `low`/`med`/`high` tier passed as `low`/`medium`/`high`; omitted when no tier is set |
-| agy | `agy --model <name> --effort <tier>` | effort omitted for `effort: false` models (`agy:sonnet`, `agy:opus`) |
+| codex | `codex exec --json --dangerously-bypass-approvals-and-sandbox -m <name> -c model_reasoning_effort=<tier>` | `low`/`med`/`high` → reasoning effort; rejects `xhigh`/`max` |
+| claude | `claude -p --dangerously-skip-permissions --model <name> [--effort <tier>] --output-format json` | explicit `low`/`med`/`high`/`xhigh`/`max` passed as `low`/`medium`/`high`/`xhigh`/`max`; omitted when no tier is set (issue 993) |
+| agy | `agy --model <name> --effort <tier>` | accepts `low`/`med`/`high`/`xhigh`/`max`; omitted/rejected for `effort: false` models (`agy:sonnet`, `agy:opus`) |
 | agy, `advisor`/`reviewer` roles | adds `--dangerously-skip-permissions --sandbox` before `--output-format json -p` (`roles.<role>.auto_approve_tools` in `spec/agent.yaml`) | headless `-p` cannot approve a tool call; without it agy ends the turn with no reply, which harnez reports as an error (issue 1000) |
 | jules | no CLI: REST calls to the Jules API (`internal/subagent/jules.go`) | no tiers; see below |
 

@@ -251,7 +251,29 @@ counters where available; missing counters, missing rates, and counter resets
 remain nullable and prevent unsupported savings claims. Reproducibility comes
 from the pricing revision and rates stored with every result. A session with
 no compaction reports zero compactions and `insufficient_data`, rather than
-claiming a saving.
+claiming a saving. Schema version 12 (issue 1215) extends
+`compaction_economics` with `effort` plus granular token counts
+(`cached_input_tokens`, `uncached_input_tokens`, `output_tokens`,
+`reasoning_tokens`).
+
+## Per-Turn API Cost & Subscription Share (issue 1215)
+
+Each completed harnez agent turn records its API list-price estimate and
+prorated subscription share in the session log (`TurnRecord` in
+`~/.harnez/agents/`) and in `internal/usagestore` (`turn_token_usage` and
+`turn_quota_deltas`):
+
+- **API cost**: `telemetry.CalculateTurnCost` applies `spec/pricing.yaml` rates
+  to the turn's uncached input, cache-read (subtracting `cache_write_tokens`
+  when known), output, and reasoning tokens, storing `cost_micros` and
+  `pricing_revision` on `TurnRecord` and `turn_token_usage`.
+- **Subscription quota share**: `spec/agent.yaml` (`plan_prices`) sets default
+  monthly subscription prices in micro-USD per provider, overridable or
+  clearable (`null` or `0`) in `~/.harnez/config.yaml` under `agent.plan_prices`
+  (`internal/subagent/planprice.go`). `usage.ComputeTurnQuotaShare` converts the
+  monthly price to a 7-day weekly pool (`monthly_usd_micros * 12 / 52`) and
+  persists `subscription_price_share_micros` across paired `turn_quota_deltas`
+  and `TurnRecord` when pre/post weekly quota readings are available.
 
 ## Harnez Data Store Map (issue 515)
 
