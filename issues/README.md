@@ -55,5 +55,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1222 | [1222-agents-skip-harnez-find-code-and-go-straight-to-grep-or-rg.md](1222-agents-skip-harnez-find-code-and-go-straight-to-grep-or-rg.md) | Agents skip harnez find code and go straight to grep or rg | Open |
 | 1223 | [1223-generated-git-hint-says-work-on-the-default-branch-in-a-protected-main-team-repo.md](1223-generated-git-hint-says-work-on-the-default-branch-in-a-protected-main-team-repo.md) | Generated Git hint says work on the default branch in a protected-main team repo | Open |
 | 1224 | [1224-core-agent-docs-trim-iteration-2.md](1224-core-agent-docs-trim-iteration-2.md) | Core agent docs trim, iteration 2 | Open |
-| 1225 | [1225-add-harnez-cleanup-skill-and-verify-it-with-a-terra-high-run-on-one-skill.md](1225-add-harnez-cleanup-skill-and-verify-it-with-a-terra-high-run-on-one-skill.md) | Add /harnez-cleanup skill and verify it with a terra:high run on one skill | In Progress |
 <!-- harnez:end issues-active-index -->

@@ -1,6 +1,6 @@
 # 1225 — Add /harnez-cleanup skill and verify it with a terra:high run on one skill
 
-**Status**: In Progress
+**Status**: Closed — Skill /harnez-cleanup added and installed; terra:high orchestrator run trimmed harnez-init 59 -> 28 lines with no lost check; prose-asserting tests loosened under 1224; study written
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
