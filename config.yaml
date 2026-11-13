@@ -194,6 +194,7 @@ debloat:
     harnez-selftest: user-invocable-only
     harnez-init: user-invocable-only
     harnez-handoff: user-invocable-only
+    harnez-cleanup: user-invocable-only
     gokay-sweep: user-invocable-only
     sitegen-sweep: user-invocable-only
     reverse-sprint: user-invocable-only
@@ -490,6 +491,11 @@ skills:
     license: AGPL-3.0-or-later
     description: "Write ready-to-paste handoff prompts for a local or cloud agent, optionally exploring for valuable work first"
     file: docs/commands/HarnezHandoff.md
+
+  - name: harnez-cleanup
+    license: AGPL-3.0-or-later
+    description: "Measure, shrink and retest agent-facing rules, docs and skills with cheap test sessions; scope is prose (repo rules by default, named skills, or a full sweep). Only on explicit /harnez-cleanup."
+    file: docs/commands/HarnezCleanup.md
 
   - name: evergreen
     license: AGPL-3.0-or-later
