@@ -24,15 +24,34 @@ purpose. The items below were seen during that work and left for a second pass.
 - **Stale Bash hint copy**: `internal/subagent/subagent.go` (line 122) and
   `internal/readcard/read_test.go` carry "- No ';', break before then/else", the wording that
   1221 replaced in `config.yaml` because agents read it as "`then` alone on a line".
-- **Test-pinned `Tools.md` phrases** block a further trim: the "Harnez Agent" and "Code and
-  Documentation Search" headings and five sentences (`cmd/harnez/agent_test.go`), and the
-  code-memory MCP and selftest wording (`internal/claude/rules_init_test.go`).
+- **Prose-asserting tests** (done, see "Tests loosened" below) blocked a further trim: the
+  "Harnez Agent" and "Code and Documentation Search" headings and five sentences
+  (`cmd/harnez/agent_test.go`), and the code-memory MCP and selftest wording
+  (`internal/claude/rules_init_test.go`).
 - **Rules read**: 9.2 KB in one call. haiku pipes it through `head -c N` on its own; the header
   now forbids that, confirmed by one run only.
 - **Other copyable docs** were not touched: IssueTracking, GoRelease, Go, Git, Make, Canary, Spec.
 - **Read guard threshold**: a doc meant to be read on demand should stay under 100 lines, or
   the native-read guard blocks it (seen with the 104-line `docs/Bash.md`). No test enforces this
   for lite docs.
+
+### Tests loosened (2026-11-13)
+
+The owner judged the wording tests too rigid. They now check names agents type and structure,
+not sentences:
+
+- `TestManagedAgentExamplesParseAgainstCobra` parses every `` `harnez agent ...` `` example in
+  `config.yaml` against the CLI. The two heading anchors and five required sentences are gone.
+- `TestRunInit_GeneratedToolsMCPAndSelftestGuidance` keeps tool and command names
+  (`list_projects`, `index_status`, `index_repository`, `harnez find code|docs`, `rg`,
+  `background_task_list`, `--session <id>`, the self-test exactly once) and drops six phrases.
+- `TestRunInit_GeneratesHarnezRules` keeps the rules read command, "once per session" and the
+  ban on routine issue images; three header sentences and the PNG sentence are no longer asserted.
+- `TestHarnezInitSkillInstallToEveryConfiguredTarget` checks four names instead of 22 phrases
+  (found by the 1225 run).
+
+Not touched: the other `internal/claude/*_skill_test.go` files (handoff, issue, review, decide,
+next, wrap, peer-assistant, advisor). Loosen each when its skill is trimmed.
 
 ### Why no session read the `@docs/...` links (canary, 2026-11-13)
 
@@ -81,4 +100,4 @@ session-start hook output reaches the model's context.
 - Trim one doc at a time and rerun the 1221 task (prompt and 15 checks are recorded there) on
   `haiku:low` and `luna:low`, three runs each, because single haiku runs vary.
 - Consider a test that fails when a `*.lite.md` source reaches 98 lines.
-- Run `make test-q1` once per change; update pinned tests only together with the wording.
+- Run `make test-q1` once per change. A test should assert commands and structure, not sentences.

@@ -38,10 +38,8 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 		t.Fatalf("generated instruction must read Index-listed rules then Local.md in one call; got header %q", cfg.AgentsMD.Rules.Header)
 	}
 	// Resumed agent turns must not re-read the rules every prompt (issue 791).
-	for _, want := range []string{"**Once per session, before your first task, read", "Absent optional files are skipped", "Skip this if you already read them in this session."} {
-		if !strings.Contains(string(agents), want) {
-			t.Fatalf("rules header must ask for one read per session (%q); got header %q", want, cfg.AgentsMD.Rules.Header)
-		}
+	if !strings.Contains(strings.ToLower(string(agents)), "once per session") {
+		t.Fatalf("rules header must ask for one read per session; got header %q", cfg.AgentsMD.Rules.Header)
 	}
 	if strings.Contains(string(agents), "Before any work") {
 		t.Fatalf("rules header still asks for a read before any work; got header %q", cfg.AgentsMD.Rules.Header)
@@ -55,9 +53,8 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(tools), "only when the user explicitly requests image output") {
-		t.Error("generated Tools.md must reserve PNG rendering for explicit user requests")
-	}
+	// Routine issue images are the regression (below); the wording that reserves PNG output
+	// for explicit requests is prose and is not asserted (1224).
 	for _, line := range strings.Split(string(tools), "\n") {
 		if strings.Contains(line, "`harnez") && (strings.Contains(line, " -I") || strings.Contains(line, " --image")) && strings.Contains(line, "issues") {
 			t.Errorf("generated Tools.md recommends routine issue images: %s", line)
@@ -90,8 +87,8 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 	}
 }
 
-// Generated Tools.md must separate an unexposed code-memory MCP from an unindexed repository, never claim auto-indexing,
-// and point to the self-test exactly once for troubled background tasks.
+// Generated Tools.md must name the code-memory MCP tools, the finder fallback and the background-task
+// commands, and point to the self-test exactly once. It checks names agents type, not prose (1224).
 func TestRunInit_GeneratedToolsMCPAndSelftestGuidance(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/mcp\n"), 0o644); err != nil {
@@ -110,10 +107,9 @@ func TestRunInit_GeneratedToolsMCPAndSelftestGuidance(t *testing.T) {
 	}
 	tools := string(raw)
 	for _, want := range []string{
-		"list_projects", "index_status", "index_repository", "authorized",
-		"Distinguish three states", "MCP not exposed", "Only the first is \"unavailable\"",
-		"Do not assume auto-indexing", "harnez find code|docs", "`rg`",
-		"background_task_list", "--session <id>", "runner is not loaded",
+		"list_projects", "index_status", "index_repository",
+		"harnez find code|docs", "`rg`",
+		"background_task_list", "--session <id>",
 	} {
 		if !strings.Contains(tools, want) {
 			t.Errorf("generated Tools.md missing %q", want)

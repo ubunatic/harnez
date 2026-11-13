@@ -54,30 +54,13 @@ func TestHarnezInitSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		if !strings.HasPrefix(content, "---\nname: \"harnez-init\"\ndescription:") {
 			t.Errorf("expected skill frontmatter in %s, got:\n%s", path, content)
 		}
+		// Names the skill depends on: the invocation switch, the two initialization
+		// markers and the command. Headings and wording are free to change (1224).
 		for _, want := range []string{
 			"disable-model-invocation: true",
-			"### 1. Guard: Verify Prior Initialization",
 			".harnez/",
 			"harnez:begin",
-			"If NOT initialized",
-			"Stop immediately",
-			"Doc variant",
-			"--variant lite",
-			"--variant full",
-			"Quota guardrails",
-			"Documentation set",
-			"Repository mode",
-			"### 2. Re-run Init",
 			"harnez init",
-			"### 3. Assess the Diff",
-			"git diff",
-			"Broken links",
-			"Self-referential pointers",
-			"Contradicting rules",
-			"Lost local edits",
-			"### 4. Fix Local Fallout",
-			"### 5. File Upstream Issues",
-			"### 6. Commit and Report",
 		} {
 			if !strings.Contains(content, want) {
 				t.Errorf("expected %s to contain %q", path, want)

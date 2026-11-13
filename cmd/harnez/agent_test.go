@@ -56,40 +56,32 @@ func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sectionStart := strings.Index(string(config), "## Harnez Agent")
-	if sectionStart < 0 {
-		t.Fatal("managed Harnez Agent section not found")
-	}
-	sectionEnd := strings.Index(string(config[sectionStart:]), "## Code and Documentation Search")
-	if sectionEnd < 0 {
-		t.Fatal("end of managed Harnez Agent section not found")
-	}
-	section := string(config[sectionStart : sectionStart+sectionEnd])
-	for _, phrase := range []string{
-		"A requested model such as `sol:low` or `luna` is a Harnez agent model",
-		"dispatch it with `harnez agent start --model <name>`, regardless of `subagent_mode`",
-		"When a `/goal` without an exit clause is set (e.g. typed by the user), say so in the first reply",
-		"/goal ... or stop and report when blocked on a user decision or denied permission",
-		"once blocked on the user, suggest `/goal clear` instead of repeating the wait message",
-	} {
-		if !strings.Contains(section, phrase) {
-			t.Errorf("managed Harnez Agent section is missing goal rule %q", phrase)
-		}
-	}
-	examples := regexp.MustCompile("`(harnez agent [^`]+)`").FindAllStringSubmatch(section, -1)
+	// Every `harnez agent ...` example in the generated rules and skills config must be a
+	// command the CLI accepts. The test checks commands, not the prose around them (1224).
+	examples := regexp.MustCompile("`(harnez agent [^`]+)`").FindAllStringSubmatch(string(config), -1)
 	if len(examples) == 0 {
-		t.Fatal("no harnez agent examples found in managed section")
+		t.Fatal("no harnez agent examples found in config.yaml")
 	}
 	for _, example := range examples {
 		fields := strings.Fields(example[1])
-		cmd, remaining, err := newAgentCmd().Find(fields[2:])
-		if err != nil {
-			t.Errorf("%q: resolve Cobra command: %v", example[1], err)
+		if len(fields) < 3 {
 			continue
 		}
-		if err := cmd.ParseFlags(remaining); err != nil && !errors.Is(err, pflag.ErrHelp) {
-			t.Errorf("%q: parse Cobra flags: %v", example[1], err)
-			continue
+		// `harnez agent start/resume ...` is shorthand for one example per subcommand.
+		for _, sub := range strings.Split(fields[2], "/") {
+			args := append([]string{sub}, fields[3:]...)
+			cmd, remaining, err := newAgentCmd().Find(args)
+			if err != nil {
+				t.Errorf("%q: resolve Cobra command: %v", example[1], err)
+				continue
+			}
+			if cmd.Name() != sub && !cmd.HasAlias(sub) {
+				t.Errorf("%q: %q is not a harnez agent subcommand", example[1], sub)
+				continue
+			}
+			if err := cmd.ParseFlags(remaining); err != nil && !errors.Is(err, pflag.ErrHelp) {
+				t.Errorf("%q: parse Cobra flags: %v", example[1], err)
+			}
 		}
 	}
 }
