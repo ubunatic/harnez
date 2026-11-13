@@ -23,3 +23,10 @@ In agent sessions, `harnez usage` (also `go test ./internal/usage/` and `make in
 - Verify in an agent session: `harnez usage` and `harnez usage --minimal -w` print quota; `go test ./internal/usage/` completes.
 
 **/goal** Make `harnez usage` run to completion when called by agents, with a regression test, or stop and report when blocked on a user decision or denied permission.
+
+## Resolution (2026-11-13)
+
+- Cause (strace): `terminalSize` fell back to `stty -F /dev/tty size` when stdout is not a tty. In the background process group of a `harnez exec` child, `stty` on `/dev/tty` raised SIGTTOU and stopped the group; the stopped-group guard then killed it (exit 125). This was not the `claude -p /usage` child.
+- Fix: `terminalSize` now reads the size with `TIOCGWINSZ` on `/dev/tty` (no SIGTTOU). Regression test `TestTerminalSizeDoesNotSpawnStty` (a fake `stty` on PATH must not run).
+- Verified: `go test ./internal/usage/` passes; `harnez usage` and `harnez usage --json` print under an agent session.
+- Still open: `harnez usage --watch` needs raw tty control and is still stopped under `harnez exec`; that is expected for an interactive view.
