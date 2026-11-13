@@ -1,6 +1,6 @@
 # 1221 — Trim core agent docs (AgenticLoop, Bash, AGENTS.md, Tools rules) and verify rule following on haiku/luna
 
-**Status**: In Progress
+**Status**: Closed — Trimmed AgenticLoop and Bash (full and lite), AGENTS.md and the generated rule files; memory files 16k -> 4.8k tokens; final docs pass 13-15 of 15 rule checks on haiku and luna; follow-ups 1222-1224
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Docs
