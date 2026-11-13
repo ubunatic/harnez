@@ -10,115 +10,69 @@
 - Local `@<image>` and `See <image>` links are cheat sheets containing the full
   document content as token-efficient PNG cards; inspect them as documentation.
 
-
-
 ## CLI command scope
 
-`apply` and `init` are intentionally separate — do not merge their concerns.
+`apply` and `init` stay separate; do not merge their concerns.
 
-- `apply` — global `~/.claude` only: settings, hooks, commands, docs; flags: `-c`, `-t`, `-d`, `-s`
-- `init`  — project dir only: AGENTS.md, local sections, doc copies, Makefile; flags: `-c`, `-d`, `--docs`
-
-Before changing any command's flags or adding project-local behaviour to `apply`, read
-`docs/CLIDesign.md` — the separation is load-bearing and the footgun it prevents is real.
-
-New configurable values (endpoints, timeouts, model names, labels) go in `spec/` with a JSON
-schema, never as Go defaults; read `docs/Spec.md` first.
+- `apply`: global `~/.claude` only (settings, hooks, commands, docs); flags `-c`, `-t`, `-d`, `-s`.
+- `init`: project dir only (AGENTS.md, local sections, doc copies, Makefile); flags `-c`, `-d`, `--docs`.
+- Before changing a command's flags or adding project-local behaviour to `apply`, read `docs/CLIDesign.md`.
+- New configurable values (endpoints, timeouts, model names, labels) go in `spec/` with a JSON
+  schema, never as Go defaults; read `docs/Spec.md` first.
 
 ## Docs Layout
 
-`docs/*.md` — this project's evergreen docs (architecture, decisions, pitfalls). Not copyable.
+- `docs/*.md`: this project's evergreen docs. Not copyable.
+- `docs/lang/`, `docs/practices/`, `docs/other/`: copyable docs (language, workflow, uncategorised).
+  `apply` installs them to `~/.claude/docs/`; `init --docs <name>` copies them into a project.
+- `docs/studies/`: case studies. `docs/proposed/`: staging for future copyable docs.
+  `docs/templates/`: Makefile scaffolding for `init`.
+- A doc that applies to many projects is copyable; one that describes this codebase goes in the
+  `docs/` root. A category dir forms once 3+ docs share a theme.
 
-`docs/lang/` — copyable language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4, Zig).
-Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --docs <name>`.
+## Rules and Copyable-Doc Sources
 
-`docs/practices/` — copyable workflow and practice docs (AgenticLoop, IssueTracking, PrototypingFeatures). Same install mechanics as `docs/lang/`.
-
-`docs/other/` — copyable docs that don't form a category yet (Canary, Spec, Containerfile). Same install mechanics as `docs/lang/`.
-
-`docs/studies/` — case studies and background reports (reference material for future generic docs).
-
-`docs/proposed/` — staging area for new docs that may become copyable. No install mechanics yet.
-
-`docs/templates/` — Makefile scaffolding used by `init`; not docs.
-
-Rule: if a doc applies to many projects → `docs/lang/`, `docs/practices/`, or `docs/other/`. If it describes this codebase → `docs/` root.
-A category dir forms once 3+ docs share a theme.
-
-## Where Repo Rules Go, and Copyable-Doc Sources
-
-- Tool-neutral repo rules live in this file, **outside** the `harnez:begin/end` blocks. Harnez-only
-  rules live in `.harnez/rules/` and are linked from its `Index.md`; `Local.md` holds per-checkout
-  settings and is git-excluded. `AGENTS.local.md` is read only once as a legacy migration source.
-- Copyable docs (`docs/practices/`, `docs/lang/`, `docs/other/`) are the **source**. Their copies
-  in `docs/*.md` (also in this repo), `~/.claude/docs/` and other projects only follow via
-  `harnez init`/`apply`. Edit the source file, never the root copy alone: a root-only edit is
-  silently overwritten by the next `harnez init`. After editing a source, sync the root copy
-  (run `make install` first, then `harnez init -d .`, because init copies the docs embedded in the
-  installed binary and otherwise changes nothing; then `git checkout --` any unrelated file it
-  rewrites) and commit both;
-  `TestRootDocCopiesMatchSources` fails when a root copy diverges from its source.
-  A root copy may come from a `*.lite.md` source (first line `<!-- harnez:variant=lite -->`);
+- Tool-neutral repo rules live in this file, outside the `harnez:begin/end` blocks. Harnez-only
+  rules live in `.harnez/rules/`, generated from `config.yaml`; `Local.md` there is per-checkout
+  and git-excluded.
+- Copyable docs are the **source**. Their copies in `docs/*.md` (also in this repo),
+  `~/.claude/docs/` and other projects follow only via `harnez init`/`apply`. Never edit a root
+  copy alone: the next `harnez init` overwrites it.
+- A root copy may come from a `*.lite.md` source (first line `<!-- harnez:variant=lite -->`);
   edit both the full and the lite source.
+- After editing a source: `make install`, then `harnez init -d .` (init copies the docs embedded
+  in the installed binary), `git checkout --` any unrelated file it rewrote, and commit source
+  and copy together. `TestRootDocCopiesMatchSources` fails when they diverge.
 
-## Issue Tracking & Priority Standards
+## Development & Review
 
-Adhere to `@docs/IssueTracking.md` for issue tracking conventions across `issues/*.md`
-(P0-P3 priority schema, severity/priority distinction, ticket metadata header format,
-tracker synchronization).
+- Run from the project root. Run `make install` after changing Go code.
+- Tickets follow `docs/IssueTracking.md`; sprints follow `docs/AgenticLoop.md` (`/sprint`).
+  Before a review, check `docs/ReviewLearnings.md`.
+- Small fixes: commit directly once all tests pass and existing assertions are intact. Larger
+  changes and features: a fresh reviewer subagent checks test rigor, doc and ticket sync and
+  code clarity before the commit.
+- `scripts/smoke-test.sh`: build, apply, verify idempotency, simulate drift and confirm repair.
+  `scripts/drop-perm.sh PATTERN`: remove matching permissions from `~/.claude/settings.json`
+  for drift simulation.
+- `gitOutput` (`internal/issues/maintenance`) trims its result and eats the leading space of
+  porcelain lines like ` M path`. Never feed it to a line-based parser; use `porcelainStatus`
+  for `git status --porcelain`. It is fine for single values (`rev-parse`) and emptiness checks.
+- Logs: after one or two targeted grep/tail checks without a root cause, stop reading and reason
+  from first principles or ask. Never load raw logs or whole transcripts into context.
 
-## Development & Review Workflow
+## Subagents
 
-Run from project root.
-- Before review, check `docs/ReviewLearnings.md` (recurring review findings).
+- A handoff must not block the main chat: delegate, stay responsive, and wait only when the user
+  asks or the next step needs the result.
+- No git worktree isolation unless the user asks for it. Sequential ticket work runs on the
+  checked-out branch; worktrees branch from stale bases and cannot see a prior step's
+  uncommitted changes.
 
-- Follow the 5-phase sprint workflow (`@docs/AgenticLoop.md` / `/sprint`):
-  1. Parallel Advisory Discovery (read-only audits)
-  2. Sequential Development & TDD
-  3. Pre-Commit Review Gate (independent reviewer subagent)
-  4. Process & Subagent Hygiene (drain/kill background tasks and timers)
-  5. Flow Quality Retrospective (`docs/feedback/` or `docs/studies/`)
-- Always run `make install` after modifying Go code to update the local binary in `~/go/bin`.
-- `scripts/smoke-test.sh` — build, apply, verify idempotency, simulate drift and confirm repair
-- `scripts/drop-perm.sh PATTERN` — remove permissions matching PATTERN from `~/.claude/settings.json` for drift simulation
-- Small fixes: direct commit is permitted once all tests pass and existing test assertions remain intact.
-- Larger changes & features: require a review pass before commit (orchestrated across subagents or by spawning a fresh reviewer subagent if acting as main agent) to verify test rigor, doc/ticket sync, and code clarity for future agents.
+## Voice Input
 
-## Git Output Parsing
-- `gitOutput` (`internal/issues/maintenance`) trims its result, which eats the leading space of
-  porcelain lines like ` M path` on the first line. Never feed it to a line-based parser; use
-  `porcelainStatus` (untrimmed) for `git status --porcelain`, or `exec.Command(...).Output()` and
-  split yourself. `gitOutput` is fine for single-value results (`rev-parse`) and emptiness checks.
-
-## Troubleshooting & Log Exploration
-- Do not get trapped exhaustively browsing transcript/system logs.
-- If a root cause is not apparent after 1–2 targeted grep/tail inspections, stop reading logs, reason from first principles, or ask for guidance.
-- Never ingest large raw logs or whole transcript files into context.
-
-## Background Tasks & Process Hygiene
-See `@docs/AgenticLoop.md` Invariant 3 (Zero Zombie Guarantee) for tracking and
-terminating background tasks, watch loops, and subagents.
-- Subagent handoff must not block the main chat. When the user asks to hand work to a subagent,
-  spawn/delegate the task and remain responsive as the host orchestrator; do not immediately wait
-  on the child agent unless the user explicitly asks you to wait or the next user-visible
-  integration step truly cannot proceed without the result.
-- Do not spawn subagents with git worktree isolation unless the user explicitly requests it.
-  Sequential/consecutive ticket work should run directly on the currently checked-out branch —
-  worktrees have their own failure modes (e.g. branching from a stale base, or being unable to
-  see a prior step's still-uncommitted changes) and add reconciliation overhead that isn't needed
-  for normal one-after-another dev work.
-
-## Context Discipline & Token Efficiency
-
-See `@docs/AgenticLoop.md` Invariant 6 (Context Discipline & Range-Bounded Ingestion)
-for the canonical statement of this rule.
-
-## Voice & Transcription Input Awareness
-Global Voice Input rule applies (`~/.claude/CLAUDE.md`); project-specific homophone
-example: "Southern Exploration" → "start an exploration agent", "harness" → "harnez".
-
-## Demo Recordings & Media Verification
-See `@docs/AgenticLoop.md` Invariant 10 (Media & Demo Verification Gate).
+Speech-to-text homophones in this project: "Southern Exploration" means "start an exploration
+agent"; "harness" means "harnez".
 
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
@@ -129,12 +83,12 @@ See `@docs/AgenticLoop.md` Invariant 10 (Media & Demo Verification Gate).
 <!-- harnez:end Repo Setup -->
 
 ## Remotes
-- codeberg.org and github.com are both dev remotes; Codeberg is canonical for releases (see Remotes in docs/Git.md).
-- `origin` is `ubunatic/harnez` on Codeberg and its `main` is protected: every change except `harnez release` goes
-  through a topic branch and a PR, which the host opens.
-- Owner's clone with the `both` remote: `make install-git-hooks` copies `scripts/git-hooks/pre-push` (Git LFS
-  plus the GitHub guard) into this clone's hooks dir. It refuses to replace a differing hook without the
-  `git lfs pre-push` line unless `FORCE=1`. Tests: `internal/githooks`.
+- Codeberg and GitHub are both dev remotes; Codeberg is canonical for releases (`docs/Git.md`, Remotes).
+- `origin` is `ubunatic/harnez` on Codeberg with a protected `main`: every change except
+  `harnez release` goes through a topic branch and a PR, which the host opens.
+- Owner's clone with the `both` remote: `make install-git-hooks` copies `scripts/git-hooks/pre-push`
+  (Git LFS plus the GitHub guard) into the hooks dir. It refuses to replace a differing hook that
+  lacks the `git lfs pre-push` line unless `FORCE=1`. Tests: `internal/githooks`.
 
 <!-- harnez:begin Language Conventions -->
 Adhere to the following conventions.
