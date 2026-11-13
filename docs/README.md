@@ -254,6 +254,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-10-two-agent-lean-sprint-stats-reply.md](studies/2026-11-10-two-agent-lean-sprint-stats-reply.md) | Lean sprint 971: stats stream always prints the final reply (2026-11-10) |
 | [studies/2026-11-11-jules-final-sweep-story.md](studies/2026-11-11-jules-final-sweep-story.md) | Story: the last Jules sweep (2026-11-10/11) |
 | [studies/2026-11-13-core-docs-trim-and-cleanup-skill.md](studies/2026-11-13-core-docs-trim-and-cleanup-skill.md) | Trimming the core agent docs and turning the run into a skill (2026-11-13) |
+| [studies/2026-11-13-docs-trim-and-cleanup-skill-story.md](studies/2026-11-13-docs-trim-and-cleanup-skill-story.md) | Story: trimming the agent docs and making it a skill (2026-11-13) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
