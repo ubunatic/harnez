@@ -620,7 +620,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		if streaming {
 			ts = newTurnStream(cmd, req.StreamMode, false)
 			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, req.PlanFirst
-			opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role, inferred)
+			opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role, inferred, opts.Model.Provider)
 			ts.watch()
 		}
 		watchCtx, cancelWatch := context.WithCancel(ctx)
@@ -1116,7 +1116,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			}
 			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, req.PlanFirst
 			ts.watch()
-			resumeTurn.Opts.Prompt = withResumeNote(withProtocol(req.Prompt, req.PlanFirst, role, false), resumeIdle)
+			resumeTurn.Opts.Prompt = withResumeNote(withProtocol(req.Prompt, req.PlanFirst, role, false, ""), resumeIdle)
 			resumeTurn.OnFresh = func(note string) { freshNote = note; ts.printf("[%s]\n", note) }
 		} else {
 			if compacted {

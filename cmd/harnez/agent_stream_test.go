@@ -46,8 +46,18 @@ func TestResumeNoteRequiresIdleSessionAboveSpecThreshold(t *testing.T) {
 			}
 		})
 	}
-	if strings.Contains(withProtocol("prompt", false, "developer", false), note) {
+	if strings.Contains(withProtocol("prompt", false, "developer", false, ""), note) {
 		t.Fatal("new session protocol contains a resume note")
+	}
+	codexPre, err := subagent.FamilyPreamble("codex")
+	if err != nil || codexPre == "" {
+		t.Fatalf("FamilyPreamble(codex) = %q, %v", codexPre, err)
+	}
+	if start := withProtocol("prompt", false, "developer", false, "codex"); !strings.Contains(start, codexPre) {
+		t.Fatalf("start protocol missing codex family preamble: %q", start)
+	}
+	if resumed := withProtocol("prompt", false, "developer", false, ""); strings.Contains(resumed, codexPre) {
+		t.Fatalf("resume protocol repeated family preamble: %q", resumed)
 	}
 }
 

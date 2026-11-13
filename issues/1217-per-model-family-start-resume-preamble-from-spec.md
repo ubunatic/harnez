@@ -1,6 +1,6 @@
 # 1217 — Per-model-family start/resume preamble from spec
 
-**Status**: Open
+**Status**: Closed — resolved on feat/jules-batch-c (start-only preambles map in spec/agent.yaml + WithProtocol; unit, schema, stream, and glossary checks pass)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -41,3 +41,9 @@ progress, clear the goal and write a failure report here.
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | ideas | jules-ideas-preamble-per-family | 7652669206978174282 | github #178 (closed) | done: 5/5 refs hold; the session showed FAILED, but the PR was delivered |
+
+## Progress 2026-11-13
+
+- Implemented `preambles` map in `spec/agent.yaml` (conservative starter notes for `claude`, `codex`, `agy`) and `spec/schemas/agent.schema.json`.
+- Added `subagent.FamilyPreamble(provider)` (`internal/subagent/agentspec.go`) and updated `agent.WithProtocol` (`internal/agent/core.go`) and its `cmd/harnez` callers so start turns include the family preamble while resume turns pass `""` (start-only per owner decision).
+- Added unit and CLI stream tests (`TestWithProtocolFamilyPreamble`, `agent_stream_test.go`, `modelcatalog` schema checks).

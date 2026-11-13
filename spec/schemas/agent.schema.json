@@ -252,6 +252,12 @@
     },
     "default_model": { "type": "string", "minLength": 1 },
     "default_role": { "type": "string", "minLength": 1 },
+    "preambles": {
+      "type": "object",
+      "description": "Optional per-provider preamble prepended on agent start (issue 1217).",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
     "models_legend": { "type": "string" },
     "costly_models": {
       "description": "Model specs (filepath.Match patterns, e.g. codex:astra:*) that agent start must refuse without an explicit accept-cost flag (ticket 1210).",

@@ -25,6 +25,7 @@ type agentSpec struct {
 	ModelTraits           map[string]string              `yaml:"model_traits"`
 	DefaultModel          string                         `yaml:"default_model"`
 	DefaultRole           string                         `yaml:"default_role"`
+	Preambles             map[string]string              `yaml:"preambles"`
 	RoleClassifyTimeoutMS int                            `yaml:"role_classify_timeout_ms"`
 	ModelsLegend          string                         `yaml:"models_legend"`
 	CostlyModels          []string                       `yaml:"costly_models"`
@@ -763,6 +764,19 @@ func RoleRules(role string) (string, error) {
 	}
 	r := spec.Roles[canonical]
 	return strings.TrimSpace(r.Rules), nil
+}
+
+// FamilyPreamble returns the optional spec/agent.yaml preamble for provider.
+func FamilyPreamble(provider string) (string, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return "", err
+	}
+	key := strings.ToLower(strings.TrimSpace(provider))
+	if key == "" {
+		return "", nil
+	}
+	return strings.TrimSpace(spec.Preambles[key]), nil
 }
 
 // RoleAutoApproveTools reports whether role runs agy tools unattended.

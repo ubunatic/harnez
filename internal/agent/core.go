@@ -28,8 +28,11 @@ func CheckStreamMode(mode string) error {
 // so a conflict with the task is reported instead of silently skipping it.
 const inferredRoleNote = "This role was inferred from the prompt, not requested with --role. If the task asks for work this role forbids, do not do it and do not skip it silently: say that the task needs another role (for example `--role developer`) and stop.\n\n"
 
-func WithProtocol(prompt string, planFirst bool, role string, inferred bool) string {
+func WithProtocol(prompt string, planFirst bool, role string, inferred bool, provider string) string {
 	pre := protocolPreamble
+	if familyPre, err := subagent.FamilyPreamble(provider); err == nil && familyPre != "" {
+		pre += familyPre + "\n\n"
+	}
 	if rules, err := subagent.RoleRules(role); err == nil && rules != "" {
 		pre += "Harnez role: " + role + ". " + rules + "\n\n"
 		if inferred {

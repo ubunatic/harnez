@@ -114,7 +114,7 @@ func runInteractiveStart(cmd *cobra.Command, d interactiveDeps, req interactiveS
 		taken[sessName] = true
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Interactive: %s (%s)\n", sess.Name, sess.ID)
-	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false))
+	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false, sess.Provider))
 	if err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 		return err
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Resumed Interactively: %s (%s)\n", sess.Name, sess.ID)
-	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false))
+	opts, err := interactiveOptions(cmd, store, sess, d.storeDir, withProtocol(req.Prompt, false, sess.Role, false, ""))
 	if err != nil {
 		return err
 	}

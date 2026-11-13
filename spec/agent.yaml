@@ -348,6 +348,12 @@ jules:
 # asked back despite the prompt). Empty turns it off.
   auto_reply: "Nobody will answer questions. Pick the smallest option that keeps your task's rules, state which one you picked, then finish and submit the PR now. Do not ask again."
 
+# Optional per-provider preamble text appended to the start protocol (issue 1217).
+preambles:
+  claude: "Claude family note: inspect targeted line ranges, prefer minimal edits, and report only verified file paths and test outputs."
+  codex: "Codex family note: verify command and test outputs directly before finishing, and state observed results without extrapolating."
+  agy: "Gemini/agy family note: inspect exact files in bounded ranges before editing, and ground every claim in direct tool output."
+
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf
 # worker that harnez refuses to let start, resume or manage other agents.
