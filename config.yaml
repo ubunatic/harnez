@@ -984,7 +984,7 @@ agents_md:
     git:
       name: "Git"
       ref: "@docs/Git.md"
-      hint: "conventional commits, work on the default branch, don't push unless asked"
+      hint: "conventional commits; branch rules follow Repo Setup; don't push unless asked"
       source: docs/lang/Git.md
       target: ~/.claude/docs/Git.md
       local: ./docs/Git.md

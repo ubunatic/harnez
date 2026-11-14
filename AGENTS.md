@@ -112,7 +112,7 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 - Containerfile build efficiency @docs/Containerfile.md,
   order layers static-first/dynamic-last; git+git-lfs mandatory in agent-facing images
 - Git @docs/Git.md,
-  conventional commits, work on the default branch, don't push unless asked
+  conventional commits; branch rules follow Repo Setup; don't push unless asked
 - Go/Golang @docs/Go.md,
   Modern Go; substantive features and tests in internal/<feature>, thin cmd/<app> for test caching; avoid deps, use runes and display width
 - Release Pipeline @docs/GoRelease.md,

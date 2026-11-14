@@ -55,6 +55,17 @@ func TestInitRepoModeWritesRepoYAML(t *testing.T) {
 	}
 	if agents := readFile(t, filepath.Join(dir, "AGENTS.md")); !strings.Contains(agents, protectedLine) {
 		t.Errorf("AGENTS.md lacks the team_protected section:\n%s", agents)
+	} else {
+		for _, want := range []string{
+			"conventional commits; branch rules follow Repo Setup; don't push unless asked",
+		} {
+			if !strings.Contains(agents, want) {
+				t.Errorf("AGENTS.md lacks Git hint %q:\n%s", want, agents)
+			}
+		}
+		if strings.Contains(agents, "work on the default branch") {
+			t.Errorf("team AGENTS.md contains solo Git hint:\n%s", agents)
+		}
 	}
 	if index := readFile(t, filepath.Join(dir, ".harnez", "rules", "Index.md")); !strings.Contains(index, "Git workflow: team, protected main") {
 		t.Errorf("Index.md lacks the git workflow line:\n%s", index)

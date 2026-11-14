@@ -30,7 +30,7 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 - Canary-first development @docs/Canary.md,
   probe external mechanisms before building features on them
 - Git @docs/Git.md,
-  conventional commits, work on the default branch, don't push unless asked
+  conventional commits; branch rules follow Repo Setup; don't push unless asked
 - Issue Tracking Practices @docs/IssueTracking.md,
   P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 - Markdown @docs/Markdown.md,
