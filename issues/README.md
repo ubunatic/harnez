@@ -54,4 +54,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1228 | [1228-issues-new-on-a-forge-tracker-fails-when-fj-is-a-wrapper-that-already-sets-the-host.md](1228-issues-new-on-a-forge-tracker-fails-when-fj-is-a-wrapper-that-already-sets-the-host.md) | issues new on a forge tracker fails when fj is a wrapper that already sets the host | Open |
 | 1229 | [1229-993-shipped-without-the-owner-decisions-of-2026-11-07.md](1229-993-shipped-without-the-owner-decisions-of-2026-11-07.md) | 993 shipped without the owner decisions of 2026-11-07 | Open |
 | 1232 | [1232-add-gemini-pro-orchestrator-g1-pro-as-a-harnez-model.md](1232-add-gemini-pro-orchestrator-g1-pro-as-a-harnez-model.md) | Add gemini-pro-orchestrator-g1-pro as a Harnez model | Open |
+| 1233 | [1233-allow-terra-high-as-efficient-frontier-developer-for-hard-tasks.md](1233-allow-terra-high-as-efficient-frontier-developer-for-hard-tasks.md) | Allow terra:high as efficient-frontier developer for hard tasks | Open |
 <!-- harnez:end issues-active-index -->

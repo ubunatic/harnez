@@ -1,0 +1,27 @@
+# 1233 — Allow terra:high as efficient-frontier developer for hard tasks
+
+**Status**: Open
+**Priority**: P2 (Medium)
+**Severity**: Minor
+**Category**: Feature
+**Related**: 974, 983, 1225
+
+---
+
+## 1. Problem & Motivation
+`roles.developer.models` in `spec/agent.yaml` maps `lean: [terra:low]`, `std: [terra:med, opus:low]`, and `smart: [sol:med, opus:med]`, skipping `terra:high` entirely.
+
+At relative cost `36` (and Codex subscription multiplier `0.19`), `codex:terra:high` sits between `terra:med` (`24`) and `sol:med` (`47`) and proved strong on complex multi-step work (e.g. issue 1225). It should be available as an efficient-frontier developer option for hard tasks in `spec/agent.yaml` (and its rating/guidance in `spec/model_scores.yaml` and `spec/agent.yaml` aligned accordingly).
+
+## 2. Technical Specification / Findings
+- In `spec/agent.yaml`:
+  - Include `terra:high` in `roles.developer.models.smart` (e.g. `smart: [terra:high, sol:med, opus:med]` or alongside `sol:med`) and update `codex:terra.use` guidance so `terra:high` is recommended as an efficient-frontier developer for hard tasks before escalating to `sol:med`/`sol:high`.
+- In `spec/model_scores.yaml`:
+  - Review `codex:terra` capability ratings (`low: 2.5, med: 3.0, high: 3.5` vs `codex:sol` `low: 3.5, med: 4.0, high: 4.5`) and update if needed so `terra:high` reflects its frontier position on hard tasks.
+- Update affected golden files (`cmd/harnez/testdata/agent-models-chart-80cols.golden`, `internal/subagent/testdata/known-model-specs.golden`) and tests in `internal/subagent/`.
+
+## 3. Implementation & Verification Plan
+- Update `spec/agent.yaml` (and `spec/model_scores.yaml` if ratings change) and regenerate/update golden fixtures.
+- Verify `harnez agent models --picks` and `harnez agent models --chart`, then run `make test-q1` and `make install`.
+
+**/goal** Allow `terra:high` as an efficient-frontier developer for hard tasks in `spec/agent.yaml` (and model scores/goldens), verified by `harnez agent models --picks` and tests, or stop and report when blocked on a user decision or denied permission.
