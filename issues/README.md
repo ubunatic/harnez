@@ -10,6 +10,11 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 <!-- harnez:begin issues-active-index -->
 | # | File | Title | Status |
 |---|------|-------|--------|
+| 857 | [857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md](857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md) | Support external issue providers (GitHub, GitLab, Codeberg, Trello, Jira) | Open |
+| 942 | [942-epic-model-catalog-access-discovery-and-user-model-policy.md](942-epic-model-catalog-access-discovery-and-user-model-policy.md) | Epic: model catalog, access discovery and user model policy | Open |
+| 979 | [979-epic-agent-instructions-and-help-text.md](979-epic-agent-instructions-and-help-text.md) | Epic: agent instructions and help text | Open |
+| 980 | [980-epic-harnez-agent-command-fixes-review-and-isolation.md](980-epic-harnez-agent-command-fixes-review-and-isolation.md) | Epic: harnez agent command fixes, review and isolation | Open |
+| 992 | [992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md](992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md) | Per-provider plan preference: own, free or shared plan limits which roles a provider gets | Open |
 | 1008 | [1008-add-optional-agent-start-and-resume-continuity-self-test.md](1008-add-optional-agent-start-and-resume-continuity-self-test.md) | Add optional agent start and resume continuity self-test | Open |
 | 1031 | [1031-autocompact-flag-for-harnez-agent-start-required-for-lmcoder-models-rejected-for-models-that-cannot-honor-it.md](1031-autocompact-flag-for-harnez-agent-start-required-for-lmcoder-models-rejected-for-models-that-cannot-honor-it.md) | Autocompact flag for harnez agent start, required for lmcoder models, rejected for models that cannot honor it | Open |
 | 1033 | [1033-tool-call-limit-per-agent-turn-enforced-by-harnez-not-by-the-prompt.md](1033-tool-call-limit-per-agent-turn-enforced-by-harnez-not-by-the-prompt.md) | Tool-call limit per agent turn, enforced by harnez, not by the prompt | Open — M1–M3 implemented and tested on `main` (`3d9183ea`, PR #166); live lmcoder:coder acceptance deferred (pi absent / proxy 127.0.0.1:8735 offline) |
@@ -48,9 +53,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1227 | [1227-quota-1-untested-code-warning-fires-after-a-branch-switch-although-the-code-equals-the-tested-commit.md](1227-quota-1-untested-code-warning-fires-after-a-branch-switch-although-the-code-equals-the-tested-commit.md) | Quota-1 untested-code warning fires after a branch switch although the code equals the tested commit | Open |
 | 1228 | [1228-issues-new-on-a-forge-tracker-fails-when-fj-is-a-wrapper-that-already-sets-the-host.md](1228-issues-new-on-a-forge-tracker-fails-when-fj-is-a-wrapper-that-already-sets-the-host.md) | issues new on a forge tracker fails when fj is a wrapper that already sets the host | Open |
 | 1229 | [1229-993-shipped-without-the-owner-decisions-of-2026-11-07.md](1229-993-shipped-without-the-owner-decisions-of-2026-11-07.md) | 993 shipped without the owner decisions of 2026-11-07 | Open |
-| 857 | [857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md](857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md) | Support external issue providers (GitHub, GitLab, Codeberg, Trello, Jira) | Open |
-| 942 | [942-epic-model-catalog-access-discovery-and-user-model-policy.md](942-epic-model-catalog-access-discovery-and-user-model-policy.md) | Epic: model catalog, access discovery and user model policy | Open |
-| 979 | [979-epic-agent-instructions-and-help-text.md](979-epic-agent-instructions-and-help-text.md) | Epic: agent instructions and help text | Open |
-| 980 | [980-epic-harnez-agent-command-fixes-review-and-isolation.md](980-epic-harnez-agent-command-fixes-review-and-isolation.md) | Epic: harnez agent command fixes, review and isolation | Open |
-| 992 | [992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md](992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md) | Per-provider plan preference: own, free or shared plan limits which roles a provider gets | Open |
+| 1232 | [1232-add-gemini-pro-orchestrator-g1-pro-as-a-harnez-model.md](1232-add-gemini-pro-orchestrator-g1-pro-as-a-harnez-model.md) | Add gemini-pro-orchestrator-g1-pro as a Harnez model | Open |
 <!-- harnez:end issues-active-index -->
