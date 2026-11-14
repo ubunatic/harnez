@@ -253,11 +253,7 @@ func jsCommands(source string) []string {
 		if c == '_' || c == '$' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
 			start := i
 			i++
-			for i < len(source) {
-				c = source[i]
-				if !(c == '_' || c == '$' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
-					break
-				}
+			for i < len(source) && (source[i] == '_' || source[i] == '$' || source[i] >= 'a' && source[i] <= 'z' || source[i] >= 'A' && source[i] <= 'Z' || source[i] >= '0' && source[i] <= '9') {
 				i++
 			}
 			tokens = append(tokens, token{text: source[start:i]})

@@ -70,7 +70,7 @@ func TestAgentCommandsClaudeAndDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Close()
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	name := filepath.Base(f.Name())
 	saveSessions(t, store, &subagent.Session{ID: "claude-collision", Name: name, Provider: "claude", ProviderSessionID: id, WorkingDir: work})
 	for _, args := range [][]string{{"commands", "--name", name}, {"commands", "--name", name, "--dir", work}, {"commands", "claude-managed", "--dir", work}} {

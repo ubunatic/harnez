@@ -126,14 +126,6 @@ func ReadRunRecord(path string) (RunRecord, error) {
 	return record, nil
 }
 
-func readState(path string) (time.Time, error) {
-	record, err := ReadRunRecord(path)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return record.Started, nil
-}
-
 // ChangesSinceLastRun returns eligible source files modified after the last
 // Quota-1 run, along with that run's recorded time. Missing state is not an
 // error and returns no changes.
@@ -285,15 +277,6 @@ func isExcludedFile(name string) bool {
 		}
 	}
 	return false
-}
-
-// findModifiedSourceFile checks if any repository source file in root has ModTime > since.
-func findModifiedSourceFile(root, stateFilePath string, since time.Time) (string, error) {
-	files, err := findModifiedSourceFiles(root, stateFilePath, since)
-	if err != nil || len(files) == 0 {
-		return "", err
-	}
-	return files[0], nil
 }
 
 func findModifiedSourceFiles(root, stateFilePath string, since time.Time) ([]string, error) {
