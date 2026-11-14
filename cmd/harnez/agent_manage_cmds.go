@@ -14,6 +14,10 @@ import (
 	"ubunatic.com/harnez/internal/subagent"
 )
 
+func unratedDeleteRefusal(name string) string {
+	return fmt.Sprintf("refusing to delete unrated session %q; rate it with: harnez agent rate --name %s <1-5> \"<reason>\", or pass --force", name, name)
+}
+
 func (ac *agentCLI) listCmd() *cobra.Command {
 	list := &cobra.Command{Use: "list", Short: "List agent sessions", RunE: func(cmd *cobra.Command, _ []string) error {
 		if ac.children && ac.all {
@@ -372,7 +376,7 @@ func (ac *agentCLI) deleteCmd() *cobra.Command {
 				}
 				if warnUnrated(cmd, x) && !force {
 					printUnratedDeleteWarning(cmd, []*subagent.Session{x})
-					failures = append(failures, fmt.Errorf("%s: refusing to delete unrated session without --force", x.Name))
+					failures = append(failures, fmt.Errorf("%s: %s", x.Name, unratedDeleteRefusal(x.Name)))
 					continue
 				}
 				if x.HarnessType == "interactive" {
@@ -484,7 +488,7 @@ func (ac *agentCLI) deleteCmd() *cobra.Command {
 		}
 		if warnUnrated(cmd, x) && !force {
 			printUnratedDeleteWarning(cmd, []*subagent.Session{x})
-			return fmt.Errorf("delete: refusing to delete unrated session %q without --force", x.Name)
+			return fmt.Errorf("delete: %s", unratedDeleteRefusal(x.Name))
 		}
 		if x.HarnessType == "interactive" {
 			if x.Status == "active" {
