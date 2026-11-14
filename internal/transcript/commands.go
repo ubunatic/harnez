@@ -7,7 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -117,6 +119,11 @@ func Commands(r io.Reader, emit func(string) error) error {
 					raw = p.Input
 				}
 				commands = append(commands, commandInput(raw))
+			} else if p.Type == "custom_tool_call" && p.Name == "exec" {
+				var source string
+				if json.Unmarshal(p.Input, &source) == nil {
+					commands = append(commands, jsCommands(source)...)
+				}
 			} else if p.Type == "local_shell_call" {
 				commands = append(commands, commandInput(p.Action))
 			}
@@ -171,4 +178,113 @@ func commandInput(raw json.RawMessage) string {
 		return strings.Join(args, " ")
 	}
 	return ""
+}
+
+// jsCommands extracts literal command fields from calls in Codex exec blocks.
+// Dynamic expressions cannot be reconstructed from a transcript and are skipped.
+func jsCommands(source string) []string {
+	type token struct {
+		text    string
+		literal bool
+	}
+	var tokens []token
+	for i := 0; i < len(source); {
+		c := source[i]
+		if unicode.IsSpace(rune(c)) {
+			i++
+			continue
+		}
+		if c == '/' && i+1 < len(source) && source[i+1] == '/' {
+			i += 2
+			for i < len(source) && source[i] != '\n' {
+				i++
+			}
+			continue
+		}
+		if c == '/' && i+1 < len(source) && source[i+1] == '*' {
+			i += 2
+			for i+1 < len(source) && source[i:i+2] != "*/" {
+				i++
+			}
+			i = min(i+2, len(source))
+			continue
+		}
+		if c == '\'' || c == '"' || c == '`' {
+			quote := c
+			i++
+			var b strings.Builder
+			valid := true
+			closed := false
+			for i < len(source) {
+				if source[i] == quote {
+					i++
+					closed = true
+					break
+				}
+				if quote == '`' && source[i] == '$' && i+1 < len(source) && source[i+1] == '{' {
+					valid = false
+				}
+				if source[i] == '\\' {
+					if i+1 >= len(source) {
+						valid = false
+						i++
+						break
+					}
+					if source[i+1] == '\n' {
+						i += 2
+						continue
+					}
+					r, _, tail, err := strconv.UnquoteChar(source[i:], quote)
+					if err != nil {
+						valid = false
+						i += 2
+						continue
+					}
+					b.WriteRune(r)
+					i = len(source) - len(tail)
+					continue
+				}
+				b.WriteByte(source[i])
+				i++
+			}
+			tokens = append(tokens, token{b.String(), valid && closed})
+			continue
+		}
+		if c == '_' || c == '$' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
+			start := i
+			i++
+			for i < len(source) {
+				c = source[i]
+				if !(c == '_' || c == '$' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
+					break
+				}
+				i++
+			}
+			tokens = append(tokens, token{text: source[start:i]})
+			continue
+		}
+		tokens = append(tokens, token{text: string(c)})
+		i++
+	}
+	var commands []string
+	for i := 0; i+5 < len(tokens); i++ {
+		if tokens[i].text != "tools" || tokens[i+1].text != "." || (tokens[i+2].text != "exec_command" && tokens[i+2].text != "shell_command" && tokens[i+2].text != "shell") || tokens[i+3].text != "(" || tokens[i+4].text != "{" {
+			continue
+		}
+		depth := 1
+		for j := i + 5; j < len(tokens) && depth > 0; j++ {
+			if !tokens[j].literal && tokens[j].text == "{" {
+				depth++
+			}
+			if !tokens[j].literal && tokens[j].text == "}" {
+				depth--
+				continue
+			}
+			if depth == 1 && (tokens[j].text == "cmd" || tokens[j].text == "command") && j+2 < len(tokens) && tokens[j+1].text == ":" && tokens[j+2].literal && (j+3 < len(tokens) && (tokens[j+3].text == "," || tokens[j+3].text == "}")) {
+				commands = append(commands, tokens[j+2].text)
+				break
+			}
+		}
+	}
+	return commands
 }

@@ -23,54 +23,36 @@ func (ac *agentCLI) commandsCmd() *cobra.Command {
 			return fmt.Errorf("commands: specify a session ID, path, or --name")
 		}
 		provider := ""
-		if _, err := os.Stat(id); err != nil && !strings.ContainsAny(id, `/\`) && !strings.HasSuffix(id, ".jsonl") {
+		_, statErr := os.Stat(id)
+		isPath := ac.name == "" && (statErr == nil || strings.ContainsAny(id, `/\`) || strings.HasSuffix(id, ".jsonl"))
+		if !isPath {
 			store, err := subagent.OpenSessionStore(ac.storeDir)
 			if err != nil {
 				return err
 			}
-			sessions, err := store.List("", true)
-			if err != nil && !os.IsNotExist(err) {
-				return err
-			}
-			var matches []*subagent.Session
-			for _, s := range sessions {
-				if s.ID == id {
-					matches = []*subagent.Session{s}
-					break
-				}
-			}
-			if len(matches) == 0 {
-				for _, s := range sessions {
-					if s.Name == id {
-						matches = append(matches, s)
-					}
-				}
-			}
-			if len(matches) == 0 && ac.name == "" {
-				for _, s := range sessions {
-					if !strings.HasPrefix(s.ID, id) {
-						continue
-					}
-					matches = append(matches, s)
-				}
-			}
-			if len(matches) > 1 {
-				return fmt.Errorf("commands: ambiguous session %q", id)
-			}
-			if len(matches) == 1 {
-				s := matches[0]
-				if cmd.Flags().Changed("dir") && ac.workDir != "." {
-					if _, err := resolveSession(store, s.ID, ac.workDir); err != nil {
+			dir := ""
+			if cmd.Flags().Changed("dir") {
+				dir = ac.workDir
+				if dir == "." {
+					dir, err = os.Getwd()
+					if err != nil {
 						return err
 					}
 				}
+			}
+			s, err := resolveSession(store, id, dir)
+			if err != nil {
+				if ac.name != "" || dir != "" || !strings.Contains(err.Error(), "not found") {
+					return err
+				}
+			} else {
 				id, provider = s.ProviderID(), s.Provider
 				if provider != "claude" && provider != "codex" {
 					return fmt.Errorf("commands: unsupported provider %q", provider)
 				}
-			} else if ac.name != "" {
-				return fmt.Errorf("commands: session %q not found", id)
 			}
+		} else if cmd.Flags().Changed("dir") {
+			return fmt.Errorf("commands: --dir requires a managed session")
 		}
 		path, err := transcript.ResolveCommands(id, provider)
 		if err != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -241,6 +242,18 @@ func (s *FileSessionStore) Find(identifier string) (*Session, error) {
 		if sess.Name == identifier {
 			return sess, nil
 		}
+	}
+	var match *Session
+	for _, sess := range sessions {
+		if strings.HasPrefix(sess.ID, identifier) && identifier != "" {
+			if match != nil {
+				return nil, fmt.Errorf("ambiguous session %q", identifier)
+			}
+			match = sess
+		}
+	}
+	if match != nil {
+		return match, nil
 	}
 	return nil, fmt.Errorf("session %q not found", identifier)
 }

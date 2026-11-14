@@ -48,3 +48,40 @@ func TestAgentCommands(t *testing.T) {
 		t.Fatalf("ambiguous: %v", err)
 	}
 }
+
+func TestAgentCommandsClaudeAndDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", home)
+	project := filepath.Join(home, "projects", "project")
+	if err := os.MkdirAll(project, 0700); err != nil {
+		t.Fatal(err)
+	}
+	id := "claude-session"
+	data := []byte("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Bash\",\"input\":{\"command\":\"one\\r\\ntwo\\nthree\"}}]}}\n")
+	if err := os.WriteFile(filepath.Join(project, id+".jsonl"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	store := t.TempDir()
+	work := t.TempDir()
+	saveSessions(t, store, &subagent.Session{ID: "claude-managed", Name: "collision-1226", Provider: "claude", ProviderSessionID: id, WorkingDir: work})
+	collision := "collision-1226"
+	f, err := os.CreateTemp(".", collision+"-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+	name := filepath.Base(f.Name())
+	saveSessions(t, store, &subagent.Session{ID: "claude-collision", Name: name, Provider: "claude", ProviderSessionID: id, WorkingDir: work})
+	for _, args := range [][]string{{"commands", "--name", name}, {"commands", "--name", name, "--dir", work}, {"commands", "claude-managed", "--dir", work}} {
+		got, err := runWithStore(t, nil, store, args...)
+		if err != nil || got != `one\r\ntwo\nthree`+"\n" {
+			t.Fatalf("%v: got %q, err %v", args, got, err)
+		}
+	}
+	for _, args := range [][]string{{"commands", "--name", name, "--dir", t.TempDir()}, {"commands", "claude-managed", "--dir", t.TempDir()}, {"commands", id, "--dir", work}} {
+		if _, err := runWithStore(t, nil, store, args...); err == nil {
+			t.Fatalf("%v: expected directory error", args)
+		}
+	}
+}

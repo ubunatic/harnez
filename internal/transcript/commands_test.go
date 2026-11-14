@@ -13,6 +13,7 @@ func TestCommandsFixtures(t *testing.T) {
 	}{
 		{"claude", []string{"printf hello", "git status\ngit diff"}},
 		{"codex", []string{"pwd", "git status", "printf hi", "'bash' '-lc' 'echo hi'"}},
+		{"codex-exec", []string{"git status --short\nrg --files cmd/example", "printf 'hello'", "first line\nsecond line", `echo "quoted"`}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			f, err := os.Open("testdata/" + tt.name + "-commands.jsonl")
