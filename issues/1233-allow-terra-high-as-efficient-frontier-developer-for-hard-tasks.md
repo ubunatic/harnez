@@ -1,6 +1,7 @@
 # 1233 — Allow terra:high as efficient-frontier developer for hard tasks
 
-**Status**: Open
+**Status**: Closed — bdbdd7e0 + 1fed6ab8: terra:high in roles.developer.models.smart and codex:terra.use guidance; pickdocs/docs synced; make test-q1 green; live dry-run + --picks verified
+**Closed-By**: session 801d927d-19ac-46f0-aece-6142997b71d9
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -36,5 +37,17 @@ At relative cost `36` (and Codex subscription multiplier `0.19`), `codex:terra:h
 - `internal/subagent/testdata/known-model-specs.golden:39` & `internal/subagent/driver_test.go:150`: already list `codex:terra:high` (verify passes).
 - `cmd/harnez/agent_chart_test.go:261` & `cmd/harnez/testdata/agent-models-chart-80cols.golden`: verify passes untouched (if chart changes, do not touch without reason).
 - Tests to run: `go test -race -count=1 ./internal/subagent ./cmd/harnez` (remember Quota-1 single test run if needed, or run targeted `go test` on those two packages before final commit).
+
+## M2 Pre-Work (`make test-q1` failure)
+- `internal/pickdocs/pickdocs_test.go:69-84`: `TestSourceBlocksCurrent` failed because the embedded `<!-- harnez:model-picks:begin -->...<!-- harnez:model-picks:end -->` tables are stale in:
+  - `docs/practices/AgenticLoop.md`
+  - `docs/practices/AgenticLoop.lite.md`
+  - `docs/practices/ModelRoles.md`
+  - `docs/commands/lean-sprint.md`
+  - `docs/commands/lean-sprint-v1.md`
+  - `docs/commands/epic.md`
+  - `docs/commands/HarnezStatus.md`
+- Also check `AGENTS.md` Rules and Copyable-Doc Sources: after updating copyable doc sources in `docs/practices/`, run `make install` and `harnez init -d .` (and `git checkout --` any unrelated file `init` rewrote) so `TestRootDocCopiesMatchSources` passes (`docs/AgenticLoop.md`, `docs/ModelRoles.md`, and any synced skill/command copies).
+- Verify with `go test ./internal/pickdocs ./internal/claude ./internal/subagent` (or `make test-q1` if available).
 
 **/goal** Allow `terra:high` as an efficient-frontier developer for hard tasks in `spec/agent.yaml` (and model scores/goldens), verified by `harnez agent models --picks` and tests, or stop and report when blocked on a user decision or denied permission.
