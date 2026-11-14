@@ -1,6 +1,7 @@
 # 1226 — harnez agent has no verb to print a session's executed commands for scoring test sessions
 
-**Status**: Open
+**Status**: Closed — cc11b4f1/1dee4d1a: add harnez agent commands for Claude and Codex session transcripts; fixture + CLI tests; docs updated; live verified on codex:luna:low
+**Closed-By**: session 801d927d-19ac-46f0-aece-6142997b71d9
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
