@@ -1,6 +1,7 @@
 # 1227 — Quota-1 untested-code warning fires after a branch switch although the code equals the tested commit
 
-**Status**: Open
+**Status**: Closed — bce91254/e5ab6a6e: quota1 TestedHead + TestedDirty snapshot comparison for warnings and rerun gate; non-file safety; mtime fallback
+**Closed-By**: session 801d927d-19ac-46f0-aece-6142997b71d9
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
