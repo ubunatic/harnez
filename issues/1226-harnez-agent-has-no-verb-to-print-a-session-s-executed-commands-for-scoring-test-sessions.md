@@ -42,3 +42,19 @@ their own transcripts and the scores rest on self-reported evidence.
   line, for Claude and Codex sessions.
 - Test with a recorded transcript fixture per provider.
 - Then name the command in the skill's Baseline section.
+
+## Decision
+- Add read-only subcommand `harnez agent commands [<id>] [--name <name>] [-d <dir>]` (accepting Harnez session id/prefix or `--name`, resolving via the session store to the provider session/thread ID and transcript path) printing executed shell commands one per line.
+- Share provider command extraction in `internal/` (handling Claude assistant `tool_use` `Bash` blocks and Codex rollout `function_call`, `custom_tool_call`, `local_shell_call` payloads) and verify with unit tests using recorded Claude and Codex JSONL fixtures (plus a live Codex test session before merge).
+- Update `docs/commands/HarnezCleanup.md` Baseline section and `docs/OrchestratedAgentFlow.md` §5 to name `harnez agent commands` (updating copyable source/root doc copies if applicable).
+
+## Pre-Work (Scout findings)
+- Confirmed gap: `cmd/harnez/agent*.go` has no verb printing executed shell commands; `harnez stats --session <id> --calls` (`cmd/harnez/stats.go:97`, `cmd/harnez/stats_calls.go:52`) prints telemetry rows without shell command strings, and `docs/OrchestratedAgentFlow.md:135` (§5) relies on raw transcripts / `~/.harnez/tool_catalog.sqlite`.
+- Session & transcript lookup:
+  - Resolve Harnez agent ID/prefix or `--name` via `cmd/harnez/agent_manage_cmds.go` conventions to provider session/thread ID and working dir.
+  - Claude transcripts live under `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` (`internal/usage/transcripts.go:9`, `internal/transcript/extract.go:28`, `internal/transcript/claude.go:28`); extract assistant content blocks with `type == "tool_use"` and `name == "Bash"` (`input.command`).
+  - Codex rollouts live under `~/.codex/sessions/YYYY/MM/DD/rollout-*-<thread-id>.jsonl` (`internal/subagent/codex.go:51` `findCodexRolloutPath`, event/call parsing at `internal/subagent/codex.go:527`, `:673`, and fixture `internal/subagent/testdata/codex-987-rollout.jsonl`); inspect live Codex rollout event schema for `exec_command` / `shell_command` / `function_call` / `custom_tool_call` / `local_shell_call` payloads so real sessions and fixtures both parse cleanly.
+- Docs check: `docs/commands/HarnezCleanup.md` is an evergreen root doc (verify no `harnez:variant=lite` / copyable source exists); document `harnez agent commands` in its Baseline section and in `docs/OrchestratedAgentFlow.md` §5.
+- Verification: `go test -race -count=1 ./cmd/harnez ./internal/subagent ./internal/transcript` + live `codex:luna:low` test session check after `make install`.
+
+**/goal** Implement `harnez agent commands` to list executed shell commands from Claude and Codex session transcripts with recorded fixture tests and doc updates, or stop and report when blocked on a user decision or denied permission.
