@@ -1,0 +1,2 @@
+{"type":"user","message":{"content":"run commands"}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Checking"},{"type":"tool_use","name":"Bash","input":{"command":"printf hello"}},{"type":"tool_use","name":"Read","input":{"file_path":"x"}},{"type":"tool_use","name":"Bash","input":{"command":"git status\ngit diff"}}]}}

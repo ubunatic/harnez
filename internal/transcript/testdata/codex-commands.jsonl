@@ -1,0 +1,5 @@
+{"type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pwd\"}"}}
+{"type":"response_item","payload":{"type":"function_call","name":"shell_command","arguments":"{\"command\":\"git status\"}"}}
+{"type":"response_item","payload":{"type":"custom_tool_call","name":"shell","input":"{\"command\":\"printf hi\"}"}}
+{"type":"response_item","payload":{"type":"local_shell_call","action":{"type":"exec","command":["bash","-lc","echo hi"]}}}
+{"type":"response_item","payload":{"type":"function_call","name":"read_file","arguments":"{\"command\":\"ignore\"}"}}

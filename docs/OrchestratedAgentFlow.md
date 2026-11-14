@@ -132,13 +132,16 @@ code and the environment in all three tickets. Check:
 
 ## 5. Finding out what agents ran
 
+- Run `harnez agent commands --name <name>` (or supply a session ID or transcript path) to
+  print executed shell commands for Claude and Codex sessions, one per line. Embedded newlines
+  are shown as `\n`.
 - Authoritative: Codex rollout logs, `~/.codex/sessions/YYYY/MM/DD/rollout-*<thread id>.jsonl`
   (every tool call with its command text). Identify a thread by the role text in its first
   prompt. Count `harnez agent` calls per thread to prove the delegation depth.
 - Claude sessions: `~/.claude/projects/<cwd with slashes as dashes>/<session id>.jsonl`; the
   commands are the `tool_use` blocks of assistant messages. The session id is in the
   `[session info: id=...]` line that `harnez agent start` prints. Issue 1221 scored nine test
-  sessions this way with a throwaway script; no `harnez agent` verb prints the list (1226).
+  sessions this way with a throwaway script.
 - Score test sessions from these files, not from a transcript the session writes about itself:
   in the 1225 run four sessions self-reported and their scores could not be compared.
 - Telemetry `~/.harnez/tool_catalog.sqlite` (`tool_calls`, `cli_invocations`, `harnez stats`)

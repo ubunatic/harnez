@@ -290,7 +290,7 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 	stop := ac.stopCmd()
 	remove := ac.deleteCmd()
 	rate := ac.rateCmd()
-	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, newAgentSelftestCmd(), newAgentSendCmd(&ac.storeDir, &ac.name, &ac.workDir))
+	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, ac.commandsCmd(), newAgentSelftestCmd(), newAgentSendCmd(&ac.storeDir, &ac.name, &ac.workDir))
 	silenceUsage(root)
 	return root
 }

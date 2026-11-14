@@ -38,7 +38,8 @@ HTO=0 harnez agent start --name <n> --role developer --model <model>:<effort> -f
 harnez agent resume --name <n> -- "<question>"
 ```
 
-Start sessions as background tasks. Score from the output files and the harness's command log,
+Start sessions as background tasks. Use `harnez agent commands --name <n>` to inspect executed
+shell commands. Score from the output files and the harness's command log,
 never from a summary or transcript the session writes. A check you could not observe is not
 applicable, not a pass. Then ask each session which rules it read, where, and which it set
 aside; resume a Claude session with `/context` for its loaded sizes.
