@@ -8,10 +8,10 @@ import (
 
 func TestRoleModelResolution(t *testing.T) {
 	for _, tc := range []struct{ role, pick, target string }{
-		{"dev", "lean", "terra:low"}, {"dev", "std", "terra:med"}, {"dev", "smart", "sol:med"},
-		{"dev", "tui", "sol:med"}, {"dev", "gui", "terra:low"}, {"dev", "cheap", "luna:med"},
+		{"dev", "lean", "terra:low"}, {"dev", "std", "terra:med"}, {"dev", "smart", "terra:high"},
+		{"dev", "tui", "terra:high"}, {"dev", "gui", "terra:low"}, {"dev", "cheap", "luna:med"},
 		{"dev", "fast", "haiku:med"}, {"review", "smart", "sol:low"}, {"review", "", "sol:low"},
-		{"", "smart", "sol:med"}, {"developer", "smart", "sol:med"}, {"advisor", "cheap", "luna:low"}, {"advisor", "smart", "opus:low"},
+		{"", "smart", "terra:high"}, {"developer", "smart", "terra:high"}, {"advisor", "cheap", "luna:low"}, {"advisor", "smart", "opus:low"},
 		{"orchestrator", "", "codex:luna:high"}, {"review", "codex:sol:med", "codex:sol:med"}, {"review", "sol", "sol"},
 	} {
 		t.Run(tc.role+"/"+tc.pick, func(t *testing.T) {

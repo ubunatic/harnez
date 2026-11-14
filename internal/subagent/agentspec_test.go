@@ -93,7 +93,7 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if sol := spec.Models["codex:sol"]; !strings.Contains(sol.Use, "judgment") {
 		t.Errorf("codex:sol use = %q, want judgment guidance", sol.Use)
 	}
-	if terra := spec.Models["codex:terra"]; terra.Use != "Near-Sol Codex developer and reviewer at half Sol's price; use Sol for the hardest judgment." || terra.Roles != "developer, advisor, reviewer" {
+	if terra := spec.Models["codex:terra"]; terra.Use != "Efficient-frontier Codex developer for hard tasks at half Sol's price; use terra:high before escalating to sol:med or sol:high, and reserve Sol for the hardest judgment." || terra.Roles != "developer, advisor, reviewer" {
 		t.Errorf("codex:terra guidance = %q, roles = %q", terra.Use, terra.Roles)
 	}
 	haiku := spec.Models["claude:haiku"]

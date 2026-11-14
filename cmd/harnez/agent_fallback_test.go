@@ -36,7 +36,7 @@ func TestPolicyFallbackProcess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestPolicyFallbackProcess$")
 	cmd.Env = append(os.Environ(), "TEST_983_CHILD=1", "XDG_CONFIG_HOME="+config, "XDG_STATE_HOME="+t.TempDir())
 	out, err := cmd.CombinedOutput()
-	if err != nil || !strings.Contains(string(out), "claude smart → opus:med (sol:med: disabled by user policy)") {
+	if err != nil || !strings.Contains(string(out), "claude smart → opus:med (terra:high: disabled by user policy; sol:med: disabled by user policy)") {
 		t.Fatalf("output=%s error=%v", out, err)
 	}
 }
@@ -89,7 +89,7 @@ func TestFallbackNoticeAndQuotaOverride(t *testing.T) {
 		return usage.ProviderQuotaAvailability{State: "available"}
 	}
 	result, err := selectStartModel("developer", "smart", false, availability, &out)
-	if err != nil || result.Provider != "claude" || result.Tier != "med" || !strings.Contains(out.String(), "smart → opus:med (sol:med: quota exhausted)") {
+	if err != nil || result.Provider != "claude" || result.Tier != "med" || !strings.Contains(out.String(), "smart → opus:med (terra:high: quota exhausted; sol:med: quota exhausted)") {
 		t.Fatalf("selection=%+v err=%v notice=%q", result, err, out.String())
 	}
 	out.Reset()
@@ -108,7 +108,7 @@ func TestResumeTraitFallsBackToSessionModel(t *testing.T) {
 		}
 		return usage.ProviderQuotaAvailability{State: "available"}
 	}
-	if err := checkResumeModel("developer", "smart", session, false, availability, &notice); err != nil || !strings.Contains(notice.String(), "sol:med: quota exhausted") {
+	if err := checkResumeModel("developer", "smart", session, false, availability, &notice); err != nil || !strings.Contains(notice.String(), "terra:high: quota exhausted; sol:med: quota exhausted") {
 		t.Fatalf("notice=%q err=%v", notice.String(), err)
 	}
 	session.Tier = "low"

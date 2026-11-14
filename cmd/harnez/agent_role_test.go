@@ -100,10 +100,10 @@ func TestStartResolvesRoleBeforeModel(t *testing.T) {
 		args        []string
 		role, model string
 	}{
-		{[]string{"--role", "dev", "--model", "smart"}, "developer", "codex:gpt-6.1-sol:med"},
+		{[]string{"--role", "dev", "--model", "smart"}, "developer", "codex:gpt-6.1-terra:high"},
 		{[]string{"--role", "review", "--model", "smart"}, "reviewer", "codex:gpt-6.1-sol:low"},
 		{[]string{"--role", "review"}, "reviewer", "codex:gpt-6.1-sol:low"},
-		{[]string{"--model", "smart"}, "developer", "codex:gpt-6.1-sol:med"},
+		{[]string{"--model", "smart"}, "developer", "codex:gpt-6.1-terra:high"},
 	} {
 		d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
 		args := append([]string{"start"}, tc.args...)
@@ -139,14 +139,14 @@ func TestModelAliasListAndBanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "smart") || !strings.Contains(out, "gpt-6.1-sol") {
+	if !strings.Contains(out, "smart") || !strings.Contains(out, "gpt-6.1-terra") {
 		t.Fatalf("banner: %s", out)
 	}
 	out, err = runWithStore(t, d, dir, "list", "--dead", "--color", "never")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "MODEL") || !strings.Contains(out, "smart → codex:sol:med") {
+	if !strings.Contains(out, "MODEL") || !strings.Contains(out, "smart → codex:terra:high") {
 		t.Fatalf("list: %s", out)
 	}
 }

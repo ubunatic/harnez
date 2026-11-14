@@ -51,7 +51,7 @@ func TestMergeRolePolicy(t *testing.T) {
 	if !reflect.DeepEqual(got.Roles["developer"].Models["smart"], []string{"opus:med"}) || len(got.Roles["developer"].Models["ai"]) != 0 || !reflect.DeepEqual(got.Roles["developer"].Models["custom"], []string{"luna:med"}) || len(got.Roles["developer"].Models["lean"]) == 0 {
 		t.Fatal("replacement, unset, new trait or inheritance lost")
 	}
-	if len(base.Roles["developer"].Models["smart"]) != 2 || got.ModelTraits["custom"] != "Custom work" || got.ModelTraits["smart"] != base.ModelTraits["smart"] {
+	if len(base.Roles["developer"].Models["smart"]) != 3 || got.ModelTraits["custom"] != "Custom work" || got.ModelTraits["smart"] != base.ModelTraits["smart"] {
 		t.Fatal("base or descriptions changed")
 	}
 	selection, err := resolveRoleSelection(got, "developer", "smart", func(target string) (Model, error) { return resolveModelIn(aliases, target) }, func(Model) string { return "" })

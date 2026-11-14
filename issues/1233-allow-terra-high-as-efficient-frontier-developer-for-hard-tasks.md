@@ -24,4 +24,17 @@ At relative cost `36` (and Codex subscription multiplier `0.19`), `codex:terra:h
 - Update `spec/agent.yaml` (and `spec/model_scores.yaml` if ratings change) and regenerate/update golden fixtures.
 - Verify `harnez agent models --picks` and `harnez agent models --chart`, then run `make test-q1` and `make install`.
 
+## Decision
+- Add `terra:high` to `roles.developer.models.smart` ahead of `sol:med` (`[terra:high, sol:med, opus:med]`) and update `codex:terra.use` guidance so `terra:high` serves as the efficient-frontier Codex developer for hard tasks before escalating to `sol:med`/`sol:high`.
+- Keep `spec/model_scores.yaml` star ratings (`codex:terra.high: 3.5`) unchanged: ratings are owner-estimated benchmarks, and changing `terra:high` without measured evidence is reversible later without altering chart placement vs `claude:sonnet:low` (cost 15, ★4.0).
+
+## Pre-Work (Scout findings)
+- `spec/agent.yaml:412`: `roles.developer.models.smart` — prepend `terra:high` (`smart: [terra:high, sol:med, opus:med]`).
+- `spec/agent.yaml:185-196`: `models.codex:terra.use` — update guidance to note `terra:high` as efficient-frontier developer for hard tasks before escalating to Sol.
+- `internal/subagent/agentspec_test.go:96`: check/update assertion on `codex:terra` guidance if it pins exact `use` text.
+- `cmd/harnez/agent_picks_test.go:59`: check/update assertion on `developer` `smart` chain length and first resolved pick (`terra:high`).
+- `internal/subagent/testdata/known-model-specs.golden:39` & `internal/subagent/driver_test.go:150`: already list `codex:terra:high` (verify passes).
+- `cmd/harnez/agent_chart_test.go:261` & `cmd/harnez/testdata/agent-models-chart-80cols.golden`: verify passes untouched (if chart changes, do not touch without reason).
+- Tests to run: `go test -race -count=1 ./internal/subagent ./cmd/harnez` (remember Quota-1 single test run if needed, or run targeted `go test` on those two packages before final commit).
+
 **/goal** Allow `terra:high` as an efficient-frontier developer for hard tasks in `spec/agent.yaml` (and model scores/goldens), verified by `harnez agent models --picks` and tests, or stop and report when blocked on a user decision or denied permission.

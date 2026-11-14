@@ -193,7 +193,7 @@ models:
     cost_by_tier: {med: 24, high: 36}
     eff: "?"
     skills: Go? TUI? SQL?
-    use: Near-Sol Codex developer and reviewer at half Sol's price; use Sol for the hardest judgment.
+    use: Efficient-frontier Codex developer for hard tasks at half Sol's price; use terra:high before escalating to sol:med or sol:high, and reserve Sol for the hardest judgment.
   codex:astra:
     aliases: [astra, astra:low]
     preferred: true
@@ -409,7 +409,7 @@ roles:
     models:
       lean: [terra:low]
       std: [terra:med, opus:low]
-      smart: [sol:med, opus:med]
+      smart: [terra:high, sol:med, opus:med]
       tui: [smart]
       gui: [lean, std]
       cheap: [luna:med]
