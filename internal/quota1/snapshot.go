@@ -53,10 +53,25 @@ func contentHash(data []byte) string {
 }
 
 func workingHash(root, path string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(root, path))
+	name := filepath.Join(root, path)
+	info, err := os.Lstat(name)
 	if os.IsNotExist(err) {
 		return "", nil
 	}
+	if err != nil {
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(name)
+		if err != nil {
+			return "", err
+		}
+		return contentHash([]byte(target)), nil
+	}
+	if !info.Mode().IsRegular() {
+		return "", nil
+	}
+	data, err := os.ReadFile(name)
 	if err != nil {
 		return "", err
 	}
@@ -104,6 +119,10 @@ func changesSinceRecord(root, stateFile string, record RunRecord) ([]string, err
 		}
 		tested, dirty := record.TestedDirty[path]
 		if !dirty {
+			kind, err := gitOutput(root, "cat-file", "-t", record.TestedHead+":"+path)
+			if err == nil && strings.TrimSpace(string(kind)) != "blob" {
+				continue
+			}
 			data, err := gitOutput(root, "show", record.TestedHead+":"+path)
 			if err == nil {
 				tested = contentHash(data)

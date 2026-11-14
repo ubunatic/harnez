@@ -474,6 +474,10 @@ func TestSnapshotBranchSwitchAndDirtyFiles(t *testing.T) {
 	finishSuccessfulRun(t, res, time.Now())
 	git("checkout", "-q", "base")
 	git("merge", "--ff-only", "-q", "-")
+	testedState, err := os.ReadFile(res.StateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
 	check := func(want string) {
 		t.Helper()
 		files, _, err := ChangesSinceLastRunAfter(dir, time.Time{})
@@ -491,8 +495,122 @@ func TestSnapshotBranchSwitchAndDirtyFiles(t *testing.T) {
 		} else if len(files) != 1 || files[0] != filepath.Join(dir, want) || !result.Allowed || result.ModifiedFile != files[0] {
 			t.Fatalf("changed snapshot: files=%v result=%+v, want %s", files, result, want)
 		}
+		if result.Allowed {
+			if err := os.WriteFile(res.StateFile, testedState, 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
+	check("")
+	git("checkout", "-q", "base~1")
+	check("code.go")
+	git("checkout", "-q", "base")
 	check("")
 	write("new.go", "changed")
 	check("new.go")
+}
+
+func TestSnapshotDeletedFilesAndNestedRepositories(t *testing.T) {
+	dir := t.TempDir()
+	git := func(root string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	write := func(name, value string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(value), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git(dir, "init", "-q")
+	git(dir, "config", "user.email", "test@example.com")
+	git(dir, "config", "user.name", "Test")
+	write("deleted.go", "committed")
+	write("predeleted.go", "committed")
+	git(dir, "add", ".")
+	git(dir, "commit", "-qm", "base")
+	if err := os.Remove(filepath.Join(dir, "predeleted.go")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "nested", "embedded"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	git(filepath.Join(dir, "nested", "embedded"), "init", "-q")
+	if err := os.Symlink("missing-target", filepath.Join(dir, "link.go")); err != nil {
+		t.Fatal(err)
+	}
+	record, err := snapshotRun(dir, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(want string) {
+		t.Helper()
+		files, err := changesSinceRecord(dir, "", record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want == "" && len(files) == 0 {
+			return
+		}
+		if len(files) != 1 || files[0] != filepath.Join(dir, want) {
+			t.Fatalf("changed files = %v, want %q", files, want)
+		}
+	}
+	check("")
+	if err := os.Remove(filepath.Join(dir, "deleted.go")); err != nil {
+		t.Fatal(err)
+	}
+	check("deleted.go")
+	write("deleted.go", "committed")
+	write("predeleted.go", "recreated")
+	check("predeleted.go")
+	if err := os.Remove(filepath.Join(dir, "predeleted.go")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "link.go")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("other-target", filepath.Join(dir, "link.go")); err != nil {
+		t.Fatal(err)
+	}
+	check("link.go")
+}
+
+func TestSnapshotIgnoresGitlinkChanges(t *testing.T) {
+	dir := t.TempDir()
+	git := func(root string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	git(dir, "init", "-q")
+	git(dir, "config", "user.email", "test@example.com")
+	git(dir, "config", "user.name", "Test")
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	git(sub, "init", "-q")
+	git(sub, "config", "user.email", "test@example.com")
+	git(sub, "config", "user.name", "Test")
+	git(sub, "commit", "--allow-empty", "-qm", "first")
+	git(dir, "add", "sub")
+	git(dir, "commit", "-qm", "gitlink")
+	record, err := snapshotRun(dir, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	git(sub, "commit", "--allow-empty", "-qm", "second")
+	if _, err := snapshotRun(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	files, err := changesSinceRecord(dir, "", record)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("gitlink changes: files=%v err=%v", files, err)
+	}
 }
