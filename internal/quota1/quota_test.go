@@ -437,3 +437,62 @@ func TestCheckAndRecord_CorruptedState(t *testing.T) {
 		t.Errorf("corrupted state should be reset and allowed")
 	}
 }
+
+func TestSnapshotBranchSwitchAndDirtyFiles(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	write := func(name, value string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(value), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git("init", "-q")
+	git("config", "user.email", "test@example.com")
+	git("config", "user.name", "Test")
+	write("code.go", "old")
+	write("dirty.go", "original")
+	git("add", ".")
+	git("commit", "-qm", "base")
+	git("branch", "base")
+	write("code.go", "tested")
+	git("commit", "-qam", "tested")
+	write("dirty.go", "dirty staged")
+	git("add", "dirty.go")
+	write("dirty.go", "dirty working")
+	write("new.go", "untracked")
+	res, err := CheckAndRecord(CheckOptions{Dir: dir})
+	if err != nil || !res.Allowed {
+		t.Fatalf("initial run: %+v, %v", res, err)
+	}
+	finishSuccessfulRun(t, res, time.Now())
+	git("checkout", "-q", "base")
+	git("merge", "--ff-only", "-q", "-")
+	check := func(want string) {
+		t.Helper()
+		files, _, err := ChangesSinceLastRunAfter(dir, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := CheckAndRecord(CheckOptions{Dir: dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want == "" {
+			if len(files) != 0 || result.Allowed {
+				t.Fatalf("unchanged snapshot: files=%v result=%+v", files, result)
+			}
+		} else if len(files) != 1 || files[0] != filepath.Join(dir, want) || !result.Allowed || result.ModifiedFile != files[0] {
+			t.Fatalf("changed snapshot: files=%v result=%+v, want %s", files, result, want)
+		}
+	}
+	check("")
+	write("new.go", "changed")
+	check("new.go")
+}

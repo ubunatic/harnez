@@ -17,12 +17,14 @@ import (
 // RunRecord is the persisted identity and outcome of the latest quota-1 run.
 // A nil Exit means the run did not complete with a normal process exit.
 type RunRecord struct {
-	Started      time.Time  `json:"started"`
-	PGID         int        `json:"pgid"`
-	PIDStarttime uint64     `json:"pid_starttime"`
-	Finished     *time.Time `json:"finished"`
-	Exit         *int       `json:"exit"`
-	Retry        bool       `json:"retry,omitempty"`
+	Started      time.Time         `json:"started"`
+	PGID         int               `json:"pgid"`
+	PIDStarttime uint64            `json:"pid_starttime"`
+	Finished     *time.Time        `json:"finished"`
+	Exit         *int              `json:"exit"`
+	Retry        bool              `json:"retry,omitempty"`
+	TestedHead   string            `json:"tested_head,omitempty"`
+	TestedDirty  map[string]string `json:"tested_dirty,omitempty"`
 }
 
 // CheckOptions configures the Quota-1 check and state recording.
@@ -146,21 +148,21 @@ func ChangesSinceLastRunAfter(dir string, turnStarted time.Time) ([]string, time
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	since, err := readState(stateFile)
+	record, err := ReadRunRecord(stateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, time.Time{}, nil
 		}
 		return nil, time.Time{}, fmt.Errorf("read quota-1 state: %w", err)
 	}
-	files, err := findModifiedSourceFiles(root, stateFile, since)
+	files, err := changesSinceRecord(root, stateFile, record)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
 	filtered := files[:0]
 	for _, path := range files {
 		info, err := os.Stat(path)
-		if err != nil || (!turnStarted.IsZero() && !info.ModTime().After(turnStarted)) {
+		if err == nil && !turnStarted.IsZero() && !info.ModTime().After(turnStarted) {
 			continue
 		}
 		rel, err := filepath.Rel(root, path)
@@ -177,7 +179,7 @@ func ChangesSinceLastRunAfter(dir string, turnStarted time.Time) ([]string, time
 			filtered = append(filtered, path)
 		}
 	}
-	return filtered, since, nil
+	return filtered, record.Started, nil
 }
 
 // writeState writes the timestamp to the state file.
@@ -360,10 +362,18 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve root dir: %w", err)
 	}
+	recordRun := func(retry bool) error {
+		record, err := snapshotRun(absRoot, now.UTC())
+		if err != nil {
+			return err
+		}
+		record.Retry = retry
+		return writeRunRecord(stateFile, record)
+	}
 
 	// 1. Check bypass
 	if opts.OwnerSuspended || isBypass(opts.Getenv) {
-		if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
+		if err := recordRun(false); err != nil {
 			return Result{}, fmt.Errorf("write quota-1 state: %w", err)
 		}
 		msg := "Quota-1: bypass active via environment variable; test execution allowed"
@@ -381,7 +391,7 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 	previous, err := ReadRunRecord(stateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
+			if err := recordRun(false); err != nil {
 				return Result{}, fmt.Errorf("write quota-1 state: %w", err)
 			}
 			return Result{
@@ -391,7 +401,7 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 			}, nil
 		}
 		// If unreadable or corrupted, overwrite and allow run
-		if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
+		if err := recordRun(false); err != nil {
 			return Result{}, fmt.Errorf("rewrite corrupt quota-1 state: %w", err)
 		}
 		return Result{
@@ -409,7 +419,7 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 			}, nil
 		}
 		if !previous.Retry {
-			if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC(), Retry: true}); err != nil {
+			if err := recordRun(true); err != nil {
 				return Result{}, fmt.Errorf("update incomplete quota-1 state: %w", err)
 			}
 			return Result{Allowed: true, Message: "Quota-1: previous run was incomplete; one retry allowed", StateFile: stateFile}, nil
@@ -417,13 +427,14 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 	}
 
 	// 3. State file exists: check if any source files modified since last run.
-	modifiedFile, err := findModifiedSourceFile(absRoot, stateFile, previous.Started)
+	modifiedFiles, err := changesSinceRecord(absRoot, stateFile, previous)
 	if err != nil {
 		return Result{}, fmt.Errorf("check modified source files: %w", err)
 	}
 
-	if modifiedFile != "" {
-		if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
+	if len(modifiedFiles) > 0 {
+		modifiedFile := modifiedFiles[0]
+		if err := recordRun(false); err != nil {
 			return Result{}, fmt.Errorf("update quota-1 state: %w", err)
 		}
 		return Result{
