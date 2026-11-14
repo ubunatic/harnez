@@ -126,7 +126,7 @@ These are the shipped picks. User models.yaml overrides are listed by `harnez ag
 | developer | fast | Fast work. | haiku:med |  |
 | developer | gui | Graphical interfaces. | lean, std |  |
 | developer | lean | Efficient standard work. | terra:low | yes |
-| developer | smart | Difficult judgment. | sol:med, opus:med |  |
+| developer | smart | Difficult judgment. | terra:high, sol:med, opus:med |  |
 | developer | std | Standard work. | terra:med, opus:low |  |
 | developer | tui | Terminal interfaces. | smart |  |
 | reviewer | smart | Difficult judgment. | sol:low | yes |
