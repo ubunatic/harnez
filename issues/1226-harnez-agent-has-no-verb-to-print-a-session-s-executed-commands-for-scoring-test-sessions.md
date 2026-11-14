@@ -57,4 +57,10 @@ their own transcripts and the scores rest on self-reported evidence.
 - Docs check: `docs/commands/HarnezCleanup.md` is an evergreen root doc (verify no `harnez:variant=lite` / copyable source exists); document `harnez agent commands` in its Baseline section and in `docs/OrchestratedAgentFlow.md` §5.
 - Verification: `go test -race -count=1 ./cmd/harnez ./internal/subagent ./internal/transcript` + live `codex:luna:low` test session check after `make install`.
 
+### M2 Pre-Work (Reviewer findings on `cc11b4f1`)
+- `internal/transcript/commands.go`: support real Codex `custom_tool_call` with `name: "exec"` whose `input` executes JS `tools.exec_command({cmd: ...})` (and multiple calls / string-literal variants inside an `exec` block; inspect real Codex rollouts like `/home/uwe/.codex/sessions/2026/11/14/rollout-2026-11-14T04-07-12-01a1d805-fa4f-7ea2-8cc4-c71b6aa15a5f.jsonl` to confirm exact payload forms, including `shell_command`/`shell` if wrapped).
+- `cmd/harnez/agent_commands.go` & `cmd/harnez/agent_args.go`: reuse `resolveSession` cleanly instead of duplicating `store.List` + prefix search; do not run `os.Stat` path shortcut on `--name` (or bypass path shortcut when `--name` is set, and only treat positional arg as file path when appropriate, respecting `--dir` cleanly).
+- `internal/transcript/commands_test.go` & `cmd/harnez/agent_commands_test.go`: add recorded/real-shape fixture cases for Codex `custom_tool_call` (`name: "exec"`, multiple/multiline `tools.exec_command`), CLI Claude transcript case, CLI `--dir` filtering, `--name` when a matching file exists in cwd, and CLI multiline `\r`/`\n` output verification.
+- Verify with `go test -race -count=1 ./cmd/harnez ./internal/subagent ./internal/transcript` and commit code+tests with `(#1226)`.
+
 **/goal** Implement `harnez agent commands` to list executed shell commands from Claude and Codex session transcripts with recorded fixture tests and doc updates, or stop and report when blocked on a user decision or denied permission.
