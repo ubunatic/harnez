@@ -40,3 +40,27 @@ Quota-1 then blocks because no source changed.
   candidates with `git diff --quiet <tested commit> -- <file>` before reporting them.
 - Test: run the quota state on a branch, switch to another branch and fast-forward to the same
   commit; the warning must stay silent. Then change one file; it must fire for that file only.
+
+## Decision
+- Record a tested-tree snapshot in `quota1.RunRecord`: `TestedHead` (`git rev-parse HEAD`, when inside a git repo) plus `TestedDirty` content hashes for eligible dirty tracked/staged/untracked files present when the test run started.
+- Compare current eligible source content against that snapshot in **both** `ChangesSinceLastRunAfter` (`warnQuota1Changes`) and `CheckAndRecord` (the Quota-1 rerun gate), so a branch switch/fast-forward to the tested code neither fires a false warning nor falsely unlocks a duplicate test rerun, while editing one eligible file warns/unlocks for that file only.
+- Fall back to the existing mtime scan when `TestedHead` is empty (older state files or non-git directories in unit tests) so backwards compatibility and non-git tests remain intact.
+
+## Pre-Work (Scout findings)
+- `internal/quota1/quota.go:17` (`RunRecord`), `:183` (writes), `:142` (`ChangesSinceLastRunAfter`), `:419` (`CheckAndRecord`): add tested-tree snapshot fields (`TestedHead string`, `TestedDirty map[string]string` with SHA-256 hex or `""` for deleted/missing) and shared helper computing eligible source file differences against the snapshot (using `git diff --name-only <TestedHead>` + current dirty/untracked eligible files vs `TestedDirty`, filtering by the same eligible-source rules).
+- `cmd/harnez/agent_run.go:269` (`warnQuota1Changes`), `:513`, `:916` (`quotaTurnStarted`): `warnQuota1Changes` already delegates to `quota1.ChangesSinceLastRunAfter`; check whether `turnStarted` cutoff needs any adjustment alongside snapshot diffing (snapshot comparison ensures pre-turn branch-switch files with unchanged content are never reported).
+- `internal/quota1/quota_test.go:288` & `cmd/harnez/agent_quota_test.go:97`: add regression tests covering:
+  1. branch switch + `git merge --ff-only` to the tested commit stays warning-free (`ChangesSinceLastRunAfter` empty) and blocks redundant `CheckAndRecord` rerun;
+  2. changing one eligible source file afterward reports and unlocks for that file only;
+  3. dirty tracked + untracked eligible files present during the test run don't trigger false warnings/reruns until modified.
+- Verify with `go test -race -count=1 ./internal/quota1 ./cmd/harnez`.
+
+### M2 Pre-Work (Reviewer findings on `bce91254`)
+- `internal/quota1/snapshot.go`: guard `workingHash` (and `snapshotCandidates` / gitlink `git show` hash comparison) against directories, symlinks, and submodules/embedded `.git` directories (e.g. skip non-regular directories or hash symlink targets consistently via `os.Lstat` instead of failing `os.ReadFile` with `is a directory`).
+- `internal/quota1/quota_test.go`: extend snapshot regression coverage to test:
+  1. switching to a commit with different `code.go` content reports `code.go` (warning/unlock) and clears when returning to `TestedHead`;
+  2. deleted committed file after the test run is reported, while a file already deleted before the run stays ignored until recreated/changed;
+  3. directory/embedded-repo paths returned by git status/diff do not error `snapshotRun` or `changesSinceRecord`.
+- Commit referencing `#1227` (or amend `bce91254` to include `(#1227)`).
+
+**/goal** Make Quota-1 track tested tree state (`TestedHead` + dirty/untracked hashes) so branch switches/fast-forwards to identical tested code emit no untested-code warning and block redundant reruns, verified by tests, or stop and report when blocked on a user decision or denied permission.
