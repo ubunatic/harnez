@@ -79,3 +79,30 @@ Searcher findings (report: `docs/studies/2026-11-16-two-agent-lean-sprint-forge-
 Acceptance: the tests above pass; the installed binary's dry form of the command (or the test
 argv) shows the host-qualified reference. The live create on a real forge is run by the host
 after owner approval; do not close this ticket.
+
+## M1 delivered: host-qualified fj references (`00c70238`)
+
+`forgetracker.FJIssueCommand` builds both fj argv forms without a host flag; canary
+`fj issue search --repo codeberg.org/ubunatic/harnez` exited 0 with the plain binary and the
+wrapper. Host check with the installed binary: `harnez issues comment -d . 41 -F <file> --forge
+--dry-run` prints `dry run: fj issue comment codeberg.org/ubunatic/harnez#41 --body-file "<file>"`.
+Open: the live create on a real forge (host, after the API write path lands).
+
+### Decision (review of M1, host and reviewer `forge-rev1`, 2026-11-16)
+
+- Auth failures print the login fix only, not the "run manually" line: running the same fj command
+  by hand fails the same way until the login is repaired.
+- fj's own output stays in the error text unredacted: it is the only diagnosis for an fj failure,
+  and harnez passes fj a body file path, never body text or a token. Accepted as a low risk.
+
+### Pre-Work / Required Refinements (do these first in the next developer turn)
+
+1. Split `FJIssueCommand` into two constructors (create, comment) that share one unexported
+   helper for the `<host>/<owner>/<repo>` reference. No sentinel number, no ignored argument.
+2. One helper for the fj login hint, used by every fj auth branch in `cmd/harnez/issues_forge.go`
+   (the 401/"token is required" branch, the token-reuse branch, and the hint near line 155).
+   Wording: `fj login for <host> failed; run "fj auth login" if your fj wrapper sets the host,
+   otherwise "fj -H <host> auth login"`. One line, no trace.
+3. Tests: a failed `issues new` with fj and a failed `issues comment` (ordinary error) each assert
+   the exact `run manually: fj issue ...` line with the host-qualified reference and the body file
+   path, and that the body file's text does not appear in the error.

@@ -64,3 +64,23 @@ Runs after 1228 M1 (shared fj builder).
    one-line message and that no trace line is printed), and an ordinary failure left unchanged.
 
 Do not close this ticket: the fallback and the live check are still open.
+
+## M2 delivered: empty-body refusal and fj token diagnosis (`135fb06a`)
+
+`harnez issues comment` reads the body file and refuses an empty or whitespace-only body before
+the issue API call and before fj runs; "token was already used" and the `keys.rs` panic give a
+one-line login hint. Host check with the installed binary: a whitespace-only file gives
+`Error: issues comment: body file is empty or whitespace-only`. Host rerun: `ok
+internal/forgetracker`, `ok cmd/harnez`.
+
+### Decision (review of M2, 2026-11-16)
+
+- The body check runs after harnez resolves the git remote locally. That is accepted: the goal is
+  "before any forge call", and no network or issue CLI call happens before the check.
+
+### Pre-Work / Required Refinements (do these first in the next developer turn)
+
+1. `TestIssuesCommentRejectsEmptyBody`: also replace `issueCLIRun` with a counter and assert it
+   was never called.
+2. `TestIssuesCommentFJErrors`: assert the exact one-line login message (see 1228 pre-work 2) for
+   both token cases, and the exact preserved text for the ordinary error.
