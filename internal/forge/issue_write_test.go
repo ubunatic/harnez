@@ -199,3 +199,19 @@ func TestWriterErrorsAndLabels(t *testing.T) {
 		t.Fatalf("github: %v calls=%d", err, calls)
 	}
 }
+
+func TestWriterLabelsRepeatedPage(t *testing.T) {
+	pages := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pages++
+		if r.Method != "GET" || r.URL.Path != "/repos/o/r/labels" || r.URL.RawQuery != fmt.Sprintf("limit=50&page=%d", pages) {
+			t.Errorf("request %s %s", r.Method, r.URL.String())
+		}
+		fmt.Fprint(w, `[{"id":1,"name":"bug"}]`)
+	}))
+	defer srv.Close()
+	ids, err := (Writer{Client: srv.Client(), Token: "tok"}).LabelIDs(Forge{Kind: "forgejo", APIBase: srv.URL}, "o", "r", []string{"bug"})
+	if err != nil || fmt.Sprint(ids) != "[1]" || pages != 2 {
+		t.Fatalf("ids=%v pages=%d err=%v", ids, pages, err)
+	}
+}

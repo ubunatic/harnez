@@ -21,9 +21,28 @@ If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.
 
 ### Forge tracker (no `issues/` dir, origin on Codeberg/Forgejo or GitHub)
 
-Harnez reads issues on the origin forge. Add `--forge` when a local `issues/` directory
-exists. Forgejo writes use a separately stored write token; create it with
-`harnez forge token create --write`. The read token remains separate.
+Harnez reads issues on the origin forge. A private repository may need a read
+forge token. Search matches terms in titles and bodies within the configured scan
+budget:
+
+```bash
+harnez find -d <repo> issues "search terms"
+```
+
+For a forge tracker (no local `issues/` directory):
+
+```bash
+harnez issues new -d <repo> "Title" -F body.md --label bug --dry-run
+harnez issues new -d <repo> "Title" -F body.md --label bug
+harnez issues comment -d <repo> 42 -F note.md --dry-run
+harnez issues comment -d <repo> 42 -F note.md
+harnez issues show -d <repo> 42 --json
+harnez issues edit -d <repo> 42 -F body.md --if-updated <updated_at>
+harnez issues close -d <repo> 42 "done"
+harnez issues reopen -d <repo> 42
+```
+
+With a local tracker, target the forge explicitly:
 
 ```bash
 harnez issues new -d <repo> --forge "Title" -F body.md --label bug
@@ -34,15 +53,19 @@ harnez issues close -d <repo> --forge 42 "done"
 harnez issues reopen -d <repo> --forge 42
 ```
 
-`--dry-run` previews forge writes. Without a write token, `new` and `comment`
-fall back to fj/tea; the other writes require a write token. Forge writes are
-host-only: Harnez worker markers prevent accidental writes, but this is not a
-security boundary. Native subagents inheriting the host environment, workers that
-unset the markers, and direct calls to forge tools are not stopped. Forgejo is
-supported; GitHub writes are tracked in ticket 1209 (the existing GitHub `new`
-path remains available). The edit timestamp check is a preflight: a write between
-the check and PATCH is not detected. A comment body must contain non-whitespace
-text and cannot use stdin. Add `--closed` to comment on or edit a closed issue.
+Forgejo writes use a separate write token, created with `harnez forge token create
+--write`; the read token remains separate. Without a write token, `new` falls back
+to fj or tea and `comment` to fj. GitHub `new` uses gh. Labels must exist on the
+forge: the API resolves their names to IDs; fj cannot set labels.
+
+`--dry-run` previews forge writes, but does not cover the `new --remote` or
+`CLAUDE_CODE_REMOTE` flow, which can create an issue. Forge writes are host-only:
+worker markers guard against accidents, not security attacks. Native subagents
+inheriting the host environment, workers that unset the markers, and direct forge
+tools are not stopped. GitHub writes beyond the existing `new` path are tracked
+in ticket 1209. The edit timestamp check is a preflight: a write between the check
+and PATCH is not detected. A comment body must contain non-whitespace text and
+cannot use stdin. Add `--closed` to comment on or edit a closed issue.
 
 - When an existing ticket partly covers the request, say so and ask before filing or commenting. Comment on other tickets only with the user's OK.
 - Report "filed as #N at <URL>; no commit". Publish Promptly below applies only to file-based trackers.

@@ -22,7 +22,9 @@ For a project with an `issues/` tracker. Use `harnez find` / `harnez issues`, no
   Examples: `issues new --forge "T" -F body.md`, `issues comment --forge 42 -F note.md`,
   `issues show --forge 42 --json`, `issues edit --forge 42 --title "T"`,
   `issues close --forge 42 done`, `issues reopen --forge 42` (prefix each with `harnez`).
-  `--dry-run` previews writes; without a write token new and comment fall back to fj/tea.
+  `--dry-run` previews forge writes, but does not cover new --remote or CLAUDE_CODE_REMOTE,
+  which can create an issue. Without a write token new falls back to fj or tea and
+  comment to fj; GitHub new uses gh.
   Forge writes run in the host session; this guards accidents, not a security boundary:
   inherited host environments, unset worker markers and direct forge tools bypass it.
   Edit's timestamp preflight is not atomic. GitHub writes are ticket 1209, except the

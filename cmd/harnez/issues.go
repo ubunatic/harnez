@@ -114,11 +114,13 @@ working-tree changes, staged or not, are never staged or committed.
 files and leaves them uncommitted. 'new' never commits.
 
 Forgejo writes use a separate write token (harnez forge token create --write);
-the read token remains separate. Without a write token new and comment use fj/tea.
+the read token remains separate. Without a write token new uses fj or tea;
+comment uses fj. GitHub new uses gh.
 Forge writes run in a host session; this guards accidents, not a security boundary:
 inherited host environments, unset worker markers and direct forge tools bypass it.
 GitHub writes are ticket 1209, except the existing GitHub new path.
---dry-run previews forge writes. With a local tracker use --forge:
+--dry-run previews forge writes, but does not cover new --remote or
+CLAUDE_CODE_REMOTE: that flow can create an issue. With a local tracker use --forge:
   issues new --forge "T" -F body.md
   issues comment --forge 42 -F note.md
   issues show --forge 42 --json
@@ -169,7 +171,8 @@ then the README is regenerated and the batch is committed once.
                     other verb, 'new' takes no ticket number (there isn't one
                     yet) and never commits.
   comment <number> -F <file>  Comment on a forge issue after checking
-                    its state; --dry-run prints the command and --closed permits
+                    its state; --dry-run prints the fj command or the API plan when a
+                    write token is stored; --closed permits
                     closed issues. With a local tracker, --forge is required.
                     Pull requests are always refused.
   edit <number> [--title text] [-F file]  Edit a forge issue; body edits
@@ -234,8 +237,8 @@ the requested reason. Use close (or done) --amend-reason to explicitly
 correct its reason in one commit; this requires an already-Closed ticket.
 Other verbs still allow reason changes on an already-matching status.
 
---check (alias --dry-run) reports what would change without writing or
-committing, and exits 1 if there is drift from the requested state (mirrors
+For local status verbs, --check (alias --dry-run) reports what would change
+without writing or committing, and exits 1 if there is drift (mirrors
 'harnez index --check').
 
 A nonexistent or ambiguous ticket number is a caller-bug error (non-zero

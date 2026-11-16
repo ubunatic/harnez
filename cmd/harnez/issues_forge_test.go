@@ -842,6 +842,16 @@ func TestForgeDryRunDoesNotTouchLocalTicket(t *testing.T) {
 	if err := os.WriteFile(path, original, 0644); err != nil {
 		t.Fatal(err)
 	}
+	repoRunGit(t, dir, "config", "user.email", "test@example.test")
+	repoRunGit(t, dir, "config", "user.name", "Test")
+	repoRunGit(t, dir, "add", "issues/007-local.md")
+	repoRunGit(t, dir, "commit", "-m", "initial")
+	if err := os.WriteFile(filepath.Join(dir, "code"), []byte("code"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	repoRunGit(t, dir, "add", "code")
+	repoRunGit(t, dir, "commit", "-m", "implement #7")
+	before := repoRunGitOutput(t, dir, "rev-parse", "HEAD")
 	cases := []struct {
 		args []string
 		want string
@@ -862,6 +872,17 @@ func TestForgeDryRunDoesNotTouchLocalTicket(t *testing.T) {
 			t.Fatalf("ticket changed: %q %v", got, err)
 		}
 	}
+	if after := repoRunGitOutput(t, dir, "rev-parse", "HEAD"); after != before {
+		t.Fatalf("unexpected commit: %s -> %s", before, after)
+	}
+	if out, err := runHarnez(t, "issues", "close", "-d", dir, "7", "reason"); err != nil {
+		t.Fatalf("local close: %q %v", out, err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(got), "**Status**: Closed — reason") {
+		t.Fatalf("local close: %q %v", got, err)
+	}
+
 }
 
 func TestForgeMissingNumber(t *testing.T) {
@@ -895,5 +916,70 @@ func TestForgeCloseReportsPostedReasonOnFailure(t *testing.T) {
 	want := "issues close: the reason was posted as a comment (https://example.test/comment) but closing failed: forge API request failed: HTTP 412 conflict; run close again without a reason"
 	if err == nil || err.Error() != want || !reflect.DeepEqual(calls, []string{"POST", "PATCH"}) {
 		t.Fatalf("%v calls=%v", err, calls)
+	}
+}
+
+func TestForgeRefinementEdges(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	oldLookup, oldMeta := issueWriteLookup, issueWriteMetadata
+	t.Cleanup(func() { issueWriteLookup, issueWriteMetadata = oldLookup, oldMeta })
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
+	src := &editSource{issue: forge.RemoteIssue{State: "open"}}
+	issueWriteLookup = func(string) string { return "" }
+	for _, verb := range []string{"close", "reopen"} {
+		err := runIssuesStateForge(io.Discard, target, src, verb, "7", "", false)
+		if err == nil || err.Error() != "no write token for codeberg.org; run: harnez forge token create --write" {
+			t.Fatalf("%s: %v", verb, err)
+		}
+	}
+	issueWriteLookup = func(string) string { return "secret" }
+	src.issue.PullRequest = &struct{}{}
+	for _, verb := range []string{"close", "reopen"} {
+		err := runIssuesStateForge(io.Discard, target, src, verb, "7", "", false)
+		if err == nil || err.Error() != "issues "+verb+": o/r#7 is a pull request" {
+			t.Fatalf("%s: %v", verb, err)
+		}
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		if r.Method != "PATCH" || string(b) != `{"title":"X"}` {
+			t.Errorf("request: %s %s", r.Method, b)
+		}
+		io.WriteString(w, `{}`)
+	}))
+	defer srv.Close()
+	target.Forge.APIBase = srv.URL
+	src.issue = forge.RemoteIssue{State: "closed"}
+	var out bytes.Buffer
+	if err := runIssuesEditForge(&out, target, src, "7", "X", "", "", true, false, false, true); err != nil || out.String() != "edited codeberg.org/o/r#7\n" {
+		t.Fatalf("closed edit: %q %v", out.String(), err)
+	}
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker")
+	issueWriteLookup = func(string) string { t.Fatal("worker looked up secret"); return "" }
+	err := runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, true)
+	if err == nil || err.Error() != "issues edit: forge writes run only in a host session (this is harnez worker worker); hand the write to the host" {
+		t.Fatalf("edit: %v", err)
+	}
+	for _, verb := range []string{"close", "reopen"} {
+		err := runIssuesStateForge(io.Discard, target, src, verb, "7", "", false)
+		if err == nil || err.Error() != "issues "+verb+": forge writes run only in a host session (this is harnez worker worker); hand the write to the host" {
+			t.Fatalf("%s: %v", verb, err)
+		}
+	}
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte("body"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body}, true, false); err != nil || out.String() != "dry run, would file on codeberg.org/o/r: fj issue create --repo codeberg.org/o/r --body-file "+body+" T\n" {
+		t.Fatalf("new dry: %q %v", out.String(), err)
+	}
+	out.Reset()
+	if err := runIssuesComment(&out, t.TempDir(), target, &stubForgeSource{}, "7", body, true, false); err != nil || out.String() != "dry run: fj issue comment codeberg.org/o/r#7 --body-file "+body+"\n" {
+		t.Fatalf("comment dry: %q %v", out.String(), err)
 	}
 }
