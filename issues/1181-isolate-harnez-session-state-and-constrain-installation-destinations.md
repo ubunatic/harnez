@@ -139,6 +139,10 @@ isolation, host-only shim provisioning, auxiliary writers (`logging`, `feedback`
 Independent review (`1181-m9-review`, `codex:sol:low`) identified error/test
 refinements folded into M10 pre-work below. M10–M17 remain open.
 
+## M10b-1b — Inherited-FD runner channel, relay, and bounded replay
+
+Added `runner_channel` settings and schema constraints in `spec/server.yaml` and `spec/schemas/server.schema.json`, fail-closed `Config.Socket()` guard when `TAIA_SESSION_DIR` is set, `internal/server/runner_channel.go` (inherited connected stream `SocketPair`, `flock`-serialized length-prefixed JSON framing, strict field/route/kind allowlisting rejecting `/shutdown`, `merge_legacy`, `ensure_schema`, and oversize frames/batches), `RelayRunnerConn`, bounded runner spool/replay (`SendRunnerTelemetry` / `ReplayRunnerSpool` without sibling scanning), and folded M10b-1a review fixes (`d.executor()` + multi-row rollback assertion). Verified via `HTO=0 make test-q1` and `make install`. M10b-2 (launcher/taia FD plumbing + canary) and M11–M17 remain open.
+
 ## M10b-1a — Telemetry receipts and runner spool path
 
 Runner telemetry defaults fail closed, `server.Config.TelemetrySpoolDir()` routes to `$TAIA_SESSION_DIR/state/telemetry-spool` via `runstate.TelemetrySpoolDir`, and collector records carry stable IDs applying `telemetry_receipts(record_id)` + telemetry writes in one SQLite transaction (pre-existing ID-less records retain legacy delivery semantics). Verified via `HTO=0 make test-q1` (exit 0) and `make install`. M10b-1b remains open for the inherited-FD runner channel and sibling-blind replay integration.

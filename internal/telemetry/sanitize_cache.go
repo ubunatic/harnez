@@ -42,7 +42,7 @@ func (d *DB) GetCachedNotes(ctx context.Context, hashes []string) (map[string]st
 		"SELECT raw_hash, clean_text FROM note_sanitization_cache WHERE raw_hash IN (%s)",
 		strings.Join(placeholders, ","),
 	)
-	rows, err := d.sql.QueryContext(ctx, query, args...)
+	rows, err := d.executor().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: query note_sanitization_cache: %w", err)
 	}
@@ -66,6 +66,9 @@ func (d *DB) GetCachedNotes(ctx context.Context, hashes []string) (map[string]st
 func (d *DB) PutCachedNotes(ctx context.Context, entries map[string]string, now time.Time) error {
 	if len(entries) == 0 {
 		return nil
+	}
+	if d.tx != nil {
+		return fmt.Errorf("telemetry: PutCachedNotes unsupported inside receipt transaction")
 	}
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {

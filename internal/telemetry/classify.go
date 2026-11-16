@@ -176,7 +176,7 @@ func (d *DB) getCachedCategories(ctx context.Context, hashes []string, out map[s
 		"SELECT raw_hash, category FROM note_category_cache WHERE raw_hash IN (%s)",
 		strings.Join(placeholders, ","),
 	)
-	rows, err := d.sql.QueryContext(ctx, query, args...)
+	rows, err := d.executor().QueryContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("telemetry: query note_category_cache: %w", err)
 	}
@@ -202,6 +202,9 @@ func (d *DB) getCachedCategories(ctx context.Context, hashes []string, out map[s
 func (d *DB) PutCachedCategories(ctx context.Context, entries map[string]ActivityCategory, now time.Time) error {
 	if len(entries) == 0 {
 		return nil
+	}
+	if d.tx != nil {
+		return fmt.Errorf("telemetry: PutCachedCategories unsupported inside receipt transaction")
 	}
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {

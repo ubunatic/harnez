@@ -5,10 +5,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -426,6 +428,129 @@ func TestCodexReceiptDeduplicatesSnapshotAndCall(t *testing.T) {
 		var count int
 		if err := db.QueryRow("SELECT count(*) FROM "+table+" WHERE session_id = ?", "codex-retry").Scan(&count); err != nil || count != 1 {
 			t.Fatalf("%s count = %d, %v", table, count, err)
+		}
+	}
+}
+
+func startUnixHTTPServer(t *testing.T, socket string, handler http.Handler, readHeaderTimeout time.Duration) *http.Server {
+	t.Helper()
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: readHeaderTimeout}
+	go func() { _ = srv.Serve(listener) }()
+	t.Cleanup(func() { _ = srv.Close() })
+	return srv
+}
+
+func startRunnerRelayHarness(t *testing.T, config server.Config, runnerRoot, hostSocket string) {
+	t.Helper()
+	if err := os.Mkdir(runnerRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runnerRoot)
+	hostEnd, runnerEnd, err := server.SocketPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostConn, err := net.FileConn(hostEnd)
+	_ = hostEnd.Close()
+	if err != nil {
+		_ = runnerEnd.Close()
+		t.Fatal(err)
+	}
+	t.Setenv(config.RunnerChannel.FDEnv, strconv.Itoa(int(runnerEnd.Fd())))
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- server.RelayRunnerConn(ctx, hostConn, hostSocket, config) }()
+	t.Cleanup(func() {
+		cancel()
+		_ = hostConn.Close()
+		_ = runnerEnd.Close()
+		<-done
+	})
+}
+
+func TestRunnerRelayCollectorAndHostAdminBoundary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, "run"))
+	t.Setenv("TAIA_SESSION_DIR", "")
+
+	config, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostSocket, err := config.Socket()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service := &telemetryCollectorService{config: config, path: dbPath, interval: time.Hour}
+	mux := http.NewServeMux()
+	service.RegisterRoutes(mux)
+	srv := startUnixHTTPServer(t, hostSocket, mux, config.ReadHeaderTimeout)
+
+	if _, err := server.PostTelemetryCommand(context.Background(), hostSocket, config.TelemetryPath, mustTelemetryRecord("ensure_schema", json.RawMessage(`{}`)), config.HTTPClientTimeout); err != nil {
+		t.Fatalf("host ensure_schema failed: %v", err)
+	}
+
+	runnerRoot := filepath.Join(t.TempDir(), "runner-session")
+	startRunnerRelayHarness(t, config, runnerRoot, hostSocket)
+
+	for _, op := range []string{"/shutdown", "merge_legacy", "ensure_schema"} {
+		resp, err := server.SendRunnerRequest(context.Background(), config, server.RunnerRequest{Op: op})
+		if err != nil || resp.Status != http.StatusForbidden {
+			t.Fatalf("runner op %q got status=%d err=%v, want 403", op, resp.Status, err)
+		}
+	}
+	if got := sendTelemetryRecord("tool_call", telemetry.ToolCall{SessionID: "runner-live", AgentID: "codex", ToolName: "bash", CallType: "hook:post"}); got != server.UpdateDelivered {
+		t.Fatalf("sendTelemetryRecord result = %q, want delivered", got)
+	}
+
+	_ = srv.Close()
+	if got := sendTelemetryRecord("tool_call", telemetry.ToolCall{SessionID: "runner-spooled", AgentID: "codex", ToolName: "read", CallType: "hook:post"}); got != server.UpdateSpooled {
+		t.Fatalf("sendTelemetryRecord during outage = %q, want spooled", got)
+	}
+	spoolEntries, err := os.ReadDir(filepath.Join(runnerRoot, "state", "telemetry-spool"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonFiles := 0
+	for _, entry := range spoolEntries {
+		if filepath.Ext(entry.Name()) == ".json" {
+			jsonFiles++
+		}
+	}
+	if jsonFiles != 1 {
+		t.Fatalf("runner spool files = %d, want 1", jsonFiles)
+	}
+
+	startUnixHTTPServer(t, hostSocket, mux, config.ReadHeaderTimeout)
+	if err := server.ReplayRunnerSpool(context.Background(), config); err != nil {
+		t.Fatalf("ReplayRunnerSpool: %v", err)
+	}
+	if err := server.ReplayRunnerSpool(context.Background(), config); err != nil {
+		t.Fatalf("second ReplayRunnerSpool: %v", err)
+	}
+
+	db, err := telemetry.OpenReadOnly(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, sid := range []string{"runner-live", "runner-spooled"} {
+		rows, err := db.Query(telemetry.Filter{SessionID: sid})
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("session %s rows = %d, %v, want 1", sid, len(rows), err)
 		}
 	}
 }

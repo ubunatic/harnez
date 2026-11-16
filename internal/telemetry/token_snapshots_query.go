@@ -35,7 +35,7 @@ func (d *DB) LatestTokenSnapshots(sessionIDs []string) (map[string]TokenSnapshot
 		FROM token_snapshots WHERE session_id IN (` + placeholders + `) ORDER BY id DESC`
 	ctx, cancel := defaultContext()
 	defer cancel()
-	rows, err := d.sql.QueryContext(ctx, query, stringArgs(ids)...)
+	rows, err := d.executor().QueryContext(ctx, query, stringArgs(ids)...)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: query latest token snapshots: %w", err)
 	}

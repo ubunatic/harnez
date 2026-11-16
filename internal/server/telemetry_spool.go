@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"syscall"
 	"time"
 )
 
@@ -45,15 +44,11 @@ func AppendTelemetrySpool(dir string, record []byte, maxBytes int64) error {
 	if err := os.Chmod(dir, 0700); err != nil {
 		return err
 	}
-	lock, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDWR, 0600)
+	lock, err := acquireDirLock(dir)
 	if err != nil {
 		return err
 	}
-	defer lock.Close()
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
-		return err
-	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	defer releaseDirLock(lock)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
@@ -117,9 +112,7 @@ func DrainTelemetrySpool(ctx context.Context, dir string, consume func(context.C
 		}
 		if err := consume(ctx, data); err != nil {
 			if errors.Is(err, ErrQuarantine) {
-				quarantineDir := filepath.Join(dir, "quarantine")
-				_ = os.MkdirAll(quarantineDir, 0700)
-				_ = os.Rename(path, filepath.Join(quarantineDir, entry.Name()))
+				quarantineSpoolFile(dir, path)
 				continue
 			}
 			failures = append(failures, err)

@@ -27,7 +27,7 @@ func (d *DB) CompactionEconomicsStats(f Filter) (CompactionEconomicsStats, error
 	query := `SELECT COUNT(*), COALESCE(MAX(model),''), COALESCE(MAX(pricing_revision),''), MAX(status), MAX(compaction_cost_micros), MAX(post_compaction_cost_micros), MAX(baseline_cost_micros), MAX(savings_micros), COALESCE(MAX(note),'') FROM compaction_economics` + where
 	var s CompactionEconomicsStats
 	var status *string
-	if err := d.sql.QueryRow(query, args...).Scan(&s.CompactionCount, &s.Model, &s.PricingRevision, &status, &s.CompactionCostMicros, &s.PostCompactionCostMicros, &s.BaselineCostMicros, &s.SavingsMicros, &s.Note); err != nil {
+	if err := d.executor().QueryRow(query, args...).Scan(&s.CompactionCount, &s.Model, &s.PricingRevision, &status, &s.CompactionCostMicros, &s.PostCompactionCostMicros, &s.BaselineCostMicros, &s.SavingsMicros, &s.Note); err != nil {
 		return s, fmt.Errorf("telemetry: compaction economics stats: %w", err)
 	}
 	if status != nil {

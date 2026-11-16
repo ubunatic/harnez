@@ -212,14 +212,6 @@ func sendTelemetryRecord(kind string, payload any) server.UpdateResult {
 	if err != nil {
 		return server.UpdateDropped
 	}
-	socket, err := config.Socket()
-	if err != nil {
-		return server.UpdateDropped
-	}
-	spoolDir, err := config.TelemetrySpoolDir()
-	if err != nil {
-		return server.UpdateDropped
-	}
 	bodyPayload, err := json.Marshal(payload)
 	if err != nil {
 		return server.UpdateDropped
@@ -228,13 +220,9 @@ func sendTelemetryRecord(kind string, payload any) server.UpdateResult {
 	if err != nil {
 		return server.UpdateDropped
 	}
-	body, err := json.Marshal(record)
-	if err != nil {
-		return server.UpdateDropped
-	}
-	result := server.PostTelemetry(context.Background(), socket, config.TelemetryPath, body, config.UpdateTimeout, spoolDir, config.TelemetrySpoolMaxBytes)
+	result := server.DispatchTelemetry(context.Background(), config, record)
 	if result == server.UpdateDropped {
-		fmt.Fprintln(os.Stderr, "harnez: telemetry record dropped (server unavailable and spool unavailable or full)")
+		fmt.Fprintln(os.Stderr, "harnez: telemetry record dropped (broker channel or host spool unavailable/full)")
 	}
 	return result
 }

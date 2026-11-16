@@ -20,14 +20,14 @@ type CompactionPair struct {
 // in arrival order; a subsequent pre after a post starts a new attempt.
 func (d *DB) LatestCompactionPair(sessionID string) (*CompactionPair, error) {
 	var hasSource int
-	if err := d.sql.QueryRow(mustTelemetrySQL().Statements["compaction_events_has_source"]).Scan(&hasSource); err != nil {
+	if err := d.executor().QueryRow(mustTelemetrySQL().Statements["compaction_events_has_source"]).Scan(&hasSource); err != nil {
 		return nil, err
 	}
 	query := mustTelemetrySQL().Statements["compaction_pair_events_legacy"]
 	if hasSource != 0 {
 		query = mustTelemetrySQL().Statements["compaction_pair_events"]
 	}
-	rows, err := d.sql.Query(query, sessionID)
+	rows, err := d.executor().Query(query, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: query compaction pair: %w", err)
 	}

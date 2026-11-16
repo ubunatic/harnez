@@ -36,6 +36,17 @@ type Config struct {
 	TelemetryWarningRateLimit time.Duration
 	DefaultLogLines           int
 	RemoteUpgrade             RemoteUpgradeConfig
+	RunnerChannel             RunnerChannelConfig
+}
+
+// RunnerChannelConfig controls the inherited launch-bound runner broker FD.
+type RunnerChannelConfig struct {
+	FDEnv                 string
+	MaxFrameBytes         int64
+	SpoolMaxBytes         int64
+	ReplayMaxRecords      int
+	ReplayMaxBytes        int64
+	AllowedTelemetryKinds []string
 }
 
 // RemoteUpgradeConfig controls best-effort replacement of an older remote binary.
@@ -73,6 +84,16 @@ type specConfig struct {
 		CommandTimeout  string `yaml:"command_timeout"`
 		TransferTimeout string `yaml:"transfer_timeout"`
 	} `yaml:"remote_upgrade"`
+	RunnerChannel rawRunnerChannel `yaml:"runner_channel"`
+}
+
+type rawRunnerChannel struct {
+	FDEnv                 string   `yaml:"fd_env"`
+	MaxFrameBytes         int64    `yaml:"max_frame_bytes"`
+	SpoolMaxBytes         int64    `yaml:"spool_max_bytes"`
+	ReplayMaxRecords      int      `yaml:"replay_max_records"`
+	ReplayMaxBytes        int64    `yaml:"replay_max_bytes"`
+	AllowedTelemetryKinds []string `yaml:"allowed_telemetry_kinds"`
 }
 
 func LoadConfig() (Config, error) {
@@ -121,6 +142,9 @@ func LoadConfig() (Config, error) {
 	}
 	if cfg.TelemetrySpoolMaxBytes <= 0 {
 		return Config{}, fmt.Errorf("spec/server.yaml: telemetry_spool_max_bytes must be positive")
+	}
+	if err := loadRunnerChannel(&cfg, raw.RunnerChannel); err != nil {
+		return Config{}, err
 	}
 	if !strings.HasSuffix(cfg.SystemdUnitName, ".service") || filepath.Base(cfg.SystemdUnitName) != cfg.SystemdUnitName {
 		return Config{}, fmt.Errorf("spec/server.yaml: systemd_unit_name must be a service filename")
@@ -183,6 +207,9 @@ func (c Config) TelemetrySpoolDir() (string, error) {
 }
 
 func (c Config) Socket() (string, error) {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return "", fmt.Errorf("shared host server socket is unavailable in runner mode")
+	}
 	base := os.Getenv("XDG_RUNTIME_DIR")
 	if !filepath.IsAbs(base) {
 		base = os.Getenv("XDG_STATE_HOME")
@@ -206,4 +233,35 @@ func (c Config) Socket() (string, error) {
 		return "", fmt.Errorf("Unix socket path exceeds 107 bytes: %s", path)
 	}
 	return path, nil
+}
+
+func loadRunnerChannel(cfg *Config, raw rawRunnerChannel) error {
+	if raw.FDEnv == "" || raw.MaxFrameBytes <= 0 || raw.SpoolMaxBytes <= 0 || raw.ReplayMaxRecords <= 0 || raw.ReplayMaxBytes <= 0 {
+		return fmt.Errorf("spec/server.yaml: runner_channel settings must be positive and non-empty")
+	}
+	if len(raw.AllowedTelemetryKinds) == 0 {
+		return fmt.Errorf("spec/server.yaml: runner_channel.allowed_telemetry_kinds must be non-empty")
+	}
+	cfg.RunnerChannel = RunnerChannelConfig{
+		FDEnv:                 raw.FDEnv,
+		MaxFrameBytes:         raw.MaxFrameBytes,
+		SpoolMaxBytes:         raw.SpoolMaxBytes,
+		ReplayMaxRecords:      raw.ReplayMaxRecords,
+		ReplayMaxBytes:        raw.ReplayMaxBytes,
+		AllowedTelemetryKinds: append([]string(nil), raw.AllowedTelemetryKinds...),
+	}
+	return nil
+}
+
+// AllowsTelemetryKind reports whether a runner may submit the given record kind.
+func (c RunnerChannelConfig) AllowsTelemetryKind(kind string) bool {
+	if kind == "" {
+		return false
+	}
+	for _, allowed := range c.AllowedTelemetryKinds {
+		if allowed == kind {
+			return true
+		}
+	}
+	return false
 }

@@ -14,14 +14,6 @@ func SendCompactionPair(ctx context.Context, sessionID string) error {
 	if err != nil {
 		return err
 	}
-	socket, err := config.Socket()
-	if err != nil {
-		return err
-	}
-	spool, err := config.TelemetrySpoolDir()
-	if err != nil {
-		return err
-	}
 	payload, err := json.Marshal(sessionID)
 	if err != nil {
 		return err
@@ -30,11 +22,7 @@ func SendCompactionPair(ctx context.Context, sessionID string) error {
 	if err != nil {
 		return err
 	}
-	body, err := json.Marshal(record)
-	if err != nil {
-		return err
-	}
-	if PostTelemetry(ctx, socket, config.TelemetryPath, body, config.UpdateTimeout, spool, config.TelemetrySpoolMaxBytes) == UpdateDropped {
+	if DispatchTelemetry(ctx, config, record) == UpdateDropped {
 		return fmt.Errorf("agy compact: telemetry record dropped")
 	}
 	return nil
