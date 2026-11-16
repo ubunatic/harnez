@@ -16,9 +16,10 @@ Reference Practice: `@docs/practices/GoRelease.md`
    With `git.protected_main` in `.harnez/repo.yaml`, those commits go through a PR first, so
    `main` is level with its remote before you release. Wait for that PR with
    `harnez pr wait <number> --contains <sha>` (background); release only after exit 0.
-2. **Push**: `git push`. (Skip under `protected_main`: `harnez release` pushes the branch and
-   tag itself. If the forge rejects the push to `main`, stop and report it. See `docs/GoRelease.md`
-   for the `release/vX.Y.Z` route.)
+2. **Push**: `git push`. (Skip under `protected_main`: `harnez release` tries pushing the branch
+   and tag directly first; if the forge rejects `main` as protected, it falls back to an AGit PR
+   and pauses until you merge and run `harnez release --continue`. On GitHub, if direct push is
+   rejected, see `docs/GoRelease.md` for the `release/vX.Y.Z` route.)
 3. **Match the project's setup**: `harnez release` defaults to a patch bump, a minisign
    signature and a GoReleaser or `make dist` build. Check the project before the first run:
    - **Bump**: read the last tags (`git tag --sort=-v:refname | head -3`). Choose the step the

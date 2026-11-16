@@ -162,11 +162,12 @@ Runtime errors suppress usage; auth failures suggest `fj auth login`, followed b
 
 ### Protected main (`git.protected_main`)
 
-A plain `harnez release` on the default branch builds and signs locally, pushes the bump commit as
-an AGit PR (`refs/for/<default>/release-vX.Y.Z`) and pauses with the tag local. Merge it with a
-merge commit or fast-forward (not squash/rebase), wait with `harnez pr wait <n> --contains <sha>`,
-then `harnez release --continue` pushes the tag, mirrors the other remotes and publishes. Before
-the merge, `--continue` only updates the PR.
+A plain `harnez release` on the default branch builds and signs locally, tries a direct push first
+(succeeding immediately when allowed), and if the forge rejects protected `main` falls back to
+pushing the bump commit as an AGit PR (`refs/for/<default>/release-vX.Y.Z`) and pauses with the
+tag local. Merge it with a merge commit or fast-forward (not squash/rebase), wait with
+`harnez pr wait <n> --contains <sha>`, then `harnez release --continue` pushes the tag, mirrors the
+other remotes and publishes. Before the merge, `--continue` only updates the PR.
 
 On GitHub (no AGit), release from `release/vX.Y.Z`; the bump commit and tag are made there and
 both are pushed. Rebase-merge or fast-forward that PR so the tag stays on `main`'s history.

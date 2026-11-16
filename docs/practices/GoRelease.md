@@ -199,13 +199,15 @@ Release only when the user or active `/goal` asks for a release; otherwise recom
 
 ### Protected Main (`git.protected_main`)
 Under protected main, a plain `harnez release` on the default branch bumps, tags, builds and signs
-locally, then pushes the bump commit as an AGit PR (`refs/for/<default>/release-vX.Y.Z`) and
-pauses; the tag stays local. Merge the PR with a merge commit or fast-forward (squash or rebase
-drops the bump commit), wait with `harnez pr wait <n> --contains <sha>`, then run
-`harnez release --continue`: it checks that the bump commit is on the remote default branch,
-pushes the tag, mirrors the merged branch and tag to the other remotes, and publishes. Before the
-merge, `--continue` only updates the PR. No direct push to the protected branch is needed. GitHub
-has no AGit: there, use the `release/vX.Y.Z` route below.
+locally, then tries a direct push to the default branch first (succeeding immediately when the
+caller/owner is permitted to push to `main`). If the publishing forge rejects the direct push as
+protected, harnez falls back to pushing the bump commit as an AGit PR
+(`refs/for/<default>/release-vX.Y.Z`) and pauses; the tag stays local. Merge the PR with a merge
+commit or fast-forward (squash or rebase drops the bump commit), wait with
+`harnez pr wait <n> --contains <sha>`, then run `harnez release --continue`: it checks that the
+bump commit is on the remote default branch, pushes the tag, mirrors the merged branch and tag to
+the other remotes, and publishes. Before the merge, `--continue` only updates the PR. GitHub has no
+AGit: there, if direct push is rejected, use the `release/vX.Y.Z` route below.
 
 On GitHub, or to release from a branch, use `release/vX.Y.Z`
 (`git switch -c release/vX.Y.Z`): the bump commit and the tag are made there, and the branch and

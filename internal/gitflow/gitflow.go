@@ -228,7 +228,7 @@ func GuardRelease(dir string) error {
 	if cfg.ProtectedMain {
 		branch, detached, ok := CurrentBranch(dir)
 		if ok && !detached && slices.Contains(ProtectedBranches(dir, cfg), branch) {
-			fmt.Fprintf(Stderr, "git.protected_main: releasing on protected %s: the bump commit goes out as an AGit PR; the tag follows after the merge (harnez release --continue)\n", branch)
+			fmt.Fprintf(Stderr, "git.protected_main: releasing on protected %s: trying direct push first; falls back to an AGit PR if the remote rejects it (harnez release --continue)\n", branch)
 			return nil
 		}
 	}
@@ -308,7 +308,7 @@ func guardCommit(dir, action string, opts *IssueCommitOptions) error {
 }
 
 // ProtectedReleaseBranch reports the branch when a release runs on a protected
-// default branch, the case where harnez release goes through an AGit PR.
+// default branch, so harnez can try a direct push and fall back to an AGit PR.
 func ProtectedReleaseBranch(dir string) (string, bool) {
 	cfg, err := Load(dir)
 	if err != nil || !cfg.ProtectedMain {

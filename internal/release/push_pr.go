@@ -14,6 +14,88 @@ var errAwaitingMerge = errors.New("release PR awaiting merge")
 // releaseTopic is the AGit topic of a release PR, e.g. release-v0.5.6.
 func releaseTopic(tag string) string { return "release-" + tag }
 
+// pushProtectedRelease tries a direct release push on a protected default
+// branch first (succeeding when the caller is allowed to push directly), and
+// falls back to an AGit PR only when the publishing forge rejects the branch
+// as protected. During --continue, if a prior release PR already merged on the
+// forge ahead of local HEAD, it resumes the PR completion path directly.
+func pushProtectedRelease(opt Options, tag, branch string, forge *ForgeInfo) error {
+	if opt.DryRun {
+		if err := pushRelease(opt, tag, forge); err != nil {
+			return err
+		}
+		if forge != nil && forge.Host != "github.com" {
+			fmt.Fprintf(opt.Out, "  [dry-run]   If direct push to protected %s is rejected by %s, would fall back to AGit PR %s:refs/for/%s/%s (resume with harnez release --continue)\n", branch, forge.RemoteName, forge.RemoteName, branch, releaseTopic(tag))
+		}
+		return nil
+	}
+	if opt.Continue && forge != nil {
+		if mergedAhead, err := releasePRMergedAhead(opt.Dir, tag, branch, forge.RemoteName); err == nil && mergedAhead {
+			return pushReleaseViaPR(opt, tag, branch, forge)
+		}
+	}
+	err := pushRelease(opt, tag, forge)
+	if err == nil {
+		return nil
+	}
+	if !isProtectedBranchRejection(err, forge) {
+		return err
+	}
+	if forge != nil && forge.Host != "github.com" {
+		fmt.Fprintf(opt.Out, "  [git]       Remote %s rejected direct push to protected %s; falling back to AGit PR\n", forge.RemoteName, branch)
+	}
+	return pushReleaseViaPR(opt, tag, branch, forge)
+}
+
+// isProtectedBranchRejection reports whether err is a protected-branch push
+// rejection from the publishing forge (before any other remote is touched).
+func isProtectedBranchRejection(err error, forge *ForgeInfo) bool {
+	if err == nil {
+		return false
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "protected") {
+		return false
+	}
+	if forge != nil && forge.RemoteName != "" {
+		return strings.Contains(err.Error(), "remote "+forge.RemoteName+":")
+	}
+	return true
+}
+
+func fetchForgeBranch(dir, remote, branch string) (string, error) {
+	urls, err := pushURLs(dir, remote)
+	if err != nil || len(urls) == 0 {
+		return "", fmt.Errorf("push URL of %s: %v", remote, err)
+	}
+	remoteBranch := "refs/remotes/" + remote + "/" + branch
+	if out, err := gitRun(dir, "fetch", "--quiet", urls[0], "+refs/heads/"+branch+":"+remoteBranch); err != nil {
+		return "", fmt.Errorf("fetch %s %s: %w: %s", remote, branch, err, out)
+	}
+	return remoteBranch, nil
+}
+
+func releasePRMergedAhead(dir, tag, branch, remote string) (bool, error) {
+	tagCommit, err := getGitRef(dir, "refs/tags/"+tag+"^{commit}")
+	if err != nil {
+		return false, err
+	}
+	localHead, err := getGitRef(dir, "refs/heads/"+branch)
+	if err != nil {
+		return false, err
+	}
+	remoteBranch, err := fetchForgeBranch(dir, remote, branch)
+	if err != nil {
+		return false, err
+	}
+	remoteHead, err := getGitRef(dir, remoteBranch)
+	if err != nil || remoteHead == localHead {
+		return false, err
+	}
+	merged := exec.Command("git", "merge-base", "--is-ancestor", tagCommit, remoteBranch)
+	merged.Dir = dir
+	return merged.Run() == nil, nil
+}
+
 // pushReleaseViaPR is the release push for a protected default branch. The
 // forge refuses a direct push, so the bump commit goes out as an AGit PR and
 // the tag waits until that commit is on the remote default branch. Each run,
@@ -44,13 +126,9 @@ func pushReleaseViaPR(opt Options, tag, branch string, forge *ForgeInfo) error {
 	}
 	// Fetch from the push URL: it is the server that refused the direct push
 	// and the one the PR merges into.
-	urls, err := pushURLs(opt.Dir, remote)
-	if err != nil || len(urls) == 0 {
-		return fmt.Errorf("push URL of %s: %v", remote, err)
-	}
-	remoteBranch := "refs/remotes/" + remote + "/" + branch
-	if out, err := gitRun(opt.Dir, "fetch", "--quiet", urls[0], "+refs/heads/"+branch+":"+remoteBranch); err != nil {
-		return fmt.Errorf("fetch %s %s: %w: %s", remote, branch, err, out)
+	remoteBranch, err := fetchForgeBranch(opt.Dir, remote, branch)
+	if err != nil {
+		return err
 	}
 	merged := exec.Command("git", "merge-base", "--is-ancestor", tagCommit, remoteBranch)
 	merged.Dir = opt.Dir

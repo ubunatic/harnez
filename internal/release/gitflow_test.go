@@ -114,6 +114,42 @@ func TestReleaseOnProtectedMainGoesThroughPR(t *testing.T) {
 	wantRemoteMatchesLocal(t, dir, bare, "refs/tags/v1.0.1", "refs/heads/main")
 }
 
+// Protected main when the caller/owner is allowed to push directly: pushes main
+// and the tag immediately with no AGit PR fallback.
+func TestReleaseOnProtectedMainPushesDirectlyWhenAllowed(t *testing.T) {
+	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	second := addSecondRemote(t, dir)
+	var out bytes.Buffer
+	if err := Run(gitflowReleaseOptions(dir, &out)); err != nil {
+		t.Fatalf("direct release on protected main: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "paused") || strings.Contains(out.String(), "AGit PR") {
+		t.Errorf("unexpected PR fallback when direct push succeeded:\n%s", out.String())
+	}
+	if strings.Contains(pushTestRefs(t, bare), "refs/for/") {
+		t.Errorf("unexpected PR ref created:\n%s", pushTestRefs(t, bare))
+	}
+	wantRemoteMatchesLocal(t, dir, bare, "refs/heads/main", "refs/tags/v1.0.1")
+	wantRemoteMatchesLocal(t, dir, second, "refs/heads/main", "refs/tags/v1.0.1")
+}
+
+// When origin accepts direct push on protected main and a mirror remote rejects,
+// harnez must surface the retry error rather than opening an AGit PR.
+func TestReleaseProtectedSecondRemoteRejectionDoesNotFallbackToPR(t *testing.T) {
+	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	second := addSecondRemote(t, dir)
+	protectRemoteMain(t, second)
+	var out bytes.Buffer
+	err := Run(gitflowReleaseOptions(dir, &out))
+	if err == nil || !strings.Contains(err.Error(), "--continue") {
+		t.Fatalf("want retryable second-remote error, got %v\n%s", err, out.String())
+	}
+	if strings.Contains(pushTestRefs(t, bare), "refs/for/") {
+		t.Errorf("must not open PR after origin accepted direct push:\n%s", pushTestRefs(t, bare))
+	}
+	wantRemoteMatchesLocal(t, dir, bare, "refs/heads/main", "refs/tags/v1.0.1")
+}
+
 func TestReleaseDryRunOnProtectedMainChangesNothing(t *testing.T) {
 	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
 	spec, err := os.ReadFile(filepath.Join(dir, "version.yaml"))
