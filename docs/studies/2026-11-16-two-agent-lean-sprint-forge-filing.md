@@ -35,3 +35,23 @@ Questions: what each `harnez issues` verb does on a forge tracker, where `--host
 
 Unverified after round 1: how a plain `fj` resolves the host without the flag, and the installed
 fj version (the wrapper breaks `fj version`). Round 2 asks for read-only canaries.
+
+## Searcher round 2: fj host handling, credentials, harnez API client
+
+`forge-scout` resumed after compaction (67.2k to 20.1k context usage), 1m18s, 51.8k new tokens.
+
+- Forge path selection: tracker values are `harnez` and `none` (`spec/schemas/repo.schema.json:12`);
+  the forge path needs no local `issues/` directory and a recognised origin
+  (`cmd/harnez/issues_forge.go:61`); `comment --forge` overrides the directory check.
+- fj is v0.7.0. Read-only canary on origin PR 78: the plain binary fails on `owner/repo#N`
+  ("cannot find repo, no host specified") and works with `-H`; the host-qualified reference
+  `codeberg.org/owner/repo#N` works with both the plain binary and the wrapper. Verified for
+  `issue view` only; `issue create --repo <host/owner/repo>` is unverified.
+- No environment variable or config file for the fj host was found in the help texts.
+- fj credential storage and the `keys.rs:154` logic stay unverified (source not on disk).
+- Harnez has its own forge API client with token lookup: stored Forgejo token, then
+  `CODEBERG_TOKEN`/`FORGEJO_TOKEN`, then `gh auth token`; anonymous reads work
+  (`internal/forge/api.go:43`, `spec/pr.yaml:20`). It only reads issues and pulls today; the only
+  write requests are for Forgejo user tokens (`internal/forgetoken/api.go:95`).
+- Codeberg swagger: issue PATCH takes `title`, `body`, `state` and `updated_at`; comment POST takes
+  `body`. Accepted `state` values and any conditional meaning of `updated_at` are unverified.
