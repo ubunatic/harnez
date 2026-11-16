@@ -20,6 +20,13 @@ The `spec/` directory is **application code**, not runtime user configuration. T
 - **Embedded application code**: In compiled languages, embed the `spec/` directory directly into the binary (e.g. Go `//go:embed`, Rust `include_str!`). The spec is part of the application artifact, not external config.
 - `spec/glossary.yaml` (`spec/schemas/glossary.schema.json`) — machine-readable ubiquitous-language glossary, canonical terms, and forbidden wording patterns
 
+### Forge tokens
+
+`spec/forge_token.yaml` defines separate read and write token settings. Its `write`
+block supplies scopes, name prefix, keyring service and token directory for the
+write store; create it with `harnez forge token create --write`. Forgejo issue
+writes use that store, while the existing read token continues to serve reads.
+
 ### Project-local Harnez configuration
 Harnez repositories may also contain `.harnez/repo.yaml`, validated by
 `spec/schemas/repo.schema.json`. This is runtime project configuration, not an

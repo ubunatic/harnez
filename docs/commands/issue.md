@@ -21,20 +21,29 @@ If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.
 
 ### Forge tracker (no `issues/` dir, origin on Codeberg/Forgejo or GitHub)
 
-Harnez reads and files tickets on the origin's forge; each command names the forge repo.
+Harnez reads issues on the origin forge. Add `--forge` when a local `issues/` directory
+exists. Forgejo writes use a separately stored write token; create it with
+`harnez forge token create --write`. The read token remains separate.
 
 ```bash
-harnez find -d <repo> issues "<search terms>"   # title search only, no body search; a private repo needs a forge token
-harnez issues show -d <repo> <n>
-harnez issues new -d <repo> "<title>" -F <body-file> --label <label> --dry-run   # shows the tea/fj/gh command
-harnez issues new -d <repo> "<title>" -F <body-file> --label <label>
-harnez issues comment -d <repo> <n> -F <body-file> --dry-run
-harnez issues comment -d <repo> <n> -F <body-file>  # add --closed for a closed issue
+harnez issues new -d <repo> --forge "Title" -F body.md --label bug
+harnez issues comment -d <repo> --forge 42 -F note.md
+harnez issues show -d <repo> --forge 42 --json
+harnez issues edit -d <repo> --forge 42 -F body.md --if-updated <updated_at>
+harnez issues close -d <repo> --forge 42 "done"
+harnez issues reopen -d <repo> --forge 42
 ```
 
-- A comment body file must contain non-whitespace text; stdin (`-F -`) is not supported.
-- When the repo has a local `issues/` directory, add `--forge` to comment on a forge issue; the number then identifies the forge issue.
-- Use only labels that exist on the forge (`tea labels` or `gh label list`); `fj` cannot set labels, so labels need `tea` or `gh`.
+`--dry-run` previews forge writes. Without a write token, `new` and `comment`
+fall back to fj/tea; the other writes require a write token. Forge writes are
+host-only: Harnez worker markers prevent accidental writes, but this is not a
+security boundary. Native subagents inheriting the host environment, workers that
+unset the markers, and direct calls to forge tools are not stopped. Forgejo is
+supported; GitHub writes are tracked in ticket 1209 (the existing GitHub `new`
+path remains available). The edit timestamp check is a preflight: a write between
+the check and PATCH is not detected. A comment body must contain non-whitespace
+text and cannot use stdin. Add `--closed` to comment on or edit a closed issue.
+
 - When an existing ticket partly covers the request, say so and ask before filing or commenting. Comment on other tickets only with the user's OK.
 - Report "filed as #N at <URL>; no commit". Publish Promptly below applies only to file-based trackers.
 

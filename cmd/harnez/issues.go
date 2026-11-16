@@ -113,6 +113,20 @@ working-tree changes, staged or not, are never staged or committed.
 --commit "<msg>" replaces the default message; --no-commit rewrites the same
 files and leaves them uncommitted. 'new' never commits.
 
+Forgejo writes use a separate write token (harnez forge token create --write);
+the read token remains separate. Without a write token new and comment use fj/tea.
+Forge writes run in a host session; this guards accidents, not a security boundary:
+inherited host environments, unset worker markers and direct forge tools bypass it.
+GitHub writes are ticket 1209, except the existing GitHub new path.
+--dry-run previews forge writes. With a local tracker use --forge:
+  issues new --forge "T" -F body.md
+  issues comment --forge 42 -F note.md
+  issues show --forge 42 --json
+  issues edit --forge 42 -F body.md --if-updated <updated_at>
+  issues close --forge 42 done
+  issues reopen --forge 42
+The edit timestamp preflight is not atomic; a write between check and PATCH is not detected.
+
 Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
 
   open [reason]    Status: Open, or "Open — <reason>"
@@ -622,7 +636,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().StringVar(&editTitleFlag, "title", "", "with edit: replace the issue title")
 	cmd.Flags().StringVar(&ifUpdatedFlag, "if-updated", "", "with edit: require the timestamp from issues show --json")
 	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment or edit: allow a closed issue")
-	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "target the forge for new, comment, edit, close or reopen even with a local issues/ dir")
+	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "target the forge for new, comment, show, edit, close or reopen even with a local issues/ dir")
 	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")
 	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: ignore duplicate matches; with edit: skip the updated-at check")
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")

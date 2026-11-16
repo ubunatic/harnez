@@ -140,15 +140,10 @@ func TestIssuesCommentOffline(t *testing.T) {
 	if err != nil || string(got) != strings.Join([]string{"issue", "comment", "codeberg.org/o/r#7", "--body-file", body, ""}, "\n") {
 		t.Fatalf("local tracker argv: %q %v", got, err)
 	}
-	for _, verb := range []string{"show", "list"} {
-		args := []string{"issues", verb, "-d", dir, "--forge"}
-		if verb == "show" {
-			args = append(args, "7")
-		}
-		if _, err := runHarnez(t, args...); err == nil || err.Error() != "issues: --forge requires new, comment, edit, close, reopen or open" {
-			t.Fatalf("forge flag on %s: %v", verb, err)
-		}
+	if _, err := runHarnez(t, "issues", "list", "-d", dir, "--forge"); err == nil || err.Error() != "issues: --forge does not support list" {
+		t.Fatalf("forge flag on list: %v", err)
 	}
+
 }
 
 type commentSource struct {
