@@ -49,6 +49,10 @@ install: ⚙️ build  # install binary to ~/go/bin (user)
 stage-install-test: ⚙️  # test stage installer path validation and failure cleanup
 	bash scripts/stage-install-test.sh
 
+promote: ⚙️ build  # promote a privately staged directory into host GOBIN/GOPATH/bin and XDG man roots
+	@test -n "$(STAGE)" || (printf 'Usage: make promote STAGE=/abs/path/to/staged\n' >&2; exit 2)
+	./$(BINARY) install --staged "$(STAGE)"
+
 
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)

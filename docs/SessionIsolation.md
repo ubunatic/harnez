@@ -85,14 +85,17 @@ socket modes or readable bearer tokens for authentication. Runner policy changes
 apply only to overlays; no runner RPC mutates global policy.
 
 A sandbox stages privately with `scripts/stage-install.sh`. A trusted host
-promoter derives its approved roots only from trusted host configuration and
+promoter (`harnez install --staged <dir>`, or `make promote STAGE=<dir>`) derives
+its approved roots only from trusted host configuration and
 defaults: `GOBIN` or `GOPATH/bin` for `harnez` and a host-generated relative
 `⚙ -> harnez` symlink, and `XDG_DATA_HOME/man/man1` or
 `~/.local/share/man/man1` for the exact man-page manifest. It copies and verifies
 staged artifacts as immutable host-owned temporary files, pins destination
 directories with `O_DIRECTORY|O_NOFOLLOW`, and promotes each approved file
 atomically. Atomicity is per file, not across the whole set. Runner-supplied
-arbitrary or checkout destinations are not approved.
+arbitrary or checkout destinations are not approved, and `harnez install` /
+shared `man --install` fail closed in runner mode instead of invoking `goself`
+against shared paths.
 
 These controls do not provide read confidentiality when `/` is readable under
 Taia, shared-checkout isolation, a same-UID filesystem boundary, or trust in

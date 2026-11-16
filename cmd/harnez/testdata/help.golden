@@ -1907,7 +1907,8 @@ Flags:
 
 === harnez install
 Install or update harnez locally (into --dir, configuring shell PATH, completions,
-the ⚙ symlink, and man pages) or onto a remote host over ssh.
+the ⚙ symlink, and man pages), promote a privately staged build into trusted
+host roots (--staged <dir>), or install onto a remote host over ssh.
 When the argument names a package in spec/dependencies.yaml (such as neus),
 it runs that dependency's installer instead.
 
@@ -1922,6 +1923,7 @@ Flags:
   -h, --help              help for install
       --no-man            Skip installing roff man pages on local install
       --no-shell          Skip shell PATH and completion setup on local install
+      --staged string     Promote a privately staged build into trusted host GOBIN/GOPATH/bin and XDG man roots
       --strategy string   Binary source: auto, self, build, release, or go (default "auto")
       --version string    Version or git ref for the release and go strategies
 

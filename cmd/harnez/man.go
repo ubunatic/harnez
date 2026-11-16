@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
@@ -53,6 +54,16 @@ func defaultManDir() string {
 }
 
 func installManPages(rootCmd *cobra.Command, targetDir string, out io.Writer) error {
+	if sessDir := os.Getenv("TAIA_SESSION_DIR"); sessDir != "" {
+		if targetDir == "" {
+			return fmt.Errorf("man --install to shared man directory is host-only in runner mode; pass --dir inside %s", sessDir)
+		}
+		cleanSess := filepath.Clean(sessDir)
+		cleanTarget := filepath.Clean(targetDir)
+		if !filepath.IsAbs(cleanTarget) || (cleanTarget != cleanSess && !strings.HasPrefix(cleanTarget, cleanSess+string(filepath.Separator))) {
+			return fmt.Errorf("man --install target %s must stay inside $TAIA_SESSION_DIR in runner mode", targetDir)
+		}
+	}
 	if targetDir == "" {
 		targetDir = defaultManDir()
 	}

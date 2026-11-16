@@ -44,6 +44,9 @@ type Options struct {
 // local installs, updates shell PATH, completions, gear symlink, man pages, and
 // any active collector service.
 func Run(ctx context.Context, opts Options, out io.Writer) error {
+	if os.Getenv("TAIA_SESSION_DIR") != "" && !opts.DryRun {
+		return fmt.Errorf("harnez install: shared installation via goself is host-only in runner mode; stage with scripts/stage-install.sh and promote on host via harnez install --staged <dir>")
+	}
 	strategy, err := goself.ParseStrategy(opts.Strategy)
 	if err != nil {
 		return err
