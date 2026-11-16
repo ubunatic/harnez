@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -142,4 +144,51 @@ func (s commentSource) Issue(fg forge.Forge, owner, repo string, n int) (forge.R
 	fg.APIBase = s.api
 	l := forge.PullLister{Client: http.DefaultClient}
 	return l.Issue(fg, owner, repo, n)
+}
+
+func TestIssuesCommentRejectsEmptyBody(t *testing.T) {
+	src := &stubForgeSource{}
+	target := forgetracker.Target{Forge: forge.Forge{Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	for _, content := range []string{"", " \t", "\n\n"} {
+		body := filepath.Join(t.TempDir(), "body file")
+		if err := os.WriteFile(body, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		err := runIssuesComment(io.Discard, t.TempDir(), target, src, "7", body, false, false)
+		if err == nil || !strings.Contains(err.Error(), "empty") || src.calls != 0 {
+			t.Fatalf("body %q: err=%v calls=%d", content, err, src.calls)
+		}
+	}
+	err := runIssuesComment(io.Discard, t.TempDir(), target, src, "7", "-", false, false)
+	if err == nil || !strings.Contains(err.Error(), "must name a body file") || src.calls != 0 {
+		t.Fatalf("stdin: err=%v calls=%d", err, src.calls)
+	}
+}
+
+func TestIssuesCommentFJErrors(t *testing.T) {
+	src := &stubForgeSource{}
+	target := forgetracker.Target{Forge: forge.Forge{Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	body := filepath.Join(t.TempDir(), "body file")
+	if err := os.WriteFile(body, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldLook, oldRun := issueCLILookPath, issueCLIRun
+	t.Cleanup(func() { issueCLILookPath, issueCLIRun = oldLook, oldRun })
+	issueCLILookPath = func(string) (string, error) { return "fj", nil }
+	for _, msg := range []string{"ordinary error\napi error: token was already used\ntrace line", "ordinary error\nthread panicked at src/keys.rs:154:28\ntrace line", "ordinary error"} {
+		issueCLIRun = func(string, forgetracker.Command) ([]byte, error) { return []byte(msg), errors.New("exit status 1") }
+		err := runIssuesComment(io.Discard, t.TempDir(), target, src, "7", body, false, false)
+		if err == nil {
+			t.Fatal("expected failure")
+		}
+		if msg == "ordinary error" {
+			if !strings.Contains(err.Error(), msg) {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if !strings.Contains(err.Error(), "fj auth login") || strings.Contains(err.Error(), "trace line") || strings.Contains(err.Error(), "\n") {
+			t.Fatal(err)
+		}
+	}
 }

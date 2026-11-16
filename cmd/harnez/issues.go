@@ -519,7 +519,7 @@ valid, exit-0 answer.`,
 	}
 	cmd.Flags().BoolVar(&remoteFlag, "remote", false, "with new: allocate a permanent GH id using authenticated gh on the github remote")
 	cmd.Flags().StringVar(&numberFlag, "number", "", "with new: use this ticket number instead of the next free one (refused if it exists)")
-	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new or comment on a forge tracker: the body file")
+	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new or comment on a forge tracker: body file (comment requires nonblank text)")
 	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment: allow a closed issue")
 	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "with comment: target the forge even with a local issues/ dir")
 	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")

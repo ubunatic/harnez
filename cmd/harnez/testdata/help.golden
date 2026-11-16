@@ -2039,7 +2039,7 @@ Flags:
       --against string          with lint: fail when a ticket here reuses a number that REF (e.g. origin/main) gives to another file; warn if REF is missing
   -a, --all                     with 'list': show all matching results
       --amend-reason            with close/done: amend the reason of an already-Closed ticket
-  -F, --body-file string        with new or comment on a forge tracker: the body file
+  -F, --body-file string        with new or comment on a forge tracker: body file (comment requires nonblank text)
       --cached                  validate the staged Git snapshot (issues lint only)
       --check                   report what would change without writing or committing; exit 1 on drift
       --closed                  with comment: allow a closed issue

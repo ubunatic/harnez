@@ -141,6 +141,13 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	} else if !info.Mode().IsRegular() {
 		return fmt.Errorf("issues comment: body file must be a regular file")
 	}
+	content, err := os.ReadFile(body)
+	if err != nil {
+		return fmt.Errorf("issues comment: body file: %w", err)
+	}
+	if strings.TrimSpace(string(content)) == "" {
+		return fmt.Errorf("issues comment: body file is empty or whitespace-only")
+	}
 	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
 	if err != nil {
 		var apiErr *forge.APIError
@@ -172,6 +179,10 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	out, err := issueCLIRun(dir, c)
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
+		lower := strings.ToLower(msg)
+		if strings.Contains(lower, "token was already used") || (strings.Contains(lower, "keys.rs") && strings.Contains(lower, "panic")) {
+			return fmt.Errorf("issues comment: fj login state failed; run fj auth login")
+		}
 		if strings.Contains(strings.ToLower(msg), "401") || strings.Contains(strings.ToLower(msg), "token is required") {
 			return fmt.Errorf("issues comment: fj authentication failed; run fj -H %s auth login", t.Forge.Host)
 		}
