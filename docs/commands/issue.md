@@ -19,7 +19,7 @@ issue-tracking guidance before acting, then runs the filing workflow end to end:
 
 If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.md` for the local-tracker/session fallback.
 
-### Forge tracker (no `issues/` dir, origin on Codeberg/Forgejo or GitHub)
+### Forge tracker
 
 Harnez reads issues on the origin forge. A private repository may need a read
 forge token. Search matches terms in titles and bodies within the configured scan
@@ -29,7 +29,9 @@ budget:
 harnez find -d <repo> issues "search terms"
 ```
 
-For a forge tracker (no local `issues/` directory):
+A recognised forge origin is the tracker when `issues/` is absent, or when
+`issues.tracker: none` and `issues/` has no numbered ticket files (`<digits>-*.md`)
+or `archive/` directory. For a forge tracker, no `--forge` flag is needed:
 
 ```bash
 harnez issues new -d <repo> "Title" -F body.md --label bug --dry-run

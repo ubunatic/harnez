@@ -120,7 +120,9 @@ Forge writes run in a host session; this guards accidents, not a security bounda
 inherited host environments, unset worker markers and direct forge tools bypass it.
 GitHub writes are ticket 1209, except the existing GitHub new path.
 --dry-run previews forge writes, but does not cover new --remote or
-CLAUDE_CODE_REMOTE: that flow can create an issue. With a local tracker use --forge:
+CLAUDE_CODE_REMOTE: that flow can create an issue. A recognised forge is the
+tracker when issues/ is absent, or issues.tracker is none and issues/ has no
+numbered ticket files or archive/ directory. With a local tracker use --forge:
   issues new --forge "T" -F body.md
   issues comment --forge 42 -F note.md
   issues show --forge 42 --json
@@ -182,8 +184,8 @@ then the README is regenerated and the batch is committed once.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
-                    Without a local issues/ dir, reads the ticket from the
-                    origin forge in spec/pr.yaml instead (read-only).
+                    With a forge tracker, reads the ticket from the origin
+                    forge in spec/pr.yaml instead (read-only).
   mv <old> [new]   Renumber a ticket to [new] (default: next free number
                     from scanning issuesDir). Renames the file keeping the
                     same slug, rewrites the '# <new> — <title>' header line,
@@ -496,7 +498,7 @@ valid, exit-0 answer.`,
 					}
 				}
 				if bodyFileFlag != "" || len(labelFlags) > 0 {
-					return fmt.Errorf("issues new: -F/--body-file and --label apply only when tickets live on the forge (no local issues/ dir)")
+					return fmt.Errorf("issues new: -F/--body-file and --label apply only when tickets live on the forge; with a local issues/ dir use --forge")
 				}
 				_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
 				if remoteFlag || remoteEnv {
@@ -560,6 +562,15 @@ valid, exit-0 answer.`,
 			if args[0] == "list" {
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
 					return fmt.Errorf("issues list: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
+				}
+				if t, src, spec, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
+					return err
+				} else if ok {
+					words := forgeFindArgs(args[1:])
+					if len(words) == 0 {
+						words = []string{"status:open"}
+					}
+					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.IssueScan, forgeFindTerms(words), limitFlag, allFlag, jsonFlag), t)
 				}
 				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args[1:], jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}

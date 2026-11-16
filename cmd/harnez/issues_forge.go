@@ -59,27 +59,57 @@ func forgeFindTerms(words []string) []string {
 // forgeTrackerSource is the live forge reader; tests replace it.
 var forgeTrackerSource = func(spec prwait.Spec) forgetracker.Source { return forgetracker.NewSource(spec) }
 
-// resolveForgeTracker reports the forge that holds dir's tickets when dir has no
-// issues/ dir (issue 1116). ok=false keeps the local tracker behaviour.
+// resolveForgeTracker reports the forge that holds dir's tickets.
+// ok=false keeps the local tracker behaviour.
 func resolveForgeTracker(stderr io.Writer, dir string) (forgetracker.Target, forgetracker.Source, prwait.Spec, bool, error) {
-	// A local issues/ dir wins before the spec is even read, so a broken spec
-	// never changes the local tracker's behaviour.
-	if _, err := os.Stat(filepath.Join(dir, "issues")); !errors.Is(err, fs.ErrNotExist) {
+	issuesDir := filepath.Join(dir, "issues")
+	_, statErr := os.Stat(issuesDir)
+	hasIssues := !errors.Is(statErr, fs.ErrNotExist)
+	if hasIssues && (!trackerIsNone(dir) || hasLocalTickets(issuesDir)) {
 		return forgetracker.Target{}, nil, prwait.Spec{}, false, nil
 	}
 	spec, err := prwait.LoadSpec()
 	if err != nil {
 		return forgetracker.Target{}, nil, spec, false, err
 	}
-	t, err := forgetracker.Resolve(dir, spec)
+	t, err := forgetracker.ResolveRemote(dir, spec)
 	if errors.Is(err, forgetracker.ErrNotApplicable) {
 		return t, nil, spec, false, nil
 	}
 	if err != nil {
 		return t, nil, spec, false, err
 	}
-	fmt.Fprintf(stderr, "no local issues/ dir: tickets live on %s\n", t)
+	if hasIssues {
+		fmt.Fprintf(stderr, "issues.tracker is none: tickets live on %s\n", t)
+	} else {
+		fmt.Fprintf(stderr, "no local issues/ dir: tickets live on %s\n", t)
+	}
 	return t, forgeTrackerSource(spec), spec, true, nil
+}
+
+// hasLocalTickets conservatively retains local mode if the directory cannot be read.
+func hasLocalTickets(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return true
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == "archive" && entry.IsDir() {
+			return true
+		}
+		if entry.IsDir() || !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		i := 0
+		for i < len(name) && name[i] >= '0' && name[i] <= '9' {
+			i++
+		}
+		if i > 0 && i < len(name) && name[i] == '-' {
+			return true
+		}
+	}
+	return false
 }
 
 // forgeTrackerHint adds the token hint to a 404 or 401, which a private repo returns

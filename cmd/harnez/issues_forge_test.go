@@ -983,3 +983,123 @@ func TestForgeRefinementEdges(t *testing.T) {
 		t.Fatalf("comment dry: %q %v", out.String(), err)
 	}
 }
+
+func TestTrackerNoneDraftsRoutesForge(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "m9-worker")
+	t.Setenv("CLAUDE_CODE_REMOTE", "")
+	if err := os.Unsetenv("CLAUDE_CODE_REMOTE"); err != nil {
+		t.Fatal(err)
+	}
+	stub := stubForge(t)
+	dir := forgeRepo(t)
+	for _, d := range []string{".harnez", "issues/inbox"} {
+		if err := os.MkdirAll(filepath.Join(dir, d), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".harnez/repo.yaml"), []byte("version: 1\nissues:\n  tracker: none\n  merge_driver: false\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: false\nmake:\n  container_test: false\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := loadIndexRepoConfig(dir); err != nil || cfg.Issues.Tracker != "none" {
+		t.Fatalf("config: %+v %v", cfg, err)
+	}
+	body := filepath.Join(dir, "issues/inbox/a.md")
+	if err := os.WriteFile(body, []byte("draft"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldLookup := issueWriteLookup
+	issueWriteLookup = func(string) string { return "test-token" }
+	t.Cleanup(func() { issueWriteLookup = oldLookup })
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"issues", "new", "T", "-F", body, "--dry-run"}, "dry run, would file on codeberg.org/o/r: fj issue create --repo codeberg.org/o/r --body-file " + body + " T\n"},
+		{[]string{"issues", "comment", "7", "-F", body, "--dry-run"}, "dry run: fj issue comment codeberg.org/o/r#7 --body-file " + body + "\n"},
+		{[]string{"issues", "show", "7"}, "# 7 — forge ticket"},
+		{[]string{"issues", "edit", "7", "--title", "X", "--dry-run"}, "dry run: would edit codeberg.org/o/r#7 over the API --title \"X\"\n"},
+		{[]string{"issues", "close", "7", "--dry-run"}, "dry run: would set codeberg.org/o/r#7 to closed over the API\n"},
+		{[]string{"issues", "reopen", "7", "--dry-run"}, "dry run: would set codeberg.org/o/r#7 to open over the API\n"},
+		{[]string{"find", "issues", "forge"}, "7\topen\tforge ticket"},
+		{[]string{"issues", "list"}, "7\topen\tforge ticket"},
+	}
+	for _, tc := range cases {
+		t.Run(strings.Join(tc.args[:2], "_"), func(t *testing.T) {
+			args := append([]string{}, tc.args...)
+			args = append(args, "-d", dir)
+			out, err := runHarnez(t, args...)
+			if err != nil || !strings.Contains(out, tc.want) || !strings.Contains(out, "issues.tracker is none: tickets live on codeberg.org/o/r\n") {
+				t.Fatalf("got %q, %v; want %q", out, err, tc.want)
+			}
+		})
+	}
+	if stub.calls == 0 {
+		t.Error("forge source was not called")
+	}
+}
+
+func TestTrackerNoneLocalCases(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "m9-worker")
+	for _, tc := range []struct{ name, tracker, entry, origin string }{
+		{"ticket", "none", "007-x.md", ""},
+		{"archive", "none", "archive/", ""},
+		{"harnez", "harnez", "inbox/a.md", ""},
+		{"missing config", "", "inbox/a.md", ""},
+		{"unknown origin", "none", "inbox/a.md", "https://example.invalid/o/r.git"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stub := stubForge(t)
+			dir := forgeRepo(t)
+			if tc.origin != "" {
+				if out, err := exec.Command("git", "-C", dir, "remote", "set-url", "origin", tc.origin).CombinedOutput(); err != nil {
+					t.Fatalf("remote: %s %v", out, err)
+				}
+			}
+			if tc.tracker != "" {
+				if err := os.MkdirAll(filepath.Join(dir, ".harnez"), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, ".harnez/repo.yaml"), []byte("version: 1\nissues:\n  tracker: "+tc.tracker+"\n"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			entry := filepath.Join(dir, "issues", tc.entry)
+			if strings.HasSuffix(tc.entry, "/") {
+				if err := os.MkdirAll(entry, 0755); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.MkdirAll(filepath.Dir(entry), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(entry, []byte("# 007 — local\n\n**Status**: Open\n**Priority**: P2\n\n---\nbody\n"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err := runHarnez(t, "issues", "new", "-d", dir, "T", "--label", "bug")
+			want := "issues new: -F/--body-file and --label apply only when tickets live on the forge; with a local issues/ dir use --forge"
+			if err == nil || err.Error() != want {
+				t.Fatalf("got %v", err)
+			}
+			if tc.name == "ticket" {
+				out, err := runHarnez(t, "issues", "show", "-d", dir, "--text", "7")
+				if err != nil || !strings.Contains(out, "local") {
+					t.Fatalf("show %q: %v", out, err)
+				}
+				out, err = runHarnez(t, "issues", "close", "-d", dir, "--no-commit", "--no-code", "7", "r")
+				if err != nil {
+					t.Fatalf("close %q: %v", out, err)
+				}
+				data, err := os.ReadFile(entry)
+				if err != nil || !strings.Contains(string(data), "**Status**: Closed") {
+					t.Fatalf("closed ticket %q: %v", data, err)
+				}
+			}
+			if stub.calls != 0 {
+				t.Fatalf("forge calls: %d", stub.calls)
+			}
+		})
+	}
+}

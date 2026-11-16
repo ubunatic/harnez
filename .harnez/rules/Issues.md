@@ -18,7 +18,9 @@ For a project with an `issues/` tracker. Use `harnez find` / `harnez issues`, no
   `issues/CLOSED.md`.
 - Commit docs and `issues/*.md` changes immediately; do not batch them behind code work.
 - Forgejo writes use a separate write token (`harnez forge token create --write`); the
-  read token is unchanged. With local tickets add `--forge` to target the forge.
+  read token is unchanged. A recognised forge is the tracker when `issues/` is absent,
+  or `issues.tracker: none` and `issues/` has no numbered ticket files or `archive/`
+  directory. With a local tracker add `--forge` to target the forge.
   Examples: `issues new --forge "T" -F body.md`, `issues comment --forge 42 -F note.md`,
   `issues show --forge 42 --json`, `issues edit --forge 42 --title "T"`,
   `issues close --forge 42 done`, `issues reopen --forge 42` (prefix each with `harnez`).
