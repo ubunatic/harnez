@@ -48,6 +48,14 @@ type codexEvidence struct {
 }
 
 func ProcessCodexTelemetry(dbPath string, raw []byte) error {
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return ProcessCodexTelemetryTx(db, raw)
+}
+func ProcessCodexTelemetryTx(db *telemetry.DB, raw []byte) error {
 	e := codex.ParseEvent(raw)
 	var hook struct {
 		SessionID string        `json:"session_id"`
@@ -65,11 +73,6 @@ func ProcessCodexTelemetry(dbPath string, raw []byte) error {
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
 	transcriptUsage := hook.Context.Transcript
 	if e.Kind == "precompact" || e.Kind == "postcompact" {
 		id, err := db.InsertCompactionEvent(telemetry.CompactionEvent{CreatedAt: createdAt, SessionID: e.SessionID, EventType: e.Kind, TurnID: e.TurnID, Trigger: e.CompactionTrigger, Reason: e.CompactionReason, InputTokens: e.InputTokens, CachedInputTokens: e.CachedInputTokens, OutputTokens: e.OutputTokens, ReasoningTokens: e.ReasoningTokens, TotalTokens: e.TotalTokens, Model: e.Model})
@@ -114,7 +117,9 @@ func ProcessCodexTelemetry(dbPath string, raw []byte) error {
 		return nil
 	}
 	if transcriptUsage.TotalTokens != nil {
-		_ = db.UpdateLatestProviderUsage(e.SessionID, transcriptUsage.LastTotalTokens, transcriptUsage.LastInputTokens, transcriptUsage.LastCachedInputTokens, transcriptUsage.LastOutputTokens, transcriptUsage.LastReasoningTokens, transcriptUsage.TotalTokens)
+		if err := db.UpdateLatestProviderUsage(e.SessionID, transcriptUsage.LastTotalTokens, transcriptUsage.LastInputTokens, transcriptUsage.LastCachedInputTokens, transcriptUsage.LastOutputTokens, transcriptUsage.LastReasoningTokens, transcriptUsage.TotalTokens); err != nil {
+			return err
+		}
 	}
 	if err := insertCodexTokenSnapshot(db, e.SessionID, "tool", nil, e, transcriptUsage); err != nil {
 		return err
@@ -124,11 +129,13 @@ func ProcessCodexTelemetry(dbPath string, raw []byte) error {
 	}
 	note := "codex:" + e.ToolCallID
 	if e.ToolCallID != "" {
-		if calls, err := db.Query(telemetry.Filter{SessionID: e.SessionID}); err == nil {
-			for _, prior := range calls {
-				if prior.Note == note {
-					return nil
-				}
+		calls, err := db.Query(telemetry.Filter{SessionID: e.SessionID})
+		if err != nil {
+			return err
+		}
+		for _, prior := range calls {
+			if prior.Note == note {
+				return nil
 			}
 		}
 	}
@@ -141,7 +148,9 @@ func ProcessCodexTelemetry(dbPath string, raw []byte) error {
 		return err
 	}
 	if skill := telemetry.SkillFromFileRef(e.Command); skill != "" {
-		_ = db.Insert(telemetry.ToolCall{CreatedAt: createdAt, SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: telemetry.SkillToolName, CallType: telemetry.CallTypeSkillInferred, SkillName: skill})
+		if err := db.Insert(telemetry.ToolCall{CreatedAt: createdAt, SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: telemetry.SkillToolName, CallType: telemetry.CallTypeSkillInferred, SkillName: skill}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

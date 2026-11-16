@@ -12,13 +12,13 @@ import (
 func (d *DB) ReconcileCompactionEconomics(sessionID, model string, catalog PricingCatalog) error {
 	var eventID int64
 	var eventModel string
-	err := d.sql.QueryRow(`SELECT id, model FROM compaction_events WHERE session_id = ? AND event_type = 'precompact' ORDER BY id DESC LIMIT 1`, sessionID).Scan(&eventID, &eventModel)
+	err := d.executor().QueryRow(`SELECT id, model FROM compaction_events WHERE session_id = ? AND event_type = 'precompact' ORDER BY id DESC LIMIT 1`, sessionID).Scan(&eventID, &eventModel)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return fmt.Errorf("telemetry: find compaction event: %w", err)
 		}
 		var count int
-		if err := d.sql.QueryRow(`SELECT COUNT(*) FROM compaction_economics WHERE session_id = ?`, sessionID).Scan(&count); err != nil {
+		if err := d.executor().QueryRow(`SELECT COUNT(*) FROM compaction_economics WHERE session_id = ?`, sessionID).Scan(&count); err != nil {
 			return err
 		}
 		if count > 0 {
@@ -30,7 +30,7 @@ func (d *DB) ReconcileCompactionEconomics(sessionID, model string, catalog Prici
 		return d.InsertCompactionEconomics(persistedEconomics(sessionID, nil, pricing, input, economics))
 	}
 	var existing int
-	if err := d.sql.QueryRow(`SELECT COUNT(*) FROM compaction_economics WHERE compaction_event_id = ?`, eventID).Scan(&existing); err != nil {
+	if err := d.executor().QueryRow(`SELECT COUNT(*) FROM compaction_economics WHERE compaction_event_id = ?`, eventID).Scan(&existing); err != nil {
 		return err
 	}
 	if eventModel != "" {
@@ -94,14 +94,14 @@ func (d *DB) ReconcileCompactionEconomics(sessionID, model string, catalog Prici
 }
 
 func (d *DB) updateCompactionEconomics(sessionID string, p PersistedEconomics) error {
-	_, err := d.sql.Exec(`UPDATE compaction_economics SET model = ?, effort = ?, pricing_revision = ?, cached_input_tokens = ?, uncached_input_tokens = ?, output_tokens = ?, reasoning_tokens = ?, cached_input_micros_per_million = ?, uncached_input_micros_per_million = ?, output_micros_per_million = ?, reasoning_micros_per_million = ?, status = ?, compaction_cost_micros = ?, post_compaction_cost_micros = ?, baseline_cost_micros = ?, savings_micros = ?, note = ? WHERE session_id = ?`, p.Model, p.Effort, p.PricingRevision, p.CachedInputTokens, p.UncachedInputTokens, p.OutputTokens, p.ReasoningTokens, p.Rates.CachedInputMicrosPerMillion, p.Rates.UncachedInputMicrosPerMillion, p.Rates.OutputMicrosPerMillion, p.Rates.ReasoningMicrosPerMillion, p.Status, p.CompactionCostMicros, p.PostCompactionCostMicros, p.BaselineCostMicros, p.SavingsMicros, p.Note, sessionID)
+	_, err := d.executor().Exec(`UPDATE compaction_economics SET model = ?, effort = ?, pricing_revision = ?, cached_input_tokens = ?, uncached_input_tokens = ?, output_tokens = ?, reasoning_tokens = ?, cached_input_micros_per_million = ?, uncached_input_micros_per_million = ?, output_micros_per_million = ?, reasoning_micros_per_million = ?, status = ?, compaction_cost_micros = ?, post_compaction_cost_micros = ?, baseline_cost_micros = ?, savings_micros = ?, note = ? WHERE session_id = ?`, p.Model, p.Effort, p.PricingRevision, p.CachedInputTokens, p.UncachedInputTokens, p.OutputTokens, p.ReasoningTokens, p.Rates.CachedInputMicrosPerMillion, p.Rates.UncachedInputMicrosPerMillion, p.Rates.OutputMicrosPerMillion, p.Rates.ReasoningMicrosPerMillion, p.Status, p.CompactionCostMicros, p.PostCompactionCostMicros, p.BaselineCostMicros, p.SavingsMicros, p.Note, sessionID)
 	return err
 }
 
 func (d *DB) latestEventSnapshot(sessionID, eventType string) (TokenSnapshot, bool, error) {
 	var s TokenSnapshot
 	var input, cached, output, reasoning, total sql.NullInt64
-	err := d.sql.QueryRow(`SELECT input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens FROM compaction_events WHERE session_id = ? AND event_type = ? ORDER BY id DESC LIMIT 1`, sessionID, eventType).Scan(&input, &cached, &output, &reasoning, &total)
+	err := d.executor().QueryRow(`SELECT input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens FROM compaction_events WHERE session_id = ? AND event_type = ? ORDER BY id DESC LIMIT 1`, sessionID, eventType).Scan(&input, &cached, &output, &reasoning, &total)
 	if err == sql.ErrNoRows {
 		return s, false, nil
 	}
@@ -130,7 +130,7 @@ func (d *DB) latestSnapshot(sessionID, source string) (TokenSnapshot, bool, erro
 	var s TokenSnapshot
 	var created string
 	var input, cached, uncached, output, reasoning, total sql.NullInt64
-	err := d.sql.QueryRow(`SELECT created_at, input_tokens, cached_input_tokens, uncached_input_tokens, output_tokens, reasoning_tokens, total_tokens FROM token_snapshots WHERE session_id = ? AND source = ? ORDER BY id DESC LIMIT 1`, sessionID, source).Scan(&created, &input, &cached, &uncached, &output, &reasoning, &total)
+	err := d.executor().QueryRow(`SELECT created_at, input_tokens, cached_input_tokens, uncached_input_tokens, output_tokens, reasoning_tokens, total_tokens FROM token_snapshots WHERE session_id = ? AND source = ? ORDER BY id DESC LIMIT 1`, sessionID, source).Scan(&created, &input, &cached, &uncached, &output, &reasoning, &total)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return s, false, nil

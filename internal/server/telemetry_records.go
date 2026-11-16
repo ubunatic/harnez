@@ -9,6 +9,16 @@ import (
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
+// WithTelemetryReceipt opens the collector store and applies one record atomically.
+func WithTelemetryReceipt(path, recordID string, apply func(*telemetry.DB) error) error {
+	db, err := telemetry.Open(path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return db.WithReceipt(recordID, apply)
+}
+
 func InsertToolCallAt(dbPath string, call telemetry.ToolCall) error {
 	db, err := telemetry.Open(dbPath)
 	if err != nil {
@@ -26,7 +36,22 @@ func InsertToolCallPayload(dbPath string, raw []byte) error {
 	return InsertToolCallAt(dbPath, call)
 }
 
+func InsertToolCallPayloadTx(db *telemetry.DB, raw []byte) error {
+	var call telemetry.ToolCall
+	if err := json.Unmarshal(raw, &call); err != nil {
+		return err
+	}
+	return db.Insert(call)
+}
 func ProcessAgyPostTool(dbPath string, raw []byte) error {
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return ProcessAgyPostToolTx(db, raw)
+}
+func ProcessAgyPostToolTx(db *telemetry.DB, raw []byte) error {
 	var payload struct {
 		ConversationID string `json:"conversationId"`
 		Output         string `json:"output"`
@@ -36,15 +61,13 @@ func ProcessAgyPostTool(dbPath string, raw []byte) error {
 	}
 	output := payload.Output
 	actualTokens := int64(readcard.ComputeTextTokens(output).TextTokens)
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
 	var duration int64
 	var savingsTokens, savingsBytes *int64
 	calls, err := db.Query(telemetry.Filter{SessionID: payload.ConversationID})
-	if err == nil && len(calls) > 0 {
+	if err != nil {
+		return err
+	}
+	if len(calls) > 0 {
 		if !calls[0].CreatedAt.IsZero() {
 			d := time.Since(calls[0].CreatedAt).Milliseconds()
 			if d > 0 {

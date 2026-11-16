@@ -22,6 +22,10 @@ func TestRunnerDirectoriesAreScopedAndPrivate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	spool, err := TelemetrySpoolDir(legacy)
+	if err != nil || spool != filepath.Join(root, "state", "telemetry-spool") {
+		t.Fatalf("spool = %q, %v", spool, err)
+	}
 	wantState := filepath.Join(root, "state", "sessions")
 	wantProcess := filepath.Join(root, "runtime", "procs")
 	if state != wantState || process != wantProcess {
@@ -79,6 +83,9 @@ func TestRunnerDirectoryRejectsInvalidRoots(t *testing.T) {
 			}
 			if _, err := ProcessRecordDir(""); err == nil {
 				t.Fatal("ProcessRecordDir accepted invalid runner root")
+			}
+			if _, err := TelemetrySpoolDir(""); err == nil {
+				t.Fatal("TelemetrySpoolDir accepted invalid runner root")
 			}
 		})
 	}

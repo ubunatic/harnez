@@ -333,3 +333,99 @@ func TestTelemetryOfflineSpoolDoesNotAcquireStoreWriteLock(t *testing.T) {
 		t.Fatalf("locked-store submission = %q", got)
 	}
 }
+
+func TestTelemetryReceiptMultiRowReplay(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db.sqlite")
+	payload, err := json.Marshal("receipt-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := server.TelemetryRecord{RecordID: "pair-retry", Kind: "agy_compaction", Payload: payload}
+	for i := 0; i < 2; i++ {
+		if err := processTelemetryRecord(record, path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var count int
+	if err := db.QueryRow("SELECT count(*) FROM compaction_events WHERE session_id = ?", "receipt-session").Scan(&count); err != nil || count != 2 {
+		t.Fatalf("events = %d, %v", count, err)
+	}
+}
+
+func TestTelemetryLostAckSpoolReplay(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", home)
+	config, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, "telemetry.sqlite")
+	payload, err := json.Marshal(telemetry.ToolCall{SessionID: "lost-ack", AgentID: "test", ToolName: "read", CallType: "hook:post"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := server.NewTelemetryRecord("tool_call", payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &telemetryCollectorService{config: config, path: path}
+	response := httptest.NewRecorder()
+	service.handleRecord(response, httptest.NewRequest(http.MethodPost, config.TelemetryPath, bytes.NewReader(body)))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status: %d", response.Code)
+	}
+	spool, err := config.TelemetrySpoolDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.AppendTelemetrySpool(spool, body, config.TelemetrySpoolMaxBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.drainSpool(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	db, err := telemetry.OpenReadOnly(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{SessionID: "lost-ack"})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows = %d, %v", len(rows), err)
+	}
+}
+
+func TestCodexReceiptDeduplicatesSnapshotAndCall(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	raw := []byte(`{"session_id":"codex-retry","hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"call-1","token_usage":{"total_tokens":107,"input_tokens":100,"output_tokens":7}}`)
+	prepared, err := server.PrepareCodexTelemetry(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := server.TelemetryRecord{RecordID: "codex-retry-id", Kind: "codex", Payload: prepared}
+	for i := 0; i < 2; i++ {
+		if err := processTelemetryRecord(record, path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, table := range []string{"tool_calls", "token_snapshots"} {
+		var count int
+		if err := db.QueryRow("SELECT count(*) FROM "+table+" WHERE session_id = ?", "codex-retry").Scan(&count); err != nil || count != 1 {
+			t.Fatalf("%s count = %d, %v", table, count, err)
+		}
+	}
+}

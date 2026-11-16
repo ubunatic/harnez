@@ -30,6 +30,9 @@ import (
 // DefaultDBPath returns the default shared telemetry database location and
 // migrates the legacy database on first use.
 func DefaultDBPath() (string, error) {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return "", fmt.Errorf("telemetry: shared database is unavailable in runner mode")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("telemetry: resolve home dir: %w", err)
@@ -111,8 +114,56 @@ const (
 
 // DB wraps the underlying *sql.DB with the schema already ensured.
 type DB struct {
+	tx         *sql.Tx
 	sql        *sql.DB
 	migrations []string
+}
+
+// executor returns the transaction when processing a collector record.
+func (d *DB) executor() sqlExecutor {
+	if d.tx != nil {
+		return d.tx
+	}
+	return d.sql
+}
+
+type sqlExecutor interface {
+	Exec(string, ...any) (sql.Result, error)
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	Query(string, ...any) (*sql.Rows, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRow(string, ...any) *sql.Row
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+// WithReceipt atomically applies a collector record once.
+func (d *DB) WithReceipt(id string, apply func(*DB) error) error {
+	tx, err := d.sql.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if id == "" {
+		if err := apply(&DB{sql: d.sql, tx: tx}); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	result, err := tx.Exec("INSERT INTO telemetry_receipts(record_id) VALUES (?) ON CONFLICT(record_id) DO NOTHING", id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return tx.Commit()
+	}
+	if err := apply(&DB{sql: d.sql, tx: tx}); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Open opens (creating parent directories and the schema if needed) the

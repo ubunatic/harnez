@@ -46,7 +46,7 @@ func (d *DB) InsertIssueSnapshot(s IssueStatusSnapshot) (bool, error) {
 	ctx, cancel := defaultContext()
 	defer cancel()
 
-	_, err = d.sql.ExecContext(ctx, `
+	_, err = d.executor().ExecContext(ctx, `
 		INSERT INTO issue_status_snapshots (
 			created_at, project_name, open_count, closed_count, draft_count, backlog_count, unknown_count
 		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -66,7 +66,7 @@ func (d *DB) latestIssueSnapshot(project string) (IssueStatusSnapshot, bool, err
 	ctx, cancel := defaultContext()
 	defer cancel()
 
-	row := d.sql.QueryRowContext(ctx, `
+	row := d.executor().QueryRowContext(ctx, `
 		SELECT id, created_at, project_name, open_count, closed_count, draft_count, backlog_count, unknown_count
 		FROM issue_status_snapshots
 		WHERE project_name = ?
@@ -108,7 +108,7 @@ func (d *DB) QueryIssueSnapshots(project string) ([]IssueStatusSnapshot, error) 
 	}
 	query += ` ORDER BY created_at ASC, id ASC`
 
-	rows, err := d.sql.QueryContext(ctx, query, args...)
+	rows, err := d.executor().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: query issue snapshots: %w", err)
 	}

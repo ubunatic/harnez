@@ -135,31 +135,11 @@ func processTelemetryRecord(record server.TelemetryRecord, dbPath string) error 
 
 func processTelemetryRecordResult(ctx context.Context, record server.TelemetryRecord, dbPath string) ([]byte, error) {
 	switch record.Kind {
-	case "tool_call":
-		return nil, server.InsertToolCallPayload(dbPath, record.Payload)
-	case "agy_post_tool":
-		return nil, server.ProcessAgyPostTool(dbPath, record.Payload)
-	case "codex":
-		return nil, server.ProcessCodexTelemetry(dbPath, record.Payload)
-	case "agy_compaction":
-		var sessionID string
-		if err := json.Unmarshal(record.Payload, &sessionID); err != nil {
-			return nil, err
-		}
-		return nil, server.InsertAgyCompactionPair(dbPath, sessionID)
-	case "cli_invocation":
-		var row telemetry.CLIInvocation
-		if err := json.Unmarshal(record.Payload, &row); err != nil {
-			return nil, err
-		}
-		return nil, server.InsertCLIInvocation(dbPath, row)
-	case "issue_snapshot":
-		var row telemetry.IssueStatusSnapshot
-		if err := json.Unmarshal(record.Payload, &row); err != nil {
-			return nil, err
-		}
-		_, err := server.InsertIssueSnapshot(dbPath, row)
+	case "tool_call", "agy_post_tool", "codex", "agy_compaction", "cli_invocation", "issue_snapshot":
+		err := server.WithTelemetryReceipt(dbPath, record.RecordID, func(tx *telemetry.DB) error { return processTelemetryWrite(record, tx) })
 		return nil, err
+	}
+	switch record.Kind {
 	case "ensure_schema":
 		version, migrations, err := server.EnsureTelemetrySchema(dbPath)
 		if err != nil {
@@ -196,6 +176,37 @@ func processTelemetryRecordResult(ctx context.Context, record server.TelemetryRe
 	}
 }
 
+func processTelemetryWrite(record server.TelemetryRecord, db *telemetry.DB) error {
+	switch record.Kind {
+	case "tool_call":
+		return server.InsertToolCallPayloadTx(db, record.Payload)
+	case "agy_post_tool":
+		return server.ProcessAgyPostToolTx(db, record.Payload)
+	case "codex":
+		return server.ProcessCodexTelemetryTx(db, record.Payload)
+	case "agy_compaction":
+		var sessionID string
+		if err := json.Unmarshal(record.Payload, &sessionID); err != nil {
+			return err
+		}
+		return server.InsertAgyCompactionPairTx(db, sessionID)
+	case "cli_invocation":
+		var row telemetry.CLIInvocation
+		if err := json.Unmarshal(record.Payload, &row); err != nil {
+			return err
+		}
+		return db.InsertCLIInvocation(row)
+	case "issue_snapshot":
+		var row telemetry.IssueStatusSnapshot
+		if err := json.Unmarshal(record.Payload, &row); err != nil {
+			return err
+		}
+		_, err := db.InsertIssueSnapshot(row)
+		return err
+	}
+	return errors.New("unknown telemetry write kind")
+}
+
 func sendTelemetryRecord(kind string, payload any) server.UpdateResult {
 	config, err := server.LoadConfig()
 	if err != nil {
@@ -213,7 +224,11 @@ func sendTelemetryRecord(kind string, payload any) server.UpdateResult {
 	if err != nil {
 		return server.UpdateDropped
 	}
-	body, err := json.Marshal(server.TelemetryRecord{Kind: kind, Payload: bodyPayload})
+	record, err := server.NewTelemetryRecord(kind, bodyPayload)
+	if err != nil {
+		return server.UpdateDropped
+	}
+	body, err := json.Marshal(record)
 	if err != nil {
 		return server.UpdateDropped
 	}

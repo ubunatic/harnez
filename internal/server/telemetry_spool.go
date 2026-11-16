@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,8 +16,18 @@ import (
 )
 
 type TelemetryRecord struct {
-	Kind    string          `json:"kind"`
-	Payload json.RawMessage `json:"payload"`
+	RecordID string          `json:"record_id,omitempty"`
+	Kind     string          `json:"kind"`
+	Payload  json.RawMessage `json:"payload"`
+}
+
+// NewTelemetryRecord assigns an identity once, before delivery or spooling.
+func NewTelemetryRecord(kind string, payload []byte) (TelemetryRecord, error) {
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return TelemetryRecord{}, err
+	}
+	return TelemetryRecord{RecordID: hex.EncodeToString(id[:]), Kind: kind, Payload: payload}, nil
 }
 
 // ErrQuarantine signals to DrainTelemetrySpool that a record is permanently

@@ -11,7 +11,7 @@ func (d *DB) InsertCompactionEconomics(estimate PersistedEconomics) error {
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	_, err := d.sql.Exec(mustTelemetrySQL().Statements["insert_compaction_economics"], createdAt.Format(time.RFC3339Nano), estimate.SessionID, estimate.CompactionEventID, estimate.Model, estimate.Effort, estimate.PricingRevision, estimate.CachedInputTokens, estimate.UncachedInputTokens, estimate.OutputTokens, estimate.ReasoningTokens, estimate.Rates.CachedInputMicrosPerMillion, estimate.Rates.UncachedInputMicrosPerMillion, estimate.Rates.OutputMicrosPerMillion, estimate.Rates.ReasoningMicrosPerMillion, estimate.Status, estimate.CompactionCostMicros, estimate.PostCompactionCostMicros, estimate.BaselineCostMicros, estimate.SavingsMicros, estimate.Note)
+	_, err := d.executor().Exec(mustTelemetrySQL().Statements["insert_compaction_economics"], createdAt.Format(time.RFC3339Nano), estimate.SessionID, estimate.CompactionEventID, estimate.Model, estimate.Effort, estimate.PricingRevision, estimate.CachedInputTokens, estimate.UncachedInputTokens, estimate.OutputTokens, estimate.ReasoningTokens, estimate.Rates.CachedInputMicrosPerMillion, estimate.Rates.UncachedInputMicrosPerMillion, estimate.Rates.OutputMicrosPerMillion, estimate.Rates.ReasoningMicrosPerMillion, estimate.Status, estimate.CompactionCostMicros, estimate.PostCompactionCostMicros, estimate.BaselineCostMicros, estimate.SavingsMicros, estimate.Note)
 	if err != nil {
 		return fmt.Errorf("telemetry: insert compaction economics: %w", err)
 	}
@@ -26,7 +26,7 @@ func (d *DB) InsertCompactionEvent(event CompactionEvent) (int64, error) {
 	if event.Source == "" {
 		event.Source = "hook"
 	}
-	result, err := d.sql.Exec(mustTelemetrySQL().Statements["insert_compaction_event"], createdAt.Format(time.RFC3339Nano), event.SessionID, event.EventType, event.TurnID, event.Trigger, event.Reason, event.InputTokens, event.CachedInputTokens, event.OutputTokens, event.ReasoningTokens, event.TotalTokens, event.Model, event.Source)
+	result, err := d.executor().Exec(mustTelemetrySQL().Statements["insert_compaction_event"], createdAt.Format(time.RFC3339Nano), event.SessionID, event.EventType, event.TurnID, event.Trigger, event.Reason, event.InputTokens, event.CachedInputTokens, event.OutputTokens, event.ReasoningTokens, event.TotalTokens, event.Model, event.Source)
 	if err != nil {
 		return 0, fmt.Errorf("telemetry: insert compaction event: %w", err)
 	}
@@ -42,7 +42,7 @@ func (d *DB) InsertSessionBoundary(boundary SessionBoundary) (int64, error) {
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	result, err := d.sql.Exec(mustTelemetrySQL().Statements["insert_session_boundary"], createdAt.Format(time.RFC3339Nano), boundary.SessionID, boundary.BoundaryType, boundary.CompactionEventID)
+	result, err := d.executor().Exec(mustTelemetrySQL().Statements["insert_session_boundary"], createdAt.Format(time.RFC3339Nano), boundary.SessionID, boundary.BoundaryType, boundary.CompactionEventID)
 	if err != nil {
 		return 0, fmt.Errorf("telemetry: insert session boundary: %w", err)
 	}
@@ -65,7 +65,7 @@ func (d *DB) InsertTokenSnapshot(snapshot TokenSnapshot) error {
 			uncached = &value
 		}
 	}
-	_, err := d.sql.Exec(mustTelemetrySQL().Statements["insert_token_snapshot"], createdAt.Format(time.RFC3339Nano), snapshot.SessionID, snapshot.Source, snapshot.BoundaryID, snapshot.InputTokens, snapshot.CachedInputTokens, uncached, snapshot.OutputTokens, snapshot.ReasoningTokens, snapshot.TotalTokens, snapshot.LastInputTokens, snapshot.LastCachedInputTokens, snapshot.LastOutputTokens, snapshot.LastReasoningTokens, snapshot.LastTotalTokens)
+	_, err := d.executor().Exec(mustTelemetrySQL().Statements["insert_token_snapshot"], createdAt.Format(time.RFC3339Nano), snapshot.SessionID, snapshot.Source, snapshot.BoundaryID, snapshot.InputTokens, snapshot.CachedInputTokens, uncached, snapshot.OutputTokens, snapshot.ReasoningTokens, snapshot.TotalTokens, snapshot.LastInputTokens, snapshot.LastCachedInputTokens, snapshot.LastOutputTokens, snapshot.LastReasoningTokens, snapshot.LastTotalTokens)
 	if err != nil {
 		return fmt.Errorf("telemetry: insert token snapshot: %w", err)
 	}
@@ -89,7 +89,7 @@ func (d *DB) Insert(tc ToolCall) error {
 	ctx, cancel := defaultContext()
 	defer cancel()
 
-	_, err := d.sql.ExecContext(ctx, mustTelemetrySQL().Statements["insert_tool_call"],
+	_, err := d.executor().ExecContext(ctx, mustTelemetrySQL().Statements["insert_tool_call"],
 		createdAt.Format(time.RFC3339Nano),
 		tc.SessionID, tc.TicketID, tc.ProjectName, tc.WorkingDir,
 		tc.AgentID, tc.ToolName, tc.CallType, tc.Score, tc.Note, tc.ExitCode,
@@ -136,7 +136,7 @@ func (d *DB) insertCLIInvocation(c CLIInvocation, rowCap int64) error {
 	ctx, cancel := defaultContext()
 	defer cancel()
 
-	_, err := d.sql.ExecContext(ctx, mustTelemetrySQL().Statements["insert_cli_invocation"],
+	_, err := d.executor().ExecContext(ctx, mustTelemetrySQL().Statements["insert_cli_invocation"],
 		createdAt.Format(time.RFC3339Nano),
 		c.SessionID, c.AgentID, c.Command, c.Args, c.ProjectName,
 		c.WorkingDir, c.TicketID, c.ExitCode, c.DurationMs, c.HarnezVersion,
@@ -163,7 +163,7 @@ func (d *DB) pruneCLIInvocations(rowCap int64) error {
 	ctx, cancel := defaultContext()
 	defer cancel()
 
-	_, err := d.sql.ExecContext(ctx, mustTelemetrySQL().Statements["prune_cli_invocations"], rowCap)
+	_, err := d.executor().ExecContext(ctx, mustTelemetrySQL().Statements["prune_cli_invocations"], rowCap)
 	if err != nil {
 		return fmt.Errorf("telemetry: prune cli invocations: %w", err)
 	}

@@ -26,7 +26,11 @@ func SendCompactionPair(ctx context.Context, sessionID string) error {
 	if err != nil {
 		return err
 	}
-	body, err := json.Marshal(TelemetryRecord{Kind: "agy_compaction", Payload: payload})
+	record, err := NewTelemetryRecord("agy_compaction", payload)
+	if err != nil {
+		return err
+	}
+	body, err := json.Marshal(record)
 	if err != nil {
 		return err
 	}
@@ -45,6 +49,14 @@ func InsertAgyCompactionPair(path, sessionID string) error {
 		return err
 	}
 	defer db.Close()
+	return InsertAgyCompactionPairTx(db, sessionID)
+}
+
+// InsertAgyCompactionPairTx writes both events through the supplied transaction.
+func InsertAgyCompactionPairTx(db *telemetry.DB, sessionID string) error {
+	if sessionID == "" {
+		return fmt.Errorf("agy compact: missing session ID")
+	}
 	for _, kind := range []string{"precompact", "postcompact"} {
 		if _, err := db.InsertCompactionEvent(telemetry.CompactionEvent{SessionID: sessionID, EventType: kind, Trigger: "manual", Source: "stream_fallback"}); err != nil {
 			return err

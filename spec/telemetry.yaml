@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=schemas/telemetry.schema.json
 # Telemetry storage DDL and INSERT statements; SQL syntax is validated by SQLite.
 schema: |
+  CREATE TABLE IF NOT EXISTS telemetry_receipts (record_id TEXT PRIMARY KEY NOT NULL);
   CREATE TABLE IF NOT EXISTS tool_calls (
   	id              INTEGER PRIMARY KEY AUTOINCREMENT,
   	created_at      TEXT    NOT NULL,

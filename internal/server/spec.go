@@ -10,6 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/sshutil"
 )
 
@@ -167,6 +168,9 @@ func LoadConfig() (Config, error) {
 }
 
 func (c Config) TelemetrySpoolDir() (string, error) {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return runstate.TelemetrySpoolDir("")
+	}
 	base := os.Getenv("XDG_STATE_HOME")
 	if !filepath.IsAbs(base) {
 		home, err := os.UserHomeDir()
@@ -175,7 +179,7 @@ func (c Config) TelemetrySpoolDir() (string, error) {
 		}
 		base = filepath.Join(home, ".local", "state")
 	}
-	return filepath.Join(base, "harnez", c.TelemetrySpoolPath), nil
+	return runstate.TelemetrySpoolDir(filepath.Join(base, "harnez", c.TelemetrySpoolPath))
 }
 
 func (c Config) Socket() (string, error) {

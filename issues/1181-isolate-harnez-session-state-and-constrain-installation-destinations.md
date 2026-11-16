@@ -139,6 +139,10 @@ isolation, host-only shim provisioning, auxiliary writers (`logging`, `feedback`
 Independent review (`1181-m9-review`, `codex:sol:low`) identified error/test
 refinements folded into M10 pre-work below. M10–M17 remain open.
 
+## M10b-1a — Telemetry receipts and runner spool path
+
+Runner telemetry defaults fail closed, `server.Config.TelemetrySpoolDir()` routes to `$TAIA_SESSION_DIR/state/telemetry-spool` via `runstate.TelemetrySpoolDir`, and collector records carry stable IDs applying `telemetry_receipts(record_id)` + telemetry writes in one SQLite transaction (pre-existing ID-less records retain legacy delivery semantics). Verified via `HTO=0 make test-q1` (exit 0) and `make install`. M10b-1b remains open for the inherited-FD runner channel and sibling-blind replay integration.
+
 ## Milestone 10 — Pre-Work / Required Refinements & Separate Runner Telemetry
 
 ### M10a — M9 review refinements

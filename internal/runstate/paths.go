@@ -60,6 +60,11 @@ func UsageStateDir(legacyDir string) (string, error) {
 	return scopedDir(legacyDir, "state", "usage")
 }
 
+// TelemetrySpoolDir returns the private runner spool or the host directory.
+func TelemetrySpoolDir(legacyDir string) (string, error) {
+	return scopedDir(legacyDir, "state", "telemetry-spool")
+}
+
 // AGYMeterDir returns the runner-local meter directory or the host directory.
 func AGYMeterDir(legacyDir string) (string, error) {
 	return scopedDir(legacyDir, "state", "agymeter")

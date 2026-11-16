@@ -34,10 +34,13 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	defaultDB, err := telemetry.DefaultDBPath()
-	if err != nil {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		if err == nil || defaultDB != "" {
+			panic("runner must reject shared telemetry path")
+		}
+	} else if err != nil {
 		panic(err)
-	}
-	if !strings.HasPrefix(filepath.Clean(defaultDB), filepath.Clean(root)+string(filepath.Separator)) {
+	} else if !strings.HasPrefix(filepath.Clean(defaultDB), filepath.Clean(root)+string(filepath.Separator)) {
 		panic("usage tests would use storage outside isolated temporary root: " + defaultDB)
 	}
 	code := m.Run()
