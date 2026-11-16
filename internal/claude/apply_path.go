@@ -7,7 +7,7 @@ import (
 
 // Hooks run through /bin/sh, which reads no rc file, so the harnez install
 // directory must be on the PATH that the login shell hands to Claude Code.
-// The PATH entry itself is written by dev/shellsetup; this file only says
+// The PATH entry itself is written by goself; this file only says
 // which directory harnez contributes.
 
 // systemBinDirs are on every login shell's PATH already, so they need no entry.
@@ -27,10 +27,12 @@ func HarnezPathDir() string {
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
-	return pathEntryDir(filepath.Dir(exe))
+	return PathEntryDir(filepath.Dir(exe))
 }
 
-func pathEntryDir(dir string) string {
+// PathEntryDir returns dir when it should be added to PATH, or "" when dir is
+// empty or already a standard system binary directory.
+func PathEntryDir(dir string) string {
 	if dir == "" || systemBinDirs[dir] {
 		return ""
 	}
