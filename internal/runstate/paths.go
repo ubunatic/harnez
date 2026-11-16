@@ -71,3 +71,12 @@ func UsageStateDir(legacyDir string) (string, error) {
 	}
 	return privatePath(root, "state", "usage")
 }
+
+// AGYMeterDir returns the runner-local meter directory or the host directory.
+func AGYMeterDir(legacyDir string) (string, error) {
+	root := os.Getenv(runnerDirEnv)
+	if root == "" {
+		return legacyDir, nil
+	}
+	return privatePath(root, "state", "agymeter")
+}

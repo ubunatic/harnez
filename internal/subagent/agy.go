@@ -45,8 +45,10 @@ func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) 
 	if err != nil {
 		return nil, fmt.Errorf("agy: resolve home directory: %w", err)
 	}
-	if _, _, err := claude.EnsureBashShim(home); err != nil {
-		return nil, fmt.Errorf("agy: ensure bash shim: %w", err)
+	if os.Getenv("TAIA_SESSION_DIR") == "" {
+		if _, _, err := claude.EnsureBashShim(home); err != nil {
+			return nil, fmt.Errorf("agy: ensure bash shim: %w", err)
+		}
 	}
 	env := AgyLaunchEnv(os.Environ(), home)
 	if d.ModelSpec != "" {

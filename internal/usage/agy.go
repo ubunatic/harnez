@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/agymeter"
+	"ubunatic.com/harnez/internal/runstate"
 )
 
 // AGYOauthToken models ~/.gemini/antigravity-cli/antigravity-oauth-token
@@ -537,7 +538,7 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 
 func addAGYMeterSource(usage, meter AgentUsage) AgentUsage {
 	for _, source := range meter.Sources {
-		if strings.HasSuffix(source, ".harnez/agymeter/usage.jsonl") && !strings.Contains(strings.Join(usage.Sources, " "), source) {
+		if strings.HasSuffix(source, "agymeter/usage.jsonl") && !strings.Contains(strings.Join(usage.Sources, " "), source) {
 			usage.Sources = append(usage.Sources, source)
 		}
 	}
@@ -576,7 +577,11 @@ func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, include
 	if err != nil {
 		return usage, false
 	}
-	path := filepath.Join(homeDir, ".harnez", "agymeter", "usage.jsonl")
+	dir, err := runstate.AGYMeterDir(filepath.Join(homeDir, ".harnez", "agymeter"))
+	if err != nil {
+		return usage, false
+	}
+	path := filepath.Join(dir, "usage.jsonl")
 	rows, err := agymeter.ReadQuotaRecords(path)
 	if err != nil {
 		return usage, false
@@ -655,6 +660,9 @@ func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, include
 	usage.QuotaFetchError = ""
 	usage.LastRefreshed = latestSnapshot
 	meterSource := "~/.harnez/agymeter/usage.jsonl"
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		meterSource = path
+	}
 	hasMeterSource := false
 	for _, source := range usage.Sources {
 		if source == meterSource {
