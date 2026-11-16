@@ -131,7 +131,26 @@ discarded errors, and test gaps folded into M9 pre-work below. M9–M17 remain o
 
 ## Milestone 9 — Pre-Work / Required Refinements & Isolate AGY / Auxiliary Writes
 
-M9a–M9c landed on `sprint/1181`. M9d routes debug logs, feedback and benchmark defaults to runner state, keeps legacy archive creation/import host-only, and adds writer and path regression coverage. AGY producer-to-reader integration coverage remains open; M10–M17 remain open.
+M9 landed across M9a–M9d (`64403936`, `5ee6ada0`, `7e0d68c7`, `c771270d`) on
+`sprint/1181` with M8 pre-work (`livefetchcache`, `power_peaks`/`power_box`,
+error reporting, pipe-barrier concurrency test), AGY meter/CA/bundle/usage/backoff
+isolation, host-only shim provisioning, auxiliary writers (`logging`, `feedback`,
+`bench`), and host-only `legacyarchive` guards, verified by `HTO=0 make test-q1`.
+Independent review (`1181-m9-review`, `codex:sol:low`) identified error/test
+refinements folded into M10 pre-work below. M10–M17 remain open.
+
+## Milestone 10 — Pre-Work / Required Refinements & Separate Runner Telemetry
+
+### Pre-Work / Required Refinements (from M9 review of `ad1cb455..c771270d`)
+- **AGY error propagation (`internal/usage/agy.go`)**: stop discarding `writeAGYAuthBackoff` errors (do not log/treat a failed write as active backoff), and propagate or visibly fail closed on `runstate.AGYMeterDir` errors inside `applyAGYMeterQuota` rather than silently returning missing data.
+- **Remove `"."` fallback (`internal/feedback/feedback.go:63`)**: `DefaultDir() (string, error)` must return the `os.UserHomeDir()` error instead of substituting `"."` (`.harnez/feedback`).
+- **Complete M9 regression & AGY producer-reader tests**: add an end-to-end AGY producer-to-reader test under `$TAIA_SESSION_DIR` (`agymeter.Meter` response observation/proxy -> `applyAGYMeterQuota`), write and read back via `writeLiveFetchCache` in `TestRunnerLiveCacheDoesNotMigrateLegacy`, assert zero shared writes in `TestRunnerProcessesWriteSeparately`, and test wrong-mode/missing/symlink runner roots (not only relative roots) on `agymeter`, `logging`, `feedback`, and `bench`.
+
+### M10 Implementation Scope (Owner Decision A1)
+- **Runner vs Admin Transport (`internal/server/{spec,client,server}.go`, `cmd/harnez/telemetry_server.go`)**: split collector HTTP/RPC handling cleanly between the host admin server and a runner channel authenticated via a **launch-bound inherited connected socketpair/FD** (A1) passed by the trusted host launcher. Reject or never expose host-only admin routes (`/shutdown`, `merge_legacy`, caller-supplied DB/source paths) on the runner channel; keep host admin routes functional for host callers. Do not rely on `0600` socket permissions or readable tokens for session auth.
+- **Runner Telemetry Spool & Replay (`internal/server/{spec,client}.go`, `internal/runstate/paths.go`)**: route runner spool paths under `$TAIA_SESSION_DIR` via `internal/runstate`; support bounded spool records and duplicate-safe replay without scanning sibling session directories.
+- **Host-Only Migrations (`internal/telemetry/telemetry.go:30`, callers)**: ensure runners never trigger `DefaultDBPath` migration/removal writes or shared writable SQLite side effects.
+- **M10 Tests**: verify inherited-FD runner auth (missing/invalid FD fails closed), forbidden admin routes (`/shutdown`, `merge_legacy`, arbitrary paths) rejected on runner channel while passing on host admin channel, oversized payload rejection, duplicate replay deduplication, collector outage -> runner spool -> bounded replay, invalid `$TAIA_SESSION_DIR` rejection, and untouched shared SQLite/migrations in runner mode.
 
 ### Pre-Work / Required Refinements (from M8 review of `ad1cb455`)
 - **Isolate `livefetchcache` (`internal/usage/livefetchcache.go:60`)**: route default live-fetch cache paths through `internal/runstate.UsageStateDir` under `$TAIA_SESSION_DIR` when set, and skip shared legacy file migration writes in runner mode so runner collection never touches shared XDG cache files.
