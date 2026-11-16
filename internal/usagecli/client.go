@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"syscall"
 
+	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -24,6 +25,8 @@ type ServerProbeResult struct {
 	ready          bool
 	listening      bool
 	starting       bool
+	outdated       bool
+	serverVersion  string
 	passiveNoQuota map[string]uint64
 }
 
@@ -108,7 +111,19 @@ func (s ServerStarter) Ensure(ctx context.Context, cfg server.Config) ServerChec
 	result := s.probe(probeCtx, cfg)
 	cancel()
 	if result.ready {
-		return ServerCheckResult{passiveNoQuota: result.passiveNoQuota}
+		if !result.outdated {
+			return ServerCheckResult{passiveNoQuota: result.passiveNoQuota}
+		}
+		if err := s.start(); err != nil {
+			return ServerCheckResult{
+				status:         fmt.Sprintf("server outdated (%s vs %s; could not restart: %s)", result.serverVersion, harnez.BuildVersion(), err.Error()),
+				passiveNoQuota: result.passiveNoQuota,
+			}
+		}
+		return ServerCheckResult{
+			status:         fmt.Sprintf("server updating (%s -> %s)", result.serverVersion, harnez.BuildVersion()),
+			passiveNoQuota: result.passiveNoQuota,
+		}
 	}
 	if !result.listening {
 		if err := s.start(); err != nil {
@@ -150,7 +165,11 @@ func probeHarnezServer(ctx context.Context, cfg server.Config) ServerProbeResult
 	}}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: cfg.ProbeTimeout}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/status", nil)
+	return probeServerHTTP(ctx, client, "http://unix/status", harnez.BuildVersion(), server.CaptureBuildIdentity())
+}
+
+func probeServerHTTP(ctx context.Context, client *http.Client, url, cliVersion, cliIdentity string) ServerProbeResult {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return ServerProbeResult{listening: true}
 	}
@@ -171,7 +190,8 @@ func probeHarnezServer(ctx context.Context, cfg server.Config) ServerProbeResult
 		return ServerProbeResult{listening: true, starting: true, passiveNoQuota: status.PassiveNoQuota}
 	}
 	ready := resp.StatusCode == http.StatusOK && decodeErr == nil && status.Health == "ok" && status.Server == "harnez" && status.Version != "" && status.BuildIdentity != ""
-	return ServerProbeResult{ready: ready, listening: true, passiveNoQuota: status.PassiveNoQuota}
+	outdated := ready && server.CompareBuild(cliVersion, cliIdentity, status.Version, status.BuildIdentity) > 0
+	return ServerProbeResult{ready: ready, listening: true, outdated: outdated, serverVersion: status.Version, passiveNoQuota: status.PassiveNoQuota}
 }
 
 func startDetachedServer() error {
