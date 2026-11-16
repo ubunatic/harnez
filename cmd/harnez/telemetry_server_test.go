@@ -454,19 +454,12 @@ func startRunnerRelayHarness(t *testing.T, config server.Config, runnerRoot, hos
 	if err != nil {
 		t.Fatal(err)
 	}
-	hostConn, err := net.FileConn(hostEnd)
-	_ = hostEnd.Close()
-	if err != nil {
-		_ = runnerEnd.Close()
-		t.Fatal(err)
-	}
 	t.Setenv(config.RunnerChannel.FDEnv, strconv.Itoa(int(runnerEnd.Fd())))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- server.RelayRunnerConn(ctx, hostConn, hostSocket, config) }()
+	go func() { done <- server.RelayRunnerBroker(ctx, hostEnd, hostSocket, config) }()
 	t.Cleanup(func() {
 		cancel()
-		_ = hostConn.Close()
 		_ = runnerEnd.Close()
 		<-done
 	})

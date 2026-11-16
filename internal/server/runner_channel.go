@@ -53,32 +53,44 @@ type RunnerReplayBatch struct {
 	Records []TelemetryRecord `json:"records"`
 }
 
-// SocketPair creates a connected Unix stream socket pair for a host launcher
-// and its spawned runner process.
+type RunnerReplayResult struct {
+	Results []RunnerReplayRecordResult `json:"results"`
+}
+
+type RunnerReplayRecordResult struct {
+	Status int    `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+// SocketPair creates a connected AF_UNIX SOCK_SEQPACKET broker socket pair for
+// passing per-request stream connections from a runner via SCM_RIGHTS.
 func SocketPair() (hostEnd, runnerEnd *os.File, err error) {
-	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_SEQPACKET|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create runner socketpair: %w", err)
 	}
 	return os.NewFile(uintptr(fds[0]), "harnez-broker-host"), os.NewFile(uintptr(fds[1]), "harnez-broker-runner"), nil
 }
 
-// SendRunnerRequest sends one framed RPC over the inherited connected broker FD
-// configured by cfg.RunnerChannel.FDEnv. Missing or invalid FDs fail closed
-// without falling back to the shared host Unix socket.
+// SendRunnerRequest opens a fresh ephemeral stream socketpair, hands one end to
+// the host broker atomically over HARNEZ_BROKER_FD via SCM_RIGHTS, and executes
+// one request/response round-trip without sharing socket state across callers.
 func SendRunnerRequest(ctx context.Context, cfg Config, req RunnerRequest) (RunnerResponse, error) {
 	fd, err := parseAndValidateRunnerFD(cfg)
 	if err != nil {
 		return RunnerResponse{}, err
 	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX); err != nil {
-		return RunnerResponse{}, fmt.Errorf("%w: lock fd: %v", ErrInvalidRunnerChannel, err)
-	}
-	defer syscall.Flock(fd, syscall.LOCK_UN) //nolint:errcheck // best-effort unlock
-
-	conn, err := dupFDAsConn(fd)
+	raw, err := json.Marshal(req)
 	if err != nil {
-		return RunnerResponse{}, fmt.Errorf("%w: %v", ErrInvalidRunnerChannel, err)
+		return RunnerResponse{}, err
+	}
+	if int64(len(raw)) > cfg.RunnerChannel.MaxFrameBytes {
+		return RunnerResponse{}, ErrRunnerPayloadTooLarge
+	}
+
+	conn, err := openPerRequestStream(fd)
+	if err != nil {
+		return RunnerResponse{}, err
 	}
 	defer conn.Close()
 
@@ -86,14 +98,6 @@ func SendRunnerRequest(ctx context.Context, cfg Config, req RunnerRequest) (Runn
 		_ = conn.SetDeadline(deadline)
 	} else if cfg.HTTPClientTimeout > 0 {
 		_ = conn.SetDeadline(time.Now().Add(cfg.HTTPClientTimeout))
-	}
-
-	raw, err := json.Marshal(req)
-	if err != nil {
-		return RunnerResponse{}, err
-	}
-	if int64(len(raw)) > cfg.RunnerChannel.MaxFrameBytes {
-		return RunnerResponse{}, ErrRunnerPayloadTooLarge
 	}
 	if err := writeChannelFrame(conn, raw, cfg.RunnerChannel.MaxFrameBytes); err != nil {
 		return RunnerResponse{}, err
@@ -109,8 +113,28 @@ func SendRunnerRequest(ctx context.Context, cfg Config, req RunnerRequest) (Runn
 	return resp, nil
 }
 
+func openPerRequestStream(brokerFD int) (net.Conn, error) {
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	if err != nil {
+		return nil, fmt.Errorf("create per-request socketpair: %w", err)
+	}
+	clientFile := os.NewFile(uintptr(fds[0]), "harnez-runner-req")
+	defer clientFile.Close()
+	peerFD := fds[1]
+	if err := syscall.Sendmsg(brokerFD, []byte{1}, syscall.UnixRights(peerFD), nil, 0); err != nil {
+		_ = syscall.Close(peerFD)
+		return nil, fmt.Errorf("%w: sendmsg: %v", ErrRunnerUnavailable, err)
+	}
+	_ = syscall.Close(peerFD)
+	conn, err := net.FileConn(clientFile)
+	if err != nil {
+		return nil, fmt.Errorf("%w: wrap stream conn: %v", ErrInvalidRunnerChannel, err)
+	}
+	return conn, nil
+}
+
 // RunnerChannelStatus validates that the inherited broker FD env var points to a
-// connected Unix stream socket.
+// connected AF_UNIX SOCK_SEQPACKET socket.
 func RunnerChannelStatus(cfg Config) error {
 	_, err := parseAndValidateRunnerFD(cfg)
 	return err
@@ -138,8 +162,8 @@ func DispatchTelemetry(ctx context.Context, cfg Config, record TelemetryRecord) 
 }
 
 // SendRunnerTelemetry submits one telemetry record via the runner broker channel,
-// spilling to the runner's private spool directory only when the collector is
-// temporarily unavailable. Missing or invalid broker FDs fail closed.
+// spilling to the runner's private spool directory only on transient collector
+// outages. Missing or invalid broker FDs fail closed.
 func SendRunnerTelemetry(ctx context.Context, cfg Config, record TelemetryRecord) UpdateResult {
 	if _, err := parseAndValidateRunnerFD(cfg); err != nil {
 		return UpdateDropped
@@ -159,7 +183,7 @@ func SendRunnerTelemetry(ctx context.Context, cfg Config, record TelemetryRecord
 	if errors.Is(err, ErrInvalidRunnerChannel) || errors.Is(err, ErrRunnerPayloadTooLarge) {
 		return UpdateDropped
 	}
-	if err == nil && resp.Status >= 400 && resp.Status < 500 {
+	if err == nil && resp.Status < 500 {
 		return UpdateDropped
 	}
 	spoolDir, err := cfg.TelemetrySpoolDir()
@@ -209,21 +233,49 @@ func ReplayRunnerSpool(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	if resp.Status >= 200 && resp.Status < 300 {
-		for _, p := range paths {
-			if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return err
-			}
-		}
-		return nil
+	return applyRunnerReplayResponse(dir, paths, resp)
+}
+
+func applyRunnerReplayResponse(dir string, paths []string, resp RunnerResponse) error {
+	if resp.Status == http.StatusRequestEntityTooLarge || resp.Status >= 500 {
+		return fmt.Errorf("%w: status %d (%s)", ErrRunnerUnavailable, resp.Status, resp.Error)
 	}
-	if resp.Status >= 400 && resp.Status < 500 {
+	if resp.Status < 200 || resp.Status >= 300 {
 		for _, p := range paths {
 			quarantineSpoolFile(dir, p)
 		}
 		return fmt.Errorf("runner replay rejected (%d): %s", resp.Status, resp.Error)
 	}
-	return fmt.Errorf("%w: status %d (%s)", ErrRunnerUnavailable, resp.Status, resp.Error)
+	if len(resp.Result) == 0 {
+		return removeReplayedPaths(paths)
+	}
+	var perRecord RunnerReplayResult
+	if err := decodeStrictJSON(resp.Result, &perRecord); err != nil || len(perRecord.Results) != len(paths) {
+		return fmt.Errorf("invalid replay result metadata")
+	}
+	var failures []error
+	for i, outcome := range perRecord.Results {
+		switch {
+		case outcome.Status >= 200 && outcome.Status < 300:
+			if err := os.Remove(paths[i]); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				failures = append(failures, err)
+			}
+		case outcome.Status >= 400 && outcome.Status < 500 && outcome.Status != http.StatusRequestEntityTooLarge:
+			quarantineSpoolFile(dir, paths[i])
+		default:
+			failures = append(failures, fmt.Errorf("%w: record %d status %d (%s)", ErrRunnerUnavailable, i, outcome.Status, outcome.Error))
+		}
+	}
+	return errors.Join(failures...)
+}
+
+func removeReplayedPaths(paths []string) error {
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }
 
 func collectRunnerReplayBatch(cfg Config, dir string) (RunnerReplayBatch, []string, error) {
@@ -237,7 +289,6 @@ func collectRunnerReplayBatch(cfg Config, dir string) (RunnerReplayBatch, []stri
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	var batch RunnerReplayBatch
 	var paths []string
-	var totalBytes int64
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
@@ -246,37 +297,153 @@ func collectRunnerReplayBatch(cfg Config, dir string) (RunnerReplayBatch, []stri
 			break
 		}
 		path := filepath.Join(dir, entry.Name())
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return RunnerReplayBatch{}, nil, err
-		}
-		var rec TelemetryRecord
-		if err := decodeStrictJSON(data, &rec); err != nil || validateRunnerTelemetryRecord(cfg, rec) != nil {
-			quarantineSpoolFile(dir, path)
+		rec, ok := readAndValidateSpoolRecord(cfg, dir, path)
+		if !ok {
 			continue
 		}
-		encoded, err := json.Marshal(rec)
-		if err != nil {
-			quarantineSpoolFile(dir, path)
-			continue
-		}
-		recordBytes := int64(len(encoded))
-		if len(batch.Records) > 0 && totalBytes+recordBytes > cfg.RunnerChannel.ReplayMaxBytes {
+		if !fitsReplayWireCap(cfg, batch.Records, rec) {
+			if len(batch.Records) == 0 {
+				quarantineSpoolFile(dir, path)
+				continue
+			}
 			break
-		}
-		if recordBytes > cfg.RunnerChannel.ReplayMaxBytes {
-			quarantineSpoolFile(dir, path)
-			continue
 		}
 		batch.Records = append(batch.Records, rec)
 		paths = append(paths, path)
-		totalBytes += recordBytes
 	}
 	return batch, paths, nil
 }
 
-// ServeRunnerConn handles framed runner telemetry RPCs on a host broker end of
-// a socketpair, enforcing allowlisted operations, payload caps, and strict JSON.
+func readAndValidateSpoolRecord(cfg Config, dir, path string) (TelemetryRecord, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		quarantineSpoolFile(dir, path)
+		return TelemetryRecord{}, false
+	}
+	var rec TelemetryRecord
+	if err := decodeStrictJSON(data, &rec); err != nil || validateRunnerTelemetryRecord(cfg, rec) != nil {
+		quarantineSpoolFile(dir, path)
+		return TelemetryRecord{}, false
+	}
+	return rec, true
+}
+
+func fitsReplayWireCap(cfg Config, current []TelemetryRecord, next TelemetryRecord) bool {
+	probe := RunnerReplayBatch{Records: append(append([]TelemetryRecord(nil), current...), next)}
+	encoded, err := json.Marshal(probe)
+	if err != nil {
+		return false
+	}
+	return int64(len(encoded)) <= cfg.RunnerChannel.ReplayMaxBytes
+}
+
+// ServeRunnerBroker listens on the host end of the AF_UNIX SOCK_SEQPACKET broker
+// socketpair, accepts per-request SCM_RIGHTS stream connections concurrently, and
+// dispatches validated telemetry operations.
+func ServeRunnerBroker(ctx context.Context, hostEnd *os.File, cfg Config, ingest func(context.Context, TelemetryRecord) error) error {
+	if hostEnd == nil {
+		return fmt.Errorf("serve runner broker: nil host socket")
+	}
+	rawConn, err := net.FileConn(hostEnd)
+	_ = hostEnd.Close()
+	if err != nil {
+		return fmt.Errorf("serve runner broker: %w", err)
+	}
+	seqConn, ok := rawConn.(*net.UnixConn)
+	if !ok {
+		_ = rawConn.Close()
+		return fmt.Errorf("serve runner broker: expected *net.UnixConn")
+	}
+	return serveUnixBroker(ctx, seqConn, cfg, ingest)
+}
+
+// RelayRunnerBroker bridges the host end of the runner broker socketpair to
+// the host collector Unix socket without exposing host-only admin operations.
+func RelayRunnerBroker(ctx context.Context, hostEnd *os.File, hostSocket string, cfg Config) error {
+	return ServeRunnerBroker(ctx, hostEnd, cfg, hostSocketIngestor(hostSocket, cfg))
+}
+
+func serveUnixBroker(ctx context.Context, seqConn *net.UnixConn, cfg Config, ingest func(context.Context, TelemetryRecord) error) error {
+	done := make(chan struct{})
+	var closeOnce sync.Once
+	closeSeq := func() { closeOnce.Do(func() { _ = seqConn.Close() }) }
+	defer closeSeq()
+	go func() {
+		select {
+		case <-ctx.Done():
+			closeSeq()
+		case <-done:
+		}
+	}()
+	defer close(done)
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	buf := make([]byte, 16)
+	oob := make([]byte, syscall.CmsgSpace(4*8))
+	for {
+		_, oobn, _, _, err := seqConn.ReadMsgUnix(buf, oob)
+		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+				return nil
+			}
+			return err
+		}
+		clientConn, err := extractSCMStreamConn(oob[:oobn])
+		if err != nil {
+			continue
+		}
+		wg.Add(1)
+		go func(c net.Conn) {
+			defer wg.Done()
+			_ = ServeRunnerConn(ctx, c, cfg, ingest)
+		}(clientConn)
+	}
+}
+
+func extractSCMStreamConn(oob []byte) (net.Conn, error) {
+	scms, err := syscall.ParseSocketControlMessage(oob)
+	if err != nil || len(scms) != 1 {
+		return nil, fmt.Errorf("invalid scm control message")
+	}
+	fds, err := syscall.ParseUnixRights(&scms[0])
+	if err != nil {
+		return nil, err
+	}
+	if len(fds) != 1 {
+		for _, fd := range fds {
+			_ = syscall.Close(fd)
+		}
+		return nil, fmt.Errorf("expected single fd, got %d", len(fds))
+	}
+	f := os.NewFile(uintptr(fds[0]), "harnez-broker-client")
+	defer f.Close()
+	if err := validateConnectedUnixSocket(fds[0], syscall.SOCK_STREAM); err != nil {
+		return nil, err
+	}
+	return net.FileConn(f)
+}
+
+func hostSocketIngestor(hostSocket string, cfg Config) func(context.Context, TelemetryRecord) error {
+	return func(callCtx context.Context, record TelemetryRecord) error {
+		body, err := json.Marshal(record)
+		if err != nil {
+			return errors.Join(err, ErrQuarantine)
+		}
+		if _, err := PostTelemetryCommand(callCtx, hostSocket, cfg.TelemetryPath, body, cfg.HTTPClientTimeout); err != nil {
+			var statusErr *HTTPStatusError
+			if errors.As(err, &statusErr) && statusErr.StatusCode >= 400 && statusErr.StatusCode < 500 {
+				return errors.Join(err, ErrQuarantine)
+			}
+			return fmt.Errorf("%w: %v", ErrRunnerUnavailable, err)
+		}
+		return nil
+	}
+}
+
+// ServeRunnerConn handles framed runner telemetry RPCs on a host stream
+// connection, enforcing allowlisted operations, payload caps, and strict JSON.
 func ServeRunnerConn(ctx context.Context, conn net.Conn, cfg Config, ingest func(context.Context, TelemetryRecord) error) error {
 	if conn == nil {
 		return fmt.Errorf("serve runner conn: nil connection")
@@ -299,7 +466,7 @@ func ServeRunnerConn(ctx context.Context, conn net.Conn, cfg Config, ingest func
 
 	for {
 		frame, err := readChannelFrame(conn, cfg.RunnerChannel.MaxFrameBytes)
-		if errors.Is(err, io.EOF) {
+		if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 			return nil
 		}
 		if errors.Is(err, ErrRunnerPayloadTooLarge) {
@@ -319,25 +486,6 @@ func ServeRunnerConn(ctx context.Context, conn net.Conn, cfg Config, ingest func
 	}
 }
 
-// RelayRunnerConn bridges a runner's inherited socketpair end on the host to the
-// host collector's Unix socket, permitting only validated telemetry writes and
-// never forwarding admin routes such as /shutdown or merge_legacy.
-func RelayRunnerConn(ctx context.Context, conn net.Conn, hostSocket string, cfg Config) error {
-	return ServeRunnerConn(ctx, conn, cfg, func(callCtx context.Context, record TelemetryRecord) error {
-		body, err := json.Marshal(record)
-		if err != nil {
-			return errors.Join(err, ErrQuarantine)
-		}
-		if _, err := PostTelemetryCommand(callCtx, hostSocket, cfg.TelemetryPath, body, cfg.HTTPClientTimeout); err != nil {
-			if strings.Contains(err.Error(), " 400 ") || strings.Contains(err.Error(), "Bad Request") {
-				return errors.Join(err, ErrQuarantine)
-			}
-			return fmt.Errorf("%w: %v", ErrRunnerUnavailable, err)
-		}
-		return nil
-	})
-}
-
 func handleRunnerFrame(ctx context.Context, cfg Config, frame []byte, ingest func(context.Context, TelemetryRecord) error) RunnerResponse {
 	var req RunnerRequest
 	if err := decodeStrictJSON(frame, &req); err != nil {
@@ -348,42 +496,58 @@ func handleRunnerFrame(ctx context.Context, cfg Config, frame []byte, ingest fun
 	}
 	switch req.Op {
 	case RunnerOpTelemetryIngest:
-		var rec TelemetryRecord
-		if err := decodeStrictJSON(req.Payload, &rec); err != nil {
-			return RunnerResponse{Status: http.StatusBadRequest, Error: "invalid telemetry record"}
-		}
-		if err := validateRunnerTelemetryRecord(cfg, rec); err != nil {
-			return statusForRunnerErr(err)
-		}
-		if err := ingest(ctx, rec); err != nil {
-			return statusForIngestErr(err)
-		}
-		return RunnerResponse{Status: http.StatusNoContent}
+		return handleRunnerIngest(ctx, cfg, req.Payload, ingest)
 	case RunnerOpTelemetryReplay:
-		var batch RunnerReplayBatch
-		if err := decodeStrictJSON(req.Payload, &batch); err != nil {
-			return RunnerResponse{Status: http.StatusBadRequest, Error: "invalid replay batch"}
-		}
-		if len(batch.Records) == 0 {
-			return RunnerResponse{Status: http.StatusBadRequest, Error: "empty replay batch"}
-		}
-		if len(batch.Records) > cfg.RunnerChannel.ReplayMaxRecords || int64(len(req.Payload)) > cfg.RunnerChannel.ReplayMaxBytes {
-			return RunnerResponse{Status: http.StatusRequestEntityTooLarge, Error: ErrRunnerPayloadTooLarge.Error()}
-		}
-		for _, rec := range batch.Records {
-			if err := validateRunnerTelemetryRecord(cfg, rec); err != nil {
-				return statusForRunnerErr(err)
-			}
-		}
-		for _, rec := range batch.Records {
-			if err := ingest(ctx, rec); err != nil {
-				return statusForIngestErr(err)
-			}
-		}
-		return RunnerResponse{Status: http.StatusNoContent}
+		return handleRunnerReplay(ctx, cfg, req.Payload, ingest)
 	default:
 		return RunnerResponse{Status: http.StatusForbidden, Error: ErrRunnerForbidden.Error()}
 	}
+}
+
+func handleRunnerIngest(ctx context.Context, cfg Config, payload json.RawMessage, ingest func(context.Context, TelemetryRecord) error) RunnerResponse {
+	var rec TelemetryRecord
+	if err := decodeStrictJSON(payload, &rec); err != nil {
+		return RunnerResponse{Status: http.StatusBadRequest, Error: "invalid telemetry record"}
+	}
+	if err := validateRunnerTelemetryRecord(cfg, rec); err != nil {
+		return statusForRunnerErr(err)
+	}
+	if err := ingest(ctx, rec); err != nil {
+		return statusForIngestErr(err)
+	}
+	return RunnerResponse{Status: http.StatusNoContent}
+}
+
+func handleRunnerReplay(ctx context.Context, cfg Config, payload json.RawMessage, ingest func(context.Context, TelemetryRecord) error) RunnerResponse {
+	var batch RunnerReplayBatch
+	if err := decodeStrictJSON(payload, &batch); err != nil {
+		return RunnerResponse{Status: http.StatusBadRequest, Error: "invalid replay batch"}
+	}
+	if len(batch.Records) == 0 {
+		return RunnerResponse{Status: http.StatusBadRequest, Error: "empty replay batch"}
+	}
+	if len(batch.Records) > cfg.RunnerChannel.ReplayMaxRecords || int64(len(payload)) > cfg.RunnerChannel.ReplayMaxBytes {
+		return RunnerResponse{Status: http.StatusRequestEntityTooLarge, Error: ErrRunnerPayloadTooLarge.Error()}
+	}
+	results := make([]RunnerReplayRecordResult, len(batch.Records))
+	for i, rec := range batch.Records {
+		if err := validateRunnerTelemetryRecord(cfg, rec); err != nil {
+			r := statusForRunnerErr(err)
+			results[i] = RunnerReplayRecordResult{Status: r.Status, Error: r.Error}
+			continue
+		}
+		if err := ingest(ctx, rec); err != nil {
+			r := statusForIngestErr(err)
+			results[i] = RunnerReplayRecordResult{Status: r.Status, Error: r.Error}
+			continue
+		}
+		results[i] = RunnerReplayRecordResult{Status: http.StatusNoContent}
+	}
+	rawResult, err := json.Marshal(RunnerReplayResult{Results: results})
+	if err != nil {
+		return RunnerResponse{Status: http.StatusInternalServerError, Error: err.Error()}
+	}
+	return RunnerResponse{Status: http.StatusOK, Result: rawResult}
 }
 
 func validateRunnerTelemetryRecord(cfg Config, rec TelemetryRecord) error {
@@ -426,29 +590,25 @@ func parseAndValidateRunnerFD(cfg Config) (int, error) {
 	if err != nil || fd < 3 {
 		return 0, fmt.Errorf("%w: %s=%q", ErrInvalidRunnerChannel, cfg.RunnerChannel.FDEnv, raw)
 	}
-	sockType, err := syscall.GetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_TYPE)
-	if err != nil || sockType != syscall.SOCK_STREAM {
-		return 0, fmt.Errorf("%w: fd %d is not a stream socket", ErrInvalidRunnerChannel, fd)
-	}
-	if _, err := syscall.Getpeername(fd); err != nil {
-		return 0, fmt.Errorf("%w: fd %d is not connected", ErrInvalidRunnerChannel, fd)
+	if err := validateConnectedUnixSocket(fd, syscall.SOCK_SEQPACKET); err != nil {
+		return 0, fmt.Errorf("%w: fd %d: %v", ErrInvalidRunnerChannel, fd, err)
 	}
 	return fd, nil
 }
 
-func dupFDAsConn(fd int) (net.Conn, error) {
-	syscall.ForkLock.RLock()
-	dupFD, err := syscall.Dup(fd)
-	if err == nil {
-		syscall.CloseOnExec(dupFD)
+func validateConnectedUnixSocket(fd, wantType int) error {
+	domain, err := syscall.GetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_DOMAIN)
+	if err != nil || domain != syscall.AF_UNIX {
+		return fmt.Errorf("not an AF_UNIX socket")
 	}
-	syscall.ForkLock.RUnlock()
-	if err != nil {
-		return nil, err
+	sockType, err := syscall.GetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_TYPE)
+	if err != nil || sockType != wantType {
+		return fmt.Errorf("unexpected socket type")
 	}
-	f := os.NewFile(uintptr(dupFD), "harnez-broker-dup")
-	defer f.Close()
-	return net.FileConn(f)
+	if _, err := syscall.Getpeername(fd); err != nil {
+		return fmt.Errorf("not connected: %w", err)
+	}
+	return nil
 }
 
 func writeRunnerResponse(w io.Writer, maxBytes int64, resp RunnerResponse) error {

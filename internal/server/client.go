@@ -12,6 +12,17 @@ import (
 
 type UpdateResult string
 
+// HTTPStatusError captures a non-2xx HTTP status from a Unix socket RPC.
+type HTTPStatusError struct {
+	StatusCode int
+	Status     string
+	Body       string
+}
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("telemetry command returned %s: %s", e.Status, e.Body)
+}
+
 const (
 	UpdateDelivered UpdateResult = "delivered"
 	UpdateSpooled   UpdateResult = "spooled"
@@ -55,7 +66,7 @@ func PostTelemetryCommand(ctx context.Context, socket, path string, payload []by
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("telemetry command returned %s: %s", resp.Status, body)
+		return nil, &HTTPStatusError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(body)}
 	}
 	return body, nil
 }
