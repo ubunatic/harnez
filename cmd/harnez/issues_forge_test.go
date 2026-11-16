@@ -4,17 +4,164 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 
 	"ubunatic.com/harnez/internal/forge"
+	"ubunatic.com/harnez/internal/forgetoken"
 	"ubunatic.com/harnez/internal/forgetracker"
 	"ubunatic.com/harnez/internal/prwait"
 )
+
+func TestForgeWritesAPI(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	_, st, err := forgeTokenStoreFor(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Save(forgetoken.Meta{Host: "codeberg.org", User: "u"}, "write-secret"); err != nil {
+		t.Fatal(err)
+	}
+	var requests []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		requests = append(requests, r.Method+" "+r.URL.RequestURI()+" "+string(body))
+		if r.Header.Get("Authorization") != "token write-secret" {
+			t.Errorf("wrong authorization")
+		}
+		switch r.URL.Path {
+		case "/repos/o/r/labels":
+			io.WriteString(w, `[{"id":5,"name":"bug"}]`)
+		case "/repos/o/r/issues":
+			io.WriteString(w, `{"number":42,"html_url":"https://example/42"}`)
+		case "/repos/o/r/issues/7/comments":
+			io.WriteString(w, `{"html_url":"https://example/comment"}`)
+		default:
+			t.Errorf("unexpected %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte("hello\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	err = runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"bug"}}, false, false)
+	if err != nil || out.String() != "filed as #42 at https://example/42; no commit\n" {
+		t.Fatalf("new %q: %v", out.String(), err)
+	}
+	want := []string{"GET /repos/o/r/labels?limit=50&page=1 ", `POST /repos/o/r/issues {"title":"T","body":"hello\n","labels":[5]}`}
+	if !reflect.DeepEqual(requests, want) {
+		t.Fatalf("requests %q", requests)
+	}
+	requests = nil
+	out.Reset()
+	err = runIssuesComment(&out, t.TempDir(), target, &stubForgeSource{}, "7", body, false, false)
+	if err != nil || out.String() != "commented on codeberg.org/o/r#7: https://example/comment\n" {
+		t.Fatalf("comment %q: %v", out.String(), err)
+	}
+	if !reflect.DeepEqual(requests, []string{`POST /repos/o/r/issues/7/comments {"body":"hello\n"}`}) {
+		t.Fatalf("requests %q", requests)
+	}
+	requests = nil
+	out.Reset()
+	err = runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"missing"}}, false, false)
+	if err == nil || err.Error() != `unknown label "missing"; existing labels: bug` || len(requests) != 1 {
+		t.Fatalf("unknown: %v %q", err, requests)
+	}
+}
+
+func TestForgeNewWorkerAndFallback(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker-1")
+	t.Setenv("CODEX_THREAD_ID", "")
+	t.Setenv("CODEBERG_TOKEN", "read-env-secret")
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte("hello"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	oldLook, oldRun, oldLookup := issueCLILookPath, issueCLIRun, issueWriteLookup
+	var ran []forgetracker.Command
+	issueCLILookPath = func(name string) (string, error) { return name, nil }
+	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
+		ran = append(ran, c)
+		return []byte("#42 T\n"), nil
+	}
+	issueWriteLookup = func(string) string { return "" }
+	t.Cleanup(func() { issueCLILookPath, issueCLIRun, issueWriteLookup = oldLook, oldRun, oldLookup })
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
+	req := forgetracker.CreateRequest{Title: "T", BodyFile: body}
+	var out bytes.Buffer
+	err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, req, false, false)
+	want := "issues new: forge writes run only in a host session (this is harnez worker worker-1); hand the write to the host"
+	if err == nil || err.Error() != want || len(ran) != 0 {
+		t.Fatalf("worker %v ran=%v", err, ran)
+	}
+	if err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, req, true, false); err != nil || out.String() != "dry run, would file on codeberg.org/o/r: fj issue create --repo codeberg.org/o/r --body-file "+body+" T\n" {
+		t.Fatalf("dry: %q %v", out.String(), err)
+	}
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	out.Reset()
+	if err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, req, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(ran) != 1 || !reflect.DeepEqual(ran[0].Args, []string{"issue", "create", "--repo", "codeberg.org/o/r", "--body-file", body, "T"}) {
+		t.Fatalf("argv: %+v", ran)
+	}
+	if err := os.WriteFile(body, []byte(" \n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	err = runIssuesNewForge(&out, io.Discard, t.TempDir(), target, req, false, false)
+	if err == nil || err.Error() != "issues new: body file is empty or whitespace-only" || len(ran) != 1 {
+		t.Fatalf("blank: %v", err)
+	}
+}
+
+func TestForgeNewStdinBody(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	f, err := os.CreateTemp(t.TempDir(), "stdin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("stdin body"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Seek(0, 0); err != nil {
+		t.Fatal(err)
+	}
+	oldStdin, oldLook, oldRun, oldLookup := os.Stdin, issueCLILookPath, issueCLIRun, issueWriteLookup
+	os.Stdin = f
+	issueCLILookPath = func(n string) (string, error) { return n, nil }
+	issueWriteLookup = func(string) string { return "" }
+	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
+		data, err := os.ReadFile(c.Args[5])
+		if err != nil || string(data) != "stdin body" {
+			t.Fatalf("body %q %v", data, err)
+		}
+		return []byte("#42 T"), nil
+	}
+	t.Cleanup(func() {
+		os.Stdin, issueCLILookPath, issueCLIRun, issueWriteLookup = oldStdin, oldLook, oldRun, oldLookup
+		f.Close()
+	})
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
+	if err := runIssuesNewForge(io.Discard, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: "-"}, false, false); err != nil {
+		t.Fatal(err)
+	}
+}
 
 type stubForgeSource struct {
 	calls   int
@@ -209,6 +356,11 @@ func TestForgeTrackerHint(t *testing.T) {
 
 func stubIssueCLI(t *testing.T, out string) *[]forgetracker.Command {
 	t.Helper()
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	oldLookup := issueWriteLookup
+	issueWriteLookup = func(string) string { return "" }
+	t.Cleanup(func() { issueWriteLookup = oldLookup })
 	var ran []forgetracker.Command
 	oldLook, oldRun := issueCLILookPath, issueCLIRun
 	issueCLILookPath = func(name string) (string, error) {
@@ -283,6 +435,31 @@ func TestIssuesNewLocalRefusesForgeFlags(t *testing.T) {
 	}
 }
 
+func TestIssuesNewForceForge(t *testing.T) {
+	ran := stubIssueCLI(t, "#42 T\n")
+	dir := forgeRepo(t)
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte("content"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runHarnez(t, "issues", "new", "--forge", "-d", dir, "T", "-F", body)
+	if err != nil || out != "filed as #42 at https://codeberg.org/o/r/issues/42; no commit\nissues new: filing on codeberg.org/o/r with tea\n" || len(*ran) != 1 {
+		t.Fatalf("%q %v ran=%d", out, err, len(*ran))
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "issues"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("local files: %v %v", entries, err)
+	}
+	for _, verb := range []string{"show", "list"} {
+		if _, err := runHarnez(t, "issues", verb, "--forge", "-d", dir, "7"); err == nil {
+			t.Fatalf("%s accepted --forge", verb)
+		}
+	}
+}
+
 func TestIssuesNewWithoutForgeSignalStaysLocal(t *testing.T) {
 	ran := stubIssueCLI(t, "#1 x\n")
 	dir := forgeRepo(t)
@@ -304,6 +481,11 @@ func TestIssuesNewTrackerNoneUsesForge(t *testing.T) {
 }
 
 func TestIssuesNewFJFailureManualCommand(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	oldLookup := issueWriteLookup
+	issueWriteLookup = func(string) string { return "" }
+	t.Cleanup(func() { issueWriteLookup = oldLookup })
 	oldLook, oldRun := issueCLILookPath, issueCLIRun
 	t.Cleanup(func() { issueCLILookPath, issueCLIRun = oldLook, oldRun })
 	issueCLILookPath = func(name string) (string, error) {

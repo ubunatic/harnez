@@ -153,7 +153,7 @@ then the README is regenerated and the batch is committed once.
                     branch. Unlike every
                     other verb, 'new' takes no ticket number (there isn't one
                     yet) and never commits.
-  comment <number> -F <file>  Comment on a forge issue through fj after checking
+  comment <number> -F <file>  Comment on a forge issue after checking
                     its state; --dry-run prints the command and --closed permits
                     closed issues. With a local tracker, --forge is required.
                     Pull requests are always refused.
@@ -253,8 +253,8 @@ valid, exit-0 answer.`,
 			if closedFlag && (len(args) == 0 || args[0] != "comment") {
 				return fmt.Errorf("issues: --closed requires comment")
 			}
-			if forgeFlag && (len(args) == 0 || args[0] != "comment") {
-				return fmt.Errorf("issues: --forge requires comment")
+			if forgeFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "new")) {
+				return fmt.Errorf("issues: --forge requires new or comment")
 			}
 			if forceFlag && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --force requires new")
@@ -380,6 +380,17 @@ valid, exit-0 answer.`,
 			}
 			if args[0] == "new" {
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
+				if forgeFlag {
+					spec, err := prwait.LoadSpec()
+					if err != nil {
+						return err
+					}
+					t, err := forgetracker.ResolveRemote(dir, spec)
+					if err != nil {
+						return fmt.Errorf("issues new: cannot resolve forge remote: %w", err)
+					}
+					return runIssuesNewForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, t, forgetracker.CreateRequest{Title: title, BodyFile: bodyFileFlag, Labels: labelFlags}, checkFlag || dryRunFlag, jsonFlag)
+				}
 				// The forge path needs an explicit signal (-F/--label or tracker: none), so a
 				// fresh repo with a forge origin still adopts a local issues/ dir (issue 853).
 				_, remoteEnvSet := os.LookupEnv("CLAUDE_CODE_REMOTE")
@@ -521,7 +532,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().StringVar(&numberFlag, "number", "", "with new: use this ticket number instead of the next free one (refused if it exists)")
 	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new or comment on a forge tracker: body file (comment requires nonblank text)")
 	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment: allow a closed issue")
-	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "with comment: target the forge even with a local issues/ dir")
+	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "with new or comment: target the forge even with a local issues/ dir")
 	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")
 	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: create despite strong duplicate matches")
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")

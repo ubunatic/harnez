@@ -19,6 +19,11 @@ import (
 )
 
 func TestIssuesCommentOffline(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	oldLookup := issueWriteLookup
+	issueWriteLookup = func(string) string { return "" }
+	t.Cleanup(func() { issueWriteLookup = oldLookup })
 	state, pull, status := "open", false, http.StatusOK
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/repos/o/r/issues/7" || r.Header.Get("Authorization") != "" {
@@ -130,7 +135,7 @@ func TestIssuesCommentOffline(t *testing.T) {
 	if err != nil || string(got) != strings.Join([]string{"issue", "comment", "codeberg.org/o/r#7", "--body-file", body, ""}, "\n") {
 		t.Fatalf("local tracker argv: %q %v", got, err)
 	}
-	if _, err := runHarnez(t, "issues", "show", "-d", dir, "7", "--forge"); err == nil || !strings.Contains(err.Error(), "--forge requires comment") {
+	if _, err := runHarnez(t, "issues", "show", "-d", dir, "7", "--forge"); err == nil || !strings.Contains(err.Error(), "--forge requires new or comment") {
 		t.Fatalf("forge flag on show: %v", err)
 	}
 }
@@ -147,6 +152,9 @@ func (s commentSource) Issue(fg forge.Forge, owner, repo string, n int) (forge.R
 }
 
 func TestIssuesCommentRejectsEmptyBody(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
 	src := &stubForgeSource{}
 	oldRun := issueCLIRun
 	calls := 0
@@ -174,7 +182,40 @@ func TestIssuesCommentRejectsEmptyBody(t *testing.T) {
 	}
 }
 
+func TestForgeCommentWorkerDenied(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker-1")
+	t.Setenv("CODEX_THREAD_ID", "")
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte("hello"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	src := &stubForgeSource{}
+	oldLook, oldRun := issueCLILookPath, issueCLIRun
+	issueCLILookPath = func(string) (string, error) { return "fj", nil }
+	issueCLIRun = func(string, forgetracker.Command) ([]byte, error) { t.Error("unexpected CLI call"); return nil, nil }
+	t.Cleanup(func() { issueCLILookPath, issueCLIRun = oldLook, oldRun })
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	err := runIssuesComment(io.Discard, t.TempDir(), target, src, "7", body, false, false)
+	want := "issues comment: forge writes run only in a host session (this is harnez worker worker-1); hand the write to the host"
+	if err == nil || err.Error() != want || src.calls != 0 {
+		t.Fatalf("err=%v calls=%d", err, src.calls)
+	}
+	var out strings.Builder
+	if err := runIssuesComment(&out, t.TempDir(), target, src, "7", body, true, false); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "dry run: fj issue comment codeberg.org/o/r#7 --body-file "+body+"\n" {
+		t.Fatal(out.String())
+	}
+}
+
 func TestIssuesCommentFJErrors(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	oldLookup := issueWriteLookup
+	issueWriteLookup = func(string) string { return "" }
+	t.Cleanup(func() { issueWriteLookup = oldLookup })
 	src := &stubForgeSource{}
 	target := forgetracker.Target{Forge: forge.Forge{Host: "codeberg.org"}, Owner: "o", Repo: "r"}
 	body := filepath.Join(t.TempDir(), "body file")

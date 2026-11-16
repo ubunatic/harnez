@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"ubunatic.com/harnez/internal/forge"
+	"ubunatic.com/harnez/internal/forgetoken"
 	"ubunatic.com/harnez/internal/forgetracker"
 	"ubunatic.com/harnez/internal/prwait"
 )
@@ -127,6 +129,25 @@ func fjLoginHint(host string) string {
 	return fmt.Sprintf(`fj login for %s failed; run "fj auth login" if your fj wrapper sets the host, otherwise "fj -H %s auth login"`, host, host)
 }
 
+func requireHostSession(verb string) error {
+	if callerAgentRole() != "" || (os.Getenv(agentSessionEnv) != "" && interactiveCodexHost() == "") {
+		return fmt.Errorf("issues %s: forge writes run only in a host session (this is harnez worker %s); hand the write to the host", verb, os.Getenv(agentSessionEnv))
+	}
+	return nil
+}
+
+var issueWriteLookup = forgetoken.LookupWrite
+
+func issueWriteAPI(t forgetracker.Target) (forge.Writer, bool, error) {
+	sp, err := prwait.LoadSpec()
+	if err != nil {
+		return forge.Writer{}, false, err
+	}
+	client := &http.Client{Timeout: sp.IssueScan.Timeout}
+	w, ok := forgetracker.WriteAPI(t, client, issueWriteLookup)
+	return w, ok, nil
+}
+
 // runIssuesComment checks the issue before invoking fj with an explicit target.
 func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forgetracker.Source, number, body string, dryRun, allowClosed bool) error {
 	n, err := strconv.Atoi(number)
@@ -152,6 +173,11 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	if strings.TrimSpace(string(content)) == "" {
 		return fmt.Errorf("issues comment: body file is empty or whitespace-only")
 	}
+	if !dryRun {
+		if err := requireHostSession("comment"); err != nil {
+			return err
+		}
+	}
 	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
 	if err != nil {
 		var apiErr *forge.APIError
@@ -172,6 +198,18 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	c := forgetracker.FJCommentCommand(t, n, body)
 	if dryRun {
 		_, err = fmt.Fprintf(w, "dry run: %s\n", c)
+		return err
+	}
+	wr, useAPI, err := issueWriteAPI(t)
+	if err != nil {
+		return err
+	}
+	if useAPI {
+		url, err := wr.Comment(t.Forge, t.Owner, t.Repo, n, string(content))
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(w, "commented on %s/%s: %s\n", t.Forge.Host, target, url)
 		return err
 	}
 	if _, err := issueCLILookPath("fj"); err != nil {
@@ -199,6 +237,12 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 // runIssuesNewForge files a ticket on the forge with its CLI (issue 1195). It makes no
 // commit. With dryRun it prints the command and creates nothing.
 func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Target, req forgetracker.CreateRequest, dryRun, jsonOut bool) error {
+	if strings.TrimSpace(req.Title) == "" {
+		return fmt.Errorf("issues new: a title is required to file on %s", t)
+	}
+	if req.BodyFile == "" {
+		return fmt.Errorf("issues new: -F/--body-file is required to file on %s", t)
+	}
 	if req.BodyFile != "" && req.BodyFile != "-" {
 		// The CLI runs in dir, so a relative path must be resolved here first.
 		abs, err := filepath.Abs(req.BodyFile)
@@ -209,6 +253,61 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 		if _, err := os.Stat(req.BodyFile); err != nil {
 			return fmt.Errorf("issues new: body file: %w", err)
 		}
+	}
+	var content []byte
+	var err error
+	if req.BodyFile == "-" {
+		content, err = io.ReadAll(os.Stdin)
+	} else {
+		content, err = os.ReadFile(req.BodyFile)
+	}
+	if err != nil {
+		return fmt.Errorf("issues new: body file: %w", err)
+	}
+	if strings.TrimSpace(string(content)) == "" {
+		return fmt.Errorf("issues new: body file is empty or whitespace-only")
+	}
+	if !dryRun {
+		if err := requireHostSession("new"); err != nil {
+			return err
+		}
+		wr, useAPI, err := issueWriteAPI(t)
+		if err != nil {
+			return err
+		}
+		if useAPI {
+			var ids []int64
+			if len(req.Labels) > 0 {
+				ids, err = wr.LabelIDs(t.Forge, t.Owner, t.Repo, req.Labels)
+				if err != nil {
+					return err
+				}
+			}
+			created, err := wr.CreateIssue(t.Forge, t.Owner, t.Repo, req.Title, string(content), ids)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				return json.NewEncoder(stdout).Encode(map[string]any{"number": created.Number, "url": created.HTMLURL, "forge": t.String(), "tool": "api"})
+			}
+			_, err = fmt.Fprintf(stdout, "filed as #%d at %s; no commit\n", created.Number, created.HTMLURL)
+			return err
+		}
+	}
+	if req.BodyFile == "-" && !dryRun {
+		f, err := os.CreateTemp("", "harnez-issue-body-*")
+		if err != nil {
+			return fmt.Errorf("issues new: temporary body: %w", err)
+		}
+		defer os.Remove(f.Name())
+		if _, err := f.Write(content); err != nil {
+			f.Close()
+			return fmt.Errorf("issues new: temporary body: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("issues new: temporary body: %w", err)
+		}
+		req.BodyFile = f.Name()
 	}
 	c, err := forgetracker.PlanCreate(t, req, issueCLILookPath)
 	if err != nil {
