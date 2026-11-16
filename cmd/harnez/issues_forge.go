@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"ubunatic.com/harnez/internal/forge"
+	"ubunatic.com/harnez/internal/forgetoken"
 	"ubunatic.com/harnez/internal/forgetracker"
 	"ubunatic.com/harnez/internal/prwait"
 )
@@ -56,27 +59,57 @@ func forgeFindTerms(words []string) []string {
 // forgeTrackerSource is the live forge reader; tests replace it.
 var forgeTrackerSource = func(spec prwait.Spec) forgetracker.Source { return forgetracker.NewSource(spec) }
 
-// resolveForgeTracker reports the forge that holds dir's tickets when dir has no
-// issues/ dir (issue 1116). ok=false keeps the local tracker behaviour.
+// resolveForgeTracker reports the forge that holds dir's tickets.
+// ok=false keeps the local tracker behaviour.
 func resolveForgeTracker(stderr io.Writer, dir string) (forgetracker.Target, forgetracker.Source, prwait.Spec, bool, error) {
-	// A local issues/ dir wins before the spec is even read, so a broken spec
-	// never changes the local tracker's behaviour.
-	if _, err := os.Stat(filepath.Join(dir, "issues")); !errors.Is(err, fs.ErrNotExist) {
+	issuesDir := filepath.Join(dir, "issues")
+	_, statErr := os.Stat(issuesDir)
+	hasIssues := !errors.Is(statErr, fs.ErrNotExist)
+	if hasIssues && (!trackerIsNone(dir) || hasLocalTickets(issuesDir)) {
 		return forgetracker.Target{}, nil, prwait.Spec{}, false, nil
 	}
 	spec, err := prwait.LoadSpec()
 	if err != nil {
 		return forgetracker.Target{}, nil, spec, false, err
 	}
-	t, err := forgetracker.Resolve(dir, spec)
+	t, err := forgetracker.ResolveRemote(dir, spec)
 	if errors.Is(err, forgetracker.ErrNotApplicable) {
 		return t, nil, spec, false, nil
 	}
 	if err != nil {
 		return t, nil, spec, false, err
 	}
-	fmt.Fprintf(stderr, "no local issues/ dir: tickets live on %s\n", t)
+	if hasIssues {
+		fmt.Fprintf(stderr, "issues.tracker is none: tickets live on %s\n", t)
+	} else {
+		fmt.Fprintf(stderr, "no local issues/ dir: tickets live on %s\n", t)
+	}
 	return t, forgeTrackerSource(spec), spec, true, nil
+}
+
+// hasLocalTickets conservatively retains local mode if the directory cannot be read.
+func hasLocalTickets(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return true
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == "archive" && entry.IsDir() {
+			return true
+		}
+		if entry.IsDir() || !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		i := 0
+		for i < len(name) && name[i] >= '0' && name[i] <= '9' {
+			i++
+		}
+		if i > 0 && i < len(name) && name[i] == '-' {
+			return true
+		}
+	}
+	return false
 }
 
 // forgeTrackerHint adds the token hint to a 404 or 401, which a private repo returns
@@ -123,8 +156,43 @@ var (
 	}
 )
 
+func fjLoginHint(host string) string {
+	return fmt.Sprintf(`fj login for %s failed; run "fj auth login" if your fj wrapper sets the host, otherwise "fj -H %s auth login"`, host, host)
+}
+
+func requireHostSession(verb string) error {
+	if callerAgentRole() != "" || (os.Getenv(agentSessionEnv) != "" && interactiveCodexHost() == "") {
+		return fmt.Errorf("issues %s: forge writes run only in a host session (this is harnez worker %s); hand the write to the host", verb, os.Getenv(agentSessionEnv))
+	}
+	return nil
+}
+
+var issueWriteLookup = forgetoken.LookupWrite
+var issueWriteClient = func(timeout time.Duration) *http.Client { return &http.Client{Timeout: timeout} }
+var issueWriteMetadata = func(host string) (bool, error) {
+	_, store, err := forgeTokenStoreFor(true)
+	if err != nil {
+		return false, err
+	}
+	_, ok, err := store.Meta(host)
+	return ok, err
+}
+
+func issueWriteAPI(t forgetracker.Target) (forge.Writer, bool, error) {
+	sp, err := prwait.LoadSpec()
+	if err != nil {
+		return forge.Writer{}, false, err
+	}
+	client := issueWriteClient(sp.IssueScan.Timeout)
+	w, ok := forgetracker.WriteAPI(t, client, issueWriteLookup)
+	return w, ok, nil
+}
+
 // runIssuesComment checks the issue before invoking fj with an explicit target.
 func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forgetracker.Source, number, body string, dryRun, allowClosed bool) error {
+	if t.Forge.Kind != "forgejo" {
+		return fmt.Errorf("issues comment: forge writes support Forgejo only; GitHub is ticket 1209")
+	}
 	n, err := strconv.Atoi(number)
 	if err != nil || n <= 0 {
 		return fmt.Errorf("issues comment: invalid issue number %q", number)
@@ -141,11 +209,23 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	} else if !info.Mode().IsRegular() {
 		return fmt.Errorf("issues comment: body file must be a regular file")
 	}
+	content, err := os.ReadFile(body)
+	if err != nil {
+		return fmt.Errorf("issues comment: body file: %w", err)
+	}
+	if strings.TrimSpace(string(content)) == "" {
+		return fmt.Errorf("issues comment: body file is empty or whitespace-only")
+	}
+	if !dryRun {
+		if err := requireHostSession("comment"); err != nil {
+			return err
+		}
+	}
 	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
 	if err != nil {
 		var apiErr *forge.APIError
 		if errors.As(err, &apiErr) && (apiErr.Status == 401 || apiErr.Status == 403 || apiErr.Status == 404) {
-			return fmt.Errorf("issues comment: preflight: %w; if the API requires authentication, %s; for fj login run fj -H %s auth login", err, privateRepoHint(t.Forge), t.Forge.Host)
+			return fmt.Errorf("issues comment: preflight: %w; if the API requires authentication, %s; %s", err, privateRepoHint(t.Forge), fjLoginHint(t.Forge.Host))
 		}
 		return fmt.Errorf("issues comment: preflight: %w", err)
 	}
@@ -158,9 +238,29 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	if !isOpen && !closedAllowed {
 		return fmt.Errorf("issues comment: %s has state %q; closed issues require --closed", target, is.State)
 	}
-	c := forgetracker.Command{Tool: "fj", Args: []string{"--host", t.Forge.Host, "issue", "comment", target, "--body-file", body}}
+	c := forgetracker.FJCommentCommand(t, n, body)
 	if dryRun {
+		stored, err := issueWriteMetadata(t.Forge.Host)
+		if err != nil {
+			return err
+		}
+		if stored {
+			_, err = fmt.Fprintf(w, "dry run: would comment on %s/%s over the API (write token)\n", t.Forge.Host, target)
+			return err
+		}
 		_, err = fmt.Fprintf(w, "dry run: %s\n", c)
+		return err
+	}
+	wr, useAPI, err := issueWriteAPI(t)
+	if err != nil {
+		return err
+	}
+	if useAPI {
+		url, err := wr.Comment(t.Forge, t.Owner, t.Repo, n, string(content))
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(w, "commented on %s/%s: %s\n", t.Forge.Host, target, url)
 		return err
 	}
 	if _, err := issueCLILookPath("fj"); err != nil {
@@ -172,18 +272,31 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	out, err := issueCLIRun(dir, c)
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
-		if strings.Contains(strings.ToLower(msg), "401") || strings.Contains(strings.ToLower(msg), "token is required") {
-			return fmt.Errorf("issues comment: fj authentication failed; run fj -H %s auth login", t.Forge.Host)
+		lower := strings.ToLower(msg)
+		if strings.Contains(lower, "token was already used") || (strings.Contains(lower, "keys.rs") && strings.Contains(lower, "panic")) {
+			return fmt.Errorf("issues comment: %s", fjLoginHint(t.Forge.Host))
 		}
-		return fmt.Errorf("issues comment: fj failed: %w: %s", err, msg)
+		if strings.Contains(strings.ToLower(msg), "401") || strings.Contains(strings.ToLower(msg), "token is required") {
+			return fmt.Errorf("issues comment: %s", fjLoginHint(t.Forge.Host))
+		}
+		return fmt.Errorf("issues comment: fj failed: %w: %s\nrun manually: %s", err, msg, c)
 	}
-	_, err = w.Write(out)
+	if _, err := w.Write(out); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "commented on %s#%d\n", t, n)
 	return err
 }
 
 // runIssuesNewForge files a ticket on the forge with its CLI (issue 1195). It makes no
 // commit. With dryRun it prints the command and creates nothing.
 func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Target, req forgetracker.CreateRequest, dryRun, jsonOut bool) error {
+	if strings.TrimSpace(req.Title) == "" {
+		return fmt.Errorf("issues new: a title is required to file on %s", t)
+	}
+	if req.BodyFile == "" {
+		return fmt.Errorf("issues new: -F/--body-file is required to file on %s", t)
+	}
 	if req.BodyFile != "" && req.BodyFile != "-" {
 		// The CLI runs in dir, so a relative path must be resolved here first.
 		abs, err := filepath.Abs(req.BodyFile)
@@ -194,6 +307,71 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 		if _, err := os.Stat(req.BodyFile); err != nil {
 			return fmt.Errorf("issues new: body file: %w", err)
 		}
+	}
+	var content []byte
+	var err error
+	if req.BodyFile == "-" {
+		content, err = io.ReadAll(os.Stdin)
+	} else {
+		content, err = os.ReadFile(req.BodyFile)
+	}
+	if err != nil {
+		return fmt.Errorf("issues new: body file: %w", err)
+	}
+	if strings.TrimSpace(string(content)) == "" {
+		return fmt.Errorf("issues new: body file is empty or whitespace-only")
+	}
+	if dryRun && t.Forge.Kind == "forgejo" {
+		stored, err := issueWriteMetadata(t.Forge.Host)
+		if err != nil {
+			return err
+		}
+		if stored {
+			_, err = fmt.Fprintf(stdout, "dry run, would file on %s over the API (write token)\n", t)
+			return err
+		}
+	}
+	if !dryRun {
+		if err := requireHostSession("new"); err != nil {
+			return err
+		}
+		wr, useAPI, err := issueWriteAPI(t)
+		if err != nil {
+			return err
+		}
+		if useAPI {
+			var ids []int64
+			if len(req.Labels) > 0 {
+				ids, err = wr.LabelIDs(t.Forge, t.Owner, t.Repo, req.Labels)
+				if err != nil {
+					return err
+				}
+			}
+			created, err := wr.CreateIssue(t.Forge, t.Owner, t.Repo, req.Title, string(content), ids)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				return json.NewEncoder(stdout).Encode(map[string]any{"number": created.Number, "url": created.HTMLURL, "forge": t.String(), "tool": "api"})
+			}
+			_, err = fmt.Fprintf(stdout, "filed as #%d at %s; no commit\n", created.Number, created.HTMLURL)
+			return err
+		}
+	}
+	if req.BodyFile == "-" && !dryRun {
+		f, err := os.CreateTemp("", "harnez-issue-body-*")
+		if err != nil {
+			return fmt.Errorf("issues new: temporary body: %w", err)
+		}
+		defer func() { _ = os.Remove(f.Name()) }()
+		if _, err := f.Write(content); err != nil {
+			f.Close()
+			return fmt.Errorf("issues new: temporary body: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("issues new: temporary body: %w", err)
+		}
+		req.BodyFile = f.Name()
 	}
 	c, err := forgetracker.PlanCreate(t, req, issueCLILookPath)
 	if err != nil {
@@ -206,6 +384,9 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	fmt.Fprintf(stderr, "issues new: filing on %s with %s\n", t, c.Tool)
 	out, err := issueCLIRun(dir, c)
 	if err != nil {
+		if c.Tool == "fj" {
+			return fmt.Errorf("issues new: fj failed: %w\n%s\nrun manually: %s", err, strings.TrimSpace(string(out)), c)
+		}
 		return fmt.Errorf("issues new: %s failed: %w\n%s", c.Tool, err, strings.TrimSpace(string(out)))
 	}
 	n, url, ok := forgetracker.ParseCreated(t, string(out), req.Title)
@@ -217,4 +398,166 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	}
 	fmt.Fprintf(stdout, "filed as #%d at %s; no commit\n", n, url)
 	return nil
+}
+
+func runIssuesEditForge(w io.Writer, t forgetracker.Target, src forgetracker.Source, number, title, bodyFile, ifUpdated string, hasTitle, force, dryRun, allowClosed bool) error {
+	if t.Forge.Kind != "forgejo" {
+		return fmt.Errorf("issues edit: forge writes support Forgejo only; GitHub is ticket 1209")
+	}
+	n, err := strconv.Atoi(number)
+	if err != nil || n <= 0 {
+		return fmt.Errorf("issues edit: invalid issue number %q", number)
+	}
+	if !hasTitle && bodyFile == "" {
+		return fmt.Errorf("issues edit: --title or -F/--body-file is required")
+	}
+	if hasTitle && strings.TrimSpace(title) == "" {
+		return fmt.Errorf("issues edit: title is empty")
+	}
+	var body string
+	if bodyFile != "" {
+		if ifUpdated == "" && !force {
+			return fmt.Errorf("issues edit: body edits need --if-updated <updated_at from issues show --json> or --force")
+		}
+		var data []byte
+		if bodyFile == "-" {
+			data, err = io.ReadAll(os.Stdin)
+		} else {
+			data, err = os.ReadFile(bodyFile)
+		}
+		if err != nil {
+			return fmt.Errorf("issues edit: body file: %w", err)
+		}
+		body = string(data)
+		if strings.TrimSpace(body) == "" {
+			return fmt.Errorf("issues edit: body file is empty or whitespace-only")
+		}
+	}
+	if dryRun {
+		plan := fmt.Sprintf("dry run: would edit %s#%d over the API", t, n)
+		if hasTitle {
+			plan += " --title " + strconv.Quote(title)
+		}
+		if bodyFile != "" {
+			plan += " -F " + strconv.Quote(bodyFile)
+		}
+		if ifUpdated != "" {
+			plan += " --if-updated " + strconv.Quote(ifUpdated)
+		}
+		if force {
+			plan += " --force"
+		}
+		if allowClosed {
+			plan += " --closed"
+		}
+		_, err = fmt.Fprintln(w, plan)
+		return err
+	}
+	if err := requireHostSession("edit"); err != nil {
+		return err
+	}
+	wr, ok, err := issueWriteAPI(t)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no write token for %s; run: harnez forge token create --write", t.Forge.Host)
+	}
+	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
+	if err != nil {
+		return fmt.Errorf("issues edit: preflight: %w", err)
+	}
+	if is.PullRequest != nil {
+		return fmt.Errorf("issues edit: %s/%s#%d is a pull request", t.Owner, t.Repo, n)
+	}
+	if strings.EqualFold(is.State, "closed") && !allowClosed {
+		return fmt.Errorf("issues edit: %s/%s#%d is closed; use --closed", t.Owner, t.Repo, n)
+	}
+	if ifUpdated != "" && !force {
+		expected, err := time.Parse(time.RFC3339Nano, ifUpdated)
+		if err != nil {
+			return fmt.Errorf("issues edit: invalid --if-updated timestamp %q", ifUpdated)
+		}
+		if !is.UpdatedAt.Equal(expected) {
+			return fmt.Errorf("issues edit: %s/%s#%d changed at %s, expected %s; run issues show again", t.Owner, t.Repo, n, is.UpdatedAt.Format(time.RFC3339Nano), ifUpdated)
+		}
+	}
+	fields := forge.EditFields{}
+	if hasTitle {
+		fields.Title = &title
+	}
+	if bodyFile != "" {
+		fields.Body = &body
+	}
+	updated, err := wr.EditIssue(t.Forge, t.Owner, t.Repo, n, fields)
+	if err != nil {
+		return err
+	}
+	if fields.Body != nil && updated.Body != body {
+		return fmt.Errorf("issues edit: forge returned a different body")
+	}
+	_, err = fmt.Fprintf(w, "edited %s#%d\n", t, n)
+	return err
+}
+
+func runIssuesStateForge(w io.Writer, t forgetracker.Target, src forgetracker.Source, verb, number, reason string, dryRun bool) error {
+	if t.Forge.Kind != "forgejo" {
+		return fmt.Errorf("issues %s: forge writes support Forgejo only; GitHub is ticket 1209", verb)
+	}
+	n, err := strconv.Atoi(number)
+	if err != nil || n <= 0 {
+		return fmt.Errorf("issues %s: invalid issue number %q", verb, number)
+	}
+	state := "closed"
+	if verb == "reopen" {
+		state = "open"
+	}
+	if dryRun {
+		if reason != "" {
+			_, err = fmt.Fprintf(w, "dry run: would comment %q on %s#%d and set state to %s over the API\n", reason, t, n, state)
+		} else {
+			_, err = fmt.Fprintf(w, "dry run: would set %s#%d to %s over the API\n", t, n, state)
+		}
+		return err
+	}
+	if err := requireHostSession(verb); err != nil {
+		return err
+	}
+	wr, ok, err := issueWriteAPI(t)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no write token for %s; run: harnez forge token create --write", t.Forge.Host)
+	}
+	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
+	if err != nil {
+		return fmt.Errorf("issues %s: preflight: %w", verb, err)
+	}
+	if is.PullRequest != nil {
+		return fmt.Errorf("issues %s: %s/%s#%d is a pull request", verb, t.Owner, t.Repo, n)
+	}
+	if strings.EqualFold(is.State, state) {
+		_, err = fmt.Fprintf(w, "%s#%d is already %s\n", t, n, state)
+		return err
+	}
+	commentURL := ""
+	if reason != "" {
+		commentURL, err = wr.Comment(t.Forge, t.Owner, t.Repo, n, reason)
+		if err != nil {
+			return err
+		}
+	}
+	if _, err := wr.EditIssue(t.Forge, t.Owner, t.Repo, n, forge.EditFields{State: &state}); err != nil {
+		if reason != "" {
+			return fmt.Errorf("issues close: the reason was posted as a comment (%s) but closing failed: %w; run close again without a reason", commentURL, err)
+		}
+		return err
+	}
+	word := "closed"
+	if verb == "reopen" {
+		word = "reopened"
+	}
+	_, err = fmt.Fprintf(w, "%s %s#%d\n", word, t, n)
+	return err
 }

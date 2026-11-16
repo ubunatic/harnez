@@ -17,6 +17,20 @@ For a project with an `issues/` tracker. Use `harnez find` / `harnez issues`, no
 - `issues/README.md` is the generated active index; it links `issues/BACKLOG.md` and
   `issues/CLOSED.md`.
 - Commit docs and `issues/*.md` changes immediately; do not batch them behind code work.
+- Forgejo writes use a separate write token (`harnez forge token create --write`); the
+  read token is unchanged. A recognised forge is the tracker when `issues/` is absent,
+  or `issues.tracker: none` and `issues/` has no numbered ticket files or `archive/`
+  directory. With a local tracker add `--forge` to target the forge.
+  Examples: `issues new --forge "T" -F body.md`, `issues comment --forge 42 -F note.md`,
+  `issues show --forge 42 --json`, `issues edit --forge 42 --title "T"`,
+  `issues close --forge 42 done`, `issues reopen --forge 42` (prefix each with `harnez`).
+  `--dry-run` previews forge writes, but does not cover new --remote or CLAUDE_CODE_REMOTE,
+  which can create an issue. Without a write token new falls back to fj or tea and
+  comment to fj; GitHub new uses gh.
+  Forge writes run in the host session; this guards accidents, not a security boundary:
+  inherited host environments, unset worker markers and direct forge tools bypass it.
+  Edit's timestamp preflight is not atomic. GitHub writes are ticket 1209, except the
+  existing GitHub new path.
 - Cloud agents: `harnez issues new --remote -d <repo> "<title>"` (automatic when
   `CLAUDE_CODE_REMOTE` is set) allocates permanent GH IDs through authenticated gh; no local
   fallback.

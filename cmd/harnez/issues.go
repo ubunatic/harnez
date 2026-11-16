@@ -70,6 +70,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var remoteFlag bool
 	var forceFlag bool
 	var bodyFileFlag string
+	var editTitleFlag, ifUpdatedFlag string
 	var closedFlag bool
 	var forgeFlag bool
 	var labelFlags []string
@@ -112,6 +113,24 @@ working-tree changes, staged or not, are never staged or committed.
 --commit "<msg>" replaces the default message; --no-commit rewrites the same
 files and leaves them uncommitted. 'new' never commits.
 
+Forgejo writes use a separate write token (harnez forge token create --write);
+the read token remains separate. Without a write token new uses fj or tea;
+comment uses fj. GitHub new uses gh.
+Forge writes run in a host session; this guards accidents, not a security boundary:
+inherited host environments, unset worker markers and direct forge tools bypass it.
+GitHub writes are ticket 1209, except the existing GitHub new path.
+--dry-run previews forge writes, but does not cover new --remote or
+CLAUDE_CODE_REMOTE: that flow can create an issue. A recognised forge is the
+tracker when issues/ is absent, or issues.tracker is none and issues/ has no
+numbered ticket files or archive/ directory. With a local tracker use --forge:
+  issues new --forge "T" -F body.md
+  issues comment --forge 42 -F note.md
+  issues show --forge 42 --json
+  issues edit --forge 42 -F body.md --if-updated <updated_at>
+  issues close --forge 42 done
+  issues reopen --forge 42
+The edit timestamp preflight is not atomic; a write between check and PATCH is not detected.
+
 Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
 
   open [reason]    Status: Open, or "Open — <reason>"
@@ -153,15 +172,20 @@ then the README is regenerated and the batch is committed once.
                     branch. Unlike every
                     other verb, 'new' takes no ticket number (there isn't one
                     yet) and never commits.
-  comment <number> -F <file>  Comment on a forge issue through fj after checking
-                    its state; --dry-run prints the command and --closed permits
+  comment <number> -F <file>  Comment on a forge issue after checking
+                    its state; --dry-run prints the fj command or the API plan when a
+                    write token is stored; --closed permits
                     closed issues. With a local tracker, --forge is required.
                     Pull requests are always refused.
+  edit <number> [--title text] [-F file]  Edit a forge issue; body edits
+                    need --if-updated or --force. A write landing between the check and the PATCH is not detected.
+  close <number> [reason]  Close a forge issue; a reason is posted as a comment first.
+  reopen <number>   Reopen a forge issue.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
-                    Without a local issues/ dir, reads the ticket from the
-                    origin forge in spec/pr.yaml instead (read-only).
+                    With a forge tracker, reads the ticket from the origin
+                    forge in spec/pr.yaml instead (read-only).
   mv <old> [new]   Renumber a ticket to [new] (default: next free number
                     from scanning issuesDir). Renames the file keeping the
                     same slug, rewrites the '# <new> — <title>' header line,
@@ -215,8 +239,8 @@ the requested reason. Use close (or done) --amend-reason to explicitly
 correct its reason in one commit; this requires an already-Closed ticket.
 Other verbs still allow reason changes on an already-matching status.
 
---check (alias --dry-run) reports what would change without writing or
-committing, and exits 1 if there is drift from the requested state (mirrors
+For local status verbs, --check (alias --dry-run) reports what would change
+without writing or committing, and exits 1 if there is drift (mirrors
 'harnez index --check').
 
 A nonexistent or ambiguous ticket number is a caller-bug error (non-zero
@@ -244,20 +268,35 @@ valid, exit-0 answer.`,
 			if numberFlag != "" && (len(args) == 0 || args[0] != "new" || remoteFlag) {
 				return fmt.Errorf("issues: --number requires local new (not --remote)")
 			}
-			if bodyFileFlag != "" && (len(args) == 0 || (args[0] != "new" && args[0] != "comment")) {
-				return fmt.Errorf("issues: -F/--body-file and --label require new; -F also supports comment")
+			if bodyFileFlag != "" && (len(args) == 0 || (args[0] != "new" && args[0] != "comment" && args[0] != "edit")) {
+				return fmt.Errorf("issues: -F/--body-file requires new, comment or edit")
 			}
 			if len(labelFlags) > 0 && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --label requires new")
 			}
-			if closedFlag && (len(args) == 0 || args[0] != "comment") {
-				return fmt.Errorf("issues: --closed requires comment")
+			if closedFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "edit")) {
+				return fmt.Errorf("issues: --closed requires comment or edit")
 			}
-			if forgeFlag && (len(args) == 0 || args[0] != "comment") {
-				return fmt.Errorf("issues: --forge requires comment")
+			if forgeFlag && len(args) > 0 && args[0] == "list" {
+				return fmt.Errorf("issues: --forge does not support list")
 			}
-			if forceFlag && (len(args) == 0 || args[0] != "new") {
-				return fmt.Errorf("issues: --force requires new")
+			if forgeFlag && (len(args) == 0 || (args[0] != "show" && args[0] != "comment" && args[0] != "new" && args[0] != "edit" && args[0] != "close" && args[0] != "reopen" && args[0] != "open")) {
+				return fmt.Errorf("issues: --forge requires new, comment, show, edit, close, reopen or open")
+			}
+			if forceFlag && (len(args) == 0 || (args[0] != "new" && args[0] != "edit")) {
+				return fmt.Errorf("issues: --force requires new or edit")
+			}
+			if (cmd.Flags().Changed("title") || cmd.Flags().Changed("if-updated")) && (len(args) == 0 || args[0] != "edit") {
+				return fmt.Errorf("issues: --title and --if-updated require edit")
+			}
+			if len(args) == 1 && (args[0] == "edit" || args[0] == "close" || args[0] == "reopen" || args[0] == "open") {
+				return fmt.Errorf("issues %s: requires an issue number", args[0])
+			}
+			if len(args) > 0 && args[0] == "edit" && len(args) != 2 {
+				return fmt.Errorf("issues edit: requires exactly one issue number")
+			}
+			if len(args) > 0 && args[0] == "reopen" && len(args) != 2 {
+				return fmt.Errorf("issues reopen: requires exactly one issue number")
 			}
 			if listFlag {
 				if len(args) != 0 {
@@ -339,6 +378,63 @@ valid, exit-0 answer.`,
 			if listFlag {
 				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, nil, jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}
+			if args[0] == "edit" {
+				var t forgetracker.Target
+				var src forgetracker.Source
+				if forgeFlag {
+					sp, err := prwait.LoadSpec()
+					if err != nil {
+						return err
+					}
+					t, err = forgetracker.ResolveRemote(dir, sp)
+					if err != nil {
+						return fmt.Errorf("issues edit: cannot resolve forge remote: %w", err)
+					}
+					src = forgeTrackerSource(sp)
+				} else {
+					var ok bool
+					var err error
+					t, src, _, ok, err = resolveForgeTracker(cmd.ErrOrStderr(), dir)
+					if err != nil {
+						return err
+					}
+					if !ok {
+						return fmt.Errorf("issues edit: local tickets are files; edit issues/<n>-*.md and commit")
+					}
+				}
+				return runIssuesEditForge(cmd.OutOrStdout(), t, src, args[1], editTitleFlag, bodyFileFlag, ifUpdatedFlag, cmd.Flags().Changed("title"), forceFlag, dryRunFlag || checkFlag, closedFlag)
+			}
+			if args[0] == "close" || args[0] == "reopen" || args[0] == "open" {
+				var t forgetracker.Target
+				var src forgetracker.Source
+				var ok bool
+				if forgeFlag {
+					sp, err := prwait.LoadSpec()
+					if err != nil {
+						return err
+					}
+					t, err = forgetracker.ResolveRemote(dir, sp)
+					if err != nil {
+						return fmt.Errorf("issues %s: cannot resolve forge remote: %w", args[0], err)
+					}
+					src, ok = forgeTrackerSource(sp), true
+				} else {
+					var err error
+					t, src, _, ok, err = resolveForgeTracker(cmd.ErrOrStderr(), dir)
+					if err != nil {
+						return err
+					}
+				}
+				if ok {
+					if args[0] == "open" {
+						return fmt.Errorf("issues open: on a forge use reopen")
+					}
+					return runIssuesStateForge(cmd.OutOrStdout(), t, src, args[0], args[1], strings.Join(args[2:], " "), dryRunFlag || checkFlag)
+				}
+				if args[0] == "reopen" {
+					return fmt.Errorf("issues reopen: local tracker; use harnez issues open <n>")
+				}
+			}
 			if args[0] == "merge-driver" {
 				target := "issues/README.md"
 				if len(args) == 4 {
@@ -380,6 +476,17 @@ valid, exit-0 answer.`,
 			}
 			if args[0] == "new" {
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
+				if forgeFlag {
+					spec, err := prwait.LoadSpec()
+					if err != nil {
+						return err
+					}
+					t, err := forgetracker.ResolveRemote(dir, spec)
+					if err != nil {
+						return fmt.Errorf("issues new: cannot resolve forge remote: %w", err)
+					}
+					return runIssuesNewForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, t, forgetracker.CreateRequest{Title: title, BodyFile: bodyFileFlag, Labels: labelFlags}, checkFlag || dryRunFlag, jsonFlag)
+				}
 				// The forge path needs an explicit signal (-F/--label or tracker: none), so a
 				// fresh repo with a forge origin still adopts a local issues/ dir (issue 853).
 				_, remoteEnvSet := os.LookupEnv("CLAUDE_CODE_REMOTE")
@@ -391,7 +498,7 @@ valid, exit-0 answer.`,
 					}
 				}
 				if bodyFileFlag != "" || len(labelFlags) > 0 {
-					return fmt.Errorf("issues new: -F/--body-file and --label apply only when tickets live on the forge (no local issues/ dir)")
+					return fmt.Errorf("issues new: -F/--body-file and --label apply only when tickets live on the forge; with a local issues/ dir use --forge")
 				}
 				_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
 				if remoteFlag || remoteEnv {
@@ -433,6 +540,17 @@ valid, exit-0 answer.`,
 			if args[0] == "show" {
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
 					return fmt.Errorf("issues show: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
+				}
+				if forgeFlag {
+					sp, err := prwait.LoadSpec()
+					if err != nil {
+						return err
+					}
+					t, err := forgetracker.ResolveRemote(dir, sp)
+					if err != nil {
+						return fmt.Errorf("issues show: cannot resolve forge remote: %w", err)
+					}
+					return forgeTrackerHint(forgetracker.Show(cmd.OutOrStdout(), forgeTrackerSource(sp), t, args[1], jsonFlag), t)
 				}
 				if t, src, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
 					return err
@@ -519,11 +637,13 @@ valid, exit-0 answer.`,
 	}
 	cmd.Flags().BoolVar(&remoteFlag, "remote", false, "with new: allocate a permanent GH id using authenticated gh on the github remote")
 	cmd.Flags().StringVar(&numberFlag, "number", "", "with new: use this ticket number instead of the next free one (refused if it exists)")
-	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new or comment on a forge tracker: the body file")
-	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment: allow a closed issue")
-	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "with comment: target the forge even with a local issues/ dir")
+	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new, comment or edit on a forge tracker: body file")
+	cmd.Flags().StringVar(&editTitleFlag, "title", "", "with edit: replace the issue title")
+	cmd.Flags().StringVar(&ifUpdatedFlag, "if-updated", "", "with edit: require the timestamp from issues show --json")
+	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment or edit: allow a closed issue")
+	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "target the forge for new, comment, show, edit, close or reopen even with a local issues/ dir")
 	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")
-	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: create despite strong duplicate matches")
+	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: ignore duplicate matches; with edit: skip the updated-at check")
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
@@ -634,6 +754,18 @@ func runIssuesShow(w io.Writer, dir, ticketArg string, jsonOutput, rawOutput, te
 // "is:open" filter when no filter text is given; an explicit filter always
 // replaces the default rather than being ANDed with it.
 func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutput, rawOutput, textOutput, imageOutput bool, limit int, all bool) error {
+	if t, src, spec, ok, err := resolveForgeTracker(errW, dir); err != nil {
+		return err
+	} else if ok {
+		words := forgeFindArgs(filterArgs)
+		if len(words) == 0 {
+			words = []string{"status:open"}
+		}
+		if len(words) > 0 && findIssuesLocalOnly[words[0]] {
+			return forgeLocalOnlyError(words[0])
+		}
+		return forgeTrackerHint(forgetracker.Find(w, src, t, spec.IssueScan, forgeFindTerms(words), limit, all, jsonOutput), t)
+	}
 	filter := strings.TrimSpace(strings.Join(filterArgs, " "))
 	if filter == "" {
 		filter = "is:open"

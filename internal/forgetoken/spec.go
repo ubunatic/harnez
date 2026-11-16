@@ -14,12 +14,20 @@ import (
 )
 
 // Spec holds the settings from spec/forge_token.yaml.
-type Spec struct {
-	DefaultHost    string   `yaml:"default_host"`
+type WriteSpec struct {
 	Scopes         []string `yaml:"scopes"`
 	NamePrefix     string   `yaml:"name_prefix"`
 	KeyringService string   `yaml:"keyring_service"`
 	TokenDir       string   `yaml:"token_dir"`
+}
+
+type Spec struct {
+	Write          WriteSpec `yaml:"write"`
+	DefaultHost    string    `yaml:"default_host"`
+	Scopes         []string  `yaml:"scopes"`
+	NamePrefix     string    `yaml:"name_prefix"`
+	KeyringService string    `yaml:"keyring_service"`
+	TokenDir       string    `yaml:"token_dir"`
 }
 
 // LoadSpec reads and validates spec/forge_token.yaml from the embedded spec FS.
@@ -56,4 +64,10 @@ func loadSpecFrom(fsys fs.FS, specPath, schemaPath string) (Spec, error) {
 		return Spec{}, fmt.Errorf("decode %s: %w", specPath, err)
 	}
 	return s, nil
+}
+
+// ForWrite selects the independent write token settings.
+func (s Spec) ForWrite() Spec {
+	s.Scopes, s.NamePrefix, s.KeyringService, s.TokenDir = s.Write.Scopes, s.Write.NamePrefix, s.Write.KeyringService, s.Write.TokenDir
+	return s
 }

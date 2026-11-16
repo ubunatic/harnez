@@ -154,3 +154,16 @@ func Lookup(host string) string {
 	}
 	return st.Secret(host)
 }
+
+// LookupWrite returns only the stored write token for host.
+func LookupWrite(host string) string {
+	spec, err := LoadSpec()
+	if err != nil {
+		return ""
+	}
+	st, err := SystemStore(spec.ForWrite())
+	if err != nil {
+		return ""
+	}
+	return st.Secret(host)
+}

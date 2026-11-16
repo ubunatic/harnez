@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -266,5 +267,33 @@ func TestGHLintHeaderMismatch(t *testing.T) {
 	writeDuplicateFile(t, dir, "issues/GH42-cloud.md", "# GH43 — Cloud\n\n**Status**: Open\n")
 	if err := issuesmaintenance.RunIssuesLint(&bytes.Buffer{}, dir); err == nil || !strings.Contains(err.Error(), "filename/header mismatch") {
 		t.Fatalf("GH header mismatch: %v", err)
+	}
+}
+
+func TestIssuesRemoteWorkerDenied(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker")
+	t.Setenv("CODEX_THREAD_ID", "")
+	for _, env := range []bool{false, true} {
+		t.Setenv("CLAUDE_CODE_REMOTE", "1")
+		if !env {
+			if err := os.Unsetenv("CLAUDE_CODE_REMOTE"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		dir := forgeRepo(t)
+		repoRunGit(t, dir, "remote", "add", "github", "https://github.com/o/r.git")
+		cmd := newIssuesCmdWithGHRunner(func(string, ...string) ([]byte, error) { t.Fatal("gh called"); return nil, nil })
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		args := []string{"new", "-d", dir, "T"}
+		if !env {
+			args = append(args, "--remote")
+		}
+		cmd.SetArgs(args)
+		err := cmd.Execute()
+		if err == nil || err.Error() != "issues new: forge writes run only in a host session (this is harnez worker worker); hand the write to the host" {
+			t.Fatalf("err: %v", err)
+		}
 	}
 }

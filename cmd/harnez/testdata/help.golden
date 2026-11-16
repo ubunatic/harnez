@@ -25,7 +25,7 @@ Available Commands:
   exec            Run a command, proxy its stdio unbuffered, and record shell-call telemetry
   feedback        Record and review agent-observed harnez bugs and instruction gaps
   find            Query repository-data entities with a short fuzzy-text/filter grammar
-  forge           Manage forge access for harnez's read paths
+  forge           Manage forge access for harnez's read and write paths
   guard           Rule enforcer and safety guardrail commands
   help            Help about any command
   index           Regenerate issue indexes and docs/README.md's studies table from source files
@@ -1566,13 +1566,13 @@ Flags:
       --via string       use only the named code/docs finder
 
 === harnez forge
-Manage forge access for harnez's read paths
+Manage forge access for harnez's read and write paths
 
 Usage:
   harnez forge [command]
 
 Available Commands:
-  token       Create, rotate, revoke or show harnez's read-only Forgejo token
+  token       Create, rotate, revoke or show Forgejo read and write tokens
 
 Flags:
   -h, --help   help for forge
@@ -1580,10 +1580,11 @@ Flags:
 Use "harnez forge [command] --help" for more information about a command.
 
 === harnez forge token
-Manage one read-only Forgejo access token per forge host (scopes, name prefix and
+Manage separate read and issue write Forgejo access tokens per forge host (scopes, name prefix and
 default host in spec/forge_token.yaml). harnez reads the stored token before
 CODEBERG_TOKEN/FORGEJO_TOKEN, so pr wait and the forge tracker mode (find issues,
 issues show) can read private repos.
+Use --write to manage the separate issue write token.
 
 Forgejo creates and deletes tokens only with your password (basic auth), never with a token.
 create, rotate and revoke prompt for the password, and for a 2FA code, on the terminal; there
@@ -1597,7 +1598,7 @@ Usage:
   harnez forge token [command]
 
 Available Commands:
-  create      Create and store a new read-only token
+  create      Create and store a read or write token
   import      Store a token copied from the forge's web settings
   revoke      Revoke the stored token on the forge and forget it locally
   rotate      Replace the stored token with a new one and revoke the old one
@@ -1606,11 +1607,12 @@ Available Commands:
 Flags:
   -h, --help          help for token
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 Use "harnez forge token [command] --help" for more information about a command.
 
 === harnez forge token create
-Create and store a new read-only token
+Create and store a read or write token
 
 Usage:
   harnez forge token create [flags]
@@ -1621,6 +1623,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez forge token import
 Read a token as the forge's settings page shows it (only the token, nothing else) from
@@ -1644,6 +1647,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez forge token revoke
 Revoke the stored token on the forge and forget it locally
@@ -1657,6 +1661,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez forge token rotate
 Replace the stored token with a new one and revoke the old one
@@ -1669,6 +1674,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez forge token status
 Show the stored token's name, scopes and store (never the secret)
@@ -1681,6 +1687,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez guard
 Inspect and verify decide-based rule enforcement and safety guardrails.
@@ -1931,6 +1938,24 @@ working-tree changes, staged or not, are never staged or committed.
 --commit "<msg>" replaces the default message; --no-commit rewrites the same
 files and leaves them uncommitted. 'new' never commits.
 
+Forgejo writes use a separate write token (harnez forge token create --write);
+the read token remains separate. Without a write token new uses fj or tea;
+comment uses fj. GitHub new uses gh.
+Forge writes run in a host session; this guards accidents, not a security boundary:
+inherited host environments, unset worker markers and direct forge tools bypass it.
+GitHub writes are ticket 1209, except the existing GitHub new path.
+--dry-run previews forge writes, but does not cover new --remote or
+CLAUDE_CODE_REMOTE: that flow can create an issue. A recognised forge is the
+tracker when issues/ is absent, or issues.tracker is none and issues/ has no
+numbered ticket files or archive/ directory. With a local tracker use --forge:
+  issues new --forge "T" -F body.md
+  issues comment --forge 42 -F note.md
+  issues show --forge 42 --json
+  issues edit --forge 42 -F body.md --if-updated <updated_at>
+  issues close --forge 42 done
+  issues reopen --forge 42
+The edit timestamp preflight is not atomic; a write between check and PATCH is not detected.
+
 Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
 
   open [reason]    Status: Open, or "Open — <reason>"
@@ -1972,15 +1997,20 @@ then the README is regenerated and the batch is committed once.
                     branch. Unlike every
                     other verb, 'new' takes no ticket number (there isn't one
                     yet) and never commits.
-  comment <number> -F <file>  Comment on a forge issue through fj after checking
-                    its state; --dry-run prints the command and --closed permits
+  comment <number> -F <file>  Comment on a forge issue after checking
+                    its state; --dry-run prints the fj command or the API plan when a
+                    write token is stored; --closed permits
                     closed issues. With a local tracker, --forge is required.
                     Pull requests are always refused.
+  edit <number> [--title text] [-F file]  Edit a forge issue; body edits
+                    need --if-updated or --force. A write landing between the check and the PATCH is not detected.
+  close <number> [reason]  Close a forge issue; a reason is posted as a comment first.
+  reopen <number>   Reopen a forge issue.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
-                    Without a local issues/ dir, reads the ticket from the
-                    origin forge in spec/pr.yaml instead (read-only).
+                    With a forge tracker, reads the ticket from the origin
+                    forge in spec/pr.yaml instead (read-only).
   mv <old> [new]   Renumber a ticket to [new] (default: next free number
                     from scanning issuesDir). Renames the file keeping the
                     same slug, rewrites the '# <new> — <title>' header line,
@@ -2034,8 +2064,8 @@ the requested reason. Use close (or done) --amend-reason to explicitly
 correct its reason in one commit; this requires an already-Closed ticket.
 Other verbs still allow reason changes on an already-matching status.
 
---check (alias --dry-run) reports what would change without writing or
-committing, and exits 1 if there is drift from the requested state (mirrors
+For local status verbs, --check (alias --dry-run) reports what would change
+without writing or committing, and exits 1 if there is drift (mirrors
 'harnez index --check').
 
 A nonexistent or ambiguous ticket number is a caller-bug error (non-zero
@@ -2049,17 +2079,18 @@ Flags:
       --against string          with lint: fail when a ticket here reuses a number that REF (e.g. origin/main) gives to another file; warn if REF is missing
   -a, --all                     with 'list': show all matching results
       --amend-reason            with close/done: amend the reason of an already-Closed ticket
-  -F, --body-file string        with new or comment on a forge tracker: the body file
+  -F, --body-file string        with new, comment or edit on a forge tracker: body file
       --cached                  validate the staged Git snapshot (issues lint only)
       --check                   report what would change without writing or committing; exit 1 on drift
-      --closed                  with comment: allow a closed issue
+      --closed                  with comment or edit: allow a closed issue
       --commit string           override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
   -d, --dir string              repo root containing issues/ (default ".")
       --dry-run                 alias for --check
       --fetch                   reconcile: git fetch, then print the plan against the upstream (no changes)
-      --force                   with new: create despite strong duplicate matches
-      --forge                   with comment: target the forge even with a local issues/ dir
+      --force                   with new: ignore duplicate matches; with edit: skip the updated-at check
+      --forge                   target the forge for new, comment, show, edit, close or reopen even with a local issues/ dir
   -h, --help                    help for issues
+      --if-updated string       with edit: require the timestamp from issues show --json
   -I, --image                   render visual PNG card context
       --implemented-by string   with close/done: the commit that did the work but does not name the ticket; it must change files outside issues/, and the close commit records it
       --json                    output a single JSON object instead of a text line
@@ -2077,6 +2108,7 @@ Flags:
       --remote                  with new: allocate a permanent GH id using authenticated gh on the github remote
       --session string          with close/done: record the closing session (defaults to HARNEZ_SESSION_ID)
   -t, --text                    output raw text directly to stdout (alias for --raw)
+      --title string            with edit: replace the issue title
 
 === harnez lint
 lint verifies source files, scripts, and documentation against harnez

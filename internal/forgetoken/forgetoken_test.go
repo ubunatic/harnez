@@ -4,13 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
+	"ubunatic.com/harnez"
 )
 
 func TestSpecScopesAreReadOnly(t *testing.T) {
@@ -328,5 +331,54 @@ func TestKeyringPreferredAndFallsBackToFile(t *testing.T) {
 	res, err = Rotate(sp, st, c, "codeberg.org", l, time.Now().Add(time.Minute), next)
 	if err != nil || res.Meta.Store != "file" || st.Secret("codeberg.org") != "secret2" {
 		t.Fatalf("fallback: %v %+v", err, res.Meta)
+	}
+}
+
+func TestWriteSpecAndStore(t *testing.T) {
+	sp, err := LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(sp.Write.Scopes, ",") != "read:repository,write:issue" {
+		t.Fatalf("write scopes: %v", sp.Write.Scopes)
+	}
+	if sp.Write.TokenDir != "forge-tokens-write" {
+		t.Fatal(sp.Write.TokenDir)
+	}
+}
+
+func TestWriteScopeRejectedInReadSpec(t *testing.T) {
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/forge_token.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := fs.ReadFile(harnez.DefaultFS, "spec/schemas/forge_token.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalid := strings.Replace(string(data), "scopes: [read:repository, read:issue]", "scopes: [write:issue]", 1)
+	files := fstest.MapFS{"spec.yaml": {Data: []byte(invalid)}, "schema.json": {Data: schema}}
+	if _, err := loadSpecFrom(files, "spec.yaml", "schema.json"); err == nil {
+		t.Fatal("write scope accepted in read spec")
+	}
+}
+
+func TestCreateWriteToken(t *testing.T) {
+	f, c, st, sp := setup(t)
+	sp = sp.ForWrite()
+	st.Dir = filepath.Join(t.TempDir(), sp.TokenDir)
+	_, err := Create(sp, st, c, "codeberg.org", login, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(f.created[0]["name"].(string), "harnez-write-") {
+		t.Fatal(f.created[0])
+	}
+	scopes, _ := json.Marshal(f.created[0]["scopes"])
+	if string(scopes) != `["read:repository","write:issue"]` {
+		t.Fatal(string(scopes))
+	}
+	if st.Secret("codeberg.org") != "secret1" {
+		t.Fatal("write token missing")
 	}
 }

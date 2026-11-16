@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +19,12 @@ import (
 )
 
 func TestIssuesCommentOffline(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	oldLookup, oldMeta := issueWriteLookup, issueWriteMetadata
+	issueWriteLookup = func(string) string { return "" }
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	t.Cleanup(func() { issueWriteLookup, issueWriteMetadata = oldLookup, oldMeta })
 	state, pull, status := "open", false, http.StatusOK
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/repos/o/r/issues/7" || r.Header.Get("Authorization") != "" {
@@ -51,6 +59,11 @@ func TestIssuesCommentOffline(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("FJ_TEST_LOG", log)
+	oldRunner := issueCLIRun
+	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
+		return exec.Command(filepath.Join(bin, "fj"), c.Args...).CombinedOutput()
+	}
+	t.Cleanup(func() { issueCLIRun = oldRunner })
 	old := forgeTrackerSource
 	forgeTrackerSource = func(sp prwait.Spec) forgetracker.Source {
 		src := forgetracker.NewSource(sp)
@@ -62,7 +75,7 @@ func TestIssuesCommentOffline(t *testing.T) {
 		return runHarnez(t, append(args, flags...)...)
 	}
 	out, err := run("--dry-run")
-	wantDry := "dry run: fj --host codeberg.org issue comment o/r#7 --body-file " + strconv.Quote(body) + "\n"
+	wantDry := "dry run: fj issue comment codeberg.org/o/r#7 --body-file " + strconv.Quote(body) + "\n"
 	if err != nil || !strings.HasPrefix(out, wantDry) {
 		t.Fatalf("dry run: %s %v", out, err)
 	}
@@ -84,15 +97,15 @@ func TestIssuesCommentOffline(t *testing.T) {
 		t.Fatal("closed refusal executed fj")
 	}
 	out, err = run("--closed")
-	if err != nil || !strings.Contains(out, "commenting on codeberg.org o/r#7: A ticket") {
+	if err != nil || !strings.Contains(out, "commenting on codeberg.org o/r#7: A ticket") || !strings.Contains(out, "commented on codeberg.org/o/r#7\n") {
 		t.Fatalf("comment: %s %v", out, err)
 	}
 	got, err := os.ReadFile(log)
-	if err != nil || string(got) != strings.Join([]string{"--host", "codeberg.org", "issue", "comment", "o/r#7", "--body-file", body, ""}, "\n") {
+	if err != nil || string(got) != strings.Join([]string{"issue", "comment", "codeberg.org/o/r#7", "--body-file", body, ""}, "\n") {
 		t.Fatalf("argv: %q %v", got, err)
 	}
 	status = http.StatusUnauthorized
-	if _, err := run(); err == nil || !strings.Contains(err.Error(), "API requires authentication") || !strings.Contains(err.Error(), "fj -H codeberg.org auth login") {
+	if _, err := run(); err == nil || !strings.Contains(err.Error(), "API requires authentication") || !strings.Contains(err.Error(), `fj -H codeberg.org auth login`) {
 		t.Fatalf("API auth: %v", err)
 	}
 	status, state = http.StatusOK, "open"
@@ -100,7 +113,7 @@ func TestIssuesCommentOffline(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(bin, "fj"), []byte("#!/bin/sh\necho '"+message+"' >&2\nexit 1\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := run(); err == nil || !strings.Contains(err.Error(), "fj -H codeberg.org auth login") {
+		if _, err := run(); err == nil || !strings.Contains(err.Error(), `fj -H codeberg.org auth login`) {
 			t.Fatalf("fj auth %q: %v", message, err)
 		}
 	}
@@ -121,16 +134,17 @@ func TestIssuesCommentOffline(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err = run("--forge")
-	if err != nil || !strings.Contains(out, "commenting on codeberg.org o/r#7: A ticket") {
+	if err != nil || !strings.Contains(out, "commenting on codeberg.org o/r#7: A ticket") || !strings.Contains(out, "commented on codeberg.org/o/r#7\n") {
 		t.Fatalf("local tracker comment: %q %v", out, err)
 	}
 	got, err = os.ReadFile(log)
-	if err != nil || string(got) != strings.Join([]string{"--host", "codeberg.org", "issue", "comment", "o/r#7", "--body-file", body, ""}, "\n") {
+	if err != nil || string(got) != strings.Join([]string{"issue", "comment", "codeberg.org/o/r#7", "--body-file", body, ""}, "\n") {
 		t.Fatalf("local tracker argv: %q %v", got, err)
 	}
-	if _, err := runHarnez(t, "issues", "show", "-d", dir, "7", "--forge"); err == nil || !strings.Contains(err.Error(), "--forge requires comment") {
-		t.Fatalf("forge flag on show: %v", err)
+	if _, err := runHarnez(t, "issues", "list", "-d", dir, "--forge"); err == nil || err.Error() != "issues: --forge does not support list" {
+		t.Fatalf("forge flag on list: %v", err)
 	}
+
 }
 
 type commentSource struct {
@@ -142,4 +156,101 @@ func (s commentSource) Issue(fg forge.Forge, owner, repo string, n int) (forge.R
 	fg.APIBase = s.api
 	l := forge.PullLister{Client: http.DefaultClient}
 	return l.Issue(fg, owner, repo, n)
+}
+
+func TestIssuesCommentRejectsEmptyBody(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	src := &stubForgeSource{}
+	oldRun := issueCLIRun
+	calls := 0
+	issueCLIRun = func(string, forgetracker.Command) ([]byte, error) { calls++; return nil, nil }
+	t.Cleanup(func() { issueCLIRun = oldRun })
+	t.Cleanup(func() {
+		if calls != 0 {
+			t.Errorf("CLI called %d times", calls)
+		}
+	})
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	for _, content := range []string{"", " \t", "\n\n"} {
+		body := filepath.Join(t.TempDir(), "body file")
+		if err := os.WriteFile(body, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		err := runIssuesComment(io.Discard, t.TempDir(), target, src, "7", body, false, false)
+		if err == nil || !strings.Contains(err.Error(), "empty") || src.calls != 0 {
+			t.Fatalf("body %q: err=%v calls=%d", content, err, src.calls)
+		}
+	}
+	err := runIssuesComment(io.Discard, t.TempDir(), target, src, "7", "-", false, false)
+	if err == nil || !strings.Contains(err.Error(), "must name a body file") || src.calls != 0 {
+		t.Fatalf("stdin: err=%v calls=%d", err, src.calls)
+	}
+}
+
+func TestForgeCommentWorkerDenied(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker-1")
+	t.Setenv("CODEX_THREAD_ID", "")
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte("hello"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	src := &stubForgeSource{}
+	oldLook, oldRun, oldLookup, oldMeta := issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata
+	issueCLILookPath = func(string) (string, error) { return "fj", nil }
+	issueCLIRun = func(string, forgetracker.Command) ([]byte, error) { t.Error("unexpected CLI call"); return nil, nil }
+	issueWriteLookup = func(string) string { t.Fatal("unexpected token lookup"); return "" }
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	t.Cleanup(func() {
+		issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata = oldLook, oldRun, oldLookup, oldMeta
+	})
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	err := runIssuesComment(io.Discard, t.TempDir(), target, src, "7", body, false, false)
+	want := "issues comment: forge writes run only in a host session (this is harnez worker worker-1); hand the write to the host"
+	if err == nil || err.Error() != want || src.calls != 0 {
+		t.Fatalf("err=%v calls=%d", err, src.calls)
+	}
+	var out strings.Builder
+	if err := runIssuesComment(&out, t.TempDir(), target, src, "7", body, true, false); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "dry run: fj issue comment codeberg.org/o/r#7 --body-file "+body+"\n" {
+		t.Fatal(out.String())
+	}
+}
+
+func TestIssuesCommentFJErrors(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	oldLookup, oldMeta := issueWriteLookup, issueWriteMetadata
+	issueWriteLookup = func(string) string { return "" }
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	t.Cleanup(func() { issueWriteLookup, issueWriteMetadata = oldLookup, oldMeta })
+	src := &stubForgeSource{}
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	body := filepath.Join(t.TempDir(), "body file")
+	if err := os.WriteFile(body, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldLook, oldRun := issueCLILookPath, issueCLIRun
+	t.Cleanup(func() { issueCLILookPath, issueCLIRun = oldLook, oldRun })
+	issueCLILookPath = func(string) (string, error) { return "fj", nil }
+	for _, msg := range []string{"ordinary error\napi error: token was already used\ntrace line", "ordinary error\nthread panicked at src/keys.rs:154:28\ntrace line", "ordinary error"} {
+		issueCLIRun = func(string, forgetracker.Command) ([]byte, error) { return []byte(msg), errors.New("exit status 1") }
+		err := runIssuesComment(io.Discard, t.TempDir(), target, src, "7", body, false, false)
+		if err == nil {
+			t.Fatal("expected failure")
+		}
+		if msg == "ordinary error" {
+			if err.Error() != "issues comment: fj failed: exit status 1: ordinary error\nrun manually: fj issue comment codeberg.org/o/r#7 --body-file "+strconv.Quote(body) {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if err.Error() != `issues comment: fj login for codeberg.org failed; run "fj auth login" if your fj wrapper sets the host, otherwise "fj -H codeberg.org auth login"` {
+			t.Fatal(err)
+		}
+	}
 }

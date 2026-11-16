@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/forgetracker"
 	"ubunatic.com/harnez/internal/gittest"
 	"ubunatic.com/harnez/internal/modelblock"
 	"ubunatic.com/harnez/internal/resolve"
@@ -34,7 +37,24 @@ var (
 // Tests that need them use t.Setenv. It also isolates tests from the real store
 // (~/.harnez) by setting HOME to a temp dir, preventing session leaks.
 func TestMain(m *testing.M) {
+	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
+		return nil, fmt.Errorf("test did not stub the issue CLI: %s", c)
+	}
+	issueWriteClient = func(timeout time.Duration) *http.Client {
+		return &http.Client{Timeout: timeout, Transport: loopbackTransport{}}
+	}
 	os.Exit(runIsolatedTests(m))
+}
+
+type loopbackTransport struct{}
+
+func (loopbackTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	host := r.URL.Hostname()
+	ip := net.ParseIP(host)
+	if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+		return nil, fmt.Errorf("test refused non-loopback forge host: %s", host)
+	}
+	return http.DefaultTransport.RoundTrip(r)
 }
 
 func runIsolatedTests(m *testing.M) int {
