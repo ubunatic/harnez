@@ -73,6 +73,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var editTitleFlag, ifUpdatedFlag string
 	var closedFlag bool
 	var forgeFlag bool
+	var inboxFlag bool
 	var labelFlags []string
 	var numberFlag string
 	var offlineFlag bool
@@ -122,10 +123,11 @@ troubleshoot token setup.
 Forge writes run in a host session; this guards accidents, not a security boundary:
 inherited host environments, unset worker markers and direct forge tools bypass it.
 GitHub writes are ticket 1209, except the existing GitHub new path.
---dry-run previews forge writes, but does not cover new --remote or
-CLAUDE_CODE_REMOTE: that flow can create an issue. A recognised forge is the
-tracker when issues/ is absent, or issues.tracker is none and issues/ has no
-numbered ticket files or archive/ directory. With a local tracker use --forge:
+--dry-run previews forge, --remote, --inbox and local new operations without
+writing files or creating issues. A recognised forge is the tracker when
+issues/ is absent, or issues.tracker is none and issues/ has no numbered
+ticket files, archive/ directory, or issues/README.md. With a local tracker
+use --forge:
   issues new --forge "T" -F body.md
   issues comment --forge 42 -F note.md
   issues show --forge 42 --json
@@ -175,6 +177,11 @@ then the README is regenerated and the batch is committed once.
                     branch. Unlike every
                     other verb, 'new' takes no ticket number (there isn't one
                     yet) and never commits.
+  new --inbox [-F file] [title]
+                    Write a lightweight draft under issues/inbox/<slug>.md
+                    without creating numbered tickets, issues/README.md, or
+                    adopting a local tracker. Useful in worker sessions when
+                    forge writes are blocked for the host.
   comment <number> -F <file>  Comment on a forge issue after checking
                     its state; --dry-run prints the fj command or the API plan when a
                     write token is stored; --closed permits
@@ -479,43 +486,21 @@ valid, exit-0 answer.`,
 					return issuesmaintenance.RunIssuesStatus(cmd.OutOrStdout(), dir)
 				}
 				if args[0] == "new" {
-					title := strings.TrimSpace(strings.Join(args[1:], " "))
-					if forgeFlag {
-						spec, err := prwait.LoadSpec()
-						if err != nil {
-							return err
-						}
-						t, err := forgetracker.ResolveRemote(dir, spec)
-						if err != nil {
-							return fmt.Errorf("issues new: cannot resolve forge remote: %w", err)
-						}
-						return runIssuesNewForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, t, forgetracker.CreateRequest{Title: title, BodyFile: bodyFileFlag, Labels: labelFlags}, checkFlag || dryRunFlag, jsonFlag)
-					}
-					// The forge path needs an explicit signal (-F/--label or tracker: none), so a
-					// fresh repo with a forge origin still adopts a local issues/ dir (issue 853).
-					_, remoteEnvSet := os.LookupEnv("CLAUDE_CODE_REMOTE")
-					if !remoteFlag && !remoteEnvSet && numberFlag == "" && (bodyFileFlag != "" || len(labelFlags) > 0 || trackerIsNone(dir)) {
-						if t, _, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
-							return err
-						} else if ok {
-							return runIssuesNewForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, t, forgetracker.CreateRequest{Title: title, BodyFile: bodyFileFlag, Labels: labelFlags}, checkFlag || dryRunFlag, jsonFlag)
-						}
-					}
-					if bodyFileFlag != "" || len(labelFlags) > 0 {
-						return fmt.Errorf("issues new: -F/--body-file and --label apply only when tickets live on the forge; with a local issues/ dir use --forge")
-					}
-					_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
-					if remoteFlag || remoteEnv {
-						fmt.Fprintln(cmd.ErrOrStderr(), "issues new: remote mode")
-						return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
-					}
-					// Without issues/, runIssuesNewWithForce always adopts the harnez
-					// tracker (same dirExists test) and prints that line instead (issue 906).
-					if dirExists(filepath.Join(dir, "issues")) {
-						fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
-					}
-					warnNumberAhead(cmd.ErrOrStderr(), dir, numberFlag, offlineFlag)
-					return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag, offlineFlag)
+					return handleIssuesNew(cmd.OutOrStdout(), cmd.ErrOrStderr(), issuesNewOptions{
+						Dir:      dir,
+						Title:    strings.TrimSpace(strings.Join(args[1:], " ")),
+						BodyFile: bodyFileFlag,
+						Number:   numberFlag,
+						Labels:   labelFlags,
+						Forge:    forgeFlag,
+						Remote:   remoteFlag,
+						Inbox:    inboxFlag,
+						Force:    forceFlag,
+						Offline:  offlineFlag,
+						DryRun:   checkFlag || dryRunFlag,
+						JSON:     jsonFlag,
+						GH:       gh,
+					})
 				}
 				if args[0] == "comment" {
 					if forgeFlag {
@@ -648,6 +633,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().StringVar(&ifUpdatedFlag, "if-updated", "", "with edit: require the timestamp from issues show --json")
 	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment or edit: allow a closed issue")
 	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "target the forge for new, comment, show, edit, close or reopen even with a local issues/ dir")
+	cmd.Flags().BoolVar(&inboxFlag, "inbox", false, "with new: write a lightweight draft in issues/inbox/ without scaffolding a local tracker or touching the forge")
 	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")
 	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: ignore duplicate matches; with edit: skip the updated-at check")
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")
@@ -902,29 +888,236 @@ func warnNumberAhead(w io.Writer, dir, number string, offline bool) {
 	}
 }
 
+type issuesNewOptions struct {
+	Dir      string
+	Title    string
+	BodyFile string
+	Number   string
+	Labels   []string
+	Forge    bool
+	Remote   bool
+	Inbox    bool
+	Force    bool
+	Offline  bool
+	DryRun   bool
+	JSON     bool
+	GH       ghRunner
+}
+
+func handleIssuesNew(stdout, stderr io.Writer, opt issuesNewOptions) error {
+	if opt.Inbox {
+		return runIssuesNewInbox(stdout, stderr, opt)
+	}
+	if opt.Forge {
+		spec, err := prwait.LoadSpec()
+		if err != nil {
+			return err
+		}
+		t, err := forgetracker.ResolveRemote(opt.Dir, spec)
+		if err != nil {
+			return fmt.Errorf("issues new: cannot resolve forge remote: %w", err)
+		}
+		return runIssuesNewForge(stdout, stderr, opt.Dir, t, forgetracker.CreateRequest{Title: opt.Title, BodyFile: opt.BodyFile, Labels: opt.Labels}, opt.DryRun, opt.JSON)
+	}
+	// The forge path needs an explicit signal (-F/--label or tracker: none), so a
+	// fresh repo with a forge origin still adopts a local issues/ dir (issue 853).
+	_, remoteEnvSet := os.LookupEnv("CLAUDE_CODE_REMOTE")
+	if !opt.Remote && !remoteEnvSet && opt.Number == "" && (opt.BodyFile != "" || len(opt.Labels) > 0 || trackerIsNone(opt.Dir)) {
+		if t, _, _, ok, err := resolveForgeTracker(stderr, opt.Dir); err != nil {
+			return err
+		} else if ok {
+			return runIssuesNewForge(stdout, stderr, opt.Dir, t, forgetracker.CreateRequest{Title: opt.Title, BodyFile: opt.BodyFile, Labels: opt.Labels}, opt.DryRun, opt.JSON)
+		}
+	}
+	if opt.BodyFile != "" || len(opt.Labels) > 0 {
+		return fmt.Errorf("issues new: -F/--body-file and --label apply only when tickets live on the forge; with a local issues/ dir use --forge")
+	}
+	_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
+	if opt.Remote || remoteEnv {
+		fmt.Fprintln(stderr, "issues new: remote mode")
+		return runIssuesNewRemoteWithOptions(stdout, stderr, remoteNewOptions{
+			Dir:    opt.Dir,
+			Title:  opt.Title,
+			JSON:   opt.JSON,
+			Force:  opt.Force,
+			DryRun: opt.DryRun,
+			GH:     opt.GH,
+		})
+	}
+	issuesDir := filepath.Join(opt.Dir, "issues")
+	// Without issues/, runIssuesNewLocal adopts the harnez tracker (unless DryRun)
+	// and prints that line instead (issue 906).
+	if dirExists(issuesDir) && (!trackerIsNone(opt.Dir) || hasLocalTickets(issuesDir)) {
+		fmt.Fprintln(stderr, "issues new: local mode")
+	}
+	warnNumberAhead(stderr, opt.Dir, opt.Number, opt.Offline)
+	return runIssuesNewLocal(stdout, stderr, opt)
+}
+
 func runIssuesNewWithForce(w io.Writer, dir, title string, jsonOutput, force bool, number string, offline bool) error {
-	issuesDir := filepath.Join(dir, "issues")
+	return runIssuesNewLocal(w, os.Stderr, issuesNewOptions{
+		Dir:     dir,
+		Title:   title,
+		JSON:    jsonOutput,
+		Force:   force,
+		Number:  number,
+		Offline: offline,
+	})
+}
+
+func runIssuesNewLocal(w, stderr io.Writer, opt issuesNewOptions) error {
+	issuesDir := filepath.Join(opt.Dir, "issues")
+	// Merely having issues/inbox/ under issues.tracker: none must not scaffold local
+	// numbered tickets or issues/README.md unless a local tracker is already present.
+	if trackerIsNone(opt.Dir) && dirExists(issuesDir) && !hasLocalTickets(issuesDir) {
+		return fmt.Errorf("issues new: issues.tracker is none and issues/ has no local tracker; use --inbox to write a draft in issues/inbox/, configure a forge origin, or set issues.tracker: harnez in .harnez/repo.yaml")
+	}
 	adoptTracker := !dirExists(issuesDir)
-	if !force {
-		if err := checkIssueDuplicates(issuesDir, title); err != nil {
+	if !opt.Force {
+		if err := checkIssueDuplicates(issuesDir, opt.Title); err != nil {
 			return err
 		}
 	}
-	elsewhere, err := issues.Claims(dir, issues.ClaimOptions{Offline: offline, Warn: os.Stderr})
+	elsewhere, err := issues.Claims(opt.Dir, issues.ClaimOptions{Offline: opt.Offline, Warn: stderr})
 	if err != nil {
 		return fmt.Errorf("issues new: %w", err)
 	}
-	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: title, Number: number, Elsewhere: elsewhere})
+	if opt.DryRun {
+		num, filename, err := issues.PlanReserve(issuesDir, issues.ReserveOptions{Title: opt.Title, Number: opt.Number, Elsewhere: elsewhere})
+		if err != nil {
+			return fmt.Errorf("issues new: %w", err)
+		}
+		if adoptTracker && stderr != nil {
+			fmt.Fprintln(stderr, "issues new: dry run, would adopt file-based tracker (tracker: harnez)")
+		}
+		relPath := filepath.ToSlash(filepath.Join("issues", filename))
+		if opt.JSON {
+			data, err := json.Marshal(find.NextResultJSON{
+				Number:   num,
+				Reserved: false,
+				File:     filename,
+				Path:     relPath,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(w, string(data))
+			return nil
+		}
+		fmt.Fprintf(w, "dry run, would reserve %s\t%s\n", num, relPath)
+		return nil
+	}
+	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: opt.Title, Number: opt.Number, Elsewhere: elsewhere})
 	if err != nil {
 		return fmt.Errorf("issues new: %w", err)
 	}
 	if adoptTracker {
-		if err := claude.AdoptRepoIssuesTracker(dir); err != nil {
+		if err := claude.AdoptRepoIssuesTracker(opt.Dir); err != nil {
 			return fmt.Errorf("issues new: record tracker adoption: %w", err)
 		}
-		fmt.Fprintln(os.Stderr, "issues new: adopted file-based tracker (tracker: harnez)")
+		fmt.Fprintln(stderr, "issues new: adopted file-based tracker (tracker: harnez)")
 	}
-	return finishIssuesNew(w, dir, num, filename, jsonOutput)
+	return finishIssuesNew(w, opt.Dir, num, filename, opt.JSON)
+}
+
+func runIssuesNewInbox(stdout, stderr io.Writer, opt issuesNewOptions) error {
+	if opt.Forge {
+		return fmt.Errorf("issues new: --inbox cannot be combined with --forge")
+	}
+	if opt.Remote {
+		return fmt.Errorf("issues new: --inbox cannot be combined with --remote")
+	}
+	if opt.Number != "" {
+		return fmt.Errorf("issues new: --inbox cannot be combined with --number")
+	}
+	if len(opt.Labels) > 0 {
+		return fmt.Errorf("issues new: --inbox does not accept --label; add labels when filing on the forge")
+	}
+	title, content, err := resolveInboxContent(strings.TrimSpace(opt.Title), opt.BodyFile)
+	if err != nil {
+		return err
+	}
+	slug := issues.Slugify(title)
+	if slug == "" {
+		slug = "draft"
+	}
+	relPath := nextInboxRelPath(opt.Dir, slug)
+	filename := filepath.Base(relPath)
+	if opt.DryRun {
+		if opt.JSON {
+			return json.NewEncoder(stdout).Encode(map[string]any{"inbox": true, "dry_run": true, "file": filename, "path": relPath, "written": false})
+		}
+		_, err := fmt.Fprintf(stdout, "dry run, would write inbox draft %s\n", relPath)
+		return err
+	}
+	relPath, err = writeInboxPayload(opt.Dir, slug, []byte(content))
+	if err != nil {
+		return err
+	}
+	filename = filepath.Base(relPath)
+	if opt.JSON {
+		return json.NewEncoder(stdout).Encode(map[string]any{"inbox": true, "file": filename, "path": relPath, "written": true})
+	}
+	fmt.Fprintf(stdout, "inbox\t%s\n", relPath)
+	if stderr != nil {
+		hostTitle := title
+		if hostTitle == "" {
+			hostTitle = "<title>"
+		}
+		fmt.Fprintf(stderr, "issues new: wrote inbox draft (no tracker index or commit; host can file with: harnez issues new -d %s %q -F %s)\n", opt.Dir, hostTitle, relPath)
+	}
+	return nil
+}
+
+func resolveInboxContent(title, bodyFile string) (string, string, error) {
+	if title == "" && bodyFile == "" {
+		return "", "", fmt.Errorf("issues new --inbox: a title or -F/--body-file is required")
+	}
+	var content string
+	if bodyFile != "" {
+		var data []byte
+		var err error
+		if bodyFile == "-" {
+			data, err = io.ReadAll(os.Stdin)
+		} else {
+			info, statErr := os.Stat(bodyFile)
+			if statErr != nil {
+				return "", "", fmt.Errorf("issues new: body file: %w", statErr)
+			}
+			if !info.Mode().IsRegular() {
+				return "", "", fmt.Errorf("issues new: body file must be a regular file")
+			}
+			data, err = os.ReadFile(bodyFile)
+		}
+		if err != nil {
+			return "", "", fmt.Errorf("issues new: body file: %w", err)
+		}
+		content = string(data)
+		if strings.TrimSpace(content) == "" {
+			return "", "", fmt.Errorf("issues new: body file is empty or whitespace-only")
+		}
+		if title == "" {
+			title = extractInboxTitle(content)
+		} else if !strings.HasPrefix(strings.TrimLeft(content, " \t\r\n"), "# ") {
+			content = "# " + title + "\n\n" + strings.TrimLeft(content, "\r\n")
+		}
+	} else {
+		content = fmt.Sprintf("# %s\n\n**Priority**: P2 (Medium)\n**Severity**: Minor\n**Category**: Bug\n\n## Goal\n\nDescribe the desired outcome, acceptance criteria, and when to stop if blocked.\n", title)
+	}
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	return title, content, nil
+}
+
+func extractInboxTitle(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
+		}
+	}
+	return ""
 }
 
 func finishIssuesNew(w io.Writer, dir, num, filename string, jsonOutput bool) error {

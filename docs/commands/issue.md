@@ -30,8 +30,9 @@ harnez find -d <repo> issues "search terms"
 ```
 
 A recognised forge origin is the tracker when `issues/` is absent, or when
-`issues.tracker: none` and `issues/` has no numbered ticket files (`<digits>-*.md`)
-or `archive/` directory. For a forge tracker, no `--forge` flag is needed:
+`issues.tracker: none` and `issues/` has no numbered ticket files (`<digits>-*.md`),
+`archive/` directory, or `issues/README.md`. Having only `issues/inbox/` keeps
+forge routing active. For a forge tracker, no `--forge` flag is needed:
 
 ```bash
 harnez issues new -d <repo> "Title" -F body.md --label bug --dry-run
@@ -64,12 +65,15 @@ forge: the API resolves their names to IDs; fj cannot set labels.
 reason — missing repository write access (`401`/`403`), missing or unauthenticated
 token/CLI (`fj`, `tea`, `gh`), or running inside a worker session — `harnez issues
 new` automatically writes the issue to `issues/inbox/<slug>.md` and warns not to
-troubleshoot token setup. Agents must **never** spend turns inspecting token
-stores, environment variables, or forge CLI auth when filing fails: verify or
-write `issues/inbox/<slug>.md`, commit it, and push it on a branch or AGit PR.
+troubleshoot token setup (or pass `--inbox` explicitly to write an inbox draft
+directly without attempting forge calls or scaffolding `issues/`). Agents must
+**never** spend turns inspecting token stores, environment variables, or forge CLI
+auth when filing fails: verify or write `issues/inbox/<slug>.md`, commit it, and
+push it on a branch or AGit PR (or hand the draft back to the host session).
 
-`--dry-run` previews forge writes, but does not cover the `new --remote` or
-`CLAUDE_CODE_REMOTE` flow, which can create an issue. Forge writes are host-only:
+`--dry-run` previews `new` (forge, `--remote`, `--inbox`, and local), comment,
+edit, close, and reopen operations without writing files or creating issues.
+Forge writes are host-only:
 worker markers guard against accidents, not security attacks. Native subagents
 inheriting the host environment, workers that unset the markers, and direct forge
 tools are not stopped (for `issues new`, workers fall back to `issues/inbox/`).
@@ -78,8 +82,24 @@ timestamp check is a preflight: a write between the check and PATCH is not detec
 A comment body must contain non-whitespace text and cannot use stdin. Add `--closed`
 to comment on or edit a closed issue.
 
+Worker-session fallback (`issues.tracker: none` / forge trackers):
+- In a `harnez` worker session (`HARNEZ_AGENT_ROLE` / `HARNEZ_SESSION_ID`), forge
+  writes fail with `forge writes run only in a host session`. Do not retry with
+  `--forge` or scaffold `issues/001-*.md` or `issues/README.md`.
+- Search the forge first with `harnez find -d <repo> issues "<search terms>"`,
+  then either hand the drafted title, labels, and body back to the host session
+  or save an inbox draft:
+
+```bash
+harnez issues new -d <repo> --inbox "<title>" [-F body.md]
+```
+
+- `--inbox` writes only `issues/inbox/<slug>.md`, keeps forge routing intact,
+  creates no tracker index or commit, and prints the draft path for the host.
+
 - When an existing ticket partly covers the request, say so and ask before filing or commenting. Comment on other tickets only with the user's OK.
-- Report "filed as #N at <URL>; no commit" (or, on inbox fallback, report the `issues/inbox/<slug>.md` path and publish the branch/PR per Publish Promptly). Publish Promptly below applies to file-based tickets and `issues/inbox/` fallbacks.
+- Report "filed as #N at <URL>; no commit" (or, on inbox fallback / `--inbox`, report the `issues/inbox/<slug>.md` path or host handoff payload and publish the branch/PR per Publish Promptly). Publish Promptly below applies to file-based tickets and `issues/inbox/` fallbacks.
+- If `harnez` issue search or filing hits friction (wrong routing, failing dry runs, unclear errors, missing guidance), briefly note it in the ticket or draft (for example under `## Filing Notes`) or log it via `harnez feedback issue "<description>" [--severity bug|instruction]` so regressions surface early.
 
 ```bash
 harnez find -d <repo> issues -a status:active

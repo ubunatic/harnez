@@ -730,6 +730,69 @@ type ReserveOptions struct {
 	Elsewhere []IssueFile
 }
 
+// PlanReserve computes the ticket number and filename that Reserve would
+// allocate under issuesDir without creating directories, lock files, or tickets.
+func PlanReserve(issuesDir string, opts ReserveOptions) (num string, filename string, err error) {
+	explicit, err := validateExplicitNumber(opts.Number)
+	if err != nil {
+		return "", "", err
+	}
+	files, err := Scan(issuesDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", "", fmt.Errorf("scan issues for reservation: %w", err)
+	}
+	files = append(files, opts.Elsewhere...)
+	nextNum, baseName, _, err := planReserveFromFiles(files, explicit, opts)
+	return nextNum, baseName, err
+}
+
+func validateExplicitNumber(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < 1 {
+		return "", fmt.Errorf("invalid ticket number %q (expected a positive integer)", raw)
+	}
+	return fmt.Sprintf("%03d", n), nil
+}
+
+func planReserveFromFiles(files []IssueFile, explicit string, opts ReserveOptions) (nextNum, baseName, titleText string, err error) {
+	nextNum = NextNumberFromFiles(files)
+	if explicit != "" {
+		nextNum = explicit
+		for _, f := range files {
+			if f.Number == nextNum {
+				return "", "", "", fmt.Errorf("ticket number %s already exists: %s", nextNum, f.location())
+			}
+		}
+	}
+	if opts.RemoteID != "" {
+		nextNum = opts.RemoteID
+		if !remoteIDRegex.MatchString(nextNum) {
+			return "", "", "", fmt.Errorf("invalid GitHub ticket id %q", nextNum)
+		}
+		for _, f := range files {
+			if f.Number == nextNum {
+				return "", "", "", fmt.Errorf("duplicate ticket number %s: %s", nextNum, f.location())
+			}
+		}
+	}
+
+	slug := Slugify(opts.Title)
+	if slug != "" {
+		baseName = fmt.Sprintf("%s-%s.md", nextNum, slug)
+		titleText = strings.TrimSpace(opts.Title)
+	} else {
+		baseName = fmt.Sprintf("%s-reserved.md", nextNum)
+		titleText = "Reserved"
+		if opts.RemoteID != "" && strings.TrimSpace(opts.Title) != "" {
+			titleText = strings.TrimSpace(opts.Title)
+		}
+	}
+	return nextNum, baseName, titleText, nil
+}
+
 // Reserve allocates the next ticket number and atomically creates a placeholder
 // ticket file under issuesDir. If a race occurs (file exists), it retries with the
 // next number until successful.
@@ -764,13 +827,9 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 		_ = lock.Close()
 	}()
 
-	explicit := ""
-	if opts.Number != "" {
-		n, err := strconv.Atoi(strings.TrimSpace(opts.Number))
-		if err != nil || n < 1 {
-			return "", "", fmt.Errorf("invalid ticket number %q (expected a positive integer)", opts.Number)
-		}
-		explicit = fmt.Sprintf("%03d", n)
+	explicit, err := validateExplicitNumber(opts.Number)
+	if err != nil {
+		return "", "", err
 	}
 
 	for attempts := 0; attempts < 100; attempts++ {
@@ -779,39 +838,9 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 			return "", "", fmt.Errorf("scan issues for reservation: %w", err)
 		}
 		files = append(files, opts.Elsewhere...)
-		nextNum := NextNumberFromFiles(files)
-		if explicit != "" {
-			nextNum = explicit
-			for _, f := range files {
-				if f.Number == nextNum {
-					return "", "", fmt.Errorf("ticket number %s already exists: %s", nextNum, f.location())
-				}
-			}
-		}
-		if opts.RemoteID != "" {
-			nextNum = opts.RemoteID
-			if !remoteIDRegex.MatchString(nextNum) {
-				return "", "", fmt.Errorf("invalid GitHub ticket id %q", nextNum)
-			}
-			for _, f := range files {
-				if f.Number == nextNum {
-					return "", "", fmt.Errorf("duplicate ticket number %s: %s", nextNum, f.location())
-				}
-			}
-		}
-
-		var baseName string
-		var titleText string
-		slug := Slugify(opts.Title)
-		if slug != "" {
-			baseName = fmt.Sprintf("%s-%s.md", nextNum, slug)
-			titleText = strings.TrimSpace(opts.Title)
-		} else {
-			baseName = fmt.Sprintf("%s-reserved.md", nextNum)
-			titleText = "Reserved"
-			if opts.RemoteID != "" && strings.TrimSpace(opts.Title) != "" {
-				titleText = strings.TrimSpace(opts.Title)
-			}
+		nextNum, baseName, titleText, err := planReserveFromFiles(files, explicit, opts)
+		if err != nil {
+			return "", "", err
 		}
 
 		content := fmt.Sprintf(`# %s — %s

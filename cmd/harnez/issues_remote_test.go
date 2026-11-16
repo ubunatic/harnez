@@ -297,3 +297,25 @@ func TestIssuesRemoteWorkerDenied(t *testing.T) {
 		}
 	}
 }
+
+func TestIssuesRemoteDryRunDoesNotCallGHOrWrite(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker")
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	repoRunGit(t, dir, "remote", "add", "github", "https://github.com/o/r.git")
+	cmd := newIssuesCmdWithGHRunner(func(string, ...string) ([]byte, error) { t.Fatal("gh called during dry run"); return nil, nil })
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"new", "-d", dir, "--remote", "--dry-run", "Remote Dry"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("--remote --dry-run failed: %v", err)
+	}
+	if !strings.Contains(out.String(), "dry run, would file on https://github.com/o/r.git") {
+		t.Fatalf("unexpected dry run output: %q", out.String())
+	}
+	files, scanErr := issues.Scan(filepath.Join(dir, "issues"))
+	if scanErr != nil || len(files) != 1 {
+		t.Fatalf("remote dry run wrote files: files=%d err=%v", len(files), scanErr)
+	}
+}

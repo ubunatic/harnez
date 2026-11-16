@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1504,5 +1505,195 @@ func TestIssuesNewNumberFlag(t *testing.T) {
 	cmd.SetOut(&out)
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("--number accepted for a non-new verb")
+	}
+}
+
+func TestIssuesNewDryRunDoesNotWriteLocalOrAdopt(t *testing.T) {
+	t.Run("fresh repo without issues dir", func(t *testing.T) {
+		dir := repoInit(t)
+		writeIssuesNewRepoConfig(t, dir)
+		configBefore, err := os.ReadFile(filepath.Join(dir, ".harnez", "repo.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, flag := range []string{"--dry-run", "--check"} {
+			var out, errOut bytes.Buffer
+			cmd := newIssuesCmd()
+			cmd.SetArgs([]string{"new", "-d", dir, "Dry Ticket", flag})
+			cmd.SetOut(&out)
+			cmd.SetErr(&errOut)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("issues new %s: %v", flag, err)
+			}
+			if !strings.Contains(out.String(), "dry run, would reserve 001\tissues/001-dry-ticket.md") {
+				t.Fatalf("unexpected stdout for %s: %q", flag, out.String())
+			}
+			if !strings.Contains(errOut.String(), "dry run, would adopt file-based tracker") {
+				t.Fatalf("unexpected stderr for %s: %q", flag, errOut.String())
+			}
+			if _, statErr := os.Stat(filepath.Join(dir, "issues")); !os.IsNotExist(statErr) {
+				t.Fatalf("issues/ created during %s: %v", flag, statErr)
+			}
+			configAfter, err := os.ReadFile(filepath.Join(dir, ".harnez", "repo.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(configAfter) != string(configBefore) {
+				t.Fatalf("repo.yaml changed during %s", flag)
+			}
+		}
+		var jsonOut bytes.Buffer
+		cmd := newIssuesCmd()
+		cmd.SetArgs([]string{"new", "-d", dir, "Dry JSON", "--dry-run", "--json"})
+		cmd.SetOut(&jsonOut)
+		cmd.SetErr(io.Discard)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("issues new --dry-run --json: %v", err)
+		}
+		if !strings.Contains(jsonOut.String(), `"reserved":false`) || !strings.Contains(jsonOut.String(), `"number":"001"`) {
+			t.Fatalf("unexpected json dry run output: %s", jsonOut.String())
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "issues")); !os.IsNotExist(statErr) {
+			t.Fatalf("issues/ created during --dry-run --json")
+		}
+	})
+
+	t.Run("existing local tracker", func(t *testing.T) {
+		dir, _ := issuesFixtureRepo(t, sampleTicket)
+		readmeBefore, err := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out, errOut bytes.Buffer
+		cmd := newIssuesCmd()
+		cmd.SetArgs([]string{"new", "-d", dir, "Dry Local", "--dry-run"})
+		cmd.SetOut(&out)
+		cmd.SetErr(&errOut)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("issues new --dry-run: %v", err)
+		}
+		if !strings.Contains(out.String(), "dry run, would reserve 043\tissues/043-dry-local.md") {
+			t.Fatalf("unexpected stdout: %q", out.String())
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "issues", "043-dry-local.md")); !os.IsNotExist(statErr) {
+			t.Fatalf("ticket written during --dry-run")
+		}
+		readmeAfter, err := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(readmeAfter) != string(readmeBefore) {
+			t.Fatalf("README modified during --dry-run")
+		}
+	})
+}
+
+func TestIssuesNewTrackerNoneInboxDoesNotScaffold(t *testing.T) {
+	dir := repoInit(t)
+	writeIssuesNewRepoConfig(t, dir)
+	inboxDir := filepath.Join(dir, "issues", "inbox")
+	if err := os.MkdirAll(inboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(inboxDir, "existing.md"), []byte("# Existing\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, extra := range [][]string{nil, {"--dry-run"}} {
+		args := append([]string{"new", "-d", dir, "Should Not Scaffold"}, extra...)
+		cmd := newIssuesCmd()
+		cmd.SetArgs(args)
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--inbox") {
+			t.Fatalf("args %v: want actionable error naming --inbox, got %v", args, err)
+		}
+	}
+	for _, forbidden := range []string{"issues/001-should-not-scaffold.md", "issues/README.md", "issues/BACKLOG.md", "issues/CLOSED.md"} {
+		if _, statErr := os.Stat(filepath.Join(dir, forbidden)); !os.IsNotExist(statErr) {
+			t.Fatalf("scaffolded forbidden file %s", forbidden)
+		}
+	}
+}
+
+func TestIssuesNewInboxAndDryRun(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker-1")
+	dir := repoInit(t)
+	writeIssuesNewRepoConfig(t, dir)
+
+	// Dry run creates nothing.
+	var out, errOut bytes.Buffer
+	cmd := newIssuesCmd()
+	cmd.SetArgs([]string{"new", "-d", dir, "--inbox", "Worker Note", "--dry-run"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("inbox --dry-run: %v", err)
+	}
+	if !strings.Contains(out.String(), "dry run, would write inbox draft issues/inbox/worker-note.md") {
+		t.Fatalf("unexpected dry-run stdout: %q", out.String())
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "issues")); !os.IsNotExist(statErr) {
+		t.Fatalf("inbox --dry-run created issues/")
+	}
+
+	// Real write creates issues/inbox/worker-note.md without scaffolding tracker indexes.
+	out.Reset()
+	errOut.Reset()
+	cmd = newIssuesCmd()
+	cmd.SetArgs([]string{"new", "-d", dir, "--inbox", "Worker Note"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("inbox create: %v", err)
+	}
+	if out.String() != "inbox\tissues/inbox/worker-note.md\n" {
+		t.Fatalf("unexpected stdout: %q", out.String())
+	}
+	if !strings.Contains(errOut.String(), "host can file with:") {
+		t.Fatalf("expected host hint on stderr, got: %q", errOut.String())
+	}
+	for _, forbidden := range []string{"issues/README.md", "issues/BACKLOG.md", "issues/CLOSED.md"} {
+		if _, statErr := os.Stat(filepath.Join(dir, forbidden)); !os.IsNotExist(statErr) {
+			t.Fatalf("--inbox created %s", forbidden)
+		}
+	}
+
+	// Second call with the same title avoids overwriting existing draft.
+	bodyPath := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(bodyPath, []byte("## Goal\n\nFix inbox conflict.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	cmd = newIssuesCmd()
+	cmd.SetArgs([]string{"new", "-d", dir, "--inbox", "Worker Note", "-F", bodyPath})
+	cmd.SetOut(&out)
+	cmd.SetErr(io.Discard)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("second inbox create: %v", err)
+	}
+	if out.String() != "inbox\tissues/inbox/worker-note-2.md\n" {
+		t.Fatalf("unexpected collision path: %q", out.String())
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "issues", "inbox", "worker-note-2.md"))
+	if err != nil || !strings.HasPrefix(string(data), "# Worker Note\n\n## Goal\n") {
+		t.Fatalf("unexpected draft content %q: %v", data, err)
+	}
+
+	// Incompatible flags fail cleanly.
+	for _, bad := range [][]string{
+		{"new", "-d", dir, "--inbox", "--forge", "T"},
+		{"new", "-d", dir, "--inbox", "--remote", "T"},
+		{"new", "-d", dir, "--inbox", "--number", "5", "T"},
+		{"new", "-d", dir, "--inbox", "--label", "bug", "T"},
+	} {
+		cmd = newIssuesCmd()
+		cmd.SetArgs(bad)
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		if err := cmd.Execute(); err == nil {
+			t.Fatalf("expected error for %v", bad)
+		}
 	}
 }

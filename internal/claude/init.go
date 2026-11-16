@@ -541,11 +541,10 @@ func writeRules(dir string, rules RulesConfig, quota bool, repoConfig *RepoConfi
 		repo := repoConfig
 		if repo.Issues.Tracker == "none" {
 			index += "\n> This repo does not use file-based issues; skip those steps and use the repo's own tracker.\n" +
-				"> When its tickets live on the forge of the origin remote (no issues/ dir), search with `harnez find -d . issues \"<terms>\"`,\n" +
+				"> When its tickets live on the forge of the origin remote (no numbered issues/ tracker or `issues/README.md`; `issues/inbox/` alone stays on the forge), search with `harnez find -d . issues \"<terms>\"`,\n" +
 				"> read with `harnez issues show N`, and file with `harnez issues new \"<title>\" -F <body-file> [--label L]`;\n" +
 				"> each prints the forge repo. Ask before commenting on an existing ticket, and report \"filed as #N at <URL>; no commit\".\n" +
-				"> If forge filing fails (missing write access, token, CLI auth, or worker session), `harnez issues new` falls back to writing\n" +
-				"> `issues/inbox/<slug>.md` — commit and push it on a branch/PR. Never inspect or troubleshoot forge token setup.\n"
+				"> If forge filing fails (missing write access, token, CLI auth, or worker session), `harnez issues new` falls back to writing `issues/inbox/<slug>.md` (or use `--inbox` directly) — never scaffold `issues/001-*.md` or `issues/README.md`, and never inspect or troubleshoot forge token setup; commit and push the draft on a branch/PR or hand it back to the host. Note any `harnez` filing friction briefly or via `harnez feedback issue \"<description>\"`.\n"
 		}
 		if !repo.Docs.Studies {
 			index += "\n> This repo does not use indexed studies; skip those steps.\n"
