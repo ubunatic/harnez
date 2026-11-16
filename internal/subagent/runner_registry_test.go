@@ -92,7 +92,13 @@ func TestFileSessionStoreCreateStampsLaunchIDAndRunnerRegistryClient(t *testing.
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- server.RelayRunnerBroker(ctx, hostEnd, hostSocket, cfg) }()
-	t.Cleanup(func() { cancel(); _ = runnerEnd.Close(); <-done })
+	t.Cleanup(func() {
+		cancel()
+		_ = runnerEnd.Close()
+		if err := <-done; err != nil {
+			_ = err
+		}
+	})
 
 	runnerRoot := filepath.Join(t.TempDir(), "runner-sess")
 	if err := os.Mkdir(runnerRoot, 0o700); err != nil {

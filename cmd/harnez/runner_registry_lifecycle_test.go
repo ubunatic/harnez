@@ -84,7 +84,13 @@ func TestTelemetryCollectorServiceRegistryOwnSessionAndLegacyRejection(t *testin
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	done2 := make(chan error, 1)
 	go func() { done2 <- server.RelayRunnerBroker(ctx2, hostEnd2, hostSocket, config) }()
-	t.Cleanup(func() { cancel2(); _ = runnerEnd2.Close(); <-done2 })
+	t.Cleanup(func() {
+		cancel2()
+		_ = runnerEnd2.Close()
+		if err := <-done2; err != nil {
+			_ = err
+		}
+	})
 	if err := os.Mkdir(runnerRoot2, 0o700); err != nil {
 		t.Fatal(err)
 	}

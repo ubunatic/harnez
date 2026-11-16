@@ -139,7 +139,13 @@ func TestRunnerLaunchHostRelayAndForwardChild(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- RelayRunnerBroker(ctx, hostEnd, hostSocket, cfg) }()
-	t.Cleanup(func() { cancel(); _ = runnerEnd.Close(); <-done })
+	t.Cleanup(func() {
+		cancel()
+		_ = runnerEnd.Close()
+		if err := <-done; err != nil {
+			_ = err
+		}
+	})
 
 	devNull, err := os.Open(os.DevNull)
 	if err != nil {

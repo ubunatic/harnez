@@ -144,7 +144,7 @@ func historySummaryStatsContext(ctx context.Context, dir string) (HistorySummary
 	var data HistorySummaryData
 
 	isCanonical := dir == "" || filepath.Clean(dir) == filepath.Clean(HistoryDir(""))
-	if !(inRunnerMode() && isCanonical) {
+	if !inRunnerMode() || !isCanonical {
 		matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
 		if err != nil || len(matches) == 0 {
 			return data, nil

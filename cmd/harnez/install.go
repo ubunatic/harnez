@@ -84,11 +84,13 @@ func newInstallCmd() *cobra.Command {
 }
 
 func expectedManManifest(rootCmd *cobra.Command) ([]string, error) {
+	rootCmd.InitDefaultHelpCmd()
+	rootCmd.InitDefaultCompletionCmd()
 	tmpDir, err := os.MkdirTemp("", "harnez-man-manifest-*")
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 	if err := doc.GenManTree(rootCmd, manHeader(), tmpDir); err != nil {
 		return nil, fmt.Errorf("generate expected man manifest: %w", err)
 	}

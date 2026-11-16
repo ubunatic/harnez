@@ -71,8 +71,30 @@ inherited broker FD (`HARNEZ_BROKER_FD`):
   Records created directly on the host intentionally carry a distinct `LaunchID`
   (or none for legacy files) and cannot be adopted or mutated by a runner.
 
-The matrix below is the full approved contract; M11–M17 behavior remains planned.
-The machine-readable contract is `spec/session_isolation.yaml`.
+The matrix below is the full M7–M17 contract (`spec/session_isolation.yaml`),
+covering live Landlock confinement, the `bwrap` prerequisite profile, and host
+promotion.
+
+## Bubblewrap prerequisites & migration contract
+
+- **Linux Quota-1 sandbox (`internal/exec/bwrap_contract.go`)**: `harnez exec`
+  under Quota-1 wraps commands in `bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp`.
+  When `$TAIA_SESSION_DIR` is set, it validates the session directory (clean
+  absolute `0700`, non-symlink) and appends `--bind $TAIA_SESSION_DIR
+  $TAIA_SESSION_DIR` *after* `--tmpfs /tmp` and `--tmpfs $XDG_RUNTIME_DIR` so
+  mount overlays never mask the runner's session directory.
+- **Taia `--allow-bwrap` boundary & host prerequisites**: `ProbeBwrapSupport`
+  and `DiagnoseBwrapError` fail closed with explicit diagnostics for
+  `Failed to make / slave: Operation not permitted`, `setting up uid map:
+  Permission denied`, `Creating new namespace failed`, missing `bwrap`, or
+  non-Linux hosts. Running `harnez exec` inside Taia Landlock confinement with
+  Quota-1 sandboxing requires launching Taia with `--allow-bwrap` (or a profile
+  including it such as `--allow develop`).
+- **Pre-M12 legacy session migration**: Host files in `~/.harnez/agents/*.json`
+  created before `LaunchID` binding carry an empty `launch_id`. No bulk
+  backfill migrates legacy sessions into runner control; they remain readable on
+  the host and intentionally fail closed (`403`) on runner-broker `own_update`
+  / `own_query` / conflict checks.
 
 | Owner | Paths and operations |
 | --- | --- |

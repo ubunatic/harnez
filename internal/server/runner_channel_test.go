@@ -45,7 +45,9 @@ func startRunnerPairBroker(t *testing.T, cfg Config, ingest func(context.Context
 	t.Cleanup(func() {
 		cancel()
 		_ = runnerEnd.Close()
-		<-done
+		if err := <-done; err != nil {
+			_ = err
+		}
 	})
 	return runnerEnd
 }

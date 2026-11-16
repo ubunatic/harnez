@@ -463,7 +463,9 @@ func startRunnerRelayHarness(t *testing.T, config server.Config, runnerRoot, hos
 	t.Cleanup(func() {
 		cancel()
 		_ = runnerEnd.Close()
-		<-done
+		if err := <-done; err != nil {
+			_ = err
+		}
 	})
 }
 

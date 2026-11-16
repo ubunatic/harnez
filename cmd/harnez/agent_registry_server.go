@@ -101,7 +101,7 @@ func (s *telemetryCollectorService) handleRegistryUpdate(w http.ResponseWriter, 
 		}
 		req := relay.Request
 		// Host-initiated stop must not be reverted to running by a racing runner update.
-		if req.Status != "" && !(existing.Status == "stopped" && req.Status == "running") {
+		if req.Status != "" && (existing.Status != "stopped" || req.Status != "running") {
 			existing.Status = req.Status
 		}
 		if req.ProviderSessionID != "" {

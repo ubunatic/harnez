@@ -252,6 +252,10 @@ func hasExplicitExecTimeout(opts execOptions, args []string) bool {
 // quota1SandboxArgs builds bwrap argv for a Quota-1 child. Empty cache paths
 // are omitted; the filesystem remains read-only outside the explicit binds.
 func quota1SandboxArgs(args []string, cwd, goCache, goModCache, runtimeDir string) []string {
+	return quota1SandboxArgsWithSession(args, cwd, goCache, goModCache, runtimeDir, "")
+}
+
+func quota1SandboxArgsWithSession(args []string, cwd, goCache, goModCache, runtimeDir, sessionDir string) []string {
 	bwrapArgs := []string{"--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"}
 	if cwd != "" {
 		bwrapArgs = append(bwrapArgs, "--bind", cwd, cwd)
@@ -264,14 +268,27 @@ func quota1SandboxArgs(args []string, cwd, goCache, goModCache, runtimeDir strin
 	if runtimeDir != "" {
 		bwrapArgs = append(bwrapArgs, "--tmpfs", runtimeDir)
 	}
+	// Re-bind validated $TAIA_SESSION_DIR after --tmpfs /tmp and runtimeDir so
+	// temporary mount overlays never mask the runner's private session directory.
+	if sessionDir != "" {
+		bwrapArgs = append(bwrapArgs, "--bind", sessionDir, sessionDir)
+	}
 	bwrapArgs = append(bwrapArgs, "--chdir", cwd, "--")
 	return append(bwrapArgs, args...)
 }
 
-func quota1SandboxCommand(args []string, cwd string) (string, []string, bool) {
+func quota1SandboxCommand(args []string, cwd string) (string, []string, bool, error) {
+	sessionDir := ""
+	if raw := os.Getenv("TAIA_SESSION_DIR"); raw != "" {
+		validated, err := validateBwrapSessionBind(raw)
+		if err != nil {
+			return "", nil, false, err
+		}
+		sessionDir = validated
+	}
 	bwrap, err := exec.LookPath("bwrap")
 	if err != nil {
-		return "", args, false
+		return "", args, false, nil
 	}
 	var goCache, goModCache string
 	if goPath, err := exec.LookPath("go"); err == nil {
@@ -285,7 +302,7 @@ func quota1SandboxCommand(args []string, cwd string) (string, []string, bool) {
 			}
 		}
 	}
-	return bwrap, quota1SandboxArgs(args, cwd, goCache, goModCache, os.Getenv("XDG_RUNTIME_DIR")), true
+	return bwrap, quota1SandboxArgsWithSession(args, cwd, goCache, goModCache, os.Getenv("XDG_RUNTIME_DIR"), sessionDir), true, nil
 }
 
 // validateToolName rejects an explicit --tool value at the point it's
@@ -630,7 +647,11 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	quota1Sandboxed := false
 	if quota1Active && !opts.DisableSandbox {
 		cwd, _ := os.Getwd()
-		if bwrap, wrappedArgs, ok := quota1SandboxCommand(args, cwd); ok {
+		bwrap, wrappedArgs, ok, sbErr := quota1SandboxCommand(args, cwd)
+		if sbErr != nil {
+			return 1, sbErr
+		}
+		if ok {
 			c = exec.Command(bwrap, wrappedArgs...)
 			quota1Sandboxed = true
 			// Keep the wrapped command in the process group recorded by harnez.
@@ -782,6 +803,11 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	exitCode := exitCodeFromError(runErr)
 	if stopped.Detected {
 		exitCode = stoppedGroupExitCode
+	}
+	if quota1Sandboxed && exitCode != 0 {
+		if diag := DiagnoseBwrapError(capturedOutput.String(), os.Getenv("TAIA_SESSION_DIR") != ""); diag != "" {
+			fmt.Fprintf(errOut, "harnez exec: %s\n", diag)
+		}
 	}
 	if quota1Active {
 		if quotaLogFile != nil {
