@@ -85,17 +85,21 @@ socket modes or readable bearer tokens for authentication. Runner policy changes
 apply only to overlays; no runner RPC mutates global policy.
 
 A sandbox stages privately with `scripts/stage-install.sh`. A trusted host
-promoter (`harnez install --staged <dir>`, or `make promote STAGE=<dir>`) derives
-its approved roots only from trusted host configuration and
-defaults: `GOBIN` or `GOPATH/bin` for `harnez` and a host-generated relative
+promoter (`harnez install --staged <dir> [--sha256 <hex>]`, or `make promote
+STAGE=<dir>`) derives its approved roots only from trusted host configuration
+and defaults: `GOBIN` or `GOPATH/bin` for `harnez` and a host-generated relative
 `⚙ -> harnez` symlink, and `XDG_DATA_HOME/man/man1` or
-`~/.local/share/man/man1` for the exact man-page manifest. It copies and verifies
-staged artifacts as immutable host-owned temporary files, pins destination
-directories with `O_DIRECTORY|O_NOFOLLOW`, and promotes each approved file
-atomically. Atomicity is per file, not across the whole set. Runner-supplied
-arbitrary or checkout destinations are not approved, and `harnez install` /
-shared `man --install` fail closed in runner mode instead of invoking `goself`
-against shared paths.
+`~/.local/share/man/man1` for the exact man-page manifest of the running host
+binary. It copies staged artifacts into fsynced host-owned temporary files,
+checks file/dir ownership, rejects FIFOs/hardlinks/symlinks, checks `--sha256`
+when provided, pins destination directories with `O_DIRECTORY|O_NOFOLLOW`, and
+promotes each approved file atomically. Atomicity is per file, not across the
+whole set; without `--sha256`, the copy digest is only a structural I/O check
+and relies on host same-UID trust rather than cryptographic build signing.
+Runner-supplied arbitrary or checkout destinations are not approved; Landlock
+blocks shared destination writes at the kernel boundary while `TAIA_SESSION_DIR`
+checks fail closed early against `goself`, `install <dep>`, and shared `man
+--install` calls.
 
 These controls do not provide read confidentiality when `/` is readable under
 Taia, shared-checkout isolation, a same-UID filesystem boundary, or trust in

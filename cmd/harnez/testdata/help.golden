@@ -1923,6 +1923,7 @@ Flags:
   -h, --help              help for install
       --no-man            Skip installing roff man pages on local install
       --no-shell          Skip shell PATH and completion setup on local install
+      --sha256 string     Expected 64-hex SHA-256 digest of staged bin/harnez when using --staged
       --staged string     Promote a privately staged build into trusted host GOBIN/GOPATH/bin and XDG man roots
       --strategy string   Binary source: auto, self, build, release, or go (default "auto")
       --version string    Version or git ref for the release and go strategies

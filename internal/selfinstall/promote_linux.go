@@ -4,7 +4,9 @@ package selfinstall
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -42,14 +44,9 @@ func openPinnedExistingDir(absPath string, wantPerm os.FileMode) (*pinnedDir, er
 	if err != nil {
 		return nil, err
 	}
-	var st unix.Stat_t
-	if err := unix.Fstat(fd, &st); err != nil {
+	if err := validateOwnedDirFD(fd, absPath, wantPerm); err != nil {
 		_ = unix.Close(fd)
 		return nil, err
-	}
-	if wantPerm != 0 && os.FileMode(st.Mode&0o777) != wantPerm {
-		_ = unix.Close(fd)
-		return nil, fmt.Errorf("directory %s must have mode %04o (got %04o)", absPath, wantPerm, st.Mode&0o777)
 	}
 	return &pinnedDir{fd: fd}, nil
 }
@@ -62,7 +59,32 @@ func ensurePinnedDir(absPath string) (*pinnedDir, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := validateOwnedDirFD(fd, absPath, 0); err != nil {
+		_ = unix.Close(fd)
+		return nil, err
+	}
 	return &pinnedDir{fd: fd}, nil
+}
+
+func validateOwnedDirFD(fd int, label string, wantPerm os.FileMode) error {
+	var st unix.Stat_t
+	if err := unix.Fstat(fd, &st); err != nil {
+		return err
+	}
+	if st.Uid != uint32(os.Geteuid()) {
+		return fmt.Errorf("directory %s must be owned by current uid", label)
+	}
+	perm := os.FileMode(st.Mode & 0o777)
+	if wantPerm != 0 {
+		if perm != wantPerm {
+			return fmt.Errorf("directory %s must have mode %04o (got %04o)", label, wantPerm, perm)
+		}
+		return nil
+	}
+	if perm&0o022 != 0 {
+		return fmt.Errorf("directory %s must not be group/world writable (mode %04o)", label, perm)
+	}
+	return nil
 }
 
 func openDirChain(absPath string, create bool) (int, error) {
@@ -100,6 +122,10 @@ func openChildPinnedDir(parent *pinnedDir, name string) (*pinnedDir, error) {
 	fd, err := unix.Openat(parent.fd, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, fmt.Errorf("open staged directory %s (must be real directory): %w", name, err)
+	}
+	if err := validateOwnedDirFD(fd, name, 0); err != nil {
+		_ = unix.Close(fd)
+		return nil, err
 	}
 	return &pinnedDir{fd: fd}, nil
 }
@@ -187,7 +213,7 @@ func openStagedPinnedDirs(stagedDir, binaryName string, expectedMan []string) (s
 	return stagedRoot, stagedBin, stagedShare, stagedShareMan, stagedMan1, nil
 }
 
-func promoteStagedOS(_ context.Context, opts PromoteOptions, contract sessioncontract.Contract, expectedMan []string, binDir, manDir string) (PromoteResult, error) {
+func promoteStagedOS(ctx context.Context, opts PromoteOptions, contract sessioncontract.Contract, expectedMan []string, binDir, manDir string) (PromoteResult, error) {
 	stagedRoot, stagedBin, stagedShare, stagedShareMan, stagedMan1, err := openStagedPinnedDirs(opts.StagedDir, contract.Promoter.Binary, expectedMan)
 	if err != nil {
 		return PromoteResult{}, err
@@ -222,14 +248,20 @@ func promoteStagedOS(_ context.Context, opts PromoteOptions, contract sessioncon
 	}()
 
 	for _, name := range expectedMan {
-		tmpName, err := copyVerifiedFileAt(stagedMan1, name, dstMan, 0o644)
+		if err := ctx.Err(); err != nil {
+			return PromoteResult{}, err
+		}
+		tmpName, err := copyVerifiedFileAt(stagedMan1, name, dstMan, 0o644, "")
 		if err != nil {
 			return PromoteResult{}, fmt.Errorf("stage man page %s: %w", name, err)
 		}
 		manTemps = append(manTemps, stagedTempCopy{tmpName: tmpName, targetName: name})
 	}
 
-	tmpBin, err := copyVerifiedFileAt(stagedBin, contract.Promoter.Binary, dstBin, 0o755)
+	if err := ctx.Err(); err != nil {
+		return PromoteResult{}, err
+	}
+	tmpBin, err := copyVerifiedFileAt(stagedBin, contract.Promoter.Binary, dstBin, 0o755, opts.ExpectedSHA256)
 	if err != nil {
 		return PromoteResult{}, fmt.Errorf("stage binary %s: %w", contract.Promoter.Binary, err)
 	}
@@ -245,22 +277,26 @@ func promoteStagedOS(_ context.Context, opts PromoteOptions, contract sessioncon
 		binTemps = append(binTemps, stagedTempCopy{tmpName: tmpSym, targetName: contract.Promoter.Alias})
 	}
 
-	for _, tc := range manTemps {
+	var committed []string
+	for idx, tc := range manTemps {
 		if err := unix.Renameat(dstMan.fd, tc.tmpName, dstMan.fd, tc.targetName); err != nil {
-			return PromoteResult{}, fmt.Errorf("promote man page %s: %w", tc.targetName, err)
+			manTemps = manTemps[idx:]
+			return PromoteResult{}, fmt.Errorf("promote man page %s (already promoted: %v): %w", tc.targetName, committed, err)
 		}
+		committed = append(committed, tc.targetName)
 	}
 	manTemps = nil
 
 	if err := unix.Renameat(dstBin.fd, tmpBin, dstBin.fd, contract.Promoter.Binary); err != nil {
-		return PromoteResult{}, fmt.Errorf("promote binary %s: %w", contract.Promoter.Binary, err)
+		return PromoteResult{}, fmt.Errorf("promote binary %s (already promoted: %v): %w", contract.Promoter.Binary, committed, err)
 	}
+	committed = append(committed, contract.Promoter.Binary)
 	binTemps = binTemps[1:]
 
 	aliasPath := ""
 	if !opts.NoAlias {
 		if err := unix.Renameat(dstBin.fd, tmpSym, dstBin.fd, contract.Promoter.Alias); err != nil {
-			return PromoteResult{}, fmt.Errorf("promote alias %s: %w", contract.Promoter.Alias, err)
+			return PromoteResult{}, fmt.Errorf("promote alias %s (already promoted: %v): %w", contract.Promoter.Alias, committed, err)
 		}
 		binTemps = nil
 		aliasPath = filepath.Join(binDir, contract.Promoter.Alias)
@@ -274,20 +310,27 @@ func promoteStagedOS(_ context.Context, opts PromoteOptions, contract sessioncon
 	}, nil
 }
 
-func copyVerifiedFileAt(srcDir *pinnedDir, srcName string, dstDir *pinnedDir, perm uint32) (string, error) {
-	srcFD, err := unix.Openat(srcDir.fd, srcName, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+func copyVerifiedFileAt(srcDir *pinnedDir, srcName string, dstDir *pinnedDir, perm uint32, expectedHex string) (string, error) {
+	// O_NONBLOCK avoids blocking if an untrusted staged tree places a FIFO here.
+	srcFD, err := unix.Openat(srcDir.fd, srcName, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return "", err
 	}
 	srcFile := os.NewFile(uintptr(srcFD), srcName)
 	defer srcFile.Close()
 
-	info, err := srcFile.Stat()
-	if err != nil {
+	var st unix.Stat_t
+	if err := unix.Fstat(int(srcFile.Fd()), &st); err != nil {
 		return "", err
 	}
-	if !info.Mode().IsRegular() || info.Size() == 0 {
+	if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Size == 0 {
 		return "", fmt.Errorf("%s must be a non-empty regular file", srcName)
+	}
+	if st.Nlink != 1 {
+		return "", fmt.Errorf("%s must not have hardlinks (nlink=%d)", srcName, st.Nlink)
+	}
+	if st.Uid != uint32(os.Geteuid()) {
+		return "", fmt.Errorf("%s must be owned by current uid", srcName)
 	}
 
 	tmpName, dstFD, err := createPinnedTempFile(dstDir, srcName, perm)
@@ -310,28 +353,34 @@ func copyVerifiedFileAt(srcDir *pinnedDir, srcName string, dstDir *pinnedDir, pe
 	if err := unix.Fchmod(int(dstFile.Fd()), perm); err != nil {
 		return "", err
 	}
+	if err := dstFile.Sync(); err != nil {
+		return "", err
+	}
 	var wantDigest [32]byte
 	copy(wantDigest[:], h.Sum(nil))
 
-	// Re-open the destination temp file via O_NOFOLLOW to verify written bytes match
-	// what we copied and were not altered before atomic rename.
-	verifyFD, err := unix.Openat(dstDir.fd, tmpName, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return "", err
-	}
-	verifyFile := os.NewFile(uintptr(verifyFD), tmpName)
-	defer verifyFile.Close()
-	if err := verifyFileSHA256(verifyFile, wantDigest); err != nil {
+	if err := verifyFileSHA256(dstFile, wantDigest, expectedHex); err != nil {
 		return "", err
 	}
 	cleanupDst = false
 	return tmpName, nil
 }
 
+func randomTempSuffix() (string, error) {
+	var raw [12]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw[:]), nil
+}
+
 func createPinnedTempFile(dir *pinnedDir, prefix string, perm uint32) (string, int, error) {
-	pid := os.Getpid()
-	for seq := 0; seq < 64; seq++ {
-		name := fmt.Sprintf(".promote-%s-%d-%d.tmp", prefix, pid, seq)
+	for seq := 0; seq < 16; seq++ {
+		suffix, err := randomTempSuffix()
+		if err != nil {
+			return "", -1, err
+		}
+		name := fmt.Sprintf(".promote-%s-%s.tmp", prefix, suffix)
 		fd, err := unix.Openat(dir.fd, name, unix.O_RDWR|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, perm)
 		if err == nil {
 			return name, fd, nil
@@ -344,10 +393,13 @@ func createPinnedTempFile(dir *pinnedDir, prefix string, perm uint32) (string, i
 }
 
 func createPinnedTempSymlink(dir *pinnedDir, target string) (string, error) {
-	pid := os.Getpid()
-	for seq := 0; seq < 64; seq++ {
-		name := fmt.Sprintf(".promote-alias-%d-%d.tmp", pid, seq)
-		err := unix.Symlinkat(target, dir.fd, name)
+	for seq := 0; seq < 16; seq++ {
+		suffix, err := randomTempSuffix()
+		if err != nil {
+			return "", err
+		}
+		name := fmt.Sprintf(".promote-alias-%s.tmp", suffix)
+		err = unix.Symlinkat(target, dir.fd, name)
 		if err == nil {
 			return name, nil
 		}

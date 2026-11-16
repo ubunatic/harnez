@@ -58,10 +58,8 @@ func installManPages(rootCmd *cobra.Command, targetDir string, out io.Writer) er
 		if targetDir == "" {
 			return fmt.Errorf("man --install to shared man directory is host-only in runner mode; pass --dir inside %s", sessDir)
 		}
-		cleanSess := filepath.Clean(sessDir)
-		cleanTarget := filepath.Clean(targetDir)
-		if !filepath.IsAbs(cleanTarget) || (cleanTarget != cleanSess && !strings.HasPrefix(cleanTarget, cleanSess+string(filepath.Separator))) {
-			return fmt.Errorf("man --install target %s must stay inside $TAIA_SESSION_DIR in runner mode", targetDir)
+		if err := validateManDirInRunnerSession(sessDir, targetDir); err != nil {
+			return err
 		}
 	}
 	if targetDir == "" {
@@ -75,4 +73,45 @@ func installManPages(rootCmd *cobra.Command, targetDir string, out io.Writer) er
 	}
 	fmt.Fprintf(out, "Installed man pages to %s\n", targetDir)
 	return nil
+}
+
+func validateManDirInRunnerSession(sessDir, targetDir string) error {
+	if !filepath.IsAbs(sessDir) || !filepath.IsAbs(targetDir) {
+		return fmt.Errorf("man --install target %s and $TAIA_SESSION_DIR must be absolute in runner mode", targetDir)
+	}
+	realSess, err := filepath.EvalSymlinks(filepath.Clean(sessDir))
+	if err != nil {
+		return fmt.Errorf("resolve $TAIA_SESSION_DIR: %w", err)
+	}
+	realTarget, err := resolveExistingPrefix(filepath.Clean(targetDir))
+	if err != nil {
+		return fmt.Errorf("resolve man target %s: %w", targetDir, err)
+	}
+	if realTarget != realSess && !strings.HasPrefix(realTarget, realSess+string(filepath.Separator)) {
+		return fmt.Errorf("man --install target %s escapes $TAIA_SESSION_DIR in runner mode", targetDir)
+	}
+	return nil
+}
+
+func resolveExistingPrefix(absPath string) (string, error) {
+	cur := absPath
+	var tail []string
+	for {
+		if _, err := os.Lstat(cur); err == nil {
+			resolved, err := filepath.EvalSymlinks(cur)
+			if err != nil {
+				return "", err
+			}
+			for i := len(tail) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, tail[i])
+			}
+			return resolved, nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return "", fmt.Errorf("no existing root for %s", absPath)
+		}
+		tail = append(tail, filepath.Base(cur))
+		cur = parent
+	}
 }

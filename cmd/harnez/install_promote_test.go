@@ -80,8 +80,18 @@ func TestInstallStagedCommandAndRunnerManGuards(t *testing.T) {
 	}
 	outsideManCmd := newRootCmd()
 	outsideManCmd.SetArgs([]string{"man", "--dir", filepath.Join(home, "outside-man")})
-	if err := outsideManCmd.Execute(); err == nil || !strings.Contains(err.Error(), "TAIA_SESSION_DIR") {
+	if err := outsideManCmd.Execute(); err == nil || !strings.Contains(err.Error(), "escapes $TAIA_SESSION_DIR") {
 		t.Fatalf("runner man --dir outside session err = %v", err)
+	}
+	// Symlink escape inside TAIA_SESSION_DIR must also be rejected (M2).
+	escapeLink := filepath.Join(runnerRoot, "escape-man")
+	if err := os.Symlink(filepath.Join(home, "data"), escapeLink); err != nil {
+		t.Fatal(err)
+	}
+	symManCmd := newRootCmd()
+	symManCmd.SetArgs([]string{"man", "--dir", filepath.Join(escapeLink, "man1")})
+	if err := symManCmd.Execute(); err == nil || !strings.Contains(err.Error(), "escapes $TAIA_SESSION_DIR") {
+		t.Fatalf("runner symlink man --dir err = %v", err)
 	}
 	insideManDir := filepath.Join(runnerRoot, "staged-man")
 	insideManCmd := newRootCmd()
@@ -94,5 +104,11 @@ func TestInstallStagedCommandAndRunnerManGuards(t *testing.T) {
 	runnerInstallCmd.SetArgs([]string{"install", "--strategy", "self"})
 	if err := runnerInstallCmd.Execute(); err == nil || !strings.Contains(err.Error(), "host-only") {
 		t.Fatalf("runner install err = %v, want host-only", err)
+	}
+	// Dependency install (harnez install neus) must also be blocked in runner mode (M3).
+	depInstallCmd := newRootCmd()
+	depInstallCmd.SetArgs([]string{"install", "neus"})
+	if err := depInstallCmd.Execute(); err == nil || !strings.Contains(err.Error(), "host-only") {
+		t.Fatalf("runner dependency install err = %v, want host-only", err)
 	}
 }

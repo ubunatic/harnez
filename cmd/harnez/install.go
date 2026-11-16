@@ -15,6 +15,7 @@ import (
 func newInstallCmd() *cobra.Command {
 	var opts selfinstall.Options
 	var stagedDir string
+	var stagedSHA256 string
 	cmd := &cobra.Command{
 		Use:   "install [host | dependency]",
 		Short: "Install harnez locally or over ssh, or install an optional dependency",
@@ -42,10 +43,17 @@ func newInstallCmd() *cobra.Command {
 				_, err = selfinstall.PromoteStaged(cmd.Context(), selfinstall.PromoteOptions{
 					StagedDir:        stagedDir,
 					ExpectedManFiles: manifest,
+					ExpectedSHA256:   stagedSHA256,
 				}, cmd.OutOrStdout())
 				return err
 			}
+			if stagedSHA256 != "" {
+				return fmt.Errorf("--sha256 requires --staged")
+			}
 			if len(args) == 1 && dependency.HasPackage(args[0]) {
+				if os.Getenv("TAIA_SESSION_DIR") != "" && !opts.DryRun {
+					return fmt.Errorf("harnez install %s: host-only operation in runner mode", args[0])
+				}
 				for _, name := range []string{"strategy", "dir", "version", "allow-dirty", "direct", "no-shell", "no-man"} {
 					if cmd.Flags().Changed(name) {
 						return fmt.Errorf("flag --%s cannot be used when installing dependency %q", name, args[0])
@@ -71,6 +79,7 @@ func newInstallCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.NoMan, "no-man", false, "Skip installing roff man pages on local install")
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Print actions without installing")
 	cmd.Flags().StringVar(&stagedDir, "staged", "", "Promote a privately staged build into trusted host GOBIN/GOPATH/bin and XDG man roots")
+	cmd.Flags().StringVar(&stagedSHA256, "sha256", "", "Expected 64-hex SHA-256 digest of staged bin/harnez when using --staged")
 	return cmd
 }
 

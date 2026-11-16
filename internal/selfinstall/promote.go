@@ -3,6 +3,7 @@ package selfinstall
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -18,6 +19,7 @@ import (
 type PromoteOptions struct {
 	StagedDir        string
 	ExpectedManFiles []string
+	ExpectedSHA256   string // optional 64-hex out-of-band binary digest pin (--sha256)
 	Home             string
 	NoAlias          bool
 	NoRefresh        bool
@@ -36,7 +38,8 @@ type PromoteResult struct {
 // directories derived solely from host environment defaults and the ownership
 // contract (never caller-supplied arbitrary paths).
 func ResolvePromoterRoots(home string) (binDir, manDir string, err error) {
-	if _, err := sessioncontract.Load(); err != nil {
+	contract, err := sessioncontract.Load()
+	if err != nil {
 		return "", "", fmt.Errorf("load session isolation contract: %w", err)
 	}
 	if home == "" {
@@ -45,34 +48,66 @@ func ResolvePromoterRoots(home string) (binDir, manDir string, err error) {
 			return "", "", fmt.Errorf("resolve home directory: %w", err)
 		}
 	}
+	home = strings.TrimSpace(home)
 	if err := validateHostRootPath(home, "HOME"); err != nil {
 		return "", "", err
 	}
 
-	if gobin := strings.TrimSpace(os.Getenv("GOBIN")); gobin != "" {
-		if err := validateHostRootPath(gobin, "GOBIN"); err != nil {
-			return "", "", err
-		}
-		binDir = gobin
-	} else if gopath := strings.TrimSpace(os.Getenv("GOPATH")); gopath != "" {
-		first := strings.TrimSpace(filepath.SplitList(gopath)[0])
-		if err := validateHostRootPath(first, "GOPATH"); err != nil {
-			return "", "", err
-		}
-		binDir = filepath.Join(first, "bin")
-	} else {
-		binDir = filepath.Join(home, "go", "bin")
+	binDir, err = resolveContractBinDir(contract.Promoter.BinaryRoots, home)
+	if err != nil {
+		return "", "", err
 	}
-
-	if xdgData := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); xdgData != "" {
-		if err := validateHostRootPath(xdgData, "XDG_DATA_HOME"); err != nil {
-			return "", "", err
-		}
-		manDir = filepath.Join(xdgData, "man", "man1")
-	} else {
-		manDir = filepath.Join(home, ".local", "share", "man", "man1")
+	manDir, err = resolveContractManDir(contract.Promoter.ManRoots, home)
+	if err != nil {
+		return "", "", err
 	}
 	return binDir, manDir, nil
+}
+
+func resolveContractBinDir(roots []string, home string) (string, error) {
+	for _, specRoot := range roots {
+		switch specRoot {
+		case "GOBIN":
+			if gobin := strings.TrimSpace(os.Getenv("GOBIN")); gobin != "" {
+				if err := validateHostRootPath(gobin, "GOBIN"); err != nil {
+					return "", err
+				}
+				return gobin, nil
+			}
+		case "GOPATH_bin":
+			if rawGP := strings.TrimSpace(os.Getenv("GOPATH")); rawGP != "" {
+				parts := filepath.SplitList(rawGP)
+				first := strings.TrimSpace(parts[0])
+				if first == "" {
+					return "", fmt.Errorf("GOPATH contains empty leading entry %q", rawGP)
+				}
+				if err := validateHostRootPath(first, "GOPATH"); err != nil {
+					return "", err
+				}
+				return filepath.Join(first, "bin"), nil
+			}
+		}
+	}
+	return filepath.Join(home, "go", "bin"), nil
+}
+
+func resolveContractManDir(roots []string, home string) (string, error) {
+	for _, specRoot := range roots {
+		switch specRoot {
+		case "XDG_DATA_HOME_man_man1":
+			if xdgData := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); xdgData != "" {
+				if err := validateHostRootPath(xdgData, "XDG_DATA_HOME"); err != nil {
+					return "", err
+				}
+				return filepath.Join(xdgData, "man", "man1"), nil
+			}
+		case "HOME_local_share_man_man1":
+			if xdgData := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); xdgData == "" {
+				return filepath.Join(home, ".local", "share", "man", "man1"), nil
+			}
+		}
+	}
+	return filepath.Join(home, ".local", "share", "man", "man1"), nil
 }
 
 func validateHostRootPath(p, label string) error {
@@ -109,6 +144,15 @@ func PromoteStaged(ctx context.Context, opts PromoteOptions, out io.Writer) (Pro
 	if err := validateHostRootPath(opts.StagedDir, "staged directory"); err != nil {
 		return PromoteResult{}, err
 	}
+	if opts.ExpectedSHA256 != "" {
+		raw, decErr := hex.DecodeString(strings.TrimSpace(opts.ExpectedSHA256))
+		if decErr != nil || len(raw) != sha256.Size {
+			return PromoteResult{}, fmt.Errorf("promote: --sha256 must be a 64-character hex digest")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return PromoteResult{}, err
+	}
 	res, err := promoteStagedOS(ctx, opts, contract, expectedMan, binDir, manDir)
 	if err != nil {
 		return PromoteResult{}, err
@@ -136,7 +180,7 @@ func validateExpectedManManifest(files []string) ([]string, error) {
 	seen := make(map[string]bool, len(files))
 	out := make([]string, 0, len(files))
 	for _, name := range files {
-		if name == "" || filepath.Base(name) != name || strings.Contains(name, "..") || !strings.HasSuffix(name, ".1") || strings.HasPrefix(name, ".") {
+		if name == "" || name == "." || name == ".." || filepath.Base(name) != name || strings.ContainsAny(name, "/\\") || !strings.HasSuffix(name, ".1") || strings.HasPrefix(name, ".") {
 			return nil, fmt.Errorf("promote: invalid man manifest entry %q", name)
 		}
 		if seen[name] {
@@ -149,7 +193,7 @@ func validateExpectedManManifest(files []string) ([]string, error) {
 	return out, nil
 }
 
-func verifyFileSHA256(f *os.File, wantDigest [32]byte) error {
+func verifyFileSHA256(f *os.File, wantDigest [32]byte, expectedHex string) error {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -165,6 +209,9 @@ func verifyFileSHA256(f *os.File, wantDigest [32]byte) error {
 	copy(got[:], h.Sum(nil))
 	if got != wantDigest {
 		return fmt.Errorf("immutable verification digest mismatch")
+	}
+	if expectedHex != "" && !strings.EqualFold(hex.EncodeToString(got[:]), strings.TrimSpace(expectedHex)) {
+		return fmt.Errorf("staged binary SHA-256 %x does not match expected %s", got, strings.TrimSpace(expectedHex))
 	}
 	return nil
 }
