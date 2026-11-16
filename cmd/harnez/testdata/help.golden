@@ -1975,6 +1975,8 @@ then the README is regenerated and the batch is committed once.
                     Pull requests are always refused.
   edit <number> [--title text] [-F file]  Edit a forge issue; body edits
                     need --if-updated or --force. A write landing between the check and the PATCH is not detected.
+  close <number> [reason]  Close a forge issue; a reason is posted as a comment first.
+  reopen <number>   Reopen a forge issue.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -2057,7 +2059,7 @@ Flags:
       --dry-run                 alias for --check
       --fetch                   reconcile: git fetch, then print the plan against the upstream (no changes)
       --force                   with new: ignore duplicate matches; with edit: skip the updated-at check
-      --forge                   with new, comment or edit: target the forge even with a local issues/ dir
+      --forge                   target the forge for new, comment, edit, close or reopen even with a local issues/ dir
   -h, --help                    help for issues
       --if-updated string       with edit: require the timestamp from issues show --json
   -I, --image                   render visual PNG card context

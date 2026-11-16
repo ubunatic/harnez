@@ -160,6 +160,8 @@ then the README is regenerated and the batch is committed once.
                     Pull requests are always refused.
   edit <number> [--title text] [-F file]  Edit a forge issue; body edits
                     need --if-updated or --force. A write landing between the check and the PATCH is not detected.
+  close <number> [reason]  Close a forge issue; a reason is posted as a comment first.
+  reopen <number>   Reopen a forge issue.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -256,8 +258,8 @@ valid, exit-0 answer.`,
 			if closedFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "edit")) {
 				return fmt.Errorf("issues: --closed requires comment or edit")
 			}
-			if forgeFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "new" && args[0] != "edit")) {
-				return fmt.Errorf("issues: --forge requires new, comment or edit")
+			if forgeFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "new" && args[0] != "edit" && args[0] != "close" && args[0] != "reopen" && args[0] != "open")) {
+				return fmt.Errorf("issues: --forge requires new, comment, edit, close, reopen or open")
 			}
 			if forceFlag && (len(args) == 0 || (args[0] != "new" && args[0] != "edit")) {
 				return fmt.Errorf("issues: --force requires new or edit")
@@ -267,6 +269,9 @@ valid, exit-0 answer.`,
 			}
 			if len(args) > 0 && args[0] == "edit" && len(args) != 2 {
 				return fmt.Errorf("issues edit: requires exactly one issue number")
+			}
+			if len(args) > 0 && args[0] == "reopen" && len(args) != 2 {
+				return fmt.Errorf("issues reopen: requires exactly one issue number")
 			}
 			if listFlag {
 				if len(args) != 0 {
@@ -320,6 +325,37 @@ valid, exit-0 answer.`,
 					}
 				}
 				return runIssuesEditForge(cmd.OutOrStdout(), t, src, args[1], editTitleFlag, bodyFileFlag, ifUpdatedFlag, cmd.Flags().Changed("title"), forceFlag, dryRunFlag || checkFlag, closedFlag)
+			}
+			if args[0] == "close" || args[0] == "reopen" || args[0] == "open" {
+				var t forgetracker.Target
+				var src forgetracker.Source
+				var ok bool
+				if forgeFlag {
+					sp, err := prwait.LoadSpec()
+					if err != nil {
+						return err
+					}
+					t, err = forgetracker.ResolveRemote(dir, sp)
+					if err != nil {
+						return fmt.Errorf("issues %s: cannot resolve forge remote: %w", args[0], err)
+					}
+					src, ok = forgeTrackerSource(sp), true
+				} else {
+					var err error
+					t, src, _, ok, err = resolveForgeTracker(cmd.ErrOrStderr(), dir)
+					if err != nil {
+						return err
+					}
+				}
+				if ok {
+					if args[0] == "open" {
+						return fmt.Errorf("issues open: on a forge use reopen")
+					}
+					return runIssuesStateForge(cmd.OutOrStdout(), t, src, args[0], args[1], strings.Join(args[2:], " "), dryRunFlag || checkFlag)
+				}
+				if args[0] == "reopen" {
+					return fmt.Errorf("issues reopen: local tracker; use harnez issues open <n>")
+				}
 			}
 			if args[0] == "show" {
 				if len(args) != 2 {
@@ -578,7 +614,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().StringVar(&editTitleFlag, "title", "", "with edit: replace the issue title")
 	cmd.Flags().StringVar(&ifUpdatedFlag, "if-updated", "", "with edit: require the timestamp from issues show --json")
 	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment or edit: allow a closed issue")
-	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "with new, comment or edit: target the forge even with a local issues/ dir")
+	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "target the forge for new, comment, edit, close or reopen even with a local issues/ dir")
 	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")
 	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: ignore duplicate matches; with edit: skip the updated-at check")
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")

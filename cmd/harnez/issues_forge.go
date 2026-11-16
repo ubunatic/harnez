@@ -401,7 +401,23 @@ func runIssuesEditForge(w io.Writer, t forgetracker.Target, src forgetracker.Sou
 		}
 	}
 	if dryRun {
-		_, err = fmt.Fprintf(w, "dry run: would edit %s#%d over the API\n", t, n)
+		plan := fmt.Sprintf("dry run: would edit %s#%d over the API", t, n)
+		if hasTitle {
+			plan += " --title " + strconv.Quote(title)
+		}
+		if bodyFile != "" {
+			plan += " -F " + strconv.Quote(bodyFile)
+		}
+		if ifUpdated != "" {
+			plan += " --if-updated " + strconv.Quote(ifUpdated)
+		}
+		if force {
+			plan += " --force"
+		}
+		if allowClosed {
+			plan += " --closed"
+		}
+		_, err = fmt.Fprintln(w, plan)
 		return err
 	}
 	if err := requireHostSession("edit"); err != nil {
@@ -448,5 +464,62 @@ func runIssuesEditForge(w io.Writer, t forgetracker.Target, src forgetracker.Sou
 		return fmt.Errorf("issues edit: forge returned a different body")
 	}
 	_, err = fmt.Fprintf(w, "edited %s#%d\n", t, n)
+	return err
+}
+
+func runIssuesStateForge(w io.Writer, t forgetracker.Target, src forgetracker.Source, verb, number, reason string, dryRun bool) error {
+	if t.Forge.Kind != "forgejo" {
+		return fmt.Errorf("issues %s: forge writes support Forgejo only; GitHub is ticket 1209", verb)
+	}
+	n, err := strconv.Atoi(number)
+	if err != nil || n <= 0 {
+		return fmt.Errorf("issues %s: invalid issue number %q", verb, number)
+	}
+	state := "closed"
+	if verb == "reopen" {
+		state = "open"
+	}
+	if dryRun {
+		if reason != "" {
+			_, err = fmt.Fprintf(w, "dry run: would comment %q on %s#%d and set state to %s over the API\n", reason, t, n, state)
+		} else {
+			_, err = fmt.Fprintf(w, "dry run: would set %s#%d to %s over the API\n", t, n, state)
+		}
+		return err
+	}
+	if err := requireHostSession(verb); err != nil {
+		return err
+	}
+	wr, ok, err := issueWriteAPI(t)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no write token for %s; run: harnez forge token create --write", t.Forge.Host)
+	}
+	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
+	if err != nil {
+		return fmt.Errorf("issues %s: preflight: %w", verb, err)
+	}
+	if is.PullRequest != nil {
+		return fmt.Errorf("issues %s: %s/%s#%d is a pull request", verb, t.Owner, t.Repo, n)
+	}
+	if strings.EqualFold(is.State, state) {
+		_, err = fmt.Fprintf(w, "%s#%d is already %s\n", t, n, state)
+		return err
+	}
+	if reason != "" {
+		if _, err := wr.Comment(t.Forge, t.Owner, t.Repo, n, reason); err != nil {
+			return err
+		}
+	}
+	if _, err := wr.EditIssue(t.Forge, t.Owner, t.Repo, n, forge.EditFields{State: &state}); err != nil {
+		return err
+	}
+	word := "closed"
+	if verb == "reopen" {
+		word = "reopened"
+	}
+	_, err = fmt.Fprintf(w, "%s %s#%d\n", word, t, n)
 	return err
 }

@@ -145,7 +145,7 @@ func TestIssuesCommentOffline(t *testing.T) {
 		if verb == "show" {
 			args = append(args, "7")
 		}
-		if _, err := runHarnez(t, args...); err == nil || err.Error() != "issues: --forge requires new, comment or edit" {
+		if _, err := runHarnez(t, args...); err == nil || err.Error() != "issues: --forge requires new, comment, edit, close, reopen or open" {
 			t.Fatalf("forge flag on %s: %v", verb, err)
 		}
 	}

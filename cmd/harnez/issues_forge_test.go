@@ -435,7 +435,7 @@ func TestIssuesNewForgeErrors(t *testing.T) {
 	if _, err := runHarnez(t, "issues", "new", "-d", dir, "T", "-F", body); err == nil || !strings.Contains(err.Error(), "printed no ticket number") {
 		t.Fatalf("silent CLI: %v", err)
 	}
-	if _, err := runHarnez(t, "issues", "show", "-d", dir, "-F", body, "7"); err == nil || !strings.Contains(err.Error(), "require new") {
+	if _, err := runHarnez(t, "issues", "show", "-d", dir, "-F", body, "7"); err == nil || err.Error() != "issues: -F/--body-file requires new, comment or edit" {
 		t.Fatalf("-F outside new: %v", err)
 	}
 }
@@ -671,7 +671,7 @@ func TestForgeEditEdges(t *testing.T) {
 		t.Fatalf("blank: %v", err)
 	}
 	var out bytes.Buffer
-	if err := runIssuesEditForge(&out, target, src, "7", "X", "", "", true, false, true, false); err != nil || out.String() != "dry run: would edit codeberg.org/o/r#7 over the API\n" {
+	if err := runIssuesEditForge(&out, target, src, "7", "X", "", "", true, false, true, false); err != nil || out.String() != "dry run: would edit codeberg.org/o/r#7 over the API --title \"X\"\n" {
 		t.Fatalf("dry: %q %v", out.String(), err)
 	}
 }
@@ -686,5 +686,141 @@ func TestIssuesEditLocal(t *testing.T) {
 	_, err := runHarnez(t, "issues", "edit", "-d", dir, "7", "--title", "X")
 	if err == nil || err.Error() != "issues edit: local tickets are files; edit issues/<n>-*.md and commit" {
 		t.Fatal(err)
+	}
+}
+
+func TestForgeStateWrites(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	old := issueWriteLookup
+	issueWriteLookup = func(string) string { return "secret" }
+	t.Cleanup(func() { issueWriteLookup = old })
+	var calls []string
+	status := 200
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		calls = append(calls, r.Method+" "+r.URL.Path+" "+string(body))
+		w.WriteHeader(status)
+		if status == 200 {
+			io.WriteString(w, `{}`)
+		} else {
+			io.WriteString(w, `{"message":"safe detail"}`)
+		}
+	}))
+	defer srv.Close()
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
+	src := &editSource{issue: forge.RemoteIssue{State: "open"}}
+	var out bytes.Buffer
+	if err := runIssuesStateForge(&out, target, src, "close", "7", "", false); err != nil || out.String() != "closed codeberg.org/o/r#7\n" {
+		t.Fatalf("close %q %v", out.String(), err)
+	}
+	if !reflect.DeepEqual(calls, []string{`PATCH /repos/o/r/issues/7 {"state":"closed"}`}) {
+		t.Fatalf("calls %q", calls)
+	}
+	calls = nil
+	out.Reset()
+	if err := runIssuesStateForge(&out, target, src, "close", "7", "done now", false); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(calls, []string{`POST /repos/o/r/issues/7/comments {"body":"done now"}`, `PATCH /repos/o/r/issues/7 {"state":"closed"}`}) {
+		t.Fatalf("calls %q", calls)
+	}
+	calls = nil
+	status = 403
+	err := runIssuesStateForge(io.Discard, target, src, "close", "7", "done now", false)
+	if err == nil || err.Error() != "forge API request failed: HTTP 403 safe detail" || !reflect.DeepEqual(calls, []string{`POST /repos/o/r/issues/7/comments {"body":"done now"}`}) {
+		t.Fatalf("failed comment %v calls=%q", err, calls)
+	}
+	calls = nil
+	status = 200
+	src.issue.State = "closed"
+	out.Reset()
+	if err := runIssuesStateForge(&out, target, src, "reopen", "7", "", false); err != nil || out.String() != "reopened codeberg.org/o/r#7\n" || !reflect.DeepEqual(calls, []string{`PATCH /repos/o/r/issues/7 {"state":"open"}`}) {
+		t.Fatalf("reopen %q %v %q", out.String(), err, calls)
+	}
+	calls = nil
+	out.Reset()
+	if err := runIssuesStateForge(&out, target, src, "close", "7", "", false); err != nil || out.String() != "codeberg.org/o/r#7 is already closed\n" || len(calls) != 0 {
+		t.Fatalf("already %q %v", out.String(), err)
+	}
+	src.issue.State = "open"
+	out.Reset()
+	if err := runIssuesStateForge(&out, target, src, "reopen", "7", "", false); err != nil || out.String() != "codeberg.org/o/r#7 is already open\n" || len(calls) != 0 {
+		t.Fatalf("already %q %v", out.String(), err)
+	}
+	status = 412
+	err = runIssuesStateForge(io.Discard, target, src, "close", "7", "", false)
+	if err == nil || err.Error() != "forge API request failed: HTTP 412 safe detail" {
+		t.Fatal(err)
+	}
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker")
+	calls = nil
+	err = runIssuesStateForge(io.Discard, target, src, "close", "7", "", false)
+	if err == nil || err.Error() != "issues close: forge writes run only in a host session (this is harnez worker worker); hand the write to the host" || len(calls) != 0 {
+		t.Fatalf("worker %v", err)
+	}
+	target.Forge.Kind = "github"
+	err = runIssuesStateForge(io.Discard, target, src, "reopen", "7", "", false)
+	if err == nil || err.Error() != "issues reopen: forge writes support Forgejo only; GitHub is ticket 1209" || len(calls) != 0 {
+		t.Fatalf("github %v", err)
+	}
+}
+
+func TestIssuesForgeOpenAndLocalReopen(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "git@codeberg.org:o/r.git"}} {
+		c := exec.Command("git", args...)
+		c.Dir = dir
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git: %s %v", out, err)
+		}
+	}
+	_, err := runHarnez(t, "issues", "open", "-d", dir, "7")
+	if err == nil || err.Error() != "issues open: on a forge use reopen" {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	_, err = runHarnez(t, "issues", "reopen", "-d", dir, "7")
+	if err == nil || err.Error() != "issues reopen: local tracker; use harnez issues open <n>" {
+		t.Fatal(err)
+	}
+}
+
+func TestForgeEditStdin(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	oldLookup, oldStdin := issueWriteLookup, os.Stdin
+	issueWriteLookup = func(string) string { return "secret" }
+	f, err := os.CreateTemp(t.TempDir(), "stdin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("one\n\ntwo\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Seek(0, 0); err != nil {
+		t.Fatal(err)
+	}
+	os.Stdin = f
+	t.Cleanup(func() { issueWriteLookup, os.Stdin = oldLookup, oldStdin; f.Close() })
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got = string(b)
+		io.WriteString(w, `{"body":"one\n\ntwo\n"}`)
+	}))
+	defer srv.Close()
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
+	err = runIssuesEditForge(io.Discard, target, &editSource{issue: forge.RemoteIssue{State: "open"}}, "7", "", "-", "", false, true, false, false)
+	if err != nil || got != `{"body":"one\n\ntwo\n"}` {
+		t.Fatalf("body %q: %v", got, err)
 	}
 }
