@@ -563,15 +563,6 @@ valid, exit-0 answer.`,
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
 					return fmt.Errorf("issues list: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
 				}
-				if t, src, spec, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
-					return err
-				} else if ok {
-					words := forgeFindArgs(args[1:])
-					if len(words) == 0 {
-						words = []string{"status:open"}
-					}
-					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.IssueScan, forgeFindTerms(words), limitFlag, allFlag, jsonFlag), t)
-				}
 				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args[1:], jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}
 			opts := issuesRunOptions{
@@ -763,6 +754,18 @@ func runIssuesShow(w io.Writer, dir, ticketArg string, jsonOutput, rawOutput, te
 // "is:open" filter when no filter text is given; an explicit filter always
 // replaces the default rather than being ANDed with it.
 func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutput, rawOutput, textOutput, imageOutput bool, limit int, all bool) error {
+	if t, src, spec, ok, err := resolveForgeTracker(errW, dir); err != nil {
+		return err
+	} else if ok {
+		words := forgeFindArgs(filterArgs)
+		if len(words) == 0 {
+			words = []string{"status:open"}
+		}
+		if len(words) > 0 && findIssuesLocalOnly[words[0]] {
+			return forgeLocalOnlyError(words[0])
+		}
+		return forgeTrackerHint(forgetracker.Find(w, src, t, spec.IssueScan, forgeFindTerms(words), limit, all, jsonOutput), t)
+	}
 	filter := strings.TrimSpace(strings.Join(filterArgs, " "))
 	if filter == "" {
 		filter = "is:open"

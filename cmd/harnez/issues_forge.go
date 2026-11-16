@@ -281,7 +281,10 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 		}
 		return fmt.Errorf("issues comment: fj failed: %w: %s\nrun manually: %s", err, msg, c)
 	}
-	_, err = w.Write(out)
+	if _, err := w.Write(out); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "commented on %s#%d\n", t, n)
 	return err
 }
 
@@ -360,7 +363,7 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 		if err != nil {
 			return fmt.Errorf("issues new: temporary body: %w", err)
 		}
-		defer os.Remove(f.Name())
+		defer func() { _ = os.Remove(f.Name()) }()
 		if _, err := f.Write(content); err != nil {
 			f.Close()
 			return fmt.Errorf("issues new: temporary body: %w", err)

@@ -43,14 +43,14 @@ func TestForgeWritesAPI(t *testing.T) {
 		switch r.URL.Path {
 		case "/repos/o/r/labels":
 			if r.URL.Query().Get("page") == "1" {
-				io.WriteString(w, `[{"id":5,"name":"bug"}]`)
+				_, _ = io.WriteString(w, `[{"id":5,"name":"bug"}]`)
 			} else {
-				io.WriteString(w, `[]`)
+				_, _ = io.WriteString(w, `[]`)
 			}
 		case "/repos/o/r/issues":
-			io.WriteString(w, `{"number":42,"html_url":"https://example/42"}`)
+			_, _ = io.WriteString(w, `{"number":42,"html_url":"https://example/42"}`)
 		case "/repos/o/r/issues/7/comments":
-			io.WriteString(w, `{"html_url":"https://example/comment"}`)
+			_, _ = io.WriteString(w, `{"html_url":"https://example/comment"}`)
 		default:
 			t.Errorf("unexpected %s", r.URL.Path)
 		}
@@ -105,7 +105,7 @@ func TestForgeNewWorkerAndFallback(t *testing.T) {
 	if err := os.WriteFile(body, []byte("hello"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	oldLook, oldRun, oldLookup := issueCLILookPath, issueCLIRun, issueWriteLookup
+	oldLook, oldRun, oldLookup, oldMeta := issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata
 	var ran []forgetracker.Command
 	issueCLILookPath = func(name string) (string, error) { return name, nil }
 	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
@@ -113,7 +113,10 @@ func TestForgeNewWorkerAndFallback(t *testing.T) {
 		return []byte("#42 T\n"), nil
 	}
 	issueWriteLookup = func(string) string { t.Fatal("unexpected token lookup by worker"); return "" }
-	t.Cleanup(func() { issueCLILookPath, issueCLIRun, issueWriteLookup = oldLook, oldRun, oldLookup })
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	t.Cleanup(func() {
+		issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata = oldLook, oldRun, oldLookup, oldMeta
+	})
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
 	req := forgetracker.CreateRequest{Title: "T", BodyFile: body}
 	var out bytes.Buffer
@@ -373,9 +376,10 @@ func stubIssueCLI(t *testing.T, out string) *[]forgetracker.Command {
 	t.Helper()
 	t.Setenv("HARNEZ_AGENT_ROLE", "")
 	t.Setenv("HARNEZ_SESSION_ID", "")
-	oldLookup := issueWriteLookup
+	oldLookup, oldMeta := issueWriteLookup, issueWriteMetadata
 	issueWriteLookup = func(string) string { return "" }
-	t.Cleanup(func() { issueWriteLookup = oldLookup })
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	t.Cleanup(func() { issueWriteLookup, issueWriteMetadata = oldLookup, oldMeta })
 	var ran []forgetracker.Command
 	oldLook, oldRun := issueCLILookPath, issueCLIRun
 	issueCLILookPath = func(name string) (string, error) {
@@ -502,9 +506,10 @@ func TestIssuesNewTrackerNoneUsesForge(t *testing.T) {
 func TestIssuesNewFJFailureManualCommand(t *testing.T) {
 	t.Setenv("HARNEZ_AGENT_ROLE", "")
 	t.Setenv("HARNEZ_SESSION_ID", "")
-	oldLookup := issueWriteLookup
+	oldLookup, oldMeta := issueWriteLookup, issueWriteMetadata
 	issueWriteLookup = func(string) string { return "" }
-	t.Cleanup(func() { issueWriteLookup = oldLookup })
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	t.Cleanup(func() { issueWriteLookup, issueWriteMetadata = oldLookup, oldMeta })
 	oldLook, oldRun := issueCLILookPath, issueCLIRun
 	t.Cleanup(func() { issueCLILookPath, issueCLIRun = oldLook, oldRun })
 	issueCLILookPath = func(name string) (string, error) {
@@ -591,7 +596,7 @@ func TestForgeEdit(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		requests = append(requests, r.Method+" "+r.URL.Path+" "+string(b))
-		io.WriteString(w, response)
+		_, _ = io.WriteString(w, response)
 	}))
 	defer srv.Close()
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
@@ -646,9 +651,10 @@ func TestForgeEditEdges(t *testing.T) {
 	t.Setenv("HARNEZ_AGENT_ROLE", "")
 	t.Setenv("HARNEZ_SESSION_ID", "")
 	t.Setenv("CODEX_THREAD_ID", "")
-	oldLookup := issueWriteLookup
+	oldLookup, oldMeta := issueWriteLookup, issueWriteMetadata
 	issueWriteLookup = func(string) string { return "" }
-	t.Cleanup(func() { issueWriteLookup = oldLookup })
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	t.Cleanup(func() { issueWriteLookup, issueWriteMetadata = oldLookup, oldMeta })
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
 	src := &editSource{}
 	err := runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, false)
@@ -707,9 +713,9 @@ func TestForgeStateWrites(t *testing.T) {
 		calls = append(calls, r.Method+" "+r.URL.Path+" "+string(body))
 		w.WriteHeader(status)
 		if status == 200 {
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		} else {
-			io.WriteString(w, `{"message":"safe detail"}`)
+			_, _ = io.WriteString(w, `{"message":"safe detail"}`)
 		}
 	}))
 	defer srv.Close()
@@ -819,7 +825,7 @@ func TestForgeEditStdin(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		got = string(b)
-		io.WriteString(w, `{"body":"one\n\ntwo\n"}`)
+		_, _ = io.WriteString(w, `{"body":"one\n\ntwo\n"}`)
 	}))
 	defer srv.Close()
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
@@ -904,11 +910,11 @@ func TestForgeCloseReportsPostedReasonOnFailure(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls = append(calls, r.Method)
 		if r.Method == "POST" {
-			io.WriteString(w, `{"html_url":"https://example.test/comment"}`)
+			_, _ = io.WriteString(w, `{"html_url":"https://example.test/comment"}`)
 			return
 		}
 		w.WriteHeader(412)
-		io.WriteString(w, `{"message":"conflict"}`)
+		_, _ = io.WriteString(w, `{"message":"conflict"}`)
 	}))
 	defer srv.Close()
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
@@ -947,7 +953,7 @@ func TestForgeRefinementEdges(t *testing.T) {
 		if r.Method != "PATCH" || string(b) != `{"title":"X"}` {
 			t.Errorf("request: %s %s", r.Method, b)
 		}
-		io.WriteString(w, `{}`)
+		_, _ = io.WriteString(w, `{}`)
 	}))
 	defer srv.Close()
 	target.Forge.APIBase = srv.URL
@@ -1008,9 +1014,16 @@ func TestTrackerNoneDraftsRoutesForge(t *testing.T) {
 	if err := os.WriteFile(body, []byte("draft"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	oldLookup := issueWriteLookup
+	oldLookup, oldMeta, oldLook := issueWriteLookup, issueWriteMetadata, issueCLILookPath
 	issueWriteLookup = func(string) string { return "test-token" }
-	t.Cleanup(func() { issueWriteLookup = oldLookup })
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	issueCLILookPath = func(name string) (string, error) {
+		if name == "fj" {
+			return name, nil
+		}
+		return "", exec.ErrNotFound
+	}
+	t.Cleanup(func() { issueWriteLookup, issueWriteMetadata, issueCLILookPath = oldLookup, oldMeta, oldLook })
 	cases := []struct {
 		args []string
 		want string
@@ -1034,6 +1047,18 @@ func TestTrackerNoneDraftsRoutesForge(t *testing.T) {
 			}
 		})
 	}
+	t.Run("issues_list_alias", func(t *testing.T) {
+		out, err := runHarnez(t, "issues", "-l", "-d", dir)
+		if err != nil || !strings.Contains(out, "7\topen\tforge ticket") || !strings.Contains(out, "issues.tracker is none: tickets live on codeberg.org/o/r\n") {
+			t.Fatalf("got %q, %v", out, err)
+		}
+	})
+	t.Run("issues_list_local_only", func(t *testing.T) {
+		_, err := runHarnez(t, "issues", "list", "open", "-d", dir)
+		if err == nil || err.Error() != forgeLocalOnlyError("open").Error() {
+			t.Fatalf("got %v", err)
+		}
+	})
 	if stub.calls == 0 {
 		t.Error("forge source was not called")
 	}
