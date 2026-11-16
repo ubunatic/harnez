@@ -138,3 +138,36 @@ reached gh without the host-only check; `comment` on a GitHub forge did its issu
 Forgejo-only refusal; dry runs always printed the fj command, also with a stored write token;
 several weak assertions (`HTTP ` prefix only, no "fj never called" on the API path). All became
 pre-work for M6 in the ticket.
+
+## Developer M6 (`edit`) and M7 (`close`, `reopen`)
+
+Same developer `forge-dev2`, resumed.
+
+| Turn | Time | Result |
+|---|---|---|
+| Write 1 | 1m26s | Stopped: its own paging test from M5 failed after the ticket changed the paging rule |
+| Write 2 | 9m23s | `00ef6564` (pre-work), `58c24095` (M6), `af87b676` (M7); `make test-q1` exit 2, fixed without a rerun |
+
+- The first stop came from the host prompt: "stop for a failing test you did not touch" was read
+  literally for a test the developer wrote one turn earlier. The wording that worked: when the
+  ticket changes a behaviour, update the tests that assert the old one and name them; only a
+  failure in an unrelated test is a blocker.
+- Host full run (`make test-q1`, fake `fj`, `tea`, `gh` first on `PATH`): exit 0, 78 `ok` lines.
+- Blocker found by the host with the installed binary and, independently, by reviewer
+  `forge-rev4` (one-shot, 1m26s, 63.2k new tokens): the forge dispatch for `edit`, `close`,
+  `reopen` and `open` was placed in the `Args` validator of the cobra command, so the local verb
+  ran afterwards. `close --forge --dry-run 41` printed the dry-run line and then
+  `041: already Closed (no change)`. All tests were green: the success tests called the helper
+  functions directly and never went through the command.
+- `close --forge` without a number panicked (`slice bounds out of range [2:1]`).
+- Context at the end of write 2: 90.4k of the 100k compaction limit, 4.7M cached tokens re-read
+  for 52.5k new ones (89x). `forge-dev2` was rated 3 of 5 and deleted; the M8 pre-work and docs
+  went to a fresh developer `forge-dev3` on `--model std` (codex:terra:med).
+
+Lessons so far:
+
+- Green tests plus a clean diff review did not show the `Args`/`RunE` double run; one dry run of
+  the installed binary did. Run every new verb through the installed binary before the review.
+- A handoff rule ("never run fj") does not bind a test the worker writes. A guard in `TestMain`
+  and fake CLIs first on `PATH` do.
+- Stop conditions in a prompt are followed literally. Name what is not a blocker.
