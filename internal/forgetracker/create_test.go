@@ -35,7 +35,7 @@ func TestPlanCreatePicksInstalledCLI(t *testing.T) {
 		want   Command
 	}{
 		{"tea first", cbTarget, []string{"tea", "fj"}, req, Command{"tea", []string{"issues", "create", "--repo", "o/r", "--title", "Fix it", "--description-file", "b.md", "--labels", "bug,P2"}}},
-		{"fj without labels", cbTarget, []string{"fj"}, CreateRequest{Title: "Fix it", BodyFile: "b.md"}, Command{"fj", []string{"--host", "codeberg.org", "issue", "create", "--repo", "o/r", "--body-file", "b.md", "Fix it"}}},
+		{"fj without labels", cbTarget, []string{"fj"}, CreateRequest{Title: "Fix it", BodyFile: "b.md"}, Command{"fj", []string{"issue", "create", "--repo", "codeberg.org/o/r", "--body-file", "b.md", "Fix it"}}},
 		{"gh", ghTarget, []string{"gh", "tea"}, req, Command{"gh", []string{"issue", "create", "--repo", "github.com/o/r", "--title", "Fix it", "--body-file", "b.md", "--label", "bug", "--label", "P2"}}},
 	}
 	for _, c := range cases {
@@ -95,5 +95,21 @@ func TestCommandStringQuotes(t *testing.T) {
 	c := Command{"gh", []string{"issue", "--title", "two words"}}
 	if got := c.String(); got != `gh issue --title "two words"` {
 		t.Fatalf("got %s", got)
+	}
+}
+
+func TestFJCommandsHaveNoHostFlag(t *testing.T) {
+	c, err := PlanCreate(cbTarget, CreateRequest{Title: "title with spaces", BodyFile: "body file"}, lookOnly("fj"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"issue", "create", "--repo", "codeberg.org/o/r", "--body-file", "body file", "title with spaces"}
+	if !reflect.DeepEqual(c.Args, want) {
+		t.Fatalf("got %q, want %q", c.Args, want)
+	}
+	for _, arg := range c.Args {
+		if arg == "--host" || arg == "-H" {
+			t.Fatalf("host flag in %q", c.Args)
+		}
 	}
 }

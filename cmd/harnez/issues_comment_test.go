@@ -62,7 +62,7 @@ func TestIssuesCommentOffline(t *testing.T) {
 		return runHarnez(t, append(args, flags...)...)
 	}
 	out, err := run("--dry-run")
-	wantDry := "dry run: fj --host codeberg.org issue comment o/r#7 --body-file " + strconv.Quote(body) + "\n"
+	wantDry := "dry run: fj issue comment codeberg.org/o/r#7 --body-file " + strconv.Quote(body) + "\n"
 	if err != nil || !strings.HasPrefix(out, wantDry) {
 		t.Fatalf("dry run: %s %v", out, err)
 	}
@@ -88,7 +88,7 @@ func TestIssuesCommentOffline(t *testing.T) {
 		t.Fatalf("comment: %s %v", out, err)
 	}
 	got, err := os.ReadFile(log)
-	if err != nil || string(got) != strings.Join([]string{"--host", "codeberg.org", "issue", "comment", "o/r#7", "--body-file", body, ""}, "\n") {
+	if err != nil || string(got) != strings.Join([]string{"issue", "comment", "codeberg.org/o/r#7", "--body-file", body, ""}, "\n") {
 		t.Fatalf("argv: %q %v", got, err)
 	}
 	status = http.StatusUnauthorized
@@ -125,7 +125,7 @@ func TestIssuesCommentOffline(t *testing.T) {
 		t.Fatalf("local tracker comment: %q %v", out, err)
 	}
 	got, err = os.ReadFile(log)
-	if err != nil || string(got) != strings.Join([]string{"--host", "codeberg.org", "issue", "comment", "o/r#7", "--body-file", body, ""}, "\n") {
+	if err != nil || string(got) != strings.Join([]string{"issue", "comment", "codeberg.org/o/r#7", "--body-file", body, ""}, "\n") {
 		t.Fatalf("local tracker argv: %q %v", got, err)
 	}
 	if _, err := runHarnez(t, "issues", "show", "-d", dir, "7", "--forge"); err == nil || !strings.Contains(err.Error(), "--forge requires comment") {

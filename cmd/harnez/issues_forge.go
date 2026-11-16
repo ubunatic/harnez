@@ -158,7 +158,7 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	if !isOpen && !closedAllowed {
 		return fmt.Errorf("issues comment: %s has state %q; closed issues require --closed", target, is.State)
 	}
-	c := forgetracker.Command{Tool: "fj", Args: []string{"--host", t.Forge.Host, "issue", "comment", target, "--body-file", body}}
+	c := forgetracker.FJIssueCommand(t, n, body, "")
 	if dryRun {
 		_, err = fmt.Fprintf(w, "dry run: %s\n", c)
 		return err
@@ -175,7 +175,7 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 		if strings.Contains(strings.ToLower(msg), "401") || strings.Contains(strings.ToLower(msg), "token is required") {
 			return fmt.Errorf("issues comment: fj authentication failed; run fj -H %s auth login", t.Forge.Host)
 		}
-		return fmt.Errorf("issues comment: fj failed: %w: %s", err, msg)
+		return fmt.Errorf("issues comment: fj failed: %w: %s\nrun manually: %s", err, msg, c)
 	}
 	_, err = w.Write(out)
 	return err
@@ -206,6 +206,9 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	fmt.Fprintf(stderr, "issues new: filing on %s with %s\n", t, c.Tool)
 	out, err := issueCLIRun(dir, c)
 	if err != nil {
+		if c.Tool == "fj" {
+			return fmt.Errorf("issues new: fj failed: %w\n%s\nrun manually: %s", err, strings.TrimSpace(string(out)), c)
+		}
 		return fmt.Errorf("issues new: %s failed: %w\n%s", c.Tool, err, strings.TrimSpace(string(out)))
 	}
 	n, url, ok := forgetracker.ParseCreated(t, string(out), req.Title)
