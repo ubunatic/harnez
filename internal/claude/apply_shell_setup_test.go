@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"ubunatic.com/harnez/dev/shellsetup"
+	"ubunatic.com/goself"
 )
 
 // withCompletionRenderer installs r for the test and restores the previous renderer.
@@ -50,12 +50,12 @@ func TestShellSetupWiresCompletionWhenRendererSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasChange(res, shellsetup.FeatureCompletion, filepath.Join(home, ".harnez", "completions", "harnez.zsh")) {
+	if !hasChange(res, goself.ShellFeatureCompletion, filepath.Join(home, ".harnez", "completions", "harnez.zsh")) {
 		t.Errorf("zsh completion script not written: %+v", res.Changes)
 	}
 }
 
-func hasChange(res shellsetup.Result, feature shellsetup.Feature, path string) bool {
+func hasChange(res goself.ShellResult, feature goself.ShellFeature, path string) bool {
 	for _, c := range res.Changes {
 		if c.Feature == feature && c.Path == path {
 			return true

@@ -40,6 +40,16 @@ func loadPackages() (map[string]packageSpec, error) {
 	return spec.Packages, nil
 }
 
+// HasPackage reports whether name is configured in spec/dependencies.yaml.
+func HasPackage(name string) bool {
+	packages, err := loadPackages()
+	if err != nil {
+		return false
+	}
+	_, ok := packages[name]
+	return ok
+}
+
 // Install runs the Go installation followed by the package's bootstrap command.
 // Dry runs only print argv; they do not resolve or execute any program.
 func Install(ctx context.Context, name string, dryRun bool, in io.Reader, out, stderr io.Writer) error {

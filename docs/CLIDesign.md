@@ -20,7 +20,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `status`| Global | Config summary + applied-state checks |
 | `usage` | Multi-Agent (local/remote) | Zero-cost token counters, live quota tracking, project attribution (`--project`), procs (`-p`), remote host (`--host`) |
 | `server` | Local / User Service | Run local services; install, inspect, and remove the systemd user collector service |
-| `install <name>` | User toolchain | Install an optional Go tool from `spec/dependencies.yaml`, then run its bootstrap; `--dry-run` prints commands |
+| `install [host \| <name>]` | Self / User toolchain | Install or update `harnez` locally or over ssh via `goself` (wiring shell PATH, completions, `⚙` symlink, and man pages), or install an optional tool from `spec/dependencies.yaml` (`--dry-run` previews) |
 | `usage history` | Analytical / Logs | Timeline, remote fetch, stats & sparklines across `~/.claude/harnez/usage-history/` |
 | `assess`| Local / Repo | Fast code/doc metrics, token estimation, glossary check (`--glossary`), and feasibility report (`--json`) |
 | `dochistory` / `repo-history` | Local / Repo | Multi-track Git artifact evolution, Braille sparklines (`--tracks`), and diff breakdown (`--diff`) |
@@ -403,10 +403,8 @@ written once per `apply`, not generated at each shell start, so opening a termin
 spawns no process and records no `cli_invocations` row. Re-run `harnez apply`
 after upgrading harnez so the scripts match the new verbs.
 
-The PATH entry and the completion wiring are written by `dev/shellsetup`, a standard-library
-package that takes a command name, a completion renderer, a PATH directory and the shells to
-wire. harnez passes its own values to it; `apply`, `status`, `diff` and `revert` call it. The
-package keeps no harnez-specific code, so another app can reuse it.
+The PATH entry and the completion wiring are written by `ubunatic.com/goself`, which
+`apply`, `status`, `diff`, `revert`, and `install` call through `internal/claude`.
 
 This bit a real session (issue 316, 2026-09-15): a debloat-feature smoke test using
 `-t` pointed the real `⚙` symlinks at a throwaway temp binary, which was then deleted,
