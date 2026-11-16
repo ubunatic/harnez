@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"ubunatic.com/harnez/internal/forgetoken"
 )
 
 func TestParseImportedToken(t *testing.T) {
@@ -61,7 +62,7 @@ func TestForgeTokenWiringWithoutStoredToken(t *testing.T) {
 	cmd := newForgeTokenCmd()
 	cmd.SetArgs([]string{"status"})
 	cmd.SetOut(&out)
-	if err := cmd.Execute(); err != nil || out.String() != "no token stored for codeberg.org\n" {
+	if err := cmd.Execute(); err != nil || out.String() != "no token stored for codeberg.org\nwrite token: none (harnez forge token create --write)\n" {
 		t.Fatalf("status: %v %q", err, out.String())
 	}
 	cmd = newForgeTokenCmd()
@@ -70,5 +71,75 @@ func TestForgeTokenWiringWithoutStoredToken(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "not a Forgejo host") {
 		t.Fatalf("github host: %v", err)
+	}
+}
+
+func TestWriteTokenCommands(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	var out bytes.Buffer
+	cmd := newForgeTokenCmd()
+	cmd.SetArgs([]string{"import", "--write", "--user", "u", "-"})
+	cmd.SetIn(strings.NewReader("write-secret"))
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "write-secret") {
+		t.Fatal("secret exposed")
+	}
+	if forgetoken.LookupWrite("codeberg.org") != "write-secret" || forgetoken.Lookup("codeberg.org") != "" {
+		t.Fatal("wrong store")
+	}
+	cmd = newForgeTokenCmd()
+	cmd.SetArgs([]string{"revoke", "--write", "--local-only"})
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriteTokenIsolation(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	_, read, err := forgeTokenStoreFor(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, write, err := forgeTokenStoreFor(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := read.Save(forgetoken.Meta{Host: "codeberg.org", User: "u"}, "read-secret"); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	cmd := newForgeTokenCmd()
+	cmd.SetArgs([]string{"status"})
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil || !strings.Contains(out.String(), "write token: none (harnez forge token create --write)") {
+		t.Fatalf("%s: %v", out.String(), err)
+	}
+	if _, err := write.Save(forgetoken.Meta{Host: "codeberg.org", User: "u"}, "write-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if forgetoken.Lookup("codeberg.org") != "read-secret" || forgetoken.LookupWrite("codeberg.org") != "write-secret" {
+		t.Fatal("lookup isolation")
+	}
+	cmd = newForgeTokenCmd()
+	cmd.SetArgs([]string{"revoke", "--write", "--local-only"})
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil || forgetoken.Lookup("codeberg.org") != "read-secret" {
+		t.Fatalf("revoke: %v", err)
+	}
+	cmd = newForgeTokenCmd()
+	cmd.SetArgs([]string{"import", "--write", "--user", "u", "-"})
+	cmd.SetIn(strings.NewReader(""))
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("empty import accepted")
+	}
+	if strings.Contains(out.String(), "read-secret") || strings.Contains(out.String(), "write-secret") {
+		t.Fatal("secret exposed")
 	}
 }

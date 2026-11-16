@@ -36,7 +36,7 @@ type forgeTokenEnv struct {
 
 func newForgeTokenCmd() *cobra.Command {
 	var host, user string
-	var localOnly bool
+	var localOnly, write bool
 	cmd := &cobra.Command{
 		Use:   "token",
 		Short: "Create, rotate, revoke or show harnez's read-only Forgejo token",
@@ -53,12 +53,13 @@ single-use, so rotate asks for a second code before it revokes the old token.
 The token goes into the OS keyring (secret-tool) when one works, else into a 0600 file under
 $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 	}
+	cmd.PersistentFlags().BoolVar(&write, "write", false, "use the separate forge issue write token")
 	cmd.PersistentFlags().StringVar(&host, "host", "", "forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)")
 
 	create := &cobra.Command{
 		Use: "create", Short: "Create and store a new read-only token", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runForgeToken(host, user, false, func(e forgeTokenEnv) error {
+			return runForgeToken(host, user, false, write, func(e forgeTokenEnv) error {
 				res, err := forgetoken.Create(e.spec, e.store, e.client, e.host, e.login, time.Now())
 				if err != nil {
 					return err
@@ -73,7 +74,7 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 	rotate := &cobra.Command{
 		Use: "rotate", Short: "Replace the stored token with a new one and revoke the old one", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runForgeToken(host, "", true, func(e forgeTokenEnv) error {
+			return runForgeToken(host, "", true, write, func(e forgeTokenEnv) error {
 				fresh := func() (string, error) { return e.tty.line("Next 2FA code, to revoke the old token: ") }
 				res, err := forgetoken.Rotate(e.spec, e.store, e.client, e.host, e.login, time.Now(), fresh)
 				if err != nil {
@@ -93,7 +94,7 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 		Use: "revoke", Short: "Revoke the stored token on the forge and forget it locally", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if localOnly {
-				sp, st, err := forgeTokenStore()
+				sp, st, err := forgeTokenStoreFor(write)
 				if err != nil {
 					return err
 				}
@@ -105,7 +106,7 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 				fmt.Fprintf(cmd.OutOrStdout(), "forgot %s locally; it is still live on %s until you delete it there\n", m.Name, h)
 				return nil
 			}
-			return runForgeToken(host, "", true, func(e forgeTokenEnv) error {
+			return runForgeToken(host, "", true, write, func(e forgeTokenEnv) error {
 				m, err := forgetoken.Revoke(e.store, e.client, e.host, e.login, false)
 				if err != nil {
 					return err
@@ -120,11 +121,29 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 	status := &cobra.Command{
 		Use: "status", Short: "Show the stored token's name, scopes and store (never the secret)", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			sp, st, err := forgeTokenStore()
+			sp, st, err := forgeTokenStoreFor(write)
 			if err != nil {
 				return err
 			}
-			return printTokenStatus(cmd.OutOrStdout(), st, orDefault(host, sp.DefaultHost))
+			if err := printTokenStatus(cmd.OutOrStdout(), st, orDefault(host, sp.DefaultHost)); err != nil {
+				return err
+			}
+			if !write {
+				_, ws, err := forgeTokenStoreFor(true)
+				if err != nil {
+					return err
+				}
+				_, ok, err := ws.Meta(orDefault(host, sp.DefaultHost))
+				if err != nil {
+					return err
+				}
+				if !ok {
+					fmt.Fprintln(cmd.OutOrStdout(), "write token: none (harnez forge token create --write)")
+				} else {
+					fmt.Fprintln(cmd.OutOrStdout(), "write token: stored")
+				}
+			}
+			return nil
 		},
 	}
 	var impUser, name, checkRepo string
@@ -142,7 +161,7 @@ themselves cannot be checked here. The source file is kept unless --remove-sourc
   harnez forge token import --user ubunatic --name issue-read --check ubunatic/harnez -`,
 		Args: cobra.ExactArgs(1), SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runForgeTokenImport(cmd.OutOrStdout(), cmd.InOrStdin(), args[0], host, impUser, name, checkRepo, removeSource)
+			return runForgeTokenImport(cmd.OutOrStdout(), cmd.InOrStdin(), args[0], host, impUser, name, checkRepo, removeSource, write)
 		},
 	}
 	imp.Flags().StringVar(&impUser, "user", "", "forge username that owns the token (required)")
@@ -153,8 +172,8 @@ themselves cannot be checked here. The source file is kept unless --remove-sourc
 	return cmd
 }
 
-func runForgeTokenImport(w io.Writer, stdin io.Reader, file, host, user, name, checkRepo string, removeSource bool) error {
-	sp, st, err := forgeTokenStore()
+func runForgeTokenImport(w io.Writer, stdin io.Reader, file, host, user, name, checkRepo string, removeSource, write bool) error {
+	sp, st, err := forgeTokenStoreFor(write)
 	if err != nil {
 		return err
 	}
@@ -249,6 +268,18 @@ func forgeTokenStore() (forgetoken.Spec, forgetoken.Store, error) {
 	return sp, st, err
 }
 
+func forgeTokenStoreFor(write bool) (forgetoken.Spec, forgetoken.Store, error) {
+	sp, err := forgetoken.LoadSpec()
+	if err != nil {
+		return sp, forgetoken.Store{}, err
+	}
+	if write {
+		sp = sp.ForWrite()
+	}
+	st, err := forgetoken.SystemStore(sp)
+	return sp, st, err
+}
+
 func printTokenStatus(w io.Writer, st forgetoken.Store, host string) error {
 	m, ok, err := st.Meta(host)
 	if err != nil {
@@ -278,8 +309,8 @@ func printTokenMeta(w io.Writer, state string, m forgetoken.Meta, st forgetoken.
 // runForgeToken resolves the forge's API base, opens the store, checks that a token is stored
 // when needStored, prompts for the login on the terminal and runs op. User comes from the flag,
 // else the stored metadata, else a prompt.
-func runForgeToken(host, user string, needStored bool, op func(forgeTokenEnv) error) error {
-	sp, st, err := forgeTokenStore()
+func runForgeToken(host, user string, needStored, write bool, op func(forgeTokenEnv) error) error {
+	sp, st, err := forgeTokenStoreFor(write)
 	if err != nil {
 		return err
 	}

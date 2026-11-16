@@ -1606,6 +1606,7 @@ Available Commands:
 Flags:
   -h, --help          help for token
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 Use "harnez forge token [command] --help" for more information about a command.
 
@@ -1621,6 +1622,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez forge token import
 Read a token as the forge's settings page shows it (only the token, nothing else) from
@@ -1644,6 +1646,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez forge token revoke
 Revoke the stored token on the forge and forget it locally
@@ -1657,6 +1660,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez forge token rotate
 Replace the stored token with a new one and revoke the old one
@@ -1669,6 +1673,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez forge token status
 Show the stored token's name, scopes and store (never the secret)
@@ -1681,6 +1686,7 @@ Flags:
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --write         use the separate forge issue write token
 
 === harnez guard
 Inspect and verify decide-based rule enforcement and safety guardrails.
