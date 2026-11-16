@@ -421,3 +421,52 @@ Pre-work first: the "Pre-Work / Required Refinements" lists in tickets 1228 and 
 - Live check, host only: the owner runs `harnez forge token create --write`; then new, comment,
   edit (title and body), close, reopen, close on `ubunatic/harnez` (with `--forge`) and on
   `harnez/taia`. Record which unverified facts it confirmed.
+
+### M8 pre-work and docs delivered (2026-11-16)
+
+- Commits `8d9a47c7` (pre-work) and `bd937e33` (docs), fresh developer `forge-dev3`
+  (codex:terra:med), one turn of 5m27s. Its `make test-q1` failed on two outdated tests, fixed
+  without a rerun; it left most of pre-work item 6 open and said so.
+- Host full run: `make test-q1` exit 0, 78 `ok` lines, fake `fj`, `tea`, `gh` on `PATH` not
+  called. `make install` and `harnez init -d .` leave `git status` clean.
+- Host check with the installed binary (no write token stored): `close`, `reopen` and `edit`
+  with `--forge --dry-run 41` each print only their dry-run line; `close --forge`,
+  `edit --forge`, `open --forge` without a number give `issues <verb>: requires an issue
+  number`; `show --forge 41 --json` returns the forge issue with
+  `"updated_at": "2026-10-31T19:57:51+01:00"`; `show --forge 78` says it is a pull request;
+  `list --forge` gives `issues: --forge does not support list`; `show 41` still shows local
+  ticket 041.
+- Reviewer `forge-rev5`: no remaining fallthrough from a forge verb to a local verb; local
+  verbs keep their paths; the remote flow of `new` differs from before `00ef6564` only by the
+  host-only check; `show --forge` uses the read token only.
+
+### Decision (review of M8, host and reviewer `forge-rev5`, 2026-11-16)
+
+- Local `close` and `open` without a number now say `issues <verb>: requires an issue number`
+  (before: cobra's argument-count error). Accepted: clearer, and no valid call changes.
+- `new --remote --dry-run` still creates the issue, as before this ticket (reviewer finding,
+  not checked by the host). Not changed here; the docs must say that `--dry-run` does not
+  cover the remote flow.
+
+### M8 refinements (last developer turn, commit `(#1202 M8 refinements)`)
+
+1. Tests still missing from pre-work item 6 and the dispatch test: no commit is made and the
+   local ticket file is byte-identical after the forge dry runs (assert `git rev-parse HEAD`
+   before and after); plain `close 7 "reason"` in that repo still closes the local ticket; a
+   successful `edit --closed`; pull-request refusal and missing write token for `close` and
+   `reopen`; label paging that ends on a repeated page; the no-token dry run of `new` and
+   `comment` and the worker runs of `edit`, `close`, `reopen` with a secret lookup that fails
+   the test when called.
+2. Docs and help state only what the code does:
+   - `comment` falls back to fj only; `new` falls back to fj or tea, and to gh on GitHub.
+   - `--dry-run` previews forge writes, not the `--remote` / `CLAUDE_CODE_REMOTE` flow of `new`.
+   - The help line for `comment --dry-run`: it prints the fj command, or the API plan when a
+     write token is stored.
+   - `docs/commands/issue.md`: bring back what `bd937e33` dropped, corrected against the code:
+     the `harnez find -d <repo> issues` search line (check what it searches before stating
+     it), the private-repo token note, the forms without `--forge` for a repository whose
+     tracker is the forge next to the `--forge` forms for a repository with local tickets,
+     one `--dry-run` example each for `new` and `comment`, and the label guidance (labels must
+     exist on the forge; over the API they are resolved by name; fj cannot set labels).
+   - Regenerate copies with `make install` and `harnez init -d .`; source and copy in the
+     same commit.
