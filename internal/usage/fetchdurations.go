@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -78,6 +79,7 @@ func fetchDurationsPath(homeDir string) (string, error) {
 func loadFetchDurationEstimate(homeDir, kind string) (estimate time.Duration, ok bool) {
 	path, err := fetchDurationsPath(homeDir)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez: resolve fetch duration state: %v\n", err)
 		return 0, false
 	}
 	cache := readLiveFetchCache[map[string]fetchDurationSample](path)
@@ -103,6 +105,7 @@ func recordFetchDuration(homeDir, kind string, elapsed time.Duration) {
 	}
 	path, err := fetchDurationsPath(homeDir)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez: resolve fetch duration state: %v\n", err)
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {

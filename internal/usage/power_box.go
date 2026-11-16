@@ -2,6 +2,7 @@ package usage
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -278,7 +279,11 @@ func sharedPowerMeter() *powerMeter {
 	sharedPowerMu.Lock()
 	defer sharedPowerMu.Unlock()
 	if sharedPower == nil {
-		path := powerPeaksPath()
+		path, err := powerPeaksPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "harnez: resolve power peaks state: %v\n", err)
+			return newPowerMeter(&powerPeakStore{now: time.Now, saveInterval: powerPeakSaveInterval(), peaks: map[string]float64{}})
+		}
 		sharedPower = newPowerMeter(newPowerPeakStore(path, readBootID(powerBootIDPath), time.Now))
 	}
 	return sharedPower

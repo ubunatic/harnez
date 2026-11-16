@@ -217,10 +217,10 @@ func readBootID(path string) string {
 }
 
 // powerPeaksPath is the peak state file under the usage state dir.
-func powerPeaksPath() string {
+func powerPeaksPath() (string, error) {
 	dir, err := ResolvedStateDir("")
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return filepath.Join(dir, powerPeaksFilename)
+	return filepath.Join(dir, powerPeaksFilename), nil
 }

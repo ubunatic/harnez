@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -35,6 +36,7 @@ func capturePassiveNoQuota(provider string, payload []byte, reason string) {
 	if !filepath.IsAbs(base) {
 		home, err := os.UserHomeDir()
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "harnez: resolve passive capture state: %v\n", err)
 			return
 		}
 		base = filepath.Join(home, ".local", "state")
@@ -44,6 +46,7 @@ func capturePassiveNoQuota(provider string, payload []byte, reason string) {
 		var err error
 		dir, err = runstate.UsageStateDir("")
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "harnez: resolve passive capture state: %v\n", err)
 			return
 		}
 	}

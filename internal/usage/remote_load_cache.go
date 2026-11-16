@@ -43,6 +43,7 @@ func ReadCachedRemoteLoadEntry(host string) RemoteLoadCache {
 	}
 	path, err := remoteLoadCachePath(host)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez: resolve remote load cache: %v\n", err)
 		return RemoteLoadCache{}
 	}
 	data, err := os.ReadFile(path)
