@@ -112,6 +112,9 @@ func importUsageArchiveIntoStore(ctx context.Context, dbPath string, store *usag
 // QuotaHistoryFromStore returns the store's historical window view in the
 // legacy report shape used by host-session fitted attribution.
 func QuotaHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]QuotaHistoryEntry, error) {
+	if inRunnerMode() && (dbPath == "" || filepath.Clean(dbPath) == filepath.Clean(UsageStorePath())) {
+		return nil, fmt.Errorf("quota history store: host-only operation in runner mode")
+	}
 	if err := ImportUsageCompatibility(ctx, homeDir, dbPath); err != nil {
 		return nil, err
 	}
@@ -133,6 +136,9 @@ func QuotaHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]Quota
 // UsageHistoryFromStore returns complete compatibility snapshots through the
 // telemetry store after importing any retained legacy JSONL files.
 func UsageHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]HistoryEntry, error) {
+	if inRunnerMode() && (dbPath == "" || filepath.Clean(dbPath) == filepath.Clean(UsageStorePath())) {
+		return nil, fmt.Errorf("usage history store: host-only operation in runner mode")
+	}
 	if err := ImportUsageCompatibility(ctx, homeDir, dbPath); err != nil {
 		return nil, err
 	}

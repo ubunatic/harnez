@@ -112,8 +112,22 @@ func TestRunnerUsageQueryRelayValidationAndFailClosed(t *testing.T) {
 	if err != nil || resp.Status != http.StatusForbidden {
 		t.Fatalf("non-empty route resp=%+v err=%v, want 403", resp, err)
 	}
-	if err := ValidateRunnerUsageQuery(RunnerUsageQuery{Action: "merge_legacy"}); !errors.Is(err, ErrRunnerForbidden) {
+	if err := ValidateRunnerUsageQuery(cfg, RunnerUsageQuery{Action: "merge_legacy"}); !errors.Is(err, ErrRunnerForbidden) {
 		t.Fatalf("unexpected validation err = %v", err)
+	}
+	if err := ValidateRunnerUsageQuery(cfg, RunnerUsageQuery{
+		Action: RunnerUsageActionLatestSummary, Provider: "codex",
+	}); err == nil {
+		t.Fatal("expected unexpected provider on latest_summary to fail")
+	}
+	manyModels := make([]string, cfg.RunnerChannel.UsageQueryMaxModels+1)
+	for i := range manyModels {
+		manyModels[i] = "m"
+	}
+	if err := ValidateRunnerUsageQuery(cfg, RunnerUsageQuery{
+		Action: RunnerUsageActionProviderQuota, Provider: "codex", Models: manyModels,
+	}); err == nil {
+		t.Fatal("expected over-limit models query to fail")
 	}
 	if _, err := os.Stat(hostSocket); err != nil {
 		t.Fatalf("expected mock socket %s: %v", hostSocket, err)

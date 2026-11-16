@@ -42,13 +42,16 @@ type Config struct {
 
 // RunnerChannelConfig controls the inherited launch-bound runner broker FD.
 type RunnerChannelConfig struct {
-	FDEnv                 string
-	MaxFrameBytes         int64
-	SpoolMaxBytes         int64
-	ReplayMaxRecords      int
-	ReplayMaxBytes        int64
-	MaxConcurrentStreams  int
-	AllowedTelemetryKinds []string
+	FDEnv                  string
+	MaxFrameBytes          int64
+	FrameHeadroomBytes     int64
+	SpoolMaxBytes          int64
+	ReplayMaxRecords       int
+	ReplayMaxBytes         int64
+	MaxConcurrentStreams   int
+	UsageQueryMaxModels    int
+	UsageQueryMaxStringLen int
+	AllowedTelemetryKinds  []string
 }
 
 // RemoteUpgradeConfig controls best-effort replacement of an older remote binary.
@@ -91,13 +94,16 @@ type specConfig struct {
 }
 
 type rawRunnerChannel struct {
-	FDEnv                 string   `yaml:"fd_env"`
-	MaxFrameBytes         int64    `yaml:"max_frame_bytes"`
-	SpoolMaxBytes         int64    `yaml:"spool_max_bytes"`
-	ReplayMaxRecords      int      `yaml:"replay_max_records"`
-	ReplayMaxBytes        int64    `yaml:"replay_max_bytes"`
-	MaxConcurrentStreams  int      `yaml:"max_concurrent_streams"`
-	AllowedTelemetryKinds []string `yaml:"allowed_telemetry_kinds"`
+	FDEnv                  string   `yaml:"fd_env"`
+	MaxFrameBytes          int64    `yaml:"max_frame_bytes"`
+	FrameHeadroomBytes     int64    `yaml:"frame_headroom_bytes"`
+	SpoolMaxBytes          int64    `yaml:"spool_max_bytes"`
+	ReplayMaxRecords       int      `yaml:"replay_max_records"`
+	ReplayMaxBytes         int64    `yaml:"replay_max_bytes"`
+	MaxConcurrentStreams   int      `yaml:"max_concurrent_streams"`
+	UsageQueryMaxModels    int      `yaml:"usage_query_max_models"`
+	UsageQueryMaxStringLen int      `yaml:"usage_query_max_string_len"`
+	AllowedTelemetryKinds  []string `yaml:"allowed_telemetry_kinds"`
 }
 
 func LoadConfig() (Config, error) {
@@ -243,25 +249,37 @@ func (c Config) Socket() (string, error) {
 }
 
 func loadRunnerChannel(cfg *Config, raw rawRunnerChannel) error {
-	if raw.FDEnv == "" || raw.MaxFrameBytes <= 0 || raw.SpoolMaxBytes <= 0 || raw.ReplayMaxRecords <= 0 || raw.ReplayMaxBytes <= 0 || raw.MaxConcurrentStreams <= 0 {
+	if raw.FDEnv == "" || raw.MaxFrameBytes <= 0 || raw.FrameHeadroomBytes <= 0 || raw.SpoolMaxBytes <= 0 || raw.ReplayMaxRecords <= 0 || raw.ReplayMaxBytes <= 0 || raw.MaxConcurrentStreams <= 0 || raw.UsageQueryMaxModels <= 0 || raw.UsageQueryMaxStringLen <= 0 {
 		return fmt.Errorf("spec/server.yaml: runner_channel settings must be positive and non-empty")
 	}
-	if raw.MaxFrameBytes <= raw.ReplayMaxBytes {
-		return fmt.Errorf("spec/server.yaml: runner_channel.max_frame_bytes must exceed replay_max_bytes")
+	if raw.MaxFrameBytes <= raw.ReplayMaxBytes || raw.MaxFrameBytes <= raw.FrameHeadroomBytes {
+		return fmt.Errorf("spec/server.yaml: runner_channel.max_frame_bytes must exceed replay_max_bytes and frame_headroom_bytes")
 	}
 	if len(raw.AllowedTelemetryKinds) == 0 {
 		return fmt.Errorf("spec/server.yaml: runner_channel.allowed_telemetry_kinds must be non-empty")
 	}
 	cfg.RunnerChannel = RunnerChannelConfig{
-		FDEnv:                 raw.FDEnv,
-		MaxFrameBytes:         raw.MaxFrameBytes,
-		SpoolMaxBytes:         raw.SpoolMaxBytes,
-		ReplayMaxRecords:      raw.ReplayMaxRecords,
-		ReplayMaxBytes:        raw.ReplayMaxBytes,
-		MaxConcurrentStreams:  raw.MaxConcurrentStreams,
-		AllowedTelemetryKinds: append([]string(nil), raw.AllowedTelemetryKinds...),
+		FDEnv:                  raw.FDEnv,
+		MaxFrameBytes:          raw.MaxFrameBytes,
+		FrameHeadroomBytes:     raw.FrameHeadroomBytes,
+		SpoolMaxBytes:          raw.SpoolMaxBytes,
+		ReplayMaxRecords:       raw.ReplayMaxRecords,
+		ReplayMaxBytes:         raw.ReplayMaxBytes,
+		MaxConcurrentStreams:   raw.MaxConcurrentStreams,
+		UsageQueryMaxModels:    raw.UsageQueryMaxModels,
+		UsageQueryMaxStringLen: raw.UsageQueryMaxStringLen,
+		AllowedTelemetryKinds:  append([]string(nil), raw.AllowedTelemetryKinds...),
 	}
 	return nil
+}
+
+// MaxResultPayloadBytes returns the maximum serialized result size allowed in
+// a runner channel response frame.
+func (c RunnerChannelConfig) MaxResultPayloadBytes() int64 {
+	if c.MaxFrameBytes <= c.FrameHeadroomBytes {
+		return 0
+	}
+	return c.MaxFrameBytes - c.FrameHeadroomBytes
 }
 
 // AllowsTelemetryKind reports whether a runner may submit the given record kind.

@@ -100,9 +100,21 @@ func loadTierOverridesFile(path string) (*TierOverrides, error) {
 	return &ov, nil
 }
 
+// LoadWritableTierOverrides reads unexpired tier overrides solely from the
+// writable path (the runner overlay when confined, or the global file on the
+// host), without merging read-only global entries.
+func LoadWritableTierOverrides() (*TierOverrides, error) {
+	path, err := ResolvedTierOverridesPath()
+	if err != nil {
+		return nil, err
+	}
+	return loadTierOverridesFile(path)
+}
+
 // LoadTierOverrides reads unexpired tier overrides from disk. If missing or expired,
 // it returns nil, nil. In runner mode ($TAIA_SESSION_DIR set without test dir
-// override), read-only global overrides are merged beneath runner overlay entries.
+// override), read-only global overrides are merged beneath runner overlay entries,
+// preserving the earliest non-zero expiry.
 func LoadTierOverrides() (*TierOverrides, error) {
 	overlayPath, err := ResolvedTierOverridesPath()
 	if err != nil {
@@ -130,7 +142,9 @@ func LoadTierOverrides() (*TierOverrides, error) {
 		}
 	}
 	if overlay != nil {
-		merged.ExpiresAt = overlay.ExpiresAt
+		if merged.ExpiresAt.IsZero() || (!overlay.ExpiresAt.IsZero() && overlay.ExpiresAt.Before(merged.ExpiresAt)) {
+			merged.ExpiresAt = overlay.ExpiresAt
+		}
 		for k, v := range overlay.Tiers {
 			merged.Tiers[k] = v
 		}

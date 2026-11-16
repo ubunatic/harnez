@@ -60,14 +60,17 @@
     "runner_channel": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fd_env", "max_frame_bytes", "spool_max_bytes", "replay_max_records", "replay_max_bytes", "max_concurrent_streams", "allowed_telemetry_kinds"],
+      "required": ["fd_env", "max_frame_bytes", "frame_headroom_bytes", "spool_max_bytes", "replay_max_records", "replay_max_bytes", "max_concurrent_streams", "usage_query_max_models", "usage_query_max_string_len", "allowed_telemetry_kinds"],
       "properties": {
         "fd_env": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
         "max_frame_bytes": { "type": "integer", "minimum": 1024 },
+        "frame_headroom_bytes": { "type": "integer", "minimum": 128 },
         "spool_max_bytes": { "type": "integer", "minimum": 1024 },
         "replay_max_records": { "type": "integer", "minimum": 1 },
         "replay_max_bytes": { "type": "integer", "minimum": 1024 },
         "max_concurrent_streams": { "type": "integer", "minimum": 1 },
+        "usage_query_max_models": { "type": "integer", "minimum": 1 },
+        "usage_query_max_string_len": { "type": "integer", "minimum": 16 },
         "allowed_telemetry_kinds": {
           "type": "array",
           "minItems": 1,

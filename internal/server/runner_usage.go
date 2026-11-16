@@ -24,14 +24,29 @@ type RunnerUsageQuery struct {
 	Models   []string `json:"models,omitempty"`
 }
 
-// ValidateRunnerUsageQuery verifies that q is an allowlisted read-only query.
-func ValidateRunnerUsageQuery(q RunnerUsageQuery) error {
+// ValidateRunnerUsageQuery verifies that q is an allowlisted read-only query
+// within configured spec bounds.
+func ValidateRunnerUsageQuery(cfg Config, q RunnerUsageQuery) error {
+	maxStr := cfg.RunnerChannel.UsageQueryMaxStringLen
+	maxModels := cfg.RunnerChannel.UsageQueryMaxModels
 	switch q.Action {
 	case RunnerUsageActionLatestSummary, RunnerUsageActionHistoryEntries, RunnerUsageActionQuotaHistory:
+		if q.Provider != "" || len(q.Models) > 0 {
+			return fmt.Errorf("unexpected provider or models on %s query", q.Action)
+		}
 		return nil
 	case RunnerUsageActionProviderQuota:
-		if strings.TrimSpace(q.Provider) == "" || len(q.Models) == 0 {
-			return fmt.Errorf("provider_quota query requires provider and models")
+		p := strings.TrimSpace(q.Provider)
+		if p == "" || (maxStr > 0 && len(p) > maxStr) || len(q.Models) == 0 {
+			return fmt.Errorf("provider_quota query requires bounded provider and models")
+		}
+		if maxModels > 0 && len(q.Models) > maxModels {
+			return fmt.Errorf("provider_quota query exceeds %d models", maxModels)
+		}
+		for _, m := range q.Models {
+			if strings.TrimSpace(m) == "" || (maxStr > 0 && len(m) > maxStr) {
+				return fmt.Errorf("provider_quota model name invalid or exceeds limit")
+			}
 		}
 		return nil
 	default:
@@ -42,7 +57,7 @@ func ValidateRunnerUsageQuery(q RunnerUsageQuery) error {
 // QueryRunnerUsage executes an allowlisted read-only usage query over the
 // inherited runner broker FD and unmarshals its JSON result into out.
 func QueryRunnerUsage(ctx context.Context, cfg Config, q RunnerUsageQuery, out any) error {
-	if err := ValidateRunnerUsageQuery(q); err != nil {
+	if err := ValidateRunnerUsageQuery(cfg, q); err != nil {
 		return err
 	}
 	rawPayload, err := json.Marshal(q)
@@ -104,7 +119,7 @@ func handleRunnerUsageRead(ctx context.Context, cfg Config, payload json.RawMess
 	if err := decodeStrictJSON(payload, &q); err != nil {
 		return RunnerResponse{Status: http.StatusBadRequest, Error: "invalid usage query"}
 	}
-	if err := ValidateRunnerUsageQuery(q); err != nil {
+	if err := ValidateRunnerUsageQuery(cfg, q); err != nil {
 		return statusForRunnerErr(err)
 	}
 	raw, err := query(ctx, q)
@@ -118,7 +133,8 @@ func handleRunnerUsageRead(ctx context.Context, cfg Config, payload json.RawMess
 		}
 		return RunnerResponse{Status: http.StatusServiceUnavailable, Error: err.Error()}
 	}
-	if int64(len(raw)) > cfg.RunnerChannel.MaxFrameBytes-256 {
+	maxPayload := cfg.RunnerChannel.MaxResultPayloadBytes()
+	if maxPayload <= 0 || int64(len(raw)) > maxPayload {
 		return RunnerResponse{Status: http.StatusRequestEntityTooLarge, Error: ErrRunnerPayloadTooLarge.Error()}
 	}
 	return RunnerResponse{Status: http.StatusOK, Result: json.RawMessage(raw)}

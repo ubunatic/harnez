@@ -631,3 +631,24 @@ func TestTelemetryCollectorServiceUsageQueryViaRunnerRelay(t *testing.T) {
 		t.Fatalf("runner ReadQuotaHistory = (%+v, %v)", qEntries, err)
 	}
 }
+
+func TestWriteCappedTailJSONBinarySearchAndOversizeItem(t *testing.T) {
+	items := []string{"alpha", "beta", "gamma", "delta"}
+	one, _ := json.Marshal([]string{"gamma", "delta"})
+	rec := httptest.NewRecorder()
+	writeCappedTailJSON(rec, items, int64(len(one)))
+	if rec.Code != http.StatusOK || rec.Header().Get("X-Harnez-Truncated") != "true" {
+		t.Fatalf("capped response code=%d truncated=%q", rec.Code, rec.Header().Get("X-Harnez-Truncated"))
+	}
+	var got []string
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || len(got) != 2 || got[0] != "gamma" {
+		t.Fatalf("capped items = %+v (%v), want [gamma delta]", got, err)
+	}
+
+	// Single entry larger than maxBytes returns 413 explicitly.
+	recTooBig := httptest.NewRecorder()
+	writeCappedTailJSON(recTooBig, []string{strings.Repeat("x", 64)}, 16)
+	if recTooBig.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversize single item status = %d, want 413", recTooBig.Code)
+	}
+}

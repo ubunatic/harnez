@@ -143,8 +143,9 @@ func runModelsSet(ctx context.Context, out, errOut io.Writer, workDir string, ar
 		return err
 	}
 
-	// Merge with existing active overrides if unexpired
-	existing, _ := subagent.LoadTierOverrides()
+	// Merge only with existing writable overrides (never freeze global runner
+	// read-only entries into the runner overlay).
+	existing, _ := subagent.LoadWritableTierOverrides()
 	mergedTiers := make(map[string]string)
 	if existing != nil && existing.Tiers != nil {
 		for k, v := range existing.Tiers {

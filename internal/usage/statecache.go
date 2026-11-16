@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"ubunatic.com/harnez/internal/modelblock"
 	"ubunatic.com/harnez/internal/runstate"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
 	"ubunatic.com/harnez/internal/xdgpath"
@@ -79,10 +81,7 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 func CachedProviderQuotaAvailabilities(provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
 	states := unknownProviderQuotaAvailabilities(models)
 	if inRunnerMode() {
-		if queried, err := queryRunnerProviderQuota(context.Background(), provider, models); err == nil && len(queried) > 0 {
-			states = queried
-		}
-		return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)
+		return cachedRunnerProviderQuotaAvailabilities(provider, models, now, states)
 	}
 	if dbPath, err := telemetry.DefaultDBPath(); err == nil {
 		states = ProviderQuotaAvailabilitiesFromStore(context.Background(), dbPath, provider, models, now)
@@ -95,15 +94,24 @@ func CachedProviderQuotaAvailabilities(provider string, models []string, now tim
 func CachedProviderQuotaAvailabilityReadOnly(provider, model string, now time.Time) ProviderQuotaAvailability {
 	models := []string{model}
 	if inRunnerMode() {
-		states := unknownProviderQuotaAvailabilities(models)
-		if queried, err := queryRunnerProviderQuota(context.Background(), provider, models); err == nil && len(queried) > 0 {
-			states = queried
-		}
-		return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)[model]
+		return cachedRunnerProviderQuotaAvailabilities(provider, models, now, unknownProviderQuotaAvailabilities(models))[model]
 	}
 	path := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
 	states := providerQuotaAvailabilitiesFromStore(context.Background(), path, provider, models, now, true)
 	return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)[model]
+}
+
+func cachedRunnerProviderQuotaAvailabilities(provider string, models []string, now time.Time, fallback map[string]ProviderQuotaAvailability) map[string]ProviderQuotaAvailability {
+	states := fallback
+	queried, err := queryRunnerProviderQuota(context.Background(), provider, models)
+	if err != nil {
+		if !errors.Is(err, server.ErrInvalidRunnerChannel) {
+			fmt.Fprintf(os.Stderr, "harnez: query runner quota availability: %v\n", err)
+		}
+	} else if len(queried) > 0 {
+		states = queried
+	}
+	return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)
 }
 
 // applyModelBlocks marks every model with an active local block as exhausted

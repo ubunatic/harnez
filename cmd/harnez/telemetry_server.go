@@ -27,9 +27,7 @@ type telemetryCollectorService struct {
 
 func (s *telemetryCollectorService) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+s.config.TelemetryPath, s.handleRecord)
-	if s.config.UsageQueryPath != "" {
-		mux.HandleFunc("POST "+s.config.UsageQueryPath, s.handleUsageQuery)
-	}
+	mux.HandleFunc("POST "+s.config.UsageQueryPath, s.handleUsageQuery)
 }
 
 func (s *telemetryCollectorService) handleRecord(w http.ResponseWriter, r *http.Request) {
@@ -66,11 +64,11 @@ func (s *telemetryCollectorService) handleUsageQuery(w http.ResponseWriter, r *h
 		http.Error(w, "invalid usage query", http.StatusBadRequest)
 		return
 	}
-	if err := server.ValidateRunnerUsageQuery(q); err != nil {
+	if err := server.ValidateRunnerUsageQuery(s.config, q); err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
-	maxPayload := s.config.RunnerChannel.MaxFrameBytes - 512
+	maxPayload := s.config.RunnerChannel.MaxResultPayloadBytes()
 	switch q.Action {
 	case server.RunnerUsageActionLatestSummary:
 		summary, err := usage.ReadStoredSummaryDirect(r.Context(), s.path)
@@ -119,19 +117,35 @@ func writeCappedTailJSON[T any](w http.ResponseWriter, items []T, maxBytes int64
 		http.Error(w, "marshal usage history", http.StatusInternalServerError)
 		return
 	}
-	if maxBytes > 0 {
-		for int64(len(raw)) > maxBytes && len(items) > 1 {
-			drop := len(items) / 2
-			if drop < 1 {
-				drop = 1
-			}
-			items = items[drop:]
-			raw, err = json.Marshal(items)
+	truncated := false
+	if maxBytes > 0 && int64(len(raw)) > maxBytes {
+		lo, hi := 0, len(items)-1
+		best := len(items)
+		var bestRaw []byte
+		for lo <= hi {
+			mid := lo + (hi-lo)/2
+			candidate, err := json.Marshal(items[mid:])
 			if err != nil {
 				http.Error(w, "marshal usage history", http.StatusInternalServerError)
 				return
 			}
+			if int64(len(candidate)) <= maxBytes {
+				best = mid
+				bestRaw = candidate
+				hi = mid - 1
+			} else {
+				lo = mid + 1
+			}
 		}
+		if best >= len(items) {
+			http.Error(w, server.ErrRunnerPayloadTooLarge.Error(), http.StatusRequestEntityTooLarge)
+			return
+		}
+		truncated = best > 0
+		raw = bestRaw
+	}
+	if truncated {
+		w.Header().Set("X-Harnez-Truncated", "true")
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(raw)

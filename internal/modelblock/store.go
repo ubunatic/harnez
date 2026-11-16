@@ -190,7 +190,7 @@ func Remove(path, provider, model string) (bool, error) {
 // are merged beneath runner overlay blocks.
 func Active(path string, now time.Time) []Block {
 	var global []Block
-	if isRunnerOverlayPath(path) {
+	if os.Getenv("TAIA_SESSION_DIR") != "" && (strings.TrimSpace(path) == "" || isRunnerOverlayPath(path)) {
 		global = readActiveFile(GlobalPath(), now)
 	}
 	local := readActiveFile(path, now)

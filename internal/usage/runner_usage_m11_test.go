@@ -197,3 +197,17 @@ func TestRunnerUsageReadsRouteThroughBrokerWithoutSharedSQLite(t *testing.T) {
 		t.Fatalf("without broker FD got %+v, want unknown", ro)
 	}
 }
+
+func TestRunnerUsageDirectStoreHistoryGuards(t *testing.T) {
+	runnerRoot := filepath.Join(t.TempDir(), "runner-sess")
+	if err := os.Mkdir(runnerRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runnerRoot)
+	if _, err := UsageHistoryFromStore(context.Background(), "", ""); err == nil {
+		t.Fatal("expected UsageHistoryFromStore to fail closed in runner mode")
+	}
+	if _, err := QuotaHistoryFromStore(context.Background(), "", ""); err == nil {
+		t.Fatal("expected QuotaHistoryFromStore to fail closed in runner mode")
+	}
+}

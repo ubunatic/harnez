@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -206,5 +208,49 @@ func TestParseExpiry(t *testing.T) {
 	wantNextDay := now.AddDate(0, 0, 1)
 	if expNextDay.Day() != wantNextDay.Day() || expNextDay.Hour() != 8 {
 		t.Fatalf("got %v, want next day 08:00 (%v)", expNextDay, wantNextDay)
+	}
+}
+
+func TestAgentModelsSetRunnerOverlayDoesNotFreezeGlobal(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	t.Setenv("TAIA_SESSION_DIR", "")
+
+	// Host sets a global smart override.
+	if err := subagent.SaveTierOverrides(subagent.TierOverrides{
+		ExpiresAt: time.Now().Add(2 * time.Hour),
+		Tiers:     map[string]string{"smart": "claude:opus:high"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	runnerRoot := filepath.Join(t.TempDir(), "runner-sess")
+	if err := os.Mkdir(runnerRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runnerRoot)
+
+	var out, errOut bytes.Buffer
+	if err := runModelsSet(context.Background(), &out, &errOut, t.TempDir(), nil, modelsSetOptions{
+		hours: 1,
+		lean:  "codex:luna:low",
+	}); err != nil {
+		t.Fatalf("runner models set failed: %v", err)
+	}
+
+	writable, err := subagent.LoadWritableTierOverrides()
+	if err != nil || writable == nil {
+		t.Fatalf("LoadWritableTierOverrides = (%+v, %v)", writable, err)
+	}
+	if _, copied := writable.Tiers["smart"]; copied {
+		t.Fatalf("runner overlay copied global tier: %+v", writable.Tiers)
+	}
+	if writable.Tiers["lean"] != "codex:luna:low" {
+		t.Fatalf("runner overlay lean = %q, want codex:luna:low", writable.Tiers["lean"])
+	}
+	// Global smart remains active through merged read.
+	if spec, ok := subagent.ActiveTierOverride("smart"); !ok || spec != "claude:opus:high" {
+		t.Fatalf("global smart = (%q, %v), want claude:opus:high", spec, ok)
 	}
 }

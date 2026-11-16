@@ -109,4 +109,17 @@ func TestRunnerOverlayFailsClosedOnMalformedRoot(t *testing.T) {
 	if err := Add(Path(), Block{Provider: "codex", Model: "m", Until: now.Add(time.Hour)}, now); err == nil {
 		t.Fatal("expected Add on invalid runner root to fail closed")
 	}
+
+	// Global blocks remain enforced even when runner root is malformed (M1).
+	t.Setenv("TAIA_SESSION_DIR", "")
+	if err := Add(GlobalPath(), Block{
+		Provider: "codex", Model: "global-kept", Until: now.Add(time.Hour), Reason: "global", CreatedAt: now,
+	}, now); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", badRoot)
+	active := Active(Path(), now)
+	if len(active) != 1 || active[0].Model != "global-kept" {
+		t.Fatalf("expected global block active on malformed runner root, got %+v", active)
+	}
 }
