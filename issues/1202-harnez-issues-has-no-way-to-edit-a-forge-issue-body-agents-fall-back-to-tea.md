@@ -584,3 +584,13 @@ Pre-work first: the "Pre-Work / Required Refinements" lists in tickets 1228 and 
   success. Add `commented on <t>#N` in the next developer turn.
 - Both scratch issues are open. Part 2 (needs the write token): comment over the API, edit,
   close with a reason, reopen, close on #174 and #292, and one `new` over the API per tracker.
+
+### M9 review, test/lint fixes and comment confirmation (2026-11-16)
+
+- Reviewed `2aee2ddd` and delivered follow-up commit `d992e65b`:
+  - Stubbed `issueCLILookPath` and `issueWriteMetadata` in `TestTrackerNoneDraftsRoutesForge` (and `issueWriteMetadata` in the other CLI dry-run fallback tests) so tests do not depend on `tea` or host token metadata.
+  - Moved `resolveForgeTracker` into `runIssuesList` and applied `findIssuesLocalOnly` checks there so `issues -l` and `issues list open` match `find issues` on a forge tracker.
+  - Added `commented on <t>#N` after `fj` output in `runIssuesComment` and asserted it in `TestIssuesCommentOffline`.
+  - Fixed 12 `errcheck` findings in `cmd/harnez/issues_forge.go` and `cmd/harnez/issues_forge_test.go`.
+- Verification: `make install && make lint` (`0 issues` from `golangci-lint`, `lint: ok`) and `make test-q1` with fake `fj`, `tea`, `gh` on `PATH` exited 0 (`78` `ok` lines; fake CLI call log stayed empty).
+- Still open: Live check part 2 on `#174` (`ubunatic/harnez`) and `#292` (`harnez/taia`) after owner runs `harnez forge token create --write`.
