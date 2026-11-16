@@ -5,12 +5,12 @@ import (
 	"os"
 	"strings"
 
-	"ubunatic.com/harnez/dev/shellsetup"
+	"ubunatic.com/goself"
 	"ubunatic.com/harnez/internal/fsutil"
 )
 
 // Shell setup for harnez: the PATH entry and the completion scripts are
-// written by dev/shellsetup. This file supplies harnez's values: its name,
+// written by ubunatic.com/goself. This file supplies harnez's values: its name,
 // its install directory, and the completion renderer that the command tree
 // registers through SetCompletionRenderer.
 
@@ -29,19 +29,26 @@ func SetCompletionRenderer(r CompletionRenderer) {
 	completionRenderer = r
 }
 
-// shellSetup returns the installer for home: harnez's PATH entry, plus
-// completion when a renderer is registered.
-func shellSetup(home string) (*shellsetup.Installer, error) {
-	cfg := shellsetup.Config{Home: home, Owner: shellOwner, PathDir: HarnezPathDir()}
+// NewShellSetup returns the PATH and completion installer for home and pathDir.
+// System bin directories are omitted from PATH entries, and completion is wired
+// when SetCompletionRenderer has been registered.
+func NewShellSetup(home, pathDir string) (*goself.ShellSetup, error) {
+	cfg := goself.ShellConfig{Home: home, Owner: shellOwner, PathDir: PathEntryDir(pathDir)}
 	if render := completionRenderer; render != nil {
-		cfg.Completions = []shellsetup.Completion{{
+		cfg.Completions = []goself.Completion{{
 			Command: shellOwner,
-			Script: func(shell shellsetup.Shell) ([]byte, error) {
+			Script: func(shell goself.Shell) ([]byte, error) {
 				return render(string(shell))
 			},
 		}}
 	}
-	return shellsetup.New(cfg)
+	return goself.NewShellSetup(cfg)
+}
+
+// shellSetup returns the installer for home: harnez's PATH entry, plus
+// completion when a renderer is registered.
+func shellSetup(home string) (*goself.ShellSetup, error) {
+	return NewShellSetup(home, HarnezPathDir())
 }
 
 // applyShellSetup writes the PATH entry and completion, then reports what changed.
@@ -56,12 +63,12 @@ func applyShellSetup(r *applyReport, home string) error {
 	}
 	for _, c := range res.Changes {
 		r.changes++
-		fmt.Printf("  %s\n", describeShellChange(c))
+		fmt.Printf("  %s\n", DescribeShellChange(c))
 	}
 	var pathStats, completionStats []string
 	for _, c := range res.Unchanged {
 		p := fsutil.ContractHome(c.Path)
-		if c.Feature == shellsetup.FeaturePath {
+		if c.Feature == goself.ShellFeaturePath {
 			pathStats = append(pathStats, p)
 		} else {
 			completionStats = append(completionStats, p)
@@ -86,7 +93,7 @@ func shellSetupPending(home string) bool {
 }
 
 // shellSetupChecks returns the status rows for the PATH entry and completion.
-func shellSetupChecks(home string) []shellsetup.Check {
+func shellSetupChecks(home string) []goself.ShellCheck {
 	inst, err := shellSetup(home)
 	if err != nil {
 		return nil
@@ -103,15 +110,15 @@ func cleanShellSetup(home string) {
 	}
 	changes, err := inst.Clean()
 	for _, c := range changes {
-		fmt.Printf("  %s\n", describeShellChange(c))
+		fmt.Printf("  %s\n", DescribeShellChange(c))
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "  shell setup clean: %v\n", err)
 	}
 }
 
-// describeShellChange renders one change as "wrote ~/.zshenv [path]".
-func describeShellChange(c shellsetup.Change) string {
+// DescribeShellChange renders one change as "wrote ~/.zshenv [path]".
+func DescribeShellChange(c goself.ShellChange) string {
 	line := c.Action + " " + fsutil.ContractHome(c.Path)
 	if c.Section != "" {
 		line += " [" + c.Section + "]"

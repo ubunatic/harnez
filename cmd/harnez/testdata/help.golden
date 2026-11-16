@@ -30,7 +30,7 @@ Available Commands:
   help            Help about any command
   index           Regenerate issue indexes and docs/README.md's studies table from source files
   init            Set up a project directory with AGENTS.md, language docs, and Makefile targets
-  install         Install an optional dependency and run its bootstrap
+  install         Install harnez locally or over ssh, or install an optional dependency
   issues          Change a ticket's Status line, resync issue indexes, and commit -- in one call
   lint            Check files against harnez repository rules and conventions
   log             Show harnez's own CLI invocation history, newest first (git log for harnez)
@@ -1906,14 +1906,24 @@ Flags:
   -y, --yes                use detected/recorded setup and reconcile Makefile targets without prompts
 
 === harnez install
-Install an optional dependency and run its bootstrap
+Install or update harnez locally (into --dir, configuring shell PATH, completions,
+the ⚙ symlink, and man pages) or onto a remote host over ssh.
+When the argument names a package in spec/dependencies.yaml (such as neus),
+it runs that dependency's installer instead.
 
 Usage:
-  harnez install <name> [flags]
+  harnez install [host | dependency] [flags]
 
 Flags:
-      --dry-run   Print commands without installing
-  -h, --help      help for install
+      --allow-dirty       Allow build strategy with uncommitted changes to a remote target
+      --dir string        Install directory on the target (default "~/.local/bin")
+      --direct            Use GOPROXY=direct for the go strategy
+      --dry-run           Print actions without installing
+  -h, --help              help for install
+      --no-man            Skip installing roff man pages on local install
+      --no-shell          Skip shell PATH and completion setup on local install
+      --strategy string   Binary source: auto, self, build, release, or go (default "auto")
+      --version string    Version or git ref for the release and go strategies
 
 === harnez issues
 issues collapses today's four-step ticket-status-change dance (hand-edit the
