@@ -63,7 +63,7 @@ const (
 func DefaultDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		home = "."
+		return "", err
 	}
 	return runstate.FeedbackDir(filepath.Join(home, ".harnez", "feedback"))
 }

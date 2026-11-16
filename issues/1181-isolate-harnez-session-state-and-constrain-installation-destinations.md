@@ -141,6 +141,10 @@ refinements folded into M10 pre-work below. M10–M17 remain open.
 
 ## Milestone 10 — Pre-Work / Required Refinements & Separate Runner Telemetry
 
+### M10a — M9 review refinements
+
+M10a addresses AGY meter path and backoff write error reporting, removes the feedback home fallback, and adds producer/reader, shared-write, cache round-trip, and invalid-root regressions. The single Quota-1 run stopped at vet before Go tests due to a misplaced check; the check was corrected afterward and targeted `go vet` passed, but the corrected code has not had a test run. M10b telemetry and broker work remains open.
+
 ### Pre-Work / Required Refinements (from M9 review of `ad1cb455..c771270d`)
 - **AGY error propagation (`internal/usage/agy.go`)**: stop discarding `writeAGYAuthBackoff` errors (do not log/treat a failed write as active backoff), and propagate or visibly fail closed on `runstate.AGYMeterDir` errors inside `applyAGYMeterQuota` rather than silently returning missing data.
 - **Remove `"."` fallback (`internal/feedback/feedback.go:63`)**: `DefaultDir() (string, error)` must return the `os.UserHomeDir()` error instead of substituting `"."` (`.harnez/feedback`).

@@ -441,3 +441,33 @@ func readRecords(t *testing.T, path string) []Record {
 	}
 	return records
 }
+
+func TestRunnerRejectsMalformedRoots(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DEBUG", "1")
+	for _, kind := range []string{"missing", "permissive", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			switch kind {
+			case "missing":
+				root = filepath.Join(root, "missing")
+			case "permissive":
+				if err := os.Chmod(root, 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				link := filepath.Join(t.TempDir(), "link")
+				if err := os.Symlink(root, link); err != nil {
+					t.Fatal(err)
+				}
+				root = link
+			}
+			t.Setenv("TAIA_SESSION_DIR", root)
+			if m, err := New(home); err == nil {
+				m.Close()
+				t.Fatal("accepted invalid root")
+			}
+		})
+	}
+}

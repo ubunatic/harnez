@@ -310,6 +310,10 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
+	if _, err := runstate.AGYMeterDir(filepath.Join(homeDir, ".harnez", "agymeter")); err != nil {
+		usage.QuotaFetchError = fmt.Sprintf("agy meter directory: %v", err)
+		return usage
+	}
 	if geminiDir == "" {
 		geminiDir = filepath.Join(homeDir, ".gemini", "antigravity-cli")
 	}
@@ -471,8 +475,11 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 				usage.QuotaFetchDurationMS = time.Since(probeStarted).Milliseconds()
 				if isAGYAuthRequired(out, err) {
 					until := time.Now().Add(agyAuthBackoffCooldown)
-					_ = writeAGYAuthBackoff(backoffPath, agyAuthBackoff{Until: until, DetectedAt: time.Now()})
-					err = fmt.Errorf(`agy -p "/usage" requires reauthentication (login required); backing off live polling until %s`, until.Format(time.RFC3339))
+					if writeErr := writeAGYAuthBackoff(backoffPath, agyAuthBackoff{Until: until, DetectedAt: time.Now()}); writeErr != nil {
+						err = fmt.Errorf(`agy -p "/usage" requires reauthentication (login required); cannot persist backoff: %w`, writeErr)
+					} else {
+						err = fmt.Errorf(`agy -p "/usage" requires reauthentication (login required); backing off live polling until %s`, until.Format(time.RFC3339))
+					}
 					out = nil
 				}
 			}
@@ -587,6 +594,7 @@ func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, include
 	}
 	dir, err := runstate.AGYMeterDir(filepath.Join(homeDir, ".harnez", "agymeter"))
 	if err != nil {
+		usage.QuotaFetchError = fmt.Sprintf("agy meter directory: %v", err)
 		return usage, false
 	}
 	path := filepath.Join(dir, "usage.jsonl")

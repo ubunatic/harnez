@@ -75,6 +75,13 @@ func TestRunnerLiveCacheDoesNotMigrateLegacy(t *testing.T) {
 	if path != filepath.Join(root, "state", "usage", "quota-cache-claude.json") {
 		t.Fatalf("runner cache path: %s", path)
 	}
+	cache := liveFetchCache[agyQuotaPayload]{FetchedAt: time.Now().UTC(), Payload: agyQuotaPayload{ModelGroups: []ModelGroup{{Name: "runner"}}}}
+	if err := writeLiveFetchCache(path, cache); err != nil {
+		t.Fatal(err)
+	}
+	if got := readLiveFetchCache[agyQuotaPayload](path); got == nil || len(got.Payload.ModelGroups) != 1 || got.Payload.ModelGroups[0].Name != "runner" {
+		t.Fatalf("cache round trip: %+v", got)
+	}
 	entries, err := os.ReadDir(shared)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("shared cache changed: %v %v", entries, err)
@@ -207,6 +214,11 @@ func TestRunnerProcessesWriteSeparately(t *testing.T) {
 		}
 		return
 	}
+	shared := t.TempDir()
+	t.Setenv("HOME", shared)
+	t.Setenv("XDG_STATE_HOME", shared)
+	t.Setenv("XDG_CACHE_HOME", shared)
+	t.Setenv("XDG_DATA_HOME", shared)
 	roots := []string{t.TempDir(), t.TempDir()}
 	cmds := make([]*exec.Cmd, 0, len(roots))
 	pipes := make([]*os.File, 0, len(roots))
@@ -253,6 +265,9 @@ func TestRunnerProcessesWriteSeparately(t *testing.T) {
 	}
 	for _, pipe := range readyPipes {
 		_ = pipe.Close()
+	}
+	if entries, err := os.ReadDir(shared); err != nil || len(entries) != 0 {
+		t.Fatalf("shared writes: %v %v", entries, err)
 	}
 	for i, root := range roots {
 		data, err := os.ReadFile(filepath.Join(root, "state", "usage", "test.json"))

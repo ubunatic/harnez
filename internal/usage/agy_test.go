@@ -2,10 +2,15 @@ package usage
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -621,5 +626,97 @@ func TestAGYMeterReaderHostFallback(t *testing.T) {
 	got, ok := applyAGYMeterQuota(AgentUsage{}, home, now, false)
 	if !ok || len(got.ModelGroups) == 0 || got.ModelGroups[0].Windows[0].RemainingPercent != 75 {
 		t.Fatalf("host meter: %+v %v", got.ModelGroups, ok)
+	}
+}
+
+func TestAGYMeterInvalidRunnerRootReportsError(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("TAIA_SESSION_DIR", filepath.Join(t.TempDir(), "missing"))
+	got, ok := applyAGYMeterQuota(AgentUsage{}, home, time.Now(), true)
+	if ok || !strings.Contains(got.QuotaFetchError, "TAIA_SESSION_DIR") {
+		t.Fatalf("meter error: %+v, %v", got, ok)
+	}
+	collected := collectAGYWithHome(context.Background(), "", home, nil)
+	if !strings.Contains(collected.QuotaFetchError, "TAIA_SESSION_DIR") {
+		t.Fatalf("collector error: %+v", collected)
+	}
+}
+
+type agyMeterTestTransport func(*http.Request) (*http.Response, error)
+
+func (f agyMeterTestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+type agyMeterTestObserver struct{ done chan struct{} }
+
+func (o agyMeterTestObserver) RequestStarted()       {}
+func (o agyMeterTestObserver) ResponseFinished(bool) { close(o.done) }
+func TestRunnerAGYMeterProxyToQuota(t *testing.T) {
+	home, root := t.TempDir(), t.TempDir()
+	t.Setenv("TAIA_SESSION_DIR", root)
+	reset := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	observer := agyMeterTestObserver{done: make(chan struct{})}
+	meter, err := agymeter.NewWithTransport(home, agyMeterTestTransport(func(r *http.Request) (*http.Response, error) {
+		body := fmt.Sprintf(`{"groups":[{"buckets":[{"bucketId":"gemini-5h","remainingFraction":0.75,"resetTime":%q}]}]}`, reset)
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+	}), observer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer meter.Close()
+	bundle, err := meter.Bundle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pem, err := os.ReadFile(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(pem) {
+		t.Fatal("invalid CA bundle")
+	}
+	proxyURL, err := url.Parse(meter.URL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	go meter.Serve()
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL), TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}, Timeout: 5 * time.Second}
+	resp, err := client.Get("https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-observer.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("meter did not observe response")
+	}
+	got, ok := applyAGYMeterQuota(AgentUsage{}, home, time.Now(), false)
+	if !ok || len(got.ModelGroups) == 0 || got.ModelGroups[0].Windows[0].RemainingPercent != 75 {
+		t.Fatalf("quota: %+v, %v", got, ok)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".harnez")); !os.IsNotExist(err) {
+		t.Fatalf("shared meter changed: %v", err)
+	}
+}
+
+func TestCollectAGYReportsBackoffWriteFailure(t *testing.T) {
+	calls, cleanup := agyStubUsageCmd(t, []byte("Please log in to continue using Antigravity.\n"), nil)
+	defer cleanup()
+	home, root := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("TAIA_SESSION_DIR", root)
+	dir := t.TempDir()
+	path := agyAuthBackoffPath(dir)
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	got := collectAGYWithHome(context.Background(), dir, home, http.DefaultClient)
+	if atomic.LoadInt32(calls) != 1 || !strings.Contains(got.QuotaFetchError, "cannot persist backoff") || strings.Contains(got.QuotaFetchError, "backing off") {
+		t.Fatalf("backoff failure: %+v, calls %d", got, *calls)
 	}
 }

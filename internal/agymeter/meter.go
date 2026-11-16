@@ -173,6 +173,16 @@ func New(home string) (*Meter, error) {
 	return newMeter(home, os.Getenv("HARNEZ_SESSION_ID"), "")
 }
 
+// NewWithTransport creates a meter with an explicit upstream transport.
+func NewWithTransport(home string, transport http.RoundTripper, observer Observer) (*Meter, error) {
+	m, err := New(home)
+	if err == nil {
+		m.transport = transport
+		m.observer = observer
+	}
+	return m, err
+}
+
 func newMeter(home, sessionID, promptID string) (*Meter, error) {
 	dir, err := runstate.AGYMeterDir(filepath.Join(home, ".harnez", "agymeter"))
 	if err != nil {
