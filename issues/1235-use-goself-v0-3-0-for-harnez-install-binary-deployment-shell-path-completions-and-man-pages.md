@@ -1,6 +1,7 @@
 # 1235 — Use goself v0.3.0 for harnez install binary deployment, shell PATH, completions, and man pages
 
-**Status**: In Progress — implementing goself v0.3.0 integration in harnez install and apply_shell_setup
+**Status**: Closed — integrated ubunatic.com/goself v0.3.0 into harnez install and internal/claude shell setup (removing dev/shellsetup); harnez install now deploys ~/.local/bin/harnez, symlinks ⚙, configures bash/zsh/fish PATH and completions, installs man pages, and restarts active harnez-agent-collector.service while preserving dependency installs (harnez install neus); HTO=0 make lint, HTO=0 make test-q1, and live go install + harnez install verified
+**Closed-By**: session d3745c98-8c17-42c0-ab28-f6f0104b79c2
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
