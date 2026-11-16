@@ -503,3 +503,53 @@ Pre-work first: the "Pre-Work / Required Refinements" lists in tickets 1228 and 
   `updated_at`; the forge returns the body byte-identical. Organisation-level labels are
   not covered.
 - Tickets 1228, 1212 and 1202 stay open until the live check has passed.
+
+### Finding before the live check: `taia` needs `--forge` on every verb (host, 2026-11-16)
+
+- `harnez/taia` sets `issues.tracker: none` in `.harnez/repo.yaml` and keeps its tickets on
+  Codeberg, but it has a tracked drafts folder `issues/inbox/` (two `.md` files, no numbered
+  ticket file). `resolveForgeTracker` (`cmd/harnez/issues_forge.go:64`) returns the local
+  tracker as soon as an `issues/` directory exists, before it looks at the tracker setting.
+- Seen with the installed binary in the `taia` checkout (dry runs only):
+  - `issues new "T" -F body.md --dry-run` gives `issues new: -F/--body-file and --label apply
+    only when tickets live on the forge (no local issues/ dir)`.
+  - `issues comment 1 -F note.md --dry-run` gives `issues comment: requires a forge tracker;
+    with a local issues/ dir use --forge`.
+  - `issues close --dry-run 1` and `issues show 1` give `issues: no ticket found for number
+    "001" under .../taia/issues`.
+  - The same calls with `--forge` print the forge plan.
+
+### Decision (host, decide mode, 2026-11-16)
+
+- A repository that sets `issues.tracker: none` and has a recognised forge origin uses the
+  forge tracker even when an `issues/` directory exists, unless that directory holds local
+  ticket files (a file `issues/<digits>-*.md`, or a directory `issues/archive/`). Reason: the
+  setting says that harnez manages no local tracker there, and a drafts folder is not a
+  tracker; local ticket files keep the old behaviour so that no existing repository changes.
+- `issues.tracker: harnez` and a missing `.harnez/repo.yaml` keep today's rule: an `issues/`
+  directory means the local tracker.
+
+### M9: forge tracker for `tracker: none` with a drafts folder
+
+1. `resolveForgeTracker` follows the Decision above. It is shared by `issues` (new, comment,
+   show, list, edit, close, reopen, open) and `find` (`cmd/harnez/find.go:169`); check each
+   caller. Where it prints `no local issues/ dir: tickets live on <t>`, print
+   `issues.tracker is none: tickets live on <t>` when the directory exists.
+2. Error texts for a repository that stays on the local tracker name the way out:
+   `issues new: -F/--body-file and --label apply only when tickets live on the forge; with a
+   local issues/ dir use --forge`. Keep the `comment` text.
+3. Tests, each through `runHarnez` in a temp-dir repository with a Codeberg origin, stubs and
+   `httptest`, never a real forge:
+   - `tracker: none` plus `issues/inbox/a.md`: `new -F`, `comment`, `show`, `edit`, `close`,
+     `reopen` take the forge path without `--forge` (dry runs for the writes; assert the exact
+     plan line), `find issues` reads the forge source.
+   - `tracker: none` plus `issues/007-x.md`: the local verbs behave as before (`close 7 "r"`
+     closes the local file).
+   - `tracker: none` plus an empty `issues/archive/` directory: local tracker.
+   - `tracker: harnez` plus `issues/inbox/a.md`, and no `repo.yaml` plus `issues/inbox/a.md`:
+     local tracker, as before.
+   - `tracker: none`, `issues/inbox/a.md` and an origin that is no recognised forge: local
+     behaviour, no error from the resolver.
+4. Docs: `docs/commands/issue.md`, the `harnez issues` help and the Issues rule source say
+   when `--forge` is needed (local tracker) and when not (no `issues/` directory, or
+   `tracker: none` without local ticket files). Regenerate the copies.
