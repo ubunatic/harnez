@@ -123,3 +123,67 @@ func TestDifferentRunnerDirectoriesStaySeparate(t *testing.T) {
 		t.Fatalf("runner directories collide: %q", first)
 	}
 }
+
+func TestUsageStateDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", root)
+	dir, err := UsageStateDir("legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir != filepath.Join(root, "state", "usage") {
+		t.Fatalf("usage directory: %s", dir)
+	}
+	info, err := os.Stat(dir)
+	if err != nil || info.Mode().Perm() != 0700 {
+		t.Fatalf("directory mode: %v %v", info, err)
+	}
+	if err := os.Chmod(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UsageStateDir("legacy"); err == nil {
+		t.Fatal("accepted permissive descendant")
+	}
+	t.Setenv("TAIA_SESSION_DIR", "relative")
+	if _, err := UsageStateDir("legacy"); err == nil {
+		t.Fatal("accepted relative root")
+	}
+	t.Setenv("TAIA_SESSION_DIR", "")
+	if dir, err := UsageStateDir("legacy"); err != nil || dir != "legacy" {
+		t.Fatalf("legacy = %q, %v", dir, err)
+	}
+}
+
+func TestUsageStateRejectsInvalidDescendants(t *testing.T) {
+	for _, kind := range []string{"symlink", "permissive", "missing root", "permissive root"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.Chmod(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "symlink":
+				if err := os.Symlink(t.TempDir(), filepath.Join(root, "state")); err != nil {
+					t.Fatal(err)
+				}
+			case "permissive":
+				if err := os.Mkdir(filepath.Join(root, "state"), 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "missing root":
+				root = filepath.Join(root, "missing")
+			case "permissive root":
+				if err := os.Chmod(root, 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("TAIA_SESSION_DIR", root)
+			if _, err := UsageStateDir("legacy"); err == nil {
+				t.Fatal("accepted invalid path")
+			}
+		})
+	}
+}

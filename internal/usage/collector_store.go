@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 // PersistUsageSummary applies collector-owned schema setup, compatibility
 // imports, observations and history snapshots to the canonical usage store.
 func PersistUsageSummary(ctx context.Context, homeDir, dbPath string, summary UsageSummary) error {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return fmt.Errorf("usage collector requires host broker in runner mode")
+	}
 	if dbPath == "" {
 		var err error
 		dbPath, err = telemetry.DefaultDBPath()
@@ -56,6 +60,9 @@ func PersistUsageSummary(ctx context.Context, homeDir, dbPath string, summary Us
 // InitializeUsageStore performs collector-owned schema setup and compatibility
 // imports once before the service accepts requests or starts its first tick.
 func InitializeUsageStore(ctx context.Context, homeDir, dbPath string) error {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return fmt.Errorf("usage collector requires host broker in runner mode")
+	}
 	if dbPath == "" {
 		var err error
 		dbPath, err = telemetry.DefaultDBPath()

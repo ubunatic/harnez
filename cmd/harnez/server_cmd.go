@@ -525,6 +525,9 @@ func localServerPID(ctx context.Context, cfg server.Config, socket string) int {
 }
 
 func runHarnezServer(ctx context.Context, interval time.Duration, offline bool, indexConfig server.NeusIndexConfig) error {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return fmt.Errorf("usage collector requires host broker in runner mode")
+	}
 	cfg, err := server.LoadConfig()
 	if err != nil {
 		return err

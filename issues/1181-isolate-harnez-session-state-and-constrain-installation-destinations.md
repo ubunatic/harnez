@@ -120,6 +120,19 @@ contract/validation gaps that are folded into M8 pre-work below. Ticket remains 
 
 ## Milestone 8 — Pre-Work / Required Refinements & Runner-Local State
 
+M8 landed on `sprint/1181` with all M7 pre-work resolved (`livefetchcache` reconciled
+as runner-local under `$TAIA_SESSION_DIR`, strict `KnownFields` + embedded JSON
+schema validation in `internal/sessioncontract` without Go literal duplication,
+exported docstrings, `ValidateRoot` removed, negative contract tests) and runner
+usage paths centralized via `internal/runstate.UsageStateDir` across `statecache`,
+`fetchdurations`, `killlog`, `passive_debug`, `power_peaks`, `remote_load_cache`,
+`collector_store`, `collector`, and `cmd/harnez/{usage_cmd,server_cmd}.go`. Runner
+snapshots no longer infer canonical store access from directory equality, and
+collector/canonical store paths fail closed when `TAIA_SESSION_DIR` is set.
+Fresh `HTO=0 make test-q1` passed after the final `killlog.go` fix (`internal/runstate`,
+`internal/sessioncontract`, `internal/usage`, `cmd/harnez`, `scripts/stage-install-test.sh`
+all green). M9–M17 remain open.
+
 ### Pre-Work / Required Refinements (from M7 review of `f87b48db`)
 - **Resolve `livefetchcache` ownership conflict**: reconcile `docs/SessionIsolation.md` (currently assigns live-fetch cache to `runner`) with `spec/session_isolation.yaml` (currently assigns `canonical_usage_snapshots_history_livefetchcache` to `broker`); freeze one unambiguous owner (or explicitly separate runner-local cache under `$TAIA_SESSION_DIR` vs host-only legacy/canonical handling) in both doc and spec.
 - **Eliminate `docs/Spec.md` duplication & tighten validation**: make `spec/schemas/session_isolation.schema.json` the single source of truth (add `minItems`, enforce uniqueness and required host-only/ownership constraints via schema rather than Go literals); have `internal/sessioncontract.Load()` decode strictly (`KnownFields`) and validate against the embedded JSON schema, limiting Go `Validate()` to cross-field invariants (`unique(Ownership.Resource)`, `disjoint(RunnerOperations, HostOnlyOperations)`, `AliasTarget == Binary`).

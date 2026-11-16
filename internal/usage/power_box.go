@@ -278,7 +278,8 @@ func sharedPowerMeter() *powerMeter {
 	sharedPowerMu.Lock()
 	defer sharedPowerMu.Unlock()
 	if sharedPower == nil {
-		sharedPower = newPowerMeter(newPowerPeakStore(powerPeaksPath(), readBootID(powerBootIDPath), time.Now))
+		path := powerPeaksPath()
+		sharedPower = newPowerMeter(newPowerPeakStore(path, readBootID(powerBootIDPath), time.Now))
 	}
 	return sharedPower
 }

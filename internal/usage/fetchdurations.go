@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"ubunatic.com/harnez/internal/runstate"
 )
 
 // fetchDurationsFilename is the on-disk cache of learned fetch-duration
@@ -52,14 +54,21 @@ func fetchDurationKindForHost(host string) string {
 // fetchDurationsPath resolves the shared fetch-duration estimate cache
 // file, using the same XDG Base Directory resolution StateDir uses, one
 // directory above its agents/usage subtree.
-func fetchDurationsPath(homeDir string) string {
+func fetchDurationsPath(homeDir string) (string, error) {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		dir, err := runstate.UsageStateDir("")
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(dir, fetchDurationsFilename), nil
+	}
 	if xdg := os.Getenv(stateCacheDirEnv); xdg != "" {
-		return filepath.Join(xdg, stateAppDir, fetchDurationsFilename)
+		return filepath.Join(xdg, stateAppDir, fetchDurationsFilename), nil
 	}
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
-	return filepath.Join(homeDir, ".local", "state", stateAppDir, fetchDurationsFilename)
+	return filepath.Join(homeDir, ".local", "state", stateAppDir, fetchDurationsFilename), nil
 }
 
 // loadFetchDurationEstimate returns the persisted rolling estimate for
@@ -67,7 +76,11 @@ func fetchDurationsPath(homeDir string) string {
 // run, or first fetch of this particular kind on this host). Callers must
 // treat ok=false as "no estimate", not "estimate is zero".
 func loadFetchDurationEstimate(homeDir, kind string) (estimate time.Duration, ok bool) {
-	cache := readLiveFetchCache[map[string]fetchDurationSample](fetchDurationsPath(homeDir))
+	path, err := fetchDurationsPath(homeDir)
+	if err != nil {
+		return 0, false
+	}
+	cache := readLiveFetchCache[map[string]fetchDurationSample](path)
 	if cache == nil || cache.Payload == nil {
 		return 0, false
 	}
@@ -88,7 +101,10 @@ func recordFetchDuration(homeDir, kind string, elapsed time.Duration) {
 	if elapsed <= 0 {
 		return
 	}
-	path := fetchDurationsPath(homeDir)
+	path, err := fetchDurationsPath(homeDir)
+	if err != nil {
+		return
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return
 	}

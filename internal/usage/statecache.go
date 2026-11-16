@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/modelblock"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
 	"ubunatic.com/harnez/internal/xdgpath"
@@ -77,6 +78,9 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 // from one provider-store lookup.
 func CachedProviderQuotaAvailabilities(provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
 	states := unknownProviderQuotaAvailabilities(models)
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)
+	}
 	if dbPath, err := telemetry.DefaultDBPath(); err == nil {
 		states = ProviderQuotaAvailabilitiesFromStore(context.Background(), dbPath, provider, models, now)
 	}
@@ -262,6 +266,11 @@ func StateDir(homeDir string) string {
 	return filepath.Join(homeDir, ".local", "state", stateAppDir, stateAgentsUsageSubdir)
 }
 
+// ResolvedStateDir resolves the usage state directory and fails closed for invalid runner roots.
+func ResolvedStateDir(homeDir string) (string, error) {
+	return runstate.UsageStateDir(StateDir(homeDir))
+}
+
 // snapshotPath returns the path of one agent's snapshot file within stateDir.
 func snapshotPath(stateDir, agentID string) string {
 	return filepath.Join(stateDir, agentID+".json")
@@ -275,7 +284,7 @@ func snapshotPath(stateDir, agentID string) string {
 // the sole writer for these files, so there is no cross-process write race
 // to close.
 func WriteAgentSnapshot(stateDir, agentID string, usage AgentUsage) error {
-	if filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
+	if os.Getenv("TAIA_SESSION_DIR") == "" && filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
 		return writeAgentSnapshotToStore(stateDir, agentID, usage)
 	}
 	return writeAgentSnapshotFile(stateDir, agentID, usage)
@@ -349,7 +358,7 @@ func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
 }
 
 func readAgentSnapshotContext(ctx context.Context, stateDir, agentID string) (*AgentSnapshot, error) {
-	if filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
+	if os.Getenv("TAIA_SESSION_DIR") == "" && filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
 		snapshot, err := readAgentSnapshotFromStore(ctx, "", agentID)
 		if err != nil || snapshot != nil {
 			return snapshot, err

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usagestore"
 )
@@ -39,6 +40,13 @@ func capturePassiveNoQuota(provider string, payload []byte, reason string) {
 		base = filepath.Join(home, ".local", "state")
 	}
 	dir := filepath.Join(base, "harnez")
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		var err error
+		dir, err = runstate.UsageStateDir("")
+		if err != nil {
+			return
+		}
+	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return
 	}

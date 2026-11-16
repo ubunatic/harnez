@@ -54,7 +54,11 @@ func TestReadCachedRemoteLoadEntryLegacyHasNoWriteTime(t *testing.T) {
 		t.Fatal(err)
 	}
 	legacy := `{"host":"host-a","snapshot":{"cpu":{"NumCPU":4}}}`
-	if err := os.WriteFile(remoteLoadCachePath("host-a"), []byte(legacy), 0o600); err != nil {
+	path, err := remoteLoadCachePath("host-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got := ReadCachedRemoteLoadEntry("host-a")
@@ -71,7 +75,11 @@ func TestReadCachedRemoteLoadEntryMalformedIsEmpty(t *testing.T) {
 	if err := WriteCachedRemoteLoad("host-a", &LoadSnapshot{CPU: CPULoad{NumCPU: 4}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(remoteLoadCachePath("host-a"), []byte("{not json"), 0o600); err != nil {
+	path, err := remoteLoadCachePath("host-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if got := ReadCachedRemoteLoadEntry("host-a"); got.Snapshot != nil || !got.UpdatedAt.IsZero() {

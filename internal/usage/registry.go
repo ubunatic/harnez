@@ -96,6 +96,9 @@ func (r *Registry) CollectLoad(ctx context.Context, id string, diagnostics ...fu
 }
 
 func writeLoadObservation(ctx context.Context, provider string, observedAt time.Time, snapshot *LoadSnapshot) error {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return fmt.Errorf("usage store requires host broker in runner mode")
+	}
 	dbPath, err := telemetry.DefaultDBPath()
 	if err != nil {
 		return err
@@ -358,7 +361,10 @@ func newUsageRegistry(homeDir string, client *http.Client, live bool) (*Registry
 	}
 	collect := func(provider string, fn func(context.Context) AgentUsage) func(context.Context) (AgentUsage, error) {
 		return func(ctx context.Context) (AgentUsage, error) {
-			stateDir := StateDir(homeDir)
+			stateDir, err := ResolvedStateDir(homeDir)
+			if err != nil {
+				return AgentUsage{AgentID: provider}, err
+			}
 			var cached *AgentSnapshot
 			if !live {
 				if snapshot, err := readAgentSnapshotContext(ctx, stateDir, provider); err == nil && snapshot != nil {
@@ -444,7 +450,10 @@ func CollectRegisteredCatchup(ctx context.Context, homeDir string, client *http.
 	if err != nil {
 		return UsageSummary{Timestamp: time.Now()}
 	}
-	stateDir := StateDir(homeDir)
+	stateDir, err := ResolvedStateDir(homeDir)
+	if err != nil {
+		return UsageSummary{Timestamp: time.Now()}
+	}
 	for _, c := range registry.collectors {
 		if c.Collect == nil {
 			continue
@@ -467,6 +476,9 @@ func CollectRegisteredCatchup(ctx context.Context, homeDir string, client *http.
 }
 
 func publishAgentObservations(ctx context.Context, agents []AgentUsage) error {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return fmt.Errorf("usage store requires host broker in runner mode")
+	}
 	dbPath, err := telemetry.DefaultDBPath()
 	if err != nil {
 		return err

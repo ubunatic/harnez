@@ -4,12 +4,13 @@ ownership:
   - {resource: session_locks_history, class: runner}
   - {resource: exec_process_records, class: runner}
   - {resource: local_usage_caches_durations_killlog_passive_debug, class: runner}
+  - {resource: livefetchcache, class: runner}
   - {resource: agy_ca_key_bundle_usage_backoff, class: runner}
   - {resource: policy_overlays, class: runner}
   - {resource: telemetry_spool, class: runner}
   - {resource: debug_feedback_bench_legacyarchive_writes, class: runner}
   - {resource: telemetry_ingestion_bounded_replay, class: broker}
-  - {resource: canonical_usage_snapshots_history_livefetchcache, class: broker}
+  - {resource: canonical_usage_snapshots_history, class: broker}
   - {resource: own_session_registry, class: broker}
   - {resource: host_agent_discovery_resume, class: shared}
   - {resource: global_policy_read_only_to_runner, class: shared}

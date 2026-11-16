@@ -17,9 +17,13 @@ type remoteLoadCacheEntry struct {
 	Snapshot  LoadSnapshot `json:"snapshot"`
 }
 
-func remoteLoadCachePath(host string) string {
+func remoteLoadCachePath(host string) (string, error) {
 	digest := sha256.Sum256([]byte(strings.TrimSpace(host)))
-	return filepath.Join(StateDir(""), "remote-load-"+hex.EncodeToString(digest[:])[:16]+".json")
+	dir, err := ResolvedStateDir("")
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "remote-load-"+hex.EncodeToString(digest[:])[:16]+".json"), nil
 }
 
 // RemoteLoadCache is the last successful remote load snapshot for one host and
@@ -37,7 +41,11 @@ func ReadCachedRemoteLoadEntry(host string) RemoteLoadCache {
 	if host == "" {
 		return RemoteLoadCache{}
 	}
-	data, err := os.ReadFile(remoteLoadCachePath(host))
+	path, err := remoteLoadCachePath(host)
+	if err != nil {
+		return RemoteLoadCache{}
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return RemoteLoadCache{}
 	}
@@ -60,7 +68,10 @@ func WriteCachedRemoteLoad(host string, snapshot *LoadSnapshot) error {
 	if host == "" || snapshot == nil {
 		return fmt.Errorf("remote load cache requires a host and snapshot")
 	}
-	path := remoteLoadCachePath(host)
+	path, err := remoteLoadCachePath(host)
+	if err != nil {
+		return err
+	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err

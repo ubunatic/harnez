@@ -2,77 +2,96 @@
 package sessioncontract
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"slices"
-	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
 )
 
+// Ownership assigns a resource to an ownership class.
 type Ownership struct {
-	Resource string `yaml:"resource"`
-	Class    string `yaml:"class"`
-}
-type Contract struct {
-	Version            int         `yaml:"version"`
-	Ownership          []Ownership `yaml:"ownership"`
-	RunnerOperations   []string    `yaml:"runner_operations"`
-	HostOnlyOperations []string    `yaml:"host_only_operations"`
-	Promoter           struct {
-		BinaryRoots []string `yaml:"binary_roots"`
-		ManRoots    []string `yaml:"man_roots"`
-		Binary      string   `yaml:"binary"`
-		Alias       string   `yaml:"alias"`
-		AliasTarget string   `yaml:"alias_target"`
-		ManManifest string   `yaml:"man_manifest"`
-		Promotion   string   `yaml:"promotion"`
-	} `yaml:"promoter"`
+	Resource string `yaml:"resource" json:"resource"`
+	Class    string `yaml:"class" json:"class"`
 }
 
+// Contract describes the session state and installation target contract.
+type Contract struct {
+	Version            int         `yaml:"version" json:"version"`
+	Ownership          []Ownership `yaml:"ownership" json:"ownership"`
+	RunnerOperations   []string    `yaml:"runner_operations" json:"runner_operations"`
+	HostOnlyOperations []string    `yaml:"host_only_operations" json:"host_only_operations"`
+	Promoter           struct {
+		BinaryRoots []string `yaml:"binary_roots" json:"binary_roots"`
+		ManRoots    []string `yaml:"man_roots" json:"man_roots"`
+		Binary      string   `yaml:"binary" json:"binary"`
+		Alias       string   `yaml:"alias" json:"alias"`
+		AliasTarget string   `yaml:"alias_target" json:"alias_target"`
+		ManManifest string   `yaml:"man_manifest" json:"man_manifest"`
+		Promotion   string   `yaml:"promotion" json:"promotion"`
+	} `yaml:"promoter" json:"promoter"`
+}
+
+// Load decodes and validates the embedded contract.
 func Load() (Contract, error) {
-	var c Contract
 	data, err := harnez.DefaultFS.ReadFile("spec/session_isolation.yaml")
 	if err != nil {
-		return c, err
+		return Contract{}, err
 	}
-	if err = yaml.Unmarshal(data, &c); err != nil {
+	return decode(data)
+}
+func decode(data []byte) (Contract, error) {
+	var c Contract
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&c); err != nil {
 		return c, err
 	}
 	return c, c.Validate()
 }
 
+// Validate checks the embedded schema and cross-field invariants.
 func (c Contract) Validate() error {
-	if c.Version != 1 || len(c.Ownership) == 0 {
-		return fmt.Errorf("invalid contract version or ownership")
+	data, err := harnez.DefaultFS.ReadFile("spec/schemas/session_isolation.schema.json")
+	if err != nil {
+		return err
 	}
+	var schema jsonschema.Schema
+	if err = json.Unmarshal(data, &schema); err != nil {
+		return err
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	var doc any
+	if err = json.Unmarshal(encoded, &doc); err != nil {
+		return err
+	}
+	if err = resolved.Validate(doc); err != nil {
+		return err
+	}
+	seen := make(map[string]bool)
 	for _, entry := range c.Ownership {
-		if entry.Resource == "" || !slices.Contains([]string{"runner", "broker", "shared"}, entry.Class) {
-			return fmt.Errorf("invalid ownership: %s", entry.Resource)
+		if seen[entry.Resource] {
+			return fmt.Errorf("duplicate ownership: %s", entry.Resource)
 		}
+		seen[entry.Resource] = true
 	}
 	for _, op := range c.RunnerOperations {
-		if !slices.Contains([]string{"telemetry_ingest", "telemetry_replay", "usage_read", "own_register", "own_update", "own_query"}, op) || slices.Contains(c.HostOnlyOperations, op) {
-			return fmt.Errorf("invalid runner operation: %s", op)
+		if slices.Contains(c.HostOnlyOperations, op) {
+			return fmt.Errorf("conflicting operation: %s", op)
 		}
 	}
-	p := c.Promoter
-	if !slices.Equal(p.BinaryRoots, []string{"GOBIN", "GOPATH_bin"}) || !slices.Equal(p.ManRoots, []string{"XDG_DATA_HOME_man_man1", "HOME_local_share_man_man1"}) || p.Binary != "harnez" || p.Alias != "⚙" || p.AliasTarget != p.Binary || p.ManManifest != "exact_generated_manifest" || p.Promotion != "pinned_nofollow_atomic_per_file" {
-		return fmt.Errorf("invalid promoter contract")
-	}
-	return nil
-}
-
-// ValidateRoot checks a resolved root against a trusted host-derived root and checkout.
-// It does not pin paths or protect against filesystem races.
-func ValidateRoot(root, approved, checkout string) error {
-	if !filepath.IsAbs(root) || !filepath.IsAbs(approved) || !filepath.IsAbs(checkout) || filepath.Clean(root) != root || root != approved {
-		return fmt.Errorf("unapproved promoter root")
-	}
-	rel, err := filepath.Rel(filepath.Clean(checkout), root)
-	if err != nil || rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
-		return fmt.Errorf("promoter root inside checkout")
+	if c.Promoter.AliasTarget != c.Promoter.Binary {
+		return fmt.Errorf("alias target differs from binary")
 	}
 	return nil
 }

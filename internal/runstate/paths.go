@@ -62,3 +62,12 @@ func privatePath(root string, parts ...string) (string, error) {
 	}
 	return path, nil
 }
+
+// UsageStateDir returns the private runner usage directory or the legacy directory.
+func UsageStateDir(legacyDir string) (string, error) {
+	root := os.Getenv(runnerDirEnv)
+	if root == "" {
+		return legacyDir, nil
+	}
+	return privatePath(root, "state", "usage")
+}

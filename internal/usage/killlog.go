@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/runstate"
 )
 
 type killFailureRecord struct {
@@ -99,6 +101,14 @@ func (r *Registry) recordKillFailure(c Collector, elapsed time.Duration, err, ct
 			stateHome = filepath.Join(home, ".local", "state")
 		}
 		logPath := filepath.Join(stateHome, filepath.FromSlash(settings.Path))
+		if os.Getenv("TAIA_SESSION_DIR") != "" {
+			dir, err := runstate.UsageStateDir("")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "harnez server: cannot resolve kill log: %v\n", err)
+				return
+			}
+			logPath = filepath.Join(dir, filepath.Base(settings.Path))
+		}
 		r.killLogMu.Lock()
 		writeErr := appendRotatingKillRecord(logPath, settings, record)
 		r.killLogMu.Unlock()

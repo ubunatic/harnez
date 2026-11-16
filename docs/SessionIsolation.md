@@ -40,16 +40,17 @@ staged binary should also be checked for generated man pages. Taia's private dir
 Landlock policy are external assumptions; Harnez cannot prove cross-runner
 denial from these tests.
 
-## Planned ownership contract (M8–M17)
+## Ownership contract and remaining work
 
-The staging and registry behavior above describes the live M1–M6 implementation.
-The following is the approved target, not a claim that M8–M17 have landed. The
-machine-readable contract is `spec/session_isolation.yaml`.
+The staging and registry behavior above describes the live M1–M6 implementation,
+and M8 runner-local usage state isolation is now wired under `$TAIA_SESSION_DIR`.
+The matrix below is the approved contract; M9–M17 behavior remains planned.
+The machine-readable contract is `spec/session_isolation.yaml`.
 
 | Owner | Paths and operations |
 | --- | --- |
-| Runner, under `$TAIA_SESSION_DIR` | Session locks and history; exec process records; local usage caches (including live-fetch cache), fetch durations, killlog and passive debug; AGY meter CA, key, bundle, `usage.jsonl` and backoff; `modelblock` and `tier_overrides` overlays; telemetry spool; runner debug/logging, feedback, bench and legacyarchive writes. |
-| Collector/broker | Telemetry ingestion and bounded spool replay; canonical usage snapshots and history; own-session registry register, update and query. A trusted launcher passes an inherited connected socketpair/FD bound to the launch identity. The runner channel excludes `/shutdown`, `merge_legacy`, arbitrary paths or PIDs, and cross-session stop/resume. |
+| Runner, under `$TAIA_SESSION_DIR` | Session locks and history; exec process records; local usage caches and live-fetch cache, fetch durations, killlog and passive debug; AGY meter CA, key, bundle, `usage.jsonl` and backoff; `modelblock` and `tier_overrides` overlays; telemetry spool; runner debug/logging, feedback, bench and legacyarchive writes. |
+| Collector/broker | Telemetry ingestion and bounded spool replay; host-owned canonical usage snapshots and history; own-session registry register, update and query. A trusted launcher passes an inherited connected socketpair/FD bound to the launch identity. The runner channel excludes `/shutdown`, `merge_legacy`, arbitrary paths or PIDs, and cross-session stop/resume. |
 | Shared, host-owned or coordinated | `~/.harnez/agents` remains host-owned for discovery and resume. Global `modelblock` and `tier_overrides` are runner read-only, with writes host-only. Runtime shims in `internal/subagent/agy.go` are provisioned by the host. Repository `.harnez` quota and checkout state remain shared coordination. |
 
 The broker must reject forged session identities and cannot rely on same-UID
