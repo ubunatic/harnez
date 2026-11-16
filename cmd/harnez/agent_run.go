@@ -20,6 +20,7 @@ import (
 	"ubunatic.com/harnez/internal/modelblock"
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
@@ -913,7 +914,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 // runResume runs one more turn on an existing session.
 // runResume runs one resume turn under ctx; see runStart for why ctx is explicit.
 func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeRequest) error {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		return fmt.Errorf("agent resume is a host-only operation in runner mode")
 	}
 	quotaTurnStarted := time.Now().Add(-time.Hour)

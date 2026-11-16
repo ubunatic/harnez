@@ -23,6 +23,7 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/usagestore"
 	"ubunatic.com/harnez/internal/xdgpath"
 )
@@ -30,7 +31,7 @@ import (
 // DefaultDBPath returns the default shared telemetry database location and
 // migrates the legacy database on first use.
 func DefaultDBPath() (string, error) {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		return "", fmt.Errorf("telemetry: shared database is unavailable in runner mode")
 	}
 	home, err := os.UserHomeDir()

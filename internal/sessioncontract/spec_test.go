@@ -22,9 +22,19 @@ func TestContractRejectsInvalidDocuments(t *testing.T) {
 		"duplicate operation":      strings.Replace(original, "telemetry_ingest, telemetry_replay", "telemetry_ingest, telemetry_ingest", 1),
 		"conflicting operation":    strings.Replace(original, "global_policy_write]", "global_policy_write, usage_read]", 1),
 		"invalid class":            strings.Replace(original, "class: runner", "class: unknown", 1),
+		"missing session_dir_env":  strings.Replace(original, "session_dir_env: TAIA_SESSION_DIR\n", "", 1),
+		"unsafe runner_paths seg":  strings.Replace(original, "session_state: [state, sessions]", "session_state: [state, ..]", 1),
+		"empty bwrap message":      strings.Replace(original, `missing_host_error: "bwrap prerequisite missing from PATH (bubblewrap is required for Quota-1 sandboxing)"`, `missing_host_error: ""`, 1),
 	}
-	if _, err := decode(data); err != nil {
+	c, err := decode(data)
+	if err != nil {
 		t.Fatalf("valid contract: %v", err)
+	}
+	if c.SessionDirEnv != "TAIA_SESSION_DIR" || len(c.RunnerPaths.SessionState) == 0 || c.Bwrap.MissingHostError == "" {
+		t.Fatalf("unexpected decoded contract fields: %+v", c)
+	}
+	if !c.AllowsRunnerOperation("telemetry_ingest") || c.AllowsRunnerOperation("arbitrary_paths") {
+		t.Fatalf("unexpected runner operation allowlist behavior: %v", c.RunnerOperations)
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {

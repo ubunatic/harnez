@@ -41,7 +41,7 @@ func GlobalPath() string {
 // the validated runner overlay under $TAIA_SESSION_DIR when running confined.
 func ResolvedPath() (string, error) {
 	global := GlobalPath()
-	if os.Getenv("TAIA_SESSION_DIR") == "" {
+	if !runstate.InRunnerMode() {
 		return global, nil
 	}
 	dir, err := runstate.PolicyDir("")
@@ -114,7 +114,7 @@ func locked(path string, fn func() error) error {
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("model-blocks: invalid runner policy path")
 	}
-	if os.Getenv("TAIA_SESSION_DIR") != "" && filepath.Clean(path) == filepath.Clean(GlobalPath()) {
+	if runstate.InRunnerMode() && filepath.Clean(path) == filepath.Clean(GlobalPath()) {
 		return fmt.Errorf("model-blocks: global blocks are read-only in runner mode")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -190,7 +190,7 @@ func Remove(path, provider, model string) (bool, error) {
 // are merged beneath runner overlay blocks.
 func Active(path string, now time.Time) []Block {
 	var global []Block
-	if os.Getenv("TAIA_SESSION_DIR") != "" && (strings.TrimSpace(path) == "" || isRunnerOverlayPath(path)) {
+	if runstate.InRunnerMode() && (strings.TrimSpace(path) == "" || isRunnerOverlayPath(path)) {
 		global = readActiveFile(GlobalPath(), now)
 	}
 	local := readActiveFile(path, now)
@@ -210,7 +210,7 @@ func Active(path string, now time.Time) []Block {
 }
 
 func isRunnerOverlayPath(path string) bool {
-	if os.Getenv("TAIA_SESSION_DIR") == "" || strings.TrimSpace(path) == "" {
+	if !runstate.InRunnerMode() || strings.TrimSpace(path) == "" {
 		return false
 	}
 	overlay, err := ResolvedPath()

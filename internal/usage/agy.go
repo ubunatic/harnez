@@ -676,7 +676,7 @@ func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, include
 	usage.QuotaFetchError = ""
 	usage.LastRefreshed = latestSnapshot
 	meterSource := "~/.harnez/agymeter/usage.jsonl"
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		meterSource = path
 	}
 	hasMeterSource := false

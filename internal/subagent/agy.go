@@ -14,6 +14,7 @@ import (
 
 	"ubunatic.com/harnez/internal/agymeter"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -45,7 +46,7 @@ func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) 
 	if err != nil {
 		return nil, fmt.Errorf("agy: resolve home directory: %w", err)
 	}
-	if os.Getenv("TAIA_SESSION_DIR") == "" {
+	if !runstate.InRunnerMode() {
 		if _, _, err := claude.EnsureBashShim(home); err != nil {
 			return nil, fmt.Errorf("agy: ensure bash shim: %w", err)
 		}

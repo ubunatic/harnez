@@ -4,15 +4,22 @@
   "type": "object",
   "required": [
     "version",
+    "session_dir_env",
     "ownership",
     "runner_operations",
     "host_only_operations",
-    "promoter"
+    "promoter",
+    "runner_paths",
+    "bwrap"
   ],
   "additionalProperties": false,
   "properties": {
     "version": {
       "const": 1
+    },
+    "session_dir_env": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
     },
     "ownership": {
       "type": "array",
@@ -374,7 +381,8 @@
         "binary_roots": {
           "const": [
             "GOBIN",
-            "GOPATH_bin"
+            "GOPATH_bin",
+            "HOME_go_bin"
           ],
           "type": "array",
           "minItems": 1,
@@ -404,6 +412,62 @@
         "promotion": {
           "const": "pinned_nofollow_atomic_per_file"
         }
+      }
+    },
+    "runner_paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_state",
+        "process_records",
+        "usage_state",
+        "telemetry_spool",
+        "agymeter",
+        "logs",
+        "feedback",
+        "bench",
+        "policy"
+      ],
+      "properties": {
+        "session_state": { "$ref": "#/definitions/pathSegments" },
+        "process_records": { "$ref": "#/definitions/pathSegments" },
+        "usage_state": { "$ref": "#/definitions/pathSegments" },
+        "telemetry_spool": { "$ref": "#/definitions/pathSegments" },
+        "agymeter": { "$ref": "#/definitions/pathSegments" },
+        "logs": { "$ref": "#/definitions/pathSegments" },
+        "feedback": { "$ref": "#/definitions/pathSegments" },
+        "bench": { "$ref": "#/definitions/pathSegments" },
+        "policy": { "$ref": "#/definitions/pathSegments" }
+      }
+    },
+    "bwrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confined_failure_prefix",
+        "confined_failure_guidance",
+        "host_failure_prefix",
+        "host_failure_guidance",
+        "missing_confined_error",
+        "missing_host_error"
+      ],
+      "properties": {
+        "confined_failure_prefix": { "type": "string", "minLength": 1 },
+        "confined_failure_guidance": { "type": "string", "minLength": 1 },
+        "host_failure_prefix": { "type": "string", "minLength": 1 },
+        "host_failure_guidance": { "type": "string", "minLength": 1 },
+        "missing_confined_error": { "type": "string", "minLength": 1 },
+        "missing_host_error": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "definitions": {
+    "pathSegments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._-]+$"
       }
     }
   }

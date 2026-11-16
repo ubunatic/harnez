@@ -101,7 +101,7 @@ func (r *Registry) recordKillFailure(c Collector, elapsed time.Duration, err, ct
 			stateHome = filepath.Join(home, ".local", "state")
 		}
 		logPath := filepath.Join(stateHome, filepath.FromSlash(settings.Path))
-		if os.Getenv("TAIA_SESSION_DIR") != "" {
+		if runstate.InRunnerMode() {
 			dir, err := runstate.UsageStateDir("")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "harnez server: cannot resolve kill log: %v\n", err)

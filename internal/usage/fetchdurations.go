@@ -56,7 +56,7 @@ func fetchDurationKindForHost(host string) string {
 // file, using the same XDG Base Directory resolution StateDir uses, one
 // directory above its agents/usage subtree.
 func fetchDurationsPath(homeDir string) (string, error) {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		dir, err := runstate.UsageStateDir("")
 		if err != nil {
 			return "", err

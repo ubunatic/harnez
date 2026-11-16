@@ -11,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"ubunatic.com/harnez/internal/runstate"
 )
 
 // ErrSessionNameInUse indicates that a registry name or ID is already reserved.
@@ -312,7 +314,7 @@ func OpenSessionStore(dir string) (*FileSessionStore, error) {
 }
 
 func guardHostSessionStoreAccess(dir string) error {
-	if os.Getenv("TAIA_SESSION_DIR") == "" {
+	if !runstate.InRunnerMode() {
 		return nil
 	}
 	def := DefaultStoreDir()

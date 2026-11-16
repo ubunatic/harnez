@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
+	"ubunatic.com/harnez/internal/runstate"
 )
 
 // RunnerBrokerHandle manages a child process's inherited broker FD and any
@@ -82,7 +83,7 @@ func PrepareCmdRunnerBroker(ctx context.Context, cmd *exec.Cmd) (*RunnerBrokerHa
 	if baseEnv == nil {
 		baseEnv = os.Environ()
 	}
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		return prepareForwardedRunnerBroker(cfg, cmd, baseEnv)
 	}
 	hostSocket, err := cfg.Socket()

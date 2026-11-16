@@ -27,6 +27,9 @@ type RunnerUsageQuery struct {
 // ValidateRunnerUsageQuery verifies that q is an allowlisted read-only query
 // within configured spec bounds.
 func ValidateRunnerUsageQuery(cfg Config, q RunnerUsageQuery) error {
+	if !cfg.RunnerChannel.AllowsUsageAction(q.Action) {
+		return fmt.Errorf("%w: unsupported usage query action %q", ErrRunnerForbidden, q.Action)
+	}
 	maxStr := cfg.RunnerChannel.UsageQueryMaxStringLen
 	maxModels := cfg.RunnerChannel.UsageQueryMaxModels
 	switch q.Action {

@@ -73,7 +73,7 @@ func liveFetchCachePath(agentDir string) string {
 			provider = "agy"
 		}
 		if provider != "" {
-			if os.Getenv("TAIA_SESSION_DIR") != "" {
+			if runstate.InRunnerMode() {
 				dir, err := runstate.UsageStateDir("")
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "harnez: resolve live quota cache: %v\n", err)

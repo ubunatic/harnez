@@ -308,7 +308,7 @@ func snapshotPath(stateDir, agentID string) string {
 // the sole writer for these files, so there is no cross-process write race
 // to close.
 func WriteAgentSnapshot(stateDir, agentID string, usage AgentUsage) error {
-	if os.Getenv("TAIA_SESSION_DIR") == "" && filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
+	if !runstate.InRunnerMode() && filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
 		return writeAgentSnapshotToStore(stateDir, agentID, usage)
 	}
 	return writeAgentSnapshotFile(stateDir, agentID, usage)
@@ -382,7 +382,7 @@ func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
 }
 
 func readAgentSnapshotContext(ctx context.Context, stateDir, agentID string) (*AgentSnapshot, error) {
-	if os.Getenv("TAIA_SESSION_DIR") == "" && filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
+	if !runstate.InRunnerMode() && filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
 		snapshot, err := readAgentSnapshotFromStore(ctx, "", agentID)
 		if err != nil || snapshot != nil {
 			return snapshot, err

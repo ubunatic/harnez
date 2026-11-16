@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
@@ -101,7 +102,7 @@ type agentModelTotals struct {
 
 func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 	isDefaultStore := opts.StoreDir == "" || filepath.Clean(opts.StoreDir) == filepath.Clean(subagent.DefaultStoreDir())
-	if os.Getenv("TAIA_SESSION_DIR") != "" && (isDefaultStore || opts.DBPath == "") {
+	if runstate.InRunnerMode() && (isDefaultStore || opts.DBPath == "") {
 		return fmt.Errorf("stats --agents is a host-only operation in runner mode")
 	}
 	if opts.Days <= 0 {

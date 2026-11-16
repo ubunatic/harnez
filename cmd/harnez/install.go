@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"ubunatic.com/harnez/internal/dependency"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/selfinstall"
 )
 
@@ -51,7 +52,7 @@ func newInstallCmd() *cobra.Command {
 				return fmt.Errorf("--sha256 requires --staged")
 			}
 			if len(args) == 1 && dependency.HasPackage(args[0]) {
-				if os.Getenv("TAIA_SESSION_DIR") != "" && !opts.DryRun {
+				if runstate.InRunnerMode() && !opts.DryRun {
 					return fmt.Errorf("harnez install %s: host-only operation in runner mode", args[0])
 				}
 				for _, name := range []string{"strategy", "dir", "version", "allow-dirty", "direct", "no-shell", "no-man"} {

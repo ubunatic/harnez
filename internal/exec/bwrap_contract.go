@@ -9,6 +9,9 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+
+	"ubunatic.com/harnez/internal/runstate"
+	"ubunatic.com/harnez/internal/sessioncontract"
 )
 
 func hasBwrapDiagLine(lower string) bool {
@@ -45,10 +48,14 @@ func DiagnoseBwrapError(output string, taiaConfined bool) string {
 	if detail == "" {
 		detail = "bubblewrap failed"
 	}
-	if taiaConfined {
-		return fmt.Sprintf("bwrap prerequisite failure under Taia confinement: %s; re-launch taia with --allow-bwrap (or a profile including it such as --allow develop)", detail)
+	contract, err := sessioncontract.Load()
+	if err != nil {
+		return detail
 	}
-	return fmt.Sprintf("bwrap prerequisite failure on host: %s; host kernel/AppArmor userns configuration does not permit unprivileged bubblewrap", detail)
+	if taiaConfined {
+		return fmt.Sprintf("%s: %s; %s", contract.Bwrap.ConfinedFailurePrefix, detail, contract.Bwrap.ConfinedFailureGuidance)
+	}
+	return fmt.Sprintf("%s: %s; %s", contract.Bwrap.HostFailurePrefix, detail, contract.Bwrap.HostFailureGuidance)
 }
 
 // ProbeBwrapSupport verifies that bubblewrap can start a minimal read-only
@@ -62,7 +69,7 @@ func ProbeBwrapSupport(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("bwrap prerequisite missing from PATH: %w", err)
 	}
-	if sessDir := os.Getenv("TAIA_SESSION_DIR"); sessDir != "" {
+	if sessDir := runstate.RunnerDir(); sessDir != "" {
 		if _, err := validateBwrapSessionBind(sessDir); err != nil {
 			return err
 		}
@@ -70,7 +77,7 @@ func ProbeBwrapSupport(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--", "true")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if diag := DiagnoseBwrapError(string(out), os.Getenv("TAIA_SESSION_DIR") != ""); diag != "" {
+		if diag := DiagnoseBwrapError(string(out), runstate.InRunnerMode()); diag != "" {
 			return fmt.Errorf("%s: %w", diag, err)
 		}
 		trimmed := strings.TrimSpace(string(out))
@@ -83,24 +90,25 @@ func ProbeBwrapSupport(ctx context.Context) error {
 }
 
 func validateBwrapSessionBind(sessDir string) (string, error) {
+	envName := runstate.RunnerDirEnv()
 	if !filepath.IsAbs(sessDir) || filepath.Clean(sessDir) != sessDir {
-		return "", fmt.Errorf("TAIA_SESSION_DIR must be a clean absolute path before entering bwrap")
+		return "", fmt.Errorf("%s must be a clean absolute path before entering bwrap", envName)
 	}
 	info, err := os.Lstat(sessDir)
 	if err != nil {
-		return "", fmt.Errorf("inspect TAIA_SESSION_DIR before entering bwrap: %w", err)
+		return "", fmt.Errorf("inspect %s before entering bwrap: %w", envName, err)
 	}
 	if !info.IsDir() || info.Mode().Perm() != 0o700 {
-		return "", fmt.Errorf("TAIA_SESSION_DIR must be a real directory with mode 0700 before entering bwrap")
+		return "", fmt.Errorf("%s must be a real directory with mode 0700 before entering bwrap", envName)
 	}
 	// bwrap --bind takes a path rather than a dirfd, so validate uid/mode and
 	// symlink-free resolution immediately before spawn to bound swap risk.
 	if stat, ok := info.Sys().(*syscall.Stat_t); !ok || int(stat.Uid) != os.Geteuid() {
-		return "", fmt.Errorf("TAIA_SESSION_DIR must be owned by current user before entering bwrap")
+		return "", fmt.Errorf("%s must be owned by current user before entering bwrap", envName)
 	}
 	resolved, err := filepath.EvalSymlinks(sessDir)
 	if err != nil || resolved != sessDir {
-		return "", fmt.Errorf("TAIA_SESSION_DIR must not traverse symlinks before entering bwrap")
+		return "", fmt.Errorf("%s must not traverse symlinks before entering bwrap", envName)
 	}
 	return sessDir, nil
 }

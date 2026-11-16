@@ -86,9 +86,11 @@ func resolveContractBinDir(roots []string, home string) (string, error) {
 				}
 				return filepath.Join(first, "bin"), nil
 			}
+		case "HOME_go_bin":
+			return filepath.Join(home, "go", "bin"), nil
 		}
 	}
-	return filepath.Join(home, "go", "bin"), nil
+	return "", fmt.Errorf("resolve promoter bin dir from contract: no matching root in %v", roots)
 }
 
 func resolveContractManDir(roots []string, home string) (string, error) {
@@ -102,12 +104,10 @@ func resolveContractManDir(roots []string, home string) (string, error) {
 				return filepath.Join(xdgData, "man", "man1"), nil
 			}
 		case "HOME_local_share_man_man1":
-			if xdgData := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); xdgData == "" {
-				return filepath.Join(home, ".local", "share", "man", "man1"), nil
-			}
+			return filepath.Join(home, ".local", "share", "man", "man1"), nil
 		}
 	}
-	return filepath.Join(home, ".local", "share", "man", "man1"), nil
+	return "", fmt.Errorf("resolve promoter man dir from contract: no matching root in %v", roots)
 }
 
 func validateHostRootPath(p, label string) error {
@@ -126,12 +126,12 @@ func validateHostRootPath(p, label string) error {
 // manifest) and atomically promotes it into trusted host destinations using
 // O_DIRECTORY|O_NOFOLLOW-pinned directory descriptors and immutable temp copies.
 func PromoteStaged(ctx context.Context, opts PromoteOptions, out io.Writer) (PromoteResult, error) {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
-		return PromoteResult{}, fmt.Errorf("promote staged artifacts: host-only operation in runner mode")
-	}
 	contract, err := sessioncontract.Load()
 	if err != nil {
 		return PromoteResult{}, fmt.Errorf("load session isolation contract: %w", err)
+	}
+	if os.Getenv(contract.SessionDirEnv) != "" {
+		return PromoteResult{}, fmt.Errorf("promote staged artifacts: host-only operation in runner mode")
 	}
 	expectedMan, err := validateExpectedManManifest(opts.ExpectedManFiles)
 	if err != nil {

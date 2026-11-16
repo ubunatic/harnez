@@ -265,3 +265,32 @@ func TestRunnerLaunchBindChildPIDEnforcesProcessTree(t *testing.T) {
 		t.Fatalf("bound child test failed: %v", err)
 	}
 }
+
+func TestValidateRegistryRequestFieldsConsumesSpec(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.RunnerChannel.AllowedRegistryStatuses) == 0 || len(cfg.RunnerChannel.AllowedUsageActions) == 0 {
+		t.Fatalf("expected spec-loaded runner_channel allowlists, got statuses=%v actions=%v",
+			cfg.RunnerChannel.AllowedRegistryStatuses, cfg.RunnerChannel.AllowedUsageActions)
+	}
+	for _, status := range cfg.RunnerChannel.AllowedRegistryStatuses {
+		if err := validateRegistryRequestFields(cfg, RunnerRegistryRequest{Status: status}); err != nil {
+			t.Fatalf("spec status %q rejected: %v", status, err)
+		}
+	}
+	for _, role := range []string{"developer", "coder", "worker", "reviewer", "advisor", "explorer"} {
+		if err := validateRegistryRequestFields(cfg, RunnerRegistryRequest{Role: role}); err != nil {
+			t.Fatalf("spec leaf role %q rejected: %v", role, err)
+		}
+	}
+	for _, bad := range []string{"orchestrator", "lead", "researcher"} {
+		if err := validateRegistryRequestFields(cfg, RunnerRegistryRequest{Role: bad}); !errors.Is(err, ErrRunnerForbidden) {
+			t.Fatalf("non-leaf/unknown role %q err = %v, want ErrRunnerForbidden", bad, err)
+		}
+	}
+	if err := validateRegistryRequestFields(cfg, RunnerRegistryRequest{Status: "invented-status"}); !errors.Is(err, ErrRunnerForbidden) {
+		t.Fatalf("invented status err = %v, want ErrRunnerForbidden", err)
+	}
+}

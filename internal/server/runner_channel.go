@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+	"ubunatic.com/harnez/internal/runstate"
+	"ubunatic.com/harnez/internal/sessioncontract"
 )
 
 func init() {
@@ -185,7 +187,7 @@ func RunnerChannelStatus(cfg Config) error {
 // DispatchTelemetry sends one telemetry record through the inherited broker FD
 // in runner mode, or via the host Unix socket and host spool otherwise.
 func DispatchTelemetry(ctx context.Context, cfg Config, record TelemetryRecord) UpdateResult {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		return SendRunnerTelemetry(ctx, cfg, record)
 	}
 	socket, err := cfg.Socket()
@@ -598,6 +600,13 @@ func handleRunnerFrame(ctx context.Context, cfg Config, frame []byte, handlers R
 		return RunnerResponse{Status: http.StatusBadRequest, Error: "invalid runner request"}
 	}
 	if strings.TrimSpace(req.Route) != "" {
+		return RunnerResponse{Status: http.StatusForbidden, Error: ErrRunnerForbidden.Error()}
+	}
+	contract, err := sessioncontract.Load()
+	if err != nil {
+		return RunnerResponse{Status: http.StatusServiceUnavailable, Error: ErrRunnerUnavailable.Error()}
+	}
+	if !contract.AllowsRunnerOperation(req.Op) {
 		return RunnerResponse{Status: http.StatusForbidden, Error: ErrRunnerForbidden.Error()}
 	}
 	switch req.Op {

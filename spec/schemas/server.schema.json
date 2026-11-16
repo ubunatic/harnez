@@ -61,7 +61,7 @@
     "runner_channel": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fd_env", "max_frame_bytes", "frame_headroom_bytes", "spool_max_bytes", "replay_max_records", "replay_max_bytes", "max_concurrent_streams", "usage_query_max_models", "usage_query_max_string_len", "registry_max_id_len", "allowed_telemetry_kinds"],
+      "required": ["fd_env", "max_frame_bytes", "frame_headroom_bytes", "spool_max_bytes", "replay_max_records", "replay_max_bytes", "max_concurrent_streams", "usage_query_max_models", "usage_query_max_string_len", "registry_max_id_len", "allowed_telemetry_kinds", "allowed_usage_actions", "allowed_registry_statuses"],
       "properties": {
         "fd_env": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
         "max_frame_bytes": { "type": "integer", "minimum": 1024 },
@@ -78,6 +78,18 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": { "type": "string", "enum": ["tool_call", "agy_post_tool", "codex", "agy_compaction", "cli_invocation", "issue_snapshot"] }
+        },
+        "allowed_usage_actions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["latest_summary", "provider_quota", "history_entries", "quota_history"] }
+        },
+        "allowed_registry_statuses": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["running", "completed", "failed", "stopped"] }
         }
       }
     }

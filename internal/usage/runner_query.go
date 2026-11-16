@@ -2,13 +2,13 @@ package usage
 
 import (
 	"context"
-	"os"
 
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
 )
 
 func inRunnerMode() bool {
-	return os.Getenv("TAIA_SESSION_DIR") != ""
+	return runstate.InRunnerMode()
 }
 
 func queryRunnerLatestSummary(ctx context.Context) (UsageSummary, error) {

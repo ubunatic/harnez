@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"ubunatic.com/harnez/internal/sessioncontract"
 )
 
 func TestRunnerDirectoriesAreScopedAndPrivate(t *testing.T) {
@@ -218,5 +220,21 @@ func TestAuxiliaryDirectories(t *testing.T) {
 		if dir, err := resolve("legacy"); err != nil || dir != "legacy" {
 			t.Fatalf("legacy: %q %v", dir, err)
 		}
+	}
+}
+
+func TestRunstateConsumesSessionContractSpec(t *testing.T) {
+	contract, err := sessioncontract.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if RunnerDirEnv() != contract.SessionDirEnv {
+		t.Fatalf("RunnerDirEnv() = %q, want %q", RunnerDirEnv(), contract.SessionDirEnv)
+	}
+	root := t.TempDir()
+	t.Setenv(contract.SessionDirEnv, root)
+	want := filepath.Join(append([]string{root}, contract.RunnerPaths.SessionState...)...)
+	if got := DefaultSessionStateDir("legacy"); got != want {
+		t.Fatalf("DefaultSessionStateDir = %q, want %q", got, want)
 	}
 }

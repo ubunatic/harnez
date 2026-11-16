@@ -5,7 +5,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -43,17 +45,19 @@ type Config struct {
 
 // RunnerChannelConfig controls the inherited launch-bound runner broker FD.
 type RunnerChannelConfig struct {
-	FDEnv                  string
-	MaxFrameBytes          int64
-	FrameHeadroomBytes     int64
-	SpoolMaxBytes          int64
-	ReplayMaxRecords       int
-	ReplayMaxBytes         int64
-	MaxConcurrentStreams   int
-	UsageQueryMaxModels    int
-	UsageQueryMaxStringLen int
-	RegistryMaxIDLen       int
-	AllowedTelemetryKinds  []string
+	FDEnv                   string
+	MaxFrameBytes           int64
+	FrameHeadroomBytes      int64
+	SpoolMaxBytes           int64
+	ReplayMaxRecords        int
+	ReplayMaxBytes          int64
+	MaxConcurrentStreams    int
+	UsageQueryMaxModels     int
+	UsageQueryMaxStringLen  int
+	RegistryMaxIDLen        int
+	AllowedTelemetryKinds   []string
+	AllowedUsageActions     []string
+	AllowedRegistryStatuses []string
 }
 
 // RemoteUpgradeConfig controls best-effort replacement of an older remote binary.
@@ -97,17 +101,19 @@ type specConfig struct {
 }
 
 type rawRunnerChannel struct {
-	FDEnv                  string   `yaml:"fd_env"`
-	MaxFrameBytes          int64    `yaml:"max_frame_bytes"`
-	FrameHeadroomBytes     int64    `yaml:"frame_headroom_bytes"`
-	SpoolMaxBytes          int64    `yaml:"spool_max_bytes"`
-	ReplayMaxRecords       int      `yaml:"replay_max_records"`
-	ReplayMaxBytes         int64    `yaml:"replay_max_bytes"`
-	MaxConcurrentStreams   int      `yaml:"max_concurrent_streams"`
-	UsageQueryMaxModels    int      `yaml:"usage_query_max_models"`
-	UsageQueryMaxStringLen int      `yaml:"usage_query_max_string_len"`
-	RegistryMaxIDLen       int      `yaml:"registry_max_id_len"`
-	AllowedTelemetryKinds  []string `yaml:"allowed_telemetry_kinds"`
+	FDEnv                   string   `yaml:"fd_env"`
+	MaxFrameBytes           int64    `yaml:"max_frame_bytes"`
+	FrameHeadroomBytes      int64    `yaml:"frame_headroom_bytes"`
+	SpoolMaxBytes           int64    `yaml:"spool_max_bytes"`
+	ReplayMaxRecords        int      `yaml:"replay_max_records"`
+	ReplayMaxBytes          int64    `yaml:"replay_max_bytes"`
+	MaxConcurrentStreams    int      `yaml:"max_concurrent_streams"`
+	UsageQueryMaxModels     int      `yaml:"usage_query_max_models"`
+	UsageQueryMaxStringLen  int      `yaml:"usage_query_max_string_len"`
+	RegistryMaxIDLen        int      `yaml:"registry_max_id_len"`
+	AllowedTelemetryKinds   []string `yaml:"allowed_telemetry_kinds"`
+	AllowedUsageActions     []string `yaml:"allowed_usage_actions"`
+	AllowedRegistryStatuses []string `yaml:"allowed_registry_statuses"`
 }
 
 func LoadConfig() (Config, error) {
@@ -212,7 +218,7 @@ func LoadConfig() (Config, error) {
 }
 
 func (c Config) TelemetrySpoolDir() (string, error) {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		return runstate.TelemetrySpoolDir("")
 	}
 	base := os.Getenv("XDG_STATE_HOME")
@@ -227,7 +233,7 @@ func (c Config) TelemetrySpoolDir() (string, error) {
 }
 
 func (c Config) Socket() (string, error) {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		return "", fmt.Errorf("shared host server socket is unavailable in runner mode")
 	}
 	base := os.Getenv("XDG_RUNTIME_DIR")
@@ -265,18 +271,26 @@ func loadRunnerChannel(cfg *Config, raw rawRunnerChannel) error {
 	if len(raw.AllowedTelemetryKinds) == 0 {
 		return fmt.Errorf("spec/server.yaml: runner_channel.allowed_telemetry_kinds must be non-empty")
 	}
+	if len(raw.AllowedUsageActions) == 0 {
+		return fmt.Errorf("spec/server.yaml: runner_channel.allowed_usage_actions must be non-empty")
+	}
+	if len(raw.AllowedRegistryStatuses) == 0 {
+		return fmt.Errorf("spec/server.yaml: runner_channel.allowed_registry_statuses must be non-empty")
+	}
 	cfg.RunnerChannel = RunnerChannelConfig{
-		FDEnv:                  raw.FDEnv,
-		MaxFrameBytes:          raw.MaxFrameBytes,
-		FrameHeadroomBytes:     raw.FrameHeadroomBytes,
-		SpoolMaxBytes:          raw.SpoolMaxBytes,
-		ReplayMaxRecords:       raw.ReplayMaxRecords,
-		ReplayMaxBytes:         raw.ReplayMaxBytes,
-		MaxConcurrentStreams:   raw.MaxConcurrentStreams,
-		UsageQueryMaxModels:    raw.UsageQueryMaxModels,
-		UsageQueryMaxStringLen: raw.UsageQueryMaxStringLen,
-		RegistryMaxIDLen:       raw.RegistryMaxIDLen,
-		AllowedTelemetryKinds:  append([]string(nil), raw.AllowedTelemetryKinds...),
+		FDEnv:                   raw.FDEnv,
+		MaxFrameBytes:           raw.MaxFrameBytes,
+		FrameHeadroomBytes:      raw.FrameHeadroomBytes,
+		SpoolMaxBytes:           raw.SpoolMaxBytes,
+		ReplayMaxRecords:        raw.ReplayMaxRecords,
+		ReplayMaxBytes:          raw.ReplayMaxBytes,
+		MaxConcurrentStreams:    raw.MaxConcurrentStreams,
+		UsageQueryMaxModels:     raw.UsageQueryMaxModels,
+		UsageQueryMaxStringLen:  raw.UsageQueryMaxStringLen,
+		RegistryMaxIDLen:        raw.RegistryMaxIDLen,
+		AllowedTelemetryKinds:   append([]string(nil), raw.AllowedTelemetryKinds...),
+		AllowedUsageActions:     append([]string(nil), raw.AllowedUsageActions...),
+		AllowedRegistryStatuses: append([]string(nil), raw.AllowedRegistryStatuses...),
 	}
 	return nil
 }
@@ -292,13 +306,46 @@ func (c RunnerChannelConfig) MaxResultPayloadBytes() int64 {
 
 // AllowsTelemetryKind reports whether a runner may submit the given record kind.
 func (c RunnerChannelConfig) AllowsTelemetryKind(kind string) bool {
-	if kind == "" {
-		return false
+	return kind != "" && slices.Contains(c.AllowedTelemetryKinds, kind)
+}
+
+// AllowsUsageAction reports whether a runner may execute the given usage query action.
+func (c RunnerChannelConfig) AllowsUsageAction(action string) bool {
+	return action != "" && slices.Contains(c.AllowedUsageActions, action)
+}
+
+// AllowsRegistryStatus reports whether a runner may report the given session status.
+func (c RunnerChannelConfig) AllowsRegistryStatus(status string) bool {
+	return status != "" && slices.Contains(c.AllowedRegistryStatuses, status)
+}
+
+var loadLeafAgentRoles = sync.OnceValues(func() (map[string]bool, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/agent.yaml")
+	if err != nil {
+		return nil, err
 	}
-	for _, allowed := range c.AllowedTelemetryKinds {
-		if allowed == kind {
-			return true
+	var raw struct {
+		Roles map[string]struct {
+			Aliases []string `yaml:"aliases"`
+			Spawns  []string `yaml:"spawns"`
+		} `yaml:"roles"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool)
+	for name, role := range raw.Roles {
+		if len(role.Spawns) > 0 {
+			continue
+		}
+		if key := strings.ToLower(strings.TrimSpace(name)); key != "" {
+			out[key] = true
+		}
+		for _, alias := range role.Aliases {
+			if key := strings.ToLower(strings.TrimSpace(alias)); key != "" {
+				out[key] = true
+			}
 		}
 	}
-	return false
-}
+	return out, nil
+})

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/runstate"
 )
 
 func newManCmd(rootCmd *cobra.Command) *cobra.Command {
@@ -54,7 +55,7 @@ func defaultManDir() string {
 }
 
 func installManPages(rootCmd *cobra.Command, targetDir string, out io.Writer) error {
-	if sessDir := os.Getenv("TAIA_SESSION_DIR"); sessDir != "" {
+	if sessDir := runstate.RunnerDir(); sessDir != "" {
 		if targetDir == "" {
 			return fmt.Errorf("man --install to shared man directory is host-only in runner mode; pass --dir inside %s", sessDir)
 		}
@@ -76,19 +77,20 @@ func installManPages(rootCmd *cobra.Command, targetDir string, out io.Writer) er
 }
 
 func validateManDirInRunnerSession(sessDir, targetDir string) error {
+	envName := runstate.RunnerDirEnv()
 	if !filepath.IsAbs(sessDir) || !filepath.IsAbs(targetDir) {
-		return fmt.Errorf("man --install target %s and $TAIA_SESSION_DIR must be absolute in runner mode", targetDir)
+		return fmt.Errorf("man --install target %s and $%s must be absolute in runner mode", targetDir, envName)
 	}
 	realSess, err := filepath.EvalSymlinks(filepath.Clean(sessDir))
 	if err != nil {
-		return fmt.Errorf("resolve $TAIA_SESSION_DIR: %w", err)
+		return fmt.Errorf("resolve $%s: %w", envName, err)
 	}
 	realTarget, err := resolveExistingPrefix(filepath.Clean(targetDir))
 	if err != nil {
 		return fmt.Errorf("resolve man target %s: %w", targetDir, err)
 	}
 	if realTarget != realSess && !strings.HasPrefix(realTarget, realSess+string(filepath.Separator)) {
-		return fmt.Errorf("man --install target %s escapes $TAIA_SESSION_DIR in runner mode", targetDir)
+		return fmt.Errorf("man --install target %s escapes $%s in runner mode", targetDir, envName)
 	}
 	return nil
 }

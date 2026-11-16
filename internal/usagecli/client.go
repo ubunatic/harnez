@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -61,7 +62,7 @@ func LoadLocalUsageWithStatus(ctx context.Context, offline bool) (usage.UsageSum
 	}
 	ctx, cancel := context.WithTimeout(ctx, cfg.UsageDeadline)
 	defer cancel()
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		if offline {
 			return usage.UsageSummary{}, "", fmt.Errorf("stored usage unavailable in offline runner mode (requires host broker)")
 		}

@@ -61,7 +61,7 @@ func GlobalTierOverridesPath() string {
 // global path on the host (or test dir), or a validated runner overlay under
 // $TAIA_SESSION_DIR when running confined.
 func ResolvedTierOverridesPath() (string, error) {
-	if tierOverridesStateDirForTest != "" || os.Getenv("TAIA_SESSION_DIR") == "" {
+	if tierOverridesStateDirForTest != "" || !runstate.InRunnerMode() {
 		return GlobalTierOverridesPath(), nil
 	}
 	dir, err := runstate.PolicyDir("")
@@ -120,7 +120,7 @@ func LoadTierOverrides() (*TierOverrides, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tierOverridesStateDirForTest != "" || os.Getenv("TAIA_SESSION_DIR") == "" {
+	if tierOverridesStateDirForTest != "" || !runstate.InRunnerMode() {
 		return loadTierOverridesFile(overlayPath)
 	}
 	global, err := loadTierOverridesFile(GlobalTierOverridesPath())

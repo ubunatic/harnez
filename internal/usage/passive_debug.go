@@ -42,7 +42,7 @@ func capturePassiveNoQuota(provider string, payload []byte, reason string) {
 		base = filepath.Join(home, ".local", "state")
 	}
 	dir := filepath.Join(base, "harnez")
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		var err error
 		dir, err = runstate.UsageStateDir("")
 		if err != nil {

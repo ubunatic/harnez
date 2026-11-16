@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
@@ -525,7 +526,7 @@ func localServerPID(ctx context.Context, cfg server.Config, socket string) int {
 }
 
 func runHarnezServer(ctx context.Context, interval time.Duration, offline bool, indexConfig server.NeusIndexConfig) error {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		return fmt.Errorf("usage collector requires host broker in runner mode")
 	}
 	cfg, err := server.LoadConfig()

@@ -200,10 +200,7 @@ func Ticket(opts TicketOptions) (string, error) {
 // otherwise ~/.harnez/sessions. Session and ticket resolution validate the
 // Taia path before using it.
 func DefaultStateDir() string {
-	if runnerDir := os.Getenv("TAIA_SESSION_DIR"); runnerDir != "" {
-		return filepath.Join(runnerDir, "state", "sessions")
-	}
-	return legacyStateDir()
+	return runstate.DefaultSessionStateDir(legacyStateDir())
 }
 
 // StateDir returns the default session-state directory after validating and

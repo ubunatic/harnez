@@ -53,7 +53,9 @@ import (
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/sessioncontract"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -279,8 +281,12 @@ func quota1SandboxArgsWithSession(args []string, cwd, goCache, goModCache, runti
 }
 
 func quota1SandboxCommand(args []string, cwd string) (string, []string, bool, error) {
+	contract, contractErr := sessioncontract.Load()
+	if contractErr != nil {
+		return "", nil, false, contractErr
+	}
 	sessionDir := ""
-	if raw := os.Getenv("TAIA_SESSION_DIR"); raw != "" {
+	if raw := os.Getenv(contract.SessionDirEnv); raw != "" {
 		validated, err := validateBwrapSessionBind(raw)
 		if err != nil {
 			return "", nil, false, err
@@ -293,9 +299,9 @@ func quota1SandboxCommand(args []string, cwd string) (string, []string, bool, er
 	bwrap, err := exec.LookPath("bwrap")
 	if err != nil {
 		if sessionDir != "" {
-			return "", nil, false, fmt.Errorf("bwrap prerequisite missing from PATH under Taia confinement (re-launch taia with --allow-bwrap after installing bwrap): %w", err)
+			return "", nil, false, fmt.Errorf("%s: %w", contract.Bwrap.MissingConfinedError, err)
 		}
-		return "", nil, false, fmt.Errorf("bwrap prerequisite missing from PATH (bubblewrap is required for Quota-1 sandboxing): %w", err)
+		return "", nil, false, fmt.Errorf("%s: %w", contract.Bwrap.MissingHostError, err)
 	}
 	var goCache, goModCache string
 	if goPath, err := exec.LookPath("go"); err == nil {
@@ -806,7 +812,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		exitCode = stoppedGroupExitCode
 	}
 	if quota1Sandboxed && exitCode != 0 {
-		if diag := DiagnoseBwrapError(capturedOutput.String(), os.Getenv("TAIA_SESSION_DIR") != ""); diag != "" {
+		if diag := DiagnoseBwrapError(capturedOutput.String(), runstate.InRunnerMode()); diag != "" {
 			fmt.Fprintf(errOut, "harnez exec: %s\n", diag)
 		}
 	}

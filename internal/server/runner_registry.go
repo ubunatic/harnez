@@ -210,7 +210,7 @@ func handleRunnerRegistry(ctx context.Context, cfg Config, op string, payload js
 	if req.Turn < 0 {
 		return RunnerResponse{Status: http.StatusForbidden, Error: ErrRunnerForbidden.Error()}
 	}
-	if err := validateRegistryRequestFields(req); err != nil {
+	if err := validateRegistryRequestFields(cfg, req); err != nil {
 		return RunnerResponse{Status: http.StatusForbidden, Error: err.Error()}
 	}
 	if err := binding.waitForBind(ctx); err != nil {
@@ -287,16 +287,15 @@ func authorizeRegistrySessionID(cfg Config, op, reqID, boundID string) (string, 
 	}
 }
 
-func validateRegistryRequestFields(req RunnerRegistryRequest) error {
-	switch req.Status {
-	case "", "running", "completed", "failed", "stopped":
-	default:
+func validateRegistryRequestFields(cfg Config, req RunnerRegistryRequest) error {
+	if req.Status != "" && !cfg.RunnerChannel.AllowsRegistryStatus(req.Status) {
 		return fmt.Errorf("%w: unsupported runner session status %q", ErrRunnerForbidden, req.Status)
 	}
-	switch strings.ToLower(strings.TrimSpace(req.Role)) {
-	case "", "worker", "developer", "researcher", "reviewer", "explorer":
-	default:
-		return fmt.Errorf("%w: unsupported runner role %q", ErrRunnerForbidden, req.Role)
+	if role := strings.ToLower(strings.TrimSpace(req.Role)); role != "" {
+		leafRoles, err := loadLeafAgentRoles()
+		if err != nil || !leafRoles[role] {
+			return fmt.Errorf("%w: unsupported runner role %q", ErrRunnerForbidden, req.Role)
+		}
 	}
 	return nil
 }

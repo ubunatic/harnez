@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"ubunatic.com/harnez/internal/sessioncontract"
 )
 
 func setupPrivateRunnerRoot(t *testing.T, cfg Config) string {
@@ -560,4 +562,40 @@ func TestOpenPerRequestStreamTimeoutAndCtxCancel(t *testing.T) {
 		opened = append(opened, c)
 	}
 	t.Fatal("expected openPerRequestStream to hit saturated EAGAIN timeout")
+}
+
+func TestRunnerChannelConsumesSessionContractOperations(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract, err := sessioncontract.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{
+		RunnerOpTelemetryIngest,
+		RunnerOpTelemetryReplay,
+		RunnerOpUsageRead,
+		RunnerOpOwnRegister,
+		RunnerOpOwnUpdate,
+		RunnerOpOwnQuery,
+	} {
+		if !contract.AllowsRunnerOperation(op) {
+			t.Fatalf("spec/session_isolation.yaml missing runner operation %q", op)
+		}
+	}
+	for _, action := range cfg.RunnerChannel.AllowedUsageActions {
+		if err := ValidateRunnerUsageQuery(cfg, RunnerUsageQuery{
+			Action:   action,
+			Provider: map[bool]string{true: "codex"}[action == RunnerUsageActionProviderQuota],
+			Models:   map[bool][]string{true: {"luna"}}[action == RunnerUsageActionProviderQuota],
+		}); err != nil {
+			t.Fatalf("spec allowed_usage_actions entry %q failed validation: %v", action, err)
+		}
+	}
+	resp := handleRunnerFrame(context.Background(), cfg, []byte(`{"op":"arbitrary_paths"}`), RunnerBrokerHandlers{})
+	if resp.Status != http.StatusForbidden {
+		t.Fatalf("disallowed op status = %d, want 403", resp.Status)
+	}
 }

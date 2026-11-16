@@ -51,4 +51,14 @@ runner_channel:
     - agy_compaction
     - cli_invocation
     - issue_snapshot
+  allowed_usage_actions:
+    - latest_summary
+    - provider_quota
+    - history_entries
+    - quota_history
+  allowed_registry_statuses:
+    - running
+    - completed
+    - failed
+    - stopped
 

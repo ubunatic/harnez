@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -40,7 +41,7 @@ func currentHostSession() string {
 // empty parent and agents of other hosts (hand-off); harnez leaf workers stay
 // bound to their lineage. Bulk operations keep using subagent.CanManage.
 func canManageTarget(callerParentID string, target *subagent.Session) bool {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if runstate.InRunnerMode() {
 		return false
 	}
 	if os.Getenv(agentSessionEnv) == "" || interactiveCodexHost() != "" {

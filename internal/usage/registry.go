@@ -96,7 +96,7 @@ func (r *Registry) CollectLoad(ctx context.Context, id string, diagnostics ...fu
 }
 
 func writeLoadObservation(ctx context.Context, provider string, observedAt time.Time, snapshot *LoadSnapshot) error {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if inRunnerMode() {
 		return fmt.Errorf("usage store requires host broker in runner mode")
 	}
 	dbPath, err := telemetry.DefaultDBPath()
@@ -483,7 +483,7 @@ func CollectRegisteredCatchup(ctx context.Context, homeDir string, client *http.
 }
 
 func publishAgentObservations(ctx context.Context, agents []AgentUsage) error {
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if inRunnerMode() {
 		return fmt.Errorf("usage store requires host broker in runner mode")
 	}
 	dbPath, err := telemetry.DefaultDBPath()

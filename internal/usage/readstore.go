@@ -27,7 +27,7 @@ func UsageStorePath() string {
 // schema setup, migrations, or writes. In runner mode (TAIA_SESSION_DIR set),
 // canonical store reads route through the launch-bound host broker FD.
 func ReadStoredSummary(ctx context.Context, dbPath string) (UsageSummary, error) {
-	if os.Getenv("TAIA_SESSION_DIR") != "" && (dbPath == "" || filepath.Clean(dbPath) == filepath.Clean(UsageStorePath())) {
+	if inRunnerMode() && (dbPath == "" || filepath.Clean(dbPath) == filepath.Clean(UsageStorePath())) {
 		return queryRunnerLatestSummary(ctx)
 	}
 	return ReadStoredSummaryDirect(ctx, dbPath)
