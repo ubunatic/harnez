@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+func clearBypassEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("QUOTA_BYPASS", "")
+	t.Setenv("HARNEZ_QUOTA_BYPASS", "")
+}
+
 func finishSuccessfulRun(t *testing.T, res Result, finished time.Time) {
 	t.Helper()
 	exit := 0
@@ -19,6 +25,7 @@ func finishSuccessfulRun(t *testing.T, res Result, finished time.Time) {
 }
 
 func TestCheckAndRecord_Lifecycle(t *testing.T) {
+	clearBypassEnv(t)
 	repoDir := t.TempDir()
 
 	// Simulate a git repository
@@ -134,6 +141,7 @@ func TestCheckAndRecord_Lifecycle(t *testing.T) {
 }
 
 func TestIncompleteRunAllowsRetryThenConsumesQuota(t *testing.T) {
+	clearBypassEnv(t)
 	dir := t.TempDir()
 	stateFile := filepath.Join(dir, "quota.state")
 	first, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
@@ -170,6 +178,7 @@ func TestIncompleteRunAllowsRetryThenConsumesQuota(t *testing.T) {
 }
 
 func TestUnfinishedRunBlocksWithCleanupGuidance(t *testing.T) {
+	clearBypassEnv(t)
 	dir := t.TempDir()
 	stateFile := filepath.Join(dir, "quota.state")
 	started, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
@@ -188,6 +197,7 @@ func TestUnfinishedRunBlocksWithCleanupGuidance(t *testing.T) {
 }
 
 func TestIncompleteRunOnlyGetsOneRetry(t *testing.T) {
+	clearBypassEnv(t)
 	dir := t.TempDir()
 	stateFile := filepath.Join(dir, "quota.state")
 	first, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
@@ -242,6 +252,7 @@ func TestParseProcStarttime(t *testing.T) {
 }
 
 func TestCheckAndRecord_Bypass(t *testing.T) {
+	clearBypassEnv(t)
 	repoDir := t.TempDir()
 
 	// Initial run
@@ -343,6 +354,7 @@ func TestChangesSinceLastRun(t *testing.T) {
 }
 
 func TestCheckAndRecord_NonGitDir(t *testing.T) {
+	clearBypassEnv(t)
 	nonGitDir := t.TempDir()
 
 	res, err := CheckAndRecord(CheckOptions{Dir: nonGitDir})
@@ -400,6 +412,7 @@ func TestResolveStateFile_WorktreeGitFileUsesHarnezRoot(t *testing.T) {
 }
 
 func TestCheckAndRecord_CustomStateFile(t *testing.T) {
+	clearBypassEnv(t)
 	dir := t.TempDir()
 	customState := filepath.Join(dir, "custom.state")
 
@@ -422,6 +435,7 @@ func TestCheckAndRecord_CustomStateFile(t *testing.T) {
 }
 
 func TestCheckAndRecord_CorruptedState(t *testing.T) {
+	clearBypassEnv(t)
 	dir := t.TempDir()
 	stateFile := filepath.Join(dir, "corrupt.state")
 	_ = os.WriteFile(stateFile, []byte("NOT_A_VALID_TIMESTAMP\n"), 0644)
@@ -439,6 +453,7 @@ func TestCheckAndRecord_CorruptedState(t *testing.T) {
 }
 
 func TestSnapshotBranchSwitchAndDirtyFiles(t *testing.T) {
+	clearBypassEnv(t)
 	dir := t.TempDir()
 	git := func(args ...string) {
 		t.Helper()
