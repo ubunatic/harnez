@@ -2,11 +2,16 @@ package usagecli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -22,6 +27,7 @@ func TestEnsureLocalServerStartsOnlyWithoutAListener(t *testing.T) {
 		{name: "starting", probe: ServerProbeResult{listening: true, starting: true}, wantText: "server starting"},
 		{name: "accept never answers", probe: ServerProbeResult{listening: true}, wantText: "server not answering"},
 		{name: "healthy", probe: ServerProbeResult{ready: true, listening: true}},
+		{name: "outdated server", probe: ServerProbeResult{ready: true, listening: true, outdated: true, serverVersion: "0.5.7+5148"}, wantText: fmt.Sprintf("server updating (0.5.7+5148 -> %s)", harnez.BuildVersion()), wantRuns: 1},
 		{name: "slow response after probe timeout", probe: ServerProbeResult{listening: true}, wantText: "server not answering"},
 		{name: "stale socket", wantText: "server starting", wantRuns: 1},
 	}
@@ -84,5 +90,46 @@ func TestLoadLocalUsageOfflineMissingStoreDoesNotCreateIt(t *testing.T) {
 	}
 	if _, err := os.Stat(home + "/data/harnez/telemetry.sqlite"); !os.IsNotExist(err) {
 		t.Fatalf("reader created store: %v", err)
+	}
+}
+
+func TestEnsureLocalServerOutdatedStartErrorReportsVersionMismatch(t *testing.T) {
+	starter := ServerStarter{
+		probe: func(context.Context, server.Config) ServerProbeResult {
+			return ServerProbeResult{ready: true, listening: true, outdated: true, serverVersion: "0.5.7+5148"}
+		},
+		start: func() error { return errors.New("boom") },
+	}
+	check := starter.Ensure(context.Background(), server.Config{ProbeTimeout: time.Second})
+	if !strings.Contains(check.status, "server outdated (0.5.7+5148 vs ") || !strings.Contains(check.status, "could not restart: boom") {
+		t.Fatalf("status = %q", check.status)
+	}
+}
+
+func TestProbeServerHTTPDetectsOutdatedServer(t *testing.T) {
+	tests := []struct {
+		name        string
+		srvVersion  string
+		srvIdentity string
+		cliVersion  string
+		cliIdentity string
+		wantOutdate bool
+	}{
+		{name: "older semver", srvVersion: "0.5.7+5148", srvIdentity: "2026-11-12T17:35:00Z", cliVersion: "0.5.8+5234", cliIdentity: "2026-11-16T08:35:00Z", wantOutdate: true},
+		{name: "same semver older binary", srvVersion: "0.5.8+5200", srvIdentity: "2026-11-12T17:35:00Z", cliVersion: "0.5.8+5234", cliIdentity: "2026-11-16T08:35:00Z", wantOutdate: true},
+		{name: "equal build", srvVersion: "0.5.8+5234", srvIdentity: "2026-11-16T08:35:00Z", cliVersion: "0.5.8+5234", cliIdentity: "2026-11-16T08:35:00Z", wantOutdate: false},
+		{name: "newer server", srvVersion: "0.6.0+6000", srvIdentity: "2026-11-17T08:35:00Z", cliVersion: "0.5.8+5234", cliIdentity: "2026-11-16T08:35:00Z", wantOutdate: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprintf(w, `{"health":"ok","server":"harnez","version":%q,"build_identity":%q}`, tt.srvVersion, tt.srvIdentity)
+			}))
+			defer srv.Close()
+			got := probeServerHTTP(context.Background(), srv.Client(), srv.URL, tt.cliVersion, tt.cliIdentity)
+			if !got.ready || !got.listening || got.outdated != tt.wantOutdate || got.serverVersion != tt.srvVersion {
+				t.Fatalf("got = %+v, want ready=true outdated=%v version=%q", got, tt.wantOutdate, tt.srvVersion)
+			}
+		})
 	}
 }

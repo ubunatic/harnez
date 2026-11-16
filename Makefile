@@ -42,6 +42,9 @@ install: ⚙️ build  # install binary to ~/go/bin (user)
 	go install -ldflags '$(VERSION_LDFLAGS)' ./cmd/harnez
 	./$(BINARY) man --install
 	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
+	@if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet harnez-agent-collector.service 2>/dev/null; \
+	then ./$(BINARY) server restart; \
+	fi
 
 stage-install-test: ⚙️  # test stage installer path validation and failure cleanup
 	bash scripts/stage-install-test.sh

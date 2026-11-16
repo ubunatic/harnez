@@ -205,7 +205,7 @@ func (s Server) claimExisting(ctx context.Context, socket, identity string) erro
 	if json.NewDecoder(resp.Body).Decode(&status) != nil || status.Server != "harnez" || strings.TrimSpace(status.Version) == "" || status.BuildIdentity == "" || (resp.StatusCode == http.StatusOK && status.Health != "ok") || (resp.StatusCode == http.StatusServiceUnavailable && status.Health != "starting") || (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusServiceUnavailable) {
 		return fmt.Errorf("cannot start harnez server: %s is in use by another program", socket)
 	}
-	if compareBuild(s.Version, identity, status.Version, status.BuildIdentity) <= 0 {
+	if CompareBuild(s.Version, identity, status.Version, status.BuildIdentity) <= 0 {
 		out := s.Output
 		if out == nil {
 			out = os.Stdout
@@ -261,7 +261,9 @@ func removeStaleSocket(socket string) error {
 	return nil
 }
 
-func compareBuild(versionA, identityA, versionB, identityB string) int {
+// CompareBuild compares two server/CLI builds by semantic version and then
+// executable build identity, returning >0 when A is newer than B.
+func CompareBuild(versionA, identityA, versionB, identityB string) int {
 	a, b := versionA, versionB
 	if !strings.HasPrefix(a, "v") {
 		a = "v" + a
