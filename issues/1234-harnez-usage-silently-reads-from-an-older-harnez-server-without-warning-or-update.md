@@ -1,6 +1,7 @@
 # 1234 — harnez usage silently reads from an older harnez server without warning or update
 
-**Status**: In Progress
+**Status**: Closed — usagecli detects older harnez server via CompareBuild, triggers non-blocking handover/restart and prints status; make install restarts active harnez-agent-collector.service; make test-q1 green, make install and live harnez usage verified Claude fable weekly at 27%
+**Closed-By**: session d3745c98-8c17-42c0-ab28-f6f0104b79c2
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
