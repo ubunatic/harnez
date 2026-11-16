@@ -99,6 +99,9 @@ func hasLocalTickets(dir string) bool {
 		if name == "archive" && entry.IsDir() {
 			return true
 		}
+		if !entry.IsDir() && name == "README.md" {
+			return true
+		}
 		if entry.IsDir() || !strings.HasSuffix(name, ".md") {
 			continue
 		}
@@ -367,16 +370,21 @@ func formatInboxIssue(title, body string, labels []string) []byte {
 	return []byte(b.String())
 }
 
-func writeInboxIssue(dir, title, body string, labels []string) (string, error) {
+func nextInboxRelPath(dir, slug string) string {
+	for n := 1; n <= 1000; n++ {
+		rel := inboxRelPath(slug, n)
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(rel))); os.IsNotExist(err) {
+			return rel
+		}
+	}
+	return inboxRelPath(slug, 1001)
+}
+
+func writeInboxPayload(dir, slug string, payload []byte) (string, error) {
 	inboxDir := filepath.Join(dir, "issues", "inbox")
 	if err := os.MkdirAll(inboxDir, 0o755); err != nil {
 		return "", fmt.Errorf("issues new: create inbox dir: %w", err)
 	}
-	slug := issues.Slugify(title)
-	if slug == "" {
-		slug = "issue"
-	}
-	payload := formatInboxIssue(title, body, labels)
 	for n := 1; ; n++ {
 		rel := inboxRelPath(slug, n)
 		full := filepath.Join(dir, filepath.FromSlash(rel))
@@ -397,6 +405,14 @@ func writeInboxIssue(dir, title, body string, labels []string) (string, error) {
 		}
 		return rel, nil
 	}
+}
+
+func writeInboxIssue(dir, title, body string, labels []string) (string, error) {
+	slug := issues.Slugify(title)
+	if slug == "" {
+		slug = "issue"
+	}
+	return writeInboxPayload(dir, slug, formatInboxIssue(title, body, labels))
 }
 
 // runIssuesNewForge files a ticket on the forge via API or CLI (issue 1195),

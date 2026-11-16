@@ -1091,6 +1091,7 @@ func TestTrackerNoneLocalCases(t *testing.T) {
 	for _, tc := range []struct{ name, tracker, entry, origin string }{
 		{"ticket", "none", "007-x.md", ""},
 		{"archive", "none", "archive/", ""},
+		{"readme", "none", "README.md", ""},
 		{"harnez", "harnez", "inbox/a.md", ""},
 		{"missing config", "", "inbox/a.md", ""},
 		{"unknown origin", "none", "inbox/a.md", "https://example.invalid/o/r.git"},
