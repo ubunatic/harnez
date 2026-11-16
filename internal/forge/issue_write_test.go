@@ -29,8 +29,13 @@ func TestWriterErrorDetails(t *testing.T) {
 	}
 	message = "exposed super-secret"
 	_, err = wr.CreateIssue(fg, "o", "r", "Title", "Body", nil)
-	if err == nil || err.Error() != "forge API request failed: HTTP 403 " {
+	if err == nil || err.Error() != "forge API request failed: HTTP 403" {
 		t.Fatalf("got %v", err)
+	}
+	message = strings.Repeat("é", 201)
+	_, err = wr.CreateIssue(fg, "o", "r", "Title", "Body", nil)
+	if err == nil || err.Error() != "forge API request failed: HTTP 403 "+strings.Repeat("é", 200) {
+		t.Fatalf("rune cap: %v", err)
 	}
 	cause := errors.New("transport failed")
 	wr.Client = &http.Client{Transport: failTransport{cause}}
@@ -119,7 +124,7 @@ func TestWriterRefinements(t *testing.T) {
 	fg := Forge{Kind: "forgejo", APIBase: srv.URL}
 	wr := Writer{Client: srv.Client(), Token: "tok"}
 	ids, err := wr.LabelIDs(fg, "o", "r", []string{"n1", "bug"})
-	if err != nil || fmt.Sprint(ids) != "[1 51]" || page != 2 {
+	if err != nil || fmt.Sprint(ids) != "[1 51]" || page != 3 {
 		t.Fatalf("ids=%v page=%d err=%v", ids, page, err)
 	}
 	is, err := wr.CreateIssue(fg, "o", "r", "T", "B", nil)
@@ -129,6 +134,32 @@ func TestWriterRefinements(t *testing.T) {
 	u, err := wr.Comment(fg, "o", "r", 7, "c")
 	if err != nil || u != "https://example/comment" {
 		t.Fatalf("url=%q err=%v", u, err)
+	}
+}
+
+func TestWriterLabelsShortPages(t *testing.T) {
+	page := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page++
+		if r.URL.RawQuery != fmt.Sprintf("limit=50&page=%d", page) {
+			t.Errorf("query: %s", r.URL.RawQuery)
+		}
+		fmt.Fprint(w, "[")
+		if page <= 2 {
+			for i := 1; i <= 30; i++ {
+				if i > 1 {
+					fmt.Fprint(w, ",")
+				}
+				id := (page-1)*30 + i
+				fmt.Fprintf(w, `{"id":%d,"name":"n%d"}`, id, id)
+			}
+		}
+		fmt.Fprint(w, "]")
+	}))
+	defer srv.Close()
+	ids, err := (Writer{Client: srv.Client(), Token: "tok"}).LabelIDs(Forge{Kind: "forgejo", APIBase: srv.URL}, "o", "r", []string{"n45"})
+	if err != nil || fmt.Sprint(ids) != "[45]" || page != 3 {
+		t.Fatalf("ids=%v pages=%d err=%v", ids, page, err)
 	}
 }
 
@@ -150,7 +181,7 @@ func TestWriterErrorsAndLabels(t *testing.T) {
 		calls = 0
 		response = `{"message":"safe detail"}`
 		_, err := wr.CreateIssue(fg, "o", "r", "T", "private body", nil)
-		if err == nil || !strings.Contains(err.Error(), "HTTP ") || strings.Contains(err.Error(), "tok") || strings.Contains(err.Error(), "private body") || calls != 1 {
+		if err == nil || err.Error() != fmt.Sprintf("forge API request failed: HTTP %d safe detail", status) || calls != 1 {
 			t.Fatalf("status %d: %v calls=%d", status, err, calls)
 		}
 		if status == 412 && !strings.Contains(err.Error(), "safe detail") {

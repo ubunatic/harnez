@@ -58,6 +58,11 @@ func TestIssuesCommentOffline(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("FJ_TEST_LOG", log)
+	oldRunner := issueCLIRun
+	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
+		return exec.Command(filepath.Join(bin, "fj"), c.Args...).CombinedOutput()
+	}
+	t.Cleanup(func() { issueCLIRun = oldRunner })
 	old := forgeTrackerSource
 	forgeTrackerSource = func(sp prwait.Spec) forgetracker.Source {
 		src := forgetracker.NewSource(sp)
@@ -135,8 +140,14 @@ func TestIssuesCommentOffline(t *testing.T) {
 	if err != nil || string(got) != strings.Join([]string{"issue", "comment", "codeberg.org/o/r#7", "--body-file", body, ""}, "\n") {
 		t.Fatalf("local tracker argv: %q %v", got, err)
 	}
-	if _, err := runHarnez(t, "issues", "show", "-d", dir, "7", "--forge"); err == nil || !strings.Contains(err.Error(), "--forge requires new or comment") {
-		t.Fatalf("forge flag on show: %v", err)
+	for _, verb := range []string{"show", "list"} {
+		args := []string{"issues", verb, "-d", dir, "--forge"}
+		if verb == "show" {
+			args = append(args, "7")
+		}
+		if _, err := runHarnez(t, args...); err == nil || err.Error() != "issues: --forge requires new or comment" {
+			t.Fatalf("forge flag on %s: %v", verb, err)
+		}
 	}
 }
 
@@ -165,7 +176,7 @@ func TestIssuesCommentRejectsEmptyBody(t *testing.T) {
 			t.Errorf("CLI called %d times", calls)
 		}
 	})
-	target := forgetracker.Target{Forge: forge.Forge{Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
 	for _, content := range []string{"", " \t", "\n\n"} {
 		body := filepath.Join(t.TempDir(), "body file")
 		if err := os.WriteFile(body, []byte(content), 0o600); err != nil {
@@ -191,10 +202,11 @@ func TestForgeCommentWorkerDenied(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := &stubForgeSource{}
-	oldLook, oldRun := issueCLILookPath, issueCLIRun
+	oldLook, oldRun, oldLookup := issueCLILookPath, issueCLIRun, issueWriteLookup
 	issueCLILookPath = func(string) (string, error) { return "fj", nil }
 	issueCLIRun = func(string, forgetracker.Command) ([]byte, error) { t.Error("unexpected CLI call"); return nil, nil }
-	t.Cleanup(func() { issueCLILookPath, issueCLIRun = oldLook, oldRun })
+	issueWriteLookup = func(string) string { t.Fatal("unexpected token lookup"); return "" }
+	t.Cleanup(func() { issueCLILookPath, issueCLIRun, issueWriteLookup = oldLook, oldRun, oldLookup })
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
 	err := runIssuesComment(io.Discard, t.TempDir(), target, src, "7", body, false, false)
 	want := "issues comment: forge writes run only in a host session (this is harnez worker worker-1); hand the write to the host"
@@ -217,7 +229,7 @@ func TestIssuesCommentFJErrors(t *testing.T) {
 	issueWriteLookup = func(string) string { return "" }
 	t.Cleanup(func() { issueWriteLookup = oldLookup })
 	src := &stubForgeSource{}
-	target := forgetracker.Target{Forge: forge.Forge{Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
 	body := filepath.Join(t.TempDir(), "body file")
 	if err := os.WriteFile(body, []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)

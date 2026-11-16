@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"ubunatic.com/harnez/internal/forge"
 	"ubunatic.com/harnez/internal/forgetoken"
@@ -137,19 +138,31 @@ func requireHostSession(verb string) error {
 }
 
 var issueWriteLookup = forgetoken.LookupWrite
+var issueWriteClient = func(timeout time.Duration) *http.Client { return &http.Client{Timeout: timeout} }
+var issueWriteMetadata = func(host string) (bool, error) {
+	_, store, err := forgeTokenStoreFor(true)
+	if err != nil {
+		return false, err
+	}
+	_, ok, err := store.Meta(host)
+	return ok, err
+}
 
 func issueWriteAPI(t forgetracker.Target) (forge.Writer, bool, error) {
 	sp, err := prwait.LoadSpec()
 	if err != nil {
 		return forge.Writer{}, false, err
 	}
-	client := &http.Client{Timeout: sp.IssueScan.Timeout}
+	client := issueWriteClient(sp.IssueScan.Timeout)
 	w, ok := forgetracker.WriteAPI(t, client, issueWriteLookup)
 	return w, ok, nil
 }
 
 // runIssuesComment checks the issue before invoking fj with an explicit target.
 func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forgetracker.Source, number, body string, dryRun, allowClosed bool) error {
+	if t.Forge.Kind != "forgejo" {
+		return fmt.Errorf("issues comment: forge writes support Forgejo only; GitHub is ticket 1209")
+	}
 	n, err := strconv.Atoi(number)
 	if err != nil || n <= 0 {
 		return fmt.Errorf("issues comment: invalid issue number %q", number)
@@ -197,6 +210,14 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	}
 	c := forgetracker.FJCommentCommand(t, n, body)
 	if dryRun {
+		stored, err := issueWriteMetadata(t.Forge.Host)
+		if err != nil {
+			return err
+		}
+		if stored {
+			_, err = fmt.Fprintf(w, "dry run: would comment on %s/%s over the API (write token)\n", t.Forge.Host, target)
+			return err
+		}
 		_, err = fmt.Fprintf(w, "dry run: %s\n", c)
 		return err
 	}
@@ -266,6 +287,16 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	}
 	if strings.TrimSpace(string(content)) == "" {
 		return fmt.Errorf("issues new: body file is empty or whitespace-only")
+	}
+	if dryRun && t.Forge.Kind == "forgejo" {
+		stored, err := issueWriteMetadata(t.Forge.Host)
+		if err != nil {
+			return err
+		}
+		if stored {
+			_, err = fmt.Fprintf(stdout, "dry run, would file on %s over the API (write token)\n", t)
+			return err
+		}
 	}
 	if !dryRun {
 		if err := requireHostSession("new"); err != nil {

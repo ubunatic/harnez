@@ -406,6 +406,15 @@ valid, exit-0 answer.`,
 				}
 				_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
 				if remoteFlag || remoteEnv {
+					if dryRunFlag || checkFlag {
+						_, err := fmt.Fprintf(cmd.OutOrStdout(), "dry run: would create GitHub issue %q and reserve a local ticket\n", title)
+						return err
+					}
+					if !dryRunFlag && !checkFlag {
+						if err := requireHostSession("new"); err != nil {
+							return err
+						}
+					}
 					fmt.Fprintln(cmd.ErrOrStderr(), "issues new: remote mode")
 					return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
 				}

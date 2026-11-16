@@ -65,10 +65,13 @@ func (w Writer) request(fg Forge, method, endpoint string, payload, result any) 
 			}
 			if json.NewDecoder(io.LimitReader(resp.Body, 8192)).Decode(&msg) == nil && safeWriteDetail(msg.Message, w.Token, data) {
 				detail = strings.Join(strings.Fields(msg.Message), " ")
-				if len(detail) > 200 {
-					detail = detail[:200]
+				if runes := []rune(detail); len(runes) > 200 {
+					detail = string(runes[:200])
 				}
 			}
+		}
+		if detail == "" {
+			return fmt.Errorf("forge API request failed: HTTP %d", resp.StatusCode)
 		}
 		return &APIError{Status: resp.StatusCode, Transient: resp.StatusCode >= 500, Detail: detail}
 	}
@@ -128,6 +131,7 @@ func (w Writer) LabelIDs(fg Forge, owner, repo string, names []string) ([]int64,
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
 	}
+	seen := make(map[int64]bool)
 	for page := 1; ; page++ {
 		var batch []struct {
 			ID   int64  `json:"id"`
@@ -137,8 +141,15 @@ func (w Writer) LabelIDs(fg Forge, owner, repo string, names []string) ([]int64,
 		if err := w.request(fg, http.MethodGet, endpoint, nil, &batch); err != nil {
 			return nil, err
 		}
-		labels = append(labels, batch...)
-		if len(batch) < 50 {
+		added := 0
+		for _, label := range batch {
+			if !seen[label.ID] {
+				seen[label.ID] = true
+				labels = append(labels, label)
+				added++
+			}
+		}
+		if added == 0 {
 			break
 		}
 	}

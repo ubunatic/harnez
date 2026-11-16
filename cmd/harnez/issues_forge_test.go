@@ -41,7 +41,11 @@ func TestForgeWritesAPI(t *testing.T) {
 		}
 		switch r.URL.Path {
 		case "/repos/o/r/labels":
-			io.WriteString(w, `[{"id":5,"name":"bug"}]`)
+			if r.URL.Query().Get("page") == "1" {
+				io.WriteString(w, `[{"id":5,"name":"bug"}]`)
+			} else {
+				io.WriteString(w, `[]`)
+			}
 		case "/repos/o/r/issues":
 			io.WriteString(w, `{"number":42,"html_url":"https://example/42"}`)
 		case "/repos/o/r/issues/7/comments":
@@ -61,9 +65,18 @@ func TestForgeWritesAPI(t *testing.T) {
 	if err != nil || out.String() != "filed as #42 at https://example/42; no commit\n" {
 		t.Fatalf("new %q: %v", out.String(), err)
 	}
-	want := []string{"GET /repos/o/r/labels?limit=50&page=1 ", `POST /repos/o/r/issues {"title":"T","body":"hello\n","labels":[5]}`}
+	want := []string{"GET /repos/o/r/labels?limit=50&page=1 ", "GET /repos/o/r/labels?limit=50&page=2 ", `POST /repos/o/r/issues {"title":"T","body":"hello\n","labels":[5]}`}
 	if !reflect.DeepEqual(requests, want) {
 		t.Fatalf("requests %q", requests)
+	}
+	requests = nil
+	out.Reset()
+	err = runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body}, false, true)
+	if err != nil || out.String() != "{\"forge\":\"codeberg.org/o/r\",\"number\":42,\"tool\":\"api\",\"url\":\"https://example/42\"}\n" {
+		t.Fatalf("new json %q: %v", out.String(), err)
+	}
+	if !reflect.DeepEqual(requests, []string{`POST /repos/o/r/issues {"title":"T","body":"hello\n"}`}) {
+		t.Fatalf("json requests %q", requests)
 	}
 	requests = nil
 	out.Reset()
@@ -77,7 +90,7 @@ func TestForgeWritesAPI(t *testing.T) {
 	requests = nil
 	out.Reset()
 	err = runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"missing"}}, false, false)
-	if err == nil || err.Error() != `unknown label "missing"; existing labels: bug` || len(requests) != 1 {
+	if err == nil || err.Error() != `unknown label "missing"; existing labels: bug` || len(requests) != 2 {
 		t.Fatalf("unknown: %v %q", err, requests)
 	}
 }
@@ -98,7 +111,7 @@ func TestForgeNewWorkerAndFallback(t *testing.T) {
 		ran = append(ran, c)
 		return []byte("#42 T\n"), nil
 	}
-	issueWriteLookup = func(string) string { return "" }
+	issueWriteLookup = func(string) string { t.Fatal("unexpected token lookup by worker"); return "" }
 	t.Cleanup(func() { issueCLILookPath, issueCLIRun, issueWriteLookup = oldLook, oldRun, oldLookup })
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
 	req := forgetracker.CreateRequest{Title: "T", BodyFile: body}
@@ -113,6 +126,7 @@ func TestForgeNewWorkerAndFallback(t *testing.T) {
 	}
 	t.Setenv("HARNEZ_AGENT_ROLE", "")
 	t.Setenv("HARNEZ_SESSION_ID", "")
+	issueWriteLookup = func(string) string { return "" }
 	out.Reset()
 	if err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, req, false, false); err != nil {
 		t.Fatal(err)
@@ -506,5 +520,42 @@ func TestIssuesNewFJFailureManualCommand(t *testing.T) {
 	want := "issues new: fj failed: exit status 1\nordinary error\nrun manually: fj issue create --repo codeberg.org/o/r --body-file " + strconv.Quote(body) + " title"
 	if err == nil || err.Error() != want || strings.Contains(err.Error(), "private body") {
 		t.Fatalf("got %v, want %s", err, want)
+	}
+}
+
+func TestForgeDryRunMetadataAndGitHub(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker")
+	t.Setenv("CODEX_THREAD_ID", "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	_, st, err := forgeTokenStoreFor(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Save(forgetoken.Meta{Host: "codeberg.org"}, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	old := issueWriteLookup
+	issueWriteLookup = func(string) string { t.Fatal("secret lookup"); return "" }
+	t.Cleanup(func() { issueWriteLookup = old })
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte("body"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	var out bytes.Buffer
+	if err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"x"}}, true, false); err != nil || out.String() != "dry run, would file on codeberg.org/o/r over the API (write token)\n" {
+		t.Fatalf("new: %q %v", out.String(), err)
+	}
+	out.Reset()
+	if err := runIssuesComment(&out, t.TempDir(), target, &stubForgeSource{}, "7", body, true, false); err != nil || out.String() != "dry run: would comment on codeberg.org/o/r#7 over the API (write token)\n" {
+		t.Fatalf("comment: %q %v", out.String(), err)
+	}
+	target.Forge.Kind = "github"
+	src := &stubForgeSource{}
+	err = runIssuesComment(io.Discard, t.TempDir(), target, src, "7", body, true, false)
+	if err == nil || err.Error() != "issues comment: forge writes support Forgejo only; GitHub is ticket 1209" || src.calls != 0 {
+		t.Fatalf("github: %v calls=%d", err, src.calls)
 	}
 }
