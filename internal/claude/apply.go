@@ -581,6 +581,9 @@ const HarnezEnvContent = `# harnez:begin env
 agy() {
     PATH="$HOME/.harnez/shims:$PATH" ANTIGRAVITY_AGENT=1 command agy "$@"
 }
+
+# Short alias for the harnez-agy launcher
+alias hagy='harnez-agy'
 # harnez:end env
 `
 

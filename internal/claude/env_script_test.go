@@ -2,6 +2,7 @@ package claude_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -54,6 +55,9 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 	}
 	if !strings.Contains(string(envData), "agy()") {
 		t.Errorf("expected agy() function in env.sh")
+	}
+	if !strings.Contains(string(envData), "alias hagy='harnez-agy'") {
+		t.Errorf("expected hagy alias for harnez-agy in env.sh")
 	}
 
 	if markdown.ContainsSectionMK(bashrcPath, "env") {
@@ -127,5 +131,48 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 	cleanedBashrc, _ := os.ReadFile(bashrcPath)
 	if !strings.Contains(string(cleanedBashrc), "alias ll='ls -la'") {
 		t.Errorf("user bashrc content was lost after CleanAll")
+	}
+}
+
+func TestHarnezEnvHagyAlias(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	targetDir := filepath.Join(tmpHome, ".claude")
+	cfg := claude.LoadTestConfig(t)
+	cfg.SkillsTarget = filepath.Join(tmpHome, ".gemini", "skills")
+	cfg.CodexSkillsTarget = filepath.Join(tmpHome, ".codex", "skills")
+	cfg.CodexHooksTarget = filepath.Join(tmpHome, ".codex", "config.toml")
+	cfg.AgyHooksTarget = filepath.Join(tmpHome, ".gemini", "config", "hooks.json")
+	cfg.ClaudeSkillsTarget = filepath.Join(tmpHome, ".claude", "skills")
+	cfg.PrimeAgentTarget = filepath.Join(tmpHome, ".prime", "agent")
+	cfg.AgentsMD.Global.Target = filepath.Join(tmpHome, ".claude", "CLAUDE.md")
+	cfg.AgentsMD.Global.Symlink = ""
+	cfg.AgentsMD.Agents = nil
+	cfg.DistillAutopipe.PiExtensionTarget = filepath.Join(tmpHome, ".pi", "harnez-distill.ts")
+	cfg.DistillAutopipe.OpenCodePluginTarget = filepath.Join(tmpHome, ".config", "opencode", "harnez-distill.ts")
+
+	if err := claude.ApplyAll(targetDir, cfg, nil, false, false, false); err != nil {
+		t.Fatalf("ApplyAll failed: %v", err)
+	}
+
+	fakeBin := filepath.Join(tmpHome, "bin")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mockLauncher := filepath.Join(fakeBin, "harnez-agy")
+	if err := os.WriteFile(mockLauncher, []byte("#!/bin/sh\nprintf 'called:%s\\n' \"$*\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	envPath := filepath.Join(tmpHome, ".harnez", "env.sh")
+	cmd := exec.Command("/bin/bash", "-c", "shopt -s expand_aliases\nsource \"$1\"\nhagy --meter", "bash", envPath)
+	cmd.Env = []string{"HOME=" + tmpHome, "PATH=" + fakeBin + ":/usr/bin:/bin"}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash source env.sh && hagy: %v\n%s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "called:--meter" {
+		t.Errorf("hagy output = %q, want %q", strings.TrimSpace(string(out)), "called:--meter")
 	}
 }
