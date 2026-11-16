@@ -92,16 +92,23 @@ func TestTelemetryCollectorServiceRegistryOwnSessionAndLegacyRejection(t *testin
 	t.Setenv(config.RunnerChannel.FDEnv, strconv.Itoa(int(runnerEnd2.Fd())))
 
 	created, err := subagent.RegisterOwnSession(context.Background(), server.RunnerRegistryRequest{
-		SessionID: "runner-sess-1", Name: "runner-w1", Provider: "codex", Model: "luna", Tier: "low", Status: "running",
+		SessionID: "runner-sess-1", Name: "w1", Provider: "codex", Model: "luna", Tier: "low", Status: "running",
 	})
-	if err != nil || created.LaunchID == "" || created.HarnessType != "runner" {
+	if err != nil || created.LaunchID == "" || created.HarnessType != "runner" || created.Name != "runner-w1" {
 		t.Fatalf("RegisterOwnSession = (%+v, %v)", created, err)
 	}
-	updated, err := subagent.UpdateOwnSession(context.Background(), server.RunnerRegistryRequest{
-		Status: "completed", Turn: 2, Response: "done",
+	// Host stop beats racing runner "running" update cleanly under lock.
+	if _, err := hostStore.Update("runner-sess-1", func(s *subagent.Session) error {
+		s.Status = "stopped"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	afterRace, err := subagent.UpdateOwnSession(context.Background(), server.RunnerRegistryRequest{
+		Status: "running", Turn: 2, Response: "done",
 	})
-	if err != nil || updated.Status != "completed" || updated.Turn != 2 || updated.LaunchID != created.LaunchID {
-		t.Fatalf("UpdateOwnSession = (%+v, %v)", updated, err)
+	if err != nil || afterRace.Status != "stopped" || afterRace.Turn != 2 || afterRace.LaunchID != created.LaunchID {
+		t.Fatalf("UpdateOwnSession after host stop = (%+v, %v), want status=stopped", afterRace, err)
 	}
 	queried, err := subagent.QueryOwnSession(context.Background(), "")
 	if err != nil || queried.ID != "runner-sess-1" || queried.Response != "done" {
@@ -110,8 +117,19 @@ func TestTelemetryCollectorServiceRegistryOwnSessionAndLegacyRejection(t *testin
 
 	// Verify immutable host record stayed intact and LaunchID preserved on disk.
 	storedOnHost, err := hostStore.Get("runner-sess-1")
-	if err != nil || storedOnHost.LaunchID != created.LaunchID || storedOnHost.Turn != 2 {
+	if err != nil || storedOnHost.LaunchID != created.LaunchID || storedOnHost.Turn != 2 || storedOnHost.Status != "stopped" {
 		t.Fatalf("storedOnHost = (%+v, %v)", storedOnHost, err)
+	}
+
+	// Direct malformed payload without LaunchID returns 400 Bad Request.
+	t.Setenv("TAIA_SESSION_DIR", "")
+	if _, err := server.PostTelemetryCommand(context.Background(), hostSocket, config.RegistryPath, []byte(`{"action":"own_query"}`), config.HTTPClientTimeout); err == nil {
+		t.Fatal("expected missing LaunchID HTTP request to fail")
+	} else {
+		var statusErr *server.HTTPStatusError
+		if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusBadRequest {
+			t.Fatalf("missing LaunchID HTTP status = %v, want 400", err)
+		}
 	}
 }
 
@@ -128,17 +146,21 @@ func TestRunnerModeRejectsCrossSessionLifecycleAndHostRegistry(t *testing.T) {
 		t.Fatal("canManageTarget returned true in runner mode")
 	}
 
-	for _, args := range [][]string{
-		{"stop", "--name", "other"},
-		{"stop", "--all"},
-		{"resume", "--name", "other", "next"},
-		{"list"},
-		{"delete", "--name", "other"},
+	for _, tc := range []struct {
+		args     []string
+		wantText string
+	}{
+		{[]string{"stop", "--name", "other"}, "host-only"},
+		{[]string{"stop", "--all"}, "host-only"},
+		{[]string{"resume", "--name", "other", "next"}, "host-only"},
+		{[]string{"delete", "--name", "other"}, "host-only"},
+		{[]string{"list"}, "host-owned"},
 	} {
 		cmd := newAgentCmd()
-		cmd.SetArgs(args)
-		if err := cmd.Execute(); err == nil {
-			t.Fatalf("harnez agent %v unexpectedly succeeded in runner mode", args)
+		cmd.SetArgs(tc.args)
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), tc.wantText) {
+			t.Fatalf("harnez agent %v err = %v, want substring %q", tc.args, err, tc.wantText)
 		}
 	}
 

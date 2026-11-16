@@ -52,6 +52,7 @@ type RunnerChannelConfig struct {
 	MaxConcurrentStreams   int
 	UsageQueryMaxModels    int
 	UsageQueryMaxStringLen int
+	RegistryMaxIDLen       int
 	AllowedTelemetryKinds  []string
 }
 
@@ -105,6 +106,7 @@ type rawRunnerChannel struct {
 	MaxConcurrentStreams   int      `yaml:"max_concurrent_streams"`
 	UsageQueryMaxModels    int      `yaml:"usage_query_max_models"`
 	UsageQueryMaxStringLen int      `yaml:"usage_query_max_string_len"`
+	RegistryMaxIDLen       int      `yaml:"registry_max_id_len"`
 	AllowedTelemetryKinds  []string `yaml:"allowed_telemetry_kinds"`
 }
 
@@ -254,7 +256,7 @@ func (c Config) Socket() (string, error) {
 }
 
 func loadRunnerChannel(cfg *Config, raw rawRunnerChannel) error {
-	if raw.FDEnv == "" || raw.MaxFrameBytes <= 0 || raw.FrameHeadroomBytes <= 0 || raw.SpoolMaxBytes <= 0 || raw.ReplayMaxRecords <= 0 || raw.ReplayMaxBytes <= 0 || raw.MaxConcurrentStreams <= 0 || raw.UsageQueryMaxModels <= 0 || raw.UsageQueryMaxStringLen <= 0 {
+	if raw.FDEnv == "" || raw.MaxFrameBytes <= 0 || raw.FrameHeadroomBytes <= 0 || raw.SpoolMaxBytes <= 0 || raw.ReplayMaxRecords <= 0 || raw.ReplayMaxBytes <= 0 || raw.MaxConcurrentStreams <= 0 || raw.UsageQueryMaxModels <= 0 || raw.UsageQueryMaxStringLen <= 0 || raw.RegistryMaxIDLen <= 0 {
 		return fmt.Errorf("spec/server.yaml: runner_channel settings must be positive and non-empty")
 	}
 	if raw.MaxFrameBytes <= raw.ReplayMaxBytes || raw.MaxFrameBytes <= raw.FrameHeadroomBytes {
@@ -273,6 +275,7 @@ func loadRunnerChannel(cfg *Config, raw rawRunnerChannel) error {
 		MaxConcurrentStreams:   raw.MaxConcurrentStreams,
 		UsageQueryMaxModels:    raw.UsageQueryMaxModels,
 		UsageQueryMaxStringLen: raw.UsageQueryMaxStringLen,
+		RegistryMaxIDLen:       raw.RegistryMaxIDLen,
 		AllowedTelemetryKinds:  append([]string(nil), raw.AllowedTelemetryKinds...),
 	}
 	return nil

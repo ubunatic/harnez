@@ -31,6 +31,7 @@ type RunnerLaunchBinding struct {
 	SessionID      string
 	BoundPID       int
 	BoundStarttime uint64
+	bindReady      chan struct{}
 }
 
 // NewRunnerLaunchBinding mints a fresh cryptographic launch identity for one
@@ -46,6 +47,16 @@ func NewRunnerLaunchBinding(sessionID string) (*RunnerLaunchBinding, error) {
 	}, nil
 }
 
+// RequireChildPIDBind makes registry operations wait until BindChildPID runs,
+// closing the race window between cmd.Start and BindChildPID.
+func (b *RunnerLaunchBinding) RequireChildPIDBind() {
+	b.mu.Lock()
+	if b.bindReady == nil && b.BoundPID == 0 {
+		b.bindReady = make(chan struct{})
+	}
+	b.mu.Unlock()
+}
+
 // BindChildPID records the started child's PID and proc starttime on the host
 // side so later registry RPCs cannot spoof foreign PIDs.
 func (b *RunnerLaunchBinding) BindChildPID(pid int) {
@@ -56,7 +67,27 @@ func (b *RunnerLaunchBinding) BindChildPID(pid int) {
 	b.mu.Lock()
 	b.BoundPID = pid
 	b.BoundStarttime = start
+	ch := b.bindReady
+	b.bindReady = nil
 	b.mu.Unlock()
+	if ch != nil {
+		close(ch)
+	}
+}
+
+func (b *RunnerLaunchBinding) waitForBind(ctx context.Context) error {
+	b.mu.Lock()
+	ch := b.bindReady
+	b.mu.Unlock()
+	if ch == nil {
+		return nil
+	}
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (b *RunnerLaunchBinding) snapshot() (launchID, sessionID string, boundPID int, boundStart uint64) {
@@ -179,6 +210,12 @@ func handleRunnerRegistry(ctx context.Context, cfg Config, op string, payload js
 	if req.Turn < 0 {
 		return RunnerResponse{Status: http.StatusForbidden, Error: ErrRunnerForbidden.Error()}
 	}
+	if err := validateRegistryRequestFields(req); err != nil {
+		return RunnerResponse{Status: http.StatusForbidden, Error: err.Error()}
+	}
+	if err := binding.waitForBind(ctx); err != nil {
+		return RunnerResponse{Status: http.StatusServiceUnavailable, Error: ErrRunnerUnavailable.Error()}
+	}
 
 	binding.opMu.Lock()
 	defer binding.opMu.Unlock()
@@ -230,7 +267,7 @@ func authorizeRegistrySessionID(cfg Config, op, reqID, boundID string) (string, 
 	reqID = strings.TrimSpace(reqID)
 	switch op {
 	case RunnerOpOwnRegister:
-		if !validSafeRegistryID(reqID, cfg.RunnerChannel.UsageQueryMaxStringLen) {
+		if !validSafeRegistryID(reqID, cfg.RunnerChannel.RegistryMaxIDLen) {
 			return "", fmt.Errorf("%w: invalid session_id for registration", ErrRunnerForbidden)
 		}
 		if boundID != "" && reqID != boundID {
@@ -248,6 +285,20 @@ func authorizeRegistrySessionID(cfg Config, op, reqID, boundID string) (string, 
 	default:
 		return "", fmt.Errorf("%w: unsupported registry op %q", ErrRunnerForbidden, op)
 	}
+}
+
+func validateRegistryRequestFields(req RunnerRegistryRequest) error {
+	switch req.Status {
+	case "", "running", "completed", "failed", "stopped":
+	default:
+		return fmt.Errorf("%w: unsupported runner session status %q", ErrRunnerForbidden, req.Status)
+	}
+	switch strings.ToLower(strings.TrimSpace(req.Role)) {
+	case "", "worker", "developer", "researcher", "reviewer", "explorer":
+	default:
+		return fmt.Errorf("%w: unsupported runner role %q", ErrRunnerForbidden, req.Role)
+	}
+	return nil
 }
 
 func validSafeRegistryID(id string, maxLen int) bool {
@@ -278,15 +329,15 @@ func validateRegistryPIDs(req RunnerRegistryRequest, boundPID int, boundStart ui
 }
 
 func validateOneProcessPID(pid int, starttime uint64, boundPID int, boundStart uint64, allowDescendant bool) error {
+	if boundPID <= 0 {
+		return fmt.Errorf("%w: cannot verify PID %d without host-bound child PID", ErrRunnerForbidden, pid)
+	}
 	if pid <= 1 || pid == os.Getpid() || starttime == 0 {
 		return fmt.Errorf("%w: forged or unverified PID %d", ErrRunnerForbidden, pid)
 	}
 	liveStart := procs.ProcessStarttime(pid)
-	if liveStart != 0 && liveStart != starttime {
-		return fmt.Errorf("%w: PID %d starttime mismatch", ErrRunnerForbidden, pid)
-	}
-	if boundPID <= 0 {
-		return nil
+	if liveStart == 0 || liveStart != starttime {
+		return fmt.Errorf("%w: PID %d dead or starttime mismatch", ErrRunnerForbidden, pid)
 	}
 	if pid == boundPID {
 		if boundStart > 0 && starttime != boundStart {
@@ -302,7 +353,7 @@ func validateOneProcessPID(pid int, starttime uint64, boundPID int, boundStart u
 		return fmt.Errorf("%w: inspect launch process tree: %v", ErrRunnerForbidden, err)
 	}
 	for _, member := range members {
-		if member.PID == pid && (member.Starttime == 0 || member.Starttime == starttime) {
+		if member.PID == pid && member.Starttime != 0 && member.Starttime == starttime {
 			return nil
 		}
 	}

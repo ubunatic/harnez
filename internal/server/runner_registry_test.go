@@ -117,11 +117,26 @@ func TestRunnerRegistryLaunchBindingAndRejections(t *testing.T) {
 		}
 	}
 
-	// Forged PID 1 rejected (403).
+	// Forged PID 1, unbound PID, role escalation, and invalid status rejected (403).
 	if err := SendRunnerRegistry(context.Background(), cfg, RunnerOpOwnRegister, RunnerRegistryRequest{
 		SessionID: "s1", ProcessPID: 1, ProcessStarttime: 123,
 	}, nil); !errors.Is(err, ErrRunnerForbidden) {
 		t.Fatalf("forged PID 1 err = %v, want ErrRunnerForbidden", err)
+	}
+	if err := SendRunnerRegistry(context.Background(), cfg, RunnerOpOwnRegister, RunnerRegistryRequest{
+		SessionID: "s1", ProcessPID: os.Getpid(), ProcessStarttime: procs.ProcessStarttime(os.Getpid()),
+	}, nil); !errors.Is(err, ErrRunnerForbidden) {
+		t.Fatalf("unbound PID err = %v, want ErrRunnerForbidden", err)
+	}
+	if err := SendRunnerRegistry(context.Background(), cfg, RunnerOpOwnRegister, RunnerRegistryRequest{
+		SessionID: "s1", Role: "orchestrator",
+	}, nil); !errors.Is(err, ErrRunnerForbidden) {
+		t.Fatalf("escalated role err = %v, want ErrRunnerForbidden", err)
+	}
+	if err := SendRunnerRegistry(context.Background(), cfg, RunnerOpOwnRegister, RunnerRegistryRequest{
+		SessionID: "s1", Status: "invented-status",
+	}, nil); !errors.Is(err, ErrRunnerForbidden) {
+		t.Fatalf("invalid status err = %v, want ErrRunnerForbidden", err)
 	}
 
 	// Valid own_register binds launch identity to s1.
@@ -182,6 +197,18 @@ func TestRunnerLaunchBindChildPIDEnforcesProcessTree(t *testing.T) {
 			ProviderPID: pid, ProviderStarttime: start + 999999,
 		}, nil); !errors.Is(err, ErrRunnerForbidden) {
 			os.Exit(5)
+		}
+		// Dead/nonexistent PID (liveStart == 0) must fail closed.
+		if err := SendRunnerRegistry(context.Background(), cfg, RunnerOpOwnUpdate, RunnerRegistryRequest{
+			ProviderPID: 99999999, ProviderStarttime: 12345,
+		}, nil); !errors.Is(err, ErrRunnerForbidden) {
+			os.Exit(6)
+		}
+		// Valid self ProviderPID inside bound process tree succeeds.
+		if err := SendRunnerRegistry(context.Background(), cfg, RunnerOpOwnUpdate, RunnerRegistryRequest{
+			ProviderPID: pid, ProviderStarttime: start, Status: "completed",
+		}, nil); err != nil {
+			os.Exit(7)
 		}
 		os.Exit(0)
 	}

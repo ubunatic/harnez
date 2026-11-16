@@ -102,6 +102,7 @@ func PrepareCmdRunnerBroker(ctx context.Context, cmd *exec.Cmd) (*RunnerBrokerHa
 		cmd.Env = setEnvKey(baseEnv, cfg.RunnerChannel.FDEnv, "", false)
 		return nil, err
 	}
+	binding.RequireChildPIDBind()
 	relayCtx, cancel := context.WithCancel(ctx)
 	done := make(chan error, 1)
 	go func() { done <- RelayRunnerBrokerWithBinding(relayCtx, hostEnd, hostSocket, cfg, binding) }()

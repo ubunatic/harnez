@@ -63,6 +63,13 @@ inherited broker FD (`HARNEZ_BROKER_FD`):
   `UnixRights(0,1,2)`). When the broker FD is missing, invalid, or stripped
   across an exec boundary, Harnez fails closed without falling back to
   `Config.Socket()`.
+- Under Taia confinement, Landlock policy is the security boundary blocking
+  direct access to `Config.Socket()` and `~/.harnez/agents`; in-process
+  `TAIA_SESSION_DIR` checks are defense in depth for honest runner code, while
+  the host broker enforces cryptographic per-launch `LaunchID` and host-bound
+  process tree validation on `own_register`, `own_update`, and `own_query`.
+  Records created directly on the host intentionally carry a distinct `LaunchID`
+  (or none for legacy files) and cannot be adopted or mutated by a runner.
 
 The matrix below is the full approved contract; M11–M17 behavior remains planned.
 The machine-readable contract is `spec/session_isolation.yaml`.

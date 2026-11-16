@@ -321,6 +321,9 @@ func (ac *agentCLI) deleteCmd() *cobra.Command {
 		return !sessionLatestTurnRated(x)
 	}
 	remove := &cobra.Command{Use: "delete", Short: "Delete an agent session", Aliases: []string{"rm"}, Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
+		if os.Getenv("TAIA_SESSION_DIR") != "" {
+			return fmt.Errorf("agent delete is a host-only operation in runner mode")
+		}
 		s, e := ac.store()
 		if e != nil {
 			return e

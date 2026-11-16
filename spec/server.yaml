@@ -43,6 +43,7 @@ runner_channel:
   max_concurrent_streams: 32
   usage_query_max_models: 64
   usage_query_max_string_len: 128
+  registry_max_id_len: 128
   allowed_telemetry_kinds:
     - tool_call
     - agy_post_tool

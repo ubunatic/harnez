@@ -16,6 +16,9 @@ import (
 // ErrSessionNameInUse indicates that a registry name or ID is already reserved.
 var ErrSessionNameInUse = errors.New("session name or ID is already in use")
 
+// ErrSessionNotFound indicates that no session record matches the requested ID.
+var ErrSessionNotFound = errors.New("session not found")
+
 // Session represents an active subagent session with metadata and telemetry.
 type Session struct {
 	ID                string `json:"id"`
@@ -313,8 +316,16 @@ func guardHostSessionStoreAccess(dir string) error {
 		return nil
 	}
 	def := DefaultStoreDir()
-	if strings.TrimSpace(dir) == "" || filepath.Clean(dir) == filepath.Clean(def) {
+	cleanDir := filepath.Clean(dir)
+	cleanDef := filepath.Clean(def)
+	if strings.TrimSpace(dir) == "" || cleanDir == cleanDef {
 		return fmt.Errorf("host session registry %s is host-owned in runner mode; use launch-bound broker RPC for own session", def)
+	}
+	if resolvedDir, err := filepath.EvalSymlinks(cleanDir); err == nil {
+		resolvedDef, defErr := filepath.EvalSymlinks(cleanDef)
+		if (defErr == nil && resolvedDir == resolvedDef) || resolvedDir == cleanDef {
+			return fmt.Errorf("host session registry %s is host-owned in runner mode; use launch-bound broker RPC for own session", def)
+		}
 	}
 	return nil
 }
@@ -331,6 +342,27 @@ func DefaultStoreDir() string {
 // Save persists a session to disk.
 func (s *FileSessionStore) Save(sess *Session) error {
 	return s.saveQueued(sess, nil, false)
+}
+
+// Update performs an atomic read-modify-write under the registry flock so
+// concurrent host mutations (such as agent stop) are never clobbered.
+func (s *FileSessionStore) Update(id string, fn func(*Session) error) (*Session, error) {
+	unlock, err := s.lockRegistry()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	sess, err := s.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := fn(sess); err != nil {
+		return nil, err
+	}
+	if err := s.save(sess); err != nil {
+		return nil, err
+	}
+	return sess, nil
 }
 
 // save writes the session atomically. Callers must hold the registry lock.
@@ -424,7 +456,7 @@ func (s *FileSessionStore) Get(id string) (*Session, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("session %q not found", id)
+			return nil, fmt.Errorf("%w: %q", ErrSessionNotFound, id)
 		}
 		return nil, fmt.Errorf("failed to read session file: %w", err)
 	}
