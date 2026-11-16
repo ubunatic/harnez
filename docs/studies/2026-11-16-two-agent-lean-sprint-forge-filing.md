@@ -55,3 +55,40 @@ fj version (the wrapper breaks `fj version`). Round 2 asks for read-only canarie
   write requests are for Forgejo user tokens (`internal/forgetoken/api.go:95`).
 - Codeberg swagger: issue PATCH takes `title`, `body`, `state` and `updated_at`; comment POST takes
   `body`. Accepted `state` values and any conditional meaning of `updated_at` are unverified.
+
+## Owner decisions (2026-11-16)
+
+Recorded in ticket 1202: forge issue writes go through harnez's own API client with a
+write-capable stored token, fj stays as fallback for create and comment; forge writes only in a
+host session, never in a subagent; the live check runs on `ubunatic/harnez` and `harnez/taia`.
+
+## Developer M1 (1228, host-qualified fj references) and M2 (1212, empty body and token diagnosis)
+
+Developer `forge-dev`, codex:terra:low. Plan turn 32s, 26.3k new tokens; the plan found that
+`comment` rejects `-F -`, so stdin cases were dropped. Implementation turn 2m55s, 14.1k new tokens.
+
+- Canary (read-only): `fj issue search --repo codeberg.org/ubunatic/harnez` exited 0 with both
+  `~/.cargo/bin/fj` and the `~/.local/bin/fj` wrapper.
+- M1 `00c70238`: one builder `forgetracker.FJIssueCommand` for create and comment; no host flag;
+  `fj issue create --repo <host>/<owner>/<repo> ...` and `fj issue comment <host>/<owner>/<repo>#N ...`.
+  A failed fj call prints the command to run by hand.
+- M2 `135fb06a`: `issues comment` reads the body file and refuses an empty or whitespace-only body
+  before any forge call; "token was already used" and the `keys.rs` panic give a one-line login
+  hint; help text, help golden file and `docs/commands/issue.md` updated.
+- Developer's `make test-q1` exited 0 with no `--- FAIL`; it quoted a `make` line, not a test
+  summary line. Host rerun of the touched packages: `ok internal/forgetracker`, `ok cmd/harnez`
+  (63s).
+- Host check with the installed binary: `harnez issues comment -d . 41 -F <file> --forge --dry-run`
+  prints `dry run: fj issue comment codeberg.org/ubunatic/harnez#41 --body-file "<file>"`; a
+  whitespace-only file gives `Error: issues comment: body file is empty or whitespace-only`.
+
+Host review findings (pre-work for the next milestone):
+
+- No test asserts the "run manually" line for a failed `issues new` or `issues comment`.
+- The two login hints differ (`fj auth login` and `fj -H <host> auth login`); the second fails with
+  a wrapper that already passes `-H`, the first has no host for a plain fj.
+
+## Architect
+
+First dispatch on `--model smart` (claude:opus:low) failed at 08:26: Claude 5-hour limit. Retried
+at 08:45.
