@@ -187,8 +187,8 @@ blocker with its cause.
 
 ## State at the end of the coding part
 
-- Twelve helper sessions were started (one architect dispatch failed on the Claude 5-hour limit);
-  three developers, five one-shot reviewers, one Searcher, one architect.
+- Eleven helper sessions were started: three developers, five one-shot reviewers, one Searcher,
+  one architect, and one architect dispatch that failed on the Claude 5-hour limit.
 - Not done: the live check on `ubunatic/harnez` and `harnez/taia`. It needs the write token,
   which only the owner can create (password and 2FA). The facts it must confirm are listed in
   ticket 1202 under "Open: live check".
