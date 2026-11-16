@@ -1,6 +1,7 @@
 # 1181 — Isolate Harnez session state and constrain installation destinations
 
-**Status**: Open
+**Status**: Closed — M1-M17 and spec consolidation landed on main (12699418); verified with make lint, HTO=0 make test-q1, and live host/taia smoke tests
+**Closed-By**: session 860f57c4-9a65-41fb-bcfb-830108e967d5
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Architecture
