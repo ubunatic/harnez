@@ -193,7 +193,48 @@ Pre-work first: the "Pre-Work / Required Refinements" lists in tickets 1228 and 
 - Edge cases: 404, 412 (detail passed through), 500, a reply that is not JSON.
 - Acceptance: tests pass; no forge write code exists outside this file and `internal/forgetoken`.
 
+### M3 and M4 delivered (2026-11-16)
+
+- Pre-work `a262a1dd`: `FJCreateCommand` and `FJCommentCommand` share `fjRepo`; one `fjLoginHint`
+  for every fj auth branch; exact-message tests for the "run manually" line.
+- M3 (write-token spec and CLI) `97c0ec9c`: `write:` block in `spec/forge_token.yaml` and schema,
+  `Spec.ForWrite`, `forgetoken.LookupWrite`, `--write` on `harnez forge token`. Installed binary:
+  `harnez forge token status` ends with `write token: none (harnez forge token create --write)`.
+- M4 (API writer) `b77e1634`: `forge.Writer` with `CreateIssue`, `EditIssue`, `Comment`,
+  `LabelIDs`; `RemoteIssue.UpdatedAt`.
+- Developer's `make test-q1` exited 0, last result line `ok ubunatic.com/harnez/scripts/gotest-summary`.
+  Host rerun: `ok` for `internal/forgetoken`, `internal/forge`, `internal/forgetracker`, `cmd/harnez`.
+
+### Decision (review of M3 and M4, host and reviewer `forge-rev2`, 2026-11-16)
+
+- The forge's own `message` is shown for every failed write, not only for 412, as one line capped
+  at 200 characters. Reason: a missing token scope or a 404 must be diagnosable from the error.
+  The message is dropped when it contains the token. A message that echoes the body in an escaped
+  form is accepted as a low risk: the body is what the caller just sent.
+- The write token may be used for the reads a write needs (label list, the issue GET before an
+  edit or close). It is never used by `TokenSource.For`.
+
 ### M5 — host-only check; `new` and `comment` over the API with fj fallback
+
+- Pre-Work / Required Refinements (do these first):
+  1. `forge.Writer` errors: keep the cause of a transport error (`%w`; a `url.Error` holds the
+     method and URL, no header). Show the forge `message` for every non-2xx status (see the
+     Decision above). Tests assert the exact status text (`HTTP 403`, not `HTTP `), a 403 whose
+     message is `token does not have at least one of required scope(s): [write:issue]` shown in
+     the error, and a message containing the token dropped.
+  2. `Writer.Comment` returns the new comment's `html_url`.
+  3. `Writer.LabelIDs` reads every page (`limit=50&page=N` until a short page). Tests: 51 labels
+     with the wanted one on page 2; the ids returned for known names; the GET method and path.
+  4. Writer tests: one success with status 200; `CreateIssue` returns `number`, `html_url` and
+     `updated_at` from the reply.
+  5. A nil `Writer.Client` must not mean "no timeout": use the same client and timeout as the
+     read path (`internal/forge/api.go`).
+  6. Token CLI tests through the command, not the helper: `forge token create --write` with the
+     fake client and fake terminal stores in the write store and sends the write scopes;
+     `revoke --write` and `rotate --write` leave the read token's secret and metadata unchanged,
+     and `revoke`/`rotate` without `--write` leave the write token unchanged.
+  7. `harnez forge token` help (short and long text) describes both tokens; `status` prints the
+     write token's name, scopes, store and created date when one is stored (never the secret).
 
 - Write set: `cmd/harnez/issues_forge.go`, `cmd/harnez/issues.go`,
   `internal/forgetracker/write.go` and test, `cmd/harnez/issues_forge_test.go`,
