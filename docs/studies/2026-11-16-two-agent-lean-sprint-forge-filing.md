@@ -92,3 +92,49 @@ Host review findings (pre-work for the next milestone):
 
 First dispatch on `--model smart` (claude:opus:low) failed at 08:26: Claude 5-hour limit. Retried
 at 08:45.
+
+The retry returned the design that ticket 1202 now holds: harnez's own Forgejo writer in
+`internal/forge`, a planner in `internal/forgetracker` that picks API or fj, a host-only check in
+the command layer, and milestones M3 to M8. It stated the limit of the host-only check itself:
+"a guard against accidents, not a security boundary" (a native host subagent, a worker that unsets
+the variables, or a worker calling curl or fj directly are not stopped).
+
+## Developer M3 (write-token spec and CLI) and M4 (Forgejo issue writer)
+
+Developer `forge-dev` (codex:terra:low), one write turn, three commits: `a262a1dd` (pre-work from
+the M1/M2 review), `97c0ec9c` (M3), `b77e1634` (M4). Its `make test-q1` exited 0. The host reran
+the four touched packages (`ok`, `cmd/harnez` about 63s). `forge-dev` was deleted after M4.
+
+Reviewer `forge-rev2` (one-shot, read-only) on `a8cd7d84..b77e1634` produced seven pre-work items
+for M5: transport errors lost their cause, the forge message was shown only for 412,
+`Writer.Comment` returned no URL, `LabelIDs` read one page, no test for a 200 reply or the
+returned fields, a nil client meant no timeout, and the token CLI isolation was tested through a
+helper and not the command.
+
+## Developer M5 (host-only check; `new` and `comment` over the API)
+
+Fresh developer `forge-dev2` (`--model lean`, codex:terra:low).
+
+| Turn | Time | Result |
+|---|---|---|
+| Plan (read-only) | 44s | Plan matched the ticket; context 46.1k of the 100k compaction limit |
+| Write 1 | 1m55s | Stopped with three uncommitted files, no commit, no blocker named |
+| Write 2 | 9m29s | `b2f68047` (pre-work), `624510c8` (M5); `make test-q1` exit 0 |
+
+- Write 2 re-read 6.3M cached tokens for 71.1k new ones (88x, harnez's own check line); the
+  session compacted once during the turn (context 27.9k afterwards).
+- The first write turn ended early without a stated reason. The resume prompt that worked said:
+  both commits in this turn, stop only for a real blocker and name it.
+- Incident: a new worker-denial test did not replace the CLI runner and ran the real
+  `fj issue comment codeberg.org/o/r#7`. fj answered "not found"; the repository does not exist
+  (anonymous API GET: 404), so nothing was written. The handoff had said "never run fj"; the rule
+  did not stop a test from doing it. The fix is structural: a `TestMain` guard (M6 pre-work).
+- Host check that would have caught it: rerunning the packages with fake `fj`, `tea` and `gh`
+  first on `PATH` that log every call. The log stayed empty for the committed tests.
+
+Reviewer `forge-rev3` (one-shot, 1m27s, 67.5k new tokens) on `810c409d..624510c8` found what the
+host's diff review had not: no package-wide guard against unstubbed CLI calls; `new --remote`
+reached gh without the host-only check; `comment` on a GitHub forge did its issue GET before the
+Forgejo-only refusal; dry runs always printed the fj command, also with a stored write token;
+several weak assertions (`HTTP ` prefix only, no "fj never called" on the API path). All became
+pre-work for M6 in the ticket.
