@@ -553,3 +553,34 @@ Pre-work first: the "Pre-Work / Required Refinements" lists in tickets 1228 and 
 4. Docs: `docs/commands/issue.md`, the `harnez issues` help and the Issues rule source say
    when `--forge` is needed (local tracker) and when not (no `issues/` directory, or
    `tracker: none` without local ticket files). Regenerate the copies.
+
+### M9 delivered, one test defect open (2026-11-16)
+
+- Commit `2aee2ddd`, fresh developer `forge-dev4` (codex:terra:med), one turn of 5m20s,
+  120.0k new tokens; its `make test-q1` exited 0. Not pushed; PR 173 ends at `ae3362c3`.
+- It also routed `issues list` through the resolver (the ticket had wrongly listed it as a
+  caller): on a forge tracker `list` now shows the open forge issues. Accepted by the host.
+- Host check with the installed binary in the `taia` checkout, without `--forge`: `show 292
+  --json`, `list`, `find issues` read the forge; `new -F`, `comment`, `close`, `reopen`,
+  `edit` with `--dry-run` print the forge plan after `issues.tracker is none: tickets live on
+  codeberg.org/harnez/taia`. `show 41` in this repository still shows the local ticket.
+- Open defect (pre-work for the next developer turn): `TestTrackerNoneDraftsRoutesForge/
+  issues_new` fails when a `tea` binary is on `PATH` (host run with the fake `fj`, `tea`,
+  `gh`: got `tea issues create ...`, want `fj issue create ...`). The test must stub
+  `issueCLILookPath` and not depend on the tools installed on the machine. After the fix the
+  host owes one full `make test-q1` with the fake CLIs on `PATH`.
+- Not reviewed yet: no one-shot reviewer has read `2aee2ddd`.
+
+### Live check, part 1: `new` and `comment` over fj (host, 2026-11-16, no write token)
+
+- `ubunatic/harnez` with `--forge`: `issues new` printed `filed as #174 at
+  https://codeberg.org/ubunatic/harnez/issues/174; no commit`; `issues comment 174` exited 0
+  and the comment is on the issue (public API read: one comment, `#issuecomment-27898402`).
+- `harnez/taia` with `--forge` (private repository): `issues new` filed #292; `issues comment
+  292` exited 0 and `fj issue view codeberg.org/harnez/taia#292 comments` shows the comment.
+- This confirms on a real forge: `fj issue create --repo <host>/<owner>/<repo>` and
+  `fj issue comment <host>/<owner>/<repo>#N` (ticket 1228), and the body handling of 1212.
+- Gap seen: on the fj path `comment` prints only `commenting on ...` and no line after
+  success. Add `commented on <t>#N` in the next developer turn.
+- Both scratch issues are open. Part 2 (needs the write token): comment over the API, edit,
+  close with a reason, reopen, close on #174 and #292, and one `new` over the API per tracker.
