@@ -25,3 +25,36 @@ In Taia, `harnez issues show 161` resolved Codeberg from `origin`, but `fj issue
 - Prevent lost updates using a revision or expected-body check from the prior read. Refuse conflicting edits; verify whether the forge supports an atomic conditional update and state any limits rather than claiming an atomic guarantee from a non-atomic preflight. Check issue state before editing and report closed or missing issues clearly.
 - Keep the show/create/edit/close experience consistent across tracker types. Verify current forge create `-F` behavior and output rather than assuming it is missing; address any gaps needed for a single-call workflow.
 - Test local and fake-forge paths, including repository resolution, stdin/file bodies, exact payloads, conflicts, closed issues, concurrent updates where supported, and secret-safe errors. Canary the real forge mechanism first.
+
+## Sprint 2026-11-16 (lean sprint 1228, 1212, 1202)
+
+Searcher findings (report: `docs/studies/2026-11-16-two-agent-lean-sprint-forge-filing.md`):
+
+- On a forge tracker `new`, `show` and `comment` exist; `close`, `open` and the other status
+  verbs are local only (`cmd/harnez/issues.go:450`, `:486`); there is no `edit` and no `reopen`.
+- `show` already uses harnez's own API client (`internal/forgetracker/forgetracker.go:88`,
+  `internal/forge/issue.go:25`). Token lookup: stored Forgejo token, then
+  `CODEBERG_TOKEN`/`FORGEJO_TOKEN`, then `gh auth token` (`internal/forge/api.go:43`). The stored
+  token is read-only by design (`harnez forge token`, scopes in `spec/forge_token.yaml`).
+- No harnez code sends an issue or pull-request write to a forge API today.
+- fj v0.7.0 has `issue edit <n> title|body` with positional text only, `issue close`, and no
+  reopen.
+- Codeberg swagger: `PATCH /repos/{owner}/{repo}/issues/{index}` takes `title`, `body`, `state`
+  and `updated_at`; `POST .../issues` takes `title` (required) and `body`;
+  `POST .../issues/{index}/comments` takes `body`. Accepted `state` values and any conditional
+  meaning of `updated_at` are unverified.
+
+## Decision
+
+Owner decisions, 2026-11-16 (asked by the host in the sprint session):
+
+- Forge issue writes (create, edit, comment, close, reopen) go through harnez's own Forgejo API
+  client with a write-capable stored token. `harnez forge token` gets an issue-write scope; the
+  owner creates or rotates that token once. fj stays as the fallback for create and comment when
+  no write token is stored.
+- Forge writes are allowed only in a host session, never in a subagent.
+- The live check runs on both `ubunatic/harnez` and `harnez/taia` on Codeberg, because the two
+  repositories use different trackers (`harnez` and `none`). One scratch issue each, closed at
+  the end.
+
+Milestones for this ticket follow from the architect's design (next section, to be added).
