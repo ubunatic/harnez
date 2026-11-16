@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Session ownership and trusted promotion contract",
+  "type": "object",
+  "required": ["version", "ownership", "runner_operations", "host_only_operations", "promoter"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"const": 1},
+    "ownership": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["resource", "class"], "additionalProperties": false, "properties": {"resource": {"type": "string", "minLength": 1}, "class": {"enum": ["runner", "broker", "shared"]}}}},
+    "runner_operations": {"type": "array", "uniqueItems": true, "items": {"enum": ["telemetry_ingest", "telemetry_replay", "usage_read", "own_register", "own_update", "own_query"]}},
+    "host_only_operations": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "promoter": {"type": "object", "additionalProperties": false, "required": ["binary_roots", "man_roots", "binary", "alias", "alias_target", "man_manifest", "promotion"], "properties": {
+      "binary_roots": {"const": ["GOBIN", "GOPATH_bin"]},
+      "man_roots": {"const": ["XDG_DATA_HOME_man_man1", "HOME_local_share_man_man1"]},
+      "binary": {"const": "harnez"}, "alias": {"const": "⚙"}, "alias_target": {"const": "harnez"},
+      "man_manifest": {"const": "exact_generated_manifest"}, "promotion": {"const": "pinned_nofollow_atomic_per_file"}
+    }}
+  }
+}

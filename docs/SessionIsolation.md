@@ -39,3 +39,34 @@ before invocation. A real
 staged binary should also be checked for generated man pages. Taia's private directory creation and
 Landlock policy are external assumptions; Harnez cannot prove cross-runner
 denial from these tests.
+
+## Planned ownership contract (M8–M17)
+
+The staging and registry behavior above describes the live M1–M6 implementation.
+The following is the approved target, not a claim that M8–M17 have landed. The
+machine-readable contract is `spec/session_isolation.yaml`.
+
+| Owner | Paths and operations |
+| --- | --- |
+| Runner, under `$TAIA_SESSION_DIR` | Session locks and history; exec process records; local usage caches (including live-fetch cache), fetch durations, killlog and passive debug; AGY meter CA, key, bundle, `usage.jsonl` and backoff; `modelblock` and `tier_overrides` overlays; telemetry spool; runner debug/logging, feedback, bench and legacyarchive writes. |
+| Collector/broker | Telemetry ingestion and bounded spool replay; canonical usage snapshots and history; own-session registry register, update and query. A trusted launcher passes an inherited connected socketpair/FD bound to the launch identity. The runner channel excludes `/shutdown`, `merge_legacy`, arbitrary paths or PIDs, and cross-session stop/resume. |
+| Shared, host-owned or coordinated | `~/.harnez/agents` remains host-owned for discovery and resume. Global `modelblock` and `tier_overrides` are runner read-only, with writes host-only. Runtime shims in `internal/subagent/agy.go` are provisioned by the host. Repository `.harnez` quota and checkout state remain shared coordination. |
+
+The broker must reject forged session identities and cannot rely on same-UID
+socket modes or readable bearer tokens for authentication. Runner policy changes
+apply only to overlays; no runner RPC mutates global policy.
+
+A sandbox stages privately with `scripts/stage-install.sh`. A trusted host
+promoter derives its approved roots only from trusted host configuration and
+defaults: `GOBIN` or `GOPATH/bin` for `harnez` and a host-generated relative
+`⚙ -> harnez` symlink, and `XDG_DATA_HOME/man/man1` or
+`~/.local/share/man/man1` for the exact man-page manifest. It copies and verifies
+staged artifacts as immutable host-owned temporary files, pins destination
+directories with `O_DIRECTORY|O_NOFOLLOW`, and promotes each approved file
+atomically. Atomicity is per file, not across the whole set. Runner-supplied
+arbitrary or checkout destinations are not approved.
+
+These controls do not provide read confidentiality when `/` is readable under
+Taia, shared-checkout isolation, a same-UID filesystem boundary, or trust in
+arbitrary code. Taia's external enforcement and supported host environment remain
+prerequisites for cross-runner denial claims.

@@ -109,3 +109,10 @@ Assessed read-only by `1181-architect` (`codex:sol:med`) on `2026-11-16`:
 - **M15 — Connect installation front doors.** Files: `scripts/stage-install{.sh,-test.sh}`, `Makefile`, `cmd/harnez/{install,man}.go`, `internal/selfinstall/install.go`, installation docs. Wire staging build/man generation -> host promoter, bypassing `goself` shared side effects in constrained/runner mode.
 - **M16 — Establish the bwrap prerequisite/profile contract.** Files: `internal/exec/exec.go` + tests, `docs/SessionIsolation.md`, issue 1181 evidence. Canary-check `Failed to make / slave: Operation not permitted`, `uid map: Permission denied`, `/tmp` masking of `$TAIA_SESSION_DIR`, and `../taia` `--allow-bwrap` boundary; fail closed cleanly on unsupported hosts.
 - **M17 — Run integrated acceptance and migration checks.** Files: Linux denial harness/tests, `scripts/stage-install-test.sh`, docs, issue 1181. Exercise concurrent normal operations + filesystem/IPC negative tests under live Taia Landlock enforcement on a supported host.
+
+## Milestone 7 — Ownership contract
+
+The ownership matrix, A1–A4 trust boundaries, promoter destinations and explicit
+non-claims are frozen in `docs/SessionIsolation.md` and the embedded
+`spec/session_isolation.yaml` with its schema and contract tests. This describes
+the M8–M17 target; it does not implement those milestones. Ticket remains open.

@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=schemas/session_isolation.schema.json
+version: 1
+ownership:
+  - {resource: session_locks_history, class: runner}
+  - {resource: exec_process_records, class: runner}
+  - {resource: local_usage_caches_durations_killlog_passive_debug, class: runner}
+  - {resource: agy_ca_key_bundle_usage_backoff, class: runner}
+  - {resource: policy_overlays, class: runner}
+  - {resource: telemetry_spool, class: runner}
+  - {resource: debug_feedback_bench_legacyarchive_writes, class: runner}
+  - {resource: telemetry_ingestion_bounded_replay, class: broker}
+  - {resource: canonical_usage_snapshots_history_livefetchcache, class: broker}
+  - {resource: own_session_registry, class: broker}
+  - {resource: host_agent_discovery_resume, class: shared}
+  - {resource: global_policy_read_only_to_runner, class: shared}
+  - {resource: host_provisioned_runtime_shims, class: shared}
+  - {resource: repo_quota_checkout_coordination, class: shared}
+runner_operations: [telemetry_ingest, telemetry_replay, usage_read, own_register, own_update, own_query]
+host_only_operations: [/shutdown, merge_legacy, arbitrary_paths, arbitrary_pids, cross_session_stop, cross_session_resume, global_policy_write]
+promoter:
+  binary_roots: [GOBIN, GOPATH_bin]
+  man_roots: [XDG_DATA_HOME_man_man1, HOME_local_share_man_man1]
+  binary: harnez
+  alias: ⚙
+  alias_target: harnez
+  man_manifest: exact_generated_manifest
+  promotion: pinned_nofollow_atomic_per_file
