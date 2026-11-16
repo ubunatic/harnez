@@ -153,8 +153,26 @@ echo "RUNNER_ISOLATION_OK"
 
 func verifyBwrapGrant(t *testing.T, fx liveIsolationFixture) {
 	t.Helper()
+	hostTmpDir, err := os.MkdirTemp("/tmp", "harnez-acc-tmp-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(hostTmpDir) })
+	hostTmpSentinel := filepath.Join(hostTmpDir, "host-tmp-sentinel")
+	if err := os.WriteFile(hostTmpSentinel, []byte("host"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	bwrapScript := `set -euo pipefail
-HARNEZ_QUOTA_1=1 "` + fx.builtBin + `" exec -- sh -c 'test -d "$TAIA_SESSION_DIR" && printf bwrap > "$TAIA_SESSION_DIR/bwrap-ok.txt" && ! touch "$HOME/bwrap-ro-denied" 2>/dev/null'
+test -e "` + hostTmpSentinel + `"
+HARNEZ_QUOTA_1=1 "` + fx.builtBin + `" exec -- sh -c '
+  test "${HARNEZ_SANDBOX:-}" = "quota1"
+  grep -q " /tmp tmpfs " /proc/self/mountinfo
+  test ! -e "` + hostTmpSentinel + `"
+  test -d "$TAIA_SESSION_DIR"
+  printf bwrap > "$TAIA_SESSION_DIR/bwrap-ok.txt"
+  ! touch "$HOME/bwrap-ro-denied" 2>/dev/null
+'
+grep -qx bwrap "$TAIA_SESSION_DIR/bwrap-ok.txt"
 echo "BWRAP_WITH_GRANT_OK"
 `
 	mockFile := writeMockBashSession(t, "mock-bwrap.yaml", "verify bwrap", bwrapScript)
@@ -212,5 +230,25 @@ func verifyStagedHostPromotion(t *testing.T, fx liveIsolationFixture) {
 	}
 	if _, err := os.Stat(res.BinaryPath); err != nil {
 		t.Fatalf("promoted binary missing: %v", err)
+	}
+	promotedBytes, err := os.ReadFile(res.BinaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	promotedSum := sha256.Sum256(promotedBytes)
+	if hex.EncodeToString(promotedSum[:]) != digestHex {
+		t.Fatalf("promoted binary SHA-256 mismatch")
+	}
+	if target, err := os.Readlink(filepath.Join(fx.gobin, "⚙")); err != nil || target != "harnez" {
+		t.Fatalf("symlink ⚙ = (%q, %v), want harnez", target, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(fx.gobin, "sentinel")); err != nil || string(data) != "host-sentinel" {
+		t.Fatalf("sentinel in GOBIN modified or removed: (%q, %v)", string(data), err)
+	}
+	manDir := filepath.Join(fx.home, ".local", "share", "man", "man1")
+	for _, name := range manifest {
+		if _, err := os.Stat(filepath.Join(manDir, name)); err != nil {
+			t.Fatalf("promoted man page %s missing: %v", name, err)
+		}
 	}
 }

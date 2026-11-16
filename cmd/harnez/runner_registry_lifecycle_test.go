@@ -88,7 +88,7 @@ func TestTelemetryCollectorServiceRegistryOwnSessionAndLegacyRejection(t *testin
 		cancel2()
 		_ = runnerEnd2.Close()
 		if err := <-done2; err != nil {
-			_ = err
+			t.Logf("cleanup broker stop: %v", err)
 		}
 	})
 	if err := os.Mkdir(runnerRoot2, 0o700); err != nil {

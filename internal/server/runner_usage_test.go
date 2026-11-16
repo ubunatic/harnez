@@ -78,7 +78,7 @@ func TestRunnerUsageQueryRelayValidationAndFailClosed(t *testing.T) {
 		cancel()
 		_ = runnerEnd.Close()
 		if err := <-done; err != nil {
-			_ = err
+			t.Logf("cleanup broker stop: %v", err)
 		}
 	})
 	t.Setenv(cfg.RunnerChannel.FDEnv, strconv.Itoa(int(runnerEnd.Fd())))

@@ -96,7 +96,7 @@ func TestFileSessionStoreCreateStampsLaunchIDAndRunnerRegistryClient(t *testing.
 		cancel()
 		_ = runnerEnd.Close()
 		if err := <-done; err != nil {
-			_ = err
+			t.Logf("cleanup broker stop: %v", err)
 		}
 	})
 

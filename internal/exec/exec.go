@@ -35,6 +35,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -286,9 +287,15 @@ func quota1SandboxCommand(args []string, cwd string) (string, []string, bool, er
 		}
 		sessionDir = validated
 	}
+	if runtime.GOOS != "linux" {
+		return "", nil, false, fmt.Errorf("quota-1 bwrap sandbox requires Linux (found %s)", runtime.GOOS)
+	}
 	bwrap, err := exec.LookPath("bwrap")
 	if err != nil {
-		return "", args, false, nil
+		if sessionDir != "" {
+			return "", nil, false, fmt.Errorf("bwrap prerequisite missing from PATH under Taia confinement (re-launch taia with --allow-bwrap after installing bwrap): %w", err)
+		}
+		return "", nil, false, fmt.Errorf("bwrap prerequisite missing from PATH (bubblewrap is required for Quota-1 sandboxing): %w", err)
 	}
 	var goCache, goModCache string
 	if goPath, err := exec.LookPath("go"); err == nil {
@@ -647,18 +654,12 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	quota1Sandboxed := false
 	if quota1Active && !opts.DisableSandbox {
 		cwd, _ := os.Getwd()
-		bwrap, wrappedArgs, ok, sbErr := quota1SandboxCommand(args, cwd)
+		bwrap, wrappedArgs, _, sbErr := quota1SandboxCommand(args, cwd)
 		if sbErr != nil {
 			return 1, sbErr
 		}
-		if ok {
-			c = exec.Command(bwrap, wrappedArgs...)
-			quota1Sandboxed = true
-			// Keep the wrapped command in the process group recorded by harnez.
-			c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-		} else {
-			fmt.Fprintln(errOut, "harnez exec: warning: bwrap not found; running Quota-1 command unsandboxed")
-		}
+		c = exec.Command(bwrap, wrappedArgs...)
+		quota1Sandboxed = true
 	}
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Env = append(os.Environ(), execTimeoutEffectiveEnv+"="+timeout.String())

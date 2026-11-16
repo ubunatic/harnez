@@ -79,8 +79,9 @@ promotion.
 
 - **Linux Quota-1 sandbox (`internal/exec/bwrap_contract.go`)**: `harnez exec`
   under Quota-1 wraps commands in `bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp`.
+  It fails closed on non-Linux hosts or when `bwrap` is missing from `PATH`.
   When `$TAIA_SESSION_DIR` is set, it validates the session directory (clean
-  absolute `0700`, non-symlink) and appends `--bind $TAIA_SESSION_DIR
+  absolute `0700`, UID-owned, non-symlink) and appends `--bind $TAIA_SESSION_DIR
   $TAIA_SESSION_DIR` *after* `--tmpfs /tmp` and `--tmpfs $XDG_RUNTIME_DIR` so
   mount overlays never mask the runner's session directory.
 - **Taia `--allow-bwrap` boundary & host prerequisites**: `ProbeBwrapSupport`

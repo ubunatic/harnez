@@ -8,13 +8,23 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 )
+
+func hasBwrapDiagLine(lower string) bool {
+	for _, line := range strings.Split(lower, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "bwrap:") {
+			return true
+		}
+	}
+	return false
+}
 
 // DiagnoseBwrapError translates bubblewrap namespace and mount-propagation
 // errors into actionable host or Taia-profile prerequisite diagnostics.
 func DiagnoseBwrapError(output string, taiaConfined bool) string {
 	lower := strings.ToLower(output)
-	if !strings.Contains(lower, "bwrap:") &&
+	if !hasBwrapDiagLine(lower) &&
 		!strings.Contains(lower, "setting up uid map") &&
 		!strings.Contains(lower, "failed to make / slave") &&
 		!strings.Contains(lower, "create a new namespace") &&
@@ -80,8 +90,13 @@ func validateBwrapSessionBind(sessDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("inspect TAIA_SESSION_DIR before entering bwrap: %w", err)
 	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 {
+	if !info.IsDir() || info.Mode().Perm() != 0o700 {
 		return "", fmt.Errorf("TAIA_SESSION_DIR must be a real directory with mode 0700 before entering bwrap")
+	}
+	// bwrap --bind takes a path rather than a dirfd, so validate uid/mode and
+	// symlink-free resolution immediately before spawn to bound swap risk.
+	if stat, ok := info.Sys().(*syscall.Stat_t); !ok || int(stat.Uid) != os.Geteuid() {
+		return "", fmt.Errorf("TAIA_SESSION_DIR must be owned by current user before entering bwrap")
 	}
 	resolved, err := filepath.EvalSymlinks(sessDir)
 	if err != nil || resolved != sessDir {

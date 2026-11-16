@@ -41,6 +41,12 @@ func TestDiagnoseBwrapErrorClassifiesPrerequisites(t *testing.T) {
 			confined: false,
 			want:     nil,
 		},
+		{
+			name:     "unrelated mid-line mention",
+			output:   "FAIL: assertion mentioned bwrap: without startup prefix",
+			confined: true,
+			want:     nil,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -58,7 +64,20 @@ func TestDiagnoseBwrapErrorClassifiesPrerequisites(t *testing.T) {
 }
 
 func TestQuota1SandboxBindsSessionDirAfterTmpfsMask(t *testing.T) {
-	sessDir := filepath.Join(t.TempDir(), "sess")
+	cwd, err := os.Getwd()
+	if err != nil || cwd == "/tmp" || strings.HasPrefix(cwd, "/tmp/") {
+		t.Fatalf("expected package cwd outside /tmp, got (%q, %v)", cwd, err)
+	}
+	tmpHostRoot, err := os.MkdirTemp("/tmp", "harnez-bwrap-tmp-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tmpHostRoot) })
+	maskedCanary := filepath.Join(tmpHostRoot, "masked-canary")
+	if err := os.WriteFile(maskedCanary, []byte("host"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sessDir := filepath.Join(tmpHostRoot, "sess")
 	if err := os.Mkdir(sessDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +86,8 @@ func TestQuota1SandboxBindsSessionDirAfterTmpfsMask(t *testing.T) {
 	if err != nil {
 		t.Skip("bwrap not installed")
 	}
-	_, wrapped, ok, err := quota1SandboxCommand([]string{"sh", "-c", "printf ok > \"$TAIA_SESSION_DIR/probe.txt\""}, "/tmp")
+	script := `test ! -e "$1" && printf ok > "$TAIA_SESSION_DIR/probe.txt"`
+	_, wrapped, ok, err := quota1SandboxCommand([]string{"sh", "-c", script, "sh", maskedCanary}, cwd)
 	if err != nil || !ok {
 		t.Fatalf("quota1SandboxCommand = (%v, %v)", ok, err)
 	}
@@ -90,7 +110,7 @@ func TestQuota1SandboxBindsSessionDirAfterTmpfsMask(t *testing.T) {
 	}
 	cmd := exec.Command(bwrap, wrapped...)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("bwrap write to bound TAIA_SESSION_DIR under /tmp failed: %v (%s)", err, string(out))
+		t.Fatalf("bwrap write to bound TAIA_SESSION_DIR under masked /tmp failed: %v (%s)", err, string(out))
 	}
 	got, err := os.ReadFile(filepath.Join(sessDir, "probe.txt"))
 	if err != nil || string(got) != "ok" {
@@ -119,8 +139,37 @@ func TestQuota1SandboxRejectsMalformedSessionDir(t *testing.T) {
 		}
 		return os.Getenv(k)
 	}
-	if code, err := runExecWrapper([]string{"true"}, opts, strings.NewReader(""), ioDiscard{}, &errOut); err == nil || code != 1 {
-		t.Fatalf("runExecWrapper with malformed TAIA_SESSION_DIR = (%d, %v), want non-zero fail closed", code, err)
+	if code, err := runExecWrapper([]string{"true"}, opts, strings.NewReader(""), ioDiscard{}, &errOut); err == nil || code != 1 || !strings.Contains(err.Error(), "TAIA_SESSION_DIR") {
+		t.Fatalf("runExecWrapper with malformed TAIA_SESSION_DIR = (%d, %v), want TAIA_SESSION_DIR fail-closed error", code, err)
+	}
+}
+
+func TestQuota1SandboxFailsClosedWithoutBwrap(t *testing.T) {
+	sessDir := filepath.Join(t.TempDir(), "sess")
+	if err := os.Mkdir(sessDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	canary := filepath.Join(t.TempDir(), "unsandboxed-ran")
+	t.Setenv("TAIA_SESSION_DIR", sessDir)
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	opts := testExecOptions(t)
+	opts.DisableSandbox = false
+	opts.Quota1Dir = t.TempDir()
+	opts.Getenv = func(k string) string {
+		if k == quota1Env {
+			return "1"
+		}
+		return os.Getenv(k)
+	}
+	var errOut bytes.Buffer
+	code, err := runExecWrapper([]string{"sh", "-c", "touch " + canary}, opts, strings.NewReader(""), ioDiscard{}, &errOut)
+	if code != 1 || err == nil || !strings.Contains(err.Error(), "bwrap") {
+		t.Fatalf("runExecWrapper without bwrap = (%d, %v), want fail-closed bwrap error", code, err)
+	}
+	if _, statErr := os.Stat(canary); !os.IsNotExist(statErr) {
+		t.Fatalf("unsandboxed command executed despite missing bwrap: stat=%v", statErr)
 	}
 }
 
