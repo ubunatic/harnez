@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -353,6 +354,9 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 	var resumeDryRun bool
 	var resumeJulesID string
 	resume := &cobra.Command{Use: "resume [session] [prompt...]", Short: "Resume an existing agent session", Long: "Resume an existing agent session.\n\n" + sessionBackgroundHelp, Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume <id> \"next step\"\n  harnez agent resume -i --name w\n  harnez agent resume --model jules --id <jules-session-id> wait", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+		if os.Getenv("TAIA_SESSION_DIR") != "" {
+			return fmt.Errorf("agent resume is a host-only operation in runner mode")
+		}
 		planFirst, err := parsePlanSpec(ac.planSpec)
 		if err != nil {
 			return err

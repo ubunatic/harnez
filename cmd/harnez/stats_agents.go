@@ -100,6 +100,9 @@ type agentModelTotals struct {
 }
 
 func runAgentStats(w io.Writer, opts agentStatsOptions) error {
+	if os.Getenv("TAIA_SESSION_DIR") != "" && (opts.StoreDir == "" || filepath.Clean(opts.StoreDir) == filepath.Clean(subagent.DefaultStoreDir()) || opts.DBPath == "") {
+		return fmt.Errorf("stats --agents is a host-only operation in runner mode")
+	}
 	if opts.Days <= 0 {
 		return fmt.Errorf("stats --agents: --days must be positive")
 	}

@@ -218,6 +218,7 @@ func runInteractivePTY(ctx context.Context, command string, args []string, opts 
 		return fmt.Errorf("%s interactive session: %w", command, err)
 	}
 	broker.ReleaseChildFD()
+	broker.BindChildPID(cmd.Process.Pid)
 	defer ptmx.Close()
 	if opts.Started != nil {
 		if err := opts.Started(cmd.Process.Pid); err != nil {

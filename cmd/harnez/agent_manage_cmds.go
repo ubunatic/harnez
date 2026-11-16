@@ -260,6 +260,9 @@ func (ac *agentCLI) compactCmd() *cobra.Command {
 
 func (ac *agentCLI) stopCmd() *cobra.Command {
 	stop := &cobra.Command{Use: "stop", Short: "Stop an agent session", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
+		if os.Getenv("TAIA_SESSION_DIR") != "" {
+			return fmt.Errorf("agent stop is a host-only operation in runner mode")
+		}
 		s, e := ac.store()
 		if e != nil {
 			return e

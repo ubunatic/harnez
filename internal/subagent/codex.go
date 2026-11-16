@@ -817,6 +817,7 @@ func startProcess(ctx context.Context, dir, name string, args ...string) (io.Rea
 		return nil, nil, err
 	}
 	broker.ReleaseChildFD()
+	broker.BindChildPID(c.Process.Pid)
 	if err := observeProcess(ctx, c); err != nil {
 		_ = KillGroup(c.Process.Pid, syscall.SIGKILL)
 		_ = c.Wait()

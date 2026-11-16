@@ -17,6 +17,7 @@ type RunnerBrokerHandle struct {
 	runnerFile *os.File
 	cancel     context.CancelFunc
 	done       <-chan error
+	binding    *RunnerLaunchBinding
 }
 
 // ReleaseChildFD closes the parent process's copy of the child FD after cmd.Start.
@@ -26,6 +27,24 @@ func (h *RunnerBrokerHandle) ReleaseChildFD() {
 	}
 	_ = h.runnerFile.Close()
 	h.runnerFile = nil
+}
+
+// BindChildPID records the launched child PID and process starttime on the
+// host-side broker binding. Call immediately after cmd.Start succeeds.
+func (h *RunnerBrokerHandle) BindChildPID(pid int) {
+	if h == nil || h.binding == nil {
+		return
+	}
+	h.binding.BindChildPID(pid)
+}
+
+// LaunchID returns the host-generated launch identity attached to this broker.
+func (h *RunnerBrokerHandle) LaunchID() string {
+	if h == nil || h.binding == nil {
+		return ""
+	}
+	id, _, _, _ := h.binding.snapshot()
+	return id
 }
 
 // Close releases any remaining parent FD copy and stops the host relay cleanly.
@@ -76,14 +95,21 @@ func PrepareCmdRunnerBroker(ctx context.Context, cmd *exec.Cmd) (*RunnerBrokerHa
 		cmd.Env = setEnvKey(baseEnv, cfg.RunnerChannel.FDEnv, "", false)
 		return nil, err
 	}
+	binding, err := NewRunnerLaunchBinding("")
+	if err != nil {
+		_ = hostEnd.Close()
+		_ = runnerEnd.Close()
+		cmd.Env = setEnvKey(baseEnv, cfg.RunnerChannel.FDEnv, "", false)
+		return nil, err
+	}
 	relayCtx, cancel := context.WithCancel(ctx)
 	done := make(chan error, 1)
-	go func() { done <- RelayRunnerBroker(relayCtx, hostEnd, hostSocket, cfg) }()
+	go func() { done <- RelayRunnerBrokerWithBinding(relayCtx, hostEnd, hostSocket, cfg, binding) }()
 
 	fdNum := 3 + len(cmd.ExtraFiles)
 	cmd.ExtraFiles = append(cmd.ExtraFiles, runnerEnd)
 	cmd.Env = setEnvKey(baseEnv, cfg.RunnerChannel.FDEnv, strconv.Itoa(fdNum), true)
-	return &RunnerBrokerHandle{runnerFile: runnerEnd, cancel: cancel, done: done}, nil
+	return &RunnerBrokerHandle{runnerFile: runnerEnd, cancel: cancel, done: done, binding: binding}, nil
 }
 
 func prepareForwardedRunnerBroker(cfg Config, cmd *exec.Cmd, baseEnv []string) (*RunnerBrokerHandle, error) {

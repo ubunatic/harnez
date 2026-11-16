@@ -20,6 +20,7 @@ import (
 type telemetryCollectorService struct {
 	config       server.Config
 	path         string
+	registryDir  string
 	interval     time.Duration
 	warnMu       sync.Mutex
 	warnedRecord map[string]time.Time
@@ -28,6 +29,7 @@ type telemetryCollectorService struct {
 func (s *telemetryCollectorService) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+s.config.TelemetryPath, s.handleRecord)
 	mux.HandleFunc("POST "+s.config.UsageQueryPath, s.handleUsageQuery)
+	mux.HandleFunc("POST "+s.config.RegistryPath, s.handleRegistry)
 }
 
 func (s *telemetryCollectorService) handleRecord(w http.ResponseWriter, r *http.Request) {

@@ -40,6 +40,9 @@ func currentHostSession() string {
 // empty parent and agents of other hosts (hand-off); harnez leaf workers stay
 // bound to their lineage. Bulk operations keep using subagent.CanManage.
 func canManageTarget(callerParentID string, target *subagent.Session) bool {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return false
+	}
 	if os.Getenv(agentSessionEnv) == "" || interactiveCodexHost() != "" {
 		return true
 	}

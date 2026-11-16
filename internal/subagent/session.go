@@ -1,6 +1,8 @@
 package subagent
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +19,7 @@ var ErrSessionNameInUse = errors.New("session name or ID is already in use")
 // Session represents an active subagent session with metadata and telemetry.
 type Session struct {
 	ID                string `json:"id"`
+	LaunchID          string `json:"launch_id,omitempty"`
 	ProviderSessionID string `json:"provider_session_id,omitempty"`
 	Name              string `json:"name"`
 	StartPrompt       string `json:"start_prompt,omitempty"`
@@ -274,7 +277,22 @@ type FileSessionStore struct {
 }
 
 // NewSessionStore creates a new file-based session store at the given directory.
+// When confined under $TAIA_SESSION_DIR, the shared host store (~/.harnez/agents)
+// is host-owned and rejected cleanly.
 func NewSessionStore(dir string) (*FileSessionStore, error) {
+	if err := guardHostSessionStoreAccess(dir); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create session store directory: %w", err)
+	}
+	return &FileSessionStore{dir: dir}, nil
+}
+
+// NewHostSessionStoreDirect opens dir directly on the host without checking
+// TAIA_SESSION_DIR, used by the trusted host collector handler so single-process
+// tests sharing one process with TAIA_SESSION_DIR do not self-block.
+func NewHostSessionStoreDirect(dir string) (*FileSessionStore, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create session store directory: %w", err)
 	}
@@ -284,7 +302,21 @@ func NewSessionStore(dir string) (*FileSessionStore, error) {
 // OpenSessionStore opens an existing store without creating directories. It is
 // intended for read-only callers such as shell completion.
 func OpenSessionStore(dir string) (*FileSessionStore, error) {
+	if err := guardHostSessionStoreAccess(dir); err != nil {
+		return nil, err
+	}
 	return &FileSessionStore{dir: dir}, nil
+}
+
+func guardHostSessionStoreAccess(dir string) error {
+	if os.Getenv("TAIA_SESSION_DIR") == "" {
+		return nil
+	}
+	def := DefaultStoreDir()
+	if strings.TrimSpace(dir) == "" || filepath.Clean(dir) == filepath.Clean(def) {
+		return fmt.Errorf("host session registry %s is host-owned in runner mode; use launch-bound broker RPC for own session", def)
+	}
+	return nil
 }
 
 // DefaultStoreDir returns the default session store directory.
@@ -336,6 +368,13 @@ func (s *FileSessionStore) save(sess *Session) error {
 func (s *FileSessionStore) Create(sess *Session) error {
 	if sess.ID == "" || sess.Name == "" {
 		return fmt.Errorf("session must have an ID and name")
+	}
+	if strings.TrimSpace(sess.LaunchID) == "" {
+		var raw [16]byte
+		if _, err := rand.Read(raw[:]); err != nil {
+			return fmt.Errorf("generate launch identity: %w", err)
+		}
+		sess.LaunchID = hex.EncodeToString(raw[:])
 	}
 	lock, err := os.OpenFile(filepath.Join(s.dir, ".registry.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {

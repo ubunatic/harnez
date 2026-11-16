@@ -913,6 +913,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 // runResume runs one more turn on an existing session.
 // runResume runs one resume turn under ctx; see runStart for why ctx is explicit.
 func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeRequest) error {
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		return fmt.Errorf("agent resume is a host-only operation in runner mode")
+	}
 	quotaTurnStarted := time.Now().Add(-time.Hour)
 
 	sessionName := req.Name

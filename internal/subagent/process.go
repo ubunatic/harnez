@@ -78,6 +78,7 @@ func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte,
 		return nil, err
 	}
 	broker.ReleaseChildFD()
+	broker.BindChildPID(cmd.Process.Pid)
 	if err := observeProcess(ctx, cmd); err != nil {
 		_ = KillGroup(cmd.Process.Pid, syscall.SIGKILL)
 		_ = cmd.Wait()

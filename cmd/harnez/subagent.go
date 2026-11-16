@@ -74,6 +74,7 @@ Explicit full, lite, or vision modes override provider selection.`,
 				return err
 			}
 			broker.ReleaseChildFD()
+			broker.BindChildPID(child.Process.Pid)
 			err = child.Wait()
 			_ = broker.Close()
 			if err != nil {

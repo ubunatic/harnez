@@ -686,6 +686,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		return 1, fmt.Errorf("exec: run %v: %w", args, err)
 	}
 	broker.ReleaseChildFD()
+	broker.BindChildPID(c.Process.Pid)
 	processRecordDir := opts.ProcessRecordDir
 	if processRecordDir == "" {
 		var err error

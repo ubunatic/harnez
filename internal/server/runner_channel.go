@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -383,8 +381,10 @@ func fitsReplayWireCap(cfg Config, current []TelemetryRecord, next TelemetryReco
 
 // RunnerBrokerHandlers supplies host-side callbacks for allowlisted runner RPCs.
 type RunnerBrokerHandlers struct {
-	Ingest     func(context.Context, TelemetryRecord) error
-	UsageQuery func(context.Context, RunnerUsageQuery) ([]byte, error)
+	Ingest        func(context.Context, TelemetryRecord) error
+	UsageQuery    func(context.Context, RunnerUsageQuery) ([]byte, error)
+	Registry      func(context.Context, RunnerRegistryRelayPayload) ([]byte, error)
+	LaunchBinding *RunnerLaunchBinding
 }
 
 // ServeRunnerBroker listens on the host end of the AF_UNIX SOCK_SEQPACKET broker
@@ -416,9 +416,22 @@ func ServeRunnerBrokerWith(ctx context.Context, hostEnd *os.File, cfg Config, ha
 // RelayRunnerBroker bridges the host end of the runner broker socketpair to
 // the host collector Unix socket without exposing host-only admin operations.
 func RelayRunnerBroker(ctx context.Context, hostEnd *os.File, hostSocket string, cfg Config) error {
+	binding, err := NewRunnerLaunchBinding("")
+	if err != nil {
+		_ = hostEnd.Close()
+		return err
+	}
+	return RelayRunnerBrokerWithBinding(ctx, hostEnd, hostSocket, cfg, binding)
+}
+
+// RelayRunnerBrokerWithBinding bridges hostEnd to hostSocket using an explicit
+// launch-bound identity for registry authorization.
+func RelayRunnerBrokerWithBinding(ctx context.Context, hostEnd *os.File, hostSocket string, cfg Config, binding *RunnerLaunchBinding) error {
 	return ServeRunnerBrokerWith(ctx, hostEnd, cfg, RunnerBrokerHandlers{
-		Ingest:     hostSocketIngestor(hostSocket, cfg),
-		UsageQuery: hostSocketUsageQuery(hostSocket, cfg),
+		Ingest:        hostSocketIngestor(hostSocket, cfg),
+		UsageQuery:    hostSocketUsageQuery(hostSocket, cfg),
+		Registry:      hostSocketRegistry(hostSocket, cfg),
+		LaunchBinding: binding,
 	})
 }
 
@@ -535,7 +548,7 @@ func ServeRunnerConnWith(ctx context.Context, conn net.Conn, cfg Config, handler
 	if conn == nil {
 		return fmt.Errorf("serve runner conn: nil connection")
 	}
-	if handlers.Ingest == nil && handlers.UsageQuery == nil {
+	if handlers.Ingest == nil && handlers.UsageQuery == nil && handlers.Registry == nil {
 		return fmt.Errorf("serve runner conn: no handlers registered")
 	}
 	done := make(chan struct{})
@@ -600,6 +613,8 @@ func handleRunnerFrame(ctx context.Context, cfg Config, frame []byte, handlers R
 		return handleRunnerReplay(ctx, cfg, req.Payload, handlers.Ingest)
 	case RunnerOpUsageRead:
 		return handleRunnerUsageRead(ctx, cfg, req.Payload, handlers.UsageQuery)
+	case RunnerOpOwnRegister, RunnerOpOwnUpdate, RunnerOpOwnQuery:
+		return handleRunnerRegistry(ctx, cfg, req.Op, req.Payload, handlers.LaunchBinding, handlers.Registry)
 	default:
 		return RunnerResponse{Status: http.StatusForbidden, Error: ErrRunnerForbidden.Error()}
 	}
@@ -696,71 +711,6 @@ func parseAndValidateRunnerFD(cfg Config) (int, error) {
 	}
 	syscall.CloseOnExec(fd)
 	return fd, nil
-}
-
-func validateConnectedUnixSocket(fd, wantType int) error {
-	domain, err := syscall.GetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_DOMAIN)
-	if err != nil || domain != syscall.AF_UNIX {
-		return fmt.Errorf("not an AF_UNIX socket")
-	}
-	sockType, err := syscall.GetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_TYPE)
-	if err != nil || sockType != wantType {
-		return fmt.Errorf("unexpected socket type")
-	}
-	if _, err := syscall.Getpeername(fd); err != nil {
-		return fmt.Errorf("not connected: %w", err)
-	}
-	return nil
-}
-
-func writeRunnerResponse(w io.Writer, maxBytes int64, resp RunnerResponse) error {
-	raw, err := json.Marshal(resp)
-	if err != nil {
-		return err
-	}
-	return writeChannelFrame(w, raw, maxBytes)
-}
-
-func writeChannelFrame(w io.Writer, body []byte, maxBytes int64) error {
-	if maxBytes <= 0 || int64(len(body)) > maxBytes {
-		return ErrRunnerPayloadTooLarge
-	}
-	var hdr [4]byte
-	binary.BigEndian.PutUint32(hdr[:], uint32(len(body)))
-	if _, err := w.Write(hdr[:]); err != nil {
-		return err
-	}
-	_, err := w.Write(body)
-	return err
-}
-
-func readChannelFrame(r io.Reader, maxBytes int64) ([]byte, error) {
-	var hdr [4]byte
-	if _, err := io.ReadFull(r, hdr[:]); err != nil {
-		return nil, err
-	}
-	n := binary.BigEndian.Uint32(hdr[:])
-	if n == 0 || maxBytes <= 0 || int64(n) > maxBytes {
-		return nil, ErrRunnerPayloadTooLarge
-	}
-	buf := make([]byte, n)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return nil, err
-	}
-	return buf, nil
-}
-
-func decodeStrictJSON(data []byte, dst any) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		return err
-	}
-	var extra any
-	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
-		return errors.New("unexpected trailing JSON data")
-	}
-	return nil
 }
 
 func acquireDirLock(dir string) (*os.File, error) {
