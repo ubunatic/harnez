@@ -255,7 +255,72 @@ Pre-work first: the "Pre-Work / Required Refinements" lists in tickets 1228 and 
   `--forge` with `show` or `list` is refused.
 - Acceptance: tests pass; `harnez issues --help` matches the golden file.
 
+### M5 delivered (2026-11-16)
+
+- Commits `b2f68047` (pre-work) and `624510c8` (M5), developer `forge-dev2` (codex:terra:low).
+  Its first write turn stopped after 2 minutes with three uncommitted files and no blocker; the
+  second turn (9m29s) finished both commits. Developer's `make test-q1`: exit 0, no `--- FAIL`.
+- Delivered: `requireHostSession(verb)`; `issueWriteAPI` and `forgetracker.WriteAPI` (API only
+  for `kind: forgejo` with a stored write token); `new` and `comment` over the API with the
+  outputs `filed as #N at <url>; no commit` and `commented on <host>/<o>/<r>#N: <url>`;
+  `new --forge`; label ids over the API; blank-body refusal for `new`; `-F -` for `new` goes
+  through a temporary file on the CLI path; `Writer.Comment` returns the URL; label paging;
+  forge message on every failed write; `forge token status` prints write-token metadata.
+- Incident: an early version of the worker-denial test ran the real
+  `fj issue comment codeberg.org/o/r#7`. fj answered `Error: not found: The target couldn't be
+  found.` Host check: anonymous `GET https://codeberg.org/api/v1/repos/o/r` gives 404. Nothing
+  was written. The test now replaces the CLI runner.
+- Host verification: `go test` of `internal/forge`, `internal/forgetracker`,
+  `internal/forgetoken` and `cmd/harnez` is `ok` with fake `fj`, `tea` and `gh` first on `PATH`;
+  none of them was called. Installed binary: host dry runs of `comment 41 --forge` and
+  `new --forge` print the fj command; with `HARNEZ_AGENT_ROLE=developer` the dry run still
+  prints and the real call stops with the host-session error before any CLI runs;
+  `list --forge` gives `issues: --forge requires new or comment`.
+
+### Decision (review of M5, host and reviewer `forge-rev3`, 2026-11-16)
+
+- A nil `Writer.Client` returns `forge write: no HTTP client` and sends nothing. This replaces
+  pre-work item 5 of M5: the command passes a client with the `issue_scan.timeout` of
+  `spec/pr.yaml`, so no second timeout value exists.
+- `new` on a GitHub origin keeps the existing `gh` path. Every other forge write on a
+  `kind: github` forge is refused (ticket 1209).
+- The host-only check covers every write of `new`, the `--remote` / `CLAUDE_CODE_REMOTE` gh
+  flow included.
+- A dry run prints what would really run: the API plan when a write token is stored, the CLI
+  command otherwise. It decides from the stored token's metadata and never reads the secret.
+- `edit`, `close` and `reopen` accept `--dry-run` on a forge target: they print the plan, send
+  no write request and are exempt from the host-only check, so a worker can hand the exact
+  command to its host.
+
 ### M6 — `edit`
+
+- Pre-Work / Required Refinements (do these first, own commit `(#1202 M6 pre-work)`):
+  1. Test guard for the whole `cmd/harnez` test package (`main_env_test.go`, `TestMain`): the
+     default `issueCLIRun` fails with `test did not stub the issue CLI: <argv>`, and the HTTP
+     client that `issueWriteAPI` builds comes from a package variable whose test default
+     refuses every non-loopback host. Tests that need a CLI or the API replace them as today.
+  2. `new` with `--remote` or `CLAUDE_CODE_REMOTE` (`cmd/harnez/issues.go`, the gh flow near
+     line 407) calls `requireHostSession("new")` before gh runs; dry runs stay exempt. Test:
+     worker markers set, the gh stub gets no call.
+  3. `comment` on a forge that is not `kind: forgejo` stops with `issues comment: forge writes
+     support Forgejo only; GitHub is ticket 1209` before the issue GET, the token lookup and
+     any CLI, also with `--dry-run`. Test: zero calls to the issue source. `new` is unchanged.
+  4. Dry runs with a stored write token print the API plan and need no fj on `PATH`:
+     `dry run: would comment on codeberg.org/o/r#7 over the API (write token)` and
+     `dry run, would file on codeberg.org/o/r over the API (write token)`. Labels are not
+     resolved in a dry run. The choice uses the token store's metadata (what
+     `forge token status --write` reads), not the secret. Without a write token the output is
+     unchanged. Test both, with a token lookup that fails the test when called.
+  5. `Writer.LabelIDs` stops at an empty page or at a page that adds no new label id, not at a
+     short page (a server page cap below 50 would end the loop early; the cap is unverified).
+     Test: pages of 30, 30 and 0 labels with the wanted label on page 2.
+  6. Writer error text: no trailing space when the forge message is dropped
+     (`forge API request failed: HTTP 403`); the 200 cap counts runes, not bytes.
+  7. Stronger tests: the API path of `new` and `comment` runs with an `issueCLIRun` that fails
+     the test; `new --json` over the API asserts the exact JSON line; the status loop in
+     `internal/forge/issue_write_test.go` (near line 153) asserts the exact `HTTP <code>` text;
+     `show --forge` and `list --forge` assert the exact error text; the worker-denial tests
+     assert that the token lookup is not called.
 
 - Write set: the cmd files of M5, `internal/forgetracker/forgetracker.go` (`show --json` gains
   `updated_at`) and tests, `cmd/harnez/testdata/help.golden`.
