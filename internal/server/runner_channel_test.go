@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -220,16 +221,22 @@ func TestRunnerChannelConcurrentChildProcessesOnInheritedFD(t *testing.T) {
 	}
 	setupPrivateRunnerRoot(t, cfg)
 
+	const workers = 6
 	var mu sync.Mutex
 	seen := make(map[string]int)
+	var arrived int
+	allArrived := make(chan struct{})
 	runnerEnd := startRunnerPairBroker(t, cfg, func(_ context.Context, rec TelemetryRecord) error {
 		mu.Lock()
-		defer mu.Unlock()
 		seen[rec.RecordID]++
+		arrived++
+		if arrived == workers {
+			close(allArrived)
+		}
+		mu.Unlock()
+		<-allArrived
 		return nil
 	})
-
-	const workers = 6
 	var wg sync.WaitGroup
 	errs := make(chan error, workers)
 	for i := 0; i < workers; i++ {
@@ -380,24 +387,68 @@ func TestRunnerChannelReplayWireByteLimitAnd413NoQuarantine(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	var count int
-	startRunnerPairBroker(t, cfg, func(_ context.Context, _ TelemetryRecord) error { count++; return nil })
+	var count atomic.Int32
+	startRunnerPairBroker(t, cfg, func(_ context.Context, _ TelemetryRecord) error { count.Add(1); return nil })
 	if err := ReplayRunnerSpool(context.Background(), cfg); err != nil {
 		t.Fatal(err)
 	}
-	if n := countJSONFiles(t, filepath.Join(runnerRoot, "state", "telemetry-spool")); n != 1 || count != 1 {
-		t.Fatalf("split batch remaining=%d count=%d, want 1 and 1", n, count)
+	if n := countJSONFiles(t, filepath.Join(runnerRoot, "state", "telemetry-spool")); n != 1 || count.Load() != 1 {
+		t.Fatalf("split batch remaining=%d count=%d, want 1 and 1", n, count.Load())
 	}
-	// If broker itself rejects 413, record stays spooled and is NOT quarantined.
+	// If broker itself rejects 413, existing keep file stays spooled and is NOT quarantined.
 	if err := os.MkdirAll(filepath.Join(spoolDir, "quarantine"), 0700); err != nil {
 		t.Fatal(err)
 	}
+	keepPath := filepath.Join(spoolDir, "keep.json")
+	if err := os.WriteFile(keepPath, []byte(`{}`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	cfg.RunnerChannel.ReplayMaxBytes = int64(len(twoBatch) * 2)
-	err = applyRunnerReplayResponse(spoolDir, []string{filepath.Join(spoolDir, "keep.json")}, RunnerResponse{Status: http.StatusRequestEntityTooLarge})
+	err = applyRunnerReplayResponse(spoolDir, []string{keepPath}, RunnerResponse{Status: http.StatusRequestEntityTooLarge})
 	if !errors.Is(err, ErrRunnerUnavailable) {
 		t.Fatalf("413 error = %v, want ErrRunnerUnavailable", err)
 	}
+	if _, statErr := os.Stat(keepPath); statErr != nil {
+		t.Fatalf("413 removed or moved keep file: %v", statErr)
+	}
 	if q := countJSONFiles(t, filepath.Join(spoolDir, "quarantine")); q != 0 {
 		t.Fatalf("413 unexpectedly quarantined %d files", q)
+	}
+}
+
+func TestRunnerBrokerEOFClosesIdleStreamsAndStatusClassification(t *testing.T) {
+	if isPermanentHTTPStatus(http.StatusRequestTimeout) || isPermanentHTTPStatus(http.StatusRequestEntityTooLarge) || isPermanentHTTPStatus(http.StatusTooManyRequests) || isPermanentHTTPStatus(http.StatusServiceUnavailable) {
+		t.Fatal("transient HTTP statuses must not quarantine")
+	}
+	if !isPermanentHTTPStatus(http.StatusBadRequest) || !isPermanentHTTPStatus(http.StatusUnprocessableEntity) {
+		t.Fatal("permanent 4xx must quarantine")
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostEnd, runnerEnd, err := SocketPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- ServeRunnerBroker(context.Background(), hostEnd, cfg, func(context.Context, TelemetryRecord) error { return nil })
+	}()
+
+	// Hand over a stream that stays idle, then close runnerEnd (EOF on SEQPACKET broker).
+	idleConn, err := openPerRequestStream(context.Background(), int(runnerEnd.Fd()), cfg.HTTPClientTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idleConn.Close()
+	_ = runnerEnd.Close()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("broker EOF returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("broker hung waiting for idle client stream after EOF")
 	}
 }

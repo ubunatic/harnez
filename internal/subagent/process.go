@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/procs"
+	"ubunatic.com/harnez/internal/server"
 )
 
 type processObserverKey struct{}
@@ -66,12 +67,16 @@ func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte,
 	if err != nil {
 		return nil, err
 	}
+	broker, _ := server.PrepareCmdRunnerBroker(ctx, cmd)
 	if err := cmd.Start(); err != nil {
+		_ = broker.Close()
 		return nil, err
 	}
+	broker.ReleaseChildFD()
 	if err := observeProcess(ctx, cmd); err != nil {
 		_ = KillGroup(cmd.Process.Pid, syscall.SIGKILL)
 		_ = cmd.Wait()
+		_ = broker.Close()
 		return nil, err
 	}
 	var b []byte
@@ -82,6 +87,7 @@ func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte,
 		b, readErr = readLines(rd, fn)
 	}
 	if err := cmd.Wait(); err != nil {
+		_ = broker.Close()
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitErr.Stderr = stderr.Bytes()
 			if msg := strings.TrimSpace(stderr.String()); msg != "" {
@@ -90,6 +96,7 @@ func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte,
 		}
 		return b, err
 	}
+	_ = broker.Close()
 	return b, readErr
 }
 

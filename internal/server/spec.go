@@ -239,6 +239,9 @@ func loadRunnerChannel(cfg *Config, raw rawRunnerChannel) error {
 	if raw.FDEnv == "" || raw.MaxFrameBytes <= 0 || raw.SpoolMaxBytes <= 0 || raw.ReplayMaxRecords <= 0 || raw.ReplayMaxBytes <= 0 {
 		return fmt.Errorf("spec/server.yaml: runner_channel settings must be positive and non-empty")
 	}
+	if raw.MaxFrameBytes <= raw.ReplayMaxBytes {
+		return fmt.Errorf("spec/server.yaml: runner_channel.max_frame_bytes must exceed replay_max_bytes")
+	}
 	if len(raw.AllowedTelemetryKinds) == 0 {
 		return fmt.Errorf("spec/server.yaml: runner_channel.allowed_telemetry_kinds must be non-empty")
 	}

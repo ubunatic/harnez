@@ -88,7 +88,7 @@ func SendRunnerRequest(ctx context.Context, cfg Config, req RunnerRequest) (Runn
 		return RunnerResponse{}, ErrRunnerPayloadTooLarge
 	}
 
-	conn, err := openPerRequestStream(fd)
+	conn, err := openPerRequestStream(ctx, fd, cfg.HTTPClientTimeout)
 	if err != nil {
 		return RunnerResponse{}, err
 	}
@@ -113,7 +113,7 @@ func SendRunnerRequest(ctx context.Context, cfg Config, req RunnerRequest) (Runn
 	return resp, nil
 }
 
-func openPerRequestStream(brokerFD int) (net.Conn, error) {
+func openPerRequestStream(ctx context.Context, brokerFD int, fallbackTimeout time.Duration) (net.Conn, error) {
 	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
 		return nil, fmt.Errorf("create per-request socketpair: %w", err)
@@ -121,9 +121,25 @@ func openPerRequestStream(brokerFD int) (net.Conn, error) {
 	clientFile := os.NewFile(uintptr(fds[0]), "harnez-runner-req")
 	defer clientFile.Close()
 	peerFD := fds[1]
-	if err := syscall.Sendmsg(brokerFD, []byte{1}, syscall.UnixRights(peerFD), nil, 0); err != nil {
-		_ = syscall.Close(peerFD)
-		return nil, fmt.Errorf("%w: sendmsg: %v", ErrRunnerUnavailable, err)
+	deadline, hasDeadline := ctx.Deadline()
+	if !hasDeadline && fallbackTimeout > 0 {
+		deadline = time.Now().Add(fallbackTimeout)
+		hasDeadline = true
+	}
+	for {
+		err := syscall.Sendmsg(brokerFD, []byte{1}, syscall.UnixRights(peerFD), nil, syscall.MSG_DONTWAIT|syscall.MSG_NOSIGNAL)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, syscall.EAGAIN) && !errors.Is(err, syscall.EWOULDBLOCK) {
+			_ = syscall.Close(peerFD)
+			return nil, fmt.Errorf("%w: sendmsg: %v", ErrRunnerUnavailable, err)
+		}
+		if ctx.Err() != nil || (hasDeadline && !time.Now().Before(deadline)) {
+			_ = syscall.Close(peerFD)
+			return nil, fmt.Errorf("%w: sendmsg timed out", ErrRunnerUnavailable)
+		}
+		time.Sleep(time.Millisecond)
 	}
 	_ = syscall.Close(peerFD)
 	conn, err := net.FileConn(clientFile)
@@ -364,13 +380,14 @@ func RelayRunnerBroker(ctx context.Context, hostEnd *os.File, hostSocket string,
 }
 
 func serveUnixBroker(ctx context.Context, seqConn *net.UnixConn, cfg Config, ingest func(context.Context, TelemetryRecord) error) error {
+	serveCtx, cancelServe := context.WithCancel(ctx)
 	done := make(chan struct{})
 	var closeOnce sync.Once
 	closeSeq := func() { closeOnce.Do(func() { _ = seqConn.Close() }) }
 	defer closeSeq()
 	go func() {
 		select {
-		case <-ctx.Done():
+		case <-serveCtx.Done():
 			closeSeq()
 		case <-done:
 		}
@@ -379,43 +396,54 @@ func serveUnixBroker(ctx context.Context, seqConn *net.UnixConn, cfg Config, ing
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
+	defer cancelServe()
 
+	sem := make(chan struct{}, 32)
 	buf := make([]byte, 16)
 	oob := make([]byte, syscall.CmsgSpace(4*8))
 	for {
-		_, oobn, _, _, err := seqConn.ReadMsgUnix(buf, oob)
+		_, oobn, flags, _, err := seqConn.ReadMsgUnix(buf, oob)
 		if err != nil {
-			if ctx.Err() != nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+			if serveCtx.Err() != nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return nil
 			}
 			return err
 		}
-		clientConn, err := extractSCMStreamConn(oob[:oobn])
+		clientConn, err := extractSCMStreamConn(oob[:oobn], flags)
 		if err != nil {
 			continue
+		}
+		select {
+		case sem <- struct{}{}:
+		case <-serveCtx.Done():
+			_ = clientConn.Close()
+			return nil
 		}
 		wg.Add(1)
 		go func(c net.Conn) {
 			defer wg.Done()
-			_ = ServeRunnerConn(ctx, c, cfg, ingest)
+			defer func() { <-sem }()
+			_ = ServeRunnerConn(serveCtx, c, cfg, ingest)
 		}(clientConn)
 	}
 }
 
-func extractSCMStreamConn(oob []byte) (net.Conn, error) {
-	scms, err := syscall.ParseSocketControlMessage(oob)
-	if err != nil || len(scms) != 1 {
-		return nil, fmt.Errorf("invalid scm control message")
+func extractSCMStreamConn(oob []byte, flags int) (net.Conn, error) {
+	scms, parseErr := syscall.ParseSocketControlMessage(oob)
+	var fds []int
+	for i := range scms {
+		if parsed, err := syscall.ParseUnixRights(&scms[i]); err == nil {
+			fds = append(fds, parsed...)
+		}
 	}
-	fds, err := syscall.ParseUnixRights(&scms[0])
-	if err != nil {
-		return nil, err
-	}
-	if len(fds) != 1 {
+	closeAll := func() {
 		for _, fd := range fds {
 			_ = syscall.Close(fd)
 		}
-		return nil, fmt.Errorf("expected single fd, got %d", len(fds))
+	}
+	if flags&syscall.MSG_CTRUNC != 0 || parseErr != nil || len(scms) != 1 || len(fds) != 1 {
+		closeAll()
+		return nil, fmt.Errorf("invalid scm control message")
 	}
 	f := os.NewFile(uintptr(fds[0]), "harnez-broker-client")
 	defer f.Close()
@@ -423,6 +451,13 @@ func extractSCMStreamConn(oob []byte) (net.Conn, error) {
 		return nil, err
 	}
 	return net.FileConn(f)
+}
+
+func isPermanentHTTPStatus(code int) bool {
+	if code < 400 || code >= 500 {
+		return false
+	}
+	return code != http.StatusRequestTimeout && code != http.StatusRequestEntityTooLarge && code != http.StatusTooManyRequests
 }
 
 func hostSocketIngestor(hostSocket string, cfg Config) func(context.Context, TelemetryRecord) error {
@@ -433,7 +468,7 @@ func hostSocketIngestor(hostSocket string, cfg Config) func(context.Context, Tel
 		}
 		if _, err := PostTelemetryCommand(callCtx, hostSocket, cfg.TelemetryPath, body, cfg.HTTPClientTimeout); err != nil {
 			var statusErr *HTTPStatusError
-			if errors.As(err, &statusErr) && statusErr.StatusCode >= 400 && statusErr.StatusCode < 500 {
+			if errors.As(err, &statusErr) && isPermanentHTTPStatus(statusErr.StatusCode) {
 				return errors.Join(err, ErrQuarantine)
 			}
 			return fmt.Errorf("%w: %v", ErrRunnerUnavailable, err)
@@ -465,6 +500,9 @@ func ServeRunnerConn(ctx context.Context, conn net.Conn, cfg Config, ingest func
 	defer close(done)
 
 	for {
+		if cfg.HTTPClientTimeout > 0 {
+			_ = conn.SetReadDeadline(time.Now().Add(cfg.HTTPClientTimeout))
+		}
 		frame, err := readChannelFrame(conn, cfg.RunnerChannel.MaxFrameBytes)
 		if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 			return nil

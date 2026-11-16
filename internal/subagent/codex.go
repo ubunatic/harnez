@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"ubunatic.com/harnez/internal/server"
 )
 
 // CodexDriver runs codex in non-interactive JSONL mode.
@@ -807,16 +808,21 @@ func startProcess(ctx context.Context, dir, name string, args ...string) (io.Rea
 	}
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
+	broker, _ := server.PrepareCmdRunnerBroker(ctx, c)
 	if err := c.Start(); err != nil {
+		_ = broker.Close()
 		return nil, nil, err
 	}
+	broker.ReleaseChildFD()
 	if err := observeProcess(ctx, c); err != nil {
 		_ = KillGroup(c.Process.Pid, syscall.SIGKILL)
 		_ = c.Wait()
+		_ = broker.Close()
 		return nil, nil, err
 	}
 	return out, func() error {
 		err := c.Wait()
+		_ = broker.Close()
 		if ctx.Err() != nil {
 			_ = KillGroup(c.Process.Pid, syscall.SIGKILL)
 		}

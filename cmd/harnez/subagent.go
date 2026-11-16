@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/readcard"
+	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -64,7 +65,15 @@ Explicit full, lite, or vision modes override provider selection.`,
 			child.Stdin = strings.NewReader(staged.Prompt)
 			child.Stdout, child.Stderr = cmd.OutOrStdout(), cmd.ErrOrStderr()
 			child.Env = append(os.Environ(), "HARNEZ_STYLE_GUIDE="+staged.StagedCardPath)
-			if err := child.Run(); err != nil {
+			broker, _ := server.PrepareCmdRunnerBroker(cmd.Context(), child)
+			if err := child.Start(); err != nil {
+				_ = broker.Close()
+				return err
+			}
+			broker.ReleaseChildFD()
+			err = child.Wait()
+			_ = broker.Close()
+			if err != nil {
 				var exit *exec.ExitError
 				if errors.As(err, &exit) {
 					return &exitCodeError{Code: exit.ExitCode()}

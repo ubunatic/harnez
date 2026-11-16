@@ -43,8 +43,25 @@ denial from these tests.
 ## Ownership contract and remaining work
 
 The staging and registry behavior above describes the live M1–M6 implementation,
-and M8 runner-local usage state isolation is now wired under `$TAIA_SESSION_DIR`.
-The matrix below is the approved contract; M9–M17 behavior remains planned.
+and M8–M10b runner isolation is now active under `$TAIA_SESSION_DIR` and the
+inherited broker FD (`HARNEZ_BROKER_FD`):
+
+- Host launchers (`internal/exec`, `cmd/harnez/subagent.go`,
+  `internal/subagent/{process,codex,interactive}.go`) attach an `AF_UNIX`
+  `SOCK_SEQPACKET` broker socketpair via `ExtraFiles` and run
+  `RelayRunnerBroker` for the child lifetime. Runners open ephemeral `SOCK_STREAM`
+  requests atomically over `HARNEZ_BROKER_FD` via `SCM_RIGHTS`; only allowlisted
+  telemetry writes (`telemetry_ingest`, `telemetry_replay`) pass through to
+  `Config.Socket()`, while `/shutdown`, `merge_legacy`, and `ensure_schema`
+  fail with `403`.
+- Direct `bwrap` execution preserves `ExtraFiles` (`HARNEZ_BROKER_FD` survives
+  when explicitly forwarded), whereas external `taia` sandbox helpers spawn
+  child commands without forwarding FDs `>= 3` (`cmd.ExtraFiles` empty /
+  `UnixRights(0,1,2)`). When the broker FD is missing, invalid, or stripped
+  across an exec boundary, Harnez fails closed without falling back to
+  `Config.Socket()`.
+
+The matrix below is the full approved contract; M11–M17 behavior remains planned.
 The machine-readable contract is `spec/session_isolation.yaml`.
 
 | Owner | Paths and operations |

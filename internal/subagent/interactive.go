@@ -20,6 +20,7 @@ import (
 	"golang.org/x/term"
 	"ubunatic.com/harnez/internal/agymeter"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/server"
 )
 
 // InteractiveOptions configures a provider's foreground terminal session.
@@ -207,10 +208,13 @@ func runInteractivePTY(ctx context.Context, command string, args []string, opts 
 		_ = listener.Close()
 		_ = os.Remove(opts.ControlSocket)
 	}()
+	broker, _ := server.PrepareCmdRunnerBroker(ctx, cmd)
+	defer func() { _ = broker.Close() }()
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
 		return fmt.Errorf("%s interactive session: %w", command, err)
 	}
+	broker.ReleaseChildFD()
 	defer ptmx.Close()
 	if opts.Started != nil {
 		if err := opts.Started(cmd.Process.Pid); err != nil {

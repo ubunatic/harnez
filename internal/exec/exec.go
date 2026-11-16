@@ -676,10 +676,13 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	c.Stdout = io.MultiWriter(stdoutWriters...)
 	c.Stderr = io.MultiWriter(stderrWriters...)
 
+	broker, _ := server.PrepareCmdRunnerBroker(ctx, c)
 	start := time.Now()
 	if err := c.Start(); err != nil {
+		_ = broker.Close()
 		return 1, fmt.Errorf("exec: run %v: %w", args, err)
 	}
+	broker.ReleaseChildFD()
 	processRecordDir := opts.ProcessRecordDir
 	if processRecordDir == "" {
 		var err error
@@ -720,6 +723,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			processGroupStopped, signalProcessGroup)
 	}()
 	runErr := c.Wait()
+	_ = broker.Close()
 	close(groupDone)
 	close(stoppedDone)
 	stopped := <-stoppedResult
