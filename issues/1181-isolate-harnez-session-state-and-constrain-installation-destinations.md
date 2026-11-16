@@ -113,6 +113,18 @@ Assessed read-only by `1181-architect` (`codex:sol:med`) on `2026-11-16`:
 ## Milestone 7 — Ownership contract
 
 The ownership matrix, A1–A4 trust boundaries, promoter destinations and explicit
-non-claims are frozen in `docs/SessionIsolation.md` and the embedded
-`spec/session_isolation.yaml` with its schema and contract tests. This describes
-the M8–M17 target; it does not implement those milestones. Ticket remains open.
+non-claims were recorded in `docs/SessionIsolation.md` and
+`spec/session_isolation.yaml` with schema and contract tests (`f87b48db`).
+Independent review (`1181-m7-review`, `codex:sol:low`) identified major
+contract/validation gaps that are folded into M8 pre-work below. Ticket remains open.
+
+## Milestone 8 — Pre-Work / Required Refinements & Runner-Local State
+
+### Pre-Work / Required Refinements (from M7 review of `f87b48db`)
+- **Resolve `livefetchcache` ownership conflict**: reconcile `docs/SessionIsolation.md` (currently assigns live-fetch cache to `runner`) with `spec/session_isolation.yaml` (currently assigns `canonical_usage_snapshots_history_livefetchcache` to `broker`); freeze one unambiguous owner (or explicitly separate runner-local cache under `$TAIA_SESSION_DIR` vs host-only legacy/canonical handling) in both doc and spec.
+- **Eliminate `docs/Spec.md` duplication & tighten validation**: make `spec/schemas/session_isolation.schema.json` the single source of truth (add `minItems`, enforce uniqueness and required host-only/ownership constraints via schema rather than Go literals); have `internal/sessioncontract.Load()` decode strictly (`KnownFields`) and validate against the embedded JSON schema, limiting Go `Validate()` to cross-field invariants (`unique(Ownership.Resource)`, `disjoint(RunnerOperations, HostOnlyOperations)`, `AliasTarget == Binary`).
+- **Contract API hygiene & tests**: add doc comments to exported `Ownership`, `Contract`, `Load`, `Validate`; remove premature `ValidateRoot` helper (belongs to M14 `internal/selfinstall`); test duplicate ownership resources, duplicate/conflicting operations, missing/empty operation lists, and unknown fields.
+
+### M8 Implementation Scope
+- Centralize remaining runner-local paths under `$TAIA_SESSION_DIR` via `internal/runstate/paths.go` for `internal/usage/{statecache,fetchdurations,killlog,passive_debug}.go` (preserving legacy host defaults when `TAIA_SESSION_DIR` is unset, honoring explicit dir overrides, and failing closed on malformed/symlinked runner roots — note `statecache.go:380` canonical snapshot store coupling must not silently write shared canonical state in runner mode).
+- Add regression tests across all 4 usage writers + `internal/runstate` covering explicit overrides, malformed/symlink roots, `0700`/`0600` private permissions, concurrent sessions, and absence of shared canonical writes.

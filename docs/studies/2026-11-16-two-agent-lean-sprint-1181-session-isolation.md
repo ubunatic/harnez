@@ -12,6 +12,8 @@ Prior work M1–M6 (`e437a41d`..`963d0131`) already landed session-scoped locks/
 - Searcher `1181-searcher` (`codex:luna:low`): 6m47s, 183.8k new / 1.7M cached tokens, context 90.1k.
 - Architect `1181-architect` (`codex:sol:med`): 8m50s, 97.0k new / 586.4k cached tokens, context 25.8k.
 
+- Reviewer `1181-m7-review` (`codex:sol:low`): M7 diff review in 57s, 27.5k new / 85.0k cached tokens, context 38.6k.
+
 ## Searcher Pass: remaining state, staging vs install, Taia/bwrap, M6 status
 
 - Confirmed M6 hidden-file regression check (`dotglob`/`.unexpected`) is present in `scripts/stage-install-test.sh:3,116-125`.
@@ -31,4 +33,5 @@ Prior work M1–M6 (`e437a41d`..`963d0131`) already landed session-scoped locks/
 
 ## Milestones
 
-- **M7 — Freeze ownership/security contract**: pending dispatch on `sprint/1181`.
+- **M7 — Freeze ownership/security contract**: committed `f87b48db` on `sprint/1181`; `HTO=0 make test-q1` and `go test -v ./internal/sessioncontract` passed. `1181-m7-review` (`codex:sol:low`) flagged 3 major gaps (`livefetchcache` owner mismatch, weak JSON schema uniqueness/`minItems`, `docs/Spec.md` literal duplication in `spec.go`), all embedded as M8 pre-work.
+- **M8 — Pre-work & centralize runner-local state**: dispatching read-only plan on `sprint/1181`.
