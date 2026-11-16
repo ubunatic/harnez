@@ -143,21 +143,24 @@ func HistorySummaryStats(dir string) (HistorySummaryData, error) {
 func historySummaryStatsContext(ctx context.Context, dir string) (HistorySummaryData, error) {
 	var data HistorySummaryData
 
-	matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
-	if err != nil || len(matches) == 0 {
-		return data, nil
-	}
+	isCanonical := dir == "" || filepath.Clean(dir) == filepath.Clean(HistoryDir(""))
+	if !(inRunnerMode() && isCanonical) {
+		matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+		if err != nil || len(matches) == 0 {
+			return data, nil
+		}
 
-	for _, path := range matches {
-		if filepath.Base(path) == QuotaHistoryFilename {
-			continue
+		for _, path := range matches {
+			if filepath.Base(path) == QuotaHistoryFilename {
+				continue
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				continue
+			}
+			data.FileCount++
+			data.TotalBytes += info.Size()
 		}
-		info, err := os.Stat(path)
-		if err != nil {
-			continue
-		}
-		data.FileCount++
-		data.TotalBytes += info.Size()
 	}
 
 	entries, err := readHistoryContext(ctx, dir)
@@ -327,7 +330,10 @@ func unlockHistoryFile(f *os.File) {
 // AppendHistory appends one snapshot as a JSON line to this machine's history
 // file under dir (see HistoryDir), tagging it with the local hostname.
 func AppendHistory(dir string, summary UsageSummary) error {
-	if filepath.Clean(dir) == filepath.Clean(HistoryDir("")) {
+	if dir == "" || filepath.Clean(dir) == filepath.Clean(HistoryDir("")) {
+		if inRunnerMode() {
+			return fmt.Errorf("append canonical usage history: host-only operation in runner mode")
+		}
 		return appendUsageSummaryToStore(dir, summary)
 	}
 	return appendHistoryFile(dir, summary)
@@ -377,7 +383,10 @@ func ReadHistory(dir string) ([]HistoryEntry, error) {
 }
 
 func readHistoryContext(ctx context.Context, dir string) ([]HistoryEntry, error) {
-	if filepath.Clean(dir) == filepath.Clean(HistoryDir("")) {
+	if dir == "" || filepath.Clean(dir) == filepath.Clean(HistoryDir("")) {
+		if inRunnerMode() {
+			return queryRunnerHistoryEntries(ctx)
+		}
 		return UsageHistoryFromStore(ctx, "", "")
 	}
 	return readHistoryFiles(dir)

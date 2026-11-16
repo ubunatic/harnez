@@ -14,6 +14,7 @@ import (
 
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 type telemetryCollectorService struct {
@@ -26,6 +27,9 @@ type telemetryCollectorService struct {
 
 func (s *telemetryCollectorService) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+s.config.TelemetryPath, s.handleRecord)
+	if s.config.UsageQueryPath != "" {
+		mux.HandleFunc("POST "+s.config.UsageQueryPath, s.handleUsageQuery)
+	}
 }
 
 func (s *telemetryCollectorService) handleRecord(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +55,86 @@ func (s *telemetryCollectorService) handleRecord(w http.ResponseWriter, r *http.
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *telemetryCollectorService) handleUsageQuery(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, s.config.UpdateMaxBodyBytes)
+	var q server.RunnerUsageQuery
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&q); err != nil {
+		http.Error(w, "invalid usage query", http.StatusBadRequest)
+		return
+	}
+	if err := server.ValidateRunnerUsageQuery(q); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	maxPayload := s.config.RunnerChannel.MaxFrameBytes - 512
+	switch q.Action {
+	case server.RunnerUsageActionLatestSummary:
+		summary, err := usage.ReadStoredSummaryDirect(r.Context(), s.path)
+		if err != nil {
+			status := http.StatusServiceUnavailable
+			if errors.Is(err, usage.ErrNoCollectorSnapshots) || errors.Is(err, os.ErrNotExist) {
+				status = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+		writeJSONResponse(w, summary)
+	case server.RunnerUsageActionProviderQuota:
+		avail := usage.ProviderQuotaAvailabilitiesFromStoreReadOnly(r.Context(), s.path, q.Provider, q.Models, time.Now())
+		writeJSONResponse(w, avail)
+	case server.RunnerUsageActionHistoryEntries:
+		entries, err := usage.ReadUsageHistoryFromStore(r.Context(), s.path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		writeCappedTailJSON(w, entries, maxPayload)
+	case server.RunnerUsageActionQuotaHistory:
+		entries, err := usage.ReadQuotaHistoryFromStore(r.Context(), s.path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		writeCappedTailJSON(w, entries, maxPayload)
+	default:
+		http.Error(w, "unsupported usage query", http.StatusForbidden)
+	}
+}
+
+func writeJSONResponse(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeCappedTailJSON[T any](w http.ResponseWriter, items []T, maxBytes int64) {
+	if items == nil {
+		items = []T{}
+	}
+	raw, err := json.Marshal(items)
+	if err != nil {
+		http.Error(w, "marshal usage history", http.StatusInternalServerError)
+		return
+	}
+	if maxBytes > 0 {
+		for int64(len(raw)) > maxBytes && len(items) > 1 {
+			drop := len(items) / 2
+			if drop < 1 {
+				drop = 1
+			}
+			items = items[drop:]
+			raw, err = json.Marshal(items)
+			if err != nil {
+				http.Error(w, "marshal usage history", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(raw)
 }
 
 func (s *telemetryCollectorService) Run(ctx context.Context) error {

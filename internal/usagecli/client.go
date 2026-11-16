@@ -61,6 +61,15 @@ func LoadLocalUsageWithStatus(ctx context.Context, offline bool) (usage.UsageSum
 	}
 	ctx, cancel := context.WithTimeout(ctx, cfg.UsageDeadline)
 	defer cancel()
+	if os.Getenv("TAIA_SESSION_DIR") != "" {
+		if offline {
+			return usage.UsageSummary{}, "", fmt.Errorf("stored usage unavailable in offline runner mode (requires host broker)")
+		}
+		summary, err := ReadStoredSummaryBoundedWith(ctx, func(ctx context.Context) (usage.UsageSummary, error) {
+			return usage.ReadStoredSummary(ctx, "")
+		})
+		return summary, "", err
+	}
 	if !offline {
 		check := EnsureLocalServerFunc(ctx, cfg)
 		status = check.status

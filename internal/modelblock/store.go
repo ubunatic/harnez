@@ -9,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"ubunatic.com/harnez/internal/runstate"
 )
 
 // Block is one local, expiring "out of quota" record for a provider model.
@@ -23,15 +25,39 @@ type Block struct {
 // Active reports whether the block still applies at now.
 func (b Block) Active(now time.Time) bool { return b.Until.After(now) }
 
-// Path returns the block file: $XDG_STATE_HOME/harnez/model-blocks.json, or
-// ~/.local/state/harnez/model-blocks.json.
-func Path() string {
+// GlobalPath returns the shared host model-block file:
+// $XDG_STATE_HOME/harnez/model-blocks.json, or ~/.local/state/harnez/model-blocks.json.
+// This file is read-only to confined runners (TAIA_SESSION_DIR set).
+func GlobalPath() string {
 	base := os.Getenv("XDG_STATE_HOME")
 	if base == "" {
 		home, _ := os.UserHomeDir()
 		base = filepath.Join(home, ".local", "state")
 	}
 	return filepath.Join(base, "harnez", "model-blocks.json")
+}
+
+// ResolvedPath returns the writable block file path: GlobalPath on the host, or
+// the validated runner overlay under $TAIA_SESSION_DIR when running confined.
+func ResolvedPath() (string, error) {
+	global := GlobalPath()
+	if os.Getenv("TAIA_SESSION_DIR") == "" {
+		return global, nil
+	}
+	dir, err := runstate.PolicyDir("")
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "model-blocks.json"), nil
+}
+
+// Path returns the writable block file path, or "" if TAIA_SESSION_DIR is invalid.
+func Path() string {
+	p, err := ResolvedPath()
+	if err != nil {
+		return ""
+	}
+	return p
 }
 
 func key(provider, model string) string { return provider + "\x00" + model }
@@ -85,6 +111,12 @@ func write(path string, blocks []Block) error {
 // locked runs fn holding an exclusive advisory flock on path+".lock", so
 // concurrent block/unblock calls (threads or processes) never lose updates.
 func locked(path string, fn func() error) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("model-blocks: invalid runner policy path")
+	}
+	if os.Getenv("TAIA_SESSION_DIR") != "" && filepath.Clean(path) == filepath.Clean(GlobalPath()) {
+		return fmt.Errorf("model-blocks: global blocks are read-only in runner mode")
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
@@ -139,12 +171,56 @@ func Remove(path, provider, model string) (bool, error) {
 		}
 		return write(path, kept)
 	})
-	return found, err
+	if err != nil {
+		return false, err
+	}
+	if !found && isRunnerOverlayPath(path) {
+		for _, gb := range readActiveFile(GlobalPath(), time.Now()) {
+			if key(gb.Provider, gb.Model) == key(provider, model) {
+				return false, fmt.Errorf("cannot unblock %s:%s: global model block is read-only in runner mode", provider, model)
+			}
+		}
+	}
+	return found, nil
 }
 
 // Active returns the blocks still in force at now, soonest expiry first.
-// A missing or unreadable file means no blocks.
+// A missing or unreadable file means no blocks. When running confined under
+// $TAIA_SESSION_DIR against the runner overlay, global host blocks (read-only)
+// are merged beneath runner overlay blocks.
 func Active(path string, now time.Time) []Block {
+	var global []Block
+	if isRunnerOverlayPath(path) {
+		global = readActiveFile(GlobalPath(), now)
+	}
+	local := readActiveFile(path, now)
+	merged := make(map[string]Block, len(global)+len(local))
+	for _, b := range global {
+		merged[key(b.Provider, b.Model)] = b
+	}
+	for _, b := range local {
+		merged[key(b.Provider, b.Model)] = b
+	}
+	active := make([]Block, 0, len(merged))
+	for _, b := range merged {
+		active = append(active, b)
+	}
+	sort.Slice(active, func(i, j int) bool { return active[i].Until.Before(active[j].Until) })
+	return active
+}
+
+func isRunnerOverlayPath(path string) bool {
+	if os.Getenv("TAIA_SESSION_DIR") == "" || strings.TrimSpace(path) == "" {
+		return false
+	}
+	overlay, err := ResolvedPath()
+	return err == nil && filepath.Clean(path) == filepath.Clean(overlay)
+}
+
+func readActiveFile(path string, now time.Time) []Block {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
 	blocks, _ := read(path)
 	var active []Block
 	for _, b := range blocks {
@@ -152,7 +228,6 @@ func Active(path string, now time.Time) []Block {
 			active = append(active, b)
 		}
 	}
-	sort.Slice(active, func(i, j int) bool { return active[i].Until.Before(active[j].Until) })
 	return active
 }
 

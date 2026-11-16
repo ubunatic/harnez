@@ -79,6 +79,9 @@ func FeedbackDir(legacyDir string) (string, error) { return scopedDir(legacyDir,
 // BenchDir returns the runner-local benchmark directory or the host directory.
 func BenchDir(legacyDir string) (string, error) { return scopedDir(legacyDir, "state", "bench") }
 
+// PolicyDir returns the runner-local policy overlay directory or the host directory.
+func PolicyDir(legacyDir string) (string, error) { return scopedDir(legacyDir, "state", "policy") }
+
 func scopedDir(legacyDir string, parts ...string) (string, error) {
 	root := os.Getenv(runnerDirEnv)
 	if root == "" {

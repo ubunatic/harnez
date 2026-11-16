@@ -76,7 +76,11 @@ func modelsBlockCmd() *cobra.Command {
 			if until == "" {
 				return fmt.Errorf("--until is required (RFC3339 time or a duration like 3h30m)")
 			}
-			return runModelsBlock(cmd.OutOrStdout(), modelblock.Path(), args[0], until, reason, time.Now())
+			path, err := modelblock.ResolvedPath()
+			if err != nil {
+				return err
+			}
+			return runModelsBlock(cmd.OutOrStdout(), path, args[0], until, reason, time.Now())
 		},
 	}
 	cmd.Flags().StringVar(&until, "until", "", "block end: RFC3339 time or duration such as 3h30m")
@@ -90,7 +94,11 @@ func modelsUnblockCmd() *cobra.Command {
 		Short: "Remove a model block",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runModelsUnblock(cmd.OutOrStdout(), modelblock.Path(), args[0])
+			path, err := modelblock.ResolvedPath()
+			if err != nil {
+				return err
+			}
+			return runModelsUnblock(cmd.OutOrStdout(), path, args[0])
 		},
 	}
 }

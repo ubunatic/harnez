@@ -17,6 +17,8 @@ import (
 
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
+	"ubunatic.com/harnez/internal/usage"
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 func TestTelemetryRouteStoresAndServerDrainsSpool(t *testing.T) {
@@ -545,5 +547,87 @@ func TestRunnerRelayCollectorAndHostAdminBoundary(t *testing.T) {
 		if err != nil || len(rows) != 1 {
 			t.Fatalf("session %s rows = %d, %v, want 1", sid, len(rows), err)
 		}
+	}
+}
+
+func TestTelemetryCollectorServiceUsageQueryViaRunnerRelay(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, "run"))
+	t.Setenv("TAIA_SESSION_DIR", "")
+
+	config, err := server.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.EnsureUsageSchema(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(usage.UsageSummary{
+		Timestamp: now,
+		Agents:    []usage.AgentUsage{{AgentID: "claude", Installed: true, Authenticated: true}},
+	})
+	if err := store.WriteUsageSummary(context.Background(), usagestore.UsageSummaryRecord{
+		Hostname:   "host-svc",
+		ObservedAt: now,
+		Payload:    payload,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteLatestUsageSummary(context.Background(), usagestore.UsageSummaryRecord{
+		Hostname:   "host-svc",
+		ObservedAt: now,
+		Payload:    payload,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reset := now.Add(time.Hour)
+	if err := store.WriteCurrent(context.Background(), now, []usagestore.Window{{
+		Provider: "codex", Pool: "primary", Key: "five_hour", Name: "five_hour",
+		Source: "collector", Freshness: "fresh", UsedFraction: 0.25, ResetAt: &reset, ObservedAt: now,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	_ = store.Close()
+
+	hostSocket, err := config.Socket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &telemetryCollectorService{config: config, path: dbPath, interval: time.Hour}
+	mux := http.NewServeMux()
+	service.RegisterRoutes(mux)
+	startUnixHTTPServer(t, hostSocket, mux, config.ReadHeaderTimeout)
+
+	runnerRoot := filepath.Join(t.TempDir(), "runner-session")
+	startRunnerRelayHarness(t, config, runnerRoot, hostSocket)
+
+	summary, err := usage.ReadStoredSummary(context.Background(), "")
+	if err != nil || len(summary.Agents) != 1 || summary.Agents[0].AgentID != "claude" {
+		t.Fatalf("runner ReadStoredSummary via telemetryCollectorService = (%+v, %v)", summary, err)
+	}
+	avail := usage.CachedProviderQuotaAvailabilities("codex", []string{"gpt-5"}, now)
+	if avail["gpt-5"].State != "available" {
+		t.Fatalf("runner CachedProviderQuotaAvailabilities = %+v, want available", avail["gpt-5"])
+	}
+	entries, err := usage.ReadHistory(usage.HistoryDir(""))
+	if err != nil || len(entries) != 1 || entries[0].Hostname != "host-svc" {
+		t.Fatalf("runner ReadHistory = (%+v, %v)", entries, err)
+	}
+	qEntries, err := usage.ReadQuotaHistory(usage.HistoryDir(""))
+	if err != nil || len(qEntries) == 0 || qEntries[0].Agent != "codex" {
+		t.Fatalf("runner ReadQuotaHistory = (%+v, %v)", qEntries, err)
 	}
 }

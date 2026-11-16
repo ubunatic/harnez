@@ -20,6 +20,9 @@ import (
 // ImportUsageCompatibility backfills the existing quota snapshots/history
 // once so consumers can read them through the shared store API.
 func ImportUsageCompatibility(ctx context.Context, homeDir, dbPath string) error {
+	if inRunnerMode() && (dbPath == "" || filepath.Clean(dbPath) == filepath.Clean(UsageStorePath())) {
+		return fmt.Errorf("import usage compatibility: host-only operation in runner mode")
+	}
 	if dbPath == "" {
 		var err error
 		dbPath, err = telemetry.DefaultDBPath()
@@ -124,17 +127,7 @@ func QuotaHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]Quota
 		return nil, err
 	}
 	defer store.Close()
-	windows, err := store.QuotaHistory(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]QuotaHistoryEntry, 0, len(windows))
-	for _, window := range windows {
-		used := int(math.Round(window.UsedFraction * 100))
-		remaining := max(100-used, 0)
-		out = append(out, QuotaHistoryEntry{Timestamp: window.ObservedAt, Agent: window.Provider, Group: window.Pool, Window: window.Name, UsedPercent: used, RemainingPercent: remaining, ResetAt: window.ResetAt})
-	}
-	return out, nil
+	return quotaHistoryFromOpenStore(ctx, store)
 }
 
 // UsageHistoryFromStore returns complete compatibility snapshots through the
@@ -155,6 +148,44 @@ func UsageHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]Histo
 		return nil, err
 	}
 	defer store.Close()
+	return usageHistoryFromOpenStore(ctx, store)
+}
+
+// ReadUsageHistoryFromStore reads recorded usage history snapshots read-only
+// without importing compatibility files or mutating the database.
+func ReadUsageHistoryFromStore(ctx context.Context, dbPath string) ([]HistoryEntry, error) {
+	if dbPath == "" {
+		dbPath = UsageStorePath()
+	}
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return nil, nil
+	}
+	store, err := usagestore.OpenReadOnly(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	defer store.Close()
+	return usageHistoryFromOpenStore(ctx, store)
+}
+
+// ReadQuotaHistoryFromStore reads recorded quota window history read-only
+// without importing compatibility files or mutating the database.
+func ReadQuotaHistoryFromStore(ctx context.Context, dbPath string) ([]QuotaHistoryEntry, error) {
+	if dbPath == "" {
+		dbPath = UsageStorePath()
+	}
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return nil, nil
+	}
+	store, err := usagestore.OpenReadOnly(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	defer store.Close()
+	return quotaHistoryFromOpenStore(ctx, store)
+}
+
+func usageHistoryFromOpenStore(ctx context.Context, store *usagestore.Store) ([]HistoryEntry, error) {
 	rows, err := store.UsageSummaries(ctx)
 	if err != nil {
 		return nil, err
@@ -169,6 +200,20 @@ func UsageHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]Histo
 			summary.Timestamp = row.ObservedAt
 		}
 		out = append(out, HistoryEntry{Hostname: row.Hostname, UsageSummary: summary})
+	}
+	return out, nil
+}
+
+func quotaHistoryFromOpenStore(ctx context.Context, store *usagestore.Store) ([]QuotaHistoryEntry, error) {
+	windows, err := store.QuotaHistory(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]QuotaHistoryEntry, 0, len(windows))
+	for _, window := range windows {
+		used := int(math.Round(window.UsedFraction * 100))
+		remaining := max(100-used, 0)
+		out = append(out, QuotaHistoryEntry{Timestamp: window.ObservedAt, Agent: window.Provider, Group: window.Pool, Window: window.Name, UsedPercent: used, RemainingPercent: remaining, ResetAt: window.ResetAt})
 	}
 	return out, nil
 }
@@ -381,6 +426,9 @@ func writeProviderSnapshotMirror(path string, fetchedAt time.Time, provider stri
 }
 
 func appendUsageSummaryToStore(dir string, summary UsageSummary) error {
+	if inRunnerMode() {
+		return fmt.Errorf("append canonical usage history: host-only operation in runner mode")
+	}
 	dbPath, err := telemetry.DefaultDBPath()
 	if err != nil {
 		return err

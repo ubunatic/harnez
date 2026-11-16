@@ -35,6 +35,7 @@ func init() {
 const (
 	RunnerOpTelemetryIngest = "telemetry_ingest"
 	RunnerOpTelemetryReplay = "telemetry_replay"
+	RunnerOpUsageRead       = "usage_read"
 )
 
 var (
@@ -380,10 +381,22 @@ func fitsReplayWireCap(cfg Config, current []TelemetryRecord, next TelemetryReco
 	return int64(len(encoded)) <= cfg.RunnerChannel.ReplayMaxBytes
 }
 
+// RunnerBrokerHandlers supplies host-side callbacks for allowlisted runner RPCs.
+type RunnerBrokerHandlers struct {
+	Ingest     func(context.Context, TelemetryRecord) error
+	UsageQuery func(context.Context, RunnerUsageQuery) ([]byte, error)
+}
+
 // ServeRunnerBroker listens on the host end of the AF_UNIX SOCK_SEQPACKET broker
 // socketpair, accepts per-request SCM_RIGHTS stream connections concurrently, and
 // dispatches validated telemetry operations.
 func ServeRunnerBroker(ctx context.Context, hostEnd *os.File, cfg Config, ingest func(context.Context, TelemetryRecord) error) error {
+	return ServeRunnerBrokerWith(ctx, hostEnd, cfg, RunnerBrokerHandlers{Ingest: ingest})
+}
+
+// ServeRunnerBrokerWith listens on hostEnd and dispatches allowlisted runner
+// telemetry and read-only query handlers concurrently.
+func ServeRunnerBrokerWith(ctx context.Context, hostEnd *os.File, cfg Config, handlers RunnerBrokerHandlers) error {
 	if hostEnd == nil {
 		return fmt.Errorf("serve runner broker: nil host socket")
 	}
@@ -397,16 +410,19 @@ func ServeRunnerBroker(ctx context.Context, hostEnd *os.File, cfg Config, ingest
 		_ = rawConn.Close()
 		return fmt.Errorf("serve runner broker: expected *net.UnixConn")
 	}
-	return serveUnixBroker(ctx, seqConn, cfg, ingest)
+	return serveUnixBroker(ctx, seqConn, cfg, handlers)
 }
 
 // RelayRunnerBroker bridges the host end of the runner broker socketpair to
 // the host collector Unix socket without exposing host-only admin operations.
 func RelayRunnerBroker(ctx context.Context, hostEnd *os.File, hostSocket string, cfg Config) error {
-	return ServeRunnerBroker(ctx, hostEnd, cfg, hostSocketIngestor(hostSocket, cfg))
+	return ServeRunnerBrokerWith(ctx, hostEnd, cfg, RunnerBrokerHandlers{
+		Ingest:     hostSocketIngestor(hostSocket, cfg),
+		UsageQuery: hostSocketUsageQuery(hostSocket, cfg),
+	})
 }
 
-func serveUnixBroker(ctx context.Context, seqConn *net.UnixConn, cfg Config, ingest func(context.Context, TelemetryRecord) error) error {
+func serveUnixBroker(ctx context.Context, seqConn *net.UnixConn, cfg Config, handlers RunnerBrokerHandlers) error {
 	serveCtx, cancelServe := context.WithCancel(ctx)
 	done := make(chan struct{})
 	var closeOnce sync.Once
@@ -454,7 +470,7 @@ func serveUnixBroker(ctx context.Context, seqConn *net.UnixConn, cfg Config, ing
 		go func(c net.Conn) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			_ = ServeRunnerConn(serveCtx, c, cfg, ingest)
+			_ = ServeRunnerConnWith(serveCtx, c, cfg, handlers)
 		}(clientConn)
 	}
 }
@@ -511,11 +527,16 @@ func hostSocketIngestor(hostSocket string, cfg Config) func(context.Context, Tel
 // ServeRunnerConn handles framed runner telemetry RPCs on a host stream
 // connection, enforcing allowlisted operations, payload caps, and strict JSON.
 func ServeRunnerConn(ctx context.Context, conn net.Conn, cfg Config, ingest func(context.Context, TelemetryRecord) error) error {
+	return ServeRunnerConnWith(ctx, conn, cfg, RunnerBrokerHandlers{Ingest: ingest})
+}
+
+// ServeRunnerConnWith handles allowlisted framed runner RPCs using handlers.
+func ServeRunnerConnWith(ctx context.Context, conn net.Conn, cfg Config, handlers RunnerBrokerHandlers) error {
 	if conn == nil {
 		return fmt.Errorf("serve runner conn: nil connection")
 	}
-	if ingest == nil {
-		return fmt.Errorf("serve runner conn: nil ingest handler")
+	if handlers.Ingest == nil && handlers.UsageQuery == nil {
+		return fmt.Errorf("serve runner conn: no handlers registered")
 	}
 	done := make(chan struct{})
 	var closeOnce sync.Once
@@ -548,7 +569,7 @@ func ServeRunnerConn(ctx context.Context, conn net.Conn, cfg Config, ingest func
 			}
 			return err
 		}
-		resp := handleRunnerFrame(ctx, cfg, frame, ingest)
+		resp := handleRunnerFrame(ctx, cfg, frame, handlers)
 		if cfg.HTTPClientTimeout > 0 {
 			_ = conn.SetWriteDeadline(time.Now().Add(cfg.HTTPClientTimeout))
 		}
@@ -558,7 +579,7 @@ func ServeRunnerConn(ctx context.Context, conn net.Conn, cfg Config, ingest func
 	}
 }
 
-func handleRunnerFrame(ctx context.Context, cfg Config, frame []byte, ingest func(context.Context, TelemetryRecord) error) RunnerResponse {
+func handleRunnerFrame(ctx context.Context, cfg Config, frame []byte, handlers RunnerBrokerHandlers) RunnerResponse {
 	var req RunnerRequest
 	if err := decodeStrictJSON(frame, &req); err != nil {
 		return RunnerResponse{Status: http.StatusBadRequest, Error: "invalid runner request"}
@@ -568,9 +589,17 @@ func handleRunnerFrame(ctx context.Context, cfg Config, frame []byte, ingest fun
 	}
 	switch req.Op {
 	case RunnerOpTelemetryIngest:
-		return handleRunnerIngest(ctx, cfg, req.Payload, ingest)
+		if handlers.Ingest == nil {
+			return RunnerResponse{Status: http.StatusServiceUnavailable, Error: ErrRunnerUnavailable.Error()}
+		}
+		return handleRunnerIngest(ctx, cfg, req.Payload, handlers.Ingest)
 	case RunnerOpTelemetryReplay:
-		return handleRunnerReplay(ctx, cfg, req.Payload, ingest)
+		if handlers.Ingest == nil {
+			return RunnerResponse{Status: http.StatusServiceUnavailable, Error: ErrRunnerUnavailable.Error()}
+		}
+		return handleRunnerReplay(ctx, cfg, req.Payload, handlers.Ingest)
+	case RunnerOpUsageRead:
+		return handleRunnerUsageRead(ctx, cfg, req.Payload, handlers.UsageQuery)
 	default:
 		return RunnerResponse{Status: http.StatusForbidden, Error: ErrRunnerForbidden.Error()}
 	}

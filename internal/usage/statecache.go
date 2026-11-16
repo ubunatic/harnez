@@ -78,7 +78,10 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 // from one provider-store lookup.
 func CachedProviderQuotaAvailabilities(provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
 	states := unknownProviderQuotaAvailabilities(models)
-	if os.Getenv("TAIA_SESSION_DIR") != "" {
+	if inRunnerMode() {
+		if queried, err := queryRunnerProviderQuota(context.Background(), provider, models); err == nil && len(queried) > 0 {
+			states = queried
+		}
 		return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)
 	}
 	if dbPath, err := telemetry.DefaultDBPath(); err == nil {
@@ -91,6 +94,13 @@ func CachedProviderQuotaAvailabilities(provider string, models []string, now tim
 // creating or migrating telemetry storage, for side-effect-free previews.
 func CachedProviderQuotaAvailabilityReadOnly(provider, model string, now time.Time) ProviderQuotaAvailability {
 	models := []string{model}
+	if inRunnerMode() {
+		states := unknownProviderQuotaAvailabilities(models)
+		if queried, err := queryRunnerProviderQuota(context.Background(), provider, models); err == nil && len(queried) > 0 {
+			states = queried
+		}
+		return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)[model]
+	}
 	path := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
 	states := providerQuotaAvailabilitiesFromStore(context.Background(), path, provider, models, now, true)
 	return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)[model]
@@ -122,6 +132,12 @@ func ProviderQuotaAvailabilityFromStore(ctx context.Context, dbPath, provider, m
 // applies model-specific pool selection to each requested model.
 func ProviderQuotaAvailabilitiesFromStore(ctx context.Context, dbPath, provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
 	return providerQuotaAvailabilitiesFromStore(ctx, dbPath, provider, models, now, false)
+}
+
+// ProviderQuotaAvailabilitiesFromStoreReadOnly reads normalized quota rows
+// without creating or migrating the SQLite store.
+func ProviderQuotaAvailabilitiesFromStoreReadOnly(ctx context.Context, dbPath, provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
+	return providerQuotaAvailabilitiesFromStore(ctx, dbPath, provider, models, now, true)
 }
 
 func providerQuotaAvailabilitiesFromStore(ctx context.Context, dbPath, provider string, models []string, now time.Time, readOnly bool) map[string]ProviderQuotaAvailability {

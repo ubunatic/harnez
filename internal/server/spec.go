@@ -24,6 +24,7 @@ type Config struct {
 	UpdateTimeout             time.Duration
 	UpdateMaxBodyBytes        int64
 	TelemetryPath             string
+	UsageQueryPath            string
 	TelemetrySpoolPath        string
 	TelemetrySpoolMaxBytes    int64
 	StartupTimeout            time.Duration
@@ -68,6 +69,7 @@ type specConfig struct {
 	UpdateTimeout             string `yaml:"update_timeout"`
 	UpdateMaxBodyBytes        int64  `yaml:"update_max_body_bytes"`
 	TelemetryPath             string `yaml:"telemetry_update_path"`
+	UsageQueryPath            string `yaml:"usage_query_path"`
 	TelemetrySpoolPath        string `yaml:"telemetry_spool_path"`
 	TelemetrySpoolMaxBytes    int64  `yaml:"telemetry_spool_max_bytes"`
 	StartupTimeout            string `yaml:"startup_timeout"`
@@ -110,7 +112,7 @@ func LoadConfig() (Config, error) {
 	if raw.SocketPath == "" || filepath.IsAbs(raw.SocketPath) || strings.Contains(raw.SocketPath, "..") || filepath.Base(raw.SocketPath) != raw.SocketPath {
 		return Config{}, fmt.Errorf("spec/server.yaml: socket_path must be a filename")
 	}
-	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes, TelemetryPath: raw.TelemetryPath, TelemetrySpoolPath: raw.TelemetrySpoolPath, TelemetrySpoolMaxBytes: raw.TelemetrySpoolMaxBytes, SystemdUnitName: raw.SystemdUnitName, SystemdUnitSource: raw.SystemdUnitSource, SystemdRestartPolicy: raw.SystemdRestartPolicy, DefaultLogLines: raw.DefaultLogLines}
+	cfg := Config{SocketPath: raw.SocketPath, UpdateMaxBodyBytes: raw.UpdateMaxBodyBytes, TelemetryPath: raw.TelemetryPath, UsageQueryPath: raw.UsageQueryPath, TelemetrySpoolPath: raw.TelemetrySpoolPath, TelemetrySpoolMaxBytes: raw.TelemetrySpoolMaxBytes, SystemdUnitName: raw.SystemdUnitName, SystemdUnitSource: raw.SystemdUnitSource, SystemdRestartPolicy: raw.SystemdRestartPolicy, DefaultLogLines: raw.DefaultLogLines}
 	if !sshutil.ValidInstallPath(raw.RemoteUpgrade.InstallPath) {
 		return Config{}, fmt.Errorf("spec/server.yaml: remote_upgrade.install_path must be a safe home-relative or absolute path outside temporary directories")
 	}
@@ -138,6 +140,9 @@ func LoadConfig() (Config, error) {
 	}
 	if !strings.HasPrefix(cfg.TelemetryPath, "/") || strings.ContainsAny(cfg.TelemetryPath, "?#") {
 		return Config{}, fmt.Errorf("spec/server.yaml: telemetry_update_path must be an absolute route path")
+	}
+	if !strings.HasPrefix(cfg.UsageQueryPath, "/") || strings.ContainsAny(cfg.UsageQueryPath, "?#") {
+		return Config{}, fmt.Errorf("spec/server.yaml: usage_query_path must be an absolute route path")
 	}
 	if cfg.TelemetrySpoolPath == "" || filepath.IsAbs(cfg.TelemetrySpoolPath) || strings.Contains(cfg.TelemetrySpoolPath, "..") || filepath.Base(cfg.TelemetrySpoolPath) != cfg.TelemetrySpoolPath {
 		return Config{}, fmt.Errorf("spec/server.yaml: telemetry_spool_path must be a directory name")
