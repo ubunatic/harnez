@@ -1940,7 +1940,10 @@ files and leaves them uncommitted. 'new' never commits.
 
 Forgejo writes use a separate write token (harnez forge token create --write);
 the read token remains separate. Without a write token new uses fj or tea;
-comment uses fj. GitHub new uses gh.
+comment uses fj. GitHub new uses gh. If forge issue creation fails (no write
+access, missing token or CLI auth, or a worker session), issues new automatically
+writes issues/inbox/<slug>.md as a file-based fallback and warns agents not to
+troubleshoot token setup.
 Forge writes run in a host session; this guards accidents, not a security boundary:
 inherited host environments, unset worker markers and direct forge tools bypass it.
 GitHub writes are ticket 1209, except the existing GitHub new path.

@@ -60,17 +60,26 @@ Forgejo writes use a separate write token, created with `harnez forge token crea
 to fj or tea and `comment` to fj. GitHub `new` uses gh. Labels must exist on the
 forge: the API resolves their names to IDs; fj cannot set labels.
 
+**Inbox fallback (never debug tokens)**: If forge issue creation fails for any
+reason — missing repository write access (`401`/`403`), missing or unauthenticated
+token/CLI (`fj`, `tea`, `gh`), or running inside a worker session — `harnez issues
+new` automatically writes the issue to `issues/inbox/<slug>.md` and warns not to
+troubleshoot token setup. Agents must **never** spend turns inspecting token
+stores, environment variables, or forge CLI auth when filing fails: verify or
+write `issues/inbox/<slug>.md`, commit it, and push it on a branch or AGit PR.
+
 `--dry-run` previews forge writes, but does not cover the `new --remote` or
 `CLAUDE_CODE_REMOTE` flow, which can create an issue. Forge writes are host-only:
 worker markers guard against accidents, not security attacks. Native subagents
 inheriting the host environment, workers that unset the markers, and direct forge
-tools are not stopped. GitHub writes beyond the existing `new` path are tracked
-in ticket 1209. The edit timestamp check is a preflight: a write between the check
-and PATCH is not detected. A comment body must contain non-whitespace text and
-cannot use stdin. Add `--closed` to comment on or edit a closed issue.
+tools are not stopped (for `issues new`, workers fall back to `issues/inbox/`).
+GitHub writes beyond the existing `new` path are tracked in ticket 1209. The edit
+timestamp check is a preflight: a write between the check and PATCH is not detected.
+A comment body must contain non-whitespace text and cannot use stdin. Add `--closed`
+to comment on or edit a closed issue.
 
 - When an existing ticket partly covers the request, say so and ask before filing or commenting. Comment on other tickets only with the user's OK.
-- Report "filed as #N at <URL>; no commit". Publish Promptly below applies only to file-based trackers.
+- Report "filed as #N at <URL>; no commit" (or, on inbox fallback, report the `issues/inbox/<slug>.md` path and publish the branch/PR per Publish Promptly). Publish Promptly below applies to file-based tickets and `issues/inbox/` fallbacks.
 
 ```bash
 harnez find -d <repo> issues -a status:active

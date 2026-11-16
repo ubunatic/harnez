@@ -178,7 +178,7 @@ Output formatting:
 					if len(words) > 0 && findIssuesLocalOnly[words[0]] {
 						return forgeLocalOnlyError(words[0])
 					}
-					return forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.IssueScan, forgeFindTerms(words), limitFlag, allFlag, jsonFlag), t)
+					return warnIfForgeAuthErr(cmd.ErrOrStderr(), forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.IssueScan, forgeFindTerms(words), limitFlag, allFlag, jsonFlag), t))
 				}
 			}
 			opts := find.FindRunOptions{

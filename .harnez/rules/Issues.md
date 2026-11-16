@@ -26,7 +26,10 @@ For a project with an `issues/` tracker. Use `harnez find` / `harnez issues`, no
   `issues close --forge 42 done`, `issues reopen --forge 42` (prefix each with `harnez`).
   `--dry-run` previews forge writes, but does not cover new --remote or CLAUDE_CODE_REMOTE,
   which can create an issue. Without a write token new falls back to fj or tea and
-  comment to fj; GitHub new uses gh.
+  comment to fj; GitHub new uses gh. If forge filing fails (missing write access,
+  token, CLI auth, or worker session), `issues new` writes `issues/inbox/<slug>.md`
+  instead — commit and push it on a branch/PR. Agents must NEVER inspect, debug, or
+  modify token setup, env vars, or forge CLI auth; always fall back to `issues/inbox/`.
   Forge writes run in the host session; this guards accidents, not a security boundary:
   inherited host environments, unset worker markers and direct forge tools bypass it.
   Edit's timestamp preflight is not atomic. GitHub writes are ticket 1209, except the

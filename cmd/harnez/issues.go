@@ -115,7 +115,10 @@ files and leaves them uncommitted. 'new' never commits.
 
 Forgejo writes use a separate write token (harnez forge token create --write);
 the read token remains separate. Without a write token new uses fj or tea;
-comment uses fj. GitHub new uses gh.
+comment uses fj. GitHub new uses gh. If forge issue creation fails (no write
+access, missing token or CLI auth, or a worker session), issues new automatically
+writes issues/inbox/<slug>.md as a file-based fallback and warns agents not to
+troubleshoot token setup.
 Forge writes run in a host session; this guards accidents, not a security boundary:
 inherited host environments, unset worker markers and direct forge tools bypass it.
 GitHub writes are ticket 1209, except the existing GitHub new path.
@@ -365,233 +368,266 @@ valid, exit-0 answer.`,
 		},
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if pushMainFlag {
-				if len(args) == 0 || listFlag {
-					return fmt.Errorf("--push-main applies only to issue commit commands")
-				}
-				switch args[0] {
-				case "open", "start", "block", "close", "done", "draft", "backlog", "promote", "mv", "rebase", "reconcile":
-				default:
-					return fmt.Errorf("issues %s: --push-main applies only to issue commit commands", args[0])
-				}
-			}
-			if listFlag {
-				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, nil, jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
-			}
-			if args[0] == "edit" {
-				var t forgetracker.Target
-				var src forgetracker.Source
-				if forgeFlag {
-					sp, err := prwait.LoadSpec()
-					if err != nil {
-						return err
+			err := func() error {
+				if pushMainFlag {
+					if len(args) == 0 || listFlag {
+						return fmt.Errorf("--push-main applies only to issue commit commands")
 					}
-					t, err = forgetracker.ResolveRemote(dir, sp)
-					if err != nil {
-						return fmt.Errorf("issues edit: cannot resolve forge remote: %w", err)
+					switch args[0] {
+					case "open", "start", "block", "close", "done", "draft", "backlog", "promote", "mv", "rebase", "reconcile":
+					default:
+						return fmt.Errorf("issues %s: --push-main applies only to issue commit commands", args[0])
 					}
-					src = forgeTrackerSource(sp)
-				} else {
+				}
+				if listFlag {
+					return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, nil, jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
+				}
+				if args[0] == "edit" {
+					var t forgetracker.Target
+					var src forgetracker.Source
+					if forgeFlag {
+						sp, err := prwait.LoadSpec()
+						if err != nil {
+							return err
+						}
+						t, err = forgetracker.ResolveRemote(dir, sp)
+						if err != nil {
+							return fmt.Errorf("issues edit: cannot resolve forge remote: %w", err)
+						}
+						src = forgeTrackerSource(sp)
+					} else {
+						var ok bool
+						var err error
+						t, src, _, ok, err = resolveForgeTracker(cmd.ErrOrStderr(), dir)
+						if err != nil {
+							return err
+						}
+						if !ok {
+							return fmt.Errorf("issues edit: local tickets are files; edit issues/<n>-*.md and commit")
+						}
+					}
+					return runIssuesEditForge(cmd.OutOrStdout(), t, src, args[1], editTitleFlag, bodyFileFlag, ifUpdatedFlag, cmd.Flags().Changed("title"), forceFlag, dryRunFlag || checkFlag, closedFlag)
+				}
+				if args[0] == "close" || args[0] == "reopen" || args[0] == "open" {
+					var t forgetracker.Target
+					var src forgetracker.Source
 					var ok bool
-					var err error
-					t, src, _, ok, err = resolveForgeTracker(cmd.ErrOrStderr(), dir)
+					if forgeFlag {
+						sp, err := prwait.LoadSpec()
+						if err != nil {
+							return err
+						}
+						t, err = forgetracker.ResolveRemote(dir, sp)
+						if err != nil {
+							return fmt.Errorf("issues %s: cannot resolve forge remote: %w", args[0], err)
+						}
+						src, ok = forgeTrackerSource(sp), true
+					} else {
+						var err error
+						t, src, _, ok, err = resolveForgeTracker(cmd.ErrOrStderr(), dir)
+						if err != nil {
+							return err
+						}
+					}
+					if ok {
+						if args[0] == "open" {
+							return fmt.Errorf("issues open: on a forge use reopen")
+						}
+						return runIssuesStateForge(cmd.OutOrStdout(), t, src, args[0], args[1], strings.Join(args[2:], " "), dryRunFlag || checkFlag)
+					}
+					if args[0] == "reopen" {
+						return fmt.Errorf("issues reopen: local tracker; use harnez issues open <n>")
+					}
+				}
+				if args[0] == "merge-driver" {
+					target := "issues/README.md"
+					if len(args) == 4 {
+						return issuesmaintenance.RunIssuesMergeDriverVersions(args[1], args[2], args[3], target)
+					}
+					if len(args) == 5 {
+						target = args[4]
+					}
+					return issuesmaintenance.RunIssuesMergeDriverVersions(args[1], args[2], args[3], target)
+				}
+				if args[0] == "reconcile" {
+					ref := ""
+					if len(args) == 2 {
+						ref = args[1]
+					}
+					if checkFlag && pullFlag {
+						return fmt.Errorf("issues reconcile: --check/--dry-run cannot be combined with --pull (it would merge first); use --fetch to preview")
+					}
+					return issuesmaintenance.RunIssuesReconcileOpts(cmd.OutOrStdout(), dir, issuesmaintenance.ReconcileOptions{Ref: ref, DryRun: dryRunFlag || checkFlag, Fetch: fetchFlag, Pull: pullFlag, Guard: gitflow.IssueCommitOptions{PushMain: pushMainFlag, Stderr: cmd.ErrOrStderr()}})
+				}
+				if args[0] == "rebase" {
+					upstream := "@{upstream}"
+					if len(args) == 2 {
+						upstream = args[1]
+					}
+					return issuesmaintenance.RunIssuesRebaseWithGuard(cmd.OutOrStdout(), dir, upstream, checkFlag || dryRunFlag, gitflow.IssueCommitOptions{PushMain: pushMainFlag, Stderr: cmd.ErrOrStderr()})
+				}
+				if args[0] == "lint" {
+					if againstFlag != "" {
+						return issues.LintAgainst(cmd.OutOrStdout(), dir, againstFlag)
+					}
+					if cachedFlag {
+						return issuesmaintenance.RunIssuesLintCached(cmd.OutOrStdout(), dir)
+					}
+					return issuesmaintenance.RunIssuesLint(cmd.OutOrStdout(), dir)
+				}
+				if args[0] == "status" {
+					return issuesmaintenance.RunIssuesStatus(cmd.OutOrStdout(), dir)
+				}
+				if args[0] == "new" {
+					title := strings.TrimSpace(strings.Join(args[1:], " "))
+					if forgeFlag {
+						spec, err := prwait.LoadSpec()
+						if err != nil {
+							return err
+						}
+						t, err := forgetracker.ResolveRemote(dir, spec)
+						if err != nil {
+							return fmt.Errorf("issues new: cannot resolve forge remote: %w", err)
+						}
+						return runIssuesNewForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, t, forgetracker.CreateRequest{Title: title, BodyFile: bodyFileFlag, Labels: labelFlags}, checkFlag || dryRunFlag, jsonFlag)
+					}
+					// The forge path needs an explicit signal (-F/--label or tracker: none), so a
+					// fresh repo with a forge origin still adopts a local issues/ dir (issue 853).
+					_, remoteEnvSet := os.LookupEnv("CLAUDE_CODE_REMOTE")
+					if !remoteFlag && !remoteEnvSet && numberFlag == "" && (bodyFileFlag != "" || len(labelFlags) > 0 || trackerIsNone(dir)) {
+						if t, _, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
+							return err
+						} else if ok {
+							return runIssuesNewForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, t, forgetracker.CreateRequest{Title: title, BodyFile: bodyFileFlag, Labels: labelFlags}, checkFlag || dryRunFlag, jsonFlag)
+						}
+					}
+					if bodyFileFlag != "" || len(labelFlags) > 0 {
+						return fmt.Errorf("issues new: -F/--body-file and --label apply only when tickets live on the forge; with a local issues/ dir use --forge")
+					}
+					_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
+					if remoteFlag || remoteEnv {
+						fmt.Fprintln(cmd.ErrOrStderr(), "issues new: remote mode")
+						return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
+					}
+					// Without issues/, runIssuesNewWithForce always adopts the harnez
+					// tracker (same dirExists test) and prints that line instead (issue 906).
+					if dirExists(filepath.Join(dir, "issues")) {
+						fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
+					}
+					warnNumberAhead(cmd.ErrOrStderr(), dir, numberFlag, offlineFlag)
+					return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag, offlineFlag)
+				}
+				if args[0] == "comment" {
+					if forgeFlag {
+						spec, err := prwait.LoadSpec()
+						if err != nil {
+							return err
+						}
+						t, err := forgetracker.ResolveRemote(dir, spec)
+						if err != nil {
+							return fmt.Errorf("issues comment: cannot resolve forge remote: %w", err)
+						}
+						return runIssuesComment(cmd.OutOrStdout(), dir, t, forgeTrackerSource(spec), args[1], bodyFileFlag, dryRunFlag || checkFlag, closedFlag)
+					}
+					t, src, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir)
 					if err != nil {
 						return err
 					}
 					if !ok {
-						return fmt.Errorf("issues edit: local tickets are files; edit issues/<n>-*.md and commit")
+						return fmt.Errorf("issues comment: requires a forge tracker; with a local issues/ dir use --forge")
 					}
+					return runIssuesComment(cmd.OutOrStdout(), dir, t, src, args[1], bodyFileFlag, dryRunFlag || checkFlag, closedFlag)
 				}
-				return runIssuesEditForge(cmd.OutOrStdout(), t, src, args[1], editTitleFlag, bodyFileFlag, ifUpdatedFlag, cmd.Flags().Changed("title"), forceFlag, dryRunFlag || checkFlag, closedFlag)
-			}
-			if args[0] == "close" || args[0] == "reopen" || args[0] == "open" {
-				var t forgetracker.Target
-				var src forgetracker.Source
-				var ok bool
-				if forgeFlag {
-					sp, err := prwait.LoadSpec()
-					if err != nil {
-						return err
+				if args[0] == "import" {
+					return runIssuesImport(cmd.OutOrStdout(), dir, args[1], jsonFlag, offlineFlag, nil)
+				}
+				if args[0] == "show" {
+					if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
+						return fmt.Errorf("issues show: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
 					}
-					t, err = forgetracker.ResolveRemote(dir, sp)
-					if err != nil {
-						return fmt.Errorf("issues %s: cannot resolve forge remote: %w", args[0], err)
+					if forgeFlag {
+						sp, err := prwait.LoadSpec()
+						if err != nil {
+							return err
+						}
+						t, err := forgetracker.ResolveRemote(dir, sp)
+						if err != nil {
+							return fmt.Errorf("issues show: cannot resolve forge remote: %w", err)
+						}
+						return forgeTrackerHint(forgetracker.Show(cmd.OutOrStdout(), forgeTrackerSource(sp), t, args[1], jsonFlag), t)
 					}
-					src, ok = forgeTrackerSource(sp), true
-				} else {
-					var err error
-					t, src, _, ok, err = resolveForgeTracker(cmd.ErrOrStderr(), dir)
-					if err != nil {
-						return err
-					}
-				}
-				if ok {
-					if args[0] == "open" {
-						return fmt.Errorf("issues open: on a forge use reopen")
-					}
-					return runIssuesStateForge(cmd.OutOrStdout(), t, src, args[0], args[1], strings.Join(args[2:], " "), dryRunFlag || checkFlag)
-				}
-				if args[0] == "reopen" {
-					return fmt.Errorf("issues reopen: local tracker; use harnez issues open <n>")
-				}
-			}
-			if args[0] == "merge-driver" {
-				target := "issues/README.md"
-				if len(args) == 4 {
-					return issuesmaintenance.RunIssuesMergeDriverVersions(args[1], args[2], args[3], target)
-				}
-				if len(args) == 5 {
-					target = args[4]
-				}
-				return issuesmaintenance.RunIssuesMergeDriverVersions(args[1], args[2], args[3], target)
-			}
-			if args[0] == "reconcile" {
-				ref := ""
-				if len(args) == 2 {
-					ref = args[1]
-				}
-				if checkFlag && pullFlag {
-					return fmt.Errorf("issues reconcile: --check/--dry-run cannot be combined with --pull (it would merge first); use --fetch to preview")
-				}
-				return issuesmaintenance.RunIssuesReconcileOpts(cmd.OutOrStdout(), dir, issuesmaintenance.ReconcileOptions{Ref: ref, DryRun: dryRunFlag || checkFlag, Fetch: fetchFlag, Pull: pullFlag, Guard: gitflow.IssueCommitOptions{PushMain: pushMainFlag, Stderr: cmd.ErrOrStderr()}})
-			}
-			if args[0] == "rebase" {
-				upstream := "@{upstream}"
-				if len(args) == 2 {
-					upstream = args[1]
-				}
-				return issuesmaintenance.RunIssuesRebaseWithGuard(cmd.OutOrStdout(), dir, upstream, checkFlag || dryRunFlag, gitflow.IssueCommitOptions{PushMain: pushMainFlag, Stderr: cmd.ErrOrStderr()})
-			}
-			if args[0] == "lint" {
-				if againstFlag != "" {
-					return issues.LintAgainst(cmd.OutOrStdout(), dir, againstFlag)
-				}
-				if cachedFlag {
-					return issuesmaintenance.RunIssuesLintCached(cmd.OutOrStdout(), dir)
-				}
-				return issuesmaintenance.RunIssuesLint(cmd.OutOrStdout(), dir)
-			}
-			if args[0] == "status" {
-				return issuesmaintenance.RunIssuesStatus(cmd.OutOrStdout(), dir)
-			}
-			if args[0] == "new" {
-				title := strings.TrimSpace(strings.Join(args[1:], " "))
-				if forgeFlag {
-					spec, err := prwait.LoadSpec()
-					if err != nil {
-						return err
-					}
-					t, err := forgetracker.ResolveRemote(dir, spec)
-					if err != nil {
-						return fmt.Errorf("issues new: cannot resolve forge remote: %w", err)
-					}
-					return runIssuesNewForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, t, forgetracker.CreateRequest{Title: title, BodyFile: bodyFileFlag, Labels: labelFlags}, checkFlag || dryRunFlag, jsonFlag)
-				}
-				// The forge path needs an explicit signal (-F/--label or tracker: none), so a
-				// fresh repo with a forge origin still adopts a local issues/ dir (issue 853).
-				_, remoteEnvSet := os.LookupEnv("CLAUDE_CODE_REMOTE")
-				if !remoteFlag && !remoteEnvSet && numberFlag == "" && (bodyFileFlag != "" || len(labelFlags) > 0 || trackerIsNone(dir)) {
-					if t, _, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
+					if t, src, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
 						return err
 					} else if ok {
-						return runIssuesNewForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, t, forgetracker.CreateRequest{Title: title, BodyFile: bodyFileFlag, Labels: labelFlags}, checkFlag || dryRunFlag, jsonFlag)
+						return forgeTrackerHint(forgetracker.Show(cmd.OutOrStdout(), src, t, args[1], jsonFlag), t)
 					}
+					return runIssuesShow(cmd.OutOrStdout(), dir, args[1], jsonFlag, rawFlag, textFlag, imageFlag)
 				}
-				if bodyFileFlag != "" || len(labelFlags) > 0 {
-					return fmt.Errorf("issues new: -F/--body-file and --label apply only when tickets live on the forge; with a local issues/ dir use --forge")
+				if args[0] == "list" {
+					if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
+						return fmt.Errorf("issues list: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
+					}
+					return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args[1:], jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 				}
-				_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
-				if remoteFlag || remoteEnv {
-					fmt.Fprintln(cmd.ErrOrStderr(), "issues new: remote mode")
-					return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
+				opts := issuesRunOptions{
+					Dir:             dir,
+					ClosedByModel:   closedByModelFlag,
+					ClosedBySession: closedBySessionFlag,
+					Check:           checkFlag || dryRunFlag,
+					JSON:            jsonFlag,
+					NoCommit:        noCommitFlag,
+					AmendReason:     amendReasonFlag,
+					NoCode:          noCodeFlag,
+					PushMain:        pushMainFlag,
+					ImplementedBy:   implementedByFlag,
+					CommitMsg:       commitMsgFlag,
+					Stderr:          cmd.ErrOrStderr(),
 				}
-				// Without issues/, runIssuesNewWithForce always adopts the harnez
-				// tracker (same dirExists test) and prints that line instead (issue 906).
-				if dirExists(filepath.Join(dir, "issues")) {
-					fmt.Fprintln(cmd.ErrOrStderr(), "issues new: local mode")
+				if !cmd.Flags().Changed("model") {
+					opts.ClosedByModel = os.Getenv("HARNEZ_AGENT_MODEL")
 				}
-				warnNumberAhead(cmd.ErrOrStderr(), dir, numberFlag, offlineFlag)
-				return runIssuesNewWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, numberFlag, offlineFlag)
-			}
-			if args[0] == "comment" {
-				if forgeFlag {
-					spec, err := prwait.LoadSpec()
+				if !cmd.Flags().Changed("session") {
+					opts.ClosedBySession = os.Getenv("HARNEZ_SESSION_ID")
+				}
+				if args[0] == "mv" {
+					oldArg := args[1]
+					var newArg string
+					if len(args) > 2 {
+						newArg = args[2]
+					}
+					result, drift, err := runIssuesMv(cmd.OutOrStdout(), oldArg, newArg, opts)
 					if err != nil {
 						return err
 					}
-					t, err := forgetracker.ResolveRemote(dir, spec)
-					if err != nil {
-						return fmt.Errorf("issues comment: cannot resolve forge remote: %w", err)
+					printIssuesResult(cmd.OutOrStdout(), result, opts)
+					if opts.Check && drift {
+						return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
 					}
-					return runIssuesComment(cmd.OutOrStdout(), dir, t, forgeTrackerSource(spec), args[1], bodyFileFlag, dryRunFlag || checkFlag, closedFlag)
+					return nil
 				}
-				t, src, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir)
-				if err != nil {
-					return err
-				}
-				if !ok {
-					return fmt.Errorf("issues comment: requires a forge tracker; with a local issues/ dir use --forge")
-				}
-				return runIssuesComment(cmd.OutOrStdout(), dir, t, src, args[1], bodyFileFlag, dryRunFlag || checkFlag, closedFlag)
-			}
-			if args[0] == "import" {
-				return runIssuesImport(cmd.OutOrStdout(), dir, args[1], jsonFlag, offlineFlag, nil)
-			}
-			if args[0] == "show" {
-				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
-					return fmt.Errorf("issues show: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
-				}
-				if forgeFlag {
-					sp, err := prwait.LoadSpec()
+				numberCount := leadingIssueNumberCount(args[1:])
+				if numberCount > 1 {
+					results, drift, err := runIssuesVerbBatch(args[0], args[1:1+numberCount], args[1+numberCount:], opts)
 					if err != nil {
 						return err
 					}
-					t, err := forgetracker.ResolveRemote(dir, sp)
-					if err != nil {
-						return fmt.Errorf("issues show: cannot resolve forge remote: %w", err)
+					if opts.JSON {
+						data, err := json.Marshal(results)
+						if err != nil {
+							return err
+						}
+						fmt.Fprintln(cmd.OutOrStdout(), string(data))
+					} else {
+						for _, result := range results {
+							printIssuesResult(cmd.OutOrStdout(), result, opts)
+						}
 					}
-					return forgeTrackerHint(forgetracker.Show(cmd.OutOrStdout(), forgeTrackerSource(sp), t, args[1], jsonFlag), t)
+					if opts.Check && drift {
+						return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
+					}
+					return nil
 				}
-				if t, src, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
-					return err
-				} else if ok {
-					return forgeTrackerHint(forgetracker.Show(cmd.OutOrStdout(), src, t, args[1], jsonFlag), t)
-				}
-				return runIssuesShow(cmd.OutOrStdout(), dir, args[1], jsonFlag, rawFlag, textFlag, imageFlag)
-			}
-			if args[0] == "list" {
-				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
-					return fmt.Errorf("issues list: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
-				}
-				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args[1:], jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
-			}
-			opts := issuesRunOptions{
-				Dir:             dir,
-				ClosedByModel:   closedByModelFlag,
-				ClosedBySession: closedBySessionFlag,
-				Check:           checkFlag || dryRunFlag,
-				JSON:            jsonFlag,
-				NoCommit:        noCommitFlag,
-				AmendReason:     amendReasonFlag,
-				NoCode:          noCodeFlag,
-				PushMain:        pushMainFlag,
-				ImplementedBy:   implementedByFlag,
-				CommitMsg:       commitMsgFlag,
-				Stderr:          cmd.ErrOrStderr(),
-			}
-			if !cmd.Flags().Changed("model") {
-				opts.ClosedByModel = os.Getenv("HARNEZ_AGENT_MODEL")
-			}
-			if !cmd.Flags().Changed("session") {
-				opts.ClosedBySession = os.Getenv("HARNEZ_SESSION_ID")
-			}
-			if args[0] == "mv" {
-				oldArg := args[1]
-				var newArg string
-				if len(args) > 2 {
-					newArg = args[2]
-				}
-				result, drift, err := runIssuesMv(cmd.OutOrStdout(), oldArg, newArg, opts)
+				result, drift, err := runIssuesVerb(cmd.OutOrStdout(), args[0], args[1], args[2:], opts)
 				if err != nil {
 					return err
 				}
@@ -600,38 +636,8 @@ valid, exit-0 answer.`,
 					return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
 				}
 				return nil
-			}
-			numberCount := leadingIssueNumberCount(args[1:])
-			if numberCount > 1 {
-				results, drift, err := runIssuesVerbBatch(args[0], args[1:1+numberCount], args[1+numberCount:], opts)
-				if err != nil {
-					return err
-				}
-				if opts.JSON {
-					data, err := json.Marshal(results)
-					if err != nil {
-						return err
-					}
-					fmt.Fprintln(cmd.OutOrStdout(), string(data))
-				} else {
-					for _, result := range results {
-						printIssuesResult(cmd.OutOrStdout(), result, opts)
-					}
-				}
-				if opts.Check && drift {
-					return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
-				}
-				return nil
-			}
-			result, drift, err := runIssuesVerb(cmd.OutOrStdout(), args[0], args[1], args[2:], opts)
-			if err != nil {
-				return err
-			}
-			printIssuesResult(cmd.OutOrStdout(), result, opts)
-			if opts.Check && drift {
-				return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
-			}
-			return nil
+			}()
+			return warnIfForgeAuthErr(cmd.ErrOrStderr(), err)
 		},
 		ValidArgsFunction: issuesCompletion,
 	}

@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -119,20 +118,31 @@ func TestForgeNewWorkerAndFallback(t *testing.T) {
 	})
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
 	req := forgetracker.CreateRequest{Title: "T", BodyFile: body}
-	var out bytes.Buffer
-	err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, req, false, false)
-	want := "issues new: forge writes run only in a host session (this is harnez worker worker-1); hand the write to the host"
-	if err == nil || err.Error() != want || len(ran) != 0 {
-		t.Fatalf("worker %v ran=%v", err, ran)
+	dir := t.TempDir()
+	var out, errBuf bytes.Buffer
+	err := runIssuesNewForge(&out, &errBuf, dir, target, req, false, false)
+	if err != nil || len(ran) != 0 {
+		t.Fatalf("worker err=%v ran=%v", err, ran)
 	}
-	if err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, req, true, false); err != nil || out.String() != "dry run, would file on codeberg.org/o/r: fj issue create --repo codeberg.org/o/r --body-file "+body+" T\n" {
+	if !strings.Contains(out.String(), "filed in inbox at issues/inbox/t.md (forge fallback; no commit)\n") {
+		t.Fatalf("worker stdout = %q", out.String())
+	}
+	if !strings.Contains(errBuf.String(), noTokenDiggingDirective) {
+		t.Fatalf("worker stderr missing no-token-digging warning: %q", errBuf.String())
+	}
+	if data, rerr := os.ReadFile(filepath.Join(dir, "issues/inbox/t.md")); rerr != nil || string(data) != "# T\n\nhello\n" {
+		t.Fatalf("inbox file: %q %v", data, rerr)
+	}
+	out.Reset()
+	errBuf.Reset()
+	if err := runIssuesNewForge(&out, io.Discard, dir, target, req, true, false); err != nil || out.String() != "dry run, would file on codeberg.org/o/r: fj issue create --repo codeberg.org/o/r --body-file "+body+" T\n" {
 		t.Fatalf("dry: %q %v", out.String(), err)
 	}
 	t.Setenv("HARNEZ_AGENT_ROLE", "")
 	t.Setenv("HARNEZ_SESSION_ID", "")
 	issueWriteLookup = func(string) string { return "" }
 	out.Reset()
-	if err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, req, false, false); err != nil {
+	if err := runIssuesNewForge(&out, io.Discard, dir, target, req, false, false); err != nil {
 		t.Fatal(err)
 	}
 	if len(ran) != 1 || !reflect.DeepEqual(ran[0].Args, []string{"issue", "create", "--repo", "codeberg.org/o/r", "--body-file", body, "T"}) {
@@ -141,7 +151,7 @@ func TestForgeNewWorkerAndFallback(t *testing.T) {
 	if err := os.WriteFile(body, []byte(" \n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	err = runIssuesNewForge(&out, io.Discard, t.TempDir(), target, req, false, false)
+	err = runIssuesNewForge(&out, io.Discard, dir, target, req, false, false)
 	if err == nil || err.Error() != "issues new: body file is empty or whitespace-only" || len(ran) != 1 {
 		t.Fatalf("blank: %v", err)
 	}
@@ -503,7 +513,7 @@ func TestIssuesNewTrackerNoneUsesForge(t *testing.T) {
 	}
 }
 
-func TestIssuesNewFJFailureManualCommand(t *testing.T) {
+func TestIssuesNewFJFailureInboxFallback(t *testing.T) {
 	t.Setenv("HARNEZ_AGENT_ROLE", "")
 	t.Setenv("HARNEZ_SESSION_ID", "")
 	oldLookup, oldMeta := issueWriteLookup, issueWriteMetadata
@@ -519,17 +529,28 @@ func TestIssuesNewFJFailureManualCommand(t *testing.T) {
 		return "", exec.ErrNotFound
 	}
 	issueCLIRun = func(string, forgetracker.Command) ([]byte, error) {
-		return []byte("ordinary error"), errors.New("exit status 1")
+		return []byte("403 Forbidden: no write access"), errors.New("exit status 1")
 	}
+	dir := t.TempDir()
 	body := filepath.Join(t.TempDir(), "body file")
 	if err := os.WriteFile(body, []byte("private body"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	target := forgetracker.Target{Forge: forge.Forge{Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
-	err := runIssuesNewForge(io.Discard, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "title", BodyFile: body}, false, false)
-	want := "issues new: fj failed: exit status 1\nordinary error\nrun manually: fj issue create --repo codeberg.org/o/r --body-file " + strconv.Quote(body) + " title"
-	if err == nil || err.Error() != want || strings.Contains(err.Error(), "private body") {
-		t.Fatalf("got %v, want %s", err, want)
+	var out, errBuf bytes.Buffer
+	err := runIssuesNewForge(&out, &errBuf, dir, target, forgetracker.CreateRequest{Title: "Title", BodyFile: body}, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error on inbox fallback: %v", err)
+	}
+	if !strings.Contains(out.String(), "filed in inbox at issues/inbox/title.md (forge fallback; no commit)") {
+		t.Fatalf("stdout = %q", out.String())
+	}
+	if !strings.Contains(errBuf.String(), noTokenDiggingDirective) || strings.Contains(errBuf.String(), "private body") {
+		t.Fatalf("stderr = %q", errBuf.String())
+	}
+	data, rerr := os.ReadFile(filepath.Join(dir, "issues/inbox/title.md"))
+	if rerr != nil || string(data) != "# Title\n\nprivate body\n" {
+		t.Fatalf("inbox file = %q %v", data, rerr)
 	}
 }
 
@@ -1126,5 +1147,123 @@ func TestTrackerNoneLocalCases(t *testing.T) {
 				t.Fatalf("forge calls: %d", stub.calls)
 			}
 		})
+	}
+}
+
+func TestIssuesNewInboxFallbackCases(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+
+	t.Run("api 403 falls back to inbox, deduplicates slug, and keeps tracker:none on forge", func(t *testing.T) {
+		stub := stubForge(t)
+		dir := forgeRepo(t)
+		writeIndexRepoConfig(t, dir, "none", false)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, `{"message":"user lacks write permission"}`, http.StatusForbidden)
+		}))
+		defer srv.Close()
+
+		oldLookup, oldMeta, oldLook := issueWriteLookup, issueWriteMetadata, issueCLILookPath
+		issueWriteLookup = func(string) string { return "write-secret" }
+		issueWriteMetadata = func(string) (bool, error) { return true, nil }
+		issueCLILookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+		t.Cleanup(func() { issueWriteLookup, issueWriteMetadata, issueCLILookPath = oldLookup, oldMeta, oldLook })
+
+		body := filepath.Join(t.TempDir(), "body.md")
+		if err := os.WriteFile(body, []byte("Details here.\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		target := forgetracker.Target{
+			Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL, IssueCLI: []string{"fj"}},
+			Owner: "o", Repo: "r",
+		}
+		req := forgetracker.CreateRequest{Title: "Need Write Access", BodyFile: body, Labels: []string{"bug"}}
+
+		var out, errBuf bytes.Buffer
+		if err := runIssuesNewForge(&out, &errBuf, dir, target, req, false, false); err != nil {
+			t.Fatalf("first fallback: %v", err)
+		}
+		if !strings.Contains(out.String(), "filed in inbox at issues/inbox/need-write-access.md (forge fallback; no commit)\n") {
+			t.Fatalf("stdout = %q", out.String())
+		}
+		if !strings.Contains(errBuf.String(), noTokenDiggingDirective) {
+			t.Fatalf("stderr = %q", errBuf.String())
+		}
+		data, err := os.ReadFile(filepath.Join(dir, "issues/inbox/need-write-access.md"))
+		if err != nil || string(data) != "# Need Write Access\n\n**Labels**: bug\n\nDetails here.\n" {
+			t.Fatalf("first inbox file = %q %v", data, err)
+		}
+
+		// Second filing with the same title gets a unique filename instead of overwriting.
+		out.Reset()
+		errBuf.Reset()
+		if err := runIssuesNewForge(&out, &errBuf, dir, target, req, false, true); err != nil {
+			t.Fatalf("second fallback: %v", err)
+		}
+		if !strings.Contains(out.String(), `"inbox":true`) || !strings.Contains(out.String(), `"path":"issues/inbox/need-write-access-2.md"`) {
+			t.Fatalf("json stdout = %q", out.String())
+		}
+		if _, err := os.Stat(filepath.Join(dir, "issues/inbox/need-write-access-2.md")); err != nil {
+			t.Fatalf("deduplicated file missing: %v", err)
+		}
+
+		// With issues.tracker: none, issues/inbox/*.md keeps read commands on the forge.
+		showOut, err := runHarnez(t, "issues", "show", "-d", dir, "7")
+		if err != nil || !strings.Contains(showOut, "# 7 — forge ticket") || stub.calls == 0 {
+			t.Fatalf("show after inbox write: %q %v calls=%d", showOut, err, stub.calls)
+		}
+	})
+
+	t.Run("missing CLI dry-run and real run warn without token digging", func(t *testing.T) {
+		oldLookup, oldMeta, oldLook := issueWriteLookup, issueWriteMetadata, issueCLILookPath
+		issueWriteLookup = func(string) string { return "" }
+		issueWriteMetadata = func(string) (bool, error) { return false, nil }
+		issueCLILookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+		t.Cleanup(func() { issueWriteLookup, issueWriteMetadata, issueCLILookPath = oldLookup, oldMeta, oldLook })
+
+		dir := forgeRepo(t)
+		writeIndexRepoConfig(t, dir, "none", false)
+		body := filepath.Join(t.TempDir(), "body.md")
+		if err := os.WriteFile(body, []byte("# Already Has Heading\n\nBody text.\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		out, err := runHarnez(t, "issues", "new", "-d", dir, "Already Has Heading", "-F", body, "--dry-run")
+		if err != nil {
+			t.Fatalf("dry run: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "dry run, would file in inbox at issues/inbox/already-has-heading.md") || !strings.Contains(out, noTokenDiggingDirective) {
+			t.Fatalf("dry run output = %q", out)
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "issues/inbox/already-has-heading.md")); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("dry run must not create inbox file: %v", statErr)
+		}
+
+		out, err = runHarnez(t, "issues", "new", "-d", dir, "Already Has Heading", "-F", body)
+		if err != nil {
+			t.Fatalf("real run: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "filed in inbox at issues/inbox/already-has-heading.md") || !strings.Contains(out, noTokenDiggingDirective) {
+			t.Fatalf("real run output = %q", out)
+		}
+		data, rerr := os.ReadFile(filepath.Join(dir, "issues/inbox/already-has-heading.md"))
+		if rerr != nil || string(data) != "# Already Has Heading\n\nBody text.\n" {
+			t.Fatalf("inbox content = %q %v", data, rerr)
+		}
+	})
+}
+
+func TestIssuesEditForgeAuthWarning(t *testing.T) {
+	oldLookup := issueWriteLookup
+	issueWriteLookup = func(string) string { return "" }
+	t.Cleanup(func() { issueWriteLookup = oldLookup })
+	dir := forgeRepo(t)
+	writeIndexRepoConfig(t, dir, "none", false)
+	out, err := runHarnez(t, "issues", "edit", "-d", dir, "7", "--title", "X")
+	if err == nil || !strings.Contains(err.Error(), "no write token") {
+		t.Fatalf("want no write token error, got %v", err)
+	}
+	if !strings.Contains(out, noTokenDiggingDirective) {
+		t.Fatalf("expected stderr warning, got %q", out)
 	}
 }

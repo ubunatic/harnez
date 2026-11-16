@@ -17,6 +17,7 @@ import (
 	"ubunatic.com/harnez/internal/forge"
 	"ubunatic.com/harnez/internal/forgetoken"
 	"ubunatic.com/harnez/internal/forgetracker"
+	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/prwait"
 )
 
@@ -288,8 +289,119 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	return err
 }
 
-// runIssuesNewForge files a ticket on the forge with its CLI (issue 1195). It makes no
-// commit. With dryRun it prints the command and creates nothing.
+const noTokenDiggingDirective = "Do NOT inspect, debug, or modify Forgejo/Codeberg/GitHub token setup, credentials, env vars, or CLI auth"
+
+func warnNoTokenDigging(stderr io.Writer, detail string) {
+	if stderr == nil {
+		return
+	}
+	if detail != "" {
+		fmt.Fprintf(stderr, "WARNING: %s. %s; use issues/inbox/ on a branch instead.\n", detail, noTokenDiggingDirective)
+		return
+	}
+	fmt.Fprintf(stderr, "WARNING: %s. Ask the owner if host credentials need attention, or file new issues in issues/inbox/ on a branch instead.\n", noTokenDiggingDirective)
+}
+
+func isForgeAuthOrWriteErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *forge.APIError
+	if errors.As(err, &apiErr) && (apiErr.Status == 401 || apiErr.Status == 403 || apiErr.Status == 404) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	for _, needle := range []string{
+		"no write token",
+		"forge token",
+		"auth login",
+		"fj failed",
+		"fj not found",
+		"tea failed",
+		"gh failed",
+		"token was already used",
+		"token is required",
+		"private repo needs a token",
+		"forge writes run only in a host session",
+		"unauthorized",
+		"forbidden",
+		"permission denied",
+	} {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func warnIfForgeAuthErr(stderr io.Writer, err error) error {
+	if isForgeAuthOrWriteErr(err) {
+		warnNoTokenDigging(stderr, "")
+	}
+	return err
+}
+
+func inboxRelPath(slug string, n int) string {
+	name := slug + ".md"
+	if n > 1 {
+		name = fmt.Sprintf("%s-%d.md", slug, n)
+	}
+	return filepath.ToSlash(filepath.Join("issues", "inbox", name))
+}
+
+func formatInboxIssue(title, body string, labels []string) []byte {
+	var b strings.Builder
+	trimmed := strings.TrimSpace(body)
+	if !strings.HasPrefix(trimmed, "# ") {
+		b.WriteString("# ")
+		b.WriteString(strings.TrimSpace(title))
+		b.WriteString("\n\n")
+	}
+	if len(labels) > 0 {
+		b.WriteString("**Labels**: ")
+		b.WriteString(strings.Join(labels, ", "))
+		b.WriteString("\n\n")
+	}
+	b.WriteString(trimmed)
+	b.WriteByte('\n')
+	return []byte(b.String())
+}
+
+func writeInboxIssue(dir, title, body string, labels []string) (string, error) {
+	inboxDir := filepath.Join(dir, "issues", "inbox")
+	if err := os.MkdirAll(inboxDir, 0o755); err != nil {
+		return "", fmt.Errorf("issues new: create inbox dir: %w", err)
+	}
+	slug := issues.Slugify(title)
+	if slug == "" {
+		slug = "issue"
+	}
+	payload := formatInboxIssue(title, body, labels)
+	for n := 1; ; n++ {
+		rel := inboxRelPath(slug, n)
+		full := filepath.Join(dir, filepath.FromSlash(rel))
+		f, err := os.OpenFile(full, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("issues new: write %s: %w", rel, err)
+		}
+		_, writeErr := f.Write(payload)
+		closeErr := f.Close()
+		if writeErr != nil {
+			return "", fmt.Errorf("issues new: write %s: %w", rel, writeErr)
+		}
+		if closeErr != nil {
+			return "", fmt.Errorf("issues new: close %s: %w", rel, closeErr)
+		}
+		return rel, nil
+	}
+}
+
+// runIssuesNewForge files a ticket on the forge via API or CLI (issue 1195),
+// and falls back to issues/inbox/<slug>.md on forge/auth/worker failure. It
+// makes no commit. With dryRun it prints the plan and creates nothing.
 func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Target, req forgetracker.CreateRequest, dryRun, jsonOut bool) error {
 	if strings.TrimSpace(req.Title) == "" {
 		return fmt.Errorf("issues new: a title is required to file on %s", t)
@@ -321,83 +433,126 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	if strings.TrimSpace(string(content)) == "" {
 		return fmt.Errorf("issues new: body file is empty or whitespace-only")
 	}
-	if dryRun && t.Forge.Kind == "forgejo" {
-		stored, err := issueWriteMetadata(t.Forge.Host)
-		if err != nil {
-			return err
-		}
-		if stored {
-			_, err = fmt.Fprintf(stdout, "dry run, would file on %s over the API (write token)\n", t)
-			return err
-		}
-	}
-	if !dryRun {
-		if err := requireHostSession("new"); err != nil {
-			return err
-		}
-		wr, useAPI, err := issueWriteAPI(t)
-		if err != nil {
-			return err
-		}
-		if useAPI {
-			var ids []int64
-			if len(req.Labels) > 0 {
-				ids, err = wr.LabelIDs(t.Forge, t.Owner, t.Repo, req.Labels)
-				if err != nil {
-					return err
-				}
-			}
-			created, err := wr.CreateIssue(t.Forge, t.Owner, t.Repo, req.Title, string(content), ids)
+	if dryRun {
+		if t.Forge.Kind == "forgejo" {
+			stored, err := issueWriteMetadata(t.Forge.Host)
 			if err != nil {
 				return err
 			}
-			if jsonOut {
-				return json.NewEncoder(stdout).Encode(map[string]any{"number": created.Number, "url": created.HTMLURL, "forge": t.String(), "tool": "api"})
+			if stored {
+				_, err = fmt.Fprintf(stdout, "dry run, would file on %s over the API (write token)\n", t)
+				return err
 			}
-			_, err = fmt.Fprintf(stdout, "filed as #%d at %s; no commit\n", created.Number, created.HTMLURL)
-			return err
 		}
+		c, err := forgetracker.PlanCreate(t, req, issueCLILookPath)
+		if err != nil {
+			slug := issues.Slugify(req.Title)
+			if slug == "" {
+				slug = "issue"
+			}
+			warnNoTokenDigging(stderr, fmt.Sprintf("forge CLI unavailable (%v)", err))
+			_, werr := fmt.Fprintf(stdout, "dry run, would file in inbox at %s (forge fallback; no commit)\n", inboxRelPath(slug, 1))
+			return werr
+		}
+		_, err = fmt.Fprintf(stdout, "dry run, would file on %s: %s\n", t, c)
+		return err
 	}
-	if req.BodyFile == "-" && !dryRun {
+	handled, err := tryCreateOnForge(forgeCreateCall{stdout: stdout, stderr: stderr, dir: dir, target: t, req: req, content: content, jsonOut: jsonOut})
+	if handled {
+		return err
+	}
+	rel, inboxErr := writeInboxIssue(dir, req.Title, string(content), req.Labels)
+	if inboxErr != nil {
+		return fmt.Errorf("%w (after forge failure: %v)", inboxErr, err)
+	}
+	warnNoTokenDigging(stderr, fmt.Sprintf("forge filing on %s failed (%v); filed in %s instead — commit and push it on a branch/PR", t, err, rel))
+	if jsonOut {
+		return json.NewEncoder(stdout).Encode(map[string]any{
+			"path":   rel,
+			"inbox":  true,
+			"forge":  t.String(),
+			"tool":   "inbox",
+			"reason": err.Error(),
+		})
+	}
+	_, werr := fmt.Fprintf(stdout, "filed in inbox at %s (forge fallback; no commit)\n", rel)
+	return werr
+}
+
+type forgeCreateCall struct {
+	stdout  io.Writer
+	stderr  io.Writer
+	dir     string
+	target  forgetracker.Target
+	req     forgetracker.CreateRequest
+	content []byte
+	jsonOut bool
+}
+
+// tryCreateOnForge attempts to create the issue via the write API or forge CLI.
+// handled=false means no ticket was created and the caller should fall back to
+// issues/inbox/. handled=true preserves non-auth errors (unknown labels or a CLI
+// that exited 0 without printing a ticket number).
+func tryCreateOnForge(c forgeCreateCall) (bool, error) {
+	if err := requireHostSession("new"); err != nil {
+		return false, err
+	}
+	wr, useAPI, err := issueWriteAPI(c.target)
+	if err != nil {
+		return false, err
+	}
+	if useAPI {
+		var ids []int64
+		if len(c.req.Labels) > 0 {
+			ids, err = wr.LabelIDs(c.target.Forge, c.target.Owner, c.target.Repo, c.req.Labels)
+			if err != nil {
+				return strings.HasPrefix(err.Error(), "unknown label "), err
+			}
+		}
+		created, err := wr.CreateIssue(c.target.Forge, c.target.Owner, c.target.Repo, c.req.Title, string(c.content), ids)
+		if err != nil {
+			return false, err
+		}
+		if c.jsonOut {
+			return true, json.NewEncoder(c.stdout).Encode(map[string]any{"number": created.Number, "url": created.HTMLURL, "forge": c.target.String(), "tool": "api"})
+		}
+		_, err = fmt.Fprintf(c.stdout, "filed as #%d at %s; no commit\n", created.Number, created.HTMLURL)
+		return true, err
+	}
+	req := c.req
+	if req.BodyFile == "-" {
 		f, err := os.CreateTemp("", "harnez-issue-body-*")
 		if err != nil {
-			return fmt.Errorf("issues new: temporary body: %w", err)
+			return false, fmt.Errorf("issues new: temporary body: %w", err)
 		}
 		defer func() { _ = os.Remove(f.Name()) }()
-		if _, err := f.Write(content); err != nil {
+		if _, err := f.Write(c.content); err != nil {
 			f.Close()
-			return fmt.Errorf("issues new: temporary body: %w", err)
+			return false, fmt.Errorf("issues new: temporary body: %w", err)
 		}
 		if err := f.Close(); err != nil {
-			return fmt.Errorf("issues new: temporary body: %w", err)
+			return false, fmt.Errorf("issues new: temporary body: %w", err)
 		}
 		req.BodyFile = f.Name()
 	}
-	c, err := forgetracker.PlanCreate(t, req, issueCLILookPath)
+	cmd, err := forgetracker.PlanCreate(c.target, req, issueCLILookPath)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if dryRun {
-		fmt.Fprintf(stdout, "dry run, would file on %s: %s\n", t, c)
-		return nil
-	}
-	fmt.Fprintf(stderr, "issues new: filing on %s with %s\n", t, c.Tool)
-	out, err := issueCLIRun(dir, c)
+	fmt.Fprintf(c.stderr, "issues new: filing on %s with %s\n", c.target, cmd.Tool)
+	out, err := issueCLIRun(c.dir, cmd)
 	if err != nil {
-		if c.Tool == "fj" {
-			return fmt.Errorf("issues new: fj failed: %w\n%s\nrun manually: %s", err, strings.TrimSpace(string(out)), c)
-		}
-		return fmt.Errorf("issues new: %s failed: %w\n%s", c.Tool, err, strings.TrimSpace(string(out)))
+		return false, fmt.Errorf("%s failed: %w: %s", cmd.Tool, err, strings.TrimSpace(string(out)))
 	}
-	n, url, ok := forgetracker.ParseCreated(t, string(out), req.Title)
+	n, url, ok := forgetracker.ParseCreated(c.target, string(out), req.Title)
 	if !ok {
-		return fmt.Errorf("issues new: %s ran but printed no ticket number; check %s before retrying\n%s", c.Tool, t, strings.TrimSpace(string(out)))
+		return true, fmt.Errorf("issues new: %s ran but printed no ticket number; check %s before retrying\n%s", cmd.Tool, c.target, strings.TrimSpace(string(out)))
 	}
-	if jsonOut {
-		return json.NewEncoder(stdout).Encode(map[string]any{"number": n, "url": url, "forge": t.String(), "tool": c.Tool})
+	if c.jsonOut {
+		return true, json.NewEncoder(c.stdout).Encode(map[string]any{"number": n, "url": url, "forge": c.target.String(), "tool": cmd.Tool})
 	}
-	fmt.Fprintf(stdout, "filed as #%d at %s; no commit\n", n, url)
-	return nil
+	_, err = fmt.Fprintf(c.stdout, "filed as #%d at %s; no commit\n", n, url)
+	return true, err
 }
 
 func runIssuesEditForge(w io.Writer, t forgetracker.Target, src forgetracker.Source, number, title, bodyFile, ifUpdated string, hasTitle, force, dryRun, allowClosed bool) error {
