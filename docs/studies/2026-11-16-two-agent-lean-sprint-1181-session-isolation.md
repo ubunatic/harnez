@@ -31,9 +31,11 @@ Prior work M1–M6 (`e437a41d`..`963d0131`) already landed session-scoped locks/
   - **A4 (Promoter)**: Trusted host defaults (`GOBIN`/`GOPATH/bin` + `XDG_DATA_HOME/man/man1`) with immutable copy validation and `O_DIRECTORY|O_NOFOLLOW`-pinned atomic per-file promotion.
 - Milestone plan frozen as M7–M17 in `issues/1181-isolate-harnez-session-state-and-constrain-installation-destinations.md`.
 
-- `1181-dev` (`codex:terra:low`): M7 (4m11s, 43.2k new / 888.8k cached), M8 pre-work+impl (7m48s, 59.4k new / 2.9M cached; hit 99.0k context).
+- `1181-dev` (`codex:terra:low`): M7 (4m11s, 43.2k new / 888.8k cached), M8 pre-work+impl (7m48s, 59.4k new / 2.9M cached; hit 99.0k context); rated 4/5 and retired.
+- Reviewer `1181-m8-review` (`codex:sol:low`): M8 diff review in 1m36s, 37.7k new / 172.7k cached tokens, context 48.4k.
 
 ## Milestones
 
 - **M7 — Freeze ownership/security contract**: committed `f87b48db` on `sprint/1181`; `HTO=0 make test-q1` and `go test -v ./internal/sessioncontract` passed. `1181-m7-review` (`codex:sol:low`) flagged 3 major gaps (`livefetchcache` owner mismatch, weak JSON schema uniqueness/`minItems`, `docs/Spec.md` literal duplication in `spec.go`), all embedded as M8 pre-work.
-- **M8 — Pre-work & centralize runner-local state**: committed on `sprint/1181` after host-verified `HTO=0 make test-q1` exit 0 (`internal/runstate` 0.004s, `internal/sessioncontract` 0.017s, `internal/usage` 7.922s, `cmd/harnez` 61.528s, `scripts/stage-install-test.sh` pass). Pending `1181-m8-review`.
+- **M8 — Pre-work & centralize runner-local state**: committed `ad1cb455` on `sprint/1181` after host-verified `HTO=0 make test-q1` exit 0 (`internal/runstate` 0.004s, `internal/sessioncontract` 0.017s, `internal/usage` 7.922s, `cmd/harnez` 61.528s, `scripts/stage-install-test.sh` pass). `1181-m8-review` flagged 3 major gaps (`livefetchcache.go:60` still writing/migrating shared XDG files, discarded errors in 6 callers including `powerPeaksPath` returning `""`, and test coverage/barrier gaps), all embedded as M9 pre-work.
+- **M9 — Pre-work & isolate AGY / auxiliary writes**: dispatching read-only plan on `sprint/1181`.

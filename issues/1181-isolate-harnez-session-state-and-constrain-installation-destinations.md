@@ -120,18 +120,27 @@ contract/validation gaps that are folded into M8 pre-work below. Ticket remains 
 
 ## Milestone 8 — Pre-Work / Required Refinements & Runner-Local State
 
-M8 landed on `sprint/1181` with all M7 pre-work resolved (`livefetchcache` reconciled
-as runner-local under `$TAIA_SESSION_DIR`, strict `KnownFields` + embedded JSON
-schema validation in `internal/sessioncontract` without Go literal duplication,
-exported docstrings, `ValidateRoot` removed, negative contract tests) and runner
-usage paths centralized via `internal/runstate.UsageStateDir` across `statecache`,
+M8 landed on `sprint/1181` (`ad1cb455`) with M7 contract refinements and runner usage
+paths centralized via `internal/runstate.UsageStateDir` across `statecache`,
 `fetchdurations`, `killlog`, `passive_debug`, `power_peaks`, `remote_load_cache`,
-`collector_store`, `collector`, and `cmd/harnez/{usage_cmd,server_cmd}.go`. Runner
-snapshots no longer infer canonical store access from directory equality, and
-collector/canonical store paths fail closed when `TAIA_SESSION_DIR` is set.
-Fresh `HTO=0 make test-q1` passed after the final `killlog.go` fix (`internal/runstate`,
-`internal/sessioncontract`, `internal/usage`, `cmd/harnez`, `scripts/stage-install-test.sh`
-all green). M9–M17 remain open.
+`collector_store`, `collector`, and `cmd/harnez/{usage_cmd,server_cmd}.go`.
+Fresh `HTO=0 make test-q1` passed (`internal/runstate`, `internal/sessioncontract`,
+`internal/usage`, `cmd/harnez`, `scripts/stage-install-test.sh`). Independent
+review (`1181-m8-review`, `codex:sol:low`) caught remaining live-fetch writes,
+discarded errors, and test gaps folded into M9 pre-work below. M9–M17 remain open.
+
+## Milestone 9 — Pre-Work / Required Refinements & Isolate AGY / Auxiliary Writes
+
+### Pre-Work / Required Refinements (from M8 review of `ad1cb455`)
+- **Isolate `livefetchcache` (`internal/usage/livefetchcache.go:60`)**: route default live-fetch cache paths through `internal/runstate.UsageStateDir` under `$TAIA_SESSION_DIR` when set, and skip shared legacy file migration writes in runner mode so runner collection never touches shared XDG cache files.
+- **Stop silently discarding runner path/broker errors**: inspect `recordFetchDuration`, `capturePassiveNoQuota`, `powerPeaksPath` (must not return `""` into store paths on error), `ReadCachedRemoteLoadEntry`, `CollectRegisteredCatchup`, and `CollectRegistered` (`publishAgentObservations` error). Propagate or fail closed visibly without writing to shared/relative fallback paths.
+- **Strengthen M8 regression tests (`internal/usage/runner_state_test.go`)**: cover `livefetchcache` isolation and zero legacy migration in runner mode, `power_peaks` and `remote_load_cache` isolation, explicit directory overrides, invalid runner roots through actual writers, assertions that shared dirs stay empty *after* collector guard calls, and an explicit synchronization barrier across concurrent child writers in `TestRunnerProcessesWriteSeparately`.
+
+### M9 Implementation Scope
+- **AGY isolation (`internal/agymeter/meter.go`, `internal/usage/agy.go`)**: move AGY meter CA/key, certificate bundle, `usage.jsonl`, and auth-backoff marker (`usage/agy.go:149`) together into runner storage under `$TAIA_SESSION_DIR` (`$TAIA_SESSION_DIR/state/agymeter` or `runstate` helper) so producer and reader agree; support legacy host defaults when `TAIA_SESSION_DIR` is unset, prevent shared writes in runner mode, and keep no CA-confidentiality claim under global reads.
+- **Shared runtime shims (`internal/subagent/agy.go`)**: keep shared runtime shim provisioning host-only; launching inside a runner (`TAIA_SESSION_DIR` set) must not rewrite shared shim files.
+- **Auxiliary writes (`internal/logging/logging.go`, `internal/feedback/feedback.go`, `internal/bench/store.go`, `internal/usage/legacyarchive.go`)**: isolate runner-local writes under `$TAIA_SESSION_DIR` via `internal/runstate` helpers while keeping host defaults and legacy migration/export host-only.
+- **M9 Tests**: producer/reader CA+bundle+`usage.jsonl` agreement, backoff isolation, host-only shim guard, auxiliary writers under `$TAIA_SESSION_DIR`, malformed runner root fail-closed checks, and zero shared writes.
 
 ### Pre-Work / Required Refinements (from M7 review of `f87b48db`)
 - **Resolve `livefetchcache` ownership conflict**: reconcile `docs/SessionIsolation.md` (currently assigns live-fetch cache to `runner`) with `spec/session_isolation.yaml` (currently assigns `canonical_usage_snapshots_history_livefetchcache` to `broker`); freeze one unambiguous owner (or explicitly separate runner-local cache under `$TAIA_SESSION_DIR` vs host-only legacy/canonical handling) in both doc and spec.
