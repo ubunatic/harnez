@@ -470,3 +470,36 @@ Pre-work first: the "Pre-Work / Required Refinements" lists in tickets 1228 and 
      exist on the forge; over the API they are resolved by name; fj cannot set labels).
    - Regenerate copies with `make install` and `harnez init -d .`; source and copy in the
      same commit.
+
+### M8 refinements delivered (2026-11-16)
+
+- Commit `e1bbdf05`, developer `forge-dev3`, one turn of 3m43s: tests
+  `TestForgeRefinementEdges` and `TestWriterLabelsRepeatedPage`, the extended
+  `TestForgeDryRunDoesNotTouchLocalTicket` (no commit after the forge dry runs, local
+  `close 7 "reason"` still closes the local ticket), and the docs and help corrections of
+  item 2. No new test found a bug. Its `make test-q1` exited 0.
+- No reviewer for this commit: it changes tests, docs and help text only; the host read
+  every added assertion.
+- `origin/main` had moved (ticket 1235, goself install). Merged into the sprint branch as
+  `2096aca3` without conflict. Host full run after the merge: `make test-q1` exit 0, 78 `ok`
+  lines, fake `fj`, `tea`, `gh` on `PATH` not called. `make install` and `harnez init -d .`
+  leave `git status` clean.
+- Host check with the merged, installed binary (no write token stored):
+  `close --forge --dry-run 41 "done now"` prints the API plan; `comment` and `new` with
+  `--forge --dry-run` print the fj command; `reopen --forge 41` with worker markers gives
+  `issues reopen: forge writes run only in a host session (this is harnez worker probe-2);
+  hand the write to the host`.
+
+### Open: live check (waits for the owner)
+
+- `harnez forge token status` on 2026-11-16: `write token: none`. The owner runs
+  `harnez forge token create --write` (password and 2FA code on the terminal).
+- Then, host only, one scratch issue each on `ubunatic/harnez` (with `--forge`) and
+  `harnez/taia`: new, comment, show --json, edit title and body with `--if-updated`, close
+  with a reason, reopen, close. Both issues are public and stay as closed issues.
+- Still unverified until then: Codeberg accepts the scope `write:issue` at token creation;
+  a token with `read:repository` and `write:issue` can do all five writes and read labels on
+  both repositories; `state` accepts `open` and `closed`; PATCH returns the new
+  `updated_at`; the forge returns the body byte-identical. Organisation-level labels are
+  not covered.
+- Tickets 1228, 1212 and 1202 stay open until the live check has passed.

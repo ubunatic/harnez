@@ -164,10 +164,43 @@ Same developer `forge-dev2`, resumed.
   for 52.5k new ones (89x). `forge-dev2` was rated 3 of 5 and deleted; the M8 pre-work and docs
   went to a fresh developer `forge-dev3` on `--model std` (codex:terra:med).
 
-Lessons so far:
+## Developer M8 (dispatch fix, docs, refinements)
+
+Fresh developer `forge-dev3` (`--model std`, codex:terra:med), no plan turn: the ticket held the
+blocker with its cause.
+
+| Turn | Time | Result |
+|---|---|---|
+| Write 1 | 5m27s | `8d9a47c7` (dispatch moved into `RunE`), `bd937e33` (docs); `make test-q1` exit 2 on two outdated tests, fixed without a rerun; most of the test list left open and reported |
+| Write 2 | 3m43s | `e1bbdf05` (missing tests, docs corrections); `make test-q1` exit 0 |
+
+- Tokens: 65.6k new in write 1, 24.8k new in write 2 (2.1M cached re-read, 85x); context 88.3k
+  of the 100k compaction limit at the end.
+- Host full run after write 1: exit 0, 78 `ok` lines, no call to the fake `fj`, `tea`, `gh`.
+- Reviewer `forge-rev5` (one-shot, 1m21s, 61.7k new tokens) on `8a5f461f..bd937e33`: no forge
+  verb is followed by a local verb any more; the docs rewrite had dropped the search line, the
+  forms without `--forge`, the dry-run examples and the label guidance, and overstated the
+  fallback (`comment` falls back to fj only). All went into the ticket for write 2.
+- No reviewer for `e1bbdf05` (tests, docs and help text only); the host read the added assertions.
+- `origin/main` moved during the sprint (ticket 1235). Merged as `2096aca3` without conflict; host
+  full run after the merge: exit 0, 78 `ok` lines, no fake CLI call.
+
+## State at the end of the coding part
+
+- Twelve helper sessions were started (one architect dispatch failed on the Claude 5-hour limit);
+  three developers, five one-shot reviewers, one Searcher, one architect.
+- Not done: the live check on `ubunatic/harnez` and `harnez/taia`. It needs the write token,
+  which only the owner can create (password and 2FA). The facts it must confirm are listed in
+  ticket 1202 under "Open: live check".
+
+Lessons:
 
 - Green tests plus a clean diff review did not show the `Args`/`RunE` double run; one dry run of
   the installed binary did. Run every new verb through the installed binary before the review.
 - A handoff rule ("never run fj") does not bind a test the worker writes. A guard in `TestMain`
   and fake CLIs first on `PATH` do.
 - Stop conditions in a prompt are followed literally. Name what is not a blocker.
+- A docs rewrite by the developer dropped working guidance. Ask the reviewer to list dropped
+  statements, not only wrong ones.
+- A developer near its compaction limit re-reads about 85 to 89 cached tokens per new token.
+  A fresh developer for the blocker cost one 5m27s turn.
