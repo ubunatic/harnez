@@ -50,21 +50,24 @@ func (w Writer) request(fg Forge, method, endpoint string, payload, result any) 
 	}
 	client := w.Client
 	if client == nil {
-		client = http.DefaultClient
+		return fmt.Errorf("forge write: no HTTP client")
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("forge write request failed")
+		return fmt.Errorf("forge write request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		detail := ""
-		if resp.StatusCode == http.StatusPreconditionFailed {
+		{
 			var msg struct {
 				Message string `json:"message"`
 			}
 			if json.NewDecoder(io.LimitReader(resp.Body, 8192)).Decode(&msg) == nil && safeWriteDetail(msg.Message, w.Token, data) {
-				detail = msg.Message
+				detail = strings.Join(strings.Fields(msg.Message), " ")
+				if len(detail) > 200 {
+					detail = detail[:200]
+				}
 			}
 		}
 		return &APIError{Status: resp.StatusCode, Transient: resp.StatusCode >= 500, Detail: detail}
@@ -110,11 +113,14 @@ func (w Writer) EditIssue(fg Forge, owner, repo string, n int, fields EditFields
 	return result, err
 }
 
-func (w Writer) Comment(fg Forge, owner, repo string, n int, body string) error {
-	var result json.RawMessage
-	return w.request(fg, http.MethodPost, issueWriteBase(fg, owner, repo)+"/issues/"+strconv.Itoa(n)+"/comments", struct {
+func (w Writer) Comment(fg Forge, owner, repo string, n int, body string) (string, error) {
+	var result struct {
+		HTMLURL string `json:"html_url"`
+	}
+	err := w.request(fg, http.MethodPost, issueWriteBase(fg, owner, repo)+"/issues/"+strconv.Itoa(n)+"/comments", struct {
 		Body string `json:"body"`
 	}{body}, &result)
+	return result.HTMLURL, err
 }
 
 func (w Writer) LabelIDs(fg Forge, owner, repo string, names []string) ([]int64, error) {
@@ -122,8 +128,19 @@ func (w Writer) LabelIDs(fg Forge, owner, repo string, names []string) ([]int64,
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
 	}
-	if err := w.request(fg, http.MethodGet, issueWriteBase(fg, owner, repo)+"/labels", nil, &labels); err != nil {
-		return nil, err
+	for page := 1; ; page++ {
+		var batch []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		}
+		endpoint := issueWriteBase(fg, owner, repo) + "/labels?limit=50&page=" + strconv.Itoa(page)
+		if err := w.request(fg, http.MethodGet, endpoint, nil, &batch); err != nil {
+			return nil, err
+		}
+		labels = append(labels, batch...)
+		if len(batch) < 50 {
+			break
+		}
 	}
 	ids := make([]int64, 0, len(names))
 	existing := make([]string, 0, len(labels))

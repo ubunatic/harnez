@@ -1,12 +1,44 @@
 package forge
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+type failTransport struct{ err error }
+
+func (f failTransport) RoundTrip(*http.Request) (*http.Response, error) { return nil, f.err }
+
+func TestWriterErrorDetails(t *testing.T) {
+	message := "token does not have at least one of required scope(s): [write:issue]"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintf(w, `{"message":%q}`, message)
+	}))
+	defer srv.Close()
+	fg := Forge{Kind: "forgejo", APIBase: srv.URL}
+	wr := Writer{Client: srv.Client(), Token: "super-secret"}
+	_, err := wr.CreateIssue(fg, "o", "r", "Title", "Body", nil)
+	if err == nil || err.Error() != "forge API request failed: HTTP 403 "+message {
+		t.Fatalf("got %v", err)
+	}
+	message = "exposed super-secret"
+	_, err = wr.CreateIssue(fg, "o", "r", "Title", "Body", nil)
+	if err == nil || err.Error() != "forge API request failed: HTTP 403 " {
+		t.Fatalf("got %v", err)
+	}
+	cause := errors.New("transport failed")
+	wr.Client = &http.Client{Transport: failTransport{cause}}
+	_, err = wr.CreateIssue(fg, "o", "r", "Title", "Body", nil)
+	if !errors.Is(err, cause) {
+		t.Fatalf("cause lost: %v", err)
+	}
+}
 
 func TestWriterRequests(t *testing.T) {
 	var method, path, body string
@@ -44,8 +76,59 @@ func TestWriterRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	method, path, body = "POST", "/api/v1/repos/o/r/issues/7/comments", `{"body":"c"}`
-	if err := wr.Comment(fg, "o", "r", 7, "c"); err != nil {
+	if _, err := wr.Comment(fg, "o", "r", 7, "c"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWriterNilClient(t *testing.T) {
+	_, err := (Writer{Token: "tok"}).CreateIssue(Forge{Kind: "forgejo", APIBase: "https://example.invalid"}, "o", "r", "T", "B", nil)
+	if err == nil || err.Error() != "forge write: no HTTP client" {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestWriterRefinements(t *testing.T) {
+	page := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/o/r/labels":
+			page++
+			if r.Method != "GET" || r.URL.RawQuery != fmt.Sprintf("limit=50&page=%d", page) {
+				t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+			}
+			if page == 1 {
+				fmt.Fprint(w, "[")
+				for i := 1; i <= 50; i++ {
+					if i > 1 {
+						fmt.Fprint(w, ",")
+					}
+					fmt.Fprintf(w, `{"id":%d,"name":"n%d"}`, i, i)
+				}
+				fmt.Fprint(w, "]")
+			} else {
+				fmt.Fprint(w, `[{"id":51,"name":"bug"}]`)
+			}
+		case "/repos/o/r/issues":
+			fmt.Fprint(w, `{"number":7,"html_url":"https://example/7","updated_at":"2026-01-02T03:04:05Z"}`)
+		case "/repos/o/r/issues/7/comments":
+			fmt.Fprint(w, `{"html_url":"https://example/comment"}`)
+		}
+	}))
+	defer srv.Close()
+	fg := Forge{Kind: "forgejo", APIBase: srv.URL}
+	wr := Writer{Client: srv.Client(), Token: "tok"}
+	ids, err := wr.LabelIDs(fg, "o", "r", []string{"n1", "bug"})
+	if err != nil || fmt.Sprint(ids) != "[1 51]" || page != 2 {
+		t.Fatalf("ids=%v page=%d err=%v", ids, page, err)
+	}
+	is, err := wr.CreateIssue(fg, "o", "r", "T", "B", nil)
+	if err != nil || is.Number != 7 || is.HTMLURL != "https://example/7" || is.UpdatedAt.Format("2006-01-02T15:04:05Z") != "2026-01-02T03:04:05Z" {
+		t.Fatalf("issue=%+v err=%v", is, err)
+	}
+	u, err := wr.Comment(fg, "o", "r", 7, "c")
+	if err != nil || u != "https://example/comment" {
+		t.Fatalf("url=%q err=%v", u, err)
 	}
 }
 

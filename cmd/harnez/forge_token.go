@@ -18,7 +18,7 @@ import (
 func newForgeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "forge",
-		Short: "Manage forge access for harnez's read paths",
+		Short: "Manage forge access for harnez's read and write paths",
 	}
 	cmd.AddCommand(newForgeTokenCmd())
 	return cmd
@@ -31,19 +31,29 @@ type forgeTokenEnv struct {
 	client forgetoken.Client
 	host   string
 	login  forgetoken.Login
-	tty    *ttyPrompter
+	tty    tokenTTY
 }
+
+type tokenTTY interface {
+	close()
+	line(string) (string, error)
+	login(string, string) (forgetoken.Login, error)
+}
+
+var forgeTokenOpenTTY = func(host string) (tokenTTY, error) { return openTTY(host) }
+var forgeTokenAPIBase = forgejoAPIBase
 
 func newForgeTokenCmd() *cobra.Command {
 	var host, user string
 	var localOnly, write bool
 	cmd := &cobra.Command{
 		Use:   "token",
-		Short: "Create, rotate, revoke or show harnez's read-only Forgejo token",
-		Long: `Manage one read-only Forgejo access token per forge host (scopes, name prefix and
+		Short: "Create, rotate, revoke or show Forgejo read and write tokens",
+		Long: `Manage separate read and issue write Forgejo access tokens per forge host (scopes, name prefix and
 default host in spec/forge_token.yaml). harnez reads the stored token before
 CODEBERG_TOKEN/FORGEJO_TOKEN, so pr wait and the forge tracker mode (find issues,
 issues show) can read private repos.
+Use --write to manage the separate issue write token.
 
 Forgejo creates and deletes tokens only with your password (basic auth), never with a token.
 create, rotate and revoke prompt for the password, and for a 2FA code, on the terminal; there
@@ -57,7 +67,7 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 	cmd.PersistentFlags().StringVar(&host, "host", "", "forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)")
 
 	create := &cobra.Command{
-		Use: "create", Short: "Create and store a new read-only token", Args: cobra.NoArgs, SilenceUsage: true,
+		Use: "create", Short: "Create and store a read or write token", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runForgeToken(host, user, false, write, func(e forgeTokenEnv) error {
 				res, err := forgetoken.Create(e.spec, e.store, e.client, e.host, e.login, time.Now())
@@ -140,7 +150,10 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 				if !ok {
 					fmt.Fprintln(cmd.OutOrStdout(), "write token: none (harnez forge token create --write)")
 				} else {
-					fmt.Fprintln(cmd.OutOrStdout(), "write token: stored")
+					fmt.Fprintln(cmd.OutOrStdout(), "write token:")
+					if err := printTokenStatus(cmd.OutOrStdout(), ws, orDefault(host, sp.DefaultHost)); err != nil {
+						return err
+					}
 				}
 			}
 			return nil
@@ -315,7 +328,7 @@ func runForgeToken(host, user string, needStored, write bool, op func(forgeToken
 		return err
 	}
 	host = orDefault(host, sp.DefaultHost)
-	apiBase, timeout, err := forgejoAPIBase(host)
+	apiBase, timeout, err := forgeTokenAPIBase(host)
 	if err != nil {
 		return err
 	}
@@ -329,7 +342,7 @@ func runForgeToken(host, user string, needStored, write bool, op func(forgeToken
 	if user == "" && stored {
 		user = m.User
 	}
-	tty, err := openTTY(host)
+	tty, err := forgeTokenOpenTTY(host)
 	if err != nil {
 		return err
 	}
