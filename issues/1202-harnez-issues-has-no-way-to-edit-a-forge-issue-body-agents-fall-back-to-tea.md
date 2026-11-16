@@ -353,7 +353,67 @@ Pre-work first: the "Pre-Work / Required Refinements" lists in tickets 1228 and 
 - Edge cases: a 412 from the forge is passed through; the host-only check applies.
 - Acceptance: tests pass.
 
+### M6 and M7 delivered with a blocker (2026-11-16)
+
+- Commits `00ef6564` (M6 pre-work), `58c24095` (M6 `edit`), `af87b676` (M7 `close`/`reopen`),
+  developer `forge-dev2`. Its first turn stopped after 1m26s on its own outdated paging test;
+  the second (9m23s) made the three commits. Its `make test-q1` failed on one outdated assertion
+  in `TestIssuesNewForgeErrors`, which it fixed without a rerun.
+- Host full run: `make test-q1` exit 0, 78 `ok` lines, no `FAIL`, with fake `fj`, `tea` and `gh`
+  first on `PATH` (none called).
+- Host check with the installed binary (no write token stored, so nothing could be written):
+  - Blocker: `close --forge --dry-run 41` prints the dry-run line and then also runs the local
+    verb: `041: already Closed (no change); use --amend-reason to change the reason`. With
+    `reopen` and `edit` the second line is `Error: issues: unknown verb "reopen" ...`. Cause
+    (reviewer `forge-rev4`, `cmd/harnez/issues.go:326,354`): the forge dispatch for `edit`,
+    `close`, `reopen` and `open` sits in cobra's `Args` validator; after it returns nil, `RunE`
+    runs the local status path. A real `close --forge 7` would also close local ticket 007.
+  - `close --forge` without a number panics: `slice bounds out of range [2:1]` at
+    `cmd/harnez/issues.go:354`.
+  - As specified: worker markers refuse `edit` and `close` and allow the dry run; `edit -F`
+    without `--if-updated` or `--force`, local `edit`, local `reopen`, forge `open` and the
+    missing write token give the texts of this ticket.
+
+### Decision (review of M6 and M7, host and reviewer `forge-rev4`, 2026-11-16)
+
+- `show <n> --forge` is allowed (read only, `--json` included); `list --forge` stays refused.
+  Reason: on a repo with a local tracker, `edit -F --if-updated` needs the forge issue's
+  `updated_at`, and the error text points at `issues show --json`. This replaces the edge case
+  "`--forge` with `show` is refused".
+- The `--remote` / `CLAUDE_CODE_REMOTE` flow of `new` goes back to its behaviour before
+  `00ef6564`; the only addition is the host-only check directly before the gh call that
+  creates the issue. The dry-run line added there skipped the title, duplicate and remote
+  checks.
+- When the reason comment of `close` is posted and the state change fails, the error says so,
+  so the user does not post the reason twice.
+
 ### M8 — docs, then the host's live check
+
+- Pre-Work / Required Refinements (do these first, own commit `(#1202 M8 pre-work)`):
+  1. Blocker: move the forge dispatch of `edit`, `close`, `reopen` and `open` out of the `Args`
+     validator into `RunE`, before the local status path. `Args` only validates. After a forge
+     verb, dry run or real, no local verb runs. Tests through `runHarnez` in a repo that has a
+     local `issues/` dir with a ticket of the same number: `close --forge --dry-run 7`,
+     `close --forge --dry-run 7 done now`, `reopen --forge --dry-run 7` and
+     `edit --forge --dry-run 7 --title X` each print exactly their one dry-run line and exit 0;
+     the local ticket file is byte-identical afterwards and no commit was made. Plain
+     `close 7 "reason"` in that repo still closes the local ticket as before.
+  2. A missing number is an error, not a panic: `close --forge`, `edit --forge` and
+     `open --forge` give `issues <verb>: requires an issue number`.
+  3. `close 7 reason`, comment posted, PATCH failed: `issues close: the reason was posted as a
+     comment (<url>) but closing failed: <forge error>; run close again without a reason`.
+     Test with exact text and request order.
+  4. `new` remote flow: remove the dry-run early return added in `00ef6564`; call
+     `requireHostSession("new")` directly before the gh call that creates the issue. Tests:
+     worker markers with flag-only `--remote` and, separately, with only `CLAUDE_CODE_REMOTE`;
+     the gh runner gets no create call.
+  5. `show <n> --forge [--json]` reads the forge issue on a repo with a local tracker; the JSON
+     has `updated_at`. `list --forge` gives `issues: --forge does not support list`.
+  6. Missing tests named by the reviewer: a successful `edit --closed`; an empty body for
+     `edit`; pull-request refusal and missing write token for `close` and `reopen`; the dry
+     runs of `close` and `reopen`; the no-token dry run of `new` and `comment` with a secret
+     lookup that fails the test; label paging that ends on a repeated page; the worker tests of
+     `edit`, `close` and `reopen` assert that the secret lookup is not called.
 
 - Docs: `docs/commands/issue.md`, the `harnez issues` help, the Issues rule source (regenerated
   with `make install` and `harnez init -d .`), `docs/Spec.md`; state the host-only limits and the
