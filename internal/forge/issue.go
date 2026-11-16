@@ -16,6 +16,7 @@ type RemoteIssue struct {
 	HTMLURL   string    `json:"html_url"`
 	State     string    `json:"state"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	User      struct {
 		Login string `json:"login"`
 	} `json:"user"`
