@@ -131,7 +131,7 @@ discarded errors, and test gaps folded into M9 pre-work below. M9–M17 remain o
 
 ## Milestone 9 — Pre-Work / Required Refinements & Isolate AGY / Auxiliary Writes
 
-M9a (`64403936`: AGY meter & host-only shims) and M9b (livefetchcache runner isolation, AGY auth backoff isolation, registry diagnostics, and `TestRunnerLiveCacheDoesNotMigrateLegacy`/`TestRunnerAGYBackoffIsIsolated` passing `HTO=0 make test-q1`) landed on `sprint/1181`; remaining error propagation/tests and auxiliary writers are still open.
+M9a–M9c landed on `sprint/1181`. M9d routes debug logs, feedback and benchmark defaults to runner state, keeps legacy archive creation/import host-only, and adds writer and path regression coverage. AGY producer-to-reader integration coverage remains open; M10–M17 remain open.
 
 ### Pre-Work / Required Refinements (from M8 review of `ad1cb455`)
 - **Isolate `livefetchcache` (`internal/usage/livefetchcache.go:60`)**: route default live-fetch cache paths through `internal/runstate.UsageStateDir` under `$TAIA_SESSION_DIR` when set, and skip shared legacy file migration writes in runner mode so runner collection never touches shared XDG cache files.

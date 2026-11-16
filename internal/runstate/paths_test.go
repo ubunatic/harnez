@@ -187,3 +187,29 @@ func TestUsageStateRejectsInvalidDescendants(t *testing.T) {
 		})
 	}
 }
+
+func TestAuxiliaryDirectories(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", root)
+	for name, resolve := range map[string]func(string) (string, error){"logs": LogDir, "feedback": FeedbackDir, "bench": BenchDir} {
+		dir, err := resolve("legacy")
+		if err != nil || dir != filepath.Join(root, "state", name) {
+			t.Fatalf("%s: %q %v", name, dir, err)
+		}
+	}
+	t.Setenv("TAIA_SESSION_DIR", "relative")
+	for _, resolve := range []func(string) (string, error){LogDir, FeedbackDir, BenchDir} {
+		if _, err := resolve("legacy"); err == nil {
+			t.Fatal("accepted invalid root")
+		}
+	}
+	t.Setenv("TAIA_SESSION_DIR", "")
+	for _, resolve := range []func(string) (string, error){LogDir, FeedbackDir, BenchDir} {
+		if dir, err := resolve("legacy"); err != nil || dir != "legacy" {
+			t.Fatalf("legacy: %q %v", dir, err)
+		}
+	}
+}

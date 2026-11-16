@@ -751,3 +751,34 @@ func TestParseModelsResolvesSpecsAndRejectsBadValues(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultDirRunnerIsolation(t *testing.T) {
+	home, root := t.TempDir(), t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("TAIA_SESSION_DIR", root)
+	dir, err := DefaultDir()
+	if err != nil || dir != filepath.Join(root, "state", "bench") {
+		t.Fatalf("runner dir: %q %v", dir, err)
+	}
+	store, err := OpenStore(filepath.Join(dir, "bench.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", "relative")
+	if _, err := DefaultDir(); err == nil {
+		t.Fatal("invalid root accepted")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".harnez")); !os.IsNotExist(err) {
+		t.Fatalf("host changed: %v", err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", "")
+	if dir, err := DefaultDir(); err != nil || dir != filepath.Join(home, ".harnez", "bench") {
+		t.Fatalf("host: %q %v", dir, err)
+	}
+}

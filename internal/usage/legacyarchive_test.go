@@ -158,3 +158,23 @@ func TestEnsureLegacyUsageArchiveCopiesOnlyOnce(t *testing.T) {
 		t.Fatalf("got %d archives after repeated mirror writes, want 1", len(archives))
 	}
 }
+
+func TestRunnerLegacyArchiveRejected(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("TAIA_SESSION_DIR", root)
+	base := t.TempDir()
+	paths := LegacyUsageArchivePaths{Home: base, DataHome: base, CacheHome: base, StateHome: base, ArchiveBase: filepath.Join(base, "archive")}
+	if _, err := ArchiveLegacyUsageData(paths); err == nil {
+		t.Fatal("runner archived host data")
+	}
+	if err := ensureLegacyUsageArchive(paths); err == nil {
+		t.Fatal("runner ensured archive")
+	}
+	if _, err := ImportLegacyUsageArchive(context.Background(), filepath.Join(base, "db"), base); err == nil {
+		t.Fatal("runner imported archive")
+	}
+	entries, err := os.ReadDir(base)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("host changed: %v %v", entries, err)
+	}
+}

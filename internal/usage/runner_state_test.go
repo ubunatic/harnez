@@ -272,3 +272,67 @@ func TestRunnerProcessesWriteSeparately(t *testing.T) {
 		}
 	}
 }
+
+func TestRunnerInvalidRootsThroughWriters(t *testing.T) {
+	for _, kind := range []string{"relative", "missing", "permissive", "symlink", "descendant"} {
+		t.Run(kind, func(t *testing.T) {
+			home, shared, root := t.TempDir(), t.TempDir(), t.TempDir()
+			switch kind {
+			case "relative":
+				root = "invalid-runner"
+			case "missing":
+				root = filepath.Join(root, "missing")
+			case "permissive":
+				if err := os.Chmod(root, 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				link := filepath.Join(t.TempDir(), "link")
+				if err := os.Symlink(root, link); err != nil {
+					t.Fatal(err)
+				}
+				root = link
+			case "descendant":
+				if err := os.Symlink(t.TempDir(), filepath.Join(root, "state")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("HOME", home)
+			t.Setenv("XDG_STATE_HOME", shared)
+			t.Setenv("XDG_CACHE_HOME", shared)
+			t.Setenv("XDG_DATA_HOME", shared)
+			t.Setenv("TAIA_SESSION_DIR", root)
+			t.Setenv(passiveNoQuotaCaptureEnv, "1")
+			recordFetchDuration(home, "local", time.Second)
+			capturePassiveNoQuota("test", []byte("{}"), "test")
+			summary := CollectRegisteredCatchup(context.Background(), home, nil, time.Hour, nil, nil)
+			if len(summary.Agents) != 0 {
+				t.Fatalf("unexpected agents: %v", summary.Agents)
+			}
+			if err := writeAGYAuthBackoff(agyAuthBackoffPath(home), agyAuthBackoff{Until: time.Now()}); err == nil {
+				t.Fatal("backoff write succeeded")
+			}
+			for _, dir := range []string{home, shared} {
+				entries, err := os.ReadDir(dir)
+				if err != nil || len(entries) != 0 {
+					t.Fatalf("shared directory changed: %v %v", entries, err)
+				}
+			}
+		})
+	}
+}
+
+func TestRunnerExplicitStateDirOverride(t *testing.T) {
+	t.Setenv("TAIA_SESSION_DIR", "invalid-runner")
+	dir := t.TempDir()
+	if err := WriteAgentSnapshot(dir, "test", AgentUsage{AgentID: "test", Name: "override"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadAgentSnapshot(dir, "test")
+	if err != nil || got == nil || got.Usage.Name != "override" {
+		t.Fatalf("override: %v %v", got, err)
+	}
+	if _, err := ResolvedStateDir(t.TempDir()); err == nil {
+		t.Fatal("home argument bypassed invalid runner")
+	}
+}

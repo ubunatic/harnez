@@ -83,7 +83,10 @@ func runFeedbackIssue(w io.Writer, description, severity, dir string, fileTicket
 		Status:      feedback.StatusNew,
 	}
 
-	feedbackDir := feedback.DefaultDir()
+	feedbackDir, err := feedback.DefaultDir()
+	if err != nil {
+		return fmt.Errorf("feedback: %w", err)
+	}
 	if fileTicket {
 		issuesDir := filepath.Join(dir, "issues")
 		path, err := feedback.Promote(issuesDir, e)
@@ -132,7 +135,11 @@ Output is deterministic, tab-separated, one entry per line, no header:
 }
 
 func runFeedbackList(w io.Writer, dir string, all bool) error {
-	entries, err := feedback.Load(feedback.DefaultDir(), dir)
+	feedbackDir, err := feedback.DefaultDir()
+	if err != nil {
+		return fmt.Errorf("feedback: %w", err)
+	}
+	entries, err := feedback.Load(feedbackDir, dir)
 	if err != nil {
 		return fmt.Errorf("feedback: %w", err)
 	}
@@ -177,7 +184,10 @@ without manually locating and reading the raw JSONL.`,
 }
 
 func runFeedbackPromote(w io.Writer, dir, id string) error {
-	feedbackDir := feedback.DefaultDir()
+	feedbackDir, err := feedback.DefaultDir()
+	if err != nil {
+		return fmt.Errorf("feedback: %w", err)
+	}
 	entries, err := feedback.Load(feedbackDir, dir)
 	if err != nil {
 		return fmt.Errorf("feedback: %w", err)

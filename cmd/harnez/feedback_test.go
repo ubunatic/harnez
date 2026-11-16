@@ -77,7 +77,11 @@ func TestFeedbackPromoteCrossProject(t *testing.T) {
 	// The origin project's log must now show the entry as promoted too
 	// (the fallback path updates the log it actually found the entry in,
 	// not one freshly created for targetProject).
-	originEntries, err := feedback.Load(feedback.DefaultDir(), originProject)
+	feedbackDir, err := feedback.DefaultDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	originEntries, err := feedback.Load(feedbackDir, originProject)
 	if err != nil {
 		t.Fatalf("Load origin log: %v", err)
 	}
@@ -86,7 +90,7 @@ func TestFeedbackPromoteCrossProject(t *testing.T) {
 	}
 
 	// No stray log file should have been created for targetProject.
-	targetLogPath, err := feedback.Path(feedback.DefaultDir(), targetProject)
+	targetLogPath, err := feedback.Path(feedbackDir, targetProject)
 	if err != nil {
 		t.Fatalf("Path: %v", err)
 	}

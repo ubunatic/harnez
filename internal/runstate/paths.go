@@ -13,21 +13,13 @@ const runnerDirEnv = "TAIA_SESSION_DIR"
 // SessionStateDir returns the runner-local session state directory, or
 // legacyDir when Harnez is not running under a Taia runner.
 func SessionStateDir(legacyDir string) (string, error) {
-	root := os.Getenv(runnerDirEnv)
-	if root == "" {
-		return legacyDir, nil
-	}
-	return privatePath(root, "state", "sessions")
+	return scopedDir(legacyDir, "state", "sessions")
 }
 
 // ProcessRecordDir returns the runner-local process record directory, or
 // legacyDir when Harnez is not running under a Taia runner.
 func ProcessRecordDir(legacyDir string) (string, error) {
-	root := os.Getenv(runnerDirEnv)
-	if root == "" {
-		return legacyDir, nil
-	}
-	return privatePath(root, "runtime", "procs")
+	return scopedDir(legacyDir, "runtime", "procs")
 }
 
 func privatePath(root string, parts ...string) (string, error) {
@@ -65,18 +57,27 @@ func privatePath(root string, parts ...string) (string, error) {
 
 // UsageStateDir returns the private runner usage directory or the legacy directory.
 func UsageStateDir(legacyDir string) (string, error) {
-	root := os.Getenv(runnerDirEnv)
-	if root == "" {
-		return legacyDir, nil
-	}
-	return privatePath(root, "state", "usage")
+	return scopedDir(legacyDir, "state", "usage")
 }
 
 // AGYMeterDir returns the runner-local meter directory or the host directory.
 func AGYMeterDir(legacyDir string) (string, error) {
+	return scopedDir(legacyDir, "state", "agymeter")
+}
+
+// LogDir returns the runner-local debug log directory or the host directory.
+func LogDir(legacyDir string) (string, error) { return scopedDir(legacyDir, "state", "logs") }
+
+// FeedbackDir returns the runner-local feedback directory or the host directory.
+func FeedbackDir(legacyDir string) (string, error) { return scopedDir(legacyDir, "state", "feedback") }
+
+// BenchDir returns the runner-local benchmark directory or the host directory.
+func BenchDir(legacyDir string) (string, error) { return scopedDir(legacyDir, "state", "bench") }
+
+func scopedDir(legacyDir string, parts ...string) (string, error) {
 	root := os.Getenv(runnerDirEnv)
 	if root == "" {
 		return legacyDir, nil
 	}
-	return privatePath(root, "state", "agymeter")
+	return privatePath(root, parts...)
 }

@@ -236,3 +236,33 @@ func TestPromoteWritesTicketFile(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultDirRunnerIsolation(t *testing.T) {
+	home, root := t.TempDir(), t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("TAIA_SESSION_DIR", root)
+	dir, err := DefaultDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir != filepath.Join(root, "state", "feedback") {
+		t.Fatalf("dir: %s", dir)
+	}
+	if err := Append(dir, home, Entry{ID: "runner"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", "relative")
+	if _, err := DefaultDir(); err == nil {
+		t.Fatal("invalid root accepted")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".harnez")); !os.IsNotExist(err) {
+		t.Fatalf("host changed: %v", err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", "")
+	if dir, err := DefaultDir(); err != nil || dir != filepath.Join(home, ".harnez", "feedback") {
+		t.Fatalf("host: %q %v", dir, err)
+	}
+}

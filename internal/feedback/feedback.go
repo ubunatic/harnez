@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/issues"
+	"ubunatic.com/harnez/internal/runstate"
 )
 
 // Entry is one feedback record.
@@ -59,12 +60,12 @@ const (
 
 // DefaultDir returns ~/.harnez/feedback, sibling to resolve.DefaultStateDir's
 // ~/.harnez/sessions.
-func DefaultDir() string {
+func DefaultDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
 	}
-	return filepath.Join(home, ".harnez", "feedback")
+	return runstate.FeedbackDir(filepath.Join(home, ".harnez", "feedback"))
 }
 
 // projectKey hashes an absolute project directory path into the log

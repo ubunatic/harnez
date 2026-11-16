@@ -612,3 +612,14 @@ func TestCollectAGYConcurrentCallsDoNotDoubleFetch(t *testing.T) {
 		t.Errorf("expected a cache file to have been written by one of the concurrent callers")
 	}
 }
+
+func TestAGYMeterReaderHostFallback(t *testing.T) {
+	t.Setenv("TAIA_SESSION_DIR", "")
+	home := t.TempDir()
+	now := time.Now().UTC().Truncate(time.Second)
+	writeTestAGYMeterRows(t, home, []agymeter.Record{{Time: now, Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.75), Reset: now.Add(time.Hour).Format(time.RFC3339)}})
+	got, ok := applyAGYMeterQuota(AgentUsage{}, home, now, false)
+	if !ok || len(got.ModelGroups) == 0 || got.ModelGroups[0].Windows[0].RemainingPercent != 75 {
+		t.Fatalf("host meter: %+v %v", got.ModelGroups, ok)
+	}
+}
