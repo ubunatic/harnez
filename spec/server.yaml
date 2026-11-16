@@ -37,6 +37,7 @@ runner_channel:
   spool_max_bytes: 1048576
   replay_max_records: 64
   replay_max_bytes: 524288
+  max_concurrent_streams: 32
   allowed_telemetry_kinds:
     - tool_call
     - agy_post_tool

@@ -19,7 +19,18 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
+
+func init() {
+	// Mark any valid inherited broker FD close-on-exec immediately at startup so
+	// unrelated subprocesses never inherit it unless PrepareCmdRunnerBroker
+	// intentionally forwards a dup via ExtraFiles.
+	if cfg, err := LoadConfig(); err == nil {
+		_, _ = parseAndValidateRunnerFD(cfg)
+	}
+}
 
 const (
 	RunnerOpTelemetryIngest = "telemetry_ingest"
@@ -135,11 +146,27 @@ func openPerRequestStream(ctx context.Context, brokerFD int, fallbackTimeout tim
 			_ = syscall.Close(peerFD)
 			return nil, fmt.Errorf("%w: sendmsg: %v", ErrRunnerUnavailable, err)
 		}
-		if ctx.Err() != nil || (hasDeadline && !time.Now().Before(deadline)) {
+		if ctxErr := ctx.Err(); ctxErr != nil {
 			_ = syscall.Close(peerFD)
-			return nil, fmt.Errorf("%w: sendmsg timed out", ErrRunnerUnavailable)
+			return nil, fmt.Errorf("%w: %w", ErrRunnerUnavailable, ctxErr)
 		}
-		time.Sleep(time.Millisecond)
+		timeoutMs := -1
+		if hasDeadline {
+			rem := time.Until(deadline)
+			if rem <= 0 {
+				_ = syscall.Close(peerFD)
+				return nil, fmt.Errorf("%w: sendmsg timed out", ErrRunnerUnavailable)
+			}
+			timeoutMs = int((rem + time.Millisecond - 1) / time.Millisecond)
+		}
+		if ctx.Done() != nil && (timeoutMs < 0 || timeoutMs > 100) {
+			timeoutMs = 100
+		}
+		_, pollErr := unix.Poll([]unix.PollFd{{Fd: int32(brokerFD), Events: unix.POLLOUT}}, timeoutMs)
+		if pollErr != nil && !errors.Is(pollErr, syscall.EINTR) {
+			_ = syscall.Close(peerFD)
+			return nil, fmt.Errorf("%w: poll: %v", ErrRunnerUnavailable, pollErr)
+		}
 	}
 	_ = syscall.Close(peerFD)
 	conn, err := net.FileConn(clientFile)
@@ -398,7 +425,11 @@ func serveUnixBroker(ctx context.Context, seqConn *net.UnixConn, cfg Config, ing
 	defer wg.Wait()
 	defer cancelServe()
 
-	sem := make(chan struct{}, 32)
+	maxStreams := cfg.RunnerChannel.MaxConcurrentStreams
+	if maxStreams <= 0 {
+		return fmt.Errorf("serve runner broker: max_concurrent_streams must be positive")
+	}
+	sem := make(chan struct{}, maxStreams)
 	buf := make([]byte, 16)
 	oob := make([]byte, syscall.CmsgSpace(4*8))
 	for {
@@ -518,6 +549,9 @@ func ServeRunnerConn(ctx context.Context, conn net.Conn, cfg Config, ingest func
 			return err
 		}
 		resp := handleRunnerFrame(ctx, cfg, frame, ingest)
+		if cfg.HTTPClientTimeout > 0 {
+			_ = conn.SetWriteDeadline(time.Now().Add(cfg.HTTPClientTimeout))
+		}
 		if err := writeRunnerResponse(conn, cfg.RunnerChannel.MaxFrameBytes, resp); err != nil {
 			return err
 		}
@@ -631,6 +665,7 @@ func parseAndValidateRunnerFD(cfg Config) (int, error) {
 	if err := validateConnectedUnixSocket(fd, syscall.SOCK_SEQPACKET); err != nil {
 		return 0, fmt.Errorf("%w: fd %d: %v", ErrInvalidRunnerChannel, fd, err)
 	}
+	syscall.CloseOnExec(fd)
 	return fd, nil
 }
 

@@ -8,8 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
+	"syscall"
 	"testing"
 )
 
@@ -67,9 +70,23 @@ func TestRunnerLaunchHostRelayAndForwardChild(t *testing.T) {
 		if err != nil {
 			os.Exit(2)
 		}
-		if role == "strip-check" {
+		if role == "strip-check" || role == "cloexec-check" {
 			if os.Getenv(cfg.RunnerChannel.FDEnv) != "" || SendRunnerTelemetry(context.Background(), cfg, TelemetryRecord{RecordID: "x", Kind: "tool_call", Payload: json.RawMessage(`{}`)}) != UpdateDropped {
 				os.Exit(3)
+			}
+			if role == "cloexec-check" {
+				if _, optErr := syscall.GetsockoptInt(3, syscall.SOL_SOCKET, syscall.SO_TYPE); optErr == nil {
+					os.Exit(5)
+				}
+			}
+			os.Exit(0)
+		}
+		if role == "spawn-plain-child" {
+			child := exec.Command(os.Args[0], "-test.run=^TestRunnerLaunchHostRelayAndForwardChild$")
+			child.Env = setEnvKey(os.Environ(), cfg.RunnerChannel.FDEnv, "", false)
+			child.Env = setEnvKey(child.Env, "HARNEZ_TEST_LAUNCH_CHILD", "cloexec-check", true)
+			if err := child.Run(); err != nil {
+				os.Exit(6)
 			}
 			os.Exit(0)
 		}
@@ -124,15 +141,47 @@ func TestRunnerLaunchHostRelayAndForwardChild(t *testing.T) {
 	go func() { done <- RelayRunnerBroker(ctx, hostEnd, hostSocket, cfg) }()
 	t.Cleanup(func() { cancel(); _ = runnerEnd.Close(); <-done })
 
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer devNull.Close()
+
 	t.Setenv(cfg.RunnerChannel.FDEnv, strconv.Itoa(int(runnerEnd.Fd())))
 	fwdCmd := exec.Command(os.Args[0], "-test.run=^TestRunnerLaunchHostRelayAndForwardChild$")
+	fwdCmd.ExtraFiles = []*os.File{devNull} // forces forwarded FD onto 4 (3 + len(ExtraFiles))
 	fwdCmd.Env = append(os.Environ(), "HARNEZ_TEST_LAUNCH_CHILD=forwarded")
 	runBrokerChildCmd(t, fwdCmd)
 
+	// Verify CLOEXEC on inherited broker FD (M1): runner spawned with ExtraFiles FD=3
+	// starts a plain child without PrepareCmdRunnerBroker; child must not see FD 3 open.
+	plainParent := exec.Command(os.Args[0], "-test.run=^TestRunnerLaunchHostRelayAndForwardChild$")
+	plainParent.ExtraFiles = []*os.File{runnerEnd}
+	plainParent.Env = setEnvKey(os.Environ(), cfg.RunnerChannel.FDEnv, "3", true)
+	plainParent.Env = setEnvKey(plainParent.Env, "HARNEZ_TEST_LAUNCH_CHILD", "spawn-plain-child", true)
+	if out, err := plainParent.CombinedOutput(); err != nil {
+		t.Fatalf("cloexec propagation test failed: %v (%s)", err, string(out))
+	}
+
+	// Verify PrepareCmdRunnerBroker strips stale FD env on error (M2).
+	t.Setenv("TAIA_SESSION_DIR", "")
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, strings.Repeat("long-", 24)))
+	t.Setenv(cfg.RunnerChannel.FDEnv, "99")
+	errCmd := exec.Command(os.Args[0])
+	errCmd.Env = os.Environ()
+	if errBroker, err := PrepareCmdRunnerBroker(context.Background(), errCmd); err == nil || errBroker != nil {
+		t.Fatalf("expected error and nil handle for invalid socket dir, got broker=%v err=%v", errBroker, err)
+	}
+	for _, entry := range errCmd.Env {
+		if strings.HasPrefix(entry, cfg.RunnerChannel.FDEnv+"=") {
+			t.Fatalf("PrepareCmdRunnerBroker error left %s in cmd.Env", cfg.RunnerChannel.FDEnv)
+		}
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
-	if len(*received) != 2 {
-		t.Fatalf("received = %v, want 2 records (host + forwarded)", *received)
+	if !slices.Contains(*received, "launch-host") || !slices.Contains(*received, "launch-forwarded") || len(*received) != 2 {
+		t.Fatalf("received = %v, want [launch-host launch-forwarded]", *received)
 	}
 }
 

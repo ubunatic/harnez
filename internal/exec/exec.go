@@ -676,7 +676,10 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	c.Stdout = io.MultiWriter(stdoutWriters...)
 	c.Stderr = io.MultiWriter(stderrWriters...)
 
-	broker, _ := server.PrepareCmdRunnerBroker(ctx, c)
+	broker, err := server.PrepareCmdRunnerBroker(ctx, c)
+	if err != nil {
+		fmt.Fprintf(errOut, "harnez exec: prepare runner broker: %v\n", err)
+	}
 	start := time.Now()
 	if err := c.Start(); err != nil {
 		_ = broker.Close()

@@ -65,7 +65,10 @@ Explicit full, lite, or vision modes override provider selection.`,
 			child.Stdin = strings.NewReader(staged.Prompt)
 			child.Stdout, child.Stderr = cmd.OutOrStdout(), cmd.ErrOrStderr()
 			child.Env = append(os.Environ(), "HARNEZ_STYLE_GUIDE="+staged.StagedCardPath)
-			broker, _ := server.PrepareCmdRunnerBroker(cmd.Context(), child)
+			broker, err := server.PrepareCmdRunnerBroker(cmd.Context(), child)
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "harnez subagent: prepare runner broker: %v\n", err)
+			}
 			if err := child.Start(); err != nil {
 				_ = broker.Close()
 				return err

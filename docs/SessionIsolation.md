@@ -49,11 +49,14 @@ inherited broker FD (`HARNEZ_BROKER_FD`):
 - Host launchers (`internal/exec`, `cmd/harnez/subagent.go`,
   `internal/subagent/{process,codex,interactive}.go`) attach an `AF_UNIX`
   `SOCK_SEQPACKET` broker socketpair via `ExtraFiles` and run
-  `RelayRunnerBroker` for the child lifetime. Runners open ephemeral `SOCK_STREAM`
+  `RelayRunnerBroker` for the child lifetime (even for host-launched children
+  without `TAIA_SESSION_DIR`, which keeps child-to-collector telemetry ready if
+  later wrapped). Runners open ephemeral `SOCK_STREAM`
   requests atomically over `HARNEZ_BROKER_FD` via `SCM_RIGHTS`; only allowlisted
   telemetry writes (`telemetry_ingest`, `telemetry_replay`) pass through to
   `Config.Socket()`, while `/shutdown`, `merge_legacy`, and `ensure_schema`
-  fail with `403`.
+  fail with `403`. Validated inherited FDs are marked close-on-exec at startup
+  so non-broker subprocesses cannot inherit the descriptor.
 - Direct `bwrap` execution preserves `ExtraFiles` (`HARNEZ_BROKER_FD` survives
   when explicitly forwarded), whereas external `taia` sandbox helpers spawn
   child commands without forwarding FDs `>= 3` (`cmd.ExtraFiles` empty /

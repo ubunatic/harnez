@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // RunnerBrokerHandle manages a child process's inherited broker FD and any
@@ -66,10 +68,12 @@ func PrepareCmdRunnerBroker(ctx context.Context, cmd *exec.Cmd) (*RunnerBrokerHa
 	}
 	hostSocket, err := cfg.Socket()
 	if err != nil {
+		cmd.Env = setEnvKey(baseEnv, cfg.RunnerChannel.FDEnv, "", false)
 		return nil, err
 	}
 	hostEnd, runnerEnd, err := SocketPair()
 	if err != nil {
+		cmd.Env = setEnvKey(baseEnv, cfg.RunnerChannel.FDEnv, "", false)
 		return nil, err
 	}
 	relayCtx, cancel := context.WithCancel(ctx)
@@ -85,6 +89,15 @@ func PrepareCmdRunnerBroker(ctx context.Context, cmd *exec.Cmd) (*RunnerBrokerHa
 func prepareForwardedRunnerBroker(cfg Config, cmd *exec.Cmd, baseEnv []string) (*RunnerBrokerHandle, error) {
 	fd, err := parseAndValidateRunnerFD(cfg)
 	if err != nil {
+		// If the env var named an existing AF_UNIX socket of any type, ensure it
+		// is close-on-exec before stripping the env var so children cannot probe it.
+		if raw := strings.TrimSpace(os.Getenv(cfg.RunnerChannel.FDEnv)); raw != "" {
+			if rawFD, convErr := strconv.Atoi(raw); convErr == nil && rawFD >= 3 {
+				if domain, optErr := syscall.GetsockoptInt(rawFD, syscall.SOL_SOCKET, syscall.SO_DOMAIN); optErr == nil && domain == syscall.AF_UNIX {
+					syscall.CloseOnExec(rawFD)
+				}
+			}
+		}
 		cmd.Env = setEnvKey(baseEnv, cfg.RunnerChannel.FDEnv, "", false)
 		return nil, nil
 	}
@@ -100,12 +113,7 @@ func prepareForwardedRunnerBroker(cfg Config, cmd *exec.Cmd, baseEnv []string) (
 }
 
 func dupFDAsFile(fd int) (*os.File, error) {
-	syscall.ForkLock.RLock()
-	dupFD, err := syscall.Dup(fd)
-	if err == nil {
-		syscall.CloseOnExec(dupFD)
-	}
-	syscall.ForkLock.RUnlock()
+	dupFD, err := unix.FcntlInt(uintptr(fd), unix.F_DUPFD_CLOEXEC, 3)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -234,8 +236,12 @@ func TestRunnerChannelConcurrentChildProcessesOnInheritedFD(t *testing.T) {
 			close(allArrived)
 		}
 		mu.Unlock()
-		<-allArrived
-		return nil
+		select {
+		case <-allArrived:
+			return nil
+		case <-time.After(3 * time.Second):
+			return fmt.Errorf("concurrency barrier timed out")
+		}
 	})
 	var wg sync.WaitGroup
 	errs := make(chan error, workers)
@@ -416,13 +422,16 @@ func TestRunnerChannelReplayWireByteLimitAnd413NoQuarantine(t *testing.T) {
 	}
 }
 
-func TestRunnerBrokerEOFClosesIdleStreamsAndStatusClassification(t *testing.T) {
+func TestRunnerStatusClassificationForQuarantine(t *testing.T) {
 	if isPermanentHTTPStatus(http.StatusRequestTimeout) || isPermanentHTTPStatus(http.StatusRequestEntityTooLarge) || isPermanentHTTPStatus(http.StatusTooManyRequests) || isPermanentHTTPStatus(http.StatusServiceUnavailable) {
 		t.Fatal("transient HTTP statuses must not quarantine")
 	}
 	if !isPermanentHTTPStatus(http.StatusBadRequest) || !isPermanentHTTPStatus(http.StatusUnprocessableEntity) {
 		t.Fatal("permanent 4xx must quarantine")
 	}
+}
+
+func TestRunnerBrokerEOFClosesIdleStreams(t *testing.T) {
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -451,4 +460,102 @@ func TestRunnerBrokerEOFClosesIdleStreamsAndStatusClassification(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("broker hung waiting for idle client stream after EOF")
 	}
+}
+
+func TestExtractSCMStreamConnValidationAndClose(t *testing.T) {
+	seqHost, seqClient, err := SocketPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer seqHost.Close()
+	defer seqClient.Close()
+
+	// Duplicate a descriptor outside UnixRights? Instead verify parse+close on live FDs.
+	r1Host, r1Peer, err := SocketPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r1Host.Close()
+	defer r1Peer.Close()
+
+	dupFD, err := syscall.Dup(int(r1Peer.Fd()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rightsSeq := syscall.UnixRights(dupFD)
+	if _, err := extractSCMStreamConn(rightsSeq, syscall.MSG_CTRUNC); err == nil {
+		t.Fatal("expected error for MSG_CTRUNC")
+	}
+	if _, optErr := syscall.GetsockoptInt(dupFD, syscall.SOL_SOCKET, syscall.SO_TYPE); !errors.Is(optErr, syscall.EBADF) {
+		t.Fatalf("MSG_CTRUNC rejected FD %d remained open (err=%v)", dupFD, optErr)
+	}
+
+	// Valid UnixRights over SOCK_SEQPACKET (not SOCK_STREAM) in an in-band message
+	// so kernel allocates fresh FDs that extractSCMStreamConn must validate and close.
+	if err := syscall.Sendmsg(int(seqClient.Fd()), []byte{1}, syscall.UnixRights(int(r1Peer.Fd())), nil, syscall.MSG_DONTWAIT); err != nil {
+		t.Fatal(err)
+	}
+	oob := make([]byte, syscall.CmsgSpace(4*8))
+	buf := make([]byte, 8)
+	_, oobn, flags, _, err := syscall.Recvmsg(int(seqHost.Fd()), buf, oob, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := extractSCMStreamConn(oob[:oobn], flags); err == nil {
+		t.Fatal("expected extractSCMStreamConn to reject SOCK_SEQPACKET FD")
+	}
+	// Multi-FD rights must also be rejected and both duped FDs closed.
+	if err := syscall.Sendmsg(int(seqClient.Fd()), []byte{2}, syscall.UnixRights(int(r1Peer.Fd()), int(r1Peer.Fd())), nil, syscall.MSG_DONTWAIT); err != nil {
+		t.Fatal(err)
+	}
+	_, oobn, flags, _, err = syscall.Recvmsg(int(seqHost.Fd()), buf, oob, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scms, _ := syscall.ParseSocketControlMessage(oob[:oobn])
+	var parsedFDs []int
+	for i := range scms {
+		if fds, pErr := syscall.ParseUnixRights(&scms[i]); pErr == nil {
+			parsedFDs = append(parsedFDs, fds...)
+		}
+	}
+	if _, err := extractSCMStreamConn(oob[:oobn], flags); err == nil {
+		t.Fatal("expected extractSCMStreamConn to reject multi-FD control message")
+	}
+	for _, fd := range parsedFDs {
+		if _, optErr := syscall.GetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_TYPE); !errors.Is(optErr, syscall.EBADF) {
+			t.Fatalf("rejected FD %d remained open (err=%v)", fd, optErr)
+		}
+	}
+}
+
+func TestOpenPerRequestStreamTimeoutAndCtxCancel(t *testing.T) {
+	hostEnd, runnerEnd, err := SocketPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hostEnd.Close()
+	defer runnerEnd.Close()
+
+	// Shrink send buffer and never read hostEnd so Sendmsg hits EAGAIN cleanly.
+	_ = syscall.SetsockoptInt(int(runnerEnd.Fd()), syscall.SOL_SOCKET, syscall.SO_SNDBUF, 4096)
+	var opened []net.Conn
+	defer func() {
+		for _, c := range opened {
+			_ = c.Close()
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
+	defer cancel()
+	for i := 0; i < 64; i++ {
+		c, sendErr := openPerRequestStream(ctx, int(runnerEnd.Fd()), 0)
+		if sendErr != nil {
+			if !errors.Is(sendErr, ErrRunnerUnavailable) {
+				t.Fatalf("saturated sendmsg error = %v, want ErrRunnerUnavailable", sendErr)
+			}
+			return
+		}
+		opened = append(opened, c)
+	}
+	t.Fatal("expected openPerRequestStream to hit saturated EAGAIN timeout")
 }

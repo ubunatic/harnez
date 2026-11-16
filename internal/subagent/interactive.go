@@ -208,7 +208,10 @@ func runInteractivePTY(ctx context.Context, command string, args []string, opts 
 		_ = listener.Close()
 		_ = os.Remove(opts.ControlSocket)
 	}()
-	broker, _ := server.PrepareCmdRunnerBroker(ctx, cmd)
+	broker, err := server.PrepareCmdRunnerBroker(ctx, cmd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez interactive: prepare runner broker: %v\n", err)
+	}
 	defer func() { _ = broker.Close() }()
 	ptmx, err := pty.Start(cmd)
 	if err != nil {

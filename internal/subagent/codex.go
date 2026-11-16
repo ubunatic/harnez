@@ -808,7 +808,10 @@ func startProcess(ctx context.Context, dir, name string, args ...string) (io.Rea
 	}
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
-	broker, _ := server.PrepareCmdRunnerBroker(ctx, c)
+	broker, err := server.PrepareCmdRunnerBroker(ctx, c)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez codex: prepare runner broker: %v\n", err)
+	}
 	if err := c.Start(); err != nil {
 		_ = broker.Close()
 		return nil, nil, err

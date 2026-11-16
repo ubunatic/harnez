@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -67,7 +69,10 @@ func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	broker, _ := server.PrepareCmdRunnerBroker(ctx, cmd)
+	broker, err := server.PrepareCmdRunnerBroker(ctx, cmd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez subagent: prepare runner broker: %v\n", err)
+	}
 	if err := cmd.Start(); err != nil {
 		_ = broker.Close()
 		return nil, err

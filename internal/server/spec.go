@@ -46,6 +46,7 @@ type RunnerChannelConfig struct {
 	SpoolMaxBytes         int64
 	ReplayMaxRecords      int
 	ReplayMaxBytes        int64
+	MaxConcurrentStreams  int
 	AllowedTelemetryKinds []string
 }
 
@@ -93,6 +94,7 @@ type rawRunnerChannel struct {
 	SpoolMaxBytes         int64    `yaml:"spool_max_bytes"`
 	ReplayMaxRecords      int      `yaml:"replay_max_records"`
 	ReplayMaxBytes        int64    `yaml:"replay_max_bytes"`
+	MaxConcurrentStreams  int      `yaml:"max_concurrent_streams"`
 	AllowedTelemetryKinds []string `yaml:"allowed_telemetry_kinds"`
 }
 
@@ -236,7 +238,7 @@ func (c Config) Socket() (string, error) {
 }
 
 func loadRunnerChannel(cfg *Config, raw rawRunnerChannel) error {
-	if raw.FDEnv == "" || raw.MaxFrameBytes <= 0 || raw.SpoolMaxBytes <= 0 || raw.ReplayMaxRecords <= 0 || raw.ReplayMaxBytes <= 0 {
+	if raw.FDEnv == "" || raw.MaxFrameBytes <= 0 || raw.SpoolMaxBytes <= 0 || raw.ReplayMaxRecords <= 0 || raw.ReplayMaxBytes <= 0 || raw.MaxConcurrentStreams <= 0 {
 		return fmt.Errorf("spec/server.yaml: runner_channel settings must be positive and non-empty")
 	}
 	if raw.MaxFrameBytes <= raw.ReplayMaxBytes {
@@ -251,6 +253,7 @@ func loadRunnerChannel(cfg *Config, raw rawRunnerChannel) error {
 		SpoolMaxBytes:         raw.SpoolMaxBytes,
 		ReplayMaxRecords:      raw.ReplayMaxRecords,
 		ReplayMaxBytes:        raw.ReplayMaxBytes,
+		MaxConcurrentStreams:  raw.MaxConcurrentStreams,
 		AllowedTelemetryKinds: append([]string(nil), raw.AllowedTelemetryKinds...),
 	}
 	return nil
