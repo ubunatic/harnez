@@ -143,10 +143,7 @@ refinements folded into M10 pre-work below. M10–M17 remain open.
 
 ### M10a — M9 review refinements
 
-M10a addresses AGY meter path and backoff write error reporting, removes the feedback home fallback, and adds producer/reader, shared-write, cache round-trip, and invalid-root regressions. The single Quota-1 run stopped at vet before Go tests due to a misplaced check; the check was corrected afterward and targeted `go vet` passed, but the corrected code has not had a test run. M10b telemetry and broker work remains open.
-
-### Pre-Work / Required Refinements (from M9 review of `ad1cb455..c771270d`)
-- M10a (`bc1b5066`) landed the AGY error propagation, `feedback.DefaultDir`, `NewWithTransport` proxy test, and extra runner-root tests, but host `HTO=0 make test-q1` failed on two new test fixtures lacking `os.Chmod(root, 0700)`: `TestRunnerAGYMeterProxyToQuota` (`agy_test.go:663`) and `TestCollectAGYReportsBackoffWriteFailure` (`agy_test.go:716`). Fix both test fixtures in `internal/usage/agy_test.go` with a new commit before starting M10b.
+M10a (`bc1b5066`) addresses AGY meter path and backoff write error reporting, removes the feedback home fallback, and adds producer/reader, shared-write, cache round-trip, and invalid-root regressions. A host Quota-1 run failed because two AGY test fixtures lacked mode-0700 runner roots; the fixtures now set that mode explicitly, and `HTO=0 make test-q1` passed. M10b telemetry and broker work remains open.
 
 ### M10 Implementation Scope (Owner Decision A1)
 - **Runner vs Admin Transport (`internal/server/{spec,client,server}.go`, `cmd/harnez/telemetry_server.go`)**: split collector HTTP/RPC handling cleanly between the host admin server and a runner channel authenticated via a **launch-bound inherited connected socketpair/FD** (A1) passed by the trusted host launcher. Reject or never expose host-only admin routes (`/shutdown`, `merge_legacy`, caller-supplied DB/source paths) on the runner channel; keep host admin routes functional for host callers. Do not rely on `0600` socket permissions or readable tokens for session auth.

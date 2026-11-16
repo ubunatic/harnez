@@ -652,6 +652,9 @@ func (o agyMeterTestObserver) RequestStarted()       {}
 func (o agyMeterTestObserver) ResponseFinished(bool) { close(o.done) }
 func TestRunnerAGYMeterProxyToQuota(t *testing.T) {
 	home, root := t.TempDir(), t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("TAIA_SESSION_DIR", root)
 	reset := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
 	observer := agyMeterTestObserver{done: make(chan struct{})}
@@ -708,6 +711,9 @@ func TestCollectAGYReportsBackoffWriteFailure(t *testing.T) {
 	calls, cleanup := agyStubUsageCmd(t, []byte("Please log in to continue using Antigravity.\n"), nil)
 	defer cleanup()
 	home, root := t.TempDir(), t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("HOME", home)
 	t.Setenv("TAIA_SESSION_DIR", root)
 	dir := t.TempDir()
