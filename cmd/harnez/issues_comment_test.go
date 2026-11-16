@@ -94,7 +94,7 @@ func TestIssuesCommentOffline(t *testing.T) {
 		t.Fatalf("argv: %q %v", got, err)
 	}
 	status = http.StatusUnauthorized
-	if _, err := run(); err == nil || !strings.Contains(err.Error(), "API requires authentication") || !strings.Contains(err.Error(), "fj -H codeberg.org auth login") {
+	if _, err := run(); err == nil || !strings.Contains(err.Error(), "API requires authentication") || !strings.Contains(err.Error(), `fj -H codeberg.org auth login`) {
 		t.Fatalf("API auth: %v", err)
 	}
 	status, state = http.StatusOK, "open"
@@ -102,7 +102,7 @@ func TestIssuesCommentOffline(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(bin, "fj"), []byte("#!/bin/sh\necho '"+message+"' >&2\nexit 1\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := run(); err == nil || !strings.Contains(err.Error(), "fj -H codeberg.org auth login") {
+		if _, err := run(); err == nil || !strings.Contains(err.Error(), `fj -H codeberg.org auth login`) {
 			t.Fatalf("fj auth %q: %v", message, err)
 		}
 	}
@@ -148,6 +148,15 @@ func (s commentSource) Issue(fg forge.Forge, owner, repo string, n int) (forge.R
 
 func TestIssuesCommentRejectsEmptyBody(t *testing.T) {
 	src := &stubForgeSource{}
+	oldRun := issueCLIRun
+	calls := 0
+	issueCLIRun = func(string, forgetracker.Command) ([]byte, error) { calls++; return nil, nil }
+	t.Cleanup(func() { issueCLIRun = oldRun })
+	t.Cleanup(func() {
+		if calls != 0 {
+			t.Errorf("CLI called %d times", calls)
+		}
+	})
 	target := forgetracker.Target{Forge: forge.Forge{Host: "codeberg.org"}, Owner: "o", Repo: "r"}
 	for _, content := range []string{"", " \t", "\n\n"} {
 		body := filepath.Join(t.TempDir(), "body file")
@@ -182,12 +191,12 @@ func TestIssuesCommentFJErrors(t *testing.T) {
 			t.Fatal("expected failure")
 		}
 		if msg == "ordinary error" {
-			if !strings.Contains(err.Error(), msg) {
+			if err.Error() != "issues comment: fj failed: exit status 1: ordinary error\nrun manually: fj issue comment codeberg.org/o/r#7 --body-file "+strconv.Quote(body) {
 				t.Fatal(err)
 			}
 			continue
 		}
-		if !strings.Contains(err.Error(), "fj auth login") || strings.Contains(err.Error(), "trace line") || strings.Contains(err.Error(), "\n") {
+		if err.Error() != `issues comment: fj login for codeberg.org failed; run "fj auth login" if your fj wrapper sets the host, otherwise "fj -H codeberg.org auth login"` {
 			t.Fatal(err)
 		}
 	}

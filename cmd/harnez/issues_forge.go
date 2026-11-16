@@ -123,6 +123,10 @@ var (
 	}
 )
 
+func fjLoginHint(host string) string {
+	return fmt.Sprintf(`fj login for %s failed; run "fj auth login" if your fj wrapper sets the host, otherwise "fj -H %s auth login"`, host, host)
+}
+
 // runIssuesComment checks the issue before invoking fj with an explicit target.
 func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forgetracker.Source, number, body string, dryRun, allowClosed bool) error {
 	n, err := strconv.Atoi(number)
@@ -152,7 +156,7 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	if err != nil {
 		var apiErr *forge.APIError
 		if errors.As(err, &apiErr) && (apiErr.Status == 401 || apiErr.Status == 403 || apiErr.Status == 404) {
-			return fmt.Errorf("issues comment: preflight: %w; if the API requires authentication, %s; for fj login run fj -H %s auth login", err, privateRepoHint(t.Forge), t.Forge.Host)
+			return fmt.Errorf("issues comment: preflight: %w; if the API requires authentication, %s; %s", err, privateRepoHint(t.Forge), fjLoginHint(t.Forge.Host))
 		}
 		return fmt.Errorf("issues comment: preflight: %w", err)
 	}
@@ -165,7 +169,7 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	if !isOpen && !closedAllowed {
 		return fmt.Errorf("issues comment: %s has state %q; closed issues require --closed", target, is.State)
 	}
-	c := forgetracker.FJIssueCommand(t, n, body, "")
+	c := forgetracker.FJCommentCommand(t, n, body)
 	if dryRun {
 		_, err = fmt.Fprintf(w, "dry run: %s\n", c)
 		return err
@@ -181,10 +185,10 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 		msg := strings.TrimSpace(string(out))
 		lower := strings.ToLower(msg)
 		if strings.Contains(lower, "token was already used") || (strings.Contains(lower, "keys.rs") && strings.Contains(lower, "panic")) {
-			return fmt.Errorf("issues comment: fj login state failed; run fj auth login")
+			return fmt.Errorf("issues comment: %s", fjLoginHint(t.Forge.Host))
 		}
 		if strings.Contains(strings.ToLower(msg), "401") || strings.Contains(strings.ToLower(msg), "token is required") {
-			return fmt.Errorf("issues comment: fj authentication failed; run fj -H %s auth login", t.Forge.Host)
+			return fmt.Errorf("issues comment: %s", fjLoginHint(t.Forge.Host))
 		}
 		return fmt.Errorf("issues comment: fj failed: %w: %s\nrun manually: %s", err, msg, c)
 	}

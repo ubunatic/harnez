@@ -20,15 +20,17 @@ type Command struct {
 	Args []string
 }
 
-// FJIssueCommand builds an fj issue command with a host-qualified reference.
-// A zero number selects create; a positive number selects comment.
-func FJIssueCommand(t Target, number int, bodyFile, title string) Command {
-	repo := t.Forge.Host + "/" + t.Owner + "/" + t.Repo
-	if number > 0 {
-		return Command{"fj", []string{"issue", "comment", fmt.Sprintf("%s#%d", repo, number), "--body-file", bodyFile}}
-	}
-	return Command{"fj", []string{"issue", "create", "--repo", repo, "--body-file", bodyFile, title}}
+// FJCreateCommand builds an fj issue create command.
+func FJCreateCommand(t Target, bodyFile, title string) Command {
+	return Command{"fj", []string{"issue", "create", "--repo", fjRepo(t), "--body-file", bodyFile, title}}
 }
+
+// FJCommentCommand builds an fj issue comment command.
+func FJCommentCommand(t Target, number int, bodyFile string) Command {
+	return Command{"fj", []string{"issue", "comment", fmt.Sprintf("%s#%d", fjRepo(t), number), "--body-file", bodyFile}}
+}
+
+func fjRepo(t Target) string { return t.Forge.Host + "/" + t.Owner + "/" + t.Repo }
 
 // String renders the command for a dry run, quoting arguments with spaces.
 func (c Command) String() string {
@@ -79,7 +81,7 @@ func PlanCreate(t Target, req CreateRequest, lookPath func(string) (string, erro
 				// fj issue create has no label flag; try the next CLI.
 				continue
 			}
-			return FJIssueCommand(t, 0, req.BodyFile, req.Title), nil
+			return FJCreateCommand(t, req.BodyFile, req.Title), nil
 		default:
 			return Command{}, fmt.Errorf("issues new: unsupported issue_cli %q for %s (supported: gh, tea, fj)", tool, t)
 		}

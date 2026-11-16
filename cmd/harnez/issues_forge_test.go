@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -298,5 +300,29 @@ func TestIssuesNewTrackerNoneUsesForge(t *testing.T) {
 	writeIndexRepoConfig(t, dir, "none", false)
 	if _, err := runHarnez(t, "issues", "new", "-d", dir, "No body"); err == nil || !strings.Contains(err.Error(), "--body-file is required") {
 		t.Fatalf("tracker none without -F: %v", err)
+	}
+}
+
+func TestIssuesNewFJFailureManualCommand(t *testing.T) {
+	oldLook, oldRun := issueCLILookPath, issueCLIRun
+	t.Cleanup(func() { issueCLILookPath, issueCLIRun = oldLook, oldRun })
+	issueCLILookPath = func(name string) (string, error) {
+		if name == "fj" {
+			return name, nil
+		}
+		return "", exec.ErrNotFound
+	}
+	issueCLIRun = func(string, forgetracker.Command) ([]byte, error) {
+		return []byte("ordinary error"), errors.New("exit status 1")
+	}
+	body := filepath.Join(t.TempDir(), "body file")
+	if err := os.WriteFile(body, []byte("private body"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	target := forgetracker.Target{Forge: forge.Forge{Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
+	err := runIssuesNewForge(io.Discard, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "title", BodyFile: body}, false, false)
+	want := "issues new: fj failed: exit status 1\nordinary error\nrun manually: fj issue create --repo codeberg.org/o/r --body-file " + strconv.Quote(body) + " title"
+	if err == nil || err.Error() != want || strings.Contains(err.Error(), "private body") {
+		t.Fatalf("got %v, want %s", err, want)
 	}
 }
