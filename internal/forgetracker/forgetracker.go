@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"ubunatic.com/harnez/internal/forge"
 	"ubunatic.com/harnez/internal/prwait"
@@ -78,11 +79,12 @@ func NewSource(spec prwait.Spec) Source {
 }
 
 type issueJSON struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	State  string `json:"state"`
-	URL    string `json:"url"`
-	Body   string `json:"body,omitempty"`
+	Number    int    `json:"number"`
+	Title     string `json:"title"`
+	State     string `json:"state"`
+	URL       string `json:"url"`
+	Body      string `json:"body,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 // Show prints one forge issue. ticket accepts "12", "#12" or "GH12".
@@ -106,7 +108,7 @@ func Show(w io.Writer, src Source, t Target, ticket string, jsonOut bool) error 
 		return fmt.Errorf("issues show: %s#%d is a pull request, not an issue", t, n)
 	}
 	if jsonOut {
-		return writeJSON(w, issueJSON{Number: is.Number, Title: is.Title, State: is.State, URL: is.HTMLURL, Body: is.Body})
+		return writeJSON(w, issueJSON{Number: is.Number, Title: is.Title, State: is.State, URL: is.HTMLURL, Body: is.Body, UpdatedAt: is.UpdatedAt.Format(time.RFC3339Nano)})
 	}
 	_, err = fmt.Fprintf(w, "# %d — %s\n\n**Status**: %s\n**Source**: %s\n\n---\n\n%s\n", is.Number, is.Title, is.State, is.HTMLURL, strings.TrimSpace(is.Body))
 	return err

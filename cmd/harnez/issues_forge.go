@@ -366,3 +366,87 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	fmt.Fprintf(stdout, "filed as #%d at %s; no commit\n", n, url)
 	return nil
 }
+
+func runIssuesEditForge(w io.Writer, t forgetracker.Target, src forgetracker.Source, number, title, bodyFile, ifUpdated string, hasTitle, force, dryRun, allowClosed bool) error {
+	if t.Forge.Kind != "forgejo" {
+		return fmt.Errorf("issues edit: forge writes support Forgejo only; GitHub is ticket 1209")
+	}
+	n, err := strconv.Atoi(number)
+	if err != nil || n <= 0 {
+		return fmt.Errorf("issues edit: invalid issue number %q", number)
+	}
+	if !hasTitle && bodyFile == "" {
+		return fmt.Errorf("issues edit: --title or -F/--body-file is required")
+	}
+	if hasTitle && strings.TrimSpace(title) == "" {
+		return fmt.Errorf("issues edit: title is empty")
+	}
+	var body string
+	if bodyFile != "" {
+		if ifUpdated == "" && !force {
+			return fmt.Errorf("issues edit: body edits need --if-updated <updated_at from issues show --json> or --force")
+		}
+		var data []byte
+		if bodyFile == "-" {
+			data, err = io.ReadAll(os.Stdin)
+		} else {
+			data, err = os.ReadFile(bodyFile)
+		}
+		if err != nil {
+			return fmt.Errorf("issues edit: body file: %w", err)
+		}
+		body = string(data)
+		if strings.TrimSpace(body) == "" {
+			return fmt.Errorf("issues edit: body file is empty or whitespace-only")
+		}
+	}
+	if dryRun {
+		_, err = fmt.Fprintf(w, "dry run: would edit %s#%d over the API\n", t, n)
+		return err
+	}
+	if err := requireHostSession("edit"); err != nil {
+		return err
+	}
+	wr, ok, err := issueWriteAPI(t)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no write token for %s; run: harnez forge token create --write", t.Forge.Host)
+	}
+	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
+	if err != nil {
+		return fmt.Errorf("issues edit: preflight: %w", err)
+	}
+	if is.PullRequest != nil {
+		return fmt.Errorf("issues edit: %s/%s#%d is a pull request", t.Owner, t.Repo, n)
+	}
+	if strings.EqualFold(is.State, "closed") && !allowClosed {
+		return fmt.Errorf("issues edit: %s/%s#%d is closed; use --closed", t.Owner, t.Repo, n)
+	}
+	if ifUpdated != "" && !force {
+		expected, err := time.Parse(time.RFC3339Nano, ifUpdated)
+		if err != nil {
+			return fmt.Errorf("issues edit: invalid --if-updated timestamp %q", ifUpdated)
+		}
+		if !is.UpdatedAt.Equal(expected) {
+			return fmt.Errorf("issues edit: %s/%s#%d changed at %s, expected %s; run issues show again", t.Owner, t.Repo, n, is.UpdatedAt.Format(time.RFC3339Nano), ifUpdated)
+		}
+	}
+	fields := forge.EditFields{}
+	if hasTitle {
+		fields.Title = &title
+	}
+	if bodyFile != "" {
+		fields.Body = &body
+	}
+	updated, err := wr.EditIssue(t.Forge, t.Owner, t.Repo, n, fields)
+	if err != nil {
+		return err
+	}
+	if fields.Body != nil && updated.Body != body {
+		return fmt.Errorf("issues edit: forge returned a different body")
+	}
+	_, err = fmt.Fprintf(w, "edited %s#%d\n", t, n)
+	return err
+}

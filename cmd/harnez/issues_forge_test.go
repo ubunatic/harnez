@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"ubunatic.com/harnez/internal/forge"
 	"ubunatic.com/harnez/internal/forgetoken"
@@ -557,5 +558,133 @@ func TestForgeDryRunMetadataAndGitHub(t *testing.T) {
 	err = runIssuesComment(io.Discard, t.TempDir(), target, src, "7", body, true, false)
 	if err == nil || err.Error() != "issues comment: forge writes support Forgejo only; GitHub is ticket 1209" || src.calls != 0 {
 		t.Fatalf("github: %v calls=%d", err, src.calls)
+	}
+}
+
+type editSource struct {
+	issue forge.RemoteIssue
+	calls int
+}
+
+func (s *editSource) Issue(_ forge.Forge, _, _ string, _ int) (forge.RemoteIssue, error) {
+	s.calls++
+	return s.issue, nil
+}
+func (s *editSource) Issues(_ forge.Forge, _, _, _ string, _ forge.ScanOptions) ([]forge.RemoteIssue, bool, error) {
+	return nil, false, nil
+}
+func (s *editSource) Repo(_ forge.Forge, _, _ string) error { return nil }
+
+func TestForgeEdit(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	old := issueWriteLookup
+	issueWriteLookup = func(string) string { return "secret" }
+	t.Cleanup(func() { issueWriteLookup = old })
+	var requests []string
+	response := `{"body":"body\n"}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		requests = append(requests, r.Method+" "+r.URL.Path+" "+string(b))
+		io.WriteString(w, response)
+	}))
+	defer srv.Close()
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
+	ts := "2026-01-02T03:04:05Z"
+	when, _ := time.Parse(time.RFC3339, ts)
+	src := &editSource{issue: forge.RemoteIssue{State: "open", UpdatedAt: when}}
+	var out bytes.Buffer
+	if err := runIssuesEditForge(&out, target, src, "7", "X", "", "", true, false, false, false); err != nil || out.String() != "edited codeberg.org/o/r#7\n" {
+		t.Fatalf("title: %q %v", out.String(), err)
+	}
+	if !reflect.DeepEqual(requests, []string{`PATCH /repos/o/r/issues/7 {"title":"X"}`}) {
+		t.Fatalf("requests: %q", requests)
+	}
+	requests = nil
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte("body\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	err := runIssuesEditForge(io.Discard, target, src, "7", "", body, "", false, false, false, false)
+	if err == nil || err.Error() != "issues edit: body edits need --if-updated <updated_at from issues show --json> or --force" {
+		t.Fatal(err)
+	}
+	err = runIssuesEditForge(io.Discard, target, src, "7", "", body, "2020-01-01T00:00:00Z", false, false, false, false)
+	if err == nil || err.Error() != "issues edit: o/r#7 changed at 2026-01-02T03:04:05Z, expected 2020-01-01T00:00:00Z; run issues show again" || len(requests) != 0 {
+		t.Fatalf("stale: %v %q", err, requests)
+	}
+	if err := runIssuesEditForge(io.Discard, target, src, "7", "X", body, ts, true, false, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(requests, []string{`PATCH /repos/o/r/issues/7 {"title":"X","body":"body\n"}`}) {
+		t.Fatalf("requests: %q", requests)
+	}
+	response = `{"body":"different"}`
+	if err := runIssuesEditForge(io.Discard, target, src, "7", "", body, "", false, true, false, false); err == nil || err.Error() != "issues edit: forge returned a different body" {
+		t.Fatalf("mismatch: %v", err)
+	}
+	requests = nil
+	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
+	t.Setenv("HARNEZ_SESSION_ID", "worker")
+	err = runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, false)
+	if err == nil || err.Error() != "issues edit: forge writes run only in a host session (this is harnez worker worker); hand the write to the host" || len(requests) != 0 {
+		t.Fatalf("worker: %v %q", err, requests)
+	}
+	target.Forge.Kind = "github"
+	err = runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, false)
+	if err == nil || err.Error() != "issues edit: forge writes support Forgejo only; GitHub is ticket 1209" || len(requests) != 0 {
+		t.Fatalf("github: %v", err)
+	}
+}
+
+func TestForgeEditEdges(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	oldLookup := issueWriteLookup
+	issueWriteLookup = func(string) string { return "" }
+	t.Cleanup(func() { issueWriteLookup = oldLookup })
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
+	src := &editSource{}
+	err := runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, false)
+	if err == nil || err.Error() != "no write token for codeberg.org; run: harnez forge token create --write" || src.calls != 0 {
+		t.Fatalf("no token: %v", err)
+	}
+	issueWriteLookup = func(string) string { return "secret" }
+	src.issue.State = "closed"
+	err = runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, false)
+	if err == nil || err.Error() != "issues edit: o/r#7 is closed; use --closed" {
+		t.Fatalf("closed: %v", err)
+	}
+	src.issue.PullRequest = &struct{}{}
+	err = runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, true)
+	if err == nil || err.Error() != "issues edit: o/r#7 is a pull request" {
+		t.Fatalf("pull: %v", err)
+	}
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte(" \n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	err = runIssuesEditForge(io.Discard, target, src, "7", "", body, "", false, true, false, false)
+	if err == nil || err.Error() != "issues edit: body file is empty or whitespace-only" {
+		t.Fatalf("blank: %v", err)
+	}
+	var out bytes.Buffer
+	if err := runIssuesEditForge(&out, target, src, "7", "X", "", "", true, false, true, false); err != nil || out.String() != "dry run: would edit codeberg.org/o/r#7 over the API\n" {
+		t.Fatalf("dry: %q %v", out.String(), err)
+	}
+}
+
+func TestIssuesEditLocal(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := runHarnez(t, "issues", "edit", "-d", dir, "7", "--title", "X")
+	if err == nil || err.Error() != "issues edit: local tickets are files; edit issues/<n>-*.md and commit" {
+		t.Fatal(err)
 	}
 }

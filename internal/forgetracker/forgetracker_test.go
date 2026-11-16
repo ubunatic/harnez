@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"ubunatic.com/harnez/internal/forge"
 	"ubunatic.com/harnez/internal/prwait"
@@ -259,5 +260,17 @@ func TestResolve(t *testing.T) {
 	}
 	if _, err := Resolve(t.TempDir(), spec); !errors.Is(err, ErrNotApplicable) {
 		t.Fatalf("no git repo must not apply, got %v", err)
+	}
+}
+
+func TestShowJSONUpdatedAt(t *testing.T) {
+	src := sample()
+	src.issues[0].UpdatedAt = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	var out bytes.Buffer
+	if err := Show(&out, src, target, "3", true); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "{\n  \"number\": 3,\n  \"title\": \"Crash on start\",\n  \"state\": \"open\",\n  \"url\": \"u3\",\n  \"body\": \"segfault in loader\",\n  \"updated_at\": \"2026-01-02T03:04:05Z\"\n}\n" {
+		t.Fatalf("json: %q", out.String())
 	}
 }

@@ -1973,6 +1973,8 @@ then the README is regenerated and the batch is committed once.
                     its state; --dry-run prints the command and --closed permits
                     closed issues. With a local tracker, --forge is required.
                     Pull requests are always refused.
+  edit <number> [--title text] [-F file]  Edit a forge issue; body edits
+                    need --if-updated or --force. A write landing between the check and the PATCH is not detected.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -2046,17 +2048,18 @@ Flags:
       --against string          with lint: fail when a ticket here reuses a number that REF (e.g. origin/main) gives to another file; warn if REF is missing
   -a, --all                     with 'list': show all matching results
       --amend-reason            with close/done: amend the reason of an already-Closed ticket
-  -F, --body-file string        with new or comment on a forge tracker: body file (comment requires nonblank text)
+  -F, --body-file string        with new, comment or edit on a forge tracker: body file
       --cached                  validate the staged Git snapshot (issues lint only)
       --check                   report what would change without writing or committing; exit 1 on drift
-      --closed                  with comment: allow a closed issue
+      --closed                  with comment or edit: allow a closed issue
       --commit string           override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")
   -d, --dir string              repo root containing issues/ (default ".")
       --dry-run                 alias for --check
       --fetch                   reconcile: git fetch, then print the plan against the upstream (no changes)
-      --force                   with new: create despite strong duplicate matches
-      --forge                   with new or comment: target the forge even with a local issues/ dir
+      --force                   with new: ignore duplicate matches; with edit: skip the updated-at check
+      --forge                   with new, comment or edit: target the forge even with a local issues/ dir
   -h, --help                    help for issues
+      --if-updated string       with edit: require the timestamp from issues show --json
   -I, --image                   render visual PNG card context
       --implemented-by string   with close/done: the commit that did the work but does not name the ticket; it must change files outside issues/, and the close commit records it
       --json                    output a single JSON object instead of a text line
@@ -2074,6 +2077,7 @@ Flags:
       --remote                  with new: allocate a permanent GH id using authenticated gh on the github remote
       --session string          with close/done: record the closing session (defaults to HARNEZ_SESSION_ID)
   -t, --text                    output raw text directly to stdout (alias for --raw)
+      --title string            with edit: replace the issue title
 
 === harnez lint
 lint verifies source files, scripts, and documentation against harnez

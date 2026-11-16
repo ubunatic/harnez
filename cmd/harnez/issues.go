@@ -70,6 +70,7 @@ func newIssuesCmdWithGHRunner(gh ghRunner) *cobra.Command {
 	var remoteFlag bool
 	var forceFlag bool
 	var bodyFileFlag string
+	var editTitleFlag, ifUpdatedFlag string
 	var closedFlag bool
 	var forgeFlag bool
 	var labelFlags []string
@@ -157,6 +158,8 @@ then the README is regenerated and the batch is committed once.
                     its state; --dry-run prints the command and --closed permits
                     closed issues. With a local tracker, --forge is required.
                     Pull requests are always refused.
+  edit <number> [--title text] [-F file]  Edit a forge issue; body edits
+                    need --if-updated or --force. A write landing between the check and the PATCH is not detected.
   show <number>    Inspect a ticket. In interactive terminal / TTY or with
                     -I/--image, renders a bounded visual card (using
                     internal/readcard). Supports --raw/--text and --json.
@@ -244,20 +247,26 @@ valid, exit-0 answer.`,
 			if numberFlag != "" && (len(args) == 0 || args[0] != "new" || remoteFlag) {
 				return fmt.Errorf("issues: --number requires local new (not --remote)")
 			}
-			if bodyFileFlag != "" && (len(args) == 0 || (args[0] != "new" && args[0] != "comment")) {
-				return fmt.Errorf("issues: -F/--body-file and --label require new; -F also supports comment")
+			if bodyFileFlag != "" && (len(args) == 0 || (args[0] != "new" && args[0] != "comment" && args[0] != "edit")) {
+				return fmt.Errorf("issues: -F/--body-file requires new, comment or edit")
 			}
 			if len(labelFlags) > 0 && (len(args) == 0 || args[0] != "new") {
 				return fmt.Errorf("issues: --label requires new")
 			}
-			if closedFlag && (len(args) == 0 || args[0] != "comment") {
-				return fmt.Errorf("issues: --closed requires comment")
+			if closedFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "edit")) {
+				return fmt.Errorf("issues: --closed requires comment or edit")
 			}
-			if forgeFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "new")) {
-				return fmt.Errorf("issues: --forge requires new or comment")
+			if forgeFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "new" && args[0] != "edit")) {
+				return fmt.Errorf("issues: --forge requires new, comment or edit")
 			}
-			if forceFlag && (len(args) == 0 || args[0] != "new") {
-				return fmt.Errorf("issues: --force requires new")
+			if forceFlag && (len(args) == 0 || (args[0] != "new" && args[0] != "edit")) {
+				return fmt.Errorf("issues: --force requires new or edit")
+			}
+			if (cmd.Flags().Changed("title") || cmd.Flags().Changed("if-updated")) && (len(args) == 0 || args[0] != "edit") {
+				return fmt.Errorf("issues: --title and --if-updated require edit")
+			}
+			if len(args) > 0 && args[0] == "edit" && len(args) != 2 {
+				return fmt.Errorf("issues edit: requires exactly one issue number")
 			}
 			if listFlag {
 				if len(args) != 0 {
@@ -285,6 +294,32 @@ valid, exit-0 answer.`,
 					return fmt.Errorf("issues comment: requires exactly one issue number and -F/--body-file")
 				}
 				return nil
+			}
+			if args[0] == "edit" {
+				var t forgetracker.Target
+				var src forgetracker.Source
+				if forgeFlag {
+					sp, err := prwait.LoadSpec()
+					if err != nil {
+						return err
+					}
+					t, err = forgetracker.ResolveRemote(dir, sp)
+					if err != nil {
+						return fmt.Errorf("issues edit: cannot resolve forge remote: %w", err)
+					}
+					src = forgeTrackerSource(sp)
+				} else {
+					var ok bool
+					var err error
+					t, src, _, ok, err = resolveForgeTracker(cmd.ErrOrStderr(), dir)
+					if err != nil {
+						return err
+					}
+					if !ok {
+						return fmt.Errorf("issues edit: local tickets are files; edit issues/<n>-*.md and commit")
+					}
+				}
+				return runIssuesEditForge(cmd.OutOrStdout(), t, src, args[1], editTitleFlag, bodyFileFlag, ifUpdatedFlag, cmd.Flags().Changed("title"), forceFlag, dryRunFlag || checkFlag, closedFlag)
 			}
 			if args[0] == "show" {
 				if len(args) != 2 {
@@ -539,11 +574,13 @@ valid, exit-0 answer.`,
 	}
 	cmd.Flags().BoolVar(&remoteFlag, "remote", false, "with new: allocate a permanent GH id using authenticated gh on the github remote")
 	cmd.Flags().StringVar(&numberFlag, "number", "", "with new: use this ticket number instead of the next free one (refused if it exists)")
-	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new or comment on a forge tracker: body file (comment requires nonblank text)")
-	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment: allow a closed issue")
-	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "with new or comment: target the forge even with a local issues/ dir")
+	cmd.Flags().StringVarP(&bodyFileFlag, "body-file", "F", "", "with new, comment or edit on a forge tracker: body file")
+	cmd.Flags().StringVar(&editTitleFlag, "title", "", "with edit: replace the issue title")
+	cmd.Flags().StringVar(&ifUpdatedFlag, "if-updated", "", "with edit: require the timestamp from issues show --json")
+	cmd.Flags().BoolVar(&closedFlag, "closed", false, "with comment or edit: allow a closed issue")
+	cmd.Flags().BoolVar(&forgeFlag, "forge", false, "with new, comment or edit: target the forge even with a local issues/ dir")
 	cmd.Flags().StringSliceVar(&labelFlags, "label", nil, "with new on a forge tracker: a label that exists on the forge (repeatable)")
-	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: create despite strong duplicate matches")
+	cmd.Flags().BoolVar(&forceFlag, "force", false, "with new: ignore duplicate matches; with edit: skip the updated-at check")
 	cmd.Flags().BoolVar(&offlineFlag, "offline", false, "with new: skip the open-PR number check (no forge API calls); remote-tracking refs are still read")
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
