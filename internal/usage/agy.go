@@ -148,7 +148,12 @@ type agyAuthBackoff struct {
 }
 
 func agyAuthBackoffPath(geminiDir string) string {
-	return filepath.Join(geminiDir, agyAuthBackoffFilename)
+	dir, err := runstate.AGYMeterDir(geminiDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez: resolve AGY backoff: %v\n", err)
+		return ""
+	}
+	return filepath.Join(dir, agyAuthBackoffFilename)
 }
 
 // readAGYAuthBackoff reads the backoff marker, returning nil if absent or
@@ -169,6 +174,9 @@ func readAGYAuthBackoff(path string) *agyAuthBackoff {
 // so a concurrent reader never observes a torn write, mirroring
 // writeLiveFetchCache's approach.
 func writeAGYAuthBackoff(path string, b agyAuthBackoff) error {
+	if path == "" {
+		return fmt.Errorf("AGY backoff path is unavailable")
+	}
 	data, err := json.Marshal(b)
 	if err != nil {
 		return err

@@ -50,6 +50,57 @@ func TestRunnerSnapshotDoesNotTouchCanonicalStore(t *testing.T) {
 	if err := RunCollectorWithFetch(context.Background(), "", "", time.Second, os.Stderr, false, nil); err == nil {
 		t.Fatal("runner collector started")
 	}
+	entries, err = os.ReadDir(shared)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("collector guards changed shared state: %v %v", entries, err)
+	}
+}
+
+func TestRunnerLiveCacheDoesNotMigrateLegacy(t *testing.T) {
+	home, shared, root := t.TempDir(), t.TempDir(), t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", shared)
+	t.Setenv("TAIA_SESSION_DIR", root)
+	legacy := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(legacy, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, liveFetchCacheFilename), []byte(`{}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	path := liveFetchCachePath(legacy)
+	if path != filepath.Join(root, "state", "usage", "quota-cache-claude.json") {
+		t.Fatalf("runner cache path: %s", path)
+	}
+	entries, err := os.ReadDir(shared)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("shared cache changed: %v %v", entries, err)
+	}
+}
+
+func TestRunnerAGYBackoffIsIsolated(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	host := t.TempDir()
+	t.Setenv("TAIA_SESSION_DIR", root)
+	path := agyAuthBackoffPath(host)
+	if want := filepath.Join(root, "state", "agymeter", agyAuthBackoffFilename); path != want {
+		t.Fatalf("backoff path = %q, want %q", path, want)
+	}
+	if err := writeAGYAuthBackoff(path, agyAuthBackoff{Until: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if readAGYAuthBackoff(path) == nil {
+		t.Fatal("missing runner backoff")
+	}
+	if entries, err := os.ReadDir(host); err != nil || len(entries) != 0 {
+		t.Fatalf("host changed: %v %v", entries, err)
+	}
 }
 
 func TestRunnerAuxiliaryState(t *testing.T) {

@@ -33,9 +33,11 @@ Prior work M1–M6 (`e437a41d`..`963d0131`) already landed session-scoped locks/
 
 - `1181-dev` (`codex:terra:low`): M7 (4m11s, 43.2k new / 888.8k cached), M8 pre-work+impl (7m48s, 59.4k new / 2.9M cached; hit 99.0k context); rated 4/5 and retired.
 - Reviewer `1181-m8-review` (`codex:sol:low`): M8 diff review in 1m36s, 37.7k new / 172.7k cached tokens, context 48.4k.
+- `1181-dev-m9` (`codex:terra:low`): M9a slice in 5m9s, 59.4k new / 1.9M cached, context 65.2k; rated 4/5 and retired.
+- `1181-dev-m9b` (`codex:terra:low`): M9b slice in 5m15s, 62.1k new / 1.9M cached, context 71.2k; host verified fixed test fixture and retired.
 
 ## Milestones
 
 - **M7 — Freeze ownership/security contract**: committed `f87b48db` on `sprint/1181`; `HTO=0 make test-q1` and `go test -v ./internal/sessioncontract` passed. `1181-m7-review` (`codex:sol:low`) flagged 3 major gaps (`livefetchcache` owner mismatch, weak JSON schema uniqueness/`minItems`, `docs/Spec.md` literal duplication in `spec.go`), all embedded as M8 pre-work.
 - **M8 — Pre-work & centralize runner-local state**: committed `ad1cb455` on `sprint/1181` after host-verified `HTO=0 make test-q1` exit 0 (`internal/runstate` 0.004s, `internal/sessioncontract` 0.017s, `internal/usage` 7.922s, `cmd/harnez` 61.528s, `scripts/stage-install-test.sh` pass). `1181-m8-review` flagged 3 major gaps (`livefetchcache.go:60` still writing/migrating shared XDG files, discarded errors in 6 callers including `powerPeaksPath` returning `""`, and test coverage/barrier gaps), all embedded as M9 pre-work.
-- **M9 — Pre-work & isolate AGY / auxiliary writes**: dispatching read-only plan on `sprint/1181`.
+- **M9a & M9b — AGY meter/backoff & `livefetchcache` isolation**: M9a (`64403936`) isolated AGY meter/bundle/log and host-only shim provisioning; M9b isolated `livefetchcache`, AGY auth backoff, and `registry.go` error reporting (`HTO=0 make test-q1` passed). Remaining M9c (error propagation + barrier/AGY tests) and M9d (auxiliary writers) dispatching next.

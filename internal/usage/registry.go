@@ -430,6 +430,7 @@ func remoteLoadCollector(host string) (Collector, error) {
 func CollectRegistered(ctx context.Context, homeDir string, client *http.Client, live bool, progress FetchProgressFunc, diagnostic func(CollectorDiagnostic)) UsageSummary {
 	registry, err := newUsageRegistry(homeDir, client, live)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez: usage registry: %v\n", err)
 		return UsageSummary{Timestamp: time.Now()}
 	}
 	agents := registry.Collect(ctx, progress, diagnostic)
@@ -439,7 +440,9 @@ func CollectRegistered(ctx context.Context, homeDir string, client *http.Client,
 			agents[i].LastRefreshed = now
 		}
 	}
-	_ = publishAgentObservations(ctx, agents)
+	if err := publishAgentObservations(ctx, agents); err != nil {
+		fmt.Fprintf(os.Stderr, "harnez: publish usage observations: %v\n", err)
+	}
 	return UsageSummary{Timestamp: now, Agents: agents}
 }
 
@@ -448,10 +451,12 @@ func CollectRegistered(ctx context.Context, homeDir string, client *http.Client,
 func CollectRegisteredCatchup(ctx context.Context, homeDir string, client *http.Client, threshold time.Duration, progress FetchProgressFunc, diagnostic func(CollectorDiagnostic)) UsageSummary {
 	registry, err := newUsageRegistry(homeDir, client, true)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez: usage registry: %v\n", err)
 		return UsageSummary{Timestamp: time.Now()}
 	}
 	stateDir, err := ResolvedStateDir(homeDir)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez: resolve usage state: %v\n", err)
 		return UsageSummary{Timestamp: time.Now()}
 	}
 	for _, c := range registry.collectors {
@@ -471,7 +476,9 @@ func CollectRegisteredCatchup(ctx context.Context, homeDir string, client *http.
 			agents[i].LastRefreshed = now
 		}
 	}
-	_ = publishAgentObservations(ctx, agents)
+	if err := publishAgentObservations(ctx, agents); err != nil {
+		fmt.Fprintf(os.Stderr, "harnez: publish usage observations: %v\n", err)
+	}
 	return UsageSummary{Timestamp: now, Agents: agents}
 }
 

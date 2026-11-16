@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/xdgpath"
 )
 
@@ -71,6 +73,14 @@ func liveFetchCachePath(agentDir string) string {
 			provider = "agy"
 		}
 		if provider != "" {
+			if os.Getenv("TAIA_SESSION_DIR") != "" {
+				dir, err := runstate.UsageStateDir("")
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "harnez: resolve live quota cache: %v\n", err)
+					return ""
+				}
+				return filepath.Join(dir, "quota-cache-"+provider+".json")
+			}
 			legacy := filepath.Join(agentDir, liveFetchCacheFilename)
 			target := filepath.Join(xdgpath.CacheHome(), "harnez", "quota-cache-"+provider+".json")
 			if _, err := os.Stat(target); os.IsNotExist(err) {
@@ -109,6 +119,9 @@ func readLiveFetchCache[T any](path string) *liveFetchCache[T] {
 // then skip the disk write rather than block, since flock does not detect a
 // hung (not dead) holder.
 func lockLiveFetchCache(path string) (f *os.File, ok bool) {
+	if path == "" {
+		return nil, false
+	}
 	lockPath := path + ".lock"
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
@@ -160,6 +173,9 @@ func lockLiveFetchInProcess(path string) func() {
 // atomic on the same filesystem, so this alone would be enough for readers
 // even without the lock — the lock exists to stop two writers interleaving.
 func writeLiveFetchCache[T any](path string, cache liveFetchCache[T]) error {
+	if path == "" {
+		return fmt.Errorf("live quota cache path is unavailable")
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
