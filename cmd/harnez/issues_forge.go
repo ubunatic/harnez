@@ -508,12 +508,17 @@ func runIssuesStateForge(w io.Writer, t forgetracker.Target, src forgetracker.So
 		_, err = fmt.Fprintf(w, "%s#%d is already %s\n", t, n, state)
 		return err
 	}
+	commentURL := ""
 	if reason != "" {
-		if _, err := wr.Comment(t.Forge, t.Owner, t.Repo, n, reason); err != nil {
+		commentURL, err = wr.Comment(t.Forge, t.Owner, t.Repo, n, reason)
+		if err != nil {
 			return err
 		}
 	}
 	if _, err := wr.EditIssue(t.Forge, t.Owner, t.Repo, n, forge.EditFields{State: &state}); err != nil {
+		if reason != "" {
+			return fmt.Errorf("issues close: the reason was posted as a comment (%s) but closing failed: %w; run close again without a reason", commentURL, err)
+		}
 		return err
 	}
 	word := "closed"

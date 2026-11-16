@@ -468,11 +468,15 @@ func TestIssuesNewForceForge(t *testing.T) {
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("local files: %v %v", entries, err)
 	}
-	for _, verb := range []string{"show", "list"} {
-		if _, err := runHarnez(t, "issues", verb, "--forge", "-d", dir, "7"); err == nil {
-			t.Fatalf("%s accepted --forge", verb)
-		}
+	stubForge(t)
+	out, err = runHarnez(t, "issues", "show", "--forge", "--json", "-d", dir, "7")
+	if err != nil || !strings.Contains(out, `"updated_at"`) {
+		t.Fatalf("show: %q %v", out, err)
 	}
+	if _, err := runHarnez(t, "issues", "list", "--forge", "-d", dir); err == nil || err.Error() != "issues: --forge does not support list" {
+		t.Fatalf("list: %v", err)
+	}
+
 }
 
 func TestIssuesNewWithoutForgeSignalStaysLocal(t *testing.T) {
@@ -822,5 +826,74 @@ func TestForgeEditStdin(t *testing.T) {
 	err = runIssuesEditForge(io.Discard, target, &editSource{issue: forge.RemoteIssue{State: "open"}}, "7", "", "-", "", false, true, false, false)
 	if err != nil || got != `{"body":"one\n\ntwo\n"}` {
 		t.Fatalf("body %q: %v", got, err)
+	}
+}
+
+func TestForgeDryRunDoesNotTouchLocalTicket(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	stubForge(t)
+	dir := forgeRepo(t)
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "issues", "007-local.md")
+	original := []byte("# 007 — local\n\n**Status**: Open\n**Priority**: P2\n\n---\nbody\n")
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"close", "7"}, "dry run: would set codeberg.org/o/r#7 to closed over the API\n"},
+		{[]string{"close", "7", "done", "now"}, "dry run: would comment \"done now\" on codeberg.org/o/r#7 and set state to closed over the API\n"},
+		{[]string{"reopen", "7"}, "dry run: would set codeberg.org/o/r#7 to open over the API\n"},
+		{[]string{"edit", "7", "--title", "X"}, "dry run: would edit codeberg.org/o/r#7 over the API --title \"X\"\n"},
+	}
+	for _, tc := range cases {
+		args := append([]string{"issues", "--forge", "--dry-run", "-d", dir}, tc.args...)
+		out, err := runHarnez(t, args...)
+		if err != nil || out != tc.want {
+			t.Errorf("%v: out=%q err=%v", tc.args, out, err)
+		}
+		got, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(got, original) {
+			t.Fatalf("ticket changed: %q %v", got, err)
+		}
+	}
+}
+
+func TestForgeMissingNumber(t *testing.T) {
+	for _, verb := range []string{"close", "edit", "open"} {
+		_, err := runHarnez(t, "issues", verb, "--forge")
+		if err == nil || err.Error() != "issues "+verb+": requires an issue number" {
+			t.Errorf("%s: %v", verb, err)
+		}
+	}
+}
+
+func TestForgeCloseReportsPostedReasonOnFailure(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	old := issueWriteLookup
+	issueWriteLookup = func(string) string { return "secret" }
+	t.Cleanup(func() { issueWriteLookup = old })
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method)
+		if r.Method == "POST" {
+			io.WriteString(w, `{"html_url":"https://example.test/comment"}`)
+			return
+		}
+		w.WriteHeader(412)
+		io.WriteString(w, `{"message":"conflict"}`)
+	}))
+	defer srv.Close()
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
+	err := runIssuesStateForge(io.Discard, target, &editSource{issue: forge.RemoteIssue{State: "open"}}, "close", "7", "done now", false)
+	want := "issues close: the reason was posted as a comment (https://example.test/comment) but closing failed: forge API request failed: HTTP 412 conflict; run close again without a reason"
+	if err == nil || err.Error() != want || !reflect.DeepEqual(calls, []string{"POST", "PATCH"}) {
+		t.Fatalf("%v calls=%v", err, calls)
 	}
 }

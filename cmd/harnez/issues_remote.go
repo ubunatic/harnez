@@ -48,6 +48,9 @@ func runIssuesNewRemoteWithForce(w io.Writer, dir, title string, jsonOutput, for
 		slug = "reserved"
 	}
 	body := fmt.Sprintf("In-repository ticket: issues/GH<issue-number>-%s.md (exact path follows allocation).", slug)
+	if err := requireHostSession("new"); err != nil {
+		return err
+	}
 	out, err := gh(dir, "issue", "create", "--repo", remote, "--title", title, "--body", body)
 	if err != nil {
 		return fmt.Errorf("issues new --remote: gh issue create failed; install gh and authenticate with gh auth login (no local fallback): %w", err)

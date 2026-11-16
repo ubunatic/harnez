@@ -258,14 +258,20 @@ valid, exit-0 answer.`,
 			if closedFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "edit")) {
 				return fmt.Errorf("issues: --closed requires comment or edit")
 			}
-			if forgeFlag && (len(args) == 0 || (args[0] != "comment" && args[0] != "new" && args[0] != "edit" && args[0] != "close" && args[0] != "reopen" && args[0] != "open")) {
-				return fmt.Errorf("issues: --forge requires new, comment, edit, close, reopen or open")
+			if forgeFlag && len(args) > 0 && args[0] == "list" {
+				return fmt.Errorf("issues: --forge does not support list")
+			}
+			if forgeFlag && (len(args) == 0 || (args[0] != "show" && args[0] != "comment" && args[0] != "new" && args[0] != "edit" && args[0] != "close" && args[0] != "reopen" && args[0] != "open")) {
+				return fmt.Errorf("issues: --forge requires new, comment, show, edit, close, reopen or open")
 			}
 			if forceFlag && (len(args) == 0 || (args[0] != "new" && args[0] != "edit")) {
 				return fmt.Errorf("issues: --force requires new or edit")
 			}
 			if (cmd.Flags().Changed("title") || cmd.Flags().Changed("if-updated")) && (len(args) == 0 || args[0] != "edit") {
 				return fmt.Errorf("issues: --title and --if-updated require edit")
+			}
+			if len(args) == 1 && (args[0] == "edit" || args[0] == "close" || args[0] == "reopen" || args[0] == "open") {
+				return fmt.Errorf("issues %s: requires an issue number", args[0])
 			}
 			if len(args) > 0 && args[0] == "edit" && len(args) != 2 {
 				return fmt.Errorf("issues edit: requires exactly one issue number")
@@ -299,6 +305,59 @@ valid, exit-0 answer.`,
 					return fmt.Errorf("issues comment: requires exactly one issue number and -F/--body-file")
 				}
 				return nil
+			}
+			if args[0] == "show" {
+				if len(args) != 2 {
+					return fmt.Errorf("issues show: requires exactly 1 ticket number argument")
+				}
+				return nil
+			}
+			if args[0] == "mv" {
+				if len(args) < 2 || len(args) > 3 {
+					return fmt.Errorf("issues mv: accepts 1 or 2 arguments: <ticket-number> [new-number]")
+				}
+				return nil
+			}
+			if args[0] == "rebase" || args[0] == "reconcile" {
+				if len(args) > 2 {
+					return fmt.Errorf("issues %s: accepts at most one argument: [upstream|ref]", args[0])
+				}
+				return nil
+			}
+			if args[0] == "lint" {
+				if len(args) != 1 {
+					return fmt.Errorf("issues lint: accepts no arguments")
+				}
+				return nil
+			}
+			if args[0] == "status" {
+				if len(args) != 1 {
+					return fmt.Errorf("issues status: accepts no arguments")
+				}
+				return nil
+			}
+			if args[0] == "merge-driver" {
+				if len(args) != 4 && len(args) != 5 {
+					return fmt.Errorf("issues merge-driver: expected %%O %%A %%B [%%P] paths")
+				}
+				return nil
+			}
+			return cobra.MinimumNArgs(2)(cmd, args)
+		},
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if pushMainFlag {
+				if len(args) == 0 || listFlag {
+					return fmt.Errorf("--push-main applies only to issue commit commands")
+				}
+				switch args[0] {
+				case "open", "start", "block", "close", "done", "draft", "backlog", "promote", "mv", "rebase", "reconcile":
+				default:
+					return fmt.Errorf("issues %s: --push-main applies only to issue commit commands", args[0])
+				}
+			}
+			if listFlag {
+				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, nil, jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}
 			if args[0] == "edit" {
 				var t forgetracker.Target
@@ -356,59 +415,6 @@ valid, exit-0 answer.`,
 				if args[0] == "reopen" {
 					return fmt.Errorf("issues reopen: local tracker; use harnez issues open <n>")
 				}
-			}
-			if args[0] == "show" {
-				if len(args) != 2 {
-					return fmt.Errorf("issues show: requires exactly 1 ticket number argument")
-				}
-				return nil
-			}
-			if args[0] == "mv" {
-				if len(args) < 2 || len(args) > 3 {
-					return fmt.Errorf("issues mv: accepts 1 or 2 arguments: <ticket-number> [new-number]")
-				}
-				return nil
-			}
-			if args[0] == "rebase" || args[0] == "reconcile" {
-				if len(args) > 2 {
-					return fmt.Errorf("issues %s: accepts at most one argument: [upstream|ref]", args[0])
-				}
-				return nil
-			}
-			if args[0] == "lint" {
-				if len(args) != 1 {
-					return fmt.Errorf("issues lint: accepts no arguments")
-				}
-				return nil
-			}
-			if args[0] == "status" {
-				if len(args) != 1 {
-					return fmt.Errorf("issues status: accepts no arguments")
-				}
-				return nil
-			}
-			if args[0] == "merge-driver" {
-				if len(args) != 4 && len(args) != 5 {
-					return fmt.Errorf("issues merge-driver: expected %%O %%A %%B [%%P] paths")
-				}
-				return nil
-			}
-			return cobra.MinimumNArgs(2)(cmd, args)
-		},
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if pushMainFlag {
-				if len(args) == 0 || listFlag {
-					return fmt.Errorf("--push-main applies only to issue commit commands")
-				}
-				switch args[0] {
-				case "open", "start", "block", "close", "done", "draft", "backlog", "promote", "mv", "rebase", "reconcile":
-				default:
-					return fmt.Errorf("issues %s: --push-main applies only to issue commit commands", args[0])
-				}
-			}
-			if listFlag {
-				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, nil, jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}
 			if args[0] == "merge-driver" {
 				target := "issues/README.md"
@@ -477,15 +483,6 @@ valid, exit-0 answer.`,
 				}
 				_, remoteEnv := os.LookupEnv("CLAUDE_CODE_REMOTE")
 				if remoteFlag || remoteEnv {
-					if dryRunFlag || checkFlag {
-						_, err := fmt.Fprintf(cmd.OutOrStdout(), "dry run: would create GitHub issue %q and reserve a local ticket\n", title)
-						return err
-					}
-					if !dryRunFlag && !checkFlag {
-						if err := requireHostSession("new"); err != nil {
-							return err
-						}
-					}
 					fmt.Fprintln(cmd.ErrOrStderr(), "issues new: remote mode")
 					return runIssuesNewRemoteWithForce(cmd.OutOrStdout(), dir, title, jsonFlag, forceFlag, gh)
 				}
@@ -524,6 +521,17 @@ valid, exit-0 answer.`,
 			if args[0] == "show" {
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
 					return fmt.Errorf("issues show: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
+				}
+				if forgeFlag {
+					sp, err := prwait.LoadSpec()
+					if err != nil {
+						return err
+					}
+					t, err := forgetracker.ResolveRemote(dir, sp)
+					if err != nil {
+						return fmt.Errorf("issues show: cannot resolve forge remote: %w", err)
+					}
+					return forgeTrackerHint(forgetracker.Show(cmd.OutOrStdout(), forgeTrackerSource(sp), t, args[1], jsonFlag), t)
 				}
 				if t, src, _, ok, err := resolveForgeTracker(cmd.ErrOrStderr(), dir); err != nil {
 					return err
