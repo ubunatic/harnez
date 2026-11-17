@@ -28,6 +28,11 @@ Not verified: how the guard records "read natively" (per session, per file, or p
 
 Expected: the guard should refuse a native `Read` only when the file's content is still in the current context window. After compaction, or when the agent has only seen the file through `harnez read`, the native `Read` should be allowed, or the refusal should name a route that also permits `Edit`.
 
+Design (owner, 2026-11-17):
+- Clear the session's read markers in a Claude `PreCompact` hook (`harnez hook compact-reset`, installed from `spec/claude-compaction.yaml`). Markers are one directory per session, so one `RemoveAll` clears them.
+- Deny a repeat only when that PreCompact hook is installed in Claude's `settings.json`. Otherwise the repeat is allowed with a warning: `File already read in this session: <path>. Please avoid re-reading it; its content may no longer be in context.` The warning goes in `additionalContext` and `systemMessage`.
+- The repeat guard is Claude-only: the agy tool hook checks only size, and the Codex hooks only see Bash. Codex has `PreCompact` and agy has no compaction hook (`docs/AutoCompaction.md`, `docs/JevCompaction.md`), so neither needs a repeat guard.
+
 Verify: read a file natively, run `/compact`, then `Read` the same file and then `Edit` it. Both should succeed, or the refusal should name a working edit path.
 
 /goal Make the guard match what is in the current context, and keep `Edit` usable after a `harnez read`, or stop and report when blocked on a user decision or denied permission.

@@ -104,6 +104,15 @@ func newHookCmd() *cobra.Command {
 			return runClaudeInstructionsHook(cmd.OutOrStdout())
 		},
 	})
+	cmd.AddCommand(&cobra.Command{
+		Use:          "compact-reset",
+		Short:        "Claude PreCompact hook: clear this session's native-read markers",
+		Hidden:       true,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runCompactResetHook(cmd.InOrStdin(), defaultReadHookStateDir())
+		},
+	})
 	cmd.AddCommand(newHookSoundCmd())
 	cmd.AddCommand(newSkillHookCmd())
 
@@ -728,6 +737,7 @@ type claudeHookSpecificOutput struct {
 	HookEventName            string `json:"hookEventName,omitempty"`
 	PermissionDecision       string `json:"permissionDecision,omitempty"`
 	PermissionDecisionReason string `json:"permissionDecisionReason,omitempty"`
+	AdditionalContext        string `json:"additionalContext,omitempty"`
 }
 
 type readHookOptions struct {
@@ -736,6 +746,21 @@ type readHookOptions struct {
 	StateDir    string
 	EnforceRead *bool
 	Insert      func(dbPath string, call telemetry.ToolCall) error
+	// CompactResetInstalled overrides the settings check (tests). Nil reads Claude's settings.
+	CompactResetInstalled func() bool
+}
+
+// defaultReadHookStateDir is where native-read markers live when no StateDir is set.
+func defaultReadHookStateDir() string {
+	if baseStateDir, err := resolve.StateDir(); err == nil {
+		return filepath.Join(baseStateDir, "read-hooks")
+	}
+	return ""
+}
+
+// repeatReadWarning tells the agent a file was already read, without denying the read.
+func repeatReadWarning(path string) string {
+	return "File already read in this session: " + path + ". Please avoid re-reading it; its content may no longer be in context."
 }
 
 func newReadHookCmd() *cobra.Command {
@@ -786,15 +811,14 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 	}
 
 	deny, reason := evaluateReadToolDisciplineWithEnforcement(payload.ToolName, payload.ToolInput, baseDir, opts.EnforceRead)
+	var warning string
 	if isReadTool(payload.ToolName) {
 		stateDir := opts.StateDir
 		if stateDir == "" {
-			if baseStateDir, err := resolve.StateDir(); err == nil {
-				stateDir = filepath.Join(baseStateDir, "read-hooks")
-			}
+			stateDir = defaultReadHookStateDir()
 		}
 		seen := map[string]bool{}
-		repeated := false
+		var repeatedPaths []string
 		for _, path := range extractFilePaths(payload.ToolInput) {
 			if !filepath.IsAbs(path) {
 				path = filepath.Join(baseDir, path)
@@ -811,15 +835,27 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 				continue
 			}
 			if repeatedRead(stateDir, payload.SessionID, path) {
-				repeated = true
+				repeatedPaths = append(repeatedPaths, path)
 			}
+		}
+		// A repeat is denied only when a PreCompact hook clears the markers after
+		// compaction; otherwise the content may already be gone, so it only warns.
+		compactReset := claudeCompactResetInstalled
+		if opts.CompactResetInstalled != nil {
+			compactReset = opts.CompactResetInstalled
 		}
 		switch {
 		case deny:
 			reason = readingDisciplineDenyReason + "\n" + readRedirect(payload.ToolInput, baseDir)
-		case repeated:
+		case len(repeatedPaths) > 0 && compactReset():
 			deny = true
 			reason = readingDiscipline.Repeat() + "\n" + readRedirect(payload.ToolInput, baseDir)
+		case len(repeatedPaths) > 0:
+			warnings := make([]string, 0, len(repeatedPaths))
+			for _, path := range repeatedPaths {
+				warnings = append(warnings, repeatReadWarning(path))
+			}
+			warning = strings.Join(warnings, "\n")
 		}
 	}
 	if deny {
@@ -835,6 +871,18 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 		fmt.Fprintln(out, string(data))
 		return nil
 	}
+	if warning != "" {
+		resp := claudeHookOutput{
+			HookSpecificOutput: claudeHookSpecificOutput{
+				HookEventName:     "PreToolUse",
+				AdditionalContext: warning,
+			},
+			SystemMessage: warning,
+		}
+		data, _ := json.Marshal(resp)
+		fmt.Fprintln(out, string(data))
+		return nil
+	}
 
 	fmt.Fprintln(out, `{}`)
 	return nil
@@ -842,20 +890,88 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 
 // A create-exclusive marker makes repeated reads deterministic across hook
 // processes without a lost-update race. Session hashes cannot traverse paths.
+// repeatedRead records a native read of path in session and reports whether the
+// session had already read it. Markers live in one directory per session so that
+// a compaction can clear them all with one RemoveAll (see runCompactResetHook).
 func repeatedRead(stateDir, session, path string) bool {
 	if session == "" || stateDir == "" {
 		return false
 	}
-	if err := os.MkdirAll(stateDir, 0700); err != nil {
+	dir := filepath.Join(stateDir, sessionMarkerDir(session))
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return false
 	}
-	key := fmt.Sprintf("%x", sha256.Sum256([]byte(session+"\x00"+path)))
-	f, err := os.OpenFile(filepath.Join(stateDir, key), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	key := fmt.Sprintf("%x", sha256.Sum256([]byte(path)))
+	f, err := os.OpenFile(filepath.Join(dir, key), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err == nil {
 		f.Close()
 		return false
 	}
 	return os.IsExist(err)
+}
+
+func sessionMarkerDir(session string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(session)))
+}
+
+// compactResetCommand is the PreCompact hook that clears a session's read markers.
+// spec/claude-compaction.yaml installs it; claudeCompactResetInstalled checks for it.
+const compactResetCommand = "harnez hook compact-reset"
+
+// runCompactResetHook clears the native-read markers of the session named in a
+// PreCompact payload. The compaction drops the content those reads put in context,
+// so the next native Read of a file is allowed again. It never blocks compaction.
+func runCompactResetHook(in io.Reader, stateDir string) error {
+	raw, err := io.ReadAll(in)
+	if err != nil {
+		return nil
+	}
+	var payload struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil || payload.SessionID == "" || stateDir == "" {
+		return nil
+	}
+	_ = os.RemoveAll(filepath.Join(stateDir, sessionMarkerDir(payload.SessionID)))
+	return nil
+}
+
+// claudeCompactResetInstalled reports whether Claude's settings.json runs the
+// compact-reset hook on PreCompact. Without it, a repeated read cannot be trusted
+// to be out of context, so the guard only warns.
+func claudeCompactResetInstalled() bool {
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return false
+		}
+		dir = filepath.Join(home, ".claude")
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "settings.json"))
+	if err != nil {
+		return false
+	}
+	var doc struct {
+		Hooks struct {
+			PreCompact []struct {
+				Hooks []struct {
+					Command string `json:"command"`
+				} `json:"hooks"`
+			} `json:"PreCompact"`
+		} `json:"hooks"`
+	}
+	if json.Unmarshal(data, &doc) != nil {
+		return false
+	}
+	for _, group := range doc.Hooks.PreCompact {
+		for _, h := range group.Hooks {
+			if h.Command == compactResetCommand {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func readRedirect(args map[string]any, baseDir string) string {

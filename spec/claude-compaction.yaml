@@ -2,5 +2,7 @@
 hooks:
   - event: PreCompact
     command: harnez codex-telemetry
+  - event: PreCompact
+    command: harnez hook compact-reset
   - event: PostCompact
     command: harnez codex-telemetry
