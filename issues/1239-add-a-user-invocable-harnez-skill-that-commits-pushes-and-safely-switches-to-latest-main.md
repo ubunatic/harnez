@@ -1,6 +1,6 @@
 # 1239 — Add a user-invocable harnez skill that commits, pushes and safely switches to latest main
 
-**Status**: Open
+**Status**: Closed — added /harnez-land skill, verified on a scratch repo
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
