@@ -17,15 +17,23 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 
 	targetDir := filepath.Join(tmpHome, ".claude")
 	envPath := filepath.Join(tmpHome, ".harnez", "env.sh")
+	envFishPath := filepath.Join(tmpHome, ".harnez", "env.fish")
 	bashrcPath := filepath.Join(tmpHome, ".bashrc")
 	zshrcPath := filepath.Join(tmpHome, ".zshrc")
+	fishrcPath := filepath.Join(tmpHome, ".config", "fish", "config.fish")
 
-	// Pre-create ~/.bashrc and ~/.zshrc with user content
+	// Pre-create ~/.bashrc, ~/.zshrc, and ~/.config/fish/config.fish with user content
 	if err := os.WriteFile(bashrcPath, []byte("# user bashrc\nalias ll='ls -la'\n"), 0644); err != nil {
 		t.Fatalf("write bashrc: %v", err)
 	}
 	if err := os.WriteFile(zshrcPath, []byte("# user zshrc\n"), 0644); err != nil {
 		t.Fatalf("write zshrc: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(fishrcPath), 0755); err != nil {
+		t.Fatalf("mkdir fish dir: %v", err)
+	}
+	if err := os.WriteFile(fishrcPath, []byte("# user fish config\nalias ll 'ls -la'\n"), 0644); err != nil {
+		t.Fatalf("write config.fish: %v", err)
 	}
 
 	cfg := claude.LoadTestConfig(t)
@@ -60,14 +68,31 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 		t.Errorf("expected hagy alias for harnez-agy in env.sh")
 	}
 
+	envFishData, err := os.ReadFile(envFishPath)
+	if err != nil {
+		t.Fatalf("read env.fish: %v", err)
+	}
+	if string(envFishData) != claude.HarnezEnvFishContent {
+		t.Errorf("env.fish content mismatch: got:\n%s\nwant:\n%s", string(envFishData), claude.HarnezEnvFishContent)
+	}
+	if !strings.Contains(string(envFishData), "function agy") {
+		t.Errorf("expected agy function in env.fish")
+	}
+	if !strings.Contains(string(envFishData), "alias hagy='harnez-agy'") {
+		t.Errorf("expected hagy alias for harnez-agy in env.fish")
+	}
+
 	if markdown.ContainsSectionMK(bashrcPath, "env") {
 		t.Errorf("expected ~/.bashrc NOT modified by default plain apply")
 	}
 	if markdown.ContainsSectionMK(zshrcPath, "env") {
 		t.Errorf("expected ~/.zshrc NOT modified by default plain apply")
 	}
+	if markdown.ContainsSectionMK(fishrcPath, "env") {
+		t.Errorf("expected ~/.config/fish/config.fish NOT modified by default plain apply")
+	}
 
-	// 2. ApplyAll with installShell=true should inject the managed block into both rc files
+	// 2. ApplyAll with installShell=true should inject the managed block into all rc files
 	if err := claude.ApplyAll(targetDir, cfg, nil, false, false, true); err != nil {
 		t.Fatalf("ApplyAll with shell failed: %v", err)
 	}
@@ -77,6 +102,9 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 	}
 	if !markdown.ContainsSectionMK(zshrcPath, "env") {
 		t.Errorf("expected ~/.zshrc to contain managed env section after apply --shell")
+	}
+	if !markdown.ContainsSectionMK(fishrcPath, "env") {
+		t.Errorf("expected ~/.config/fish/config.fish to contain managed env section after apply --shell")
 	}
 
 	bashrcData, _ := os.ReadFile(bashrcPath)
@@ -93,16 +121,19 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 		t.Errorf("expected DiffAll=false when fully aligned, got true")
 	}
 
-	// 4. Drift detection: corrupt env.sh
+	// 4. Drift detection: corrupt env.sh and env.fish
 	if err := os.WriteFile(envPath, []byte("# corrupted\n"), 0644); err != nil {
 		t.Fatalf("write corrupted env.sh: %v", err)
+	}
+	if err := os.WriteFile(envFishPath, []byte("# corrupted\n"), 0644); err != nil {
+		t.Fatalf("write corrupted env.fish: %v", err)
 	}
 	changed, err = claude.DiffAll(targetDir, cfg, nil)
 	if err != nil {
 		t.Fatalf("DiffAll on drift: %v", err)
 	}
 	if !changed {
-		t.Errorf("expected DiffAll=true after corrupting env.sh")
+		t.Errorf("expected DiffAll=true after corrupting env.sh/env.fish")
 	}
 
 	// 5. Repair via ApplyAll
@@ -113,8 +144,12 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 	if string(envData) != claude.HarnezEnvContent {
 		t.Errorf("env.sh was not repaired")
 	}
+	envFishData, _ = os.ReadFile(envFishPath)
+	if string(envFishData) != claude.HarnezEnvFishContent {
+		t.Errorf("env.fish was not repaired")
+	}
 
-	// 6. CleanAll should remove env.sh and clean .bashrc / .zshrc
+	// 6. CleanAll should remove env.sh/env.fish and clean .bashrc / .zshrc / config.fish
 	if err := claude.CleanAll(targetDir, cfg); err != nil {
 		t.Fatalf("CleanAll failed: %v", err)
 	}
@@ -122,15 +157,25 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 	if _, err := os.Stat(envPath); !os.IsNotExist(err) {
 		t.Errorf("expected env.sh removed after CleanAll")
 	}
+	if _, err := os.Stat(envFishPath); !os.IsNotExist(err) {
+		t.Errorf("expected env.fish removed after CleanAll")
+	}
 	if markdown.ContainsSectionMK(bashrcPath, "env") {
 		t.Errorf("expected ~/.bashrc cleaned after CleanAll")
 	}
 	if markdown.ContainsSectionMK(zshrcPath, "env") {
 		t.Errorf("expected ~/.zshrc cleaned after CleanAll")
 	}
+	if markdown.ContainsSectionMK(fishrcPath, "env") {
+		t.Errorf("expected ~/.config/fish/config.fish cleaned after CleanAll")
+	}
 	cleanedBashrc, _ := os.ReadFile(bashrcPath)
 	if !strings.Contains(string(cleanedBashrc), "alias ll='ls -la'") {
 		t.Errorf("user bashrc content was lost after CleanAll")
+	}
+	cleanedFishrc, _ := os.ReadFile(fishrcPath)
+	if !strings.Contains(string(cleanedFishrc), "alias ll 'ls -la'") {
+		t.Errorf("user config.fish content was lost after CleanAll")
 	}
 }
 
@@ -174,5 +219,18 @@ func TestHarnezEnvHagyAlias(t *testing.T) {
 	}
 	if strings.TrimSpace(string(out)) != "called:--meter" {
 		t.Errorf("hagy output = %q, want %q", strings.TrimSpace(string(out)), "called:--meter")
+	}
+
+	if fishBin, lookErr := exec.LookPath("fish"); lookErr == nil {
+		envFishPath := filepath.Join(tmpHome, ".harnez", "env.fish")
+		fishCmd := exec.Command(fishBin, "-c", "source \"$argv[1]\"; hagy --meter", envFishPath)
+		fishCmd.Env = []string{"HOME=" + tmpHome, "PATH=" + fakeBin + ":/usr/bin:/bin"}
+		fishOut, fishErr := fishCmd.CombinedOutput()
+		if fishErr != nil {
+			t.Fatalf("fish source env.fish && hagy: %v\n%s", fishErr, fishOut)
+		}
+		if strings.TrimSpace(string(fishOut)) != "called:--meter" {
+			t.Errorf("fish hagy output = %q, want %q", strings.TrimSpace(string(fishOut)), "called:--meter")
+		}
 	}
 }

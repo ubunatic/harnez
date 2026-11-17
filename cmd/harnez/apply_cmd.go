@@ -242,7 +242,7 @@ func newApplyCmd() *cobra.Command {
 	apply.Flags().BoolVar(&applySystemd, "systemd", false,
 		"write the harnez-agent-collector systemd --user unit; use `harnez server install` to enable and start it")
 	apply.Flags().BoolVarP(&applyShell, "shell", "s", false,
-		"inject harnez environment source into ~/.bashrc and ~/.zshrc")
+		"inject harnez environment source into ~/.bashrc, ~/.zshrc, and ~/.config/fish/config.fish")
 	apply.Flags().BoolVar(&debloat, "debloat", false,
 		"apply the minimal Claude, Codex, and Antigravity context-saving preset from config.yaml")
 	apply.Flags().StringVar(&debloatPreset, "debloat-preset", "",
