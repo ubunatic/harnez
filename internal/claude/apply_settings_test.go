@@ -27,7 +27,7 @@ func TestCompactionHooksPreserveForeignAndAreIdempotent(t *testing.T) {
 		t.Fatal("second apply changed hooks")
 	}
 	hooks := first["hooks"].(map[string]any)
-	if len(hooks["PreCompact"].([]any)) != 2 || len(hooks["PostCompact"].([]any)) != 1 {
+	if len(hooks["PreCompact"].([]any)) != 3 || len(hooks["PostCompact"].([]any)) != 1 {
 		t.Fatalf("hooks = %#v", hooks)
 	}
 }

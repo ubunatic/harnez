@@ -1120,7 +1120,8 @@ func TestClaudeReadHookRepeatedSliceNamesTheRepeat(t *testing.T) {
 		t.Fatal(err)
 	}
 	on := true
-	opts := readHookOptions{BaseDir: dir, StateDir: t.TempDir(), EnforceRead: &on, Insert: func(string, telemetry.ToolCall) error { return nil }}
+	compactReset := func() bool { return true }
+	opts := readHookOptions{BaseDir: dir, StateDir: t.TempDir(), EnforceRead: &on, CompactResetInstalled: compactReset, Insert: func(string, telemetry.ToolCall) error { return nil }}
 	payload := `{"tool_name":"Read","session_id":"s","tool_input":{"file_path":"` + path + `","offset":394,"limit":5}}`
 	var first, second bytes.Buffer
 	if err := runClaudeReadHook(strings.NewReader(payload), &first, opts); err != nil {
@@ -1135,6 +1136,89 @@ func TestClaudeReadHookRepeatedSliceNamesTheRepeat(t *testing.T) {
 	got := second.String()
 	if !strings.Contains(got, "already read this file") || strings.Contains(got, "or more lines") || !strings.Contains(got, "-L 394:398") {
 		t.Fatalf("repeat deny = %s", got)
+	}
+}
+
+// Without a PreCompact reset hook, a repeated native read is allowed with a warning:
+// the content may already be out of context, so a deny would block Edit for good (1240).
+func TestClaudeReadHookRepeatWarnsWithoutCompactReset(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.go")
+	if err := os.WriteFile(path, []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	opts := readHookOptions{BaseDir: dir, StateDir: t.TempDir(), CompactResetInstalled: func() bool { return false }}
+	payload := `{"tool_name":"Read","session_id":"s","tool_input":{"file_path":"` + path + `"}}`
+	var first, second bytes.Buffer
+	if err := runClaudeReadHook(strings.NewReader(payload), &first, opts); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(first.String()) != "{}" {
+		t.Fatalf("first read not plain allow: %s", first.String())
+	}
+	if err := runClaudeReadHook(strings.NewReader(payload), &second, opts); err != nil {
+		t.Fatal(err)
+	}
+	var resp claudeHookOutput
+	if err := json.Unmarshal(second.Bytes(), &resp); err != nil {
+		t.Fatalf("decode %q: %v", second.String(), err)
+	}
+	if resp.HookSpecificOutput.PermissionDecision == "deny" {
+		t.Fatalf("repeat denied without compact reset: %s", second.String())
+	}
+	if !strings.Contains(resp.HookSpecificOutput.AdditionalContext, "avoid re-reading") || !strings.Contains(resp.HookSpecificOutput.AdditionalContext, path) {
+		t.Fatalf("warning missing path or advice: %s", second.String())
+	}
+}
+
+// The PreCompact reset clears only its own session's markers, so a later native
+// Read is allowed again for that session and still denied for the other one.
+func TestCompactResetClearsOnlyItsSessionMarkers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.go")
+	if err := os.WriteFile(path, []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state := t.TempDir()
+	opts := readHookOptions{BaseDir: dir, StateDir: state, CompactResetInstalled: func() bool { return true }}
+	read := func(session string) string {
+		t.Helper()
+		var out bytes.Buffer
+		payload := `{"tool_name":"Read","session_id":"` + session + `","tool_input":{"file_path":"` + path + `"}}`
+		if err := runClaudeReadHook(strings.NewReader(payload), &out, opts); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+	for _, session := range []string{"a", "b"} {
+		read(session)
+		if !strings.Contains(read(session), `"deny"`) {
+			t.Fatalf("session %s repeat not denied before compaction", session)
+		}
+	}
+	if err := runCompactResetHook(strings.NewReader(`{"session_id":"a"}`), state); err != nil {
+		t.Fatal(err)
+	}
+	if got := read("a"); strings.TrimSpace(got) != "{}" {
+		t.Fatalf("session a read after compact reset = %s, want allow", got)
+	}
+	if got := read("b"); !strings.Contains(got, `"deny"`) {
+		t.Fatalf("session b markers cleared by session a compact: %s", got)
+	}
+}
+
+func TestClaudeCompactResetInstalledReadsSettings(t *testing.T) {
+	config := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", config)
+	if claudeCompactResetInstalled() {
+		t.Fatal("reported installed without a settings file")
+	}
+	settings := `{"hooks":{"PreCompact":[{"hooks":[{"type":"command","command":"harnez codex-telemetry"}]},{"hooks":[{"type":"command","command":"` + compactResetCommand + `"}]}]}}`
+	if err := os.WriteFile(filepath.Join(config, "settings.json"), []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !claudeCompactResetInstalled() {
+		t.Fatal("hook present in settings not detected")
 	}
 }
 

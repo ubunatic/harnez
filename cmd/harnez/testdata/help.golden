@@ -1769,6 +1769,15 @@ Usage:
 Flags:
   -h, --help   help for claude-instructions
 
+=== harnez hook compact-reset
+Claude PreCompact hook: clear this session's native-read markers
+
+Usage:
+  harnez hook compact-reset [flags]
+
+Flags:
+  -h, --help   help for compact-reset
+
 === harnez hook post-tool
 Antigravity PostToolUse telemetry hook
 
