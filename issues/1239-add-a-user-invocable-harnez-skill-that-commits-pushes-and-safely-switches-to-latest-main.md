@@ -31,3 +31,14 @@ After a topic branch merges, getting back to a clean `main` takes several manual
 - Verify the unmerged-branch report on a repo with one merged and one unmerged branch.
 
 /goal Implement the skill, verify it on a scratch repo, and stop and report when blocked on a user decision or a denied permission.
+
+## 4. Implementation
+
+- Skill `/harnez-land` (`docs/commands/HarnezLand.md`), registered in `config.yaml` as
+  user-invocable-only; install test `internal/claude/harnez_land_skill_test.go`.
+- Merged-branch check uses `git merge-tree --write-tree origin/main <branch>` against
+  `origin/main^{tree}`, so squash merges count as merged; `git branch --merged` misses them.
+- Scratch-repo check (bare remote, AGit-style push, squash merge from a second clone): the
+  squash-merged topic was reported merged, an unmerged branch was reported unmerged, a dirty file
+  showed in `git status --porcelain`, and `git merge --ff-only origin/main` advanced `main`. A
+  local bare remote has no AGit, so the PR-number and `harnez pr wait` steps were not exercised.
