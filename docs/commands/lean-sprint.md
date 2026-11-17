@@ -35,6 +35,10 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 - `/lean-sprint <ticket-numbers>` (e.g. `/lean-sprint 064` or `/lean-sprint 042, 043`)
 - `/lean-sprint "<scoped-task-or-bug-description>"`
 - `/lean-sprint <ticket> refined <tier>` (or `with architect`, `with advisor`, or an explicitly named model)
+- `/lean-sprint <ticket> <searcher>/<developer>/<reviewer>` (e.g. `cheap/lean/smart`):
+  each position is a model or a trait for that role and replaces the model named below. A missing position keeps the role default, and `-` skips the Searcher or reviewer
+  agent. The host still reviews every diff. Check each pick with `harnez agent start --dry-run`
+  for its role. For a fourth position, or a pick it rejects, stop and ask; never substitute.
 - The legacy single-developer workflow is available as `/lean-sprint-v1 <ticket-or-task>`.
 
 ---
@@ -122,8 +126,8 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
     init reverted M3's rules edit; green tests hid a driver that init never installed and merge
     commits missing rows.)
 - **One-shot cheap review (default)**: after the host's own diff review, start one read-only reviewer
-  per milestone diff, `HTO=0 harnez agent start --role reviewer --model <user's pick, else lean> -f
-  <prompt>`, with the commit range, the ticket, 3-4 concrete questions (behaviour change, test
+  per milestone diff, `HTO=0 harnez agent start --role reviewer [--model <user's pick>] -f
+  <prompt>` (no `--model` gives the reviewer default), with the commit range, the ticket, 3-4 concrete questions (behaviour change, test
   strength, contract or API scope, secret leaks) and "reply in under 25 lines with severity". Its
   findings become pre-work like the host's. Skip it only for a docs-only or one-line change, and say so
   in the sprint report. (Sprint 1177/1173/1138/1139, 2026-11-06: three low-cost Codex reviews of
