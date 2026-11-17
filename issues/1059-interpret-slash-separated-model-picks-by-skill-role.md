@@ -1,6 +1,6 @@
 # 1059 — Interpret slash-separated model picks by skill role
 
-**Status**: Open
+**Status**: Closed — slash picks defined in /lean-sprint, verified by dry-run
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Enhancement
