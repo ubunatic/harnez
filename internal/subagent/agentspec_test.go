@@ -123,8 +123,25 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if strings.Contains(string(skill), "Prefer `luna` first") {
 		t.Error("lean-sprint skill still prefers Luna first")
 	}
-	if strings.Contains(string(skill), "haiku:high") {
+	// The generated picks table may list haiku:high (owner pick, issue 1241); the prose must not.
+	if strings.Contains(pickdocs.WithoutBlocks(string(skill)), "haiku:high") {
 		t.Error("lean-sprint skill recommends haiku:high")
+	}
+}
+
+// Every leaf role resolves the core traits, so a trait that works for one role never fails for
+// another (issue 1241: --role reviewer --model lean was rejected).
+func TestLeafRolesDefineCoreTraits(t *testing.T) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []string{"developer", "advisor", "reviewer"} {
+		for _, trait := range []string{"cheap", "lean", "smart"} {
+			if len(spec.Roles[role].Models[trait]) == 0 {
+				t.Errorf("role %s lacks core trait %s", role, trait)
+			}
+		}
 	}
 }
 
@@ -167,7 +184,7 @@ func TestEmbeddedAgentSpecLoadsAndResolves(t *testing.T) {
 		t.Fatalf("default=%q, spec/agent.yaml has %q", spec.DefaultModel, raw.DefaultModel)
 	}
 	model, err := DefaultModel()
-	if err != nil || model.Provider != "codex" {
+	if err != nil || model.Provider != "claude" {
 		t.Fatalf("model=%#v err=%v", model, err)
 	}
 	if spec.ExternalSessions["codex"].Format != "jsonl" {

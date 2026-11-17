@@ -101,8 +101,8 @@ func TestStartResolvesRoleBeforeModel(t *testing.T) {
 		role, model string
 	}{
 		{[]string{"--role", "dev", "--model", "smart"}, "developer", "codex:gpt-6.1-terra:high"},
-		{[]string{"--role", "review", "--model", "smart"}, "reviewer", "codex:gpt-6.1-sol:low"},
-		{[]string{"--role", "review"}, "reviewer", "codex:gpt-6.1-sol:low"},
+		{[]string{"--role", "review", "--model", "smart"}, "reviewer", "codex:gpt-6.1-sol:med"},
+		{[]string{"--role", "review"}, "reviewer", "codex:gpt-6.1-sol:med"},
 		{[]string{"--model", "smart"}, "developer", "codex:gpt-6.1-terra:high"},
 	} {
 		d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
@@ -157,8 +157,8 @@ func TestStartBannerOneModelLine(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"default", []string{"--role", "review"}, "model: smart → codex:sol:low (default)"},
-		{"trait", []string{"--role", "review", "--model", "smart"}, "model: smart → codex:sol:low"},
+		{"default", []string{"--role", "review"}, "model: smart → codex:sol:med (default)"},
+		{"trait", []string{"--role", "review", "--model", "smart"}, "model: smart → codex:sol:med"},
 		{"concrete", []string{"--role", "review", "--model", "codex:sol:low"}, "model: codex:sol:low"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

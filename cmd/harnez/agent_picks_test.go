@@ -51,7 +51,7 @@ func TestModelPicksCommand(t *testing.T) {
 	if err := json.Unmarshal([]byte(run("--picks", "--json")), &picks); err != nil {
 		t.Fatal(err)
 	}
-	var smart, ai, defaultLean bool
+	var smart, reviewLean, defaultLean bool
 	for i, p := range picks {
 		if i > 0 && (p.Role < picks[i-1].Role || p.Role == picks[i-1].Role && p.Trait < picks[i-1].Trait) {
 			t.Fatal("picks are not sorted")
@@ -59,14 +59,14 @@ func TestModelPicksCommand(t *testing.T) {
 		if p.Role == "developer" && p.Trait == "smart" {
 			smart = len(p.Chain) == 3 && p.Resolved == "codex:terra:high" && p.Error == "" && !p.Default
 		}
-		if p.Role == "developer" && p.Trait == "ai" {
-			ai = len(p.Chain) == 0 && strings.Contains(p.Error, "unset") && !p.Default
+		if p.Role == "reviewer" && p.Trait == "lean" {
+			reviewLean = len(p.Chain) > 0 && p.Error == "" && !p.Default
 		}
 		if p.Role == "developer" && p.Trait == "lean" {
 			defaultLean = p.Default
 		}
 	}
-	if !smart || !ai || !defaultLean {
+	if !smart || !reviewLean || !defaultLean {
 		t.Fatalf("missing picks: %+v", picks)
 	}
 	var models []subagent.ModelEntry
