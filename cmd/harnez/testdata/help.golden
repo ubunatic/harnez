@@ -777,7 +777,7 @@ Flags:
       --profiles strings                       profile(s) adding docs, tools and components, comma-separated (go,rust,codeberg,github,minimal; see spec/tools.yaml)
       --prune                                  with --components: also remove what the selection leaves out (desired state); without it a --components run leaves components outside the selection untouched
       --remove-docs                            remove all global docs from ~/.claude/docs/ and ~/.prime/agent/docs/
-  -s, --shell                                  inject harnez environment source into ~/.bashrc and ~/.zshrc
+  -s, --shell                                  inject harnez environment source into ~/.bashrc, ~/.zshrc, and ~/.config/fish/config.fish
       --systemd harnez server install          write the harnez-agent-collector systemd --user unit; use harnez server install to enable and start it
   -t, --target string                          Claude config directory (default: ~/.claude)
       --tools strings                          companion tool(s) to install, comma-separated (see spec/tools.yaml: gokay,loom,fj); a missing installer or failed install only warns

@@ -587,9 +587,27 @@ alias hagy='harnez-agy'
 # harnez:end env
 `
 
+const HarnezEnvFishContent = `# harnez:begin env
+# Shell environment and helper functions for harnez-managed tools and agents.
+
+# Antigravity (AGY) wrapper with guarded shims PATH and agent indicator
+function agy --wraps agy
+    PATH="$HOME/.harnez/shims:$PATH" ANTIGRAVITY_AGENT=1 command agy $argv
+end
+
+# Short alias for the harnez-agy launcher
+alias hagy='harnez-agy'
+# harnez:end env
+`
+
 const HarnezShellRCSnippet = `if test -f "$HOME/.harnez/env.sh"
 then source "$HOME/.harnez/env.sh"
 fi
+`
+
+const HarnezFishRCSnippet = `if test -f "$HOME/.harnez/env.fish"
+    source "$HOME/.harnez/env.fish"
+end
 `
 
 // HarnezEnvPath returns the standard location of the harnez environment script (~/.harnez/env.sh).
@@ -599,6 +617,15 @@ func HarnezEnvPath() string {
 		return ""
 	}
 	return filepath.Join(home, ".harnez", "env.sh")
+}
+
+// HarnezEnvFishPath returns the standard location of the fish environment script (~/.harnez/env.fish).
+func HarnezEnvFishPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".harnez", "env.fish")
 }
 
 // ShellRCPaths returns potential shell rc targets (~/.bashrc, ~/.zshrc) that exist,
@@ -622,6 +649,43 @@ func ShellRCPaths() []string {
 		return []string{candidates[0]}
 	}
 	return existing
+}
+
+// FishRCPaths returns ~/.config/fish/config.fish when ~/.config/fish exists.
+func FishRCPaths() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	fishDir := filepath.Join(home, ".config", "fish")
+	if _, err := os.Stat(fishDir); err != nil {
+		return nil
+	}
+	return []string{filepath.Join(fishDir, "config.fish")}
+}
+
+type shellEnvTarget struct {
+	envPath   string
+	content   string
+	rcSnippet string
+	rcPaths   []string
+}
+
+func shellEnvTargets() []shellEnvTarget {
+	return []shellEnvTarget{
+		{
+			envPath:   HarnezEnvPath(),
+			content:   HarnezEnvContent,
+			rcSnippet: HarnezShellRCSnippet,
+			rcPaths:   ShellRCPaths(),
+		},
+		{
+			envPath:   HarnezEnvFishPath(),
+			content:   HarnezEnvFishContent,
+			rcSnippet: HarnezFishRCSnippet,
+			rcPaths:   FishRCPaths(),
+		},
+	}
 }
 
 // SwitchDocVariant re-installs a single already project-installed doc through
@@ -923,20 +987,22 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 		}
 	}
 
-	if envPath := HarnezEnvPath(); envPath != "" {
-		if _, err := os.Stat(envPath); err != nil {
-			anyChanged = true
-		} else {
-			data, readErr := os.ReadFile(envPath)
-			if readErr != nil || string(data) != HarnezEnvContent {
+	for _, st := range shellEnvTargets() {
+		if st.envPath != "" {
+			if _, err := os.Stat(st.envPath); err != nil {
 				anyChanged = true
+			} else {
+				data, readErr := os.ReadFile(st.envPath)
+				if readErr != nil || string(data) != st.content {
+					anyChanged = true
+				}
 			}
 		}
-	}
-	for _, rcPath := range ShellRCPaths() {
-		if markdown.ContainsSectionMK(rcPath, "env") {
-			if changed, err := markdown.DiffMK(rcPath, "env", HarnezShellRCSnippet); err != nil || changed {
-				anyChanged = true
+		for _, rcPath := range st.rcPaths {
+			if markdown.ContainsSectionMK(rcPath, "env") {
+				if changed, err := markdown.DiffMK(rcPath, "env", st.rcSnippet); err != nil || changed {
+					anyChanged = true
+				}
 			}
 		}
 	}
@@ -1067,15 +1133,17 @@ func CleanAll(target string, cfg *Config) error {
 			_ = os.Remove(filepath.Dir(shimPath))
 		}
 	}
-	if envPath := HarnezEnvPath(); envPath != "" {
-		if err := os.Remove(envPath); err == nil {
-			fmt.Printf("  removed %s\n", envPath)
-			_ = os.Remove(filepath.Dir(envPath))
+	for _, st := range shellEnvTargets() {
+		if st.envPath != "" {
+			if err := os.Remove(st.envPath); err == nil {
+				fmt.Printf("  removed %s\n", st.envPath)
+				_ = os.Remove(filepath.Dir(st.envPath))
+			}
 		}
-	}
-	for _, rcPath := range ShellRCPaths() {
-		if removed, _, err := markdown.CleanMK(rcPath, "env"); err == nil && removed {
-			fmt.Printf("  cleaned %s [env]\n", rcPath)
+		for _, rcPath := range st.rcPaths {
+			if removed, _, err := markdown.CleanMK(rcPath, "env"); err == nil && removed {
+				fmt.Printf("  cleaned %s [env]\n", rcPath)
+			}
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {

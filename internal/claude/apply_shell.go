@@ -55,16 +55,19 @@ func applyShellIntegration(r *applyReport, target string, cfg *Config, shellOpt 
 		r.addStat("⚙ symlink", strings.Join(gearStats, ", "))
 	}
 
-	if envPath := HarnezEnvPath(); envPath != "" {
-		changed, err := fsutil.WriteIfChanged(envPath, []byte(HarnezEnvContent))
-		if err != nil {
-			return fmt.Errorf("harnez env %s: %w", envPath, err)
-		}
-		if changed {
-			r.changes++
-			fmt.Printf("  wrote %s\n", envPath)
-		} else {
-			r.addStat("env script", fsutil.ContractHome(envPath))
+	targets := shellEnvTargets()
+	for _, st := range targets {
+		if st.envPath != "" {
+			changed, err := fsutil.WriteIfChanged(st.envPath, []byte(st.content))
+			if err != nil {
+				return fmt.Errorf("harnez env %s: %w", st.envPath, err)
+			}
+			if changed {
+				r.changes++
+				fmt.Printf("  wrote %s\n", st.envPath)
+			} else {
+				r.addStat("env script", fsutil.ContractHome(st.envPath))
+			}
 		}
 	}
 
@@ -75,20 +78,22 @@ func applyShellIntegration(r *applyReport, target string, cfg *Config, shellOpt 
 	}
 
 	if shellOpt {
-		for _, rcPath := range ShellRCPaths() {
-			changed, existed, err := markdown.ApplyMK(rcPath, "env", HarnezShellRCSnippet)
-			if err != nil {
-				return fmt.Errorf("shell rc %s: %w", rcPath, err)
-			}
-			if changed {
-				r.changes++
-				if existed {
-					fmt.Printf("  updated %s [env]\n", rcPath)
-				} else {
-					fmt.Printf("  wrote %s [env]\n", rcPath)
+		for _, st := range targets {
+			for _, rcPath := range st.rcPaths {
+				changed, existed, err := markdown.ApplyMK(rcPath, "env", st.rcSnippet)
+				if err != nil {
+					return fmt.Errorf("shell rc %s: %w", rcPath, err)
 				}
-			} else {
-				r.addStat("shell rc", fsutil.ContractHome(rcPath))
+				if changed {
+					r.changes++
+					if existed {
+						fmt.Printf("  updated %s [env]\n", rcPath)
+					} else {
+						fmt.Printf("  wrote %s [env]\n", rcPath)
+					}
+				} else {
+					r.addStat("shell rc", fsutil.ContractHome(rcPath))
+				}
 			}
 		}
 	}

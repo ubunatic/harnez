@@ -252,31 +252,33 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 			state: shimState,
 		})
 	}
-	if envPath := HarnezEnvPath(); envPath != "" {
-		envState := "missing"
-		if _, err := os.Stat(envPath); err == nil {
-			data, readErr := os.ReadFile(envPath)
-			if readErr == nil && string(data) == HarnezEnvContent {
-				envState = "ok"
-			} else {
-				envState = "drifted"
-			}
-		}
-		checks = append(checks, entry{
-			label: envPath,
-			state: envState,
-		})
-	}
-	for _, rcPath := range ShellRCPaths() {
-		if markdown.ContainsSectionMK(rcPath, "env") {
-			rcState := "ok"
-			if changed, err := markdown.DiffMK(rcPath, "env", HarnezShellRCSnippet); err != nil || changed {
-				rcState = "drifted"
+	for _, st := range shellEnvTargets() {
+		if st.envPath != "" {
+			envState := "missing"
+			if _, err := os.Stat(st.envPath); err == nil {
+				data, readErr := os.ReadFile(st.envPath)
+				if readErr == nil && string(data) == st.content {
+					envState = "ok"
+				} else {
+					envState = "drifted"
+				}
 			}
 			checks = append(checks, entry{
-				label: rcPath + " [env]",
-				state: rcState,
+				label: st.envPath,
+				state: envState,
 			})
+		}
+		for _, rcPath := range st.rcPaths {
+			if markdown.ContainsSectionMK(rcPath, "env") {
+				rcState := "ok"
+				if changed, err := markdown.DiffMK(rcPath, "env", st.rcSnippet); err != nil || changed {
+					rcState = "drifted"
+				}
+				checks = append(checks, entry{
+					label: rcPath + " [env]",
+					state: rcState,
+				})
+			}
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
