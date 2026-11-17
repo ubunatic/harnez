@@ -6,7 +6,7 @@ Y: Capability Rating (1-5 stars) · X: Relative Cost · Pareto Frontier Marked (
     │                                 ⢀sonnet  ⢀opus⢀⣀⠔⠊            ⢀⢀⡠⠤⠒⠉⠁   
 4.0 ┤                        ⢀⣀⣀⠤⠤haiku⠁     hydrogen⠁              ⠙⠁        
     │          flash38⣴⠤⠒⠒⠒⠉⠉⠁  ⢀sonnet⢴⠄  ⠠⡦argon                            
-    │          flash37⣸⡀     ⣠⡤⠒⠁          ⢀⣇⠤⠒⠉  terra                       
+    │              ⡠⠒⠁⣸⡀     ⣠⡤⠒⠁          ⢀⣇⠤⠒⠉  terra                       
 3.0 ┤           ⡠⠔⠉   ⢸ ⢀⡠⠤⠒⠉⠈          ⣀⠤⠒⠉⠁                                 
     │        ⣀⠔⠉      ⢺⠊⠁⢀⡠⠾⠂         ⠺⠋                                      
 2.0 ┤     ⣀⠔⠊        ⢀⣸⡤⠒⠁  luna                                              
@@ -23,4 +23,4 @@ Providers: [agy]  [claude]  [codex]
 Rating source: spec/model_scores.yaml (owner estimate, unverified)
 Cost source: spec/agent.yaml cost matrix (raw API cost)
 
-Models not plotted (5): jules:jules:low (cost <= 0), lmcoder:coder:low (cost <= 0), strata-coder:qwen3.8-flash-next-coder-iq1_m:low (cost <= 0), strata:qwen3.8-flash-next-iq2_xs:low (cost <= 0), strata:qwen3.8-flash-next-iq3_xxs:low (cost <= 0)
+Models not plotted (4): lmcoder:coder:low (cost <= 0), strata-coder:qwen3.8-flash-next-coder-iq1_m:low (cost <= 0), strata:qwen3.8-flash-next-iq2_xs:low (cost <= 0), strata:qwen3.8-flash-next-iq3_xxs:low (cost <= 0)

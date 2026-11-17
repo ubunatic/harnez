@@ -32,7 +32,7 @@ func TestAgentModelsLoadsAvailabilityOncePerProvider(t *testing.T) {
 		{Model: subagent.Model{Provider: "codex", Name: "luna"}},
 		{Model: subagent.Model{Provider: "codex", Name: "luna"}},
 		{Model: subagent.Model{Provider: "codex", Name: "opus"}},
-		{Model: subagent.Model{Provider: "agy", Name: "flash37"}},
+		{Model: subagent.Model{Provider: "agy", Name: "flash38"}},
 		{Model: subagent.Model{Provider: "agy", Name: "argon"}},
 	}
 	lookupCounts := make(map[string]int)
@@ -47,7 +47,7 @@ func TestAgentModelsLoadsAvailabilityOncePerProvider(t *testing.T) {
 	if lookupCounts["codex"] != 1 || lookupCounts["agy"] != 1 || len(lookupCounts) != 2 {
 		t.Fatalf("provider availability lookup counts = %#v, want one per provider", lookupCounts)
 	}
-	for _, key := range []string{"codex\x00luna", "codex\x00opus", "agy\x00flash37", "agy\x00argon"} {
+	for _, key := range []string{"codex\x00luna", "codex\x00opus", "agy\x00flash38", "agy\x00argon"} {
 		if got[key].State == "" {
 			t.Errorf("availability missing for %q: %#v", key, got)
 		}

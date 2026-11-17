@@ -255,6 +255,7 @@ models:
     use: host seat for repo judgment, pre-work, diff review
   agy:flash37:
     aliases: [flash37, flash37:low]
+    disabled: true
     provider: agy
     name: gemini-3.7-flash
     tier: low
@@ -344,6 +345,7 @@ models:
     use: Local Strata IQ3 XXS model served through Pi provider strata; requires that provider and this exact model ID in ~/.pi/agent/models.json. Its configured context window is 98304 tokens; Harnez compacts at 80000.
   jules:jules:
     aliases: [jules]
+    disabled: true
     provider: jules
     name: jules
     tier: low

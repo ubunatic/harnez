@@ -22,7 +22,7 @@ func TestLoadFromDirsWithoutMachineFilesUsesDefaults(t *testing.T) {
 		t.Fatal("missing policy unexpectedly produced a policy")
 	}
 	for _, model := range models {
-		if model.Identity.Harness == "" || model.Identity.Model == "" || !catalog.IsEnabled(model.Identity.Harness, model.Identity.Model, model.Identity.Tier) {
+		if model.Identity.Harness == "" || model.Identity.Model == "" || catalog.IsEnabled(model.Identity.Harness, model.Identity.Model, model.Identity.Tier) == model.Disabled {
 			t.Fatalf("invalid default model: %#v", model)
 		}
 	}

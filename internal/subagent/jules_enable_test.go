@@ -1,0 +1,33 @@
+package subagent
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"ubunatic.com/harnez/modelcatalog"
+)
+
+// enableJulesForTest opts this test into the shipped-disabled Jules model (issue 1242).
+func enableJulesForTest(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	policy := "version: 1\ndefault_enabled: true\nenabled: [jules:jules]\nmodels: {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "models.yaml"), []byte(policy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := modelcatalog.LoadFromDirs(t.TempDir(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(UseModelCatalogForTest(catalog))
+}
+
+func TestJulesShippedDisabled(t *testing.T) {
+	if _, err := ResolveModel("jules"); err == nil {
+		t.Fatal("jules resolves although the shipped spec disables it")
+	}
+	if _, err := ResolveModel("flash37"); err == nil {
+		t.Fatal("flash37 resolves although the shipped spec disables it")
+	}
+}

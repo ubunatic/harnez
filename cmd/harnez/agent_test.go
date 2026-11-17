@@ -172,7 +172,7 @@ func TestAgentModelsListsKnownSpecs(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "codex:luna:low") || !strings.Contains(out.String(), "agy:flash37:low") {
+	if !strings.Contains(out.String(), "codex:luna:low") || !strings.Contains(out.String(), "agy:flash38:low") {
 		t.Fatalf("known models output = %q", out.String())
 	}
 	for _, tier := range []string{"low", "med", "high", "xhigh"} {

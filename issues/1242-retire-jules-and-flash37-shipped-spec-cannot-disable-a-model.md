@@ -28,3 +28,15 @@ flash38. Both are not in any pick chain, but `harnez agent models` still lists t
   `agent models`), or removal. Recommendation: the flag for flash37, removal for Jules after
   2026-12-31 with the skill and its tickets.
 - Verify: `harnez agent start --dry-run --model flash37` refuses with "disabled".
+
+## 4. Delivered (2026-11-17)
+
+- Spec model field `disabled: true` (schema, `modelcatalog` `ShippedDisabled`): hidden from
+  `agent models`, refused at start with "retired and disabled in the shipped spec", skipped in pick
+  chains as "disabled in the shipped spec". Only an explicit user `models.yaml` entry re-enables it;
+  `default_enabled` does not.
+- `agy:flash37` and `jules:jules` carry it. Tests that used flash37 as a fixture now use flash38;
+  Jules tests opt in with `enableJulesForTest` (`subagent.UseModelCatalogForTest`).
+- The owner also asked to drop the `haiku:high` ban in the lean-sprint test; done.
+- Remaining: remove the Jules driver, the `/jules` skill (it now fails at start) and close 1185
+  and 1218, after 2026-12-31.

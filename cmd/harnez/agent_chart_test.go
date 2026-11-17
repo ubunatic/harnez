@@ -183,7 +183,7 @@ func TestPlacedLabelsWithinTwoCells(t *testing.T) {
 
 	// Verify fable and sonnet have labels on canvas
 	canvasText := strings.Join(lines[3:15], "\n")
-	for _, expectedLabel := range []string{"fable", "sonnet", "opus", "sol", "flash38", "flash37", "haiku", "luna", "terra", "argon"} {
+	for _, expectedLabel := range []string{"fable", "sonnet", "opus", "sol", "flash38", "haiku", "luna", "terra", "argon"} {
 		if !strings.Contains(canvasText, expectedLabel) {
 			t.Errorf("expected label %q on canvas, but not found", expectedLabel)
 		}
@@ -205,7 +205,7 @@ func TestPlacedLabelsWithinTwoCells(t *testing.T) {
 			continue
 		}
 		canvasRunes := lineRunes[6:]
-		for _, word := range []string{"fable", "sonnet", "opus", "sol", "flash38", "flash37", "haiku", "luna", "terra", "argon"} {
+		for _, word := range []string{"fable", "sonnet", "opus", "sol", "flash38", "haiku", "luna", "terra", "argon"} {
 			wordRunes := []rune(word)
 			for i := 0; i <= len(canvasRunes)-len(wordRunes); i++ {
 				match := true

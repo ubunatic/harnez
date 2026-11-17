@@ -121,6 +121,7 @@ type julesHarness struct {
 
 func newJulesHarness(t *testing.T, fake *fakeJules, remotes map[string]string, heads map[string]string) julesHarness {
 	t.Helper()
+	enableJulesForTest(t)
 	fake.t = t
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
@@ -1055,6 +1056,7 @@ func TestParseGitHubRemote(t *testing.T) {
 }
 
 func TestJulesModelResolvesToDriver(t *testing.T) {
+	enableJulesForTest(t)
 	model, err := ResolveModel("jules")
 	if err != nil {
 		t.Fatal(err)

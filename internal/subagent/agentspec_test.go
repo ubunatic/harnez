@@ -123,10 +123,6 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if strings.Contains(string(skill), "Prefer `luna` first") {
 		t.Error("lean-sprint skill still prefers Luna first")
 	}
-	// The generated picks table may list haiku:high (owner pick, issue 1241); the prose must not.
-	if strings.Contains(pickdocs.WithoutBlocks(string(skill)), "haiku:high") {
-		t.Error("lean-sprint skill recommends haiku:high")
-	}
 }
 
 // Every leaf role resolves the core traits, so a trait that works for one role never fails for
@@ -409,7 +405,7 @@ func TestParseAgentSpecRequiresExternalSessionDiscovery(t *testing.T) {
 }
 
 func TestResolveModelBareAliases(t *testing.T) {
-	for _, alias := range []string{"luna", "sol", "astra", "haiku", "flash37", "flash38"} {
+	for _, alias := range []string{"luna", "sol", "astra", "haiku", "flash38"} {
 		if _, err := ResolveModel(alias); err != nil {
 			t.Errorf("alias %q: %v", alias, err)
 		}

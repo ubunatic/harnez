@@ -39,8 +39,10 @@ type Model struct {
 	Key       string
 	Aliases   []string
 	Preferred bool
-	Effort    *bool
-	Facts     map[string]any
+	// Disabled is the shipped spec default; user policy can re-enable the model.
+	Disabled bool
+	Effort   *bool
+	Facts    map[string]any
 	// Deprecated: listing guidance has no typed replacement yet. Do not add
 	// new consumers.
 	Guide     LegacyGuide
@@ -78,6 +80,7 @@ type LegacyGuide struct {
 type legacyModel struct {
 	Aliases     []string `yaml:"aliases"`
 	Preferred   bool     `yaml:"preferred"`
+	Disabled    bool     `yaml:"disabled"`
 	Effort      *bool    `yaml:"effort"`
 	Provider    string   `yaml:"provider"`
 	Name        string   `yaml:"name"`
@@ -343,7 +346,7 @@ func loadDefaults() (*Catalog, error) {
 		}
 		id := modelID(identity)
 		alias := strings.TrimPrefix(key, legacy.Provider+":")
-		catalog.models[id] = Model{Identity: identity, Key: alias, Aliases: append([]string(nil), legacy.Aliases...), Preferred: legacy.Preferred, Effort: legacy.Effort, Facts: map[string]any{}, Guide: legacy.LegacyGuide, Source: "spec-default"}
+		catalog.models[id] = Model{Identity: identity, Key: alias, Aliases: append([]string(nil), legacy.Aliases...), Preferred: legacy.Preferred, Disabled: legacy.Disabled, Effort: legacy.Effort, Facts: map[string]any{}, Guide: legacy.LegacyGuide, Source: "spec-default"}
 	}
 	return catalog, nil
 }
@@ -581,12 +584,46 @@ func contains(values []string, value string) bool {
 	return false
 }
 
-// IsEnabled applies user policy to a fully resolved provider, model ID and
-// tier. Unknown access observations do not disable a model.
+// IsEnabled applies the shipped disabled flag and user policy to a fully
+// resolved provider, model ID and tier. Unknown access observations do not
+// disable a model. A shipped-disabled model is enabled only when user policy
+// names it, never by default_enabled.
 func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
-	if c == nil || c.policy == nil {
+	if c == nil {
 		return true
 	}
+	if c.ShippedDisabled(provider, modelName) {
+		return c.policy != nil && c.policyEnabled(provider, modelName, tier, false)
+	}
+	if c.policy == nil {
+		return true
+	}
+	return c.policyEnabled(provider, modelName, tier, c.policy.DefaultEnabled)
+}
+
+// ShippedDisabled reports whether the embedded spec marks the model disabled.
+func (c *Catalog) ShippedDisabled(provider, modelName string) bool {
+	if c == nil {
+		return false
+	}
+	for _, model := range c.models {
+		if !model.Disabled || !strings.EqualFold(model.Identity.Harness, provider) && !strings.EqualFold(model.Identity.Provider, provider) {
+			continue
+		}
+		if model.Identity.Model == modelName || model.Key == modelName {
+			return true
+		}
+		for _, alias := range model.Aliases {
+			if base, _, _ := strings.Cut(alias, ":"); alias == modelName || base == modelName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// policyEnabled applies user policy; fallback answers when policy names nothing.
+func (c *Catalog) policyEnabled(provider, modelName, tier string, fallback bool) bool {
 	provider, tier = strings.ToLower(provider), strings.ToLower(tier)
 	var aliases []string
 	providers := []string{provider}
@@ -646,7 +683,7 @@ func (c *Catalog) IsEnabled(provider, modelName, tier string) bool {
 			return true
 		}
 	}
-	return c.policy.DefaultEnabled
+	return fallback
 }
 
 // ExplicitlyEnabled reports whether user policy names provider:model:tier explicitly.
