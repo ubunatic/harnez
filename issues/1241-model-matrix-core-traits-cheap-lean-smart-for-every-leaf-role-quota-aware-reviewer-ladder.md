@@ -1,6 +1,6 @@
 # 1241 — Model matrix: core traits cheap/lean/smart for every leaf role, quota-aware reviewer ladder
 
-**Status**: Open
+**Status**: Closed — core traits on all leaf roles, reviewer ladder from owner tiers; make test-q1 green
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
