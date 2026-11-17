@@ -50,4 +50,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1229 | [1229-993-shipped-without-the-owner-decisions-of-2026-11-07.md](1229-993-shipped-without-the-owner-decisions-of-2026-11-07.md) | 993 shipped without the owner decisions of 2026-11-07 | Open |
 | 1232 | [1232-add-gemini-pro-orchestrator-g1-pro-as-a-harnez-model.md](1232-add-gemini-pro-orchestrator-g1-pro-as-a-harnez-model.md) | Add gemini-pro-orchestrator-g1-pro as a Harnez model | Open |
 | 1236 | [1236-telemetry-openreadonly-lacks-busy-timeout-causing-sqlite-busy-on-stats-agents.md](1236-telemetry-openreadonly-lacks-busy-timeout-causing-sqlite-busy-on-stats-agents.md) | telemetry: OpenReadOnly lacks busy_timeout, causing SQLITE_BUSY on stats --agents | Open |
+| 1238 | [1238-harnez-statusline-does-not-show-the-model-or-the-reasoning-effort.md](1238-harnez-statusline-does-not-show-the-model-or-the-reasoning-effort.md) | harnez statusline does not show the model or the reasoning effort | Open |
 <!-- harnez:end issues-active-index -->
