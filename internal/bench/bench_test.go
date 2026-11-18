@@ -280,10 +280,10 @@ func TestInvokeBuildsAgentCommands(t *testing.T) {
 	if name != "codex" || !contains(args, "-m", "gpt-6-luna") || !contains(args, "-c", "model_reasoning_effort=medium") || args[0] != "exec" {
 		t.Errorf("codex cmd = %s %v", name, args)
 	}
-	if _, err := Invoke(context.Background(), fake(agyJSON), AgentAgy, "agy:flash37:low", t.TempDir(), "hi"); err != nil {
+	if _, err := Invoke(context.Background(), fake(agyJSON), AgentAgy, "agy:flash38:low", t.TempDir(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	if name != "agy" || !contains(args, "--model", "gemini-3.7-flash") || !contains(args, "--effort", "low") || args[1] != "hi" || !contains(args, "--output-format", "json") {
+	if name != "agy" || !contains(args, "--model", "gemini-3.8-flash") || !contains(args, "--effort", "low") || args[1] != "hi" || !contains(args, "--output-format", "json") {
 		t.Errorf("agy cmd = %s %v", name, args)
 	}
 	if _, err := Invoke(context.Background(), fake(""), "gemini", "", t.TempDir(), "hi"); err == nil {
@@ -741,11 +741,11 @@ func TestParseReadListOrderAndErrors(t *testing.T) {
 }
 
 func TestParseModelsResolvesSpecsAndRejectsBadValues(t *testing.T) {
-	got, err := ParseModels("agy:flash37:low,claude:haiku:low")
-	if err != nil || len(got) != 2 || got[0].Provider != AgentAgy || got[0].Name != "gemini-3.7-flash" || got[0].Tier != "low" || got[1].Provider != AgentClaude {
+	got, err := ParseModels("agy:flash38:low,claude:haiku:low")
+	if err != nil || len(got) != 2 || got[0].Provider != AgentAgy || got[0].Name != "gemini-3.8-flash" || got[0].Tier != "low" || got[1].Provider != AgentClaude {
 		t.Fatalf("got %#v, %v", got, err)
 	}
-	for _, input := range []string{"agy:flash37:low,", "madeup:model:low"} {
+	for _, input := range []string{"agy:flash38:low,", "madeup:model:low"} {
 		if _, err := ParseModels(input); err == nil {
 			t.Errorf("accepted %q", input)
 		}

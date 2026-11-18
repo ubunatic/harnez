@@ -1,6 +1,6 @@
 # 1059 — Interpret slash-separated model picks by skill role
 
-**Status**: Open
+**Status**: Closed — slash picks defined in /lean-sprint, verified by dry-run
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Enhancement
@@ -35,3 +35,18 @@ would be defined.
 | kind | session name | Jules ID | PR | state |
 | --- | --- | --- | --- | --- |
 | audit | jules-audit-1059 | 8735768250679803037 | github #186 (closed) | done: still valid, 1/1 ref holds; next step corrected |
+
+## Decision
+
+- Scope: lean-sprint only. It is the one skill with a fixed searcher/developer/reviewer chain; other
+  skills keep naming roles in prose until a second one needs the form.
+- Form: `/lean-sprint <ticket> <searcher>/<developer>/<reviewer>`. A missing position keeps the role
+  default, `-` skips the Searcher or reviewer agent, and the host still reviews every diff. A fourth
+  position or a pick `harnez agent start --dry-run` rejects stops for the user; no substitution.
+  Dry-run already validates per role (`cheap` is rejected for reviewer), so no parser was added.
+- Side fix: the reviewer step said `--model <user's pick, else lean>`, but reviewers have no `lean`
+  trait (`harnez agent start --dry-run --role reviewer --model lean` is rejected). It now omits
+  `--model`, which gives the reviewer default.
+- Examples use traits only: `TestNoModelPicksInPractice` bans `model:effort` picks in skill docs.
+- Verified: dry-run of `cheap/lean/smart` resolves per role; install test
+  `internal/claude/lean_sprint_skill_test.go`.

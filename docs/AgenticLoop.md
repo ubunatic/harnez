@@ -78,8 +78,8 @@ These are the shipped picks. User models.yaml overrides are listed by `harnez ag
 | Role | Trait | Meaning | Chain | Default |
 |---|---|---|---|---|
 | advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |
+| advisor | lean | Efficient standard work. | terra:med, hydrogen:low |  |
 | advisor | smart | Difficult judgment. | opus:low, opus:med, sol:low |  |
-| developer | ai | AI-oriented work. | unset |  |
 | developer | cheap | Low-cost work. | luna:med |  |
 | developer | fast | Fast work. | haiku:med |  |
 | developer | gui | Graphical interfaces. | lean, std |  |
@@ -87,7 +87,10 @@ These are the shipped picks. User models.yaml overrides are listed by `harnez ag
 | developer | smart | Difficult judgment. | terra:high, sol:med, opus:med |  |
 | developer | std | Standard work. | terra:med, opus:low |  |
 | developer | tui | Terminal interfaces. | smart |  |
-| reviewer | smart | Difficult judgment. | sol:low | yes |
+| reviewer | best | Hardest judgment, highest cost. | sol:high, hydrogen:high, argon:high, opus:high, fable:high |  |
+| reviewer | cheap | Low-cost work. | haiku:high, luna:high |  |
+| reviewer | lean | Efficient standard work. | terra:med, hydrogen:low |  |
+| reviewer | smart | Difficult judgment. | sol:med, hydrogen:med, opus:med | yes |
 <!-- harnez:model-picks:end -->
 
 <!-- harnez:stop -->

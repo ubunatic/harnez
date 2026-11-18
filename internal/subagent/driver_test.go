@@ -54,7 +54,7 @@ func TestResolveModel(t *testing.T) {
 	if _, err := ResolveModel("fable:bogus"); err == nil || !strings.Contains(err.Error(), "unknown model tier") {
 		t.Errorf("ResolveModel(fable:bogus) error = %v; want unknown model tier", err)
 	}
-	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "low"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "claude-haiku-5-5", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "claude-haiku-5-5", "low"}, {"agy:flash37:low", "agy", "gemini-3.7-flash", "low"}, {"agy:gemini-3.7-flash:low", "agy", "gemini-3.7-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
+	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "low"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "claude-haiku-5-5", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "claude-haiku-5-5", "low"}, {"agy:flash38:low", "agy", "gemini-3.8-flash", "low"}, {"agy:gemini-3.8-flash:low", "agy", "gemini-3.8-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
 		m, err := ResolveModel(tc.spec)
 		if err != nil {
 			t.Fatal(err)
@@ -162,8 +162,8 @@ func TestKnownModelSpecsGoldenWithoutPolicy(t *testing.T) {
 }
 
 func TestResolveModelThreePartProviderSpec(t *testing.T) {
-	m, err := ResolveModel("agy:flash37:low")
-	if err != nil || m.Provider != "agy" || m.Name != "gemini-3.7-flash" || m.Tier != "low" {
+	m, err := ResolveModel("agy:flash38:low")
+	if err != nil || m.Provider != "agy" || m.Name != "gemini-3.8-flash" || m.Tier != "low" {
 		t.Fatalf("resolved model = %#v, %v", m, err)
 	}
 }

@@ -295,6 +295,7 @@
           "extra_tiers": { "type": "array", "items": { "type": "string", "enum": ["xhigh", "max"] }, "uniqueItems": true },
           "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
           "preferred": { "type": "boolean" },
+          "disabled": { "type": "boolean", "description": "Shipped off for everyone: hidden from listings and refused at start. A user models.yaml entry with enabled: true turns it back on." },
           "effort": { "type": "boolean" },
           "roles": { "type": "string" },
           "cost": { "type": "integer", "minimum": 1 },

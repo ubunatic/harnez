@@ -10,9 +10,10 @@ func TestRoleModelResolution(t *testing.T) {
 	for _, tc := range []struct{ role, pick, target string }{
 		{"dev", "lean", "terra:low"}, {"dev", "std", "terra:med"}, {"dev", "smart", "terra:high"},
 		{"dev", "tui", "terra:high"}, {"dev", "gui", "terra:low"}, {"dev", "cheap", "luna:med"},
-		{"dev", "fast", "haiku:med"}, {"review", "smart", "sol:low"}, {"review", "", "sol:low"},
+		{"dev", "fast", "haiku:med"}, {"review", "smart", "sol:med"}, {"review", "", "sol:med"},
+		{"review", "cheap", "haiku:high"}, {"review", "lean", "terra:med"}, {"advisor", "lean", "terra:med"},
 		{"", "smart", "terra:high"}, {"developer", "smart", "terra:high"}, {"advisor", "cheap", "luna:low"}, {"advisor", "smart", "opus:low"},
-		{"orchestrator", "", "codex:luna:high"}, {"review", "codex:sol:med", "codex:sol:med"}, {"review", "sol", "sol"},
+		{"orchestrator", "", "claude:haiku:high"}, {"review", "codex:sol:med", "codex:sol:med"}, {"review", "sol", "sol"},
 	} {
 		t.Run(tc.role+"/"+tc.pick, func(t *testing.T) {
 			got, err := ResolveModelForRole(tc.role, tc.pick)
@@ -23,7 +24,7 @@ func TestRoleModelResolution(t *testing.T) {
 		})
 	}
 	for _, tc := range []struct{ role, pick, want string }{
-		{"review", "lean", "known traits"}, {"developer", "nonexistent", "known traits"}, {"developer", "ai", "unset"},
+		{"review", "fast", "known traits"}, {"developer", "nonexistent", "known traits"},
 	} {
 		if _, err := ResolveModelForRole(tc.role, tc.pick); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s/%s: %v, want %s", tc.role, tc.pick, err, tc.want)

@@ -59,6 +59,7 @@ func TestJulesIDRefusesNonJulesModelBeforeAnyRead(t *testing.T) {
 }
 
 func TestJulesIDAdoptsOnceThenResumesOnTheRecord(t *testing.T) {
+	enableJulesForTest(t)
 	dir := t.TempDir()
 	drv := &julesIDDriver{}
 	if _, err := runWithStore(t, drv, dir, "resume", "--model", "jules", "--id", julesIDTestSession, "wait"); err != nil {
@@ -82,6 +83,7 @@ func TestJulesIDAdoptsOnceThenResumesOnTheRecord(t *testing.T) {
 }
 
 func TestStatusJulesIDReadsAndWritesNothing(t *testing.T) {
+	enableJulesForTest(t)
 	dir := t.TempDir()
 	drv := &julesIDDriver{}
 	out, err := runWithStore(t, drv, dir, "status", "--model", "jules", "--id", julesIDTestSession)

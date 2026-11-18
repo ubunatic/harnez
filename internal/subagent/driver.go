@@ -533,6 +533,9 @@ func resolveModelWithCatalog(aliases map[string]modelAlias, catalog *modelcatalo
 		return Model{}, err
 	}
 	if !catalog.IsEnabled(model.Provider, model.Name, model.Tier) {
+		if catalog.ShippedDisabled(model.Provider, model.Name) {
+			return Model{}, fmt.Errorf("model %q is retired and disabled in the shipped spec; enable it in models.yaml", spec)
+		}
 		return Model{}, fmt.Errorf("model %q is disabled by user policy", spec)
 	}
 	return model, nil
@@ -646,6 +649,9 @@ func ResolveModelWithOptions(roleName, modelSpec string, opts ResolveOptions) (M
 		quota := "unknown"
 		if !opts.Override && opts.Exhausted != nil && opts.Exhausted(m) {
 			quota = "exhausted"
+		}
+		if !mergedModelCatalog.IsEnabled(m.Provider, m.Name, m.Tier) && mergedModelCatalog.ShippedDisabled(m.Provider, m.Name) {
+			return "disabled in the shipped spec"
 		}
 		if reason := candidateUnavailable(mergedModelCatalog.IsEnabled(m.Provider, m.Name, m.Tier), access, quota, opts.Override); reason != "" {
 			return reason

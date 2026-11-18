@@ -43,3 +43,20 @@ func TestIsEnabledPreservesExactPiModelID(t *testing.T) {
 		t.Fatal("policy ID must not match a Pi model ID with different case")
 	}
 }
+
+func TestShippedDisabledNeedsExplicitUserEnable(t *testing.T) {
+	identity := Identity{Harness: "agy", Provider: "agy", Model: "gemini-3.7-flash", Tier: "low"}
+	model := Model{Identity: identity, Key: "flash37", Aliases: []string{"flash37", "flash37:low"}, Disabled: true}
+	catalog := func(policy *Policy) *Catalog {
+		return &Catalog{models: map[string]Model{modelID(identity): model}, policy: policy}
+	}
+	if catalog(nil).IsEnabled("agy", "gemini-3.7-flash", "low") {
+		t.Fatal("shipped-disabled model enabled without user policy")
+	}
+	if catalog(&Policy{DefaultEnabled: true}).IsEnabled("agy", "gemini-3.7-flash", "low") {
+		t.Fatal("default_enabled must not re-enable a shipped-disabled model")
+	}
+	if !catalog(&Policy{Enabled: []string{"agy:flash37"}}).IsEnabled("agy", "gemini-3.7-flash", "low") {
+		t.Fatal("explicit user enable lost")
+	}
+}
