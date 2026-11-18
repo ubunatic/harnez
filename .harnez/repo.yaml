@@ -19,6 +19,7 @@ docs:
 rules:
     quota: true
 make:
+    scaffold: true
     container_test: true
 git:
     mode: team
