@@ -51,3 +51,16 @@ Filing a ticket for taia (tracker `none`, tickets on Codeberg) hit three harnez 
 3. **Inbox label-loss warnings**:
    - `formatInboxIssue` + `writeInboxIssue` / dry-run warning (`cmd/harnez/issues_forge.go`): when `len(labels) > 0` and `"fj"` is in `t.Forge.IssueCLI`, emit stderr `WARNING: labels (<joined>) were saved in the draft only; fj cannot set labels — apply via write token, tea, or forge UI when filing.` and place `> Note: fj cannot set labels; apply via write token, tea, or forge UI when filing.` directly below `**Labels**: ...`.
    - Update `TestIssuesNewInboxFallbackCases` (`cmd/harnez/issues_forge_test.go`) and add unit tests for `fj` read fallback, exit-2 blocked search, `find issues next [--json]` on forge, and inbox `--label` `--dry-run` + real fallback warnings.
+
+## Refinements (from `rev-1237` review of `93281368`)
+
+1. **[blocking] `internal/forgetracker/fj_search.go` pagination & `truncated`**:
+   - Pass `--all` to `fj --style minimal issue search --repo <host>/<owner>/<repo> --state <state>` (note live canary proved `0 issues` exits 0 and missing/private fails exit 1).
+   - Respect `opts.PageSize * opts.MaxPages` when `> 0`: if fetched count exceeds `limit`, slice to `limit` and return `truncated = true`. Test `--all` in argv, `truncated` capping, and partial `state == "all"` failure (`open` succeeds, `closed` fails -> returns error, not partial silent success).
+2. **`handleForgeFindErr` message accuracy (`cmd/harnez/issues_forge.go`)**:
+   - Distinguish when a read token IS configured (`t.Forge` has non-empty token) vs no read token (`private repo; no read token or fj login`), so a 404/401 with an existing token reports `search blocked on <target> (HTTP <status>; read token rejected or repo inaccessible)` rather than falsely saying "no read token". Keep `warnNoTokenDigging` and exit 2. Test both cases.
+3. **`issues new --forge` stderr wiring (`cmd/harnez/issues.go`)**:
+   - Wire `forgetracker.SetFallbackStderr(src, stderr)` right after `forgeTrackerSource(spec)` in the `--forge` branch so the `fj` fallback note reaches `cmd.ErrOrStderr()`.
+4. **Docs (`docs/commands/issue.md`, `docs/practices/IssueTracking{,.lite}.md`)**:
+   - Note in `docs/commands/issue.md` that `find issues next --json` emits `"number":""` and `"forge_assigned":true` on forge trackers.
+   - Update `docs/practices/IssueTracking.md` and `docs/practices/IssueTracking.lite.md` where `find issues next` is described as local-only/max+1 so forge trackers are noted (and check `config.yaml` `.harnez/rules/Issues.md`); if any copyable doc or `config.yaml` rule changes, run `make install && ./harnez init -d .` cleanly and commit source + copy together.
