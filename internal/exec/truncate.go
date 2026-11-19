@@ -188,6 +188,12 @@ func (w capWriter) Write(p []byte) (int, error) {
 // allowance returns how many leading bytes of p may be shown, and whether the
 // line limit is what stops them. Caller holds c.mu.
 func (c *outputCap) allowance(p []byte) (int, bool) {
+	if c.withheld {
+		// Truncation has begun. Withhold every later write, even one that fits
+		// the room left by a rune-boundary back-off, so the shown text stays a
+		// prefix of the stream and the spill keeps the rest in order.
+		return 0, c.byLines
+	}
 	keep := len(p)
 	if room := c.cfg.MaxBytes - int64(len(c.shown)); int64(keep) > room {
 		keep = int(room)
@@ -321,18 +327,21 @@ func (c *outputCap) adoptQuotaLog(quotaLog string) (string, error) {
 	}
 	path := f.Name()
 	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
 		return "", err
 	}
 	if err := moveFile(quotaLog, path); err != nil {
+		// Leave no empty or partial spill behind; the quota log stays put.
+		_ = os.Remove(path)
 		return "", err
 	}
 	return path, nil
 }
 
 // moveFile renames src to dst, falling back to copy-then-remove across
-// filesystems.
-func moveFile(src, dst string) error {
-	if err := os.Rename(src, dst); err == nil {
+// filesystems. A failed copy removes the partial dst it created.
+func moveFile(src, dst string) (err error) {
+	if os.Rename(src, dst) == nil {
 		return nil
 	}
 	in, err := os.Open(src)
@@ -344,11 +353,16 @@ func moveFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, in); err != nil {
+	defer func() {
+		if err != nil {
+			_ = os.Remove(dst)
+		}
+	}()
+	if _, err = io.Copy(out, in); err != nil {
 		_ = out.Close()
 		return err
 	}
-	if err := out.Close(); err != nil {
+	if err = out.Close(); err != nil {
 		return err
 	}
 	return os.Remove(src)

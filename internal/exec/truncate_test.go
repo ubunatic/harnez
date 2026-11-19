@@ -244,6 +244,50 @@ func TestOutputCap_CutDoesNotSplitRune(t *testing.T) {
 	}
 }
 
+// A rune-boundary back-off leaves room for a small follow-up write. That write
+// must still go to the spill, not to dst, and the spill must keep every byte
+// in order.
+func TestOutputCap_FollowUpAfterRuneCutSpillsInOrder(t *testing.T) {
+	c, _ := capFor(t, 4, 0, false)
+	var shown bytes.Buffer
+	w := c.writer(&shown)
+	// "aéé" is 5 bytes. The cap cuts at "aé" (3 bytes), so 1 byte of room is
+	// left. The writes that follow must not use that room.
+	for _, chunk := range []string{"aéé", "x", "yz"} {
+		if n, err := w.Write([]byte(chunk)); err != nil || n != len(chunk) {
+			t.Fatalf("Write(%q) = %d, %v", chunk, n, err)
+		}
+	}
+	if shown.String() != "aé" {
+		t.Fatalf("shown = %q, want %q (nothing after the cut)", shown.String(), "aé")
+	}
+	path, err := c.settle(0, "")
+	if err != nil {
+		t.Fatalf("settle: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "aéé"+"xyz" {
+		t.Fatalf("spill = %q, want full stream %q", got, "aéé"+"xyz")
+	}
+	if c.shownBytes() != int64(len("aé")) {
+		t.Fatalf("shownBytes = %d, want %d", c.shownBytes(), len("aé"))
+	}
+}
+
+// A failed adopt must not leave an empty or partial spill file behind.
+func TestOutputCap_AdoptFailureLeavesNoSpill(t *testing.T) {
+	c, dir := capFor(t, 4, 0, false)
+	if _, err := c.adoptQuotaLog(filepath.Join(dir, "missing-quota.log")); err == nil {
+		t.Fatal("adoptQuotaLog of a missing log succeeded")
+	}
+	if got := spillFiles(t, dir); len(got) != 0 {
+		t.Fatalf("failed adopt left %v, want none", got)
+	}
+}
+
 func TestOutputCap_MirroredWritesNoSpill(t *testing.T) {
 	c, dir := capFor(t, 4, 0, true)
 	var shown bytes.Buffer
@@ -323,6 +367,8 @@ func execRunOpts(t *testing.T, env map[string]string) (execOptions, string) {
 	opts.IsTerminal = noTTY
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
+	// Keep state out of $HOME so runs stay quiet in read-only sandboxes.
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	return opts, tmp
 }
 
