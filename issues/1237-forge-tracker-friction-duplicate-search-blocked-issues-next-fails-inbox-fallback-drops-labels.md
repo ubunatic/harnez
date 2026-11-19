@@ -1,6 +1,6 @@
 # 1237 — Forge-tracker friction: duplicate search blocked, issues next fails, labels not applied on fj
 
-**Status**: Open
+**Status**: Closed — M1 and review refinements delivered (93281368, 2b5e5625): added fj --all read fallback and exit-2 blocked search, exit-0 forge-assigned find issues next [--json], and inbox fj label-drop warnings/draft notes; fj read canary, make lint, make test-q1 (dev) and touched Go suites passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
