@@ -1,7 +1,7 @@
 # 776 — harnez tui External Harness Forwarding and Subscription-Aware Model Router
 
 **Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
-**Priority**: P1 (High)
+**Priority**: P2 (Medium)
 **Severity**: Feature
 **Category**: Interactive TUI / Model Orchestration
 **Related**: #774, #775, #501, #603

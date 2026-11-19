@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -1121,5 +1122,112 @@ func TestSkillNameRoundTripsToExport(t *testing.T) {
 	}
 	if skills["Skill"] != "plugin-dev:hook-development" || skills["Bash"] != "" {
 		t.Fatalf("exported skills = %v", skills)
+	}
+}
+
+func TestOpenReadOnlyWaitsForBusyLock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := db.Insert(sampleCall("s1", "Bash", 4, 0)); err != nil {
+		db.Close()
+		t.Fatalf("Insert: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Verify OpenReadOnly configures busy_timeout=5000.
+	roDB, err := OpenReadOnly(path)
+	if err != nil {
+		t.Fatalf("OpenReadOnly: %v", err)
+	}
+	var timeout int
+	if err := roDB.sql.QueryRow("PRAGMA busy_timeout").Scan(&timeout); err != nil {
+		roDB.Close()
+		t.Fatalf("PRAGMA busy_timeout: %v", err)
+	}
+	if timeout != 5000 {
+		roDB.Close()
+		t.Fatalf("busy_timeout = %d, want 5000", timeout)
+	}
+	roDB.Close()
+
+	// Hold an exclusive write lock briefly while a read-only reader opens and queries.
+	writer, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("sql.Open writer: %v", err)
+	}
+	writer.SetMaxOpenConns(1)
+	defer writer.Close()
+
+	// Switch to DELETE journal mode so BEGIN EXCLUSIVE blocks readers (WAL allows snapshot reads).
+	if _, err := writer.Exec("PRAGMA journal_mode = DELETE"); err != nil {
+		t.Fatalf("PRAGMA journal_mode = DELETE: %v", err)
+	}
+
+	// Prove reproduction without busy_timeout: a raw ?mode=ro connection fails immediately under BEGIN EXCLUSIVE.
+	if _, err := writer.Exec("BEGIN EXCLUSIVE"); err != nil {
+		t.Fatalf("BEGIN EXCLUSIVE (repro): %v", err)
+	}
+	rawRO, err := sql.Open("sqlite", path+"?mode=ro")
+	if err != nil {
+		_, _ = writer.Exec("ROLLBACK")
+		t.Fatalf("sql.Open raw ro: %v", err)
+	}
+	var count int
+	err = rawRO.QueryRow("SELECT COUNT(*) FROM tool_calls").Scan(&count)
+	_ = rawRO.Close()
+	if _, rbErr := writer.Exec("ROLLBACK"); rbErr != nil {
+		t.Fatalf("ROLLBACK (repro): %v", rbErr)
+	}
+	if err == nil {
+		t.Fatal("expected raw ?mode=ro query under BEGIN EXCLUSIVE to fail with busy/locked error, got nil")
+	}
+	if !strings.Contains(err.Error(), "locked") && !strings.Contains(err.Error(), "SQLITE_BUSY") {
+		t.Fatalf("expected raw ?mode=ro error to mention locked/SQLITE_BUSY, got: %v", err)
+	}
+
+	ready := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		if _, err := writer.Exec("BEGIN EXCLUSIVE"); err != nil {
+			close(ready)
+			done <- fmt.Errorf("BEGIN EXCLUSIVE: %w", err)
+			return
+		}
+		close(ready)
+		time.Sleep(40 * time.Millisecond)
+		if _, err := writer.Exec("ROLLBACK"); err != nil {
+			done <- fmt.Errorf("ROLLBACK: %w", err)
+			return
+		}
+		done <- nil
+	}()
+
+	<-ready
+	roDB2, err := OpenReadOnly(path)
+	if err != nil {
+		if werr := <-done; werr != nil {
+			t.Errorf("writer goroutine: %v", werr)
+		}
+		t.Fatalf("OpenReadOnly under lock: %v", err)
+	}
+	defer roDB2.Close()
+
+	rows, err := roDB2.Query(Filter{})
+	if err != nil {
+		if werr := <-done; werr != nil {
+			t.Errorf("writer goroutine: %v", werr)
+		}
+		t.Fatalf("Query under lock: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("writer goroutine: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
 	}
 }

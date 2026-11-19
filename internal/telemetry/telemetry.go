@@ -238,7 +238,7 @@ func OpenReadOnly(path string) (*DB, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return openEmptyReadOnlyDB()
 	}
-	sqlDB, err := sql.Open("sqlite", path+"?mode=ro")
+	sqlDB, err := sql.Open("sqlite", path+"?mode=ro&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: open read-only %s: %w", path, err)
 	}

@@ -1,6 +1,6 @@
 # 989 — make install leaves a stale telemetry collector running; new record kinds wait in the spool
 
-**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
+**Status**: Closed — make install and harnez install now restart active harnez-agent-collector.service and harnez usage auto-detects and restarts stale harnez server builds via CompareBuild (#1234 c1ea0b85, #1235 66185218)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

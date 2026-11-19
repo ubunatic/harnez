@@ -1,6 +1,6 @@
 # 647 — Document foreground waiting for long-running Codex tasks
 
-**Status**: Backlog — grooming 2026-10-23: active cap 20; no work planned this week
+**Status**: Closed — Host-specific detach and wait guidance for Codex (exec_command/write_stdin), Claude (run_in_background), and AGY delivered in a7207b8e, efb6651d, and 0583e34c and verified in live sessions
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

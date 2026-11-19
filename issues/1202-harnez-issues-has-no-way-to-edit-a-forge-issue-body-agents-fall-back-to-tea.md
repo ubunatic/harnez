@@ -1,6 +1,6 @@
 # 1202 — harnez issues has no way to edit a forge issue body; agents fall back to tea
 
-**Status**: Open
+**Status**: Open — M3–M9 plus #1196/#1237 shipped on main; awaiting owner write-token live check part 2 on #174 and taia#292
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

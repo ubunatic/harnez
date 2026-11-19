@@ -1,7 +1,7 @@
 # diff and clean don't cover Makefile targets
 
 **Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
-
+**Priority:** P3 (Low)
 **Severity:** Low — apply is idempotent; diff/clean gaps are cosmetic for now
 
 ## Problem

@@ -1,6 +1,6 @@
 # 1228 — issues new on a forge tracker fails when fj is a wrapper that already sets the host
 
-**Status**: Open
+**Status**: Closed — Host-qualified fj issue create/comment references and login/manual-run diagnostics delivered in 00c70238 and a262a1dd (PR #173); verified live on codeberg.org/ubunatic/harnez#174 and codeberg.org/harnez/taia#292
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug

@@ -1,6 +1,6 @@
 # 942 — Epic: model catalog, access discovery and user model policy
 
-**Status**: Open
+**Status**: Backlog — grooming 2026-11-19: post-v0.5.9 triage; active list focused on P1/P2 bugs and ready features under 30-ticket cap
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Epic

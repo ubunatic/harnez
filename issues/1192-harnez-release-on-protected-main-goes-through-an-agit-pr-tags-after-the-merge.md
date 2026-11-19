@@ -1,6 +1,6 @@
 # 1192 — harnez release on protected main goes through an AGit PR, tags after the merge
 
-**Status**: Open
+**Status**: Closed — pushProtectedRelease and pushReleaseViaPR now detect squash/rebase-merged release PRs on --continue and return an actionable re-tag error instead of looping; added tests for second-remote mirroring after PR merge, squash-merge detection, and merge-commit tag refusal (make test-q1 and make lint exit 0)
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug

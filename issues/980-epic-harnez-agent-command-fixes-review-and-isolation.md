@@ -1,6 +1,6 @@
 # 980 — Epic: harnez agent command fixes, review and isolation
 
-**Status**: Open
+**Status**: Backlog — grooming 2026-11-19: post-v0.5.9 triage; active list focused on P1/P2 bugs and ready features under 30-ticket cap
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Epic
@@ -18,9 +18,9 @@ Bugs first, then features. Web fanout only for 962 (isolated mode: existing sand
 
 | # | Ticket | Pri | What | Status |
 |---|---|---|---|---|
-| 1 | 959 | P2 | Role inference turns a fix prompt into a read-only reviewer (bug) | Open |
+| 1 | 959 | P2 | Role inference turns a fix prompt into a read-only reviewer (bug) | Closed |
 | 2 | 965 | P2 | Issue close records stale inherited worker model and session (bug) | Open |
-| 3 | 971 | P2 | `agent start --stream` stats drop the final reply when already printed (bug) | Open |
+| 3 | 971 | P2 | `agent start --stream` stats drop the final reply when already printed (bug) | Closed |
 | 4 | 958 | P3 | `agent review` subcommand for second-vendor diff audits | Open |
 | 5 | 962 | P2 | Isolated mode: inference only, no files, network, skills or tools | Open |
 | 6 | 961 | P2 | Agents write scratch files to `.harnez/scratch`; init creates and ignores it | Open |

@@ -77,6 +77,7 @@ func wantRemoteMatchesLocal(t *testing.T, dir, bare string, refs ...string) {
 func TestReleaseOnProtectedMainGoesThroughPR(t *testing.T) {
 	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
 	protectRemoteMain(t, bare)
+	second := addSecondRemote(t, dir)
 	var out bytes.Buffer
 	if err := Run(gitflowReleaseOptions(dir, &out)); err != nil {
 		t.Fatalf("release on protected main: %v\n%s", err, out.String())
@@ -112,6 +113,64 @@ func TestReleaseOnProtectedMainGoesThroughPR(t *testing.T) {
 		t.Fatalf("--continue after merge: %v\n%s", err, out.String())
 	}
 	wantRemoteMatchesLocal(t, dir, bare, "refs/tags/v1.0.1", "refs/heads/main")
+	wantRemoteMatchesLocal(t, dir, second, "refs/tags/v1.0.1", "refs/heads/main")
+}
+
+func TestReleaseOnProtectedMainDetectsSquashMerge(t *testing.T) {
+	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	protectRemoteMain(t, bare)
+	var out bytes.Buffer
+	if err := Run(gitflowReleaseOptions(dir, &out)); err != nil {
+		t.Fatalf("release on protected main: %v\n%s", err, out.String())
+	}
+	bump := pushTestGitOutput(t, dir, "rev-parse", "v1.0.1^{commit}")
+	if got := pushTestGitOutput(t, bare, "rev-parse", "refs/for/main/release-v1.0.1"); got != bump {
+		t.Fatalf("PR ref = %q, want bump %s", got, bump)
+	}
+
+	// Simulate a squash/rebase merge on bare with a different SHA.
+	squash := pushTestGitOutput(t, dir, "commit-tree", bump+"^{tree}", "-p", bump+"^", "-m", "chore(release): bump version to v1.0.1 — (#1)")
+	if squash == bump {
+		t.Fatalf("expected squash commit SHA to differ from bump %s", bump)
+	}
+	runGitCmd(t, dir, "push", "origin", squash+":refs/heads/squash-tmp")
+	runGitCmd(t, bare, "update-ref", "refs/heads/main", squash)
+
+	out.Reset()
+	opt := gitflowReleaseOptions(dir, &out)
+	opt.Continue = true
+	err := Run(opt)
+	if err == nil || !strings.Contains(err.Error(), "squash- or rebase-merged") {
+		t.Fatalf("want squash- or rebase-merged error, got %v\n%s", err, out.String())
+	}
+	if strings.Contains(pushTestRefs(t, bare), "refs/tags/v1.0.1") {
+		t.Fatal("tag pushed after squash/rebase merge")
+	}
+}
+
+func TestReleaseOnProtectedMainRefusesTagOnMergeCommit(t *testing.T) {
+	dir, bare := gitflowReleaseRepo(t, releaseProtectedYAML)
+	protectRemoteMain(t, bare)
+	var out bytes.Buffer
+	if err := Run(gitflowReleaseOptions(dir, &out)); err != nil {
+		t.Fatalf("release on protected main: %v\n%s", err, out.String())
+	}
+	bump := pushTestGitOutput(t, dir, "rev-parse", "v1.0.1^{commit}")
+	merge := pushTestGitOutput(t, dir, "commit-tree", bump+"^{tree}", "-p", bump+"^", "-p", bump, "-m", "Merge release PR")
+	runGitCmd(t, dir, "push", "origin", merge+":refs/heads/merge-tmp")
+	runGitCmd(t, bare, "update-ref", "refs/heads/main", merge)
+	runGitCmd(t, dir, "tag", "-f", "-a", "v1.0.1", "-m", "v1.0.1", merge)
+
+	out.Reset()
+	opt := gitflowReleaseOptions(dir, &out)
+	opt.Continue = true
+	err := Run(opt)
+	if err == nil || !strings.Contains(err.Error(), "points at merge commit") {
+		t.Fatalf("want merge-commit tag refusal, got %v\n%s", err, out.String())
+	}
+	if strings.Contains(pushTestRefs(t, bare), "refs/tags/v1.0.1") {
+		t.Fatal("tag pushed when pointing at merge commit")
+	}
 }
 
 // Protected main when the caller/owner is allowed to push directly: pushes main

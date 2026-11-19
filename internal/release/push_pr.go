@@ -91,9 +91,47 @@ func releasePRMergedAhead(dir, tag, branch, remote string) (bool, error) {
 	if err != nil || remoteHead == localHead {
 		return false, err
 	}
-	merged := exec.Command("git", "merge-base", "--is-ancestor", tagCommit, remoteBranch)
-	merged.Dir = dir
-	return merged.Run() == nil, nil
+	return isGitAncestor(dir, tagCommit, remoteBranch) || releasePRSquashedOrRebased(dir, tag, tagCommit, remoteBranch), nil
+}
+
+func isGitAncestor(dir, ancestor, descendant string) bool {
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", ancestor, descendant)
+	cmd.Dir = dir
+	return cmd.Run() == nil
+}
+
+func releasePRSquashedOrRebased(dir, tag, tagCommit, remoteBranch string) bool {
+	if isGitAncestor(dir, tagCommit, remoteBranch) {
+		return false
+	}
+	parent := tagCommit + "^"
+	if !isGitAncestor(dir, parent, remoteBranch) {
+		return false
+	}
+	remoteHead, err := getGitRef(dir, remoteBranch)
+	if err != nil {
+		return false
+	}
+	if localHead, err := getGitRef(dir, "HEAD"); err == nil && remoteHead == localHead {
+		return false
+	}
+	out, err := gitRun(dir, "log", "--format=%s", parent+".."+remoteBranch)
+	if err != nil {
+		return false
+	}
+	defaultSubject := fmt.Sprintf("chore(release): bump version to %s", tag)
+	tagSubject, _ := gitRun(dir, "log", "-1", "--format=%s", tagCommit)
+	tagSubject = strings.TrimSpace(tagSubject)
+	for _, line := range strings.Split(out, "\n") {
+		subj := strings.TrimSpace(line)
+		if subj == "" {
+			continue
+		}
+		if strings.Contains(subj, defaultSubject) || (tagSubject != "" && strings.Contains(subj, tagSubject)) {
+			return true
+		}
+	}
+	return false
 }
 
 // pushReleaseViaPR is the release push for a protected default branch. The
@@ -130,9 +168,10 @@ func pushReleaseViaPR(opt Options, tag, branch string, forge *ForgeInfo) error {
 	if err != nil {
 		return err
 	}
-	merged := exec.Command("git", "merge-base", "--is-ancestor", tagCommit, remoteBranch)
-	merged.Dir = opt.Dir
-	if merged.Run() != nil {
+	if !isGitAncestor(opt.Dir, tagCommit, remoteBranch) {
+		if releasePRSquashedOrRebased(opt.Dir, tag, tagCommit, remoteBranch) {
+			return fmt.Errorf("release PR for %s was squash- or rebase-merged on %s/%s (bump commit %.8s is not an ancestor); fast-forward local %s to %s/%s, re-point tag %s to the merged commit, and rerun harnez release --continue", tag, remote, branch, tagCommit, branch, remote, branch, tag)
+		}
 		return openReleasePR(opt, tag, branch, remote, tagCommit)
 	}
 
