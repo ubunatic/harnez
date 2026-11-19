@@ -1779,3 +1779,270 @@ func TestRunExecWrapper_Quota1StreamsFullLogToFile(t *testing.T) {
 		t.Errorf("quota log file size on disk = %d, want >= 2000000", info.Size())
 	}
 }
+
+// quota1GoTestRepo makes a temp repo that uses Quota-1 (Quota.md present) and
+// has a .git/HEAD, so its state file lives under the temp repo and never under
+// the outer checkout's .git/harnez.
+func quota1GoTestRepo(t *testing.T) string {
+	t.Helper()
+	repoDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repoDir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, ".git", "HEAD"), []byte("ref: refs/heads/test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rulesDir := filepath.Join(repoDir, ".harnez", "rules")
+	if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rulesDir, "Quota.md"), []byte("# Quota-1 Guardrails\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return repoDir
+}
+
+// fakeGoOnPath puts a stub `go` first on PATH so go test commands run quickly
+// without a Go module. The stub echoes its arguments and exits 0.
+func fakeGoOnPath(t *testing.T) {
+	t.Helper()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "go"), []byte("#!/bin/sh\necho \"fake go $*\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// writeSourceAt writes a Go source file and gives it a fixed past mtime, so it
+// is clearly older than the next Quota-1 record.
+func writeSourceAt(t *testing.T, path string, mtime time.Time) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, mtime, mtime); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// touchSource makes a source file look edited after the last Quota-1 record.
+// A future mtime avoids a sleep.
+func touchSource(t *testing.T, path string) {
+	t.Helper()
+	future := time.Now().Add(time.Hour)
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestQuota1GoTestDetection(t *testing.T) {
+	cases := []struct {
+		name   string
+		script string
+		want   bool
+	}{
+		{"plain go test", "go test .", true},
+		{"targeted go test", "go test -run Foo ./pkg", true},
+		{"env assignment and coverage", "GOWORK=off go test -coverprofile=c.out ./...", true},
+		{"after cd with &&", "cd sub && gotestsum ./...", true},
+		{"absolute go path", "/usr/local/go/bin/go test ./...", true},
+		{"after semicolon", "true; go test ./...", true},
+		{"after pipe", "go test ./... 2>&1 | tee out.txt", true},
+		{"command substitution", "echo $(go test ./...)", true},
+		{"go flag before subcommand", "go -C sub test ./...", true},
+		{"env wrapper", "env GOWORK=off go test .", true},
+		{"quoted argument ignored, real command matches", "echo 'a;b' && go test .", true},
+		{"go build", "go build ./...", false},
+		{"go vet", "go vet ./...", false},
+		{"go list", "go list ./...", false},
+		{"go mod", "go mod tidy", false},
+		{"echo literal", `echo "go test"`, false},
+		{"rg literal", `rg "go test" .`, false},
+		{"git commit message", `git commit -m "go test ./..."`, false},
+		{"make test-q1", "make test-q1", false},
+		{"comment", "true # go test ./...", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runsGoTest([]string{"bash", "-c", tc.script}); got != tc.want {
+				t.Errorf("runsGoTest(bash -c %q) = %v, want %v", tc.script, got, tc.want)
+			}
+		})
+	}
+	// Direct argv forms: the executable is argv[0], no shell splitting.
+	if !runsGoTest([]string{"go", "test", "./..."}) {
+		t.Error("runsGoTest(direct go test) = false, want true")
+	}
+	if runsGoTest([]string{"go", "build", "./..."}) {
+		t.Error("runsGoTest(direct go build) = true, want false")
+	}
+}
+
+// Locked test 2: a passing --quota-1 run followed by coverage or targeted go
+// test runs with no source change is refused.
+func TestRunExecWrapper_GoTestAfterPassingQuota1RunWithoutEditIsBlocked(t *testing.T) {
+	repoDir := quota1GoTestRepo(t)
+	fakeGoOnPath(t)
+	opts := testExecOptions(t)
+	opts.Quota1 = true
+	opts.Quota1Dir = repoDir
+
+	var out, errOut bytes.Buffer
+	if code, err := runExecWrapper([]string{"true"}, opts, strings.NewReader(""), &out, &errOut); err != nil || code != 0 {
+		t.Fatalf("passing quota run = (%d, %v), stderr=%q", code, err, errOut.String())
+	}
+
+	plain := testExecOptions(t)
+	plain.Quota1Dir = repoDir
+	for _, args := range [][]string{
+		{"bash", "-c", "go test -cover ."},
+		{"bash", "-c", "GOWORK=off go test -run Foo ."},
+	} {
+		var out, errOut bytes.Buffer
+		code, err := runExecWrapper(args, plain, strings.NewReader(""), &out, &errOut)
+		if err != nil || code != 1 {
+			t.Fatalf("%v = (%d, %v), want blocked exit 1; stderr=%q", args, code, err, errOut.String())
+		}
+		if !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
+			t.Errorf("%v stderr = %q, want Quota-1 blocked message", args, errOut.String())
+		}
+		if out.String() != "" {
+			t.Errorf("%v ran the child; stdout = %q", args, out.String())
+		}
+	}
+}
+
+// Locked test 3: a plain go test run records Quota-1 state, so a repeat with no
+// source change is refused whether it is go test or make test-q1.
+func TestRunExecWrapper_PlainGoTestRecordsQuota1State(t *testing.T) {
+	repoDir := quota1GoTestRepo(t)
+	fakeGoOnPath(t)
+	opts := testExecOptions(t)
+	opts.Quota1Dir = repoDir
+
+	var out, errOut bytes.Buffer
+	code, err := runExecWrapper([]string{"bash", "-c", "go test -run Foo ."}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 0 {
+		t.Fatalf("first plain go test = (%d, %v), stderr=%q; want (0, nil)", code, err, errOut.String())
+	}
+	statePath, _, err := quota1.ResolveStateFile(repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := quota1.ReadRunRecord(statePath)
+	if err != nil {
+		t.Fatalf("plain go test left no Quota-1 state: %v", err)
+	}
+	if record.Exit == nil || *record.Exit != 0 {
+		t.Fatalf("recorded exit = %v, want 0", record.Exit)
+	}
+
+	for _, tc := range []struct {
+		name string
+		args []string
+		opts execOptions
+	}{
+		{"go test", []string{"go", "test", "."}, opts},
+		{"make test-q1 via --quota-1", []string{"make", "test-q1"}, func() execOptions { o := opts; o.Quota1 = true; return o }()},
+	} {
+		var out, errOut bytes.Buffer
+		code, err := runExecWrapper(tc.args, tc.opts, strings.NewReader(""), &out, &errOut)
+		if err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
+			t.Fatalf("repeat %s = (%d, %v), stderr=%q; want quota block", tc.name, code, err, errOut.String())
+		}
+	}
+}
+
+// Locked test 4: a failing --quota-1 run, a source fix and a targeted rerun of
+// the touched package is allowed.
+func TestRunExecWrapper_FailedQuota1RunThenTouchedPackageRerunAllowed(t *testing.T) {
+	repoDir := quota1GoTestRepo(t)
+	fakeGoOnPath(t)
+	pkgFile := filepath.Join(repoDir, "pkg", "app.go")
+	writeSourceAt(t, pkgFile, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+
+	opts := testExecOptions(t)
+	opts.Quota1 = true
+	opts.Quota1Dir = repoDir
+	var out, errOut bytes.Buffer
+	code, err := runExecWrapper([]string{"sh", "-c", "exit 1"}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 1 {
+		t.Fatalf("failing quota run = (%d, %v), want (1, nil)", code, err)
+	}
+
+	touchSource(t, pkgFile)
+	plain := testExecOptions(t)
+	plain.Quota1Dir = repoDir
+	var rerunOut, rerunErr bytes.Buffer
+	code, err = runExecWrapper([]string{"bash", "-c", "go test ./pkg"}, plain, strings.NewReader(""), &rerunOut, &rerunErr)
+	if err != nil || code != 0 {
+		t.Fatalf("touched-package rerun = (%d, %v), stderr=%q; want (0, nil)", code, err, rerunErr.String())
+	}
+	if strings.Contains(rerunErr.String(), "test execution blocked") {
+		t.Fatalf("touched-package rerun was blocked: %q", rerunErr.String())
+	}
+}
+
+// Locked test 5: a go test inside an active Quota-1 run is not blocked, the
+// wrapper hands HARNEZ_QUOTA1_ACTIVE=1 to its child, and a repo without
+// Quota-1 leaves plain go test unblocked and writes no state.
+func TestRunExecWrapper_NestedAndNonQuotaGoTest(t *testing.T) {
+	fakeGoOnPath(t)
+
+	t.Run("nested inside active quota run", func(t *testing.T) {
+		repoDir := quota1GoTestRepo(t)
+		opts := testExecOptions(t)
+		opts.Quota1 = true
+		opts.Quota1Dir = repoDir
+		var out, errOut bytes.Buffer
+		// The child prints the marker; the wrapper must have set it.
+		code, err := runExecWrapper([]string{"sh", "-c", `printf %s "$HARNEZ_QUOTA1_ACTIVE"`}, opts, strings.NewReader(""), &out, &errOut)
+		if err != nil || code != 0 || out.String() != "1" {
+			t.Fatalf("quota child marker = (%d, %v, %q), stderr=%q; want (0, nil, \"1\")", code, err, out.String(), errOut.String())
+		}
+
+		// Same repo, no source change since that run: a nested go test must pass.
+		nested := testExecOptions(t)
+		nested.Quota1Dir = repoDir
+		nested.Getenv = func(k string) string {
+			if k == quota1ActiveEnv {
+				return "1"
+			}
+			return ""
+		}
+		var nOut, nErr bytes.Buffer
+		code, err = runExecWrapper([]string{"bash", "-c", "go test ./..."}, nested, strings.NewReader(""), &nOut, &nErr)
+		if err != nil || code != 0 || strings.Contains(nErr.String(), "test execution blocked") {
+			t.Fatalf("nested go test = (%d, %v), stderr=%q; want unblocked", code, err, nErr.String())
+		}
+	})
+
+	t.Run("repo without quota-1 is unaffected", func(t *testing.T) {
+		repoDir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(repoDir, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repoDir, ".git", "HEAD"), []byte("ref: refs/heads/test\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		opts := testExecOptions(t)
+		opts.Quota1Dir = repoDir
+		for i := range 2 {
+			var out, errOut bytes.Buffer
+			code, err := runExecWrapper([]string{"bash", "-c", "go test ./..."}, opts, strings.NewReader(""), &out, &errOut)
+			if err != nil || code != 0 || strings.Contains(errOut.String(), "Quota-1") {
+				t.Fatalf("plain go test run %d = (%d, %v), stderr=%q; want unaffected", i+1, code, err, errOut.String())
+			}
+		}
+		statePath, _, err := quota1.ResolveStateFile(repoDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+			t.Fatalf("non-Quota repo wrote Quota-1 state at %s (stat err %v)", statePath, err)
+		}
+	})
+}

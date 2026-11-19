@@ -159,7 +159,9 @@ func detectQuota1(opts execOptions, args []string) bool {
 			return true
 		}
 	}
-	return false
+	// Plain, targeted and coverage go test runs count toward the same one-run
+	// budget as --quota-1 (issue 944), but only in repos that use Quota-1.
+	return quota1DetectedGoTest(opts, getenv, args)
 }
 
 // unwrapShellCommand returns the script argument for shell -c invocations,
@@ -687,6 +689,10 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	c.Env = append(os.Environ(), execTimeoutEffectiveEnv+"="+timeout.String())
 	if quota1Sandboxed {
 		c.Env = append(c.Env, quota1SandboxMarkerEnv+"="+quota1SandboxMarkerValue)
+	}
+	if quota1Active {
+		// Nested go test calls under this run must not be counted again.
+		c.Env = append(c.Env, quota1ActiveEnv+"=1")
 	}
 	c.Env = append(c.Env, execTimeoutExplicitEnv+"=0")
 	if hasExplicitExecTimeout(opts, args) {
