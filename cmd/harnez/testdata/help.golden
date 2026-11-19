@@ -2584,6 +2584,15 @@ Flags:
       --remote string      git remote whose URL names the forge and repository (default: default_remote in spec/pr.yaml)
       --timeout duration   give up after this long (default: default_timeout in spec/pr.yaml)
 
+=== harnez push-guard
+Check one push destination against the repo's push-to-main policy
+
+Usage:
+  harnez push-guard <remote-ref> [flags]
+
+Flags:
+  -h, --help   help for push-guard
+
 === harnez rate
 rate writes a single tool_calls row (call_type=internal, exit_code=NULL)
 recording how well an internal tool call (file read, edit, semantic scan,

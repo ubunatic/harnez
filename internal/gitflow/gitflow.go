@@ -286,17 +286,12 @@ func guardCommit(dir, action string, opts *IssueCommitOptions) error {
 				fmt.Fprintln(writer, "git.protected_main: ticket commit unlocked by --push-main flag")
 				return nil
 			}
-			spec, err := disable.LoadSpec()
+			sessionID, applied, err := pushMainOverride(dir)
 			if err != nil {
 				return err
 			}
-			root, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
-			if err != nil {
-				return fmt.Errorf("resolve repository root: %w", err)
-			}
-			status := spec.Check(strings.TrimSpace(string(root)), "repo-rules", "push-main", nil)
-			if status.Applied {
-				fmt.Fprintf(writer, "git.protected_main: ticket commit unlocked by /disable repo-rules push-main for session %s\n", status.State.SessionID)
+			if applied {
+				fmt.Fprintf(writer, "git.protected_main: ticket commit unlocked by /disable repo-rules push-main for session %s\n", sessionID)
 				return nil
 			}
 			return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing to %s on '%s'; use --push-main or /disable repo-rules push-main, or run: git switch -c issue/<n>-<slug>", action, branch)
@@ -305,6 +300,54 @@ func guardCommit(dir, action string, opts *IssueCommitOptions) error {
 	}
 	fmt.Fprintf(Stderr, "git.mode=%s: committing on %s; use a topic branch\n", cfg.Mode, branch)
 	return nil
+}
+
+// pushMainOverride reports whether `/disable repo-rules push-main` is applied
+// to the repository at dir, and for which session. Both commit and push guards
+// honour it, so the owner's override means the same thing on both paths.
+func pushMainOverride(dir string) (sessionID string, applied bool, err error) {
+	spec, err := disable.LoadSpec()
+	if err != nil {
+		return "", false, err
+	}
+	root, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", false, fmt.Errorf("resolve repository root: %w", err)
+	}
+	status := spec.Check(strings.TrimSpace(string(root)), "repo-rules", "push-main", nil)
+	if !status.Applied {
+		return "", false, nil
+	}
+	return status.State.SessionID, true, nil
+}
+
+// GuardPush is the push-side check: the pre-push hook and `harnez push-guard`
+// call it once per destination ref (remoteRef, such as refs/heads/main) before
+// git updates it. It follows GuardCommit's rules. With git.protected_main, a
+// direct push to the default branch is refused and the error names the AGit
+// ref to use instead. Everything else passes: AGit refs/for/ pushes, tags,
+// topic branches, and every repo without protected_main (solo included).
+func GuardPush(dir, remoteRef string) error {
+	cfg, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	if !cfg.ProtectedMain {
+		return nil
+	}
+	branch, isHead := strings.CutPrefix(remoteRef, "refs/heads/")
+	if !isHead || !slices.Contains(ProtectedBranches(dir, cfg), branch) {
+		return nil
+	}
+	sessionID, applied, err := pushMainOverride(dir)
+	if err != nil {
+		return err
+	}
+	if applied {
+		fmt.Fprintf(Stderr, "git.protected_main: direct push to %s unlocked by /disable repo-rules push-main for session %s\n", remoteRef, sessionID)
+		return nil
+	}
+	return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing a direct push to %s; push through AGit instead: git push origin HEAD:refs/for/%s/<topic> (or /disable repo-rules push-main)", remoteRef, branch)
 }
 
 // ProtectedReleaseBranch reports the branch when a release runs on a protected

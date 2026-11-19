@@ -24,6 +24,7 @@ commonly stored in an `AGENTS.md` file at the repository root.
       work others push to, long sprints that need rebasing, forks, and GitHub, which has no AGit.
   - `protected_main` (team/fork only): do not commit to or push the default branch unless the
     repository admin explicitly authorizes it in the current session, and never force-push.
+    The pre-push hook enforces this for raw `git push` (see "AGit pulls and push policy").
     `harnez issues` commits may use `--push-main` or matching-session `/disable repo-rules push-main` when authorized; otherwise they refuse and print the `git switch -c` command. Other auto-committing commands remain guarded. `harnez release` is the exception: the admin, or an agent asked to release,
     may run it there; the forge's branch protection decides whether the push is accepted.
 - Commit proactively:
@@ -60,6 +61,29 @@ commonly stored in an `AGENTS.md` file at the repository root.
   `git -C <repo> show <tag>:<path>`, `git worktree add`, or scratch clones. Checking out
   a tag leaves the repository in a detached HEAD state and risks causing subsequent agent
   commits in that shared checkout to land off-branch.
+
+## AGit pulls and push policy
+- AGit repositories: `harnez init` sets two keys in the repo's own `.git/config` (never the global
+  config): `branch.autoSetupMerge always` and `checkout.defaultRemote origin`. It does this when
+  `git.mode` is `team`, when `origin` is a Forgejo host in `spec/pr.yaml`, or when `remote.origin.push`
+  has a `refs/for/` refspec. Re-running init changes nothing. Solo repositories on GitHub or a local
+  bare remote keep both keys unset.
+- Why: a branch cut from a local `main` has no upstream by default, so plain `git pull` stops with
+  "There is no tracking information". With `always`, the branch tracks its start point. A branch cut
+  from a local `main` tracks the local `main` (`branch.<n>.remote` = `.`), so `git pull` merges that
+  local copy, which may lag `origin/main`. To pick up Codeberg's `main`, run `git pull origin main`,
+  or cut the branch from `origin/main`.
+- Push policy: with `git.protected_main: true` in `.harnez/repo.yaml`, the pre-push hook
+  (`scripts/git-hooks/pre-push`, installed by `make install-git-hooks`) refuses a direct push to the
+  default branch and names `git push origin HEAD:refs/for/<default>/<topic>`. It calls
+  `harnez push-guard <remote-ref>` per ref, which applies the same rules as commits. AGit `refs/for/`
+  pushes, tags and topic branches pass. Solo repositories and `protected_main: false` allow direct
+  pushes. `/disable repo-rules push-main` in the owning session unlocks a direct push, as it does a
+  protected commit.
+- `harnez release` is not blocked by this check. On a protected default branch it tries a direct
+  push first; the forge decides, and a refusal falls back to an AGit PR (`docs/GoRelease.md`).
+- Without the hook (no `make install-git-hooks`), the policy is advisory: the forge's branch protection
+  is the enforcement.
 
 ## Remotes
 - Two dev remotes: Codeberg (`codeberg.org/<username>/<reponame>`) and GitHub (same path).
