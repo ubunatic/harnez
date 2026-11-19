@@ -1,6 +1,6 @@
 # 1218 — agent status for a running Jules session warns: decode Jules API response: unexpected end of JSON input
 
-**Status**: Open
+**Status**: Backlog — grooming 2026-11-19: post-v0.5.9 triage; active list focused on P1/P2 bugs and ready features under 30-ticket cap
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
