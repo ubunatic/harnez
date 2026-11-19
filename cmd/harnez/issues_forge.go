@@ -10,10 +10,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/forge"
 	"ubunatic.com/harnez/internal/forgetoken"
 	"ubunatic.com/harnez/internal/forgetracker"
@@ -23,9 +26,10 @@ import (
 
 // findIssuesLocalOnly lists `find issues` words that the forge reader does not serve. On a
 // forge repo they are refused with forgeLocalOnlyError; closed is not in the set because it
-// maps to status:closed (issue 1198).
+// maps to status:closed (issue 1198), similar scores forge tickets via find.Similar (issue 1196),
+// and next reports a forge-assigned status with zero API calls (issue 1237).
 var findIssuesLocalOnly = map[string]bool{
-	"next": true, "last": true, "similar": true,
+	"last": true,
 	"open": true, "blocked": true, "draft": true,
 }
 
@@ -85,7 +89,9 @@ func resolveForgeTracker(stderr io.Writer, dir string) (forgetracker.Target, for
 	} else {
 		fmt.Fprintf(stderr, "no local issues/ dir: tickets live on %s\n", t)
 	}
-	return t, forgeTrackerSource(spec), spec, true, nil
+	src := forgeTrackerSource(spec)
+	forgetracker.SetFallbackStderr(src, stderr)
+	return t, src, spec, true, nil
 }
 
 // hasLocalTickets conservatively retains local mode if the directory cannot be read.
@@ -344,6 +350,56 @@ func warnIfForgeAuthErr(stderr io.Writer, err error) error {
 	return err
 }
 
+func runFindNextForge(stdout io.Writer, t forgetracker.Target, jsonOut bool) error {
+	if jsonOut {
+		data, err := json.Marshal(find.NextResultJSON{
+			Number:        "",
+			Reserved:      false,
+			ForgeAssigned: true,
+			Forge:         t.String(),
+		})
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(stdout, string(data))
+		return err
+	}
+	_, err := fmt.Fprintf(stdout, "forge-assigned on %s (assigned by forge on harnez issues new)\n", t)
+	return err
+}
+
+var forgeReadTokenFor = func(fg forge.Forge) string {
+	return forge.SystemTokenSource(os.Getenv).For(fg)
+}
+
+func handleForgeFindErr(cmd *cobra.Command, err error, t forgetracker.Target) error {
+	if err == nil {
+		return nil
+	}
+	var apiErr *forge.APIError
+	if errors.As(err, &apiErr) && (apiErr.Status == 401 || apiErr.Status == 403 || apiErr.Status == 404) {
+		if strings.TrimSpace(forgeReadTokenFor(t.Forge)) != "" {
+			fmt.Fprintf(cmd.ErrOrStderr(), "search blocked on %s (HTTP %d; read token rejected or repo inaccessible)\n", t, apiErr.Status)
+		} else {
+			fmt.Fprintf(cmd.ErrOrStderr(), "search blocked on %s (private repo; no read token or fj login)\n", t)
+		}
+		warnNoTokenDigging(cmd.ErrOrStderr(), "")
+		return silenceIfExitCode(cmd, &exitCodeError{Code: 2})
+	}
+	return warnIfForgeAuthErr(cmd.ErrOrStderr(), forgeTrackerHint(err, t))
+}
+
+func hasFJCLI(t forgetracker.Target) bool {
+	return slices.Contains(t.Forge.IssueCLI, "fj")
+}
+
+func warnInboxFJLabels(stderr io.Writer, t forgetracker.Target, labels []string) {
+	if stderr == nil || len(labels) == 0 || !hasFJCLI(t) {
+		return
+	}
+	fmt.Fprintf(stderr, "WARNING: labels (%s) were saved in the draft only; fj cannot set labels — apply via write token, tea, or forge UI when filing.\n", strings.Join(labels, ", "))
+}
+
 func inboxRelPath(slug string, n int) string {
 	name := slug + ".md"
 	if n > 1 {
@@ -352,7 +408,7 @@ func inboxRelPath(slug string, n int) string {
 	return filepath.ToSlash(filepath.Join("issues", "inbox", name))
 }
 
-func formatInboxIssue(title, body string, labels []string) []byte {
+func formatInboxIssue(title, body string, labels []string, warnFJLabels bool) []byte {
 	var b strings.Builder
 	trimmed := strings.TrimSpace(body)
 	if !strings.HasPrefix(trimmed, "# ") {
@@ -363,7 +419,11 @@ func formatInboxIssue(title, body string, labels []string) []byte {
 	if len(labels) > 0 {
 		b.WriteString("**Labels**: ")
 		b.WriteString(strings.Join(labels, ", "))
-		b.WriteString("\n\n")
+		b.WriteByte('\n')
+		if warnFJLabels {
+			b.WriteString("> Note: fj cannot set labels; apply via write token, tea, or forge UI when filing.\n")
+		}
+		b.WriteByte('\n')
 	}
 	b.WriteString(trimmed)
 	b.WriteByte('\n')
@@ -407,18 +467,97 @@ func writeInboxPayload(dir, slug string, payload []byte) (string, error) {
 	}
 }
 
-func writeInboxIssue(dir, title, body string, labels []string) (string, error) {
+func writeInboxIssue(dir, title, body string, labels []string, warnFJLabels bool) (string, error) {
 	slug := issues.Slugify(title)
 	if slug == "" {
 		slug = "issue"
 	}
-	return writeInboxPayload(dir, slug, formatInboxIssue(title, body, labels))
+	return writeInboxPayload(dir, slug, formatInboxIssue(title, body, labels, warnFJLabels))
+}
+
+type forgeNewOptions struct {
+	Dir           string
+	Target        forgetracker.Target
+	Source        forgetracker.Source
+	Scan          forge.ScanOptions
+	Req           forgetracker.CreateRequest
+	ExplicitForge bool
+	Force         bool
+	DryRun        bool
+	JSON          bool
+}
+
+func printForgeTruncatedNote(stderr io.Writer, opts forge.ScanOptions, fetched int) {
+	if stderr == nil {
+		return
+	}
+	count := fetched
+	if count <= 0 {
+		count = opts.PageSize * opts.MaxPages
+	}
+	fmt.Fprintf(stderr, "checked the newest %d forge issues; older issues were not fetched\n", count)
+}
+
+func runFindSimilarForge(stdout, stderr io.Writer, src forgetracker.Source, t forgetracker.Target, opts forge.ScanOptions, query string, jsonOut bool) error {
+	files, truncated, err := forgetracker.FetchIssueFiles(src, t, opts)
+	if err != nil {
+		return fmt.Errorf("find issues similar: %s: %w", t, err)
+	}
+	if truncated {
+		printForgeTruncatedNote(stderr, opts, len(files))
+	}
+	results, err := find.Similar(files, query)
+	if err != nil {
+		return err
+	}
+	return find.RenderSimilar(stdout, results, jsonOut)
+}
+
+// checkForgeNewDuplicates scans forge tickets for duplicates before dry-run or
+// creation. CLI entrypoints always set opt.Source; a nil Source is only valid
+// for direct unit tests that intentionally omit forge reads.
+func checkForgeNewDuplicates(stderr io.Writer, opt forgeNewOptions) error {
+	if opt.Source == nil || (!opt.DryRun && opt.Force) {
+		return nil
+	}
+	files, truncated, err := forgetracker.FetchIssueFiles(opt.Source, opt.Target, opt.Scan)
+	if err != nil {
+		if stderr != nil {
+			fmt.Fprintf(stderr, "issues new: duplicate check skipped on %s (%v)\n", opt.Target, forgeTrackerHint(err, opt.Target))
+		}
+		return nil
+	}
+	if truncated {
+		printForgeTruncatedNote(stderr, opt.Scan, len(files))
+	}
+	matches, threshold, err := findIssueDuplicatesFromFiles(files, opt.Req.Title)
+	if err != nil {
+		return err
+	}
+	dupOpts := issues.DuplicateCheckOptions{Forge: true, ExplicitForge: opt.ExplicitForge}
+	if !opt.Force {
+		if dupErr := issues.DuplicateErrorWithOptions(opt.Req.Title, matches, threshold, dupOpts); dupErr != nil {
+			return dupErr
+		}
+	}
+	if opt.DryRun && len(matches) > 0 && stderr != nil {
+		fmt.Fprintf(stderr, "issues new: similar forge ticket(s) found (strong-match threshold %d%%):\n", threshold)
+		for _, m := range matches {
+			strength := ""
+			if m.Strong {
+				strength = ", strong"
+			}
+			fmt.Fprintf(stderr, "  #%s %s — %s (score %.3f%s)\n", m.Number, m.RawStatus, m.PlainTitle, m.Score, strength)
+		}
+	}
+	return nil
 }
 
 // runIssuesNewForge files a ticket on the forge via API or CLI (issue 1195),
 // and falls back to issues/inbox/<slug>.md on forge/auth/worker failure. It
-// makes no commit. With dryRun it prints the plan and creates nothing.
-func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Target, req forgetracker.CreateRequest, dryRun, jsonOut bool) error {
+// makes no commit. With DryRun it prints the plan and creates nothing.
+func runIssuesNewForge(stdout, stderr io.Writer, opt forgeNewOptions) error {
+	dir, t, req, dryRun, jsonOut := opt.Dir, opt.Target, opt.Req, opt.DryRun, opt.JSON
 	if strings.TrimSpace(req.Title) == "" {
 		return fmt.Errorf("issues new: a title is required to file on %s", t)
 	}
@@ -449,6 +588,10 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	if strings.TrimSpace(string(content)) == "" {
 		return fmt.Errorf("issues new: body file is empty or whitespace-only")
 	}
+	opt.Req = req
+	if err := checkForgeNewDuplicates(stderr, opt); err != nil {
+		return err
+	}
 	if dryRun {
 		if t.Forge.Kind == "forgejo" {
 			stored, err := issueWriteMetadata(t.Forge.Host)
@@ -467,6 +610,7 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 				slug = "issue"
 			}
 			warnNoTokenDigging(stderr, fmt.Sprintf("forge CLI unavailable (%v)", err))
+			warnInboxFJLabels(stderr, t, req.Labels)
 			_, werr := fmt.Fprintf(stdout, "dry run, would file in inbox at %s (forge fallback; no commit)\n", inboxRelPath(slug, 1))
 			return werr
 		}
@@ -477,11 +621,12 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	if handled {
 		return err
 	}
-	rel, inboxErr := writeInboxIssue(dir, req.Title, string(content), req.Labels)
+	rel, inboxErr := writeInboxIssue(dir, req.Title, string(content), req.Labels, hasFJCLI(t))
 	if inboxErr != nil {
 		return fmt.Errorf("%w (after forge failure: %v)", inboxErr, err)
 	}
 	warnNoTokenDigging(stderr, fmt.Sprintf("forge filing on %s failed (%v); filed in %s instead — commit and push it on a branch/PR", t, err, rel))
+	warnInboxFJLabels(stderr, t, req.Labels)
 	if jsonOut {
 		return json.NewEncoder(stdout).Encode(map[string]any{
 			"path":   rel,

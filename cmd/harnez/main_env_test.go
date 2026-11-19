@@ -40,6 +40,12 @@ func TestMain(m *testing.M) {
 	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
 		return nil, fmt.Errorf("test did not stub the issue CLI: %s", c)
 	}
+	forgetracker.FJLookPath = func(string) (string, error) {
+		return "", exec.ErrNotFound
+	}
+	forgetracker.FJRun = func(c forgetracker.Command) ([]byte, error) {
+		return nil, fmt.Errorf("test did not stub forgetracker fj CLI: %s", c)
+	}
 	issueWriteClient = func(timeout time.Duration) *http.Client {
 		return &http.Client{Timeout: timeout, Transport: loopbackTransport{}}
 	}

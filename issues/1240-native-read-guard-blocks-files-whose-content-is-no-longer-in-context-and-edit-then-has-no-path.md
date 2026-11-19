@@ -1,6 +1,6 @@
 # 1240 — Native Read guard blocks files whose content is no longer in context, and Edit then has no path
 
-**Status**: Open
+**Status**: Closed — Verified already landed on main in 74f06897: PreCompact harnez hook compact-reset clears per-session read markers, repeat native Read warns unless compact-reset is installed, and harnez read does not write native-read markers (cmd/harnez/hook_test.go, internal/claude/apply_settings_test.go).
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

@@ -19,6 +19,8 @@ import (
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/disable"
+	"ubunatic.com/harnez/internal/forge"
+	"ubunatic.com/harnez/internal/prwait"
 )
 
 // Mode is the repo's git workflow: solo commits on the default branch, team
@@ -286,17 +288,12 @@ func guardCommit(dir, action string, opts *IssueCommitOptions) error {
 				fmt.Fprintln(writer, "git.protected_main: ticket commit unlocked by --push-main flag")
 				return nil
 			}
-			spec, err := disable.LoadSpec()
+			sessionID, applied, err := pushMainOverride(dir)
 			if err != nil {
 				return err
 			}
-			root, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
-			if err != nil {
-				return fmt.Errorf("resolve repository root: %w", err)
-			}
-			status := spec.Check(strings.TrimSpace(string(root)), "repo-rules", "push-main", nil)
-			if status.Applied {
-				fmt.Fprintf(writer, "git.protected_main: ticket commit unlocked by /disable repo-rules push-main for session %s\n", status.State.SessionID)
+			if applied {
+				fmt.Fprintf(writer, "git.protected_main: ticket commit unlocked by /disable repo-rules push-main for session %s\n", sessionID)
 				return nil
 			}
 			return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing to %s on '%s'; use --push-main or /disable repo-rules push-main, or run: git switch -c issue/<n>-<slug>", action, branch)
@@ -305,6 +302,86 @@ func guardCommit(dir, action string, opts *IssueCommitOptions) error {
 	}
 	fmt.Fprintf(Stderr, "git.mode=%s: committing on %s; use a topic branch\n", cfg.Mode, branch)
 	return nil
+}
+
+// pushMainOverride reports whether `/disable repo-rules push-main` is applied
+// to the repository at dir, and for which session. Both commit and push guards
+// honour it, so the owner's override means the same thing on both paths.
+func pushMainOverride(dir string) (sessionID string, applied bool, err error) {
+	spec, err := disable.LoadSpec()
+	if err != nil {
+		return "", false, err
+	}
+	root, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", false, fmt.Errorf("resolve repository root: %w", err)
+	}
+	status := spec.Check(strings.TrimSpace(string(root)), "repo-rules", "push-main", nil)
+	if !status.Applied {
+		return "", false, nil
+	}
+	return status.State.SessionID, true, nil
+}
+
+// GuardPush is GuardPushTarget for a push with no remote context: the policy
+// applies to a direct push to the default branch on any remote.
+func GuardPush(dir, remoteRef string) error {
+	return GuardPushTarget(dir, "", "", remoteRef)
+}
+
+// GuardPushTarget is the push-side check: the pre-push hook and `harnez
+// push-guard` call it once per destination ref (remoteRef, such as
+// refs/heads/main) before git updates it. remote and url name the destination;
+// the hook passes git's $1 and $2. Both empty means the target is unknown and
+// the policy applies. It follows GuardCommit's rules. With git.protected_main,
+// a direct push to the default branch on an AGit-capable remote is refused and
+// the error names the AGit ref to use instead (see pushTargetGuarded). Everything
+// else passes: AGit refs/for/ pushes, tags, topic branches, GitHub and other
+// mirrors, and every repo without protected_main (solo included).
+func GuardPushTarget(dir, remote, url, remoteRef string) error {
+	cfg, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	if !cfg.ProtectedMain || !pushTargetGuarded(remote, url) {
+		return nil
+	}
+	branch, isHead := strings.CutPrefix(remoteRef, "refs/heads/")
+	if !isHead || !slices.Contains(ProtectedBranches(dir, cfg), branch) {
+		return nil
+	}
+	sessionID, applied, err := pushMainOverride(dir)
+	if err != nil {
+		return err
+	}
+	if applied {
+		fmt.Fprintf(Stderr, "git.protected_main: direct push to %s unlocked by /disable repo-rules push-main for session %s\n", remoteRef, sessionID)
+		return nil
+	}
+	return fmt.Errorf("git.protected_main is set in .harnez/repo.yaml: refusing a direct push to %s; push through AGit instead: git push origin HEAD:refs/for/%s/<topic> (or /disable repo-rules push-main)", remoteRef, branch)
+}
+
+// pushTargetGuarded reports whether protected_main covers a push to remote at
+// url. It covers AGit-capable destinations: origin, unless its URL names a
+// GitHub host, and any remote whose URL names a kind: forgejo host in
+// spec/pr.yaml. GitHub has no AGit, so a GitHub URL passes, and so does a named
+// remote that is neither origin nor a Forgejo URL, such as a fork or a mirror.
+// A release mirrors the merged default branch to those remotes after its AGit
+// PR, so their direct push must pass. An unknown target (both empty) is guarded.
+func pushTargetGuarded(remote, url string) bool {
+	if remote == "" && url == "" {
+		return true
+	}
+	if host, _, _, ok := forge.ParseRemoteURL(url); ok {
+		spec, err := prwait.LoadSpec()
+		if err != nil {
+			return true
+		}
+		if fg, known := spec.ForgeFor(host); known {
+			return fg.Kind == "forgejo"
+		}
+	}
+	return remote == "origin"
 }
 
 // ProtectedReleaseBranch reports the branch when a release runs on a protected

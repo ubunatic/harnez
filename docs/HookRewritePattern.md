@@ -214,13 +214,15 @@ Claude and Codex are rewritten by their PreToolUse hooks. agy is the special cas
 
 ## Command output size (issue 543)
 
-- `harnez exec` keeps at most 256 KB head + 1 MB tail of a child's output in memory and passes that
-  on (marker `… [N bytes omitted] …`). The quota-1 log streams to a file and is deleted on success.
+- `harnez exec` keeps at most 256 KB head + 1 MB tail of a child's output in memory (marker `… [N bytes omitted] …`).
+  The live stdout a caller sees is capped at the `spec/exec.yaml` truncate limits (50 KB or 2000 lines); the full
+  output goes to a spill file named in a `[Full output: …]` banner (issue 771). The quota-1 log streams to a file
+  and is deleted on success.
   Before 543, capture was unbounded (50 MB output → 249 MB RSS).
 - agy truncates tool output itself, also for hook-rewritten commands: measured 2026-09-24, session
   7e5f6ea1, results showed `<truncated N lines>` and stayed ≤ ~8 KB each (69 KB over 17 calls). So
   exec's large pass-through does not inflate agy's context. Whether Claude and Codex truncate is unmeasured.
 - agy's token cost is dominated by re-reading the context on every model call (mostly cached), not by
   command output; retire long agy sessions instead (issue 545 item 5).
-- Open idea: a small inline byte cap in `harnez exec` with the full output in a file and a search
-  command over saved outputs ("context guard"); not yet a ticket.
+- Open idea: a search command over the saved spill outputs ("context guard"); not yet a ticket. The inline
+  byte cap and spill file are landed (issue 771).

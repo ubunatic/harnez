@@ -1296,6 +1296,13 @@ The telemetry write is best-effort and bounded: it never delays the
 wrapped command's own execution, and gives up waiting on a slow/hung DB
 write after a short bound rather than hanging the caller.
 
+Output cap: on a non-TTY stdout, exec forwards at most the spec/exec.yaml
+truncate limits (50KB or 2000 lines by default) and then prints a notice that
+names a spill file holding the complete output. An interactive terminal is left
+untouched unless it is forced. Precedence: --max-output-bytes, then a leading
+HARNEZ_EXEC_MAX_OUTPUT_BYTES=<n> or HARNEZ_EXEC_TRUNCATE=0|1|true|false prefix or
+environment variable, then spec/exec.yaml. 0 disables the byte limit.
+
 Timeout precedence is an explicit HARNEZ_TIMEOUT=<duration|0> or HTO=<duration|0> prefix, then
 the Bash tool's native timeout/background intent, then repo config
 exec.timeout, then the built-in 60s default. HTO=0 disables the limit;
@@ -1318,6 +1325,7 @@ Flags:
       --distill string[="auto"]   distillation filter mode (auto, gotest, git, raw)
       --expect-failure            record telemetry row with call_type=shell-expected
   -h, --help                      help for exec
+      --max-output-bytes int      cap the output shown to the caller at N bytes and spill the full output to a file (0 disables; forces the cap on a TTY when > 0; default: spec/exec.yaml)
       --quota-1                   enforce Quota-1 single-test boundary (require code edits between runs)
       --ticket string             ticket_id override (default: resolve.Ticket())
       --timeout duration          maximum command runtime (default: HTO/HARNEZ_TIMEOUT, tool intent, repo config, then 60s)
@@ -1442,7 +1450,8 @@ Entities:
            narrow lifecycle state. Without a local issues/ dir, plain term
            searches read the origin forge (spec/pr.yaml) instead: every term
            must match title or body; ':' terms other than status: filters
-           are rejected and subcommands like next stay local-only. It reads at
+           are rejected and subcommands like last stay local-only (next
+           returns a forge-assigned status with zero API calls). It reads at
            most the spec's issue_scan page budget and notes when older
            tickets may exist (JSON: "truncated").
   code     searches source files through configured finders (neus first,
@@ -1465,7 +1474,8 @@ Subcommands / Allocation:
            with 3+ digits). Read-only: it does not create or reserve
            anything. To atomically reserve that number and create a Draft
            placeholder ticket file, use 'harnez issues new [title]' instead
-           (cmd/harnez/issues.go) -- find never mutates.
+           (cmd/harnez/issues.go) -- find never mutates. On forge-tracked
+           repos, reports a forge-assigned status with zero API calls (exit 0).
 
   harnez find issues history [--project <name>] [--json]
            Render the open/closed/draft/backlog/unknown ticket-count snapshot
@@ -1501,9 +1511,10 @@ Query grammar:
                       Blocked or Draft). A leading bare word 'closed' is
                       status:closed; only the first term is rewritten, so
                       'closed' later in the query is a search term. The
-                      words open, blocked, draft, next, last, history and
-                      similar are local-only and are refused on a forge
-                      repo, naming the forge form.
+                      words open, blocked, draft and last are local-only
+                      and are refused on a forge repo, naming the forge
+                      form; next reports a forge-assigned status with zero
+                      API calls, and history reads the telemetry DB.
 
 An unquoted '|' is a shell pipeline operator, so an OR query needs shell
 quoting:
@@ -2573,6 +2584,17 @@ Flags:
       --remote string      git remote whose URL names the forge and repository (default: default_remote in spec/pr.yaml)
       --timeout duration   give up after this long (default: default_timeout in spec/pr.yaml)
 
+=== harnez push-guard
+Check one push destination against the repo's push-to-main policy
+
+Usage:
+  harnez push-guard <remote-ref> [flags]
+
+Flags:
+  -h, --help            help for push-guard
+      --remote string   remote name the pre-push hook passes as $1 (empty: policy applies to every remote)
+      --url string      push URL the pre-push hook passes as $2 (names a forge host)
+
 === harnez rate
 rate writes a single tool_calls row (call_type=internal, exit_code=NULL)
 recording how well an internal tool call (file read, edit, semantic scan,
@@ -2665,7 +2687,7 @@ Flags:
 === harnez release
 Automates the full project release lifecycle:
   1. Reads or initializes the single source of truth version.yaml spec.
-  2. Bumps semver (patch, minor, major, or explicit version) or resumes (--continue).
+  2. Bumps semver (patch, minor, major, or explicit version; default: inferred from recent tags) or resumes (--continue).
   3. Propagates version to language files (version.go, __version__.py, build.zig.zon, etc.).
   4. Runs GoReleaser or custom build command to produce dist/ artifacts.
   5. Cryptographically signs SHA256SUMS with minisign (non-interactive).
@@ -2684,7 +2706,7 @@ Usage:
 Flags:
       --allow-workspace     honor an enclosing go.work file during the build step (default: GOWORK=off, so the release always builds against pinned, tagged go.mod/go.sum deps, not untagged local workspace sources)
       --build-cmd string    custom build command (defaults to goreleaser or make dist)
-  -b, --bump string         version bump type ('patch', 'minor', 'major', or explicit semver 'x.y.z') (default "patch")
+  -b, --bump string         version bump type ('patch', 'minor', 'major', explicit semver 'x.y.z', or empty to infer from tag history)
       --continue            resume a previous release safely without bumping or re-tagging
   -d, --dir string          target project directory (default ".")
   -n, --dry-run             simulate execution without modifying files, git, or remote forge

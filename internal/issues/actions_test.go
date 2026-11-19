@@ -128,6 +128,27 @@ func TestDuplicateErrorUsesInjectedMatchesAndLifecycle(t *testing.T) {
 	}
 }
 
+func TestCheckDuplicatesFromFilesAndForgeHints(t *testing.T) {
+	matches := []DuplicateMatch{
+		{Number: "7", RawStatus: "open", PlainTitle: "crash on startup", Score: 0.91, Strong: true},
+		{Number: "8", RawStatus: "closed", PlainTitle: "startup crash fix", Score: 0.72, Strong: true},
+	}
+	search := func([]IssueFile, string) ([]DuplicateMatch, error) { return matches, nil }
+
+	err := CheckDuplicatesFromFiles(nil, "crash on startup", search, DuplicateCheckOptions{Forge: true})
+	if err == nil || !strings.Contains(err.Error(), "harnez issues show 7") || !strings.Contains(err.Error(), "harnez issues reopen 8") {
+		t.Fatalf("forge auto hints = %v", err)
+	}
+	if strings.Contains(err.Error(), "--forge") || strings.Contains(err.Error(), "harnez issues open") {
+		t.Fatalf("unexpected local or --forge hint: %v", err)
+	}
+
+	err = CheckDuplicatesFromFiles(nil, "crash on startup", search, DuplicateCheckOptions{Forge: true, ExplicitForge: true})
+	if err == nil || !strings.Contains(err.Error(), "harnez issues show --forge 7") || !strings.Contains(err.Error(), "harnez issues reopen --forge 8") {
+		t.Fatalf("explicit --forge hints = %v", err)
+	}
+}
+
 func TestRewriteIssueReferencesExactFilenames(t *testing.T) {
 	for _, tc := range []struct{ in, want string }{
 		{"issues/096-b.md.", "issues/097-b.md."},

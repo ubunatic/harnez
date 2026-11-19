@@ -68,6 +68,11 @@ func TestPlanCreateErrors(t *testing.T) {
 			t.Errorf("%s: err %v, want %q", c.name, err, c.want)
 		}
 	}
+	// GitHub has no fj in issue_cli, so a missing gh with labels must not mention fj.
+	_, err := PlanCreate(ghTarget, CreateRequest{Title: "T", BodyFile: "b.md", Labels: []string{"bug"}}, lookOnly())
+	if err == nil || strings.Contains(err.Error(), "fj cannot set labels") {
+		t.Errorf("gh missing with labels must not mention fj: %v", err)
+	}
 }
 
 func TestParseCreated(t *testing.T) {

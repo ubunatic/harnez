@@ -368,6 +368,9 @@ type execOptions struct {
 	Insert              func(dbPath string, call telemetry.ToolCall) error // nil means defaultInsertExecRow
 	Timeout             time.Duration
 	TimeoutSet          bool
+	MaxOutputBytes      int64                // --max-output-bytes; used only when MaxOutputBytesSet
+	MaxOutputBytesSet   bool                 // the flag was given explicitly (0 disables truncation)
+	IsTerminal          func(io.Writer) bool // nil means a *os.File terminal check
 	ConfigPath          string
 	AgentID             string
 	SendTelemetryRecord func(kind string, payload any) server.UpdateResult
@@ -608,6 +611,15 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		opts.Tool = inferToolFromArgs(args, "Bash")
 	}
 
+	execSpec, err := LoadExecSpec()
+	if err != nil {
+		return 1, fmt.Errorf("exec: %w", err)
+	}
+	truncCfg, err := resolveTruncateSettings(opts, args, execSpec.Truncate, out)
+	if err != nil {
+		return 1, fmt.Errorf("exec: %w", err)
+	}
+
 	quota1Active := detectQuota1(opts, args)
 	quotaStateFile := ""
 	if quota1Active {
@@ -628,6 +640,10 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 
 	counter := &byteCounter{}
 	capturedOutput := newHeadTailBuffer(maxExecHeadBytes, maxExecTailBytes)
+	distillActive := opts.Distill != ""
+	// Quota-1 runs keep the full stream in their log, which the cap mirrors.
+	// Distilled output is capped after the run, so it spills on its own.
+	capOut := newOutputCap(truncCfg, quota1Active && !distillActive)
 	quotaLogPath := ""
 	var quotaLogFile *os.File
 	if quota1Active {
@@ -679,7 +695,6 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	c.Stdin = in
 
 	var distOpts distill.Options
-	distillActive := opts.Distill != ""
 	if distillActive {
 		mode := distill.Mode(opts.Distill)
 		if mode == "true" || mode == "1" || mode == distill.ModeAuto {
@@ -688,18 +703,18 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		distOpts = distill.Options{Mode: mode, MaxLines: 300}
 	}
 
-	var stdoutWriters []io.Writer
-	var stderrWriters []io.Writer
-	if distillActive {
-		stdoutWriters = []io.Writer{capturedOutput, counter}
-		stderrWriters = []io.Writer{capturedOutput, counter}
-	} else {
-		stdoutWriters = []io.Writer{out, counter, capturedOutput}
-		stderrWriters = []io.Writer{errOut, counter, capturedOutput}
-	}
+	// The full stream always reaches counter, capturedOutput and the Quota-1
+	// log. The live cap comes last, so a stalled or closed caller never starves
+	// the telemetry buffers.
+	stdoutWriters := []io.Writer{counter, capturedOutput}
+	stderrWriters := []io.Writer{counter, capturedOutput}
 	if quotaLogFile != nil {
 		stdoutWriters = append(stdoutWriters, quotaLogFile)
 		stderrWriters = append(stderrWriters, quotaLogFile)
+	}
+	if !distillActive {
+		stdoutWriters = append(stdoutWriters, capOut.writer(out))
+		stderrWriters = append(stderrWriters, capOut.writer(errOut))
 	}
 	c.Stdout = io.MultiWriter(stdoutWriters...)
 	c.Stderr = io.MultiWriter(stderrWriters...)
@@ -828,22 +843,39 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			if quota1PreTestFailure(capturedOutput.String()) {
 				fmt.Fprintln(errOut, "Quota-1: tests did not run; fix gofmt/vet, then rerun make test-q1.")
 			}
-		} else {
-			_ = os.Remove(quotaLogPath)
 		}
 	}
 
 	rawBytes := counter.total()
 	var distilledBytesPtr *int64
+	shownBytes := counter.total()
 
 	if distillActive {
 		rawStr := capturedOutput.String()
 		distilled, rBytes, dBytes := distill.DistillWithMetrics(rawStr, distOpts)
-		fmt.Fprintln(out, distilled)
+		_, _ = capOut.writer(out).Write([]byte(distilled + "\n"))
 		rawBytes = rBytes
+		shownBytes = int64(len(distilled) + 1)
 		if distOpts.Mode != distill.ModeRaw {
 			distilledBytesPtr = &dBytes
 		}
+	}
+
+	// settle also drops or keeps the Quota-1 log, so it runs for every exit.
+	quotaLog := ""
+	if quota1Active {
+		quotaLog = quotaLogPath
+	}
+	spillPath, settleErr := capOut.settle(exitCode, quotaLog)
+	if capOut.truncated() {
+		if settleErr != nil {
+			fmt.Fprintf(errOut, "harnez exec: keep full output for truncated stream: %v\n", settleErr)
+		} else {
+			fmt.Fprint(out, capOut.notice(spillPath))
+		}
+	}
+	if capOut.cfg.active() {
+		shownBytes = capOut.shownBytes()
 	}
 
 	score, note := telemetry.ScoreShell(capturedOutput.String(), exitCode)
@@ -854,6 +886,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		DurationMs:     duration.Milliseconds(),
 		RawBytes:       rawBytes,
 		DistilledBytes: distilledBytesPtr,
+		OutputBytes:    &shownBytes,
 		Score:          &score,
 		Note:           note,
 		ExpectFailure:  opts.ExpectFailure || detectExpectFailure(opts, args),
@@ -1048,8 +1081,11 @@ type execCall struct {
 	DurationMs     int64
 	RawBytes       int64
 	DistilledBytes *int64
-	Score          *int
-	Note           string
+	// OutputBytes is the output actually shown to the caller (issue 771); the
+	// notice text is not counted.
+	OutputBytes *int64
+	Score       *int
+	Note        string
 	// ExpectFailure marks this row as an intentionally-expected failure
 	// (issue 226's HARNEZ_EXPECT_FAILURE convention, detected by
 	// detectExpectFailure) — recordExecTelemetry writes call_type
@@ -1126,6 +1162,7 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 			DurationMs:     call.DurationMs,
 			RawBytes:       call.RawBytes,
 			DistilledBytes: call.DistilledBytes,
+			OutputBytes:    call.OutputBytes,
 		}
 
 		insert := opts.Insert

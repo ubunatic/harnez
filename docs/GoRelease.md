@@ -137,7 +137,7 @@ then re-running clears the warning next release.
 Release only when the user or active `/goal` asks; otherwise recommend the bump and wait. First ensure a clean tree, committed/indexed docs and tickets, and passing `make lint` plus `make test-q1` (`make release` depends on `check`: gofmt, vet, and Go tests). Patch: compatible fixes/docs/refactors; minor: backward-compatible capabilities; major: breaking public APIs. A release pushes and publishes.
 
 ```bash
-make release                     # or: harnez release   (bumps patch by default)
+make release                     # or: harnez release   (infers minor/patch from tags, fallback patch)
 harnez release --bump patch      # or minor / major / 1.0.0
 harnez release --dry-run         # preview execution
 harnez release --continue        # resume a failed/interrupted publish

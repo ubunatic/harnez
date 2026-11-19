@@ -1,6 +1,6 @@
 # 771 — harnez exec: truncate large bash tool output with spill file log message and spec yaml limit
 
-**Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Status**: Closed — M1 and review refinements delivered (fa47f5ae, 99cc0430): added spec/exec.yaml spill-file output truncation (50KB/2000 lines default on non-TTY, --max-output-bytes and env overrides, Quota-1/distill/OutputBytes integration, rune-safe cap); make lint, test-q1 (dev), -race internal/exec, and cmd/harnez passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -43,3 +43,35 @@ Tools like the "pi" agent handle this cleanly by truncating output streams at a 
   - Author unit tests in `cmd/harnez/exec_test.go` with commands producing output above and below the threshold.
   - Verify that the spill file contains full output while the returned reader contains truncated output with the exact banner message.
   - Test with `make test-q1` / `go test ./cmd/harnez`.
+
+## Decision
+
+- **Spec & defaults (`spec/exec.yaml` + `spec/schemas/exec.schema.json`)**: Store `truncate: {enabled: true, max_output_bytes: 51200, max_output_lines: 2000, spill_dir: "", spill_prefix: "harnez-exec-"}` in `spec/exec.yaml` validated against `spec/schemas/exec.schema.json` and loaded via `internal/exec/spec.go` (zero Go defaults per `docs/Spec.md`). Document `spec/exec.yaml` in `docs/Spec.md`. (Host `/decide` + Consult `consult-771`, 2026-11-19.)
+- **Live head-capped writer & lazy spill**: Use a mutex-guarded live head-capped writer sharing one byte+line budget and one lazy spill file across stdout and stderr (retaining emitted head in memory and creating the spill file only on first overflow; upstream `headTailBuffer` `capturedOutput` and `quotaLogFile` stay full/unmodified so scoring and Quota-1 failure extraction remain intact). (Host `/decide` + Consult `consult-771`, 2026-11-19.)
+- **TTY, overrides, `--distill`, `--quota-1`, telemetry**:
+  - Enable by default when stdout is NOT a TTY (`!term.IsTerminal`); skip on TTY unless forced via `HARNEZ_EXEC_TRUNCATE=1` or explicit `--max-output-bytes > 0`.
+  - Precedence: `--max-output-bytes` flag (`0` disables) > `HARNEZ_EXEC_MAX_OUTPUT_BYTES` / `HARNEZ_EXEC_TRUNCATE` (including leading `VAR=val` command prefixes) > `spec/exec.yaml`.
+  - On `--distill`, also apply the cap to the distilled output printed after exit (spilling full distilled output if capped).
+  - On `--quota-1`, reuse `quotaLogPath` when `exitCode != 0` (avoiding duplicate multi-MB files) and a normal spill file when `exitCode == 0`.
+  - Record shown byte count in `ToolCall.OutputBytes`; keep `RawBytes` and `--distill`-only `DistilledBytes` intact. (Host `/decide` + Consult `consult-771`, 2026-11-19.)
+
+## M1 — `harnez exec` spill-file output truncation
+
+- Write set (expected): `spec/exec.yaml`, `spec/schemas/exec.schema.json`, `internal/exec/spec.go`, `internal/exec/spec_test.go`, `internal/exec/exec.go` (+ `truncate.go` helper if cleaner), `internal/exec/exec_test.go`, `cmd/harnez/exec.go`, `cmd/harnez/exec_command.go`, `cmd/harnez/exec_test.go`, `cmd/harnez/testdata/help.golden`, `docs/Spec.md`, `docs/HookRewritePattern.md` (fix `:217-218` stale output claim if touched).
+- Spill notice format when truncated (appended to `out` at exit):
+  `[Full output: <spill_file_path>. Truncated: <lines_shown> lines shown (<limit> limit)]`
+  where `<limit>` formats KB cleanly like `50.0KB` when `maxBytes` applies (or `<N> lines` if capped by line limit first; keep clear and tested).
+- Note for `TestRunExecWrapper_BoundsCapturedOutputAndRetainsTail` (`internal/exec/exec_test.go:1646-1685`): opt out via `HARNEZ_EXEC_TRUNCATE=0` to keep its existing untruncated 3MB passthrough invariant intact AND add dedicated truncation tests rather than weakening existing assertions!
+- Locked tests:
+  1. Spec schema test (`internal/exec/spec_test.go`): valid `spec/exec.yaml` loads `51200`/`2000`, invalid schema rejects bad fields/types.
+  2. Below-limit output: unchanged stdout/stderr, NO spill file created, no banner, `OutputBytes == RawBytes`.
+  3. Above-limit byte & line caps (covering mixed stdout+stderr): stdout+stderr truncated cleanly at cap, exact banner printed with existing spill file path containing 100% verbatim full output, exit code preserved (`!= 0` stays `!= 0`), `RawBytes >= fullLen`, `OutputBytes <= cap`.
+  4. Precedence & overrides: `--max-output-bytes` beats `HARNEZ_EXEC_MAX_OUTPUT_BYTES` beats spec; `HARNEZ_EXEC_TRUNCATE=0` and `--max-output-bytes=0` disable truncation; `HARNEZ_EXEC_TRUNCATE=1` forces truncation.
+  5. `--distill` large output + `--quota-1` (failure reuses `quotaLogPath`, pass uses spill file + preserves `quotaLogFile` cleanup) + TTY vs non-TTY detection.
+  6. `help.golden` updated and passes.
+
+## Refinements (from `rev-771` review of `fa47f5ae`)
+
+1. **[HIGH] `internal/exec/truncate.go` `outputCap.allowance`**: return `0, c.byLines` immediately at the top when `c.withheld` is true, so once truncation begins (including after backing off to a UTF-8 rune boundary that leaves `room > 0`), no later small write leaks to `dst` or skips `spillLocked`! Add a regression test verifying follow-up writes after a rune-aligned cut are NOT written to `dst` and ARE written completely in order to the spill file.
+2. **[LOW] `adoptQuotaLog` / `moveFile` cleanup (`internal/exec/truncate.go`)**: remove the newly created destination file (`path`/`dst`) on `moveFile` / `io.Copy` / `Close` error so failed adopts leave zero orphan partial files.
+3. **[LOW] `execRunOpts` (`internal/exec/truncate_test.go`)**: set `t.Setenv("XDG_STATE_HOME", t.TempDir())` (or pass `StateDir`/env cleanly) so `TestRunExecWrapper_*` truncation tests stay clean inside read-only `$HOME` sandboxes (without `PrepareCmdRunnerBroker` stderr warnings).

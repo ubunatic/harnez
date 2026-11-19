@@ -18,6 +18,12 @@ type DuplicateMatch struct {
 // SimilaritySearch is provided by the caller because find owns matching.
 type SimilaritySearch func(files []IssueFile, title string) ([]DuplicateMatch, error)
 
+// DuplicateCheckOptions customizes how duplicate-match hints are formatted.
+type DuplicateCheckOptions struct {
+	Forge         bool // format hints for forge tickets (show/reopen) instead of local (open/promote)
+	ExplicitForge bool // include --forge in forge hints when the repo also has a local tracker
+}
+
 // CheckDuplicates scans existing tickets and applies an injected similarity
 // search before building the configured lifecycle-aware duplicate error.
 func CheckDuplicates(issuesDir, title string, search SimilaritySearch) error {
@@ -31,23 +37,49 @@ func CheckDuplicates(issuesDir, title string, search SimilaritySearch) error {
 		}
 		return fmt.Errorf("issues new: duplicate scan: %w", err)
 	}
+	return CheckDuplicatesFromFiles(files, title, search, DuplicateCheckOptions{})
+}
+
+// FindDuplicatesFromFiles applies an injected similarity search over files and
+// returns the candidate matches alongside the configured strong-match threshold
+// percentage.
+func FindDuplicatesFromFiles(files []IssueFile, title string, search SimilaritySearch) ([]DuplicateMatch, int, error) {
+	if strings.TrimSpace(title) == "" {
+		return nil, 0, nil
+	}
 	if search == nil {
-		return fmt.Errorf("issues new: duplicate search is not configured")
+		return nil, 0, fmt.Errorf("issues new: duplicate search is not configured")
 	}
 	matches, err := search(files, title)
 	if err != nil {
-		return fmt.Errorf("issues new: duplicate scan: %w", err)
+		return nil, 0, fmt.Errorf("issues new: duplicate scan: %w", err)
 	}
 	threshold := 0
 	if policy, err := DuplicateGateSettings(); err == nil {
 		threshold = int(policy.Threshold * 100)
 	}
-	return DuplicateError(title, matches, threshold)
+	return matches, threshold, nil
+}
+
+// CheckDuplicatesFromFiles applies an injected similarity search over files and
+// builds the lifecycle-aware duplicate error when any strong match is found.
+func CheckDuplicatesFromFiles(files []IssueFile, title string, search SimilaritySearch, opts DuplicateCheckOptions) error {
+	matches, threshold, err := FindDuplicatesFromFiles(files, title, search)
+	if err != nil {
+		return err
+	}
+	return DuplicateErrorWithOptions(title, matches, threshold, opts)
 }
 
 // DuplicateError formats the duplicate gate's actionable error. Similarity
 // scoring is injected by the caller so the issue core does not depend on find.
 func DuplicateError(title string, matches []DuplicateMatch, thresholdPercent int) error {
+	return DuplicateErrorWithOptions(title, matches, thresholdPercent, DuplicateCheckOptions{})
+}
+
+// DuplicateErrorWithOptions formats the duplicate gate's actionable error using
+// either local (open/promote) or forge (show/reopen) command hints.
+func DuplicateErrorWithOptions(title string, matches []DuplicateMatch, thresholdPercent int, opts DuplicateCheckOptions) error {
 	if strings.TrimSpace(title) == "" {
 		return nil
 	}
@@ -57,14 +89,10 @@ func DuplicateError(title string, matches []DuplicateMatch, thresholdPercent int
 		if !match.Strong {
 			continue
 		}
-		verb := "open"
-		if CanonicalizeStatus(match.RawStatus) == StatusBacklog {
-			verb = "promote"
-		}
 		if count == 0 {
 			fmt.Fprintf(&message, "issues new: likely duplicate ticket(s) found (strong-match threshold %d%%):", thresholdPercent)
 		}
-		fmt.Fprintf(&message, "\n  #%s %s — %s (score %.3f)\n    harnez issues %s %s", match.Number, match.RawStatus, match.PlainTitle, match.Score, verb, match.Number)
+		fmt.Fprintf(&message, "\n  #%s %s — %s (score %.3f)\n    %s", match.Number, match.RawStatus, match.PlainTitle, match.Score, duplicateMatchHint(match, opts))
 		count++
 	}
 	if count == 0 {
@@ -72,6 +100,24 @@ func DuplicateError(title string, matches []DuplicateMatch, thresholdPercent int
 	}
 	message.WriteString("\nUse --force to create anyway.")
 	return errors.New(message.String())
+}
+
+func duplicateMatchHint(match DuplicateMatch, opts DuplicateCheckOptions) string {
+	if opts.Forge {
+		verb := "show"
+		if CanonicalizeStatus(match.RawStatus) == StatusClosed {
+			verb = "reopen"
+		}
+		if opts.ExplicitForge {
+			return fmt.Sprintf("harnez issues %s --forge %s", verb, match.Number)
+		}
+		return fmt.Sprintf("harnez issues %s %s", verb, match.Number)
+	}
+	verb := "open"
+	if CanonicalizeStatus(match.RawStatus) == StatusBacklog {
+		verb = "promote"
+	}
+	return fmt.Sprintf("harnez issues %s %s", verb, match.Number)
 }
 
 // trimStatusPrefix drops a leading "<label> —" (or "<label> -") from reason,

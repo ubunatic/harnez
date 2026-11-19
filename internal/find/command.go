@@ -18,10 +18,12 @@ import (
 
 // NextResultJSON is the JSON result shared by find and issue allocation commands.
 type NextResultJSON struct {
-	Number   string `json:"number"`
-	Reserved bool   `json:"reserved"`
-	File     string `json:"file,omitempty"`
-	Path     string `json:"path,omitempty"`
+	Number        string `json:"number"`
+	Reserved      bool   `json:"reserved"`
+	File          string `json:"file,omitempty"`
+	Path          string `json:"path,omitempty"`
+	ForgeAssigned bool   `json:"forge_assigned,omitempty"`
+	Forge         string `json:"forge,omitempty"`
 }
 
 // findRunOptions bundles inputs for runFindWithOptions.
@@ -350,7 +352,13 @@ func runFindSimilar(w io.Writer, opts findRunOptions, query string) error {
 	if err != nil {
 		return err
 	}
-	if opts.JSON {
+	return RenderSimilar(w, results, opts.JSON)
+}
+
+// RenderSimilar writes similarity results in TSV or JSON format, matching
+// `find issues similar`.
+func RenderSimilar(w io.Writer, results []SimilarResult, jsonOut bool) error {
+	if jsonOut {
 		if results == nil {
 			results = []SimilarResult{}
 		}

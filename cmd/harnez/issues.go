@@ -917,16 +917,37 @@ func handleIssuesNew(stdout, stderr io.Writer, opt issuesNewOptions) error {
 		if err != nil {
 			return fmt.Errorf("issues new: cannot resolve forge remote: %w", err)
 		}
-		return runIssuesNewForge(stdout, stderr, opt.Dir, t, forgetracker.CreateRequest{Title: opt.Title, BodyFile: opt.BodyFile, Labels: opt.Labels}, opt.DryRun, opt.JSON)
+		src := forgeTrackerSource(spec)
+		forgetracker.SetFallbackStderr(src, stderr)
+		return runIssuesNewForge(stdout, stderr, forgeNewOptions{
+			Dir:           opt.Dir,
+			Target:        t,
+			Source:        src,
+			Scan:          spec.IssueScan,
+			Req:           forgetracker.CreateRequest{Title: opt.Title, BodyFile: opt.BodyFile, Labels: opt.Labels},
+			ExplicitForge: true,
+			Force:         opt.Force,
+			DryRun:        opt.DryRun,
+			JSON:          opt.JSON,
+		})
 	}
 	// The forge path needs an explicit signal (-F/--label or tracker: none), so a
 	// fresh repo with a forge origin still adopts a local issues/ dir (issue 853).
 	_, remoteEnvSet := os.LookupEnv("CLAUDE_CODE_REMOTE")
 	if !opt.Remote && !remoteEnvSet && opt.Number == "" && (opt.BodyFile != "" || len(opt.Labels) > 0 || trackerIsNone(opt.Dir)) {
-		if t, _, _, ok, err := resolveForgeTracker(stderr, opt.Dir); err != nil {
+		if t, src, spec, ok, err := resolveForgeTracker(stderr, opt.Dir); err != nil {
 			return err
 		} else if ok {
-			return runIssuesNewForge(stdout, stderr, opt.Dir, t, forgetracker.CreateRequest{Title: opt.Title, BodyFile: opt.BodyFile, Labels: opt.Labels}, opt.DryRun, opt.JSON)
+			return runIssuesNewForge(stdout, stderr, forgeNewOptions{
+				Dir:    opt.Dir,
+				Target: t,
+				Source: src,
+				Scan:   spec.IssueScan,
+				Req:    forgetracker.CreateRequest{Title: opt.Title, BodyFile: opt.BodyFile, Labels: opt.Labels},
+				Force:  opt.Force,
+				DryRun: opt.DryRun,
+				JSON:   opt.JSON,
+			})
 		}
 	}
 	if opt.BodyFile != "" || len(opt.Labels) > 0 {

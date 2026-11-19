@@ -219,7 +219,7 @@ the merge.
 ```bash
 make release
 # or
-harnez release
+harnez release   # infers minor/patch from recent tags (fallback: patch)
 ```
 
 ### Automated / Pre-Specified Bump

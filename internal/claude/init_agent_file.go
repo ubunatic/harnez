@@ -112,7 +112,7 @@ func initGitIntegration(ir *initReport, dir string, repoConfig *RepoConfig) erro
 		return err
 	}
 	ir.changes += gitChanges
-	return nil
+	return installAgitPullConfig(ir, dir, repoConfig)
 }
 
 // ensureIssueLockIgnores adds issue-tracker lock exclusions to .gitignore and

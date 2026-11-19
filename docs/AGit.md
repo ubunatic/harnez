@@ -18,6 +18,13 @@ Forgejo and Gitea support it (Codeberg runs Forgejo). GitHub has no AGit.
   directly unless the repository admin explicitly authorizes it in the current session.
 - The topic is per pusher, by default the forge username, and is reused across tickets and small PRs.
 - To skip typing the refspec: `git config remote.origin.push HEAD:refs/for/main/<topic>`.
+- Pulling: AGit has no remote branch to track. `harnez init` sets `branch.autoSetupMerge always` and
+  `checkout.defaultRemote origin` in the repo's `.git/config`, so a new branch tracks its start point
+  and plain `git pull` works. A branch cut from a local `main` pulls that local `main`; use
+  `git pull origin main` to fetch the forge's copy.
+- Push policy: with `protected_main` the pre-push hook refuses a direct push to the default branch on
+  origin or a Forgejo remote. AGit and topic pushes still pass, and so do pushes to GitHub, which has
+  no AGit; a release mirrors the merged `main` there (`docs/lang/Git.md`, "AGit pulls and push policy").
 
 ## PR lifecycle
 

@@ -2,15 +2,58 @@ package githooks
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // hookSource is the versioned pre-push hook, relative to this package directory.
 const hookSource = "../../scripts/git-hooks/pre-push"
+
+// harnezBuild is the harnez binary the hook's `harnez` calls resolve to. It is built
+// once per test binary from this tree, so a host's installed harnez never decides a test.
+var harnezBuild struct {
+	once sync.Once
+	dir  string
+	err  error
+}
+
+// harnezBinDir returns the directory holding the tree's harnez binary, building it on first use.
+func harnezBinDir(t *testing.T) string {
+	t.Helper()
+	harnezBuild.once.Do(func() {
+		harnezBuild.dir, harnezBuild.err = buildHarnez()
+	})
+	if harnezBuild.err != nil {
+		t.Fatalf("build harnez for the pre-push hook: %v", harnezBuild.err)
+	}
+	return harnezBuild.dir
+}
+
+func buildHarnez() (string, error) {
+	dir, err := os.MkdirTemp("", "githooks-harnez-")
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", filepath.Join(dir, "harnez"), "./cmd/harnez")
+	cmd.Dir = "../.."
+	if out, err := cmd.CombinedOutput(); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", fmt.Errorf("go build ./cmd/harnez: %w\n%s", err, out)
+	}
+	return dir, nil
+}
+
+// removeHarnezBuild deletes the built binary; TestMain calls it after the tests.
+func removeHarnezBuild() {
+	if harnezBuild.dir != "" {
+		_ = os.RemoveAll(harnezBuild.dir)
+	}
+}
 
 // fixture is a work clone with two bare repositories: cb stands in for Codeberg
 // (remote origin and the first URL of "both"), gh for GitHub. The GitHub path
@@ -44,7 +87,7 @@ func newFixture(t *testing.T) *fixture {
 	f := &fixture{
 		t: t,
 		env: []string{
-			"PATH=" + os.Getenv("PATH"),
+			"PATH=" + harnezBinDir(t) + string(os.PathListSeparator) + os.Getenv("PATH"),
 			"HOME=" + home,
 			"GIT_CONFIG_GLOBAL=" + globalCfg,
 			"GIT_CONFIG_NOSYSTEM=1",
@@ -267,5 +310,88 @@ func TestPrePushGuard(t *testing.T) {
 		}
 		f.assertRef(f.gh, "refs/heads/jules/1234-fix", julesSHA)
 		f.assertRef(f.gh, "refs/heads/main", mainSHA)
+	})
+}
+
+// writeRepoYAML installs .harnez/repo.yaml in the work clone, untracked, as a
+// harnez-initialised repository has it.
+func (f *fixture) writeRepoYAML(body string) {
+	f.t.Helper()
+	if err := os.MkdirAll(filepath.Join(f.work, ".harnez"), 0o755); err != nil {
+		f.t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.work, ".harnez", "repo.yaml"), []byte(body), 0o644); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// TestPrePushPushPolicy runs the hook's push-to-main policy (issue 1206) through
+// the tree's harnez: only git.protected_main refuses a direct push to main.
+func TestPrePushPushPolicy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("creates several repositories and runs git-lfs; skipped in -short")
+	}
+	const protected = "git:\n  mode: team\n  protected_main: true\n"
+
+	t.Run("solo repo pushes main directly", func(t *testing.T) {
+		f := newFixture(t)
+		sha := f.commit("a.txt")
+		if code := f.push("origin", "main"); code != 0 {
+			t.Fatalf("push origin main: exit %d, want 0", code)
+		}
+		f.assertRef(f.cb, "refs/heads/main", sha)
+	})
+
+	t.Run("unprotected team repo pushes main directly", func(t *testing.T) {
+		f := newFixture(t)
+		f.writeRepoYAML("git:\n  mode: team\n  protected_main: false\n")
+		sha := f.commit("a.txt")
+		if code := f.push("origin", "main"); code != 0 {
+			t.Fatalf("push origin main: exit %d, want 0", code)
+		}
+		f.assertRef(f.cb, "refs/heads/main", sha)
+	})
+
+	t.Run("protected main refuses a direct push", func(t *testing.T) {
+		f := newFixture(t)
+		f.writeRepoYAML(protected)
+		f.commit("a.txt")
+		if code := f.push("origin", "main"); code == 0 {
+			t.Fatal("push origin main: exit 0, want refusal with protected_main")
+		}
+		f.assertRef(f.cb, "refs/heads/main", "")
+	})
+
+	t.Run("protected main refuses both's Codeberg leg and passes its GitHub leg", func(t *testing.T) {
+		f := newFixture(t)
+		sha := f.commit("a.txt")
+		if code := f.push("origin", "main"); code != 0 {
+			t.Fatalf("seed origin main before protection: exit %d, want 0", code)
+		}
+		f.writeRepoYAML(protected)
+		// git runs the hook once per push URL of "both", with that URL as $2. The fixture's
+		// remotes are local paths the guard cannot read as forges, so the hook runs here with
+		// the forge URLs git would pass for the two legs.
+		if out, code := f.runHook("both", codebergURL, sha); code == 0 {
+			t.Fatalf("both Codeberg leg: exit 0, want refusal with protected_main\n%s", out)
+		}
+		if out, code := f.runHook("both", githubURL, sha); code != 0 {
+			t.Fatalf("both GitHub leg once Codeberg main matches origin/main: exit %d, want 0\n%s", code, out)
+		}
+	})
+
+	t.Run("protected main still takes AGit and topic pushes", func(t *testing.T) {
+		f := newFixture(t)
+		f.writeRepoYAML(protected)
+		f.mustGit("checkout", "-q", "-b", "topic")
+		sha := f.commit("t.txt")
+		if code := f.push("origin", "HEAD:refs/for/main/topic"); code != 0 {
+			t.Fatalf("push origin HEAD:refs/for/main/topic: exit %d, want 0", code)
+		}
+		f.assertRef(f.cb, "refs/for/main/topic", sha)
+		if code := f.push("origin", "topic"); code != 0 {
+			t.Fatalf("push origin topic: exit %d, want 0", code)
+		}
+		f.assertRef(f.cb, "refs/heads/topic", sha)
 	})
 }

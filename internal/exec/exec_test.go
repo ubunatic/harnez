@@ -1646,6 +1646,14 @@ func TestTailBuffer_WriteAndCap(t *testing.T) {
 func TestRunExecWrapper_BoundsCapturedOutputAndRetainsTail(t *testing.T) {
 	opts := testExecOptions(t)
 	opts.InsertTimeout = 2 * time.Second
+	// This test checks the untruncated 3MB passthrough; the output cap (issue 771)
+	// has its own tests in truncate_test.go.
+	opts.Getenv = func(name string) string {
+		if name == truncateEnv {
+			return "0"
+		}
+		return ""
+	}
 
 	var out, errOut bytes.Buffer
 	// Generate 3MB of 'A's followed by a distinct error tail
