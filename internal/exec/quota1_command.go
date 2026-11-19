@@ -21,12 +21,32 @@ var shellAssignRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 
 // shellPrefixWords may stand before the command word without being the
 // command themselves: reserved words, and wrappers that only re-dispatch
-// their arguments. `env` is handled separately in skipCommandPrefix.
+// their arguments. `env`, `timeout`, `nice` and `time` are handled separately
+// in skipCommandPrefix because they accept options (and timeout's duration).
 var shellPrefixWords = map[string]bool{
 	"!": true, "{": true, "}": true, "if": true, "then": true, "else": true,
-	"elif": true, "do": true, "while": true, "until": true, "time": true,
+	"elif": true, "do": true, "while": true, "until": true,
 	"exec": true, "command": true,
 }
+
+var (
+	envValueFlags = map[string]bool{
+		"-u": true, "--unset": true,
+		"-C": true, "--chdir": true,
+		"-S": true, "--split-string": true,
+	}
+	timeoutValueFlags = map[string]bool{
+		"-s": true, "--signal": true,
+		"-k": true, "--kill-after": true,
+	}
+	niceValueFlags = map[string]bool{
+		"-n": true, "--adjustment": true,
+	}
+	timeValueFlags = map[string]bool{
+		"-f": true, "--format": true,
+		"-o": true, "--output": true,
+	}
+)
 
 // runsGoTest reports whether args run `go test` or `gotestsum` in command
 // position. args is either a direct argv or a shell -c script; a script is
@@ -65,21 +85,52 @@ func isGoTestCommand(words []string) bool {
 	return false
 }
 
-// skipCommandPrefix drops leading assignments, prefix words and env's options
-// (`env -i`), so the first remaining word is the command position.
+// skipCommandPrefix drops leading assignments, prefix words, and command
+// wrappers (`env`, `timeout`, `nice`, `time`) together with their options so
+// the first remaining word is the command position.
 func skipCommandPrefix(words []string) []string {
 	for len(words) > 0 {
 		w := words[0]
-		switch {
-		case w == "env":
-			words = words[1:]
-			for len(words) > 0 && strings.HasPrefix(words[0], "-") {
-				words = words[1:]
+		switch filepath.Base(w) {
+		case "env":
+			words = skipFlagOptions(words[1:], envValueFlags)
+			continue
+		case "timeout":
+			words = skipFlagOptions(words[1:], timeoutValueFlags)
+			if len(words) > 0 {
+				words = words[1:] // duration
 			}
-		case shellAssignRE.MatchString(w), shellPrefixWords[w]:
+			continue
+		case "nice":
+			words = skipFlagOptions(words[1:], niceValueFlags)
+			continue
+		case "time":
+			words = skipFlagOptions(words[1:], timeValueFlags)
+			continue
+		}
+		if shellAssignRE.MatchString(w) || shellPrefixWords[w] {
 			words = words[1:]
-		default:
+			continue
+		}
+		return words
+	}
+	return words
+}
+
+// skipFlagOptions consumes leading flag tokens (stopping at `--` or the first
+// non-flag word). Flags in valueFlags consume the following word as their value.
+func skipFlagOptions(words []string, valueFlags map[string]bool) []string {
+	for len(words) > 0 {
+		arg := words[0]
+		if arg == "--" {
+			return words[1:]
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
 			return words
+		}
+		words = words[1:]
+		if valueFlags[arg] && len(words) > 0 {
+			words = words[1:]
 		}
 	}
 	return words

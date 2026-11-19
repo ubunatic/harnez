@@ -142,8 +142,10 @@ func isQuota1SandboxMarker(value string) bool {
 // quota1CmdRE matches a leading HARNEZ_QUOTA_1=1 command prefix.
 var quota1CmdRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*` + quota1Env + `=(1|[Tt][Rr][Uu][Ee])\b`)
 
-// detectQuota1 reports whether args should be run under Quota-1 single-test enforcement.
-func detectQuota1(opts execOptions, args []string) bool {
+// detectExplicitQuota1 reports whether the caller explicitly asked for Quota-1
+// (--quota-1, HARNEZ_QUOTA_1=1, or a leading HARNEZ_QUOTA_1=1 command prefix).
+// Only explicit Quota-1 invocations wrap the child in the bwrap sandbox.
+func detectExplicitQuota1(opts execOptions, args []string) bool {
 	if opts.Quota1 {
 		return true
 	}
@@ -158,6 +160,18 @@ func detectQuota1(opts execOptions, args []string) bool {
 		if quota1CmdRE.MatchString(a) {
 			return true
 		}
+	}
+	return false
+}
+
+// detectQuota1 reports whether args should be run under Quota-1 single-test enforcement.
+func detectQuota1(opts execOptions, args []string) bool {
+	if detectExplicitQuota1(opts, args) {
+		return true
+	}
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
 	}
 	// Plain, targeted and coverage go test runs count toward the same one-run
 	// budget as --quota-1 (issue 944), but only in repos that use Quota-1.
@@ -622,7 +636,12 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		return 1, fmt.Errorf("exec: %w", err)
 	}
 
-	quota1Active := detectQuota1(opts, args)
+	explicitQuota1 := detectExplicitQuota1(opts, args)
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	quota1Active := explicitQuota1 || quota1DetectedGoTest(opts, getenv, args)
 	quotaStateFile := ""
 	if quota1Active {
 		res, err := quota1.CheckAndRecord(quota1.CheckOptions{
@@ -676,7 +695,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	defer cancel()
 	c := exec.Command(args[0], args[1:]...)
 	quota1Sandboxed := false
-	if quota1Active && !opts.DisableSandbox {
+	if explicitQuota1 && !opts.DisableSandbox {
 		cwd, _ := os.Getwd()
 		bwrap, wrappedArgs, _, sbErr := quota1SandboxCommand(args, cwd)
 		if sbErr != nil {

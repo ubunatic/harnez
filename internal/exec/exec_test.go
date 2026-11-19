@@ -1854,7 +1854,23 @@ func TestQuota1GoTestDetection(t *testing.T) {
 		{"command substitution", "echo $(go test ./...)", true},
 		{"go flag before subcommand", "go -C sub test ./...", true},
 		{"env wrapper", "env GOWORK=off go test .", true},
+		{"env unset flag", "env -u GOPATH go test ./...", true},
+		{"env chdir flag", "env -C sub --unset=FOO go test ./...", true},
+		{"env split-string flag", "env -S GOWORK=off go test .", true},
+		{"env double-dash", "env -i -u FOO -- go test .", true},
+		{"timeout duration", "timeout 30s go test ./...", true},
+		{"timeout signal and kill-after", "timeout -s KILL -k 5s 30s go test ./...", true},
+		{"timeout long flags", "timeout --signal TERM --kill-after 5s 1m gotestsum ./...", true},
+		{"nice adjustment", "nice -n 10 go test ./...", true},
+		{"nice negative adjustment", "nice -n -5 go test .", true},
+		{"time portability flag", "time -p go test ./...", true},
+		{"time format flag", `time -f "%E" go test ./...`, true},
+		{"chained wrappers", "time -p timeout -k 5s 30s nice -n 10 env -u GOPATH GOWORK=off go test ./...", true},
 		{"quoted argument ignored, real command matches", "echo 'a;b' && go test .", true},
+		{"env unset named go", "env -u go test -f foo", false},
+		{"timeout non-test", `timeout 30s echo "go test"`, false},
+		{"nice non-test", "nice -n 10 go build ./...", false},
+		{"time non-test", "time -p go vet ./...", false},
 		{"go build", "go build ./...", false},
 		{"go vet", "go vet ./...", false},
 		{"go list", "go list ./...", false},
@@ -2043,6 +2059,162 @@ func TestRunExecWrapper_NestedAndNonQuotaGoTest(t *testing.T) {
 		}
 		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
 			t.Fatalf("non-Quota repo wrote Quota-1 state at %s (stat err %v)", statePath, err)
+		}
+	})
+}
+
+// Refinement 1: plain detected go test counts/gates under Quota-1 and exports
+// HARNEZ_QUOTA1_ACTIVE=1 without forcing bwrap sandboxing; explicit --quota-1
+// and HARNEZ_QUOTA_1=1 still request the bwrap sandbox.
+func TestRunExecWrapper_PlainGoTestDoesNotForceBwrapSandbox(t *testing.T) {
+	bin := t.TempDir()
+	fakeGo := "#!/bin/sh\nprintf \"sandbox=%s active=%s\\n\" \"$HARNEZ_SANDBOX\" \"$HARNEZ_QUOTA1_ACTIVE\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fakeGo), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Clear any inherited HARNEZ_SANDBOX (for example when this test itself
+	// runs under make test-q1) and put only our fake go on PATH so any bwrap
+	// lookup fails deterministically.
+	t.Setenv(quota1SandboxMarkerEnv, "")
+	t.Setenv("PATH", bin)
+
+	repoDir := quota1GoTestRepo(t)
+	opts := testExecOptions(t)
+	opts.DisableSandbox = false
+	opts.Quota1Dir = repoDir
+
+	if detectExplicitQuota1(opts, []string{"go", "test", "."}) {
+		t.Fatal("detectExplicitQuota1(plain go test) = true, want false")
+	}
+	if !detectQuota1(opts, []string{"go", "test", "."}) {
+		t.Fatal("detectQuota1(plain go test) = false, want true")
+	}
+
+	var out, errOut bytes.Buffer
+	code, err := runExecWrapper([]string{"go", "test", "."}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 0 {
+		t.Fatalf("first plain go test = (%d, %v), stderr=%q; want (0, nil) without bwrap", code, err, errOut.String())
+	}
+	if got, want := out.String(), "sandbox= active=1\n"; got != want {
+		t.Fatalf("plain go test env output = %q, want %q", got, want)
+	}
+
+	// Second plain go test without source edits must still be blocked by Quota-1.
+	var out2, errOut2 bytes.Buffer
+	code, err = runExecWrapper([]string{"go", "test", "."}, opts, strings.NewReader(""), &out2, &errOut2)
+	if err != nil || code != 1 || !strings.Contains(errOut2.String(), "Quota-1: test execution blocked") {
+		t.Fatalf("second plain go test = (%d, %v), stderr=%q; want quota block", code, err, errOut2.String())
+	}
+
+	// Explicit --quota-1 and HARNEZ_QUOTA_1=1 still invoke bwrap sandboxing
+	// (which errors here because bwrap is not on our isolated PATH).
+	for _, tc := range []struct {
+		name  string
+		setup func(*execOptions)
+	}{
+		{"explicit flag", func(o *execOptions) { o.Quota1 = true }},
+		{"HARNEZ_QUOTA_1 env", func(o *execOptions) {
+			o.Getenv = func(k string) string {
+				if k == quota1Env {
+					return "1"
+				}
+				return ""
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			explicitOpts := testExecOptions(t)
+			explicitOpts.DisableSandbox = false
+			explicitOpts.Quota1Dir = quota1GoTestRepo(t)
+			tc.setup(&explicitOpts)
+			if !detectExplicitQuota1(explicitOpts, []string{"go", "test", "."}) {
+				t.Fatalf("detectExplicitQuota1(%s) = false, want true", tc.name)
+			}
+			var eOut, eErr bytes.Buffer
+			_, err := runExecWrapper([]string{"go", "test", "."}, explicitOpts, strings.NewReader(""), &eOut, &eErr)
+			if err == nil {
+				t.Fatalf("%s with DisableSandbox=false and no bwrap succeeded; want sandbox error", tc.name)
+			}
+		})
+	}
+}
+
+// Refinement 4: verify plain go test gating triggers for each of the 3
+// quota1Configured signals independently.
+func TestRunExecWrapper_Quota1ConfiguredTriggers(t *testing.T) {
+	fakeGoOnPath(t)
+
+	emptyGitRepo := func(t *testing.T) string {
+		t.Helper()
+		repoDir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(repoDir, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repoDir, ".git", "HEAD"), []byte("ref: refs/heads/test\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return repoDir
+	}
+
+	t.Run("repo.yaml rules.quota true alone", func(t *testing.T) {
+		repoDir := emptyGitRepo(t)
+		if err := os.MkdirAll(filepath.Join(repoDir, ".harnez"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		repoYAML := "version: 1\nissues:\n  tracker: none\n  merge_driver: false\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: true\nmake:\n  container_test: false\n"
+		if err := os.WriteFile(filepath.Join(repoDir, ".harnez", "repo.yaml"), []byte(repoYAML), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		opts := testExecOptions(t)
+		opts.Quota1Dir = repoDir
+		if !quota1Configured(opts) {
+			t.Fatal("quota1Configured = false for repo.yaml rules.quota: true")
+		}
+		var out, errOut bytes.Buffer
+		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out, &errOut); err != nil || code != 0 {
+			t.Fatalf("first run = (%d, %v), stderr=%q; want (0, nil)", code, err, errOut.String())
+		}
+		var out2, errOut2 bytes.Buffer
+		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out2, &errOut2); err != nil || code != 1 || !strings.Contains(errOut2.String(), "Quota-1: test execution blocked") {
+			t.Fatalf("second run = (%d, %v), stderr=%q; want quota block", code, err, errOut2.String())
+		}
+	})
+
+	t.Run("Quota.md alone", func(t *testing.T) {
+		repoDir := quota1GoTestRepo(t)
+		opts := testExecOptions(t)
+		opts.Quota1Dir = repoDir
+		if !quota1Configured(opts) {
+			t.Fatal("quota1Configured = false for Quota.md alone")
+		}
+		var out, errOut bytes.Buffer
+		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out, &errOut); err != nil || code != 0 {
+			t.Fatalf("first run = (%d, %v), stderr=%q; want (0, nil)", code, err, errOut.String())
+		}
+		var out2, errOut2 bytes.Buffer
+		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out2, &errOut2); err != nil || code != 1 || !strings.Contains(errOut2.String(), "Quota-1: test execution blocked") {
+			t.Fatalf("second run = (%d, %v), stderr=%q; want quota block", code, err, errOut2.String())
+		}
+	})
+
+	t.Run("existing quota_1.state alone", func(t *testing.T) {
+		repoDir := emptyGitRepo(t)
+		res, err := quota1.CheckAndRecord(quota1.CheckOptions{Dir: repoDir})
+		if err != nil || !res.Allowed {
+			t.Fatalf("seed quota_1.state = (%+v, %v), want allowed", res, err)
+		}
+		exitCode := 0
+		if err := quota1.FinishRun(res.StateFile, time.Now(), &exitCode); err != nil {
+			t.Fatalf("record seeded result: %v", err)
+		}
+		opts := testExecOptions(t)
+		opts.Quota1Dir = repoDir
+		if !quota1Configured(opts) {
+			t.Fatal("quota1Configured = false for existing quota_1.state alone")
+		}
+		var out, errOut bytes.Buffer
+		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out, &errOut); err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
+			t.Fatalf("plain go test after seeded state = (%d, %v), stderr=%q; want quota block", code, err, errOut.String())
 		}
 	})
 }
