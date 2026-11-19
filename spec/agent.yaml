@@ -309,7 +309,7 @@ models:
     tier: low
     roles: advisor, reviewer, developer
     cost: 48
-    cost_by_tier: {med: 108, high: 219, xhigh: 384}
+    cost_by_tier: {med: 109, high: 219, xhigh: 384}
     extra_tiers: [xhigh]
     eff: "?"
     skills: Go? TUI? SQL?

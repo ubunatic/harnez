@@ -54,7 +54,7 @@ estimates, not measured quota costs.
 | `claude:fable` | Fable 5.2 | $2.62 / $3.10 / $8.40 | 131 / 155 / 420 |
 | `agy:argon` | Gemini 4 Argon | $3.98 / $5.69 / $6.51 | 199 / 285 / 326 |
 | `agy:hydrogen` | Gemini 4 Hydrogen | $0.35 / $0.90 / $2.40 | 18 / 45 / 120 |
-| `agy:neon` | Gemini 4 Neon | $0.96 / $2.17 / $4.38 / $7.67 | 48 / 108 / 219 / 384 (M1 values, confirmed) |
+| `agy:neon` | Gemini 4 Neon | $0.96 / $2.17 / $4.38 / $7.67 | 48 / 109 / 219 / 384 (M1 values, confirmed) |
 
 Not recalibrated, on purpose:
 
@@ -83,7 +83,7 @@ Other M2 spec changes:
 `agy models` exposes `gemini-4-neon-{low,medium,high,xhigh}` (no bare `gemini-4-neon`).
 Harnez maps `agy:neon` / `neon` to `gemini-4-neon` with tiers `low`, `med`, `high`, and
 `xhigh`. FrontierCode 2.0 snapshot (2026-11-19): `46.2%` at high for `$4.38`/rollout, `#3`
-overall. Spec costs (`cost: 48`, `cost_by_tier` med 108 / high 219 / xhigh 384) are a relative
+overall. Spec costs (`cost: 48`, `cost_by_tier` med 109 / high 219 / xhigh 384) are a relative
 estimate anchored to `luna:low = 1` at `$0.02`/rollout, not a measured quota cost; ratings are
 `owner estimate, unverified`. Full recalibration of other models is issue 1243 M2.
 

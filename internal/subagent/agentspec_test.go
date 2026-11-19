@@ -148,7 +148,7 @@ func TestKnownModelEntriesCostByTierAndEffortRows(t *testing.T) {
 	wantCosts := map[string]int{
 		"codex:luna:low": 1, "codex:luna:med": 5, "codex:luna:high": 6,
 		"codex:sol:low": 17, "codex:sol:med": 25, "codex:sol:high": 33,
-		"agy:neon:low": 48, "agy:neon:med": 108, "agy:neon:high": 219, "agy:neon:xhigh": 384,
+		"agy:neon:low": 48, "agy:neon:med": 109, "agy:neon:high": 219, "agy:neon:xhigh": 384,
 		"codex:terra:low": 15, "codex:terra:med": 24, "codex:terra:high": 36,
 		"codex:astra:low": 182, "codex:astra:med": 342, "codex:astra:high": 384,
 	}
@@ -716,7 +716,7 @@ func TestModelCost(t *testing.T) {
 		{"codex:sol:high", 33, true},
 		{"codex:luna:med", 5, true},
 		{"neon:xhigh", 384, true},
-		{"agy:neon:med", 108, true},
+		{"agy:neon:med", 109, true},
 		{"agy:argon:high", 326, true},
 		{"claude:fable:low", 131, true},
 	} {
