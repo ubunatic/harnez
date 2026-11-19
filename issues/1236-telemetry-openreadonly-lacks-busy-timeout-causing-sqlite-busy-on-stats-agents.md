@@ -1,6 +1,6 @@
 # 1236 — telemetry: OpenReadOnly lacks busy_timeout, causing SQLITE_BUSY on stats --agents
 
-**Status**: Open
+**Status**: Closed — Added _pragma=busy_timeout(5000) to telemetry.OpenReadOnly DSN and added TestOpenReadOnlyWaitsForBusyLock proving raw mode=ro fails under lock while OpenReadOnly waits and succeeds (make test-q1 and make lint exit 0)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
