@@ -1,6 +1,6 @@
 # 965 — Issue closure records stale inherited worker model and session in interactive Codex hosts
 
-**Status**: Backlog — grooming 1083 (2026-11-03): active list focused on taia support, P1s and open bugs; promote when needed
+**Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
