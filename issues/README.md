@@ -12,7 +12,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 |---|------|-------|--------|
 | 857 | [857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md](857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md) | Support external issue providers (GitHub, GitLab, Codeberg, Trello, Jira) | Open |
 | 942 | [942-epic-model-catalog-access-discovery-and-user-model-policy.md](942-epic-model-catalog-access-discovery-and-user-model-policy.md) | Epic: model catalog, access discovery and user model policy | Open |
-| 944 | [944-quota-1-count-targeted-and-coverage-go-test-runs-toward-the-one-run-budget.md](944-quota-1-count-targeted-and-coverage-go-test-runs-toward-the-one-run-budget.md) | quota-1: count targeted and coverage go test runs toward the one-run budget | Open |
 | 979 | [979-epic-agent-instructions-and-help-text.md](979-epic-agent-instructions-and-help-text.md) | Epic: agent instructions and help text | Open |
 | 980 | [980-epic-harnez-agent-command-fixes-review-and-isolation.md](980-epic-harnez-agent-command-fixes-review-and-isolation.md) | Epic: harnez agent command fixes, review and isolation | Open |
 | 992 | [992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md](992-per-provider-plan-preference-own-free-or-shared-plan-limits-which-roles-a-provider-gets.md) | Per-provider plan preference: own, free or shared plan limits which roles a provider gets | Open |
