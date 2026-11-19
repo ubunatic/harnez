@@ -69,3 +69,9 @@ Tools like the "pi" agent handle this cleanly by truncating output streams at a 
   4. Precedence & overrides: `--max-output-bytes` beats `HARNEZ_EXEC_MAX_OUTPUT_BYTES` beats spec; `HARNEZ_EXEC_TRUNCATE=0` and `--max-output-bytes=0` disable truncation; `HARNEZ_EXEC_TRUNCATE=1` forces truncation.
   5. `--distill` large output + `--quota-1` (failure reuses `quotaLogPath`, pass uses spill file + preserves `quotaLogFile` cleanup) + TTY vs non-TTY detection.
   6. `help.golden` updated and passes.
+
+## Refinements (from `rev-771` review of `fa47f5ae`)
+
+1. **[HIGH] `internal/exec/truncate.go` `outputCap.allowance`**: return `0, c.byLines` immediately at the top when `c.withheld` is true, so once truncation begins (including after backing off to a UTF-8 rune boundary that leaves `room > 0`), no later small write leaks to `dst` or skips `spillLocked`! Add a regression test verifying follow-up writes after a rune-aligned cut are NOT written to `dst` and ARE written completely in order to the spill file.
+2. **[LOW] `adoptQuotaLog` / `moveFile` cleanup (`internal/exec/truncate.go`)**: remove the newly created destination file (`path`/`dst`) on `moveFile` / `io.Copy` / `Close` error so failed adopts leave zero orphan partial files.
+3. **[LOW] `execRunOpts` (`internal/exec/truncate_test.go`)**: set `t.Setenv("XDG_STATE_HOME", t.TempDir())` (or pass `StateDir`/env cleanly) so `TestRunExecWrapper_*` truncation tests stay clean inside read-only `$HOME` sandboxes (without `PrepareCmdRunnerBroker` stderr warnings).
