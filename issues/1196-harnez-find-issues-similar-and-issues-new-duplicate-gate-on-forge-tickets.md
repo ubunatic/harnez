@@ -44,6 +44,14 @@ thresholds and stopwords from the spec), `--force` overrides. On the forge path 
 - Reuse `spec/pr.yaml` `issue_scan` (up to 10 pages x 20 = 200 issues) for forge `find issues similar` and the `issues new` duplicate gate instead of adding a new spec budget; if the scan result is `truncated`, print a brief note to stderr so callers know older issues were not fetched. (Host `/decide`, 2026-11-19.)
 - Defer private-repo CLI fallback (`fj`/`tea`/`gh` list without a harnez read token) to `#1237` (next sprint) so API reads stay uniform here. (Host `/decide`, 2026-11-19.)
 - On forge `issues new`, warn to stderr and continue when the forge read fails or is unreachable (matching `internal/issues/claims.go`), rather than failing closed offline. `--force` bypasses blocking on strong matches while still surfacing matches on `--dry-run`. (Host `/decide`, 2026-11-19.)
+- Scope boundary: explicit `--inbox` offline drafts and `--remote` (`CLAUDE_CODE_REMOTE` GitHub flow) stay outside the forge duplicate gate here (`--remote` already documents its own flow; `--inbox` intentionally avoids forge calls). Direct unit tests calling `runIssuesNewForge` without `Source` document the nil-`Source` bypass rather than rejecting nil, keeping unit tests focused. (Host `/decide`, 2026-11-19.)
+
+## Refinements (from `rev-1196` review of `ef0130dc`)
+
+1. `printForgeTruncatedNote` (`cmd/harnez/issues_forge.go`): report `fetched` (`len(files)`) when `fetched > 0` instead of `PageSize*MaxPages`, so filtered PR pages do not overstate checked issues (`checked the newest %d forge issues; older issues were not fetched`).
+2. `checkForgeNewDuplicates` (`cmd/harnez/issues_forge.go`): wrap `err` with `forgeTrackerHint(err, opt.Target)` in the skipped-check stderr warning so private-repo 404/401 hints surface consistently, and add a brief doc comment explaining when `opt.Source == nil` is valid (test callers that omit forge reads; CLI entrypoints always set `Source`).
+3. `docs/commands/issue.md`: reword the `--dry-run` note to accurately say strong matches refuse unless `--force`, and `--dry-run` runs the check without writing (`--dry-run --force` surfaces matches without writing).
+4. Tests (`cmd/harnez/issues_forge_test.go`): test `issues new` truncation note on stderr, unreachable host error (`forge.APIError{Status: 0, Transient: true}`), and `stdout`/`stderr` separation on `issues new --dry-run` duplicate output.
 
 ## M1 — `find issues similar` and `issues new` duplicate gate on forge trackers
 
