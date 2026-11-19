@@ -1,6 +1,6 @@
 # 1136 — harnez release: infer bump size from tag history, clarify missing build, and warn on tag-only repos without version.yaml
 
-**Status**: Open
+**Status**: Closed — M1 and review refinements delivered (c5dd6ce8, 5d3b6b56): added tag-history bump inference with custom tag_prefix support, explicit --skip-build vs missing build banners, missing vs malformed version.yaml handling, tests, and GoRelease docs/help sync; make lint, test-q1 (dev), and internal/release + cmd/harnez passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
