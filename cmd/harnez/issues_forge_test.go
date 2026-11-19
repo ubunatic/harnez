@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/forge"
 	"ubunatic.com/harnez/internal/forgetoken"
 	"ubunatic.com/harnez/internal/forgetracker"
@@ -61,7 +63,7 @@ func TestForgeWritesAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	err = runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"bug"}}, false, false)
+	err = runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: t.TempDir(), Target: target, Req: forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"bug"}}})
 	if err != nil || out.String() != "filed as #42 at https://example/42; no commit\n" {
 		t.Fatalf("new %q: %v", out.String(), err)
 	}
@@ -71,7 +73,7 @@ func TestForgeWritesAPI(t *testing.T) {
 	}
 	requests = nil
 	out.Reset()
-	err = runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body}, false, true)
+	err = runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: t.TempDir(), Target: target, Req: forgetracker.CreateRequest{Title: "T", BodyFile: body}, JSON: true})
 	if err != nil || out.String() != "{\"forge\":\"codeberg.org/o/r\",\"number\":42,\"tool\":\"api\",\"url\":\"https://example/42\"}\n" {
 		t.Fatalf("new json %q: %v", out.String(), err)
 	}
@@ -89,7 +91,7 @@ func TestForgeWritesAPI(t *testing.T) {
 	}
 	requests = nil
 	out.Reset()
-	err = runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"missing"}}, false, false)
+	err = runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: t.TempDir(), Target: target, Req: forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"missing"}}})
 	if err == nil || err.Error() != `unknown label "missing"; existing labels: bug` || len(requests) != 2 {
 		t.Fatalf("unknown: %v %q", err, requests)
 	}
@@ -120,7 +122,7 @@ func TestForgeNewWorkerAndFallback(t *testing.T) {
 	req := forgetracker.CreateRequest{Title: "T", BodyFile: body}
 	dir := t.TempDir()
 	var out, errBuf bytes.Buffer
-	err := runIssuesNewForge(&out, &errBuf, dir, target, req, false, false)
+	err := runIssuesNewForge(&out, &errBuf, forgeNewOptions{Dir: dir, Target: target, Req: req})
 	if err != nil || len(ran) != 0 {
 		t.Fatalf("worker err=%v ran=%v", err, ran)
 	}
@@ -135,14 +137,14 @@ func TestForgeNewWorkerAndFallback(t *testing.T) {
 	}
 	out.Reset()
 	errBuf.Reset()
-	if err := runIssuesNewForge(&out, io.Discard, dir, target, req, true, false); err != nil || out.String() != "dry run, would file on codeberg.org/o/r: fj issue create --repo codeberg.org/o/r --body-file "+body+" T\n" {
+	if err := runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: dir, Target: target, Req: req, DryRun: true}); err != nil || out.String() != "dry run, would file on codeberg.org/o/r: fj issue create --repo codeberg.org/o/r --body-file "+body+" T\n" {
 		t.Fatalf("dry: %q %v", out.String(), err)
 	}
 	t.Setenv("HARNEZ_AGENT_ROLE", "")
 	t.Setenv("HARNEZ_SESSION_ID", "")
 	issueWriteLookup = func(string) string { return "" }
 	out.Reset()
-	if err := runIssuesNewForge(&out, io.Discard, dir, target, req, false, false); err != nil {
+	if err := runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: dir, Target: target, Req: req}); err != nil {
 		t.Fatal(err)
 	}
 	if len(ran) != 1 || !reflect.DeepEqual(ran[0].Args, []string{"issue", "create", "--repo", "codeberg.org/o/r", "--body-file", body, "T"}) {
@@ -151,7 +153,7 @@ func TestForgeNewWorkerAndFallback(t *testing.T) {
 	if err := os.WriteFile(body, []byte(" \n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	err = runIssuesNewForge(&out, io.Discard, dir, target, req, false, false)
+	err = runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: dir, Target: target, Req: req})
 	if err == nil || err.Error() != "issues new: body file is empty or whitespace-only" || len(ran) != 1 {
 		t.Fatalf("blank: %v", err)
 	}
@@ -186,16 +188,19 @@ func TestForgeNewStdinBody(t *testing.T) {
 		f.Close()
 	})
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
-	if err := runIssuesNewForge(io.Discard, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: "-"}, false, false); err != nil {
+	if err := runIssuesNewForge(io.Discard, io.Discard, forgeNewOptions{Dir: t.TempDir(), Target: target, Req: forgetracker.CreateRequest{Title: "T", BodyFile: "-"}}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 type stubForgeSource struct {
-	calls   int
-	state   string // state argument of the last Issues request
-	repoErr error  // Repo probe result; nil means the repo is reachable
-	missing bool   // Issue answers 404 for every number
+	calls     int
+	state     string // state argument of the last Issues request
+	repoErr   error  // Repo probe result; nil means the repo is reachable
+	missing   bool   // Issue answers 404 for every number
+	issues    []forge.RemoteIssue
+	truncated bool
+	issuesErr error
 }
 
 func (s *stubForgeSource) Issue(_ forge.Forge, _, _ string, n int) (forge.RemoteIssue, error) {
@@ -209,7 +214,13 @@ func (s *stubForgeSource) Issue(_ forge.Forge, _, _ string, n int) (forge.Remote
 func (s *stubForgeSource) Issues(_ forge.Forge, _, _ string, state string, _ forge.ScanOptions) ([]forge.RemoteIssue, bool, error) {
 	s.calls++
 	s.state = state
-	return []forge.RemoteIssue{{Number: 7, Title: "forge ticket", State: "open"}}, false, nil
+	if s.issuesErr != nil {
+		return nil, false, s.issuesErr
+	}
+	if s.issues != nil {
+		return s.issues, s.truncated, nil
+	}
+	return []forge.RemoteIssue{{Number: 7, Title: "forge ticket", State: "open"}}, s.truncated, nil
 }
 
 func (s *stubForgeSource) Repo(forge.Forge, string, string) error { return s.repoErr }
@@ -233,7 +244,6 @@ func TestFindForgeClosedWordAndActiveAlias(t *testing.T) {
 		{"draft", "find issues draft: forge tickets have only open and closed states; use status:open or status:closed"},
 		{"next", "find issues next: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
 		{"last", "find issues last: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
-		{"similar", "find issues similar: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
 	}
 	for _, c := range refused {
 		out, err := runHarnez(t, "find", "-d", dir, "issues", c.word)
@@ -465,6 +475,7 @@ func TestIssuesNewLocalRefusesForgeFlags(t *testing.T) {
 }
 
 func TestIssuesNewForceForge(t *testing.T) {
+	stubForge(t)
 	ran := stubIssueCLI(t, "#42 T\n")
 	dir := forgeRepo(t)
 	if err := os.Mkdir(filepath.Join(dir, "issues"), 0755); err != nil {
@@ -482,7 +493,6 @@ func TestIssuesNewForceForge(t *testing.T) {
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("local files: %v %v", entries, err)
 	}
-	stubForge(t)
 	out, err = runHarnez(t, "issues", "show", "--forge", "--json", "-d", dir, "7")
 	if err != nil || !strings.Contains(out, `"updated_at"`) {
 		t.Fatalf("show: %q %v", out, err)
@@ -538,7 +548,7 @@ func TestIssuesNewFJFailureInboxFallback(t *testing.T) {
 	}
 	target := forgetracker.Target{Forge: forge.Forge{Host: "codeberg.org", IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
 	var out, errBuf bytes.Buffer
-	err := runIssuesNewForge(&out, &errBuf, dir, target, forgetracker.CreateRequest{Title: "Title", BodyFile: body}, false, false)
+	err := runIssuesNewForge(&out, &errBuf, forgeNewOptions{Dir: dir, Target: target, Req: forgetracker.CreateRequest{Title: "Title", BodyFile: body}})
 	if err != nil {
 		t.Fatalf("unexpected error on inbox fallback: %v", err)
 	}
@@ -576,7 +586,7 @@ func TestForgeDryRunMetadataAndGitHub(t *testing.T) {
 	}
 	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org"}, Owner: "o", Repo: "r"}
 	var out bytes.Buffer
-	if err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"x"}}, true, false); err != nil || out.String() != "dry run, would file on codeberg.org/o/r over the API (write token)\n" {
+	if err := runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: t.TempDir(), Target: target, Req: forgetracker.CreateRequest{Title: "T", BodyFile: body, Labels: []string{"x"}}, DryRun: true}); err != nil || out.String() != "dry run, would file on codeberg.org/o/r over the API (write token)\n" {
 		t.Fatalf("new: %q %v", out.String(), err)
 	}
 	out.Reset()
@@ -1002,7 +1012,7 @@ func TestForgeRefinementEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if err := runIssuesNewForge(&out, io.Discard, t.TempDir(), target, forgetracker.CreateRequest{Title: "T", BodyFile: body}, true, false); err != nil || out.String() != "dry run, would file on codeberg.org/o/r: fj issue create --repo codeberg.org/o/r --body-file "+body+" T\n" {
+	if err := runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: t.TempDir(), Target: target, Req: forgetracker.CreateRequest{Title: "T", BodyFile: body}, DryRun: true}); err != nil || out.String() != "dry run, would file on codeberg.org/o/r: fj issue create --repo codeberg.org/o/r --body-file "+body+" T\n" {
 		t.Fatalf("new dry: %q %v", out.String(), err)
 	}
 	out.Reset()
@@ -1182,7 +1192,7 @@ func TestIssuesNewInboxFallbackCases(t *testing.T) {
 		req := forgetracker.CreateRequest{Title: "Need Write Access", BodyFile: body, Labels: []string{"bug"}}
 
 		var out, errBuf bytes.Buffer
-		if err := runIssuesNewForge(&out, &errBuf, dir, target, req, false, false); err != nil {
+		if err := runIssuesNewForge(&out, &errBuf, forgeNewOptions{Dir: dir, Target: target, Req: req}); err != nil {
 			t.Fatalf("first fallback: %v", err)
 		}
 		if !strings.Contains(out.String(), "filed in inbox at issues/inbox/need-write-access.md (forge fallback; no commit)\n") {
@@ -1199,7 +1209,7 @@ func TestIssuesNewInboxFallbackCases(t *testing.T) {
 		// Second filing with the same title gets a unique filename instead of overwriting.
 		out.Reset()
 		errBuf.Reset()
-		if err := runIssuesNewForge(&out, &errBuf, dir, target, req, false, true); err != nil {
+		if err := runIssuesNewForge(&out, &errBuf, forgeNewOptions{Dir: dir, Target: target, Req: req, JSON: true}); err != nil {
 			t.Fatalf("second fallback: %v", err)
 		}
 		if !strings.Contains(out.String(), `"inbox":true`) || !strings.Contains(out.String(), `"path":"issues/inbox/need-write-access-2.md"`) {
@@ -1266,5 +1276,286 @@ func TestIssuesEditForgeAuthWarning(t *testing.T) {
 	}
 	if !strings.Contains(out, noTokenDiggingDirective) {
 		t.Fatalf("expected stderr warning, got %q", out)
+	}
+}
+
+func TestFindForgeIssuesSimilarAndJSON(t *testing.T) {
+	stub := stubForge(t)
+	stub.issues = []forge.RemoteIssue{
+		{Number: 12, Title: "Crash on startup loader", Body: "segfault when reading config", State: "open", HTMLURL: "https://codeberg.org/o/r/issues/12"},
+		{Number: 8, Title: "Startup loader hangs on config", Body: "loader loop", State: "closed", HTMLURL: "https://codeberg.org/o/r/issues/8"},
+		{Number: 3, Title: "Docs typo", Body: "spelling", State: "open", HTMLURL: "https://codeberg.org/o/r/issues/3"},
+	}
+	dir := forgeRepo(t)
+
+	out, err := runHarnez(t, "find", "-d", dir, "issues", "similar", "Crash on startup loader")
+	if err != nil {
+		t.Fatalf("find issues similar: %v\n%s", err, out)
+	}
+	if stub.state != "all" {
+		t.Fatalf("state = %q, want all", stub.state)
+	}
+	if !strings.Contains(out, "12\topen\tCrash on startup loader\t") || !strings.Contains(out, "https://codeberg.org/o/r/issues/12") {
+		t.Fatalf("unexpected TSV output:\n%s", out)
+	}
+	if !strings.Contains(out, "8\tclosed\tStartup loader hangs on config\t") {
+		t.Fatalf("expected closed match in TSV output:\n%s", out)
+	}
+
+	// JSON output with truncation warning on stderr.
+	stub.truncated = true
+	root := newRootCmd()
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"find", "-d", dir, "issues", "similar", "--json", "Crash on startup loader"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("find issues similar --json: %v\n%s", err, stderr.String())
+	}
+	var results []find.SimilarResult
+	if err := json.Unmarshal(stdout.Bytes(), &results); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if len(results) < 2 || results[0].Number != "12" || !results[0].Strong {
+		t.Fatalf("unexpected JSON results: %+v", results)
+	}
+	if !strings.Contains(stderr.String(), "checked the newest ") || !strings.Contains(stderr.String(), "older issues were not fetched") {
+		t.Fatalf("missing truncation note on stderr: %q", stderr.String())
+	}
+
+	// Empty query fails before calling forge.
+	before := stub.calls
+	if _, err := runHarnez(t, "find", "-d", dir, "issues", "similar"); err == nil || !strings.Contains(err.Error(), "title must not be empty") {
+		t.Fatalf("empty similar query: %v", err)
+	}
+	if stub.calls != before {
+		t.Fatalf("empty similar query should not call forge: %d -> %d", before, stub.calls)
+	}
+
+	// issues.tracker: none with only issues/inbox/ still routes similar to forge.
+	writeIndexRepoConfig(t, dir, "none", false)
+	if err := os.MkdirAll(filepath.Join(dir, "issues", "inbox"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "issues", "inbox", "draft.md"), []byte("# Draft\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err = runHarnez(t, "find", "-d", dir, "issues", "similar", "Crash on startup loader")
+	if err != nil || !strings.Contains(out, "12\topen\tCrash on startup loader\t") {
+		t.Fatalf("tracker none + inbox similar: %v\n%s", err, out)
+	}
+}
+
+func TestForgeNewDuplicateGateAPIAndCLI(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+
+	body := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(body, []byte("repro steps\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("API write-token path refuses strong match and succeeds with --force", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		t.Setenv("PATH", t.TempDir())
+		_, st, err := forgeTokenStoreFor(true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Save(forgetoken.Meta{Host: "codeberg.org", User: "u"}, "write-secret"); err != nil {
+			t.Fatal(err)
+		}
+		var postCount int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/repos/o/r/issues" {
+				http.NotFound(w, r)
+				return
+			}
+			switch r.Method {
+			case http.MethodGet:
+				_, _ = io.WriteString(w, `[{"number":12,"title":"Crash on startup loader","body":"segfault","state":"open","html_url":"https://codeberg.org/o/r/issues/12"},{"number":8,"title":"Crash on startup loader closed","body":"old","state":"closed","html_url":"https://codeberg.org/o/r/issues/8"}]`)
+			case http.MethodPost:
+				postCount++
+				_, _ = io.WriteString(w, `{"number":42,"html_url":"https://codeberg.org/o/r/issues/42"}`)
+			default:
+				http.Error(w, "method", http.StatusMethodNotAllowed)
+			}
+		}))
+		defer srv.Close()
+
+		target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
+		scan := forge.ScanOptions{PageSize: 20, MaxPages: 2}
+		src := forge.NewPullLister(scan, func(forge.Forge) string { return "" })
+		req := forgetracker.CreateRequest{Title: "Crash on startup loader", BodyFile: body}
+
+		var out, errBuf bytes.Buffer
+		err = runIssuesNewForge(&out, &errBuf, forgeNewOptions{Dir: t.TempDir(), Target: target, Source: src, Scan: scan, Req: req})
+		if err == nil || !strings.Contains(err.Error(), "likely duplicate ticket(s) found") || !strings.Contains(err.Error(), "harnez issues show 12") || !strings.Contains(err.Error(), "harnez issues reopen 8") {
+			t.Fatalf("expected duplicate error with forge hints, got: %v", err)
+		}
+		if postCount != 0 {
+			t.Fatalf("expected 0 POST calls on duplicate refusal, got %d", postCount)
+		}
+
+		out.Reset()
+		errBuf.Reset()
+		err = runIssuesNewForge(&out, &errBuf, forgeNewOptions{Dir: t.TempDir(), Target: target, Source: src, Scan: scan, Req: req, Force: true})
+		if err != nil || !strings.Contains(out.String(), "filed as #42") || postCount != 1 {
+			t.Fatalf("expected --force create to succeed: err=%v out=%q posts=%d", err, out.String(), postCount)
+		}
+	})
+
+	t.Run("CLI path refuses strong match and succeeds with --force", func(t *testing.T) {
+		oldLook, oldRun, oldLookup, oldMeta := issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata
+		var cliCalls int
+		issueCLILookPath = func(name string) (string, error) { return name, nil }
+		issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
+			cliCalls++
+			return []byte("#42 Crash on startup loader\n"), nil
+		}
+		issueWriteLookup = func(string) string { return "" }
+		issueWriteMetadata = func(string) (bool, error) { return false, nil }
+		t.Cleanup(func() {
+			issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata = oldLook, oldRun, oldLookup, oldMeta
+		})
+
+		stub := stubForge(t)
+		stub.issues = []forge.RemoteIssue{
+			{Number: 12, Title: "Crash on startup loader", Body: "segfault", State: "open", HTMLURL: "https://codeberg.org/o/r/issues/12"},
+		}
+		dir := forgeRepo(t)
+
+		out, err := runHarnez(t, "issues", "new", "-d", dir, "Crash on startup loader", "-F", body)
+		if err == nil || !strings.Contains(err.Error(), "likely duplicate ticket(s) found") || !strings.Contains(err.Error(), "harnez issues show 12") {
+			t.Fatalf("CLI duplicate refusal: err=%v out=%q", err, out)
+		}
+		if cliCalls != 0 {
+			t.Fatalf("expected 0 CLI calls on duplicate refusal, got %d", cliCalls)
+		}
+
+		out, err = runHarnez(t, "issues", "new", "-d", dir, "--force", "Crash on startup loader", "-F", body)
+		if err != nil || !strings.Contains(out, "filed as #42") || cliCalls != 1 {
+			t.Fatalf("CLI --force create: err=%v out=%q calls=%d", err, out, cliCalls)
+		}
+
+		// Explicit --forge includes --forge in the hint.
+		if err := os.Mkdir(filepath.Join(dir, "issues"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		out, err = runHarnez(t, "issues", "new", "-d", dir, "--forge", "Crash on startup loader", "-F", body)
+		if err == nil || !strings.Contains(err.Error(), "harnez issues show --forge 12") || cliCalls != 1 {
+			t.Fatalf("explicit --forge hint: err=%v out=%q calls=%d", err, out, cliCalls)
+		}
+	})
+}
+
+func TestForgeNewDryRunDuplicateMatches(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+
+	oldLook, oldRun, oldLookup, oldMeta := issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata
+	var cliCalls int
+	issueCLILookPath = func(name string) (string, error) { return name, nil }
+	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
+		cliCalls++
+		return []byte("#42\n"), nil
+	}
+	issueWriteLookup = func(string) string { return "" }
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	t.Cleanup(func() {
+		issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata = oldLook, oldRun, oldLookup, oldMeta
+	})
+
+	body := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(body, []byte("details\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stub := stubForge(t)
+	stub.issues = []forge.RemoteIssue{
+		{Number: 12, Title: "Crash on startup loader", Body: "segfault", State: "open", HTMLURL: "https://codeberg.org/o/r/issues/12"},
+		{Number: 9, Title: "Unrelated widget docs", Body: "readme", State: "open", HTMLURL: "https://codeberg.org/o/r/issues/9"},
+	}
+	dir := forgeRepo(t)
+
+	// Strong match on --dry-run without --force returns duplicate error and makes 0 writes.
+	out, err := runHarnez(t, "issues", "new", "-d", dir, "--dry-run", "Crash on startup loader", "-F", body)
+	if err == nil || !strings.Contains(err.Error(), "likely duplicate ticket(s) found") || !strings.Contains(err.Error(), "#12") {
+		t.Fatalf("dry-run strong match: err=%v out=%q", err, out)
+	}
+	if cliCalls != 0 {
+		t.Fatalf("expected 0 CLI calls on dry-run, got %d", cliCalls)
+	}
+
+	// Strong match on --dry-run --force displays the match and the planned create action with 0 writes.
+	out, err = runHarnez(t, "issues", "new", "-d", dir, "--dry-run", "--force", "Crash on startup loader", "-F", body)
+	if err != nil || !strings.Contains(out, "#12 open — Crash on startup loader") || !strings.Contains(out, "strong") || !strings.Contains(out, "dry run, would file on codeberg.org/o/r") {
+		t.Fatalf("dry-run --force strong match: err=%v out=%q", err, out)
+	}
+	if cliCalls != 0 {
+		t.Fatalf("expected 0 CLI calls on dry-run --force, got %d", cliCalls)
+	}
+
+	// Weak match on --dry-run without --force surfaces the match and prints the planned action with 0 writes.
+	out, err = runHarnez(t, "issues", "new", "-d", dir, "--dry-run", "Startup metrics dashboard export", "-F", body)
+	if err != nil || !strings.Contains(out, "#12 open — Crash on startup loader") || !strings.Contains(out, "dry run, would file on codeberg.org/o/r") {
+		t.Fatalf("dry-run weak match: err=%v out=%q", err, out)
+	}
+	if cliCalls != 0 {
+		t.Fatalf("expected 0 CLI calls on dry-run weak match, got %d", cliCalls)
+	}
+}
+
+func TestForgeNewDuplicateCheckFailureWarnsAndContinues(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+
+	_, st, err := forgeTokenStoreFor(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Save(forgetoken.Meta{Host: "codeberg.org", User: "u"}, "write-secret"); err != nil {
+		t.Fatal(err)
+	}
+
+	var postCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/issues":
+			http.Error(w, "upstream down", http.StatusInternalServerError)
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/o/r/issues":
+			postCount++
+			_, _ = io.WriteString(w, `{"number":55,"html_url":"https://codeberg.org/o/r/issues/55"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	body := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(body, []byte("details\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
+	scan := forge.ScanOptions{PageSize: 20, MaxPages: 2}
+	src := forge.NewPullLister(scan, func(forge.Forge) string { return "" })
+
+	var out, errBuf bytes.Buffer
+	err = runIssuesNewForge(&out, &errBuf, forgeNewOptions{
+		Dir:    t.TempDir(),
+		Target: target,
+		Source: src,
+		Scan:   scan,
+		Req:    forgetracker.CreateRequest{Title: "Crash on startup loader", BodyFile: body},
+	})
+	if err != nil {
+		t.Fatalf("expected create to continue after 500 on duplicate scan: %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "duplicate check skipped") {
+		t.Fatalf("expected warning on stderr, got: %q", errBuf.String())
+	}
+	if !strings.Contains(out.String(), "filed as #55") || postCount != 1 {
+		t.Fatalf("expected API create to succeed: out=%q posts=%d", out.String(), postCount)
 	}
 }

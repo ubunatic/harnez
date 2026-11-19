@@ -350,7 +350,13 @@ func runFindSimilar(w io.Writer, opts findRunOptions, query string) error {
 	if err != nil {
 		return err
 	}
-	if opts.JSON {
+	return RenderSimilar(w, results, opts.JSON)
+}
+
+// RenderSimilar writes similarity results in TSV or JSON format, matching
+// `find issues similar`.
+func RenderSimilar(w io.Writer, results []SimilarResult, jsonOut bool) error {
+	if jsonOut {
 		if results == nil {
 			results = []SimilarResult{}
 		}

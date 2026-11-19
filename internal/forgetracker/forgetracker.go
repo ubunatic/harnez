@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/forge"
+	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/prwait"
 )
 
@@ -192,6 +193,41 @@ func Find(w io.Writer, src Source, t Target, opts forge.ScanOptions, terms []str
 		}
 	}
 	return nil
+}
+
+// IssueFiles converts forge issues into the issues.IssueFile corpus that
+// find.Similar and issues.CheckDuplicatesFromFiles score. Pull requests are
+// skipped.
+func IssueFiles(list []forge.RemoteIssue) []issues.IssueFile {
+	files := make([]issues.IssueFile, 0, len(list))
+	for _, is := range list {
+		if is.PullRequest != nil {
+			continue
+		}
+		path := strings.TrimSpace(is.HTMLURL)
+		if path == "" {
+			path = fmt.Sprintf("#%d", is.Number)
+		}
+		files = append(files, issues.IssueFile{
+			Number:    strconv.Itoa(is.Number),
+			RelPath:   path,
+			Title:     is.Title,
+			RawStatus: is.State,
+			Canonical: issues.CanonicalizeStatus(is.State),
+			Body:      is.Body,
+		})
+	}
+	return files
+}
+
+// FetchIssueFiles lists all forge issues (open and closed) within opts and
+// converts them to issues.IssueFile values for similarity scoring.
+func FetchIssueFiles(src Source, t Target, opts forge.ScanOptions) ([]issues.IssueFile, bool, error) {
+	list, truncated, err := src.Issues(t.Forge, t.Owner, t.Repo, "all", opts)
+	if err != nil {
+		return nil, false, err
+	}
+	return IssueFiles(list), truncated, nil
 }
 
 func writeJSON(w io.Writer, v any) error {

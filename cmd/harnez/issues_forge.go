@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/forge"
 	"ubunatic.com/harnez/internal/forgetoken"
 	"ubunatic.com/harnez/internal/forgetracker"
@@ -23,9 +24,9 @@ import (
 
 // findIssuesLocalOnly lists `find issues` words that the forge reader does not serve. On a
 // forge repo they are refused with forgeLocalOnlyError; closed is not in the set because it
-// maps to status:closed (issue 1198).
+// maps to status:closed (issue 1198), and similar scores forge tickets via find.Similar (issue 1196).
 var findIssuesLocalOnly = map[string]bool{
-	"next": true, "last": true, "similar": true,
+	"next": true, "last": true,
 	"open": true, "blocked": true, "draft": true,
 }
 
@@ -415,10 +416,86 @@ func writeInboxIssue(dir, title, body string, labels []string) (string, error) {
 	return writeInboxPayload(dir, slug, formatInboxIssue(title, body, labels))
 }
 
+type forgeNewOptions struct {
+	Dir           string
+	Target        forgetracker.Target
+	Source        forgetracker.Source
+	Scan          forge.ScanOptions
+	Req           forgetracker.CreateRequest
+	ExplicitForge bool
+	Force         bool
+	DryRun        bool
+	JSON          bool
+}
+
+func printForgeTruncatedNote(stderr io.Writer, opts forge.ScanOptions, fetched int) {
+	if stderr == nil {
+		return
+	}
+	count := opts.PageSize * opts.MaxPages
+	if count <= 0 {
+		count = fetched
+	}
+	fmt.Fprintf(stderr, "checked the newest %d forge issues; older issues were not fetched\n", count)
+}
+
+func runFindSimilarForge(stdout, stderr io.Writer, src forgetracker.Source, t forgetracker.Target, opts forge.ScanOptions, query string, jsonOut bool) error {
+	files, truncated, err := forgetracker.FetchIssueFiles(src, t, opts)
+	if err != nil {
+		return fmt.Errorf("find issues similar: %s: %w", t, err)
+	}
+	if truncated {
+		printForgeTruncatedNote(stderr, opts, len(files))
+	}
+	results, err := find.Similar(files, query)
+	if err != nil {
+		return err
+	}
+	return find.RenderSimilar(stdout, results, jsonOut)
+}
+
+func checkForgeNewDuplicates(stderr io.Writer, opt forgeNewOptions) error {
+	if opt.Source == nil || (!opt.DryRun && opt.Force) {
+		return nil
+	}
+	files, truncated, err := forgetracker.FetchIssueFiles(opt.Source, opt.Target, opt.Scan)
+	if err != nil {
+		if stderr != nil {
+			fmt.Fprintf(stderr, "issues new: duplicate check skipped on %s (%v)\n", opt.Target, err)
+		}
+		return nil
+	}
+	if truncated {
+		printForgeTruncatedNote(stderr, opt.Scan, len(files))
+	}
+	matches, threshold, err := findIssueDuplicatesFromFiles(files, opt.Req.Title)
+	if err != nil {
+		return err
+	}
+	dupOpts := issues.DuplicateCheckOptions{Forge: true, ExplicitForge: opt.ExplicitForge}
+	if !opt.Force {
+		if dupErr := issues.DuplicateErrorWithOptions(opt.Req.Title, matches, threshold, dupOpts); dupErr != nil {
+			return dupErr
+		}
+	}
+	if opt.DryRun && len(matches) > 0 && stderr != nil {
+		fmt.Fprintf(stderr, "issues new: similar forge ticket(s) found (strong-match threshold %d%%):\n", threshold)
+		for _, m := range matches {
+			strength := ""
+			if m.Strong {
+				strength = ", strong"
+			}
+			fmt.Fprintf(stderr, "  #%s %s — %s (score %.3f%s)\n", m.Number, m.RawStatus, m.PlainTitle, m.Score, strength)
+		}
+	}
+	return nil
+}
+
 // runIssuesNewForge files a ticket on the forge via API or CLI (issue 1195),
 // and falls back to issues/inbox/<slug>.md on forge/auth/worker failure. It
-// makes no commit. With dryRun it prints the plan and creates nothing.
-func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Target, req forgetracker.CreateRequest, dryRun, jsonOut bool) error {
+// makes no commit. With DryRun it prints the plan and creates nothing.
+func runIssuesNewForge(stdout, stderr io.Writer, opt forgeNewOptions) error {
+	dir, t, req, dryRun, jsonOut := opt.Dir, opt.Target, opt.Req, opt.DryRun, opt.JSON
 	if strings.TrimSpace(req.Title) == "" {
 		return fmt.Errorf("issues new: a title is required to file on %s", t)
 	}
@@ -448,6 +525,10 @@ func runIssuesNewForge(stdout, stderr io.Writer, dir string, t forgetracker.Targ
 	}
 	if strings.TrimSpace(string(content)) == "" {
 		return fmt.Errorf("issues new: body file is empty or whitespace-only")
+	}
+	opt.Req = req
+	if err := checkForgeNewDuplicates(stderr, opt); err != nil {
+		return err
 	}
 	if dryRun {
 		if t.Forge.Kind == "forgejo" {

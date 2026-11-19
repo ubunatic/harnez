@@ -107,9 +107,9 @@ Query grammar:
                       Blocked or Draft). A leading bare word 'closed' is
                       status:closed; only the first term is rewritten, so
                       'closed' later in the query is a search term. The
-                      words open, blocked, draft, next, last, history and
-                      similar are local-only and are refused on a forge
-                      repo, naming the forge form.
+                      words open, blocked, draft, next, last and history
+                      are local-only and are refused on a forge repo,
+                      naming the forge form.
 
 An unquoted '|' is a shell pipeline operator, so an OR query needs shell
 quoting:
@@ -175,6 +175,13 @@ Output formatting:
 						return forgeLocalOnlyError("--next")
 					}
 					words := forgeFindArgs(args[1:])
+					if len(words) > 0 && words[0] == "similar" {
+						query := strings.TrimSpace(strings.Join(words[1:], " "))
+						if query == "" {
+							return fmt.Errorf("find issues similar: title must not be empty")
+						}
+						return warnIfForgeAuthErr(cmd.ErrOrStderr(), forgeTrackerHint(runFindSimilarForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), src, t, spec.IssueScan, query, jsonFlag), t))
+					}
 					if len(words) > 0 && findIssuesLocalOnly[words[0]] {
 						return forgeLocalOnlyError(words[0])
 					}

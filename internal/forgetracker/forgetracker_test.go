@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/forge"
+	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/prwait"
 )
 
@@ -272,5 +274,43 @@ func TestShowJSONUpdatedAt(t *testing.T) {
 	}
 	if out.String() != "{\n  \"number\": 3,\n  \"title\": \"Crash on start\",\n  \"state\": \"open\",\n  \"url\": \"u3\",\n  \"body\": \"segfault in loader\",\n  \"updated_at\": \"2026-01-02T03:04:05Z\"\n}\n" {
 		t.Fatalf("json: %q", out.String())
+	}
+}
+
+func TestIssueFilesAndSimilar(t *testing.T) {
+	remote := []forge.RemoteIssue{
+		{Number: 12, Title: "Crash on startup loader", Body: "segfault when loading config", State: "open", HTMLURL: "https://codeberg.org/o/r/issues/12"},
+		{Number: 8, Title: "Startup loader hangs on empty config", Body: "loader loop", State: "closed", HTMLURL: ""},
+		{Number: 5, Title: "Unrelated docs typo", Body: "readme spelling", State: "open", HTMLURL: "https://codeberg.org/o/r/issues/5"},
+		{Number: 99, Title: "Crash on startup loader PR", Body: "pull request", State: "open", PullRequest: &struct{}{}},
+	}
+	files := IssueFiles(remote)
+	if len(files) != 3 {
+		t.Fatalf("want 3 non-PR IssueFiles, got %d", len(files))
+	}
+	if files[0].Number != "12" || files[0].RawStatus != "open" || files[0].Canonical != issues.StatusOpen || files[0].RelPath != "https://codeberg.org/o/r/issues/12" {
+		t.Fatalf("unexpected files[0]: %+v", files[0])
+	}
+	if files[1].Number != "8" || files[1].RawStatus != "closed" || files[1].Canonical != issues.StatusClosed || files[1].RelPath != "#8" {
+		t.Fatalf("unexpected files[1]: %+v", files[1])
+	}
+	results, err := find.Similar(files, "Crash on startup loader")
+	if err != nil {
+		t.Fatalf("find.Similar: %v", err)
+	}
+	if len(results) < 2 {
+		t.Fatalf("want at least 2 similar results (open + closed), got %+v", results)
+	}
+	if results[0].Number != "12" || !results[0].Strong || results[0].Path != "https://codeberg.org/o/r/issues/12" {
+		t.Fatalf("unexpected top match: %+v", results[0])
+	}
+	foundClosed := false
+	for _, r := range results {
+		if r.Number == "8" && r.RawStatus == "closed" && r.Path == "#8" {
+			foundClosed = true
+		}
+	}
+	if !foundClosed {
+		t.Fatalf("expected closed forge issue #8 in results: %+v", results)
 	}
 }

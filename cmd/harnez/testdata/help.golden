@@ -1501,9 +1501,9 @@ Query grammar:
                       Blocked or Draft). A leading bare word 'closed' is
                       status:closed; only the first term is rewritten, so
                       'closed' later in the query is a search term. The
-                      words open, blocked, draft, next, last, history and
-                      similar are local-only and are refused on a forge
-                      repo, naming the forge form.
+                      words open, blocked, draft, next, last and history
+                      are local-only and are refused on a forge repo,
+                      naming the forge form.
 
 An unquoted '|' is a shell pipeline operator, so an OR query needs shell
 quoting:
