@@ -1,6 +1,6 @@
 # 1206 — repo setup: configure git pull autoSetupMerge for AGit repos and respect push-to-main policy
 
-**Status**: Open
+**Status**: Closed — M1 and review refinements delivered (96f338d8, 54ee3cf9): harnez init configures local branch.autoSetupMerge=always and checkout.defaultRemote=origin on AGit repos, GuardPushTarget + harnez push-guard + pre-push enforce protected_main on AGit remotes while keeping GitHub mirrors/solo/release working, plus synced Git/AGit docs; make lint, touched packages, and un-skipped internal/githooks (17 subtests) passed.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
