@@ -45,3 +45,14 @@ Coverage should come from the q1 run itself (e.g. a `-coverprofile` passed throu
   4. Failing `--quota-1` run -> edit source `.go` file -> targeted `go test ./pkg` -> allowed.
   5. Recursive `HARNEZ_QUOTA1_ACTIVE=1`: `go test` inside an active `--quota-1` run is NOT blocked; non-Quota repo (`rules.quota` absent/false, no `Quota.md`, no `quota_1.state`) leaves plain `go test` unblocked.
   6. `internal/claude/quota1_init_test.go`, `rules_init_test.go`, and `TestRootDocCopiesMatchSources` pass.
+
+## Refinements (from `rev-944` review of `46948f89` / `2921e4cd`)
+
+1. **[MEDIUM] Separate Quota-1 counting from `bwrap` sandboxing (`internal/exec/exec.go`)**:
+   - Keep `quota1.CheckAndRecord` gating + `HARNEZ_QUOTA1_ACTIVE=1` active for BOTH explicit `--quota-1`/`HARNEZ_QUOTA_1=1` AND detected `go test` / `gotestsum` (`quota1Active`), while restricting `bwrap` sandboxing (`quota1Sandbox`) strictly to explicit `--quota-1` / `HARNEZ_QUOTA_1=1` (`explicitQuota1`). Add a unit test verifying detected plain `go test` counts/gates under Quota-1 without enabling `quota1Sandboxed`.
+2. **Wrapper prefixes (`internal/exec/quota1_command.go`)**:
+   - Handle flag-value pairs cleanly in `skipCommandPrefix` for `env` (`-u`, `-C`, `--unset`, `--chdir`, `-S`, `--split-string`), `timeout` (`<duration>` plus flags like `-s`/`-k`), `nice` (`-n <val>`), and `time` (`-p`, `-f`), with table tests covering them.
+3. **Sync `config.yaml` and `.harnez/rules/Quota.md`**:
+   - Ensure `config.yaml` (`quota_section` and `files.Quota.md`) includes the `Report Untested Edits` bullet cleanly and matches `.harnez/rules/Quota.md` so `make install && ./harnez init -d .` is an exact no-op on `.harnez/rules/Quota.md`.
+4. **Test all 3 `quota1Configured` triggers (`internal/exec/exec_test.go`)**:
+   - Add tests verifying plain `go test` gating triggers cleanly for (a) `.harnez/repo.yaml` with `rules: { quota: true }` (no `Quota.md`), (b) `.harnez/rules/Quota.md` alone, and (c) existing `quota_1.state` alone. Also confirm `internal/claude` tests (`quota1_init_test`, `rules_init_test`) pass.
