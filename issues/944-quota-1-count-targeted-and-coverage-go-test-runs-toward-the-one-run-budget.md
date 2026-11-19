@@ -1,6 +1,6 @@
 # 944 — quota-1: count targeted and coverage go test runs toward the one-run budget
 
-**Status**: Open
+**Status**: Closed — M1+M2 and review refinements delivered (c60cee14, e8d834df): updated config.yaml/Quota.md and lean-sprint docs, enforced Quota-1 counting on plain/targeted/coverage go test and gotestsum (preserving explicit --quota-1 bwrap boundary, wrapper prefixes, HARNEZ_QUOTA1_ACTIVE recursion guard, and all 3 repo activation triggers); make lint, init idempotency, and dev make test-q1 passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
