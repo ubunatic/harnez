@@ -1,6 +1,6 @@
 # 1212 — harnez issues comment: fj fails with "token was already used" (keys.rs:154 panic); fall back to tea, preflight empty body
 
-**Status**: Open
+**Status**: Closed — Empty/whitespace comment preflight and fj token-reuse/auth diagnostics delivered in 135fb06a and a262a1dd, plus Forgejo API comment path in PR #173; verified live on codeberg.org/ubunatic/harnez#174 and codeberg.org/harnez/taia#292
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
