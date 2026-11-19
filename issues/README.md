@@ -34,4 +34,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1244 | [1244-add-orchestrator-neon-as-a-harnez-model.md](1244-add-orchestrator-neon-as-a-harnez-model.md) | Add Orchestrator (Neon) as a Harnez model | Open |
 | 1245 | [1245-make-install-writes-go-bin-harnez-while-local-bin-harnez-goself-shadows-it-on-path.md](1245-make-install-writes-go-bin-harnez-while-local-bin-harnez-goself-shadows-it-on-path.md) | make install writes ~/go/bin/harnez while ~/.local/bin/harnez (goself) shadows it on PATH | Open |
 | 1246 | [1246-exec-quota-1-treats-compile-only-go-test-c-as-a-test-execution-blocking-verifier-runs.md](1246-exec-quota-1-treats-compile-only-go-test-c-as-a-test-execution-blocking-verifier-runs.md) | exec: Quota-1 treats compile-only go test -c as a test execution, blocking verifier runs | Open |
+| 1247 | [1247-allow-forge-issues-edit-via-codeberg-token.md](1247-allow-forge-issues-edit-via-codeberg-token.md) | Allow forge issues edit via CODEBERG_TOKEN | Open |
 <!-- harnez:end issues-active-index -->
