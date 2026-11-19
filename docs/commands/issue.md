@@ -31,8 +31,9 @@ harnez find -d <repo> issues similar "proposed title"
 ```
 
 `harnez issues new` on a forge tracker checks existing forge tickets for strong
-duplicate matches before creating (pass `--force` to override; `--dry-run`
-surfaces matches without writing).
+duplicate matches before creating: strong matches are refused unless `--force`
+is passed, and `--dry-run` runs the check without writing (`--dry-run --force`
+surfaces matches alongside the planned create action without writing).
 
 A recognised forge origin is the tracker when `issues/` is absent, or when
 `issues.tracker: none` and `issues/` has no numbered ticket files (`<digits>-*.md`),

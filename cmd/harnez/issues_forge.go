@@ -432,9 +432,9 @@ func printForgeTruncatedNote(stderr io.Writer, opts forge.ScanOptions, fetched i
 	if stderr == nil {
 		return
 	}
-	count := opts.PageSize * opts.MaxPages
+	count := fetched
 	if count <= 0 {
-		count = fetched
+		count = opts.PageSize * opts.MaxPages
 	}
 	fmt.Fprintf(stderr, "checked the newest %d forge issues; older issues were not fetched\n", count)
 }
@@ -454,6 +454,9 @@ func runFindSimilarForge(stdout, stderr io.Writer, src forgetracker.Source, t fo
 	return find.RenderSimilar(stdout, results, jsonOut)
 }
 
+// checkForgeNewDuplicates scans forge tickets for duplicates before dry-run or
+// creation. CLI entrypoints always set opt.Source; a nil Source is only valid
+// for direct unit tests that intentionally omit forge reads.
 func checkForgeNewDuplicates(stderr io.Writer, opt forgeNewOptions) error {
 	if opt.Source == nil || (!opt.DryRun && opt.Force) {
 		return nil
@@ -461,7 +464,7 @@ func checkForgeNewDuplicates(stderr io.Writer, opt forgeNewOptions) error {
 	files, truncated, err := forgetracker.FetchIssueFiles(opt.Source, opt.Target, opt.Scan)
 	if err != nil {
 		if stderr != nil {
-			fmt.Fprintf(stderr, "issues new: duplicate check skipped on %s (%v)\n", opt.Target, err)
+			fmt.Fprintf(stderr, "issues new: duplicate check skipped on %s (%v)\n", opt.Target, forgeTrackerHint(err, opt.Target))
 		}
 		return nil
 	}

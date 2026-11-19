@@ -1319,7 +1319,7 @@ func TestFindForgeIssuesSimilarAndJSON(t *testing.T) {
 	if len(results) < 2 || results[0].Number != "12" || !results[0].Strong {
 		t.Fatalf("unexpected JSON results: %+v", results)
 	}
-	if !strings.Contains(stderr.String(), "checked the newest ") || !strings.Contains(stderr.String(), "older issues were not fetched") {
+	if !strings.Contains(stderr.String(), "checked the newest 3 forge issues; older issues were not fetched") {
 		t.Fatalf("missing truncation note on stderr: %q", stderr.String())
 	}
 
@@ -1477,28 +1477,55 @@ func TestForgeNewDryRunDuplicateMatches(t *testing.T) {
 	}
 	dir := forgeRepo(t)
 
+	runSplit := func(args ...string) (string, string, error) {
+		root := newRootCmd()
+		var stdout, stderr bytes.Buffer
+		root.SetOut(&stdout)
+		root.SetErr(&stderr)
+		root.SetArgs(args)
+		err := root.Execute()
+		return stdout.String(), stderr.String(), err
+	}
+
 	// Strong match on --dry-run without --force returns duplicate error and makes 0 writes.
-	out, err := runHarnez(t, "issues", "new", "-d", dir, "--dry-run", "Crash on startup loader", "-F", body)
+	stdout, stderr, err := runSplit("issues", "new", "-d", dir, "--dry-run", "Crash on startup loader", "-F", body)
 	if err == nil || !strings.Contains(err.Error(), "likely duplicate ticket(s) found") || !strings.Contains(err.Error(), "#12") {
-		t.Fatalf("dry-run strong match: err=%v out=%q", err, out)
+		t.Fatalf("dry-run strong match: err=%v stdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout on dry-run duplicate refusal, got %q", stdout)
 	}
 	if cliCalls != 0 {
 		t.Fatalf("expected 0 CLI calls on dry-run, got %d", cliCalls)
 	}
 
-	// Strong match on --dry-run --force displays the match and the planned create action with 0 writes.
-	out, err = runHarnez(t, "issues", "new", "-d", dir, "--dry-run", "--force", "Crash on startup loader", "-F", body)
-	if err != nil || !strings.Contains(out, "#12 open — Crash on startup loader") || !strings.Contains(out, "strong") || !strings.Contains(out, "dry run, would file on codeberg.org/o/r") {
-		t.Fatalf("dry-run --force strong match: err=%v out=%q", err, out)
+	// Strong match on --dry-run --force puts matches on stderr and planned create action on stdout, with 0 writes.
+	stub.truncated = true
+	stdout, stderr, err = runSplit("issues", "new", "-d", dir, "--dry-run", "--force", "Crash on startup loader", "-F", body)
+	if err != nil {
+		t.Fatalf("dry-run --force strong match: err=%v stdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "dry run, would file on codeberg.org/o/r") || strings.Contains(stdout, "#12 open") || strings.Contains(stdout, "checked the newest") {
+		t.Fatalf("dry-run --force stdout should contain only plan: %q", stdout)
+	}
+	if !strings.Contains(stderr, "#12 open — Crash on startup loader") || !strings.Contains(stderr, "strong") || !strings.Contains(stderr, "checked the newest 2 forge issues; older issues were not fetched") || strings.Contains(stderr, "dry run, would file") {
+		t.Fatalf("dry-run --force stderr missing match/truncation note: %q", stderr)
 	}
 	if cliCalls != 0 {
 		t.Fatalf("expected 0 CLI calls on dry-run --force, got %d", cliCalls)
 	}
 
-	// Weak match on --dry-run without --force surfaces the match and prints the planned action with 0 writes.
-	out, err = runHarnez(t, "issues", "new", "-d", dir, "--dry-run", "Startup metrics dashboard export", "-F", body)
-	if err != nil || !strings.Contains(out, "#12 open — Crash on startup loader") || !strings.Contains(out, "dry run, would file on codeberg.org/o/r") {
-		t.Fatalf("dry-run weak match: err=%v out=%q", err, out)
+	// Weak match on --dry-run without --force puts match on stderr and planned action on stdout, with 0 writes.
+	stub.truncated = false
+	stdout, stderr, err = runSplit("issues", "new", "-d", dir, "--dry-run", "Startup metrics dashboard export", "-F", body)
+	if err != nil {
+		t.Fatalf("dry-run weak match: err=%v stdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "dry run, would file on codeberg.org/o/r") || strings.Contains(stdout, "#12 open") {
+		t.Fatalf("dry-run weak match stdout should contain only plan: %q", stdout)
+	}
+	if !strings.Contains(stderr, "#12 open — Crash on startup loader") || strings.Contains(stderr, "dry run, would file") {
+		t.Fatalf("dry-run weak match stderr missing match: %q", stderr)
 	}
 	if cliCalls != 0 {
 		t.Fatalf("expected 0 CLI calls on dry-run weak match, got %d", cliCalls)
@@ -1508,54 +1535,98 @@ func TestForgeNewDryRunDuplicateMatches(t *testing.T) {
 func TestForgeNewDuplicateCheckFailureWarnsAndContinues(t *testing.T) {
 	t.Setenv("HARNEZ_AGENT_ROLE", "")
 	t.Setenv("HARNEZ_SESSION_ID", "")
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("PATH", t.TempDir())
-
-	_, st, err := forgeTokenStoreFor(true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.Save(forgetoken.Meta{Host: "codeberg.org", User: "u"}, "write-secret"); err != nil {
-		t.Fatal(err)
-	}
-
-	var postCount int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/issues":
-			http.Error(w, "upstream down", http.StatusInternalServerError)
-		case r.Method == http.MethodPost && r.URL.Path == "/repos/o/r/issues":
-			postCount++
-			_, _ = io.WriteString(w, `{"number":55,"html_url":"https://codeberg.org/o/r/issues/55"}`)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
 
 	body := filepath.Join(t.TempDir(), "body.md")
 	if err := os.WriteFile(body, []byte("details\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
-	scan := forge.ScanOptions{PageSize: 20, MaxPages: 2}
-	src := forge.NewPullLister(scan, func(forge.Forge) string { return "" })
 
-	var out, errBuf bytes.Buffer
-	err = runIssuesNewForge(&out, &errBuf, forgeNewOptions{
-		Dir:    t.TempDir(),
-		Target: target,
-		Source: src,
-		Scan:   scan,
-		Req:    forgetracker.CreateRequest{Title: "Crash on startup loader", BodyFile: body},
+	t.Run("HTTP 500 on duplicate scan warns and continues API create", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		t.Setenv("PATH", t.TempDir())
+		_, st, err := forgeTokenStoreFor(true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Save(forgetoken.Meta{Host: "codeberg.org", User: "u"}, "write-secret"); err != nil {
+			t.Fatal(err)
+		}
+		var postCount int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/issues":
+				http.Error(w, "upstream down", http.StatusInternalServerError)
+			case r.Method == http.MethodPost && r.URL.Path == "/repos/o/r/issues":
+				postCount++
+				_, _ = io.WriteString(w, `{"number":55,"html_url":"https://codeberg.org/o/r/issues/55"}`)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer srv.Close()
+
+		target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL}, Owner: "o", Repo: "r"}
+		scan := forge.ScanOptions{PageSize: 20, MaxPages: 2}
+		src := forge.NewPullLister(scan, func(forge.Forge) string { return "" })
+
+		var out, errBuf bytes.Buffer
+		err = runIssuesNewForge(&out, &errBuf, forgeNewOptions{
+			Dir:    t.TempDir(),
+			Target: target,
+			Source: src,
+			Scan:   scan,
+			Req:    forgetracker.CreateRequest{Title: "Crash on startup loader", BodyFile: body},
+		})
+		if err != nil {
+			t.Fatalf("expected create to continue after 500 on duplicate scan: %v", err)
+		}
+		if !strings.Contains(errBuf.String(), "duplicate check skipped") {
+			t.Fatalf("expected warning on stderr, got: %q", errBuf.String())
+		}
+		if !strings.Contains(out.String(), "filed as #55") || postCount != 1 {
+			t.Fatalf("expected API create to succeed: out=%q posts=%d", out.String(), postCount)
+		}
 	})
-	if err != nil {
-		t.Fatalf("expected create to continue after 500 on duplicate scan: %v", err)
-	}
-	if !strings.Contains(errBuf.String(), "duplicate check skipped") {
-		t.Fatalf("expected warning on stderr, got: %q", errBuf.String())
-	}
-	if !strings.Contains(out.String(), "filed as #55") || postCount != 1 {
-		t.Fatalf("expected API create to succeed: out=%q posts=%d", out.String(), postCount)
-	}
+
+	t.Run("unreachable host and 404 private-repo hint warn and continue CLI create", func(t *testing.T) {
+		oldLook, oldRun, oldLookup, oldMeta := issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata
+		var cliCalls int
+		issueCLILookPath = func(name string) (string, error) { return name, nil }
+		issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
+			cliCalls++
+			return []byte("#56 Crash on startup loader\n"), nil
+		}
+		issueWriteLookup = func(string) string { return "" }
+		issueWriteMetadata = func(string) (bool, error) { return false, nil }
+		t.Cleanup(func() {
+			issueCLILookPath, issueCLIRun, issueWriteLookup, issueWriteMetadata = oldLook, oldRun, oldLookup, oldMeta
+		})
+
+		target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", TokenEnv: []string{"CODEBERG_TOKEN"}, IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
+		src := &stubForgeSource{issuesErr: &forge.APIError{Status: 0, Transient: true, Detail: "dial tcp: connection refused"}}
+		var out, errBuf bytes.Buffer
+		err := runIssuesNewForge(&out, &errBuf, forgeNewOptions{
+			Dir:    t.TempDir(),
+			Target: target,
+			Source: src,
+			Req:    forgetracker.CreateRequest{Title: "Crash on startup loader", BodyFile: body},
+		})
+		if err != nil || cliCalls != 1 || !strings.Contains(errBuf.String(), "duplicate check skipped") || !strings.Contains(errBuf.String(), "connection refused") {
+			t.Fatalf("unreachable host: err=%v calls=%d stderr=%q", err, cliCalls, errBuf.String())
+		}
+
+		// Private-repo 404 includes token hint in the skipped-check warning.
+		src.issuesErr = &forge.APIError{Status: 404, Detail: "not found"}
+		out.Reset()
+		errBuf.Reset()
+		err = runIssuesNewForge(&out, &errBuf, forgeNewOptions{
+			Dir:    t.TempDir(),
+			Target: target,
+			Source: src,
+			Req:    forgetracker.CreateRequest{Title: "Crash on startup loader", BodyFile: body},
+		})
+		if err != nil || cliCalls != 2 || !strings.Contains(errBuf.String(), "duplicate check skipped") || !strings.Contains(errBuf.String(), "a private repo needs a token") {
+			t.Fatalf("private repo 404 hint: err=%v calls=%d stderr=%q", err, cliCalls, errBuf.String())
+		}
+	})
 }
