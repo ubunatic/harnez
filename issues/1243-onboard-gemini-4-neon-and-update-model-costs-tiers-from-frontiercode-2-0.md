@@ -86,19 +86,23 @@ Relevant rows from the FrontierCode 2.0 leaderboard (`#`, `Model`, `Harness`, `S
 
 ## 3. Implementation & Verification Plan
 
-### M1: Onboard `agy:neon` (`gemini-4-neon`)
-- Add `agy:neon` (`aliases: [neon, neon:low]`, `provider: agy`, `name: gemini-4-neon`, `tier: low`, `roles: advisor, reviewer` — `agentspec_test.go:83-84` forbids `developer` on `agy:*`) to `spec/agent.yaml` (after `agy:hydrogen`, lines 289–298).
-- Add `agy:neon` ratings block to `spec/model_scores.yaml` (after `agy:hydrogen`, lines 92–97) with `source: "owner estimate, unverified"`.
-- Update `internal/subagent/testdata/known-model-specs.golden`, `internal/subagent/agy_test.go`, and `internal/subagent/driver_test.go`.
-- Update `docs/Models.md` and `docs/practices/ModelRoles.md` (if needed for M1, or defer full doc table recalibration to M2; if `docs/practices/ModelRoles.md` is edited, run `make install && harnez init -d .`).
-- Run `make install`, `make test-q1`, and a live `agy` canary for `neon:low` / `neon:med` (`harnez agent start --role advisor --name canary-neon --model neon:med -d . -p "Reply OK"`).
+### M1: Onboard `agy:neon` (`gemini-4-neon`) — Delivered (`c9582b7d`)
+- Onboarded `agy:neon` (`low`/`med`/`high`/`xhigh`) in `spec/agent.yaml`, `spec/model_scores.yaml`, `docs/Models.md`, golden files, and `agy_test.go`/`driver_test.go`.
+- `make install` + `go test ./internal/subagent/... ./cmd/harnez/...` passed; live canary `canary-neon` (`neon:med`) replied `OK` in 9s; `rev-1243-m1` (`neon:med`) returned **PASS**.
 
 ### M2: Recalibrate Model Costs, Ratings, and Tiers from FrontierCode 2.0
+
+#### Pre-Work / Required Refinements (from M1 review & owner decision)
+1. **Allow `developer` role on `agy:*` models (owner decision 2026-11-19)**: add `developer` to `agy:neon` (and other `agy` models as appropriate) in `spec/agent.yaml` and update/remove the `agy:*` non-developer assertion in `internal/subagent/agentspec_test.go:83-84`.
+2. **`agy:neon` M1 review gaps**: add `xhigh` rating for `agy:neon` in `spec/model_scores.yaml`, add `ModelCost` assertions for `agy:neon` tiers in tests, and decide/update `costly_models` for high-cost `neon` tiers (`high`/`xhigh`) if appropriate.
+
+#### M2 Core Work
 - Check `~/.codex/models_cache.json` to map FrontierCode 2.0 model names (`GPT-6.2 Astra/Sol`, `GPT-6.1 Sol`, `GPT-6 Luna`, etc.) to `spec/agent.yaml` entries without misidentifying `gpt-6-astra` / `gpt-6.1-sol` / `gpt-6.1-terra`.
-- Update `cost` / `cost_by_tier` in `spec/agent.yaml` (anchored to `luna:low = 1`), `ratings` in `spec/model_scores.yaml`, and `roles` tier lists where justified by FrontierCode 2.0.
-- Update pinned cost/rating assertions in `internal/subagent/agentspec_test.go` and `modelscores_test.go`.
+- Update `cost` / `cost_by_tier` in `spec/agent.yaml` (anchored to `luna:low = 1` at `$0.02`/rollout), `ratings` in `spec/model_scores.yaml`, and `roles` tier lists where justified by FrontierCode 2.0.
+- Update pinned cost/rating assertions in `internal/subagent/agentspec_test.go`, `modelscores_test.go`, and `cmd/harnez/testdata/agent-models-chart-80cols.golden`.
 - Update `docs/Models.md` and `docs/practices/ModelRoles.md` (+ `make install && harnez init -d .` for root copy `docs/ModelRoles.md`).
 - Run `make install` and `make test-q1`.
 
 ## Decision
-- **2026-11-19 (Host)**: Split #1243 into M1 (onboard `agy:neon` quickly) and M2 (recalibrate all model costs, ratings, tiers, and docs from FrontierCode 2.0) per owner instruction. Keep `agy:neon` roles as `advisor, reviewer` because `agentspec_test.go:83-84` forbids `developer` on `agy:*` models.
+- **2026-11-19 (Host)**: Split #1243 into M1 (onboard `agy:neon` quickly) and M2 (recalibrate all model costs, ratings, tiers, and docs from FrontierCode 2.0) per owner instruction.
+- **2026-11-19 (Owner)**: `let agy take "developer" too` — allow `developer` role on `agy:*` models (removing the restriction in `agentspec_test.go:83-84`).
