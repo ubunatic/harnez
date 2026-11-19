@@ -26,3 +26,22 @@ Coverage should come from the q1 run itself (e.g. a `-coverprofile` passed throu
 - M1: update the Quota.md source, the lean-sprint and lean-sprint-v1 §3 wording, and run `harnez init` so the installed rules show the change.
 - M2 (enforcement): count plain `go test` / `gotestsum` runs by agents against the quota-1 state, for example through the Bash hook, and block a repeat without a source change. The 896 touched-package rerun stays allowed after a failed run.
 - Verification: a test where a passing q1 run followed by `go test -cover .` with no edit is refused, and a test where a failing q1 run, a fix, and a touched-package rerun is allowed.
+
+## Decision
+
+- **Docs & rule text (M1)**: Update both `config.yaml:765-772` (`quota_section`) and `config.yaml:905-914` (`Quota.md` rule source), plus `docs/commands/lean-sprint.md` §3 and `docs/commands/lean-sprint-v1.md` §2 (correcting ticket's §3 citation), keeping existing `internal/claude/quota1_init_test.go` anchor phrases (`Single-Test Boundary`, `Clean Tree First`, `make test-q1`, `QUOTA_BYPASS=1`). Regenerate `.harnez/rules/Quota.md` and synced copies via `make install && ./harnez init -d .`. (Host `/decide`, 2026-11-19.)
+- **When plain `go test` / `gotestsum` triggers Quota-1 (M2)**:
+  - Detect `go test` and `gotestsum` command invocations at shell-segment command position (unwrapping `bash -c`/`sh -c`, stripping leading `VAR=VAL` assignments, splitting on `;`/`&&`/`||`/`|`, and checking the executable token so arguments like `echo "go test"` or `rg "go test"` and commands like `go vet`/`go build` do not match).
+  - Enforce Quota-1 on matched `go test` / `gotestsum` runs ONLY when Quota-1 is enabled in the workspace (`.harnez/repo.yaml` sets `rules.quota: true`, `.harnez/rules/Quota.md` exists, or a `quota_1.state` file already exists), and ONLY when NOT already inside an active parent `--quota-1` execution (`HARNEZ_QUOTA1_ACTIVE=1` exported into the wrapped child env by `runExecWrapper`).
+  - Keep existing `QUOTA_BYPASS=1` / `HARNEZ_QUOTA_BYPASS=1` and `/disable` owner suspension working, and keep source-change gating (`snapshot.go`, which naturally allows a failing run -> source edit -> targeted `go test ./touched` rerun). (Host `/decide`, 2026-11-19.)
+
+## M1+M2 — Docs sync and Quota-1 enforcement for `go test` / `gotestsum`
+
+- Write set (expected): `config.yaml`, `.harnez/rules/Quota.md`, `docs/commands/lean-sprint.md`, `docs/commands/lean-sprint-v1.md` (and `AGENTS.md` / synced docs if `./harnez init -d .` updates them — revert unrelated diffs), `internal/exec/exec.go` (command-position `go test` / `gotestsum` detector + repo Quota-1 check + `HARNEZ_QUOTA1_ACTIVE=1`), `internal/exec/exec_test.go` (+ `quota1` tests).
+- Locked tests:
+  1. Command detector unit tests: matches `go test .`, `go test -run Foo ./pkg`, `GOWORK=off go test -coverprofile=c.out ./...`, `cd sub && gotestsum ./...`; rejects `go build ./...`, `go vet ./...`, `echo "go test"`, `rg "go test" .`, `make test-q1`.
+  2. Passing `--quota-1` run followed by `go test -cover .` (and `GOWORK=off go test -run Foo .`) with NO source change in a Quota-1 repo -> refused.
+  3. Plain `go test -run Foo .` first run records Quota-1 state so a repeat `make test-q1` or `go test .` with NO source change -> refused.
+  4. Failing `--quota-1` run -> edit source `.go` file -> targeted `go test ./pkg` -> allowed.
+  5. Recursive `HARNEZ_QUOTA1_ACTIVE=1`: `go test` inside an active `--quota-1` run is NOT blocked; non-Quota repo (`rules.quota` absent/false, no `Quota.md`, no `quota_1.state`) leaves plain `go test` unblocked.
+  6. `internal/claude/quota1_init_test.go`, `rules_init_test.go`, and `TestRootDocCopiesMatchSources` pass.
