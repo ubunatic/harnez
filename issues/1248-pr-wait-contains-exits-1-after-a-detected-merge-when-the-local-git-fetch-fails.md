@@ -24,6 +24,22 @@ exit 1   (after 31 s)
 
 The PR had merged as `054dc9c`, and `b0721d2` was on `main`. The wait loop saw the merge. The local `git fetch` behind `--contains` then failed: the taia background task could not read `~/.gitconfig`, a taia-side problem. The command exited 1, "usage, configuration, or local git error". The issue skill and `docs/Git.md` say the exit code is the only merge signal. So the agent lost the merge and had to confirm it by hand through the API.
 
+Second occurrence, harnez PR #191 (2026-11-20), from a taia background task in this repo:
+
+```
+$ HTO=0 harnez pr wait 191 --contains ba088276
+harnez pr wait: git fetch origin failed: hostkeys_find_by_key_hostfile:
+  hostkeys_foreach failed for /home/alfred/.ssh/known_hosts: Permission denied
+ssh_askpass: exec(/usr/lib/ssh/ssh-askpass): No such file or directory
+Host key verification failed.
+exit 1   (after 396 s)
+```
+
+#191 had merged as `cea59ed6`, and `ba088276` was on `origin/main`. This time the sandbox blocked
+ssh's `known_hosts`, not `~/.gitconfig`. So the fix must not depend on one sandbox setting: once
+the forge reports the merge, a failed fetch must not turn it into exit 1. The run also took
+396 s. It is not yet known whether that time went into polling or into ssh before it failed.
+
 ## 2. Technical Specification / Findings
 
 Verified on `main` at bb26257e:
