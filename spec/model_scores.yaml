@@ -101,6 +101,7 @@ models:
       low: 3.5
       med: 3.5
       high: 4.0
+      xhigh: 4.0
   agy:sonnet:
     source: "owner estimate, unverified"
     ratings:

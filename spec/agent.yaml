@@ -143,6 +143,8 @@ external_sessions:
 costly_models:
   - codex:sol:high
   - agy:argon:high
+  - agy:neon:high
+  - agy:neon:xhigh
   - "codex:astra:*"
   - claude:fable:high
 
@@ -165,7 +167,7 @@ models:
     tier: low
     roles: developer, mechanical, reviewer
     cost: 1
-    cost_by_tier: {med: 4, high: 6}
+    cost_by_tier: {med: 5, high: 6}
     eff: "~"
     skills: Go~ TUI- SQL?
     use: Owner guidance — background and mechanical work, including log compaction.
@@ -177,8 +179,8 @@ models:
     name: gpt-6.1-sol
     tier: low
     roles: developer, advisor, reviewer
-    cost: 29
-    cost_by_tier: {med: 47, high: 71}
+    cost: 17
+    cost_by_tier: {med: 25, high: 33}
     eff: "~"
     skills: Go~ TUI~ SQL?
     use: Owner guidance — use sol:low for judgment, orchestration, and resolving compiler failures; reserve higher effort for harder work.
@@ -193,7 +195,7 @@ models:
     cost_by_tier: {med: 24, high: 36}
     eff: "?"
     skills: Go? TUI? SQL?
-    use: Efficient-frontier Codex developer for hard tasks at half Sol's price; use terra:high before escalating to sol:med or sol:high, and reserve Sol for the hardest judgment.
+    use: Efficient-frontier Codex developer for hard tasks; cost not yet recalibrated (no FrontierCode 2.0 row, issue 1243); use terra:high before escalating to sol:med or sol:high, and reserve Sol for the hardest judgment.
   codex:astra:
     aliases: [astra, astra:low]
     preferred: true
@@ -214,7 +216,7 @@ models:
     tier: low
     roles: developer, reviewer, mechanical, advisor
     cost: 4
-    cost_by_tier: {med: 4, high: 7, xhigh: 10}
+    cost_by_tier: {med: 5, high: 7, xhigh: 12}
     extra_tiers: [xhigh]
     eff: "-"
     skills: Go~ TUI~ SQL~
@@ -227,7 +229,8 @@ models:
     name: sonnet
     tier: low
     roles: advisor, reviewer, developer
-    cost: 15
+    cost: 19
+    cost_by_tier: {med: 24, high: 54}
     eff: "~"
     skills: Go~ TUI~ SQL~
     use: cross-vendor advisor or reviewer; strong tool use
@@ -237,11 +240,11 @@ models:
     name: claude-fable-5-2
     tier: low
     roles: orchestrator, reviewer
-    cost: 40
+    cost: 131
+    cost_by_tier: {med: 155, high: 420}
     eff: "?"
     skills: Go? TUI? SQL?
-    use: "Cost estimate based on published API prices: twice Claude Opus 5.5."
-    guidance_source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    use: "Cost from FrontierCode 2.0 rollouts (Fable 5.2 low $2.62, high $8.40), about 3.5x Opus 5.5 at low; issue 1243."
   claude:opus:
     aliases: [opus, opus:low]
     preferred: true
@@ -249,7 +252,8 @@ models:
     name: opus
     tier: low
     roles: orchestrator, reviewer
-    cost: 20
+    cost: 38
+    cost_by_tier: {med: 85, high: 121}
     eff: "+"
     skills: Go+ TUI? SQL+
     use: host seat for repo judgment, pre-work, diff review
@@ -270,7 +274,7 @@ models:
     provider: agy
     name: gemini-3.8-flash
     tier: low
-    roles: reviewer, advisor
+    roles: reviewer, advisor, developer
     cost: 4
     eff: "~"
     skills: Go~ TUI~ SQL~
@@ -281,40 +285,42 @@ models:
     provider: agy
     name: gemini-4-argon
     tier: low
-    roles: advisor, reviewer
-    cost: 24
+    roles: advisor, reviewer, developer
+    cost: 199
+    cost_by_tier: {med: 285, high: 326}
     eff: "?"
     skills: Go? TUI? SQL?
-    use: premium Gemini 4 Argon; scarce weekly quota, measured at low effort only
+    use: Gemini 4 Argon; scarce weekly quota, measured at low effort only; FrontierCode 2.0 27.6% at high for $6.51 is behind Gemini 4 Neon (46.2% at $4.38), issue 1243.
   agy:hydrogen:
     aliases: [hydrogen, hydrogen:low]
     provider: agy
     name: gemini-4-hydrogen
     tier: low
-    roles: advisor, reviewer
-    cost: 24
+    roles: advisor, reviewer, developer
+    cost: 18
+    cost_by_tier: {med: 45, high: 120}
     eff: "?"
     skills: Go? TUI? SQL?
-    use: Gemini 4 Hydrogen; cost unmeasured (estimated at Argon cost)
+    use: Gemini 4 Hydrogen; costs from FrontierCode 2.0 low/med/high rollouts (issue 1243); no xhigh row used
   agy:neon:
     aliases: [neon, neon:low]
     provider: agy
     name: gemini-4-neon
     tier: low
-    roles: advisor, reviewer
+    roles: advisor, reviewer, developer
     cost: 48
     cost_by_tier: {med: 108, high: 219, xhigh: 384}
     extra_tiers: [xhigh]
     eff: "?"
     skills: Go? TUI? SQL?
-    use: Gemini 4 Neon; #3 on FrontierCode 2.0 (46.2% at high, $4.38/rollout). Costs are an unverified relative estimate anchored to luna:low = 1 at $0.02/rollout; recalibrate in issue 1243 M2.
+    use: Gemini 4 Neon; #3 on FrontierCode 2.0 (46.2% at high, $4.38/rollout). Costs are FrontierCode 2.0 rollout cost at luna:low = 1 ($0.02); issue 1243.
   agy:sonnet:
     provider: agy
     name: claude-sonnet-5-5
     tier: low
     effort: false
     roles: reviewer
-    cost: 16
+    cost: 19
     eff: "?"
     skills: Go~ TUI~ SQL~
     use: Claude Sonnet 5.5; reviewer when Claude quota is out
@@ -324,7 +330,7 @@ models:
     tier: low
     effort: false
     roles: advisor, reviewer
-    cost: 32
+    cost: 38
     eff: "?"
     skills: Go+ TUI~ SQL~
     use: Claude Opus 5.5; careful analysis of hard problems
@@ -445,7 +451,7 @@ roles:
       cheap: [haiku:high, luna:high]
       lean: [terra:med, hydrogen:low]
       smart: [sol:med, hydrogen:med, opus:med]
-      best: [sol:high, hydrogen:high, argon:high, opus:high, fable:high]
+      best: [sol:high, hydrogen:high, neon:high, opus:high, fable:high]
     spawns: []
     auto_approve_tools: true
     rules: >-

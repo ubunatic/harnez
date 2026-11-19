@@ -91,8 +91,8 @@ func TestAcceptCostStartAndResume(t *testing.T) {
 		spec, wantModel, wantCost, wantQuota string
 		avail                                func(string, string) usage.ProviderQuotaAvailability
 	}{
-		{"codex:sol:high", "codex:sol:high", "71", "5h 80%, weekly 65%", freshAvail},
-		{"sol:high", "codex:sol:high", "71", "5h 80%, weekly 65%", freshAvail},
+		{"codex:sol:high", "codex:sol:high", "33", "5h 80%, weekly 65%", freshAvail},
+		{"sol:high", "codex:sol:high", "33", "5h 80%, weekly 65%", freshAvail},
 		{"agy:argon:high", "agy:argon:high", "unknown", "unknown", staleAvail},
 		{"gemini-4-argon:high", "agy:argon:high", "unknown", "unknown", staleAvail},
 		{"codex:astra:low", "codex:astra:low", "182", "5h 80%, weekly 65%", freshAvail},
