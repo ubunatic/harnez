@@ -263,6 +263,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-19-two-agent-lean-sprint-1237-forge-friction.md](studies/2026-11-19-two-agent-lean-sprint-1237-forge-friction.md) | Two-Agent Lean Sprint: 1237 — Forge-Tracker Friction (Private Search, `find next`, Label Warnings) |
 | [studies/2026-11-19-two-agent-lean-sprint-1243-neon-costs.md](studies/2026-11-19-two-agent-lean-sprint-1243-neon-costs.md) | Two-Agent Lean Sprint: 1243 — Onboard Gemini 4 Neon & Update Costs/Tiers (FrontierCode 2.0) |
 | [studies/2026-11-19-two-agent-lean-sprint-771-exec-truncation.md](studies/2026-11-19-two-agent-lean-sprint-771-exec-truncation.md) | Two-Agent Lean Sprint: 771 — `harnez exec` Spill-File Output Truncation & `spec/exec.yaml` |
+| [studies/2026-11-19-two-agent-lean-sprint-944-quota1-gotest.md](studies/2026-11-19-two-agent-lean-sprint-944-quota1-gotest.md) | Two-Agent Lean Sprint: 944 — Count Targeted & Coverage `go test` Runs Under Quota-1 |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
