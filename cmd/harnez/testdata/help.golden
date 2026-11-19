@@ -1638,16 +1638,19 @@ Global Flags:
 
 === harnez forge token import
 Read a token as the forge's settings page shows it (only the token, nothing else) from
-<file>, or from stdin with "-", and store it like create does. --user names the forge account
-that owns it. --name is the token's name on the forge; without it, revoke and rotate cannot
-delete it there. --check owner/repo first reads that repo's issues with the token and stores
-nothing on failure. Forgejo lists a token's scopes only with the password, so the scopes
-themselves cannot be checked here. The source file is kept unless --remove-source is given.
+<file>, or from stdin with "-", and store it like create does. With --wizard, prompt for
+all import options and the token on the terminal (when no <file|-> is given). --user names
+the forge account that owns it. --name is the token's name on the forge; without it, revoke
+and rotate cannot delete it there. --check owner/repo first reads that repo's issues with
+the token and stores nothing on failure. Forgejo lists a token's scopes only with the
+password, so the scopes themselves cannot be checked here. The source file is kept unless
+--remove-source is given.
 
   harnez forge token import --user ubunatic --name issue-read --check ubunatic/harnez -
+  harnez forge token import --wizard
 
 Usage:
-  harnez forge token import <file|-> [flags]
+  harnez forge token import [<file|->] [flags]
 
 Flags:
       --check string    owner/repo whose issues the token must be able to read
@@ -1655,6 +1658,7 @@ Flags:
       --name string     the token's name on the forge (needed for revoke)
       --remove-source   delete <file> after the token is stored
       --user string     forge username that owns the token (required)
+      --wizard          prompt for import options and token on the terminal
 
 Global Flags:
       --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)

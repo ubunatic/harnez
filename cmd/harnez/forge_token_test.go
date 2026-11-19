@@ -15,8 +15,9 @@ import (
 
 type fakeTokenTTY struct{}
 
-func (fakeTokenTTY) close()                      {}
-func (fakeTokenTTY) line(string) (string, error) { return "", nil }
+func (fakeTokenTTY) close()                        {}
+func (fakeTokenTTY) line(string) (string, error)   { return "", nil }
+func (fakeTokenTTY) secret(string) (string, error) { return "", nil }
 func (fakeTokenTTY) login(_ string, user string) (forgetoken.Login, error) {
 	return forgetoken.Login{User: user, Password: "pw"}, nil
 }
@@ -253,5 +254,121 @@ func TestForgeTokenStatusWriteMetadata(t *testing.T) {
 	want := fmt.Sprintf("no token stored for codeberg.org\nwrite token:\nstored: write-name for u@codeberg.org\n  scopes: read:repository, write:issue\n  store:  %s/codeberg.org.token (0600)\n  created: 2026-01-02T03:04:05Z\n", st.Dir)
 	if out.String() != want {
 		t.Fatalf("got %q want %q", out.String(), want)
+	}
+}
+
+type scriptedTokenTTY struct {
+	lines       []string
+	secrets     []string
+	prompts     []string
+	secretCalls int
+}
+
+func (s *scriptedTokenTTY) close() {}
+func (s *scriptedTokenTTY) line(p string) (string, error) {
+	s.prompts = append(s.prompts, p)
+	if len(s.lines) == 0 {
+		return "", nil
+	}
+	v := s.lines[0]
+	s.lines = s.lines[1:]
+	return v, nil
+}
+func (s *scriptedTokenTTY) secret(p string) (string, error) {
+	s.prompts = append(s.prompts, p)
+	s.secretCalls++
+	if len(s.secrets) == 0 {
+		return "", nil
+	}
+	v := s.secrets[0]
+	s.secrets = s.secrets[1:]
+	return v, nil
+}
+func (s *scriptedTokenTTY) login(_ string, user string) (forgetoken.Login, error) {
+	return forgetoken.Login{User: user, Password: "pw"}, nil
+}
+
+func TestForgeTokenImportWizard(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	var checkedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		checkedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("[]"))
+	}))
+	defer srv.Close()
+	oldTTY, oldAPI := forgeTokenOpenTTY, forgeTokenAPIBase
+	tty := &scriptedTokenTTY{
+		lines:   []string{"", "write", "uwe", "wiz-write", "ubunatic/harnez"},
+		secrets: []string{"wiz-SECRET-1"},
+	}
+	forgeTokenOpenTTY = func(string) (tokenTTY, error) { return tty, nil }
+	forgeTokenAPIBase = func(string) (string, time.Duration, error) { return srv.URL, time.Second, nil }
+	t.Cleanup(func() { forgeTokenOpenTTY, forgeTokenAPIBase = oldTTY, oldAPI })
+
+	var out bytes.Buffer
+	cmd := newForgeTokenCmd()
+	cmd.SetArgs([]string{"import", "--wizard"})
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "wiz-SECRET-1") {
+		t.Fatal("secret exposed in output")
+	}
+	if !strings.Contains(out.String(), "imported: wiz-write for uwe@codeberg.org") || !strings.Contains(out.String(), "check:  read ubunatic/harnez issues OK") {
+		t.Fatalf("out = %q", out.String())
+	}
+	if checkedPath != "/repos/ubunatic/harnez/issues" {
+		t.Fatalf("checkedPath = %q", checkedPath)
+	}
+	if forgetoken.LookupWrite("codeberg.org") != "wiz-SECRET-1" || forgetoken.Lookup("codeberg.org") != "" {
+		t.Fatal("token not stored in write store")
+	}
+
+	// Non-wizard without file arg still fails.
+	cmd = newForgeTokenCmd()
+	cmd.SetArgs([]string{"import"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "accepts 1 arg(s)") {
+		t.Fatalf("expected 1 arg error, got %v", err)
+	}
+
+	// Wizard with existing token for same kind fails before prompting for user/secret.
+	tty2 := &scriptedTokenTTY{lines: []string{"", "write"}}
+	forgeTokenOpenTTY = func(string) (tokenTTY, error) { return tty2, nil }
+	cmd = newForgeTokenCmd()
+	cmd.SetArgs([]string{"import", "--wizard"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "already stored") || !strings.Contains(err.Error(), "revoke --write") {
+		t.Fatalf("expected already stored --write error, got %v", err)
+	}
+	if len(tty2.prompts) != 2 {
+		t.Fatalf("expected early exit after 2 prompts, got %v", tty2.prompts)
+	}
+
+	// Wizard with stdin '-' and flag defaults reads token from stdin without calling tty.secret.
+	tty3 := &scriptedTokenTTY{lines: []string{"", "", "", "", ""}}
+	forgeTokenOpenTTY = func(string) (tokenTTY, error) { return tty3, nil }
+	var outStdin bytes.Buffer
+	cmd = newForgeTokenCmd()
+	cmd.SetArgs([]string{"import", "--wizard", "--user", "uwe", "--name", "wiz-read", "-"})
+	cmd.SetIn(strings.NewReader("stdin-SECRET-1\n"))
+	cmd.SetOut(&outStdin)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if tty3.secretCalls != 0 {
+		t.Fatalf("expected tty.secret not to be called with '-', got %d", tty3.secretCalls)
+	}
+	if strings.Contains(outStdin.String(), "stdin-SECRET-1") || !strings.Contains(outStdin.String(), "imported: wiz-read for uwe@codeberg.org") {
+		t.Fatalf("outStdin = %q", outStdin.String())
+	}
+	if forgetoken.Lookup("codeberg.org") != "stdin-SECRET-1" {
+		t.Fatal("stdin token not stored in read store")
 	}
 }
