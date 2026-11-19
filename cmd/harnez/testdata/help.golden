@@ -2591,7 +2591,9 @@ Usage:
   harnez push-guard <remote-ref> [flags]
 
 Flags:
-  -h, --help   help for push-guard
+  -h, --help            help for push-guard
+      --remote string   remote name the pre-push hook passes as $1 (empty: policy applies to every remote)
+      --url string      push URL the pre-push hook passes as $2 (names a forge host)
 
 === harnez rate
 rate writes a single tool_calls row (call_type=internal, exit_code=NULL)

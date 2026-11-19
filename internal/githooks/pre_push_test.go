@@ -362,15 +362,22 @@ func TestPrePushPushPolicy(t *testing.T) {
 		f.assertRef(f.cb, "refs/heads/main", "")
 	})
 
-	t.Run("protected main refuses the both remote before GitHub", func(t *testing.T) {
+	t.Run("protected main refuses both's Codeberg leg and passes its GitHub leg", func(t *testing.T) {
 		f := newFixture(t)
-		f.writeRepoYAML(protected)
-		f.commit("a.txt")
-		if code := f.push("both", "main"); code == 0 {
-			t.Fatal("push both main: exit 0, want refusal with protected_main")
+		sha := f.commit("a.txt")
+		if code := f.push("origin", "main"); code != 0 {
+			t.Fatalf("seed origin main before protection: exit %d, want 0", code)
 		}
-		f.assertRef(f.cb, "refs/heads/main", "")
-		f.assertRef(f.gh, "refs/heads/main", "")
+		f.writeRepoYAML(protected)
+		// git runs the hook once per push URL of "both", with that URL as $2. The fixture's
+		// remotes are local paths the guard cannot read as forges, so the hook runs here with
+		// the forge URLs git would pass for the two legs.
+		if out, code := f.runHook("both", codebergURL, sha); code == 0 {
+			t.Fatalf("both Codeberg leg: exit 0, want refusal with protected_main\n%s", out)
+		}
+		if out, code := f.runHook("both", githubURL, sha); code != 0 {
+			t.Fatalf("both GitHub leg once Codeberg main matches origin/main: exit %d, want 0\n%s", code, out)
+		}
 	})
 
 	t.Run("protected main still takes AGit and topic pushes", func(t *testing.T) {

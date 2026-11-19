@@ -26,7 +26,7 @@ commonly stored in an `AGENTS.md` file at the repository root.
     repository admin explicitly authorizes it in the current session, and never force-push.
     The pre-push hook enforces this for raw `git push` (see "AGit pulls and push policy").
     `harnez issues` commits may use `--push-main` or matching-session `/disable repo-rules push-main` when authorized; otherwise they refuse and print the `git switch -c` command. Other auto-committing commands remain guarded. `harnez release` is the exception: the admin, or an agent asked to release,
-    may run it there; the forge's branch protection decides whether the push is accepted.
+    may run it there; it tries a direct push first and falls back to an AGit release PR when that push is refused (see "AGit pulls and push policy").
 - Commit proactively:
   - Default preference: commit autonomously after intermediate steps once tests are clean, after finished features (with review pass), between iteration attempts on a stuck bug, and immediately after filing issue-tracker entries.
   - Ask-first harness interaction: If running in a harness that mandates explicit user confirmation for `git commit`, ask the user **upfront before starting work / during session kickoff** for authorization to commit local checkpoints proactively. This enables the user to step away without returning to uncommitted progress.
@@ -75,13 +75,29 @@ commonly stored in an `AGENTS.md` file at the repository root.
   or cut the branch from `origin/main`.
 - Push policy: with `git.protected_main: true` in `.harnez/repo.yaml`, the pre-push hook
   (`scripts/git-hooks/pre-push`, installed by `make install-git-hooks`) refuses a direct push to the
-  default branch and names `git push origin HEAD:refs/for/<default>/<topic>`. It calls
-  `harnez push-guard <remote-ref>` per ref, which applies the same rules as commits. AGit `refs/for/`
-  pushes, tags and topic branches pass. Solo repositories and `protected_main: false` allow direct
-  pushes. `/disable repo-rules push-main` in the owning session unlocks a direct push, as it does a
-  protected commit.
-- `harnez release` is not blocked by this check. On a protected default branch it tries a direct
-  push first; the forge decides, and a refusal falls back to an AGit PR (`docs/GoRelease.md`).
+  default branch on origin, and on any remote whose URL is a Forgejo host in `spec/pr.yaml`. The hook
+  runs `harnez push-guard --remote <name> --url <url> <remote-ref>` for each ref and each push URL of
+  the remote, and the refusal names `git push origin HEAD:refs/for/<default>/<topic>`.
+  Not refused: AGit `refs/for/` pushes, tags, topic branches, and any push to a GitHub URL or to a
+  named remote that is neither origin nor a Forgejo URL (a fork or a mirror). GitHub has no AGit, so
+  this policy does not refuse a direct push of `main` to GitHub. Solo repositories and
+  `protected_main: false` allow direct pushes. `/disable repo-rules push-main` in the owning session
+  unlocks a direct push, as it does a protected commit.
+- The hook can only refuse what git tells it: `git push both main` runs it once per push URL, so
+  Codeberg's leg is refused first and GitHub is not reached. A `pre-push` hook also runs during
+  `git push --dry-run`.
+- A stale or missing `harnez` (one without `push-guard --remote --url`, or none on `PATH`) makes the
+  hook warn and skip the policy instead of refusing every push. A skipped policy means a direct push
+  to `main` is not refused; only the warning is shown. Run `make install` to restore the check.
+- `harnez release` on a protected default branch tries a direct push first: a preflight dry-run, then
+  the push, to each release remote. With the hook installed, the origin refusal comes from the hook
+  before the forge is asked, and the release falls back to an AGit release PR, `refs/for/<default>/release-<tag>`.
+  Without the hook, the forge's rejection decides, and the fallback runs only when its message names
+  "protected"; any other rejection stops the release. The release then pauses until the PR merges
+  (`harnez pr wait <n> --contains <sha>`), and `harnez release --continue` finishes it. The tag goes to
+  origin first. Then the merged `main` and the tag are mirrored, atomically, to the other release
+  remotes; a GitHub mirror passes the hook, but a mirror on a Forgejo URL is refused like origin. A
+  failed mirror stops the release; retry with `--continue`. See `docs/GoRelease.md`.
 - Without the hook (no `make install-git-hooks`), the policy is advisory: the forge's branch protection
   is the enforcement.
 

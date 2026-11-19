@@ -22,8 +22,9 @@ Forgejo and Gitea support it (Codeberg runs Forgejo). GitHub has no AGit.
   `checkout.defaultRemote origin` in the repo's `.git/config`, so a new branch tracks its start point
   and plain `git pull` works. A branch cut from a local `main` pulls that local `main`; use
   `git pull origin main` to fetch the forge's copy.
-- Push policy: with `protected_main` the pre-push hook refuses a direct push to the default branch,
-  and every AGit or topic push still passes (`docs/lang/Git.md`, "AGit pulls and push policy").
+- Push policy: with `protected_main` the pre-push hook refuses a direct push to the default branch on
+  origin or a Forgejo remote. AGit and topic pushes still pass, and so do pushes to GitHub, which has
+  no AGit; a release mirrors the merged `main` there (`docs/lang/Git.md`, "AGit pulls and push policy").
 
 ## PR lifecycle
 

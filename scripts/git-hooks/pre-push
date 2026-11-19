@@ -9,22 +9,26 @@ printf '%s\n' "$refs" | git lfs pre-push "$@" || exit $?
 # Ticket numbers: a ticket added here must not reuse a number that origin/main gives to another
 # file (issue 1099). A failed fetch only warns; a confirmed collision blocks the push.
 if test -d issues && command -v harnez >/dev/null 2>&1
-then git fetch --quiet origin main 2>/dev/null || echo >&2 "pre-push: could not fetch origin main; ticket numbers checked against the last fetched copy"
-    harnez issues lint --against origin/main || exit $?
+then git fetch --quiet origin main 2>/dev/null || printf '%s\n' "pre-push: could not fetch origin main; ticket numbers checked against the last fetched copy" >&2
+     harnez issues lint --against origin/main || exit $?
 fi
 
 # Push-to-main policy (issue 1206): with git.protected_main in .harnez/repo.yaml, a direct push
-# to the default branch is refused; AGit refs/for/ pushes, tags and topic branches pass.
-if command -v harnez >/dev/null 2>&1
+# to the default branch on origin or a Forgejo remote is refused. AGit refs/for/ pushes, tags,
+# topic branches and GitHub or other mirrors pass. The check needs a harnez whose push-guard
+# takes --remote and --url; a missing or older binary warns and skips, so AGit pushes still work.
+if command -v harnez >/dev/null 2>&1 && harnez push-guard --help 2>/dev/null | grep -q -- --url
 then policy=0
      while read -r local_ref local_sha remote_ref remote_sha
      do test -n "$remote_ref" || continue
-        harnez push-guard "$remote_ref" </dev/null || policy=1
+        harnez push-guard --remote "$1" --url "$2" "$remote_ref" </dev/null || policy=1
      done <<EOF
 $refs
 EOF
      test "$policy" -eq 0 || exit 1
-else echo >&2 "pre-push: harnez not found; the push-to-main policy (git.protected_main) was not checked"
+elif command -v harnez >/dev/null 2>&1
+then printf '%s\n' "pre-push: harnez on PATH has no push-guard with --remote and --url (stale binary?); the push-to-main policy (git.protected_main) was not checked; run make install" >&2
+else printf '%s\n' "pre-push: harnez not found; the push-to-main policy (git.protected_main) was not checked" >&2
 fi
 
 case "$1:$2" in
@@ -45,12 +49,12 @@ do
     refs/heads/main)
         codeberg_sha=$(git ls-remote origin refs/heads/main | cut -f1)
         if test "$local_sha" != "$codeberg_sha"
-        then echo >&2 "pre-push: GitHub refused: Codeberg main is at ${codeberg_sha:-unknown}, not $local_sha"
+        then printf '%s\n' "pre-push: GitHub refused: Codeberg main is at ${codeberg_sha:-unknown}, not $local_sha" >&2
             status=1
         fi
         ;;
     *)
-        echo >&2 "pre-push: GitHub takes only main and tags; not pushing $remote_ref there"
+        printf '%s\n' "pre-push: GitHub takes only main and tags; not pushing $remote_ref there" >&2
         status=1
         ;;
     esac
