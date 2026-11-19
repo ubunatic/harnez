@@ -96,12 +96,17 @@ Relevant rows from the FrontierCode 2.0 leaderboard (`#`, `Model`, `Harness`, `S
 1. **Allow `developer` role on `agy:*` models (owner decision 2026-11-19)**: add `developer` to `agy:neon` (and other `agy` models as appropriate) in `spec/agent.yaml` and update/remove the `agy:*` non-developer assertion in `internal/subagent/agentspec_test.go:83-84`.
 2. **`agy:neon` M1 review gaps**: add `xhigh` rating for `agy:neon` in `spec/model_scores.yaml`, add `ModelCost` assertions for `agy:neon` tiers in tests, and decide/update `costly_models` for high-cost `neon` tiers (`high`/`xhigh`) if appropriate.
 
-#### M2 Core Work
-- Check `~/.codex/models_cache.json` to map FrontierCode 2.0 model names (`GPT-6.2 Astra/Sol`, `GPT-6.1 Sol`, `GPT-6 Luna`, etc.) to `spec/agent.yaml` entries without misidentifying `gpt-6-astra` / `gpt-6.1-sol` / `gpt-6.1-terra`.
-- Update `cost` / `cost_by_tier` in `spec/agent.yaml` (anchored to `luna:low = 1` at `$0.02`/rollout), `ratings` in `spec/model_scores.yaml`, and `roles` tier lists where justified by FrontierCode 2.0.
-- Update pinned cost/rating assertions in `internal/subagent/agentspec_test.go`, `modelscores_test.go`, and `cmd/harnez/testdata/agent-models-chart-80cols.golden`.
-- Update `docs/Models.md` and `docs/practices/ModelRoles.md` (+ `make install && harnez init -d .` for root copy `docs/ModelRoles.md`).
-- Run `make install` and `make test-q1`.
+#### M2 Core Work — Delivered (`a9bade32`)
+- Added `developer` role to `agy:neon`, `agy:hydrogen`, `agy:argon`, `agy:flash38` and updated `internal/subagent/agentspec_test.go`.
+- Added `xhigh: 4.0` rating for `agy:neon` in `spec/model_scores.yaml`, `ModelCost` assertions, and `costly_models` for `agy:neon:{high,xhigh}`.
+- Recalibrated `cost` / `cost_by_tier` in `spec/agent.yaml` (`luna`, `sol`, `haiku`, `sonnet`, `fable`, `opus`, `argon`, `hydrogen`, `neon`) from FrontierCode 2.0 (`round_half_up($ / 0.02)`), replaced `argon:high` with `neon:high` in `roles.reviewer.models.best`, and synced `docs/Models.md`, `docs/HarnezAgentArchitecture.md`, `docs/practices/ModelRoles.md`, `AgenticLoop`, command docs, and tests (`make test-q1` green).
+- `rev-1243-m2` (`neon:med`) returned **PASS WITH MINOR FINDINGS** (2 minor items queued as M3).
+
+### M3: M2 Review Refinements
+#### Pre-Work / Required Refinements (from `rev-1243-m2`)
+1. Fix `agy:neon:med` rounding inconsistency: `$2.17 / $0.02 = 108.5` rounds half-up to `109` (currently `108` in `spec/agent.yaml`, `docs/Models.md`, and `agentspec_test.go` if asserted).
+2. Fix `cmd/harnez/agent_cost_test.go:96-100`: replace stale `wantCost: "unknown"` on `agy:argon:high` (`326`) and `claude:fable:high` (`420`) with the real cost strings, and add `costly_models` refusal cases for `agy:neon:high` (`219`) and `agy:neon:xhigh` (`384`).
+3. Run `make install` and `make test-q1`, then commit with `git commit -m "fix(spec): round agy:neon:med to 109 and tighten agent_cost_test assertions (issue 1243 M3)"`.
 
 ## Decision
 - **2026-11-19 (Host)**: Split #1243 into M1 (onboard `agy:neon` quickly) and M2 (recalibrate all model costs, ratings, tiers, and docs from FrontierCode 2.0) per owner instruction.
