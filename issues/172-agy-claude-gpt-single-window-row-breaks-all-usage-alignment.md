@@ -4,7 +4,7 @@
 
 **Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 n/a-placeholder design question (§3.3) remain open pending live account verification
-**Priority**: P2 (Medium)
+**Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
 **Related**: `internal/usage/agy.go` (`parseAGYUsageOutput`), `internal/usage/watch.go`

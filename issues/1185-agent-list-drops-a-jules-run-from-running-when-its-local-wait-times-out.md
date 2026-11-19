@@ -1,7 +1,7 @@
 # 1185 — agent list drops a Jules run from running when its local wait times out
 
 **Status**: Open
-**Priority**: P2 (Medium)
+**Priority**: P3 (Low)
 **Severity**: Major
 **Category**: Bug
 **Related**: 1089, 1095

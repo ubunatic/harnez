@@ -1,6 +1,7 @@
 # promote command — push improved project docs back to source
 
 **Status:** Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
+**Priority:** P3 (Low)
 **Severity:** Feature — workflow gap
 
 ## Problem

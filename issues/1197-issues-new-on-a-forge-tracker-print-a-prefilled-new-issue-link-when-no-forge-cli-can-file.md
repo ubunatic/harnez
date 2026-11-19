@@ -1,7 +1,7 @@
 # 1197 — issues new on a forge tracker: print a prefilled new-issue link when no forge CLI can file
 
 **Status**: Open
-**Priority**: P2 (Medium)
+**Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
 **Related**: 1195 (forge create via tea/fj/gh), 1196 (forge duplicate gate), 1067 (issues export)

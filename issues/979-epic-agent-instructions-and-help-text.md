@@ -1,7 +1,7 @@
 # 979 — Epic: agent instructions and help text
 
 **Status**: Open
-**Priority**: P1 (High) — contains 972, the only active P1
+**Priority**: P2 (Medium) — 972, 970 and 976 closed; remaining child 963 is P2 in Backlog
 **Severity**: Normal
 **Category**: Epic
 **Related**: 972, 963, 970, 976

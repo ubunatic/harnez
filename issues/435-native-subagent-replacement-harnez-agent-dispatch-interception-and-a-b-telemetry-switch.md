@@ -1,7 +1,7 @@
 # 435 — Native Subagent Replacement, Harnez Agent Dispatch Interception, and A/B Telemetry Switch
 
 **Status**: Backlog — grooming 2026-10-23: active cap 20; no work planned this week
-**Priority**: P1 (High)
+**Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Agentic Ergonomics / Infrastructure
 **Related**: #342, #417, `docs/HarnezAgentArchitecture.md`, `docs/practices/AgenticLoop.md`

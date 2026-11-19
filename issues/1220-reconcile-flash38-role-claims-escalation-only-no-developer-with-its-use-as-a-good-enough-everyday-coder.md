@@ -1,7 +1,7 @@
 # 1220 — reconcile flash38 role claims (escalation-only, no developer) with its use as a good enough everyday coder
 
 **Status**: Open
-**Priority**: P2 (Medium)
+**Priority**: P3 (Low)
 **Severity**: Moderate
 **Category**: Agent Guidance
 **Related**: 604 (closed: flash38 escalation-only), 711 (flash38/default-spec mismatches), 1002 (agy developer turns on flash38:low), docs/Models.md, spec/agent.yaml
