@@ -258,6 +258,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-16-two-agent-lean-sprint-1181-session-isolation.md](studies/2026-11-16-two-agent-lean-sprint-1181-session-isolation.md) | Lean sprint 1181: isolate Harnez session state and constrain installation destinations (2026-11-16) |
 | [studies/2026-11-16-two-agent-lean-sprint-forge-filing.md](studies/2026-11-16-two-agent-lean-sprint-forge-filing.md) | Lean sprint 1228, 1212, 1202: forge filing through harnez issues (2026-11-16) |
 | [studies/2026-11-19-two-agent-lean-sprint-1196-forge-similar-gate.md](studies/2026-11-19-two-agent-lean-sprint-1196-forge-similar-gate.md) | Two-Agent Lean Sprint: 1196 — Forge `find issues similar` & `issues new` Duplicate Gate |
+| [studies/2026-11-19-two-agent-lean-sprint-1237-forge-friction.md](studies/2026-11-19-two-agent-lean-sprint-1237-forge-friction.md) | Two-Agent Lean Sprint: 1237 — Forge-Tracker Friction (Private Search, `find next`, Label Warnings) |
 | [studies/2026-11-19-two-agent-lean-sprint-1243-neon-costs.md](studies/2026-11-19-two-agent-lean-sprint-1243-neon-costs.md) | Two-Agent Lean Sprint: 1243 — Onboard Gemini 4 Neon & Update Costs/Tiers (FrontierCode 2.0) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
