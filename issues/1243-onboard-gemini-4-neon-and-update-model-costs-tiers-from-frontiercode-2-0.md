@@ -1,6 +1,6 @@
 # 1243 — Onboard Gemini 4 Neon and update model costs/tiers from FrontierCode 2.0
 
-**Status**: Open
+**Status**: Closed — M1-M3 delivered: onboarded agy:neon (live canary OK in 9s), allowed developer role on agy models, recalibrated costs/tiers from FrontierCode 2.0, and tightened agent_cost_test assertions; make test-q1 and touched Go suites passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature

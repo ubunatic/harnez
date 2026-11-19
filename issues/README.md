@@ -53,5 +53,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1238 | [1238-harnez-statusline-does-not-show-the-model-or-the-reasoning-effort.md](1238-harnez-statusline-does-not-show-the-model-or-the-reasoning-effort.md) | harnez statusline does not show the model or the reasoning effort | Open |
 | 1240 | [1240-native-read-guard-blocks-files-whose-content-is-no-longer-in-context-and-edit-then-has-no-path.md](1240-native-read-guard-blocks-files-whose-content-is-no-longer-in-context-and-edit-then-has-no-path.md) | Native Read guard blocks files whose content is no longer in context, and Edit then has no path | Open |
 | 1242 | [1242-retire-jules-and-flash37-shipped-spec-cannot-disable-a-model.md](1242-retire-jules-and-flash37-shipped-spec-cannot-disable-a-model.md) | Retire Jules and flash37: shipped spec cannot disable a model | Open |
-| 1243 | [1243-onboard-gemini-4-neon-and-update-model-costs-tiers-from-frontiercode-2-0.md](1243-onboard-gemini-4-neon-and-update-model-costs-tiers-from-frontiercode-2-0.md) | Onboard Gemini 4 Neon and update model costs/tiers from FrontierCode 2.0 | Open |
 <!-- harnez:end issues-active-index -->
