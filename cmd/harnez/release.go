@@ -14,7 +14,7 @@ func newReleaseCmd() *cobra.Command {
 		Short:        "Language-agnostic version bump, build, minisign, and forge publish pipeline",
 		Long: `Automates the full project release lifecycle:
   1. Reads or initializes the single source of truth version.yaml spec.
-  2. Bumps semver (patch, minor, major, or explicit version) or resumes (--continue).
+  2. Bumps semver (patch, minor, major, or explicit version; default: inferred from recent tags) or resumes (--continue).
   3. Propagates version to language files (version.go, __version__.py, build.zig.zon, etc.).
   4. Runs GoReleaser or custom build command to produce dist/ artifacts.
   5. Cryptographically signs SHA256SUMS with minisign (non-interactive).

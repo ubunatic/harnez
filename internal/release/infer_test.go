@@ -10,9 +10,10 @@ import (
 
 func TestInferBumpFromTagList(t *testing.T) {
 	tests := []struct {
-		name     string
-		tags     []string
-		wantBump string
+		name      string
+		tags      []string
+		tagPrefix string
+		wantBump  string
 	}{
 		{
 			name:     "empty history defaults to patch",
@@ -60,15 +61,35 @@ func TestInferBumpFromTagList(t *testing.T) {
 			wantBump: "patch",
 		},
 		{
+			// Discriminating: the latest 4 (v0.6.3..v0.6.0) are all patch steps,
+			// while uncapped history would contain five minor steps and win.
 			name:     "only latest 4 stable tags inspected",
-			tags:     []string{"v0.1.0", "v0.1.1", "v0.1.2", "v0.1.3", "v0.2.0", "v0.3.0", "v0.4.0"},
-			wantBump: "minor",
+			tags:     []string{"v0.1.0", "v0.2.0", "v0.3.0", "v0.4.0", "v0.5.0", "v0.6.0", "v0.6.1", "v0.6.2", "v0.6.3"},
+			wantBump: "patch",
+		},
+		{
+			name:      "custom tag prefix minor sequence",
+			tags:      []string{"taia-v0.1.0", "taia-v0.2.0", "taia-v0.3.0"},
+			tagPrefix: "taia-v",
+			wantBump:  "minor",
+		},
+		{
+			name:      "custom tag prefix ignores other prefixes",
+			tags:      []string{"v0.1.0", "v0.1.1", "v0.1.2", "taia-v0.1.0", "taia-v0.2.0", "taia-v0.3.0"},
+			tagPrefix: "taia-v",
+			wantBump:  "minor",
+		},
+		{
+			name:      "default v prefix ignores custom prefixed tags",
+			tags:      []string{"v0.1.0", "v0.1.1", "v0.1.2", "taia-v0.1.0", "taia-v0.2.0", "taia-v0.3.0"},
+			tagPrefix: "v",
+			wantBump:  "patch",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, reason := inferBumpFromTagList(tc.tags)
+			got, reason := inferBumpFromTagList(tc.tags, tc.tagPrefix)
 			if got != tc.wantBump {
 				t.Errorf("inferBumpFromTagList(%v) = %q (%s), want %q", tc.tags, got, reason, tc.wantBump)
 			}
@@ -76,6 +97,20 @@ func TestInferBumpFromTagList(t *testing.T) {
 				t.Errorf("expected non-empty reason")
 			}
 		})
+	}
+}
+
+func TestInferBumpFromTagsNonGitDirFallsBackToPatch(t *testing.T) {
+	// Keep git discovery from walking up into an enclosing repository.
+	dir := t.TempDir()
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
+
+	got, reason := InferBumpFromTags(dir, "v")
+	if got != "patch" {
+		t.Errorf("InferBumpFromTags on non-git dir = %q (%s), want patch", got, reason)
+	}
+	if reason != "unable to inspect git tags" {
+		t.Errorf("reason = %q, want %q", reason, "unable to inspect git tags")
 	}
 }
 
@@ -156,7 +191,7 @@ func TestRunSkipBuildVsMissingBuildConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("skip-build run: %v\n%s", err, skippedOut.String())
 	}
-	if !strings.Contains(skippedOut.String(), "[build] Build skipped (--skip-build)") {
+	if !strings.Contains(skippedOut.String(), "[build]     Build skipped (--skip-build)") {
 		t.Errorf("expected explicit skip-build message, got:\n%s", skippedOut.String())
 	}
 	if strings.Contains(skippedOut.String(), "No build configuration detected") {
@@ -189,7 +224,7 @@ func TestRunSkipBuildVsMissingBuildConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing-build run: %v\n%s", err, missingOut.String())
 	}
-	wantBuild := "[build] No build configuration detected (no build_cmd in version.yaml, no .goreleaser.yaml, no make dist/build target); proceeding without artifact compilation."
+	wantBuild := "[build]     No build configuration detected (no build_cmd in version.yaml, no .goreleaser.yaml, no make dist/build target); proceeding without artifact compilation."
 	if !strings.Contains(missingOut.String(), wantBuild) {
 		t.Errorf("expected %q, got:\n%s", wantBuild, missingOut.String())
 	}

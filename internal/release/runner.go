@@ -104,10 +104,14 @@ func Run(opt Options) error {
 	var tagName string
 	spec, specPath, err := LoadVersionSpec(opt.Dir)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("load version spec: %w", err)
 		}
-		fmt.Fprintf(opt.Out, "  [warning] No version.yaml found in %s; release is running in tag-only fallback mode without a declared release spec.\n", opt.Dir)
+		// --continue bumps nothing and writes no spec, so the fallback warning
+		// (which describes bump-time behaviour) would only be noise there.
+		if !opt.Continue {
+			fmt.Fprintf(opt.Out, "  [warning] No version.yaml found in %s; release is running in tag-only fallback mode without a declared release spec.\n", opt.Dir)
+		}
 	}
 
 	tagPrefix := "v"
@@ -167,7 +171,7 @@ func Run(opt Options) error {
 		bump := strings.TrimSpace(opt.Bump)
 		if bump == "" {
 			var reason string
-			bump, reason = InferBumpFromTags(opt.Dir)
+			bump, reason = InferBumpFromTags(opt.Dir, tagPrefix)
 			fmt.Fprintf(opt.Out, "  [version] Inferred bump: %s (%s)\n", bump, reason)
 		}
 
@@ -243,7 +247,7 @@ func Run(opt Options) error {
 		}
 	}
 	if opt.SkipBuild {
-		fmt.Fprintf(opt.Out, "  [build] Build skipped (--skip-build)\n")
+		fmt.Fprintf(opt.Out, "  [build]     Build skipped (--skip-build)\n")
 	} else if !reuse {
 		if err := runBuildStep(opt, spec); err != nil {
 			return err
@@ -535,7 +539,7 @@ func runBuildStep(opt Options, spec *VersionSpec) error {
 		return nil
 	}
 
-	fmt.Fprintf(opt.Out, "  [build] No build configuration detected (no build_cmd in version.yaml, no .goreleaser.yaml, no make dist/build target); proceeding without artifact compilation.\n")
+	fmt.Fprintf(opt.Out, "  [build]     No build configuration detected (no build_cmd in version.yaml, no .goreleaser.yaml, no make dist/build target); proceeding without artifact compilation.\n")
 	return nil
 }
 
