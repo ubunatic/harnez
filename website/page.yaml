@@ -3,12 +3,12 @@
 # yaml-language-server: $schema=../spec/schemas/page.schema.json
 
 title: harnez — declarative developer and agent harness
-kicker: Agent configuration · Live quotas · Tool telemetry
+kicker: Agent configuration · Session isolation · Live quotas · Tool telemetry
 title_lead: harnez
 title_main: manage agent harnesses from one config.yaml.
-lead: Configure Claude Code, Antigravity, Codex and Prime Agent declaratively. Idempotent configuration,
-  hook interception, live quota and hardware monitoring, and SQLite tool telemetry keep agent workflows
-  observable.
+lead: Configure Claude Code, Antigravity, Codex, and Pi declaratively. Idempotent setup, isolated
+  runner sessions, two-stage command truncation and Quota-1 hooks, forge-tracked issues, live quota
+  and hardware monitoring, and SQLite tool telemetry keep multi-agent workflows observable and safe.
 go_package: true
 install: go install ubunatic.com/harnez/cmd/harnez@latest
 logo:
@@ -26,18 +26,18 @@ sections:
   title: Why harnez?
   blocks:
   - cards:
-    - title: Configuration Drift & Blind Spots
+    - title: Configuration Drift & Context Bloat
       text: AI coding agent setups drift across machines and providers. Tool permissions wipe on updates,
-        prompt conventions diverge across repositories, multi-agent skills need disparate target directories,
-        and unexpected rate limits or silent tool failures stall workflows without telemetry.
-    - title: Declarative Source of Truth & Native Hooks
-      text: A single declarative `config.yaml` idempotently manages global configs, local project scaffolding,
-        and cross-agent skills. Two-stage `PreToolUse` hooks rewrite commands to proxy stdio unbuffered
-        and capture execution metrics directly into a local SQLite database.
-    - title: Deterministic, Observable Engineering
-      text: Zero drift across all agent harnesses, one-command project onboarding via `harnez init`, live
-        cross-provider quota tracking with rate-limit protection, and quantitative tool call reliability
-        metrics via `harnez stats`.
+        conventions diverge across repositories, runaway shell output overflows context windows, and
+        multi-agent runs collide on shared sockets, state files, or redundant test runs.
+    - title: Declarative Source of Truth & Bounded Hooks
+      text: One declarative `config.yaml` and per-repo `.harnez/repo.yaml` idempotently manage global
+        configs, AGit git setup, and copyable docs. Two-stage `PreToolUse` hooks wrap execution in
+        `harnez exec` with spec-driven spill-file truncation, Quota-1 test budgets, and SQLite telemetry.
+    - title: Isolated, Multi-Provider Engineering
+      text: Launch and monitor subagents across Claude Code, Codex, Antigravity, and Pi with role-based
+        model picks, Landlock/bwrap session isolation (`$TAIA_SESSION_DIR`), staged host binary promotion,
+        and unified local or Codeberg/GitHub issue workflows.
 - id: usage
   tag: Unified Token, Quota & Hardware Dashboard
   title: Unified Token, Quota & Hardware Dashboard
@@ -60,17 +60,17 @@ sections:
         alt: harnez usage Remote Load panel for node x600 showing the RTX 3060 at 53 percent and the Phoenix1
           GPU at 59 percent while a vision workload runs
   - text: |-
-      `harnez usage` (aliases: `quota`, `tokens`) unifies live rate-limit quota windows, token velocity sparklines, host hardware load, remote SSH nodes, and microphone speech meters into one interactive btop-style dashboard.
+      `harnez usage` (aliases: `quota`, `tokens`) unifies live rate-limit quota windows, token velocity sparklines, host hardware load, remote SSH nodes, and microphone speech meters into one interactive btop-style dashboard backed by the `harnez server` collector.
 
-      **Instant Splash Status:** Red/green brand glyphs (`● codex`, `✱ claude`, `Λ agy`, `● mic`) provide sub-second verification of provider connectivity and recording state on startup.
+      **Instant Splash Status:** Red/green brand glyphs (`● codex`, `✱ claude`, `Λ agy`, `● mic`) verify provider connectivity and recording state at startup, and the CLI automatically hands over stale collector daemons on version mismatch.
 
       ### Multi-Provider Quotas
 
-      Live 5-hour and weekly rate limits for Claude Code, Gemini/Antigravity, and OpenAI Codex with reset countdowns and shared file-locked disk caching.
+      Live 5-hour, weekly, monthly, and scoped quotas (including separate Claude Code Fable weekly tracking) across Claude Code, Antigravity (AGY), and OpenAI Codex with collector-backed file-locked caching and runner broker reads.
 
       ### Hardware & Remote Streaming
 
-      Local CPU, RAM, and GPU/VRAM telemetry (AMD Cezanne/Phoenix, NVIDIA) alongside remote node metrics streamed over SSH (`--host @x600`).
+      Local CPU, RAM, and GPU/VRAM telemetry (AMD Cezanne/Phoenix, NVIDIA) alongside remote node metrics streamed over SSH (`--host user@x600`), plus terminal size probing via `TIOCGWINSZ` so agent subprocesses can inspect usage safely.
 
       ### Live Speech & Mic Ballistics
 
@@ -80,8 +80,9 @@ sections:
       # live btop-style dashboard with tokens/min sparkline and hardware load
       $ harnez usage --watch          # -w
 
-      # compact one-shot summary for status bars and quick CLI glances
-      $ harnez usage --summary        # -s
+      # one-shot quota table or compact load + usage panels
+      $ harnez usage --table
+      $ harnez usage --compact
 
       # stream live telemetry from a remote compute node over SSH
       $ harnez usage --watch --host user@x600
@@ -133,72 +134,85 @@ sections:
       feedback overhead: 28.1 avg bytes/call, ~943 one-time instruction tokens
       ```
 
-      ### Two-Stage Hook Interception
+      ### Two-Stage Hook Interception & Spill Truncation
 
-      `PreToolUse` hooks rewrite commands into `harnez exec -- <cmd>`. The hook process exits immediately; the wrapper proxies unbuffered stdio, captures timing and exit codes, and writes SQLite telemetry in a bounded goroutine without blocking the agent.
+      `PreToolUse` hooks rewrite shell commands into `harnez exec -- <cmd>` (via the `⚙` symlink). The wrapper proxies unbuffered stdio, caps non-TTY output via `spec/exec.yaml` (51,200 bytes / 2,000 lines by default, or `--max-output-bytes`) with lazy spill files, enforces Quota-1 single-run `go test` / `gotestsum` budgets, and writes SQLite telemetry asynchronously.
 
       ### Noise Distillation Engine
 
-      `harnez distill` automatically strips passing test noise, repetitive logs, and ANSI escape codes before output enters the agent's context window, saving over 50% in context tokens and bandwidth.
+      `harnez distill` strips passing test noise, ANSI escapes, and repeated build chatter before output enters the agent's context window, and pairs with spill-file truncation when raw or distilled logs exceed budget.
 
       ### Native Multi-Agent Hooks & Shims
 
-      Includes dedicated adapters: quiet guarded `bash` PATH shim for Google Antigravity, Claude Code `settings.json` hooks, and Codex shell wrappers.
+      Includes dedicated adapters: Claude Code `settings.json` hooks (including `PreCompact` read-marker resets), guarded `bash` PATH shim and `hooks.json` integration for Antigravity, Codex config hooks, and inherited-FD telemetry relay sockets for confined runner processes.
 - id: features
   tag: Core Engine Features
   title: Core Engine Features
   blocks:
   - cards:
-    - title: Multi-Agent Harness
-      text: Centralizes skills, permissions, and conventions across Claude Code (`~/.claude`), Google
-        Antigravity (`~/.gemini`), Codex (`~/.codex`), and Prime Agent (`~/.prime`).
-    - title: Non-Destructive Key Merging
-      text: Permissions, effort levels, and hooks in `settings.json` are merged cleanly. User themes,
-        authentication tokens, and manual overrides remain completely intact.
-    - title: Structured 5-Phase Sprints
-      text: 'Orchestrate structured `/sprint` workflows: Parallel Advisory Discovery → Sequential TDD
-        → Pre-Commit Review Gate → Process Hygiene → Retrospective.'
-    - title: Live Logarithmic Mic Meter
-      text: Equalizer-style smooth decay and speech-activated dynamic refresh rates via PipeWire (`pw-record`),
-        ALSA, and PulseAudio with logarithmic dBFS scaling.
-    - title: Repository Discovery & Issues
-      text: '`harnez find` and `harnez issues` offer fast fuzzy search, next-ticket reservation, and automatic
-        README index synchronization.'
-    - title: Copyable Language & Practice Docs
-      text: Bundles battle-tested conventions for Go, Bash, Make, Rust, Zig, C++, GTK4, Markdown, Canary-first
-        probes, Spec architectures, and Agentic Loops.
-    - title: Concise Mode Switching
-      text: '`harnez mode` adjusts prompt terseness levels dynamically and syncs `AGENTS.local.md` overlays
-        across active workspace repos.'
-    - title: One-Command Project Scaffolding
-      text: '`harnez init` provisions `AGENTS.md`, symlinks `CLAUDE.md`, installs requested language docs,
-        and reconciles Makefile targets.'
+    - title: Multi-Agent Harness & Subagents
+      text: Dispatch and resume sessions across Claude Code, Codex, Antigravity, and Pi (`harnez agent`,
+        `harnez models`) using spec-driven role picks (`cheap`/`lean`/`smart`/`best`), effort tiers up to
+        `xhigh`/`max`, per-turn cost/tool-call limits, and `--accept-cost` confirmation gates.
+    - title: Session Isolation & Safe Promotion
+      text: Isolate untrusted runners inside `$TAIA_SESSION_DIR` with inherited-FD broker sockets for
+        telemetry, usage, and own-session registry, verified Bubblewrap (`/tmp` tmpfs + UID-owned binds),
+        and `O_DIRECTORY|O_NOFOLLOW` + SHA-256 staged host binary promotion (`harnez install --staged`).
+    - title: Bounded Execution & Quota-1
+      text: '`harnez exec` caps non-TTY output via `spec/exec.yaml` spill files, `harnez distill` trims
+        log noise, and Quota-1 tracks plain, targeted, and coverage `go test` or `gotestsum` runs to
+        halt redundant test loops until code changes.'
+    - title: Local & Forge-Tracked Issues
+      text: '`harnez find` searches code, docs, similar tickets, and next IDs; `harnez issues` handles
+        create, comment, edit, close, and reopen both in local `issues/` trackers and on Codeberg/GitHub
+        forges with strong duplicate gating and private `fj --all` fallback.'
+    - title: AGit Repo Scaffolding & Push Guards
+      text: '`harnez init` detects repo modes (`solo`, `fork`, `team`), writes `.harnez/repo.yaml`, sets
+        repo-local AGit pull tracking (`autoSetupMerge=always`), and enforces `protected_main` on AGit
+        remotes via `harnez push-guard` and `pre-push` hooks.'
     - title: Release & Forge Automation
-      text: '`harnez release` coordinates semantic version bumps, builds, minisign signatures, and Codeberg
-        release forge uploads.'
+      text: '`harnez release` infers patch/minor bump cadence from tag history (honoring custom `tag_prefix`),
+        propagates versions, builds with `GOWORK=off`, signs `SHA256SUMS` non-interactively with minisign,
+        and publishes artifacts to Codeberg.'
+    - title: Concise Mode & Key Merging
+      text: '`harnez mode` switches session terseness across `lite`, `std`, `ultra`, and `vision` in
+        `.harnez/rules/Local.md`, while `harnez apply` cleanly merges managed JSON keys, shell PATH/completions
+        via `goself`, and commented Markdown blocks.'
+    - title: Copyable Language & Practice Docs
+      text: Bundles maintained docs (full and `.lite` variants) for Go, Bash, Make, Rust, Zig, C++,
+        GTK4, Markdown, AGit, GoRelease, Canary-first probes, Spec schemas, Website rules, and Agentic Loops.
 - id: commands
   tag: Commands Reference
   title: Commands Reference
   blocks:
   - text: |-
-      Self-contained, fast Go binary with no external dependencies required for daily workflows.
+      Self-contained Go CLI built from `spec/*.yaml` single-source definitions and managed via `goself`.
 
-      | Command | Key flags | What it does |
+      | Command | Key flags / verbs | What it does |
       | --- | --- | --- |
-      | `apply` | `-c` `-t` `-d` `--force-docs` | Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs idempotently |
-      | `usage` | `-w` `-s` `--host` `--mic` `--json` `--offline` | Live dashboard & sparkline monitor for token quotas, CPU/RAM/GPU load, and mic speech ballistics |
-      | `stats` | `--auto` `--overhead` `--project` `--tool` `--json` | Analytical report over tool call frequency, average quality score, failure rate, and byte savings |
-      | `exec` | `--tool` `--expect-failure` `--distill` | Proxy stdio unbuffered, execute commands, and record non-blocking telemetry rows to SQLite |
-      | `distill` | `--` `hook` | Strip low-signal test suite noise, ANSI escapes, and redundant output to conserve context tokens |
-      | `init` | `-c` `-d` `--docs` `-m` `-y` `--update` | Set up a project directory: AGENTS.md, doc copies, git mode, and Makefile targets |
-      | `diff` | `-c` `-t` `-e` | Preview pending changes without writing (`-e, --exit-code` returns 1 on drift) |
-      | `find` | `-d` `issues` `docs` `--json` | Fuzzy search across tickets, documentation entities, and compute next issue numbers |
-      | `issues` | `new` `start` `close` `-d` | Change ticket status, resync `issues/README.md`, and commit in one atomic step |
-      | `mode` | `concise` `verbose` `normal` | Switch concise mode terseness level and update `AGENTS.local.md` overlays |
-      | `rate` | `1-5` `--ok` `--note` | Record tool quality feedback score or a lean heartbeat into telemetry SQLite database |
-      | `release` | `patch` `minor` `major` | Run version bump, test suite, binary build, minisign signing, and forge release publication |
-      | `revert --managed` | `-c` `-t` `--managed` | Remove managed keys from `settings.json` and strip managed Markdown blocks |
-      | `status` | `-c` `-t` | Print configuration summary and verify applied file integrity on disk |
+      | `agent` | `start` `resume` `wait` `list` `commands` | Launch, inspect, compact, rate, and extract command logs across Claude, Codex, AGY, and Pi |
+      | `apply` | `-c` `-t` `-d` `--profiles` `--prune` `-s` | Sync global Claude, Gemini, Codex, and Pi configs, shell setup, skills, and docs idempotently |
+      | `usage` | `-w` `--table` `--compact` `--host` `--mic` `--json` | Show or watch unified multi-provider token quotas, CPU/RAM/GPU load, and live mic levels |
+      | `stats` | `--auto` `--agents` `--overhead` `--project` `--json` | Report tool call frequency, average rating, failure rate, cost, and distillation savings |
+      | `exec` (`⚙`) | `--max-output-bytes` `--quota-1` `--distill` `--timeout` | Run commands with spill-file output caps, Quota-1 test gating, noise filtering, and telemetry |
+      | `distill` | `--` `hook` | Strip passing test chatter, ANSI escapes, and redundant output lines to conserve tokens |
+      | `find` | `issues` `code` `docs` `similar` `next` `--json` | Search local or forge issues, code, docs, duplicate candidates, and session history |
+      | `issues` | `new` `show` `comment` `edit` `start` `close` `--forge` | Manage local Markdown or Forgejo/GitHub issues with duplicate gating and index commits |
+      | `forge` | `token create|rotate|revoke|show` `--write` | Manage separate Codeberg/Forgejo read and write API tokens safely on the host |
+      | `pr` | `wait <number> --contains <sha>` | Wait for Codeberg (Forgejo) or GitHub pull requests to merge or close |
+      | `init` | `-d` `--docs` `-m` `--protected-main` `--quota-1` `--ramp` | Scaffold `.harnez/repo.yaml`, `AGENTS.md`, Makefile targets, language docs, and AGit config |
+      | `install` | `--staged` `--sha256` `--direct` `--dry-run` | Deploy binary/completions/`⚙`/man pages via `goself`, promote staged builds, or install deps |
+      | `server` | `install` `status` `logs` `restart` `stop` | Manage the local `harnez-agent-collector` systemd service and broker daemon |
+      | `mode` | `lite` `std` `ultra` `vision` `off` `-e` | Switch ConciseMode terseness level in `.harnez/rules/Local.md` or emit an ephemeral directive |
+      | `read` | `-L` `-I` `--compress` `--line-numbers` | Bounded source reading, safe Go/JSON lexical compression, and terminal/vision card rendering |
+      | `lint` | `--check` `--lang` `--json` `-v` | Validate Go, Bash, Makefile, and Markdown files against repository rules |
+      | `release` | `-b` `--tag-prefix` `--skip-build` `--continue` `-n` | Infer semver bump, build (`GOWORK=off`), sign with minisign, tag, and publish to Codeberg |
+      | `push-guard` | `<remote-ref>` `--remote` `--url` | Enforce `protected_main` push policy on AGit remotes while keeping GitHub mirrors working |
+      | `diff` | `-c` `-t` `-e` `--components` `--prune` | Preview pending changes without writing (`-e` exits 1 on drift) |
+      | `status` | `-c` `-t` `--components` `--debloat` | Print configuration summary, hook trust, and verify applied target state |
+      | `models` | `--picks` `--json` | Inspect registered models, capabilities, FrontierCode 2.0 relative costs, and role picks |
+      | `rate` | `1-5` `--ok` | Record a 1–5 internal tool quality rating or a lean liveness heartbeat into SQLite |
+      | `revert` | `-c` `-t` `--managed` | Remove managed keys from `settings.json` and strip managed Markdown blocks |
 - id: architecture
   tag: Architecture
   title: How it works
@@ -206,19 +220,19 @@ sections:
   - text: |-
       ### 1. Two-Stage Hook Interception
 
-      PreToolUse lifecycle hooks rewrite tool invocations (such as `Bash` or `run_command`) into `harnez exec` wrappers. The hook returns instantaneously, letting `harnez exec` supervise execution, proxy unbuffered stdio, and write telemetry asynchronously to SQLite.
+      PreToolUse lifecycle hooks rewrite tool invocations (such as `Bash` or `run_command`) into `⚙` (`harnez exec`) wrappers. The hook returns immediately while `harnez exec` proxies unbuffered stdio, enforces `spec/exec.yaml` spill caps and Quota-1 `go test` budgets, and relays SQLite telemetry asynchronously.
 
       ### 2. Key Merge, Not Replace
 
-      harnez only mutates keys it explicitly manages (`effortLevel`, `permissions`, `hooks`, `env`, `spinnerVerbs`). User preferences, dark themes, and auth tokens in `settings.json` and `hooks.json` are strictly preserved.
+      `harnez apply` only mutates keys it explicitly manages (`model`, `effortLevel`, `permissions`, `hooks`, `env`, `spinnerVerbs`, `statusLine`). Existing user preferences, themes, and auth credentials in target configs are preserved.
 
       ### 3. Managed Markdown Boundaries
 
-      Content in `AGENTS.md` and `CLAUDE.md` is bounded by HTML comments (`<!-- harnez:begin ... -->`). Custom rules, project architectures, and unmanaged sections outside those comments are never overwritten.
+      Content in `AGENTS.md` and `CLAUDE.md` stays inside HTML comment markers (`<!-- harnez:begin ... -->`), while generated harness rules live separately in `.harnez/rules/`. Project notes outside those markers remain untouched.
 
-      ### 4. Shared Caching & Lock Coordination
+      ### 4. Brokered Isolation & Shared Locking
 
-      Live quota queries and hardware metrics are cached on disk with file locks (`~/.claude/harnez-quota-cache.json`). Multiple running terminals and agent subprocesses share cached readings without hitting upstream API rate limits.
+      On the host, quota cache reads and writes coordinate via file locks, and the `harnez server` collector serves usage/telemetry continuously. Confined runner processes access telemetry, usage snapshots, and own-session registry over an inherited `socketpair` FD (`SCM_RIGHTS`) with Landlock, verified Bubblewrap binds, and host-only binary promotion via `O_NOFOLLOW`.
 - id: config
   tag: Configuration
   title: config.yaml at a glance
@@ -228,15 +242,16 @@ sections:
       target_dir: ~/.claude
       skills_target: ~/.gemini/skills
       codex_skills_target: ~/.codex/skills
-      prime_agent_target: ~/.prime/agent
+      pi_agent_target: ~/.pi/agent
 
-      docs:
-        - golang
-        - bash
-        - make
-        - agentic-loop
-        - canary
-        - spec
+      global_section_targets:
+        - ~/.claude/CLAUDE.md
+        - ~/.codex/AGENTS.md
+        - ~/.gemini/GEMINI.md
+
+      docs_profiles:
+        go: [golang, bash, make, spec, canary]
+        codeberg: [agit, gorelease]
 
       effort: medium
 
@@ -251,24 +266,28 @@ sections:
           matcher: Bash
           command: "harnez exec hook"
         - event: Stop
-          command: "ffplay -nodisp -autoexit /usr/share/sounds/..."
+          command: "harnez hook sound"
 
       skills:
-        - name: sprint
-          description: "Orchestrate 5-phase agentic sprint loop"
-          file: commands/sprint.md
+        - name: lean-sprint
+          description: "Run one ticket or scoped task as a lean sprint"
+          file: docs/commands/lean-sprint.md
       ```
 - id: engineering-story
   tag: Recent engineering
   title: Recent engineering
   blocks:
   - text: >-
-      Recent milestones include server-side monitoring of local and remote hosts (epic 921, in
-      progress: `server status --json`, remote upgrade on start, remote load polling), a per-repo
-      `.harnez/repo.yaml` so `init` adapts to repos built differently (854), a merged model catalog with
-      policy enforcement (941, under epic 942) and developer tier defaults from owner feedback (956).
-      The [four days of epics story](https://codeberg.org/ubunatic/harnez/src/branch/main/docs/studies/2026-10-25-four-days-of-epics-server-monitor-and-skills-story.md)
-      records the work ticket by ticket.
+      Recent releases and sprints delivered `v0.5.9`, 17-milestone `$TAIA_SESSION_DIR` isolation and
+      `O_NOFOLLOW` staged host binary promotion (`#1181`), `goself v0.3.0` shell/binary install integration
+      (`#1235`), full Forgejo issue lifecycle + duplicate gating and `fj --all` private search fallback
+      (`#1202`, `#1196`, `#1237`), `spec/exec.yaml` spill-file truncation (`#771`), Quota-1 `go test` /
+      `gotestsum` enforcement (`#944`), tag-history release bump inference (`#1136`), AGit pull ergonomics
+      and `push-guard` (`#1206`), and `agy:neon` onboarding with FrontierCode 2.0 cost recalibration
+      (`#1243`). Read the
+      [2026-11-19 session isolation, forge parity, and quota pack story](https://codeberg.org/ubunatic/harnez/src/branch/main/docs/studies/2026-11-19-session-isolation-forge-parity-and-quota-pack-story.md)
+      and the earlier
+      [docs trim and cleanup skill story](https://codeberg.org/ubunatic/harnez/src/branch/main/docs/studies/2026-11-13-docs-trim-and-cleanup-skill-story.md).
 - id: install
   tag: Getting started
   title: Build and install from source
