@@ -48,4 +48,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1236 | [1236-telemetry-openreadonly-lacks-busy-timeout-causing-sqlite-busy-on-stats-agents.md](1236-telemetry-openreadonly-lacks-busy-timeout-causing-sqlite-busy-on-stats-agents.md) | telemetry: OpenReadOnly lacks busy_timeout, causing SQLITE_BUSY on stats --agents | Open |
 | 1238 | [1238-harnez-statusline-does-not-show-the-model-or-the-reasoning-effort.md](1238-harnez-statusline-does-not-show-the-model-or-the-reasoning-effort.md) | harnez statusline does not show the model or the reasoning effort | Open |
 | 1242 | [1242-retire-jules-and-flash37-shipped-spec-cannot-disable-a-model.md](1242-retire-jules-and-flash37-shipped-spec-cannot-disable-a-model.md) | Retire Jules and flash37: shipped spec cannot disable a model | Open |
+| 1244 | [1244-add-orchestrator-neon-as-a-harnez-model.md](1244-add-orchestrator-neon-as-a-harnez-model.md) | Add Orchestrator (Neon) as a Harnez model | Open |
+| 1245 | [1245-make-install-writes-go-bin-harnez-while-local-bin-harnez-goself-shadows-it-on-path.md](1245-make-install-writes-go-bin-harnez-while-local-bin-harnez-goself-shadows-it-on-path.md) | make install writes ~/go/bin/harnez while ~/.local/bin/harnez (goself) shadows it on PATH | Open |
 <!-- harnez:end issues-active-index -->
