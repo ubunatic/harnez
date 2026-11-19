@@ -289,6 +289,7 @@ const wantSoloReleaseOutput = `==> Preparing release for PROJECT (dry-run=false,
   [version]   Bumping version: 1.0.0 -> 1.0.1 (tag: v1.0.1)
   [git]       Committed version bump (chore(release): bump version to v1.0.1)
   [git]       Created annotated tag: v1.0.1
+  [build] Build skipped (--skip-build)
   [forge]     Verified/Enabled 'has_releases' on test/repo
   [git]       Pushing branch main and tag v1.0.1 to origin...
 ==> Release v1.0.1 completed successfully!

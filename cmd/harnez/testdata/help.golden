@@ -2695,7 +2695,7 @@ Usage:
 Flags:
       --allow-workspace     honor an enclosing go.work file during the build step (default: GOWORK=off, so the release always builds against pinned, tagged go.mod/go.sum deps, not untagged local workspace sources)
       --build-cmd string    custom build command (defaults to goreleaser or make dist)
-  -b, --bump string         version bump type ('patch', 'minor', 'major', or explicit semver 'x.y.z') (default "patch")
+  -b, --bump string         version bump type ('patch', 'minor', 'major', explicit semver 'x.y.z', or empty to infer from tag history)
       --continue            resume a previous release safely without bumping or re-tagging
   -d, --dir string          target project directory (default ".")
   -n, --dry-run             simulate execution without modifying files, git, or remote forge

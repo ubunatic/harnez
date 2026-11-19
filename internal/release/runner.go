@@ -102,7 +102,13 @@ func Run(opt Options) error {
 	// 4. Version determination & spec handling
 	var targetVersion string
 	var tagName string
-	spec, specPath, _ := LoadVersionSpec(opt.Dir)
+	spec, specPath, err := LoadVersionSpec(opt.Dir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("load version spec: %w", err)
+		}
+		fmt.Fprintf(opt.Out, "  [warning] No version.yaml found in %s; release is running in tag-only fallback mode without a declared release spec.\n", opt.Dir)
+	}
 
 	tagPrefix := "v"
 	if opt.TagPrefix != "" {
@@ -158,9 +164,16 @@ func Run(opt Options) error {
 			}
 		}
 
-		bumped, err := BumpVersion(currentVersion, opt.Bump)
+		bump := strings.TrimSpace(opt.Bump)
+		if bump == "" {
+			var reason string
+			bump, reason = InferBumpFromTags(opt.Dir)
+			fmt.Fprintf(opt.Out, "  [version] Inferred bump: %s (%s)\n", bump, reason)
+		}
+
+		bumped, err := BumpVersion(currentVersion, bump)
 		if err != nil {
-			return fmt.Errorf("bump version (%s -> %s): %w", currentVersion, opt.Bump, err)
+			return fmt.Errorf("bump version (%s -> %s): %w", currentVersion, bump, err)
 		}
 		targetVersion = bumped.String()
 		tagName = FormatTag(tagPrefix, targetVersion)
@@ -229,7 +242,9 @@ func Run(opt Options) error {
 			fmt.Fprintf(opt.Out, "  [build]     Complete signed dist for %s exists, skipped build and signing\n", targetVersion)
 		}
 	}
-	if !opt.SkipBuild && !reuse {
+	if opt.SkipBuild {
+		fmt.Fprintf(opt.Out, "  [build] Build skipped (--skip-build)\n")
+	} else if !reuse {
 		if err := runBuildStep(opt, spec); err != nil {
 			return err
 		}
@@ -520,7 +535,7 @@ func runBuildStep(opt Options, spec *VersionSpec) error {
 		return nil
 	}
 
-	fmt.Fprintf(opt.Out, "  [build]     No .goreleaser.yaml found and no --build-cmd specified; skipping artifact build\n")
+	fmt.Fprintf(opt.Out, "  [build] No build configuration detected (no build_cmd in version.yaml, no .goreleaser.yaml, no make dist/build target); proceeding without artifact compilation.\n")
 	return nil
 }
 
@@ -567,7 +582,7 @@ func hasMakefileTarget(dir, target string) bool {
 func runSigningStep(opt Options, projectName, version, keyPath string) error {
 	checksumPath := filepath.Join(opt.Dir, "dist", "SHA256SUMS")
 	if !fileExists(checksumPath) {
-		fmt.Fprintf(opt.Out, "  [sign]      No dist/SHA256SUMS found to sign\n")
+		fmt.Fprintf(opt.Out, "  [sign]      No build artifacts or dist/SHA256SUMS found in dist/; skipping signing\n")
 		return nil
 	}
 	if !checksumMatchesVersion(checksumPath, version, "") {

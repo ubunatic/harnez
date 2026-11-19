@@ -1111,8 +1111,8 @@ func TestRunBuildStepCleansDistBeforeSkippingBuild(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(distDir, "SHA256SUMS")); !os.IsNotExist(err) {
 		t.Fatalf("stale checksums remain after skipped build: stat err=%v", err)
 	}
-	if !strings.Contains(out.String(), "No .goreleaser.yaml found") {
-		t.Errorf("expected build step to skip, output: %s", out.String())
+	if !strings.Contains(out.String(), "[build] No build configuration detected") {
+		t.Errorf("expected build step to report missing build configuration, output: %s", out.String())
 	}
 	if strings.Contains(out.String(), "Signing ") {
 		t.Errorf("unexpected stale checksum signing, output: %s", out.String())

@@ -35,7 +35,7 @@ Pass --allow-workspace to opt back in when that's genuinely intended.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&opt.Bump, "bump", "b", "patch", "version bump type ('patch', 'minor', 'major', or explicit semver 'x.y.z')")
+	cmd.Flags().StringVarP(&opt.Bump, "bump", "b", "", "version bump type ('patch', 'minor', 'major', explicit semver 'x.y.z', or empty to infer from tag history)")
 	cmd.Flags().BoolVar(&opt.Continue, "continue", false, "resume a previous release safely without bumping or re-tagging")
 	cmd.Flags().BoolVarP(&opt.DryRun, "dry-run", "n", false, "simulate execution without modifying files, git, or remote forge")
 	cmd.Flags().BoolVar(&opt.Force, "force", false, "re-release the current code as a new version even if nothing changed since the previous tag")

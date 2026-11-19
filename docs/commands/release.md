@@ -20,11 +20,13 @@ Reference Practice: `@docs/practices/GoRelease.md`
    and tag directly first; if the forge rejects `main` as protected, it falls back to an AGit PR
    and pauses until you merge and run `harnez release --continue`. On GitHub, if direct push is
    rejected, see `docs/GoRelease.md` for the `release/vX.Y.Z` route.)
-3. **Match the project's setup**: `harnez release` defaults to a patch bump, a minisign
+3. **Match the project's setup**: `harnez release` infers the bump size (`minor` or `patch`) from
+   recent stable tags when `--bump` is omitted (falling back to `patch`), and defaults to a minisign
    signature and a GoReleaser or `make dist` build. Check the project before the first run:
-   - **Bump**: read the last tags (`git tag --sort=-v:refname | head -3`). Choose the step the
-     project uses, for example `-b minor` when tags go v0.19.0 → v0.20.0. Ask the user when
-     the history is unclear. A project with no `version.yaml` is versioned by its tags alone.
+   - **Bump**: omit `--bump` to let `harnez release` infer from recent tags (e.g. `minor` when tags
+     go v0.19.0 → v0.20.0), or pass `-b patch|minor|major|x.y.z` to override. Ask the user when
+     the history is unclear. A project with no `version.yaml` runs in tag-only fallback mode with a
+     warning.
    - **Signing**: a project that ships no minisign-signed archives has no
      `~/.minisign/<project>.key`. Pass `--skip-sign` only when the project never signs;
      a missing key in a project that does sign is an auth stop (step 5).
