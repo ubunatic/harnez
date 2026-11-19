@@ -917,10 +917,12 @@ func handleIssuesNew(stdout, stderr io.Writer, opt issuesNewOptions) error {
 		if err != nil {
 			return fmt.Errorf("issues new: cannot resolve forge remote: %w", err)
 		}
+		src := forgeTrackerSource(spec)
+		forgetracker.SetFallbackStderr(src, stderr)
 		return runIssuesNewForge(stdout, stderr, forgeNewOptions{
 			Dir:           opt.Dir,
 			Target:        t,
-			Source:        forgeTrackerSource(spec),
+			Source:        src,
 			Scan:          spec.IssueScan,
 			Req:           forgetracker.CreateRequest{Title: opt.Title, BodyFile: opt.BodyFile, Labels: opt.Labels},
 			ExplicitForge: true,

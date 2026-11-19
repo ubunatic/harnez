@@ -1726,7 +1726,9 @@ func TestFindIssuesNextForgeAndLocalJSON(t *testing.T) {
 func TestFindIssuesForgePrivateBlockedAndFJFallback(t *testing.T) {
 	dir := forgeRepo(t)
 
-	t.Run("blocked private repo exits 2 and does not mask similar --json", func(t *testing.T) {
+	t.Run("blocked private repo without token exits 2 and does not mask similar --json", func(t *testing.T) {
+		t.Setenv("CODEBERG_TOKEN", "")
+		t.Setenv("FORGEJO_TOKEN", "")
 		stub := stubForge(t)
 		stub.issuesErr = &forge.APIError{Status: 404, Detail: "not found"}
 
@@ -1747,6 +1749,29 @@ func TestFindIssuesForgePrivateBlockedAndFJFallback(t *testing.T) {
 			if !strings.Contains(stderr, noTokenDiggingDirective) {
 				t.Fatalf("%v: stderr missing no-token-digging warning: %q", args, stderr)
 			}
+		}
+	})
+
+	t.Run("blocked private repo with configured token reports HTTP status and exits 2", func(t *testing.T) {
+		t.Setenv("CODEBERG_TOKEN", "configured-read-token")
+		stub := stubForge(t)
+		stub.issuesErr = &forge.APIError{Status: 401, Detail: "unauthorized"}
+
+		stdout, stderr, err := runHarnezSplit(t, "find", "-d", dir, "issues", "similar", "login", "--json")
+		if code := exitCodeFromRunError(err); code != 2 {
+			t.Fatalf("exit code = %d (err=%v), want 2", code, err)
+		}
+		if strings.TrimSpace(stdout) != "" {
+			t.Fatalf("stdout must be empty, got %q", stdout)
+		}
+		if !strings.Contains(stderr, "search blocked on codeberg.org/o/r (HTTP 401; read token rejected or repo inaccessible)") {
+			t.Fatalf("stderr missing token-rejected status: %q", stderr)
+		}
+		if strings.Contains(stderr, "no read token") {
+			t.Fatalf("stderr must not falsely say no read token: %q", stderr)
+		}
+		if !strings.Contains(stderr, noTokenDiggingDirective) {
+			t.Fatalf("stderr missing no-token-digging warning: %q", stderr)
 		}
 	})
 
@@ -1785,6 +1810,19 @@ func TestFindIssuesForgePrivateBlockedAndFJFallback(t *testing.T) {
 		}
 		if !strings.Contains(stderr, "note: using fj issue search for codeberg.org/o/r (titles only; no read token)") {
 			t.Fatalf("stderr missing fj fallback note: %q", stderr)
+		}
+
+		// issues new --forge --dry-run wires stderr so the fj fallback note reaches cmd stderr.
+		body := filepath.Join(t.TempDir(), "body.md")
+		if err := os.WriteFile(body, []byte("Details.\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, newStderr, newErr := runHarnezSplit(t, "issues", "new", "-d", dir, "--forge", "--dry-run", "--force", "Distinct New Title", "-F", body)
+		if newErr != nil {
+			t.Fatalf("issues new --forge --dry-run: %v\nstderr=%s", newErr, newStderr)
+		}
+		if !strings.Contains(newStderr, "note: using fj issue search for codeberg.org/o/r (titles only; no read token)") {
+			t.Fatalf("issues new --forge stderr missing fj fallback note: %q", newStderr)
 		}
 	})
 }

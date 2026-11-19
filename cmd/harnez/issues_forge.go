@@ -368,13 +368,21 @@ func runFindNextForge(stdout io.Writer, t forgetracker.Target, jsonOut bool) err
 	return err
 }
 
+var forgeReadTokenFor = func(fg forge.Forge) string {
+	return forge.SystemTokenSource(os.Getenv).For(fg)
+}
+
 func handleForgeFindErr(cmd *cobra.Command, err error, t forgetracker.Target) error {
 	if err == nil {
 		return nil
 	}
 	var apiErr *forge.APIError
 	if errors.As(err, &apiErr) && (apiErr.Status == 401 || apiErr.Status == 403 || apiErr.Status == 404) {
-		fmt.Fprintf(cmd.ErrOrStderr(), "search blocked on %s (private repo; no read token or fj login)\n", t)
+		if strings.TrimSpace(forgeReadTokenFor(t.Forge)) != "" {
+			fmt.Fprintf(cmd.ErrOrStderr(), "search blocked on %s (HTTP %d; read token rejected or repo inaccessible)\n", t, apiErr.Status)
+		} else {
+			fmt.Fprintf(cmd.ErrOrStderr(), "search blocked on %s (private repo; no read token or fj login)\n", t)
+		}
 		warnNoTokenDigging(cmd.ErrOrStderr(), "")
 		return silenceIfExitCode(cmd, &exitCodeError{Code: 2})
 	}

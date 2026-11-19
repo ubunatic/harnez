@@ -28,7 +28,7 @@ var (
 func FJSearchCommand(t Target, state string) Command {
 	return Command{
 		Tool: "fj",
-		Args: []string{"--style", "minimal", "issue", "search", "--repo", fjRepo(t), "--state", state},
+		Args: []string{"--style", "minimal", "issue", "search", "--all", "--repo", fjRepo(t), "--state", state},
 	}
 }
 
@@ -147,8 +147,13 @@ func (s *fjFallbackSource) Issues(fg forge.Forge, owner, repo, state string, opt
 		}
 		combined = append(combined, ParseFJSearchOutput(t, st, string(out))...)
 	}
+	truncated = false
+	if limit := opts.PageSize * opts.MaxPages; limit > 0 && len(combined) > limit {
+		combined = combined[:limit]
+		truncated = true
+	}
 	s.noteOnce(t)
-	return combined, false, nil
+	return combined, truncated, nil
 }
 
 func (s *fjFallbackSource) noteOnce(t Target) {

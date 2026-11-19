@@ -29,7 +29,7 @@ func (e *errSource) Repo(forge.Forge, string, string) error { return e.repoErr }
 
 func TestFJSearchCommandHasNoHostFlag(t *testing.T) {
 	c := FJSearchCommand(cbTarget, "open")
-	want := []string{"--style", "minimal", "issue", "search", "--repo", "codeberg.org/o/r", "--state", "open"}
+	want := []string{"--style", "minimal", "issue", "search", "--all", "--repo", "codeberg.org/o/r", "--state", "open"}
 	if c.Tool != "fj" || !reflect.DeepEqual(c.Args, want) {
 		t.Fatalf("got %s %q, want fj %q", c.Tool, c.Args, want)
 	}
@@ -167,6 +167,47 @@ func TestFJFallbackSourceGates(t *testing.T) {
 		_, _, err = src.Issues(cbTarget.Forge, cbTarget.Owner, cbTarget.Repo, "open", forge.ScanOptions{})
 		if !errors.As(err, &apiErr) || apiErr.Status != 401 || stderr.Len() != 0 {
 			t.Fatalf("failing fj: err=%v stderr=%q", err, stderr.String())
+		}
+	})
+
+	t.Run("caps results to PageSize*MaxPages and sets truncated", func(t *testing.T) {
+		FJLookPath = lookOnly("fj")
+		FJRun = func(c Command) ([]byte, error) {
+			for i := 0; i < len(c.Args)-1; i++ {
+				if c.Args[i] == "--state" && c.Args[i+1] == "open" {
+					return []byte("3 issues\n#10: A (by u)\n#9: B (by u)\n#8: C (by u)\n"), nil
+				}
+			}
+			return []byte("2 issues\n#7: D (by u)\n#6: E (by u)\n"), nil
+		}
+		var stderr bytes.Buffer
+		src := NewFJFallbackSource(&errSource{issuesErr: &forge.APIError{Status: 404, Detail: "404"}}, func(forge.Forge) bool { return false }, &stderr)
+		got, truncated, err := src.Issues(cbTarget.Forge, cbTarget.Owner, cbTarget.Repo, "all", forge.ScanOptions{PageSize: 2, MaxPages: 2})
+		if err != nil || !truncated || len(got) != 4 {
+			t.Fatalf("capped fallback: len=%d truncated=%v err=%v", len(got), truncated, err)
+		}
+		got, truncated, err = src.Issues(cbTarget.Forge, cbTarget.Owner, cbTarget.Repo, "all", forge.ScanOptions{PageSize: 5, MaxPages: 1})
+		if err != nil || truncated || len(got) != 5 {
+			t.Fatalf("exact-budget fallback: len=%d truncated=%v err=%v", len(got), truncated, err)
+		}
+	})
+
+	t.Run("partial state=all failure returns error without silent partial success", func(t *testing.T) {
+		FJLookPath = lookOnly("fj")
+		FJRun = func(c Command) ([]byte, error) {
+			for i := 0; i < len(c.Args)-1; i++ {
+				if c.Args[i] == "--state" && c.Args[i+1] == "open" {
+					return []byte("1 issue\n#10: Open (by u)\n"), nil
+				}
+			}
+			return []byte("unauthorized"), errors.New("exit 1")
+		}
+		var stderr bytes.Buffer
+		src := NewFJFallbackSource(&errSource{issuesErr: &forge.APIError{Status: 404, Detail: "404"}}, func(forge.Forge) bool { return false }, &stderr)
+		got, truncated, err := src.Issues(cbTarget.Forge, cbTarget.Owner, cbTarget.Repo, "all", forge.ScanOptions{})
+		var apiErr *forge.APIError
+		if !errors.As(err, &apiErr) || apiErr.Status != 404 || got != nil || truncated || stderr.Len() != 0 {
+			t.Fatalf("partial failure: got=%v truncated=%v err=%v stderr=%q", got, truncated, err, stderr.String())
 		}
 	})
 }

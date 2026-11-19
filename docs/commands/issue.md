@@ -26,7 +26,8 @@ forge token; on Forgejo repos without a read token, `find issues` and `find
 issues similar` fall back to read-only `fj issue search` (titles only) when `fj`
 is logged in, or exit 2 with a blocked status (`search blocked on <target> ...`)
 without debugging tokens. `harnez find -d <repo> issues next [--json]` reports
-a `forge-assigned` status with zero API calls (exit 0). Search matches terms in
+a `forge-assigned` status with zero API calls (exit 0; `--json` emits
+`"number":""` and `"forge_assigned":true`). Search matches terms in
 titles and bodies within the configured scan budget:
 
 ```bash

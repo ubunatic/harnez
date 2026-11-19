@@ -7,7 +7,7 @@ For a project with an `issues/` tracker. Use `harnez find` / `harnez issues`, no
   Draft). `status:backlog` lists parked ones, which active lists leave out.
 - `harnez find -d <repo> issues "<query>"` — fuzzy search in titles and bodies.
   `harnez issues show -d <repo> <n>` — one ticket.
-- `harnez find -d <repo> issues next` — next free number (read-only).
+- `harnez find -d <repo> issues next` — next free number (read-only; `forge-assigned` on forge trackers).
 - `harnez issues new -d <repo> "<title>"` — run it right away: it reserves the number and
   creates the skeleton. Fill the printed file and keep its schema, run `harnez index -d <repo>`,
   commit ticket and index.
