@@ -47,6 +47,16 @@ When running `harnez release` across different repositories:
   2. `runBuildStep`: `--skip-build` prints skip reason distinct from missing build config; missing build config emits exact `[build] No build configuration detected ...` message; signing/publishing with empty `dist/` handles/reports cleanly (`release_test.go:1114` updated ONLY to match the new message while keeping all assertions).
   3. Missing `version.yaml` emits `[warning] No version.yaml found in <dir>; release is running in tag-only fallback mode without a declared release spec.`; malformed existing `version.yaml` fails without overwriting the file.
 
+## Refinements (from `rev-1136` review of `c5dd6ce8`)
+
+1. **Tag prefix support (`internal/release/infer.go`, `runner.go`)**: pass `tagPrefix` into `InferBumpFromTags(dir, tagPrefix)` so custom `tag_prefix` / `--tag-prefix` (e.g. `taia-v0.1.0 -> taia-v0.2.0` -> `taia-v`) are matched/stripped before `ParseSemver` (when `tagPrefix == ""`, keep `v` handling). Add unit test for custom `tagPrefix`.
+2. **Discriminating latest-4 test (`internal/release/infer_test.go`)**: replace the non-discriminating fixture with `v0.1.0, v0.2.0, v0.3.0, v0.4.0, v0.5.0, v0.6.0, v0.6.1, v0.6.2, v0.6.3` (capped 4 -> `patch`; uncapped -> `minor`).
+3. **Error fallback test**: add unit test verifying `InferBumpFromTags` returns `"patch"` cleanly on a non-git directory (`git tag` failure).
+4. **Error check, `--continue`, alignment & help (`internal/release/runner.go`, `cmd/harnez/release.go`, `help.golden`)**:
+   - Use `errors.Is(err, os.ErrNotExist)` on `LoadVersionSpec`.
+   - Suppress the tag-only fallback missing-`version.yaml` warning during `--continue` (or clarify it applies only when bumping, matching `--continue` semantics without breaking tests).
+   - Align `[build]` column spacing (`  [build]     ...`) cleanly with siblings, and update `cmd/harnez/release.go:17` + `cmd/harnez/testdata/help.golden` to reflect tag-history bump inference.
+
 ## Jules runs
 
 | kind | session name | Jules ID | PR | state |
