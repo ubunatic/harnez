@@ -76,7 +76,12 @@ func ResolveRemote(dir string, spec prwait.Spec) (Target, error) {
 
 // NewSource builds the live forge reader from the spec and the system token sources.
 func NewSource(spec prwait.Spec) Source {
-	return forge.NewPullLister(spec.IssueScan, forge.SystemTokenSource(os.Getenv).For)
+	tokenFor := forge.SystemTokenSource(os.Getenv).For
+	return NewFJFallbackSource(
+		forge.NewPullLister(spec.IssueScan, tokenFor),
+		func(fg forge.Forge) bool { return tokenFor(fg) != "" },
+		nil,
+	)
 }
 
 type issueJSON struct {

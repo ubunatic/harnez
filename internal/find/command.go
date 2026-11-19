@@ -18,10 +18,12 @@ import (
 
 // NextResultJSON is the JSON result shared by find and issue allocation commands.
 type NextResultJSON struct {
-	Number   string `json:"number"`
-	Reserved bool   `json:"reserved"`
-	File     string `json:"file,omitempty"`
-	Path     string `json:"path,omitempty"`
+	Number        string `json:"number"`
+	Reserved      bool   `json:"reserved"`
+	File          string `json:"file,omitempty"`
+	Path          string `json:"path,omitempty"`
+	ForgeAssigned bool   `json:"forge_assigned,omitempty"`
+	Forge         string `json:"forge,omitempty"`
 }
 
 // findRunOptions bundles inputs for runFindWithOptions.

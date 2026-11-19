@@ -242,7 +242,6 @@ func TestFindForgeClosedWordAndActiveAlias(t *testing.T) {
 		{"open", "find issues open: not supported for forge tickets; use find issues status:open"},
 		{"blocked", "find issues blocked: forge tickets have only open and closed states; use status:open or status:closed"},
 		{"draft", "find issues draft: forge tickets have only open and closed states; use status:open or status:closed"},
-		{"next", "find issues next: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
 		{"last", "find issues last: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms"},
 	}
 	for _, c := range refused {
@@ -259,11 +258,18 @@ func TestFindForgeClosedWordAndActiveAlias(t *testing.T) {
 	if _, err := runHarnez(t, "find", "-d", dir, "issues", "open bug"); err == nil || !strings.Contains(err.Error(), "find issues open: not supported") {
 		t.Errorf(`find issues "open bug" must be refused like open, got %v`, err)
 	}
-	if _, err := runHarnez(t, "find", "-d", dir, "--next", "issues"); err == nil || err.Error() != "find issues --next: needs a local issues/ dir; forge tickets support status:open, status:closed, status:active and plain terms" {
-		t.Errorf("find --next issues on a forge repo: got %v", err)
+	wantNext := "forge-assigned on codeberg.org/o/r (assigned by forge on harnez issues new)"
+	for _, args := range [][]string{
+		{"find", "-d", dir, "issues", "next"},
+		{"find", "-d", dir, "--next", "issues"},
+	} {
+		out, err := runHarnez(t, args...)
+		if err != nil || !strings.Contains(out, wantNext) {
+			t.Errorf("%v on a forge repo: err=%v out=%q", args, err, out)
+		}
 	}
 	if stub.calls != calls {
-		t.Errorf("local-only words reached the forge: %d extra calls", stub.calls-calls)
+		t.Errorf("local-only words or next reached the forge: %d extra calls", stub.calls-calls)
 	}
 	// history reads the telemetry DB, so the forge path must leave it alone.
 	if _, err := runHarnez(t, "find", "-d", dir, "issues", "history"); err != nil && strings.Contains(err.Error(), "needs a local issues/ dir") {
@@ -1201,9 +1207,14 @@ func TestIssuesNewInboxFallbackCases(t *testing.T) {
 		if !strings.Contains(errBuf.String(), noTokenDiggingDirective) {
 			t.Fatalf("stderr = %q", errBuf.String())
 		}
+		wantLabelWarn := "WARNING: labels (bug) were saved in the draft only; fj cannot set labels — apply via write token, tea, or forge UI when filing."
+		if !strings.Contains(errBuf.String(), wantLabelWarn) {
+			t.Fatalf("stderr missing label warning: %q", errBuf.String())
+		}
 		data, err := os.ReadFile(filepath.Join(dir, "issues/inbox/need-write-access.md"))
-		if err != nil || string(data) != "# Need Write Access\n\n**Labels**: bug\n\nDetails here.\n" {
-			t.Fatalf("first inbox file = %q %v", data, err)
+		wantInbox := "# Need Write Access\n\n**Labels**: bug\n> Note: fj cannot set labels; apply via write token, tea, or forge UI when filing.\n\nDetails here.\n"
+		if err != nil || string(data) != wantInbox {
+			t.Fatalf("first inbox file = %q %v\nwant: %q", data, err, wantInbox)
 		}
 
 		// Second filing with the same title gets a unique filename instead of overwriting.
@@ -1260,6 +1271,37 @@ func TestIssuesNewInboxFallbackCases(t *testing.T) {
 		data, rerr := os.ReadFile(filepath.Join(dir, "issues/inbox/already-has-heading.md"))
 		if rerr != nil || string(data) != "# Already Has Heading\n\nBody text.\n" {
 			t.Fatalf("inbox content = %q %v", data, rerr)
+		}
+	})
+
+	t.Run("dry-run --label fallback warns that fj cannot set labels", func(t *testing.T) {
+		oldLookup, oldMeta, oldLook := issueWriteLookup, issueWriteMetadata, issueCLILookPath
+		issueWriteLookup = func(string) string { return "" }
+		issueWriteMetadata = func(string) (bool, error) { return false, nil }
+		issueCLILookPath = func(name string) (string, error) {
+			if name == "fj" {
+				return "/usr/bin/fj", nil
+			}
+			return "", exec.ErrNotFound
+		}
+		t.Cleanup(func() { issueWriteLookup, issueWriteMetadata, issueCLILookPath = oldLookup, oldMeta, oldLook })
+
+		dir := forgeRepo(t)
+		writeIndexRepoConfig(t, dir, "none", false)
+		body := filepath.Join(t.TempDir(), "body.md")
+		if err := os.WriteFile(body, []byte("Details.\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		out, err := runHarnez(t, "issues", "new", "-d", dir, "Labeled Draft", "-F", body, "--label", "enhancement", "--label", "bug", "--dry-run")
+		if err != nil {
+			t.Fatalf("dry run --label: %v\n%s", err, out)
+		}
+		wantWarn := "WARNING: labels (enhancement, bug) were saved in the draft only; fj cannot set labels — apply via write token, tea, or forge UI when filing."
+		if !strings.Contains(out, wantWarn) {
+			t.Fatalf("dry run --label missing fj label warning: %q", out)
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "issues/inbox/labeled-draft.md")); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("dry run must not create inbox file: %v", statErr)
 		}
 	})
 }
@@ -1627,6 +1669,122 @@ func TestForgeNewDuplicateCheckFailureWarnsAndContinues(t *testing.T) {
 		})
 		if err != nil || cliCalls != 2 || !strings.Contains(errBuf.String(), "duplicate check skipped") || !strings.Contains(errBuf.String(), "a private repo needs a token") {
 			t.Fatalf("private repo 404 hint: err=%v calls=%d stderr=%q", err, cliCalls, errBuf.String())
+		}
+	})
+}
+
+func runHarnezSplit(t *testing.T, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	root := newRootCmd()
+	var out, errOut bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	root.SetArgs(args)
+	err = root.Execute()
+	return out.String(), errOut.String(), err
+}
+
+func TestFindIssuesNextForgeAndLocalJSON(t *testing.T) {
+	stub := stubForge(t)
+	dir := forgeRepo(t)
+	wantForgeJSON := `{"number":"","reserved":false,"forge_assigned":true,"forge":"codeberg.org/o/r"}`
+	for _, args := range [][]string{
+		{"find", "-d", dir, "issues", "next", "--json"},
+		{"find", "-d", dir, "--next", "issues", "--json"},
+	} {
+		stdout, _, err := runHarnezSplit(t, args...)
+		if err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		if got := strings.TrimSpace(stdout); got != wantForgeJSON {
+			t.Fatalf("%v: stdout = %q, want %q", args, got, wantForgeJSON)
+		}
+	}
+	if stub.calls != 0 {
+		t.Fatalf("find issues next --json on forge must make 0 API calls, got %d", stub.calls)
+	}
+
+	// Local tracker next --json keeps the exact existing shape without forge fields.
+	localDir := forgeRepo(t)
+	if err := os.Mkdir(filepath.Join(localDir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ticket := "# 001 — local ticket\n\n**Status**: Open\n**Priority**: P2\n\n---\nbody\n"
+	if err := os.WriteFile(filepath.Join(localDir, "issues", "001-local-ticket.md"), []byte(ticket), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, err := runHarnezSplit(t, "find", "-d", localDir, "issues", "next", "--json")
+	if err != nil {
+		t.Fatalf("local next --json: %v", err)
+	}
+	wantLocalJSON := `{"number":"002","reserved":false}`
+	if got := strings.TrimSpace(stdout); got != wantLocalJSON {
+		t.Fatalf("local next --json = %q, want %q", got, wantLocalJSON)
+	}
+}
+
+func TestFindIssuesForgePrivateBlockedAndFJFallback(t *testing.T) {
+	dir := forgeRepo(t)
+
+	t.Run("blocked private repo exits 2 and does not mask similar --json", func(t *testing.T) {
+		stub := stubForge(t)
+		stub.issuesErr = &forge.APIError{Status: 404, Detail: "not found"}
+
+		for _, args := range [][]string{
+			{"find", "-d", dir, "issues", "login"},
+			{"find", "-d", dir, "issues", "similar", "login", "--json"},
+		} {
+			stdout, stderr, err := runHarnezSplit(t, args...)
+			if code := exitCodeFromRunError(err); code != 2 {
+				t.Fatalf("%v: exit code = %d (err=%v), want 2", args, code, err)
+			}
+			if strings.TrimSpace(stdout) != "" {
+				t.Fatalf("%v: stdout must be empty on blocked search, got %q", args, stdout)
+			}
+			if !strings.Contains(stderr, "search blocked on codeberg.org/o/r (private repo; no read token or fj login)") {
+				t.Fatalf("%v: stderr missing blocked status: %q", args, stderr)
+			}
+			if !strings.Contains(stderr, noTokenDiggingDirective) {
+				t.Fatalf("%v: stderr missing no-token-digging warning: %q", args, stderr)
+			}
+		}
+	})
+
+	t.Run("fj fallback succeeds for private forgejo similar --json", func(t *testing.T) {
+		oldSrc := forgeTrackerSource
+		oldLook, oldRun := forgetracker.FJLookPath, forgetracker.FJRun
+		t.Cleanup(func() {
+			forgeTrackerSource = oldSrc
+			forgetracker.FJLookPath, forgetracker.FJRun = oldLook, oldRun
+		})
+		forgeTrackerSource = func(prwait.Spec) forgetracker.Source {
+			inner := &stubForgeSource{issuesErr: &forge.APIError{Status: 404, Detail: "not found"}}
+			return forgetracker.NewFJFallbackSource(inner, func(forge.Forge) bool { return false }, nil)
+		}
+		forgetracker.FJLookPath = func(name string) (string, error) {
+			if name == "fj" {
+				return "/usr/bin/fj", nil
+			}
+			return "", exec.ErrNotFound
+		}
+		forgetracker.FJRun = func(c forgetracker.Command) ([]byte, error) {
+			for i := 0; i < len(c.Args)-1; i++ {
+				if c.Args[i] == "--state" && c.Args[i+1] == "open" {
+					return []byte("1 issue\n#295: Fix login redirect loop (by alice)\n"), nil
+				}
+			}
+			return []byte("0 issues\n"), nil
+		}
+
+		stdout, stderr, err := runHarnezSplit(t, "find", "-d", dir, "issues", "similar", "Fix login redirect loop", "--json")
+		if err != nil {
+			t.Fatalf("similar via fj fallback: %v\nstderr=%s", err, stderr)
+		}
+		if !strings.Contains(stdout, `"number": "295"`) || !strings.Contains(stdout, "https://codeberg.org/o/r/issues/295") {
+			t.Fatalf("unexpected similar json stdout:\n%s", stdout)
+		}
+		if !strings.Contains(stderr, "note: using fj issue search for codeberg.org/o/r (titles only; no read token)") {
+			t.Fatalf("stderr missing fj fallback note: %q", stderr)
 		}
 	})
 }

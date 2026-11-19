@@ -22,8 +22,12 @@ If `.harnez/repo.yaml` sets `issues.tracker: none`, follow `.harnez/rules/Index.
 ### Forge tracker
 
 Harnez reads issues on the origin forge. A private repository may need a read
-forge token. Search matches terms in titles and bodies within the configured scan
-budget:
+forge token; on Forgejo repos without a read token, `find issues` and `find
+issues similar` fall back to read-only `fj issue search` (titles only) when `fj`
+is logged in, or exit 2 with a blocked status (`search blocked on <target> ...`)
+without debugging tokens. `harnez find -d <repo> issues next [--json]` reports
+a `forge-assigned` status with zero API calls (exit 0). Search matches terms in
+titles and bodies within the configured scan budget:
 
 ```bash
 harnez find -d <repo> issues "search terms"
@@ -65,7 +69,10 @@ harnez issues reopen -d <repo> --forge 42
 Forgejo writes use a separate write token, created with `harnez forge token create
 --write`; the read token remains separate. Without a write token, `new` falls back
 to fj or tea and `comment` to fj. GitHub `new` uses gh. Labels must exist on the
-forge: the API resolves their names to IDs; fj cannot set labels.
+forge: the API resolves their names to IDs; fj cannot set labels (when `issues new
+--label` falls back to `issues/inbox/<slug>.md` on a target whose `issue_cli`
+includes `fj`, harnez warns on stderr and adds a note under `**Labels**: ...` in
+the draft).
 
 **Inbox fallback (never debug tokens)**: If forge issue creation fails for any
 reason — missing repository write access (`401`/`403`), missing or unauthenticated

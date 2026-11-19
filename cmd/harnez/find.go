@@ -48,7 +48,8 @@ Entities:
            narrow lifecycle state. Without a local issues/ dir, plain term
            searches read the origin forge (spec/pr.yaml) instead: every term
            must match title or body; ':' terms other than status: filters
-           are rejected and subcommands like next stay local-only. It reads at
+           are rejected and subcommands like last stay local-only (next
+           returns a forge-assigned status with zero API calls). It reads at
            most the spec's issue_scan page budget and notes when older
            tickets may exist (JSON: "truncated").
   code     searches source files through configured finders (neus first,
@@ -71,7 +72,8 @@ Subcommands / Allocation:
            with 3+ digits). Read-only: it does not create or reserve
            anything. To atomically reserve that number and create a Draft
            placeholder ticket file, use 'harnez issues new [title]' instead
-           (cmd/harnez/issues.go) -- find never mutates.
+           (cmd/harnez/issues.go) -- find never mutates. On forge-tracked
+           repos, reports a forge-assigned status with zero API calls (exit 0).
 
   harnez find issues history [--project <name>] [--json]
            Render the open/closed/draft/backlog/unknown ticket-count snapshot
@@ -107,9 +109,10 @@ Query grammar:
                       Blocked or Draft). A leading bare word 'closed' is
                       status:closed; only the first term is rewritten, so
                       'closed' later in the query is a search term. The
-                      words open, blocked, draft, next, last and history
-                      are local-only and are refused on a forge repo,
-                      naming the forge form.
+                      words open, blocked, draft and last are local-only
+                      and are refused on a forge repo, naming the forge
+                      form; next reports a forge-assigned status with zero
+                      API calls, and history reads the telemetry DB.
 
 An unquoted '|' is a shell pipeline operator, so an OR query needs shell
 quoting:
@@ -171,21 +174,21 @@ Output formatting:
 					return err
 				}
 				if ok {
-					if nextFlag {
-						return forgeLocalOnlyError("--next")
-					}
 					words := forgeFindArgs(args[1:])
+					if nextFlag || (len(words) > 0 && words[0] == "next") {
+						return runFindNextForge(cmd.OutOrStdout(), t, jsonFlag)
+					}
 					if len(words) > 0 && words[0] == "similar" {
 						query := strings.TrimSpace(strings.Join(words[1:], " "))
 						if query == "" {
 							return fmt.Errorf("find issues similar: title must not be empty")
 						}
-						return warnIfForgeAuthErr(cmd.ErrOrStderr(), forgeTrackerHint(runFindSimilarForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), src, t, spec.IssueScan, query, jsonFlag), t))
+						return handleForgeFindErr(cmd, runFindSimilarForge(cmd.OutOrStdout(), cmd.ErrOrStderr(), src, t, spec.IssueScan, query, jsonFlag), t)
 					}
 					if len(words) > 0 && findIssuesLocalOnly[words[0]] {
 						return forgeLocalOnlyError(words[0])
 					}
-					return warnIfForgeAuthErr(cmd.ErrOrStderr(), forgeTrackerHint(forgetracker.Find(cmd.OutOrStdout(), src, t, spec.IssueScan, forgeFindTerms(words), limitFlag, allFlag, jsonFlag), t))
+					return handleForgeFindErr(cmd, forgetracker.Find(cmd.OutOrStdout(), src, t, spec.IssueScan, forgeFindTerms(words), limitFlag, allFlag, jsonFlag), t)
 				}
 			}
 			opts := find.FindRunOptions{

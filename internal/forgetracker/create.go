@@ -3,6 +3,7 @@ package forgetracker
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -87,7 +88,7 @@ func PlanCreate(t Target, req CreateRequest, lookPath func(string) (string, erro
 		}
 	}
 	msg := fmt.Sprintf("issues new: no forge CLI found for %s: install one of %s", t, strings.Join(clis, ", "))
-	if len(req.Labels) > 0 {
+	if len(req.Labels) > 0 && slices.Contains(clis, "fj") {
 		msg += " (fj cannot set labels)"
 	}
 	return Command{}, fmt.Errorf("%s", msg)
