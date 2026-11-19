@@ -204,6 +204,38 @@ func TestAgyEffortMapping(t *testing.T) {
 	}
 }
 
+func TestNeonAliasesAndEffort(t *testing.T) {
+	for _, tc := range []struct{ spec, tier, effort string }{
+		{"neon", "low", "low"}, {"neon:low", "low", "low"},
+		{"agy:neon:med", "med", "medium"}, {"neon:high", "high", "high"},
+		{"neon:xhigh", "xhigh", "xhigh"},
+	} {
+		model, err := ResolveModel(tc.spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if model.Provider != "agy" || model.Name != "gemini-4-neon" || model.Tier != tc.tier {
+			t.Fatalf("%s parsed as %+v", tc.spec, model)
+		}
+		var args []string
+		d := AgyDriver{Dir: t.TempDir(), Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
+			args = gotArgs
+			return []byte(`{"status":"SUCCESS","response":"ok"}`), nil
+		}}
+		if _, err := d.Run(context.Background(), RunOptions{Prompt: "p", Model: model}); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(args[2:6], []string{"--model", "gemini-4-neon", "--effort", tc.effort}) {
+			t.Fatalf("%s args = %#v", tc.spec, args)
+		}
+	}
+	for _, bad := range []string{"neon:ultra", "agy:neon:bogus"} {
+		if _, err := ResolveModel(bad); err == nil {
+			t.Errorf("ResolveModel(%q) succeeded, want error", bad)
+		}
+	}
+}
+
 func TestArgonAliasesAndEffort(t *testing.T) {
 	for _, tc := range []struct{ spec, tier, effort string }{
 		{"argon", "low", "low"}, {"argon:low", "low", "low"},

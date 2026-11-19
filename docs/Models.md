@@ -38,6 +38,15 @@ and prints with `harnez agent models`. This doc keeps the evidence behind it. Ro
 practice: `docs/practices/ModelRoles.md`; measured sprint eval: `ModelAdvisoryEval.md`.
 To refresh it, follow [ModelResearch.md](ModelResearch.md).
 
+## 2026-11-19 Gemini 4 Neon onboarding (issue 1243 M1)
+
+`agy models` exposes `gemini-4-neon-{low,medium,high,xhigh}` (no bare `gemini-4-neon`).
+Harnez maps `agy:neon` / `neon` to `gemini-4-neon` with tiers `low`, `med`, `high`, and
+`xhigh`. FrontierCode 2.0 snapshot (2026-11-19): `46.2%` at high for `$4.38`/rollout, `#3`
+overall. Spec costs (`cost: 48`, `cost_by_tier` med 108 / high 219 / xhigh 384) are a relative
+estimate anchored to `luna:low = 1` at `$0.02`/rollout, not a measured quota cost; ratings are
+`owner estimate, unverified`. Full recalibration of other models is issue 1243 M2.
+
 ## 2026-10-18 Gemini 4 Argon quota measurement (issue 822)
 
 `agy models` exposes `gemini-4-argon-low`, `gemini-4-argon-medium`, and

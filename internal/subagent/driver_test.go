@@ -96,6 +96,20 @@ func TestResolveOfficialModelNames(t *testing.T) {
 			t.Errorf("ResolveModel(%q) = %#v, %v; want agy:hydrogen:%s", spec, m, err, wantTier)
 		}
 	}
+	for spec, wantTier := range map[string]string{
+		"neon":                "low",
+		"agy:neon:high":       "high",
+		"gemini-4-neon":       "low",
+		"gemini-4-neon:low":   "low",
+		"gemini-4-neon:med":   "med",
+		"gemini-4-neon:HIGH":  "high",
+		"gemini-4-neon:xhigh": "xhigh",
+	} {
+		m, err := ResolveModel(spec)
+		if err != nil || m.Provider != "agy" || m.Name != "gemini-4-neon" || m.Tier != wantTier {
+			t.Errorf("ResolveModel(%q) = %#v, %v; want agy:neon:%s", spec, m, err, wantTier)
+		}
+	}
 }
 
 func TestOfficialModelAmbiguityAndPrecedence(t *testing.T) {
@@ -1203,6 +1217,8 @@ func TestXHighAndMaxEffortTiers(t *testing.T) {
 		{"agy:argon:xhigh", "agy", "gemini-4-argon", "xhigh", "xhigh"},
 		{"agy:argon:max", "agy", "gemini-4-argon", "max", "max"},
 		{"argon:xhigh", "agy", "gemini-4-argon", "xhigh", "xhigh"},
+		{"agy:neon:xhigh", "agy", "gemini-4-neon", "xhigh", "xhigh"},
+		{"neon:xhigh", "agy", "gemini-4-neon", "xhigh", "xhigh"},
 	} {
 		m, err := ResolveModel(tc.spec)
 		if err != nil {

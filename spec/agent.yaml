@@ -296,6 +296,18 @@ models:
     eff: "?"
     skills: Go? TUI? SQL?
     use: Gemini 4 Hydrogen; cost unmeasured (estimated at Argon cost)
+  agy:neon:
+    aliases: [neon, neon:low]
+    provider: agy
+    name: gemini-4-neon
+    tier: low
+    roles: advisor, reviewer
+    cost: 48
+    cost_by_tier: {med: 108, high: 219, xhigh: 384}
+    extra_tiers: [xhigh]
+    eff: "?"
+    skills: Go? TUI? SQL?
+    use: Gemini 4 Neon; #3 on FrontierCode 2.0 (46.2% at high, $4.38/rollout). Costs are an unverified relative estimate anchored to luna:low = 1 at $0.02/rollout; recalibrate in issue 1243 M2.
   agy:sonnet:
     provider: agy
     name: claude-sonnet-5-5
