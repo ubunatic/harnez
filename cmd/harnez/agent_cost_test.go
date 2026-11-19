@@ -91,13 +91,15 @@ func TestAcceptCostStartAndResume(t *testing.T) {
 		spec, wantModel, wantCost, wantQuota string
 		avail                                func(string, string) usage.ProviderQuotaAvailability
 	}{
-		{"codex:sol:high", "codex:sol:high", "71", "5h 80%, weekly 65%", freshAvail},
-		{"sol:high", "codex:sol:high", "71", "5h 80%, weekly 65%", freshAvail},
-		{"agy:argon:high", "agy:argon:high", "unknown", "unknown", staleAvail},
-		{"gemini-4-argon:high", "agy:argon:high", "unknown", "unknown", staleAvail},
+		{"codex:sol:high", "codex:sol:high", "33", "5h 80%, weekly 65%", freshAvail},
+		{"sol:high", "codex:sol:high", "33", "5h 80%, weekly 65%", freshAvail},
+		{"agy:argon:high", "agy:argon:high", "326", "unknown", staleAvail},
+		{"gemini-4-argon:high", "agy:argon:high", "326", "unknown", staleAvail},
+		{"agy:neon:high", "agy:neon:high", "219", "unknown", staleAvail},
+		{"agy:neon:xhigh", "agy:neon:xhigh", "384", "unknown", staleAvail},
 		{"codex:astra:low", "codex:astra:low", "182", "5h 80%, weekly 65%", freshAvail},
 		{"gpt-6-astra:med", "codex:astra:med", "342", "5h 80%, weekly 65%", freshAvail},
-		{"claude:fable:high", "claude:fable:high", "unknown", "unknown", staleAvail},
+		{"claude:fable:high", "claude:fable:high", "420", "unknown", staleAvail},
 	} {
 		_, _, err := runStartCase(tc.spec, false, tc.avail)
 		if err == nil {

@@ -76,13 +76,16 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if flash38.Cost != 4 {
 		t.Errorf("agy:flash38 cost = %d, want 4 (agy quota cost remains unmeasured)", flash38.Cost)
 	}
-	if flash38.Roles != "reviewer, advisor" {
-		t.Errorf("agy:flash38 roles = %q, want reviewer, advisor", flash38.Roles)
+	if flash38.Roles != "reviewer, advisor, developer" {
+		t.Errorf("agy:flash38 roles = %q, want reviewer, advisor, developer", flash38.Roles)
 	}
-	for name, model := range spec.Models {
-		if strings.HasPrefix(name, "agy:") && strings.Contains(model.Roles, "developer") {
-			t.Errorf("%s roles = %q, want no developer role", name, model.Roles)
+	for _, name := range []string{"agy:neon", "agy:hydrogen", "agy:argon", "agy:flash38"} {
+		if !strings.Contains(spec.Models[name].Roles, "developer") {
+			t.Errorf("%s roles = %q, want developer role (owner decision, issue 1243)", name, spec.Models[name].Roles)
 		}
+	}
+	if sonnet := spec.Models["agy:sonnet"]; strings.Contains(sonnet.Roles, "developer") {
+		t.Errorf("agy:sonnet roles = %q, want no developer role", sonnet.Roles)
 	}
 	if sonnet := spec.Models["agy:sonnet"]; !strings.Contains(sonnet.Use, "reviewer when Claude quota is out") || strings.Contains(sonnet.Use, "developer") {
 		t.Errorf("agy:sonnet use = %q, want reviewer-only guidance when Claude quota is out", sonnet.Use)
@@ -93,7 +96,7 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if sol := spec.Models["codex:sol"]; !strings.Contains(sol.Use, "judgment") {
 		t.Errorf("codex:sol use = %q, want judgment guidance", sol.Use)
 	}
-	if terra := spec.Models["codex:terra"]; terra.Use != "Efficient-frontier Codex developer for hard tasks at half Sol's price; use terra:high before escalating to sol:med or sol:high, and reserve Sol for the hardest judgment." || terra.Roles != "developer, advisor, reviewer" {
+	if terra := spec.Models["codex:terra"]; terra.Use != "Efficient-frontier Codex developer for hard tasks; cost not yet recalibrated (no FrontierCode 2.0 row, issue 1243); use terra:high before escalating to sol:med or sol:high, and reserve Sol for the hardest judgment." || terra.Roles != "developer, advisor, reviewer" {
 		t.Errorf("codex:terra guidance = %q, roles = %q", terra.Use, terra.Roles)
 	}
 	haiku := spec.Models["claude:haiku"]
@@ -143,8 +146,9 @@ func TestLeafRolesDefineCoreTraits(t *testing.T) {
 
 func TestKnownModelEntriesCostByTierAndEffortRows(t *testing.T) {
 	wantCosts := map[string]int{
-		"codex:luna:low": 1, "codex:luna:med": 4, "codex:luna:high": 6,
-		"codex:sol:low": 29, "codex:sol:med": 47, "codex:sol:high": 71,
+		"codex:luna:low": 1, "codex:luna:med": 5, "codex:luna:high": 6,
+		"codex:sol:low": 17, "codex:sol:med": 25, "codex:sol:high": 33,
+		"agy:neon:low": 48, "agy:neon:med": 109, "agy:neon:high": 219, "agy:neon:xhigh": 384,
 		"codex:terra:low": 15, "codex:terra:med": 24, "codex:terra:high": 36,
 		"codex:astra:low": 182, "codex:astra:med": 342, "codex:astra:high": 384,
 	}
@@ -709,7 +713,12 @@ func TestModelCost(t *testing.T) {
 		{"codex:astra:med", 342, true},
 		{"codex:astra:high", 384, true},
 		{"gpt-6-astra:med", 342, true},
-		{"codex:sol:high", 71, true},
+		{"codex:sol:high", 33, true},
+		{"codex:luna:med", 5, true},
+		{"neon:xhigh", 384, true},
+		{"agy:neon:med", 109, true},
+		{"agy:argon:high", 326, true},
+		{"claude:fable:low", 131, true},
 	} {
 		m, err := ResolveModel(tc.spec)
 		if err != nil {

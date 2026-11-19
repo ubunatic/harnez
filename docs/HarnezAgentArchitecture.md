@@ -133,7 +133,7 @@ quota: claude 5h unknown, last reading 23m old (read 10:18:47)
 ### Costly model confirmation (`--accept-cost`)
 
 `spec/agent.yaml` lists `costly_models` (for example `codex:sol:high`,
-`agy:argon:high`, `codex:astra:*`, and `claude:fable:high`). Starting or resuming
+`agy:argon:high`, `agy:neon:high`, `agy:neon:xhigh`, `codex:astra:*`, and `claude:fable:high`). Starting or resuming
 one without `--accept-cost` exits non-zero and prints the resolved model,
 relative cost, remaining 5h/weekly quota (or `unknown` when stale), and
 `--accept-cost`. Passing `--accept-cost` prints one stderr warning line with the

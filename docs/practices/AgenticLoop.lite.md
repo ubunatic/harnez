@@ -87,7 +87,7 @@ These are the shipped picks. User models.yaml overrides are listed by `harnez ag
 | developer | smart | Difficult judgment. | terra:high, sol:med, opus:med |  |
 | developer | std | Standard work. | terra:med, opus:low |  |
 | developer | tui | Terminal interfaces. | smart |  |
-| reviewer | best | Hardest judgment, highest cost. | sol:high, hydrogen:high, argon:high, opus:high, fable:high |  |
+| reviewer | best | Hardest judgment, highest cost. | sol:high, hydrogen:high, neon:high, opus:high, fable:high |  |
 | reviewer | cheap | Low-cost work. | haiku:high, luna:high |  |
 | reviewer | lean | Efficient standard work. | terra:med, hydrogen:low |  |
 | reviewer | smart | Difficult judgment. | sol:med, hydrogen:med, opus:med | yes |

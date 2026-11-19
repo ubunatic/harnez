@@ -38,6 +38,55 @@ and prints with `harnez agent models`. This doc keeps the evidence behind it. Ro
 practice: `docs/practices/ModelRoles.md`; measured sprint eval: `ModelAdvisoryEval.md`.
 To refresh it, follow [ModelResearch.md](ModelResearch.md).
 
+## 2026-11-19 FrontierCode 2.0 cost recalibration (issue 1243 M2)
+
+Source: FrontierCode 2.0 leaderboard snapshot (2026-11-19, ticket 1243 §2). Cost is rollout
+cost divided by `$0.02` and rounded half up, so `luna:low = 1`. These are relative owner
+estimates, not measured quota costs.
+
+| Model (spec) | FrontierCode 2.0 row | Rollout cost low / med / high / xhigh | Spec cost low / med / high / xhigh |
+|---|---|---|---|
+| `codex:luna` (`gpt-6-luna`, in `~/.codex/models_cache.json`) | GPT-6 Luna | $0.02 / $0.09 / $0.12 | 1 / 5 / 6 |
+| `codex:sol` (`gpt-6.1-sol`, exact name) | GPT-6.1 Sol | $0.34 / $0.49 / $0.65 | 17 / 25 / 33 |
+| `claude:haiku` | Haiku 5.5 | $0.07 / $0.10 / $0.14 / $0.23 | 4 / 5 / 7 / 12 |
+| `claude:sonnet`, `agy:sonnet` | Sonnet 5.5 | $0.37 / $0.48 / $1.07 | 19 / 24 / 54 (agy: low only) |
+| `claude:opus`, `agy:opus` | Opus 5.5 | $0.75 / $1.70 / $2.42 | 38 / 85 / 121 (agy: low only) |
+| `claude:fable` | Fable 5.2 | $2.62 / $3.10 / $8.40 | 131 / 155 / 420 |
+| `agy:argon` | Gemini 4 Argon | $3.98 / $5.69 / $6.51 | 199 / 285 / 326 |
+| `agy:hydrogen` | Gemini 4 Hydrogen | $0.35 / $0.90 / $2.40 | 18 / 45 / 120 |
+| `agy:neon` | Gemini 4 Neon | $0.96 / $2.17 / $4.38 / $7.67 | 48 / 109 / 219 / 384 (M1 values, confirmed) |
+
+Not recalibrated, on purpose:
+
+- `codex:terra` (`gpt-6.1-terra`): no FrontierCode 2.0 row. Its 15 / 24 / 36 are the pre-M2
+  estimate, and its listing text no longer claims "half Sol's price".
+- `codex:astra` (`gpt-6-astra`): FrontierCode 2.0 lists `GPT-6.2 Astra`. The name differs, so it
+  is not mapped. Cost stays 182 / 342 / 384 and remains costly. Unverified: whether
+  `gpt-6-astra` and `GPT-6.2 Astra` are the same model.
+- `agy:flash38`: no FrontierCode 2.0 row. `agy:flash37` is disabled.
+- Ratings (`spec/model_scores.yaml`): only `agy:neon` `xhigh: 4.0` was added. The FrontierCode pass
+  rates have no defined mapping onto the 1–5 scale, so the other ratings are unchanged.
+
+Other M2 spec changes:
+
+- `developer` role added to `agy:neon`, `agy:hydrogen`, `agy:argon`, and `agy:flash38` (owner
+  decision, 2026-11-19). `agy:sonnet`, `agy:opus`, and `agy:flash37` keep their roles.
+- `costly_models` gains `agy:neon:high` and `agy:neon:xhigh`, matching `agy:argon:high`.
+- Reviewer `best` picks: `argon:high` is replaced by `neon:high`. On FrontierCode 2.0, Neon high
+  scores 46.2% at $4.38 and Argon high 27.6% at $6.51.
+- `claude:fable` listing text: the old "twice Claude Opus 5.5" claim is replaced by the
+  FrontierCode 2.0 figure, about 3.5x Opus 5.5 at low.
+- `docs/data/models-00{1,2}.txt` are dated snapshots (Opus 4.6 era) and are left unchanged.
+
+## 2026-11-19 Gemini 4 Neon onboarding (issue 1243 M1)
+
+`agy models` exposes `gemini-4-neon-{low,medium,high,xhigh}` (no bare `gemini-4-neon`).
+Harnez maps `agy:neon` / `neon` to `gemini-4-neon` with tiers `low`, `med`, `high`, and
+`xhigh`. FrontierCode 2.0 snapshot (2026-11-19): `46.2%` at high for `$4.38`/rollout, `#3`
+overall. Spec costs (`cost: 48`, `cost_by_tier` med 109 / high 219 / xhigh 384) are a relative
+estimate anchored to `luna:low = 1` at `$0.02`/rollout, not a measured quota cost; ratings are
+`owner estimate, unverified`. Full recalibration of other models is issue 1243 M2.
+
 ## 2026-10-18 Gemini 4 Argon quota measurement (issue 822)
 
 `agy models` exposes `gemini-4-argon-low`, `gemini-4-argon-medium`, and
