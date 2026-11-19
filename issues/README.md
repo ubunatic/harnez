@@ -10,7 +10,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 <!-- harnez:begin issues-active-index -->
 | # | File | Title | Status |
 |---|------|-------|--------|
-| 771 | [771-harnez-exec-truncate-large-bash-tool-output-with-spill-file-log-message-and-spec-yaml-limit.md](771-harnez-exec-truncate-large-bash-tool-output-with-spill-file-log-message-and-spec-yaml-limit.md) | harnez exec: truncate large bash tool output with spill file log message and spec yaml limit | Open |
 | 857 | [857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md](857-support-external-issue-providers-github-gitlab-codeberg-trello-jira.md) | Support external issue providers (GitHub, GitLab, Codeberg, Trello, Jira) | Open |
 | 942 | [942-epic-model-catalog-access-discovery-and-user-model-policy.md](942-epic-model-catalog-access-discovery-and-user-model-policy.md) | Epic: model catalog, access discovery and user model policy | Open |
 | 979 | [979-epic-agent-instructions-and-help-text.md](979-epic-agent-instructions-and-help-text.md) | Epic: agent instructions and help text | Open |

@@ -1,6 +1,6 @@
 # 771 — harnez exec: truncate large bash tool output with spill file log message and spec yaml limit
 
-**Status**: Open
+**Status**: Closed — M1 and review refinements delivered (fa47f5ae, 99cc0430): added spec/exec.yaml spill-file output truncation (50KB/2000 lines default on non-TTY, --max-output-bytes and env overrides, Quota-1/distill/OutputBytes integration, rune-safe cap); make lint, test-q1 (dev), -race internal/exec, and cmd/harnez passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
