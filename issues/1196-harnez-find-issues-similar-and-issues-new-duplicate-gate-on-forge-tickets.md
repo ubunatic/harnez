@@ -1,6 +1,6 @@
 # 1196 — harnez find issues similar and issues new duplicate gate on forge tickets
 
-**Status**: Open
+**Status**: Closed — M1 and review refinements delivered (ef0130dc, 6bdd3bea): enabled find issues similar [--json] and issues new duplicate gate on forge trackers reusing find.Similar; make lint and touched Go packages passed.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
