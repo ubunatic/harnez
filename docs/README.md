@@ -257,6 +257,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-13-docs-trim-and-cleanup-skill-story.md](studies/2026-11-13-docs-trim-and-cleanup-skill-story.md) | Story: trimming the agent docs and making it a skill (2026-11-13) |
 | [studies/2026-11-16-two-agent-lean-sprint-1181-session-isolation.md](studies/2026-11-16-two-agent-lean-sprint-1181-session-isolation.md) | Lean sprint 1181: isolate Harnez session state and constrain installation destinations (2026-11-16) |
 | [studies/2026-11-16-two-agent-lean-sprint-forge-filing.md](studies/2026-11-16-two-agent-lean-sprint-forge-filing.md) | Lean sprint 1228, 1212, 1202: forge filing through harnez issues (2026-11-16) |
+| [studies/2026-11-19-two-agent-lean-sprint-1243-neon-costs.md](studies/2026-11-19-two-agent-lean-sprint-1243-neon-costs.md) | Two-Agent Lean Sprint: 1243 — Onboard Gemini 4 Neon & Update Costs/Tiers (FrontierCode 2.0) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
