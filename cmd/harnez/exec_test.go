@@ -139,3 +139,24 @@ func TestNewExecCmd_Quota1Flag(t *testing.T) {
 		t.Errorf("flag default = %q, want false", f.DefValue)
 	}
 }
+
+func TestNewExecCmd_MaxOutputBytesFlag(t *testing.T) {
+	cmd := newExecCmd()
+	f := cmd.Flags().Lookup("max-output-bytes")
+	if f == nil {
+		t.Fatal("expected --max-output-bytes flag to be registered")
+	}
+	if f.Value.Type() != "int64" {
+		t.Errorf("flag type = %s, want int64", f.Value.Type())
+	}
+	if f.DefValue != "0" {
+		t.Errorf("flag default = %q, want 0 (spec/exec.yaml applies when unset)", f.DefValue)
+	}
+	// An explicit =0 must register as Changed so it can disable the cap.
+	if err := cmd.ParseFlags([]string{"--max-output-bytes=0"}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	if !cmd.Flags().Changed("max-output-bytes") {
+		t.Error("--max-output-bytes=0 did not register as Changed")
+	}
+}

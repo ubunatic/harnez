@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=schemas/exec.schema.json
+# harnez exec settings (internal/exec). Zero values in Go are never defaults:
+# every threshold below is read from this file.
+truncate:
+  # Cap the output forwarded to the caller on a non-TTY stdout. A TTY is left
+  # untouched unless HARNEZ_EXEC_TRUNCATE=1 or --max-output-bytes forces the cap.
+  enabled: true
+  # Shown-output byte limit. 0 disables truncation.
+  max_output_bytes: 51200
+  # Shown-output line limit. 0 means no line limit.
+  max_output_lines: 2000
+  # Directory for the full-output spill file; "" means os.TempDir().
+  spill_dir: ""
+  # File-name prefix for spill files (created as <prefix>*.log).
+  spill_prefix: "harnez-exec-"

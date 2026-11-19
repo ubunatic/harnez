@@ -27,6 +27,18 @@ block supplies scopes, name prefix, keyring service and token directory for the
 write store; create it with `harnez forge token create --write`. Forgejo issue
 writes use that store, while the existing read token continues to serve reads.
 
+### Exec output truncation
+
+`spec/exec.yaml` defines the `truncate` block that `harnez exec` uses to cap the
+output shown to its caller. Its defaults are `enabled: true`, `max_output_bytes: 51200`
+(50KB), `max_output_lines: 2000`, `spill_dir: ""` (`os.TempDir()`) and
+`spill_prefix: "harnez-exec-"`. `spec/schemas/exec.schema.json` validates the file,
+and `internal/exec/spec.go` loads it. Per call, `--max-output-bytes` overrides the
+spec. `HARNEZ_EXEC_MAX_OUTPUT_BYTES` and `HARNEZ_EXEC_TRUNCATE` override it too,
+also as leading `VAR=val` prefixes on the command. Precedence is flag, then
+environment or prefix, then spec. A TTY stdout is left uncapped unless the cap is
+forced. Issue 771 records the decision.
+
 ### Project-local Harnez configuration
 Harnez repositories may also contain `.harnez/repo.yaml`, validated by
 `spec/schemas/repo.schema.json`. This is runtime project configuration, not an

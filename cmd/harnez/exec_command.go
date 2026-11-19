@@ -14,6 +14,7 @@ func newExecCommand() *cobra.Command {
 	var expectFailureFlag bool
 	var quota1Flag bool
 	var timeoutFlag time.Duration
+	var maxOutputBytesFlag int64
 
 	cmd := &cobra.Command{
 		Use:     "exec [--tool <tool_name>] [--ticket <ticket_id>] [--distill[=<mode>]] [--expect-failure] [--quota-1] -- <command...>",
@@ -35,6 +36,13 @@ distillation is active), and synthetic quality score (1-5).
 The telemetry write is best-effort and bounded: it never delays the
 wrapped command's own execution, and gives up waiting on a slow/hung DB
 write after a short bound rather than hanging the caller.
+
+Output cap: on a non-TTY stdout, exec forwards at most the spec/exec.yaml
+truncate limits (50KB or 2000 lines by default) and then prints a notice that
+names a spill file holding the complete output. An interactive terminal is left
+untouched unless it is forced. Precedence: --max-output-bytes, then a leading
+HARNEZ_EXEC_MAX_OUTPUT_BYTES=<n> or HARNEZ_EXEC_TRUNCATE=0|1|true|false prefix or
+environment variable, then spec/exec.yaml. 0 disables the byte limit.
 
 Timeout precedence is an explicit HARNEZ_TIMEOUT=<duration|0> or HTO=<duration|0> prefix, then
 the Bash tool's native timeout/background intent, then repo config
@@ -59,6 +67,9 @@ points an agent's Bash tool calls at this command.`,
 				Quota1:        quota1Flag,
 				Timeout:       timeoutFlag,
 				TimeoutSet:    cmd.Flags().Changed("timeout"),
+
+				MaxOutputBytes:    maxOutputBytesFlag,
+				MaxOutputBytesSet: cmd.Flags().Changed("max-output-bytes"),
 			}, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 			if err != nil {
 				return err
@@ -76,6 +87,7 @@ points an agent's Bash tool calls at this command.`,
 	cmd.Flags().BoolVar(&expectFailureFlag, "expect-failure", false, "record telemetry row with call_type=shell-expected")
 	cmd.Flags().BoolVar(&quota1Flag, "quota-1", false, "enforce Quota-1 single-test boundary (require code edits between runs)")
 	cmd.Flags().DurationVar(&timeoutFlag, "timeout", 0, "maximum command runtime (default: HTO/HARNEZ_TIMEOUT, tool intent, repo config, then 60s)")
+	cmd.Flags().Int64Var(&maxOutputBytesFlag, "max-output-bytes", 0, "cap the output shown to the caller at N bytes and spill the full output to a file (0 disables; forces the cap on a TTY when > 0; default: spec/exec.yaml)")
 	cmd.Flags().Lookup("distill").NoOptDefVal = "auto"
 
 	cmd.AddCommand(newExecHookCmd())
