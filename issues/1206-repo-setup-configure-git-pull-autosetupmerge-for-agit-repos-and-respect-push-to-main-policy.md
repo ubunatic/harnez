@@ -38,3 +38,19 @@ Repository permissions are not uniform across projects:
 - Projects with protected `main` enforce AGit PR creation and refuse direct pushes.
 - Unit tests cover git config application and push policy differentiation.
 - Documented in `docs/lang/Git.md`.
+
+## Decision
+
+- **AGit detection in `harnez init`**: Detect AGit repositories when ANY of: (1) `.harnez/repo.yaml` has `git.mode: team` (`protected_main: true` or `mode: team`), (2) the local `origin` remote URL resolves to a `kind: forgejo` host in `spec/pr.yaml`, or (3) repo-local `remote.origin.push` configures `refs/for/`. Only touch repo-local git config (`git config --local branch.autoSetupMerge always` and `checkout.defaultRemote origin`) inside actual git worktrees, skipping silently on non-git directories and skipping writes under `--dry-run`. Do NOT overwrite if not AGit-enabled (`solo` + non-AGit remote leaves config untouched). (Host `/decide`, 2026-11-19.)
+- **Push-to-main policy parity**: Provide a shared `gitflow.GuardPush` / policy helper matching `GuardCommit`: when `git.protected_main` is `false` (or `git.mode: solo`), pushing directly to `refs/heads/<default>` is allowed without hindrance; when `git.protected_main` is `true`, direct pushes to `refs/heads/<default>` are refused with a pointer to `refs/for/<default>/<topic>` (while `refs/for/...`, topic branches, and explicit `/disable repo-rules push-main` / `--push-main` override remain allowed). Wire this check consistently in `scripts/git-hooks/pre-push` (`internal/githooks`) and check `internal/guard` / `internal/release` so direct-push vs AGit-only policies never invert. (Host `/decide`, 2026-11-19.)
+
+## M1 — AGit `git pull` ergonomics & push-to-main policy enforcement
+
+- Write set (expected): `internal/claude/init.go` (+ helper file if clearer), `internal/gitflow/gitflow.go`, `internal/githooks/` & `scripts/git-hooks/pre-push` (if hook updated), `internal/guard/` (if push guard exists/added cleanly), `internal/claude/init_test.go`, `internal/gitflow/gitflow_test.go`, `internal/githooks/pre_push_test.go`, `docs/lang/Git.md`, root `docs/Git.md` (via `make install && ./harnez init -d .`), `docs/practices/AGit.md` & `docs/AGit.md` (if needed for pull config guidance).
+- Locked tests (temp git repos + `t.TempDir()`, never touching global `~/.gitconfig`):
+  1. `harnez init` on a temp git repo with AGit enabled (`protected_main: true`, or `solo` + `codeberg.org` `origin` URL, or `remote.origin.push = HEAD:refs/for/main/topic`) sets local `branch.autoSetupMerge=always` and `checkout.defaultRemote=origin`, is idempotent on re-run, and enables `git pull` on a newly created branch tracking `main` (`git checkout -b topic origin/main` / `git branch --track`).
+  2. `harnez init` on a temp git repo with `mode: solo` and a non-AGit remote (e.g. local bare `/tmp/...` or `github.com` without `refs/for/`) leaves `branch.autoSetupMerge` and `checkout.defaultRemote` unset, and non-git `t.TempDir()` exits 0 cleanly without errors.
+  3. Push policy differentiation (`gitflow` + `pre-push` hook):
+     - `protected_main: false` / `solo`: pushing `refs/heads/main` is allowed.
+     - `protected_main: true`: pushing `refs/heads/main` directly is refused with AGit `refs/for/...` guidance; pushing `refs/for/main/<topic>` and `refs/heads/feature` succeeds cleanly.
+  4. Docs synced (`TestRootDocCopiesMatchSources` passes).
