@@ -53,3 +53,21 @@ Resume point: on `models/subscription-ladders`, run `make test-q1` outside the s
 session with user namespaces), update the failing expectations to the new spec values without
 pinning prose, rerun, then review and merge through a PR. Out of scope: cost recalibration and
 the `luna:high` plan gate (992).
+
+## 4. Progress (2026-11-20)
+
+Quota-1 suspended by the owner for this session; tests ran with `go test` in the taia sandbox.
+Method: failing test names on `main` vs. the branch for `./cmd/harnez`, `./internal/subagent`
+and the other fast failing packages; the sandbox alone fails 147 tests in the first two on
+`main` (runner-mode host-only verbs, agymeter paths, socket path length, telemetry broker).
+
+- The branch added 23 failures; all are fixed by updating expected spec values. Cycle tests in
+  `role_policy_test.go` now build their own cycle instead of relying on the shipped `tui` pick;
+  `TestCodexArgsUseModelThresholds` compares against `CompactThreshold`; the `--picks` test checks
+  the chain head instead of an account-dependent resolution.
+- No branch-only failures remain in the compared packages; the root package passes.
+- Not compared: `internal/server` and `internal/usage` hit the 100 s timeout in the sandbox.
+- Behaviour note for review: sessions recorded on `gpt-6.1-sol` count as a removed model after
+  the rename and cannot resume.
+
+Remaining: one full `make test-q1` on the host, then the PR.

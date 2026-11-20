@@ -29,14 +29,14 @@ func TestPolicyFallbackProcess(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(config, "harnez"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	policy := "version: 1\ndefault_enabled: false\nenabled: [claude:opus:med]\nmodels: {}\n"
+	policy := "version: 1\ndefault_enabled: false\nenabled: [claude:opus:high]\nmodels: {}\n"
 	if err := os.WriteFile(filepath.Join(config, "harnez", "models.yaml"), []byte(policy), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestPolicyFallbackProcess$")
 	cmd.Env = append(os.Environ(), "TEST_983_CHILD=1", "XDG_CONFIG_HOME="+config, "XDG_STATE_HOME="+t.TempDir())
 	out, err := cmd.CombinedOutput()
-	if err != nil || !strings.Contains(string(out), "claude smart → opus:med (terra:high: disabled by user policy; sol:med: disabled by user policy)") {
+	if err != nil || !strings.Contains(string(out), "claude smart → opus:high (sol:med: disabled by user policy)") {
 		t.Fatalf("output=%s error=%v", out, err)
 	}
 }
@@ -89,7 +89,7 @@ func TestFallbackNoticeAndQuotaOverride(t *testing.T) {
 		return usage.ProviderQuotaAvailability{State: "available"}
 	}
 	result, err := selectStartModel("developer", "smart", false, availability, &out)
-	if err != nil || result.Provider != "claude" || result.Tier != "med" || !strings.Contains(out.String(), "smart → opus:med (terra:high: quota exhausted; sol:med: quota exhausted)") {
+	if err != nil || result.Provider != "claude" || result.Tier != "high" || !strings.Contains(out.String(), "smart → opus:high (sol:med: quota exhausted)") {
 		t.Fatalf("selection=%+v err=%v notice=%q", result, err, out.String())
 	}
 	out.Reset()
@@ -100,7 +100,7 @@ func TestFallbackNoticeAndQuotaOverride(t *testing.T) {
 }
 
 func TestResumeTraitFallsBackToSessionModel(t *testing.T) {
-	session := &subagent.Session{Provider: "claude", Model: "opus", Tier: "med"}
+	session := &subagent.Session{Provider: "claude", Model: "opus", Tier: "high"}
 	var notice bytes.Buffer
 	availability := func(provider, model string) usage.ProviderQuotaAvailability {
 		if provider == "codex" {
@@ -108,7 +108,7 @@ func TestResumeTraitFallsBackToSessionModel(t *testing.T) {
 		}
 		return usage.ProviderQuotaAvailability{State: "available"}
 	}
-	if err := checkResumeModel("developer", "smart", session, false, availability, &notice); err != nil || !strings.Contains(notice.String(), "terra:high: quota exhausted; sol:med: quota exhausted") {
+	if err := checkResumeModel("developer", "smart", session, false, availability, &notice); err != nil || !strings.Contains(notice.String(), "sol:med: quota exhausted") {
 		t.Fatalf("notice=%q err=%v", notice.String(), err)
 	}
 	session.Tier = "low"
@@ -139,7 +139,7 @@ func TestTraitFailureDoesNotContradictHint(t *testing.T) {
 func TestResumeDisabledCandidatePolicyProcess(t *testing.T) {
 	if os.Getenv("TEST_983_CHILD") == "1" {
 		var notice bytes.Buffer
-		s := &subagent.Session{Provider: "claude", Model: "opus", Tier: "med"}
+		s := &subagent.Session{Provider: "claude", Model: "opus", Tier: "high"}
 		err := checkResumeModel("developer", "smart", s, false, func(string, string) usage.ProviderQuotaAvailability {
 			return usage.ProviderQuotaAvailability{State: "unknown"}
 		}, &notice)
@@ -152,7 +152,7 @@ func TestResumeDisabledCandidatePolicyProcess(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(config, "harnez"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	policy := "version: 1\ndefault_enabled: false\nenabled: [claude:opus:med]\nmodels: {}\n"
+	policy := "version: 1\ndefault_enabled: false\nenabled: [claude:opus:high]\nmodels: {}\n"
 	if err := os.WriteFile(filepath.Join(config, "harnez", "models.yaml"), []byte(policy), 0600); err != nil {
 		t.Fatal(err)
 	}

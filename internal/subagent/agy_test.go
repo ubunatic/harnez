@@ -206,7 +206,7 @@ func TestAgyEffortMapping(t *testing.T) {
 
 func TestNeonAliasesAndEffort(t *testing.T) {
 	for _, tc := range []struct{ spec, tier, effort string }{
-		{"neon", "low", "low"}, {"neon:low", "low", "low"},
+		{"neon", "med", "medium"}, {"neon:low", "low", "low"},
 		{"agy:neon:med", "med", "medium"}, {"neon:high", "high", "high"},
 		{"neon:xhigh", "xhigh", "xhigh"},
 	} {
@@ -238,7 +238,7 @@ func TestNeonAliasesAndEffort(t *testing.T) {
 
 func TestArgonAliasesAndEffort(t *testing.T) {
 	for _, tc := range []struct{ spec, tier, effort string }{
-		{"argon", "low", "low"}, {"argon:low", "low", "low"},
+		{"argon", "high", "high"}, {"argon:low", "low", "low"},
 		{"agy:argon:med", "med", "medium"}, {"agy:argon:high", "high", "high"},
 	} {
 		model, err := ResolveModel(tc.spec)

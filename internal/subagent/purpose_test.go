@@ -8,11 +8,11 @@ import (
 
 func TestRoleModelResolution(t *testing.T) {
 	for _, tc := range []struct{ role, pick, target string }{
-		{"dev", "lean", "terra:low"}, {"dev", "std", "terra:med"}, {"dev", "smart", "terra:high"},
-		{"dev", "tui", "terra:high"}, {"dev", "gui", "terra:low"}, {"dev", "cheap", "luna:med"},
-		{"dev", "fast", "haiku:med"}, {"review", "smart", "sol:med"}, {"review", "", "sol:med"},
-		{"review", "cheap", "haiku:high"}, {"review", "lean", "terra:med"}, {"advisor", "lean", "terra:med"},
-		{"", "smart", "terra:high"}, {"developer", "smart", "terra:high"}, {"advisor", "cheap", "luna:low"}, {"advisor", "smart", "opus:low"},
+		{"dev", "lean", "terra:low"}, {"dev", "std", "sol:low"}, {"dev", "smart", "sol:med"},
+		{"dev", "tui", "terra:low"}, {"dev", "gui", "terra:low"}, {"dev", "cheap", "luna:med"},
+		{"dev", "fast", "haiku:low"}, {"review", "smart", "sol:med"}, {"review", "", "sol:med"},
+		{"review", "cheap", "haiku:low"}, {"review", "lean", "terra:low"}, {"advisor", "lean", "terra:low"},
+		{"", "smart", "sol:med"}, {"developer", "smart", "sol:med"}, {"advisor", "cheap", "luna:med"}, {"advisor", "smart", "opus:high"},
 		{"orchestrator", "", "claude:haiku:high"}, {"review", "codex:sol:med", "codex:sol:med"}, {"review", "sol", "sol"},
 	} {
 		t.Run(tc.role+"/"+tc.pick, func(t *testing.T) {
@@ -44,9 +44,9 @@ func TestCanonicalRoleModelResolution(t *testing.T) {
 }
 
 func TestRoleSelectionOfficialModelDiagnostics(t *testing.T) {
-	for _, name := range []string{"gemini-4-argon", "gemini-4-argon:low"} {
+	for name, tier := range map[string]string{"gemini-4-argon": "high", "gemini-4-argon:low": "low"} {
 		selection, err := ResolveModelWithAvailability("advisor", name, nil, false)
-		if err != nil || selection.Model.Provider != "agy" || selection.Model.Name != "gemini-4-argon" || selection.Model.Tier != "low" {
+		if err != nil || selection.Model.Provider != "agy" || selection.Model.Name != "gemini-4-argon" || selection.Model.Tier != tier {
 			t.Errorf("selection for %q = %+v, %v", name, selection, err)
 		}
 	}
@@ -77,7 +77,7 @@ func TestOfficialNameInModelPick(t *testing.T) {
 		}, func(Model) string { return "" })
 		return selection.Model, err
 	})
-	if len(picks) != 1 || picks[0].Resolved != "agy:argon:low" || picks[0].Error != "" {
+	if len(picks) != 1 || picks[0].Resolved != "agy:argon:high" || picks[0].Error != "" {
 		t.Fatalf("picks = %+v", picks)
 	}
 }

@@ -57,7 +57,7 @@ func TestModelPicksCommand(t *testing.T) {
 			t.Fatal("picks are not sorted")
 		}
 		if p.Role == "developer" && p.Trait == "smart" {
-			smart = len(p.Chain) == 3 && p.Resolved == "codex:terra:high" && p.Error == "" && !p.Default
+			smart = len(p.Chain) == 3 && p.Chain[0] == "sol:med" && p.Resolved != "" && p.Error == "" && !p.Default
 		}
 		if p.Role == "reviewer" && p.Trait == "lean" {
 			reviewLean = len(p.Chain) > 0 && p.Error == "" && !p.Default

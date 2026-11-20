@@ -1123,7 +1123,7 @@ func TestRunResumeRejectsSessionWithRemovedModel(t *testing.T) {
 }
 
 func TestRunResumeAcceptsCurrentCodexModels(t *testing.T) {
-	for _, tc := range []struct{ model, tier string }{{"gpt-6-luna", "med"}, {"gpt-6.1-sol", "low"}, {"gpt-6.1-terra", "low"}} {
+	for _, tc := range []struct{ model, tier string }{{"gpt-6-luna", "med"}, {"gpt-6.2-sol", "low"}, {"gpt-6.1-terra", "low"}} {
 		t.Run(tc.model+":"+tc.tier, func(t *testing.T) {
 			store, err := subagent.NewSessionStore(t.TempDir())
 			if err != nil {

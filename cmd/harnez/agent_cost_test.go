@@ -98,7 +98,7 @@ func TestAcceptCostStartAndResume(t *testing.T) {
 		{"agy:neon:high", "agy:neon:high", "219", "unknown", staleAvail},
 		{"agy:neon:xhigh", "agy:neon:xhigh", "384", "unknown", staleAvail},
 		{"codex:astra:low", "codex:astra:low", "182", "5h 80%, weekly 65%", freshAvail},
-		{"gpt-6-astra:med", "codex:astra:med", "342", "5h 80%, weekly 65%", freshAvail},
+		{"gpt-6.2-astra:med", "codex:astra:med", "342", "5h 80%, weekly 65%", freshAvail},
 		{"claude:fable:high", "claude:fable:high", "420", "unknown", staleAvail},
 	} {
 		_, _, err := runStartCase(tc.spec, false, tc.avail)
@@ -134,7 +134,7 @@ func TestAcceptCostStartAndResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sess := &subagent.Session{ID: "sid", Name: "costly", Provider: "codex", Model: "gpt-6-astra", Tier: "low", Role: "advisor", WorkingDir: t.TempDir(), Status: "completed", HarnessType: "harnez"}
+	sess := &subagent.Session{ID: "sid", Name: "costly", Provider: "codex", Model: "gpt-6.2-astra", Tier: "low", Role: "advisor", WorkingDir: t.TempDir(), Status: "completed", HarnessType: "harnez"}
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestAcceptCostDryRunAndPickFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sess := &subagent.Session{ID: "sid", Name: "costly", Provider: "codex", Model: "gpt-6-astra", Tier: "low", Role: "advisor", WorkingDir: t.TempDir(), Status: "completed", HarnessType: "harnez"}
+	sess := &subagent.Session{ID: "sid", Name: "costly", Provider: "codex", Model: "gpt-6.2-astra", Tier: "low", Role: "advisor", WorkingDir: t.TempDir(), Status: "completed", HarnessType: "harnez"}
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}

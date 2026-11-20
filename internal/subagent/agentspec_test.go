@@ -84,7 +84,10 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if flash38.Roles != "reviewer, advisor, developer" {
 		t.Errorf("agy:flash38 roles = %q, want reviewer, advisor, developer", flash38.Roles)
 	}
-	for _, name := range []string{"agy:neon", "agy:hydrogen", "agy:argon", "agy:flash38"} {
+	if argon := spec.Models["agy:argon"]; argon.Roles != "reviewer, advisor" {
+		t.Errorf("agy:argon roles = %q, want reviewer, advisor (owner decision, 2026-11-20)", argon.Roles)
+	}
+	for _, name := range []string{"agy:neon", "agy:hydrogen", "agy:flash38"} {
 		if !strings.Contains(spec.Models[name].Roles, "developer") {
 			t.Errorf("%s roles = %q, want developer role (owner decision, issue 1243)", name, spec.Models[name].Roles)
 		}
@@ -422,9 +425,9 @@ func TestResolveModelBareAliases(t *testing.T) {
 
 func TestCodexSolAndLunaResolveToGPT6(t *testing.T) {
 	for alias, want := range map[string]string{
-		"sol":            "gpt-6.1-sol",
-		"codex:sol":      "gpt-6.1-sol",
-		"codex:sol:low":  "gpt-6.1-sol",
+		"sol":            "gpt-6.2-sol",
+		"codex:sol":      "gpt-6.2-sol",
+		"codex:sol:low":  "gpt-6.2-sol",
 		"luna":           "gpt-6-luna",
 		"codex:luna":     "gpt-6-luna",
 		"codex:luna:med": "gpt-6-luna",
@@ -713,7 +716,7 @@ func TestModelCost(t *testing.T) {
 		{"codex:astra:low", 182, true},
 		{"codex:astra:med", 342, true},
 		{"codex:astra:high", 384, true},
-		{"gpt-6-astra:med", 342, true},
+		{"gpt-6.2-astra:med", 342, true},
 		{"codex:sol:high", 33, true},
 		{"codex:luna:med", 5, true},
 		{"neon:xhigh", 384, true},

@@ -39,8 +39,8 @@ func TestLoadThroughPublicPackage(t *testing.T) {
 	if haiku == nil {
 		t.Fatal("Load returned no spec-default model with Identity.Model claude-haiku-5-5")
 	}
-	if haiku.Identity.Provider != "claude" || haiku.Identity.Tier != "low" {
-		t.Fatalf("claude-haiku-5-5: provider %q tier %q, want claude/low",
+	if haiku.Identity.Provider != "claude" || haiku.Identity.Tier != "med" {
+		t.Fatalf("claude-haiku-5-5: provider %q tier %q, want claude/med",
 			haiku.Identity.Provider, haiku.Identity.Tier)
 	}
 }

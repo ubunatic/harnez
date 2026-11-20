@@ -41,7 +41,7 @@ func TestCompactThresholdHaikuSpecAndUserPrecedence(t *testing.T) {
 	}{
 		{"haiku", 80000}, {"claude:haiku:low", 80000}, {"claude:haiku:med", 80000},
 		{"claude:haiku:high", 80000}, {"claude:sonnet:low", 200000},
-		{"codex:luna:med", 100000}, {"codex:sol:low", 100000}, {"codex:terra:high", 100000},
+		{"codex:luna:med", 100000}, {"codex:sol:low", 200000}, {"codex:terra:high", 200000},
 		{"strata", 80000}, {"strata-coder:qwen3.8-flash-next-coder-iq1_m", 80000},
 		{"strata-iq2", 80000}, {"strata-iq3", 80000},
 		{"strata:qwen3.8-flash-next-iq2_xs:low", 80000}, {"strata:qwen3.8-flash-next-iq3_xxs:low", 80000},
@@ -58,7 +58,7 @@ func TestCompactThresholdHaikuSpecAndUserPrecedence(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".harnez"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	model, err := ResolveModel("haiku")
+	model, err := ResolveModel("haiku:low")
 	if err != nil {
 		t.Fatal(err)
 	}

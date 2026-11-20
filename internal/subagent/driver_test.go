@@ -45,16 +45,16 @@ func TestCodexCheckResumable(t *testing.T) {
 }
 
 func TestResolveModel(t *testing.T) {
-	for _, spec := range []string{"fable", "claude:fable:low"} {
+	for spec, tier := range map[string]string{"fable": "med", "claude:fable:low": "low"} {
 		m, err := ResolveModel(spec)
-		if err != nil || m.Provider != "claude" || m.Name != "claude-fable-5-2" || m.Tier != "low" {
-			t.Errorf("ResolveModel(%q) = %#v, %v; want claude:claude-fable-5-2:low", spec, m, err)
+		if err != nil || m.Provider != "claude" || m.Name != "claude-fable-5-2" || m.Tier != tier {
+			t.Errorf("ResolveModel(%q) = %#v, %v; want claude:claude-fable-5-2:%s", spec, m, err, tier)
 		}
 	}
 	if _, err := ResolveModel("fable:bogus"); err == nil || !strings.Contains(err.Error(), "unknown model tier") {
 		t.Errorf("ResolveModel(fable:bogus) error = %v; want unknown model tier", err)
 	}
-	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "low"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "claude-haiku-5-5", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "claude-haiku-5-5", "low"}, {"agy:flash38:low", "agy", "gemini-3.8-flash", "low"}, {"agy:gemini-3.8-flash:low", "agy", "gemini-3.8-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
+	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "med"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "claude-haiku-5-5", "med"}, {"claude:sonnet", "claude", "sonnet", "med"}, {"claude:opus", "claude", "opus", "med"}, {"claude:haiku:latest", "claude", "claude-haiku-5-5", "med"}, {"agy:flash38:low", "agy", "gemini-3.8-flash", "low"}, {"agy:gemini-3.8-flash:low", "agy", "gemini-3.8-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
 		m, err := ResolveModel(tc.spec)
 		if err != nil {
 			t.Fatal(err)
@@ -74,19 +74,19 @@ func TestResolveModel(t *testing.T) {
 func TestResolveOfficialModelNames(t *testing.T) {
 	for _, spec := range []string{"gemini-4-argon", "gemini-4-argon:low", "gemini-4-argon:HIGH"} {
 		m, err := ResolveModel(spec)
-		wantTier := "low"
-		if strings.HasSuffix(spec, ":HIGH") {
-			wantTier = "high"
+		wantTier := "high"
+		if strings.HasSuffix(spec, ":low") {
+			wantTier = "low"
 		}
 		if err != nil || m.Provider != "agy" || m.Name != "gemini-4-argon" || m.Tier != wantTier {
 			t.Errorf("ResolveModel(%q) = %#v, %v; want agy:argon:%s", spec, m, err, wantTier)
 		}
 	}
 	for spec, wantTier := range map[string]string{
-		"hydrogen":               "low",
-		"agy:hydrogen":           "low",
+		"hydrogen":               "med",
+		"agy:hydrogen":           "med",
 		"agy:hydrogen:med":       "med",
-		"gemini-4-hydrogen":      "low",
+		"gemini-4-hydrogen":      "med",
 		"gemini-4-hydrogen:low":  "low",
 		"gemini-4-hydrogen:med":  "med",
 		"gemini-4-hydrogen:HIGH": "high",
@@ -97,9 +97,9 @@ func TestResolveOfficialModelNames(t *testing.T) {
 		}
 	}
 	for spec, wantTier := range map[string]string{
-		"neon":                "low",
+		"neon":                "med",
 		"agy:neon:high":       "high",
-		"gemini-4-neon":       "low",
+		"gemini-4-neon":       "med",
 		"gemini-4-neon:low":   "low",
 		"gemini-4-neon:med":   "med",
 		"gemini-4-neon:HIGH":  "high",
@@ -339,8 +339,13 @@ func TestCodexArgsUseModelThresholds(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		threshold, err := CompactThreshold(model)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := fmt.Sprintf("model_auto_compact_token_limit=%d", threshold)
 		for _, args := range [][]string{codexRunArgs(model, "go"), codexResumeArgs("id", "go", model)} {
-			if !strings.Contains(strings.Join(args, " "), "model_auto_compact_token_limit=100000") {
+			if !strings.Contains(strings.Join(args, " "), want) {
 				t.Errorf("%s: args = %q", name, args)
 			}
 		}
