@@ -84,4 +84,11 @@ Targets: the tests touched in `157da616` (`driver_test.go`, `agy_test.go`, `comp
 `modelcatalog/load_external_test.go`). Check: change a default tier and a pick in a scratch
 copy of `spec/agent.yaml`; no test outside spec-validation tests may fail.
 
-Remaining: the refactor above, one full `make test-q1` on the host, then the PR.
+Done (2026-11-20): the target tests read expectations from the shipped spec (helpers in
+`internal/subagent/specexpect_test.go`) or loop over all shipped models, roles and costly
+entries; process tests receive their expected values from the parent. Check passed: with Neon's
+default tier changed and developer `smart` reordered in `spec/agent.yaml`, `internal/subagent`,
+`modelcatalog`, `cmd/harnez` and the root package showed no failures beyond the sandbox baseline.
+The spec-wide resolution test found 1253.
+
+Remaining: one full `make test-q1` on the host, then merge the PR.
