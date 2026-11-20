@@ -1,0 +1,55 @@
+# 1252 — Update tests for the 2026-11-20 vendor-ladder model picks
+
+**Status**: Open
+**Priority**: P1 (High)
+**Severity**: Moderate
+**Category**: Bug
+**Related**: 992, 1243, 1242, 1229
+
+---
+
+## 1. Problem & Motivation
+
+Branch `models/subscription-ladders` changes `spec/agent.yaml` to the owner's 2026-11-20 model
+ladders (one pick per vendor per role trait, OpenAI with or without a subscription) and records
+the evidence in `docs/Models.md`. The suite has not run on it: `make test-q1` fails inside the
+taia sandbox before any test starts (`bwrap: setting up uid map: Permission denied`). Several
+tests pin the old picks and default efforts and will fail until updated.
+
+## 2. Technical Specification / Findings
+
+Spec changes on the branch:
+
+- Default effort `med` for sol, haiku, sonnet, opus, fable, hydrogen, neon; `high` for argon;
+  `low` for terra and astra. Names `gpt-6.2-sol`, `gpt-6.2-astra` (Astra unverified).
+- Role picks: see the `harnez:model-picks` block in `docs/commands/epic.md`. `luna:high` follows
+  each OpenAI pick above `luna:med` as the no-subscription fallback; plan gating is 992.
+- Argon roles `reviewer, advisor` (developer removed); flash38 out of all picks, replaced by
+  `hydrogen:low`; flash37 kept as `disabled: true`.
+- `compact_thresholds`: `codex:gpt-6.1-terra` and `codex:gpt-6.2-sol` at 200000,
+  `claude:haiku:xhigh` at 80000 added.
+- Guidance prose fixed for YAML: a ` #` in a plain scalar had cut the Neon text; colon-space
+  rewritten.
+
+Test change already on the branch (unrun): `internal/subagent/agentspec_test.go` no longer pins
+guidance prose; it checks every model has `use` text, every `model:tier` named in guidance
+resolves via `ResolveModel`, and `guidance_source_url` is https. Checked by hand against the
+spec: all references resolve.
+
+Tests expected to fail and need new expected values:
+
+- `internal/subagent/driver_test.go:57` (default tiers for opus, haiku, sonnet)
+- `internal/subagent/purpose_test.go:11-15`, `internal/subagent/fallback_test.go`
+- `cmd/harnez/agent_role_test.go:103-105`, `cmd/harnez/agent_picks_test.go`,
+  `internal/pickdocs/pickdocs_test.go:21`
+- `cmd/harnez/agent_resume_test.go:1126`, `cmd/harnez/agent_cost_test.go` (`gpt-6.1-sol`,
+  `gpt-6-astra` names)
+- `internal/subagent/agentspec_test.go` developer-role loop over argon, `agy_test.go:209,241`
+  (neon and argon default tiers)
+
+## 3. Implementation & Verification Plan
+
+Resume point: on `models/subscription-ladders`, run `make test-q1` outside the sandbox (or in a
+session with user namespaces), update the failing expectations to the new spec values without
+pinning prose, rerun, then review and merge through a PR. Out of scope: cost recalibration and
+the `luna:high` plan gate (992).
