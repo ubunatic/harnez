@@ -1,8 +1,11 @@
 package modelcatalog_test
 
 import (
+	"io/fs"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/modelcatalog"
 )
 
@@ -20,15 +23,28 @@ func TestLoadThroughPublicPackage(t *testing.T) {
 	if catalog == nil {
 		t.Fatal("Load returned a nil catalog without an error")
 	}
+	// Expected identities come from spec/agent.yaml (issue 1252: no pinned models).
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/agent.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Models map[string]struct {
+			Provider string `yaml:"provider"`
+			Name     string `yaml:"name"`
+			Tier     string `yaml:"tier"`
+			Disabled bool   `yaml:"disabled"`
+		} `yaml:"models"`
+	}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
 	defaults := 0
-	var haiku *modelcatalog.Model
+	found := map[string]modelcatalog.Model{}
 	for _, model := range catalog.Models() {
-		if model.Source != "spec-default" {
-			continue
-		}
-		defaults++
-		if model.Identity.Model == "claude-haiku-5-5" {
-			haiku = &model
+		if model.Source == "spec-default" {
+			defaults++
+			found[model.Identity.Provider+"\x00"+model.Identity.Model] = model
 		}
 	}
 	if defaults == 0 {
@@ -36,11 +52,17 @@ func TestLoadThroughPublicPackage(t *testing.T) {
 	}
 	// Identity is checked field by field, so a loader that fabricates
 	// defaults with the right count still fails.
-	if haiku == nil {
-		t.Fatal("Load returned no spec-default model with Identity.Model claude-haiku-5-5")
-	}
-	if haiku.Identity.Provider != "claude" || haiku.Identity.Tier != "med" {
-		t.Fatalf("claude-haiku-5-5: provider %q tier %q, want claude/med",
-			haiku.Identity.Provider, haiku.Identity.Tier)
+	for key, want := range spec.Models {
+		if want.Disabled {
+			continue
+		}
+		got, ok := found[want.Provider+"\x00"+want.Name]
+		if !ok {
+			t.Errorf("%s: no spec-default model %s:%s", key, want.Provider, want.Name)
+			continue
+		}
+		if got.Identity.Tier != want.Tier {
+			t.Errorf("%s: tier %q, want spec tier %q", key, got.Identity.Tier, want.Tier)
+		}
 	}
 }

@@ -498,10 +498,13 @@ func TestAgentStartStoresCanonicalWorkingDir(t *testing.T) {
 }
 
 func TestAgentHaikuAliases(t *testing.T) {
+	want, err := subagent.ResolveModel("haiku")
+	if err != nil || want.Provider != "claude" || !strings.Contains(want.Name, "haiku") || want.Tier == "" {
+		t.Fatalf("haiku resolved to %#v (%v)", want, err)
+	}
 	for _, spec := range []string{"claude:haiku", "claude:haiku:latest"} {
-		m, err := subagent.ResolveModel(spec)
-		if err != nil || m.Provider != "claude" || m.Name != "claude-haiku-5-5" || m.Tier != "med" {
-			t.Fatalf("%s resolved to %#v (%v)", spec, m, err)
+		if m, err := subagent.ResolveModel(spec); err != nil || m != want {
+			t.Fatalf("%s resolved to %#v (%v), want %#v", spec, m, err, want)
 		}
 	}
 }

@@ -45,70 +45,65 @@ func TestCodexCheckResumable(t *testing.T) {
 }
 
 func TestResolveModel(t *testing.T) {
-	for spec, tier := range map[string]string{"fable": "med", "claude:fable:low": "low"} {
-		m, err := ResolveModel(spec)
-		if err != nil || m.Provider != "claude" || m.Name != "claude-fable-5-2" || m.Tier != tier {
-			t.Errorf("ResolveModel(%q) = %#v, %v; want claude:claude-fable-5-2:%s", spec, m, err, tier)
+	// Every shipped model resolves by spec key, key:tier, aliases and
+	// provider:official-name:tier to its spec entry (issue 1252: no pinned values).
+	aliases := map[string]bool{}
+	for _, entry := range shippedSpec(t).Models {
+		for _, alias := range entry.Aliases {
+			aliases[strings.SplitN(alias, ":", 2)[0]] = true
 		}
+	}
+	for key, entry := range shippedModels(t) {
+		want := entry.Model
+		specs := map[string]string{key + ":" + want.Tier: want.Tier, want.Provider + ":" + want.Name + ":" + want.Tier: want.Tier}
+		// A bare key whose provider is also a model alias reads as alias:tier
+		// (strata:<name>); only the tiered form is unambiguous there.
+		if !aliases[want.Provider] {
+			specs[key] = want.Tier
+		}
+		for _, alias := range entry.Aliases {
+			specs[alias] = aliasTier(alias, want.Tier)
+		}
+		for spec, tier := range specs {
+			got, err := ResolveModel(spec)
+			if err != nil || got.Provider != want.Provider || got.Name != want.Name || got.Tier != tier {
+				t.Errorf("ResolveModel(%q) = %#v, %v; want %s:%s:%s", spec, got, err, want.Provider, want.Name, tier)
+			}
+		}
+	}
+	if latest, bare := mustResolve(t, "claude:haiku:latest"), mustResolve(t, "claude:haiku"); latest != bare {
+		t.Errorf("claude:haiku:latest = %#v, want the claude:haiku default %#v", latest, bare)
 	}
 	if _, err := ResolveModel("fable:bogus"); err == nil || !strings.Contains(err.Error(), "unknown model tier") {
 		t.Errorf("ResolveModel(fable:bogus) error = %v; want unknown model tier", err)
 	}
-	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-6-luna", "low"}, {"luna:low", "codex", "gpt-6-luna", "low"}, {"opus", "claude", "opus", "med"}, {"opus:med", "claude", "opus", "med"}, {"claude:haiku", "claude", "claude-haiku-5-5", "med"}, {"claude:sonnet", "claude", "sonnet", "med"}, {"claude:opus", "claude", "opus", "med"}, {"claude:haiku:latest", "claude", "claude-haiku-5-5", "med"}, {"agy:flash38:low", "agy", "gemini-3.8-flash", "low"}, {"agy:gemini-3.8-flash:low", "agy", "gemini-3.8-flash", "low"}, {"flash38", "agy", "gemini-3.8-flash", "low"}} {
-		m, err := ResolveModel(tc.spec)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if m.Provider != tc.provider || m.Name != tc.name || m.Tier != tc.tier {
-			t.Fatalf("%s resolved to %#v", tc.spec, m)
-		}
-	}
-	for spec, tier := range map[string]string{"terra": "low", "terra:low": "low", "terra:med": "med", "terra:high": "high", "codex:terra": "low"} {
-		m, err := ResolveModel(spec)
-		if err != nil || m.Provider != "codex" || m.Name != "gpt-6.1-terra" || m.Tier != tier {
-			t.Errorf("ResolveModel(%q) = %#v, %v; want codex:gpt-6.1-terra:%s", spec, m, err, tier)
-		}
-	}
 }
 
 func TestResolveOfficialModelNames(t *testing.T) {
-	for _, spec := range []string{"gemini-4-argon", "gemini-4-argon:low", "gemini-4-argon:HIGH"} {
-		m, err := ResolveModel(spec)
-		wantTier := "high"
-		if strings.HasSuffix(spec, ":low") {
-			wantTier = "low"
-		}
-		if err != nil || m.Provider != "agy" || m.Name != "gemini-4-argon" || m.Tier != wantTier {
-			t.Errorf("ResolveModel(%q) = %#v, %v; want agy:argon:%s", spec, m, err, wantTier)
-		}
+	names := map[string]int{}
+	for _, entry := range shippedSpec(t).Models {
+		names[entry.Model.Name]++
 	}
-	for spec, wantTier := range map[string]string{
-		"hydrogen":               "med",
-		"agy:hydrogen":           "med",
-		"agy:hydrogen:med":       "med",
-		"gemini-4-hydrogen":      "med",
-		"gemini-4-hydrogen:low":  "low",
-		"gemini-4-hydrogen:med":  "med",
-		"gemini-4-hydrogen:HIGH": "high",
-	} {
-		m, err := ResolveModel(spec)
-		if err != nil || m.Provider != "agy" || m.Name != "gemini-4-hydrogen" || m.Tier != wantTier {
-			t.Errorf("ResolveModel(%q) = %#v, %v; want agy:hydrogen:%s", spec, m, err, wantTier)
+	checked := 0
+	for key, entry := range shippedModels(t) {
+		want := entry.Model
+		if names[want.Name] != 1 || strings.HasSuffix(key, ":"+want.Name) || want.Provider != "agy" {
+			continue
 		}
+		specs := map[string]string{want.Name: want.Tier, want.Name + ":low": "low"}
+		if want.SupportsEffort() {
+			specs[want.Name+":HIGH"] = "high"
+		}
+		for spec, tier := range specs {
+			got, err := ResolveModel(spec)
+			if err != nil || got.Provider != want.Provider || got.Name != want.Name || got.Tier != tier {
+				t.Errorf("ResolveModel(%q) = %#v, %v; want %s:%s", spec, got, err, key, tier)
+			}
+		}
+		checked++
 	}
-	for spec, wantTier := range map[string]string{
-		"neon":                "med",
-		"agy:neon:high":       "high",
-		"gemini-4-neon":       "med",
-		"gemini-4-neon:low":   "low",
-		"gemini-4-neon:med":   "med",
-		"gemini-4-neon:HIGH":  "high",
-		"gemini-4-neon:xhigh": "xhigh",
-	} {
-		m, err := ResolveModel(spec)
-		if err != nil || m.Provider != "agy" || m.Name != "gemini-4-neon" || m.Tier != wantTier {
-			t.Errorf("ResolveModel(%q) = %#v, %v; want agy:neon:%s", spec, m, err, wantTier)
-		}
+	if checked == 0 {
+		t.Fatal("no agy model with a unique official name in the spec")
 	}
 }
 
@@ -334,11 +329,12 @@ func TestCodexPassesReasoningEffort(t *testing.T) {
 
 func TestCodexArgsUseModelThresholds(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	for _, name := range []string{"terra:med", "sol:low", "luna:high"} {
-		model, err := ResolveModel(name)
-		if err != nil {
-			t.Fatal(err)
+	for _, entry := range KnownModelEntries() {
+		if entry.Model.Provider != "codex" {
+			continue
 		}
+		name := entry.Spec
+		model := mustResolve(t, name)
 		threshold, err := CompactThreshold(model)
 		if err != nil {
 			t.Fatal(err)

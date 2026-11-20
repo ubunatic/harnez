@@ -96,14 +96,21 @@ func TestAgentStartDefaultsToDeveloperRole(t *testing.T) {
 func TestStartResolvesRoleBeforeModel(t *testing.T) {
 	t.Setenv(agentRoleEnv, "")
 	installUnclassifiedNeus(t)
+	pick := func(role string) string {
+		m, err := subagent.ResolveModelForRole(role, "smart")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m.String()
+	}
 	for _, tc := range []struct {
 		args        []string
 		role, model string
 	}{
-		{[]string{"--role", "dev", "--model", "smart"}, "developer", "codex:gpt-6.2-sol:med"},
-		{[]string{"--role", "review", "--model", "smart"}, "reviewer", "codex:gpt-6.2-sol:med"},
-		{[]string{"--role", "review"}, "reviewer", "codex:gpt-6.2-sol:med"},
-		{[]string{"--model", "smart"}, "developer", "codex:gpt-6.2-sol:med"},
+		{[]string{"--role", "dev", "--model", "smart"}, "developer", pick("developer")},
+		{[]string{"--role", "review", "--model", "smart"}, "reviewer", pick("reviewer")},
+		{[]string{"--role", "review"}, "reviewer", pick("reviewer")},
+		{[]string{"--model", "smart"}, "developer", pick("developer")},
 	} {
 		d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
 		args := append([]string{"start"}, tc.args...)
@@ -139,14 +146,18 @@ func TestModelAliasListAndBanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "smart") || !strings.Contains(out, "gpt-6.2-sol") {
+	want, err := subagent.ResolveModelForRole("developer", "smart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "smart") || !strings.Contains(out, want.Name) {
 		t.Fatalf("banner: %s", out)
 	}
 	out, err = runWithStore(t, d, dir, "list", "--dead", "--color", "never")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "MODEL") || !strings.Contains(out, "smart → codex:sol:med") {
+	if !strings.Contains(out, "MODEL") || !strings.Contains(out, "smart → "+want.Spec()) {
 		t.Fatalf("list: %s", out)
 	}
 }
