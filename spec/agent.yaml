@@ -25,12 +25,13 @@ cost_check:
   context_usage_fraction: 0.75
   min_turns: 3
 compact_thresholds:
-  codex:gpt-6.1-terra: 100000
-  codex:gpt-6.1-sol: 100000
+  codex:gpt-6.1-terra: 200000
+  codex:gpt-6.2-sol: 200000
   codex:gpt-6-luna: 100000
   claude:haiku:low: 80000
   claude:haiku:med: 80000
   claude:haiku:high: 80000
+  claude:haiku:xhigh: 80000
   strata-coder:qwen3.8-flash-next-coder-iq1_m: 80000
   strata:qwen3.8-flash-next-iq2_xs: 80000
   strata:qwen3.8-flash-next-iq3_xxs: 80000
@@ -170,20 +171,20 @@ models:
     cost_by_tier: {med: 5, high: 6}
     eff: "~"
     skills: Go~ TUI- SQL?
-    use: Owner guidance — background and mechanical work, including log compaction.
-    use_med: Owner guidance — low-cost developer option for well-specified implementation and tests.
+    use: Owner guidance — lowest OpenAI rung and the only GPT-6 model usable without an OpenAI subscription; background and mechanical work, including log compaction. luna:high only without a subscription; with one, step up to terra:low.
+    use_med: Owner guidance — lowest OpenAI rung, also without a subscription; low-cost developer option for well-specified implementation and tests.
   codex:sol:
-    aliases: [sol, sol:low]
+    aliases: [sol, sol:med]
     preferred: true
     provider: codex
-    name: gpt-6.1-sol
-    tier: low
+    name: gpt-6.2-sol
+    tier: med
     roles: developer, advisor, reviewer
     cost: 17
     cost_by_tier: {med: 25, high: 33}
-    eff: "~"
-    skills: Go~ TUI~ SQL?
-    use: Owner guidance — use sol:low for judgment, orchestration, and resolving compiler failures; reserve higher effort for harder work.
+    eff: "+"
+    skills: Go+ TUI+ SQL?
+    use: Owner guidance — needs an OpenAI subscription. GPT-6.2 Sol is the new frontier at OK cost (benchmarks); ladder sol:low, sol:med, sol:high; xhigh and max add little intelligence for their cost. sol:low supersedes terra:med and above and may be very cost-effective (high intelligence, low token output, low cost); untested.
   codex:terra:
     aliases: [terra, terra:low]
     preferred: true
@@ -195,12 +196,12 @@ models:
     cost_by_tier: {med: 24, high: 36}
     eff: "?"
     skills: Go? TUI? SQL?
-    use: Efficient-frontier Codex developer for hard tasks; cost not yet recalibrated (no FrontierCode 2.0 row, issue 1243); use terra:high before escalating to sol:med or sol:high, and reserve Sol for the hardest judgment.
+    use: Owner guidance — needs an OpenAI subscription. terra:low is the step after luna:med, at haiku:high level; sol:low supersedes terra:med and above. Cost not yet recalibrated (no FrontierCode 2.0 row, issue 1243).
   codex:astra:
     aliases: [astra, astra:low]
     preferred: true
     provider: codex
-    name: gpt-6-astra
+    name: gpt-6.2-astra
     tier: low
     roles: advisor, developer
     cost: 182
@@ -209,25 +210,25 @@ models:
     skills: Go+ TUI~ SQL~
     use: hardest multi-step coding and terminal automation; escalation only
   claude:haiku:
-    aliases: [haiku, haiku:low]
+    aliases: [haiku, haiku:med]
     preferred: true
     provider: claude
     name: claude-haiku-5-5
-    tier: low
+    tier: med
     roles: developer, reviewer, mechanical, advisor
     cost: 4
     cost_by_tier: {med: 5, high: 7, xhigh: 12}
     extra_tiers: [xhigh]
-    eff: "-"
+    eff: "+"
     skills: Go~ TUI~ SQL~
-    use: Owner guidance — haiku:med for easy tasks and haiku:low for very simple, repetitive tasks. Haiku 5.5 input above 100k tokens costs 5x; harnez compacts Haiku at 80k by default; override via agent.compact_thresholds (issue 969, docs/AutoCompaction.md). High thinking effort fills that budget quickly; see guidance_source_url.
+    use: Owner guidance — haiku:low for very cheap, fast, simple work; haiku:high as a capable developer; skip haiku:med. haiku:xhigh is the next step for standard work; it matches opus:low at about a quarter of its API cost. Haiku's subscription subsidy is said to be lower than for larger models, so opus:high may pay off sooner. A weak host session; it needs more guidance than opus. Haiku 5.5 input above 100k tokens costs 5x; harnez compacts Haiku at 80k by default; override via agent.compact_thresholds (issue 969, docs/AutoCompaction.md). High thinking effort fills that budget quickly; see guidance_source_url.
     guidance_source_url: https://code.claude.com/docs/en/model-config#haiku-55-context-window-and-pricing
   claude:sonnet:
-    aliases: [sonnet, sonnet:low]
+    aliases: [sonnet, sonnet:med]
     preferred: true
     provider: claude
     name: sonnet
-    tier: low
+    tier: med
     roles: advisor, reviewer, developer
     cost: 19
     cost_by_tier: {med: 24, high: 54}
@@ -238,25 +239,25 @@ models:
     aliases: [fable]
     provider: claude
     name: claude-fable-5-2
-    tier: low
+    tier: med
     roles: orchestrator, reviewer
     cost: 131
     cost_by_tier: {med: 155, high: 420}
     eff: "?"
     skills: Go? TUI? SQL?
-    use: "Cost from FrontierCode 2.0 rollouts (Fable 5.2 low $2.62, high $8.40), about 3.5x Opus 5.5 at low; issue 1243."
+    use: "Owner guidance — fable:med is the top Anthropic rung. Cost from FrontierCode 2.0 rollouts (Fable 5.2 low $2.62, high $8.40), about 3.5x Opus 5.5 at low; issue 1243."
   claude:opus:
-    aliases: [opus, opus:low]
+    aliases: [opus, opus:med]
     preferred: true
     provider: claude
     name: opus
-    tier: low
+    tier: med
     roles: orchestrator, reviewer
     cost: 38
     cost_by_tier: {med: 85, high: 121}
     eff: "+"
     skills: Go+ TUI? SQL+
-    use: host seat for repo judgment, pre-work, diff review
+    use: Owner guidance — opus:high for reviews and judgment; opus:low is no better than haiku:xhigh at about four times its API cost. Host seat for repo judgment, pre-work, diff review.
   agy:flash37:
     aliases: [flash37, flash37:low]
     disabled: true
@@ -278,42 +279,42 @@ models:
     cost: 4
     eff: "~"
     skills: Go~ TUI~ SQL~
-    use: Owner guidance — use flash38:med for routing and preprocessing, especially wide-context inputs.
+    use: Owner guidance — superseded by hydrogen:low as the cheap, fast Google model; kept for routing and preprocessing wide-context inputs.
     use_med: Owner guidance — route and preprocess wide-context inputs.
   agy:argon:
-    aliases: [argon, argon:low]
+    aliases: [argon, argon:high]
     provider: agy
     name: gemini-4-argon
-    tier: low
-    roles: advisor, reviewer, developer
+    tier: high
+    roles: reviewer, advisor
     cost: 199
     cost_by_tier: {med: 285, high: 326}
-    eff: "?"
+    eff: "-"
     skills: Go? TUI? SQL?
-    use: Gemini 4 Argon; scarce weekly quota, measured at low effort only; FrontierCode 2.0 27.6% at high for $6.51 is behind Gemini 4 Neon (46.2% at $4.38), issue 1243.
+    use: Owner guidance — on a separate plan, so spend its quota on argon:high as reviewer, advisor or consultant; skip argon:med. Not an orchestrator; the Gemini orchestrator variants think long and slow. Quota measured at low effort only (issue 822); FrontierCode 2.0 27.6% at high for $6.51 is behind Gemini 4 Neon (46.2% at $4.38), issue 1243.
   agy:hydrogen:
-    aliases: [hydrogen, hydrogen:low]
+    aliases: [hydrogen, hydrogen:med]
     provider: agy
     name: gemini-4-hydrogen
-    tier: low
+    tier: med
     roles: advisor, reviewer, developer
     cost: 18
     cost_by_tier: {med: 45, high: 120}
-    eff: "?"
+    eff: "+"
     skills: Go? TUI? SQL?
-    use: Gemini 4 Hydrogen; costs from FrontierCode 2.0 low/med/high rollouts (issue 1243); no xhigh row used
+    use: Owner guidance — hydrogen:low is the cheap, fast Google model and replaces flash38. hydrogen:med is an alternative to neon:low only if Hydrogen's subscription subsidy is better (unknown); neon:med is well above hydrogen:high. Costs from FrontierCode 2.0 low/med/high rollouts (issue 1243); no xhigh row used.
   agy:neon:
-    aliases: [neon, neon:low]
+    aliases: [neon, neon:med]
     provider: agy
     name: gemini-4-neon
-    tier: low
+    tier: med
     roles: advisor, reviewer, developer
     cost: 48
     cost_by_tier: {med: 109, high: 219, xhigh: 384}
     extra_tiers: [xhigh]
-    eff: "?"
+    eff: "+"
     skills: Go? TUI? SQL?
-    use: Gemini 4 Neon; #3 on FrontierCode 2.0 (46.2% at high, $4.38/rollout). Costs are FrontierCode 2.0 rollout cost at luna:low = 1 ($0.02); issue 1243.
+    use: Owner guidance — Google ladder after hydrogen:low is neon:low, neon:med, neon:high; nothing above neon:high. Ranked 3rd on FrontierCode 2.0 (46.2% at high, $4.38/rollout). Costs are FrontierCode 2.0 rollout cost at luna:low = 1 ($0.02); issue 1243.
   agy:sonnet:
     provider: agy
     name: claude-sonnet-5-5
@@ -421,19 +422,19 @@ roles:
       channel; prompts stay short. Delete every helper when you are done
       (`harnez agent delete --name <n>`).
       If resuming a helper fails, write the follow-up into the ticket and start a fresh helper instead of retrying.
-      When codex has no quota, use agy:flash38 as the cross-vendor reviewer.
+      When codex has no quota, use agy:neon:med (or agy:argon:high on its separate plan) as the cross-vendor reviewer.
   developer:
     description: Implement assigned work, run checks, and commit the result.
     aliases: [dev, coder, worker, implementer]
     default_model: lean
     models:
-      lean: [terra:low]
-      std: [terra:med, opus:low]
-      smart: [terra:high, sol:med, opus:med]
-      tui: [smart]
+      lean: [terra:low, luna:high, haiku:high, neon:low]
+      std: [sol:low, luna:high, haiku:xhigh, neon:low]
+      smart: [sol:med, opus:high, neon:med]
+      tui: [lean]
       gui: [lean, std]
-      cheap: [luna:med]
-      fast: [haiku:med]
+      cheap: [luna:med, haiku:low, hydrogen:low]
+      fast: [haiku:low, luna:med, hydrogen:low]
     spawns: []
     rules: >-
       You are a leaf worker. The host repository's applications are your sole product;
@@ -448,10 +449,10 @@ roles:
     aliases: [review, critic, checker]
     default_model: smart
     models:
-      cheap: [haiku:high, luna:high]
-      lean: [terra:med, hydrogen:low]
-      smart: [sol:med, hydrogen:med, opus:med]
-      best: [sol:high, hydrogen:high, neon:high, opus:high, fable:high]
+      cheap: [haiku:low, luna:med, hydrogen:low]
+      lean: [terra:low, luna:high, neon:low, haiku:high]
+      smart: [sol:med, neon:med, opus:high]
+      best: [sol:high, neon:high, argon:high, fable:med]
     spawns: []
     auto_approve_tools: true
     rules: >-
@@ -463,7 +464,10 @@ roles:
     description: Research the code and return a concise read-only plan.
     aliases: [search, arch, explorer, scout, auditor, planner]
     default_model: cheap
-    models: {cheap: [luna:low, haiku:low], lean: [terra:med, hydrogen:low], smart: [opus:low, opus:med, sol:low]}
+    models:
+      cheap: [luna:med, haiku:low, hydrogen:low]
+      lean: [terra:low, luna:high, neon:low, haiku:high]
+      smart: [opus:high, neon:med, argon:high, sol:med]
     spawns: []
     auto_approve_tools: true
     rules: >-

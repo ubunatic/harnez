@@ -1,5 +1,67 @@
 # Model Assessment
 
+## 2026-11-20 Artificial Analysis snapshot and owner guidance
+
+Source: Artificial Analysis chart of Intelligence Index against cost per task (USD, log scale),
+two owner screenshots of 2026-11-20; the second adds Hydrogen low, Opus low and Sonnet low and
+medium. Values are read off the chart and are approximate. They are
+not mapped onto spec cost units: the chart uses a different benchmark and no `luna:low` anchor,
+so the FrontierCode 2.0 costs (issue 1243) stay.
+
+| Model, effort | Cost per task | Index | On the Pareto line |
+|---|---|---|---|
+| GPT-6 Luna, medium | ≈ $0.04 | ≈ 18 | yes |
+| Claude Haiku 5.5, low / medium / high / xhigh | ≈ $0.045 / $0.09 / $0.16 / $0.25 | ≈ 18 / 24 / 30 / 34 | low only |
+| GPT-6.1 Terra, low / medium / high / xhigh | ≈ $0.07 / $0.17 / $0.26 / $0.40 | ≈ 29 / 38 / 42 / 45 | low to high |
+| GPT-6.2 Sol, low / medium | ≈ $0.18 / $0.40 | ≈ 40 / 52 | yes |
+| GPT-6.2 Sol, high and xhigh | ≈ $0.55–0.62 | ≈ 55 | yes; the labels do not say which point is which |
+| Gemini 4 Hydrogen, low / medium / high / xhigh | ≈ $0.29 / $0.80 / $1.9 / $3.2 | ≈ 27 / 41 / 51 / 54 | no |
+| Gemini 4 Neon, low / medium / high / xhigh | ≈ $0.75 / $1.9 / $3.7 / $6.5 | ≈ 44 / 55 / 60 / 61 | no |
+| Gemini 4 Argon, medium / high | ≈ $4.3 / $5.0 | ≈ 48 / 50 | no |
+| Claude Sonnet 5.5, low / medium / high | ≈ $0.52 / $0.77 / $1.6 | ≈ 26 / 31 / 41 | no |
+| Claude Opus 5.5, low / medium / high | ≈ $0.98 / $2.5 / $3.6 | ≈ 35 / 48 / 52 | no |
+| Claude Fable 5.2, medium | ≈ $3.8 | ≈ 56 | no |
+| Gemini 3.8 Flash, medium / high | ≈ $6.3 / $7.8 | ≈ 30 / 31 | no |
+
+- The chart lists `GPT-6.2 Sol` and `GPT-6.1 Terra`, matching the spec names `gpt-6.2-sol` and
+  `gpt-6.1-terra`. It shows no Astra, so `gpt-6.2-astra` is still unverified.
+- Owner guidance (2026-11-20), recorded in the `use` text in `spec/agent.yaml`:
+  - Sol 6.2 is the new frontier at OK cost. `sol:med` and `sol:high` fit mid, high and best tasks
+    in any category. `sol:low` may be very cost-effective but is untested. The chart backs this:
+    Sol low through high are on the Pareto line.
+  - `sol:low` supersedes `terra:med` and above. `terra:low` remains a `haiku:high`-level option
+    from another vendor. The chart agrees: Sol low (≈ $0.18, ≈ 40) beats Terra medium
+    (≈ $0.17, ≈ 38) and Terra high.
+- Pick policy (owner decision, 2026-11-20): each role trait lists one model per vendor (OpenAI,
+  Anthropic, Google), each that vendor's most cost-effective fit for the trait. Harnez runs on
+  15–30 USD subscriptions, not API prices, and vendors subsidise them by a factor of roughly
+  10–30 that differs by vendor and possibly by model. API costs such as this chart's therefore
+  do not compare across vendors, and a cheaper vendor never removes another from a chain.
+- Accounts differ. Without an OpenAI subscription only Luna is usable, so each OpenAI pick above
+  `luna:med` is followed by `luna:high`; the chain skips models marked unsupported for the
+  account. Argon runs on a separate Google plan, so it follows Neon where its quota is useful.
+- The chart shows cost against intelligence only, not speed.
+- Hydrogen low (≈ 27 at ≈ $0.29) matches Gemini 3.8 Flash (≈ 30 at ≈ $6.3) at about a twentieth of
+  the cost, which backs replacing `flash38` with `hydrogen:low`.
+- Owner ladders per vendor:
+  - OpenAI with a subscription: `luna:med`, `terra:low`, `sol:low`, `sol:med`, `sol:high`.
+    `sol:xhigh` and `sol:max` add little for their cost; `luna:high` is not worth it.
+    Without a subscription: `luna:med`, `luna:high`.
+  - Anthropic: `haiku:low` for very cheap, fast, simple work, then `haiku:high` as a capable
+    developer (skip `haiku:med`), then `haiku:xhigh`, then `opus:high` for reviews and judgment, and
+    `fable:med` at the top. Opus low (≈ 35 at ≈ $0.98) is no better than Haiku xhigh (≈ 34.5 at
+    ≈ $0.25), so the ladder skips it. Haiku's subscription subsidy is said to be lower than for
+    larger models, so `opus:high` may pay off sooner than the API prices suggest.
+  - Google: `hydrogen:low` as the cheap, fast model (it replaces `flash38`), then Neon:
+    `neon:low`, `neon:med`, `neon:high`, nothing higher. `hydrogen:med` replaces `neon:low` only if
+    Hydrogen's subsidy proves better; `neon:med` is well above `hydrogen:high`. `argon:high`
+    (skip `argon:med`) serves as reviewer, advisor or consultant, not as orchestrator: the Gemini
+    orchestrator variants think long and slow.
+- Trait mapping: `cheap` and `fast` use the first rung (`luna:med`, `haiku:low`, `hydrogen:low`);
+  `lean` uses `terra:low`, `haiku:high`, `neon:low`; developer `std` uses `sol:low`, `haiku:xhigh`,
+  `neon:low`; `smart` uses `sol:med`, `opus:high`, `neon:med`; reviewer `best` uses `sol:high`,
+  `neon:high`, `argon:high`, `fable:med`.
+
 ## 2026-11-10 Cost vs Capability Chart (issue 1211)
 
 `harnez agent models --chart` renders a 2D Braille terminal chart mapping relative cost
