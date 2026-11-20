@@ -1,6 +1,6 @@
 # 1252 — Update tests for the 2026-11-20 vendor-ladder model picks
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
@@ -67,7 +67,21 @@ and the other fast failing packages; the sandbox alone fails 147 tests in the fi
   the chain head instead of an account-dependent resolution.
 - No branch-only failures remain in the compared packages; the root package passes.
 - Not compared: `internal/server` and `internal/usage` hit the 100 s timeout in the sandbox.
-- Behaviour note for review: sessions recorded on `gpt-6.1-sol` count as a removed model after
-  the rename and cannot resume.
+- Sessions recorded on `gpt-6.1-sol` count as a removed model after the rename and cannot
+  resume. Owner (2026-11-20): accepted; old sessions will not be resumed.
 
-Remaining: one full `make test-q1` on the host, then the PR.
+## 5. Owner decision: tests derive expectations from the spec (2026-11-20)
+
+Updating literal values only moves the problem: the next catalog update breaks the same tests
+again. Tests must read expected values from the loaded spec (default tier, chain head, model
+name, compaction threshold, cost) or assert properties and ranges (resolves, tier is one of the
+model's tiers, threshold positive, chain has one entry per vendor), never copy spec literals.
+Keep literals only in tests that build their own synthetic spec or policy.
+
+Targets: the tests touched in `157da616` (`driver_test.go`, `agy_test.go`, `compact_test.go`,
+`agentspec_test.go`, `purpose_test.go`, `agent_role_test.go`, `agent_fallback_test.go`,
+`agent_test.go`, `agent_picks_test.go`, `agent_resume_test.go`, `agent_cost_test.go`,
+`modelcatalog/load_external_test.go`). Check: change a default tier and a pick in a scratch
+copy of `spec/agent.yaml`; no test outside spec-validation tests may fail.
+
+Remaining: the refactor above, one full `make test-q1` on the host, then the PR.
