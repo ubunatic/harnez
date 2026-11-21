@@ -38,4 +38,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1258 | [1258-make-promote-writes-gobin-while-make-install-writes-local-bin.md](1258-make-promote-writes-gobin-while-make-install-writes-local-bin.md) | make promote writes GOBIN while make install writes ~/.local/bin | Open |
 | 1259 | [1259-cmd-harnez-and-selfinstall-tests-fail-inside-taia-long-socket-paths-and-staged-root-permission.md](1259-cmd-harnez-and-selfinstall-tests-fail-inside-taia-long-socket-paths-and-staged-root-permission.md) | cmd/harnez and selfinstall tests fail inside taia: long socket paths and staged root permission | Open |
 | 1260 | [1260-tests-leak-model-blocks-into-the-shared-test-state-dir.md](1260-tests-leak-model-blocks-into-the-shared-test-state-dir.md) | Tests leak model blocks into the shared test state dir | Open |
+| 1261 | [1261-pr-wait-keeps-polling-a-pr-with-merge-conflicts-exit-so-the-waiter-can-react.md](1261-pr-wait-keeps-polling-a-pr-with-merge-conflicts-exit-so-the-waiter-can-react.md) | pr wait keeps polling a PR with merge conflicts; exit so the waiter can react | Open |
 <!-- harnez:end issues-active-index -->
