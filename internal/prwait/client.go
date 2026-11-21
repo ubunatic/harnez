@@ -59,6 +59,35 @@ func (f *HTTPFetcher) Fetch(t Target) (PullInfo, error) {
 	return info, nil
 }
 
+// Comparer answers --contains through the forge API: is sha reachable from branch.
+type Comparer interface {
+	OnBranch(t Target, branch, sha string) (bool, error)
+}
+
+// CompareURL is the REST endpoint comparing branch (base) with sha (head). Forgejo and GitHub
+// share the path and report the commits in sha that branch lacks as total_commits.
+func CompareURL(t Target, branch, sha string) string {
+	return fmt.Sprintf("%s/repos/%s/%s/compare/%s...%s",
+		strings.TrimSuffix(t.Forge.APIBase, "/"),
+		url.PathEscape(t.Owner), url.PathEscape(t.Repo), url.PathEscape(branch), url.PathEscape(sha))
+}
+
+// OnBranch reports whether sha is on branch: the compare lists no commits that branch lacks.
+// An unknown sha (for example one never pushed) is an error, so the caller falls back to git.
+func (f *HTTPFetcher) OnBranch(t Target, branch, sha string) (bool, error) {
+	what := fmt.Sprintf("comparing %s...%s for %s/%s on %s", branch, sha, t.Owner, t.Repo, t.Forge.Host)
+	var cmp struct {
+		TotalCommits *int `json:"total_commits"`
+	}
+	if err := forge.GetJSON(f.Client, t.Forge, CompareURL(t, branch, sha), f.tokenFor(t.Forge), what, "", &cmp); err != nil {
+		return false, err
+	}
+	if cmp.TotalCommits == nil {
+		return false, fmt.Errorf("compare response %s lacks total_commits", what)
+	}
+	return *cmp.TotalCommits == 0, nil
+}
+
 func (f *HTTPFetcher) tokenFor(fg Forge) string {
 	if f.Token == nil {
 		return ""

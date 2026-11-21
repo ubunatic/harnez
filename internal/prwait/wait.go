@@ -1,6 +1,7 @@
 package prwait
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
@@ -24,12 +25,13 @@ func (SystemClock) Sleep(d time.Duration) { time.Sleep(d) }
 type Outcome int
 
 const (
-	Merged         Outcome = iota // exit 0
-	Failed                        // exit 1: local failure such as a git error
-	ClosedUnmerged                // exit 2
-	TimedOut                      // exit 3
-	APIFailed                     // exit 4
-	NotOnBranch                   // exit 5: merged, but --contains sha is not on the default branch
+	Merged             Outcome = iota // exit 0
+	Failed                            // exit 1: local failure such as a git error
+	ClosedUnmerged                    // exit 2
+	TimedOut                          // exit 3
+	APIFailed                         // exit 4
+	NotOnBranch                       // exit 5: merged, but --contains sha is not on the default branch
+	ContainsUnverified                // exit 6: merged, but neither the forge nor local git could check --contains
 )
 
 // ExitCode is the process exit code for the outcome.
@@ -58,10 +60,12 @@ type Result struct {
 }
 
 // Waiter polls a pull request until it is merged, closed, or the timeout passes.
+// Compare is optional; without it --contains uses local git only.
 type Waiter struct {
-	Fetch Fetcher
-	Clock Clock
-	Git   GitOps
+	Fetch   Fetcher
+	Clock   Clock
+	Git     GitOps
+	Compare Comparer
 }
 
 // Wait polls until a terminal state. The first poll happens immediately.
@@ -105,18 +109,36 @@ func (w Waiter) Wait(o Options) Result {
 }
 
 // afterMerge runs the optional --contains check: the commit must be on the default branch.
+// The forge API answers first; local git is the fallback. A seen merge never ends in Failed
+// (issue 1248): when neither path can answer, the outcome is ContainsUnverified.
 func (w Waiter) afterMerge(o Options, info PullInfo) Result {
 	if o.Contains == "" {
 		return Result{Outcome: Merged, Info: info}
 	}
+	var apiErr error
+	if w.Compare != nil {
+		on, err := w.Compare.OnBranch(o.Target, o.Branch, o.Contains)
+		if err == nil {
+			return containsResult(on, info)
+		}
+		apiErr = fmt.Errorf("forge compare: %w", err)
+	}
+	on, gitErr := w.localContains(o)
+	if gitErr == nil {
+		return containsResult(on, info)
+	}
+	return Result{Outcome: ContainsUnverified, Info: info, Err: errors.Join(apiErr, gitErr)}
+}
+
+func (w Waiter) localContains(o Options) (bool, error) {
 	if err := w.Git.FetchRemote(o.Dir, o.Remote); err != nil {
-		return Result{Outcome: Failed, Info: info, Err: err}
+		return false, err
 	}
-	ok, err := w.Git.IsAncestor(o.Dir, o.Contains, o.Remote+"/"+o.Branch)
-	if err != nil {
-		return Result{Outcome: Failed, Info: info, Err: err}
-	}
-	if !ok {
+	return w.Git.IsAncestor(o.Dir, o.Contains, o.Remote+"/"+o.Branch)
+}
+
+func containsResult(on bool, info PullInfo) Result {
+	if !on {
 		return Result{Outcome: NotOnBranch, Info: info}
 	}
 	return Result{Outcome: Merged, Info: info}
@@ -139,6 +161,9 @@ func (r Result) Summary(t Target, o Options) string {
 		return fmt.Sprintf("PR %d still open after %s: state=%s url=%s", t.Number, o.Timeout, stateOrUnknown(r.Info.State), page)
 	case NotOnBranch:
 		return fmt.Sprintf("PR %d merged as %s, but %s is not on %s/%s: url=%s",
+			t.Number, r.Info.MergeCommitSHA, o.Contains, o.Remote, o.Branch, page)
+	case ContainsUnverified:
+		return fmt.Sprintf("PR %d merged as %s, but whether %s is on %s/%s is unverified: url=%s",
 			t.Number, r.Info.MergeCommitSHA, o.Contains, o.Remote, o.Branch, page)
 	default:
 		return ""
