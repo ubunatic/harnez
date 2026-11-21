@@ -23,7 +23,7 @@ func TestPolicyLoadErrorPath(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "harnez"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	data := "version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\nroles: {developer: {models: {smart: [tui]}}}\n"
+	data := "version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\nroles: {developer: {models: {smart: [tui], tui: [smart]}}}\n"
 	if err := os.WriteFile(filepath.Join(dir, "harnez", "models.yaml"), []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestMergeRolePolicyRejectsInvalid(t *testing.T) {
 		want              string
 	}{
 		{"role", "unknown", "smart", []string{"sol:med"}, "unknown role"},
-		{"cycle", "developer", "smart", []string{"tui"}, "cycle"},
+		{"cycle", "developer", "smart", []string{"smart"}, "cycle"},
 		{"unknown", "developer", "smart", []string{"missing-model"}, "target"},
 		{"tier", "developer", "low", []string{"sol:med"}, "invalid trait"},
 		{"collision", "developer", "sol", []string{"sol:med"}, "collides"},

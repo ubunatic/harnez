@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -61,6 +63,9 @@ func TestPickDocsMatchAgentSpec(t *testing.T) {
 	}
 }
 
+// guidanceModelRef matches model:tier specs such as sol:med or claude:haiku:high in guidance text.
+var guidanceModelRef = regexp.MustCompile(`\b[a-z][a-z0-9]*(?::[a-z][a-z0-9]*)?:(?:low|med|high|xhigh|max)\b`)
+
 func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	data, err := fs.ReadFile(harnez.DefaultFS, "spec/agent.yaml")
 	if err != nil {
@@ -72,47 +77,36 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if err := yaml.Unmarshal(data, &spec); err != nil {
 		t.Fatal(err)
 	}
-	flash38 := spec.Models["agy:flash38"]
-	if flash38.Cost != 4 {
-		t.Errorf("agy:flash38 cost = %d, want 4 (agy quota cost remains unmeasured)", flash38.Cost)
-	}
-	if flash38.Roles != "reviewer, advisor, developer" {
-		t.Errorf("agy:flash38 roles = %q, want reviewer, advisor, developer", flash38.Roles)
-	}
-	for _, name := range []string{"agy:neon", "agy:hydrogen", "agy:argon", "agy:flash38"} {
-		if !strings.Contains(spec.Models[name].Roles, "developer") {
-			t.Errorf("%s roles = %q, want developer role (owner decision, issue 1243)", name, spec.Models[name].Roles)
-		}
-	}
-	if sonnet := spec.Models["agy:sonnet"]; strings.Contains(sonnet.Roles, "developer") {
-		t.Errorf("agy:sonnet roles = %q, want no developer role", sonnet.Roles)
-	}
-	if sonnet := spec.Models["agy:sonnet"]; !strings.Contains(sonnet.Use, "reviewer when Claude quota is out") || strings.Contains(sonnet.Use, "developer") {
-		t.Errorf("agy:sonnet use = %q, want reviewer-only guidance when Claude quota is out", sonnet.Use)
-	}
-	if luna := spec.Models["codex:luna"]; !strings.Contains(luna.Use, "background and mechanical work") || !strings.Contains(luna.UseMed, "low-cost developer option") || !strings.Contains(luna.UseMed, "well-specified implementation and tests") {
-		t.Errorf("codex:luna guidance = %q / %q, want background work and low-cost developer guidance", luna.Use, luna.UseMed)
-	}
-	if sol := spec.Models["codex:sol"]; !strings.Contains(sol.Use, "judgment") {
-		t.Errorf("codex:sol use = %q, want judgment guidance", sol.Use)
-	}
-	if terra := spec.Models["codex:terra"]; terra.Use != "Efficient-frontier Codex developer for hard tasks; cost not yet recalibrated (no FrontierCode 2.0 row, issue 1243); use terra:high before escalating to sol:med or sol:high, and reserve Sol for the hardest judgment." || terra.Roles != "developer, advisor, reviewer" {
-		t.Errorf("codex:terra guidance = %q, roles = %q", terra.Use, terra.Roles)
-	}
-	haiku := spec.Models["claude:haiku"]
-	if !strings.Contains(haiku.Use, "haiku:med for easy tasks") || !strings.Contains(haiku.Use, "haiku:low for very simple, repetitive tasks") || !strings.Contains(haiku.Use, "100k") || !strings.Contains(haiku.Use, "5x") || !strings.Contains(haiku.Use, "harnez compacts Haiku at 80k by default; override via agent.compact_thresholds") {
-		t.Errorf("claude:haiku use = %q, want tier, price-step and compaction guidance", haiku.Use)
-	}
+	// Roles are owner picks that change with the catalog; test only that each
+	// listed role exists (mechanical is a listing label, not a spawnable role).
+	roles := shippedSpec(t).Roles
 	for name, model := range spec.Models {
-		if strings.Contains(model.Use, "haiku:high") || strings.Contains(model.UseMed, "haiku:high") {
-			t.Errorf("%s recommends haiku:high in model guidance", name)
+		for _, role := range strings.Split(model.Roles, ",") {
+			role = strings.TrimSpace(role)
+			if _, ok := roles[role]; !ok && role != "mechanical" && role != "" {
+				t.Errorf("%s lists unknown role %q", name, role)
+			}
 		}
 	}
-	if haiku.GuidanceSourceURL != "https://code.claude.com/docs/en/model-config#haiku-55-context-window-and-pricing" {
-		t.Errorf("claude:haiku guidance_source_url = %q, want official pricing source", haiku.GuidanceSourceURL)
-	}
-	if flash38 := spec.Models["agy:flash38"]; !strings.Contains(flash38.UseMed, "preprocess") {
-		t.Errorf("agy:flash38 use_med = %q, want routing/preprocessing guidance", flash38.UseMed)
+	// Guidance wording is owner prose and changes with every reassessment; test
+	// only that it exists and that the model:tier specs it names still resolve.
+	for name, model := range spec.Models {
+		if strings.TrimSpace(model.Use) == "" {
+			t.Errorf("%s has no use guidance", name)
+		}
+		for _, text := range []string{model.Use, model.UseMed} {
+			for _, ref := range guidanceModelRef.FindAllString(text, -1) {
+				if _, err := ResolveModel(ref); err != nil {
+					t.Errorf("%s guidance names %q, which does not resolve: %v", name, ref, err)
+				}
+			}
+		}
+		if model.GuidanceSourceURL == "" {
+			continue
+		}
+		if u, err := url.Parse(model.GuidanceSourceURL); err != nil || u.Scheme != "https" || u.Host == "" {
+			t.Errorf("%s guidance_source_url = %q, want an https URL", name, model.GuidanceSourceURL)
+		}
 	}
 	skill, err := fs.ReadFile(harnez.DefaultFS, "docs/commands/lean-sprint.md")
 	if err != nil {
@@ -145,23 +139,21 @@ func TestLeafRolesDefineCoreTraits(t *testing.T) {
 }
 
 func TestKnownModelEntriesCostByTierAndEffortRows(t *testing.T) {
-	wantCosts := map[string]int{
-		"codex:luna:low": 1, "codex:luna:med": 5, "codex:luna:high": 6,
-		"codex:sol:low": 17, "codex:sol:med": 25, "codex:sol:high": 33,
-		"agy:neon:low": 48, "agy:neon:med": 109, "agy:neon:high": 219, "agy:neon:xhigh": 384,
-		"codex:terra:low": 15, "codex:terra:med": 24, "codex:terra:high": 36,
-		"codex:astra:low": 182, "codex:astra:med": 342, "codex:astra:high": 384,
+	guides := shippedGuides(t)
+	entries := KnownModelEntries()
+	if len(entries) == 0 {
+		t.Fatal("no model entries")
 	}
-	for _, entry := range KnownModelEntries() {
-		if want, ok := wantCosts[entry.Spec]; ok {
-			if entry.Cost != want {
-				t.Errorf("%s cost = %d, want %d", entry.Spec, entry.Cost, want)
-			}
-			delete(wantCosts, entry.Spec)
+	for _, entry := range entries {
+		i := strings.LastIndex(entry.Spec, ":")
+		guide, ok := guides[entry.Spec[:i]]
+		if !ok {
+			t.Errorf("%s has no spec model entry", entry.Spec)
+			continue
 		}
-	}
-	for spec := range wantCosts {
-		t.Errorf("missing model entry %s", spec)
+		if want := expectedCost(guide, entry.Model.Tier); entry.Cost != want || want < 0 {
+			t.Errorf("%s cost = %d, want spec cost %d", entry.Spec, entry.Cost, want)
+		}
 	}
 }
 
@@ -419,25 +411,19 @@ func TestResolveModelBareAliases(t *testing.T) {
 	}
 }
 
-func TestCodexSolAndLunaResolveToGPT6(t *testing.T) {
-	for alias, want := range map[string]string{
-		"sol":            "gpt-6.1-sol",
-		"codex:sol":      "gpt-6.1-sol",
-		"codex:sol:low":  "gpt-6.1-sol",
-		"luna":           "gpt-6-luna",
-		"codex:luna":     "gpt-6-luna",
-		"codex:luna:med": "gpt-6-luna",
-	} {
-		model, err := ResolveModel(alias)
-		if err != nil {
-			t.Fatalf("ResolveModel(%q): %v", alias, err)
+func TestCodexModelsResolveToGPT(t *testing.T) {
+	checked := 0
+	for key, entry := range shippedModels(t) {
+		if entry.Model.Provider != "codex" {
+			continue
 		}
-		if model.Name != want {
-			t.Errorf("ResolveModel(%q).Name = %q, want %q", alias, model.Name, want)
+		if !strings.HasPrefix(entry.Model.Name, "gpt-") {
+			t.Errorf("%s name = %q, want a gpt- model", key, entry.Model.Name)
 		}
-		if model.Provider != "codex" {
-			t.Errorf("ResolveModel(%q).Provider = %q, want codex", alias, model.Provider)
-		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatal("no codex models in the spec")
 	}
 }
 
@@ -703,30 +689,15 @@ func TestIsCostlyModel(t *testing.T) {
 }
 
 func TestModelCost(t *testing.T) {
-	for _, tc := range []struct {
-		spec     string
-		wantCost int
-		wantOK   bool
-	}{
-		{"codex:luna:low", 1, true},
-		{"codex:astra:low", 182, true},
-		{"codex:astra:med", 342, true},
-		{"codex:astra:high", 384, true},
-		{"gpt-6-astra:med", 342, true},
-		{"codex:sol:high", 33, true},
-		{"codex:luna:med", 5, true},
-		{"neon:xhigh", 384, true},
-		{"agy:neon:med", 109, true},
-		{"agy:argon:high", 326, true},
-		{"claude:fable:low", 131, true},
-	} {
-		m, err := ResolveModel(tc.spec)
-		if err != nil {
-			t.Fatalf("ResolveModel(%q): %v", tc.spec, err)
-		}
-		got, ok := ModelCost(m)
-		if got != tc.wantCost || ok != tc.wantOK {
-			t.Errorf("ModelCost(%q) = (%d, %v), want (%d, %v)", tc.spec, got, ok, tc.wantCost, tc.wantOK)
+	guides := shippedGuides(t)
+	for _, entry := range KnownModelEntries() {
+		i := strings.LastIndex(entry.Spec, ":")
+		want := expectedCost(guides[entry.Spec[:i]], entry.Model.Tier)
+		for _, spec := range []string{entry.Spec, entry.Model.Provider + ":" + entry.Model.Name + ":" + entry.Model.Tier} {
+			got, ok := ModelCost(mustResolve(t, spec))
+			if got != want || ok != (want > 0) {
+				t.Errorf("ModelCost(%q) = (%d, %v), want (%d, %v)", spec, got, ok, want, want > 0)
+			}
 		}
 	}
 }

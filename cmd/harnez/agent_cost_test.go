@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -36,8 +37,34 @@ func (d *stubCostDriver) Compact(context.Context, string, subagent.Model) (*suba
 	return &subagent.TurnResult{}, nil
 }
 
+// costlyAndCheapEntries returns the first costly and the first cheap shipped
+// model entry with a known cost, so the tests follow spec/agent.yaml (issue 1252).
+func costlyAndCheapEntries(t *testing.T) (costly, cheap subagent.ModelEntry) {
+	t.Helper()
+	for _, e := range subagent.KnownModelEntries() {
+		isCostly, err := subagent.IsCostlyModelFor(e.Model)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if e.Cost <= 0 {
+			continue
+		}
+		if isCostly && costly.Spec == "" {
+			costly = e
+		}
+		if !isCostly && cheap.Spec == "" {
+			cheap = e
+		}
+	}
+	if costly.Spec == "" || cheap.Spec == "" {
+		t.Fatalf("spec needs a costly and a cheap model with a cost: costly=%q cheap=%q", costly.Spec, cheap.Spec)
+	}
+	return costly, cheap
+}
+
 func TestAcceptCostStartAndResume(t *testing.T) {
 	now := time.Now().UTC()
+	costlyEntry, cheapEntry := costlyAndCheapEntries(t)
 	freshAvail := func(string, string) usage.ProviderQuotaAvailability {
 		return usage.ProviderQuotaAvailability{
 			State: "available",
@@ -79,28 +106,31 @@ func TestAcceptCostStartAndResume(t *testing.T) {
 	}
 
 	// Cheap model starts without --accept-cost or costly warning.
-	if _, stderr, err := runStartCase("codex:luna:low", false, freshAvail); err != nil || strings.Contains(stderr, "Warning: using costly model") {
+	if _, stderr, err := runStartCase(cheapEntry.Spec, false, freshAvail); err != nil || strings.Contains(stderr, "Warning: using costly model") {
 		t.Fatalf("cheap start failed: err=%v stderr=%q", err, stderr)
 	}
 	if d.runs != 1 {
 		t.Fatalf("runs=%d, want 1", d.runs)
 	}
 
-	// Each costly model (including aliases and official names) is refused without --accept-cost.
-	for _, tc := range []struct {
+	// Each costly model (also by official name) is refused without --accept-cost,
+	// naming its spec, relative cost and quota; stale quota reads as unknown.
+	type costlyCase struct {
 		spec, wantModel, wantCost, wantQuota string
 		avail                                func(string, string) usage.ProviderQuotaAvailability
-	}{
-		{"codex:sol:high", "codex:sol:high", "33", "5h 80%, weekly 65%", freshAvail},
-		{"sol:high", "codex:sol:high", "33", "5h 80%, weekly 65%", freshAvail},
-		{"agy:argon:high", "agy:argon:high", "326", "unknown", staleAvail},
-		{"gemini-4-argon:high", "agy:argon:high", "326", "unknown", staleAvail},
-		{"agy:neon:high", "agy:neon:high", "219", "unknown", staleAvail},
-		{"agy:neon:xhigh", "agy:neon:xhigh", "384", "unknown", staleAvail},
-		{"codex:astra:low", "codex:astra:low", "182", "5h 80%, weekly 65%", freshAvail},
-		{"gpt-6-astra:med", "codex:astra:med", "342", "5h 80%, weekly 65%", freshAvail},
-		{"claude:fable:high", "claude:fable:high", "420", "unknown", staleAvail},
-	} {
+	}
+	var cases []costlyCase
+	for _, e := range subagent.KnownModelEntries() {
+		if isCostly, err := subagent.IsCostlyModelFor(e.Model); err != nil || !isCostly {
+			continue
+		}
+		cost := strconv.Itoa(e.Cost)
+		cases = append(cases, costlyCase{e.Spec, e.Spec, cost, "5h 80%, weekly 65%", freshAvail})
+		if m, err := subagent.ResolveModel(e.Model.Name + ":" + e.Model.Tier); err == nil && m.Spec() == e.Spec {
+			cases = append(cases, costlyCase{e.Model.Name + ":" + e.Model.Tier, e.Spec, cost, "unknown", staleAvail})
+		}
+	}
+	for _, tc := range cases {
 		_, _, err := runStartCase(tc.spec, false, tc.avail)
 		if err == nil {
 			t.Fatalf("%s: expected refusal without --accept-cost", tc.spec)
@@ -117,11 +147,11 @@ func TestAcceptCostStartAndResume(t *testing.T) {
 	}
 
 	// Passing --accept-cost prints one stderr warning line and starts.
-	_, stderr, err := runStartCase("codex:astra:low", true, freshAvail)
+	_, stderr, err := runStartCase(costlyEntry.Spec, true, freshAvail)
 	if err != nil {
 		t.Fatalf("accepted costly start failed: %v", err)
 	}
-	if strings.Count(stderr, "Warning: using costly model") != 1 || !strings.Contains(stderr, "182") || !strings.Contains(stderr, "5h 80%, weekly 65%") {
+	if strings.Count(stderr, "Warning: using costly model") != 1 || !strings.Contains(stderr, strconv.Itoa(costlyEntry.Cost)) || !strings.Contains(stderr, "5h 80%, weekly 65%") {
 		t.Fatalf("stderr warning = %q, want one warning line with cost and quota", stderr)
 	}
 	if d.runs != 2 {
@@ -134,7 +164,7 @@ func TestAcceptCostStartAndResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sess := &subagent.Session{ID: "sid", Name: "costly", Provider: "codex", Model: "gpt-6-astra", Tier: "low", Role: "advisor", WorkingDir: t.TempDir(), Status: "completed", HarnessType: "harnez"}
+	sess := &subagent.Session{ID: "sid", Name: "costly", Provider: costlyEntry.Model.Provider, Model: costlyEntry.Model.Name, Tier: costlyEntry.Model.Tier, Role: "advisor", WorkingDir: t.TempDir(), Status: "completed", HarnessType: "harnez"}
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
@@ -154,13 +184,13 @@ func TestAcceptCostStartAndResume(t *testing.T) {
 		err := runResume(context.Background(), cmd, deps, resumeRequest{Name: "costly", Prompt: "next", StreamMode: streamFull, AcceptCost: acceptCost})
 		return errOut.String(), err
 	}
-	if _, err := runResumeCase(false); err == nil || !strings.Contains(err.Error(), "codex:astra:low") || !strings.Contains(err.Error(), "--accept-cost") {
+	if _, err := runResumeCase(false); err == nil || !strings.Contains(err.Error(), costlyEntry.Spec) || !strings.Contains(err.Error(), "--accept-cost") {
 		t.Fatalf("resume without --accept-cost = %v, want refusal", err)
 	}
 	if d.resumes != 0 {
 		t.Fatalf("driver resumed despite refusal: resumes=%d", d.resumes)
 	}
-	if stderr, err := runResumeCase(true); err != nil || !strings.Contains(stderr, "182") {
+	if stderr, err := runResumeCase(true); err != nil || !strings.Contains(stderr, strconv.Itoa(costlyEntry.Cost)) {
 		t.Fatalf("resume with --accept-cost err=%v stderr=%q", err, stderr)
 	}
 	if d.resumes != 1 {
@@ -169,16 +199,17 @@ func TestAcceptCostStartAndResume(t *testing.T) {
 }
 
 func TestAcceptCostDryRunAndPickFallback(t *testing.T) {
+	costlyEntry, cheapEntry := costlyAndCheapEntries(t)
 	if os.Getenv("TEST_1210_PICK_CHILD") == "1" {
 		sel, err := subagent.ResolveModelWithOptions("advisor", "smart", subagent.ResolveOptions{AcceptCost: false})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if sel.Model.Spec() != "codex:luna:low" || !strings.Contains(strings.Join(sel.Skipped, "; "), "costly model") {
+		if sel.Model.Spec() != cheapEntry.Spec || !strings.Contains(strings.Join(sel.Skipped, "; "), "costly model") {
 			t.Fatalf("without accept-cost: %+v", sel)
 		}
 		sel2, err := subagent.ResolveModelWithOptions("advisor", "smart", subagent.ResolveOptions{AcceptCost: true})
-		if err != nil || sel2.Model.Spec() != "codex:sol:high" {
+		if err != nil || sel2.Model.Spec() != costlyEntry.Spec {
 			t.Fatalf("with accept-cost: %+v err=%v", sel2, err)
 		}
 		return
@@ -188,7 +219,7 @@ func TestAcceptCostDryRunAndPickFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sess := &subagent.Session{ID: "sid", Name: "costly", Provider: "codex", Model: "gpt-6-astra", Tier: "low", Role: "advisor", WorkingDir: t.TempDir(), Status: "completed", HarnessType: "harnez"}
+	sess := &subagent.Session{ID: "sid", Name: "costly", Provider: costlyEntry.Model.Provider, Model: costlyEntry.Model.Name, Tier: costlyEntry.Model.Tier, Role: "advisor", WorkingDir: t.TempDir(), Status: "completed", HarnessType: "harnez"}
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
@@ -206,9 +237,9 @@ func TestAcceptCostDryRunAndPickFallback(t *testing.T) {
 		model, want string
 		accept      bool
 	}{
-		{"codex:astra:low", "accept-cost: required (pass --accept-cost; relative cost 182 (codex:luna:low = 1), quota left: unknown)", false},
-		{"codex:astra:low", "accept-cost: accepted (relative cost 182 (codex:luna:low = 1), quota left: unknown)", true},
-		{"codex:luna:low", "accept-cost: not required", false},
+		{costlyEntry.Spec, "accept-cost: required (pass --accept-cost; relative cost " + strconv.Itoa(costlyEntry.Cost) + " (", false},
+		{costlyEntry.Spec, "accept-cost: accepted (relative cost " + strconv.Itoa(costlyEntry.Cost) + " (", true},
+		{cheapEntry.Spec, "accept-cost: not required", false},
 	} {
 		var out bytes.Buffer
 		cmd := &cobra.Command{}
@@ -233,7 +264,7 @@ func TestAcceptCostDryRunAndPickFallback(t *testing.T) {
 	if err := os.MkdirAll(harnezDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	_ = os.WriteFile(filepath.Join(harnezDir, "models.yaml"), []byte("version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\nroles:\n  advisor:\n    models:\n      smart: [sol:high, luna:low]\n"), 0o600)
+	_ = os.WriteFile(filepath.Join(harnezDir, "models.yaml"), []byte("version: 1\ndefault_enabled: true\nenabled: []\nmodels: {}\nroles:\n  advisor:\n    models:\n      smart: ["+costlyEntry.Spec+", "+cheapEntry.Spec+"]\n"), 0o600)
 	t.Setenv("XDG_CONFIG_HOME", cfgDir)
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	proc := exec.Command(os.Args[0], "-test.run=^TestAcceptCostDryRunAndPickFallback$")

@@ -77,18 +77,18 @@ These are the shipped picks. User models.yaml overrides are listed by `harnez ag
 
 | Role | Trait | Meaning | Chain | Default |
 |---|---|---|---|---|
-| advisor | cheap | Low-cost work. | luna:low, haiku:low | yes |
-| advisor | lean | Efficient standard work. | terra:med, hydrogen:low |  |
-| advisor | smart | Difficult judgment. | opus:low, opus:med, sol:low |  |
-| developer | cheap | Low-cost work. | luna:med |  |
-| developer | fast | Fast work. | haiku:med |  |
+| advisor | cheap | Low-cost work. | luna:med, haiku:low, hydrogen:low | yes |
+| advisor | lean | Efficient standard work. | terra:low, luna:high, neon:low, haiku:high |  |
+| advisor | smart | Difficult judgment. | opus:high, neon:med, argon:high, sol:med |  |
+| developer | cheap | Low-cost work. | luna:med, haiku:low, hydrogen:low |  |
+| developer | fast | Fast work. | haiku:low, luna:med, hydrogen:low |  |
 | developer | gui | Graphical interfaces. | lean, std |  |
-| developer | lean | Efficient standard work. | terra:low | yes |
-| developer | smart | Difficult judgment. | terra:high, sol:med, opus:med |  |
-| developer | std | Standard work. | terra:med, opus:low |  |
-| developer | tui | Terminal interfaces. | smart |  |
-| reviewer | best | Hardest judgment, highest cost. | sol:high, hydrogen:high, neon:high, opus:high, fable:high |  |
-| reviewer | cheap | Low-cost work. | haiku:high, luna:high |  |
-| reviewer | lean | Efficient standard work. | terra:med, hydrogen:low |  |
-| reviewer | smart | Difficult judgment. | sol:med, hydrogen:med, opus:med | yes |
+| developer | lean | Efficient standard work. | terra:low, luna:high, haiku:high, neon:low | yes |
+| developer | smart | Difficult judgment. | sol:med, opus:high, neon:med |  |
+| developer | std | Standard work. | sol:low, luna:high, haiku:xhigh, neon:low |  |
+| developer | tui | Terminal interfaces. | lean |  |
+| reviewer | best | Hardest judgment, highest cost. | sol:high, neon:high, argon:high, fable:med |  |
+| reviewer | cheap | Low-cost work. | haiku:low, luna:med, hydrogen:low |  |
+| reviewer | lean | Efficient standard work. | terra:low, luna:high, neon:low, haiku:high |  |
+| reviewer | smart | Difficult judgment. | sol:med, neon:med, opus:high | yes |
 <!-- harnez:model-picks:end -->

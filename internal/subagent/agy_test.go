@@ -204,18 +204,16 @@ func TestAgyEffortMapping(t *testing.T) {
 	}
 }
 
-func TestNeonAliasesAndEffort(t *testing.T) {
-	for _, tc := range []struct{ spec, tier, effort string }{
-		{"neon", "low", "low"}, {"neon:low", "low", "low"},
-		{"agy:neon:med", "med", "medium"}, {"neon:high", "high", "high"},
-		{"neon:xhigh", "xhigh", "xhigh"},
-	} {
-		model, err := ResolveModel(tc.spec)
-		if err != nil {
-			t.Fatal(err)
+func TestAgyModelsResolveAndPassEffort(t *testing.T) {
+	checked := 0
+	for _, entry := range KnownModelEntries() {
+		want := entry.Model
+		if want.Provider != "agy" || !want.SupportsEffort() {
+			continue
 		}
-		if model.Provider != "agy" || model.Name != "gemini-4-neon" || model.Tier != tc.tier {
-			t.Fatalf("%s parsed as %+v", tc.spec, model)
+		model := mustResolve(t, entry.Spec)
+		if model.Provider != want.Provider || model.Name != want.Name || model.Tier != want.Tier {
+			t.Fatalf("%s parsed as %+v, want %+v", entry.Spec, model, want)
 		}
 		var args []string
 		d := AgyDriver{Dir: t.TempDir(), Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
@@ -225,39 +223,23 @@ func TestNeonAliasesAndEffort(t *testing.T) {
 		if _, err := d.Run(context.Background(), RunOptions{Prompt: "p", Model: model}); err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(args[2:6], []string{"--model", "gemini-4-neon", "--effort", tc.effort}) {
-			t.Fatalf("%s args = %#v", tc.spec, args)
+		if !reflect.DeepEqual(args[2:6], []string{"--model", want.Name, "--effort", effortArg(want.Tier)}) {
+			t.Fatalf("%s args = %#v", entry.Spec, args)
 		}
+		checked++
 	}
-	for _, bad := range []string{"neon:ultra", "agy:neon:bogus"} {
-		if _, err := ResolveModel(bad); err == nil {
-			t.Errorf("ResolveModel(%q) succeeded, want error", bad)
-		}
+	if checked == 0 {
+		t.Fatal("no agy model with effort tiers in the spec")
 	}
-}
-
-func TestArgonAliasesAndEffort(t *testing.T) {
-	for _, tc := range []struct{ spec, tier, effort string }{
-		{"argon", "low", "low"}, {"argon:low", "low", "low"},
-		{"agy:argon:med", "med", "medium"}, {"agy:argon:high", "high", "high"},
-	} {
-		model, err := ResolveModel(tc.spec)
-		if err != nil {
-			t.Fatal(err)
+	for key, entry := range shippedModels(t) {
+		if entry.Model.Provider != "agy" {
+			continue
 		}
-		if model.Provider != "agy" || model.Name != "gemini-4-argon" || model.Tier != tc.tier {
-			t.Fatalf("%s parsed as %+v", tc.spec, model)
+		if got := mustResolve(t, key); got.Tier != entry.Model.Tier {
+			t.Errorf("%s resolved to tier %q, want spec default %q", key, got.Tier, entry.Model.Tier)
 		}
-		var args []string
-		d := AgyDriver{Dir: t.TempDir(), Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
-			args = gotArgs
-			return []byte(`{"status":"SUCCESS","response":"ok"}`), nil
-		}}
-		if _, err := d.Run(context.Background(), RunOptions{Prompt: "p", Model: model}); err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(args[2:6], []string{"--model", "gemini-4-argon", "--effort", tc.effort}) {
-			t.Fatalf("%s args = %#v", tc.spec, args)
+		if _, err := ResolveModel(key + ":bogus"); err == nil {
+			t.Errorf("ResolveModel(%q) succeeded, want error", key+":bogus")
 		}
 	}
 }

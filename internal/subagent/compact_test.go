@@ -12,7 +12,7 @@ func TestCompactThresholdDefaultGlobalAndOverride(t *testing.T) {
 	t.Setenv("HOME", home)
 	m := Model{Provider: "codex", Name: "gpt", Tier: "high"}
 	got, err := CompactThreshold(m)
-	if err != nil || got != 200000 {
+	if err != nil || got != shippedSpec(t).CompactThreshold {
 		t.Fatalf("default threshold = %d, %v; want spec/agent.yaml compact_threshold_tokens", got, err)
 	}
 	config := "agent:\n  compact_threshold_tokens: 250000\n  compact_thresholds:\n    codex:gpt:high: 175000\n"
@@ -35,45 +35,56 @@ func TestCompactThresholdDefaultGlobalAndOverride(t *testing.T) {
 func TestCompactThresholdHaikuSpecAndUserPrecedence(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	for _, tc := range []struct {
-		name string
-		want int
-	}{
-		{"haiku", 80000}, {"claude:haiku:low", 80000}, {"claude:haiku:med", 80000},
-		{"claude:haiku:high", 80000}, {"claude:sonnet:low", 200000},
-		{"codex:luna:med", 100000}, {"codex:sol:low", 100000}, {"codex:terra:high", 100000},
-		{"strata", 80000}, {"strata-coder:qwen3.8-flash-next-coder-iq1_m", 80000},
-		{"strata-iq2", 80000}, {"strata-iq3", 80000},
-		{"strata:qwen3.8-flash-next-iq2_xs:low", 80000}, {"strata:qwen3.8-flash-next-iq3_xxs:low", 80000},
-	} {
-		model, err := ResolveModel(tc.name)
-		if err != nil {
-			t.Fatal(err)
+	spec := shippedSpec(t)
+	// Each model gets the first compact_thresholds key in lookup order (spec,
+	// provider:name, provider), else compact_threshold_tokens; every key is used.
+	used := map[string]bool{}
+	var pinned Model
+	for _, entry := range KnownModelEntries() {
+		m := entry.Model
+		want := spec.CompactThreshold
+		for _, key := range []string{m.Spec(), m.Provider + ":" + m.Name, m.Provider} {
+			if n, ok := spec.CompactThresholds[key]; ok {
+				want, used[key] = n, true
+				if key == m.Spec() && (pinned == Model{} || key < pinned.Spec()) {
+					pinned = m
+				}
+				break
+			}
 		}
-		got, err := CompactThreshold(model)
-		if err != nil || got != tc.want {
-			t.Errorf("%s: threshold = %d, %v; want %d", tc.name, got, err, tc.want)
+		if got, err := CompactThreshold(m); err != nil || got != want {
+			t.Errorf("%s: threshold = %d, %v; want %d", entry.Spec, got, err, want)
 		}
+	}
+	for key := range spec.CompactThresholds {
+		if !used[key] {
+			t.Errorf("compact_thresholds key %q matches no shipped model", key)
+		}
+	}
+	if (pinned == Model{}) {
+		t.Fatal("spec has no provider:model:tier compact_thresholds key")
+	}
+	// User config: a per-model key beats the spec; a global default does not.
+	specWant, err := CompactThreshold(pinned)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(home, ".harnez"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	model, err := ResolveModel("haiku")
-	if err != nil {
-		t.Fatal(err)
-	}
+	key := pinned.Spec()
 	for _, tc := range []struct {
 		config string
 		want   int
 	}{
-		{"agent:\n  compact_threshold_tokens: 150000\n", 80000},
-		{"agent:\n  compact_threshold_tokens: 150000\n  compact_thresholds:\n    claude:haiku:low: 120000\n", 120000},
-		{"agent:\n  compact_thresholds:\n    claude:haiku:low: 60000\n", 60000},
+		{"agent:\n  compact_threshold_tokens: 150000\n", specWant},
+		{"agent:\n  compact_threshold_tokens: 150000\n  compact_thresholds:\n    " + key + ": 120000\n", 120000},
+		{"agent:\n  compact_thresholds:\n    " + key + ": 60000\n", 60000},
 	} {
 		if err := os.WriteFile(filepath.Join(home, ".harnez", "config.yaml"), []byte(tc.config), 0600); err != nil {
 			t.Fatal(err)
 		}
-		got, err := CompactThreshold(model)
+		got, err := CompactThreshold(pinned)
 		if err != nil || got != tc.want {
 			t.Errorf("config %q: threshold = %d, %v; want %d", tc.config, got, err, tc.want)
 		}

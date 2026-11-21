@@ -7,29 +7,71 @@ import (
 )
 
 func TestRoleModelResolution(t *testing.T) {
-	for _, tc := range []struct{ role, pick, target string }{
-		{"dev", "lean", "terra:low"}, {"dev", "std", "terra:med"}, {"dev", "smart", "terra:high"},
-		{"dev", "tui", "terra:high"}, {"dev", "gui", "terra:low"}, {"dev", "cheap", "luna:med"},
-		{"dev", "fast", "haiku:med"}, {"review", "smart", "sol:med"}, {"review", "", "sol:med"},
-		{"review", "cheap", "haiku:high"}, {"review", "lean", "terra:med"}, {"advisor", "lean", "terra:med"},
-		{"", "smart", "terra:high"}, {"developer", "smart", "terra:high"}, {"advisor", "cheap", "luna:low"}, {"advisor", "smart", "opus:low"},
-		{"orchestrator", "", "claude:haiku:high"}, {"review", "codex:sol:med", "codex:sol:med"}, {"review", "sol", "sol"},
-	} {
-		t.Run(tc.role+"/"+tc.pick, func(t *testing.T) {
-			got, err := ResolveModelForRole(tc.role, tc.pick)
-			want, wantErr := ResolveModel(tc.target)
-			if err != nil || wantErr != nil || got != want {
-				t.Fatalf("got %+v %v, want %+v %v", got, err, want, wantErr)
+	// Each role and trait resolves to the head of its spec chain, by canonical
+	// name and by every role alias; "" picks the role's default trait.
+	spec := shippedSpec(t)
+	for role, rs := range spec.Roles {
+		names := append([]string{role}, rs.Aliases...)
+		traits := map[string]string{}
+		for trait := range rs.Models {
+			traits[trait] = trait
+		}
+		if rs.DefaultModel != "" {
+			traits[""] = rs.DefaultModel
+		}
+		for pick, trait := range traits {
+			want := mustResolve(t, shippedChainHead(t, role, trait))
+			for _, name := range names {
+				got, err := ResolveModelForRole(name, pick)
+				if err != nil || got != want {
+					t.Errorf("%s/%s: got %+v %v, want %+v", name, pick, got, err, want)
+				}
 			}
-		})
+		}
+	}
+	if got, want := mustResolveRole(t, "", "smart"), mustResolveRole(t, "developer", "smart"); got != want {
+		t.Errorf("empty role resolves %+v, want the developer pick %+v", got, want)
+	}
+	head := shippedChainHead(t, "reviewer", spec.Roles["reviewer"].DefaultModel)
+	if got, want := mustResolveRole(t, "reviewer", head), mustResolve(t, head); got != want {
+		t.Errorf("explicit model %s for reviewer = %+v, want %+v", head, got, want)
 	}
 	for _, tc := range []struct{ role, pick, want string }{
-		{"review", "fast", "known traits"}, {"developer", "nonexistent", "known traits"},
+		{"reviewer", "nonexistent", "known traits"}, {"developer", "nonexistent", "known traits"},
 	} {
 		if _, err := ResolveModelForRole(tc.role, tc.pick); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s/%s: %v, want %s", tc.role, tc.pick, err, tc.want)
 		}
 	}
+}
+
+func mustResolveRole(t *testing.T, role, pick string) Model {
+	t.Helper()
+	m, err := ResolveModelForRole(role, pick)
+	if err != nil {
+		t.Fatalf("ResolveModelForRole(%q, %q): %v", role, pick, err)
+	}
+	return m
+}
+
+// officialNameModel returns a shipped agy model whose official name differs from
+// its alias key and is unique, for tests of official-name resolution.
+func officialNameModel(t *testing.T) (string, Model) {
+	t.Helper()
+	names := map[string]int{}
+	for _, entry := range shippedSpec(t).Models {
+		names[entry.Model.Name]++
+	}
+	best := ""
+	for key, entry := range shippedModels(t) {
+		if entry.Model.Provider == "agy" && names[entry.Model.Name] == 1 && !strings.HasSuffix(key, ":"+entry.Model.Name) && (best == "" || key < best) {
+			best = key
+		}
+	}
+	if best == "" {
+		t.Fatal("no agy model with a unique official name in the spec")
+	}
+	return best, shippedModels(t)[best].Model
 }
 
 func TestCanonicalRoleModelResolution(t *testing.T) {
@@ -44,14 +86,16 @@ func TestCanonicalRoleModelResolution(t *testing.T) {
 }
 
 func TestRoleSelectionOfficialModelDiagnostics(t *testing.T) {
-	for _, name := range []string{"gemini-4-argon", "gemini-4-argon:low"} {
+	_, want := officialNameModel(t)
+	for name, tier := range map[string]string{want.Name: want.Tier, want.Name + ":low": "low"} {
 		selection, err := ResolveModelWithAvailability("advisor", name, nil, false)
-		if err != nil || selection.Model.Provider != "agy" || selection.Model.Name != "gemini-4-argon" || selection.Model.Tier != "low" {
+		if err != nil || selection.Model.Provider != want.Provider || selection.Model.Name != want.Name || selection.Model.Tier != tier {
 			t.Errorf("selection for %q = %+v, %v", name, selection, err)
 		}
 	}
-	_, err := ResolveModelWithAvailability("advisor", "gemini-4-argom", nil, false)
-	if err == nil || !strings.Contains(err.Error(), "known traits:") || !strings.Contains(err.Error(), "close matches: gemini-4-argon") {
+	typo := want.Name[:len(want.Name)-1] + "#"
+	_, err := ResolveModelWithAvailability("advisor", typo, nil, false)
+	if err == nil || !strings.Contains(err.Error(), "known traits:") || !strings.Contains(err.Error(), "close matches: "+want.Name) {
 		t.Fatalf("unknown model diagnostics = %v", err)
 	}
 	spec := agentSpec{Roles: map[string]RoleSpec{"advisor": {Models: map[string][]string{"smart": {"first"}}}}}
@@ -66,7 +110,8 @@ func TestRoleSelectionOfficialModelDiagnostics(t *testing.T) {
 }
 
 func TestOfficialNameInModelPick(t *testing.T) {
-	spec := agentSpec{Roles: map[string]RoleSpec{"advisor": {Models: map[string][]string{"smart": {"gemini-4-argon"}}}}}
+	_, want := officialNameModel(t)
+	spec := agentSpec{Roles: map[string]RoleSpec{"advisor": {Models: map[string][]string{"smart": {want.Name}}}}}
 	aliases, err := modelAliasMap()
 	if err != nil {
 		t.Fatal(err)
@@ -77,8 +122,8 @@ func TestOfficialNameInModelPick(t *testing.T) {
 		}, func(Model) string { return "" })
 		return selection.Model, err
 	})
-	if len(picks) != 1 || picks[0].Resolved != "agy:argon:low" || picks[0].Error != "" {
-		t.Fatalf("picks = %+v", picks)
+	if len(picks) != 1 || picks[0].Resolved != want.Spec() || picks[0].Error != "" {
+		t.Fatalf("picks = %+v, want %s", picks, want.Spec())
 	}
 }
 

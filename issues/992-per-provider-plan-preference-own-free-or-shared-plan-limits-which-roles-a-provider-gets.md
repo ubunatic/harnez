@@ -58,3 +58,28 @@ key per provider plus role filtering; the catalog and access work stays in 942.
 quota windows but the latest snapshot says `Installed && !Authenticated`, mark it unavailable so
 `cachedModelPicks`/`selectStartSelection` fall back. A missing store or no snapshot must stay
 `unknown` (keeps `agent-picks.golden`). Re-verify the line numbers; they are a day old.
+
+## Owner decision: plan-gated `luna:high` (2026-11-20)
+
+The 2026-11-20 picks (`spec/agent.yaml`, `docs/Models.md`) follow each OpenAI pick above
+`luna:med` with `luna:high`, e.g. developer `lean: [terra:low, luna:high, haiku:high, neon:low]`.
+Without an OpenAI subscription only Luna is usable, so `luna:high` is the OpenAI fallback there.
+Today the chain falls through for any skip reason (quota exhausted, user policy, costly gate),
+so a subscription account can land on `luna:high`. Wanted:
+
+- **Subscription plan known** (`own`, or a detected paid plan): never pick `luna:high`; skip it
+  with a visible reason ("only for accounts without an OpenAI subscription").
+- **Free plan known**: `luna:high` keeps its place right after the OpenAI pick.
+- **Plan unknown**: try every other model in the chain first (`sol:low`, the other vendors);
+  `luna:high` moves to the end of the chain as the last resort.
+
+Plan source: the declared `plan` from the user policy above wins. Otherwise detect it from the
+Codex login: `internal/usage/codex.go:344` already reads the `chatgpt_plan_type` claim for
+`harnez usage`. Canary first: confirm the value a no-subscription account reports (expected
+`free`) and a paid one (`plus`, `pro`, ...) before mapping values.
+
+Which models are plan-gated belongs in `spec/agent.yaml` with a schema (`docs/Spec.md`), e.g. a
+per-provider list of no-subscription-only model specs, not in Go. `--picks` shows the plan per
+provider and the filtered or reordered chain. Tests: subscription plan with Terra and Sol
+exhausted never resolves `luna:high`; free plan picks it in place; unknown plan resolves it only
+after every other candidate is skipped.

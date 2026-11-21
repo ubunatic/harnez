@@ -801,7 +801,7 @@ agents_md:
           - Start: `harnez agent start --name <name> --role <role> --model <model> -p <prompt>`; roles are
             `orchestrator`, `developer`, `reviewer` and `advisor`. Run it with `HTO=0` as one job per worker
             in your session background (Claude Code: Bash `run_in_background: true`, under 30 minutes;
-            other hosts: `harnez agent start --help`). Interactive hosts never call `harnez_wait_agent` or
+            under taia: its `background_task` tool; other hosts: `harnez agent start --help`). Interactive hosts never call `harnez_wait_agent` or
             spawn-and-wait MCP synchronously.
           - Then: `harnez agent list`, `harnez agent status --name <session>`, `harnez agent wait <session>`,
             `harnez agent resume --name <session> <prompt>`, `harnez agent stop --name <session>`.
@@ -827,6 +827,10 @@ agents_md:
             completion notification: no polling, no `sleep`.
           - Never shell `&` or `nohup`. Never `pkill -f`/`pgrep -f` with a pattern that can match your
             own command line; match argv via `ps -eo pid,args` or kill recorded PIDs.
+          - Under taia (`TAIA_SESSION_DIR` set) run every background job through taia's
+            `background_task` tools, never the host's own background. Keep foreground Bash calls
+            within the Bash timeout (split long test runs by package): Claude Code may move an
+            overrunning call into its own background, where taia cannot see or cancel it.
           - Unsure about this host's background tools: run `harnez agent selftest --step hello` once and
             pass the printed `--session <id>` to every later step. Report a missing background tool by
             name; do not fake background work.
