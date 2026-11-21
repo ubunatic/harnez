@@ -62,7 +62,7 @@ make install
 | :--- | :--- | :--- |
 | `make check-fast` | `go test ./...` | Fast local feedback loop during development. |
 | `make check` / `make test` | `gofmt` + `go vet` + `go test` | Full static analysis and unit/integration test suite. |
-| `make smoke` | `bash scripts/smoke-test.sh` | Live smoke test verifying apply, status, diff, and drift repair. |
+| `make smoke` | `go run ./scripts/smoke` | Host-only live smoke: real apply idempotency, plugin status, installed version, usage. |
 | `make test-q1` | `harnez exec --quota-1 -- make test` | Test suite executed under Quota-1 guardrail enforcement. |
 
 ### Running Unit & Integration Tests

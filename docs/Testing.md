@@ -62,9 +62,10 @@ boundary or depends on the real environment. The shared Makefile tiers
   (Ubuntu 24.04, git 2.43, the same as the CI runner), with podman if installed,
   else docker (`ENGINE=`). Only the `TEST_OUT` log dir (default
   `/tmp/harnez-container-test`) is mounted from the host. `make test-ubuntu` is an alias.
-- **Smoke tests** — `make smoke` runs `scripts/smoke-test.sh`, which builds the
-  binary and exercises apply, idempotency, drift repair, and selected live
-  output behavior.
+- **Smoke tests** — `make smoke` (host only) runs the tests, builds the binary
+  and runs `go run ./scripts/smoke`: real apply idempotency, Claude plugin
+  status, PATH harnez version and usage output. Drift repair is the hermetic
+  `TestApplyDiffRepairCycle`.
 - **Canaries and live checks** — `scripts/canary-*.sh` and the matching Go
   programs probe external CLIs, network/SSH behavior, microphones, and PTYs.
   Use `make smoke-container` to run Pi and Codex against a local model in one

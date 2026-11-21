@@ -65,3 +65,24 @@ Shelving means removing from the tree; git history keeps the files. Restore one 
 - Canary trees: `canary/646-session-compact/` (646 is Backlog), `scripts/canary-pi-capture/`,
   `scripts/canary-pi-presentation/`, `scripts/canary-pi-compaction/` (1047 is Backlog) with the
   `make canary-pi-compaction` target, and `reels/` (Wayreel demo scenarios).
+
+## 5. M2–M4 Done (2026-11-21)
+
+- M2 (#201): `scripts/lint.sh` became `TestCommandDocsAreRegisteredInConfig` (root package). It
+  parses `config.yaml` for `file:`/`source:` values instead of grepping; the dead node and
+  gnome-extensions checks were dropped.
+- M3 (#202): `scripts/smoke-test.sh` and `drop-perm.sh` were split. The drift cycle is the hermetic
+  `TestApplyDiffRepairCycle` (`cmd/harnez`); the live rest is `go run ./scripts/smoke` behind
+  `make smoke` (host only). It no longer edits the real `settings.json`, so `jq` is gone too. Two
+  stale assumptions surfaced: jev compaction is off by default (its plugin is now checked only when
+  installed), and the old `Status:.*enabled` grep also matched "disabled".
+- M4: `scripts/stage-install.sh` and its 213-line shell test became `harnez install --stage <dir>`
+  (`internal/selfinstall/stage.go`). Section 2 had kept the script as shell, but porting only its
+  test would have meant Go writing fake `go`/`uname`/`realpath` shell scripts. The Go version
+  copies the running binary instead of running `go build`, needs no coreutils or Linux check, and
+  in runner mode refuses a destination outside `$TAIA_SESSION_DIR` before creating anything. The
+  `stage-install-test` target left `make check`; the 1181 acceptance test stages with the new flag.
+
+Shell left in `scripts/` after M4: `test-pi.sh`, `macos-ci.sh`, `install-canary.sh`,
+`install-dev-deps.sh`, `setup-env.sh`, `jules-setup.sh`, `git-hooks/pre-push` and
+`agent-canary/` (container launchers). These stay shell by the owner rule above.

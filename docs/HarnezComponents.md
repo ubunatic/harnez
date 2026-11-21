@@ -214,7 +214,7 @@ graph TD
 - **Degradation.** Core must tolerate missing components: skip installing hooks whose
   binary is absent, and omit skill text for absent components (or gate it via docs
   profiles, which already exist).
-- **Tests.** `scripts/smoke-test.sh` and the apply drift tests assume one binary; they need
+- **Tests.** `scripts/smoke` and the apply drift tests assume one binary; they need
   a multi-binary install step.
 
 ## 7. Conclusions

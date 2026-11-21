@@ -52,9 +52,9 @@
 - Small fixes: commit directly once all tests pass and existing assertions are intact. Larger
   changes and features: a fresh reviewer subagent checks test rigor, doc and ticket sync and
   code clarity before the commit.
-- `scripts/smoke-test.sh`: build, apply, verify idempotency, simulate drift and confirm repair.
-  `scripts/drop-perm.sh PATTERN`: remove matching permissions from `~/.claude/settings.json`
-  for drift simulation.
+- `make smoke` (host only): runs the tests, then `go run ./scripts/smoke` against the real
+  `~/.claude`: repeat-apply idempotency, Claude plugin status, PATH harnez version and usage output.
+  The drift-and-repair cycle is the hermetic `TestApplyDiffRepairCycle` (`cmd/harnez`).
 - `gitOutput` (`internal/issues/maintenance`) trims its result and eats the leading space of
   porcelain lines like ` M path`. Never feed it to a line-based parser; use `porcelainStatus`
   for `git status --porcelain`. It is fine for single values (`rev-parse`) and emptiness checks.

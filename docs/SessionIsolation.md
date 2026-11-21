@@ -1,17 +1,17 @@
 # Session Local Staging
 
-`bash scripts/stage-install.sh "/absolute/private/path"` builds `harnez` and
-its man pages under a new destination. Pass the destination as one quoted
-positional argument; there is intentionally no Make staging entry point. The
-script currently requires Linux,
-Bash, GNU or uutils coreutils `realpath`/`stat`, GNU Make, and Go 1.20 or newer
-(for `go build -C`). The destination's parent must already exist,
-be a real directory with mode `0700`, and have no symlink components. The
-destination itself must not exist. A destination with spaces is supported.
+`make build && ./harnez install --stage /absolute/private/path` copies the running
+binary and writes its man pages under a new destination (`internal/selfinstall/stage.go`;
+it replaced `scripts/stage-install.sh` in issue 1254). It runs no shell and needs no
+coreutils, so any destination name is passed through unchanged. It is allowed in runner
+mode; there the man directory must lie inside `$TAIA_SESSION_DIR`, as for `man --dir`.
+The destination must be absolute and clean, its parent must already exist, be a real
+directory with mode `0700`, and have no symlink components, and the destination itself
+must not exist.
 
 The stage contains `bin/harnez` and `share/man/man1/`. The command does not run
 `go install`, install the `⚙` alias, or write man pages to a shared location.
-On build or man generation failure it removes the newly created stage. The
+On copy or man generation failure it removes the newly created stage. The
 caller must provide a trusted private parent, such as a session workspace
 created by its host. This workflow does not install into shared destinations
 safely: it does not provide a trusted installer or defeat same-UID path races.
@@ -107,7 +107,7 @@ The broker must reject forged session identities and cannot rely on same-UID
 socket modes or readable bearer tokens for authentication. Runner policy changes
 apply only to overlays; no runner RPC mutates global policy.
 
-A sandbox stages privately with `scripts/stage-install.sh`. A trusted host
+A sandbox stages privately with `harnez install --stage <dir>`. A trusted host
 promoter (`harnez install --staged <dir> [--sha256 <hex>]`, or `make promote
 STAGE=<dir>`) derives its approved roots only from trusted host configuration
 and defaults: `GOBIN` or `GOPATH/bin` for `harnez` and a host-generated relative

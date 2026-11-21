@@ -41,9 +41,6 @@ man: ⚙️ build  # generate roff man pages
 install: ⚙️ build  # harnez install: ~/.local/bin, ⚙, shell PATH, completions, man pages, active collector (host only)
 	./$(BINARY) install --strategy self
 
-stage-install-test: ⚙️  # test stage installer path validation and failure cleanup
-	bash scripts/stage-install-test.sh
-
 promote: ⚙️ build  # promote a privately staged directory into host GOBIN/GOPATH/bin and XDG man roots
 	@test -n "$(STAGE)" || (printf 'Usage: make promote STAGE=/abs/path/to/staged\n' >&2; exit 2)
 	./$(BINARY) install --staged "$(STAGE)"
@@ -85,7 +82,7 @@ revert-managed: ⚙️ build  # remove managed blocks from the Claude Code confi
 status: ⚙️ build  # show config summary and applied state
 	./$(BINARY) status -c $(CONFIG) -t $(TARGET)
 
-lint: ⚙️ build  # gofmt, go vet, golangci-lint (skipped if absent), harnez lint --check, docs/commands registration
+lint: ⚙️ build  # gofmt, go vet, golangci-lint (skipped if absent), harnez lint --check (docs/commands registration is a Go test)
 	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
 	if ! command -v golangci-lint >/dev/null 2>&1; \
@@ -93,7 +90,6 @@ lint: ⚙️ build  # gofmt, go vet, golangci-lint (skipped if absent), harnez l
 	else GOWORK=off golangci-lint run ./...; \
 	fi
 	./$(BINARY) lint --check
-	bash scripts/lint.sh
 
 install-canary: ⚙️  # verify the latest Codeberg release installs and reports its version
 	bash scripts/install-canary.sh
@@ -123,7 +119,7 @@ macos-ci: ⚙️  # trigger and watch macos-hello CI workflow on the GitHub mirr
 test-pi: ⚙️  # Pi background-task extension tests (node 22.18+; fails when node is missing)
 	bash scripts/test-pi.sh
 
-check: ⚙️ test-pi stage-install-test  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
+check: ⚙️ test-pi  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
 	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
 	GOWORK=off go test $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) ./...
@@ -138,8 +134,8 @@ test-pkg: ⚙️  # one package with -race, uncached: make test-pkg PKG=./intern
 	@test -n "$(PKG)" || (echo "❌ usage: make test-pkg PKG=./path/..." && exit 1)
 	GOWORK=off go test -race -count=1 $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) $(PKG)
 
-smoke: ⚙️ build  # live smoke: apply/diff/repair + usage bar-alignment against real binary
-	bash scripts/smoke-test.sh
+smoke: ⚙️ test build  # host-only live smoke: real apply idempotency, Claude plugin status, PATH harnez version, usage output
+	GOWORK=off go run ./scripts/smoke ./$(BINARY)
 
 smoke-container: ⚙️  # build both agent images and run the in-pod Pi/Codex smoke test (LMCODER_MODEL_DIR=reuse host models, LMCODER_CACHE_DIR=download to a host dir)
 	bash scripts/agent-canary/run.sh

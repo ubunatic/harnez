@@ -77,9 +77,15 @@ func installManPages(rootCmd *cobra.Command, targetDir string, out io.Writer) er
 }
 
 func validateManDirInRunnerSession(sessDir, targetDir string) error {
+	return validateInRunnerSession(sessDir, targetDir, "man --install target")
+}
+
+// validateInRunnerSession refuses a target outside the runner session dir,
+// resolving symlinks in its existing prefix; what names the target in errors.
+func validateInRunnerSession(sessDir, targetDir, what string) error {
 	envName := runstate.RunnerDirEnv()
 	if !filepath.IsAbs(sessDir) || !filepath.IsAbs(targetDir) {
-		return fmt.Errorf("man --install target %s and $%s must be absolute in runner mode", targetDir, envName)
+		return fmt.Errorf("%s %s and $%s must be absolute in runner mode", what, targetDir, envName)
 	}
 	realSess, err := filepath.EvalSymlinks(filepath.Clean(sessDir))
 	if err != nil {
@@ -87,10 +93,10 @@ func validateManDirInRunnerSession(sessDir, targetDir string) error {
 	}
 	realTarget, err := resolveExistingPrefix(filepath.Clean(targetDir))
 	if err != nil {
-		return fmt.Errorf("resolve man target %s: %w", targetDir, err)
+		return fmt.Errorf("resolve %s %s: %w", what, targetDir, err)
 	}
 	if realTarget != realSess && !strings.HasPrefix(realTarget, realSess+string(filepath.Separator)) {
-		return fmt.Errorf("man --install target %s escapes $%s in runner mode", targetDir, envName)
+		return fmt.Errorf("%s %s escapes $%s in runner mode", what, targetDir, envName)
 	}
 	return nil
 }
