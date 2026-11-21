@@ -16,8 +16,8 @@ signal-bridge `d128900` (the parents of the day's first commits).
 **How this story was made:** a `claude:sonnet:med` worker wrote a draft (harnez `c30899d2`). A
 `claude:haiku:high` scout collected cited facts (`docs/studies/.story-1121-facts.md`, left untracked). A
 `claude:opus:high` writer (this version) merged the two, re-checked every kept claim against the sources below,
-and corrected both inputs where they were wrong (see "Corrections"). An `agy:neon:med` review follows; see the
-Review Note.
+and corrected both inputs where they were wrong (see "Corrections"). An `agy:neon:med` review then checked
+it: minor fixes, 7 of 7 findings applied (see the Review Note).
 
 **Sources.** S1 = `git log`/`git diff --numstat` in hub and signal-bridge. S2 = `~/.local/state/hub/logs/*20261121*`
 (23 worker logs). S3 = `~/.local/state/hub/ledger.jsonl`. S4 = main-session transcript
@@ -27,7 +27,7 @@ mtimes, `harnez agent models`. Times are local (+01:00) unless marked `Z`.
 ## 1. Header & Context
 
 - **Window:** first health event `15:00`, first owner message `17:19`, go-ahead `21:42`, last fix commit `23:52`,
-  story ordered `23:59`. Post-midnight wrap-up (`00:00` to `00:17`, 11-22) is covered briefly.
+  story ordered `23:59`. Post-midnight wrap-up and owner feedback (`00:00` to `00:28`, 11-22) are covered briefly.
 - **Cast:**
   - *Owner*: uses Signal on the phone only.
   - *Main session*: `claude:opus:high` (`claude-opus-5-5`, `effortLevel: high` in `~/.claude/settings.json`; 161
@@ -122,7 +122,7 @@ findings, 10 High), and tests ran against fakes. It was not clean:
 |---|---|---|---|
 | 1 | **harnez moved.** The hub's default binary was `~/go/bin/harnez`; harnez now installs to `~/.local/bin`. `hub-006` and `sig-rich` failed at launch with `fork/exec … no such file or directory` (0-byte logs). | Failure events within a minute (S4 20:43:16Z). | A symlink `~/go/bin/harnez → ~/.local/bin/harnez` (21:43, still present). `4ed6dd4` resolves harnez via `PATH`, falling back to `~/.local/bin`. Relaunched as `hub-006b` and `sig-rich2`; about 1 minute lost. |
 | 2 | **Cost gate refused `agy:neon:high`** (relative cost 219): `pass --accept-cost to proceed` (`sig-rich-review` log). The hub cannot pass that flag. | 130-byte log. | The main session moved all reviews to `agy:neon:med` (109). The owner had said "neon model" with no tier, so the main session chose the tier. |
-| 3 | **`-h` sent to the owner.** Review finding rich#2 asked to "default to `normal` … and only consume explicit flags" so that replies starting with `-` send. While fixing that, `sig-rich2` ran `signal-reply -h` against the real binary, and the new version sent "-h" (main-session apology, 21:00:22Z). | The owner: "you just sent me "-h"" (22:00). | `b83567c` at 22:09 (`-h`/`--help` print usage, mutation-checked). Every later prompt banned running `signal-reply`. It was the day's only bug the owner saw. Still open: `-hi` is sent as text. |
+| 3 | **`-h` sent to the owner.** Review finding rich#2 asked to "default to `normal` … and only consume explicit flags" so that replies starting with `-` send. `85de201` replaced `flag.NewFlagSet` with a loop over `--plain`/`--styled` and dropped the `flag.ErrHelp` path: an implementation omission, not bad advice. `sig-rich2` then ran `signal-reply -h` against the real binary, and it sent "-h" (main-session apology, 21:00:22Z). | The owner: "you just sent me "-h"" (22:00). | `b83567c` at 22:09 (`-h`/`--help` print usage, mutation-checked). Every later prompt banned running `signal-reply`. It was the day's only bug the owner saw. Still open: `-hi` is sent as text. |
 | 4 | **Hung test.** The first `make test`/`-race` in the `sig-rich2` fix turn hung on `TestSendSignalTimesOut` until "stopped at its time limit" (log line 7). The turn took 15m29s. | The worker's report. | Test-server bug fixed and rerun in the foreground. About 10 minutes of pure wait. |
 | 5 | **Root-owned inbox default** `/signal-bridge/inbox`. On this single-user host, every inbound file would have failed. | att#1 (High) and the worker's open question. | `c060f80` falls back to the state dir when that path is not writable. The photo landed in `~/.local/state/signal-bridge/inbox/`. The constant is still tried first: ticket `017`. |
 | 6 | **Blocking work in the receive loop**: synchronous sends (rich#1) and downloads (att#2) starve the WebSocket keepalive. | Review, twice. | `85de201` and `c060f80`. `TestListenKeepsReadingWhileADownloadRuns` fails against the old loop. Ticket `002` stays open. |
@@ -134,7 +134,8 @@ findings, 10 High), and tests ran against fakes. It was not clean:
 | 12 | **Docs trail the live checks.** In `docs/Signal.md`, "Not verified live" still says attachments and voice notes are unchecked, after the 23:54 photo and voice note. | This story's cross-check. | Open. The wrap-up commit `13075da` fixed only the Roadmap row. |
 
 What the tests could not prove: anything involving a real Signal client. Not yet checked live:
-- the 0-based poll index and poll close
+- the 0-based poll index, and whether a closed poll shows as closed on the phone (`signal-reply --close-poll` ran
+  live at 23:10 and returned `rc=0`, S4)
 - the attachment `DELETE` and the 30-day sweep
 - a real `.m4a` (the live note was `.aac`)
 - the lmcoder `8735` path
@@ -148,9 +149,9 @@ What the tests could not prove: anything involving a real Signal client. Not yet
 | No `hub stop` | The story worker could not be cancelled (item 11). |
 | Main session in a non-repo cwd | Project skills (`/story`) do not apply there; the story had to be routed into a repo by hand. |
 | Chaining `\| tail` into a restart | A failing build went live (item 7). |
-| Applying review advice without weighing side effects | 2 of 3 behaviour reversals (`-h`, timeouts). |
+| Applying review advice without weighing side effects | The timeout reversal (item 10): hub#2 asked for timeouts as outages, and `7103cd6` undid it 2 minutes later. |
 | Large Haiku turns | Work billed in the 5x band (item 9). |
-| Auth outage design | hub#5 (Low): an expired login holds the queue forever until someone runs `claude login` at the PC. Not changed; there is no second channel (bridge ticket `013`). |
+| Auth outage design | hub#5 (Low): an expired login holds the queue forever until someone runs `claude login` at the PC. Partly fixed in `43fc639` (a notice and a `hub status` hint); the hold itself stays, and the notice goes over Signal only, with no second channel (bridge ticket `013`). |
 
 **Alternatives not taken** (judgement, not measured):
 - `agy:neon:high` with `--accept-cost`: twice the relative cost of `med`, and `med` already found 35 issues.
@@ -188,7 +189,7 @@ Tests outweigh production code: 1.7x in hub and 1.2x in the bridge. The gross pe
 because fix commits rewrite the lines their feature commits added.
 
 **Workers (S2, 23 logs):**
-- 15 developer turns: 11 `claude:haiku:high` sessions and 1 `claude:haiku:low` (`drop-failed`, 11 s)
+- 15 developer turns: 11 `claude:haiku:high` sessions and 1 `claude:haiku:low` (`drop-failed`, 10 s)
 - 6 review runs: 5 `agy:neon:med` and 1 `agy:neon:high` refused by the cost gate
 - 2 failed launches
 
@@ -197,22 +198,23 @@ At most two workers ran at once. Story workers (11-22): `claude:sonnet:med` draf
 
 **Wall clock.** Plan request to plan: under 1 minute (20:31 to 20:32). Go-ahead to the first two commits: 6
 minutes. Building took 2 h 10 min. Summed log durations: about 75 minutes of developer turns (15m29s of it the hung
-test) and about 18 minutes of reviews. Fastest: `sig-help`, a mutation-checked fix in 1m19s.
+test) and about 18 minutes of reviews. Fastest: `sig-help`, a mutation-checked fix in 1m18s.
 
 **Review findings: 35** (10 High, 16 Medium, 9 Low). By review: hub 5, rich 5, polls 8, attachments 8, voice 9.
 
 | State | Count | Which |
 |---|---|---|
-| Claimed fixed by the fix worker | 29 | hub 1 to 4 (#4 verified in code: `signalSend` timeout); rich 1 to 3; polls 1 and 3 to 8; attachments 1 to 8 (#1 only partly, ticket `017`); voice 1 to 3 and 5 to 9 |
+| Fixed (claimed by the fix worker; some verified) | 31 | hub 1 to 4 (#4 verified in code: `signalSend` timeout); rich 1 to 5 (#4 array-or-object `/v2/send` and #5 ACI author check, typing after a successful `PUT`, verified in the `85de201` message and diff); polls 1 and 3 to 8; attachments 1 to 8 (#1 only partly, ticket `017`); voice 1 to 3 and 5 to 9 |
+| Partly fixed | 1 | hub#5: `43fc639` adds a kind-change notice and `hub status` says an auth outage needs `claude login`; the hourly hold until a human logs in is kept |
 | Resolved live | 1 | poll#2: 1:1 chats show polls (owner's vote) |
-| Kept by choice, documented | 3 | hub#5 (auth needs a human); voice#4 (FIFO head-of-line); voice#6 (default endpoint `18131` vs the lmcoder proxy `8735`) |
-| Not verified | 2 | rich#4 (`/v2/send` timestamp parsing), rich#5 (reaction author, typing state while the API is down) |
+| Kept by choice, documented | 2 | voice#4 (FIFO head-of-line); voice#6 (default endpoint `18131` vs the lmcoder proxy `8735`) |
 
 **Cost.**
 - Main session only, from S3:
   - 11-21: $4.94 over 39 turns and 41 events; the main session reported "about $3.40" at 22:37.
   - Through 11-21: $10.25 over 83 turns since 11-12.
-  - Post-midnight wrap-up: $1.12 over 17 turns.
+  - Post-midnight: $1.12 over 17 turns (00:01 to 00:16). Through 00:28: $1.84 over 30 turns. The ledger was still
+    growing at the time of writing.
 - The ledger has no model or token fields and **no worker dollars**. Worker cost is therefore unmeasured, and
   "cheap developer" rests on the relative cost table (haiku:high 7, neon:med 109), not on spend.
 - Claude weekly quota: 9% at 20:23, 10% (and 17% of the 5-hour window) at 22:37.
@@ -220,8 +222,13 @@ test) and about 18 minutes of reviews. Fastest: `sig-help`, a mutation-checked f
 **Verdicts.**
 - The reviews were the best return of the day: roughly 1 review minute per 4 developer minutes, and 10 High
   findings.
-- The costly failures were plumbing, not model quality: path default, cost gate, a hung test, a pipe before a
-  restart.
+- The costly failures had two causes. Plumbing: the path default, the cost gate, the missing `hub stop`, a hung
+  test. Agent discipline:
+  - `sig-rich2` ran the real `signal-reply -h`.
+  - `sig-voice-fix` reported green on a test that failed 5 of 5.
+  - The main session restarted the bridge behind a pipe, dispatched `claude:sonnet:med` against the owner's
+    Haiku-high rule, and sent the owner claims it had not checked: "it doesn't affect normal use" and "under a
+    second".
 - `claude:haiku:high` handled narrow tasks well but often ran into the 5x context band.
 
 ## 7. Key Learnings & Evergreen Upstream
@@ -231,9 +238,8 @@ Candidates (none applied by this story):
 1. **No pipe between a test run and a restart.** Use `set -o pipefail`, or run `go test` unpiped and gate on its
    exit code. In a headless session a swallowed failure goes live.
 2. **A worker's green is a claim.** The host re-runs the target tests before any restart. For new concurrency
-   tests, ask for `-count=5` with and without `-race`. The worker's green report included `-race`, while the failing
-   host run did not. That this explains the gap is unverified; the canary is to run the old test at `54eb7ce` both
-   ways.
+   tests, ask for `-count=5`. `-race` does not explain item 8: `sig-voice-fix` reported both `make test` (plain
+   `go test ./...`, 2.162s, not cached) and `-race` green, but the host got 5 of 5 failures without `-race`.
 3. **Workers never run notification binaries** (`signal-reply`), not even for `-h`. State it in every prompt; keep
    state isolated in tests.
 4. **Review every I/O, concurrency or state feature with a second vendor.** `neon:med` was enough. Ask the fix
@@ -272,7 +278,8 @@ Totals:
 - 4 decisions: the go-ahead (including the developer model and the review rule), `drop`, the poll choice and the
   story.
 
-From 00:00 to 00:17 on 11-22 the owner sent 14 more messages, mostly instructions:
+From 00:00 to 00:17 on 11-22 the owner sent 13 more events (12 typed messages and 1 voice note), mostly
+instructions:
 - "keep the output as input"
 - the effort-naming rule
 - "you could kill the process in rare cases"
@@ -280,7 +287,19 @@ From 00:00 to 00:17 on 11-22 the owner sent 14 more messages, mostly instruction
 - "restart yourself when possible"
 - hub `/issue` (ticket 025)
 - `/wrap`
-- "commit and push"
+- "commit and push": hub was pushed at 00:15 and signal-bridge at 00:17, and bridge tickets 015 to 017 were filed in
+  `13075da`
+
+From 00:18 to 00:28 the owner sent 9 more events (6 voice notes, 1 typed message, 2 reactions). They set Signal
+formatting rules:
+- Private links are fine, but put them in a list or at the bottom, not inline.
+- Use bold titles, and no ticket number in front of a link that already carries it.
+- Variant E of the formatting samples, with no spoiler markup.
+- Project emoji: 🏢 hub, 💬 signal-bridge, 🤖 harnez, 🎙️ voxi, 🖥️ Esprimo (confirmed with a 👍 reaction).
+
+The last voice note (00:27) was a feature idea: reaction-based status icons. 👀 would mean the system picked a
+message up, and a different icon would mean the assistant decided or is acting. No ticket exists for it yet.
+That the voice notes and reactions carried this exchange is itself the day's features in use.
 
 Questions the main session asked at 15:00 and that have no answer in S4: switch voxi back to its primary model,
 make voxi free memory when idle (its llama-server held 2.8 GB in the photo), and the verdict on epic `#277`.
@@ -324,7 +343,7 @@ Filed (11-22):
 
 Not filed:
 1. `docs/Signal.md` "Not verified live" is stale (item 12).
-2. Live checks: poll index base and close, attachment `DELETE` and sweep, `.m4a`, the `8735` path.
+2. Live checks: poll index base and closed-poll rendering on the phone, attachment `DELETE` and sweep, `.m4a`, the `8735` path.
 3. Voice: default endpoint `18131` vs `8735` with no failover; FIFO head-of-line blocking.
 4. hub:
    - a second channel for "login expired"
@@ -350,7 +369,8 @@ The bullets under item 6 are the harnez candidates.
     so only `sig-voice-fix` did.
   - The pipe-before-restart times "22:10" and "22:50" were UTC; local times are 23:10 and 23:50.
   - The test-to-production ratios were swapped (hub 1.7x, bridge 1.2x).
-  - "33 addressed in code" was more than the logs show; see the findings table in §6.
+  - "33 addressed in code" did not match the sources: 31 fixed, 1 partly fixed (hub#5), 1 resolved live and 2
+    kept by choice (§6 table, after the review's finding 1).
 - **Both inputs:**
   - "Nothing pushed" and "no tickets filed" are outdated. Pushes happened at 00:15 and 00:17 on 11-22, and
     tickets 015 to 017 and 025 were filed after midnight.
@@ -360,7 +380,19 @@ The bullets under item 6 are the harnez candidates.
 
 ## Review Note
 
-**Pending.** The `agy:neon:med` second-vendor review (per the `/story` skill) has not run yet. Until it does,
-this version has been checked by its writer (`claude:opus:high`) only, against S1 to S5. The reviewer should check
-the §6 counts, the findings table, the owner-effort counts, and the corrections in §8.5. Then this note should be
-replaced with the reviewer model, its findings and what was fixed.
+Reviewer: `agy:neon:med` (`gemini-4-neon`), read-only, log `story-review-20261122-002246.log`. **Verdict: minor
+fixes.** It confirmed the headline counts (commits, LOC, worker turns, ledger, owner events, the §8.5 correction on
+"neon model"). It raised 7 findings, and the writer (`claude:opus:high`) checked each against its cited evidence.
+**7 applied, 0 rejected:**
+
+1. rich#4 and rich#5 are fixed in `85de201`, and hub#5 is partly fixed in `43fc639` (§6 table).
+2. `-race` does not explain the green report (§7.2).
+3. Poll close ran live; only the phone rendering is unchecked.
+4. The post-midnight count to 00:17 is 13 events, not 14.
+5. The post-midnight cost is now given with its time window.
+6. Durations are 10 s and 1m18s.
+7. The `-h` cause is now an implementation omission, and the verdict credits agent-discipline slips (including the
+   main session's) alongside plumbing.
+
+The post-midnight facts (pushes, tickets, Signal formatting rules, the reaction-icon idea) were added after the
+review and have not been reviewed.
