@@ -85,7 +85,7 @@ revert-managed: ⚙️ build  # remove managed blocks from the Claude Code confi
 status: ⚙️ build  # show config summary and applied state
 	./$(BINARY) status -c $(CONFIG) -t $(TARGET)
 
-lint: ⚙️ build  # gofmt, go vet, golangci-lint (skipped if absent), harnez lint --check, docs/commands registration
+lint: ⚙️ build  # gofmt, go vet, golangci-lint (skipped if absent), harnez lint --check (docs/commands registration is a Go test)
 	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
 	if ! command -v golangci-lint >/dev/null 2>&1; \
@@ -93,7 +93,6 @@ lint: ⚙️ build  # gofmt, go vet, golangci-lint (skipped if absent), harnez l
 	else GOWORK=off golangci-lint run ./...; \
 	fi
 	./$(BINARY) lint --check
-	bash scripts/lint.sh
 
 install-canary: ⚙️  # verify the latest Codeberg release installs and reports its version
 	bash scripts/install-canary.sh

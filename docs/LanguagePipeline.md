@@ -126,9 +126,10 @@ file, checked with `/context`; issue 1224):
 
 ## Lint check
 
-`make lint` / `scripts/lint.sh` verifies that every `docs/commands/*.md` file has a matching
-`- name:` entry in `config.yaml`. Runs forward only (file → config); the reverse direction
-(config entry → file exists) is enforced by `apply`, which errors on missing `file:` paths.
+`TestCommandDocsAreRegisteredInConfig` (root package, part of every `go test` tier) verifies that
+every embedded `docs/commands/*.md` file is a `file:` or `source:` value in `config.yaml`. Runs
+forward only (file → config); the reverse direction (config entry → file exists) is enforced by
+`apply`, which errors on missing `file:` paths.
 
 ## Known gaps
 
