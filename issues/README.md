@@ -36,5 +36,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1247 | [1247-allow-forge-issues-edit-via-codeberg-token.md](1247-allow-forge-issues-edit-via-codeberg-token.md) | Allow forge issues edit via CODEBERG_TOKEN | Open |
 | 1250 | [1250-telemetry-record-dropped-prints-on-every-harnez-call-inside-a-taia-sandbox.md](1250-telemetry-record-dropped-prints-on-every-harnez-call-inside-a-taia-sandbox.md) | telemetry record dropped prints on every harnez call inside a taia sandbox | Open |
 | 1251 | [1251-issue-skill-treats-push-dry-run-as-a-permission-check-and-misreads-a-branch-protection-rejection.md](1251-issue-skill-treats-push-dry-run-as-a-permission-check-and-misreads-a-branch-protection-rejection.md) | issue skill treats push --dry-run as a permission check and misreads a branch-protection rejection | Open |
-| 1252 | [1252-update-tests-for-the-2026-11-20-vendor-ladder-model-picks.md](1252-update-tests-for-the-2026-11-20-vendor-ladder-model-picks.md) | Update tests for the 2026-11-20 vendor-ladder model picks | In Progress |
 <!-- harnez:end issues-active-index -->
