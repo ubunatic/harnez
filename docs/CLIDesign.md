@@ -337,7 +337,7 @@ whole `env` map was replaced, and a later step (the jev plugin, which adds
 `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`) put a removed key back. Every run therefore
 reported `env: changed` and rewrote a byte-identical file. A step that adds to a
 managed map after the base merge must see the merged result, or `apply` stops being
-idempotent. `scripts/smoke-test.sh` now checks the file's bytes and mtime across a
+idempotent. `TestApplyDiffRepairCycle` checks the file's bytes and mtime across a
 second run, not only the reported change count.
 
 Trade-off: an env key that harnez stops managing is no longer removed by `apply`;

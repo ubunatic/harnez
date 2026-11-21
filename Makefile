@@ -137,8 +137,8 @@ test-pkg: ⚙️  # one package with -race, uncached: make test-pkg PKG=./intern
 	@test -n "$(PKG)" || (echo "❌ usage: make test-pkg PKG=./path/..." && exit 1)
 	GOWORK=off go test -race -count=1 $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) $(PKG)
 
-smoke: ⚙️ build  # live smoke: apply/diff/repair + usage bar-alignment against real binary
-	bash scripts/smoke-test.sh
+smoke: ⚙️ test build  # host-only live smoke: real apply idempotency, Claude plugin status, PATH harnez version, usage output
+	GOWORK=off go run ./scripts/smoke ./$(BINARY)
 
 smoke-container: ⚙️  # build both agent images and run the in-pod Pi/Codex smoke test (LMCODER_MODEL_DIR=reuse host models, LMCODER_CACHE_DIR=download to a host dir)
 	bash scripts/agent-canary/run.sh
