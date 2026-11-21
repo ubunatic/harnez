@@ -45,6 +45,29 @@ report when blocked on a user decision or denied permission.
 - Verify with fake-forge tests for both forge kinds: conflicted exits 7, null keeps polling, and a
   conflict that appears mid-wait is caught on the next poll.
 
+### `--fixup`: fix simple conflicts, push, keep waiting (owner request 2026-11-21)
+
+`harnez pr wait <n> --fixup` handles the common case itself: a conflict only in generated
+indexes, as on #198.
+
+- On a conflicted poll, fetch the PR head and the base into a temporary worktree (the caller's
+  checkout stays untouched) and merge the base into the PR head. Merge, never rebase, so the
+  update is a fast-forward and needs no force-push.
+- Fix only conflicts confined to an allowlist of generated files (`issues/README.md`,
+  `issues/BACKLOG.md`, `issues/CLOSED.md`, `docs/README.md`): regenerate them with
+  `harnez index`, check `harnez issues lint --against origin/<base>` (for example a ticket
+  number collision), and commit the merge.
+- Push to the PR's own head (its AGit topic, or its branch on GitHub), print what was fixed and
+  pushed, then keep waiting with the same `--contains` and timeout.
+- Exit without pushing when anything else conflicts, regeneration or lint fails, the topic is
+  unknown, or the push is rejected. Use the conflict exit code, or a distinct
+  "fixup failed" code if callers need to tell the two apart; the message names the reason and the
+  conflicting files. Remove the temporary worktree in every case.
+- Fix at most once per wait, so a PR that conflicts again after a fixup exits instead of looping.
+- Verify with a local bare remote: an index-only conflict is merged, pushed and waited on; a
+  conflict in a non-generated file exits with the files listed; a rejected push exits; the
+  caller's worktree is unchanged throughout.
+
 ## Filing Notes
 
 - Updating an AGit PR needs its topic, which neither the Forgejo API nor the PR page shows (the
