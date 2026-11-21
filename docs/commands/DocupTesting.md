@@ -7,7 +7,7 @@ Inspect these sources first, stopping at the Docup evidence cap:
 1. `AGENTS.md` and the repository's applicable local instructions.
 2. `docs/Testing.md` and `docs/other/Canary.md`.
 3. `Makefile` targets for checks, tests, lint, smoke, install, and canaries.
-4. Representative `*_test.go` files and `scripts/smoke-test.sh` or relevant
+4. Representative `*_test.go` files and `scripts/smoke` or relevant
    `scripts/canary-*` entry points.
 5. At most 10 relevant recent commits when history is needed to confirm drift.
 

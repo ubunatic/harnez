@@ -417,8 +417,9 @@ make diff     # build then preview changes
 make install  # build, then harnez install into ~/.local/bin
 ```
 
-Smoke-test (build → apply → idempotency check → drift simulation → repair):
+Smoke-test on the host (tests → build → real apply idempotency → Claude plugin status →
+installed version and usage):
 
 ```sh
-scripts/smoke-test.sh
+make smoke
 ```
