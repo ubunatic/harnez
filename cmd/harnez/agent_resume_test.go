@@ -1151,7 +1151,9 @@ func TestRunResumeAcceptsCurrentCodexModels(t *testing.T) {
 			deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, dbPath: filepath.Join(t.TempDir(), "telemetry.sqlite"), find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
 				return s.Find(id)
 			}}
-			if err := runResume(t.Context(), &cobra.Command{}, deps, resumeRequest{Name: "current", Prompt: "continue", StreamMode: streamFull}); err != nil {
+			// The costly gate is tested elsewhere; this test checks only that every current
+			// codex model is resumable, so costly entries (astra) accept the cost.
+			if err := runResume(t.Context(), &cobra.Command{}, deps, resumeRequest{Name: "current", Prompt: "continue", StreamMode: streamFull, AcceptCost: true}); err != nil {
 				t.Fatal(err)
 			}
 			if driver.resumes != 1 {
