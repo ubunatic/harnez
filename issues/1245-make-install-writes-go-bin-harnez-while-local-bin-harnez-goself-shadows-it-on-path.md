@@ -1,6 +1,6 @@
 # 1245 — make install writes ~/go/bin/harnez while ~/.local/bin/harnez (goself) shadows it on PATH
 
-**Status**: In Progress
+**Status**: Closed — make install goes through goself into ~/.local/bin with a static build and a PATH-shadow warning (#197); host verified: PATH and ./harnez both 0.5.10+5439
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
