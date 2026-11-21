@@ -22,3 +22,13 @@ Since issue 1235 (`goself v0.3.0`), `harnez install` installs `~/.local/bin/harn
 
 - Decide whether `Makefile`'s `install` target should keep installing into `GOPATH/bin` and also sync/update `~/.local/bin/harnez` when `~/.local/bin` precedes `GOPATH/bin` on `PATH` (e.g. via `./$(BINARY) install --direct` or Makefile promotion), warn loudly when a shadowing binary exists on `PATH`, or unify promoter/Makefile default roots.
 - Verify on host that running `make install` makes `harnez --version` on `PATH` match `./harnez --version`, without breaking runner-mode staging (`scripts/stage-install-test.sh`) or `make lint`.
+
+## 4. Occurrence: taia background tasks run the stale binary (2026-11-21)
+
+`make install` refreshed `~/go/bin/harnez` (01:26), which the foreground Bash shell finds first.
+A taia background task runs `bash -lc`, where `command -v harnez` is `~/.local/bin/harnez` (built
+2026-11-19, before the 2026-11-20 model ladders). A reviewer started there resolved
+`--role reviewer --model lean` to `hydrogen:low` with "terra:med: unsupported", while
+`harnez agent models --picks` from `~/go/bin` gives the shipped chain
+`terra:low, luna:high, neon:low, haiku:high`. So agents in background tasks silently use an old
+spec and old code until `~/.local/bin` is updated.

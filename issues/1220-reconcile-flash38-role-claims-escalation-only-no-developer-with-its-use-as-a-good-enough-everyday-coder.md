@@ -41,3 +41,18 @@ Agents that read the spec will avoid flash38 for coding, while the owner uses it
 - Align the spec `roles`/`use` text, the Models.md line 195 claim, and the data files with the decision.
 - Change COST only with measured data from the canary. Otherwise keep COST 4 and mark it unmeasured.
 - Verify: `harnez agent models` matches the decision, and `make test` passes.
+
+## 4. Resolution (2026-11-21)
+
+The owner decided both questions after this ticket was filed, so no new decision was needed:
+
+- 2026-11-19: flash38 gets the `developer` role (`docs/Models.md`, "Other M2 spec changes");
+  `spec/agent.yaml` lists `roles: reviewer, advisor, developer`.
+- 2026-11-20: `hydrogen:low` replaces flash38 as the cheap, fast Google model; flash38 is in no
+  role chain (owner ladders in `docs/Models.md`, ticket 1252).
+
+Aligned: the stale "flash37/flash38 are frontier-grade, not mechanical workers" bullet in
+`docs/Models.md` now records this history. COST 4 stays, unmeasured (507). Not changed:
+`docs/data/models-001.txt` and `models-002.txt`, which are dated snapshots of past
+`harnez agent models` output and stay as recorded. The replay canary is dropped: flash38 is no
+longer picked, so measuring it has no consumer.

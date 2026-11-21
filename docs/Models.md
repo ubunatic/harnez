@@ -303,9 +303,10 @@ Findings:
 - **No Go- or TUI-specific benchmark exists for any model.** Those columns are inferred from
   general coding and terminal benchmarks; our own sprint evidence (`ModelAdvisoryEval.md`)
   outranks them.
-- **flash37/flash38 are frontier-grade, not mechanical workers.** Their Terminal-Bench 2.1 scores
-  match terra/sol. List price is low, but subscription cost feels high in practice; ticket 507
-  (quota snapshots per agent turn) is meant to measure real subscription cost.
+- **flash37/flash38 (historical).** Their Terminal-Bench 2.1 scores matched terra/sol, so they were
+  kept off mechanical work (604). The owner then gave flash38 the developer role (2026-11-19), and
+  `hydrogen:low` replaced it as the cheap, fast Google pick, leaving flash38 in no role chain
+  (2026-11-20, issue 1220); flash37 is disabled. Subscription cost stays unmeasured (ticket 507).
 - **Research agents disagree on identity and price.** The astra agent found "GPT-6 Astra", not
   `gpt-5.6-astra`; sol and terra agents gave conflicting prices. The agent was right: Codex's
   `~/.codex/models_cache.json` offers only `gpt-6-astra`, and the spec was fixed on
