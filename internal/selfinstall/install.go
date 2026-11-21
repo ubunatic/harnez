@@ -47,7 +47,7 @@ type Options struct {
 // any active collector service, and warns when PATH finds another harnez first.
 func Run(ctx context.Context, opts Options, out io.Writer) error {
 	if runstate.InRunnerMode() && !opts.DryRun {
-		return fmt.Errorf("harnez install: shared installation via goself is host-only in runner mode; stage with scripts/stage-install.sh and promote on host via harnez install --staged <dir>")
+		return fmt.Errorf("harnez install: shared installation via goself is host-only in runner mode; stage with harnez install --stage <dir> and promote on host via harnez install --staged <dir>")
 	}
 	strategy, err := goself.ParseStrategy(opts.Strategy)
 	if err != nil {

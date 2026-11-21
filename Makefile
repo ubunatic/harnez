@@ -41,9 +41,6 @@ man: ⚙️ build  # generate roff man pages
 install: ⚙️ build  # harnez install: ~/.local/bin, ⚙, shell PATH, completions, man pages, active collector (host only)
 	./$(BINARY) install --strategy self
 
-stage-install-test: ⚙️  # test stage installer path validation and failure cleanup
-	bash scripts/stage-install-test.sh
-
 promote: ⚙️ build  # promote a privately staged directory into host GOBIN/GOPATH/bin and XDG man roots
 	@test -n "$(STAGE)" || (printf 'Usage: make promote STAGE=/abs/path/to/staged\n' >&2; exit 2)
 	./$(BINARY) install --staged "$(STAGE)"
@@ -122,7 +119,7 @@ macos-ci: ⚙️  # trigger and watch macos-hello CI workflow on the GitHub mirr
 test-pi: ⚙️  # Pi background-task extension tests (node 22.18+; fails when node is missing)
 	bash scripts/test-pi.sh
 
-check: ⚙️ test-pi stage-install-test  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
+check: ⚙️ test-pi  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
 	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
 	GOWORK=off go test $(TESTFLAGS) -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) ./...

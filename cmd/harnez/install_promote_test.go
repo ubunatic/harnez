@@ -112,3 +112,60 @@ func TestInstallStagedCommandAndRunnerManGuards(t *testing.T) {
 		t.Fatalf("runner dependency install err = %v, want host-only", err)
 	}
 }
+
+// TestInstallStageInRunnerModeStaysInsideTheSession covers `install --stage`
+// (issue 1254): allowed in runner mode inside $TAIA_SESSION_DIR, with man pages
+// that match the promoter's manifest, refused outside it, and exclusive of the
+// install flags.
+func TestInstallStageInRunnerModeStaysInsideTheSession(t *testing.T) {
+	runnerRoot := filepath.Join(t.TempDir(), "runner-sess")
+	if err := os.Mkdir(runnerRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runnerRoot)
+
+	staged := filepath.Join(runnerRoot, "stage")
+	stageCmd := newRootCmd()
+	stageCmd.SetArgs([]string{"install", "--stage", staged})
+	if err := stageCmd.Execute(); err != nil {
+		t.Fatalf("runner install --stage inside session failed: %v", err)
+	}
+	if info, err := os.Stat(filepath.Join(staged, "bin", "harnez")); err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatalf("staged binary = %v, %v", info, err)
+	}
+	manifest, err := expectedManManifest(newRootCmd())
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Join(staged, "share", "man", "man1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	if strings.Join(got, ",") != strings.Join(manifest, ",") {
+		t.Errorf("staged man pages differ from the promoter manifest:\n got %v\nwant %v", got, manifest)
+	}
+
+	outsideParent := filepath.Join(t.TempDir(), "outside")
+	if err := os.Mkdir(outsideParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(outsideParent, "stage")
+	outsideCmd := newRootCmd()
+	outsideCmd.SetArgs([]string{"install", "--stage", outside})
+	if err := outsideCmd.Execute(); err == nil || !strings.Contains(err.Error(), "escapes $TAIA_SESSION_DIR") {
+		t.Fatalf("runner install --stage outside session err = %v", err)
+	}
+	if _, err := os.Lstat(outside); err == nil {
+		t.Errorf("refused stage left %s behind", outside)
+	}
+
+	conflictCmd := newRootCmd()
+	conflictCmd.SetArgs([]string{"install", "--stage", filepath.Join(runnerRoot, "other"), "--strategy", "self"})
+	if err := conflictCmd.Execute(); err == nil || !strings.Contains(err.Error(), "cannot be combined with --stage") {
+		t.Fatalf("install --stage --strategy err = %v", err)
+	}
+}

@@ -15,19 +15,42 @@ import (
 
 func newInstallCmd() *cobra.Command {
 	var opts selfinstall.Options
+	var stageDir string
 	var stagedDir string
 	var stagedSHA256 string
 	cmd := &cobra.Command{
 		Use:   "install [host | dependency]",
 		Short: "Install harnez locally or over ssh, or install an optional dependency",
 		Long: "Install or update harnez locally (into --dir, configuring shell PATH, completions,\n" +
-			"the ⚙ symlink, and man pages), promote a privately staged build into trusted\n" +
-			"host roots (--staged <dir>), or install onto a remote host over ssh.\n" +
-			"When the argument names a package in spec/dependencies.yaml (such as neus),\n" +
-			"it runs that dependency's installer instead.",
+			"the ⚙ symlink, and man pages), stage this binary and its man pages into a new\n" +
+			"private directory (--stage <dir>, allowed in runner mode), promote such a staged\n" +
+			"build into trusted host roots (--staged <dir>), or install onto a remote host\n" +
+			"over ssh. When the argument names a package in spec/dependencies.yaml (such as\n" +
+			"neus), it runs that dependency's installer instead.",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if stageDir != "" {
+				if len(args) > 0 {
+					return fmt.Errorf("--stage cannot be combined with a host or dependency argument")
+				}
+				for _, name := range []string{"staged", "sha256", "strategy", "dir", "version", "allow-dirty", "direct", "no-shell", "no-man", "dry-run"} {
+					if cmd.Flags().Changed(name) {
+						return fmt.Errorf("flag --%s cannot be combined with --stage", name)
+					}
+				}
+				if sessDir := runstate.RunnerDir(); sessDir != "" {
+					if err := validateInRunnerSession(sessDir, stageDir, "install --stage destination"); err != nil {
+						return err
+					}
+				}
+				return selfinstall.Stage(selfinstall.StageOptions{
+					Dir: stageDir,
+					WriteMan: func(manDir string) error {
+						return installManPages(cmd.Root(), manDir, io.Discard)
+					},
+				}, cmd.OutOrStdout())
+			}
 			if stagedDir != "" {
 				if len(args) > 0 {
 					return fmt.Errorf("--staged cannot be combined with a host or dependency argument")
@@ -79,6 +102,7 @@ func newInstallCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.NoShell, "no-shell", false, "Skip shell PATH and completion setup on local install")
 	cmd.Flags().BoolVar(&opts.NoMan, "no-man", false, "Skip installing roff man pages on local install")
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Print actions without installing")
+	cmd.Flags().StringVar(&stageDir, "stage", "", "Copy this binary and its man pages into a new private directory (absolute, parent mode 0700) for --staged")
 	cmd.Flags().StringVar(&stagedDir, "staged", "", "Promote a privately staged build into trusted host GOBIN/GOPATH/bin and XDG man roots")
 	cmd.Flags().StringVar(&stagedSHA256, "sha256", "", "Expected 64-hex SHA-256 digest of staged bin/harnez when using --staged")
 	return cmd

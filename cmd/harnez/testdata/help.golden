@@ -1931,10 +1931,11 @@ Flags:
 
 === harnez install
 Install or update harnez locally (into --dir, configuring shell PATH, completions,
-the ⚙ symlink, and man pages), promote a privately staged build into trusted
-host roots (--staged <dir>), or install onto a remote host over ssh.
-When the argument names a package in spec/dependencies.yaml (such as neus),
-it runs that dependency's installer instead.
+the ⚙ symlink, and man pages), stage this binary and its man pages into a new
+private directory (--stage <dir>, allowed in runner mode), promote such a staged
+build into trusted host roots (--staged <dir>), or install onto a remote host
+over ssh. When the argument names a package in spec/dependencies.yaml (such as
+neus), it runs that dependency's installer instead.
 
 Usage:
   harnez install [host | dependency] [flags]
@@ -1948,6 +1949,7 @@ Flags:
       --no-man            Skip installing roff man pages on local install
       --no-shell          Skip shell PATH and completion setup on local install
       --sha256 string     Expected 64-hex SHA-256 digest of staged bin/harnez when using --staged
+      --stage string      Copy this binary and its man pages into a new private directory (absolute, parent mode 0700) for --staged
       --staged string     Promote a privately staged build into trusted host GOBIN/GOPATH/bin and XDG man roots
       --strategy string   Binary source: auto, self, build, release, or go (default "auto")
       --version string    Version or git ref for the release and go strategies

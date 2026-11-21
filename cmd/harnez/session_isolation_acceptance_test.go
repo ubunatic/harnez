@@ -189,19 +189,15 @@ echo "BWRAP_WITH_GRANT_OK"
 
 func verifyStagedHostPromotion(t *testing.T, fx liveIsolationFixture) {
 	t.Helper()
-	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
 	stageParent := filepath.Join(t.TempDir(), "stage-parent")
 	if err := os.Mkdir(stageParent, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	staged := filepath.Join(stageParent, "staged-promo")
-	stageCmd := exec.Command("bash", filepath.Join(repoRoot, "scripts", "stage-install.sh"), staged)
+	stageCmd := exec.Command(fx.builtBin, "install", "--stage", staged)
 	stageCmd.Env = append(os.Environ(), fx.env...)
 	if stageOut, err := stageCmd.CombinedOutput(); err != nil {
-		t.Fatalf("stage-install.sh failed: %v\n%s", err, string(stageOut))
+		t.Fatalf("harnez install --stage failed: %v\n%s", err, string(stageOut))
 	}
 	stagedBinBytes, err := os.ReadFile(filepath.Join(staged, "bin", "harnez"))
 	if err != nil {
