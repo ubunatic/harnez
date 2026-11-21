@@ -92,3 +92,7 @@ default tier changed and developer `smart` reordered in `spec/agent.yaml`, `inte
 The spec-wide resolution test found 1253.
 
 Remaining: one full `make test-q1` on the host, then merge the PR.
+
+Host run (2026-11-21): the owner reports `make test-q1` passed on the host. The PR merged as #193;
+the follow-up test fixes (cost gate in `agent_resume_test.go` and `agent_agy_approval_test.go`)
+merged with #194.
