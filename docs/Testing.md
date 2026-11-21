@@ -96,7 +96,7 @@ make check       # vet plus the complete Go suite
 make smoke       # build plus live smoke checks
 make container-test  # make check offline in Containerfile.test (podman or docker)
 make macos-ci    # trigger + quietly watch real macOS CI on the GitHub mirror
-make install     # install the current binary to ~/go/bin
+make install     # install the current binary to ~/.local/bin (harnez install)
 ```
 
 For advanced cases, inspect the nearest package tests, the relevant canary, and

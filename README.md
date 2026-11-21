@@ -36,7 +36,7 @@ Or from source:
 ```sh
 git clone https://codeberg.org/ubunatic/harnez
 cd harnez
-make install          # builds and installs to ~/go/bin
+make install          # builds and installs to ~/.local/bin via harnez install
 ```
 
 System-wide:
@@ -414,7 +414,7 @@ make build    # compile ./harnez
 make test     # go vet + go test
 make apply    # build then apply repo config.yaml to ~/.claude
 make diff     # build then preview changes
-make install  # build then install to ~/go/bin
+make install  # build, then harnez install into ~/.local/bin
 ```
 
 Smoke-test (build → apply → idempotency check → drift simulation → repair):

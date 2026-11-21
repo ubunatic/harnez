@@ -29,8 +29,8 @@ help: 🤖  # show this help
 preflight: ⚙️  # check toolchains and dependencies
 	@command -v go >/dev/null || (echo "❌ go is not installed" && exit 1)
 
-build: ⚙️  # build the binary
-	go build -ldflags '$(VERSION_LDFLAGS)' -o $(BINARY) ./cmd/harnez
+build: ⚙️  # build the static binary (CGO_ENABLED=0, like releases; goself's self strategy copies it)
+	CGO_ENABLED=0 go build -ldflags '$(VERSION_LDFLAGS)' -o $(BINARY) ./cmd/harnez
 
 run: ⚙️ build  # run the application locally
 	./$(BINARY)
@@ -38,13 +38,8 @@ run: ⚙️ build  # run the application locally
 man: ⚙️ build  # generate roff man pages
 	./$(BINARY) man --dir .
 
-install: ⚙️ build  # install binary to ~/go/bin (user)
-	go install -ldflags '$(VERSION_LDFLAGS)' ./cmd/harnez
-	./$(BINARY) man --install
-	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
-	@if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet harnez-agent-collector.service 2>/dev/null; \
-	then ./$(BINARY) server restart; \
-	fi
+install: ⚙️ build  # harnez install: ~/.local/bin, ⚙, shell PATH, completions, man pages, active collector (host only)
+	./$(BINARY) install --strategy self
 
 stage-install-test: ⚙️  # test stage installer path validation and failure cleanup
 	bash scripts/stage-install-test.sh

@@ -1,6 +1,6 @@
 # 1245 — make install writes ~/go/bin/harnez while ~/.local/bin/harnez (goself) shadows it on PATH
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -32,3 +32,24 @@ A taia background task runs `bash -lc`, where `command -v harnez` is `~/.local/b
 `harnez agent models --picks` from `~/go/bin` gives the shipped chain
 `terra:low, luna:high, neon:low, haiku:high`. So agents in background tasks silently use an old
 spec and old code until `~/.local/bin` is updated.
+
+## 5. Resolution (2026-11-21)
+
+Owner question "do we use goself properly" found three gaps against goself's own guide
+(`skills/goself/SKILL.md` in goself v0.3.0); all three are fixed here:
+
+- One install location. `make install` now runs `./harnez install --strategy self`, so goself
+  writes `~/.local/bin/harnez`, the `⚙` symlink, shell PATH, completions and man pages, and
+  restarts an active collector. It no longer writes `GOPATH/bin`. `self` copies the
+  Makefile build, which keeps the `+<commit count>` version; `auto` would rebuild without it.
+- Static build. `make build` uses `CGO_ENABLED=0` like GoReleaser, so the `self` strategy never
+  copies a glibc-linked binary to a musl host (goself trap 1). Only `net`, `os/user` and
+  `runtime/cgo` used cgo, and all three have pure-Go fallbacks.
+- `go.mod` listed goself as `// indirect`; `go mod tidy` makes it (and `golang.org/x/sys`) direct.
+- `harnez install` warns when PATH finds a different harnez first (for example a stale
+  `~/go/bin/harnez` from the old recipe) and says which directory to put first.
+
+Unchanged: runner mode still refuses `harnez install` (issue 1181, A4), so `make install` inside
+a taia session fails with the stage-and-promote hint. `make promote` still writes `GOBIN` or
+`GOPATH/bin`; aligning the promoter root with `~/.local/bin` is a follow-up if staged promotion
+should also land first on PATH.
