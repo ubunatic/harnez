@@ -1,6 +1,6 @@
 # 1248 — pr wait --contains exits 1 after a detected merge when the local git fetch fails
 
-**Status**: Open
+**Status**: Closed — pr wait --contains asks the forge compare API first; a seen merge never exits 1, exit 6 when unverifiable
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
