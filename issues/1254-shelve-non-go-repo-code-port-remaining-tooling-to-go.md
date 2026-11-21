@@ -1,6 +1,6 @@
 # 1254 — Shelve non-Go repo code; port remaining tooling to Go
 
-**Status**: In Progress
+**Status**: Closed — non-Go repo code shelved (#196) and lint.sh, smoke-test.sh, drop-perm.sh, stage-install.sh and its test ported to Go (#201, #202, #203); remaining shell scripts kept by owner rule
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor
