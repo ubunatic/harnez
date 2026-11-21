@@ -1,6 +1,6 @@
 # 1220 — reconcile flash38 role claims (escalation-only, no developer) with its use as a good enough everyday coder
 
-**Status**: Open
+**Status**: Closed — owner decisions of 2026-11-19/20 applied; flash38 history recorded in docs/Models.md
 **Priority**: P3 (Low)
 **Severity**: Moderate
 **Category**: Agent Guidance
