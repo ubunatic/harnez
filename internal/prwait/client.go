@@ -19,6 +19,43 @@ type PullInfo struct {
 	MergedAt       string `json:"merged_at"`
 	MergeCommitSHA string `json:"merge_commit_sha"`
 	HTMLURL        string `json:"html_url"`
+	// Mergeable is false when the forge cannot merge the head into the base. Forgejo also says
+	// false while it rechecks after a push and for work-in-progress PRs; GitHub says null while
+	// it computes. Only a local merge check turns false into a conflict.
+	Mergeable *bool   `json:"mergeable"`
+	Head      PullRef `json:"head"`
+	Base      PullRef `json:"base"`
+	// Flow is Forgejo's PR kind: 1 is an AGit PR, whose head.label is "<pusher>/<topic>".
+	Flow int `json:"flow"`
+}
+
+// PullRef is one side of a pull request. An AGit head has ref refs/pull/<n>/head.
+type PullRef struct {
+	Ref   string   `json:"ref"`
+	Label string   `json:"label"`
+	SHA   string   `json:"sha"`
+	Repo  PullRepo `json:"repo"`
+}
+
+// PullRepo names the repository a PullRef lives in.
+type PullRepo struct {
+	FullName string `json:"full_name"`
+}
+
+// agitFlow is Forgejo's flow value for a PR opened by pushing to refs/for/<base>/<topic>.
+const agitFlow = 1
+
+// AGitTopic returns the pusher and topic of an AGit PR. Only a push by that pusher to the same
+// topic updates the PR; anyone else's push opens a new one.
+func (p PullInfo) AGitTopic() (pusher, topic string, ok bool) {
+	if p.Flow != agitFlow {
+		return "", "", false
+	}
+	pusher, topic, ok = strings.Cut(p.Head.Label, "/")
+	if !ok || pusher == "" || topic == "" {
+		return "", "", false
+	}
+	return pusher, topic, true
 }
 
 // APIError is a failed pull request lookup. Transient errors (network, 429, 5xx) may be retried.
