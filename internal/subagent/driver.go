@@ -975,8 +975,11 @@ func resolveExistingModelIn(aliases map[string]modelAlias, spec string) (Model, 
 		if len(parts) == 3 {
 			parts[2] = normalizeTier(parts[2])
 		} else if len(parts) == 2 {
+			// A spec key whose provider is also an alias (strata:<name>) is the key
+			// itself, not <alias>:<tier> (issue 1253).
+			_, isKey := aliases[clean]
 			for _, candidate := range aliases {
-				if modelHasAlias(candidate, parts[0]) {
+				if !isKey && modelHasAlias(candidate, parts[0]) {
 					parts[1] = normalizeTier(parts[1])
 					if !isTier(parts[1]) {
 						return Model{}, fmt.Errorf("unknown model tier in requested spec %q; known specs: %s", spec, knownModelSpecs())
