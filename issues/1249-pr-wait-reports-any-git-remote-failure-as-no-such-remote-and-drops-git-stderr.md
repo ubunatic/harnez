@@ -1,6 +1,6 @@
 # 1249 — pr wait reports any git remote failure as no such remote and drops git stderr
 
-**Status**: Open
+**Status**: Closed — git errors keep exit code and stderr; no such remote only on exit 2
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
