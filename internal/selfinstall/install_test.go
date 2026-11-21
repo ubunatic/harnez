@@ -126,3 +126,52 @@ func TestRunUnknownStrategyErrors(t *testing.T) {
 		t.Fatalf("error = %v, want unknown strategy", err)
 	}
 }
+
+func TestShadowWarningNamesTheHarnezThatPATHFindsFirst(t *testing.T) {
+	root := t.TempDir()
+	installDir := filepath.Join(root, "local", "bin")
+	otherDir := filepath.Join(root, "go", "bin")
+	linkDir := filepath.Join(root, "link")
+	for _, dir := range []string{installDir, otherDir, linkDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	binPath := filepath.Join(installDir, "harnez")
+	for _, path := range []string{binPath, filepath.Join(otherDir, "harnez")} {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(binPath, filepath.Join(linkDir, "harnez")); err != nil {
+		t.Fatal(err)
+	}
+	empty := t.TempDir()
+	sep := string(os.PathListSeparator)
+
+	for _, tc := range []struct {
+		name, path string
+		warn       bool
+	}{
+		{"install dir first", installDir + sep + otherDir, false},
+		{"other copy first", otherDir + sep + installDir, true},
+		{"symlink to the installed file", linkDir + sep + otherDir, false},
+		{"no harnez on PATH", empty, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PATH", tc.path)
+			got := shadowWarning(binPath)
+			if !tc.warn {
+				if got != "" {
+					t.Fatalf("shadowWarning = %q, want none", got)
+				}
+				return
+			}
+			for _, want := range []string{"warning:", filepath.Join(otherDir, "harnez"), binPath, installDir + " first"} {
+				if !strings.Contains(got, want) {
+					t.Errorf("shadowWarning = %q, missing %q", got, want)
+				}
+			}
+		})
+	}
+}

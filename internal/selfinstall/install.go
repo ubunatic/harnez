@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -43,7 +44,7 @@ type Options struct {
 
 // Run installs or updates the harnez binary locally or on Options.Host and, for
 // local installs, updates shell PATH, completions, gear symlink, man pages, and
-// any active collector service.
+// any active collector service, and warns when PATH finds another harnez first.
 func Run(ctx context.Context, opts Options, out io.Writer) error {
 	if runstate.InRunnerMode() && !opts.DryRun {
 		return fmt.Errorf("harnez install: shared installation via goself is host-only in runner mode; stage with scripts/stage-install.sh and promote on host via harnez install --staged <dir>")
@@ -151,7 +152,39 @@ func setupLocalUX(ctx context.Context, opts Options, binPath string, out io.Writ
 	if refresh == nil {
 		refresh = refreshSystemdCollector
 	}
-	return refresh(ctx, binPath, out)
+	if err := refresh(ctx, binPath, out); err != nil {
+		return err
+	}
+	if w := shadowWarning(binPath); w != "" {
+		fmt.Fprintln(out, w)
+	}
+	return nil
+}
+
+// shadowWarning reports when the harnez that PATH finds first is not binPath,
+// so a stale copy elsewhere (such as GOPATH/bin) would keep running (issue 1245).
+func shadowWarning(binPath string) string {
+	found, err := exec.LookPath(filepath.Base(binPath))
+	if err != nil {
+		return ""
+	}
+	if sameFile(found, binPath) {
+		return ""
+	}
+	return fmt.Sprintf("  warning: harnez on PATH is %s, not %s; remove it or put %s first on PATH",
+		fsutil.ContractHome(found), fsutil.ContractHome(binPath), fsutil.ContractHome(filepath.Dir(binPath)))
+}
+
+func sameFile(a, b string) bool {
+	ai, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	bi, err := os.Stat(b)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(ai, bi)
 }
 
 func ensureGearSymlink(binPath string) (string, bool, error) {
