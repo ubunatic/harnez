@@ -71,3 +71,9 @@ Done: `CompletionDelivery` treats "not idle with no known agent run" as possible
 Implement and verify a bounded improvement for the reproduced race without claiming the full no-loss goal unless the API limitation is resolved. Preserve ordinary streaming follow-ups and cancellation; make undelivered or unconfirmed work visible, avoid blind resend/duplicate loops, and report residual cases. Keep batching policy in 1044 and output formatting in 1021/1046. Review design and canary evidence before closing; park any genuinely unresolvable gap explicitly.
 
 Before implementing, check live code, Pi APIs and recent history. Coordinate with the output and batching policies in 1021, 1044 and 1046. Verify a real Pi session with a task completing during compaction, multiple concurrent completions, and error/retry handling, plus focused automated tests. Preserve cancellation and normal completion behavior; document any runtime limitation that prevents reliable delivery.
+
+## Shelved canary (2026-11-21)
+
+Issue 1254 removed this ticket's non-Go canary or helper script from the tree. Restore it with
+`git checkout <commit>^ -- <path>`, where `<commit>` is the 1254 shelving commit; section 4 of
+issue 1254 lists the paths.

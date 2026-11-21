@@ -41,4 +41,4 @@ Rejected constructs:
 - Return a unique marker string from the hook and grep the saved session
   (`~/.claude/projects/<cwd with / and . as ->/*.jsonl`) for it: this proves the returned value
   took effect, not only that the hook fired.
-- Examples: `canary/646-session-compact/`, `scripts/canary-646-claude-compact.sh`.
+- Examples: the shelved 646 canaries (issue 1254).

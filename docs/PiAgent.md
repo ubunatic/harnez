@@ -111,7 +111,7 @@ resumes; this is not an acknowledgement or a guarantee that old results remain u
 releases unsent pins and clears delivery timers. The loader rejects entry limits below 256, message
 limits below 512, or a message limit unable to fit one full entry plus the guidance envelope; the
 schema enforces individual bounds and the loader additionally checks the field relationship.
-`make canary-pi-compaction` checks this against the real Pi with a local stub model.
+The real-Pi canary for this (issue 1047) is shelved; see issue 1254 to restore it.
 
 Tools (model-callable):
 
@@ -153,11 +153,8 @@ The bounded post-exit drain deadline can mark even finite buffered output incomp
 storage is slow. Tasks with held completion messages remain available until submission,
 which is not an acknowledgement of delivery; normal eviction can follow submission.
 
-For isolated real-Pi regression checks, `scripts/canary-pi-capture/run.sh` exercises
-capture, paged reads and opt-outs; `scripts/canary-pi-presentation/run.sh` checks
-collapsed and expanded interactive output. These use a local stub model and do not
-establish that an installed global extension or an external model is configured correctly.
-The compaction canary above checks batching and held notifications separately.
+The real-Pi capture and presentation canaries (local stub model) are shelved with the
+compaction canary; issue 1254 lists them and how to restore them.
 
 Lifecycle and reporting:
 

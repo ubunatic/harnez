@@ -53,3 +53,9 @@ unless `HARNEZ_DOT8=1` is set (`cmd/harnez/read.go`), and the exported `Dot8Enco
 `Dot8Decode`, `Dot8RoundTripCheck`, and `Dot8CheckDocument` functions in
 `internal/readcard/dot8.go` are marked `Deprecated:`. Resume once this pitch fix
 lands and a clean 3x4 readability canary passes 3/3 on at least two agents.
+
+## Shelved canary (2026-11-21)
+
+Issue 1254 removed this ticket's non-Go canary or helper script from the tree. Restore it with
+`git checkout <commit>^ -- <path>`, where `<commit>` is the 1254 shelving commit; section 4 of
+issue 1254 lists the paths.

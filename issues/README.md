@@ -36,4 +36,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1247 | [1247-allow-forge-issues-edit-via-codeberg-token.md](1247-allow-forge-issues-edit-via-codeberg-token.md) | Allow forge issues edit via CODEBERG_TOKEN | Open |
 | 1250 | [1250-telemetry-record-dropped-prints-on-every-harnez-call-inside-a-taia-sandbox.md](1250-telemetry-record-dropped-prints-on-every-harnez-call-inside-a-taia-sandbox.md) | telemetry record dropped prints on every harnez call inside a taia sandbox | Open |
 | 1251 | [1251-issue-skill-treats-push-dry-run-as-a-permission-check-and-misreads-a-branch-protection-rejection.md](1251-issue-skill-treats-push-dry-run-as-a-permission-check-and-misreads-a-branch-protection-rejection.md) | issue skill treats push --dry-run as a permission check and misreads a branch-protection rejection | Open |
+| 1254 | [1254-shelve-non-go-repo-code-port-remaining-tooling-to-go.md](1254-shelve-non-go-repo-code-port-remaining-tooling-to-go.md) | Shelve non-Go repo code; port remaining tooling to Go | In Progress |
 <!-- harnez:end issues-active-index -->

@@ -178,3 +178,9 @@ Neither offers a live replacement hook like Claude's `session.compact`.
   fail; with `false` all pass. Likely the same drift bug; fix it and make the tests independent of the flag.
 - **Consequence**: for Codex/agy only two routes remain, each needing its own canary: (a) Codex
   `experimental_compact_prompt_file` for better summaries, (b) disk rewrite + resume.
+
+## Shelved canary (2026-11-21)
+
+Issue 1254 removed this ticket's non-Go canary or helper script from the tree. Restore it with
+`git checkout <commit>^ -- <path>`, where `<commit>` is the 1254 shelving commit; section 4 of
+issue 1254 lists the paths.
