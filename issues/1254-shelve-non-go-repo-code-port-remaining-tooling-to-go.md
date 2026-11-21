@@ -44,9 +44,11 @@ Shelving means removing from the tree; git history keeps the files. Restore one 
   for each removed path outside `issues/` and `docs/studies/`.
 - M2: port `scripts/lint.sh` (docs/commands registration) to a Go test or `harnez lint --check`
   and drop its dead `contrib/*/*.js` node check (no `contrib/` exists).
-- M3: fold `scripts/test-pi.sh` into the Makefile recipe; review `smoke-test.sh`,
-  `stage-install*.sh`, `macos-ci.sh` and `install-canary.sh` for a Go port (`go run ./scripts/...`
-  or an `internal/` test), one at a time.
+- M3: port `scripts/smoke-test.sh` (with `drop-perm.sh`) and `scripts/stage-install-test.sh` to Go
+  tests in the full tier, one at a time. Owner rule (2026-11-21): keep Makefile recipes thin; do
+  not move script logic into the Makefile. A few small shell scripts are fine: `test-pi.sh`,
+  `stage-install.sh`, the pre-push hook, the container launchers and the environment bootstrap
+  scripts (`install-dev-deps.sh`, `setup-env.sh`, `jules-setup.sh`, `macos-ci.sh`) stay shell.
 
 ## 4. M1 Shelved
 
