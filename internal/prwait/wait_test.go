@@ -33,6 +33,26 @@ type fakeGit struct {
 	fetched   int
 	checked   []string
 	asked     int
+	// conflicts answers Conflicts per call; the last entry repeats.
+	conflicts   []conflictAnswer
+	conflictAsk []string
+}
+
+type conflictAnswer struct {
+	files []string
+	err   error
+}
+
+func (g *fakeGit) Conflicts(_, remote, base string, number int, head string) ([]string, error) {
+	g.conflictAsk = append(g.conflictAsk, fmt.Sprintf("%s/%s+#%d@%s", remote, base, number, head))
+	if len(g.conflicts) == 0 {
+		return nil, fmt.Errorf("unexpected Conflicts call")
+	}
+	i := len(g.conflictAsk) - 1
+	if i >= len(g.conflicts) {
+		i = len(g.conflicts) - 1
+	}
+	return g.conflicts[i].files, g.conflicts[i].err
 }
 
 func (g *fakeGit) RemoteURL(string, string) (string, error) {

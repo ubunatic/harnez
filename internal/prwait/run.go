@@ -2,6 +2,7 @@ package prwait
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 )
@@ -13,14 +14,17 @@ type Request struct {
 	Dir      string        // repository directory; empty means the current directory
 	Timeout  time.Duration // zero uses the spec's default_timeout
 	Contains string        // optional commit that must be on the default branch after a merge
+	Progress io.Writer     // receives a line per fixup pushed; nil discards it
 }
 
 // Deps are the side effects Run needs. Tests inject fakes; the command uses SystemDeps.
+// Fix is set only for --fixup.
 type Deps struct {
 	Fetch   Fetcher
 	Clock   Clock
 	Git     GitOps
 	Compare Comparer
+	Fix     Fixer
 }
 
 // Report is what the command prints and turns into an exit code.
@@ -80,6 +84,7 @@ func Run(spec Spec, deps Deps, req Request) Report {
 		Dir:       dir,
 		Remote:    remote,
 		Branch:    spec.DefaultBranch,
+		Progress:  req.Progress,
 	}
 	res := Waiter(deps).Wait(opt)
 	return Report{Outcome: res.Outcome, Line: res.Summary(target, opt), Err: res.Err}

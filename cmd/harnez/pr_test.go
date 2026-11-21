@@ -46,7 +46,7 @@ func TestPRWaitHelpListsExitCodes(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"--remote", "--timeout", "--contains", "merged", "closed without a merge", "still open"} {
+	for _, want := range []string{"--remote", "--timeout", "--contains", "merged", "closed without a merge", "still open", "conflicts with the base"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("help lacks %q", want)
 		}

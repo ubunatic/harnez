@@ -2578,6 +2578,15 @@ Exit codes:
   5  merged, but the --contains commit is not on the default branch
   6  merged, but whether the --contains commit is on the default branch is
      unverified: neither the forge API nor local git could check it
+  7  open, but the head conflicts with the base: the summary names the files
+     and the push that updates this PR
+
+A conflict is checked on every poll, so one that appears after another PR
+merges ends the wait too. When the forge calls the PR unmergeable, pr wait
+fetches the base and refs/pull/<n>/head and merges them in memory with git
+merge-tree, ignoring custom merge drivers the forge does not run. A clean
+local merge (the forge still rechecking, or a work-in-progress PR) keeps it
+polling; if git cannot check, two unmergeable polls in a row end the wait.
 
 --contains asks the forge's compare API first and falls back to git fetch
 plus git merge-base when the API cannot answer (for example an unpushed sha).

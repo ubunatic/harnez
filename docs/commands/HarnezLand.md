@@ -28,6 +28,8 @@ for the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD`).
 - PR number in the push output: start `HTO=0 harnez pr wait <number> --contains <sha>` in the
   background, and report "merged" only on its exit 0. On exit 6 the forge saw the merge but
   `<sha>` is unverified: confirm with a foreground `git fetch` and `git merge-base --is-ancestor`.
+  On exit 7 the PR conflicts with its base: merge the base in, push with the `git push` line the
+  wait printed, and start a new wait.
 
 ## 3. Switch
 
