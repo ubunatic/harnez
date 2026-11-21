@@ -54,10 +54,8 @@ bridge (`$.process.run`), and why a mistake registers zero hooks silently.
 
 ## Canaries and testing
 
-- `scripts/canary-646-claude-compact.sh` starts an interactive Claude with the canary plugin in
-  a scratch dir (your `~/.claude/settings.json` untouched); `... check` greps the saved session
-  for `compact_boundary` and the marker.
-- `canary/646-session-compact/run.sh` (M1, scripted) and `m2-run.sh` (real `harnez compact`).
+- The 646 canaries (interactive `scripts/canary-646-claude-compact.sh`, scripted
+  `canary/646-session-compact/`) are shelved; issue 1254 lists how to restore them.
 - Never give a canary a fresh `CLAUDE_CONFIG_DIR`: it has no login, and credentials must not be
   copied. Use the real config with per-process flags (`--plugin-dir`, env).
 
@@ -81,5 +79,5 @@ warns that the run ended with no output. Usage is unchanged and provides no
 post-compaction context usage or reduction. Automatic threshold compaction stays
 disabled until a reliable current-context count is available. The interactive
 control path writes `/compact` to the PTY but was not verified live in this canary.
-Exact commands and saved-summary evidence are in issue 823; rerun the small probe
-with `python3 scripts/canary-823-agy-compact.py`.
+Exact commands and saved-summary evidence are in issue 823; the small probe
+(`scripts/canary-823-agy-compact.py`) is shelved, see issue 1254.

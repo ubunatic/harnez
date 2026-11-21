@@ -80,8 +80,9 @@ harnez read -I --dot8 docs/CodexHooks.md    # encode in-process, then render as 
 harnez read -I --dot8=native file.braille.md   # already-encoded input, skip the encoder
 ```
 
-- Port `scripts/md-to-braille8.py` to Go (`internal/readcard/dot8.go`), including the
-  lossless round-trip self-check. Go must not depend on Python at read time.
+- Port the shelved `scripts/md-to-braille8.py` (issue 1254) to Go
+  (`internal/readcard/dot8.go`), including the lossless round-trip
+  self-check. Go must not depend on Python at read time.
 - Style axes stay orthogonal: `--dot8` composes with `--chrome`, `--gutter`, `--frame`,
   `--meta`, `--style`.
 - Line numbers refer to the **source** line, so agents can cite `-L` ranges.

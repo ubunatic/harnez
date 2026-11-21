@@ -326,9 +326,8 @@ to (but simpler than) `PA_STREAM_PEAK_DETECT`; no audio is retained.
 ## 11. Minimal Canary Commands
 
 Three-state check: meter alone → meter + ordinary recorder → cleanup.
-The existing
-[`scripts/canary-gnome-mic-indicator.sh`](../scripts/canary-gnome-mic-indicator.sh)
-covers Strategy A for GNOME. Ad hoc commands for other strategies:
+The GNOME Strategy A canary (`scripts/canary-gnome-mic-indicator.sh`) is shelved;
+issue 1254 lists how to restore it. Ad hoc commands for other strategies:
 
 ### Strategy A — GNOME `application.id` exemption (confirmed)
 

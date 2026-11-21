@@ -21,6 +21,8 @@
 # local macOS container storage & test binaries
 /macos-storage/
 /scripts/macos-hello/hello_*
+# go build ./scripts/canary-* output at the root
+/canary-*
 downloads
 /scratch/
 /.dot8/

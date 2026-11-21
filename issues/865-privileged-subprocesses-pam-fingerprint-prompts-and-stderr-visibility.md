@@ -101,3 +101,9 @@ The user can run this canary directly on their host to confirm the biometric beh
 The canary exists (`scripts/canary-865-pam-fingerprint.py`, 9879553b, 112527d2); no host run result is
 recorded here. Still open: run it on the host (does fingerprint auth work with stdin closed?), then write the
 rules into `docs/lang/Go.md` and `docs/lang/Bash.md` (sources first, then root copies).
+
+## Shelved canary (2026-11-21)
+
+Issue 1254 removed this ticket's non-Go canary or helper script from the tree. Restore it with
+`git checkout <commit>^ -- <path>`, where `<commit>` is the 1254 shelving commit; section 4 of
+issue 1254 lists the paths.

@@ -17,9 +17,8 @@ title: Harnez Braille 8 Convention
 > canary passing 3/3 on at least two agents. This encoding convention below
 > remains the reference for the encoding itself.
 
-`scripts/md-to-braille8.py` performs a deliberately simple, reversible Unicode
-conversion. It is a project convention, not a universal literary- or
-computer-Braille table.
+The convention is a deliberately simple, reversible Unicode conversion. It is a project
+convention, not a universal literary- or computer-Braille table.
 
 ## Rules
 
@@ -86,32 +85,11 @@ column 2.
 
 ## Commands
 
-Encode:
+Render a native 3px Dot8 card with diagnostic dot colors:
 
 ```bash
-python3 scripts/md-to-braille8.py input.md
-# writes .dot8/input.braille.md beside input.md
-python3 scripts/md-to-braille8.py input.md output.braille.md
-
-# Render a native 3px Dot8 card with diagnostic dot colors
 harnez read -I --dot8 --dot8-colors=red-white input.md
 ```
 
-Decode:
-
-```bash
-python3 scripts/md-to-braille8.py --reverse .dot8/input.braille.md
-# writes input.md beside .dot8/
-python3 scripts/md-to-braille8.py --reverse .dot8/input.braille.md restored.md
-```
-
-Both normal and reverse conversion perform an automatic lossless round-trip
-self-check and refuse to write output if it fails.
-
-Check without writing. Success is silent and exits `0`; failures print only the
-affected Markdown section and error, then exit `1`:
-
-```bash
-python3 scripts/md-to-braille8.py --check input.md
-python3 scripts/md-to-braille8.py --reverse --check .dot8/input.braille.md
-```
+The standalone Python encoder and decoder (`scripts/md-to-braille8.py`, with `--reverse` and
+`--check`) is shelved with the Dot8 experiment; issue 1254 lists how to restore it.

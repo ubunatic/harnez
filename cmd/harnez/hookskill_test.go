@@ -9,7 +9,7 @@ import (
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
-// Payloads follow the issue 735 probe (scripts/canary-735-skill-hooks.sh).
+// Payloads follow the issue 735 probe (scripts/canary-735-skill-hooks.sh, shelved in issue 1254).
 func TestClaudeSkillHookRecordsSkillCalls(t *testing.T) {
 	home, cwd := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
