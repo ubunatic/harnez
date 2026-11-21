@@ -1,6 +1,6 @@
 # 1245 — make install writes ~/go/bin/harnez while ~/.local/bin/harnez (goself) shadows it on PATH
 
-**Status**: In Progress
+**Status**: Closed — make install goes through goself into ~/.local/bin with a static build and a PATH-shadow warning (#197); host verified: PATH and ./harnez both 0.5.10+5439
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -53,3 +53,8 @@ Unchanged: runner mode still refuses `harnez install` (issue 1181, A4), so `make
 a taia session fails with the stage-and-promote hint. `make promote` still writes `GOBIN` or
 `GOPATH/bin`; aligning the promoter root with `~/.local/bin` is a follow-up if staged promotion
 should also land first on PATH.
+
+Host run (2026-11-21): the owner ran `make install`; it installed `~/.local/bin/harnez`, restarted
+the collector, and warned that PATH finds `~/go/bin/harnez` first. After removing the stale
+`~/go/bin/harnez` and `~/go/bin/⚙`, `harnez --version` and `./harnez --version` both print
+`0.5.10+5439` and `which ⚙` is `~/.local/bin/⚙`, with `~/go/bin` still ahead on PATH.
