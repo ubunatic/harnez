@@ -1,6 +1,6 @@
 # 1252 — Update tests for the 2026-11-20 vendor-ladder model picks
 
-**Status**: In Progress
+**Status**: Closed — spec-derived test expectations merged (#193, #194); host make test-q1 passed
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
