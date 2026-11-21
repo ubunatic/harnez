@@ -30,10 +30,11 @@ func TestAgentAgyRoleAutoApprovesTools(t *testing.T) {
 				calls = append(calls, args)
 				return []byte(`{"conversation_id":"agy-c1","status":"SUCCESS","response":"done","usage":{"output_tokens":3}}`), nil
 			}}
-			if _, err := runWithStore(t, driver, storeDir, "start", "--name", "worker", "--role", tc.role, "--model", "argon", "review the diff"); err != nil {
+			// The costly gate is tested elsewhere; argon may be costly at its default tier.
+			if _, err := runWithStore(t, driver, storeDir, "start", "--name", "worker", "--role", tc.role, "--model", "argon", "--accept-cost", "review the diff"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := runWithStore(t, driver, storeDir, "resume", "--name", "worker", "go on"); err != nil {
+			if _, err := runWithStore(t, driver, storeDir, "resume", "--name", "worker", "--accept-cost", "go on"); err != nil {
 				t.Fatal(err)
 			}
 			if len(calls) != 2 {

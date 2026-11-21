@@ -1,6 +1,6 @@
 # 1249 — pr wait reports any git remote failure as no such remote and drops git stderr
 
-**Status**: Open
+**Status**: Closed — git errors keep exit code and stderr; no such remote only on exit 2
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
@@ -29,6 +29,15 @@ Verified on `main` at bb26257e. `internal/prwait/git.go:21-27` `SystemGit.Remote
 
 ## 3. Implementation & Verification Plan
 
-- [ ] `RemoteURL`: capture stderr. Report "no such remote" only for the missing-remote case (exit 2). For anything else, report `git remote get-url <remote>: exit <n>: <stderr>`.
-- [ ] `IsAncestor`: include the exit code and stderr for codes other than 0 and 1.
-- [ ] Test with a real temp repo (`internal/prwait` already has a git test main): (a) missing remote gives "no such remote"; (b) a broken config (`GIT_CONFIG_GLOBAL` pointing at an invalid file) gives git's own message, not "no such remote".
+- [x] `RemoteURL`: capture stderr. Report "no such remote" only for the missing-remote case (exit 2). For anything else, report `git remote get-url <remote>: exit <n>: <stderr>`.
+- [x] `IsAncestor`: include the exit code and stderr for codes other than 0 and 1.
+- [x] Test with a real temp repo (`internal/prwait` already has a git test main): (a) missing remote gives "no such remote"; (b) a broken config (`GIT_CONFIG_GLOBAL` pointing at an invalid file) gives git's own message, not "no such remote".
+
+## 4. Done (2026-11-21)
+
+Canary in a temp repo matched §2: `remote get-url nope` exits 2 (`error: No such remote`), a broken
+`GIT_CONFIG_GLOBAL` and a non-repository exit 128, `merge-base --is-ancestor deadbeef HEAD` exits
+128. `SystemGit.RemoteURL` says "no such remote" only on exit 2; other failures and `IsAncestor`
+codes other than 0/1 report `<git command>: exit <n>: <stderr>` (`gitError`,
+`internal/prwait/git.go`). Tests: `internal/prwait/git_test.go`, real temp repos, missing remote,
+broken global config, unknown object.

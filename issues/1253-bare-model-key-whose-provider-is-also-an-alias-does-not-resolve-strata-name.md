@@ -1,6 +1,6 @@
 # 1253 — Bare model key whose provider is also an alias does not resolve (strata:<name>)
 
-**Status**: Open
+**Status**: Closed — bare spec key resolves before the alias:tier reading; TestResolveModel covers every bare key
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug

@@ -40,6 +40,11 @@ Exit codes:
   3  still open when the timeout passed
   4  API error (not found, not authorized, or repeated transient failures)
   5  merged, but the --contains commit is not on the default branch
+  6  merged, but whether the --contains commit is on the default branch is
+     unverified: neither the forge API nor local git could check it
+
+--contains asks the forge's compare API first and falls back to git fetch
+plus git merge-base when the API cannot answer (for example an unpushed sha).
 
 Tokens are optional. Forgejo reads the env vars in spec/pr.yaml (for example
 CODEBERG_TOKEN); GitHub reads GITHUB_TOKEN, else gh auth token. No token is
@@ -72,6 +77,6 @@ ever printed.`,
 
 	cmd.Flags().StringVar(&remote, "remote", "", "git remote whose URL names the forge and repository (default: default_remote in spec/pr.yaml)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "give up after this long (default: default_timeout in spec/pr.yaml)")
-	cmd.Flags().StringVar(&contains, "contains", "", "after a merge, also require this commit to be on the default branch (exit 5 if not)")
+	cmd.Flags().StringVar(&contains, "contains", "", "after a merge, also require this commit to be on the default branch (exit 5 if not, 6 if unverifiable)")
 	return cmd
 }

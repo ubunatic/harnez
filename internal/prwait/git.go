@@ -17,13 +17,36 @@ type GitOps interface {
 // SystemGit runs the real git binary.
 type SystemGit struct{}
 
-// RemoteURL returns the fetch URL of remote.
+// RemoteURL returns the fetch URL of remote. Only git's exit 2 means the remote is missing;
+// any other failure (unreadable config, not a repository) keeps git's exit code and stderr (issue 1249).
 func (SystemGit) RemoteURL(dir, remote string) (string, error) {
-	out, err := exec.Command("git", "-C", dir, "remote", "get-url", remote).Output()
+	cmd := exec.Command("git", "-C", dir, "remote", "get-url", remote)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("git remote %q: no such remote", remote)
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
+			return "", fmt.Errorf("git remote %q: no such remote", remote)
+		}
+		return "", gitError(err, stderr.String(), "git remote get-url %s", remote)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// gitError names the git command, its exit code and its stderr.
+func gitError(err error, stderr, format string, args ...any) error {
+	what := fmt.Sprintf(format, args...)
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		what += fmt.Sprintf(": exit %d", exitErr.ExitCode())
+	} else {
+		what += ": " + err.Error()
+	}
+	if msg := strings.TrimSpace(stderr); msg != "" {
+		what += ": " + msg
+	}
+	return errors.New(what)
 }
 
 // FetchRemote fetches remote so the --contains check sees the latest default branch.
@@ -36,7 +59,10 @@ func (SystemGit) FetchRemote(dir, remote string) error {
 
 // IsAncestor reports whether sha is reachable from ref. Exit status 1 means "not an ancestor".
 func (SystemGit) IsAncestor(dir, sha, ref string) (bool, error) {
-	err := exec.Command("git", "-C", dir, "merge-base", "--is-ancestor", sha, ref).Run()
+	cmd := exec.Command("git", "-C", dir, "merge-base", "--is-ancestor", sha, ref)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	err := cmd.Run()
 	if err == nil {
 		return true, nil
 	}
@@ -44,5 +70,5 @@ func (SystemGit) IsAncestor(dir, sha, ref string) (bool, error) {
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return false, nil
 	}
-	return false, fmt.Errorf("git merge-base --is-ancestor %s %s failed", sha, ref)
+	return false, gitError(err, stderr.String(), "git merge-base --is-ancestor %s %s", sha, ref)
 }

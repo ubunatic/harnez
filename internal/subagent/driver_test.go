@@ -55,12 +55,8 @@ func TestResolveModel(t *testing.T) {
 	}
 	for key, entry := range shippedModels(t) {
 		want := entry.Model
-		specs := map[string]string{key + ":" + want.Tier: want.Tier, want.Provider + ":" + want.Name + ":" + want.Tier: want.Tier}
-		// A bare key whose provider is also a model alias reads as alias:tier
-		// (strata:<name>); only the tiered form is unambiguous there.
-		if !aliases[want.Provider] {
-			specs[key] = want.Tier
-		}
+		// The bare key resolves even when its provider is also an alias (strata:<name>, issue 1253).
+		specs := map[string]string{key: want.Tier, key + ":" + want.Tier: want.Tier, want.Provider + ":" + want.Name + ":" + want.Tier: want.Tier}
 		for _, alias := range entry.Aliases {
 			specs[alias] = aliasTier(alias, want.Tier)
 		}
@@ -76,6 +72,14 @@ func TestResolveModel(t *testing.T) {
 	}
 	if _, err := ResolveModel("fable:bogus"); err == nil || !strings.Contains(err.Error(), "unknown model tier") {
 		t.Errorf("ResolveModel(fable:bogus) error = %v; want unknown model tier", err)
+	}
+	// A provider that is also an alias still rejects an unknown tier (issue 1253).
+	for _, entry := range shippedModels(t) {
+		if provider := entry.Model.Provider; aliases[provider] {
+			if _, err := ResolveModel(provider + ":bogus"); err == nil || !strings.Contains(err.Error(), "unknown model tier") {
+				t.Errorf("ResolveModel(%s:bogus) error = %v; want unknown model tier", provider, err)
+			}
+		}
 	}
 }
 

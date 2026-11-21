@@ -17,9 +17,10 @@ type Request struct {
 
 // Deps are the side effects Run needs. Tests inject fakes; the command uses SystemDeps.
 type Deps struct {
-	Fetch Fetcher
-	Clock Clock
-	Git   GitOps
+	Fetch   Fetcher
+	Clock   Clock
+	Git     GitOps
+	Compare Comparer
 }
 
 // Report is what the command prints and turns into an exit code.
@@ -32,10 +33,12 @@ type Report struct {
 // SystemDeps wires the real HTTP fetcher, wall clock and git binary, with tokens read from getenv.
 func SystemDeps(spec Spec, getenv func(string) string) Deps {
 	ts := SystemTokenSource(getenv)
+	fetcher := NewHTTPFetcher(spec.RequestTimeout, ts.For)
 	return Deps{
-		Fetch: NewHTTPFetcher(spec.RequestTimeout, ts.For),
-		Clock: SystemClock{},
-		Git:   SystemGit{},
+		Fetch:   fetcher,
+		Clock:   SystemClock{},
+		Git:     SystemGit{},
+		Compare: fetcher,
 	}
 }
 

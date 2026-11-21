@@ -234,8 +234,9 @@ func TestWaitContainsChecksDefaultBranch(t *testing.T) {
 	}{
 		{"ancestor of default branch", &fakeGit{ancestor: true}, Merged, 1},
 		{"not on default branch", &fakeGit{ancestor: false}, NotOnBranch, 1},
-		{"fetch fails", &fakeGit{fetchErr: fmt.Errorf("network down")}, Failed, 1},
-		{"ancestry check errors", &fakeGit{ancestorE: fmt.Errorf("bad object")}, Failed, 1},
+		// A seen merge never ends in exit 1 (issue 1248).
+		{"fetch fails", &fakeGit{fetchErr: fmt.Errorf("network down")}, ContainsUnverified, 1},
+		{"ancestry check errors", &fakeGit{ancestorE: fmt.Errorf("bad object")}, ContainsUnverified, 1},
 	}
 	for _, kind := range forgeKinds {
 		for _, c := range cases {
@@ -266,5 +267,111 @@ func TestWaitSummaryNamesPRStateAndMergeCommit(t *testing.T) {
 		if !strings.Contains(line, want) {
 			t.Errorf("summary %q lacks %q", line, want)
 		}
+	}
+}
+
+type fakeComparer struct {
+	on    bool
+	err   error
+	asked []string
+}
+
+func (c *fakeComparer) OnBranch(_ Target, branch, sha string) (bool, error) {
+	c.asked = append(c.asked, branch+"..."+sha)
+	return c.on, c.err
+}
+
+// The forge API answers --contains first; local git runs only when the API cannot (issue 1248).
+func TestWaitContainsAsksForgeBeforeGit(t *testing.T) {
+	cases := []struct {
+		name      string
+		cmp       *fakeComparer
+		git       *fakeGit
+		want      Outcome
+		wantFetch int
+	}{
+		{"forge says on branch", &fakeComparer{on: true}, &fakeGit{fetchErr: fmt.Errorf("must not fetch")}, Merged, 0},
+		{"forge says not on branch", &fakeComparer{on: false}, &fakeGit{ancestor: true}, NotOnBranch, 0},
+		{"forge fails, git answers", &fakeComparer{err: fmt.Errorf("HTTP 404")}, &fakeGit{ancestor: true}, Merged, 1},
+		{"forge fails, git says not on branch", &fakeComparer{err: fmt.Errorf("HTTP 404")}, &fakeGit{ancestor: false}, NotOnBranch, 1},
+		{"forge and fetch fail", &fakeComparer{err: fmt.Errorf("HTTP 404")}, &fakeGit{fetchErr: fmt.Errorf("Host key verification failed")}, ContainsUnverified, 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := &scripted{steps: []step{{200, prJSON("closed", true)}}}
+			srv := httptest.NewServer(s.handler(t))
+			t.Cleanup(srv.Close)
+			target := Target{Forge: forgeFor("forgejo", srv.URL), Owner: "ubunatic", Repo: "harnez", Number: 78}
+			opt := Options{Target: target, Poll: time.Second, Timeout: time.Hour, MaxErrors: 3,
+				Contains: "b0721d2b", Remote: "origin", Branch: "main"}
+			w := Waiter{Fetch: NewHTTPFetcher(time.Second, nil), Clock: &fakeClock{}, Git: c.git, Compare: c.cmp}
+			res := w.Wait(opt)
+			if res.Outcome != c.want {
+				t.Fatalf("outcome = %d, want %d (err=%v)", res.Outcome, c.want, res.Err)
+			}
+			if c.git.fetched != c.wantFetch {
+				t.Fatalf("git fetches = %d, want %d", c.git.fetched, c.wantFetch)
+			}
+			if len(c.cmp.asked) != 1 || c.cmp.asked[0] != "main...b0721d2b" {
+				t.Fatalf("forge compare asked %q, want one main...b0721d2b", c.cmp.asked)
+			}
+			if res.Outcome != ContainsUnverified {
+				return
+			}
+			if res.Outcome.ExitCode() == Failed.ExitCode() {
+				t.Fatalf("a seen merge exited %d like a local error", res.Outcome.ExitCode())
+			}
+			for _, want := range []string{"HTTP 404", "Host key verification failed"} {
+				if res.Err == nil || !strings.Contains(res.Err.Error(), want) {
+					t.Errorf("err = %v, want it to name %q", res.Err, want)
+				}
+			}
+			line := res.Summary(target, opt)
+			for _, want := range []string{"PR 78 merged as d2044b5a3915", "b0721d2b", "unverified"} {
+				if !strings.Contains(line, want) {
+					t.Errorf("summary %q lacks %q", line, want)
+				}
+			}
+		})
+	}
+}
+
+func TestHTTPFetcherOnBranchReadsCompareTotalCommits(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		body    string
+		want    bool
+		wantErr bool
+	}{
+		{"on branch", 200, `{"total_commits":0,"commits":[]}`, true, false},
+		{"ahead of branch", 200, `{"total_commits":2,"commits":[{},{}]}`, false, false},
+		{"unknown sha", 404, `{"message":"The target couldn't be found."}`, false, true},
+		{"no total_commits", 200, `{}`, false, true},
+	}
+	for _, kind := range forgeKinds {
+		for _, c := range cases {
+			t.Run(kind+"/"+c.name, func(t *testing.T) {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if !strings.HasSuffix(r.URL.Path, "/repos/ubunatic/harnez/compare/main...b0721d2b") {
+						t.Errorf("unexpected request path %q", r.URL.Path)
+					}
+					w.WriteHeader(c.status)
+					_, _ = io.WriteString(w, c.body)
+				}))
+				t.Cleanup(srv.Close)
+				target := Target{Forge: forgeFor(kind, srv.URL), Owner: "ubunatic", Repo: "harnez", Number: 78}
+				on, err := NewHTTPFetcher(time.Second, nil).OnBranch(target, "main", "b0721d2b")
+				if (err != nil) != c.wantErr || on != c.want {
+					t.Fatalf("OnBranch = %t, %v; want %t, error %t", on, err, c.want, c.wantErr)
+				}
+			})
+		}
+	}
+}
+
+func TestSystemDepsAsksTheForgeForContains(t *testing.T) {
+	if SystemDeps(testSpec(), func(string) string { return "" }).Compare == nil {
+		t.Fatal("SystemDeps has no forge Comparer; --contains would depend on local git alone")
 	}
 }
