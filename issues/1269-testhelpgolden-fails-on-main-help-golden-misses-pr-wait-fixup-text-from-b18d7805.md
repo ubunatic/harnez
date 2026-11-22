@@ -1,6 +1,6 @@
 # 1269 — TestHelpGolden fails on main: help.golden misses pr wait --fixup text from b18d7805
 
-**Status**: Open
+**Status**: Closed — help.golden regenerated in f28f0f4d (pr wait --fixup text); TestHelpGolden green in 1045 M2-M4 Quota-1 runs
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
