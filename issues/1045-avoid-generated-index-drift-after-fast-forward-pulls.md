@@ -1,6 +1,6 @@
 # 1045 — Avoid generated index drift after fast-forward pulls
 
-**Status**: Open
+**Status**: Closed — Delivered M1-M4 (2da5631d, 93559eb8, ef587a23, 58b037a8): studies index reads git's index without dotfiles, hook-safe git calls, --stage stages generated drift but never hand edits; Quota-1 green (cmd/harnez 70.5s, no FAIL); live ff-pull plus issue-only commit with hooks left no drift
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
