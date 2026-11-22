@@ -99,3 +99,18 @@ Before implementation, verify current hook, index, lint and merge-driver behavio
    - after `--stage` and a commit, `git status` is clean apart from deliberate user edits.
 3. [low] Make the skip message accurate. A missing worktree file stages its deletion as before. A conflicted index file (no stage-0 entry) prints `index --stage: <path> is unmerged; not staged`. Test both.
 4. [nit] In `TestUntrackedPathsKeepsUnusualNames`, replace or extend `a b.md` with a case old code fails, such as a name with a tab or quote, and add one `R` rename entry to cover the source-field skip.
+
+**M4 delivered (58b037a8): every `--stage` candidate is held to the hand-edit rule.**
+- An unmerged index file prints `is unmerged; not staged`.
+- A post-merge-drift test and a clean-after-commit test were added, plus tab, quote and rename porcelain cases.
+- Dev Quota-1: `ok cmd/harnez 70.511s`, `ok internal/index 0.640s`, `ok internal/issues/maintenance 1.132s`, no FAIL.
+- Host live check: a prose edit plus a newly staged study leaves `docs/README.md` unstaged with the warning. `harnez init -d .` leaves the tree clean.
+
+## Decision (close-out)
+
+- Accepted residual: an index file with no stage-0 entry that is not conflicted (first creation) is staged whole. Reason: there is no staged content to compare against, and staging a newly created generated file is the intended behaviour.
+- The deleted-worktree branch, which stages the deletion, has no test: `index --stage` rewrites every existing candidate, so the branch is unreachable through the command.
+
+## Goal check
+
+Fast-forward pulls no longer leave index drift: untracked notes and dotfiles are never indexed, and a correct pulled commit regenerates to itself. The lint names untracked studies. `index --stage` fixes post-merge drift without staging hand edits or unrelated work. User edits are preserved. Hooks work in linked worktrees. The 1042 merge-conflict case stays separate.
