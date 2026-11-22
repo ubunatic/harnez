@@ -28,6 +28,13 @@ Before implementation, verify current hook, index, lint and merge-driver behavio
 - Studies index enumerates files in git's index (`git ls-files docs/studies`), skipping dotfiles; outside a git repo fall back to `os.ReadDir` minus dotfiles. Reason: matches the `--cached` lint's staged snapshot, so worktree-only notes never reach the index and a staged new study is still indexed.
 - post-merge keeps regenerating without staging. Reason: staging there would silently stage unrelated work; with tracked-only enumeration a correct pulled commit produces no drift.
 
+- Study titles are read from git's index blobs (one `git cat-file --batch`), worktree only in the non-git fallback. Reason: a staged-then-edited study would otherwise make the worktree render differ from the `--cached` lint, so `harnez index --stage` would loop.
+- `studyFiles` is a local helper in `internal/index` (stdout-only `exec`, `-z`, `git -C docsDir`). Reason: `maintenance` imports `index` (cycle), and `gitOutput` trims leading spaces.
+- Unmerged studies are deduped. Reason: `ls-files -s` lists them once per stage, and the merge driver renders docs during conflicts.
+- The untracked-study hint goes into the docs-drift message (`rebase.go:809`), collected via `porcelainStatus` with `--untracked-files=all`. Reason: the 781-783 hint is issues-only.
+- The e2e (a) ff-pull reproduction lands red-first in M1. Reason: reproducing it in M2 would require reverting M1.
+- `harnez index --stage` also stages a drifted issues README; this is accepted, and e2e (b) assumes no such drift.
+
 ## Milestones
 
 ### M1 — Tracked-only studies enumeration
