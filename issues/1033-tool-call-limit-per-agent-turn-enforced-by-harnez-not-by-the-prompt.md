@@ -1,5 +1,7 @@
 # 1033 — Tool-call limit per agent turn, enforced by harnez, not by the prompt
 
+> 2026-11-22 note (orchestrator-run findings, ticket 1264): the Findings' `--json` trap is partly stale. `useStream` is forced when a tool-call guard is set (`cmd/harnez/agent_run.go:678`), so a configured limit observes `--json` turns. The token watchdog still requires `streaming` (`:714-715`), so a detached Haiku turn has no token cap (1264).
+
 **Status**: Backlog — grooming 2026-11-19: post-v0.5.9 triage; active list focused on P1/P2 bugs and ready features under 30-ticket cap
 **Priority**: P2 (Medium)
 **Severity**: Minor
