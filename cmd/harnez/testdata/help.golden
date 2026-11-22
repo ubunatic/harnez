@@ -1882,7 +1882,9 @@ running the command directly in-session to see exactly what changed and
 fix the offending ticket(s) without a separate diff step. Pass --stage to
 stage the index files this run rewrote or that differ from the index (for
 example one that post-merge already regenerated); it requires a Git
-repository. When no index file differs, --stage stages nothing.
+repository. When no index file differs, --stage stages nothing. A differing file
+this run did not rewrite is staged only when its staged content regenerates to
+the worktree content; a file with unstaged hand edits is skipped with a warning.
 
 docs/studies/ is read from Git's index inside a repository: a new study is
 listed only after git add, and an untracked study is never listed. issues/*.md

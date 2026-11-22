@@ -226,10 +226,12 @@ rows within either managed table will be overwritten by the next `harnez index`
 run — prefer fixing the source ticket/study file instead. Use `harnez index --stage`
 to regenerate and stage the index files this run rewrote or that differ from the index
 (for example one the post-merge hook already regenerated); it requires a Git repository
-and stages nothing when no index file differs.
+and stages nothing when no index file differs. A differing file that `--stage` did not
+rewrite is staged only when regenerating its staged content gives the worktree content;
+a file with unstaged hand edits is skipped with a warning.
 
-Inside a Git repository the studies index reads Git's index: a new study is listed only
-after `git add`, and an untracked study is never listed. After a fast-forward pull the
+Inside a Git repository the studies index lists the studies in Git's index (tracked or
+staged): an untracked study is never listed, so `git add` a new study before `harnez index`. After a fast-forward pull the
 post-merge hook may leave a regenerated `docs/README.md` unstaged; the next issue-only
 commit then fails the pre-commit lint. Run `harnez index --stage`, then commit. The lint
 message names any untracked studies to `git add` first.

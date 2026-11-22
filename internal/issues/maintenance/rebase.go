@@ -688,15 +688,23 @@ func runIssuesLint(w io.Writer, dir string) error {
 // studies under docs/studies/ in dir. Dotfiles are not studies, so they are
 // left out. Porcelain output is read untrimmed (see porcelainStatus).
 func untrackedPaths(dir string) (tickets, studies []string, err error) {
-	out, err := exec.Command("git", "-C", dir, "status", "--porcelain", "--untracked-files=all").Output()
+	// -z keeps names with spaces or non-ASCII bytes unquoted; index.GitCommand
+	// keeps hook variables from redirecting git to another repository.
+	out, err := index.GitCommand(dir, "status", "--porcelain", "-z", "--untracked-files=all").Output()
 	if err != nil {
 		return nil, nil, fmt.Errorf("git status: %w", err)
 	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if !strings.HasPrefix(line, "?? ") {
+	entries := strings.Split(string(out), "\x00")
+	for i := 0; i < len(entries); i++ {
+		entry := entries[i]
+		if strings.HasPrefix(entry, "R") || strings.HasPrefix(entry, "C") {
+			i++ // a rename or copy is followed by its source path
 			continue
 		}
-		path := line[3:]
+		if !strings.HasPrefix(entry, "?? ") {
+			continue
+		}
+		path := entry[3:]
 		switch {
 		case strings.HasPrefix(path, "issues/"):
 			tickets = append(tickets, path)

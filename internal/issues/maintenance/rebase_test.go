@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,12 +15,28 @@ import (
 
 func gitTestRun(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "commit.gpgsign=false"}, args...)...)
+	cmd.Env = gitTestEnv(dir)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// gitTestEnv isolates test git calls from the developer's global and system
+// configuration and from repository variables a git hook may export.
+func gitTestEnv(home string) []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		switch name {
+		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_COMMON_DIR", "HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM":
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env, "HOME="+home, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
 }
 
 func writeTestTicket(t *testing.T, dir string, n int, slug string) {
@@ -578,6 +595,34 @@ func TestRunIssuesLintCachedHintsUntrackedStudy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "docs/studies/2026-01-03-draft.md") {
 		t.Fatalf("docs drift error = %v, want the untracked study named as a hint", err)
+	}
+}
+
+// M3 item 2: porcelain output quotes names with non-ASCII bytes, so the untracked
+// lists must come from -z output and carry the exact file names.
+func TestUntrackedPathsKeepsUnusualNames(t *testing.T) {
+	dir := t.TempDir()
+	gitTestRun(t, dir, "init", "-b", "main")
+	for _, rel := range []string{"issues/003-a b.md", "docs/studies/2026-01-05-café.md", "docs/studies/2026-01-06-a b.md"} {
+		path := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("# Study\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tickets, studies, err := untrackedPaths(dir)
+	if err != nil {
+		t.Fatalf("untrackedPaths: %v", err)
+	}
+	if want := []string{"issues/003-a b.md"}; !slices.Equal(tickets, want) {
+		t.Errorf("untracked tickets = %q, want %q", tickets, want)
+	}
+	want := []string{"docs/studies/2026-01-05-café.md", "docs/studies/2026-01-06-a b.md"}
+	if !slices.Equal(studies, want) {
+		t.Errorf("untracked studies = %q, want %q", studies, want)
 	}
 }
 

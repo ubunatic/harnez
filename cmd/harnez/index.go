@@ -65,7 +65,9 @@ running the command directly in-session to see exactly what changed and
 fix the offending ticket(s) without a separate diff step. Pass --stage to
 stage the index files this run rewrote or that differ from the index (for
 example one that post-merge already regenerated); it requires a Git
-repository. When no index file differs, --stage stages nothing.
+repository. When no index file differs, --stage stages nothing. A differing file
+this run did not rewrite is staged only when its staged content regenerates to
+the worktree content; a file with unstaged hand edits is skipped with a warning.
 
 docs/studies/ is read from Git's index inside a repository: a new study is
 listed only after git add, and an untracked study is never listed. issues/*.md
@@ -128,7 +130,7 @@ func runIndex(w io.Writer, opts indexOptions) error {
 		return fmt.Errorf("index: --stage cannot be used with --check")
 	}
 	if opts.Stage {
-		if _, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output(); err != nil {
+		if _, err := index.GitCommand(dir, "rev-parse", "--show-toplevel").Output(); err != nil {
 			return fmt.Errorf("index --stage: %s is not inside a Git repository", dir)
 		}
 	}
@@ -214,16 +216,25 @@ func runIndex(w io.Writer, opts indexOptions) error {
 			return fmt.Errorf("index --stage: %w", err)
 		}
 		for _, p := range differs {
-			if !slices.Contains(changedPaths, filepath.FromSlash(p)) {
-				changedPaths = append(changedPaths, filepath.FromSlash(p))
+			rel := filepath.FromSlash(p)
+			if slices.Contains(changedPaths, rel) {
+				continue
 			}
+			generated, err := stagedIsGenerated(dir, p)
+			if err != nil {
+				return fmt.Errorf("index --stage: %w", err)
+			}
+			if !generated {
+				fmt.Fprintf(w, "index --stage: %s has unstaged hand edits; not staged\n", p)
+				continue
+			}
+			changedPaths = append(changedPaths, rel)
 		}
 		if len(changedPaths) == 0 {
 			fmt.Fprintln(w, "index --stage: no index files changed; nothing staged")
 			return nil
 		}
-		args := append([]string{"-C", dir, "add", "--"}, changedPaths...)
-		cmd := exec.Command("git", args...)
+		cmd := index.GitCommand(dir, append([]string{"add", "--"}, changedPaths...)...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("index --stage: git add: %w: %s", err, strings.TrimSpace(string(output)))
 		}
@@ -232,6 +243,49 @@ func runIndex(w io.Writer, opts indexOptions) error {
 		}
 	}
 	return nil
+}
+
+// stagedIsGenerated reports whether the worktree content of the index file p is
+// exactly what harnez generates from p's staged content. Only then is the whole
+// difference from the index generated, so --stage may stage it; a hand edit
+// makes the regenerated staged content differ from the worktree.
+func stagedIsGenerated(dir, p string) (bool, error) {
+	worktree, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(p)))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	staged, ok, err := index.StagedContent(dir, p)
+	if err != nil || !ok {
+		return false, err
+	}
+	generated, err := regenerateStaged(dir, p, string(staged))
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", p, err)
+	}
+	return generated == string(worktree), nil
+}
+
+// regenerateStaged returns what harnez generates for the index file p from its
+// staged content. BACKLOG.md and CLOSED.md are generated from the tickets
+// alone, so the staged content does not matter for them.
+func regenerateStaged(dir, p, staged string) (string, error) {
+	issuesDir := filepath.Join(dir, "issues")
+	switch p {
+	case "issues/README.md":
+		return index.RenderIssuesReadme(staged, issuesDir, filepath.Join(issuesDir, "README.md"))
+	case "issues/BACKLOG.md", "issues/CLOSED.md":
+		files, err := index.IssueIndexFiles(issuesDir)
+		if err != nil {
+			return "", err
+		}
+		return files[filepath.Base(p)], nil
+	case "docs/README.md":
+		return index.RenderDocsReadme(staged, filepath.Join(dir, "docs"), filepath.Join(dir, "docs", "README.md"))
+	}
+	return "", fmt.Errorf("no generator for index file %s", p)
 }
 
 func loadIndexRepoConfig(dir string) (*claude.RepoConfig, error) {

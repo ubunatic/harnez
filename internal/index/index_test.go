@@ -981,8 +981,9 @@ func TestStudiesTableIgnoresGitDirFromEnv(t *testing.T) {
 	t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
 
 	table := renderStudiesTable(t, root)
-	if !studyTableHas(table, "2026-01-01-a.md") {
-		t.Errorf("study of the docs repository missing when GIT_DIR names another repository:\n%s", table)
+	const row = "| [studies/2026-01-01-a.md](studies/2026-01-01-a.md) | Tracked A |"
+	if !strings.Contains(table, row) {
+		t.Errorf("row %q missing when GIT_DIR names another repository:\n%s", row, table)
 	}
 }
 
@@ -995,8 +996,92 @@ func TestStudiesTableOutsideGitIgnoresGitDirFromEnv(t *testing.T) {
 	t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
 
 	table := renderStudiesTable(t, root)
-	if !studyTableHas(table, "2026-01-01-a.md") {
-		t.Errorf("plain study dropped when GIT_DIR names another repository:\n%s", table)
+	const row = "| [studies/2026-01-01-a.md](studies/2026-01-01-a.md) | Plain A |"
+	if !strings.Contains(table, row) {
+		t.Errorf("row %q dropped when GIT_DIR names another repository:\n%s", row, table)
+	}
+}
+
+// IndexedDiffers reports tracked paths whose worktree content differs from the
+// index, and neither untracked files nor paths absent from both.
+func TestIndexedDiffersReportsOnlyTrackedChanges(t *testing.T) {
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "README.md"), "# Docs\n")
+	gitStudiesRun(t, root, "add", "docs/README.md")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+	writeFile(t, filepath.Join(root, "docs", "README.md"), "# Docs\n\nEdited.\n")
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-new.md"), studiesBody("New"))
+
+	got, err := IndexedDiffers(root, []string{"docs/README.md", "docs/studies/2026-01-01-new.md", "docs/absent.md"})
+	if err != nil {
+		t.Fatalf("IndexedDiffers: %v", err)
+	}
+	if strings.Join(got, ",") != "docs/README.md" {
+		t.Errorf("IndexedDiffers = %q, want only the tracked edit docs/README.md", got)
+	}
+}
+
+// StagedContent returns the blob in Git's index, not the worktree copy, and
+// reports a path with no index entry as absent without an error.
+func TestStagedContentReturnsIndexedBlob(t *testing.T) {
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "README.md"), "# Docs\n\nStaged.\n")
+	gitStudiesRun(t, root, "add", "docs/README.md")
+	writeFile(t, filepath.Join(root, "docs", "README.md"), "# Docs\n\nWorktree only.\n")
+
+	content, ok, err := StagedContent(root, "docs/README.md")
+	if err != nil || !ok {
+		t.Fatalf("StagedContent ok = %v, err = %v; want the indexed blob", ok, err)
+	}
+	if string(content) != "# Docs\n\nStaged.\n" {
+		t.Errorf("StagedContent = %q, want the staged blob", content)
+	}
+	if _, ok, err := StagedContent(root, "docs/absent.md"); ok || err != nil {
+		t.Errorf("StagedContent of an absent path: ok = %v, err = %v; want false, nil", ok, err)
+	}
+}
+
+// RenderDocsReadmeSnapshot lists the studies of a plain directory without asking
+// git, as the --cached lint needs for its materialized snapshot.
+func TestRenderDocsReadmeSnapshotListsPlainDirectory(t *testing.T) {
+	docs := filepath.Join(t.TempDir(), "docs")
+	writeFile(t, filepath.Join(docs, "studies", "2026-01-01-a.md"), studiesBody("Plain A"))
+	content := "# Docs\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n"
+
+	got, err := RenderDocsReadmeSnapshot(content, docs, filepath.Join(docs, "README.md"))
+	if err != nil {
+		t.Fatalf("RenderDocsReadmeSnapshot: %v", err)
+	}
+	const row = "| [studies/2026-01-01-a.md](studies/2026-01-01-a.md) | Plain A |"
+	if !strings.Contains(got, row) {
+		t.Errorf("snapshot render lacks %q:\n%s", row, got)
+	}
+}
+
+// readCatFileBatch must reject every malformed stream, not return short blobs.
+func TestReadCatFileBatchRejectsBadBlobs(t *testing.T) {
+	const oid = "0123456789abcdef0123456789abcdef01234567"
+	cases := []struct {
+		name, stream, wantErr string
+	}{
+		{"bad size", oid + " blob x\n", "bad size"},
+		{"negative size", oid + " blob -1\n", "bad size"},
+		{"not a blob", oid + " tree 3\nabc\n", "unexpected header"},
+		{"truncated blob", oid + " blob 10\nabc", "read blob"},
+		{"no terminator", oid + " blob 3\nabcX", "not newline-terminated"},
+		{"missing header", "", "read header"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := readCatFileBatch(strings.NewReader(tc.stream), []string{oid})
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("readCatFileBatch error = %v, want one containing %q", err, tc.wantErr)
+			}
+		})
+	}
+	blobs, err := readCatFileBatch(strings.NewReader(oid+" blob 3\nabc\n"), []string{oid})
+	if err != nil || len(blobs) != 1 || string(blobs[0]) != "abc" {
+		t.Fatalf("readCatFileBatch = %q, %v; want one blob abc", blobs, err)
 	}
 }
 

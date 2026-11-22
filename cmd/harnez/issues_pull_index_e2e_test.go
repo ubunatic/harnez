@@ -66,14 +66,17 @@ func (f *pullFixture) setIdentity(dir string) {
 	gitRunE2E(f.t, dir, f.env, "config", "user.email", "harnez-e2e@example.invalid")
 }
 
-func (f *pullFixture) harnez(dir string, args ...string) {
+// harnez runs the fixture binary in dir and returns its combined output.
+func (f *pullFixture) harnez(dir string, args ...string) string {
 	f.t.Helper()
 	cmd := exec.Command(f.bin, args...)
 	cmd.Dir = dir
 	cmd.Env = f.env
-	if out, err := cmd.CombinedOutput(); err != nil {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		f.t.Fatalf("harnez %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
+	return string(out)
 }
 
 // teammateStudy adds a study in the work repository and pushes it. With
@@ -251,6 +254,28 @@ func TestLinkedWorktreePullAndIssueCommitKeepStudyRows(t *testing.T) {
 
 	if out, err := f.issueOnlyCommit(wt, "docs(issues): add follow-up note"); err != nil {
 		t.Fatalf("issue-only commit in linked worktree failed the pre-commit lint: %v\n%s", err, out)
+	}
+}
+
+// TestIndexStageLeavesHandEditUnstaged is M3 item 1: --stage stages a differing
+// index file it did not rewrite only when regenerating its staged content gives
+// the worktree content. A hand-written prose edit to docs/README.md must stay
+// unstaged, with a warning, so the next commit does not carry it silently.
+func TestIndexStageLeavesHandEditUnstaged(t *testing.T) {
+	skipShort(t, "builds the CLI and performs real Git commits")
+	f := newPullFixture(t)
+	clone := f.clone
+	appendE2E(t, filepath.Join(clone, "docs", "README.md"), "\nHand-written note.\n")
+
+	out := f.harnez(clone, "index", "--stage", "-d", ".")
+	if !strings.Contains(out, "index --stage: docs/README.md has unstaged hand edits; not staged") {
+		t.Errorf("--stage output lacks the hand-edit warning:\n%s", out)
+	}
+	if got := gitRunE2E(t, clone, f.env, "diff", "--cached", "--name-only"); got != "" {
+		t.Fatalf("--stage staged %q, want nothing: the hand edit must stay unstaged", got)
+	}
+	if got := gitRunE2E(t, clone, f.env, "diff", "--name-only"); got != "docs/README.md" {
+		t.Fatalf("unstaged files after --stage = %q, want docs/README.md", got)
 	}
 }
 

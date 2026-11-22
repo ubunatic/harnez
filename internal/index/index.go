@@ -639,7 +639,7 @@ var gitRepoEnv = map[string]bool{
 
 // gitCommand runs git in dir, so that git discovers the repository of dir
 // itself and not one named by an inherited hook variable.
-func gitCommand(dir string, args ...string) *exec.Cmd {
+func GitCommand(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 	var env []string
 	for _, kv := range os.Environ() {
@@ -668,7 +668,7 @@ func gitError(op string, err error) error {
 // message and the answer is no. Any other failure is an error: falling back to
 // the directory then could index untracked notes.
 func gitInWorkTree(docsDir string) (bool, error) {
-	out, err := gitCommand(docsDir, "rev-parse", "--is-inside-work-tree").Output()
+	out, err := GitCommand(docsDir, "rev-parse", "--is-inside-work-tree").Output()
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && exit.ExitCode() == 128 {
@@ -713,7 +713,7 @@ func dirStudySources(docsDir string) ([]studySource, error) {
 // (conflicted), and skipped when that file is gone (deleted by one side).
 // Symlinks and submodules are not studies.
 func gitStudySources(docsDir string) ([]studySource, error) {
-	out, err := gitCommand(docsDir, "ls-files", "-s", "-z", "--", "studies").Output()
+	out, err := GitCommand(docsDir, "ls-files", "-s", "-z", "--", "studies").Output()
 	if err != nil {
 		return nil, gitError("ls-files studies", err)
 	}
@@ -789,7 +789,7 @@ func catFileBlobs(docsDir string, oids []string) ([][]byte, error) {
 	if len(oids) == 0 {
 		return nil, nil
 	}
-	cmd := gitCommand(docsDir, "cat-file", "--batch")
+	cmd := GitCommand(docsDir, "cat-file", "--batch")
 	cmd.Stdin = strings.NewReader(strings.Join(oids, "\n") + "\n")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -797,7 +797,14 @@ func catFileBlobs(docsDir string, oids []string) ([][]byte, error) {
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("git cat-file --batch: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
-	r := bufio.NewReader(&stdout)
+	return readCatFileBatch(&stdout, oids)
+}
+
+// readCatFileBatch parses the output of git cat-file --batch for oids, one
+// blob per oid, in order. It rejects headers that are not blob headers, bad
+// sizes, truncated blobs and blobs without their newline terminator.
+func readCatFileBatch(src io.Reader, oids []string) ([][]byte, error) {
+	r := bufio.NewReader(src)
 	blobs := make([][]byte, 0, len(oids))
 	for range oids {
 		header, err := r.ReadString('\n')
@@ -840,7 +847,7 @@ func StudiesTable(docsDir string) (string, error) {
 func IndexedDiffers(repoDir string, rel []string) ([]string, error) {
 	var differs []string
 	for _, p := range rel {
-		err := gitCommand(repoDir, "diff", "--quiet", "--", p).Run()
+		err := GitCommand(repoDir, "diff", "--quiet", "--", p).Run()
 		if err == nil {
 			continue
 		}
@@ -852,6 +859,20 @@ func IndexedDiffers(repoDir string, rel []string) ([]string, error) {
 		return nil, gitError("diff "+p, err)
 	}
 	return differs, nil
+}
+
+// StagedContent returns the staged blob of rel, relative to repoDir. ok is
+// false when rel has no index entry, for example a file only on disk.
+func StagedContent(repoDir, rel string) (content []byte, ok bool, err error) {
+	out, err := GitCommand(repoDir, "show", ":./"+rel).Output()
+	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 128 {
+			return nil, false, nil
+		}
+		return nil, false, gitError("show "+rel, err)
+	}
+	return out, true, nil
 }
 
 func studiesTableFrom(docsDir string, list studyLister) (string, error) {
