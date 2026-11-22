@@ -41,7 +41,26 @@ Before implementation, verify current hook, index, lint and merge-driver behavio
 - `StudiesTable` uses `git ls-files` (tracked + staged) and skips dotfiles; non-git fallback skips dotfiles.
 - Tests first: untracked study ignored; dotfile (tracked or not) ignored; staged-but-uncommitted study included; non-git fallback.
 
+**M1 delivered (2da5631d): tracked-only studies enumeration.** `studySources` reads `git ls-files -s -z` + one `cat-file --batch`, skips dotfiles, symlinks and submodules, dedupes conflicted paths, and falls back to `os.ReadDir` outside git. It adds 8 unit tests and an ff-pull e2e (`cmd/harnez/issues_pull_index_e2e_test.go`). Quota-1 run 21:35Z: only `--- FAIL: TestHelpGolden`, which is pre-existing and unrelated; filed as 1269. Review: `r1045m1` (agy:neon:med).
+
 ### M2 — Pull + commit workflow verification and lint hint
+
+**Pre-Work / Required Refinements (from the M1 review, do these first):**
+1. [high] Hook env leak. Git hooks may export `GIT_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` (absolute `GIT_DIR` in linked worktrees). `gitInWorkTree`/`ls-files` then resolve against the wrong tree:
+   - the `--cached` lint's temp-dir render (`rebase.go:805`) lists the real repo's studies, or none;
+   - post-merge `harnez index` can drop every study row.
+   Fix both:
+   - (a) The lint's temp-tree render selects the directory source explicitly instead of relying on git detection.
+   - (b) The git calls in `internal/index` run with `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and `GIT_PREFIX` removed from the env, so `git -C docsDir` discovery is authoritative.
+   Tests:
+   - a unit test with `GIT_DIR` set to another repo;
+   - an e2e in a linked worktree (`git worktree add`): an issue-only commit passes the pre-commit lint, and post-merge keeps the study rows.
+2. [med] Test isolation. Set `HOME`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` and `commit.gpgsign=false` in `internal/index/index_test.go` git helpers and every git call in `issues_pull_index_e2e_test.go`. Some currently pass a nil env.
+3. [med] Surface `ExitError.Stderr` in the `ls-files` and `rev-parse` errors. In `catFileBlobs`, reject `size < 0` and require the terminator byte to be `'\n'`.
+4. [low] Assert exact rows rather than substrings: `TestStudiesTableUsesStagedContent` should check the full `| [studies/x.md](studies/x.md) | Staged topic |` row, and the ff-pull e2e should check the full row.
+5. [low] Symlink parity: `dirStudySources` also skips symlinks, matching the git source.
+6. [med] Document that a new study must be staged (`git add`) before `harnez index` lists it, while `issues/*.md` still reads the worktree. Cover it in the `harnez index` help (`cmd/harnez/index.go`) and the IssueTracking docs (below). After changing help, regenerate `cmd/harnez/testdata/help.golden` in its own commit `test(help): regenerate help golden (issue 1269)`. That also clears 1269's stale `pr wait --fixup` text; check that the golden diff contains only those two help changes.
+
 - E2E in a scratch repo (extend `cmd/harnez/issues_index_init_merge_e2e_test.go` or sibling): (a) ff pull with an untracked study and a user-edited unrelated file → worktree index clean, user edit preserved, issue-only commit passes the pre-commit lint; (b) pulled commit whose `docs/README.md` is stale → post-merge regenerates, lint fails with an actionable hint, the hinted command fixes it staging only `docs/README.md`, user edits preserved.
 - Extend the untracked hint at `rebase.go:781-783` to `docs/studies/`.
 - Update `docs/practices/IssueTracking.md` (+ lite source if present) and its root copy via `harnez init -d .`, if the hook/lint behaviour description changes.
