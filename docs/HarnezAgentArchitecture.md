@@ -463,6 +463,8 @@ How a spec reaches the provider CLI (batch drivers):
 | agy, `advisor`/`reviewer` roles | adds `--dangerously-skip-permissions --sandbox` before `--output-format json -p` (`roles.<role>.auto_approve_tools` in `spec/agent.yaml`) | headless `-p` cannot approve a tool call; without it agy ends the turn with no reply, which harnez reports as an error (issue 1000) |
 | jules | no CLI: REST calls to the Jules API (`internal/subagent/jules.go`) | no tiers; see below |
 
+Claude context modes (issue 1268): with no `--context-mode`, or `default`, the claude row adds no flags beyond the table, so a headless worker loads the user's settings, hooks and MCP servers. This is intended: `spec/agent.yaml` `context_modes.default` documents full discovery. `no-skills` adds `--disable-slash-commands --strict-mcp-config`; `plain` also adds `--setting-sources ""` and a tool list (`internal/subagent/claude.go:67-84`).
+
 ### Google Jules
 
 `--model jules` submits a task to Google Jules, a cloud agent that works on a connected GitHub

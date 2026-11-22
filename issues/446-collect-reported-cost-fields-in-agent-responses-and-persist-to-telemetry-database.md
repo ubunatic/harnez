@@ -2,6 +2,7 @@
 
 > 2026-09-30 architecture note: reported costs/tokens are source-tagged passive observations in the canonical schema ([UsageCollection.md](../docs/UsageCollection.md)).
 > 2026-11-22 note (orchestrator-run findings, ticket 1264 set): "not recorded anywhere" is too strong. harnez stores an estimated per-turn `cost_micros` when a rate card matches the model (`cmd/harnez/agent_run.go:127-144`; `internal/usagestore/store.go:115`) and a session `total_cost_micros` (`internal/subagent/session.go:63`, `:154-180`). No CLI shows it: `harnez stats agents` has no cost column (`cmd/harnez/stats_agents.go:747`). Provider-reported dollars (`internal/claude/init.go:105`) are not linked to agent sessions (unverified). The orchestrator's ledger has `cost_usd` for the main session only and no worker dollars (study facts file). Open: a per-session and per-day total from these fields, and whether `agy:neon` has rate-card coverage (unverified).
+> 2026-11-22 note (hub-run finding E): no Claude session records `cost_micros`, because `spec/pricing.yaml` has one rate card, `gpt-5`, and no Claude model. `cmd/harnez/agent_run.go:127-141` sets `cost_micros` only when `catalog.Lookup(sess.Model)` matches. Rate cards are the scope of backlog ticket 445. The `claude` cost values in the model list are relative costs (`agent models`, `CheckCostlyModel`), not dollars.
 
 **Status**: Backlog — grooming pass 843 M4 (2026-10-22); promote when needed
 **Priority**: P2 (Medium)

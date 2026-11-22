@@ -31,3 +31,7 @@ Options, in order of value:
 3. Owner decision: set `tool_call_limits` for Haiku developer roles (1033).
 
 Canary before any build (repo rule: canary first): one detached Haiku turn with a prompt above 100k tokens, to measure whether the 80k cap fires. Cost needs owner approval; not run in this ticket.
+
+## 4. Notes
+
+- **2026-11-22, hub-run (C): the 80k gate does not bound a single turn.** The orchestrator's hub run had Haiku workers reach about 167k context inside one long turn. Harnez's gate runs only before a prompt (`docs/AutoCompaction.md:13-15`), so nothing in harnez stopped the turn. The CLI's own auto-compaction did not hold it under 100k either: `docs/AutoCompaction.md:38` gives the Claude Code autocompact buffer as 33k by default, so the trigger sits near the window size minus 33k. If Haiku's window is 200k (unverified here), that gives about 167k, which matches the report. Source of the 167k figure: the orchestrator's hub log, not in this repo. Verify with the canary in section 3 and read the stream's usage events for the turn.
