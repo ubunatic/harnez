@@ -84,3 +84,18 @@ Before implementation, verify current hook, index, lint and merge-driver behavio
    - direct tests for `IndexedDiffers`, `RenderDocsReadmeSnapshot`, and `catFileBlobs` bad size or terminator (via a small injectable reader if needed);
    - `TestStudiesTableIgnoresGitDirFromEnv` and `TestStudiesTableOutsideGitIgnoresGitDirFromEnv` assert exact rows.
 6. [low] Lite wording (`docs/practices/IssueTracking.lite.md:65` and root copy): the *staged* `docs/README.md` is stale while the worktree copy is regenerated; say "studies in Git's index (tracked or staged)". Then `make install && harnez init -d .` and commit the source and copy together.
+
+**M3 delivered (ef587a23): review hardening.** `--stage` skips a differing file it did not rewrite unless regenerating the staged copy gives the worktree content, and prints a warning. `untrackedPaths` uses `-z`. `index.GitCommand` scrubs hook env everywhere. Tests are isolated and direct unit tests were added.
+- Dev Quota-1: `ok cmd/harnez 70.814s`, `ok internal/index 0.618s`, `ok internal/issues/maintenance 1.102s`, no FAIL.
+- Host live check with the installed binary: a prose-only hand edit stays unstaged with the warning, and drift from a newly staged study is staged.
+- Review `r1045m3` (claude:haiku:low).
+
+### M4 — Close the remaining --stage gaps
+
+**Pre-Work / Required Refinements (from the M3 review):**
+1. [important] Apply the generated-only check to paths this run **rewrote** too. `changedPaths` from the docs and issues writes are staged unchecked, so a prose hand edit in `docs/README.md` plus a stale studies table gets staged whole. Rule for every candidate: stage only if regenerating its staged content equals the new worktree content; otherwise warn and skip. Test: a prose hand edit plus a newly staged study → `docs/README.md` stays unstaged with the warning.
+2. [medium] Add the missing M3 item-1 tests:
+   - post-merge-only drift is staged (the staged README is stale, the worktree was regenerated, no hand edit);
+   - after `--stage` and a commit, `git status` is clean apart from deliberate user edits.
+3. [low] Make the skip message accurate. A missing worktree file stages its deletion as before. A conflicted index file (no stage-0 entry) prints `index --stage: <path> is unmerged; not staged`. Test both.
+4. [nit] In `TestUntrackedPathsKeepsUnusualNames`, replace or extend `a b.md` with a case old code fails, such as a name with a tab or quote, and add one `R` rename entry to cover the source-field skip.
