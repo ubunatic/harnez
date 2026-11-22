@@ -2,6 +2,7 @@ package index
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -768,5 +769,184 @@ func TestLockReadmeConcurrent(t *testing.T) {
 	}
 	if _, err := os.Stat(p + ".lock"); !os.IsNotExist(err) {
 		t.Fatalf("lock file left behind: %v", err)
+	}
+}
+
+// gitStudiesCmd runs git in root with a test committer identity.
+func gitStudiesCmd(root string, args ...string) *exec.Cmd {
+	full := append([]string{"-C", root, "-c", "user.name=Harnez Test", "-c", "user.email=harnez-test@example.invalid", "-c", "commit.gpgsign=false"}, args...)
+	return exec.Command("git", full...)
+}
+
+// gitStudiesRepo creates a fresh git repository on main and returns its root.
+// Callers put studies under root/docs/studies.
+func gitStudiesRepo(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	root := t.TempDir()
+	if out, err := gitStudiesCmd(root, "init", "-q", "-b", "main").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	return root
+}
+
+func gitStudiesRun(t *testing.T, root string, args ...string) {
+	t.Helper()
+	if out, err := gitStudiesCmd(root, args...).CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
+func studiesBody(topic string) string {
+	return "# Study: " + topic + "\n\n**Scope**: " + topic + "\n"
+}
+
+func studyTableHas(table, name string) bool {
+	return strings.Contains(table, "| [studies/"+name+"](studies/"+name+") |")
+}
+
+func renderStudiesTable(t *testing.T, root string) string {
+	t.Helper()
+	table, err := StudiesTable(filepath.Join(root, "docs"))
+	if err != nil {
+		t.Fatalf("StudiesTable: %v", err)
+	}
+	return table
+}
+
+func TestStudiesTableIgnoresUntrackedStudy(t *testing.T) {
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Tracked A"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-01-a.md")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-02-b.md"), studiesBody("Untracked B"))
+
+	table := renderStudiesTable(t, root)
+	if !studyTableHas(table, "2026-01-01-a.md") {
+		t.Errorf("tracked study missing from table:\n%s", table)
+	}
+	if studyTableHas(table, "2026-01-02-b.md") {
+		t.Errorf("untracked study indexed:\n%s", table)
+	}
+}
+
+func TestStudiesTableIgnoresDotfiles(t *testing.T) {
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Tracked A"))
+	writeFile(t, filepath.Join(root, "docs", "studies", ".2026-01-03-tracked.md"), studiesBody("Tracked dotfile"))
+	gitStudiesRun(t, root, "add", "docs/studies")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+	writeFile(t, filepath.Join(root, "docs", "studies", ".story-1121-facts.md"), studiesBody("Untracked dotfile"))
+
+	table := renderStudiesTable(t, root)
+	if !studyTableHas(table, "2026-01-01-a.md") {
+		t.Errorf("tracked study missing from table:\n%s", table)
+	}
+	for _, name := range []string{".2026-01-03-tracked.md", ".story-1121-facts.md"} {
+		if studyTableHas(table, name) {
+			t.Errorf("dotfile %s indexed:\n%s", name, table)
+		}
+	}
+}
+
+func TestStudiesTableIncludesStagedStudy(t *testing.T) {
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Tracked A"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-01-a.md")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-02-c.md"), studiesBody("Staged C"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-02-c.md")
+
+	table := renderStudiesTable(t, root)
+	if !studyTableHas(table, "2026-01-02-c.md") {
+		t.Errorf("staged study missing from table:\n%s", table)
+	}
+}
+
+func TestStudiesTableUsesStagedContent(t *testing.T) {
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Tracked A"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-01-a.md")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+	c := filepath.Join(root, "docs", "studies", "2026-01-02-c.md")
+	writeFile(t, c, studiesBody("Staged topic"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-02-c.md")
+	writeFile(t, c, studiesBody("Worktree-only topic"))
+
+	table := renderStudiesTable(t, root)
+	if !strings.Contains(table, "Staged topic") {
+		t.Errorf("table does not use the staged study content:\n%s", table)
+	}
+	if strings.Contains(table, "Worktree-only topic") {
+		t.Errorf("table uses unstaged worktree content:\n%s", table)
+	}
+}
+
+func TestStudiesTableStagedAddDeletedFromWorktree(t *testing.T) {
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Tracked A"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-01-a.md")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+	c := filepath.Join(root, "docs", "studies", "2026-01-02-c.md")
+	writeFile(t, c, studiesBody("Staged C"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-02-c.md")
+	if err := os.Remove(c); err != nil {
+		t.Fatal(err)
+	}
+
+	table := renderStudiesTable(t, root)
+	if !studyTableHas(table, "2026-01-02-c.md") {
+		t.Errorf("staged study deleted from worktree dropped; the --cached lint still sees it:\n%s", table)
+	}
+}
+
+func TestStudiesTableDedupesConflictedStudy(t *testing.T) {
+	root := gitStudiesRepo(t)
+	a := filepath.Join(root, "docs", "studies", "2026-01-01-a.md")
+	writeFile(t, a, studiesBody("Base A"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-01-a.md")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+	gitStudiesRun(t, root, "switch", "-q", "-c", "theirs")
+	writeFile(t, a, studiesBody("Theirs A"))
+	gitStudiesRun(t, root, "commit", "-q", "-am", "theirs")
+	gitStudiesRun(t, root, "switch", "-q", "main")
+	writeFile(t, a, studiesBody("Ours A"))
+	gitStudiesRun(t, root, "commit", "-q", "-am", "ours")
+	if out, err := gitStudiesCmd(root, "merge", "-q", "--no-edit", "theirs").CombinedOutput(); err == nil {
+		t.Fatalf("expected a merge conflict, got success:\n%s", out)
+	}
+
+	table := renderStudiesTable(t, root)
+	if n := strings.Count(table, "| [studies/2026-01-01-a.md]"); n != 1 {
+		t.Errorf("conflicted study rendered %d times, want 1:\n%s", n, table)
+	}
+}
+
+func TestStudiesTableFilenameWithSpaces(t *testing.T) {
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-04 spaced name.md"), studiesBody("Spaced"))
+	gitStudiesRun(t, root, "add", "docs/studies")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+
+	table := renderStudiesTable(t, root)
+	if !strings.Contains(table, "studies/2026-01-04 spaced name.md") {
+		t.Errorf("study with spaces missing from table:\n%s", table)
+	}
+}
+
+func TestStudiesTableNonGitFallbackSkipsDotfiles(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Plain A"))
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-02-b.md"), studiesBody("Plain B"))
+	writeFile(t, filepath.Join(root, "docs", "studies", ".hidden.md"), studiesBody("Hidden"))
+
+	table := renderStudiesTable(t, root)
+	if !studyTableHas(table, "2026-01-01-a.md") || !studyTableHas(table, "2026-01-02-b.md") {
+		t.Errorf("plain studies missing from non-git table:\n%s", table)
+	}
+	if studyTableHas(table, ".hidden.md") {
+		t.Errorf("dotfile indexed outside git:\n%s", table)
 	}
 }

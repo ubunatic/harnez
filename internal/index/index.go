@@ -10,8 +10,12 @@
 package index
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -591,32 +595,193 @@ type studyRow struct {
 	topic   string
 }
 
-// StudiesTable renders the docs/README.md docs/studies/ table (header row,
-// separator row, and one row per *.md file directly under docsDir/studies)
-// sorted by filename.
-func StudiesTable(docsDir string) (string, error) {
+// studySource is one study to index: its file name and the content its topic
+// is read from.
+type studySource struct {
+	name string
+	data []byte
+}
+
+// isStudyName reports whether a file under docs/studies is indexed: a *.md
+// file that is not a dotfile.
+func isStudyName(name string) bool {
+	return strings.HasSuffix(name, ".md") && !strings.HasPrefix(name, ".")
+}
+
+// studySources lists the studies the table indexes. Inside a git work tree it
+// follows git's index, so untracked notes never reach the table and a staged
+// study is indexed with its staged content, matching the --cached lint's
+// snapshot. Outside one it lists the directory. Dotfiles are never indexed.
+func studySources(docsDir string) ([]studySource, error) {
+	if gitInWorkTree(docsDir) {
+		return gitStudySources(docsDir)
+	}
+	return dirStudySources(docsDir)
+}
+
+// gitInWorkTree reports whether docsDir lies inside a git work tree. Any git
+// failure (no repository, no git binary, missing directory) means no.
+func gitInWorkTree(docsDir string) bool {
+	out, err := exec.Command("git", "-C", docsDir, "rev-parse", "--is-inside-work-tree").Output()
+	return err == nil && strings.TrimSpace(string(out)) == "true"
+}
+
+// dirStudySources lists docsDir/studies from the worktree, skipping
+// directories and dotfiles.
+func dirStudySources(docsDir string) ([]studySource, error) {
 	studiesDir := filepath.Join(docsDir, "studies")
 	entries, err := os.ReadDir(studiesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			entries = nil
-		} else {
-			return "", fmt.Errorf("read %s: %w", studiesDir, err)
+			return nil, nil
 		}
+		return nil, fmt.Errorf("read %s: %w", studiesDir, err)
 	}
-
-	var rows []studyRow
+	var sources []studySource
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+		if e.IsDir() || !isStudyName(e.Name()) {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(studiesDir, e.Name()))
 		if err != nil {
-			return "", fmt.Errorf("read %s: %w", e.Name(), err)
+			return nil, fmt.Errorf("read %s: %w", e.Name(), err)
 		}
+		sources = append(sources, studySource{name: e.Name(), data: data})
+	}
+	return sources, nil
+}
+
+// gitStudySources lists docsDir/studies from git's index. A study is listed
+// once even when it is unmerged (one entry per conflict stage). Its content is
+// the index blob, or the worktree file when the path has no stage-0 entry
+// (conflicted), and skipped when that file is gone (deleted by one side).
+// Symlinks and submodules are not studies.
+func gitStudySources(docsDir string) ([]studySource, error) {
+	out, err := exec.Command("git", "-C", docsDir, "ls-files", "-s", "-z", "--", "studies").Output()
+	if err != nil {
+		return nil, fmt.Errorf("git ls-files studies: %w", err)
+	}
+	type indexed struct {
+		oid string // stage-0 blob; empty when the path is only unmerged
+	}
+	byName := map[string]*indexed{}
+	var names []string
+	for _, rec := range strings.Split(string(out), "\x00") {
+		if rec == "" {
+			continue
+		}
+		// Record: "<mode> SP <object> SP <stage> TAB <path>".
+		tab := strings.IndexByte(rec, '\t')
+		if tab < 0 {
+			return nil, fmt.Errorf("git ls-files studies: unexpected record %q", rec)
+		}
+		fields := strings.Fields(rec[:tab])
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("git ls-files studies: unexpected record %q", rec)
+		}
+		path := rec[tab+1:]
+		name := filepath.Base(path)
+		if filepath.Dir(path) != "studies" || !isStudyName(name) {
+			continue
+		}
+		if fields[0] == "120000" || fields[0] == "160000" {
+			continue
+		}
+		entry := byName[name]
+		if entry == nil {
+			entry = &indexed{}
+			byName[name] = entry
+			names = append(names, name)
+		}
+		if fields[2] == "0" {
+			entry.oid = fields[1]
+		}
+	}
+	var oids []string
+	for _, name := range names {
+		if oid := byName[name].oid; oid != "" {
+			oids = append(oids, oid)
+		}
+	}
+	blobs, err := catFileBlobs(docsDir, oids)
+	if err != nil {
+		return nil, err
+	}
+	var sources []studySource
+	next := 0
+	for _, name := range names {
+		if byName[name].oid == "" {
+			data, err := os.ReadFile(filepath.Join(docsDir, "studies", name))
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("read %s: %w", name, err)
+			}
+			sources = append(sources, studySource{name: name, data: data})
+			continue
+		}
+		sources = append(sources, studySource{name: name, data: blobs[next]})
+		next++
+	}
+	return sources, nil
+}
+
+// catFileBlobs returns the contents of the given blobs in order, using one
+// git cat-file --batch process.
+func catFileBlobs(docsDir string, oids []string) ([][]byte, error) {
+	if len(oids) == 0 {
+		return nil, nil
+	}
+	cmd := exec.Command("git", "-C", docsDir, "cat-file", "--batch")
+	cmd.Stdin = strings.NewReader(strings.Join(oids, "\n") + "\n")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git cat-file --batch: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	r := bufio.NewReader(&stdout)
+	blobs := make([][]byte, 0, len(oids))
+	for range oids {
+		header, err := r.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("git cat-file --batch: read header: %w", err)
+		}
+		fields := strings.Fields(header)
+		if len(fields) != 3 || fields[1] != "blob" {
+			return nil, fmt.Errorf("git cat-file --batch: unexpected header %q", strings.TrimSpace(header))
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil {
+			return nil, fmt.Errorf("git cat-file --batch: bad size in %q: %w", strings.TrimSpace(header), err)
+		}
+		data := make([]byte, size)
+		if _, err := io.ReadFull(r, data); err != nil {
+			return nil, fmt.Errorf("git cat-file --batch: read blob %s: %w", fields[0], err)
+		}
+		if _, err := r.ReadByte(); err != nil {
+			return nil, fmt.Errorf("git cat-file --batch: read blob terminator: %w", err)
+		}
+		blobs = append(blobs, data)
+	}
+	return blobs, nil
+}
+
+// StudiesTable renders the docs/README.md docs/studies/ table (header row,
+// separator row, and one row per indexed study; see studySources) sorted by
+// filename.
+func StudiesTable(docsDir string) (string, error) {
+	sources, err := studySources(docsDir)
+	if err != nil {
+		return "", err
+	}
+
+	var rows []studyRow
+	for _, s := range sources {
 		rows = append(rows, studyRow{
-			relPath: "studies/" + e.Name(),
-			topic:   StudyTopic(string(data)),
+			relPath: "studies/" + s.name,
+			topic:   StudyTopic(string(s.data)),
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].relPath < rows[j].relPath })

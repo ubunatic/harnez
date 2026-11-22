@@ -62,6 +62,9 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 			t.Errorf("plain CLI init omitted %q from .gitattributes", line)
 		}
 	}
+	// Studies are indexed only once tracked (issue 1045), so stage sources first,
+	// then regenerate the index and stage it.
+	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	cli("index", "-d", ".")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "base")
@@ -70,6 +73,7 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 	writeMergeFixture(t, root, "issues/002-side.md", "# 002 — side ticket\n\n**Status**: Open\n")
 	writeMergeFixture(t, root, "issues/004-backlog.md", "# 004 — backlog ticket\n\n**Status**: Backlog\n")
 	writeMergeFixture(t, root, "docs/studies/b.md", "# Side study\n\n**Scope**: side study\n")
+	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	cli("index", "-d", ".")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "side sources")
@@ -78,6 +82,7 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 	writeMergeFixture(t, root, "issues/003-main.md", "# 003 — main ticket\n\n**Status**: Open\n")
 	writeMergeFixture(t, root, "issues/005-closed.md", "# 005 — closed ticket\n\n**Status**: Closed\n")
 	writeMergeFixture(t, root, "docs/studies/c.md", "# Main study\n\n**Scope**: main study\n")
+	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	cli("index", "-d", ".")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "main sources")
