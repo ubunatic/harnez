@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -62,8 +63,13 @@ mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
 diff of the drift, so the output is self-contained enough for an agent
 running the command directly in-session to see exactly what changed and
 fix the offending ticket(s) without a separate diff step. Pass --stage to
-stage only index files rewritten by this run; it requires a Git repository.
-When no index file changes, --stage stages nothing.
+stage the index files this run rewrote or that differ from the index (for
+example one that post-merge already regenerated); it requires a Git
+repository. When no index file differs, --stage stages nothing.
+
+docs/studies/ is read from Git's index inside a repository: a new study is
+listed only after git add, and an untracked study is never listed. issues/*.md
+is read from the worktree.
 
 Each run that isn't --check also appends a dated open/closed/draft/unknown
 ticket count snapshot for this repo to the shared telemetry DB (issue 228),
@@ -194,6 +200,24 @@ func runIndex(w io.Writer, opts indexOptions) error {
 		}
 	}
 	if opts.Stage {
+		// Also stage index files that differ from the index: post-merge may
+		// already have regenerated them unstaged, so this run rewrites nothing.
+		var candidates []string
+		if hasIssues {
+			candidates = append(candidates, "issues/README.md", "issues/BACKLOG.md", "issues/CLOSED.md")
+		}
+		if hasDocs {
+			candidates = append(candidates, "docs/README.md")
+		}
+		differs, err := index.IndexedDiffers(dir, candidates)
+		if err != nil {
+			return fmt.Errorf("index --stage: %w", err)
+		}
+		for _, p := range differs {
+			if !slices.Contains(changedPaths, filepath.FromSlash(p)) {
+				changedPaths = append(changedPaths, filepath.FromSlash(p))
+			}
+		}
 		if len(changedPaths) == 0 {
 			fmt.Fprintln(w, "index --stage: no index files changed; nothing staged")
 			return nil

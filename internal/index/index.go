@@ -12,6 +12,7 @@ package index
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -602,32 +603,87 @@ type studySource struct {
 	data []byte
 }
 
-// isStudyName reports whether a file under docs/studies is indexed: a *.md
+// IsStudyName reports whether a file under docs/studies is indexed: a *.md
 // file that is not a dotfile.
-func isStudyName(name string) bool {
+func IsStudyName(name string) bool {
 	return strings.HasSuffix(name, ".md") && !strings.HasPrefix(name, ".")
 }
+
+// studyLister lists the studies of a docs directory.
+type studyLister func(docsDir string) ([]studySource, error)
 
 // studySources lists the studies the table indexes. Inside a git work tree it
 // follows git's index, so untracked notes never reach the table and a staged
 // study is indexed with its staged content, matching the --cached lint's
 // snapshot. Outside one it lists the directory. Dotfiles are never indexed.
 func studySources(docsDir string) ([]studySource, error) {
-	if gitInWorkTree(docsDir) {
+	inTree, err := gitInWorkTree(docsDir)
+	if err != nil {
+		return nil, err
+	}
+	if inTree {
 		return gitStudySources(docsDir)
 	}
 	return dirStudySources(docsDir)
 }
 
-// gitInWorkTree reports whether docsDir lies inside a git work tree. Any git
-// failure (no repository, no git binary, missing directory) means no.
-func gitInWorkTree(docsDir string) bool {
-	out, err := exec.Command("git", "-C", docsDir, "rev-parse", "--is-inside-work-tree").Output()
-	return err == nil && strings.TrimSpace(string(out)) == "true"
+// gitRepoEnv names the variables a git hook exports to point git at its own
+// repository. harnez reads other repositories, so they are removed.
+var gitRepoEnv = map[string]bool{
+	"GIT_DIR":        true,
+	"GIT_WORK_TREE":  true,
+	"GIT_INDEX_FILE": true,
+	"GIT_PREFIX":     true,
+	"GIT_COMMON_DIR": true,
+}
+
+// gitCommand runs git in dir, so that git discovers the repository of dir
+// itself and not one named by an inherited hook variable.
+func gitCommand(dir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	var env []string
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		if !gitRepoEnv[name] {
+			env = append(env, kv)
+		}
+	}
+	cmd.Env = env
+	return cmd
+}
+
+// gitError wraps a failed git command, adding git's own stderr when it has any.
+func gitError(op string, err error) error {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if msg := strings.TrimSpace(string(exit.Stderr)); msg != "" {
+			return fmt.Errorf("git %s: %w: %s", op, err, msg)
+		}
+	}
+	return fmt.Errorf("git %s: %w", op, err)
+}
+
+// gitInWorkTree reports whether docsDir lies inside a git work tree. Outside
+// any repository, or for a missing directory, git exits 128 with a known
+// message and the answer is no. Any other failure is an error: falling back to
+// the directory then could index untracked notes.
+func gitInWorkTree(docsDir string) (bool, error) {
+	out, err := gitCommand(docsDir, "rev-parse", "--is-inside-work-tree").Output()
+	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 128 {
+			msg := string(exit.Stderr)
+			if strings.Contains(msg, "not a git repository") || strings.Contains(msg, "cannot change to") {
+				return false, nil
+			}
+		}
+		return false, gitError("rev-parse --is-inside-work-tree", err)
+	}
+	return strings.TrimSpace(string(out)) == "true", nil
 }
 
 // dirStudySources lists docsDir/studies from the worktree, skipping
-// directories and dotfiles.
+// directories, symlinks (git does not index them either) and dotfiles.
 func dirStudySources(docsDir string) ([]studySource, error) {
 	studiesDir := filepath.Join(docsDir, "studies")
 	entries, err := os.ReadDir(studiesDir)
@@ -639,7 +695,7 @@ func dirStudySources(docsDir string) ([]studySource, error) {
 	}
 	var sources []studySource
 	for _, e := range entries {
-		if e.IsDir() || !isStudyName(e.Name()) {
+		if e.IsDir() || e.Type()&os.ModeSymlink != 0 || !IsStudyName(e.Name()) {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(studiesDir, e.Name()))
@@ -657,9 +713,9 @@ func dirStudySources(docsDir string) ([]studySource, error) {
 // (conflicted), and skipped when that file is gone (deleted by one side).
 // Symlinks and submodules are not studies.
 func gitStudySources(docsDir string) ([]studySource, error) {
-	out, err := exec.Command("git", "-C", docsDir, "ls-files", "-s", "-z", "--", "studies").Output()
+	out, err := gitCommand(docsDir, "ls-files", "-s", "-z", "--", "studies").Output()
 	if err != nil {
-		return nil, fmt.Errorf("git ls-files studies: %w", err)
+		return nil, gitError("ls-files studies", err)
 	}
 	type indexed struct {
 		oid string // stage-0 blob; empty when the path is only unmerged
@@ -681,7 +737,7 @@ func gitStudySources(docsDir string) ([]studySource, error) {
 		}
 		path := rec[tab+1:]
 		name := filepath.Base(path)
-		if filepath.Dir(path) != "studies" || !isStudyName(name) {
+		if filepath.Dir(path) != "studies" || !IsStudyName(name) {
 			continue
 		}
 		if fields[0] == "120000" || fields[0] == "160000" {
@@ -733,7 +789,7 @@ func catFileBlobs(docsDir string, oids []string) ([][]byte, error) {
 	if len(oids) == 0 {
 		return nil, nil
 	}
-	cmd := exec.Command("git", "-C", docsDir, "cat-file", "--batch")
+	cmd := gitCommand(docsDir, "cat-file", "--batch")
 	cmd.Stdin = strings.NewReader(strings.Join(oids, "\n") + "\n")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -753,15 +809,19 @@ func catFileBlobs(docsDir string, oids []string) ([][]byte, error) {
 			return nil, fmt.Errorf("git cat-file --batch: unexpected header %q", strings.TrimSpace(header))
 		}
 		size, err := strconv.Atoi(fields[2])
-		if err != nil {
-			return nil, fmt.Errorf("git cat-file --batch: bad size in %q: %w", strings.TrimSpace(header), err)
+		if err != nil || size < 0 {
+			return nil, fmt.Errorf("git cat-file --batch: bad size in %q", strings.TrimSpace(header))
 		}
 		data := make([]byte, size)
 		if _, err := io.ReadFull(r, data); err != nil {
 			return nil, fmt.Errorf("git cat-file --batch: read blob %s: %w", fields[0], err)
 		}
-		if _, err := r.ReadByte(); err != nil {
+		term, err := r.ReadByte()
+		if err != nil {
 			return nil, fmt.Errorf("git cat-file --batch: read blob terminator: %w", err)
+		}
+		if term != '\n' {
+			return nil, fmt.Errorf("git cat-file --batch: blob %s is not newline-terminated", fields[0])
 		}
 		blobs = append(blobs, data)
 	}
@@ -772,7 +832,30 @@ func catFileBlobs(docsDir string, oids []string) ([][]byte, error) {
 // separator row, and one row per indexed study; see studySources) sorted by
 // filename.
 func StudiesTable(docsDir string) (string, error) {
-	sources, err := studySources(docsDir)
+	return studiesTableFrom(docsDir, studySources)
+}
+
+// IndexedDiffers returns the paths among rel, relative to repoDir, whose
+// worktree content differs from the index. Untracked paths are not reported.
+func IndexedDiffers(repoDir string, rel []string) ([]string, error) {
+	var differs []string
+	for _, p := range rel {
+		err := gitCommand(repoDir, "diff", "--quiet", "--", p).Run()
+		if err == nil {
+			continue
+		}
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 1 {
+			differs = append(differs, p)
+			continue
+		}
+		return nil, gitError("diff "+p, err)
+	}
+	return differs, nil
+}
+
+func studiesTableFrom(docsDir string, list studyLister) (string, error) {
+	sources, err := list(docsDir)
 	if err != nil {
 		return "", err
 	}
@@ -829,7 +912,19 @@ func UpdateDocsReadme(readmePath, docsDir string) (bool, error) {
 // RenderDocsReadme regenerates the marked studies table without writing files.
 // The rest of docs/README.md is kept byte-for-byte, including local line endings.
 func RenderDocsReadme(content, docsDir, readmePath string) (string, error) {
-	table, err := StudiesTable(docsDir)
+	return renderDocsReadmeFrom(content, docsDir, readmePath, studySources)
+}
+
+// RenderDocsReadmeSnapshot is RenderDocsReadme for a directory holding a
+// materialized snapshot, such as the --cached lint's temp dir. It reads the
+// studies from that directory and never asks git, so no hook variable can
+// redirect it to another repository.
+func RenderDocsReadmeSnapshot(content, docsDir, readmePath string) (string, error) {
+	return renderDocsReadmeFrom(content, docsDir, readmePath, dirStudySources)
+}
+
+func renderDocsReadmeFrom(content, docsDir, readmePath string, list studyLister) (string, error) {
+	table, err := studiesTableFrom(docsDir, list)
 	if err != nil {
 		return "", err
 	}

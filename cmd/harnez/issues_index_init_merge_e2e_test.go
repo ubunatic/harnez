@@ -221,15 +221,20 @@ func editPreface(t *testing.T, root, value string) {
 	}
 }
 
+// e2eEnv is the environment for harnez and git in an e2e repository: no
+// repository variables inherited from a hook, no user or system git config.
 func e2eEnv(home, binDir string) []string {
 	env := os.Environ()
 	filtered := env[:0]
 	for _, entry := range env {
-		if !strings.HasPrefix(entry, "HOME=") && !strings.HasPrefix(entry, "PATH=") {
-			filtered = append(filtered, entry)
+		name, _, _ := strings.Cut(entry, "=")
+		switch name {
+		case "HOME", "PATH", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_COMMON_DIR", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM":
+			continue
 		}
+		filtered = append(filtered, entry)
 	}
-	return append(filtered, "HOME="+home, "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"), "HARNEZ_DISABLE_RATE_FEEDBACK=1")
+	return append(filtered, "HOME="+home, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"), "HARNEZ_DISABLE_RATE_FEEDBACK=1")
 }
 
 func gitRunE2E(t *testing.T, root string, env []string, args ...string) string {

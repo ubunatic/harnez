@@ -526,6 +526,61 @@ func TestRunIssuesLintCachedNamesUntrackedTicketWhenIndexIncludesIt(t *testing.T
 	}
 }
 
+// A new study that is not yet staged is not indexed, so the docs drift message
+// must name it and say how to get it indexed (issue 1045 M2).
+func TestRunIssuesLintCachedHintsUntrackedStudy(t *testing.T) {
+	dir := t.TempDir()
+	gitTestRun(t, dir, "init", "-b", "main")
+	gitTestRun(t, dir, "config", "user.name", "Test")
+	gitTestRun(t, dir, "config", "user.email", "test@example.invalid")
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "issues", "README.md"), []byte("# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeTestTicket(t, dir, 1, "tracked")
+	commitIssueIndex(t, dir, "base")
+
+	docs := filepath.Join(dir, "docs")
+	if err := os.MkdirAll(filepath.Join(docs, "studies"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	study := func(topic string) string {
+		return "# Study: " + topic + "\n\n**Scope**: " + topic + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(docs, "studies", "2026-01-01-a.md"), []byte(study("A")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(docs, "README.md"), []byte("# Docs\n\nHandwritten preface.\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := indexpkg.UpdateDocsReadme(filepath.Join(docs, "README.md"), docs); err != nil {
+		t.Fatal(err)
+	}
+	gitTestRun(t, dir, "add", "docs")
+	gitTestRun(t, dir, "commit", "-m", "docs base")
+
+	// Staged but not in the committed README: the staged README is stale.
+	if err := os.WriteFile(filepath.Join(docs, "studies", "2026-01-02-b.md"), []byte(study("B")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitTestRun(t, dir, "add", "docs/studies/2026-01-02-b.md")
+	// Untracked: not indexed and not staged.
+	if err := os.WriteFile(filepath.Join(docs, "studies", "2026-01-03-draft.md"), []byte(study("Draft")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	err := runIssuesLintCached(&out, dir)
+	if err == nil || !strings.Contains(err.Error(), "docs/README.md is generated studies index drift") {
+		t.Fatalf("cached lint error = %v, want docs drift", err)
+	}
+	if !strings.Contains(err.Error(), "docs/studies/2026-01-03-draft.md") {
+		t.Fatalf("docs drift error = %v, want the untracked study named as a hint", err)
+	}
+}
+
 func TestIssuesRebaseMissingIntegrationShowsExactSetupCommand(t *testing.T) {
 	dir := t.TempDir()
 	gitTestRun(t, dir, "init", "-b", "main")

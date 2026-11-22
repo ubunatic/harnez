@@ -772,10 +772,28 @@ func TestLockReadmeConcurrent(t *testing.T) {
 	}
 }
 
-// gitStudiesCmd runs git in root with a test committer identity.
+// gitStudiesCmd runs git in root with a test committer identity and an
+// isolated environment (see gitIsolatedEnv).
 func gitStudiesCmd(root string, args ...string) *exec.Cmd {
 	full := append([]string{"-C", root, "-c", "user.name=Harnez Test", "-c", "user.email=harnez-test@example.invalid", "-c", "commit.gpgsign=false"}, args...)
-	return exec.Command("git", full...)
+	cmd := exec.Command("git", full...)
+	cmd.Env = gitIsolatedEnv(root)
+	return cmd
+}
+
+// gitIsolatedEnv is the environment for test git calls: no repository
+// variables inherited from a hook, no user or system git configuration.
+func gitIsolatedEnv(home string) []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		switch name {
+		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_COMMON_DIR", "HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM":
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env, "HOME="+home, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
 }
 
 // gitStudiesRepo creates a fresh git repository on main and returns its root.
@@ -876,8 +894,9 @@ func TestStudiesTableUsesStagedContent(t *testing.T) {
 	writeFile(t, c, studiesBody("Worktree-only topic"))
 
 	table := renderStudiesTable(t, root)
-	if !strings.Contains(table, "Staged topic") {
-		t.Errorf("table does not use the staged study content:\n%s", table)
+	const row = "| [studies/2026-01-02-c.md](studies/2026-01-02-c.md) | Staged topic |"
+	if !strings.Contains(table, row) {
+		t.Errorf("table lacks the staged study row %q:\n%s", row, table)
 	}
 	if strings.Contains(table, "Worktree-only topic") {
 		t.Errorf("table uses unstaged worktree content:\n%s", table)
@@ -948,5 +967,64 @@ func TestStudiesTableNonGitFallbackSkipsDotfiles(t *testing.T) {
 	}
 	if studyTableHas(table, ".hidden.md") {
 		t.Errorf("dotfile indexed outside git:\n%s", table)
+	}
+}
+
+// A git hook exports GIT_DIR for the repository that runs it. harnez run from
+// that hook must still read the studies of docsDir's own repository.
+func TestStudiesTableIgnoresGitDirFromEnv(t *testing.T) {
+	other := gitStudiesRepo(t)
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Tracked A"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-01-a.md")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+	t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
+
+	table := renderStudiesTable(t, root)
+	if !studyTableHas(table, "2026-01-01-a.md") {
+		t.Errorf("study of the docs repository missing when GIT_DIR names another repository:\n%s", table)
+	}
+}
+
+// The --cached lint renders a materialized snapshot in a temp dir that is not
+// a repository; a hook's GIT_DIR must not turn it into a git listing.
+func TestStudiesTableOutsideGitIgnoresGitDirFromEnv(t *testing.T) {
+	other := gitStudiesRepo(t)
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Plain A"))
+	t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
+
+	table := renderStudiesTable(t, root)
+	if !studyTableHas(table, "2026-01-01-a.md") {
+		t.Errorf("plain study dropped when GIT_DIR names another repository:\n%s", table)
+	}
+}
+
+func TestStudiesTableNonGitFallbackSkipsSymlinks(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "docs", "target.md"), studiesBody("Linked target"))
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Plain A"))
+	if err := os.Symlink("../target.md", filepath.Join(root, "docs", "studies", "2026-01-02-link.md")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+
+	table := renderStudiesTable(t, root)
+	if studyTableHas(table, "2026-01-02-link.md") {
+		t.Errorf("symlinked study indexed outside git, but git skips symlinks:\n%s", table)
+	}
+}
+
+func TestStudiesTableSurfacesGitStderr(t *testing.T) {
+	root := gitStudiesRepo(t)
+	writeFile(t, filepath.Join(root, "docs", "studies", "2026-01-01-a.md"), studiesBody("Tracked A"))
+	gitStudiesRun(t, root, "add", "docs/studies/2026-01-01-a.md")
+	gitStudiesRun(t, root, "commit", "-q", "-m", "base")
+	if err := os.WriteFile(filepath.Join(root, ".git", "index"), []byte("not an index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := StudiesTable(filepath.Join(root, "docs"))
+	if err == nil || !strings.Contains(err.Error(), "index") {
+		t.Fatalf("StudiesTable error = %v, want git's own stderr about the corrupt index", err)
 	}
 }
