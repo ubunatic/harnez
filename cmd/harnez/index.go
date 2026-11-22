@@ -65,9 +65,9 @@ running the command directly in-session to see exactly what changed and
 fix the offending ticket(s) without a separate diff step. Pass --stage to
 stage the index files this run rewrote or that differ from the index (for
 example one that post-merge already regenerated); it requires a Git
-repository. When no index file differs, --stage stages nothing. A differing file
-this run did not rewrite is staged only when its staged content regenerates to
-the worktree content; a file with unstaged hand edits is skipped with a warning.
+repository. When no index file differs, --stage stages nothing. A file it would stage is
+staged only when its staged content regenerates to the worktree content; a file
+with unstaged hand edits, or a conflict, is skipped with a warning.
 
 docs/studies/ is read from Git's index inside a repository: a new study is
 listed only after git add, and an untracked study is never listed. issues/*.md
@@ -202,8 +202,9 @@ func runIndex(w io.Writer, opts indexOptions) error {
 		}
 	}
 	if opts.Stage {
-		// Also stage index files that differ from the index: post-merge may
-		// already have regenerated them unstaged, so this run rewrites nothing.
+		// Every index file this run rewrote, and every one that differs from the
+		// index, is a candidate: post-merge may already have regenerated one
+		// unstaged. Each candidate meets the same rule in stageVerdictFor.
 		var candidates []string
 		if hasIssues {
 			candidates = append(candidates, "issues/README.md", "issues/BACKLOG.md", "issues/CLOSED.md")
@@ -215,57 +216,97 @@ func runIndex(w io.Writer, opts indexOptions) error {
 		if err != nil {
 			return fmt.Errorf("index --stage: %w", err)
 		}
-		for _, p := range differs {
-			rel := filepath.FromSlash(p)
-			if slices.Contains(changedPaths, rel) {
-				continue
+		pending := differs
+		for _, rel := range changedPaths {
+			if p := filepath.ToSlash(rel); !slices.Contains(pending, p) {
+				pending = append(pending, p)
 			}
-			generated, err := stagedIsGenerated(dir, p)
-			if err != nil {
-				return fmt.Errorf("index --stage: %w", err)
-			}
-			if !generated {
-				fmt.Fprintf(w, "index --stage: %s has unstaged hand edits; not staged\n", p)
-				continue
-			}
-			changedPaths = append(changedPaths, rel)
 		}
-		if len(changedPaths) == 0 {
+		if len(pending) == 0 {
 			fmt.Fprintln(w, "index --stage: no index files changed; nothing staged")
 			return nil
 		}
-		cmd := index.GitCommand(dir, append([]string{"add", "--"}, changedPaths...)...)
+		var stage []string
+		for _, p := range pending {
+			verdict, err := stageVerdictFor(dir, p)
+			if err != nil {
+				return fmt.Errorf("index --stage: %w", err)
+			}
+			switch verdict {
+			case stageUnmerged:
+				fmt.Fprintf(w, "index --stage: %s is unmerged; not staged\n", p)
+			case stageHandEdit:
+				fmt.Fprintf(w, "index --stage: %s has unstaged hand edits; not staged\n", p)
+			case stageFile:
+				stage = append(stage, p)
+			}
+		}
+		if len(stage) == 0 {
+			return nil
+		}
+		paths := make([]string, len(stage))
+		for i, p := range stage {
+			paths[i] = filepath.FromSlash(p)
+		}
+		cmd := index.GitCommand(dir, append([]string{"add", "--"}, paths...)...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("index --stage: git add: %w: %s", err, strings.TrimSpace(string(output)))
 		}
-		for _, path := range changedPaths {
-			fmt.Fprintf(w, "staged %s\n", path)
+		for _, p := range stage {
+			fmt.Fprintf(w, "staged %s\n", p)
 		}
 	}
 	return nil
 }
 
-// stagedIsGenerated reports whether the worktree content of the index file p is
-// exactly what harnez generates from p's staged content. Only then is the whole
-// difference from the index generated, so --stage may stage it; a hand edit
-// makes the regenerated staged content differ from the worktree.
-func stagedIsGenerated(dir, p string) (bool, error) {
+// stageVerdict is what --stage does with one index file.
+type stageVerdict int
+
+const (
+	stageFile     stageVerdict = iota // stage the file
+	stageHandEdit                     // the worktree holds hand edits the staged content lacks
+	stageUnmerged                     // a conflict: the index has no stage-0 entry
+)
+
+// stageVerdictFor decides whether --stage may stage the index file p. A file
+// with a stage-0 entry is staged only when regenerating its staged content gives
+// its worktree content, so a hand edit that was never staged stays out of the
+// commit. A file with no stage-0 entry is staged unless it is conflicted: there
+// is no staged content to regenerate from, which holds only for a file that was
+// never committed. A deleted worktree file stages its deletion, which has no
+// hand-written content to protect.
+func stageVerdictFor(dir, p string) (stageVerdict, error) {
+	staged, indexed, err := index.StagedContent(dir, p)
+	if err != nil {
+		return stageFile, err
+	}
+	if !indexed {
+		conflicted, err := index.IsUnmerged(dir, p)
+		if err != nil {
+			return stageFile, err
+		}
+		if conflicted {
+			return stageUnmerged, nil
+		}
+	}
 	worktree, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(p)))
 	if os.IsNotExist(err) {
-		return false, nil
+		return stageFile, nil
 	}
 	if err != nil {
-		return false, err
+		return stageFile, err
 	}
-	staged, ok, err := index.StagedContent(dir, p)
-	if err != nil || !ok {
-		return false, err
+	if !indexed {
+		return stageFile, nil
 	}
 	generated, err := regenerateStaged(dir, p, string(staged))
 	if err != nil {
-		return false, fmt.Errorf("%s: %w", p, err)
+		return stageFile, fmt.Errorf("%s: %w", p, err)
 	}
-	return generated == string(worktree), nil
+	if generated != string(worktree) {
+		return stageHandEdit, nil
+	}
+	return stageFile, nil
 }
 
 // regenerateStaged returns what harnez generates for the index file p from its

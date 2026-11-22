@@ -875,6 +875,16 @@ func StagedContent(repoDir, rel string) (content []byte, ok bool, err error) {
 	return out, true, nil
 }
 
+// IsUnmerged reports whether rel has conflict entries in the index. A conflicted
+// path has no stage-0 entry, so StagedContent reports it as not indexed.
+func IsUnmerged(repoDir, rel string) (bool, error) {
+	out, err := GitCommand(repoDir, "ls-files", "--unmerged", "--", rel).Output()
+	if err != nil {
+		return false, gitError("ls-files --unmerged "+rel, err)
+	}
+	return len(bytes.TrimSpace(out)) > 0, nil
+}
+
 func studiesTableFrom(docsDir string, list studyLister) (string, error) {
 	sources, err := list(docsDir)
 	if err != nil {

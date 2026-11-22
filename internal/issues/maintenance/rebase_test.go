@@ -603,7 +603,9 @@ func TestRunIssuesLintCachedHintsUntrackedStudy(t *testing.T) {
 func TestUntrackedPathsKeepsUnusualNames(t *testing.T) {
 	dir := t.TempDir()
 	gitTestRun(t, dir, "init", "-b", "main")
-	for _, rel := range []string{"issues/003-a b.md", "docs/studies/2026-01-05-café.md", "docs/studies/2026-01-06-a b.md"} {
+	gitTestRun(t, dir, "config", "user.name", "Harnez Test")
+	gitTestRun(t, dir, "config", "user.email", "harnez-test@example.invalid")
+	write := func(rel string) {
 		path := filepath.Join(dir, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -612,12 +614,22 @@ func TestUntrackedPathsKeepsUnusualNames(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// git mv stages an R entry whose source path follows it in -z output.
+	write("issues/002-old.md")
+	gitTestRun(t, dir, "add", "issues/002-old.md")
+	gitTestRun(t, dir, "commit", "-q", "-m", "base")
+	gitTestRun(t, dir, "mv", "issues/002-old.md", "issues/002-renamed.md")
+	// Tab and quote names are C-quoted in plain porcelain output, so a parser
+	// that reads that output never matches them.
+	for _, rel := range []string{"issues/003-a b.md", "issues/004-tab\tname.md", "issues/005-quote\"d.md", "docs/studies/2026-01-05-café.md", "docs/studies/2026-01-06-a b.md"} {
+		write(rel)
+	}
 
 	tickets, studies, err := untrackedPaths(dir)
 	if err != nil {
 		t.Fatalf("untrackedPaths: %v", err)
 	}
-	if want := []string{"issues/003-a b.md"}; !slices.Equal(tickets, want) {
+	if want := []string{"issues/003-a b.md", "issues/004-tab\tname.md", "issues/005-quote\"d.md"}; !slices.Equal(tickets, want) {
 		t.Errorf("untracked tickets = %q, want %q", tickets, want)
 	}
 	want := []string{"docs/studies/2026-01-05-café.md", "docs/studies/2026-01-06-a b.md"}

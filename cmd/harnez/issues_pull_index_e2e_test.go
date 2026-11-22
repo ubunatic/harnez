@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -276,6 +277,91 @@ func TestIndexStageLeavesHandEditUnstaged(t *testing.T) {
 	}
 	if got := gitRunE2E(t, clone, f.env, "diff", "--name-only"); got != "docs/README.md" {
 		t.Fatalf("unstaged files after --stage = %q, want docs/README.md", got)
+	}
+}
+
+// TestIndexStageKeepsHandEditOutOfRewrittenReadme is M4 item 1: a file this run
+// rewrote meets the same rule as one it did not. A prose hand edit in
+// docs/README.md stays unstaged even though a newly staged study rewrites its
+// table, and the warning names the file.
+func TestIndexStageKeepsHandEditOutOfRewrittenReadme(t *testing.T) {
+	skipShort(t, "builds the CLI and performs real Git commits")
+	f := newPullFixture(t)
+	clone := f.clone
+	appendE2E(t, filepath.Join(clone, "docs", "README.md"), "\nHand-written note.\n")
+	writeMergeFixture(t, clone, "docs/studies/2026-01-04-new.md", "# Study: New\n\n**Scope**: staged study\n")
+	gitRunE2E(t, clone, f.env, "add", "docs/studies/2026-01-04-new.md")
+
+	out := f.harnez(clone, "index", "--stage", "-d", ".")
+	if !strings.Contains(out, "index --stage: docs/README.md has unstaged hand edits; not staged") {
+		t.Errorf("--stage output lacks the hand-edit warning for the rewritten README:\n%s", out)
+	}
+	if got := gitRunE2E(t, clone, f.env, "diff", "--cached", "--name-only"); got != "docs/studies/2026-01-04-new.md" {
+		t.Fatalf("--stage staged %q, want only the new study", got)
+	}
+	if got := gitRunE2E(t, clone, f.env, "diff", "--name-only"); got != "docs/README.md" {
+		t.Fatalf("unstaged files after --stage = %q, want docs/README.md", got)
+	}
+}
+
+// TestIndexStageStagesPostMergeDriftThenCommitsClean is M4 item 2: a README that
+// post-merge regenerated unstaged is staged with no hand-edit warning, and after
+// --stage and a commit only the user's own AGENTS.md edit stays unstaged.
+func TestIndexStageStagesPostMergeDriftThenCommitsClean(t *testing.T) {
+	skipShort(t, "builds the CLI and performs real Git pulls")
+	f := newPullFixture(t)
+	clone := f.clone
+	f.teammateStudy("2026-01-02-new.md", "# Study: New\n\n**Scope**: pulled study\n", false)
+	appendE2E(t, filepath.Join(clone, "AGENTS.md"), "local note\n")
+	f.pullFastForward()
+	if status := gitRunE2E(t, clone, f.env, "status", "--porcelain", "--", "docs/README.md"); status != "M docs/README.md" {
+		t.Fatalf("post-merge status for docs/README.md = %q, want unstaged regeneration", status)
+	}
+
+	out := f.harnez(clone, "index", "--stage", "-d", ".")
+	if strings.Contains(out, "hand edits") {
+		t.Errorf("--stage warned about hand edits in post-merge drift:\n%s", out)
+	}
+	if !strings.Contains(out, "staged docs/README.md") {
+		t.Errorf("--stage did not report the regenerated README as staged:\n%s", out)
+	}
+	if got := gitRunE2E(t, clone, f.env, "diff", "--cached", "--name-only"); got != "docs/README.md" {
+		t.Fatalf("after index --stage, staged = %q, want docs/README.md", got)
+	}
+	gitRunE2E(t, clone, f.env, "commit", "-q", "-m", "docs(issues): add follow-up note")
+
+	if got := gitRunE2E(t, clone, f.env, "status", "--porcelain"); got != "M AGENTS.md" {
+		t.Fatalf("git status after commit = %q, want only the user's AGENTS.md edit", got)
+	}
+}
+
+// TestIndexStageSkipsUnmergedReadme is M4 item 3: a conflicted index file has no
+// stage-0 entry. --stage must say it is unmerged, must not stage it (which would
+// silently resolve the conflict), and must leave both conflict stages in place.
+func TestIndexStageSkipsUnmergedReadme(t *testing.T) {
+	skipShort(t, "builds the CLI and performs real Git commits")
+	f := newPullFixture(t)
+	clone := f.clone
+	base := gitRunE2E(t, clone, f.env, "rev-parse", "HEAD:docs/README.md")
+	gitRunE2E(t, clone, f.env, "update-index", "--force-remove", "--", "docs/README.md")
+	info := exec.Command("git", "update-index", "--index-info")
+	info.Dir = clone
+	info.Env = f.env
+	info.Stdin = strings.NewReader(fmt.Sprintf("100644 %s 1\tdocs/README.md\n100644 %s 2\tdocs/README.md\n", base, base))
+	if out, err := info.CombinedOutput(); err != nil {
+		t.Fatalf("git update-index --index-info: %v\n%s", err, out)
+	}
+
+	out := f.harnez(clone, "index", "--stage", "-d", ".")
+	if !strings.Contains(out, "index --stage: docs/README.md is unmerged; not staged") {
+		t.Errorf("--stage output lacks the unmerged warning:\n%s", out)
+	}
+	if strings.Contains(out, "hand edits") {
+		t.Errorf("unmerged README reported as a hand edit:\n%s", out)
+	}
+	unmerged := gitRunE2E(t, clone, f.env, "ls-files", "--unmerged", "--", "docs/README.md")
+	if strings.Count(unmerged, "\n")+1 != 2 {
+		t.Fatalf("--stage changed the conflict; ls-files --unmerged = %q, want both stages 1 and 2", unmerged)
 	}
 }
 
