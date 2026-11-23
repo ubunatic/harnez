@@ -16,3 +16,6 @@ Accept `searcher` as an appropriate role alias and verify role resolution and re
 
 ## Decision
 Include `cmd/harnez/testdata/help.golden` in the write set: CLI help is generated from the alias spec and its existing golden test requires the updated output. Preserve unrelated changes and assertions.
+
+## Blocker / Resume point
+The developer implemented the alias and tests in four uncommitted files. `make test-q1` exited 2 before tests: bubblewrap could not set up the UID map (`Permission denied`) in this sandbox. No quota bypass was attempted. Resume with the existing edits in a host environment that permits the quota sandbox; run the required quota suite, review the diff and assertions, install and live-check the CLI, then commit and close only after verification. The runner-mode shared installation is also host-only.
