@@ -58,4 +58,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1279 | [1279-runner-mode-errors-should-name-the-taia-background-task-route.md](1279-runner-mode-errors-should-name-the-taia-background-task-route.md) | Runner mode errors should name the taia background task route | Open |
 | 1280 | [1280-document-narrow-taia-sandbox-state-and-runtime-access-for-harnez.md](1280-document-narrow-taia-sandbox-state-and-runtime-access-for-harnez.md) | Document narrow taia sandbox state and runtime access for harnez | Open |
 | 1281 | [1281-show-forge-issue-comments-to-workers.md](1281-show-forge-issue-comments-to-workers.md) | Show forge issue comments to workers | Open |
+| 1282 | [1282-accept-searcher-as-an-agent-role-alias.md](1282-accept-searcher-as-an-agent-role-alias.md) | Accept searcher as an agent role alias | Open |
 <!-- harnez:end issues-active-index -->
