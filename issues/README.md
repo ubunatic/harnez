@@ -53,4 +53,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1274 | [1274-add-rewind-command-similar-to-claude-code-and-agy.md](1274-add-rewind-command-similar-to-claude-code-and-agy.md) | Add `/rewind` command similar to Claude Code and AGY | Open |
 | 1275 | [1275-exec-quota-1-blocks-full-make-test-q1-after-go-test-short-without-source-edits.md](1275-exec-quota-1-blocks-full-make-test-q1-after-go-test-short-without-source-edits.md) | exec: Quota-1 blocks full `make test-q1` after `go test -short` without source edits | Open |
 | 1276 | [1276-harnez-pr-create-should-fall-back-to-agit-flow-when-token-access-fails.md](1276-harnez-pr-create-should-fall-back-to-agit-flow-when-token-access-fails.md) | `harnez pr create` should fall back to AGit flow when token access fails | Open |
+| 1277 | [1277-add-taia-as-driver-for-local-models-instead-of-pi-when-taia-cli-is-available.md](1277-add-taia-as-driver-for-local-models-instead-of-pi-when-taia-cli-is-available.md) | Add taia as driver for local models instead of pi when taia CLI is available | Open |
 <!-- harnez:end issues-active-index -->
