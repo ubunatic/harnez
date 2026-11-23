@@ -1,6 +1,6 @@
 # 1247 — Allow forge issues edit via CODEBERG_TOKEN
 
-**Status**: Open
+**Status**: Closed — implemented token_env fallback for forge writes, forge token import, and forge status live checks (8b0e79e5, 09a5a372); verified live and with make test-q1
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
