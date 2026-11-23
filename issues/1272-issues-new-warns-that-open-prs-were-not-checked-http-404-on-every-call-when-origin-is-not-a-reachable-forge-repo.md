@@ -32,3 +32,9 @@ Probed 2026-11-23 (anonymous API):
 - Keep the warning for a real failure (private repo without a token, unreachable host).
 - Test: stub forge with an empty repo (repo 200 with `empty:true`, pulls 404) prints no
   warning; repo 404 still warns.
+
+## Confirmed (2026-11-23)
+
+After the owner pushed splitty, the repo reports `"empty":false` and
+`GET /repos/ubunatic/splitty/pulls` returns 200, which confirms the empty-repo cause. The fix
+above still applies to any new, empty forge repo.
