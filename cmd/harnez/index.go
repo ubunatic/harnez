@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -62,8 +63,15 @@ mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
 diff of the drift, so the output is self-contained enough for an agent
 running the command directly in-session to see exactly what changed and
 fix the offending ticket(s) without a separate diff step. Pass --stage to
-stage only index files rewritten by this run; it requires a Git repository.
-When no index file changes, --stage stages nothing.
+stage the index files this run rewrote or that differ from the index (for
+example one that post-merge already regenerated); it requires a Git
+repository. When no index file differs, --stage stages nothing. A file it would stage is
+staged only when its staged content regenerates to the worktree content; a file
+with unstaged hand edits, or a conflict, is skipped with a warning.
+
+docs/studies/ is read from Git's index inside a repository: a new study is
+listed only after git add, and an untracked study is never listed. issues/*.md
+is read from the worktree.
 
 Each run that isn't --check also appends a dated open/closed/draft/unknown
 ticket count snapshot for this repo to the shared telemetry DB (issue 228),
@@ -122,7 +130,7 @@ func runIndex(w io.Writer, opts indexOptions) error {
 		return fmt.Errorf("index: --stage cannot be used with --check")
 	}
 	if opts.Stage {
-		if _, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output(); err != nil {
+		if _, err := index.GitCommand(dir, "rev-parse", "--show-toplevel").Output(); err != nil {
 			return fmt.Errorf("index --stage: %s is not inside a Git repository", dir)
 		}
 	}
@@ -194,20 +202,131 @@ func runIndex(w io.Writer, opts indexOptions) error {
 		}
 	}
 	if opts.Stage {
-		if len(changedPaths) == 0 {
+		// Every index file this run rewrote, and every one that differs from the
+		// index, is a candidate: post-merge may already have regenerated one
+		// unstaged. Each candidate meets the same rule in stageVerdictFor.
+		var candidates []string
+		if hasIssues {
+			candidates = append(candidates, "issues/README.md", "issues/BACKLOG.md", "issues/CLOSED.md")
+		}
+		if hasDocs {
+			candidates = append(candidates, "docs/README.md")
+		}
+		differs, err := index.IndexedDiffers(dir, candidates)
+		if err != nil {
+			return fmt.Errorf("index --stage: %w", err)
+		}
+		pending := differs
+		for _, rel := range changedPaths {
+			if p := filepath.ToSlash(rel); !slices.Contains(pending, p) {
+				pending = append(pending, p)
+			}
+		}
+		if len(pending) == 0 {
 			fmt.Fprintln(w, "index --stage: no index files changed; nothing staged")
 			return nil
 		}
-		args := append([]string{"-C", dir, "add", "--"}, changedPaths...)
-		cmd := exec.Command("git", args...)
+		var stage []string
+		for _, p := range pending {
+			verdict, err := stageVerdictFor(dir, p)
+			if err != nil {
+				return fmt.Errorf("index --stage: %w", err)
+			}
+			switch verdict {
+			case stageUnmerged:
+				fmt.Fprintf(w, "index --stage: %s is unmerged; not staged\n", p)
+			case stageHandEdit:
+				fmt.Fprintf(w, "index --stage: %s has unstaged hand edits; not staged\n", p)
+			case stageFile:
+				stage = append(stage, p)
+			}
+		}
+		if len(stage) == 0 {
+			return nil
+		}
+		paths := make([]string, len(stage))
+		for i, p := range stage {
+			paths[i] = filepath.FromSlash(p)
+		}
+		cmd := index.GitCommand(dir, append([]string{"add", "--"}, paths...)...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("index --stage: git add: %w: %s", err, strings.TrimSpace(string(output)))
 		}
-		for _, path := range changedPaths {
-			fmt.Fprintf(w, "staged %s\n", path)
+		for _, p := range stage {
+			fmt.Fprintf(w, "staged %s\n", p)
 		}
 	}
 	return nil
+}
+
+// stageVerdict is what --stage does with one index file.
+type stageVerdict int
+
+const (
+	stageFile     stageVerdict = iota // stage the file
+	stageHandEdit                     // the worktree holds hand edits the staged content lacks
+	stageUnmerged                     // a conflict: the index has no stage-0 entry
+)
+
+// stageVerdictFor decides whether --stage may stage the index file p. A file
+// with a stage-0 entry is staged only when regenerating its staged content gives
+// its worktree content, so a hand edit that was never staged stays out of the
+// commit. A file with no stage-0 entry is staged unless it is conflicted: there
+// is no staged content to regenerate from, which holds only for a file that was
+// never committed. A deleted worktree file stages its deletion, which has no
+// hand-written content to protect.
+func stageVerdictFor(dir, p string) (stageVerdict, error) {
+	staged, indexed, err := index.StagedContent(dir, p)
+	if err != nil {
+		return stageFile, err
+	}
+	if !indexed {
+		conflicted, err := index.IsUnmerged(dir, p)
+		if err != nil {
+			return stageFile, err
+		}
+		if conflicted {
+			return stageUnmerged, nil
+		}
+	}
+	worktree, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(p)))
+	if os.IsNotExist(err) {
+		return stageFile, nil
+	}
+	if err != nil {
+		return stageFile, err
+	}
+	if !indexed {
+		return stageFile, nil
+	}
+	generated, err := regenerateStaged(dir, p, string(staged))
+	if err != nil {
+		return stageFile, fmt.Errorf("%s: %w", p, err)
+	}
+	if generated != string(worktree) {
+		return stageHandEdit, nil
+	}
+	return stageFile, nil
+}
+
+// regenerateStaged returns what harnez generates for the index file p from its
+// staged content. BACKLOG.md and CLOSED.md are generated from the tickets
+// alone, so the staged content does not matter for them.
+func regenerateStaged(dir, p, staged string) (string, error) {
+	issuesDir := filepath.Join(dir, "issues")
+	switch p {
+	case "issues/README.md":
+		return index.RenderIssuesReadme(staged, issuesDir, filepath.Join(issuesDir, "README.md"))
+	case "issues/BACKLOG.md", "issues/CLOSED.md":
+		files, err := index.IssueIndexFiles(issuesDir)
+		if err != nil {
+			return "", err
+		}
+		return files[filepath.Base(p)], nil
+	case "docs/README.md":
+		return index.RenderDocsReadme(staged, filepath.Join(dir, "docs"), filepath.Join(dir, "docs", "README.md"))
+	}
+	return "", fmt.Errorf("no generator for index file %s", p)
 }
 
 func loadIndexRepoConfig(dir string) (*claude.RepoConfig, error) {

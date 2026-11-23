@@ -61,7 +61,8 @@ In-repo tracker in `issues/`, one file per ticket (`issues/NNN-kebab-case-title.
 ## 4. Issues Index & Archive Conventions
 
 - `issues/README.md` lists active tickets only (Open, In Progress, Blocked, Draft) and links to generated `issues/BACKLOG.md` and `issues/CLOSED.md`.
-- `harnez index` regenerates all three indexes; `harnez index --stage` also stages only indexes rewritten by that run. `harnez issues lint` checks completeness across them. Never hand-edit rows.
+- `harnez index` regenerates all three indexes; `harnez index --stage` also stages index files this run rewrote or that differ from the index (e.g. one post-merge regenerated). `harnez issues lint` checks completeness across them. Never hand-edit rows.
+- Studies index: inside a Git repo it lists the studies in Git's index (tracked or staged); `git add` a new study before `harnez index`. After a pull, a stale unstaged `docs/README.md` fails the next issue-only commit; run `harnez index --stage`, which never stages a hand edit.
 - `harnez find -d <repo> issues -a status:active` searches the active set. `harnez issues lint` and `harnez issues status` warn above the active cap configured in `spec/issues.yaml`.
 - **Backlog**: defer with `harnez issues backlog <n…> [reason]`, return with `promote <n…>`; `is:open` excludes Backlog, `status:unresolved` includes it.
 - **Duplicates**: `harnez issues new` refuses when `find issues similar` scores a match at or above 0.65 in any status; reopen/promote it, or pass `--force`.

@@ -267,6 +267,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-19-two-agent-lean-sprint-771-exec-truncation.md](studies/2026-11-19-two-agent-lean-sprint-771-exec-truncation.md) | Two-Agent Lean Sprint: 771 — `harnez exec` Spill-File Output Truncation & `spec/exec.yaml` |
 | [studies/2026-11-19-two-agent-lean-sprint-944-quota1-gotest.md](studies/2026-11-19-two-agent-lean-sprint-944-quota1-gotest.md) | Two-Agent Lean Sprint: 944 — Count Targeted & Coverage `go test` Runs Under Quota-1 |
 | [studies/2026-11-21-headless-signal-assistant-one-day-build-story.md](studies/2026-11-21-headless-signal-assistant-one-day-build-story.md) | Story: one day of a headless Signal assistant building itself (2026-11-21) |
+| [studies/2026-11-22-two-agent-lean-sprint-1045-index-drift.md](studies/2026-11-22-two-agent-lean-sprint-1045-index-drift.md) | Two-Agent Lean Sprint: 1045 — Generated Index Drift After Fast-Forward Pulls |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |

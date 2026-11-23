@@ -1880,8 +1880,15 @@ mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
 diff of the drift, so the output is self-contained enough for an agent
 running the command directly in-session to see exactly what changed and
 fix the offending ticket(s) without a separate diff step. Pass --stage to
-stage only index files rewritten by this run; it requires a Git repository.
-When no index file changes, --stage stages nothing.
+stage the index files this run rewrote or that differ from the index (for
+example one that post-merge already regenerated); it requires a Git
+repository. When no index file differs, --stage stages nothing. A file it would stage is
+staged only when its staged content regenerates to the worktree content; a file
+with unstaged hand edits, or a conflict, is skipped with a warning.
+
+docs/studies/ is read from Git's index inside a repository: a new study is
+listed only after git add, and an untracked study is never listed. issues/*.md
+is read from the worktree.
 
 Each run that isn't --check also appends a dated open/closed/draft/unknown
 ticket count snapshot for this repo to the shared telemetry DB (issue 228),
@@ -2588,6 +2595,17 @@ merge-tree, ignoring custom merge drivers the forge does not run. A clean
 local merge (the forge still rechecking, or a work-in-progress PR) keeps it
 polling; if git cannot check, two unmergeable polls in a row end the wait.
 
+--fixup handles the common conflict itself: one only in the generated
+indexes (issues/README.md, BACKLOG.md, CLOSED.md, docs/README.md). In a
+temporary worktree it merges the base into the PR head, regenerates them as
+harnez index does, fails on a ticket number the base already uses, commits
+the merge and pushes it to the PR's own head (its AGit topic, or its branch).
+It prints what it pushed and keeps waiting. Any other conflict, a failed
+check or a rejected push exits 7 with the reason, without pushing. It fixes
+once per wait; a PR that conflicts again exits 7. An AGit PR updates only on
+a push by the user who opened it; another user's push opens a new PR, which
+--fixup reports.
+
 --contains asks the forge's compare API first and falls back to git fetch
 plus git merge-base when the API cannot answer (for example an unpushed sha).
 
@@ -2600,6 +2618,7 @@ Usage:
 
 Flags:
       --contains string    after a merge, also require this commit to be on the default branch (exit 5 if not, 6 if unverifiable)
+      --fixup              on a conflict only in generated indexes, merge the base in, regenerate them, push to the PR's head and keep waiting (once per wait)
   -h, --help               help for wait
       --remote string      git remote whose URL names the forge and repository (default: default_remote in spec/pr.yaml)
       --timeout duration   give up after this long (default: default_timeout in spec/pr.yaml)

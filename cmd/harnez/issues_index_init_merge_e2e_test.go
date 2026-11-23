@@ -62,6 +62,9 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 			t.Errorf("plain CLI init omitted %q from .gitattributes", line)
 		}
 	}
+	// Studies are indexed only once tracked (issue 1045), so stage sources first,
+	// then regenerate the index and stage it.
+	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	cli("index", "-d", ".")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "base")
@@ -70,6 +73,7 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 	writeMergeFixture(t, root, "issues/002-side.md", "# 002 — side ticket\n\n**Status**: Open\n")
 	writeMergeFixture(t, root, "issues/004-backlog.md", "# 004 — backlog ticket\n\n**Status**: Backlog\n")
 	writeMergeFixture(t, root, "docs/studies/b.md", "# Side study\n\n**Scope**: side study\n")
+	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	cli("index", "-d", ".")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "side sources")
@@ -78,6 +82,7 @@ func TestInitInstallsIssueMergeDriverEndToEnd(t *testing.T) {
 	writeMergeFixture(t, root, "issues/003-main.md", "# 003 — main ticket\n\n**Status**: Open\n")
 	writeMergeFixture(t, root, "issues/005-closed.md", "# 005 — closed ticket\n\n**Status**: Closed\n")
 	writeMergeFixture(t, root, "docs/studies/c.md", "# Main study\n\n**Scope**: main study\n")
+	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	cli("index", "-d", ".")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "add", "-A")
 	gitRunE2E(t, root, e2eEnv(home, binDir), "commit", "-qm", "main sources")
@@ -216,15 +221,20 @@ func editPreface(t *testing.T, root, value string) {
 	}
 }
 
+// e2eEnv is the environment for harnez and git in an e2e repository: no
+// repository variables inherited from a hook, no user or system git config.
 func e2eEnv(home, binDir string) []string {
 	env := os.Environ()
 	filtered := env[:0]
 	for _, entry := range env {
-		if !strings.HasPrefix(entry, "HOME=") && !strings.HasPrefix(entry, "PATH=") {
-			filtered = append(filtered, entry)
+		name, _, _ := strings.Cut(entry, "=")
+		switch name {
+		case "HOME", "PATH", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_COMMON_DIR", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM":
+			continue
 		}
+		filtered = append(filtered, entry)
 	}
-	return append(filtered, "HOME="+home, "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"), "HARNEZ_DISABLE_RATE_FEEDBACK=1")
+	return append(filtered, "HOME="+home, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"), "HARNEZ_DISABLE_RATE_FEEDBACK=1")
 }
 
 func gitRunE2E(t *testing.T, root string, env []string, args ...string) string {

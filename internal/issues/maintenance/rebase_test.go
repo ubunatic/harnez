@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,12 +15,28 @@ import (
 
 func gitTestRun(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "commit.gpgsign=false"}, args...)...)
+	cmd.Env = gitTestEnv(dir)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// gitTestEnv isolates test git calls from the developer's global and system
+// configuration and from repository variables a git hook may export.
+func gitTestEnv(home string) []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		switch name {
+		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_COMMON_DIR", "HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM":
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env, "HOME="+home, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
 }
 
 func writeTestTicket(t *testing.T, dir string, n int, slug string) {
@@ -523,6 +540,101 @@ func TestRunIssuesLintCachedNamesUntrackedTicketWhenIndexIncludesIt(t *testing.T
 	err := runIssuesLintCached(&out, dir)
 	if err == nil || !strings.Contains(err.Error(), "issues/002-untracked.md") || !strings.Contains(err.Error(), "staged ticket set") {
 		t.Fatalf("cached lint error = %v, want actionable untracked-ticket diagnostic", err)
+	}
+}
+
+// A new study that is not yet staged is not indexed, so the docs drift message
+// must name it and say how to get it indexed (issue 1045 M2).
+func TestRunIssuesLintCachedHintsUntrackedStudy(t *testing.T) {
+	dir := t.TempDir()
+	gitTestRun(t, dir, "init", "-b", "main")
+	gitTestRun(t, dir, "config", "user.name", "Test")
+	gitTestRun(t, dir, "config", "user.email", "test@example.invalid")
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "issues", "README.md"), []byte("# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeTestTicket(t, dir, 1, "tracked")
+	commitIssueIndex(t, dir, "base")
+
+	docs := filepath.Join(dir, "docs")
+	if err := os.MkdirAll(filepath.Join(docs, "studies"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	study := func(topic string) string {
+		return "# Study: " + topic + "\n\n**Scope**: " + topic + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(docs, "studies", "2026-01-01-a.md"), []byte(study("A")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(docs, "README.md"), []byte("# Docs\n\nHandwritten preface.\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := indexpkg.UpdateDocsReadme(filepath.Join(docs, "README.md"), docs); err != nil {
+		t.Fatal(err)
+	}
+	gitTestRun(t, dir, "add", "docs")
+	gitTestRun(t, dir, "commit", "-m", "docs base")
+
+	// Staged but not in the committed README: the staged README is stale.
+	if err := os.WriteFile(filepath.Join(docs, "studies", "2026-01-02-b.md"), []byte(study("B")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitTestRun(t, dir, "add", "docs/studies/2026-01-02-b.md")
+	// Untracked: not indexed and not staged.
+	if err := os.WriteFile(filepath.Join(docs, "studies", "2026-01-03-draft.md"), []byte(study("Draft")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	err := runIssuesLintCached(&out, dir)
+	if err == nil || !strings.Contains(err.Error(), "docs/README.md is generated studies index drift") {
+		t.Fatalf("cached lint error = %v, want docs drift", err)
+	}
+	if !strings.Contains(err.Error(), "docs/studies/2026-01-03-draft.md") {
+		t.Fatalf("docs drift error = %v, want the untracked study named as a hint", err)
+	}
+}
+
+// M3 item 2: porcelain output quotes names with non-ASCII bytes, so the untracked
+// lists must come from -z output and carry the exact file names.
+func TestUntrackedPathsKeepsUnusualNames(t *testing.T) {
+	dir := t.TempDir()
+	gitTestRun(t, dir, "init", "-b", "main")
+	gitTestRun(t, dir, "config", "user.name", "Harnez Test")
+	gitTestRun(t, dir, "config", "user.email", "harnez-test@example.invalid")
+	write := func(rel string) {
+		path := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("# Study\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// git mv stages an R entry whose source path follows it in -z output.
+	write("issues/002-old.md")
+	gitTestRun(t, dir, "add", "issues/002-old.md")
+	gitTestRun(t, dir, "commit", "-q", "-m", "base")
+	gitTestRun(t, dir, "mv", "issues/002-old.md", "issues/002-renamed.md")
+	// Tab and quote names are C-quoted in plain porcelain output, so a parser
+	// that reads that output never matches them.
+	for _, rel := range []string{"issues/003-a b.md", "issues/004-tab\tname.md", "issues/005-quote\"d.md", "docs/studies/2026-01-05-café.md", "docs/studies/2026-01-06-a b.md"} {
+		write(rel)
+	}
+
+	tickets, studies, err := untrackedPaths(dir)
+	if err != nil {
+		t.Fatalf("untrackedPaths: %v", err)
+	}
+	if want := []string{"issues/003-a b.md", "issues/004-tab\tname.md", "issues/005-quote\"d.md"}; !slices.Equal(tickets, want) {
+		t.Errorf("untracked tickets = %q, want %q", tickets, want)
+	}
+	want := []string{"docs/studies/2026-01-05-café.md", "docs/studies/2026-01-06-a b.md"}
+	if !slices.Equal(studies, want) {
+		t.Errorf("untracked studies = %q, want %q", studies, want)
 	}
 }
 

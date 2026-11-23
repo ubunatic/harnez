@@ -3,6 +3,7 @@ package maintenance
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -677,7 +678,41 @@ func restoreStagedChanges(dir string, state rebaseState) error {
 }
 
 func runIssuesLint(w io.Writer, dir string) error {
-	return runIssuesLintMode(w, dir, false, nil)
+	// Untracked studies only feed a hint, so a failed status (no repository)
+	// leaves the hint empty rather than failing the lint.
+	_, studies, _ := untrackedPaths(dir)
+	return runIssuesLintMode(w, dir, false, nil, studies)
+}
+
+// untrackedPaths lists the untracked files under issues/ and the untracked
+// studies under docs/studies/ in dir. Dotfiles are not studies, so they are
+// left out. Porcelain output is read untrimmed (see porcelainStatus).
+func untrackedPaths(dir string) (tickets, studies []string, err error) {
+	// -z keeps names with spaces or non-ASCII bytes unquoted; index.GitCommand
+	// keeps hook variables from redirecting git to another repository.
+	out, err := index.GitCommand(dir, "status", "--porcelain", "-z", "--untracked-files=all").Output()
+	if err != nil {
+		return nil, nil, fmt.Errorf("git status: %w", err)
+	}
+	entries := strings.Split(string(out), "\x00")
+	for i := 0; i < len(entries); i++ {
+		entry := entries[i]
+		if strings.HasPrefix(entry, "R") || strings.HasPrefix(entry, "C") {
+			i++ // a rename or copy is followed by its source path
+			continue
+		}
+		if !strings.HasPrefix(entry, "?? ") {
+			continue
+		}
+		path := entry[3:]
+		switch {
+		case strings.HasPrefix(path, "issues/"):
+			tickets = append(tickets, path)
+		case strings.HasPrefix(path, "docs/studies/") && index.IsStudyName(filepath.Base(path)):
+			studies = append(studies, path)
+		}
+	}
+	return tickets, studies, nil
 }
 
 type issueIndexSnapshot map[string]FileSnapshot
@@ -734,7 +769,7 @@ func RestoreIssueIndexes(issuesDir string, snapshot IssueIndexSnapshot) error {
 	return restoreIssueIndexes(issuesDir, snapshot)
 }
 
-func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []string) error {
+func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets, untrackedStudies []string) error {
 	issuesDir := filepath.Join(dir, "issues")
 	if _, err := os.Stat(issuesDir); os.IsNotExist(err) {
 		// A tracker with no issues/ yet (fresh harnez init) has nothing to lint (issue 1072).
@@ -802,12 +837,21 @@ func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []
 	docsReadme := filepath.Join(dir, "docs", "README.md")
 	docsContent, err := os.ReadFile(docsReadme)
 	if err == nil {
-		generated, err := index.RenderDocsReadme(string(docsContent), filepath.Join(dir, "docs"), docsReadme)
+		render := index.RenderDocsReadme
+		if cached {
+			// dir is the materialized staged snapshot, not the live repository.
+			render = index.RenderDocsReadmeSnapshot
+		}
+		generated, err := render(string(docsContent), filepath.Join(dir, "docs"), docsReadme)
 		if err != nil {
 			return fmt.Errorf("issues lint: %w", err)
 		}
 		if generated != string(docsContent) {
-			return fmt.Errorf("issues lint: docs/README.md is generated studies index drift; run 'harnez index --stage'")
+			msg := "issues lint: docs/README.md is generated studies index drift; run 'harnez index --stage'"
+			if len(untrackedStudies) > 0 {
+				msg += "; untracked studies are not indexed until staged: " + strings.Join(untrackedStudies, ", ") + " (git add them, then run 'harnez index --stage')"
+			}
+			return errors.New(msg)
 		}
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("issues lint: read docs index: %w", err)
@@ -855,14 +899,11 @@ func runIssuesLintCached(w io.Writer, dir string) error {
 	if _, err := gitOutput(dir, "checkout-index", "--all", "--prefix="+prefix); err != nil {
 		return fmt.Errorf("issues lint --cached: materialize index: %w", err)
 	}
-	status, _ := gitOutput(dir, "status", "--short", "--untracked-files=all")
-	var untrackedTickets []string
-	for _, line := range strings.Split(status, "\n") {
-		if strings.HasPrefix(line, "?? ") && strings.HasPrefix(strings.TrimSpace(line[3:]), "issues/") {
-			untrackedTickets = append(untrackedTickets, strings.TrimSpace(line[3:]))
-		}
+	untrackedTickets, untrackedStudies, err := untrackedPaths(dir)
+	if err != nil {
+		return fmt.Errorf("issues lint --cached: %w", err)
 	}
-	return runIssuesLintMode(w, tmp, true, untrackedTickets)
+	return runIssuesLintMode(w, tmp, true, untrackedTickets, untrackedStudies)
 }
 
 // runIssuesMergeDriver retains the two-path helper used by unit tests.
