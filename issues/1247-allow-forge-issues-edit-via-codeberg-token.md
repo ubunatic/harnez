@@ -47,3 +47,9 @@ the token source, `noWriteTokenError` names the env variables, `TestMain` unsets
 variables, help, `docs/commands/issue.md` and the Issues rule updated. Tests added but not yet
 run: the Quota-1 wrapper's bwrap cannot map user namespaces inside the taia sandbox; run
 `make test-q1` on the host.
+
+Also on this branch (owner request, 2026-11-23): `harnez forge token import [--write] --from NAME`
+reads the token from an environment variable; without a source (and for `-` when stdin is a
+terminal) import prompts for the token without echo, so a pasted token stays out of the shell
+history. `--user` and flag conflicts are checked before the prompt. Tests:
+`TestForgeTokenImportSources`; not yet run (same bwrap blocker).
