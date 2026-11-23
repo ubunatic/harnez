@@ -1,6 +1,6 @@
 # 1282 — Accept searcher as an agent role alias
 
-**Status**: Open
+**Status**: Closed — added searcher alias to advisor role in spec/agent.yaml with unit, CLI, and help golden tests; full make test-q1 green
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
