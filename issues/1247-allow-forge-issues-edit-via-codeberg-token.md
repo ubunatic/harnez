@@ -31,3 +31,19 @@ Even when `CODEBERG_TOKEN` is set in the environment (or `fj` is already authent
 - [ ] `harnez issues edit` (and forge write token resolution as appropriate) falls back to `CODEBERG_TOKEN` / configured `TokenEnv` when no stored write token is present (while still preferring the stored write token if configured, and preserving host-only session guards and secret-safe errors).
 - [ ] If the env token lacks write scope (`401`/`403`), return a clear error pointing to `harnez forge token create --write` or `CODEBERG_TOKEN` scope without leaking token values.
 - [ ] Update `cmd/harnez/issues_forge_test.go` and `internal/forgetracker/` tests to cover `CODEBERG_TOKEN` fallback for `edit`.
+
+## Decision (owner, 2026-11-23)
+
+The owner reverses the #1202 rule "writes never fall back to env variables": when no stored
+write token exists, every forge write (new, comment, edit, close, reopen) uses the forge's
+`token_env` variable (`CODEBERG_TOKEN`, then `FORGEJO_TOKEN`). The stored write token still
+wins; fj stays the last fallback for new and comment. Host-only write guards are unchanged.
+
+## Progress (2026-11-23)
+
+Implemented on branch `issue/1247-forge-write-env-token`, uncommitted: `forgetracker.WriteAPI`
+env fallback, `forge.Writer.Source` scope hint on 401/403 (variable name only), dry runs name
+the token source, `noWriteTokenError` names the env variables, `TestMain` unsets the token
+variables, help, `docs/commands/issue.md` and the Issues rule updated. Tests added but not yet
+run: the Quota-1 wrapper's bwrap cannot map user namespaces inside the taia sandbox; run
+`make test-q1` on the host.
