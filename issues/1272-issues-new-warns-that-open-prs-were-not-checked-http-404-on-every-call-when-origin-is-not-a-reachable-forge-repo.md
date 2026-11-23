@@ -38,3 +38,13 @@ Probed 2026-11-23 (anonymous API):
 After the owner pushed splitty, the repo reports `"empty":false` and
 `GET /repos/ubunatic/splitty/pulls` returns 200, which confirms the empty-repo cause. The fix
 above still applies to any new, empty forge repo.
+
+## Follow-up: HTTP 401 after the push (2026-11-23)
+
+Splitty then reported `open PRs not checked on origin (forge API request failed: HTTP 401 ...)`.
+Anonymous `GET /repos/ubunatic/splitty/pulls?state=open` returns 200 with no open PRs, so the
+per-PR files request is not reached: harnez in that session sends a token Codeberg rejects, and
+by design (1138) does not retry anonymously. Which token was not checked (agents must not inspect
+token setup); a token the owner revoked the same day is a candidate. Improvement for this ticket:
+on 401 the warning should say the read token was rejected and name `harnez forge token status`,
+instead of a bare HTTP status.
