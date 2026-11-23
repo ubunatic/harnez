@@ -535,7 +535,8 @@ func TestAgentSpecRolesAndCheckSpawn(t *testing.T) {
 	}
 	for alias, want := range map[string]string{
 		"explorer": "advisor", "scout": "advisor", "auditor": "advisor", "planner": "advisor",
-		"coder": "developer", "worker": "developer", "implementer": "developer",
+		"searcher": "advisor",
+		"coder":    "developer", "worker": "developer", "implementer": "developer",
 		"critic": "reviewer", "checker": "reviewer", "lead": "orchestrator", "coordinator": "orchestrator",
 		"developer": "developer",
 	} {
@@ -545,6 +546,11 @@ func TestAgentSpecRolesAndCheckSpawn(t *testing.T) {
 	}
 	if _, err := ResolveRole("wizard"); err == nil || !strings.Contains(err.Error(), "known roles:") || !strings.Contains(err.Error(), "explorer") {
 		t.Fatalf("unknown role error = %v, want role catalog", err)
+	}
+	for _, nearMiss := range []string{"Searcher", "searchers", " searcher", "searcher "} {
+		if got, err := ResolveRole(nearMiss); got != "" || err == nil || !strings.Contains(err.Error(), "unknown agent role") {
+			t.Errorf("ResolveRole(%q) = %q, %v; want unknown role error", nearMiss, got, err)
+		}
 	}
 }
 
@@ -564,6 +570,9 @@ func TestResolveRoleDynamicStaticBeforeClassifierAndGracefulFallback(t *testing.
 	}
 	if got, classified, err := ResolveRoleDynamic("explorer"); err != nil || classified || got != "advisor" {
 		t.Fatalf("alias role = %q, classified=%v, err=%v", got, classified, err)
+	}
+	if got, classified, err := ResolveRoleDynamic("searcher"); err != nil || classified || got != "advisor" {
+		t.Fatalf("searcher role = %q, classified=%v, err=%v; want static advisor alias", got, classified, err)
 	}
 	if got, classified, err := ResolveRoleDynamic("code author"); err != nil || !classified || got != "developer" {
 		t.Fatalf("dynamic role = %q, classified=%v, err=%v", got, classified, err)
