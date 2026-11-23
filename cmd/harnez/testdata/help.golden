@@ -1583,6 +1583,7 @@ Usage:
   harnez forge [command]
 
 Available Commands:
+  status      Check forge tokens live and report which token is effective for reads and writes
   token       Create, rotate, revoke or show Forgejo read and write tokens
 
 Flags:
@@ -1590,12 +1591,27 @@ Flags:
 
 Use "harnez forge [command] --help" for more information about a command.
 
+=== harnez forge status
+Probe every configured token source for a forge host (stored read/write tokens,
+environment variables in spec/pr.yaml, and gh auth for GitHub) against the live API.
+Reports whether each token works and which one is effective for read and write paths.
+Token values are never printed.
+
+Usage:
+  harnez forge status [flags]
+
+Flags:
+  -h, --help          help for status
+      --host string   forge host from spec/pr.yaml (default: default_host in spec/forge_token.yaml)
+      --repo string   optional owner/repo to probe issue read access on Forgejo
+
 === harnez forge token
 Manage separate read and issue write Forgejo access tokens per forge host (scopes, name prefix and
 default host in spec/forge_token.yaml). harnez reads the stored token before
 CODEBERG_TOKEN/FORGEJO_TOKEN, so pr wait and the forge tracker mode (find issues,
 issues show) can read private repos.
-Use --write to manage the separate issue write token.
+Use --write to manage the separate issue write token. Issue writes use it first,
+then CODEBERG_TOKEN/FORGEJO_TOKEN with the issue write scope, then fj.
 
 Forgejo creates and deletes tokens only with your password (basic auth), never with a token.
 create, rotate and revoke prompt for the password, and for a 2FA code, on the terminal; there
@@ -1637,16 +1653,25 @@ Global Flags:
       --write         use the separate forge issue write token
 
 === harnez forge token import
-Read a token as the forge's settings page shows it (only the token, nothing else) from
-<file>, or from stdin with "-", and store it like create does. With --wizard, prompt for
-all import options and the token on the terminal (when no <file|-> is given). --user names
+Read a token as the forge's settings page shows it (only the token, nothing else) and
+store it like create does. The token comes from one of:
+
+  (nothing)     a prompt on the terminal; paste the token, it is not shown and never
+                reaches the shell history
+  -             stdin; a pipe is read as is, a terminal gets the hidden prompt
+  <file>        the file's content
+  --from NAME   the environment variable NAME, e.g. CODEBERG_TOKEN
+
+Errors name the source, never the token. With --wizard, prompt for all import options and
+the token on the terminal (when no <file|-> or --from is given). --user names
 the forge account that owns it. --name is the token's name on the forge; without it, revoke
 and rotate cannot delete it there. --check owner/repo first reads that repo's issues with
 the token and stores nothing on failure. Forgejo lists a token's scopes only with the
 password, so the scopes themselves cannot be checked here. The source file is kept unless
 --remove-source is given.
 
-  harnez forge token import --user ubunatic --name issue-read --check ubunatic/harnez -
+  harnez forge token import --user ubunatic --name issue-read --check ubunatic/harnez
+  harnez forge token import --write --user ubunatic --from CODEBERG_TOKEN
   harnez forge token import --wizard
 
 Usage:
@@ -1654,6 +1679,7 @@ Usage:
 
 Flags:
       --check string    owner/repo whose issues the token must be able to read
+      --from NAME       read the token from environment variable NAME (e.g. CODEBERG_TOKEN)
   -h, --help            help for import
       --name string     the token's name on the forge (needed for revoke)
       --remove-source   delete <file> after the token is stored
@@ -1975,8 +2001,9 @@ working-tree changes, staged or not, are never staged or committed.
 files and leaves them uncommitted. 'new' never commits.
 
 Forgejo writes use a separate write token (harnez forge token create --write);
-the read token remains separate. Without a write token new uses fj or tea;
-comment uses fj. GitHub new uses gh. If forge issue creation fails (no write
+the read token remains separate. Without a stored write token, writes use
+CODEBERG_TOKEN or FORGEJO_TOKEN when set (it needs the issue write scope);
+with neither, new uses fj or tea and comment uses fj. GitHub new uses gh. If forge issue creation fails (no write
 access, missing token or CLI auth, or a worker session), issues new automatically
 writes issues/inbox/<slug>.md as a file-based fallback and warns agents not to
 troubleshoot token setup.
@@ -2560,12 +2587,133 @@ Usage:
   harnez pr [command]
 
 Available Commands:
+  close       Close a pull request
+  comment     Add a comment to a pull request
+  create      Create a pull request on the origin forge
+  edit        Edit a pull request's title, body, or base branch
+  list        List pull requests on the origin forge
+  merge       Merge a pull request
+  reopen      Reopen a closed pull request
+  show        Show details of a pull request
   wait        Wait until a pull request is merged or closed
 
 Flags:
   -h, --help   help for pr
 
 Use "harnez pr [command] --help" for more information about a command.
+
+=== harnez pr close
+Close a pull request
+
+Usage:
+  harnez pr close <number|url> [comment] [flags]
+
+Flags:
+      --dry-run         preview without closing the pull request
+  -h, --help            help for close
+      --remote string   git remote whose URL names the forge and repository
+      --repo string     override repository as owner/repo
+
+=== harnez pr comment
+Add a comment to a pull request
+
+Usage:
+  harnez pr comment <number|url> [body] [flags]
+
+Flags:
+  -F, --body-file string   read comment body from file
+      --dry-run            preview without posting the comment
+  -h, --help               help for comment
+      --remote string      git remote whose URL names the forge and repository
+      --repo string        override repository as owner/repo
+
+=== harnez pr create
+Create a pull request on the origin forge
+
+Usage:
+  harnez pr create [flags]
+
+Flags:
+      --base string        base branch (default: default_branch in spec/pr.yaml)
+  -b, --body string        pull request body
+  -F, --body-file string   read pull request body from file
+      --draft              create as a draft pull request
+      --dry-run            preview without creating the pull request
+      --head string        head branch (default: current git branch)
+  -h, --help               help for create
+      --remote string      git remote whose URL names the forge and repository
+      --repo string        override repository as owner/repo
+  -t, --title string       pull request title
+
+=== harnez pr edit
+Edit a pull request's title, body, or base branch
+
+Usage:
+  harnez pr edit <number|url> [flags]
+
+Flags:
+      --base string        new base branch
+  -b, --body string        new pull request body
+  -F, --body-file string   read new pull request body from file
+      --dry-run            preview without editing the pull request
+  -h, --help               help for edit
+      --remote string      git remote whose URL names the forge and repository
+      --repo string        override repository as owner/repo
+  -t, --title string       new pull request title
+
+=== harnez pr list
+List pull requests on the origin forge
+
+Usage:
+  harnez pr list [flags]
+
+Flags:
+  -h, --help            help for list
+      --json            output pull requests as JSON
+      --limit int       maximum number of pull requests to return (default 20)
+      --remote string   git remote whose URL names the forge and repository
+      --repo string     override repository as owner/repo
+      --state string    filter by state: open, closed, or all (default "open")
+
+=== harnez pr merge
+Merge a pull request
+
+Usage:
+  harnez pr merge <number|url> [flags]
+
+Flags:
+      --delete-branch   delete head branch after merge (Forgejo)
+      --dry-run         preview without merging the pull request
+  -h, --help            help for merge
+      --method string   merge method: merge, squash, or rebase (default "merge")
+      --remote string   git remote whose URL names the forge and repository
+      --repo string     override repository as owner/repo
+
+=== harnez pr reopen
+Reopen a closed pull request
+
+Usage:
+  harnez pr reopen <number|url> [flags]
+
+Flags:
+      --dry-run         preview without reopening the pull request
+  -h, --help            help for reopen
+      --remote string   git remote whose URL names the forge and repository
+      --repo string     override repository as owner/repo
+
+=== harnez pr show
+Show details of a pull request
+
+Usage:
+  harnez pr show <number|url> [flags]
+
+Flags:
+      --comments        include pull request comments
+      --files           include changed files
+  -h, --help            help for show
+      --json            output pull request details as JSON
+      --remote string   git remote whose URL names the forge and repository
+      --repo string     override repository as owner/repo
 
 === harnez pr wait
 Poll a pull request on Codeberg (Forgejo) or GitHub until it is merged,

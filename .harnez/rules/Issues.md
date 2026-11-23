@@ -26,8 +26,9 @@ For a project with an `issues/` tracker. Use `harnez find` / `harnez issues`, no
   `issues show --forge 42 --json`, `issues edit --forge 42 --title "T"`,
   `issues close --forge 42 done`, `issues reopen --forge 42` (prefix each with `harnez`).
   `--dry-run` previews `new` (forge, `--remote`, `--inbox`, and local), comment, edit,
-  close, and reopen without writing files or creating issues. Without a write token new
-  falls back to fj or tea and comment to fj; GitHub new uses gh. If forge filing fails
+  close, and reopen without writing files or creating issues. Without a stored write token,
+  writes use `CODEBERG_TOKEN`/`FORGEJO_TOKEN` when the host session has it set; with neither,
+  new falls back to fj or tea and comment to fj; GitHub new uses gh. If forge filing fails
   (missing write access, token, CLI auth, or worker session), `issues new` writes
   `issues/inbox/<slug>.md` instead (or use `--inbox` directly) — commit and push it
   on a branch/PR. Agents must NEVER inspect, debug, or modify token setup, env vars, or

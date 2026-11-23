@@ -68,8 +68,11 @@ harnez issues reopen -d <repo> --forge 42
 ```
 
 Forgejo writes use a separate write token, created with `harnez forge token create
---write`; the read token remains separate. Without a write token, `new` falls back
-to fj or tea and `comment` to fj. GitHub `new` uses gh. Labels must exist on the
+--write`; the read token remains separate. Without a stored write token, writes use
+`CODEBERG_TOKEN` or `FORGEJO_TOKEN` (the forge's `token_env` in `spec/pr.yaml`) when set;
+that token needs the issue write scope, and a 401 or 403 names the variable, never its
+value. With neither, `new` falls back to fj or tea and `comment` to fj; `edit`, `close`
+and `reopen` stop with `no write token`. GitHub `new` uses gh. Labels must exist on the
 forge: the API resolves their names to IDs; fj cannot set labels (when `issues new
 --label` falls back to `issues/inbox/<slug>.md` on a target whose `issue_cli`
 includes `fj`, harnez warns on stderr and adds a note under `**Labels**: ...` in

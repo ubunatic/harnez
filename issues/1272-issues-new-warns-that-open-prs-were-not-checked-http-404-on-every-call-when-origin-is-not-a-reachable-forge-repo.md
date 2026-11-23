@@ -1,0 +1,50 @@
+# 1272 — issues new warns that open PRs were not checked (HTTP 404) on every call when origin is not a reachable forge repo
+
+**Status**: Open
+**Priority**: P3 (Low)
+**Severity**: Minor
+**Category**: Bug
+**Related**: 1138
+
+---
+
+## 1. Problem & Motivation
+
+Reported by the splitty host session (taia, 2026-11-23): every `harnez issues new` in
+`/home/alfiz/projects/splitty` warns
+`open PRs not checked on origin (forge API request failed: HTTP 404 API request to codeberg.org)`.
+The warning repeats on every call and says nothing about the cause, so agents learn to ignore it.
+
+## 2. Technical Specification / Findings
+
+Probed 2026-11-23 (anonymous API):
+
+- `ubunatic/splitty` on Codeberg is public (`"private":false`, `"has_pull_requests":true`) but
+  **empty** (`"empty":true`, nothing pushed). `GET /repos/ubunatic/splitty` and its `/issues`
+  return 200, while `GET /repos/ubunatic/splitty/pulls` returns 404. `ubunatic/harnez/pulls`
+  returns 200.
+- The warning comes from the open-PR claim scan, `internal/issues/claims.go:79`.
+
+## 3. Implementation & Verification Plan
+
+- A 404 from the pull list of a repo that exists and is `empty` means there are no open PRs:
+  treat it as an empty list, or say "remote repo is empty" instead of a bare HTTP 404.
+- Keep the warning for a real failure (private repo without a token, unreachable host).
+- Test: stub forge with an empty repo (repo 200 with `empty:true`, pulls 404) prints no
+  warning; repo 404 still warns.
+
+## Confirmed (2026-11-23)
+
+After the owner pushed splitty, the repo reports `"empty":false` and
+`GET /repos/ubunatic/splitty/pulls` returns 200, which confirms the empty-repo cause. The fix
+above still applies to any new, empty forge repo.
+
+## Follow-up: HTTP 401 after the push (2026-11-23)
+
+Splitty then reported `open PRs not checked on origin (forge API request failed: HTTP 401 ...)`.
+Anonymous `GET /repos/ubunatic/splitty/pulls?state=open` returns 200 with no open PRs, so the
+per-PR files request is not reached: harnez in that session sends a token Codeberg rejects, and
+by design (1138) does not retry anonymously. Which token was not checked (agents must not inspect
+token setup); a token the owner revoked the same day is a candidate. Improvement for this ticket:
+on 401 the warning should say the read token was rejected and name `harnez forge token status`,
+instead of a bare HTTP status.

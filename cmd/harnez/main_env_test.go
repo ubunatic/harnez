@@ -98,6 +98,13 @@ func runIsolatedTests(m *testing.M) int {
 			panic(err)
 		}
 	}
+	// Forge writes fall back to these variables (issue 1247); a developer's real token
+	// must never reach a test, which could then write to the real forge.
+	for _, name := range []string{"CODEBERG_TOKEN", "FORGEJO_TOKEN", "GITHUB_TOKEN"} {
+		if err := os.Unsetenv(name); err != nil {
+			panic(err)
+		}
+	}
 	// Host detection picks detach guidance wording (detachHost); keep it generic.
 	for _, name := range []string{"HARNEZ_AGENT", "CODEX_THREAD_ID", "CODEX_CLI", "CLAUDE_CODE_SESSION_ID", "ANTIGRAVITY_AGENT", "ANTIGRAVITY_AGENTAPI_EXE"} {
 		if err := os.Unsetenv(name); err != nil {

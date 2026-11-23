@@ -178,6 +178,7 @@ func requireHostSession(verb string) error {
 }
 
 var issueWriteLookup = forgetoken.LookupWrite
+var issueWriteGetenv = os.Getenv
 var issueWriteClient = func(timeout time.Duration) *http.Client { return &http.Client{Timeout: timeout} }
 var issueWriteMetadata = func(host string) (bool, error) {
 	_, store, err := forgeTokenStoreFor(true)
@@ -194,8 +195,30 @@ func issueWriteAPI(t forgetracker.Target) (forge.Writer, bool, error) {
 		return forge.Writer{}, false, err
 	}
 	client := issueWriteClient(sp.IssueScan.Timeout)
-	w, ok := forgetracker.WriteAPI(t, client, issueWriteLookup)
+	w, ok := forgetracker.WriteAPI(t, client, issueWriteLookup, issueWriteGetenv)
 	return w, ok, nil
+}
+
+// issueWriteSource names the token a forge write would use, without reading the stored
+// secret: "write token" when one is stored, else the set token_env variable, else "".
+func issueWriteSource(f forge.Forge) (string, error) {
+	stored, err := issueWriteMetadata(f.Host)
+	if err != nil {
+		return "", err
+	}
+	if stored {
+		return "write token", nil
+	}
+	return forgetracker.WriteEnvName(f, issueWriteGetenv), nil
+}
+
+// noWriteTokenError names both ways to authorise edit, close and reopen.
+func noWriteTokenError(f forge.Forge) error {
+	env := ""
+	if len(f.TokenEnv) > 0 {
+		env = ", or set " + strings.Join(f.TokenEnv, " or ") + " to a token with the issue write scope"
+	}
+	return fmt.Errorf("no write token for %s; run: harnez forge token create --write%s", f.Host, env)
 }
 
 // runIssuesComment checks the issue before invoking fj with an explicit target.
@@ -250,12 +273,12 @@ func runIssuesComment(w io.Writer, dir string, t forgetracker.Target, src forget
 	}
 	c := forgetracker.FJCommentCommand(t, n, body)
 	if dryRun {
-		stored, err := issueWriteMetadata(t.Forge.Host)
+		source, err := issueWriteSource(t.Forge)
 		if err != nil {
 			return err
 		}
-		if stored {
-			_, err = fmt.Fprintf(w, "dry run: would comment on %s/%s over the API (write token)\n", t.Forge.Host, target)
+		if source != "" {
+			_, err = fmt.Fprintf(w, "dry run: would comment on %s/%s over the API (%s)\n", t.Forge.Host, target, source)
 			return err
 		}
 		_, err = fmt.Fprintf(w, "dry run: %s\n", c)
@@ -594,12 +617,12 @@ func runIssuesNewForge(stdout, stderr io.Writer, opt forgeNewOptions) error {
 	}
 	if dryRun {
 		if t.Forge.Kind == "forgejo" {
-			stored, err := issueWriteMetadata(t.Forge.Host)
+			source, err := issueWriteSource(t.Forge)
 			if err != nil {
 				return err
 			}
-			if stored {
-				_, err = fmt.Fprintf(stdout, "dry run, would file on %s over the API (write token)\n", t)
+			if source != "" {
+				_, err = fmt.Fprintf(stdout, "dry run, would file on %s over the API (%s)\n", t, source)
 				return err
 			}
 		}
@@ -777,7 +800,7 @@ func runIssuesEditForge(w io.Writer, t forgetracker.Target, src forgetracker.Sou
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("no write token for %s; run: harnez forge token create --write", t.Forge.Host)
+		return noWriteTokenError(t.Forge)
 	}
 	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
 	if err != nil {
@@ -844,7 +867,7 @@ func runIssuesStateForge(w io.Writer, t forgetracker.Target, src forgetracker.So
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("no write token for %s; run: harnez forge token create --write", t.Forge.Host)
+		return noWriteTokenError(t.Forge)
 	}
 	is, err := src.Issue(t.Forge, t.Owner, t.Repo, n)
 	if err != nil {

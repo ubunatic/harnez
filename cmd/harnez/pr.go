@@ -15,7 +15,17 @@ func newPRCmd() *cobra.Command {
 		Use:   "pr",
 		Short: "Work with pull requests on Codeberg (Forgejo) and GitHub",
 	}
-	cmd.AddCommand(newPRWaitCmd())
+	cmd.AddCommand(
+		newPRListCmd(),
+		newPRShowCmd(),
+		newPRCommentCmd(),
+		newPRCreateCmd(),
+		newPREditCmd(),
+		newPRCloseCmd(),
+		newPRReopenCmd(),
+		newPRMergeCmd(),
+		newPRWaitCmd(),
+	)
 	return cmd
 }
 
