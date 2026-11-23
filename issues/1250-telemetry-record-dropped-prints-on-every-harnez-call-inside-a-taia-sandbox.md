@@ -36,3 +36,9 @@ Probed in this sandbox (2026-11-19):
 - [ ] Fix whichever applies: make the server accept sandboxed CLI telemetry, and/or add `~/.local/state/harnez/telemetry-spool` (only that directory) to the taia harnez profile or the harnez-generated sandbox grants.
 - [ ] Rate-limit the stderr line: at most once per session (marker under the session state dir), otherwise debug-only. Policy decision for the owner: should a dropped CLI-invocation record be silent by default?
 - [ ] Test: dispatch with an unwritable spool and a failing socket prints the warning once across two calls in the same session.
+
+## Seen again (2026-11-23)
+
+Still printed after every harnez command inside taia: the splitty host session (`agent models
+--picks`, `issues new`, `index`) and the harnez host session (`read`, `forge token status`,
+`issues show --forge`) both reported it.
