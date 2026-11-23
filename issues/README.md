@@ -51,4 +51,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1271 | [1271-issues-new-rejects-f-body-file-for-a-local-tracker.md](1271-issues-new-rejects-f-body-file-for-a-local-tracker.md) | issues new rejects -F/--body-file for a local tracker | Open |
 | 1272 | [1272-issues-new-warns-that-open-prs-were-not-checked-http-404-on-every-call-when-origin-is-not-a-reachable-forge-repo.md](1272-issues-new-warns-that-open-prs-were-not-checked-http-404-on-every-call-when-origin-is-not-a-reachable-forge-repo.md) | issues new warns that open PRs were not checked (HTTP 404) on every call when origin is not a reachable forge repo | Open |
 | 1274 | [1274-add-rewind-command-similar-to-claude-code-and-agy.md](1274-add-rewind-command-similar-to-claude-code-and-agy.md) | Add `/rewind` command similar to Claude Code and AGY | Open |
+| 1275 | [1275-exec-quota-1-blocks-full-make-test-q1-after-go-test-short-without-source-edits.md](1275-exec-quota-1-blocks-full-make-test-q1-after-go-test-short-without-source-edits.md) | exec: Quota-1 blocks full `make test-q1` after `go test -short` without source edits | Open |
 <!-- harnez:end issues-active-index -->
