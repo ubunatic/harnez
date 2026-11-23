@@ -55,4 +55,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1276 | [1276-harnez-pr-create-should-fall-back-to-agit-flow-when-token-access-fails.md](1276-harnez-pr-create-should-fall-back-to-agit-flow-when-token-access-fails.md) | `harnez pr create` should fall back to AGit flow when token access fails | Open |
 | 1277 | [1277-add-taia-as-driver-for-local-models-instead-of-pi-when-taia-cli-is-available.md](1277-add-taia-as-driver-for-local-models-instead-of-pi-when-taia-cli-is-available.md) | Add taia as driver for local models instead of pi when taia CLI is available | Open |
 | 1278 | [1278-harnez-pr-wait-should-hint-agents-to-return-to-the-default-branch-on-merge.md](1278-harnez-pr-wait-should-hint-agents-to-return-to-the-default-branch-on-merge.md) | harnez pr wait should hint agents to return to the default branch on merge | Open |
+| 1279 | [1279-runner-mode-errors-should-name-the-taia-background-task-route.md](1279-runner-mode-errors-should-name-the-taia-background-task-route.md) | Runner mode errors should name the taia background task route | Open |
 <!-- harnez:end issues-active-index -->
