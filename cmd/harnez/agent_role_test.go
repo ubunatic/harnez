@@ -250,6 +250,8 @@ func TestAgentStartResolvesRoleAliasAndHelpListsRoles(t *testing.T) {
 		text string
 	}{
 		{[]string{"start", "explorer", "audit SQLite queries"}, "", "advisor", "audit SQLite queries"},
+		{[]string{"start", "--role", "searcher", "find call sites"}, "", "advisor", "find call sites"},
+		{[]string{"start", "searcher", "find call sites"}, "", "advisor", "find call sites"},
 		{[]string{"start", "coder", "my-worker", "implement ticket 041"}, "my-worker", "developer", "implement ticket 041"},
 	} {
 		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
@@ -278,6 +280,9 @@ func TestAgentStartResolvesRoleAliasAndHelpListsRoles(t *testing.T) {
 			if err != nil || started == nil || started.Role != tc.role || d.envRole != tc.role || !strings.Contains(d.prompt, tc.text) {
 				t.Fatalf("session=%#v envRole=%q prompt=%q err=%v", started, d.envRole, d.prompt, err)
 			}
+			if !strings.Contains(d.prompt, "Harnez role: "+tc.role+".") {
+				t.Fatalf("prompt lacks %s role preamble: %q", tc.role, d.prompt)
+			}
 		})
 	}
 
@@ -289,7 +294,7 @@ func TestAgentStartResolvesRoleAliasAndHelpListsRoles(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"explorer", "advisor", "developer"} {
+	for _, want := range []string{"explorer", "advisor", "developer", "searcher"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("start help missing %q:\n%s", want, out.String())
 		}

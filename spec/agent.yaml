@@ -462,7 +462,7 @@ roles:
       findings by severity in at most 15 lines.
   advisor:
     description: Research the code and return a concise read-only plan.
-    aliases: [search, arch, explorer, scout, auditor, planner]
+    aliases: [search, searcher, arch, explorer, scout, auditor, planner]
     default_model: cheap
     models:
       cheap: [luna:med, haiku:low, hydrogen:low]

@@ -125,7 +125,7 @@ Flags:
       --plan string             planning gate: yes or no (default "no")
   -p, --prompt string           prompt text
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -152,7 +152,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -176,7 +176,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -207,7 +207,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -232,7 +232,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -257,7 +257,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -288,7 +288,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -325,7 +325,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -353,7 +353,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -383,7 +383,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -407,7 +407,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -431,7 +431,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -494,7 +494,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -532,7 +532,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -593,7 +593,7 @@ Global Flags:
       --model string         provider:model[:tier]
       --name string          session name
       --role string          agent role for a new session (default from spec/agent.yaml); roles:
-                               advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                               advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -622,7 +622,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -648,7 +648,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
@@ -674,7 +674,7 @@ Global Flags:
       --model string            provider:model[:tier]
       --name string             session name
       --role string             agent role for a new session (default from spec/agent.yaml); roles:
-                                  advisor (aliases: arch, auditor, explorer, planner, scout, search): Research the code and return a concise read-only plan.
+                                  advisor (aliases: arch, auditor, explorer, planner, scout, search, searcher): Research the code and return a concise read-only plan.
                                   developer (aliases: coder, dev, implementer, worker): Implement assigned work, run checks, and commit the result.
                                   orchestrator (aliases: coordinator, lead): Coordinate work and delegate to leaf workers.
                                   reviewer (aliases: checker, critic, review): Inspect changes and report actionable findings without editing.
