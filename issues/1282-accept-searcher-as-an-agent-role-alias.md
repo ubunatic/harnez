@@ -13,3 +13,6 @@ Lean-sprint uses the term searcher, but `harnez agent` reportedly does not accep
 
 ## Goal
 Accept `searcher` as an appropriate role alias and verify role resolution and relevant guidance agree. Check live code and recent history first. Stop and report on a user decision or denied permission; on a loop, hard blocker or no progress, clear the goal and record a failure report and resume point.
+
+## Decision
+Include `cmd/harnez/testdata/help.golden` in the write set: CLI help is generated from the alias spec and its existing golden test requires the updated output. Preserve unrelated changes and assertions.
