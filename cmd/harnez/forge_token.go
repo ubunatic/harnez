@@ -20,7 +20,7 @@ func newForgeCmd() *cobra.Command {
 		Use:   "forge",
 		Short: "Manage forge access for harnez's read and write paths",
 	}
-	cmd.AddCommand(newForgeTokenCmd())
+	cmd.AddCommand(newForgeTokenCmd(), newForgeStatusCmd())
 	return cmd
 }
 
