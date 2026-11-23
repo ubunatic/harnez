@@ -54,7 +54,8 @@ func newForgeTokenCmd() *cobra.Command {
 default host in spec/forge_token.yaml). harnez reads the stored token before
 CODEBERG_TOKEN/FORGEJO_TOKEN, so pr wait and the forge tracker mode (find issues,
 issues show) can read private repos.
-Use --write to manage the separate issue write token.
+Use --write to manage the separate issue write token. Issue writes use it first,
+then CODEBERG_TOKEN/FORGEJO_TOKEN with the issue write scope, then fj.
 
 Forgejo creates and deletes tokens only with your password (basic auth), never with a token.
 create, rotate and revoke prompt for the password, and for a 2FA code, on the terminal; there
@@ -160,34 +161,44 @@ $XDG_CONFIG_HOME/harnez/forge-tokens. Its secret is never printed.`,
 			return nil
 		},
 	}
-	var impUser, name, checkRepo string
+	var impUser, name, checkRepo, fromVar string
 	var removeSource, wizard bool
 	imp := &cobra.Command{
 		Use:   "import [<file|->]",
 		Short: "Store a token copied from the forge's web settings",
-		Long: `Read a token as the forge's settings page shows it (only the token, nothing else) from
-<file>, or from stdin with "-", and store it like create does. With --wizard, prompt for
-all import options and the token on the terminal (when no <file|-> is given). --user names
+		Long: `Read a token as the forge's settings page shows it (only the token, nothing else) and
+store it like create does. The token comes from one of:
+
+  (nothing)     a prompt on the terminal; paste the token, it is not shown and never
+                reaches the shell history
+  -             stdin; a pipe is read as is, a terminal gets the hidden prompt
+  <file>        the file's content
+  --from NAME   the environment variable NAME, e.g. CODEBERG_TOKEN
+
+Errors name the source, never the token. With --wizard, prompt for all import options and
+the token on the terminal (when no <file|-> or --from is given). --user names
 the forge account that owns it. --name is the token's name on the forge; without it, revoke
 and rotate cannot delete it there. --check owner/repo first reads that repo's issues with
 the token and stores nothing on failure. Forgejo lists a token's scopes only with the
 password, so the scopes themselves cannot be checked here. The source file is kept unless
 --remove-source is given.
 
-  harnez forge token import --user ubunatic --name issue-read --check ubunatic/harnez -
+  harnez forge token import --user ubunatic --name issue-read --check ubunatic/harnez
+  harnez forge token import --write --user ubunatic --from CODEBERG_TOKEN
   harnez forge token import --wizard`,
 		Args: cobra.MaximumNArgs(1), SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !wizard {
-				if err := cobra.ExactArgs(1)(cmd, args); err != nil {
-					return err
-				}
-			}
 			var file string
 			if len(args) > 0 {
 				file = args[0]
 			}
-			return runForgeTokenImport(cmd.OutOrStdout(), cmd.InOrStdin(), file, host, impUser, name, checkRepo, removeSource, write, wizard)
+			if fromVar != "" && file != "" {
+				return fmt.Errorf("--from and <file|-> are exclusive; give one token source")
+			}
+			if removeSource && (file == "" || file == "-") {
+				return fmt.Errorf("--remove-source applies only to a <file>")
+			}
+			return runForgeTokenImport(cmd.OutOrStdout(), cmd.InOrStdin(), importSource{file: file, fromVar: fromVar}, host, impUser, name, checkRepo, removeSource, write, wizard)
 		},
 	}
 	imp.Flags().StringVar(&impUser, "user", "", "forge username that owns the token (required)")
@@ -195,6 +206,7 @@ password, so the scopes themselves cannot be checked here. The source file is ke
 	imp.Flags().StringVar(&checkRepo, "check", "", "owner/repo whose issues the token must be able to read")
 	imp.Flags().BoolVar(&removeSource, "remove-source", false, "delete <file> after the token is stored")
 	imp.Flags().BoolVar(&wizard, "wizard", false, "prompt for import options and token on the terminal")
+	imp.Flags().StringVar(&fromVar, "from", "", "read the token from environment variable `NAME` (e.g. CODEBERG_TOKEN)")
 	cmd.AddCommand(create, rotate, revoke, status, imp)
 	return cmd
 }
@@ -210,11 +222,27 @@ type forgeTokenImportConfig struct {
 	data      []byte
 }
 
-func runForgeTokenImport(w io.Writer, stdin io.Reader, file, host, user, name, checkRepo string, removeSource, write, wizard bool) error {
+// importSource says where import reads the token: a file, "-" for stdin, an environment
+// variable (fromVar), or, when both are empty, a hidden prompt on the terminal.
+type importSource struct {
+	file    string
+	fromVar string
+}
+
+// label names the source in errors; it never contains the token.
+func (src importSource) label() string {
+	if src.fromVar != "" {
+		return "--from " + src.fromVar
+	}
+	return src.file
+}
+
+func runForgeTokenImport(w io.Writer, stdin io.Reader, src importSource, host, user, name, checkRepo string, removeSource, write, wizard bool) error {
+	file := src.file
 	var cfg forgeTokenImportConfig
 	var err error
 	if wizard {
-		cfg, err = runForgeTokenImportWizard(stdin, file, host, user, name, checkRepo, write)
+		cfg, err = runForgeTokenImportWizard(stdin, src, host, user, name, checkRepo, write)
 		if err != nil {
 			return err
 		}
@@ -231,7 +259,19 @@ func runForgeTokenImport(w io.Writer, stdin io.Reader, file, host, user, name, c
 		if err != nil {
 			return err
 		}
-		data, rm, err := readImportSource(stdin, file, removeSource)
+		if user == "" {
+			// Before the prompt, so nobody pastes a token only to be told to start over.
+			return fmt.Errorf("--user is required: the forge username that owns the token")
+		}
+		prompt := importSecretPrompt(sp.Scopes, user, host, write)
+		data, rm, err := readImportSource(stdin, src, removeSource, func() (string, error) {
+			tty, err := forgeTokenOpenTTY(host)
+			if err != nil {
+				return "", err
+			}
+			defer tty.close()
+			return tty.secret(prompt)
+		})
 		if err != nil {
 			return err
 		}
@@ -243,10 +283,10 @@ func runForgeTokenImport(w io.Writer, stdin io.Reader, file, host, user, name, c
 	}
 	tok, err := parseImportedToken(cfg.data)
 	if err != nil {
-		if file == "" {
+		if src.label() == "" {
 			return err
 		}
-		return fmt.Errorf("%s: %w", file, err)
+		return fmt.Errorf("%s: %w", src.label(), err)
 	}
 	if cfg.user == "" {
 		return fmt.Errorf("--user is required: the forge username that owns the token")
@@ -278,18 +318,50 @@ func runForgeTokenImport(w io.Writer, stdin io.Reader, file, host, user, name, c
 	return nil
 }
 
-func readImportSource(stdin io.Reader, file string, removeSource bool) ([]byte, bool, error) {
-	if file == "-" {
+// readImportSource returns the raw token input and whether the source file may be removed.
+// secret prompts on the terminal without echo; it runs when no file or variable is given, or
+// for "-" when stdin is a terminal, so a pasted token is never shown.
+func readImportSource(stdin io.Reader, src importSource, removeSource bool, secret func() (string, error)) ([]byte, bool, error) {
+	switch {
+	case src.fromVar != "":
+		v := os.Getenv(src.fromVar)
+		if strings.TrimSpace(v) == "" {
+			return nil, false, fmt.Errorf("--from %s: the variable is not set or empty", src.fromVar)
+		}
+		return []byte(v), false, nil
+	case src.file == "" || (src.file == "-" && importStdinIsTerminal(stdin)):
+		raw, err := secret()
+		return []byte(raw), false, err
+	case src.file == "-":
 		data, err := io.ReadAll(io.LimitReader(stdin, 64<<10))
 		return data, false, err
 	}
-	data, err := os.ReadFile(file)
+	data, err := os.ReadFile(src.file)
 	return data, removeSource, err
+}
+
+// importStdinIsTerminal reports whether stdin is an interactive terminal, where reading it
+// directly would echo the pasted token.
+var importStdinIsTerminal = func(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
+}
+
+func importSecretPrompt(scopes []string, user, host string, write bool) string {
+	kind := "Token"
+	if write {
+		kind = "Write token"
+	}
+	owner := host
+	if user != "" {
+		owner = user + "@" + host
+	}
+	return fmt.Sprintf("%s for %s (scopes: %s; paste it, not shown): ", kind, owner, strings.Join(scopes, ", "))
 }
 
 // runForgeTokenImportWizard prompts on the terminal for any missing import options and, when
 // file is empty, reads the token secret without echo.
-func runForgeTokenImportWizard(stdin io.Reader, file, host, user, name, checkRepo string, write bool) (forgeTokenImportConfig, error) {
+func runForgeTokenImportWizard(stdin io.Reader, src importSource, host, user, name, checkRepo string, write bool) (forgeTokenImportConfig, error) {
 	var cfg forgeTokenImportConfig
 	sp, err := forgetoken.LoadSpec()
 	if err != nil {
@@ -353,14 +425,9 @@ func runForgeTokenImportWizard(stdin io.Reader, file, host, user, name, checkRep
 	if err != nil {
 		return cfg, err
 	}
-	var data []byte
-	if file != "" {
-		data, _, err = readImportSource(stdin, file, false)
-	} else {
-		var raw string
-		raw, err = tty.secret(fmt.Sprintf("Token for %s@%s (scopes: %s; not shown): ", user, host, strings.Join(sp.Scopes, ", ")))
-		data = []byte(raw)
-	}
+	data, _, err := readImportSource(stdin, src, false, func() (string, error) {
+		return tty.secret(fmt.Sprintf("Token for %s@%s (scopes: %s; not shown): ", user, host, strings.Join(sp.Scopes, ", ")))
+	})
 	if err != nil {
 		return cfg, err
 	}

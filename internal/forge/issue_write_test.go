@@ -45,6 +45,39 @@ func TestWriterErrorDetails(t *testing.T) {
 	}
 }
 
+// Issue 1247: a 401 or 403 with an environment token names the variable and the missing
+// scope, keeps the APIError for errors.As, and never contains the token value.
+func TestWriterEnvTokenScopeHint(t *testing.T) {
+	status := http.StatusForbidden
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(status)
+		fmt.Fprint(w, `{"message":"token does not have at least one of required scope(s): [write:issue]"}`)
+	}))
+	defer srv.Close()
+	fg := Forge{Kind: "forgejo", APIBase: srv.URL}
+	hint := "; the CODEBERG_TOKEN token was rejected: give it the issue write scope (write:issue) or run harnez forge token create --write"
+	wr := Writer{Client: srv.Client(), Token: "env-secret", Source: "CODEBERG_TOKEN"}
+	for _, status = range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		_, err := wr.CreateIssue(fg, "o", "r", "Title", "Body", nil)
+		var apiErr *APIError
+		if err == nil || !strings.HasSuffix(err.Error(), hint) || !errors.As(err, &apiErr) || apiErr.Status != status {
+			t.Fatalf("HTTP %d: want APIError with hint, got %v", status, err)
+		}
+		if strings.Contains(err.Error(), "env-secret") {
+			t.Fatalf("HTTP %d: token value leaked: %v", status, err)
+		}
+	}
+	status = http.StatusNotFound
+	if _, err := wr.CreateIssue(fg, "o", "r", "Title", "Body", nil); err == nil || strings.Contains(err.Error(), "CODEBERG_TOKEN") {
+		t.Fatalf("404 must not carry the scope hint, got %v", err)
+	}
+	status = http.StatusForbidden
+	wr.Source = ""
+	if _, err := wr.CreateIssue(fg, "o", "r", "Title", "Body", nil); err == nil || strings.Contains(err.Error(), "token was rejected") {
+		t.Fatalf("stored token must not carry the env hint, got %v", err)
+	}
+}
+
 func TestWriterRequests(t *testing.T) {
 	var method, path, body string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

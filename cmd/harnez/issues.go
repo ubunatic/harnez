@@ -115,8 +115,9 @@ working-tree changes, staged or not, are never staged or committed.
 files and leaves them uncommitted. 'new' never commits.
 
 Forgejo writes use a separate write token (harnez forge token create --write);
-the read token remains separate. Without a write token new uses fj or tea;
-comment uses fj. GitHub new uses gh. If forge issue creation fails (no write
+the read token remains separate. Without a stored write token, writes use
+CODEBERG_TOKEN or FORGEJO_TOKEN when set (it needs the issue write scope);
+with neither, new uses fj or tea and comment uses fj. GitHub new uses gh. If forge issue creation fails (no write
 access, missing token or CLI auth, or a worker session), issues new automatically
 writes issues/inbox/<slug>.md as a file-based fallback and warns agents not to
 troubleshoot token setup.

@@ -15,6 +15,17 @@ import (
 type Writer struct {
 	Client *http.Client
 	Token  string
+	// Source names the environment variable the token came from; empty for the
+	// stored write token. Only the name is ever reported, never the value.
+	Source string
+}
+
+// scopeHint adds the missing-scope hint to a 401 or 403 from an environment token.
+func (w Writer) scopeHint(status int, err error) error {
+	if w.Source == "" || (status != http.StatusUnauthorized && status != http.StatusForbidden) {
+		return err
+	}
+	return fmt.Errorf("%w; the %s token was rejected: give it the issue write scope (write:issue) or run harnez forge token create --write", err, w.Source)
 }
 
 // EditFields specifies the issue fields to update.
@@ -71,9 +82,9 @@ func (w Writer) request(fg Forge, method, endpoint string, payload, result any) 
 			}
 		}
 		if detail == "" {
-			return fmt.Errorf("forge API request failed: HTTP %d", resp.StatusCode)
+			return w.scopeHint(resp.StatusCode, fmt.Errorf("forge API request failed: HTTP %d", resp.StatusCode))
 		}
-		return &APIError{Status: resp.StatusCode, Transient: resp.StatusCode >= 500, Detail: detail}
+		return w.scopeHint(resp.StatusCode, &APIError{Status: resp.StatusCode, Transient: resp.StatusCode >= 500, Detail: detail})
 	}
 	if result != nil {
 		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {

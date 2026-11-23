@@ -1027,6 +1027,75 @@ func TestForgeRefinementEdges(t *testing.T) {
 	}
 }
 
+// Issue 1247: without a stored write token, forge writes use the forge's token_env
+// variable; the stored token still wins, dry runs name the variable but never the value,
+// and a rejected env token gets the scope hint.
+func TestForgeWriteEnvTokenFallback(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	oldLookup, oldMeta := issueWriteLookup, issueWriteMetadata
+	issueWriteLookup = func(string) string { return "" }
+	issueWriteMetadata = func(string) (bool, error) { return false, nil }
+	t.Cleanup(func() { issueWriteLookup, issueWriteMetadata = oldLookup, oldMeta })
+	var auth []string
+	status := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = append(auth, r.Header.Get("Authorization"))
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, `{"message":"token does not have at least one of required scope(s): [write:issue]"}`)
+	}))
+	defer srv.Close()
+	target := forgetracker.Target{Forge: forge.Forge{Kind: "forgejo", Host: "codeberg.org", APIBase: srv.URL, TokenEnv: []string{"CODEBERG_TOKEN", "FORGEJO_TOKEN"}, IssueCLI: []string{"fj"}}, Owner: "o", Repo: "r"}
+	src := &editSource{issue: forge.RemoteIssue{State: "open"}}
+
+	err := runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, false)
+	want := "no write token for codeberg.org; run: harnez forge token create --write, or set CODEBERG_TOKEN or FORGEJO_TOKEN to a token with the issue write scope"
+	if err == nil || err.Error() != want || len(auth) != 0 {
+		t.Fatalf("no token: %v (requests %v)", err, auth)
+	}
+
+	t.Setenv("CODEBERG_TOKEN", "env-secret")
+	body := filepath.Join(t.TempDir(), "body")
+	if err := os.WriteFile(body, []byte("body"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: t.TempDir(), Target: target, Req: forgetracker.CreateRequest{Title: "T", BodyFile: body}, DryRun: true}); err != nil || out.String() != "dry run, would file on codeberg.org/o/r over the API (CODEBERG_TOKEN)\n" {
+		t.Fatalf("new dry: %q %v", out.String(), err)
+	}
+	out.Reset()
+	if err := runIssuesComment(&out, t.TempDir(), target, &stubForgeSource{}, "7", body, true, false); err != nil || out.String() != "dry run: would comment on codeberg.org/o/r#7 over the API (CODEBERG_TOKEN)\n" {
+		t.Fatalf("comment dry: %q %v", out.String(), err)
+	}
+
+	out.Reset()
+	if err := runIssuesEditForge(&out, target, src, "7", "X", "", "", true, false, false, false); err != nil || out.String() != "edited codeberg.org/o/r#7\n" {
+		t.Fatalf("env edit: %q %v", out.String(), err)
+	}
+	if len(auth) != 1 || auth[0] != "token env-secret" {
+		t.Fatalf("env edit must authenticate with CODEBERG_TOKEN, got %v", auth)
+	}
+
+	status = http.StatusForbidden
+	err = runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, false)
+	if err == nil || !strings.Contains(err.Error(), "the CODEBERG_TOKEN token was rejected: give it the issue write scope (write:issue)") || strings.Contains(err.Error(), "env-secret") {
+		t.Fatalf("rejected env token: %v", err)
+	}
+
+	status = http.StatusOK
+	auth = nil
+	issueWriteLookup = func(string) string { return "stored-secret" }
+	issueWriteMetadata = func(string) (bool, error) { return true, nil }
+	if err := runIssuesEditForge(io.Discard, target, src, "7", "X", "", "", true, false, false, false); err != nil || len(auth) != 1 || auth[0] != "token stored-secret" {
+		t.Fatalf("stored token must win over env: %v %v", err, auth)
+	}
+	out.Reset()
+	if err := runIssuesNewForge(&out, io.Discard, forgeNewOptions{Dir: t.TempDir(), Target: target, Req: forgetracker.CreateRequest{Title: "T", BodyFile: body}, DryRun: true}); err != nil || out.String() != "dry run, would file on codeberg.org/o/r over the API (write token)\n" {
+		t.Fatalf("new dry with stored token: %q %v", out.String(), err)
+	}
+}
+
 func TestTrackerNoneDraftsRoutesForge(t *testing.T) {
 	t.Setenv("HARNEZ_AGENT_ROLE", "developer")
 	t.Setenv("HARNEZ_SESSION_ID", "m9-worker")

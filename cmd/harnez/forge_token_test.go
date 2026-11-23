@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -131,6 +132,115 @@ func TestForgeTokenImportFromStdin(t *testing.T) {
 	if st.Keyring != nil || st.Secret("codeberg.org") != "tok-SECRET-1" {
 		t.Fatal("token not stored in the temp file store")
 	}
+}
+
+// import reads the token from --from NAME, from a hidden terminal prompt when no source is
+// given, and from that prompt for "-" when stdin is a terminal. No source ever reaches the
+// output or an error message.
+func TestForgeTokenImportSources(t *testing.T) {
+	t.Setenv("PATH", t.TempDir()) // hide secret-tool: the real keyring holds live tokens
+	oldTTY, oldIsTerm := forgeTokenOpenTTY, importStdinIsTerminal
+	t.Cleanup(func() { forgeTokenOpenTTY, importStdinIsTerminal = oldTTY, oldIsTerm })
+	run := func(t *testing.T, tty *scriptedTokenTTY, stdin string, args ...string) (string, error) {
+		t.Helper()
+		forgeTokenOpenTTY = func(string) (tokenTTY, error) { return tty, nil }
+		var out bytes.Buffer
+		cmd := newForgeTokenCmd()
+		cmd.SetArgs(append([]string{"import"}, args...))
+		cmd.SetIn(strings.NewReader(stdin))
+		cmd.SetOut(&out)
+		cmd.SetErr(&bytes.Buffer{})
+		err := cmd.Execute()
+		return out.String(), err
+	}
+	stored := func(t *testing.T, write bool) string {
+		t.Helper()
+		_, st, err := forgeTokenStoreFor(write)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return st.Secret("codeberg.org")
+	}
+
+	t.Run("from env var into the write store", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		t.Setenv("HARNEZ_TEST_IMPORT_TOKEN", " env-SECRET-1\n")
+		tty := &scriptedTokenTTY{}
+		out, err := run(t, tty, "", "--write", "--user", "u", "--from", "HARNEZ_TEST_IMPORT_TOKEN")
+		if err != nil || strings.Contains(out, "env-SECRET-1") || tty.secretCalls != 0 {
+			t.Fatalf("err=%v out=%q prompts=%d", err, out, tty.secretCalls)
+		}
+		if stored(t, true) != "env-SECRET-1" || stored(t, false) != "" {
+			t.Fatal("--from --write must fill only the write store")
+		}
+	})
+
+	t.Run("from env var errors name the variable, never the value", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		t.Setenv("HARNEZ_TEST_IMPORT_EMPTY", "  ")
+		t.Setenv("HARNEZ_TEST_IMPORT_BAD", "bad SECRET-2")
+		for name, want := range map[string]string{
+			"HARNEZ_TEST_IMPORT_UNSET": "--from HARNEZ_TEST_IMPORT_UNSET: the variable is not set or empty",
+			"HARNEZ_TEST_IMPORT_EMPTY": "--from HARNEZ_TEST_IMPORT_EMPTY: the variable is not set or empty",
+			"HARNEZ_TEST_IMPORT_BAD":   "--from HARNEZ_TEST_IMPORT_BAD: expected only the token, as copied from the forge's settings page",
+		} {
+			_, err := run(t, &scriptedTokenTTY{}, "", "--user", "u", "--from", name)
+			if err == nil || err.Error() != want {
+				t.Fatalf("%s: got %v, want %q", name, err, want)
+			}
+		}
+		if stored(t, false) != "" {
+			t.Fatal("a failed import stored a token")
+		}
+	})
+
+	t.Run("no source prompts on the terminal without echo", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		tty := &scriptedTokenTTY{secrets: []string{"tty-SECRET-3"}}
+		out, err := run(t, tty, "stdin-must-not-be-read", "--user", "u")
+		if err != nil || strings.Contains(out, "tty-SECRET-3") || tty.secretCalls != 1 {
+			t.Fatalf("err=%v out=%q prompts=%d", err, out, tty.secretCalls)
+		}
+		if len(tty.prompts) != 1 || !strings.HasPrefix(tty.prompts[0], "Token for u@codeberg.org (scopes: ") || !strings.HasSuffix(tty.prompts[0], "; paste it, not shown): ") {
+			t.Fatalf("prompt = %q", tty.prompts)
+		}
+		if stored(t, false) != "tty-SECRET-3" {
+			t.Fatal("prompted token not stored")
+		}
+	})
+
+	t.Run("dash on a terminal stdin uses the hidden prompt", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		importStdinIsTerminal = func(io.Reader) bool { return true }
+		t.Cleanup(func() { importStdinIsTerminal = oldIsTerm })
+		tty := &scriptedTokenTTY{secrets: []string{"tty-SECRET-4"}}
+		if _, err := run(t, tty, "stdin-must-not-be-read", "--write", "--user", "u", "-"); err != nil || tty.secretCalls != 1 {
+			t.Fatalf("err=%v prompts=%d", err, tty.secretCalls)
+		}
+		if !strings.HasPrefix(tty.prompts[0], "Write token for u@codeberg.org") || stored(t, true) != "tty-SECRET-4" {
+			t.Fatalf("prompt=%q stored=%v", tty.prompts, stored(t, true) == "tty-SECRET-4")
+		}
+	})
+
+	t.Run("flag errors come before any prompt", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		t.Setenv("HARNEZ_TEST_IMPORT_TOKEN", "env-SECRET-5")
+		for _, c := range []struct {
+			args []string
+			want string
+		}{
+			{[]string{}, "--user is required: the forge username that owns the token"},
+			{[]string{"--user", "u", "--from", "HARNEZ_TEST_IMPORT_TOKEN", "tok.txt"}, "--from and <file|-> are exclusive; give one token source"},
+			{[]string{"--user", "u", "--remove-source"}, "--remove-source applies only to a <file>"},
+			{[]string{"--user", "u", "--remove-source", "-"}, "--remove-source applies only to a <file>"},
+		} {
+			tty := &scriptedTokenTTY{secrets: []string{"never"}}
+			_, err := run(t, tty, "", c.args...)
+			if err == nil || err.Error() != c.want || tty.secretCalls != 0 {
+				t.Fatalf("%v: err=%v prompts=%d, want %q before any prompt", c.args, err, tty.secretCalls, c.want)
+			}
+		}
+	})
 }
 
 // rotate and revoke refuse before any prompt when nothing is stored; status never prompts
@@ -327,13 +437,16 @@ func TestForgeTokenImportWizard(t *testing.T) {
 		t.Fatal("token not stored in write store")
 	}
 
-	// Non-wizard without file arg still fails.
+	// Non-wizard without a file arg now prompts for the token (owner request, 2026-11-23),
+	// but bare import without --user still fails, before any prompt.
+	noPrompt := &scriptedTokenTTY{secrets: []string{"never"}}
+	forgeTokenOpenTTY = func(string) (tokenTTY, error) { return noPrompt, nil }
 	cmd = newForgeTokenCmd()
 	cmd.SetArgs([]string{"import"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "accepts 1 arg(s)") {
-		t.Fatalf("expected 1 arg error, got %v", err)
+	if err := cmd.Execute(); err == nil || err.Error() != "--user is required: the forge username that owns the token" || noPrompt.secretCalls != 0 {
+		t.Fatalf("expected --user error before any prompt, got %v (prompts %d)", err, noPrompt.secretCalls)
 	}
 
 	// Wizard with existing token for same kind fails before prompting for user/secret.
