@@ -1,6 +1,6 @@
 # 1273 — Add more `harnez pr` verbs to replace `fj` for pull requests
 
-**Status**: Open
+**Status**: Closed — added list/show/comment/create/edit/close/reopen/merge verbs to harnez pr; make test-q1 passed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
