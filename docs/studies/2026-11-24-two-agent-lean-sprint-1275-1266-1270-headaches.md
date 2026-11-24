@@ -1,0 +1,31 @@
+---
+kind: sprint
+date: 2026-11-24
+tickets: [1275, 1266, 1270, 1279]
+branch: sprint/1275-1266-1270
+---
+
+# Two-Agent Lean Sprint: Three Harnez Headaches (#1275, #1266, #1270/#1279)
+
+## Scope & `/decide` Choices
+
+Three active P2 harnez headaches selected for a 3-milestone lean sprint + release:
+
+1. **M1 (#1275 — Tier-aware Quota-1)**: Allow upgrading from a narrower/shorter test run (`go test -short`, `make test-short`, targeted packages) to a broader/full run (`make test-q1`) without intervening source edits, while keeping repeat same/lower-tier runs blocked; update `Quota.md` guidance.
+2. **M2 (#1266 — `agent resume` unset `context_tokens == 0`)**: Treat never-recorded `context_tokens == 0` like unknown `-1` (skip compaction, warn, dispatch resume) instead of refusing and destroying session continuity.
+3. **M3 (#1270 + #1279 — Runner-mode `--dry-run`, read-only `OpenSessionStore`, actionable error route)**: Skip session store open in `--dry-run` under runner mode, allow read-only `OpenSessionStore` (`agent list`/`show`/`status`) while keeping mutating `NewSessionStore` guarded, and name `mcp__taia__background_task` in runner-mode mutation errors.
+
+## Architect Refinement (`argon:med`)
+
+- Dispatched `argon-headaches` (`agy:argon:med`, `--role advisor`, read-only): finished in 8m55s (5.33M tokens incl. cached), rated 5/5 and cleaned up.
+- Verified live-code `file:line` citations, caller audits, doc sources/copies, and existing locked tests for all 3 milestones; Searcher skipped per lean-sprint §1.
+- Key architect catches:
+  - M1 (#1275): `TestRunExecWrapper_PlainGoTestRecordsQuota1State` currently asserts `make test-q1` is blocked after `go test -run Foo .`; `config.yaml` + `.harnez/rules/Quota.md` + `docs/commands/lean-sprint*.md` must stay in sync with `internal/claude/quota1_init_test.go` anchors.
+  - M2 (#1266): `VerifyCompaction` (`after <= 0`) stays strictly enforced; only `EnsureContextUnderThreshold` (`<= 0`) + `agent_run.go` warning change.
+  - M3 (#1270/#1279): `listCmd`/`statusCmd`/`waitCmd` in `cmd/harnez` currently call `ac.store()` (`NewSessionStore`) instead of `OpenSessionStore`, and two runner-registry tests assert `OpenSessionStore`/`list` fail.
+
+## Milestones
+
+- **M1 (#1275 — Tier-aware Quota-1)**: dispatching `dev-headaches` (`agy:hydrogen:med`).
+- **M2 (#1266 — `agent resume` zero `context_tokens`)**: pending.
+- **M3 (#1270/#1279 — Runner-mode `--dry-run`, read-only `OpenSessionStore`, actionable errors)**: pending.

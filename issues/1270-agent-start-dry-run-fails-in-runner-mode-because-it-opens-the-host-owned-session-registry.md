@@ -45,3 +45,18 @@ two scouts successfully earlier in the same session.
   3. Runner-mode mutation errors in `guardHostSessionStoreAccess` name the actionable `mcp__taia__background_task` route (#1279).
 
 - Test: runner mode plus `--dry-run` prints the preview and opens no store; read-only `OpenSessionStore` succeeds in runner mode; mutating `NewSessionStore` keeps the guard and names `mcp__taia__background_task`.
+
+## 4. Architect Refinement (`argon:med`, 2026-11-24) — M3
+
+- **Read-only `OpenSessionStore` & read-only subcommands**:
+  - `internal/subagent/session.go:307-314`: remove `guardHostSessionStoreAccess(dir)` from `OpenSessionStore(dir)` (which only reads via `os.ReadDir`/`os.ReadFile` and never writes/mkdirs). Keep `guardHostSessionStoreAccess(dir)` on mutating `NewSessionStore(dir)`.
+  - `cmd/harnez/agent.go` & `cmd/harnez/agent_manage_cmds.go`: add `ac.openStore` (`subagent.OpenSessionStore(ac.storeDir)`) and use it in `listCmd`, `statusCmd`, `waitCmd`, and `/status` (while `/compact`, `/stop`, `start`, `resume`, `delete` keep `ac.store()`). Verify `resolveSession` / `canManageTarget` (`cmd/harnez/agent_args.go:43-51`) does not block read-only `status`/`wait` in runner mode.
+- **`agent start --dry-run` in runner mode**:
+  - `cmd/harnez/agent_run.go:563-605`: when `req.DryRun && runstate.InRunnerMode() && req.SessionID == ""`, skip `d.store()`, use `req.Name` or `subagent.GenerateSessionName(nil)`, print preview via `printAgentPreview`, and print `note: name uniqueness is checked against the host session registry at start\n`. Also skip `d.store()` in `withHostTrackingLine` (`cmd/harnez/agent_args.go:209-227`) when `--dry-run` is set.
+- **Actionable runner-mode errors (#1279)**:
+  - `internal/subagent/session.go:316-333` (`guardHostSessionStoreAccess`): include `dispatch via taia background_task (mcp__taia__background_task) or use launch-bound broker RPC for own session` (preserving `"host-owned"`).
+  - `cmd/harnez/agent_cmds.go:358`, `cmd/harnez/agent_run.go:918`, `cmd/harnez/agent_manage_cmds.go:265,326`, `cmd/harnez/agent_stop.go:64`: include `; run via taia background_task (mcp__taia__background_task)` (preserving `"host-only"`).
+- **Tests**:
+  - `internal/subagent/runner_registry_test.go`: `NewSessionStore` still fails closed naming `mcp__taia__background_task`; `OpenSessionStore` succeeds in runner mode without creating dir.
+  - `cmd/harnez/agent_dry_run_test.go`: `TestAgentStartDryRunInRunnerModeSkipsStore` (with and without `--name`, prints preview + uniqueness note, creates no store dir).
+  - `cmd/harnez/runner_registry_lifecycle_test.go`: `agent list` and `agent status` succeed in runner mode on pre-populated host registry; mutating `agent start` (non-dry-run), `resume`, `stop`, `delete` fail closed and name `mcp__taia__background_task`.

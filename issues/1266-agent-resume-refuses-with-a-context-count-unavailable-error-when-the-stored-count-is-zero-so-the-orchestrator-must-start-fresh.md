@@ -33,3 +33,13 @@ Source: the hub-run report (orchestrator, 2026-11-22). The refused session's sto
 - Selected Option 1 (autonomous `/decide`, 2026-11-24): treat a never-recorded count (`0`, produced when `omitempty` omits an unset `context_tokens` field) like unknown (`-1`) — skip compaction, print a warning, and dispatch the resume prompt rather than destroying session continuity.
 
 Canary before the fix: a unit case in the resume table (`cmd/harnez/agent_resume_test.go`, near line 575) with a stored session that has no `context_tokens` and a claude driver. Expect the refusal today. After the fix, run `make test-q1` for the quota-wrapped run.
+
+## 4. Architect Refinement (`argon:med`, 2026-11-24) — M2
+
+- **Exact fix**:
+  - `internal/subagent/compact.go:92-104` (`EnsureContextUnderThreshold`): treat `contextTokens <= 0` (both `-1` unknown and `0` never-recorded) as skip compaction (`return false, nil`). Keep `VerifyCompaction` (`after <= 0 || after >= before`) strictly enforced.
+  - `cmd/harnez/agent_run.go:1089-1095`: when `compactMode == "manual" || interactive`, if `contextTokens == 0`, emit `fmt.Fprintf(cmd.ErrOrStderr(), "harnez: warning: session %q has no recorded context token count; skipping compaction check\n", sess.Name)` and proceed; if `contextTokens > 0`, call `subagent.EnsureContextUnderThreshold`.
+- **Write set**: `internal/subagent/compact.go`, `internal/subagent/compact_test.go`, `cmd/harnez/agent_run.go`, `cmd/harnez/agent_resume_test.go`.
+- **Tests**:
+  - Canary + regression in `cmd/harnez/agent_resume_test.go`: `TestClaudeResumeWithUnsetZeroContextTokensWarnsAndDispatches` (`ContextTokens: 0` omitted by `omitempty` -> succeeds, `compactCalls == 0`, `resumeCalls == 1`, stderr contains `"no recorded context token count; skipping compaction check"`).
+  - Unit case in `internal/subagent/compact_test.go`: `EnsureContextUnderThreshold(0, 200, ...)` returns `false, nil` without invoking `compact`.

@@ -35,3 +35,17 @@ Current workaround used in `splitty`: run `go vet ./...` followed directly by `H
 - Running `go test -short ./...` (or a narrower package/short tier) followed by `make test-q1` without source edits succeeds.
 - Repeat runs at the same or lower tier without intervening source edits remain blocked.
 - `Quota.md` (and its source/copy if applicable) documents the tier-upgrade behavior.
+
+## 4. Architect Refinement (`argon:med`, 2026-11-24) — M1
+
+- **Tier model (`internal/quota1/quota.go`)**:
+  - `TierPackage = 1` (`go test ./pkg`, `go test -run Foo ./...`, `make test-pkg`), `TierShort = 2` (`go test -short ./...`, `make test-short`), `TierFull = 3` (`make test-q1`, `make test`, `make check`, `go test ./...`, or unrecognised explicit `--quota-1` command).
+  - Add `Tier int` (`json:"tier,omitempty"`) to `RunRecord` and `Tier int` to `CheckOptions`; normalize `0` via `effectiveTier(t) -> TierFull` for legacy/default backwards compatibility.
+  - In `CheckAndRecord`: when `len(modifiedFiles) == 0`, allow if `currentTier > effectiveTier(previous.Tier)` (record new `RunRecord` with `Tier: currentTier`, `Retry: false`, message `"Quota-1: tier upgrade (%s -> %s) allowed; quota recorded"`); block when `currentTier <= effectiveTier(previous.Tier)`. Keep unfinished-run retry/block logic (`Exit == nil && Finished == nil`) intact before the tier check.
+- **Command classifier (`internal/exec/quota1_command.go` + `internal/exec/exec.go`)**:
+  - Add `classifyQuota1Tier(args []string) int` taking the max tier across simple command segments (`go test` / `gotestsum`, `make` targets, fallback `TierFull`), and pass `Tier` into `quota1.CheckOptions` in `runExecWrapper`.
+- **Docs & Copies**:
+  - Update `config.yaml` (`quota_section` and `Quota.md` rule template, preserving anchor phrases tested by `internal/claude/quota1_init_test.go`), sync `.harnez/rules/Quota.md` via `make install && harnez init -y -d .`, and note tier upgrades in `docs/commands/lean-sprint.md` and `docs/commands/lean-sprint-v1.md`.
+- **Tests**:
+  - `internal/quota1/quota_test.go`: `TestCheckAndRecord_TierUpgradeAndBlock` (upgrades allowed; same/lower/legacy blocked; post-edit downgrade resets tier).
+  - `internal/exec/exec_test.go`: `TestClassifyQuota1Tier`, end-to-end `runExecWrapper` (`go test -short ./...` -> `make test-q1` succeeds; repeat `make test-q1` or downgrade blocked), and update `TestRunExecWrapper_PlainGoTestRecordsQuota1State` (`:1936-1973`) to reflect same-tier block + upgrade to `make test-q1` allowed + repeat `make test-q1` blocked.
