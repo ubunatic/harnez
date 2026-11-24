@@ -1,6 +1,6 @@
 # 1270 — agent start --dry-run fails in runner mode because it opens the host-owned session registry
 
-**Status**: Open
+**Status**: Closed — M3 (d09a7d6a, b9758e8f) unblocked runner-mode agent start --dry-run and read-only OpenSessionStore (enforced readOnly: true across all write/lock paths, waitForAgent skips stale save), verified by rev-m3-fixup and HTO=0 make test exit 0
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
