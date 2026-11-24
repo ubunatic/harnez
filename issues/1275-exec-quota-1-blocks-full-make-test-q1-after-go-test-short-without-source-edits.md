@@ -1,6 +1,6 @@
 # 1275 — exec: Quota-1 blocks full `make test-q1` after `go test -short` without source edits
 
-**Status**: Open
+**Status**: Closed — M1 (01fee008) + review fixes (80d0efda) delivered tier-aware Quota-1 (TierPackage/TierShort/TierFull) allowing narrow-to-full upgrades without source edits while blocking same/lower tiers and syncing Quota.md; HTO=0 make test exit 0
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
