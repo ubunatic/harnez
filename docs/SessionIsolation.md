@@ -63,6 +63,21 @@ inherited broker FD (`HARNEZ_BROKER_FD`):
   `UnixRights(0,1,2)`). When the broker FD is missing, invalid, or stripped
   across an exec boundary, Harnez fails closed without falling back to
   `Config.Socket()`.
+- **Diskless broker telemetry and quiet drops (#1250)**: `server.DispatchTelemetry`
+  (`internal/server/runner_channel.go`) routes over an inherited `HARNEZ_BROKER_FD`
+  even when `TAIA_SESSION_DIR` is unset, and never touches host spool paths on
+  disk. When telemetry cannot be delivered, `sendTelemetryRecord` suppresses
+  stderr drop warnings by default (enable with `HARNEZ_DEBUG` or
+  `HARNEZ_TELEMETRY_DEBUG`) so confined CLI calls stay noise-free.
+- **Read-only runner registry inspection and actionable errors (#1270, #1279)**:
+  In runner mode, `harnez agent start --dry-run` skips opening the host session
+  store, and `agent list`/`status`/`wait` read `~/.harnez/agents` through
+  `OpenSessionStore` (`readOnly: true`, failing closed across all write/lock
+  methods and skipping stale-session repair in `waitForAgent`). Mutating
+  `NewSessionStore` and host-only commands (`start`, `resume`, `stop`, `delete`)
+  stay guarded and name `mcp__taia__background_task` in their errors (note:
+  drivers whose client-tool path does not expose Taia plugin tools, such as
+  `agy`, cannot invoke `mcp__taia__background_task` directly).
 - Under Taia confinement, Landlock policy is the security boundary blocking
   direct access to `Config.Socket()` and `~/.harnez/agents`; in-process
   `TAIA_SESSION_DIR` checks are defense in depth for honest runner code, while
@@ -133,6 +148,14 @@ Runner-supplied arbitrary or checkout destinations are not approved; Landlock
 blocks shared destination writes at the kernel boundary while `TAIA_SESSION_DIR`
 checks fail closed early against `goself`, `install <dep>`, and shared `man
 --install` calls.
+
+On the host, `make install` runs `./harnez install --strategy self` (`CGO_ENABLED=0`,
+`goself v0.5.0`, #1245 / PR #222) into `~/.local/bin/harnez`, warns on `PATH`
+shadows, and atomically symlinks `$GOBIN/harnez -> ~/.local/bin/harnez`
+(`ensureGoBinSymlink` in `internal/selfinstall/install.go`) so interactive host
+shells and Taia `bash -lc` background tasks invoke the same binary. Aligning the
+host promoter's approved binary root (`GOBIN`/`GOPATH/bin`, A4) with
+`~/.local/bin` remains an open decision in issue #1258.
 
 These controls do not provide read confidentiality when `/` is readable under
 Taia, shared-checkout isolation, a same-UID filesystem boundary, or trust in
