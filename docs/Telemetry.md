@@ -324,3 +324,22 @@ uses modification time as the best available indication. Quota history is
 included in `harnez usage history timeline` as a separate quota-window section;
 its records remain in JSONL rather than being mixed with per-host token
 snapshots.
+
+## Sandboxed Transport & Read-Only Store Hardening (#1078, #1181, #1236, #1250)
+
+- **Broker-FD routing without host spool disk writes (#1181, #1250)**:
+  `server.DispatchTelemetry` (`internal/server/runner_channel.go`) routes
+  telemetry over an inherited `HARNEZ_BROKER_FD` (`SOCK_SEQPACKET` +
+  `SCM_RIGHTS`) whenever present—even without `TAIA_SESSION_DIR`—and never writes
+  to host spool paths on disk. If neither broker nor socket accepts a CLI
+  invocation record, `sendTelemetryRecord` stays silent by default and logs the
+  drop only when `HARNEZ_DEBUG` or `HARNEZ_TELEMETRY_DEBUG` is set.
+- **Read-only SQLite concurrency & sandbox fallback (#1078, #1236)**:
+  - `telemetry.OpenReadOnly` (`internal/telemetry/telemetry.go`) appends
+    `_pragma=busy_timeout(5000)` to `?mode=ro` so read-only queries (`harnez
+    stats agents`) wait out collector write/checkpoint locks instead of failing
+    with `SQLITE_BUSY`.
+  - `usagestore.OpenReadOnly` (`internal/usagestore/store.go`) verifies reads on
+    open and falls back to `immutable=1` when WAL `-shm` creation is denied in a
+    read-only sandbox directory (trade-off: uncheckpointed WAL frames stay
+    invisible until the writer checkpoints).

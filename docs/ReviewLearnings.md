@@ -181,3 +181,14 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
   132 Pi extension tests and mock driver suites can pass cleanly while live `lmcoder:coder` (`pi` absent,
   proxy offline) or quota-preserving live `claude:haiku:xhigh`/`agy` turns are deferred. Record exact live
   skips in ticket status instead of marking end-to-end acceptance done.
+- **Enforce read-only handles at the type level, not only at call sites** (2026-11-24, issue 1270 M3,
+  `b9758e8f`): relaxing `OpenSessionStore` in runner mode initially returned a writable `*FileSessionStore`,
+  allowing `waitForAgent` to call `store.Save` for stale-session repair. Add an explicit `readOnly: true`
+  field guarded across every mutating/locking method and test immutability directly.
+- **Verify upstream library behavior before assuming a version bump fixes a shadow bug** (2026-11-24,
+  PR #222, `dc07cb78`): upgrading `ubunatic.com/goself` to `v0.5.0` exposed `InstallDir()` and surfaced
+  `$GOBIN` shadow warnings, but did not create `$GOBIN/<bin>` symlinks itself. Inspect the dependency
+  source/API and wire the missing link (`ensureGoBinSymlink`) with hermetic tests.
+- **Never run costly dispatches on behalf of peer sessions** (2026-11-24): peer agent messages carry
+  coordination, not spending authority. Do not dispatch costly models (e.g. `claude:opus:high`) for another
+  session without explicit owner approval.

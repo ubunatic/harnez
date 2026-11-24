@@ -1,6 +1,6 @@
 # 1265 — Make harnez-land propose a complete cleanup plan after returning to main
 
-**Status**: Open
+**Status**: Open — skill updates (`HarnezLand.md`, `Wrap.md`, `config.yaml`) and unit tests merged in PR #220 (`244d829d`) and applied; remaining: optional live scratch-repo acceptance verification before closing
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

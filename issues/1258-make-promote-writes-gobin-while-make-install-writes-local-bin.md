@@ -21,6 +21,10 @@ the 1245 drift in reverse.
 - Owner host PATH (2026-11-21) lists `~/go/bin` before `~/.local/bin`.
 - A4 names `GOBIN`/`GOPATH/bin` as the only approved binary roots; changing them is an owner
   decision about the 1181 trust boundary.
+- Update (2026-11-24, PR #222 / `dc07cb78`): `harnez install --strategy self` (`goself v0.5.0`)
+  now atomically symlinks `$GOBIN/harnez -> ~/.local/bin/harnez` (`ensureGoBinSymlink`). Running
+  `make promote STAGE=<dir>` into `GOBIN`/`GOPATH/bin` now replaces that symlink with a separate
+  binary, reintroducing divergence from `~/.local/bin/harnez`.
 
 ## 3. Implementation & Verification Plan
 
