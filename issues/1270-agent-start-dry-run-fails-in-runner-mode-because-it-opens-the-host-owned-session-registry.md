@@ -60,3 +60,11 @@ two scouts successfully earlier in the same session.
   - `internal/subagent/runner_registry_test.go`: `NewSessionStore` still fails closed naming `mcp__taia__background_task`; `OpenSessionStore` succeeds in runner mode without creating dir.
   - `cmd/harnez/agent_dry_run_test.go`: `TestAgentStartDryRunInRunnerModeSkipsStore` (with and without `--name`, prints preview + uniqueness note, creates no store dir).
   - `cmd/harnez/runner_registry_lifecycle_test.go`: `agent list` and `agent status` succeed in runner mode on pre-populated host registry; mutating `agent start` (non-dry-run), `resume`, `stop`, `delete` fail closed and name `mcp__taia__background_task`.
+
+## 5. M3 Delivery & Review Fixes (Pre-Work)
+
+- **M3 delivered (`d09a7d6a`)**: Unblocked runner-mode `--dry-run`, switched `list`/`status`/`wait`/`/status` to `OpenSessionStore`, and updated runner-mode errors to name `mcp__taia__background_task`.
+- **Review (`codex:sol:med`, 2m26s) — Needs pre-work**:
+  1. `[HIGH]` `OpenSessionStore` returned a writable `*FileSessionStore` and `waitForAgent` (`cmd/harnez/agent_async.go:538`) calls `store.Save` when a running worker disappeared. Fix: add `readOnly: true` on `OpenSessionStore` and fail closed in all mutating methods on `FileSessionStore` (`Save`, `Delete`, `Purge`, etc.); in `waitForAgent`, skip `store.Save` stale-session repair when read-only / in runner mode.
+  2. `[MED]` Add tests asserting `OpenSessionStore(...).Save(...)` fails closed and leaves files untouched, and stale-running `agent wait` in runner mode does not mutate registry files.
+  3. `[LOW]` Add a store-call spy in `TestAgentStartDryRunInRunnerModeSkipsStore` proving zero `store()` invocations (including through `withHostTrackingLine`).
