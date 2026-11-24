@@ -28,4 +28,13 @@ Three active P2 harnez headaches selected for a 3-milestone lean sprint + releas
 
 - **M1 (#1275 — Tier-aware Quota-1)**: delivered by `dev-headaches` (`agy:hydrogen:med`, 6m09s, 988k tokens, commit `01fee008`). Host + `rev-m1-1275` (`codex:sol:med`, 1m58s, 47k new tokens, rated 5/5) caught 3 `[MED]` items (`-buildvcs` boolean flag, `-test.short`/`-test.run` aliases, duplicate bullets in `.harnez/rules/Quota.md`) and 2 `[LOW]` items (`make -l 1.5`, extra tests) — folded into M2 pre-work.
 - **M2 (#1266 — `agent resume` zero `context_tokens` + M1 pre-work)**: delivered by `dev-headaches` (`agy:hydrogen:med`, 4m28s, 1.75M tokens, commit `80d0efda`). Reviewed by `rev-m2-1266` (`codex:sol:med`, 1m21s, 50.2k new tokens, rated 5/5): **Ready to accept** (`0 [HIGH]`, `0 [MED]`).
-- **M3 (#1270/#1279 — Runner-mode `--dry-run`, read-only `OpenSessionStore`, actionable errors)**: delivered by `dev-headaches` (`agy:hydrogen:med`, 11m49s, 5.20M tokens, commit `d09a7d6a`). Reviewed by `rev-m3-1270` (`codex:sol:med`, 2m26s, 54.1k new tokens, rated 5/5): caught `[HIGH]` `OpenSessionStore` writable store + `waitForAgent` `store.Save` stale repair in runner mode, plus `[MED]`/`[LOW]` test gaps — resumed `dev-headaches` for M3 fixup.
+- **M3 (#1270/#1279 — Runner-mode `--dry-run`, read-only `OpenSessionStore`, actionable errors)**: delivered by `dev-headaches` (`agy:hydrogen:med`, 11m49s, 5.20M tokens, commit `d09a7d6a`). Reviewed by `rev-m3-1270` (`codex:sol:med`, 2m26s, 54.1k new tokens, rated 5/5): caught `[HIGH]` `OpenSessionStore` writable store + `waitForAgent` `store.Save` stale repair in runner mode, plus `[MED]`/`[LOW]` test gaps.
+- **M3 fixup (`b9758e8f`)**: delivered by `dev-headaches` (`agy:hydrogen:med`, 7m50s, 8.27M tokens): enforced `readOnly: true` + `requireWritable()` across all `FileSessionStore` write/lock paths, skipped stale-session `store.Save` in `waitForAgent`, fixed `agent_send.go` `QueueMessage` to use `NewSessionStore`, and added immutability + store-spy tests. Reviewed by `rev-m3-fixup` (`codex:sol:med`, 1m12s, 62.2k new tokens, rated 5/5): **Ready to accept** (`0` blocking findings).
+
+## Final Verification & Teardown
+
+- `make install`: updated `~/.local/bin/harnez`.
+- Live smoke: `TAIA_SESSION_DIR=... ~/.local/bin/harnez agent start --dry-run --role developer --model claude:haiku:high --name dry -p "x"` printed preview + uniqueness note without opening the host registry.
+- `HTO=0 make test`: exited 0 (`test-pi`: 115 pass / 0 fail / 17 skipped; `gofmt`, `go vet`, and all Go packages green).
+- All 5 sprint agents (`argon-headaches`, `dev-headaches`, `rev-m1-1275`, `rev-m2-1266`, `rev-m3-1270`, `rev-m3-fixup` — 6 sessions total) rated 5/5 and deleted.
+- Closed tickets `#1275`, `#1266`, `#1270`, `#1279`.
