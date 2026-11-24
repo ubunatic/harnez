@@ -1,6 +1,6 @@
 ---
 name: harnez-land
-description: Commit and land changes (direct to main when unprotected and confident, else via AGit/PR), switch to latest main, and audit/clean up stale worktrees, local/remote branches, and AGit topics/PRs with a concrete plan (interactive or auto). Only on explicit /harnez-land.
+description: Commit and land changes (direct to main when push is allowed and confident, else via AGit/PR), switch to latest main, and audit/clean up stale worktrees, local/remote branches, and AGit topics/PRs with a concrete plan (interactive or auto). Only on explicit /harnez-land.
 disable-model-invocation: true
 ---
 
@@ -14,13 +14,17 @@ report it); evidence-driven in steps 4–5. Triggers: only on explicit `/harnez-
 
 ## Push Policy (`main` vs PR)
 
-`main` is the development branch; only releases are immutable/safe.
+`main` is the development branch; only releases are immutable/safe. Note that a forge-protected
+`main` often blocks force-push/deletion while still allowing normal fast-forward pushes for
+authorized accounts — check whether pushing `main` is actually allowed, not just whether branch
+protection is enabled on the forge.
 
-- **Unprotected `main` + good confidence**: if the repo allows pushing to `main` (no
-  `protected_main`, no pre-push block) and you have good confidence in the changes, commit on or
-  merge into `main` and push `main` directly (`git push origin main`).
-- **Protected `main` or needs review**: when `main` is protected (`.harnez/repo.yaml`
-  `protected_main: true`, `AGENTS.md`, or forge/hook rejects `refs/heads/main`) or confidence is
+- **Push to `main` allowed + good confidence**: if repo policy allows pushing `main` (not
+  PR-only via `.harnez/repo.yaml` `protected_main: true` / `AGENTS.md`, and not blocked by a
+  hook/remote) and you have good confidence in the changes, commit on or merge into `main` and
+  push `main` directly (`git push origin main`).
+- **PR-only repo or needs review**: when repo policy requires PRs (`.harnez/repo.yaml`
+  `protected_main: true`, `AGENTS.md`, or push to `refs/heads/main` is rejected) or confidence is
   low, never commit on `main` and never push `refs/heads/main` — use a topic branch and PR.
 - **Always**: never force-push, never `-o force-push=true`, never reset or rebase `main`.
 
@@ -83,8 +87,8 @@ Assign every item exactly one disposition and a one-line reason:
 2. **Rescue uncommitted** — Dirty or detached worktree / stash with local edits or untracked files.
    Inspect first; commit to a recovery branch, fold into an active PR, or drop if scratch/generated.
 3. **Integrate as-is** — Clean, scoped, good-quality work still relevant to `main`. Push directly
-   to `main` (if unprotected and confident), or push via AGit (`refs/for/main/<topic>`) / merge
-   its open PR, wait for merge, then drop.
+   to `main` (if push to `main` is allowed and confident), or push via AGit (`refs/for/main/<topic>`)
+   / merge its open PR, wait for merge, then drop.
 4. **Fixup & PR** — Valuable work that is stale, conflicting, or needs minor cleanup/tests. Rebase
    or cherry-pick onto `origin/main` (new AGit topic suffix if replacing a conflicting AGit PR),
    fix up, and land via `main` or PR (or hand off to `/lean-sprint` if non-trivial).

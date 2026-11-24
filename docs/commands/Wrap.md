@@ -52,14 +52,16 @@ to `/harnez-land`.
    `main`):
    - **Ready & authorized to land** (complete work, user asked to push/land or
      `/decide` is active):
-     - If you can push to `main` (unprotected) **and** have good confidence in
-       the changes, push to `main` directly (`main` is the development branch;
-       only releases are safe).
-     - Otherwise (protected `main`, or needs review), push the topic branch via
-       AGit (`git push origin HEAD:refs/for/main/<topic>`) or branch push
-       (GitHub), and start `HTO=0 harnez pr wait <number> --contains <sha>` in
-       the background (report "merged" only on exit 0; handle exit 6/7 per
-       `docs/AGit.md`).
+     - If pushing to `main` is allowed (not PR-only in `.harnez/repo.yaml` /
+       `AGENTS.md` and not rejected by hook/remote; forge branch protection may
+       still allow non-force pushes for authorized accounts) **and** you have
+       good confidence in the changes, push to `main` directly (`main` is the
+       development branch; only releases are safe).
+     - Otherwise (PR-only repo, push to `main` rejected, or needs review), push
+       the topic branch via AGit (`git push origin HEAD:refs/for/main/<topic>`)
+       or branch push (GitHub), and start
+       `HTO=0 harnez pr wait <number> --contains <sha>` in the background
+       (report "merged" only on exit 0; handle exit 6/7 per `docs/AGit.md`).
      - Once landed/merged, `git fetch origin`, `git switch main`,
        `git merge --ff-only origin/main`, and remove **only** this scope's
        verified-merged branch or clean worktree.

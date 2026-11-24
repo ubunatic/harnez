@@ -504,7 +504,7 @@ skills:
 
   - name: harnez-land
     license: AGPL-3.0-or-later
-    description: "Commit and land changes (direct to main when unprotected and confident, else via AGit/PR), switch to latest main, and audit/clean up stale worktrees, local/remote branches, and AGit topics/PRs with a concrete plan (interactive or auto). Only on explicit /harnez-land."
+    description: "Commit and land changes (direct to main when push is allowed and confident, else via AGit/PR), switch to latest main, and audit/clean up stale worktrees, local/remote branches, and AGit topics/PRs with a concrete plan (interactive or auto). Only on explicit /harnez-land."
     file: docs/commands/HarnezLand.md
 
   - name: evergreen
