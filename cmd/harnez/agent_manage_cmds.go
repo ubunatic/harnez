@@ -203,7 +203,19 @@ func (ac *agentCLI) waitCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		sess, err := waitForAgent(cmd.Context(), s, args[0], waitTimeout)
+		// The host registry wins. Only a session the spool confirms as verified is
+		// waited on through its own store, read-only.
+		store := s
+		if _, findErr := s.Find(args[0]); findErr != nil {
+			spoolStore, ok, err := subagent.VerifiedSpoolStore(args[0])
+			if err != nil {
+				return err
+			}
+			if ok {
+				store = spoolStore
+			}
+		}
+		sess, err := waitForAgent(cmd.Context(), store, args[0], waitTimeout)
 		if err != nil {
 			return err
 		}

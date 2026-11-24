@@ -161,3 +161,23 @@ func readBounded(path string) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// VerifiedSpoolStore returns a read-only store for the spool entry id when the
+// registry at its store confirms it. ok is false when the spool holds no
+// verified entry for id, including when the store is gone.
+func VerifiedSpoolStore(id string) (store *FileSessionStore, ok bool, err error) {
+	entries, err := ReadSpoolEntries(nil)
+	if err != nil {
+		return nil, false, err
+	}
+	for _, e := range entries {
+		if e.ID == id && e.State == SpoolVerified {
+			st, err := OpenSessionStore(e.Store)
+			if err != nil {
+				return nil, false, err
+			}
+			return st, true, nil
+		}
+	}
+	return nil, false, nil
+}

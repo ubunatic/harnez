@@ -172,3 +172,29 @@ func TestSpoolOversizedPointerIsUnverifiedHint(t *testing.T) {
 		t.Fatalf("oversized pointer state = %s session %v, want unverified without metadata", e.State, e.Session)
 	}
 }
+
+func TestVerifiedSpoolStoreOnlyForConfirmedEntries(t *testing.T) {
+	spool := t.TempDir()
+	t.Setenv("HARNEZ_SPOOL_DIR", spool)
+	storeDir := t.TempDir()
+	store, err := NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Create(&Session{ID: "wv1", Name: "wv", Status: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := VerifiedSpoolStore("wv1")
+	if err != nil || !ok || got == nil {
+		t.Fatalf("verified entry: ok=%v err=%v", ok, err)
+	}
+	if _, found, _ := VerifiedSpoolStore("nope"); found {
+		t.Fatal("unknown id reported as verified")
+	}
+	if err := os.RemoveAll(storeDir); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, _ := VerifiedSpoolStore("wv1"); found {
+		t.Fatal("stale entry (store gone) reported as verified")
+	}
+}
