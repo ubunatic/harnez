@@ -43,3 +43,12 @@ Canary before the fix: a unit case in the resume table (`cmd/harnez/agent_resume
 - **Tests**:
   - Canary + regression in `cmd/harnez/agent_resume_test.go`: `TestClaudeResumeWithUnsetZeroContextTokensWarnsAndDispatches` (`ContextTokens: 0` omitted by `omitempty` -> succeeds, `compactCalls == 0`, `resumeCalls == 1`, stderr contains `"no recorded context token count; skipping compaction check"`).
   - Unit case in `internal/subagent/compact_test.go`: `EnsureContextUnderThreshold(0, 200, ...)` returns `false, nil` without invoking `compact`.
+
+## 5. Pre-Work / Required Refinements (from M1 #1275 Review)
+
+Execute these M1 fixes first (in the M2 commit or a clean M1-fixup commit before M2):
+1. `[MED]` `internal/exec/quota1_command.go`: remove `buildvcs` from `goTestValueFlags` (boolean in `go test`).
+2. `[MED]` `internal/exec/quota1_command.go`: recognize `-test.short`, `-test.run`, `-test.bench`, `-test.fuzz` aliases alongside `-short`, `-run`, `-bench`, `-fuzz`.
+3. `[MED]` `.harnez/rules/Quota.md`: remove the stale duplicate `Single-Test Boundary` / `Code Modification Required` lines (3-4) and keep the single clean tier-aware bullets in their original position.
+4. `[LOW]` `internal/exec/quota1_command.go` (`classifyMakeArgs`): allow decimal numbers for `-l`/`--load-average` (e.g. `make -l 1.5 test-short`).
+5. `[LOW]` Add test cases in `internal/exec/exec_test.go` and `internal/quota1/quota_test.go` for `-buildvcs ./...`, `-test.short ./...`, `-test.run Foo ./...`, `make -l 1.5 test-short`, and unfinished `TierPackage -> TierFull` remaining blocked.

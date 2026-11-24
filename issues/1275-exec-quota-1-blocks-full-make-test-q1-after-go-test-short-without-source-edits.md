@@ -49,3 +49,13 @@ Current workaround used in `splitty`: run `go vet ./...` followed directly by `H
 - **Tests**:
   - `internal/quota1/quota_test.go`: `TestCheckAndRecord_TierUpgradeAndBlock` (upgrades allowed; same/lower/legacy blocked; post-edit downgrade resets tier).
   - `internal/exec/exec_test.go`: `TestClassifyQuota1Tier`, end-to-end `runExecWrapper` (`go test -short ./...` -> `make test-q1` succeeds; repeat `make test-q1` or downgrade blocked), and update `TestRunExecWrapper_PlainGoTestRecordsQuota1State` (`:1936-1973`) to reflect same-tier block + upgrade to `make test-q1` allowed + repeat `make test-q1` blocked.
+
+## 5. Delivery & Review (M1)
+
+- **M1 delivered (`01fee008`)**: Implemented `TierPackage`/`TierShort`/`TierFull` in `internal/quota1`, `classifyQuota1Tier` in `internal/exec/quota1_command.go`, wired into `runExecWrapper`, updated `config.yaml`, `.harnez/rules/Quota.md`, `docs/commands/lean-sprint*.md`, and added unit + wrapper tests.
+- **Review (`codex:sol:med`, 1m58s) — Needs pre-work (folded into M2 pre-work)**:
+  1. `[MED]` `quota1_command.go`: remove `buildvcs` from `goTestValueFlags` (it is boolean in `go test`).
+  2. `[MED]` `quota1_command.go`: recognize `-test.short`, `-test.run`, `-test.bench`, `-test.fuzz` aliases.
+  3. `[MED]` `.harnez/rules/Quota.md`: deduplicate lines 3-4 vs 13-14 so only the tier-aware rules remain.
+  4. `[LOW]` `classifyMakeArgs`: allow decimal load averages (`-l 1.5`).
+  5. `[LOW]` Add unit tests for those parser cases and unfinished Package -> Full blocking.
