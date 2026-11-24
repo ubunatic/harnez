@@ -86,24 +86,17 @@ Instead, per coordination with `taia`, `harnez exec --quota-1` on Linux should s
 
 ## 3. Implementation & Verification Plan
 
-### Milestone 1 (`M1`): Linux Landlock Confinement Helper & Platform Build Split
+### Milestone 1 (`M1`): Linux Landlock Confinement Helper & Platform Build Split — **Delivered (`b845e492`)**
 
-- **Write Set**:
-  - Create `internal/exec/landlock_linux.go` (`//go:build linux`)
-  - Create `internal/exec/landlock_other.go` (`//go:build !linux`)
-  - Create `internal/exec/landlock_test.go`
-  - Edit `cmd/harnez/main.go` (call `internalexec.MaybeRunSandboxHelper()` at the very top of `main()`)
-  - Edit `internal/exec/gittest_main_test.go` and `cmd/harnez/main_env_test.go` (call `MaybeRunSandboxHelper()` at the top of `TestMain`)
-- **Verification (`M1`)**:
-  - Kernel Landlock subprocess tests in `internal/exec/landlock_test.go` (skipping only if `probeLandlockABI()` reports kernel lacks Landlock):
-    - Writes inside granted `cwd` and `TMPDIR` succeed.
-    - Writes to `/dev/null` succeed.
-    - Cross-subdir `os.Rename` inside `cwd` succeeds (ABI v2+ `REFER`).
-    - Writes, truncates, deletes, and renames in `$HOME` or a sibling temp dir outside the grant list fail with `EACCES` (`permission denied`).
-    - Broker FD (`HARNEZ_BROKER_FD`) survives across `MaybeRunSandboxHelper` `unix.Exec`.
-  - `GOWORK=off go test -race -count=1 ./internal/exec/... ./cmd/harnez/...` passes, and non-Linux cross-compile (`GOOS=darwin go build ./internal/exec/...`) succeeds.
+- **Delivered**: Created `internal/exec/landlock_linux.go`, `internal/exec/landlock_other.go`, `internal/exec/landlock_test.go`, and wired `MaybeRunSandboxHelper()` at the top of `cmd/harnez/main.go`, `internal/exec/gittest_main_test.go`, and `cmd/harnez/main_env_test.go`. Verified with `go test -race -count=1 ./internal/exec/... ./cmd/harnez/...` (all 5 kernel Landlock tests ran unskipped and passed).
+- **Review (`neon:med`, `rev-1283-m1`)**: Core Landlock syscall/thread/FD handling and trigger contract `[OK]`; 3 test/error-handling refinements recorded as M2 Pre-Work below.
 
 ### Milestone 2 (`M2`): `runExecWrapper` Fallback Wiring, Private `TMPDIR`, & Acceptance Tests
+
+- **Pre-Work / Required Refinements (from M1 review)**:
+  1. `[MED]` `internal/exec/landlock_test.go`: Update `TestLandlockHelperPreservesBrokerFD` to use a `unix.Socketpair(unix.AF_UNIX, unix.SOCK_SEQPACKET, 0)` (instead of `os.Pipe()`) so `internal/server.init()` actually sets `FD_CLOEXEC` on FD 3 and the test genuinely exercises the `flags&unix.FD_CLOEXEC != 0` clearing branch in `internal/exec/landlock_linux.go`.
+  2. `[LOW]` `internal/exec/landlock_test.go`: Gate the `os.Truncate` denial assertion on `abi >= 3` (matching `REFER`'s `abi >= 2` gate) so the test does not fail on Linux < 6.2 kernels.
+  3. `[LOW]` `internal/exec/landlock_linux.go`: Handle errors from `unix.FcntlInt(uintptr(fd), unix.F_SETFD, ...)` (log to stderr or fail closed) instead of discarding with `_, _`.
 
 - **Write Set**:
   - Edit `internal/exec/bwrap_contract.go`
