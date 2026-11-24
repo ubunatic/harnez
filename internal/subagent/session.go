@@ -395,6 +395,7 @@ func (s *FileSessionStore) save(sess *Session) error {
 		_ = os.Remove(tmp.Name())
 		return fmt.Errorf("failed to write session file: %w", err)
 	}
+	_ = writeSpoolPointer(s.dir, sess.ID, data, time.Now())
 	return nil
 }
 
@@ -452,6 +453,7 @@ func (s *FileSessionStore) Create(sess *Session) error {
 		_ = os.Remove(path)
 		return fmt.Errorf("close session file: %w", err)
 	}
+	_ = writeSpoolPointer(s.dir, sess.ID, data, time.Now())
 	return nil
 }
 
@@ -543,6 +545,7 @@ func (s *FileSessionStore) Delete(id string) error {
 		}
 		return fmt.Errorf("failed to delete session file: %w", err)
 	}
+	_ = removeSpoolPointer(id)
 	return nil
 }
 
