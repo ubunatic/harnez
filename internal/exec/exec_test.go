@@ -2106,8 +2106,9 @@ func TestRunExecWrapper_PlainGoTestDoesNotForceBwrapSandbox(t *testing.T) {
 		t.Fatalf("second plain go test = (%d, %v), stderr=%q; want quota block", code, err, errOut2.String())
 	}
 
-	// Explicit --quota-1 and HARNEZ_QUOTA_1=1 still invoke bwrap sandboxing
-	// (which errors here because bwrap is not on our isolated PATH).
+	// Explicit --quota-1 and HARNEZ_QUOTA_1=1 still invoke sandboxing
+	// (falling back to Landlock when bwrap is missing, and failing closed when
+	// Landlock is also unavailable).
 	for _, tc := range []struct {
 		name  string
 		setup func(*execOptions)
@@ -2130,10 +2131,26 @@ func TestRunExecWrapper_PlainGoTestDoesNotForceBwrapSandbox(t *testing.T) {
 			if !detectExplicitQuota1(explicitOpts, []string{"go", "test", "."}) {
 				t.Fatalf("detectExplicitQuota1(%s) = false, want true", tc.name)
 			}
+			if _, llErr := probeLandlockABI(); llErr == nil {
+				var llOut, llErrBuf bytes.Buffer
+				llCode, llRunErr := runExecWrapper([]string{"go", "test", "."}, explicitOpts, strings.NewReader(""), &llOut, &llErrBuf)
+				if llRunErr != nil || llCode != 0 {
+					t.Fatalf("%s with Landlock fallback failed: (%d, %v), stderr=%q", tc.name, llCode, llRunErr, llErrBuf.String())
+				}
+				if got, want := llOut.String(), "sandbox=quota1 active=1\n"; got != want {
+					t.Fatalf("%s Landlock env output = %q, want %q", tc.name, got, want)
+				}
+			}
+			origLandlock := quota1ProbeLandlockFn
+			quota1ProbeLandlockFn = func() (int, error) {
+				return 0, fmt.Errorf("landlock disabled in test")
+			}
+			t.Cleanup(func() { quota1ProbeLandlockFn = origLandlock })
+			explicitOpts.Quota1Dir = quota1GoTestRepo(t)
 			var eOut, eErr bytes.Buffer
 			_, err := runExecWrapper([]string{"go", "test", "."}, explicitOpts, strings.NewReader(""), &eOut, &eErr)
 			if err == nil {
-				t.Fatalf("%s with DisableSandbox=false and no bwrap succeeded; want sandbox error", tc.name)
+				t.Fatalf("%s with DisableSandbox=false, no bwrap, and no landlock succeeded; want sandbox error", tc.name)
 			}
 		})
 	}

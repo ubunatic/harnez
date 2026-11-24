@@ -16,6 +16,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	internalexec "ubunatic.com/harnez/internal/exec"
 	"ubunatic.com/harnez/internal/forgetracker"
 	"ubunatic.com/harnez/internal/gittest"
 	"ubunatic.com/harnez/internal/modelblock"
@@ -37,6 +38,8 @@ var (
 // Tests that need them use t.Setenv. It also isolates tests from the real store
 // (~/.harnez) by setting HOME to a temp dir, preventing session leaks.
 func TestMain(m *testing.M) {
+	internalexec.MaybeRunSandboxHelper()
+
 	issueCLIRun = func(_ string, c forgetracker.Command) ([]byte, error) {
 		return nil, fmt.Errorf("test did not stub the issue CLI: %s", c)
 	}

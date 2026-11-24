@@ -2,6 +2,7 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -111,4 +112,23 @@ func validateBwrapSessionBind(sessDir string) (string, error) {
 		return "", fmt.Errorf("%s must not traverse symlinks before entering bwrap", envName)
 	}
 	return sessDir, nil
+}
+
+func isBwrapFallbackError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, exec.ErrNotFound) ||
+		errors.Is(err, os.ErrPermission) ||
+		errors.Is(err, syscall.EPERM) ||
+		errors.Is(err, syscall.EACCES) {
+		return true
+	}
+	if DiagnoseBwrapError(err.Error(), runstate.InRunnerMode()) != "" {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "bwrap prerequisite missing") ||
+		strings.Contains(lower, "permission denied") ||
+		strings.Contains(lower, "operation not permitted")
 }

@@ -296,6 +296,22 @@ func quota1SandboxArgsWithSession(args []string, cwd, goCache, goModCache, runti
 	return append(bwrapArgs, args...)
 }
 
+func detectGoCacheDirs() (string, string) {
+	var goCache, goModCache string
+	if goPath, err := exec.LookPath("go"); err == nil {
+		if output, err := exec.Command(goPath, "env", "GOCACHE", "GOMODCACHE").Output(); err == nil {
+			paths := strings.Fields(string(output))
+			if len(paths) > 0 {
+				goCache = paths[0]
+			}
+			if len(paths) > 1 {
+				goModCache = paths[1]
+			}
+		}
+	}
+	return goCache, goModCache
+}
+
 func quota1SandboxCommand(args []string, cwd string) (string, []string, bool, error) {
 	contract, contractErr := sessioncontract.Load()
 	if contractErr != nil {
@@ -319,19 +335,184 @@ func quota1SandboxCommand(args []string, cwd string) (string, []string, bool, er
 		}
 		return "", nil, false, fmt.Errorf("%s: %w", contract.Bwrap.MissingHostError, err)
 	}
-	var goCache, goModCache string
-	if goPath, err := exec.LookPath("go"); err == nil {
-		if output, err := exec.Command(goPath, "env", "GOCACHE", "GOMODCACHE").Output(); err == nil {
-			paths := strings.Fields(string(output))
-			if len(paths) > 0 {
-				goCache = paths[0]
-			}
-			if len(paths) > 1 {
-				goModCache = paths[1]
+	goCache, goModCache := detectGoCacheDirs()
+	return bwrap, quota1SandboxArgsWithSession(args, cwd, goCache, goModCache, os.Getenv("XDG_RUNTIME_DIR"), sessionDir), true, nil
+}
+
+type sandboxPlan struct {
+	bin         string
+	args        []string
+	envOverride map[string]string
+	cleanup     func()
+}
+
+var (
+	quota1ProbeBwrapFn    = ProbeBwrapSupport
+	quota1ProbeLandlockFn = probeLandlockABI
+)
+
+func envLookup(env []string, key string) string {
+	prefix := key + "="
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			return entry[len(prefix):]
+		}
+	}
+	return ""
+}
+
+func mergeEnv(base []string, overrides map[string]string) []string {
+	out := make([]string, 0, len(base)+len(overrides))
+	for _, entry := range base {
+		k, _, _ := strings.Cut(entry, "=")
+		if _, replaced := overrides[k]; replaced {
+			continue
+		}
+		out = append(out, entry)
+	}
+	keys := make([]string, 0, len(overrides))
+	for k := range overrides {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		out = append(out, k+"="+overrides[k])
+	}
+	return out
+}
+
+func createQuota1SandboxRoot(sessionDir, cwd string) (string, error) {
+	candidates := []string{""}
+	if sessionDir != "" {
+		candidates = append(candidates, sessionDir)
+	}
+	if cwd != "" {
+		candidates = append(candidates, cwd)
+	}
+	var lastErr error
+	for _, parent := range candidates {
+		dir, err := os.MkdirTemp(parent, "hz-q1-*")
+		if err == nil {
+			return dir, nil
+		}
+		lastErr = err
+	}
+	return "", fmt.Errorf("create quota-1 sandbox temp root: %w", lastErr)
+}
+
+func dedupeNonEmpty(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
+}
+
+func prepareQuota1Sandbox(ctx context.Context, args []string, cwd string, baseEnv []string) (sandboxPlan, error) {
+	contract, contractErr := sessioncontract.Load()
+	if contractErr != nil {
+		return sandboxPlan{}, contractErr
+	}
+	sessionDir := ""
+	if raw := envLookup(baseEnv, contract.SessionDirEnv); raw != "" {
+		validated, err := validateBwrapSessionBind(raw)
+		if err != nil {
+			return sandboxPlan{}, err
+		}
+		sessionDir = validated
+	}
+	if runtime.GOOS != "linux" {
+		return sandboxPlan{}, fmt.Errorf("quota-1 sandbox requires Linux (found %s)", runtime.GOOS)
+	}
+
+	probeCtx, probeCancel := context.WithTimeout(ctx, 5*time.Second)
+	bwrapErr := quota1ProbeBwrapFn(probeCtx)
+	probeCancel()
+	if bwrapErr == nil {
+		bwrap, wrappedArgs, _, sbErr := quota1SandboxCommand(args, cwd)
+		if sbErr != nil {
+			return sandboxPlan{}, sbErr
+		}
+		return sandboxPlan{
+			bin:  bwrap,
+			args: wrappedArgs,
+			envOverride: map[string]string{
+				quota1SandboxMarkerEnv: quota1SandboxMarkerValue,
+			},
+		}, nil
+	}
+	if !isBwrapFallbackError(bwrapErr) {
+		return sandboxPlan{}, bwrapErr
+	}
+
+	abi, llErr := quota1ProbeLandlockFn()
+	if llErr != nil || abi < 1 {
+		return sandboxPlan{}, fmt.Errorf("quota-1 sandbox unavailable: bwrap failed (%v) and landlock unavailable (%v)", bwrapErr, llErr)
+	}
+
+	selfExe, err := os.Executable()
+	if err != nil {
+		return sandboxPlan{}, fmt.Errorf("resolve harnez executable for landlock sandbox: %w", err)
+	}
+	sandboxRoot, err := createQuota1SandboxRoot(sessionDir, cwd)
+	if err != nil {
+		return sandboxPlan{}, err
+	}
+	cleanup := func() { _ = os.RemoveAll(sandboxRoot) }
+
+	tmpDir := filepath.Join(sandboxRoot, "tmp")
+	if err := os.Mkdir(tmpDir, 0o700); err != nil {
+		cleanup()
+		return sandboxPlan{}, fmt.Errorf("create quota-1 private TMPDIR: %w", err)
+	}
+	runDir := ""
+	if envLookup(baseEnv, "XDG_RUNTIME_DIR") != "" {
+		runDir = filepath.Join(sandboxRoot, "run")
+		if err := os.Mkdir(runDir, 0o700); err != nil {
+			cleanup()
+			return sandboxPlan{}, fmt.Errorf("create quota-1 private XDG_RUNTIME_DIR: %w", err)
+		}
+	}
+
+	goCache, goModCache := detectGoCacheDirs()
+	for _, cachePtr := range []*string{&goCache, &goModCache} {
+		if *cachePtr != "" {
+			if err := os.MkdirAll(*cachePtr, 0o755); err != nil {
+				*cachePtr = ""
 			}
 		}
 	}
-	return bwrap, quota1SandboxArgsWithSession(args, cwd, goCache, goModCache, os.Getenv("XDG_RUNTIME_DIR"), sessionDir), true, nil
+
+	writeDirs := dedupeNonEmpty([]string{cwd, goCache, goModCache, sessionDir, tmpDir, runDir})
+	dirsJSON, err := json.Marshal(writeDirs)
+	if err != nil {
+		cleanup()
+		return sandboxPlan{}, fmt.Errorf("encode landlock write dirs: %w", err)
+	}
+
+	envOverride := map[string]string{
+		"TMPDIR":                              tmpDir,
+		quota1SandboxMarkerEnv:                quota1SandboxMarkerValue,
+		"HARNEZ_INTERNAL_LANDLOCK_WRITE_DIRS": string(dirsJSON),
+	}
+	if runDir != "" {
+		envOverride["XDG_RUNTIME_DIR"] = runDir
+	}
+	wrappedArgs := append([]string{"__landlock-exec", "--"}, args...)
+	return sandboxPlan{
+		bin:         selfExe,
+		args:        wrappedArgs,
+		envOverride: envOverride,
+		cleanup:     cleanup,
+	}, nil
 }
 
 // validateToolName rejects an explicit --tool value at the point it's
@@ -695,28 +876,34 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	defer cancel()
 	c := exec.Command(args[0], args[1:]...)
 	quota1Sandboxed := false
-	if explicitQuota1 && !opts.DisableSandbox {
-		cwd, _ := os.Getwd()
-		bwrap, wrappedArgs, _, sbErr := quota1SandboxCommand(args, cwd)
-		if sbErr != nil {
-			return 1, sbErr
-		}
-		c = exec.Command(bwrap, wrappedArgs...)
-		quota1Sandboxed = true
+	var sandboxCleanup func()
+	envOverrides := map[string]string{
+		execTimeoutEffectiveEnv: timeout.String(),
+		execTimeoutExplicitEnv:  "0",
 	}
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	c.Env = append(os.Environ(), execTimeoutEffectiveEnv+"="+timeout.String())
-	if quota1Sandboxed {
-		c.Env = append(c.Env, quota1SandboxMarkerEnv+"="+quota1SandboxMarkerValue)
+	if hasExplicitExecTimeout(opts, args) {
+		envOverrides[execTimeoutExplicitEnv] = "1"
 	}
 	if quota1Active {
 		// Nested go test calls under this run must not be counted again.
-		c.Env = append(c.Env, quota1ActiveEnv+"=1")
+		envOverrides[quota1ActiveEnv] = "1"
 	}
-	c.Env = append(c.Env, execTimeoutExplicitEnv+"=0")
-	if hasExplicitExecTimeout(opts, args) {
-		c.Env[len(c.Env)-1] = execTimeoutExplicitEnv + "=1"
+	baseEnv := os.Environ()
+	if explicitQuota1 && !opts.DisableSandbox {
+		cwd, _ := os.Getwd()
+		plan, sbErr := prepareQuota1Sandbox(ctx, args, cwd, baseEnv)
+		if sbErr != nil {
+			return 1, sbErr
+		}
+		c = exec.Command(plan.bin, plan.args...)
+		sandboxCleanup = plan.cleanup
+		for k, v := range plan.envOverride {
+			envOverrides[k] = v
+		}
+		quota1Sandboxed = true
 	}
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	c.Env = mergeEnv(baseEnv, envOverrides)
 	c.Stdin = in
 
 	var distOpts distill.Options
@@ -751,6 +938,9 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	start := time.Now()
 	if err := c.Start(); err != nil {
 		_ = broker.Close()
+		if sandboxCleanup != nil {
+			sandboxCleanup()
+		}
 		return 1, fmt.Errorf("exec: run %v: %w", args, err)
 	}
 	broker.ReleaseChildFD()
@@ -795,6 +985,9 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			processGroupStopped, signalProcessGroup)
 	}()
 	runErr := c.Wait()
+	if sandboxCleanup != nil {
+		sandboxCleanup()
+	}
 	_ = broker.Close()
 	close(groupDone)
 	close(stoppedDone)
