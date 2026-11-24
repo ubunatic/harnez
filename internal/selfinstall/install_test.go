@@ -75,6 +75,7 @@ func TestRunLocalSelfInstallWiresBinaryShellGearAndMan(t *testing.T) {
 		Strategy: "self",
 		Dir:      installDir,
 		Home:     home,
+		GoBinDir: filepath.Join(home, "go", "bin"),
 		InstallMan: func(w io.Writer) error {
 			manCalled = true
 			return nil
@@ -173,5 +174,73 @@ func TestShadowWarningNamesTheHarnezThatPATHFindsFirst(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRunLocalSelfInstallSymlinksGoBinToLocalBin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	installDir := filepath.Join(home, ".local", "bin")
+	goBin := filepath.Join(home, "go", "bin")
+	if err := os.MkdirAll(goBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	staleGoBin := filepath.Join(goBin, "harnez")
+	if err := os.WriteFile(staleGoBin, []byte("#!/bin/sh\necho stale\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sep := string(os.PathListSeparator)
+	t.Setenv("PATH", goBin+sep+installDir+sep+"/usr/bin"+sep+"/bin")
+
+	wantBin := filepath.Join(installDir, "harnez")
+	opts := Options{
+		Strategy:       "self",
+		Dir:            installDir,
+		Home:           home,
+		GoBinDir:       goBin,
+		NoShell:        true,
+		NoMan:          true,
+		RefreshService: func(context.Context, string, io.Writer) error { return nil },
+	}
+	var out bytes.Buffer
+	if err := Run(context.Background(), opts, &out); err != nil {
+		t.Fatal(err)
+	}
+
+	gotTarget, err := os.Readlink(staleGoBin)
+	if err != nil || gotTarget != wantBin {
+		t.Fatalf("gobin symlink = (%q, %v), want %q", gotTarget, err, wantBin)
+	}
+	if strings.Contains(out.String(), "warning:") {
+		t.Errorf("unexpected shadow warning after symlinking gobin:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "symlink ") {
+		t.Errorf("expected symlink log line:\n%s", out.String())
+	}
+
+	// Second run is idempotent and does not re-create the gobin symlink.
+	out.Reset()
+	if err := Run(context.Background(), opts, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "symlink ") {
+		t.Errorf("unexpected symlink rewrite on idempotent run:\n%s", out.String())
+	}
+
+	// Missing goBin dir is not created.
+	missingGoBin := filepath.Join(home, "absent-go", "bin")
+	if link, changed, err := ensureGoBinSymlink(wantBin, missingGoBin); err != nil || changed || link != "" {
+		t.Fatalf("missing goBin = (%q, %v, %v), want empty/false/nil", link, changed, err)
+	}
+	if _, err := os.Stat(missingGoBin); !os.IsNotExist(err) {
+		t.Fatalf("ensureGoBinSymlink created missing dir %s", missingGoBin)
+	}
+
+	// Same dir is a no-op (must not clobber the installed binary).
+	if link, changed, err := ensureGoBinSymlink(wantBin, installDir); err != nil || changed || link != "" {
+		t.Fatalf("same dir = (%q, %v, %v), want empty/false/nil", link, changed, err)
+	}
+	if fi, err := os.Lstat(wantBin); err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("installed binary should remain a regular file, mode=%v err=%v", fi.Mode(), err)
 	}
 }
