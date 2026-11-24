@@ -41,4 +41,19 @@ models:
 
 ## 4. Milestone 2 (`M2`: `runExecWrapper` Fallback Wiring, Private `TMPDIR`, & Acceptance Tests)
 
-- Developer: resuming `dev-1283` (`hydrogen:med`) with M2 Pre-Work + M2 implementation.
+- Developer: resumed `dev-1283` (`hydrogen:med`, 6m06s, 2,722,266 tokens incl. cached), commit `e1f6294b`.
+  - Resolved all 3 M1 review pre-work items (`SOCK_SEQPACKET` broker-FD test, ABI v3 truncate gate, fail-closed `F_SETFD`).
+  - Wired `prepareQuota1Sandbox` with `bwrap` probe-first -> Landlock fallback, short `hz-q1-*` private `TMPDIR`/`XDG_RUNTIME_DIR` + cleanup, fail-closed dual unavailability, acceptance test in `cmd/harnez/session_isolation_acceptance_test.go`, and `docs/SessionIsolation.md`.
+- Verification:
+  - `make install`: installed `~/.local/bin/harnez`.
+  - `HTO=0 make test`: exit 0 (`cmd/harnez` 69.5s, `internal/exec` 5.6s, zero `--- FAIL`).
+  - Host `go test -race -count=1 ./internal/exec/...`: passed (40.2s).
+  - Live `~/.local/bin/harnez exec --quota-1` verified both normal `bwrap` and forced Landlock fallback (`bwrap: setting up uid map: Permission denied` -> `sandbox=quota1`, private `TMPDIR` writable, `$HOME` write blocked with `Permission denied`).
+- Reviewer: `neon:med` (`rev-1283-m2`, 1m26s, 213,115 tokens incl. cached) — **Ready to accept** (`0 [HIGH]`, `0 [MED]`, `2 [LOW]` optional follow-ups).
+
+## 5. Outcome & Efficiency
+
+- Total agent turns: 5 (1 architect `argon:med`, 2 developer `hydrogen:med`, 2 reviewer `neon:med`; `opus:high` hit Claude 5h limit on M1).
+- Zero host code edits (strict Zero Coding invariant upheld).
+- `neon:med` M1 review caught a real `[MED]` test gap (`os.Pipe` vs `SOCK_SEQPACKET` `FD_CLOEXEC`) that was cleanly fixed in M2 pre-work.
+- All sprint agents rated and deleted; issue #1283 closed on `sprint/1283`.
