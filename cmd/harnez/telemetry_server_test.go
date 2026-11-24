@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
@@ -652,5 +653,36 @@ func TestWriteCappedTailJSONBinarySearchAndOversizeItem(t *testing.T) {
 	writeCappedTailJSON(recTooBig, []string{strings.Repeat("x", 64)}, 16)
 	if recTooBig.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversize single item status = %d, want 413", recTooBig.Code)
+	}
+}
+
+func TestSendTelemetryRecordDroppedSilentByDefaultAndDebugGated(t *testing.T) {
+	t.Setenv(runstate.RunnerDirEnv(), "")
+	t.Setenv("HARNEZ_BROKER_FD", "")
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	// Point XDG_STATE_HOME at a regular file so host spool creation fails cleanly.
+	notADir := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(notADir, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_STATE_HOME", notADir)
+	t.Setenv("HARNEZ_DEBUG", "")
+	t.Setenv("HARNEZ_TELEMETRY_DEBUG", "")
+
+	var silent bytes.Buffer
+	if got := sendTelemetryRecordTo(&silent, "cli_invocation", telemetry.CLIInvocation{Command: "read"}); got != server.UpdateDropped {
+		t.Fatalf("sendTelemetryRecordTo result = %q, want dropped", got)
+	}
+	if silent.Len() != 0 {
+		t.Fatalf("default dropped telemetry wrote stderr %q, want empty", silent.String())
+	}
+
+	t.Setenv("HARNEZ_TELEMETRY_DEBUG", "1")
+	var debugOut bytes.Buffer
+	if got := sendTelemetryRecordTo(&debugOut, "cli_invocation", telemetry.CLIInvocation{Command: "read"}); got != server.UpdateDropped {
+		t.Fatalf("debug sendTelemetryRecordTo result = %q, want dropped", got)
+	}
+	if !strings.Contains(debugOut.String(), "telemetry record dropped") {
+		t.Fatalf("debug stderr = %q, want telemetry record dropped", debugOut.String())
 	}
 }

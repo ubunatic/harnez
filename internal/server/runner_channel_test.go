@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/sessioncontract"
 )
 
@@ -597,5 +598,75 @@ func TestRunnerChannelConsumesSessionContractOperations(t *testing.T) {
 	resp := handleRunnerFrame(context.Background(), cfg, []byte(`{"op":"arbitrary_paths"}`), RunnerBrokerHandlers{})
 	if resp.Status != http.StatusForbidden {
 		t.Fatalf("disallowed op status = %d, want 403", resp.Status)
+	}
+}
+
+func TestDispatchTelemetryUsesBrokerFDWithoutRunnerDirAndSkipsHostSpool(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.UpdateTimeout = 200 * time.Millisecond
+	t.Setenv(runstate.RunnerDirEnv(), "")
+	stateHome := t.TempDir()
+	runtimeDir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+
+	hostEnd, runnerEnd, err := SocketPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runnerEnd.Close()
+	t.Setenv(cfg.RunnerChannel.FDEnv, strconv.Itoa(int(runnerEnd.Fd())))
+
+	var mu sync.Mutex
+	var delivered []string
+	failBroker := false
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- ServeRunnerBroker(ctx, hostEnd, cfg, func(_ context.Context, rec TelemetryRecord) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if failBroker {
+				return errors.New("collector unavailable")
+			}
+			delivered = append(delivered, rec.RecordID)
+			return nil
+		})
+	}()
+	t.Cleanup(func() {
+		cancel()
+		_ = hostEnd.Close()
+		<-done
+	})
+
+	rec, err := NewTelemetryRecord("cli_invocation", json.RawMessage(`{"command":"read"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := DispatchTelemetry(context.Background(), cfg, rec); got != UpdateDelivered {
+		t.Fatalf("DispatchTelemetry with inherited broker FD = %q, want delivered", got)
+	}
+	mu.Lock()
+	gotDelivered := len(delivered)
+	failBroker = true
+	mu.Unlock()
+	if gotDelivered != 1 {
+		t.Fatalf("broker delivered %d records, want 1", gotDelivered)
+	}
+
+	// On broker outage without TAIA_SESSION_DIR, DispatchTelemetry must not write to host spool on disk.
+	rec2, err := NewTelemetryRecord("cli_invocation", json.RawMessage(`{"command":"find"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := DispatchTelemetry(context.Background(), cfg, rec2); got != UpdateDropped {
+		t.Fatalf("DispatchTelemetry on broker outage without runner dir = %q, want dropped", got)
+	}
+	spoolDir := filepath.Join(stateHome, "harnez", cfg.TelemetrySpoolPath)
+	if entries, err := os.ReadDir(spoolDir); err == nil && len(entries) > 0 {
+		t.Fatalf("host spool %s unexpectedly received %d entries", spoolDir, len(entries))
 	}
 }
