@@ -33,10 +33,15 @@ two scouts successfully earlier in the same session.
 - The store open goes through `guardHostSessionStoreAccess` (`internal/subagent/session.go:316`),
   which refuses the default registry when `runstate.InRunnerMode()` (issue 1181).
 
-## 3. Implementation & Verification Plan
+## 3. Decision, Goal & Verification Plan
 
-- In runner mode, `--dry-run` skips the registry: preview the requested name as is (or a
-  generated one) and note that the name is checked at start.
-- If a registry read is needed, the error names the supported route for agents in taia.
-- Test: runner mode plus `--dry-run` prints the preview and opens no store; the non-dry-run
-  path keeps the guard.
+/goal Unblock `harnez agent start --dry-run` and read-only session inspection (`OpenSessionStore` for `agent list`/`show`/`status`) in runner mode while keeping mutating `NewSessionStore` guarded, and update runner-mode mutation errors to name the `mcp__taia__background_task` route (resolving #1279 as well); or stop and report when blocked on a user decision or denied permission. On a loop, hard architectural blocker, or no progress, clear the goal and record a failure report with resume point.
+
+## Decision
+
+- Combined `#1270` + `#1279` + Taia's read-only `OpenSessionStore` recommendation (autonomous `/decide`, 2026-11-24):
+  1. In runner mode, `--dry-run` skips opening the session store (previews the requested/generated name and notes name uniqueness is checked at start).
+  2. Read-only `OpenSessionStore` drops the runner-mode block so `agent list`/`show`/`status` work inside Taia (where Landlock already permits reading `~/.harnez/agents`), while mutating `NewSessionStore` keeps `guardHostSessionStoreAccess`.
+  3. Runner-mode mutation errors in `guardHostSessionStoreAccess` name the actionable `mcp__taia__background_task` route (#1279).
+
+- Test: runner mode plus `--dry-run` prints the preview and opens no store; read-only `OpenSessionStore` succeeds in runner mode; mutating `NewSessionStore` keeps the guard and names `mcp__taia__background_task`.

@@ -22,13 +22,16 @@ Even though `go test -short ./...` skips full-tier PTY/integration tests and `ma
 
 Current workaround used in `splitty`: run `go vet ./...` followed directly by `HTO=0 make test-q1` (skipping `go test -short ./...` beforehand).
 
-## 2. Proposed Solutions
+## 2. Decision & Goal
 
-Either or both of:
-1. **Tier-aware Quota-1**: allow a full-tier `make test-q1` upgrade after a `-short` run (while still blocking repeat runs at the same or lower tier without intervening source edits).
-2. **Docs/skill guidance**: document in `Quota.md` and `lean-sprint` not to run `go test -short ./...` before `make test-q1` when no further edits are planned.
+/goal Make Quota-1 tier-aware so upgrading from a narrower/shorter test run (e.g., `go test -short ./...`, `make test-short`, or single-package tests) to a broader/full test run (`make test-q1` / full suite) succeeds without intervening source edits, while repeat runs at the same or lower tier remain blocked, and update `Quota.md` guidance; or stop and report when blocked on a user decision or denied permission. On a loop, hard architectural blocker, or no progress, clear the goal and record a failure report with resume point.
+
+## Decision
+
+- Selected Option 1 + Option 2 (autonomous `/decide`, 2026-11-24): implement tier-aware Quota-1 upgrades in code so `go test -short` -> `make test-q1` works without workarounds, and update `Quota.md` docs to reflect the rule.
 
 ## 3. Acceptance Criteria
 
-- Running `go test -short ./...` followed by `make test-q1` without source edits either succeeds (tier upgrade allowed) or is explicitly documented and guided in `Quota.md` / `lean-sprint`.
-- Repeat runs at the same tier without source edits remain blocked.
+- Running `go test -short ./...` (or a narrower package/short tier) followed by `make test-q1` without source edits succeeds.
+- Repeat runs at the same or lower tier without intervening source edits remain blocked.
+- `Quota.md` (and its source/copy if applicable) documents the tier-upgrade behavior.

@@ -24,11 +24,12 @@ Source: the hub-run report (orchestrator, 2026-11-22). The refused session's sto
 - `internal/subagent/session.go:236-237` (`marshalStoredSession`) keeps -1 on disk and drops 0 (`omitempty`). A stored record with no `context_tokens` reloads as 0, which is what triggers the refusal. This means 0 means "never recorded", not "measured as zero".
 - Unverified: which stored state the hub's refused session held. Check the session's `context_tokens` field in the registry JSON; a missing field means the refusal came from this path.
 
-## 3. Implementation & Verification Plan
+## 3. Decision, Goal & Verification Plan
 
-Owner decision first:
+/goal Allow `harnez agent resume` to proceed with a clear warning when a stored session has no recorded context token count (`context_tokens == 0`), matching the existing unknown (`-1`) contract, and verify with unit/regression tests; or stop and report when blocked on a user decision or denied permission. On a loop, hard architectural blocker, or no progress, clear the goal and record a failure report with resume point.
 
-1. Treat a never-recorded count (0) like unknown (-1): skip compaction, dispatch, and print a warning. The code already defines negative values this way.
-2. Keep the refusal, but name the cause ("no context count recorded for this session") and the next command the host should run.
+## Decision
 
-Option 1 is the lean choice; it is a recommendation, not a decision. Canary before the fix: a unit case in the resume table (`cmd/harnez/agent_resume_test.go`, near line 575) with a stored session that has no `context_tokens` and a claude driver. Expect the refusal today. After the fix, run `make test-q1` for the quota-wrapped run.
+- Selected Option 1 (autonomous `/decide`, 2026-11-24): treat a never-recorded count (`0`, produced when `omitempty` omits an unset `context_tokens` field) like unknown (`-1`) — skip compaction, print a warning, and dispatch the resume prompt rather than destroying session continuity.
+
+Canary before the fix: a unit case in the resume table (`cmd/harnez/agent_resume_test.go`, near line 575) with a stored session that has no `context_tokens` and a claude driver. Expect the refusal today. After the fix, run `make test-q1` for the quota-wrapped run.
