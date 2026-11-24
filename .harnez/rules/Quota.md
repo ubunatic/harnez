@@ -8,3 +8,7 @@
 - **Report Untested Edits**: If you edit code after your single test run, say in your report that the committed code is untested after that run and name the changed files, so the host runs the suite.
 - **Media & Demo Verification Gate**: Get explicit user confirmation before publishing recordings or screenshots.
 - **Owner Suspension**: Only the user can suspend these rules for a session, with `/disable` (see Owner Overrides in Tools.md).
+
+
+- **Single-Test Boundary**: Every test execution, including targeted `go test` and coverage runs, counts toward the one-run allowance and must use the quota wrapper. Upgrading from a narrower tier (`package`/`-run` -> `-short` -> full suite) without intervening source edits is allowed; repeat runs at the same or lower tier require an intervening source modification (under lean-sprint §3, after fixing a failure from that run, the developer may rerun only touched packages and must report the full run owed to the host).
+- **Code Modification Required**: If tests fail or complete, you MUST modify repository source files before running tests again at the same or lower tier. Tier upgrades (`package` -> `short` -> `full`) are allowed; same-or-lower-tier repeats without intermediate code modifications are blocked.

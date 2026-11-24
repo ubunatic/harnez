@@ -1931,11 +1931,13 @@ func TestRunExecWrapper_GoTestAfterPassingQuota1RunWithoutEditIsBlocked(t *testi
 	}
 }
 
-// Locked test 3: a plain go test run records Quota-1 state, so a repeat with no
-// source change is refused whether it is go test or make test-q1.
+// Locked test 3: a plain go test run records Quota-1 state, so a same-tier
+// repeat is refused, upgrading to make test-q1 is allowed, and a repeat
+// make test-q1 is refused.
 func TestRunExecWrapper_PlainGoTestRecordsQuota1State(t *testing.T) {
 	repoDir := quota1GoTestRepo(t)
 	fakeGoOnPath(t)
+	fakeMakeOnPath(t)
 	opts := testExecOptions(t)
 	opts.Quota1Dir = repoDir
 
@@ -1955,20 +1957,34 @@ func TestRunExecWrapper_PlainGoTestRecordsQuota1State(t *testing.T) {
 	if record.Exit == nil || *record.Exit != 0 {
 		t.Fatalf("recorded exit = %v, want 0", record.Exit)
 	}
+	if record.Tier != quota1.TierPackage {
+		t.Fatalf("recorded tier = %d, want %d", record.Tier, quota1.TierPackage)
+	}
 
-	for _, tc := range []struct {
-		name string
-		args []string
-		opts execOptions
-	}{
-		{"go test", []string{"go", "test", "."}, opts},
-		{"make test-q1 via --quota-1", []string{"make", "test-q1"}, func() execOptions { o := opts; o.Quota1 = true; return o }()},
-	} {
-		var out, errOut bytes.Buffer
-		code, err := runExecWrapper(tc.args, tc.opts, strings.NewReader(""), &out, &errOut)
-		if err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
-			t.Fatalf("repeat %s = (%d, %v), stderr=%q; want quota block", tc.name, code, err, errOut.String())
-		}
+	// Same-tier repeat is blocked.
+	out.Reset()
+	errOut.Reset()
+	code, err = runExecWrapper([]string{"go", "test", "."}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
+		t.Fatalf("repeat go test = (%d, %v), stderr=%q; want quota block", code, err, errOut.String())
+	}
+
+	// Upgrading from TierPackage to TierFull (make test-q1) is allowed.
+	q1Opts := opts
+	q1Opts.Quota1 = true
+	out.Reset()
+	errOut.Reset()
+	code, err = runExecWrapper([]string{"make", "test-q1"}, q1Opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 0 {
+		t.Fatalf("upgrade make test-q1 = (%d, %v), stderr=%q; want (0, nil)", code, err, errOut.String())
+	}
+
+	// Second make test-q1 at TierFull is blocked.
+	out.Reset()
+	errOut.Reset()
+	code, err = runExecWrapper([]string{"make", "test-q1"}, q1Opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
+		t.Fatalf("repeat make test-q1 = (%d, %v), stderr=%q; want quota block", code, err, errOut.String())
 	}
 }
 
@@ -2234,4 +2250,97 @@ func TestRunExecWrapper_Quota1ConfiguredTriggers(t *testing.T) {
 			t.Fatalf("plain go test after seeded state = (%d, %v), stderr=%q; want quota block", code, err, errOut.String())
 		}
 	})
+}
+
+func fakeMakeOnPath(t *testing.T) {
+	t.Helper()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "make"), []byte("#!/bin/sh\necho \"fake make $*\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestClassifyQuota1Tier(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want int
+	}{
+		{"go test pkg", []string{"go", "test", "./pkg"}, quota1.TierPackage},
+		{"go test dot", []string{"go", "test", "."}, quota1.TierPackage},
+		{"go test bare", []string{"go", "test"}, quota1.TierPackage},
+		{"go test -run", []string{"go", "test", "-run", "Foo", "./..."}, quota1.TierPackage},
+		{"go test -bench", []string{"go", "test", "-bench=.", "./..."}, quota1.TierPackage},
+		{"go test -fuzz", []string{"go", "test", "-fuzz", "FuzzFoo", "./..."}, quota1.TierPackage},
+		{"go test subpackage glob", []string{"go", "test", "./internal/..."}, quota1.TierPackage},
+		{"go test -short", []string{"go", "test", "-short", "./..."}, quota1.TierShort},
+		{"go test -short=true", []string{"go", "test", "-short=true", "./..."}, quota1.TierShort},
+		{"go test --short", []string{"go", "test", "--short", "./..."}, quota1.TierShort},
+		{"go test -short=false", []string{"go", "test", "-short=false", "./..."}, quota1.TierFull},
+		{"go test full", []string{"go", "test", "./..."}, quota1.TierFull},
+		{"go test ellipsis", []string{"go", "test", "..."}, quota1.TierFull},
+		{"go test flags with values", []string{"go", "test", "-p", "4", "-count", "1", "-timeout", "30s", "-tags", "foo", "./..."}, quota1.TierFull},
+		{"go test short with value flags", []string{"go", "test", "-p", "4", "-count", "1", "-short", "./..."}, quota1.TierShort},
+		{"gotestsum short", []string{"gotestsum", "--format", "testname", "--", "-short", "./..."}, quota1.TierShort},
+		{"gotestsum full", []string{"gotestsum", "--", "./..."}, quota1.TierFull},
+		{"make test-pkg", []string{"make", "test-pkg"}, quota1.TierPackage},
+		{"make flags and vars test-short", []string{"make", "-C", "sub", "-j", "4", "FOO=bar", "test-short"}, quota1.TierShort},
+		{"make --directory= test-pkg", []string{"make", "--directory=sub", "-f", "Makefile.ci", "test-pkg"}, quota1.TierPackage},
+		{"make test-q1", []string{"make", "test-q1"}, quota1.TierFull},
+		{"make test", []string{"make", "test"}, quota1.TierFull},
+		{"make check", []string{"make", "check"}, quota1.TierFull},
+		{"shell cd && go test -short", []string{"bash", "-c", "cd sub && go test -short ./..."}, quota1.TierShort},
+		{"shell max across segments", []string{"bash", "-c", "go test ./pkg && go test -short ./..."}, quota1.TierShort},
+		{"unrecognised fallback", []string{"./scripts/custom-test.sh"}, quota1.TierFull},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := classifyQuota1Tier(tc.args); got != tc.want {
+				t.Fatalf("classifyQuota1Tier(%v) = %d, want %d", tc.args, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRunExecWrapper_Quota1TierUpgradeAndBlock(t *testing.T) {
+	repoDir := quota1GoTestRepo(t)
+	fakeGoOnPath(t)
+	fakeMakeOnPath(t)
+	opts := testExecOptions(t)
+	opts.Quota1Dir = repoDir
+
+	// 1. Run go test -short ./... (TierShort).
+	var out, errOut bytes.Buffer
+	code, err := runExecWrapper([]string{"go", "test", "-short", "./..."}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 0 {
+		t.Fatalf("go test -short = (%d, %v), stderr=%q; want (0, nil)", code, err, errOut.String())
+	}
+
+	// 2. Upgrade to make test-q1 (TierFull) without source edits succeeds.
+	q1Opts := opts
+	q1Opts.Quota1 = true
+	out.Reset()
+	errOut.Reset()
+	code, err = runExecWrapper([]string{"make", "test-q1"}, q1Opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 0 {
+		t.Fatalf("upgrade make test-q1 = (%d, %v), stderr=%q; want (0, nil)", code, err, errOut.String())
+	}
+
+	// 3. Repeat make test-q1 and downgrade go test -short ./... are both blocked.
+	for _, tc := range []struct {
+		name string
+		args []string
+		o    execOptions
+	}{
+		{"repeat make test-q1", []string{"make", "test-q1"}, q1Opts},
+		{"downgrade go test -short", []string{"go", "test", "-short", "./..."}, opts},
+	} {
+		out.Reset()
+		errOut.Reset()
+		code, err = runExecWrapper(tc.args, tc.o, strings.NewReader(""), &out, &errOut)
+		if err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
+			t.Fatalf("%s = (%d, %v), stderr=%q; want quota block", tc.name, code, err, errOut.String())
+		}
+	}
 }
