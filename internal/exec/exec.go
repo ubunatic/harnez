@@ -35,7 +35,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -53,9 +52,7 @@ import (
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/resolve"
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
-	"ubunatic.com/harnez/internal/sessioncontract"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -144,7 +141,7 @@ var quota1CmdRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*` + 
 
 // detectExplicitQuota1 reports whether the caller explicitly asked for Quota-1
 // (--quota-1, HARNEZ_QUOTA_1=1, or a leading HARNEZ_QUOTA_1=1 command prefix).
-// Only explicit Quota-1 invocations wrap the child in the bwrap sandbox.
+// Explicit Quota-1 invocations are advisory: they record and report, never sandbox or block.
 func detectExplicitQuota1(opts execOptions, args []string) bool {
 	if opts.Quota1 {
 		return true
@@ -268,99 +265,6 @@ func hasExplicitExecTimeout(opts execOptions, args []string) bool {
 	return getenv(execTimeoutShortEnv) != "" || getenv(execTimeoutEnv) != ""
 }
 
-// quota1SandboxArgs builds bwrap argv for a Quota-1 child. Empty cache paths
-// are omitted; the filesystem remains read-only outside the explicit binds.
-func quota1SandboxArgs(args []string, cwd, goCache, goModCache, runtimeDir string) []string {
-	return quota1SandboxArgsWithSession(args, cwd, goCache, goModCache, runtimeDir, "")
-}
-
-func quota1SandboxArgsWithSession(args []string, cwd, goCache, goModCache, runtimeDir, sessionDir string) []string {
-	bwrapArgs := []string{"--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"}
-	if cwd != "" {
-		bwrapArgs = append(bwrapArgs, "--bind", cwd, cwd)
-	}
-	for _, cache := range []string{goCache, goModCache} {
-		if cache != "" {
-			bwrapArgs = append(bwrapArgs, "--bind", cache, cache)
-		}
-	}
-	if runtimeDir != "" {
-		bwrapArgs = append(bwrapArgs, "--tmpfs", runtimeDir)
-	}
-	// Re-bind validated $TAIA_SESSION_DIR after --tmpfs /tmp and runtimeDir so
-	// temporary mount overlays never mask the runner's private session directory.
-	if sessionDir != "" {
-		bwrapArgs = append(bwrapArgs, "--bind", sessionDir, sessionDir)
-	}
-	bwrapArgs = append(bwrapArgs, "--chdir", cwd, "--")
-	return append(bwrapArgs, args...)
-}
-
-func detectGoCacheDirs() (string, string) {
-	var goCache, goModCache string
-	if goPath, err := exec.LookPath("go"); err == nil {
-		if output, err := exec.Command(goPath, "env", "GOCACHE", "GOMODCACHE").Output(); err == nil {
-			paths := strings.Fields(string(output))
-			if len(paths) > 0 {
-				goCache = paths[0]
-			}
-			if len(paths) > 1 {
-				goModCache = paths[1]
-			}
-		}
-	}
-	return goCache, goModCache
-}
-
-func quota1SandboxCommand(args []string, cwd string) (string, []string, bool, error) {
-	contract, contractErr := sessioncontract.Load()
-	if contractErr != nil {
-		return "", nil, false, contractErr
-	}
-	sessionDir := ""
-	if raw := os.Getenv(contract.SessionDirEnv); raw != "" {
-		validated, err := validateBwrapSessionBind(raw)
-		if err != nil {
-			return "", nil, false, err
-		}
-		sessionDir = validated
-	}
-	if runtime.GOOS != "linux" {
-		return "", nil, false, fmt.Errorf("quota-1 bwrap sandbox requires Linux (found %s)", runtime.GOOS)
-	}
-	bwrap, err := exec.LookPath("bwrap")
-	if err != nil {
-		if sessionDir != "" {
-			return "", nil, false, fmt.Errorf("%s: %w", contract.Bwrap.MissingConfinedError, err)
-		}
-		return "", nil, false, fmt.Errorf("%s: %w", contract.Bwrap.MissingHostError, err)
-	}
-	goCache, goModCache := detectGoCacheDirs()
-	return bwrap, quota1SandboxArgsWithSession(args, cwd, goCache, goModCache, os.Getenv("XDG_RUNTIME_DIR"), sessionDir), true, nil
-}
-
-type sandboxPlan struct {
-	bin         string
-	args        []string
-	envOverride map[string]string
-	cleanup     func()
-}
-
-var (
-	quota1ProbeBwrapFn    = ProbeBwrapSupport
-	quota1ProbeLandlockFn = probeLandlockABI
-)
-
-func envLookup(env []string, key string) string {
-	prefix := key + "="
-	for _, entry := range env {
-		if strings.HasPrefix(entry, prefix) {
-			return entry[len(prefix):]
-		}
-	}
-	return ""
-}
-
 func mergeEnv(base []string, overrides map[string]string) []string {
 	out := make([]string, 0, len(base)+len(overrides))
 	for _, entry := range base {
@@ -379,140 +283,6 @@ func mergeEnv(base []string, overrides map[string]string) []string {
 		out = append(out, k+"="+overrides[k])
 	}
 	return out
-}
-
-func createQuota1SandboxRoot(sessionDir, cwd string) (string, error) {
-	candidates := []string{""}
-	if sessionDir != "" {
-		candidates = append(candidates, sessionDir)
-	}
-	if cwd != "" {
-		candidates = append(candidates, cwd)
-	}
-	var lastErr error
-	for _, parent := range candidates {
-		dir, err := os.MkdirTemp(parent, "hz-q1-*")
-		if err == nil {
-			return dir, nil
-		}
-		lastErr = err
-	}
-	return "", fmt.Errorf("create quota-1 sandbox temp root: %w", lastErr)
-}
-
-func dedupeNonEmpty(paths []string) []string {
-	seen := make(map[string]struct{}, len(paths))
-	out := make([]string, 0, len(paths))
-	for _, p := range paths {
-		if p == "" {
-			continue
-		}
-		if _, ok := seen[p]; ok {
-			continue
-		}
-		seen[p] = struct{}{}
-		out = append(out, p)
-	}
-	return out
-}
-
-func prepareQuota1Sandbox(ctx context.Context, args []string, cwd string, baseEnv []string) (sandboxPlan, error) {
-	contract, contractErr := sessioncontract.Load()
-	if contractErr != nil {
-		return sandboxPlan{}, contractErr
-	}
-	sessionDir := ""
-	if raw := envLookup(baseEnv, contract.SessionDirEnv); raw != "" {
-		validated, err := validateBwrapSessionBind(raw)
-		if err != nil {
-			return sandboxPlan{}, err
-		}
-		sessionDir = validated
-	}
-	if runtime.GOOS != "linux" {
-		return sandboxPlan{}, fmt.Errorf("quota-1 sandbox requires Linux (found %s)", runtime.GOOS)
-	}
-
-	probeCtx, probeCancel := context.WithTimeout(ctx, 5*time.Second)
-	bwrapErr := quota1ProbeBwrapFn(probeCtx)
-	probeCancel()
-	if bwrapErr == nil {
-		bwrap, wrappedArgs, _, sbErr := quota1SandboxCommand(args, cwd)
-		if sbErr != nil {
-			return sandboxPlan{}, sbErr
-		}
-		return sandboxPlan{
-			bin:  bwrap,
-			args: wrappedArgs,
-			envOverride: map[string]string{
-				quota1SandboxMarkerEnv: quota1SandboxMarkerValue,
-			},
-		}, nil
-	}
-	if !isBwrapFallbackError(bwrapErr) {
-		return sandboxPlan{}, bwrapErr
-	}
-
-	abi, llErr := quota1ProbeLandlockFn()
-	if llErr != nil || abi < 1 {
-		return sandboxPlan{}, fmt.Errorf("quota-1 sandbox unavailable: bwrap failed (%v) and landlock unavailable (%v)", bwrapErr, llErr)
-	}
-
-	selfExe, err := os.Executable()
-	if err != nil {
-		return sandboxPlan{}, fmt.Errorf("resolve harnez executable for landlock sandbox: %w", err)
-	}
-	sandboxRoot, err := createQuota1SandboxRoot(sessionDir, cwd)
-	if err != nil {
-		return sandboxPlan{}, err
-	}
-	cleanup := func() { _ = os.RemoveAll(sandboxRoot) }
-
-	tmpDir := filepath.Join(sandboxRoot, "tmp")
-	if err := os.Mkdir(tmpDir, 0o700); err != nil {
-		cleanup()
-		return sandboxPlan{}, fmt.Errorf("create quota-1 private TMPDIR: %w", err)
-	}
-	runDir := ""
-	if envLookup(baseEnv, "XDG_RUNTIME_DIR") != "" {
-		runDir = filepath.Join(sandboxRoot, "run")
-		if err := os.Mkdir(runDir, 0o700); err != nil {
-			cleanup()
-			return sandboxPlan{}, fmt.Errorf("create quota-1 private XDG_RUNTIME_DIR: %w", err)
-		}
-	}
-
-	goCache, goModCache := detectGoCacheDirs()
-	for _, cachePtr := range []*string{&goCache, &goModCache} {
-		if *cachePtr != "" {
-			if err := os.MkdirAll(*cachePtr, 0o755); err != nil {
-				*cachePtr = ""
-			}
-		}
-	}
-
-	writeDirs := dedupeNonEmpty([]string{cwd, goCache, goModCache, sessionDir, tmpDir, runDir})
-	dirsJSON, err := json.Marshal(writeDirs)
-	if err != nil {
-		cleanup()
-		return sandboxPlan{}, fmt.Errorf("encode landlock write dirs: %w", err)
-	}
-
-	envOverride := map[string]string{
-		"TMPDIR":                              tmpDir,
-		quota1SandboxMarkerEnv:                quota1SandboxMarkerValue,
-		"HARNEZ_INTERNAL_LANDLOCK_WRITE_DIRS": string(dirsJSON),
-	}
-	if runDir != "" {
-		envOverride["XDG_RUNTIME_DIR"] = runDir
-	}
-	wrappedArgs := append([]string{"__landlock-exec", "--"}, args...)
-	return sandboxPlan{
-		bin:         selfExe,
-		args:        wrappedArgs,
-		envOverride: envOverride,
-		cleanup:     cleanup,
-	}, nil
 }
 
 // validateToolName rejects an explicit --tool value at the point it's
@@ -835,8 +605,8 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			return 1, fmt.Errorf("exec: %w", err)
 		}
 		if !res.Allowed {
-			fmt.Fprintln(errOut, res.Message)
-			return 1, nil
+			// Quota-1 is a recommendation, not a gate: report and run anyway.
+			fmt.Fprintf(errOut, "quota-1 advisory (not enforced): %s\n", res.Message)
 		}
 		quotaStateFile = res.StateFile
 	}
@@ -876,8 +646,6 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 	defer cancel()
 	c := exec.Command(args[0], args[1:]...)
-	quota1Sandboxed := false
-	var sandboxCleanup func()
 	envOverrides := map[string]string{
 		execTimeoutEffectiveEnv: timeout.String(),
 		execTimeoutExplicitEnv:  "0",
@@ -890,19 +658,6 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		envOverrides[quota1ActiveEnv] = "1"
 	}
 	baseEnv := os.Environ()
-	if explicitQuota1 && !opts.DisableSandbox {
-		cwd, _ := os.Getwd()
-		plan, sbErr := prepareQuota1Sandbox(ctx, args, cwd, baseEnv)
-		if sbErr != nil {
-			return 1, sbErr
-		}
-		c = exec.Command(plan.bin, plan.args...)
-		sandboxCleanup = plan.cleanup
-		for k, v := range plan.envOverride {
-			envOverrides[k] = v
-		}
-		quota1Sandboxed = true
-	}
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Env = mergeEnv(baseEnv, envOverrides)
 	c.Stdin = in
@@ -939,9 +694,6 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	start := time.Now()
 	if err := c.Start(); err != nil {
 		_ = broker.Close()
-		if sandboxCleanup != nil {
-			sandboxCleanup()
-		}
 		return 1, fmt.Errorf("exec: run %v: %w", args, err)
 	}
 	broker.ReleaseChildFD()
@@ -986,9 +738,6 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			processGroupStopped, signalProcessGroup)
 	}()
 	runErr := c.Wait()
-	if sandboxCleanup != nil {
-		sandboxCleanup()
-	}
 	_ = broker.Close()
 	close(groupDone)
 	close(stoppedDone)
@@ -1044,11 +793,6 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	exitCode := exitCodeFromError(runErr)
 	if stopped.Detected {
 		exitCode = stoppedGroupExitCode
-	}
-	if quota1Sandboxed && exitCode != 0 {
-		if diag := DiagnoseBwrapError(capturedOutput.String(), runstate.InRunnerMode()); diag != "" {
-			fmt.Fprintf(errOut, "harnez exec: %s\n", diag)
-		}
 	}
 	if quota1Active {
 		if quotaLogFile != nil {

@@ -51,11 +51,8 @@ func DetectExpectFailure(opts Options, args []string) bool { return detectExpect
 func DetectQuota1(opts Options, args []string) bool        { return detectQuota1(opts, args) }
 func HasExplicitTimeout(opts Options, args []string) bool  { return hasExplicitExecTimeout(opts, args) }
 func IsQuota1SandboxMarker(value string) bool              { return isQuota1SandboxMarker(value) }
-func Quota1SandboxArgs(args []string, cwd, goCache, goModCache, runtimeDir string) []string {
-	return quota1SandboxArgs(args, cwd, goCache, goModCache, runtimeDir)
-}
-func AlreadyRoutedThroughExec(command string) bool { return alreadyRoutedThroughExec(command) }
-func IsSimpleShellCommand(command string) bool     { return isSimpleShellCommand(command) }
+func AlreadyRoutedThroughExec(command string) bool         { return alreadyRoutedThroughExec(command) }
+func IsSimpleShellCommand(command string) bool             { return isSimpleShellCommand(command) }
 func FormatGearRewrite(command, distillFlag string) string {
 	return formatGearRewrite(command, distillFlag)
 }

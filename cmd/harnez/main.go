@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/claude"
-	internalexec "ubunatic.com/harnez/internal/exec"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/sessionstate"
@@ -125,8 +124,6 @@ func resolveComponentSelection(cfg *claude.Config, flag []string, prune bool) (c
 }
 
 func main() {
-	internalexec.MaybeRunSandboxHelper()
-
 	if len(os.Args) > 0 && isGearInvocation(os.Args[0]) {
 		os.Args = append([]string{"harnez", "exec"}, os.Args[1:]...)
 	}

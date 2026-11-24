@@ -181,31 +181,6 @@ func TestQuota1SandboxMarker(t *testing.T) {
 		})
 	}
 }
-func TestQuota1SandboxArgs(t *testing.T) {
-	got := quota1SandboxArgs([]string{"sh", "-c", "true"}, "/repo", "/cache/build", "/cache/mod", "")
-	want := []string{"--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--bind", "/repo", "/repo", "--bind", "/cache/build", "/cache/build", "--bind", "/cache/mod", "/cache/mod", "--chdir", "/repo", "--", "sh", "-c", "true"}
-	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
-		t.Fatalf("quota1SandboxArgs() = %q, want %q", got, want)
-	}
-}
-func TestQuota1SandboxBlocksHomeWrite(t *testing.T) {
-	bwrap, err := exec.LookPath("bwrap")
-	if err != nil {
-		t.Skip("bwrap not installed")
-	}
-	cwd := t.TempDir()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	args := quota1SandboxArgs([]string{"sh", "-c", "touch \"$HOME/forbidden\""}, cwd, "", "", "")
-	cmd := exec.Command(bwrap, args...)
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("HOME write succeeded in sandbox; output: %s", output)
-	}
-	if _, err := os.Stat(filepath.Join(home, "forbidden")); !os.IsNotExist(err) {
-		t.Fatalf("HOME write created file: stat error = %v", err)
-	}
-}
 
 // shlexSplitForTest tokenizes rewritten exactly as a real outer 'bash -c
 // <rewritten>' would (the same re-execution TestRunExecHook_* is guarding
@@ -1275,13 +1250,13 @@ func TestRunExecWrapper_Quota1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run 2 error = %v", err)
 	}
-	if code2 != 1 {
-		t.Fatalf("run 2 exit code = %d, want 1", code2)
+	if code2 != 0 {
+		t.Fatalf("run 2 exit code = %d, want 0 (advisory, not enforced)", code2)
 	}
-	if out2.String() != "" {
-		t.Errorf("stdout should be empty when child is blocked, got %q", out2.String())
+	if out2.String() != "test2\n" {
+		t.Errorf("stdout = %q, want the advisory run to execute the child", out2.String())
 	}
-	if !strings.Contains(errOut2.String(), "Quota-1: test execution blocked") {
+	if !strings.Contains(errOut2.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
 		t.Errorf("stderr = %q, want Quota-1 blocked message", errOut2.String())
 	}
 
@@ -1318,11 +1293,11 @@ func TestRunExecWrapper_Quota1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run 4 error = %v", err)
 	}
-	if code4 != 1 {
-		t.Fatalf("run 4 exit code = %d, want 1 (blocked via env)", code4)
+	if code4 != 0 {
+		t.Fatalf("run 4 exit code = %d, want 0 (advisory via env)", code4)
 	}
-	if !strings.Contains(errOut4.String(), "Quota-1: test execution blocked") {
-		t.Errorf("stderr = %q, want Quota-1 blocked message", errOut4.String())
+	if !strings.Contains(errOut4.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+		t.Errorf("stderr = %q, want advisory message", errOut4.String())
 	}
 
 	// 5. Test QUOTA_BYPASS=1 bypasses quota
@@ -1388,8 +1363,8 @@ func TestRunExecWrapper_Quota1SignalAllowsRetry(t *testing.T) {
 
 	var blockedOut, blockedErr bytes.Buffer
 	code, err = runExecWrapper([]string{"true"}, opts, strings.NewReader(""), &blockedOut, &blockedErr)
-	if err != nil || code != 1 || !strings.Contains(blockedErr.String(), "test execution blocked") {
-		t.Fatalf("run after successful retry = (%d, %v), stderr=%q; want quota block", code, err, blockedErr.String())
+	if err != nil || code != 0 || !strings.Contains(blockedErr.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+		t.Fatalf("run after successful retry = (%d, %v), stderr=%q; want advisory run", code, err, blockedErr.String())
 	}
 }
 func TestRunExecWrapperContinuesStoppedQuotaRunWithoutConsumingQuota(t *testing.T) {
@@ -1919,14 +1894,14 @@ func TestRunExecWrapper_GoTestAfterPassingQuota1RunWithoutEditIsBlocked(t *testi
 	} {
 		var out, errOut bytes.Buffer
 		code, err := runExecWrapper(args, plain, strings.NewReader(""), &out, &errOut)
-		if err != nil || code != 1 {
-			t.Fatalf("%v = (%d, %v), want blocked exit 1; stderr=%q", args, code, err, errOut.String())
+		if err != nil || code != 0 {
+			t.Fatalf("%v = (%d, %v), want advisory exit 0; stderr=%q", args, code, err, errOut.String())
 		}
-		if !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
+		if !strings.Contains(errOut.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
 			t.Errorf("%v stderr = %q, want Quota-1 blocked message", args, errOut.String())
 		}
-		if out.String() != "" {
-			t.Errorf("%v ran the child; stdout = %q", args, out.String())
+		if out.String() == "" {
+			t.Errorf("%v did not run the child under advisory Quota-1", args)
 		}
 	}
 }
@@ -1965,8 +1940,8 @@ func TestRunExecWrapper_PlainGoTestRecordsQuota1State(t *testing.T) {
 	out.Reset()
 	errOut.Reset()
 	code, err = runExecWrapper([]string{"go", "test", "."}, opts, strings.NewReader(""), &out, &errOut)
-	if err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
-		t.Fatalf("repeat go test = (%d, %v), stderr=%q; want quota block", code, err, errOut.String())
+	if err != nil || code != 0 || !strings.Contains(errOut.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+		t.Fatalf("repeat go test = (%d, %v), stderr=%q; want advisory run", code, err, errOut.String())
 	}
 
 	// Upgrading from TierPackage to TierFull (make test-q1) is allowed.
@@ -1983,8 +1958,8 @@ func TestRunExecWrapper_PlainGoTestRecordsQuota1State(t *testing.T) {
 	out.Reset()
 	errOut.Reset()
 	code, err = runExecWrapper([]string{"make", "test-q1"}, q1Opts, strings.NewReader(""), &out, &errOut)
-	if err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
-		t.Fatalf("repeat make test-q1 = (%d, %v), stderr=%q; want quota block", code, err, errOut.String())
+	if err != nil || code != 0 || !strings.Contains(errOut.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+		t.Fatalf("repeat make test-q1 = (%d, %v), stderr=%q; want advisory run", code, err, errOut.String())
 	}
 }
 
@@ -2079,99 +2054,6 @@ func TestRunExecWrapper_NestedAndNonQuotaGoTest(t *testing.T) {
 	})
 }
 
-// Refinement 1: plain detected go test counts/gates under Quota-1 and exports
-// HARNEZ_QUOTA1_ACTIVE=1 without forcing bwrap sandboxing; explicit --quota-1
-// and HARNEZ_QUOTA_1=1 still request the bwrap sandbox.
-func TestRunExecWrapper_PlainGoTestDoesNotForceBwrapSandbox(t *testing.T) {
-	bin := t.TempDir()
-	fakeGo := "#!/bin/sh\nprintf \"sandbox=%s active=%s\\n\" \"$HARNEZ_SANDBOX\" \"$HARNEZ_QUOTA1_ACTIVE\"\n"
-	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fakeGo), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// Clear any inherited HARNEZ_SANDBOX (for example when this test itself
-	// runs under make test-q1) and put only our fake go on PATH so any bwrap
-	// lookup fails deterministically.
-	t.Setenv(quota1SandboxMarkerEnv, "")
-	t.Setenv("PATH", bin)
-
-	repoDir := quota1GoTestRepo(t)
-	opts := testExecOptions(t)
-	opts.DisableSandbox = false
-	opts.Quota1Dir = repoDir
-
-	if detectExplicitQuota1(opts, []string{"go", "test", "."}) {
-		t.Fatal("detectExplicitQuota1(plain go test) = true, want false")
-	}
-	if !detectQuota1(opts, []string{"go", "test", "."}) {
-		t.Fatal("detectQuota1(plain go test) = false, want true")
-	}
-
-	var out, errOut bytes.Buffer
-	code, err := runExecWrapper([]string{"go", "test", "."}, opts, strings.NewReader(""), &out, &errOut)
-	if err != nil || code != 0 {
-		t.Fatalf("first plain go test = (%d, %v), stderr=%q; want (0, nil) without bwrap", code, err, errOut.String())
-	}
-	if got, want := out.String(), "sandbox= active=1\n"; got != want {
-		t.Fatalf("plain go test env output = %q, want %q", got, want)
-	}
-
-	// Second plain go test without source edits must still be blocked by Quota-1.
-	var out2, errOut2 bytes.Buffer
-	code, err = runExecWrapper([]string{"go", "test", "."}, opts, strings.NewReader(""), &out2, &errOut2)
-	if err != nil || code != 1 || !strings.Contains(errOut2.String(), "Quota-1: test execution blocked") {
-		t.Fatalf("second plain go test = (%d, %v), stderr=%q; want quota block", code, err, errOut2.String())
-	}
-
-	// Explicit --quota-1 and HARNEZ_QUOTA_1=1 still invoke sandboxing
-	// (falling back to Landlock when bwrap is missing, and failing closed when
-	// Landlock is also unavailable).
-	for _, tc := range []struct {
-		name  string
-		setup func(*execOptions)
-	}{
-		{"explicit flag", func(o *execOptions) { o.Quota1 = true }},
-		{"HARNEZ_QUOTA_1 env", func(o *execOptions) {
-			o.Getenv = func(k string) string {
-				if k == quota1Env {
-					return "1"
-				}
-				return ""
-			}
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			explicitOpts := testExecOptions(t)
-			explicitOpts.DisableSandbox = false
-			explicitOpts.Quota1Dir = quota1GoTestRepo(t)
-			tc.setup(&explicitOpts)
-			if !detectExplicitQuota1(explicitOpts, []string{"go", "test", "."}) {
-				t.Fatalf("detectExplicitQuota1(%s) = false, want true", tc.name)
-			}
-			if _, llErr := probeLandlockABI(); llErr == nil {
-				var llOut, llErrBuf bytes.Buffer
-				llCode, llRunErr := runExecWrapper([]string{"go", "test", "."}, explicitOpts, strings.NewReader(""), &llOut, &llErrBuf)
-				if llRunErr != nil || llCode != 0 {
-					t.Fatalf("%s with Landlock fallback failed: (%d, %v), stderr=%q", tc.name, llCode, llRunErr, llErrBuf.String())
-				}
-				if got, want := llOut.String(), "sandbox=quota1 active=1\n"; got != want {
-					t.Fatalf("%s Landlock env output = %q, want %q", tc.name, got, want)
-				}
-			}
-			origLandlock := quota1ProbeLandlockFn
-			quota1ProbeLandlockFn = func() (int, error) {
-				return 0, fmt.Errorf("landlock disabled in test")
-			}
-			t.Cleanup(func() { quota1ProbeLandlockFn = origLandlock })
-			explicitOpts.Quota1Dir = quota1GoTestRepo(t)
-			var eOut, eErr bytes.Buffer
-			_, err := runExecWrapper([]string{"go", "test", "."}, explicitOpts, strings.NewReader(""), &eOut, &eErr)
-			if err == nil {
-				t.Fatalf("%s with DisableSandbox=false, no bwrap, and no landlock succeeded; want sandbox error", tc.name)
-			}
-		})
-	}
-}
-
 // Refinement 4: verify plain go test gating triggers for each of the 3
 // quota1Configured signals independently.
 func TestRunExecWrapper_Quota1ConfiguredTriggers(t *testing.T) {
@@ -2208,8 +2090,8 @@ func TestRunExecWrapper_Quota1ConfiguredTriggers(t *testing.T) {
 			t.Fatalf("first run = (%d, %v), stderr=%q; want (0, nil)", code, err, errOut.String())
 		}
 		var out2, errOut2 bytes.Buffer
-		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out2, &errOut2); err != nil || code != 1 || !strings.Contains(errOut2.String(), "Quota-1: test execution blocked") {
-			t.Fatalf("second run = (%d, %v), stderr=%q; want quota block", code, err, errOut2.String())
+		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out2, &errOut2); err != nil || code != 0 || !strings.Contains(errOut2.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+			t.Fatalf("second run = (%d, %v), stderr=%q; want advisory run", code, err, errOut2.String())
 		}
 	})
 
@@ -2225,8 +2107,8 @@ func TestRunExecWrapper_Quota1ConfiguredTriggers(t *testing.T) {
 			t.Fatalf("first run = (%d, %v), stderr=%q; want (0, nil)", code, err, errOut.String())
 		}
 		var out2, errOut2 bytes.Buffer
-		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out2, &errOut2); err != nil || code != 1 || !strings.Contains(errOut2.String(), "Quota-1: test execution blocked") {
-			t.Fatalf("second run = (%d, %v), stderr=%q; want quota block", code, err, errOut2.String())
+		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out2, &errOut2); err != nil || code != 0 || !strings.Contains(errOut2.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+			t.Fatalf("second run = (%d, %v), stderr=%q; want advisory run", code, err, errOut2.String())
 		}
 	})
 
@@ -2246,8 +2128,8 @@ func TestRunExecWrapper_Quota1ConfiguredTriggers(t *testing.T) {
 			t.Fatal("quota1Configured = false for existing quota_1.state alone")
 		}
 		var out, errOut bytes.Buffer
-		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out, &errOut); err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
-			t.Fatalf("plain go test after seeded state = (%d, %v), stderr=%q; want quota block", code, err, errOut.String())
+		if code, err := runExecWrapper([]string{"bash", "-c", "go test ."}, opts, strings.NewReader(""), &out, &errOut); err != nil || code != 0 || !strings.Contains(errOut.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+			t.Fatalf("plain go test after seeded state = (%d, %v), stderr=%q; want advisory run", code, err, errOut.String())
 		}
 	})
 }
@@ -2343,8 +2225,8 @@ func TestRunExecWrapper_Quota1TierUpgradeAndBlock(t *testing.T) {
 		out.Reset()
 		errOut.Reset()
 		code, err = runExecWrapper(tc.args, tc.o, strings.NewReader(""), &out, &errOut)
-		if err != nil || code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
-			t.Fatalf("%s = (%d, %v), stderr=%q; want quota block", tc.name, code, err, errOut.String())
+		if err != nil || code != 0 || !strings.Contains(errOut.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+			t.Fatalf("%s = (%d, %v), stderr=%q; want advisory run", tc.name, code, err, errOut.String())
 		}
 	}
 }

@@ -64,8 +64,8 @@ func newQuota1Repo(t *testing.T, stateSession string) string {
 
 func TestQuota1EnforcedWithoutOwnerSuspension(t *testing.T) {
 	code, stderr := runTwiceUnderQuota1(t, newQuota1Repo(t, ""), "s1")
-	if code != 1 || !strings.Contains(stderr, "Quota-1: test execution blocked") {
-		t.Fatalf("second run: code %d stderr %q, want blocked", code, stderr)
+	if code != 0 || !strings.Contains(stderr, "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+		t.Fatalf("second run: code %d stderr %q, want advisory run", code, stderr)
 	}
 }
 
@@ -107,15 +107,15 @@ func TestQuota1RestoredAfterEnable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code != 1 || !strings.Contains(errOut.String(), "Quota-1: test execution blocked") {
-		t.Fatalf("after /enable: code %d stderr %q, want blocked", code, errOut.String())
+	if code != 0 || !strings.Contains(errOut.String(), "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+		t.Fatalf("after /enable: code %d stderr %q, want advisory run", code, errOut.String())
 	}
 }
 
 func TestQuota1StaleSuspensionIsEnforcedAndWarns(t *testing.T) {
 	code, stderr := runTwiceUnderQuota1(t, newQuota1Repo(t, "old-session"), "s1")
-	if code != 1 || !strings.Contains(stderr, "Quota-1: test execution blocked") {
-		t.Fatalf("second run: code %d stderr %q, want blocked", code, stderr)
+	if code != 0 || !strings.Contains(stderr, "quota-1 advisory (not enforced): Quota-1: test execution blocked") {
+		t.Fatalf("second run: code %d stderr %q, want advisory run", code, stderr)
 	}
 	if !strings.Contains(stderr, "from another session") {
 		t.Errorf("stderr %q lacks the stale warning", stderr)
