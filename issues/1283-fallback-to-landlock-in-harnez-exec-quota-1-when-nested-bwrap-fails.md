@@ -1,6 +1,6 @@
 # 1283 — Fallback to Landlock in harnez exec --quota-1 when nested bwrap fails
 
-**Status**: In Progress
+**Status**: Closed — M1 (b845e492) and M2 (e1f6294b) delivered Linux Landlock ABI v1+ fallback for harnez exec --quota-1 when nested bwrap fails; verified with make install, HTO=0 make test (exit 0), go test -race ./internal/exec/... (40.2s), live forced-fallback check (sandbox=quota1, private TMPDIR writable, HOME EACCES), and neon:med M1/M2 reviews (0 HIGH/MED)
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
@@ -91,12 +91,11 @@ Instead, per coordination with `taia`, `harnez exec --quota-1` on Linux should s
 - **Delivered**: Created `internal/exec/landlock_linux.go`, `internal/exec/landlock_other.go`, `internal/exec/landlock_test.go`, and wired `MaybeRunSandboxHelper()` at the top of `cmd/harnez/main.go`, `internal/exec/gittest_main_test.go`, and `cmd/harnez/main_env_test.go`. Verified with `go test -race -count=1 ./internal/exec/... ./cmd/harnez/...` (all 5 kernel Landlock tests ran unskipped and passed).
 - **Review (`neon:med`, `rev-1283-m1`)**: Core Landlock syscall/thread/FD handling and trigger contract `[OK]`; 3 test/error-handling refinements recorded as M2 Pre-Work below.
 
-### Milestone 2 (`M2`): `runExecWrapper` Fallback Wiring, Private `TMPDIR`, & Acceptance Tests
+### Milestone 2 (`M2`): `runExecWrapper` Fallback Wiring, Private `TMPDIR`, & Acceptance Tests — **Delivered (`e1f6294b`)**
 
-- **Pre-Work / Required Refinements (from M1 review)**:
-  1. `[MED]` `internal/exec/landlock_test.go`: Update `TestLandlockHelperPreservesBrokerFD` to use a `unix.Socketpair(unix.AF_UNIX, unix.SOCK_SEQPACKET, 0)` (instead of `os.Pipe()`) so `internal/server.init()` actually sets `FD_CLOEXEC` on FD 3 and the test genuinely exercises the `flags&unix.FD_CLOEXEC != 0` clearing branch in `internal/exec/landlock_linux.go`.
-  2. `[LOW]` `internal/exec/landlock_test.go`: Gate the `os.Truncate` denial assertion on `abi >= 3` (matching `REFER`'s `abi >= 2` gate) so the test does not fail on Linux < 6.2 kernels.
-  3. `[LOW]` `internal/exec/landlock_linux.go`: Handle errors from `unix.FcntlInt(uintptr(fd), unix.F_SETFD, ...)` (log to stderr or fail closed) instead of discarding with `_, _`.
+- **Delivered**: Executed all 3 M1 review refinements (`SOCK_SEQPACKET` broker-FD test, ABI v3 truncate gate, fail-closed `F_SETFD`), factored Quota-1 sandbox setup into `prepareQuota1Sandbox` (`internal/exec/exec.go`) with `isBwrapFallbackError` (`internal/exec/bwrap_contract.go`), private `hz-q1-*` `TMPDIR`/`XDG_RUNTIME_DIR` + cleanup, updated unit/contract/acceptance tests (`internal/exec/bwrap_contract_test.go`, `exec_test.go`, `cmd/harnez/session_isolation_acceptance_test.go`), and documented the fallback in `docs/SessionIsolation.md`.
+- **Verification**: `make install`, `gofmt`, `HTO=0 make test` (exit 0; `cmd/harnez` 69.5s, `internal/exec` 5.6s), host `go test -race -count=1 ./internal/exec/...` (40.2s), and live `~/.local/bin/harnez exec --quota-1` checks (both `bwrap` and forced Landlock fallback).
+- **Review (`neon:med`, `rev-1283-m2`)**: Ready to accept (`0 [HIGH]`, `0 [MED]`, `2 [LOW]` optional follow-ups: `defer sandboxCleanup()` and end-to-end broker FD assertion inside `TestQuota1SandboxFallsBackToLandlockOnBwrapFailure`).
 
 - **Write Set**:
   - Edit `internal/exec/bwrap_contract.go`
