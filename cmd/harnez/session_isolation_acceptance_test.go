@@ -131,6 +131,18 @@ if "` + fx.builtBin + `" agent resume --name host-agent hi >/dev/null 2>&1; then
 if "` + fx.builtBin + `" usage --offline >/dev/null 2>&1; then echo "LEAK_USAGE"; exit 17; fi
 if "` + fx.builtBin + `" install --strategy self >/dev/null 2>&1; then echo "LEAK_INSTALL"; exit 18; fi
 if bwrap --ro-bind / / --dev /dev --proc /proc -- true >/dev/null 2>&1; then echo "LEAK_BWRAP"; exit 19; fi
+HARNEZ_QUOTA_1=1 "` + fx.builtBin + `" exec -- sh -c '
+  test "${HARNEZ_SANDBOX:-}" = "quota1"
+  printf "q1" > "$TAIA_SESSION_DIR/q1-landlock.txt"
+  printf "q1" > "$TMPDIR/q1-tmp.txt"
+  printf "q1" > "./q1-cwd.txt"
+  err_home=$(touch "$HOME/q1-escape" 2>&1 || true)
+  printf "%s" "$err_home" | grep -qi "permission denied"
+  test ! -e "$HOME/q1-escape"
+  err_sib=$(touch "` + fx.siblingSess + `/q1-escape" 2>&1 || true)
+  printf "%s" "$err_sib" | grep -qi "permission denied"
+  test ! -e "` + fx.siblingSess + `/q1-escape"
+'
 echo "RUNNER_ISOLATION_OK"
 `
 	mockFile := writeMockBashSession(t, "mock-confined.yaml", "verify confinement", probeScript)

@@ -1,3 +1,5 @@
+//go:build linux
+
 package exec
 
 import (
@@ -12,6 +14,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 const landlockChildEnv = "HARNEZ_TEST_LANDLOCK_CHILD"
@@ -69,12 +73,15 @@ func TestLandlockHelperChild(t *testing.T) {
 		}
 
 	case "deny":
+		abi, _ := strconv.Atoi(os.Getenv("HARNEZ_TEST_LANDLOCK_ABI"))
 		for _, dir := range []string{os.Getenv("HOME"), os.Getenv("HARNEZ_TEST_OUTSIDE_DIR")} {
 			if dir == "" {
 				t.Fatal("missing target outside dir")
 			}
 			assertEACCES(t, "write", os.WriteFile(filepath.Join(dir, "new.txt"), []byte("x"), 0o600))
-			assertEACCES(t, "truncate", os.Truncate(filepath.Join(dir, "existing.txt"), 0))
+			if abi >= 3 {
+				assertEACCES(t, "truncate", os.Truncate(filepath.Join(dir, "existing.txt"), 0))
+			}
 			assertEACCES(t, "remove", os.Remove(filepath.Join(dir, "existing.txt")))
 			assertEACCES(t, "rename", os.Rename(filepath.Join(dir, "src.txt"), filepath.Join(dir, "dst.txt")))
 		}
@@ -197,7 +204,7 @@ func TestLandlockHelperAllowsGrantedWritesAndDevices(t *testing.T) {
 }
 
 func TestLandlockHelperDeniesOutsideGrants(t *testing.T) {
-	requireLandlockABI(t)
+	abi := requireLandlockABI(t)
 
 	cwd := t.TempDir()
 	tmpDir := t.TempDir()
@@ -218,6 +225,7 @@ func TestLandlockHelperDeniesOutsideGrants(t *testing.T) {
 		"TMPDIR":                      tmpDir,
 		"HARNEZ_TEST_OUTSIDE_DIR":     outsideDir,
 		"HARNEZ_TEST_LANDLOCK_ACTION": "deny",
+		"HARNEZ_TEST_LANDLOCK_ABI":    strconv.Itoa(abi),
 	}, nil)
 	if err != nil {
 		t.Fatalf("landlock deny child failed: %v\noutput:\n%s", err, out)
@@ -268,26 +276,28 @@ func TestLandlockHelperPreservesBrokerFD(t *testing.T) {
 
 	cwd := t.TempDir()
 	tmpDir := t.TempDir()
-	r, w, err := os.Pipe()
+	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_SEQPACKET, 0)
 	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
+		t.Fatalf("unix.Socketpair: %v", err)
 	}
-	defer func() { _ = r.Close() }()
+	parentSock := os.NewFile(uintptr(fds[0]), "broker-parent")
+	childSock := os.NewFile(uintptr(fds[1]), "broker-child")
+	defer func() { _ = parentSock.Close() }()
 
 	exePath, err := os.Executable()
 	if err != nil {
-		_ = w.Close()
+		_ = childSock.Close()
 		t.Fatalf("os.Executable: %v", err)
 	}
 	dirsJSON, err := json.Marshal([]string{cwd, tmpDir})
 	if err != nil {
-		_ = w.Close()
+		_ = childSock.Close()
 		t.Fatalf("marshal writeDirs: %v", err)
 	}
 
 	cmd := osexec.Command(exePath, "__landlock-exec", "--", exePath, "-test.run=^TestLandlockHelperChild$")
 	cmd.Dir = cwd
-	cmd.ExtraFiles = []*os.File{w}
+	cmd.ExtraFiles = []*os.File{childSock}
 	cmd.Env = append(os.Environ(),
 		landlockChildEnv+"=1",
 		"TMPDIR="+tmpDir,
@@ -300,20 +310,20 @@ func TestLandlockHelperPreservesBrokerFD(t *testing.T) {
 	cmd.Stderr = &out
 
 	if err := cmd.Start(); err != nil {
-		_ = w.Close()
+		_ = childSock.Close()
 		t.Fatalf("cmd.Start: %v", err)
 	}
-	_ = w.Close()
+	_ = childSock.Close()
 
-	got, readErr := io.ReadAll(r)
+	got, readErr := io.ReadAll(parentSock)
 	waitErr := cmd.Wait()
 	if waitErr != nil {
 		t.Fatalf("broker child failed: %v\noutput:\n%s", waitErr, out.String())
 	}
 	if readErr != nil {
-		t.Fatalf("read broker pipe: %v", readErr)
+		t.Fatalf("read broker socketpair: %v", readErr)
 	}
 	if string(got) != "broker-ok\n" {
-		t.Fatalf("broker pipe = %q, want %q", string(got), "broker-ok\n")
+		t.Fatalf("broker socketpair = %q, want %q", string(got), "broker-ok\n")
 	}
 }

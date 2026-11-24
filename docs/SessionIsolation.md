@@ -77,20 +77,30 @@ promotion.
 
 ## Bubblewrap prerequisites & migration contract
 
-- **Linux Quota-1 sandbox (`internal/exec/bwrap_contract.go`)**: `harnez exec`
-  under Quota-1 wraps commands in `bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp`.
-  It fails closed on non-Linux hosts or when `bwrap` is missing from `PATH`.
+- **Linux Quota-1 sandbox & Landlock fallback (`internal/exec/bwrap_contract.go`, `internal/exec/landlock_linux.go`)**: `harnez exec`
+  under Quota-1 probes `bwrap --ro-bind / / --dev /dev --proc /proc -- true` first.
   When `$TAIA_SESSION_DIR` is set, it validates the session directory (clean
-  absolute `0700`, UID-owned, non-symlink) and appends `--bind $TAIA_SESSION_DIR
-  $TAIA_SESSION_DIR` *after* `--tmpfs /tmp` and `--tmpfs $XDG_RUNTIME_DIR` so
-  mount overlays never mask the runner's session directory.
+  absolute `0700`, UID-owned, non-symlink) before either backend runs.
+  - When `bwrap` succeeds, `harnez exec` wraps commands in `bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp`
+    and appends `--bind $TAIA_SESSION_DIR $TAIA_SESSION_DIR` *after* `--tmpfs /tmp` and
+    `--tmpfs $XDG_RUNTIME_DIR` so mount overlays never mask the runner's session directory.
+  - When `bwrap` is unavailable or fails with a namespace / UID-map / mount-propagation
+    permission error (`EPERM`/`EACCES`, `setting up uid map`, `Failed to make / slave`,
+    `Creating new namespace failed`), `harnez exec` falls back to Linux **Landlock**
+    (ABI v1+) via an internal self-reexec helper (`__landlock-exec -- <cmd>`), granting
+    read+execute on `/`, read/write on safe device nodes, and write access only to `cwd`,
+    Go caches, `$TAIA_SESSION_DIR`, and a private `0700` `TMPDIR` (and `XDG_RUNTIME_DIR`
+    if set) cleaned up after the child exits. Env vars (`TAIA_SANDBOX_MODE`,
+    `TAIA_ALLOW_BWRAP`) are never consulted to skip confinement.
+  - If both `bwrap` and Landlock are unavailable (or on non-Linux hosts), `harnez exec`
+    fails closed with an actionable diagnostic error without running the user command.
 - **Taia `--allow-bwrap` boundary & host prerequisites**: `ProbeBwrapSupport`
-  and `DiagnoseBwrapError` fail closed with explicit diagnostics for
+  and `DiagnoseBwrapError` report explicit diagnostics for
   `Failed to make / slave: Operation not permitted`, `setting up uid map:
   Permission denied`, `Creating new namespace failed`, missing `bwrap`, or
-  non-Linux hosts. Running `harnez exec` inside Taia Landlock confinement with
-  Quota-1 sandboxing requires launching Taia with `--allow-bwrap` (or a profile
-  including it such as `--allow develop`).
+  non-Linux hosts. Running `harnez exec` inside Taia Landlock confinement without
+  `--allow-bwrap` now succeeds via the stacked Landlock fallback; `--allow-bwrap`
+  remains required only when `bwrap` itself is needed.
 - **Pre-M12 legacy session migration**: Host files in `~/.harnez/agents/*.json`
   created before `LaunchID` binding carry an empty `launch_id`. No bulk
   backfill migrates legacy sessions into runner control; they remain readable on

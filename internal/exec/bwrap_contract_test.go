@@ -3,6 +3,7 @@ package exec
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -145,6 +146,12 @@ func TestQuota1SandboxRejectsMalformedSessionDir(t *testing.T) {
 }
 
 func TestQuota1SandboxFailsClosedWithoutBwrap(t *testing.T) {
+	origLandlock := quota1ProbeLandlockFn
+	quota1ProbeLandlockFn = func() (int, error) {
+		return 0, fmt.Errorf("landlock disabled in test")
+	}
+	t.Cleanup(func() { quota1ProbeLandlockFn = origLandlock })
+
 	sessDir := filepath.Join(t.TempDir(), "sess")
 	if err := os.Mkdir(sessDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -181,5 +188,149 @@ func TestProbeBwrapFailsClosedWithoutBinary(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if err := ProbeBwrapSupport(context.Background()); err == nil || !strings.Contains(err.Error(), "bwrap") {
 		t.Fatalf("ProbeBwrapSupport without bwrap = %v, want explicit error", err)
+	}
+}
+
+func installFakeFailingBwrap(t *testing.T) {
+	t.Helper()
+	binDir := t.TempDir()
+	fakeBwrap := filepath.Join(binDir, "bwrap")
+	script := "#!/bin/sh\necho 'bwrap: setting up uid map: Permission denied' >&2\nexit 1\n"
+	if err := os.WriteFile(fakeBwrap, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestQuota1SandboxFallsBackToLandlockOnBwrapFailure(t *testing.T) {
+	if _, err := probeLandlockABI(); err != nil {
+		t.Skipf("skipping Landlock fallback test: %v", err)
+	}
+	installFakeFailingBwrap(t)
+
+	workDir := t.TempDir()
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origWD) })
+
+	sessDir := filepath.Join(t.TempDir(), "sess")
+	if err := os.Mkdir(sessDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fakeHome := t.TempDir()
+	outsideTmp, err := os.MkdirTemp("/tmp", "harnez-ll-outside-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(outsideTmp) })
+
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("TAIA_SESSION_DIR", sessDir)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	// Spoofed env vars must be ignored by Landlock fallback.
+	t.Setenv("TAIA_SANDBOX_MODE", "landlock")
+	t.Setenv("TAIA_ALLOW_BWRAP", "0")
+
+	opts := testExecOptions(t)
+	opts.DisableSandbox = false
+	opts.Quota1Dir = t.TempDir()
+	opts.Getenv = func(k string) string {
+		if k == quota1Env {
+			return "1"
+		}
+		return os.Getenv(k)
+	}
+
+	counterFile := filepath.Join(workDir, "runs.log")
+	tmpRecordFile := filepath.Join(workDir, "tmpdir.txt")
+	script := `set -eu
+printf '1\n' >> "` + counterFile + `"
+printf '%s' "$TMPDIR" > "` + tmpRecordFile + `"
+test "${HARNEZ_SANDBOX:-}" = "quota1"
+printf 'ok' > "$TAIA_SESSION_DIR/sess.txt"
+printf 'ok' > "$TMPDIR/tmp.txt"
+err_home=$(touch "$HOME/escape.txt" 2>&1 || true)
+printf '%s' "$err_home" | grep -qi "permission denied"
+test ! -e "$HOME/escape.txt"
+err_tmp=$(touch "` + outsideTmp + `/escape.txt" 2>&1 || true)
+printf '%s' "$err_tmp" | grep -qi "permission denied"
+test ! -e "` + outsideTmp + `/escape.txt"
+`
+	var outBuf, errOut bytes.Buffer
+	code, err := runExecWrapper([]string{"sh", "-c", script}, opts, strings.NewReader(""), &outBuf, &errOut)
+	if err != nil || code != 0 {
+		t.Fatalf("runExecWrapper Landlock fallback = (%d, %v)\nstdout:\n%s\nstderr:\n%s", code, err, outBuf.String(), errOut.String())
+	}
+
+	runsData, err := os.ReadFile(counterFile)
+	if err != nil || string(runsData) != "1\n" {
+		t.Fatalf("expected command to run exactly once, got %q (%v)", string(runsData), err)
+	}
+	if got, err := os.ReadFile(filepath.Join(sessDir, "sess.txt")); err != nil || string(got) != "ok" {
+		t.Fatalf("expected sess.txt in TAIA_SESSION_DIR, got (%q, %v)", string(got), err)
+	}
+	privateTmp, err := os.ReadFile(tmpRecordFile)
+	if err != nil || len(privateTmp) == 0 {
+		t.Fatalf("expected private TMPDIR recorded, got (%q, %v)", string(privateTmp), err)
+	}
+	if _, statErr := os.Stat(string(privateTmp)); !os.IsNotExist(statErr) {
+		t.Fatalf("expected private TMPDIR %q to be cleaned up, stat=%v", string(privateTmp), statErr)
+	}
+}
+
+func TestQuota1SandboxFallbackRejectsMalformedSessionDir(t *testing.T) {
+	if _, err := probeLandlockABI(); err != nil {
+		t.Skipf("skipping Landlock fallback test: %v", err)
+	}
+	installFakeFailingBwrap(t)
+
+	badPerm := filepath.Join(t.TempDir(), "bad-perm")
+	if err := os.Mkdir(badPerm, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	symTarget := filepath.Join(t.TempDir(), "real-sess")
+	if err := os.Mkdir(symTarget, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	symLink := filepath.Join(t.TempDir(), "sym-sess")
+	if err := os.Symlink(symTarget, symLink); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		dir  string
+	}{
+		{name: "mode_0755", dir: badPerm},
+		{name: "relative", dir: "relative/sess"},
+		{name: "symlink", dir: symLink},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			canary := filepath.Join(t.TempDir(), "ran")
+			t.Setenv("TAIA_SESSION_DIR", tc.dir)
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			opts := testExecOptions(t)
+			opts.DisableSandbox = false
+			opts.Quota1Dir = t.TempDir()
+			opts.Getenv = func(k string) string {
+				if k == quota1Env {
+					return "1"
+				}
+				return os.Getenv(k)
+			}
+			var errOut bytes.Buffer
+			code, err := runExecWrapper([]string{"sh", "-c", "touch " + canary}, opts, strings.NewReader(""), ioDiscard{}, &errOut)
+			if code != 1 || err == nil || !strings.Contains(err.Error(), "TAIA_SESSION_DIR") {
+				t.Fatalf("runExecWrapper(%s) = (%d, %v), want TAIA_SESSION_DIR fail-closed error", tc.name, code, err)
+			}
+			if _, statErr := os.Stat(canary); !os.IsNotExist(statErr) {
+				t.Fatalf("command executed despite malformed TAIA_SESSION_DIR (%s)", tc.name)
+			}
+		})
 	}
 }

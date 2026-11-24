@@ -209,7 +209,10 @@ func MaybeRunSandboxHelper() {
 		if fd, err := strconv.Atoi(rawFD); err == nil && fd >= 3 {
 			if flags, err := unix.FcntlInt(uintptr(fd), unix.F_GETFD, 0); err == nil {
 				if flags&unix.FD_CLOEXEC != 0 {
-					_, _ = unix.FcntlInt(uintptr(fd), unix.F_SETFD, flags&^unix.FD_CLOEXEC)
+					if _, err := unix.FcntlInt(uintptr(fd), unix.F_SETFD, flags&^unix.FD_CLOEXEC); err != nil {
+						fmt.Fprintf(os.Stderr, "harnez: clear FD_CLOEXEC on %s=%d: %v\n", brokerFDEnv, fd, err)
+						os.Exit(126)
+					}
 				}
 			}
 		}
