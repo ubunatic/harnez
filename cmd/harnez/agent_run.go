@@ -560,6 +560,28 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if spec == "" {
 		spec = m.Spec()
 	}
+	if req.DryRun && runstate.InRunnerMode() && req.SessionID == "" {
+		sessName := req.Name
+		if sessName == "" {
+			sessName, err = subagent.GenerateSessionName(nil)
+			if err != nil {
+				return err
+			}
+		}
+		canonicalWorkDir, err := filepath.Abs(req.Dir)
+		if err != nil {
+			return fmt.Errorf("resolve working directory: %w", err)
+		}
+		autoApprove, err := subagent.RoleAutoApproveTools(role)
+		if err != nil {
+			return err
+		}
+		if err := printAgentPreview(cmd, m, role, sessName, canonicalWorkDir, "", req.Prompt, req.PromptSource, req.ContextMode, autoApprove, false, req.AcceptCost, d.availability); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "note: name uniqueness is checked against the host session registry at start")
+		return nil
+	}
 	s, err := d.store()
 	if err != nil {
 		return err
@@ -915,7 +937,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 // runResume runs one resume turn under ctx; see runStart for why ctx is explicit.
 func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if runstate.InRunnerMode() {
-		return fmt.Errorf("agent resume is a host-only operation in runner mode")
+		return fmt.Errorf("agent resume is a host-only operation in runner mode; run via taia background_task (mcp__taia__background_task)")
 	}
 	quotaTurnStarted := time.Now().Add(-time.Hour)
 

@@ -157,6 +157,56 @@ func TestDryRunCobraLeavesStoreAndTelemetryUntouched(t *testing.T) {
 	}
 }
 
+func TestAgentStartDryRunInRunnerModeSkipsStore(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	runnerRoot := filepath.Join(t.TempDir(), "runner-sess")
+	if err := os.Mkdir(runnerRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAIA_SESSION_DIR", runnerRoot)
+
+	for _, tc := range []struct {
+		name     string
+		args     []string
+		wantName string
+	}{
+		{
+			name:     "explicit name",
+			args:     []string{"start", "--dry-run", "--role", "developer", "--model", "codex:luna:low", "--name", "dry", "hello"},
+			wantName: "name: dry",
+		},
+		{
+			name: "omitted name",
+			args: []string{"start", "--dry-run", "--role", "developer", "--model", "codex:luna:low", "hello"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := newAgentCmd()
+			var out, errOut bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&errOut)
+			cmd.SetArgs(tc.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("dry-run in runner mode failed: %v (stderr=%q)", err, errOut.String())
+			}
+			got := out.String()
+			if !strings.Contains(got, "role: developer") {
+				t.Fatalf("preview missing role: %s", got)
+			}
+			if tc.wantName != "" && !strings.Contains(got, tc.wantName) {
+				t.Fatalf("preview missing %q: %s", tc.wantName, got)
+			}
+			if !strings.Contains(got, "note: name uniqueness is checked against the host session registry at start") {
+				t.Fatalf("preview missing uniqueness note: %s", got)
+			}
+			if _, err := os.Stat(filepath.Join(home, ".harnez", "agents")); !os.IsNotExist(err) {
+				t.Fatalf("expected ~/.harnez/agents not to be created, got err=%v", err)
+			}
+		})
+	}
+}
+
 func TestPromptFlagErrorRedactsPrompt(t *testing.T) {
 	for _, prefix := range [][]string{nil, {"start"}} {
 		for _, dry := range []bool{false, true} {

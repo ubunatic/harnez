@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"ubunatic.com/harnez/internal/server"
@@ -26,9 +27,11 @@ func TestRunnerModeBlocksDirectHostSessionStore(t *testing.T) {
 
 	if _, err := NewSessionStore(DefaultStoreDir()); err == nil {
 		t.Fatal("expected NewSessionStore(DefaultStoreDir()) to fail closed in runner mode")
+	} else if !strings.Contains(err.Error(), "mcp__taia__background_task") {
+		t.Fatalf("NewSessionStore error = %q, want mcp__taia__background_task", err.Error())
 	}
-	if _, err := OpenSessionStore(DefaultStoreDir()); err == nil {
-		t.Fatal("expected OpenSessionStore(DefaultStoreDir()) to fail closed in runner mode")
+	if _, err := OpenSessionStore(DefaultStoreDir()); err != nil {
+		t.Fatalf("expected OpenSessionStore(DefaultStoreDir()) to succeed in runner mode, got: %v", err)
 	}
 	if _, err := os.Stat(DefaultStoreDir()); !os.IsNotExist(err) {
 		t.Fatalf("DefaultStoreDir should not be created in runner mode: %v", err)

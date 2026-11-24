@@ -305,11 +305,8 @@ func NewHostSessionStoreDirect(dir string) (*FileSessionStore, error) {
 }
 
 // OpenSessionStore opens an existing store without creating directories. It is
-// intended for read-only callers such as shell completion.
+// intended for read-only callers such as shell completion and status inspection.
 func OpenSessionStore(dir string) (*FileSessionStore, error) {
-	if err := guardHostSessionStoreAccess(dir); err != nil {
-		return nil, err
-	}
 	return &FileSessionStore{dir: dir}, nil
 }
 
@@ -321,12 +318,12 @@ func guardHostSessionStoreAccess(dir string) error {
 	cleanDir := filepath.Clean(dir)
 	cleanDef := filepath.Clean(def)
 	if strings.TrimSpace(dir) == "" || cleanDir == cleanDef {
-		return fmt.Errorf("host session registry %s is host-owned in runner mode; use launch-bound broker RPC for own session", def)
+		return fmt.Errorf("host session registry %s is host-owned in runner mode; dispatch via taia background_task (mcp__taia__background_task) or use launch-bound broker RPC for own session", def)
 	}
 	if resolvedDir, err := filepath.EvalSymlinks(cleanDir); err == nil {
 		resolvedDef, defErr := filepath.EvalSymlinks(cleanDef)
 		if (defErr == nil && resolvedDir == resolvedDef) || resolvedDir == cleanDef {
-			return fmt.Errorf("host session registry %s is host-owned in runner mode; use launch-bound broker RPC for own session", def)
+			return fmt.Errorf("host session registry %s is host-owned in runner mode; dispatch via taia background_task (mcp__taia__background_task) or use launch-bound broker RPC for own session", def)
 		}
 	}
 	return nil

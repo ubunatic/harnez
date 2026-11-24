@@ -24,7 +24,7 @@ func (ac *agentCLI) listCmd() *cobra.Command {
 		if ac.children && ac.all {
 			return fmt.Errorf("--children cannot be combined with --all-sessions")
 		}
-		s, err := ac.store()
+		s, err := ac.openStore()
 		if err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func (ac *agentCLI) statusCmd() *cobra.Command {
 		if ac.name == "" && ac.statusReply {
 			return fmt.Errorf("--reply, --turn, and --all require --name <session>")
 		}
-		s, e := ac.store()
+		s, e := ac.openStore()
 		if e != nil {
 			return e
 		}
@@ -191,7 +191,7 @@ func (ac *agentCLI) statusCmd() *cobra.Command {
 func (ac *agentCLI) waitCmd() *cobra.Command {
 	var waitTimeout time.Duration
 	wait := &cobra.Command{Use: "wait <session>", Short: "Wait for an agent session to finish", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := ac.store()
+		s, err := ac.openStore()
 		if err != nil {
 			return err
 		}
@@ -262,7 +262,7 @@ func (ac *agentCLI) compactCmd() *cobra.Command {
 func (ac *agentCLI) stopCmd() *cobra.Command {
 	stop := &cobra.Command{Use: "stop", Short: "Stop an agent session", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		if runstate.InRunnerMode() {
-			return fmt.Errorf("agent stop is a host-only operation in runner mode")
+			return fmt.Errorf("agent stop is a host-only operation in runner mode; run via taia background_task (mcp__taia__background_task)")
 		}
 		s, e := ac.store()
 		if e != nil {
@@ -323,7 +323,7 @@ func (ac *agentCLI) deleteCmd() *cobra.Command {
 	}
 	remove := &cobra.Command{Use: "delete", Short: "Delete an agent session", Aliases: []string{"rm"}, Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		if runstate.InRunnerMode() {
-			return fmt.Errorf("agent delete is a host-only operation in runner mode")
+			return fmt.Errorf("agent delete is a host-only operation in runner mode; run via taia background_task (mcp__taia__background_task)")
 		}
 		s, e := ac.store()
 		if e != nil {

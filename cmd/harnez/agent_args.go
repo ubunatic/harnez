@@ -215,6 +215,9 @@ func withHostTrackingLine(c *cobra.Command, store func() (*subagent.FileSessionS
 		if skip() {
 			return nil
 		}
+		if dryRun, _ := cmd.Flags().GetBool("dry-run"); dryRun {
+			return nil
+		}
 		s, err := store()
 		if err != nil {
 			return nil

@@ -61,7 +61,7 @@ func stopSession(cmd *cobra.Command, store *subagent.FileSessionStore, x *subage
 
 func stopSessionWithReader(cmd *cobra.Command, store *subagent.FileSessionStore, x *subagent.Session, reader procs.ProcReader) error {
 	if runstate.InRunnerMode() {
-		return fmt.Errorf("agent stop is a host-only operation in runner mode")
+		return fmt.Errorf("agent stop is a host-only operation in runner mode; run via taia background_task (mcp__taia__background_task)")
 	}
 	grace, killWait, poll, err := subagent.StopBounds()
 	if err != nil {

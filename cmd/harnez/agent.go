@@ -147,6 +147,7 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 	})
 	root.Flags().StringVar(&ac.planSpec, "plan", "no", "planning gate: yes or no")
 	ac.store = func() (*subagent.FileSessionStore, error) { return subagent.NewSessionStore(ac.storeDir) }
+	ac.openStore = func() (*subagent.FileSessionStore, error) { return subagent.OpenSessionStore(ac.storeDir) }
 	ac.parent = currentHostSession
 	_ = root.RegisterFlagCompletionFunc("name", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return agentSessionCompletion(ac.storeDir, ac.parent)(cmd, args, toComplete)
@@ -223,7 +224,11 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			if e := guardLeafRole(strings.TrimPrefix(trimmed, "/")); e != nil {
 				return e
 			}
-			s, e := ac.store()
+			openStore := ac.store
+			if trimmed == "/status" {
+				openStore = ac.openStore
+			}
+			s, e := openStore()
 			if e != nil {
 				return e
 			}
@@ -241,7 +246,11 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 			}
 		}
 		if ac.name != "" {
-			s, e := ac.store()
+			openStore := ac.store
+			if trimmed == "/status" {
+				openStore = ac.openStore
+			}
+			s, e := openStore()
 			if e != nil {
 				return e
 			}
@@ -259,7 +268,11 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 		}
 		maxToolCallsSet := cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls")
 		if rootContinue {
-			s, e := ac.store()
+			openStore := ac.store
+			if trimmed == "/status" {
+				openStore = ac.openStore
+			}
+			s, e := openStore()
 			if e != nil {
 				return e
 			}
