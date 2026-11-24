@@ -1,6 +1,6 @@
 # 1266 — agent resume refuses with a context-count-unavailable error when the stored count is zero, so the orchestrator must start fresh
 
-**Status**: Open
+**Status**: Closed — M2 (80d0efda) updated EnsureContextUnderThreshold (<= 0) and agent_run.go to warn and dispatch resume when context_tokens is unset (0) while keeping VerifyCompaction strict; HTO=0 make test exit 0
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
