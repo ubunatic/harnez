@@ -504,7 +504,7 @@ skills:
 
   - name: harnez-land
     license: AGPL-3.0-or-later
-    description: "Commit the working tree, push it through AGit, and switch to the latest main; report leftover branches and PRs. Only on explicit /harnez-land."
+    description: "Commit and land changes (direct to main when unprotected and confident, else via AGit/PR), switch to latest main, and audit/clean up stale worktrees, local/remote branches, and AGit topics/PRs with a concrete plan (interactive or auto). Only on explicit /harnez-land."
     file: docs/commands/HarnezLand.md
 
   - name: evergreen
@@ -514,7 +514,7 @@ skills:
 
   - name: wrap
     license: AGPL-3.0-or-later
-    description: "Close the current work session, preserve its state, and prepare a concise handoff"
+    description: "Close the current work session (or a user-named scope), preserve or land its changes, and prepare a concise handoff"
     file: docs/commands/Wrap.md
 
   - name: peer-assistant
