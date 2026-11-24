@@ -87,6 +87,15 @@ func (ac *agentCLI) listCmd() *cobra.Command {
 			}
 			xs = append(xs, deleted...)
 		}
+		if p == "" && !ac.failedOnly {
+			registry, err := s.List("", true)
+			if err != nil {
+				return err
+			}
+			if xs, err = appendSpoolSessions(xs, registry); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "harnez: spool unreadable: %v\n", err)
+			}
+		}
 		xs = appendExternalAgentSessions(xs, managed, external, deleted)
 		if !ac.includeDead && !ac.failedOnly {
 			filtered := xs[:0]
