@@ -1,6 +1,6 @@
 # 1250 — telemetry record dropped prints on every harnez call inside a taia sandbox
 
-**Status**: Open
+**Status**: Closed — DispatchTelemetry now routes over an inherited HARNEZ_BROKER_FD even without TAIA_SESSION_DIR and never touches host spool paths on disk; sendTelemetryRecord suppresses dropped-telemetry stderr noise by default (debug-gated via HARNEZ_DEBUG/HARNEZ_TELEMETRY_DEBUG); verified with -race tests in internal/server and cmd/harnez
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug

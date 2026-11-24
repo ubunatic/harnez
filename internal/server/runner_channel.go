@@ -185,10 +185,27 @@ func RunnerChannelStatus(cfg Config) error {
 }
 
 // DispatchTelemetry sends one telemetry record through the inherited broker FD
-// in runner mode, or via the host Unix socket and host spool otherwise.
+// in runner mode (or whenever a valid broker FD is inherited), or via the host
+// Unix socket and host spool otherwise.
 func DispatchTelemetry(ctx context.Context, cfg Config, record TelemetryRecord) UpdateResult {
 	if runstate.InRunnerMode() {
 		return SendRunnerTelemetry(ctx, cfg, record)
+	}
+	if RunnerChannelStatus(cfg) == nil {
+		if result := SendRunnerTelemetry(ctx, cfg, record); result == UpdateDelivered {
+			return result
+		}
+		// Broker FD is present (sandboxed agent): fall back to server socket only,
+		// never touching host spool paths on disk.
+		socket, err := cfg.Socket()
+		if err != nil {
+			return UpdateDropped
+		}
+		body, err := json.Marshal(record)
+		if err != nil {
+			return UpdateDropped
+		}
+		return PostUpdate(ctx, socket, cfg.TelemetryPath, body, cfg.UpdateTimeout)
 	}
 	socket, err := cfg.Socket()
 	if err != nil {
@@ -206,8 +223,8 @@ func DispatchTelemetry(ctx context.Context, cfg Config, record TelemetryRecord) 
 }
 
 // SendRunnerTelemetry submits one telemetry record via the runner broker channel,
-// spilling to the runner's private spool directory only on transient collector
-// outages. Missing or invalid broker FDs fail closed.
+// spilling to the runner's private spool directory only in runner mode on
+// transient collector outages. Missing or invalid broker FDs fail closed.
 func SendRunnerTelemetry(ctx context.Context, cfg Config, record TelemetryRecord) UpdateResult {
 	if _, err := parseAndValidateRunnerFD(cfg); err != nil {
 		return UpdateDropped
@@ -221,13 +238,18 @@ func SendRunnerTelemetry(ctx context.Context, cfg Config, record TelemetryRecord
 	}
 	resp, err := SendRunnerRequest(ctx, cfg, RunnerRequest{Op: RunnerOpTelemetryIngest, Payload: payload})
 	if err == nil && resp.Status >= 200 && resp.Status < 300 {
-		_ = ReplayRunnerSpool(ctx, cfg)
+		if runstate.InRunnerMode() {
+			_ = ReplayRunnerSpool(ctx, cfg)
+		}
 		return UpdateDelivered
 	}
 	if errors.Is(err, ErrInvalidRunnerChannel) || errors.Is(err, ErrRunnerPayloadTooLarge) {
 		return UpdateDropped
 	}
 	if err == nil && resp.Status < 500 {
+		return UpdateDropped
+	}
+	if !runstate.InRunnerMode() {
 		return UpdateDropped
 	}
 	spoolDir, err := cfg.TelemetrySpoolDir()
