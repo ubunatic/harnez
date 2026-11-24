@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/agent"
 	"ubunatic.com/harnez/internal/procs"
+	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -535,8 +536,10 @@ func waitForAgent(ctx context.Context, store *subagent.FileSessionStore, identif
 			sess.ProcessPID = 0
 			sess.LastActiveAt = time.Now()
 			sess.LastError = "detached worker exited without recording a terminal status"
-			if err := store.Save(sess); err != nil {
-				return nil, err
+			if !runstate.InRunnerMode() && !store.IsReadOnly() {
+				if err := store.Save(sess); err != nil {
+					return nil, err
+				}
 			}
 			return sess, nil
 		}

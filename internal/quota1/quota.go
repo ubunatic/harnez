@@ -14,6 +14,33 @@ import (
 	"time"
 )
 
+// Quota-1 execution tiers ordered from narrowest to broadest.
+const (
+	TierPackage = 1
+	TierShort   = 2
+	TierFull    = 3
+)
+
+// effectiveTier normalizes zero/unset tiers (including legacy records) to TierFull.
+func effectiveTier(t int) int {
+	if t <= 0 {
+		return TierFull
+	}
+	return t
+}
+
+// TierName returns the human-readable name for a Quota-1 tier.
+func TierName(t int) string {
+	switch effectiveTier(t) {
+	case TierPackage:
+		return "package"
+	case TierShort:
+		return "short"
+	default:
+		return "full"
+	}
+}
+
 // RunRecord is the persisted identity and outcome of the latest quota-1 run.
 // A nil Exit means the run did not complete with a normal process exit.
 type RunRecord struct {
@@ -23,6 +50,7 @@ type RunRecord struct {
 	Finished     *time.Time        `json:"finished"`
 	Exit         *int              `json:"exit"`
 	Retry        bool              `json:"retry,omitempty"`
+	Tier         int               `json:"tier,omitempty"`
 	TestedHead   string            `json:"tested_head,omitempty"`
 	TestedDirty  map[string]string `json:"tested_dirty,omitempty"`
 }
@@ -44,6 +72,9 @@ type CheckOptions struct {
 	// OwnerSuspended allows the run and still records it, because the owner
 	// ran /disable process quota-1 in this session (issue 1188).
 	OwnerSuspended bool
+
+	// Tier is the test execution tier (TierPackage, TierShort, or TierFull; 0 defaults to TierFull).
+	Tier int
 }
 
 // Result describes the outcome of a Quota-1 check.
@@ -341,6 +372,7 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 		root = "."
 	}
 
+	currentTier := effectiveTier(opts.Tier)
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve root dir: %w", err)
@@ -351,6 +383,7 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 			return err
 		}
 		record.Retry = retry
+		record.Tier = currentTier
 		return writeRunRecord(stateFile, record)
 	}
 
@@ -428,7 +461,19 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 		}, nil
 	}
 
-	// 4. No files modified: block!
+	prevTier := effectiveTier(previous.Tier)
+	if currentTier > prevTier {
+		if err := recordRun(false); err != nil {
+			return Result{}, fmt.Errorf("update quota-1 state: %w", err)
+		}
+		return Result{
+			Allowed:   true,
+			Message:   fmt.Sprintf("Quota-1: tier upgrade (%s -> %s) allowed; quota recorded", TierName(prevTier), TierName(currentTier)),
+			StateFile: stateFile,
+		}, nil
+	}
+
+	// 4. No files modified and no tier upgrade: block!
 	return Result{
 		Allowed:   false,
 		Message:   fmt.Sprintf("Quota-1: test execution blocked because no repository source files have been modified since the last test run (%s).\nUnder Quota-1 rules, code must be modified before running tests again. If the previous run hung or was killed, run `harnez clean procs q1 --kill`.\n(Bypass available via QUOTA_BYPASS=1 or HARNEZ_QUOTA_BYPASS=1 for emergency/manual overrides)", previous.Started.Format(time.RFC3339)),

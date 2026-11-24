@@ -19,6 +19,9 @@ type QueuedMessage struct {
 }
 
 func (s *FileSessionStore) lockRegistry() (func(), error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	lock, err := os.OpenFile(filepath.Join(s.dir, ".registry.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("open session registry lock: %w", err)

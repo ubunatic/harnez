@@ -510,7 +510,7 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 				if wait {
 					return fmt.Errorf("--wait is supported only for live Claude sessions")
 				}
-				store, storeErr := subagent.OpenSessionStore(*storeDir)
+				store, storeErr := subagent.NewSessionStore(*storeDir)
 				if storeErr != nil {
 					return storeErr
 				}

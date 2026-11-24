@@ -135,6 +135,10 @@ func TestEnsureContextUnderThreshold(t *testing.T) {
 	if err != nil || compacted || called {
 		t.Fatalf("unknown context: compacted=%v called=%v err=%v", compacted, called, err)
 	}
+	compacted, err = EnsureContextUnderThreshold(0, 200, compact)
+	if err != nil || compacted || called {
+		t.Fatalf("unset zero context: compacted=%v called=%v err=%v", compacted, called, err)
+	}
 	compacted, err = EnsureContextUnderThreshold(199, 200, compact)
 	if err != nil || compacted || called {
 		t.Fatalf("under threshold: compacted=%v called=%v err=%v", compacted, called, err)

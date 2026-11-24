@@ -629,3 +629,117 @@ func TestSnapshotIgnoresGitlinkChanges(t *testing.T) {
 		t.Fatalf("gitlink changes: files=%v err=%v", files, err)
 	}
 }
+
+func TestCheckAndRecord_TierUpgradeAndBlock(t *testing.T) {
+	dir := t.TempDir()
+	codePath := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(codePath, []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(codePath, past, past); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Package -> Short -> Full upgrades are allowed without source edits.
+	res, err := CheckAndRecord(CheckOptions{Dir: dir, Tier: TierPackage})
+	if err != nil || !res.Allowed {
+		t.Fatalf("initial TierPackage: res=%+v err=%v", res, err)
+	}
+	finishSuccessfulRun(t, res, time.Now())
+
+	res, err = CheckAndRecord(CheckOptions{Dir: dir, Tier: TierShort})
+	if err != nil || !res.Allowed {
+		t.Fatalf("upgrade TierPackage -> TierShort: res=%+v err=%v", res, err)
+	}
+	if !strings.Contains(res.Message, "Quota-1: tier upgrade (package -> short) allowed; quota recorded") {
+		t.Fatalf("unexpected upgrade message: %q", res.Message)
+	}
+	finishSuccessfulRun(t, res, time.Now())
+
+	// Same-tier and lower-tier repeats from TierShort are blocked.
+	for _, tc := range []struct {
+		name string
+		tier int
+	}{
+		{"TierShort -> TierShort", TierShort},
+		{"TierShort -> TierPackage", TierPackage},
+	} {
+		blocked, err := CheckAndRecord(CheckOptions{Dir: dir, Tier: tc.tier})
+		if err != nil || blocked.Allowed {
+			t.Fatalf("%s: res=%+v err=%v; want blocked", tc.name, blocked, err)
+		}
+	}
+
+	res, err = CheckAndRecord(CheckOptions{Dir: dir, Tier: TierFull})
+	if err != nil || !res.Allowed {
+		t.Fatalf("upgrade TierShort -> TierFull: res=%+v err=%v", res, err)
+	}
+	if !strings.Contains(res.Message, "Quota-1: tier upgrade (short -> full) allowed; quota recorded") {
+		t.Fatalf("unexpected upgrade message: %q", res.Message)
+	}
+	finishSuccessfulRun(t, res, time.Now())
+
+	// Same-tier and lower-tier repeats from TierFull are blocked.
+	for _, tc := range []struct {
+		name string
+		tier int
+	}{
+		{"TierFull -> TierShort", TierShort},
+		{"TierFull -> TierFull", TierFull},
+	} {
+		blocked, err := CheckAndRecord(CheckOptions{Dir: dir, Tier: tc.tier})
+		if err != nil || blocked.Allowed {
+			t.Fatalf("%s: res=%+v err=%v; want blocked", tc.name, blocked, err)
+		}
+	}
+
+	// 2. Legacy state without tier (Tier: 0) normalizes to TierFull and blocks TierFull.
+	legacy := RunRecord{
+		Started:  time.Now().Add(-time.Minute).UTC(),
+		Finished: ptrTime(time.Now().UTC()),
+		Exit:     ptrInt(0),
+	}
+	if err := writeRunRecord(res.StateFile, legacy); err != nil {
+		t.Fatal(err)
+	}
+	blocked, err := CheckAndRecord(CheckOptions{Dir: dir, Tier: TierFull})
+	if err != nil || blocked.Allowed {
+		t.Fatalf("legacy Tier: 0 -> TierFull: res=%+v err=%v; want blocked", blocked, err)
+	}
+
+	// 3. Post-edit downgrade (TierFull -> TierPackage) is allowed and resets recorded tier.
+	future := time.Now().Add(time.Hour)
+	if err := os.Chtimes(codePath, future, future); err != nil {
+		t.Fatal(err)
+	}
+	res, err = CheckAndRecord(CheckOptions{Dir: dir, Tier: TierPackage})
+	if err != nil || !res.Allowed {
+		t.Fatalf("post-edit downgrade TierFull -> TierPackage: res=%+v err=%v", res, err)
+	}
+	finishSuccessfulRun(t, res, time.Now())
+
+	rec, err := ReadRunRecord(res.StateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Tier != TierPackage {
+		t.Fatalf("recorded tier after post-edit downgrade = %d, want %d", rec.Tier, TierPackage)
+	}
+
+	// 4. Unfinished TierPackage run (Exit == nil && Finished == nil) still blocks TierFull upgrade.
+	unfinished := RunRecord{
+		Started: time.Now().UTC(),
+		Tier:    TierPackage,
+	}
+	if err := writeRunRecord(res.StateFile, unfinished); err != nil {
+		t.Fatal(err)
+	}
+	blocked, err = CheckAndRecord(CheckOptions{Dir: dir, Tier: TierFull})
+	if err != nil || blocked.Allowed {
+		t.Fatalf("unfinished TierPackage -> TierFull: res=%+v err=%v; want blocked", blocked, err)
+	}
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }
+func ptrInt(v int) *int              { return &v }

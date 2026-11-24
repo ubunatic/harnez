@@ -139,16 +139,8 @@ func skipFlagOptions(words []string, valueFlags map[string]bool) []string {
 // goSubcommand returns the first word after `go` that is not a flag. `go -C
 // dir` takes a value, so that value is skipped as well.
 func goSubcommand(args []string) string {
-	for i := 0; i < len(args); i++ {
-		switch arg := args[i]; {
-		case arg == "-C":
-			i++
-		case strings.HasPrefix(arg, "-"):
-		default:
-			return arg
-		}
-	}
-	return ""
+	sub, _ := goSubcommandAndArgs(args)
+	return sub
 }
 
 // shellSimpleCommands splits a shell script into its simple commands and
@@ -257,4 +249,217 @@ func quota1DetectedGoTest(opts execOptions, getenv func(string) string, args []s
 		return false
 	}
 	return runsGoTest(args) && quota1Configured(opts)
+}
+
+var goTestValueFlags = map[string]bool{
+	"C": true, "p": true, "covermode": true, "coverpkg": true,
+	"asmflags": true, "buildmode": true, "compiler": true,
+	"gccgoflags": true, "gcflags": true, "installsuffix": true, "ldflags": true,
+	"mod": true, "modfile": true, "overlay": true, "pgo": true,
+	"pkgdir": true, "tags": true, "toolexec": true, "exec": true,
+	"bench": true, "test.bench": true, "benchtime": true, "blockprofile": true, "blockprofilerate": true,
+	"count": true, "coverprofile": true, "cpu": true, "cpuprofile": true,
+	"fuzz": true, "test.fuzz": true, "fuzzminimizetime": true, "fuzztime": true, "list": true,
+	"memprofile": true, "memprofilerate": true, "mutexprofile": true, "mutexprofilefraction": true,
+	"outputdir": true, "parallel": true, "run": true, "test.run": true, "skip": true,
+	"timeout": true, "trace": true, "vet": true, "o": true, "shuffle": true,
+}
+
+var makeValueFlags = map[string]bool{
+	"-C": true, "--directory": true,
+	"-f": true, "--file": true, "--makefile": true,
+	"-I": true, "--include-dir": true,
+	"-o": true, "--old-file": true, "--assume-old": true,
+	"-W": true, "--what-if": true, "--new-file": true, "--assume-new": true,
+	"-E": true, "--eval": true,
+}
+
+// classifyQuota1Tier determines the Quota-1 tier for a command (direct argv or
+// shell -c script) by taking the maximum tier across test-executing segments.
+// Unrecognised commands (e.g. explicit --quota-1 custom scripts) default to TierFull.
+func classifyQuota1Tier(args []string) int {
+	commands := [][]string{args}
+	if script := unwrapShellCommand(args); len(args) > 1 && len(script) == 1 {
+		commands = shellSimpleCommands(script[0])
+	}
+	maxTier := 0
+	for _, words := range commands {
+		if tier, ok := classifySimpleCommandTier(words); ok && tier > maxTier {
+			maxTier = tier
+		}
+	}
+	if maxTier == 0 {
+		return quota1.TierFull
+	}
+	return maxTier
+}
+
+func classifySimpleCommandTier(words []string) (int, bool) {
+	words = skipCommandPrefix(words)
+	if len(words) == 0 {
+		return 0, false
+	}
+	switch filepath.Base(words[0]) {
+	case "gotestsum":
+		return classifyGoTestArgs(gotestsumGoTestArgs(words[1:])), true
+	case "go":
+		sub, rest := goSubcommandAndArgs(words[1:])
+		if sub == "test" {
+			return classifyGoTestArgs(rest), true
+		}
+	case "make":
+		return classifyMakeArgs(words[1:]), true
+	}
+	return 0, false
+}
+
+func gotestsumGoTestArgs(args []string) []string {
+	for i, arg := range args {
+		if arg == "--" {
+			return args[i+1:]
+		}
+	}
+	return args
+}
+
+func goSubcommandAndArgs(args []string) (string, []string) {
+	for i := 0; i < len(args); i++ {
+		switch arg := args[i]; {
+		case arg == "-C":
+			i++
+		case strings.HasPrefix(arg, "-"):
+		default:
+			return arg, args[i+1:]
+		}
+	}
+	return "", nil
+}
+
+func classifyGoTestArgs(args []string) int {
+	hasFilter := false
+	isShort := false
+	var targets []string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "-args" {
+			break
+		}
+		if arg == "--" {
+			continue
+		}
+		if strings.HasPrefix(arg, "-") && arg != "-" {
+			name := strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-")
+			flagName, flagVal, hasEq := strings.Cut(name, "=")
+			switch flagName {
+			case "run", "test.run", "bench", "test.bench", "fuzz", "test.fuzz":
+				hasFilter = true
+			case "short", "test.short":
+				isShort = !hasEq || flagVal == "true" || flagVal == "1"
+			}
+			if !hasEq && goTestValueFlags[flagName] && i+1 < len(args) {
+				i++
+			}
+			continue
+		}
+		targets = append(targets, arg)
+	}
+
+	if hasFilter {
+		return quota1.TierPackage
+	}
+	repoWide := false
+	for _, t := range targets {
+		if t == "./..." || t == "..." {
+			repoWide = true
+			break
+		}
+	}
+	if !repoWide {
+		return quota1.TierPackage
+	}
+	if isShort {
+		return quota1.TierShort
+	}
+	return quota1.TierFull
+}
+
+func classifyMakeArgs(args []string) int {
+	maxTier := 0
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			continue
+		}
+		if strings.HasPrefix(arg, "-") && arg != "-" {
+			if strings.Contains(arg, "=") {
+				continue
+			}
+			if makeValueFlags[arg] && i+1 < len(args) {
+				i++
+				continue
+			}
+			if (arg == "-j" || arg == "--jobs") &&
+				i+1 < len(args) && isAllDigits(args[i+1]) {
+				i++
+			} else if (arg == "-l" || arg == "--load-average") &&
+				i+1 < len(args) && isDecimalNumber(args[i+1]) {
+				i++
+			}
+			continue
+		}
+		if strings.Contains(arg, "=") {
+			continue
+		}
+		var tier int
+		switch arg {
+		case "test-pkg":
+			tier = quota1.TierPackage
+		case "test-short":
+			tier = quota1.TierShort
+		default:
+			tier = quota1.TierFull
+		}
+		if tier > maxTier {
+			maxTier = tier
+		}
+	}
+	if maxTier == 0 {
+		return quota1.TierFull
+	}
+	return maxTier
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func isDecimalNumber(s string) bool {
+	if s == "" {
+		return false
+	}
+	seenDot := false
+	seenDigit := false
+	for _, r := range s {
+		if r == '.' {
+			if seenDot {
+				return false
+			}
+			seenDot = true
+			continue
+		}
+		if r < '0' || r > '9' {
+			return false
+		}
+		seenDigit = true
+	}
+	return seenDigit
 }

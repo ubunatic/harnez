@@ -829,6 +829,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			Dir:            opts.Quota1Dir,
 			Getenv:         opts.Getenv,
 			OwnerSuspended: quota1SuspendedByOwner(opts, errOut),
+			Tier:           classifyQuota1Tier(args),
 		})
 		if err != nil {
 			return 1, fmt.Errorf("exec: %w", err)

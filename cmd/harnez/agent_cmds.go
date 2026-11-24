@@ -46,6 +46,7 @@ type agentCLI struct {
 	statusAllReplies    bool
 	statusReply         bool
 	statusTurn          int
+	openStore           func() (*subagent.FileSessionStore, error)
 	store               func() (*subagent.FileSessionStore, error)
 	storeDir            string
 	streamMode          string
@@ -355,7 +356,7 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 	var resumeJulesID string
 	resume := &cobra.Command{Use: "resume [session] [prompt...]", Short: "Resume an existing agent session", Long: "Resume an existing agent session.\n\n" + sessionBackgroundHelp, Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume <id> \"next step\"\n  harnez agent resume -i --name w\n  harnez agent resume --model jules --id <jules-session-id> wait", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		if runstate.InRunnerMode() {
-			return fmt.Errorf("agent resume is a host-only operation in runner mode")
+			return fmt.Errorf("agent resume is a host-only operation in runner mode; run via taia background_task (mcp__taia__background_task)")
 		}
 		planFirst, err := parsePlanSpec(ac.planSpec)
 		if err != nil {

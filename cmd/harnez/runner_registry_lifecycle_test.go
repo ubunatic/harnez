@@ -142,6 +142,29 @@ func TestTelemetryCollectorServiceRegistryOwnSessionAndLegacyRejection(t *testin
 func TestRunnerModeRejectsCrossSessionLifecycleAndHostRegistry(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("TAIA_SESSION_DIR", "")
+
+	// Pre-populate a host session in the default store before entering runner mode.
+	hostStore, err := subagent.NewSessionStore(subagent.DefaultStoreDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hostStore.Create(&subagent.Session{
+		ID: "other", Name: "other", Provider: "codex", Model: "luna", Tier: "low", Status: "completed", WorkingDir: home,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := hostStore.Create(&subagent.Session{
+		ID: "stale-running", Name: "stale-running", Provider: "codex", Model: "luna", Tier: "low", Status: "running", ProcessPID: 999999999, WorkingDir: home,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	staleFile := filepath.Join(subagent.DefaultStoreDir(), "stale-running.json")
+	staleBefore, err := os.ReadFile(staleFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	runnerRoot := filepath.Join(t.TempDir(), "runner-sess")
 	if err := os.Mkdir(runnerRoot, 0o700); err != nil {
 		t.Fatal(err)
@@ -152,29 +175,68 @@ func TestRunnerModeRejectsCrossSessionLifecycleAndHostRegistry(t *testing.T) {
 		t.Fatal("canManageTarget returned true in runner mode")
 	}
 
+	// Read-only list and status succeed on the pre-populated host registry.
+	for _, args := range [][]string{
+		{"list", "--all-sessions", "--dead"},
+		{"status", "--name", "other"},
+	} {
+		cmd := newAgentCmd()
+		var out strings.Builder
+		cmd.SetOut(&out)
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("read-only harnez agent %v failed in runner mode: %v", args, err)
+		}
+		if !strings.Contains(out.String(), "other") {
+			t.Fatalf("harnez agent %v output = %q, want session 'other'", args, out.String())
+		}
+	}
+
+	// Read-only agent wait on a stale-running session in runner mode must not fail with a
+	// write error and must leave the session JSON file byte-for-byte unchanged on disk.
+	waitCmd := newAgentCmd()
+	var waitOut strings.Builder
+	waitCmd.SetOut(&waitOut)
+	waitCmd.SetArgs([]string{"wait", "stale-running"})
+	if err := waitCmd.Execute(); err != nil {
+		t.Fatalf("harnez agent wait stale-running failed in runner mode: %v", err)
+	}
+	staleAfter, err := os.ReadFile(staleFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(staleAfter) != string(staleBefore) {
+		t.Fatalf("stale-running.json mutated in runner mode:\nbefore: %s\nafter:  %s", staleBefore, staleAfter)
+	}
+
 	for _, tc := range []struct {
 		args     []string
-		wantText string
+		wantText []string
 	}{
-		{[]string{"stop", "--name", "other"}, "host-only"},
-		{[]string{"stop", "--all"}, "host-only"},
-		{[]string{"resume", "--name", "other", "next"}, "host-only"},
-		{[]string{"delete", "--name", "other"}, "host-only"},
-		{[]string{"list"}, "host-owned"},
+		{[]string{"start", "--role", "advisor", "--model", "codex:luna:low", "-p", "hi"}, []string{"host-owned", "mcp__taia__background_task"}},
+		{[]string{"stop", "--name", "other"}, []string{"host-only", "mcp__taia__background_task"}},
+		{[]string{"stop", "--all"}, []string{"host-only", "mcp__taia__background_task"}},
+		{[]string{"resume", "--name", "other", "next"}, []string{"host-only", "mcp__taia__background_task"}},
+		{[]string{"delete", "--name", "other"}, []string{"host-only", "mcp__taia__background_task"}},
 	} {
 		cmd := newAgentCmd()
 		cmd.SetArgs(tc.args)
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), tc.wantText) {
-			t.Fatalf("harnez agent %v err = %v, want substring %q", tc.args, err, tc.wantText)
+		if err == nil {
+			t.Fatalf("harnez agent %v succeeded, want error containing %v", tc.args, tc.wantText)
+		}
+		for _, want := range tc.wantText {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("harnez agent %v err = %v, want substring %q", tc.args, err, want)
+			}
 		}
 	}
 
-	if err := stopSessionWithReader(&cobra.Command{}, nil, &subagent.Session{ID: "other"}, nil); err == nil || !strings.Contains(err.Error(), "host-only") {
-		t.Fatalf("stopSessionWithReader in runner mode err = %v, want host-only error", err)
+	if err := stopSessionWithReader(&cobra.Command{}, nil, &subagent.Session{ID: "other"}, nil); err == nil || !strings.Contains(err.Error(), "host-only") || !strings.Contains(err.Error(), "mcp__taia__background_task") {
+		t.Fatalf("stopSessionWithReader in runner mode err = %v, want host-only + mcp__taia__background_task error", err)
 	}
-	if err := runResume(context.Background(), &cobra.Command{}, agentDeps{}, resumeRequest{Name: "other"}); err == nil || !strings.Contains(err.Error(), "host-only") {
-		t.Fatalf("runResume in runner mode err = %v, want host-only error", err)
+	if err := runResume(context.Background(), &cobra.Command{}, agentDeps{}, resumeRequest{Name: "other"}); err == nil || !strings.Contains(err.Error(), "host-only") || !strings.Contains(err.Error(), "mcp__taia__background_task") {
+		t.Fatalf("runResume in runner mode err = %v, want host-only + mcp__taia__background_task error", err)
 	}
 	if err := runAgentStats(os.Stdout, agentStatsOptions{Days: 7}); err == nil || !strings.Contains(err.Error(), "host-only") {
 		t.Fatalf("runAgentStats in runner mode err = %v, want host-only error", err)

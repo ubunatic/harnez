@@ -646,6 +646,37 @@ func TestAgyOverThresholdResumeSkipsAutomaticCompaction(t *testing.T) {
 	}
 }
 
+func TestClaudeResumeWithUnsetZeroContextTokensWarnsAndDispatches(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	store, err := subagent.NewSessionStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "claude", Model: "sonnet", Status: "completed", ContextTokens: 0}); err != nil {
+		t.Fatal(err)
+	}
+	driver := &codexAutoCompactDriver{}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+
+	var out, errOut bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"resume", "--name", "worker", "prompt", "--store-dir", dir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("resume with unset zero context_tokens failed: %v", err)
+	}
+	if driver.compactCalls != 0 || driver.resumeCalls != 1 {
+		t.Fatalf("compact calls=%d resume calls=%d, want 0 and 1", driver.compactCalls, driver.resumeCalls)
+	}
+	if !strings.Contains(errOut.String(), "no recorded context token count; skipping compaction check") {
+		t.Fatalf("stderr = %q, want warning about missing context token count", errOut.String())
+	}
+}
+
 type unverifiedCompactDriver struct {
 	recordingAgentDriver
 	resumes int
