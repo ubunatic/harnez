@@ -1087,10 +1087,14 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		return driver.Compact(ctx, sess.ProviderID(), subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
 	}
 	// Interactive sessions are guarded above; native compaction is verified after resume.
-	if contextTokens >= 0 && (compactMode == "manual" || interactive) {
-		compacted, err = subagent.EnsureContextUnderThreshold(contextTokens, threshold, compactFn)
-		if err != nil {
-			return fmt.Errorf("refusing to send resume prompt: %w", err)
+	if compactMode == "manual" || interactive {
+		if contextTokens == 0 {
+			fmt.Fprintf(cmd.ErrOrStderr(), "harnez: warning: session %q has no recorded context token count; skipping compaction check\n", sess.Name)
+		} else if contextTokens > 0 {
+			compacted, err = subagent.EnsureContextUnderThreshold(contextTokens, threshold, compactFn)
+			if err != nil {
+				return fmt.Errorf("refusing to send resume prompt: %w", err)
+			}
 		}
 	}
 	if compacted {

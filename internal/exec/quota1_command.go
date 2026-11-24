@@ -253,15 +253,15 @@ func quota1DetectedGoTest(opts execOptions, getenv func(string) string, args []s
 
 var goTestValueFlags = map[string]bool{
 	"C": true, "p": true, "covermode": true, "coverpkg": true,
-	"asmflags": true, "buildmode": true, "buildvcs": true, "compiler": true,
+	"asmflags": true, "buildmode": true, "compiler": true,
 	"gccgoflags": true, "gcflags": true, "installsuffix": true, "ldflags": true,
 	"mod": true, "modfile": true, "overlay": true, "pgo": true,
 	"pkgdir": true, "tags": true, "toolexec": true, "exec": true,
-	"bench": true, "benchtime": true, "blockprofile": true, "blockprofilerate": true,
+	"bench": true, "test.bench": true, "benchtime": true, "blockprofile": true, "blockprofilerate": true,
 	"count": true, "coverprofile": true, "cpu": true, "cpuprofile": true,
-	"fuzz": true, "fuzzminimizetime": true, "fuzztime": true, "list": true,
+	"fuzz": true, "test.fuzz": true, "fuzzminimizetime": true, "fuzztime": true, "list": true,
 	"memprofile": true, "memprofilerate": true, "mutexprofile": true, "mutexprofilefraction": true,
-	"outputdir": true, "parallel": true, "run": true, "skip": true,
+	"outputdir": true, "parallel": true, "run": true, "test.run": true, "skip": true,
 	"timeout": true, "trace": true, "vet": true, "o": true, "shuffle": true,
 }
 
@@ -352,9 +352,9 @@ func classifyGoTestArgs(args []string) int {
 			name := strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-")
 			flagName, flagVal, hasEq := strings.Cut(name, "=")
 			switch flagName {
-			case "run", "bench", "fuzz":
+			case "run", "test.run", "bench", "test.bench", "fuzz", "test.fuzz":
 				hasFilter = true
-			case "short":
+			case "short", "test.short":
 				isShort = !hasEq || flagVal == "true" || flagVal == "1"
 			}
 			if !hasEq && goTestValueFlags[flagName] && i+1 < len(args) {
@@ -399,8 +399,11 @@ func classifyMakeArgs(args []string) int {
 				i++
 				continue
 			}
-			if (arg == "-j" || arg == "--jobs" || arg == "-l" || arg == "--load-average") &&
+			if (arg == "-j" || arg == "--jobs") &&
 				i+1 < len(args) && isAllDigits(args[i+1]) {
+				i++
+			} else if (arg == "-l" || arg == "--load-average") &&
+				i+1 < len(args) && isDecimalNumber(args[i+1]) {
 				i++
 			}
 			continue
@@ -437,4 +440,26 @@ func isAllDigits(s string) bool {
 		}
 	}
 	return true
+}
+
+func isDecimalNumber(s string) bool {
+	if s == "" {
+		return false
+	}
+	seenDot := false
+	seenDigit := false
+	for _, r := range s {
+		if r == '.' {
+			if seenDot {
+				return false
+			}
+			seenDot = true
+			continue
+		}
+		if r < '0' || r > '9' {
+			return false
+		}
+		seenDigit = true
+	}
+	return seenDigit
 }

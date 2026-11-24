@@ -726,6 +726,19 @@ func TestCheckAndRecord_TierUpgradeAndBlock(t *testing.T) {
 	if rec.Tier != TierPackage {
 		t.Fatalf("recorded tier after post-edit downgrade = %d, want %d", rec.Tier, TierPackage)
 	}
+
+	// 4. Unfinished TierPackage run (Exit == nil && Finished == nil) still blocks TierFull upgrade.
+	unfinished := RunRecord{
+		Started: time.Now().UTC(),
+		Tier:    TierPackage,
+	}
+	if err := writeRunRecord(res.StateFile, unfinished); err != nil {
+		t.Fatal(err)
+	}
+	blocked, err = CheckAndRecord(CheckOptions{Dir: dir, Tier: TierFull})
+	if err != nil || blocked.Allowed {
+		t.Fatalf("unfinished TierPackage -> TierFull: res=%+v err=%v; want blocked", blocked, err)
+	}
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
