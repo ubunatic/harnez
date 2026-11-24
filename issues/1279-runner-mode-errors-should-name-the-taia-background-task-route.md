@@ -1,6 +1,6 @@
 # 1279 — Runner mode errors should name the taia background task route
 
-**Status**: Open
+**Status**: Closed — M3 (d09a7d6a) updated runner-mode host-owned/host-only errors across session.go and cmd/harnez agent commands to name mcp__taia__background_task; verified by runner_registry tests and HTO=0 make test exit 0
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
