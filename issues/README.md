@@ -53,4 +53,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1278 | [1278-harnez-pr-wait-should-hint-agents-to-return-to-the-default-branch-on-merge.md](1278-harnez-pr-wait-should-hint-agents-to-return-to-the-default-branch-on-merge.md) | harnez pr wait should hint agents to return to the default branch on merge | Open |
 | 1280 | [1280-document-narrow-taia-sandbox-state-and-runtime-access-for-harnez.md](1280-document-narrow-taia-sandbox-state-and-runtime-access-for-harnez.md) | Document narrow taia sandbox state and runtime access for harnez | Open |
 | 1281 | [1281-show-forge-issue-comments-to-workers.md](1281-show-forge-issue-comments-to-workers.md) | Show forge issue comments to workers | Open |
+| 1284 | [1284-init-ensuregitexclude-walks-into-ancestor-git-outside-target-directory.md](1284-init-ensuregitexclude-walks-into-ancestor-git-outside-target-directory.md) | init: EnsureGitExclude walks into ancestor .git outside target directory | Open |
+| 1285 | [1285-init-quota-1-prints-quota-1-guardrails-added-for-agents-md-before-migrating-it-to-quota-md.md](1285-init-quota-1-prints-quota-1-guardrails-added-for-agents-md-before-migrating-it-to-quota-md.md) | init: --quota-1 prints Quota-1 Guardrails added for AGENTS.md before migrating it to Quota.md | Open |
 <!-- harnez:end issues-active-index -->
