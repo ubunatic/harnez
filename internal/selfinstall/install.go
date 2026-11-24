@@ -38,6 +38,7 @@ type Options struct {
 	NoShell        bool
 	NoMan          bool
 	Home           string
+	GoBinDir       string // optional override for goself.InstallDir() (tests)
 	InstallMan     func(io.Writer) error
 	RefreshService func(context.Context, string, io.Writer) error
 }
@@ -86,6 +87,9 @@ func Run(ctx context.Context, opts Options, out io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(out, "installed %s (%s, %s)\n", fsutil.ContractHome(res.Path), res.Platform, res.Strategy)
+	for _, w := range res.Warnings {
+		fmt.Fprintf(out, "  warning: %s\n", w)
+	}
 
 	if opts.Host != "" {
 		return nil
@@ -134,6 +138,16 @@ func setupLocalUX(ctx context.Context, opts Options, binPath string, out io.Writ
 	}
 	if changed {
 		fmt.Fprintf(out, "  symlink %s -> %s\n", fsutil.ContractHome(link), filepath.Base(binPath))
+	}
+
+	goBinDir := opts.GoBinDir
+	if goBinDir == "" {
+		goBinDir = goself.InstallDir()
+	}
+	if goLink, goChanged, err := ensureGoBinSymlink(binPath, goBinDir); err != nil {
+		return err
+	} else if goChanged {
+		fmt.Fprintf(out, "  symlink %s -> %s\n", fsutil.ContractHome(goLink), fsutil.ContractHome(binPath))
 	}
 
 	if !opts.NoShell {
@@ -202,6 +216,36 @@ func ensureGearSymlink(binPath string) (string, bool, error) {
 	if err := os.Rename(tmp, link); err != nil {
 		_ = os.Remove(tmp)
 		return "", false, fmt.Errorf("install gear symlink %s: %w", link, err)
+	}
+	return link, true, nil
+}
+
+// ensureGoBinSymlink points <goBinDir>/<name> at binPath when goBinDir exists
+// and differs from filepath.Dir(binPath), replacing any stale go-install copy
+// atomically so PATH entries with ~/go/bin ahead of ~/.local/bin stay current.
+func ensureGoBinSymlink(binPath, goBinDir string) (string, bool, error) {
+	if goBinDir == "" || sameFile(goBinDir, filepath.Dir(binPath)) {
+		return "", false, nil
+	}
+	info, err := os.Stat(goBinDir)
+	if err != nil || !info.IsDir() {
+		return "", false, nil
+	}
+	link := filepath.Join(goBinDir, filepath.Base(binPath))
+	if current, err := os.Readlink(link); err == nil && current == binPath {
+		return link, false, nil
+	}
+	if linfo, err := os.Lstat(link); err == nil && linfo.IsDir() {
+		return "", false, fmt.Errorf("cannot replace directory %s with symlink to %s", link, binPath)
+	}
+	tmp := filepath.Join(goBinDir, fmt.Sprintf(".%s-link-%d.tmp", filepath.Base(binPath), os.Getpid()))
+	_ = os.Remove(tmp)
+	if err := os.Symlink(binPath, tmp); err != nil {
+		return "", false, fmt.Errorf("create gobin symlink: %w", err)
+	}
+	if err := os.Rename(tmp, link); err != nil {
+		_ = os.Remove(tmp)
+		return "", false, fmt.Errorf("install gobin symlink %s: %w", link, err)
 	}
 	return link, true, nil
 }
