@@ -195,3 +195,28 @@ func TestConfigListValueArrayRoundTrip(t *testing.T) {
 		t.Fatalf("get docs.copies = %q, %v", out, err)
 	}
 }
+
+func TestConfigAccessPrintsManifest(t *testing.T) {
+	out, _, err := runConfig(t, "--access")
+	if err != nil {
+		t.Fatalf("config --access: %v", err)
+	}
+	if !strings.HasPrefix(out, "mode\thost\t") && !strings.HasPrefix(out, "mode\tconfined\t") {
+		t.Fatalf("config --access lacks a mode line:\n%s", out)
+	}
+	if !strings.Contains(out, "id\taccess\tstatus\tpath\tpurpose\n") {
+		t.Fatalf("config --access lacks the header:\n%s", out)
+	}
+}
+
+func TestConfigAccessRefusesKeysAndOtherFlags(t *testing.T) {
+	for _, args := range [][]string{
+		{"--access", "git.mode"},
+		{"--access", "--list"},
+		{"--access", "--unset", "git.mode"},
+	} {
+		if _, _, err := runConfig(t, args...); err == nil {
+			t.Errorf("config %v succeeded, want a usage error", args)
+		}
+	}
+}
