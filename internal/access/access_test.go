@@ -16,33 +16,31 @@ func TestEmbeddedSpecLoads(t *testing.T) {
 	if len(spec.Entries) == 0 {
 		t.Fatal("manifest has no entries")
 	}
-	if _, ok := spec.entry(spec.ModeProbe); !ok {
-		t.Fatalf("mode_probe %q not found", spec.ModeProbe)
-	}
 }
 
 func TestValidateRejectsBadManifest(t *testing.T) {
 	cases := map[string]string{
 		"unknown root": `version: 1
-mode_probe: a
 entries:
-  - {id: a, root: etc, path: x, access: read, modes: [host], purpose: p}
+  - {id: a, root: etc, path: x, access: read, purpose: p}
 `,
 		"absolute path": `version: 1
-mode_probe: a
 entries:
-  - {id: a, root: home, path: /x, access: read, modes: [host], purpose: p}
-`,
-		"probe names no entry": `version: 1
-mode_probe: missing
-entries:
-  - {id: a, root: home, path: x, access: read, modes: [host], purpose: p}
+  - {id: a, root: home, path: /x, access: read, purpose: p}
 `,
 		"duplicate id": `version: 1
-mode_probe: a
+entries:
+  - {id: a, root: home, path: x, access: read, purpose: p}
+  - {id: a, root: home, path: y, access: read, purpose: p}
+`,
+		"retired modes key": `version: 1
 entries:
   - {id: a, root: home, path: x, access: read, modes: [host], purpose: p}
-  - {id: a, root: home, path: y, access: read, modes: [host], purpose: p}
+`,
+		"retired mode_probe key": `version: 1
+mode_probe: a
+entries:
+  - {id: a, root: home, path: x, access: read, purpose: p}
 `,
 	}
 	for name, body := range cases {
@@ -51,32 +49,6 @@ entries:
 				t.Fatal("decode accepted a bad manifest")
 			}
 		})
-	}
-}
-
-func TestDetectHostWhenHomeWritable(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	spec := mustLoad(t)
-	mode, reason := spec.Detect(t.TempDir())
-	if mode != ModeHost {
-		t.Fatalf("mode = %s (%s), want host", mode, reason)
-	}
-}
-
-func TestDetectConfinedWhenHomeReadOnly(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root bypasses directory permissions")
-	}
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	if err := os.Chmod(home, 0o500); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(home, 0o700) })
-	spec := mustLoad(t)
-	mode, reason := spec.Detect(t.TempDir())
-	if mode != ModeConfined {
-		t.Fatalf("mode = %s (%s), want confined", mode, reason)
 	}
 }
 
@@ -117,53 +89,50 @@ func TestStatusOfReadOnlyDirIsDenied(t *testing.T) {
 	}
 }
 
-func TestRowsFilterByMode(t *testing.T) {
-	spec := mustLoad(t)
-	repo := t.TempDir()
-	host := spec.Rows(ModeHost, repo)
-	confined := spec.Rows(ModeConfined, repo)
-	hasID := func(rows []Row, id string) bool {
-		for _, r := range rows {
-			if r.ID == id {
-				return true
-			}
-		}
-		return false
+func TestRowsCoverEveryEntry(t *testing.T) {
+	spec, err := Load()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !hasID(host, "agent_registry") || hasID(host, "confined_registry") {
-		t.Fatalf("host rows wrong: %+v", host)
+	rows := spec.Rows(t.TempDir())
+	if len(rows) != len(spec.Entries) {
+		t.Fatalf("rows = %d, want %d", len(rows), len(spec.Entries))
 	}
-	if hasID(confined, "agent_registry") || !hasID(confined, "confined_registry") {
-		t.Fatalf("confined rows wrong: %+v", confined)
-	}
-	for _, r := range host {
+	for _, r := range rows {
 		if r.Status == "" || r.Path == "" {
 			t.Fatalf("row without status or path: %+v", r)
 		}
 	}
 }
 
-func TestRenderWritesHeaderAndRows(t *testing.T) {
-	var buf bytes.Buffer
-	rows := []Row{{ID: "x", Access: "read", Status: "ok", Path: "/p", Purpose: "why"}}
-	if err := Render(&buf, ModeHost, "reason", rows); err != nil {
+func TestPathRowReportsStoreAndSpool(t *testing.T) {
+	dir := t.TempDir()
+	store := filepath.Join(dir, "harnez-agents")
+	if err := os.Mkdir(store, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	got := buf.String()
-	want := "mode\thost\treason\nid\taccess\tstatus\tpath\tpurpose\nx\tread\tok\t/p\twhy\n"
-	if got != want {
-		t.Fatalf("Render = %q, want %q", got, want)
+	r := PathRow("store", "readwrite", store, "session registry")
+	if r.ID != "store" || r.Status != "ok" || r.Path != store {
+		t.Fatalf("store row = %+v, want ok", r)
 	}
-	if strings.Count(got, "\n") != 3 {
-		t.Fatalf("unexpected line count in %q", got)
+	r = PathRow("spool", "readwrite", filepath.Join(dir, "spool"), "pointers")
+	if r.Status != "create" {
+		t.Fatalf("missing spool status = %s, want create", r.Status)
 	}
 }
 
-func mustLoad(t *testing.T) Spec {
-	t.Helper()
-	spec, err := Load()
-	if err != nil {
+func TestRenderWritesHeaderAndRows(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []Row{{ID: "x", Access: "read", Status: "ok", Path: "/p", Purpose: "why"}}
+	if err := Render(&buf, rows); err != nil {
 		t.Fatal(err)
 	}
-	return spec
+	got := buf.String()
+	want := "id\taccess\tstatus\tpath\tpurpose\nx\tread\tok\t/p\twhy\n"
+	if got != want {
+		t.Fatalf("Render = %q, want %q", got, want)
+	}
+	if strings.Count(got, "\n") != 2 {
+		t.Fatalf("unexpected line count in %q", got)
+	}
 }

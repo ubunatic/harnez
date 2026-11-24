@@ -1,63 +1,39 @@
 # yaml-language-server: $schema=schemas/access.schema.json
-# Directories harnez needs readable or writable, per mode. A caller that grants
-# these paths (taia profile, sandbox, or a human) lets harnez run in that mode.
+# Directories harnez needs readable or writable. A caller that grants these paths
+# (a taia profile, a sandbox, or a human) lets harnez run. harnez reports them with
+# `harnez config --access` and does not pick a mode from them. The session store
+# and the spool are resolved in code (HARNEZ_STORE_DIR, HARNEZ_SPOOL_DIR) and are
+# reported there, not listed here.
 # root: home | repo | tmp | xdg_data_home | xdg_state_home | xdg_cache_home | xdg_runtime_dir
-# modes: host (the process can write ~/.harnez) | confined (it cannot)
 version: 1
-# The mode is host when this entry's path is writable, otherwise confined.
-mode_probe: agent_registry
 entries:
-  - id: agent_registry
-    root: home
-    path: .harnez/agents
-    access: readwrite
-    modes: [host]
-    purpose: host agent registry; cross-session stop, resume and listing
   - id: user_config
     root: home
     path: .harnez/config.yaml
     access: read
-    modes: [host, confined]
     purpose: user config (models, costs, tool limits)
   - id: repo_config
     root: repo
     path: .harnez
     access: readwrite
-    modes: [host, confined]
     purpose: repo.yaml, rules and quota state
-  - id: confined_registry
-    root: repo
-    path: .harnez/agents
-    access: readwrite
-    modes: [confined]
-    purpose: agent registry for confined sessions in this repo
-  - id: confined_registry_tmp
-    root: tmp
-    path: harnez/agents
-    access: readwrite
-    modes: [confined]
-    purpose: fallback agent registry when the repo is not writable
   - id: telemetry
     root: xdg_data_home
     path: harnez
     access: readwrite
-    modes: [host, confined]
     purpose: telemetry database and usage exports
   - id: state
     root: xdg_state_home
     path: harnez
     access: readwrite
-    modes: [host, confined]
     purpose: model access locks and tool-limit state
   - id: cache
     root: xdg_cache_home
     path: harnez
     access: readwrite
-    modes: [host, confined]
     purpose: quota cache
   - id: process_records
     root: xdg_runtime_dir
     path: harnez/procs
     access: readwrite
-    modes: [host, confined]
     purpose: process records for exec and clean
