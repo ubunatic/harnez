@@ -52,3 +52,8 @@ Execute these M1 fixes first (in the M2 commit or a clean M1-fixup commit before
 3. `[MED]` `.harnez/rules/Quota.md`: remove the stale duplicate `Single-Test Boundary` / `Code Modification Required` lines (3-4) and keep the single clean tier-aware bullets in their original position.
 4. `[LOW]` `internal/exec/quota1_command.go` (`classifyMakeArgs`): allow decimal numbers for `-l`/`--load-average` (e.g. `make -l 1.5 test-short`).
 5. `[LOW]` Add test cases in `internal/exec/exec_test.go` and `internal/quota1/quota_test.go` for `-buildvcs ./...`, `-test.short ./...`, `-test.run Foo ./...`, `make -l 1.5 test-short`, and unfinished `TierPackage -> TierFull` remaining blocked.
+
+## 6. Delivery & Review (M2)
+
+- **M2 delivered (`80d0efda`)**: Completed all 5 M1 review pre-work items and updated `EnsureContextUnderThreshold` (`contextTokens <= 0`) + `cmd/harnez/agent_run.go` warning + unit/regression tests in `compact_test.go` and `agent_resume_test.go`.
+- **Review (`codex:sol:med`, 1m21s)**: **Ready to accept** (`0 [HIGH]`, `0 [MED]`, `1 [LOW]` optional `-test.bench`/`-test.fuzz` parser test cases).

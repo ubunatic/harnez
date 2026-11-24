@@ -27,5 +27,5 @@ Three active P2 harnez headaches selected for a 3-milestone lean sprint + releas
 ## Milestones
 
 - **M1 (#1275 — Tier-aware Quota-1)**: delivered by `dev-headaches` (`agy:hydrogen:med`, 6m09s, 988k tokens, commit `01fee008`). Host + `rev-m1-1275` (`codex:sol:med`, 1m58s, 47k new tokens, rated 5/5) caught 3 `[MED]` items (`-buildvcs` boolean flag, `-test.short`/`-test.run` aliases, duplicate bullets in `.harnez/rules/Quota.md`) and 2 `[LOW]` items (`make -l 1.5`, extra tests) — folded into M2 pre-work.
-- **M2 (#1266 — `agent resume` zero `context_tokens` + M1 pre-work)**: dispatching `dev-headaches`.
-- **M3 (#1270/#1279 — Runner-mode `--dry-run`, read-only `OpenSessionStore`, actionable errors)**: pending.
+- **M2 (#1266 — `agent resume` zero `context_tokens` + M1 pre-work)**: delivered by `dev-headaches` (`agy:hydrogen:med`, 4m28s, 1.75M tokens, commit `80d0efda`). Reviewed by `rev-m2-1266` (`codex:sol:med`, 1m21s, 50.2k new tokens, rated 5/5): **Ready to accept** (`0 [HIGH]`, `0 [MED]`).
+- **M3 (#1270/#1279 — Runner-mode `--dry-run`, read-only `OpenSessionStore`, actionable errors)**: dispatching `dev-headaches`.
