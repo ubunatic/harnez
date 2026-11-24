@@ -30,6 +30,9 @@ type TurnTokenUsage struct {
 
 // RecordTurnQuota appends one boundary observation in the session store.
 func (s *FileSessionStore) RecordTurnQuota(event TurnQuotaEvent) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	if event.SessionID == "" || event.Turn < 1 || (event.Boundary != "before" && event.Boundary != "after") {
 		return fmt.Errorf("invalid turn quota event")
 	}

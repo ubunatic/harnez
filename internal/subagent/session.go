@@ -278,7 +278,20 @@ type SessionStore interface {
 
 // FileSessionStore persists sessions as JSON files in a directory.
 type FileSessionStore struct {
-	dir string
+	dir      string
+	readOnly bool
+}
+
+// IsReadOnly reports whether the store was opened via OpenSessionStore.
+func (s *FileSessionStore) IsReadOnly() bool {
+	return s.readOnly
+}
+
+func (s *FileSessionStore) requireWritable() error {
+	if s.readOnly {
+		return fmt.Errorf("session store %s was opened read-only", s.dir)
+	}
+	return nil
 }
 
 // NewSessionStore creates a new file-based session store at the given directory.
@@ -307,7 +320,7 @@ func NewHostSessionStoreDirect(dir string) (*FileSessionStore, error) {
 // OpenSessionStore opens an existing store without creating directories. It is
 // intended for read-only callers such as shell completion and status inspection.
 func OpenSessionStore(dir string) (*FileSessionStore, error) {
-	return &FileSessionStore{dir: dir}, nil
+	return &FileSessionStore{dir: dir, readOnly: true}, nil
 }
 
 func guardHostSessionStoreAccess(dir string) error {
@@ -340,12 +353,18 @@ func DefaultStoreDir() string {
 
 // Save persists a session to disk.
 func (s *FileSessionStore) Save(sess *Session) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	return s.saveQueued(sess, nil, false)
 }
 
 // Update performs an atomic read-modify-write under the registry flock so
 // concurrent host mutations (such as agent stop) are never clobbered.
 func (s *FileSessionStore) Update(id string, fn func(*Session) error) (*Session, error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	unlock, err := s.lockRegistry()
 	if err != nil {
 		return nil, err
@@ -366,6 +385,9 @@ func (s *FileSessionStore) Update(id string, fn func(*Session) error) (*Session,
 
 // save writes the session atomically. Callers must hold the registry lock.
 func (s *FileSessionStore) save(sess *Session) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	if sess.ID == "" {
 		return fmt.Errorf("session must have an ID")
 	}
@@ -397,6 +419,9 @@ func (s *FileSessionStore) save(sess *Session) error {
 
 // Create atomically reserves a session name and creates its initial registry entry.
 func (s *FileSessionStore) Create(sess *Session) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	if sess.ID == "" || sess.Name == "" {
 		return fmt.Errorf("session must have an ID and name")
 	}
@@ -507,6 +532,9 @@ func (s *FileSessionStore) listFrom(dir, parentID string, allSessions bool) ([]*
 
 // Delete removes a session file.
 func (s *FileSessionStore) Delete(id string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	unlock, err := s.lockRegistry()
 	if err != nil {
 		return err

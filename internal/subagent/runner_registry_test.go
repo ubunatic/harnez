@@ -36,6 +36,41 @@ func TestRunnerModeBlocksDirectHostSessionStore(t *testing.T) {
 	if _, err := os.Stat(DefaultStoreDir()); !os.IsNotExist(err) {
 		t.Fatalf("DefaultStoreDir should not be created in runner mode: %v", err)
 	}
+
+	// Seed a host session file with runner mode disabled, then verify OpenSessionStore
+	// in runner mode fails closed on Save and Delete and leaves the file untouched.
+	t.Setenv("TAIA_SESSION_DIR", "")
+	hostStore, err := NewSessionStore(DefaultStoreDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hostStore.Create(&Session{ID: "ro-test", Name: "ro-test", Provider: "codex", Model: "luna", Status: "completed"}); err != nil {
+		t.Fatal(err)
+	}
+	sessFile := filepath.Join(DefaultStoreDir(), "ro-test.json")
+	beforeBytes, err := os.ReadFile(sessFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("TAIA_SESSION_DIR", runnerRoot)
+	roStore, err := OpenSessionStore(DefaultStoreDir())
+	if err != nil {
+		t.Fatalf("OpenSessionStore(DefaultStoreDir()) failed: %v", err)
+	}
+	if err := roStore.Save(&Session{ID: "ro-test", Name: "ro-test", Status: "failed"}); err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("roStore.Save err = %v, want read-only error", err)
+	}
+	if err := roStore.Delete("ro-test"); err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("roStore.Delete err = %v, want read-only error", err)
+	}
+	afterBytes, err := os.ReadFile(sessFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(afterBytes) != string(beforeBytes) {
+		t.Fatalf("session file mutated by read-only store:\nbefore: %s\nafter:  %s", beforeBytes, afterBytes)
+	}
 }
 
 func TestFileSessionStoreCreateStampsLaunchIDAndRunnerRegistryClient(t *testing.T) {

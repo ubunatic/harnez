@@ -205,6 +205,39 @@ func TestAgentStartDryRunInRunnerModeSkipsStore(t *testing.T) {
 			}
 		})
 	}
+
+	// Spy on store() in both runStart and withHostTrackingLine to prove zero invocations.
+	storeCalls := 0
+	spyStore := func() (*subagent.FileSessionStore, error) {
+		storeCalls++
+		return nil, os.ErrInvalid
+	}
+	spyCmd := &cobra.Command{Use: "start", RunE: func(c *cobra.Command, _ []string) error {
+		return runStart(t.Context(), c, agentDeps{
+			store:  spyStore,
+			parent: func() string { return "host-parent" },
+		}, startRequest{
+			DryRun:     true,
+			Role:       "developer",
+			ModelSpec:  "codex:luna:low",
+			Name:       "dry-spy",
+			Prompt:     "hello",
+			Dir:        ".",
+			StreamMode: streamFull,
+		})
+	}}
+	spyCmd.Flags().Bool("dry-run", false, "")
+	var spyOut, spyErr bytes.Buffer
+	spyCmd.SetOut(&spyOut)
+	spyCmd.SetErr(&spyErr)
+	withHostTrackingLine(spyCmd, spyStore, func() string { return "host-parent" }, func() bool { return false })
+	spyCmd.SetArgs([]string{"--dry-run"})
+	if err := spyCmd.Execute(); err != nil {
+		t.Fatalf("spy dry-run failed: %v", err)
+	}
+	if storeCalls != 0 {
+		t.Fatalf("store() called %d times during runner-mode --dry-run, want 0", storeCalls)
+	}
 }
 
 func TestPromptFlagErrorRedactsPrompt(t *testing.T) {

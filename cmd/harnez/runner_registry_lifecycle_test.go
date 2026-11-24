@@ -154,6 +154,16 @@ func TestRunnerModeRejectsCrossSessionLifecycleAndHostRegistry(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := hostStore.Create(&subagent.Session{
+		ID: "stale-running", Name: "stale-running", Provider: "codex", Model: "luna", Tier: "low", Status: "running", ProcessPID: 999999999, WorkingDir: home,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	staleFile := filepath.Join(subagent.DefaultStoreDir(), "stale-running.json")
+	staleBefore, err := os.ReadFile(staleFile)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	runnerRoot := filepath.Join(t.TempDir(), "runner-sess")
 	if err := os.Mkdir(runnerRoot, 0o700); err != nil {
@@ -180,6 +190,23 @@ func TestRunnerModeRejectsCrossSessionLifecycleAndHostRegistry(t *testing.T) {
 		if !strings.Contains(out.String(), "other") {
 			t.Fatalf("harnez agent %v output = %q, want session 'other'", args, out.String())
 		}
+	}
+
+	// Read-only agent wait on a stale-running session in runner mode must not fail with a
+	// write error and must leave the session JSON file byte-for-byte unchanged on disk.
+	waitCmd := newAgentCmd()
+	var waitOut strings.Builder
+	waitCmd.SetOut(&waitOut)
+	waitCmd.SetArgs([]string{"wait", "stale-running"})
+	if err := waitCmd.Execute(); err != nil {
+		t.Fatalf("harnez agent wait stale-running failed in runner mode: %v", err)
+	}
+	staleAfter, err := os.ReadFile(staleFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(staleAfter) != string(staleBefore) {
+		t.Fatalf("stale-running.json mutated in runner mode:\nbefore: %s\nafter:  %s", staleBefore, staleAfter)
 	}
 
 	for _, tc := range []struct {
