@@ -1,6 +1,6 @@
 # 1299 — selfinstall: TestRunLocalSelfInstallSymlinksGoBinToLocalBin fails when the fixture gobin binary is newer than the test binary
 
-**Status**: Open
+**Status**: Closed — Test-only fix: fixture mtime pinned to 2000-01-01 and GOBIN pinned to the fixture dir (goself ignores Options.GoBinDir); new TestRunLocalSelfWarnsWhenGoBinIsNewer proves the warning still fires; selfinstall passes cached, after make install, and with hostile GOBIN/GOPATH
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
