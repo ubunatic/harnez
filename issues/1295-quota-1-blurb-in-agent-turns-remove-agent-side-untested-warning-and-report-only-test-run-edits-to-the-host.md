@@ -1,6 +1,6 @@
 # 1295 — quota-1 blurb in agent turns: remove agent-side untested warning and report only test-run edits to the host
 
-**Status**: In Progress — code and tests written; full `make test-q1` pending
+**Status**: Closed — agent turns no longer print the quota-1 line; a run reports files edited while it ran (11439ed3)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
