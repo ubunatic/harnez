@@ -1,6 +1,7 @@
 # 1288 — Slow TestAgentSelftestGeneratedSessionAcrossShells takes 31s
 
-**Status**: Open
+**Status**: Closed — merged into 1291
+**Closed-By**: claude:opus:med, session merge-slow-tests
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Performance
