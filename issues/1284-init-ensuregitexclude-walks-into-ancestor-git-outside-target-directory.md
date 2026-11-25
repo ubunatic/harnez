@@ -1,6 +1,6 @@
 # 1284 — init: EnsureGitExclude walks into ancestor .git outside target directory
 
-**Status**: Open
+**Status**: Open — partly addressed by c6cf2219: `FindGitDir` now skips a `.git` directory without `HEAD`, so the stray `/home/uwe/.git` (only `info/`) is no longer written to. The walk still continues past the target to a real ancestor repository, which remains open.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
