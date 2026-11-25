@@ -37,6 +37,9 @@ func TestRunInit_QuotaOffManagedTextHasNoQuotaCommands(t *testing.T) {
 	if strings.Contains(agents, "Quota.md") {
 		t.Errorf("AGENTS.md links Quota.md without quota-1 rules:\n%s", agents)
 	}
+	if strings.Contains(agents, "test-q1") {
+		t.Errorf("AGENTS.md names test-q1 without quota-1 rules:\n%s", agents)
+	}
 	// Every managed rule and doc that init wrote must be free of test-q1.
 	managed, err := filepath.Glob(filepath.Join(dir, "docs", "*.md"))
 	if err != nil {
@@ -103,8 +106,14 @@ func TestRunInit_QuotaOnKeepsQuotaCommands(t *testing.T) {
 	if !strings.Contains(agents, "Quota.md") {
 		t.Errorf("AGENTS.md drops Quota.md with quota-1 rules:\n%s", agents)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md")); err != nil {
+	quotaRule := filepath.Join(dir, ".harnez", "rules", "Quota.md")
+	if _, err := os.Stat(quotaRule); err != nil {
 		t.Errorf("Quota.md missing with quota-1 rules: %v", err)
+	}
+	// The managed rule keeps the quota-1 test command: managedTextFor must not
+	// rewrite it to the plain target when quota-1 rules are on.
+	if rule := readFileForQuotaTest(t, quotaRule); !strings.Contains(rule, "make test-q1") {
+		t.Errorf("Quota.md dropped the make test-q1 command with quota-1 rules:\n%s", rule)
 	}
 }
 
