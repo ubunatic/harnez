@@ -1,6 +1,6 @@
 ---
 name: harnez-land
-description: Commit and land changes (direct to main when push is allowed and confident, else via AGit/PR), switch to latest main, and audit/clean up stale worktrees, local/remote branches, and AGit topics/PRs with a concrete plan (interactive or auto). Only on explicit /harnez-land.
+description: Commit and land changes (direct to main when allowed, else AGit, else a topic branch and PR), switch to latest main, and audit/clean up stale worktrees, local/remote branches, and AGit topics/PRs with a concrete plan (interactive or auto). Only on explicit /harnez-land.
 disable-model-invocation: true
 ---
 
@@ -39,18 +39,19 @@ protection is enabled on the forge.
 ## 2. Push
 
 - Skip when `git log origin/main..HEAD` is empty.
-- **Direct-to-`main` repo + good confidence**: if on a topic branch, fast-forward or merge into
-  `main` first, then `git push origin main`.
-- **Protected-`main` / PR repo**:
-  - Forge with AGit (Forgejo, Gitea): `git push origin HEAD:refs/for/main/<topic>`. The topic is
-    the one in `git config remote.origin.push`, else the forge username, else ask.
-  - GitHub or a branch others push to: `git push -u origin HEAD`.
-  - PR number in the push output: start `HTO=0 harnez pr wait <number> --contains <sha>` in the
-    background, and report "merged" only on its exit 0. On exit 6 the forge saw the merge but
-    `<sha>` is unverified: confirm with a foreground `git fetch` and `git merge-base --is-ancestor`.
-    On exit 7 the PR conflicts with its base: merge the base in, push with the `git push` line the
-    wait printed, and start a new wait.
-- A rejected push stops the run: report it (`docs/AGit.md` covers the non-fast-forward case).
+- Push in this order; a refused push falls through to the next step:
+  1. **Direct to `main`**, when `protected_main` is not set in `.harnez/repo.yaml`, the forge or
+     hook accepts it, and you are confident in the changes: if on a topic branch, fast-forward or
+     merge into `main` first, then `git push origin main`. Never force-push.
+  2. **AGit**, where the forge supports it (Forgejo, Gitea): `git push origin HEAD:refs/for/main/<topic>`.
+     The topic is the one in `git config remote.origin.push`, else the forge username, else ask.
+  3. **Topic branch**: `git push -u origin HEAD`, then a PR (GitHub, or a branch others push to).
+- For a PR from step 2 or 3: start `HTO=0 harnez pr wait <number> --contains <sha>` in the
+  background, and report "merged" only on its exit 0. On exit 6 the forge saw the merge but
+  `<sha>` is unverified: confirm with a foreground `git fetch` and `git merge-base --is-ancestor`.
+  On exit 7 the PR conflicts with its base: merge the base in, push with the `git push` line the
+  wait printed, and start a new wait.
+- A rejected push at step 3 stops the run: report it (`docs/AGit.md` covers the non-fast-forward case).
 
 ## 3. Switch
 
@@ -86,9 +87,9 @@ Assign every item exactly one disposition and a one-line reason:
    local branch, remove the clean worktree, or delete the remote branch (if ours).
 2. **Rescue uncommitted** — Dirty or detached worktree / stash with local edits or untracked files.
    Inspect first; commit to a recovery branch, fold into an active PR, or drop if scratch/generated.
-3. **Integrate as-is** — Clean, scoped, good-quality work still relevant to `main`. Push directly
-   to `main` (if push to `main` is allowed and confident), or push via AGit (`refs/for/main/<topic>`)
-   / merge its open PR, wait for merge, then drop.
+3. **Integrate as-is** — Clean, scoped, good-quality work still relevant to `main`. Land it by the
+   push order in section 2 (direct to `main` when allowed, else AGit, else a topic branch), or merge
+   its open PR, wait for merge, then drop.
 4. **Fixup & PR** — Valuable work that is stale, conflicting, or needs minor cleanup/tests. Rebase
    or cherry-pick onto `origin/main` (new AGit topic suffix if replacing a conflicting AGit PR),
    fix up, and land via `main` or PR (or hand off to `/lean-sprint` if non-trivial).

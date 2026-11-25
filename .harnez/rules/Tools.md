@@ -75,9 +75,9 @@ Harnez-only rules in .harnez/rules/. Flags and details: `harnez <verb> --help`.
 - If `.harnez/state/disable/` has files, read them at session start. An item applies only when
   its `session_id` is this session; otherwise enforce the rule and warn once that a stale item
   is recorded (`/enable` clears it).
-- With `repo-rules push-main` suspended, still push through AGit where the forge has it, then
-  run `harnez pr wait <number> --contains <sha>` in the background; only its exit 0 counts as
-  merged.
+- With `repo-rules push-main` suspended, push `main` directly. If the remote refuses it, use
+  AGit where the forge has it, then a topic branch. When a PR was opened, run
+  `harnez pr wait <number> --contains <sha>` in the background; only its exit 0 counts as merged.
 
 ## Repository Scope
 This repository is the sole product. Never offer or start implementation in another repository

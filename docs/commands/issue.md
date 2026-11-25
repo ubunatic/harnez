@@ -139,9 +139,10 @@ The goal is that the ticket commit reaches `main`, or a review PR, as soon as it
 
 Routes, in order:
 
-1. **Direct push to `main`**, preferred whenever the admin's authorization allows it and the remote accepts it. Standing consent counts only where applicable policy allows it. Where applicable policy requires authorization in the current session, standing consent is insufficient: ask for it, or use the AGit route. Several policy sources may apply, such as `AGENTS.md`, `.harnez/repo.yaml` or `docs/Git.md`. The strictest rule wins, and the remote's branch protection has the final word.
-2. **AGit PR to `main`**, when direct push is not allowed and the remote supports AGit. Use the contributor's reusable topic (by default the Git username). Several issues may share one topic and one PR.
-3. **Stop** otherwise. Leave the commit on the current branch, or on `issue/<n>-<slug>` if you are on the default branch, and report the reason.
+1. **Direct push to `main`**, preferred whenever the admin's authorization allows it and the remote accepts it. Standing consent counts only where applicable policy allows it. Where applicable policy requires authorization in the current session, standing consent is insufficient: ask for it, or use the AGit route or the topic branch route. Several policy sources may apply, such as `AGENTS.md`, `.harnez/repo.yaml` or `docs/Git.md`. The strictest rule wins, and the remote's branch protection has the final word.
+2. **AGit PR to `main`**, when direct push is not allowed or refused and the remote supports AGit. Use the contributor's reusable topic (by default the Git username). Several issues may share one topic and one PR.
+3. **Topic branch PR**, when AGit is not available: push `issue/<n>-<slug>` and open a PR for it (see the topic branch route below).
+4. **Stop** otherwise. Leave the commit on the current branch, or on `issue/<n>-<slug>` if you are on the default branch, and report the reason.
 
 `<sha>` is the intended issue commit: the commit that `harnez issues open --commit` made for this ticket.
 
@@ -156,7 +157,11 @@ Direct route:
 
 AGit route:
 
-- `git -C <repo> push origin HEAD:refs/for/main/<topic>`. This is the form the repository owner reports the Forgejo remote accepts; it is not verified on other servers. If the remote rejects it, stop and report the server's message. Do not fall back to a direct push.
+- `git -C <repo> push origin HEAD:refs/for/main/<topic>`. This is the form the repository owner reports the Forgejo remote accepts; it is not verified on other servers. If the remote rejects it, fall through to the topic branch route and report the server's message. Do not fall back to a direct push.
+
+Topic branch route:
+
+- `git -C <repo> push -u origin HEAD` pushes `issue/<n>-<slug>`. Check the pushed commits as in the direct route, then open the PR and learn its merge as in the AGit route (`harnez pr wait`).
 - Pushes to the same topic update its open PR. Check the topic's PR is still open before pushing. If it was closed or merged, use a new topic and say so.
 - The topic may contain other issues' commits. Check that the commits being pushed contain no unrelated changes. If any pushed commit is unrelated to an issue, stop and report it.
 - The PR is not on `main` until it is merged. Report it as open, not as published.
@@ -187,7 +192,7 @@ walked in, never "as discussed above." At minimum, include:
 - Any explicit constraints the user stated (scope limits, priority hints, what *not*
   to do).
 - The absolute repository and installed skill paths, execution mode (`direct`),
-  selected agent/model/effort, write, commit and publication authority (direct push, AGit PR or stop),
+  selected agent/model/effort, write, commit and publication authority (direct push, AGit PR, topic branch PR or stop),
   and expected result: ticket number/path or duplicate finding, verification, commit, publication
   status, and remaining blockers.
 

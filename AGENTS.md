@@ -76,16 +76,18 @@ agent"; "harness" means "harnez".
 
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
-- Team repo. Push in this order: (1) `git push origin main` when the remote accepts it, fast-forward only; (2) when main is refused, AGit on a forge that has it: `git push origin HEAD:refs/for/<default-branch>/<topic>`; (3) otherwise push a branch (`issue/<n>-<slug>`, `sprint/<n>`) and open a PR.
+- Team repo. Push in this order; a refused push falls through to the next step:
+  1. `git push origin main` (fast-forward only) when the repo does not set `protected_main` and the forge or hook accepts it.
+  2. AGit where the forge supports it: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
+  3. A topic branch (`issue/<n>-<slug>`, `sprint/<n>`) and a PR.
 - Never force-push.
 - Update/rebase your branch before merging; follow this repo's CI and review requirements.
 <!-- harnez:end Repo Setup -->
 
 ## Remotes
 - Codeberg and GitHub are both dev remotes; Codeberg is canonical for releases (`docs/Git.md`, Remotes).
-- `origin` is `ubunatic/harnez` on Codeberg. Push `main` first when the remote accepts it
-  (fast-forward only, never force). When `main` is refused, use AGit (`refs/for/main/<topic>`);
-  without AGit, push a branch and open a PR.
+- `origin` is `ubunatic/harnez` on Codeberg. Push order: `main` directly when allowed (fast-forward
+  only, never force); else AGit (`refs/for/main/<topic>`); else a topic branch and a PR.
 - Owner's clone with the `both` remote: `make install-git-hooks` copies `scripts/git-hooks/pre-push`
   (Git LFS plus the GitHub guard) into the hooks dir. It refuses to replace a differing hook that
   lacks the `git lfs pre-push` line unless `FORCE=1`. Tests: `internal/githooks`.
@@ -98,7 +100,7 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 - Agentic Loop Practices @docs/AgenticLoop.md,
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
 - AGit @docs/AGit.md,
-  AGit is the fallback when a direct push to main is refused: push HEAD:refs/for/<default>/<topic>, no branch; merged topic opens a new PR; harnez pr wait for the merge
+  AGit is step 2 of the push order, used when a direct push to main is not allowed or refused: push HEAD:refs/for/<default>/<topic>, no branch; merged topic opens a new PR; harnez pr wait for the merge
 - Bash/Shell @docs/Bash.md,
   Read docs/Bash.md before writing shell (scripts, Make recipes, embedded shell): house style, not common Bash
   Header `set -euo pipefail`; `if test`, never `[ ]` or `[[ ]]`; no `;`

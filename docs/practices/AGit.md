@@ -6,13 +6,15 @@ weight: 30
 <!-- harnez:bundled -->
 # AGit
 
-This repository uses AGit: a PR is opened by pushing to a magic ref, not by pushing a branch.
-Forgejo and Gitea support it (Codeberg runs Forgejo). GitHub has no AGit.
+AGit opens a PR by pushing to a magic ref, not by pushing a branch. It is step 2 of the push order:
+direct push to the default branch first, then AGit, then a topic branch. Forgejo and Gitea support
+it (Codeberg runs Forgejo). GitHub has no AGit.
 
 ## Push
 
-- Push order: first `git push origin <default-branch>` when the remote accepts it (fast-forward only).
-  When that push is refused, use AGit. Without AGit, push a branch and open a PR.
+- Push order: (1) `git push origin <default-branch>` when `protected_main` is not set and the remote
+  accepts it (fast-forward only); (2) AGit when that push is not allowed or refused and the forge
+  supports it; (3) otherwise a topic branch and a PR. A refused step falls through to the next.
 - AGit push: `git push origin HEAD:refs/for/<default-branch>/<topic>`, e.g.
   `git push origin HEAD:refs/for/main/flashcoder`. No branch is created on the remote.
 - Never force-push.

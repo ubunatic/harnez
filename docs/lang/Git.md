@@ -14,13 +14,14 @@ commonly stored in an `AGENTS.md` file at the repository root.
   `harnez init --repo-mode <mode> [--protected-main]`; the project's Repo Setup restates it):
   - `solo`: work local, on the repo's default branch (usually `main`, sometimes `master`);
     no local feature branches.
-  - `team` / `fork`: push the default branch first when the remote accepts it (fast-forward only,
-    never force). When that push is refused, use AGit; without AGit, push a branch and open a PR.
-    - AGit (Forgejo, Gitea): `git push origin HEAD:refs/for/<default-branch>/<topic>`, no branch.
-      Topics, the PR lifecycle and the `harnez pr wait` merge signal are in `docs/AGit.md`
-      (`harnez init --docs agit`).
-    - Branch: one branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`), pushed: for
-      work others push to, long sprints that need rebasing, forks, and GitHub, which has no AGit.
+  - `team` / `fork`: push in this order; a refused push falls through to the next step:
+    1. Direct push to the default branch (`git push origin main`, fast-forward only, never force)
+       when `protected_main` is not set and the forge or hook accepts it.
+    2. AGit where the forge supports it (Forgejo, Gitea): `git push origin HEAD:refs/for/<default-branch>/<topic>`,
+       no branch. Topics, the PR lifecycle and the `harnez pr wait` merge signal are in `docs/AGit.md`
+       (`harnez init --docs agit`).
+    3. A topic branch, one per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`), and a PR. Forks and
+       GitHub, which has no AGit, use this step.
   - `protected_main` (team/fork only): when true, the default branch refuses direct pushes, so use
     AGit or a branch. When false, direct pushes to the default branch are allowed (this repo sets
     `protected_main: false`). Never force-push.
@@ -37,9 +38,11 @@ commonly stored in an `AGENTS.md` file at the repository root.
 - Do not push until the user confirms pushing. One confirmation covers the session:
   push later finished work without asking again, unless the user narrows or revokes consent.
 - Solo: "push" means `main` and tags to both dev remotes. Ask again only for force pushes,
-  new remote branches, or a remote that diverged. Team/fork: "push" means the topic branch.
-- Solo: do not create remote branches or PRs unless asked. Team/fork: pushing the topic
-  branch is the delivery; the PR is opened by the host or owner (`tea`/`gh` per forge).
+  new remote branches, or a remote that diverged. Team/fork: "push" means the push order above:
+  the default branch when allowed, else AGit, else a topic branch.
+- Solo: do not create remote branches or PRs unless asked. Team/fork: a direct push to the default
+  branch needs no PR; AGit opens its PR with the push; a topic branch is delivered by a PR the host
+  or owner opens (`tea`/`gh` per forge).
 
 ## Commit messages
 - Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary):
