@@ -58,12 +58,48 @@ func TestRunInit_QuotaOffManagedTextHasNoQuotaCommands(t *testing.T) {
 		t.Errorf("Makefile gained a test-q1 target without quota-1 rules:\n%s", makefile)
 	}
 
-	// A second run, as in an already-initialised repo, must not touch AGENTS.md.
+	// A second run, as in an already-initialised repo, must not touch AGENTS.md,
+	// the managed rules and docs, or the Makefile.
+	before := map[string]string{"Makefile": makefile}
+	for _, path := range append(managed, rules...) {
+		before[path] = readFileForQuotaTest(t, path)
+	}
 	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true, Docs: []string{"gorelease"}}); err != nil {
 		t.Fatal(err)
 	}
 	if again := readFileForQuotaTest(t, filepath.Join(dir, "AGENTS.md")); again != agents {
 		t.Errorf("second init changed AGENTS.md:\nbefore:\n%s\nafter:\n%s", agents, again)
+	}
+	for path, want := range before {
+		if got := readFileForQuotaTest(t, path); got != want {
+			t.Errorf("second init changed %s", path)
+		}
+	}
+}
+
+// A repo whose Makefile names test-q1 keeps the quota-1 rules, the Quota.md
+// read item and the test-q1 command in managed text.
+func TestRunInit_QuotaOnKeepsQuotaCommands(t *testing.T) {
+	dir := t.TempDir()
+	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/quotaon\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Makefile"), []byte("test-q1:\n\tgo test ./...\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := claude.LoadTestConfig(t)
+	if err := claude.RunInitWithVariant(dir, cfg, claude.InitOptions{AssumeYes: true}); err != nil {
+		t.Fatal(err)
+	}
+	agents := readFileForQuotaTest(t, filepath.Join(dir, "AGENTS.md"))
+	if !strings.Contains(agents, "Quota.md") {
+		t.Errorf("AGENTS.md drops Quota.md with quota-1 rules:\n%s", agents)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md")); err != nil {
+		t.Errorf("Quota.md missing with quota-1 rules: %v", err)
 	}
 }
 
