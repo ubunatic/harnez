@@ -101,8 +101,10 @@ func Copy(src, dst string) (changed bool, err error) {
 	return WriteIfChanged(dst, data)
 }
 
-// FindGitDir searches upwards from startDir for the .git directory or file.
-// Returns the path to the actual git directory and true if found.
+// FindGitDir searches upwards from startDir for a git repository and returns
+// its git directory. A .git directory or gitfile counts only when the target
+// is a real repository (it has a HEAD file); a stray .git directory, such as
+// one left in a home directory, is skipped so tooling does not write into it.
 func FindGitDir(startDir string) (string, bool) {
 	dir, err := filepath.Abs(startDir)
 	if err != nil {
@@ -113,7 +115,9 @@ func FindGitDir(startDir string) (string, bool) {
 		fi, err := os.Stat(gitPath)
 		if err == nil {
 			if fi.IsDir() {
-				return gitPath, true
+				if isGitRepoDir(gitPath) {
+					return gitPath, true
+				}
 			}
 			data, err := os.ReadFile(gitPath)
 			if err == nil {
@@ -123,7 +127,9 @@ func FindGitDir(startDir string) (string, bool) {
 					if !filepath.IsAbs(target) {
 						target = filepath.Join(dir, target)
 					}
-					return filepath.Clean(target), true
+					if isGitRepoDir(filepath.Clean(target)) {
+						return filepath.Clean(target), true
+					}
 				}
 			}
 		}
@@ -173,4 +179,11 @@ func EnsureGitExclude(startDir string, pattern string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// isGitRepoDir reports whether p looks like a git directory: git writes a HEAD
+// file into every repository it creates.
+func isGitRepoDir(p string) bool {
+	fi, err := os.Stat(filepath.Join(p, "HEAD"))
+	return err == nil && fi.Mode().IsRegular()
 }
