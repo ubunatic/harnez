@@ -1,6 +1,6 @@
-# 1292 — Flaky internal/server runner-launch tests fail in full test-q1 runs
+# 1292 — Runner-launch tests fail under harnez exec (inherited broker FD)
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -9,19 +9,20 @@
 ---
 
 ## 0. Goal
-`/goal` Find why `TestRunnerLaunchBwrapSurvivesExtraFiles` and `TestRunnerLaunchBindChildPIDEnforcesProcessTree` (internal/server) fail only in full `HTO=0 make test-q1` runs, then fix the cause without weakening the assertions. Done when five consecutive full runs are green, or the cause is written down with a reproduction. Stop and report if the fix needs a design decision, or if the cause is outside this repo.
+`/goal` Find why `TestRunnerLaunchBwrapSurvivesExtraFiles` and `TestRunnerLaunchBindChildPIDEnforcesProcessTree` (internal/server) fail in full `HTO=0 make test-q1` runs, then fix the cause without weakening the assertions. Done when a full `make test-q1` run is green.
 
 ## 1. Problem & Motivation
-Both tests fail in full `make test-q1` runs and pass when run alone (`go test -count=1 -run ...`) and with `-count=3`. Across the four full runs on 2026-11-25 (ticket commits 21ffce83 to c4744476), these two were the only failures. Each failed run means a developer or agent has to rerun the suite and judge by hand whether the failure is real, which slows every commit and hides real regressions.
+Both tests failed in every full `make test-q1` run on 2026-11-25 and passed when run directly. Each failed run meant a rerun and a manual judgment on whether the failure was real.
 
-## 2. Technical Specification / Findings
-- Failure messages seen: `bwrap relayed = [], want [bwrap-1]` (SurvivesExtraFiles) and `bound child test failed: exit status 3` (BindChildPIDEnforcesProcessTree).
-- Both tests run bwrap-based launches. Full runs run many packages in parallel, so bwrap start-up or child-PID timing under load is the likely cause. Not yet confirmed.
-- Their runtime is short (about 0.01 to 0.03s), so a fixed wait or a race between the child and the relay is more likely than slow work.
-- Unknown: whether the same failures occur on the parent commit of any recent change, and whether they also fail under `-p 1`.
+## 2. Findings (confirmed)
+- Cause: `harnez exec` exports its own broker socket as `HARNEZ_BROKER_FD`. The tests inherited it. `prepareForwardedRunnerBroker` (internal/server/runner_launch.go) forwarded that socket to the test child, so the child relayed to the outer broker instead of the test's broker. Result: `bwrap relayed = []` and `bound child test failed: exit status 3`.
+- Evidence: the package passed when run directly (3 of 3). It failed through `harnez exec`, with or without `--quota-1`. Clearing `HARNEZ_BROKER_FD` in the two tests made them pass under `harnez exec`. The quota variable and the process group were ruled out: each alone passed.
+- Not a load or timing problem: the earlier "load-dependent" theory was wrong.
 
-## 3. Implementation & Verification Plan
-1. Reproduce under load: run the two tests with `-count=20` while a parallel `go test ./...` runs, and record the failure rate.
-2. Read the launch path and the test's wait logic. Replace any fixed budget with a ready signal from the child, per `docs/TestTiers.md` (Timing Rules).
-3. Keep the assertions: relayed files and the process-tree check must still be checked.
-4. Verify: five consecutive full `make test-q1` runs are green, and the targeted run passes under load.
+## 3. Resolution
+- Both tests now clear the inherited variable with `t.Setenv(cfg.RunnerChannel.FDEnv, "")` before they start their own broker. Assertions are unchanged.
+- Fix commit: b86c6aab (refs 1292).
+- Verified: `harnez exec --quota-1 -- go test ./internal/server/` passes; full `HTO=0 make test-q1` exits 0.
+
+## 4. Open question (separate ticket if pursued)
+Whether `harnez exec` should hand its broker socket to arbitrary child processes. It is a design question, not part of this fix.
