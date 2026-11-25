@@ -25,9 +25,10 @@ type spoolPointer struct {
 	Entry     json.RawMessage `json:"entry"`
 }
 
-// SpoolDir returns HARNEZ_SPOOL_DIR, or ~/.harnez/spool when it is unset.
+// SpoolDir returns HARNEZ_SPOOL_DIR, trimmed, or ~/.harnez/spool when it is unset
+// or blank.
 func SpoolDir() string {
-	if v := os.Getenv("HARNEZ_SPOOL_DIR"); v != "" {
+	if v := strings.TrimSpace(os.Getenv("HARNEZ_SPOOL_DIR")); v != "" {
 		return v
 	}
 	home, err := os.UserHomeDir()

@@ -21,6 +21,25 @@ func TestSpoolDirHonoursEnvAndDefaultsUnderHome(t *testing.T) {
 	}
 }
 
+// A whitespace-only HARNEZ_SPOOL_DIR is blank, and a padded one names its trimmed
+// path, as DefaultStoreDir treats HARNEZ_STORE_DIR.
+func TestSpoolDirTrimsBlankAndPaddedValues(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	defaultDir := filepath.Join(home, ".harnez", "spool")
+	for _, blank := range []string{"  ", "\t", " \n "} {
+		t.Setenv("HARNEZ_SPOOL_DIR", blank)
+		if got := SpoolDir(); got != defaultDir {
+			t.Fatalf("SpoolDir() with HARNEZ_SPOOL_DIR=%q = %q, want default %q", blank, got, defaultDir)
+		}
+	}
+	want := filepath.Join(t.TempDir(), "spool")
+	t.Setenv("HARNEZ_SPOOL_DIR", "  "+want+"  ")
+	if got := SpoolDir(); got != want {
+		t.Fatalf("SpoolDir() with padded HARNEZ_SPOOL_DIR = %q, want %q", got, want)
+	}
+}
+
 // Reading pointers must not create the store a stale pointer names.
 func TestSpoolReadDoesNotCreateMissingStore(t *testing.T) {
 	t.Setenv("HARNEZ_SPOOL_DIR", t.TempDir())
