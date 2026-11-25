@@ -64,7 +64,7 @@ make:
 
 `init` writes the file on first initialization after detecting the repo's issue
 format, existing studies directory, copied language docs, quota section or
-`test-q1` target, existing `container-test` target, and existing Makefile. It validates
+quota-1 make target, existing `container-test` target, and existing Makefile. It validates
 later reads against the schema and leaves an existing file unchanged unless a setup
 flag records an override. `docs.copies` records optional detected or explicitly selected
 docs; later runs copy only recorded choices and print an `init --docs <name>` hint for

@@ -32,13 +32,22 @@ func TestRunInit_QuotaOffManagedTextHasNoQuotaCommands(t *testing.T) {
 	if strings.Contains(agents, "Quota.md") {
 		t.Errorf("AGENTS.md links Quota.md without quota-1 rules:\n%s", agents)
 	}
-	for _, rel := range []string{
-		filepath.Join(".harnez", "rules", "Tools.md"),
-		filepath.Join("docs", "GoRelease.md"),
-	} {
-		body := readFileForQuotaTest(t, filepath.Join(dir, rel))
+	// Every managed rule and doc that init wrote must be free of test-q1.
+	managed, err := filepath.Glob(filepath.Join(dir, "docs", "*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules, err := filepath.Glob(filepath.Join(dir, ".harnez", "rules", "*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(managed) == 0 || len(rules) == 0 {
+		t.Fatalf("init wrote no managed docs (%d) or rules (%d)", len(managed), len(rules))
+	}
+	for _, path := range append(managed, rules...) {
+		body := readFileForQuotaTest(t, path)
 		if strings.Contains(body, "test-q1") {
-			t.Errorf("%s names test-q1 without quota-1 rules:\n%s", rel, body)
+			t.Errorf("%s names test-q1 without quota-1 rules:\n%s", path, body)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md")); !os.IsNotExist(err) {
