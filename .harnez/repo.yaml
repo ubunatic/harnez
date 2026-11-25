@@ -23,4 +23,4 @@ make:
     container_test: true
 git:
     mode: team
-    protected_main: true
+    protected_main: false

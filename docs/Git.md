@@ -14,17 +14,17 @@ commonly stored in an `AGENTS.md` file at the repository root.
   `harnez init --repo-mode <mode> [--protected-main]`; the project's Repo Setup restates it):
   - `solo`: work local, on the repo's default branch (usually `main`, sometimes `master`);
     no local feature branches.
-  - `team` / `fork`: work on a local topic branch and open a PR. Ticket commits ride on the
-    current topic branch.
-    - `team`, AGit by default: on a forge with AGit (Forgejo, Gitea), tickets and small PRs reuse
-      one local branch and push no branch: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
+  - `team` / `fork`: push the default branch first when the remote accepts it (fast-forward only,
+    never force). When that push is refused, use AGit; without AGit, push a branch and open a PR.
+    - AGit (Forgejo, Gitea): `git push origin HEAD:refs/for/<default-branch>/<topic>`, no branch.
       Topics, the PR lifecycle and the `harnez pr wait` merge signal are in `docs/AGit.md`
       (`harnez init --docs agit`).
-    - Otherwise one branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`), pushed: for
+    - Branch: one branch per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`), pushed: for
       work others push to, long sprints that need rebasing, forks, and GitHub, which has no AGit.
-  - `protected_main` (team/fork only): do not commit to or push the default branch unless the
-    repository admin explicitly authorizes it in the current session, and never force-push.
-    The pre-push hook enforces this for raw `git push` (see "AGit pulls and push policy").
+  - `protected_main` (team/fork only): when true, the default branch refuses direct pushes, so use
+    AGit or a branch. When false, direct pushes to the default branch are allowed (this repo sets
+    `protected_main: false`). Never force-push.
+    The pre-push hook enforces the `true` case for raw `git push` (see "AGit pulls and push policy").
     `harnez issues` commits may use `--push-main` or matching-session `/disable repo-rules push-main` when authorized; otherwise they refuse and print the `git switch -c` command. Other auto-committing commands remain guarded. `harnez release` is the exception: the admin, or an agent asked to release,
     may run it there; it tries a direct push first and falls back to an AGit release PR when that push is refused (see "AGit pulls and push policy").
 - Commit proactively:

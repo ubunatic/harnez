@@ -76,16 +76,16 @@ agent"; "harness" means "harnez".
 
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
-- Team repo: work on a local topic branch and open a PR to merge. Tickets and small PRs on a forge with AGit (Forgejo, Gitea) reuse one local branch and push no branch: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
-- Push a branch (`issue/<n>-<slug>`, `sprint/<n>`) for work others push to, long sprints that need rebasing, and GitHub, which has no AGit.
-- main is protected; harnez refuses commits on it, except `harnez release`, which the repository admin or an agent asked to release may run there. Otherwise do not commit to or push the default branch unless the repository admin explicitly authorizes it in the current session. Never force-push.
+- Team repo. Push in this order: (1) `git push origin main` when the remote accepts it, fast-forward only; (2) when main is refused, AGit on a forge that has it: `git push origin HEAD:refs/for/<default-branch>/<topic>`; (3) otherwise push a branch (`issue/<n>-<slug>`, `sprint/<n>`) and open a PR.
+- Never force-push.
 - Update/rebase your branch before merging; follow this repo's CI and review requirements.
 <!-- harnez:end Repo Setup -->
 
 ## Remotes
 - Codeberg and GitHub are both dev remotes; Codeberg is canonical for releases (`docs/Git.md`, Remotes).
-- `origin` is `ubunatic/harnez` on Codeberg with a protected `main`: every change except
-  `harnez release` goes through a topic branch and a PR, which the host opens.
+- `origin` is `ubunatic/harnez` on Codeberg. Push `main` first when the remote accepts it
+  (fast-forward only, never force). When `main` is refused, use AGit (`refs/for/main/<topic>`);
+  without AGit, push a branch and open a PR.
 - Owner's clone with the `both` remote: `make install-git-hooks` copies `scripts/git-hooks/pre-push`
   (Git LFS plus the GitHub guard) into the hooks dir. It refuses to replace a differing hook that
   lacks the `git lfs pre-push` line unless `FORCE=1`. Tests: `internal/githooks`.
@@ -98,7 +98,7 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 - Agentic Loop Practices @docs/AgenticLoop.md,
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
 - AGit @docs/AGit.md,
-  this repo uses AGit: push HEAD:refs/for/<default>/<topic>, no branch; merged topic opens a new PR; harnez pr wait for the merge
+  AGit is the fallback when a direct push to main is refused: push HEAD:refs/for/<default>/<topic>, no branch; merged topic opens a new PR; harnez pr wait for the merge
 - Bash/Shell @docs/Bash.md,
   Read docs/Bash.md before writing shell (scripts, Make recipes, embedded shell): house style, not common Bash
   Header `set -euo pipefail`; `if test`, never `[ ]` or `[[ ]]`; no `;`

@@ -1036,7 +1036,7 @@ agents_md:
     agit:
       name: "AGit"
       ref: "@docs/AGit.md"
-      hint: "this repo uses AGit: push HEAD:refs/for/<default>/<topic>, no branch; merged topic opens a new PR; harnez pr wait for the merge"
+      hint: "AGit is the fallback when a direct push to main is refused: push HEAD:refs/for/<default>/<topic>, no branch; merged topic opens a new PR; harnez pr wait for the merge"
       source: docs/practices/AGit.md
       target: ~/.claude/docs/AGit.md
       local: ./docs/AGit.md
@@ -1201,18 +1201,17 @@ agents_md:
         - main is protected; harnez refuses commits on it, except `harnez release`, which the repository admin or an agent asked to release may run there. Otherwise do not commit to or push the default branch unless the repository admin explicitly authorizes it in the current session. Never force-push.
     team:
       name: "Team"
-      rule: "Git workflow: team (local topic branch, PR to merge; AGit where the forge supports it)."
+      rule: "Git workflow: team (push main when allowed; AGit when main is refused; otherwise a branch and PR)."
       content: |
         ## Repo Setup
-        - Team repo: work on a local topic branch and open a PR to merge. Tickets and small PRs on a forge with AGit (Forgejo, Gitea) reuse one local branch and push no branch: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
-        - Push a branch (`issue/<n>-<slug>`, `sprint/<n>`) for work others push to, long sprints that need rebasing, and GitHub, which has no AGit.
+        - Team repo. Push in this order: (1) `git push origin main` when the remote accepts it, fast-forward only; (2) when main is refused, AGit on a forge that has it: `git push origin HEAD:refs/for/<default-branch>/<topic>`; (3) otherwise push a branch (`issue/<n>-<slug>`, `sprint/<n>`) and open a PR.
+        - Never force-push.
         - Update/rebase your branch before merging; follow this repo's CI and review requirements.
     team_protected:
       name: "Team / protected main"
       rule: "Git workflow: team, protected main (harnez refuses commits on main except `harnez release`; see Repo Setup)."
       content: |
         ## Repo Setup
-        - Team repo: work on a local topic branch and open a PR to merge. Tickets and small PRs on a forge with AGit (Forgejo, Gitea) reuse one local branch and push no branch: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
-        - Push a branch (`issue/<n>-<slug>`, `sprint/<n>`) for work others push to, long sprints that need rebasing, and GitHub, which has no AGit.
+        - Team repo with a protected main. Push AGit first on a forge that has it (`git push origin HEAD:refs/for/<default-branch>/<topic>`, no branch); otherwise push a branch (`issue/<n>-<slug>`, `sprint/<n>`) and open a PR.
         - main is protected; harnez refuses commits on it, except `harnez release`, which the repository admin or an agent asked to release may run there. Otherwise do not commit to or push the default branch unless the repository admin explicitly authorizes it in the current session. Never force-push.
         - Update/rebase your branch before merging; follow this repo's CI and review requirements.

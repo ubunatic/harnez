@@ -11,11 +11,11 @@ Forgejo and Gitea support it (Codeberg runs Forgejo). GitHub has no AGit.
 
 ## Push
 
-- Commit on a local topic branch, never on the default branch.
-- Push with `git push origin HEAD:refs/for/<default-branch>/<topic>`, e.g.
+- Push order: first `git push origin <default-branch>` when the remote accepts it (fast-forward only).
+  When that push is refused, use AGit. Without AGit, push a branch and open a PR.
+- AGit push: `git push origin HEAD:refs/for/<default-branch>/<topic>`, e.g.
   `git push origin HEAD:refs/for/main/flashcoder`. No branch is created on the remote.
-- "Push", "push it" and "push to main" mean this AGit push. Never push `refs/heads/<default-branch>`
-  directly unless the repository admin explicitly authorizes it in the current session.
+- Never force-push.
 - The topic is per pusher, by default the forge username, and is reused across tickets and small PRs.
 - To skip typing the refspec: `git config remote.origin.push HEAD:refs/for/main/<topic>`.
 - Pulling: AGit has no remote branch to track. `harnez init` sets `branch.autoSetupMerge always` and
