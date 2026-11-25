@@ -1,6 +1,6 @@
 # 1298 — Integrate fix/init-quota-off (spool pointers, quota-off init) onto main after runner-mode removal; drop the obsolete confinement work
 
-**Status**: Open
+**Status**: Closed — Integrated via PR 226: spool pointers, list/wait/config --access, store-error wording and quota-off init on main; obsolete confinement work dropped; final full q1 80 ok, only failure is pre-existing 1299
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Chore
