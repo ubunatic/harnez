@@ -67,7 +67,7 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := runAgentStats(&out, agentStatsOptions{Days: 7, JSON: true, HomeDir: home, DBPath: dbPath}); err != nil {
+	if err := runAgentStats(&out, agentStatsOptions{Days: 7, JSON: true, HomeDir: home, StoreDir: storeDir, DBPath: dbPath}); err != nil {
 		t.Fatal(err)
 	}
 	var report agentStatsReport
@@ -100,7 +100,7 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 	}
 
 	var table bytes.Buffer
-	if err := runAgentStats(&table, agentStatsOptions{Days: 7, HomeDir: home, DBPath: dbPath}); err != nil {
+	if err := runAgentStats(&table, agentStatsOptions{Days: 7, HomeDir: home, StoreDir: storeDir, DBPath: dbPath}); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"agent-1", "host-1", "measured", "fitted", "gpt-5.6-luna", "SRC", "QUALITY", "3.0/5", "PTS/100K NEW", "MEASURED TURNS"} {
@@ -133,7 +133,7 @@ func TestAgentStatsLegacyNewInputSubtractsCachedAndRetainsDeletedSessions(t *tes
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := runAgentStats(&out, agentStatsOptions{Days: 7, JSON: true, HomeDir: home, DBPath: dbPath}); err != nil {
+	if err := runAgentStats(&out, agentStatsOptions{Days: 7, JSON: true, HomeDir: home, StoreDir: storeDir, DBPath: dbPath}); err != nil {
 		t.Fatal(err)
 	}
 	var report agentStatsReport
@@ -239,7 +239,7 @@ func TestAgentStatsMeasuresDeletedAGYFiveHourPairs(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := runAgentStats(&out, agentStatsOptions{Days: 7, JSON: true, HomeDir: home, DBPath: dbPath}); err != nil {
+	if err := runAgentStats(&out, agentStatsOptions{Days: 7, JSON: true, HomeDir: home, StoreDir: storeDir, DBPath: dbPath}); err != nil {
 		t.Fatal(err)
 	}
 	var report agentStatsReport
