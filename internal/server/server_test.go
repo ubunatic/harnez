@@ -66,7 +66,7 @@ func TestServerCreatesPrivateSocketAndEqualBuildReturnsAlreadyRunning(t *testing
 	go func() {
 		done <- (Server{Config: cfg, Version: "1.2.3", BuildIdentity: "b", Services: []Service{waitingService{started}}}).Run(ctx)
 	}()
-	<-started
+	awaitServerStart(t, started, done)
 	info, err := os.Stat(socket)
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +116,7 @@ func TestNewerBuildTakesOverAndOldServerExitsSuccessfully(t *testing.T) {
 	go func() {
 		oldDone <- (Server{Config: cfg, Version: "1.2.3", BuildIdentity: oldIdentity, Services: []Service{waitingService{oldStarted}}}).Run(oldCtx)
 	}()
-	<-oldStarted
+	awaitServerStart(t, oldStarted, oldDone)
 	if err := os.Chtimes(executable, executableInfo.ModTime(), newMTime); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestNewerBuildTakesOverAndOldServerExitsSuccessfully(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("old server did not stop")
 	}
-	<-newStarted
+	awaitServerStart(t, newStarted, newDone)
 	status := requestStatus(t, socket)
 	if status.BuildIdentity != newIdentity {
 		t.Fatalf("new identity = %q", status.BuildIdentity)
@@ -159,7 +159,7 @@ func TestNewerBuildHandsOverToSystemdInsteadOfTakingSocket(t *testing.T) {
 	go func() {
 		done <- (Server{Config: cfg, Version: "1.0.0", BuildIdentity: "a", Services: []Service{waitingService{started}}}).Run(ctx)
 	}()
-	<-started
+	awaitServerStart(t, started, done)
 	gotPID := 0
 	var output bytes.Buffer
 	handOver := func(_ context.Context, oldPID int) (bool, error) { gotPID = oldPID; return true, nil }
@@ -187,7 +187,7 @@ func TestOlderBuildReturnsAlreadyRunning(t *testing.T) {
 	go func() {
 		done <- (Server{Config: cfg, Version: "2.0.0", BuildIdentity: "a", Services: []Service{waitingService{started}}}).Run(ctx)
 	}()
-	<-started
+	awaitServerStart(t, started, done)
 	var output bytes.Buffer
 	if err := (Server{Config: cfg, Version: "1.9.9", BuildIdentity: "z", Output: &output}).Run(context.Background()); err != nil {
 		t.Fatal(err)
@@ -221,7 +221,7 @@ func TestStaleSocketIsReplacedAndForeignListenerErrors(t *testing.T) {
 	go func() {
 		done <- (Server{Config: cfg, Version: "1.0.0", BuildIdentity: "a", Services: []Service{waitingService{started}}}).Run(ctx)
 	}()
-	<-started
+	awaitServerStart(t, started, done)
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)
@@ -251,4 +251,17 @@ func requestStatus(t *testing.T, socket string) statusInfo {
 		t.Fatal(err)
 	}
 	return status
+}
+
+// awaitServerStart waits for a test service to start. If the server exits first
+// it fails the test instead of blocking forever; the error goes back into done
+// so the test's own cleanup can still read it.
+func awaitServerStart(t *testing.T, started <-chan struct{}, done chan error) {
+	t.Helper()
+	select {
+	case <-started:
+	case err := <-done:
+		done <- err
+		t.Fatalf("server exited before starting: %v", err)
+	}
 }

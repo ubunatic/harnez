@@ -38,7 +38,7 @@ func TestStatusRouteReportsPassiveNoQuotaCounts(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	<-started
+	awaitServerStart(t, started, done)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/status", nil)
 	if err != nil {
 		t.Fatal(err)

@@ -138,7 +138,7 @@ func TestNeusIndexerDoesNotOverlapAndJoinsCancellation(t *testing.T) {
 	}}
 	done := make(chan error, 1)
 	go func() { done <- s.cycle(ctx) }()
-	<-started
+	awaitServerStart(t, started, done)
 	if err := s.cycle(ctx); err != nil {
 		t.Fatal(err)
 	}
