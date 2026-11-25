@@ -108,6 +108,7 @@ func TestAgentListIncludesExternalSessionsOnlyInGlobalViews(t *testing.T) {
 }
 
 func TestAgentListDefaultsToActiveAndHasDeadArchivedFilters(t *testing.T) {
+	isolateSpool(t)
 	storeDir := t.TempDir()
 	store, err := subagent.NewSessionStore(storeDir)
 	if err != nil {
@@ -195,6 +196,7 @@ func TestAgentListGlobalAndChildrenViews(t *testing.T) {
 func TestAgentListThenResumeByDisplayedIDAndName(t *testing.T) {
 	for _, identifier := range []string{"sid", "worker"} {
 		t.Run(identifier, func(t *testing.T) {
+			isolateSpool(t)
 			old := agentDriver
 			d := &resumeOutcomeDriver{}
 			agentDriver = func(subagent.Model, string) subagent.Driver { return d }

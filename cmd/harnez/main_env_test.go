@@ -213,6 +213,14 @@ func installTestCommandGuards(home string) error {
 	return os.Setenv("PATH", path)
 }
 
+// isolateSpool gives the calling test its own spool. TestMain runs once for the
+// package, and every registry write leaves a spool pointer in the shared
+// default spool, so a list test without this sees other tests' sessions.
+func isolateSpool(t *testing.T) {
+	t.Helper()
+	t.Setenv("HARNEZ_SPOOL_DIR", t.TempDir())
+}
+
 func TestHostCommandGuardsAndXDGIsolation(t *testing.T) {
 	if got := os.Getenv("HOME"); got != testIsolatedHome {
 		t.Fatalf("HOME=%q, want isolated HOME %q", got, testIsolatedHome)
