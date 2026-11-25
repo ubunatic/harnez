@@ -1,6 +1,6 @@
 # 1294 — per-repo push route in .harnez/repo.yaml; generic push wording: main if possible, AGit if protected, else branches
 
-**Status**: Open
+**Status**: Closed — implemented in 4585067a: git.push_route and git.agit_topic, generic push wording
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
