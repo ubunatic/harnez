@@ -295,7 +295,7 @@ func (s *FileSessionStore) requireWritable() error {
 // NewSessionStore creates a new file-based session store at the given directory.
 func NewSessionStore(dir string) (*FileSessionStore, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, fmt.Errorf("failed to create session store directory: %w", err)
+		return nil, fmt.Errorf("cannot create session store %s (%w): set --store-dir or HARNEZ_STORE_DIR to a writable directory", dir, err)
 	}
 	return &FileSessionStore{dir: dir}, nil
 }
