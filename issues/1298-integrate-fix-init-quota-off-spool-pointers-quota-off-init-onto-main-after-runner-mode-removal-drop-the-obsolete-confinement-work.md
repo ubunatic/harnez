@@ -57,3 +57,14 @@ The branch has 14 commits; main gained 43. Main removed runner mode and the whol
 - **M2 (quota-off init remainder):** port the parts of a7d2c765/ad261e05 that c4744476 does not cover: `internal/claude/quota_text.go` and its wiring, `internal/claude/quota_off_init_test.go` (scan every managed doc and rule file for `test-q1`), the repo schema changes if still needed, and the Spec wording in `docs/other/Spec.md` and its root copy `docs/Spec.md`. Then `make install`, `harnez init -d .`, `git checkout --` unrelated rewrites, and commit the source and the copy together.
 - **M3 (spool docs):** document `HARNEZ_SPOOL_DIR`, its default `~/.harnez/spool`, and the `agent list` SOURCE values and `agent wait` rules in `docs/CLIDesign.md` or the session-isolation doc that main has. If the default path should be configurable, follow `docs/Spec.md`.
 - **Verify:** `make install`, `make lint`, then one `HTO=0 make test-q1` after M3. Record its final summary line here.
+
+## 6. Delivery and pre-work
+
+**M1-M3 delivered** (dev-1298, 71fb1c32..20adf012): 5 spool and access picks, the store-error wording and test, the spool dir tests, the quota-off init port with quota-on and re-init tests, and the spool section in `docs/SessionIsolation.md`. `make install` and `make lint` pass, and `harnez init -d .` leaves the tree clean. The q1 run (`.git/harnez/quota-1-logs/test-20261125T225945.992926631Z.log`) failed in 3 tests. One of them, `TestRunLocalSelfInstallSymlinksGoBinToLocalBin`, is in a package this branch did not touch, so it went to #1299 and is not this sprint's job.
+
+**M4 (q1 fixes), pre-work:**
+1. `TestRunInit_QuotaOffManagedTextHasNoQuotaCommands` (`internal/claude/quota_off_init_test.go:56`) reads a Makefile that init never writes in that repo. Seed a Makefile with a plain `test:` target before init, and keep the no-`test-q1` assertion on the managed Makefile text.
+2. `TestAgentListDefaultsToActiveAndHasDeadArchivedFilters` (`cmd/harnez/agent_list_test.go:143`) has two causes:
+   - (a) Test isolation: cmd/harnez tests share one default spool, so registry writes from other tests leak in as `spool-stale` rows. Give each test its own `HARNEZ_SPOOL_DIR`, either in the shared env helper (`cmd/harnez/main_env_test.go`) or in `TestMain`. Do not weaken the list assertion.
+   - (b) Product bug: the `--dead` list shows spool rows whose STATUS is `running` (`w00`-`w07`). Spool rows bypass the status filters. Run them through the same default, `--dead` and `--archived` filters as registry rows, and add a test with spool rows of each status for each filter.
+3. Then rerun only the touched packages through the quota wrapper (`harnez exec --quota-1 -- go test ./cmd/harnez/ ./internal/claude/ ./internal/subagent/`), quote the summary line, and report that the full run is owed to the host.
