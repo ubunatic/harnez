@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"ubunatic.com/goself"
 	"ubunatic.com/harnez/internal/claude"
@@ -52,6 +53,44 @@ func TestRunDryRunDoesNotWriteFiles(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("dry run output missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+func TestRunLocalSelfWarnsWhenGoBinIsNewer(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	installDir := filepath.Join(home, ".local", "bin")
+	goBin := filepath.Join(home, "go", "bin")
+	if err := os.MkdirAll(goBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	newerGoBin := filepath.Join(goBin, "harnez")
+	if err := os.WriteFile(newerGoBin, []byte("#!/bin/sh\necho newer\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A fixture later than any test binary must trigger goself's shadow warning.
+	future := time.Now().Add(time.Hour)
+	if err := os.Chtimes(newerGoBin, future, future); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", goBin+string(os.PathListSeparator)+installDir+string(os.PathListSeparator)+"/usr/bin"+string(os.PathListSeparator)+"/bin")
+
+	var out bytes.Buffer
+	err := Run(context.Background(), Options{
+		Strategy:       "self",
+		Dir:            installDir,
+		Home:           home,
+		GoBinDir:       goBin,
+		NoShell:        true,
+		NoMan:          true,
+		RefreshService: func(context.Context, string, io.Writer) error { return nil },
+	}, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "  warning: " + newerGoBin + " is newer than running "
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("missing shadow warning %q in output:\n%s", want, out.String())
 	}
 }
 
@@ -191,6 +230,12 @@ func TestRunLocalSelfInstallSymlinksGoBinToLocalBin(t *testing.T) {
 	}
 	staleGoBin := filepath.Join(goBin, "harnez")
 	if err := os.WriteFile(staleGoBin, []byte("#!/bin/sh\necho stale\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Pin the fixture older than any test binary so the shadow check never
+	// depends on when the (possibly cached) test executable was built.
+	past := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(staleGoBin, past, past); err != nil {
 		t.Fatal(err)
 	}
 	sep := string(os.PathListSeparator)
