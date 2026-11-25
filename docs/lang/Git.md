@@ -23,8 +23,7 @@ commonly stored in an `AGENTS.md` file at the repository root.
     3. A topic branch, one per ticket or sprint (`issue/<n>-<slug>`, `sprint/<n>`), and a PR. Forks and
        GitHub, which has no AGit, use this step.
   - `protected_main` (team/fork only): when true, the default branch refuses direct pushes, so use
-    AGit or a branch. When false, direct pushes to the default branch are allowed (this repo sets
-    `protected_main: false`). Never force-push.
+    AGit or a branch. When false, direct pushes to the default branch are allowed. Never force-push.
     The pre-push hook enforces the `true` case for raw `git push` (see "AGit pulls and push policy").
     `harnez issues` commits may use `--push-main` or matching-session `/disable repo-rules push-main` when authorized; otherwise they refuse and print the `git switch -c` command. Other auto-committing commands remain guarded. `harnez release` is the exception: the admin, or an agent asked to release,
     may run it there; it tries a direct push first and falls back to an AGit release PR when that push is refused (see "AGit pulls and push policy").
