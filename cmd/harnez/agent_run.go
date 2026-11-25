@@ -403,6 +403,20 @@ func recordCodexAccess(stderr io.Writer, provider, model string, turnErr error) 
 	}
 }
 
+// modelAccessDir returns the models directory for access records. An explicit
+// --store-dir, or a non-blank HARNEZ_STORE_DIR, keeps access.yaml and its lock
+// beneath that store. Otherwise it returns "" and the default state directory
+// is used.
+func modelAccessDir(cmd *cobra.Command) string {
+	if f := cmd.InheritedFlags().Lookup("store-dir"); f != nil && f.Changed && strings.TrimSpace(f.Value.String()) != "" {
+		return filepath.Join(f.Value.String(), "models")
+	}
+	if v := strings.TrimSpace(os.Getenv(subagent.StoreDirEnv)); v != "" {
+		return filepath.Join(v, "models")
+	}
+	return ""
+}
+
 func providerErrorLine(err error) string {
 	for _, line := range strings.Split(err.Error(), "\n") {
 		if line = strings.TrimSpace(line); line != "" {

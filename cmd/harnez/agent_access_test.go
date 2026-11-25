@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"ubunatic.com/harnez/internal/agent"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
@@ -124,7 +126,7 @@ func TestAgentModelsObservedCodexAccess(t *testing.T) {
 	if err := start("failed"); err == nil || !strings.Contains(err.Error(), message) {
 		t.Fatalf("failure = %v", err)
 	}
-	table, err := run("models")
+	table, err := run("models", "--store-dir", store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +141,7 @@ func TestAgentModelsObservedCodexAccess(t *testing.T) {
 	}
 	checkJSON := func(want string, startable bool) {
 		t.Helper()
-		output, err := run("models", "--json")
+		output, err := run("models", "--json", "--store-dir", store)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -163,7 +165,7 @@ func TestAgentModelsObservedCodexAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkJSON("verified", true)
-	state := filepath.Join(root, "state", "harnez", "models", "access.yaml")
+	state := filepath.Join(store, "models", "access.yaml")
 	first, err := os.ReadFile(state)
 	if err != nil {
 		t.Fatal(err)
@@ -177,5 +179,127 @@ func TestAgentModelsObservedCodexAccess(t *testing.T) {
 	}
 	if !bytes.Equal(first, second) {
 		t.Fatal("repeated success changed access state")
+	}
+}
+
+func TestModelAccessDirFollowsStoreOverride(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+	t.Setenv(subagent.StoreDirEnv, "")
+	cmd := &cobra.Command{Use: "start"}
+	if got := modelAccessDir(cmd); got != "" {
+		t.Fatalf("no override: modelAccessDir = %q, want default state (empty)", got)
+	}
+
+	envStore := filepath.Join(root, "env-store")
+	t.Setenv(subagent.StoreDirEnv, envStore)
+	if got := modelAccessDir(cmd); got != filepath.Join(envStore, "models") {
+		t.Fatalf("HARNEZ_STORE_DIR: modelAccessDir = %q", got)
+	}
+
+	root2 := &cobra.Command{Use: "agent"}
+	root2.PersistentFlags().String("store-dir", "", "")
+	child := &cobra.Command{Use: "start"}
+	root2.AddCommand(child)
+	flagStore := filepath.Join(root, "flag-store")
+	if err := root2.PersistentFlags().Set("store-dir", flagStore); err != nil {
+		t.Fatal(err)
+	}
+	if got := modelAccessDir(child); got != filepath.Join(flagStore, "models") {
+		t.Fatalf("--store-dir: modelAccessDir = %q, want the flag store beating the env store", got)
+	}
+}
+
+func TestRecordCodexAccessUnderStoreOverrideWritesOnlyInStore(t *testing.T) {
+	root := t.TempDir()
+	store := filepath.Join(root, "store")
+	state := filepath.Join(root, "state")
+	for _, dir := range []string{store, state} {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("XDG_STATE_HOME", state)
+	t.Setenv(subagent.StoreDirEnv, store)
+	if err := os.Chmod(state, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(state, 0700) })
+
+	var stderr bytes.Buffer
+	modelcatalog.SetAccessDir(modelAccessDir(&cobra.Command{Use: "start"}))
+	t.Cleanup(func() { modelcatalog.SetAccessDir("") })
+	recordCodexAccess(&stderr, "codex", "gpt-6-luna", nil)
+	if stderr.Len() != 0 {
+		t.Fatalf("start printed a warning: %q", stderr.String())
+	}
+	for _, name := range []string{"access.yaml", "access.yaml.lock"} {
+		if _, err := os.Stat(filepath.Join(store, "models", name)); err != nil {
+			t.Fatalf("%s not beneath the store override: %v", name, err)
+		}
+	}
+	entries, err := os.ReadDir(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("default state dir was written: %d entries", len(entries))
+	}
+}
+
+func TestAgentStartUnderStoreEnvWritesNothingOutsideStore(t *testing.T) {
+	root := t.TempDir()
+	store := filepath.Join(root, "store")
+	state := filepath.Join(root, "state")
+	for _, dir := range []string{store, state, filepath.Join(root, "bin")} {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_STATE_HOME", state)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "cache"))
+	t.Setenv("CODEX_HOME", filepath.Join(root, "codex"))
+	t.Setenv(agentSessionEnv, "")
+	t.Setenv(subagent.StoreDirEnv, store)
+	bin := filepath.Join(root, "bin")
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	oldDriver, oldQuota := agentDriver, agentTurnQuotaReader
+	agentDriver = func(m subagent.Model, dir string) subagent.Driver { return accessTestCodexDriver{} }
+	agentTurnQuotaReader = func(context.Context, string, bool, time.Time, time.Time) usage.TurnQuotaReading {
+		return usage.TurnQuotaReading{}
+	}
+	t.Cleanup(func() { agentDriver, agentTurnQuotaReader = oldDriver, oldQuota })
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"thread.started\",\"thread_id\":\"fake-thread\"}'\nprintf '%s\\n' '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"done\"}}'\nprintf '%s\\n' '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}'\n"
+	if err := os.WriteFile(filepath.Join(bin, "codex"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(state, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(state, 0700) })
+
+	cmd := newAgentCmd()
+	var out, stderr bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"start", "--role", "advisor", "--model", "codex:luna:low", "--name", "env-start", "hello"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("start: %v (stderr: %s)", err, stderr.String())
+	}
+	if strings.Contains(stderr.String(), "could not record model access") {
+		t.Fatalf("start printed an access warning: %s", stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(store, "models", "access.yaml")); err != nil {
+		t.Fatalf("access record not beneath the store: %v", err)
+	}
+	entries, err := os.ReadDir(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("default state dir was written: %d entries", len(entries))
 	}
 }

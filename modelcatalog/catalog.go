@@ -293,16 +293,33 @@ func cloneValue(value any) any {
 // Load reads the embedded defaults and overlays optional state and policy
 // files from the user's XDG directories.
 func Load() (*Catalog, error) {
+	return loadFromModelsDir(currentModelsDir())
+}
+
+// DefaultModelsDir is the user state directory for access.yaml and its lock.
+func DefaultModelsDir() string {
+	return filepath.Join(xdgpath.StateHome(), "harnez", "models")
+}
+
+// defaultConfigDir is the user config directory that holds the policy file.
+func defaultConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("model catalog: resolve home: %w", err)
+		return "", fmt.Errorf("model catalog: resolve home: %w", err)
 	}
 	configBase := os.Getenv("XDG_CONFIG_HOME")
 	if configBase == "" {
 		configBase = filepath.Join(home, ".config")
 	}
-	stateBase := xdgpath.StateHome()
-	return LoadFromDirs(filepath.Join(stateBase, "harnez", "models"), filepath.Join(configBase, "harnez"))
+	return filepath.Join(configBase, "harnez"), nil
+}
+
+func loadFromModelsDir(dir string) (*Catalog, error) {
+	configDir, err := defaultConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	return LoadFromDirs(dir, configDir)
 }
 
 // LoadFromDirs loads the catalog from explicit machine directories. It is

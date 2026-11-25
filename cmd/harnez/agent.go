@@ -20,6 +20,7 @@ import (
 	"ubunatic.com/harnez/internal/privacy"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
+	"ubunatic.com/harnez/modelcatalog"
 )
 
 var agentDriver = subagent.DriverFor
@@ -125,6 +126,7 @@ then user agent.compact_threshold_tokens, then the spec global default.`}
 		return names, cobra.ShellCompDirectiveNoFileComp
 	})
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		modelcatalog.SetAccessDir(modelAccessDir(cmd))
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		if !dryRun {
 			if err := sessionTipHook(cmd, args); err != nil {

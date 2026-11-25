@@ -8,12 +8,26 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-	"ubunatic.com/harnez/internal/xdgpath"
 )
+
+// accessDir is the models directory for this process. Empty means the default state dir.
+var accessDir string
+
+// SetAccessDir points access reads and writes at dir, the models directory that holds
+// access.yaml and its lock. An empty dir restores the default state directory.
+func SetAccessDir(dir string) { accessDir = dir }
+
+// currentModelsDir is the models directory that access reads and writes use.
+func currentModelsDir() string {
+	if accessDir != "" {
+		return accessDir
+	}
+	return DefaultModelsDir()
+}
 
 // RecordAccess appends observations to the user's catalog without losing concurrent writes.
 func RecordAccess(provider, model, status string) error {
-	dir := filepath.Join(xdgpath.StateHome(), "harnez", "models")
+	dir := currentModelsDir()
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
@@ -38,7 +52,7 @@ func RecordAccess(provider, model, status string) error {
 	} else if !os.IsNotExist(readErr) {
 		return readErr
 	}
-	catalog, err := Load()
+	catalog, err := loadFromModelsDir(dir)
 	if err != nil {
 		return err
 	}
