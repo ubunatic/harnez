@@ -36,6 +36,23 @@ live in `<store>/models/access.yaml` with `access.yaml.lock` beside it, via
 - A test that sets the override and makes the default state dir read-only must see the start
   write nothing outside the store and print no access warning (`agent_access_test.go`).
 
+## Staged installation
+
+- `harnez install --stage <dir>` copies the running binary and writes its man pages into a new
+  private destination (`internal/selfinstall/stage.go`). It runs no shell, does not run `go install`,
+  does not install the `⚙` alias, and writes no shared location. The destination must be absolute and
+  clean, its parent must already exist as a real directory with mode `0700` and no symlink components,
+  and the destination itself must not exist. The stage holds `bin/harnez` and `share/man/man1/`. On
+  failure the new stage is removed.
+- `harnez install --staged <dir>` (`make promote STAGE=<dir>`) promotes a staged build into the host
+  GOBIN or GOPATH/bin and the XDG man roots (`internal/selfinstall/promote*.go`). It pins directories
+  without following links, requires the exact generated man manifest, verifies SHA-256, creates the `⚙`
+  symlink, and renames each file atomically.
+- The caller must supply a trusted private parent. The flow does not defeat same-UID path races, and it
+  does not protect against arbitrary shell code or a hostile `MAKEFLAGS` set before invocation.
+- The promoter roots come from the ownership contract in `spec/session_isolation.yaml`, which is
+  tracked in ticket 1289.
+
 ## Leftovers (tracked, not yet removed)
 
 - **Ownership contract.** `spec/session_isolation.yaml` and its schema still declare runner, broker
