@@ -23,6 +23,11 @@ func TestRunInit_QuotaOffManagedTextHasNoQuotaCommands(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/quotaoff\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// Seed a Makefile with a plain test target: init leaves a repo's own
+	// Makefile in place, so the test-q1 check reads a file that exists.
+	if err := os.WriteFile(filepath.Join(dir, "Makefile"), []byte("test:\n\tgo test ./...\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	cfg := claude.LoadTestConfig(t)
 	opts := claude.InitOptions{AssumeYes: true, Docs: []string{"gorelease"}}
 	if err := claude.RunInitWithVariant(dir, cfg, opts); err != nil {
@@ -60,7 +65,7 @@ func TestRunInit_QuotaOffManagedTextHasNoQuotaCommands(t *testing.T) {
 
 	// A second run, as in an already-initialised repo, must not touch AGENTS.md,
 	// the managed rules and docs, or the Makefile.
-	before := map[string]string{"Makefile": makefile}
+	before := map[string]string{filepath.Join(dir, "Makefile"): makefile}
 	for _, path := range append(managed, rules...) {
 		before[path] = readFileForQuotaTest(t, path)
 	}
