@@ -90,6 +90,9 @@ func TestRunnerLaunchBwrapSurvivesExtraFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// harnez exec exports its own broker socket; this test needs the broker it starts,
+	// so drop the inherited FD or the child talks to the outer broker (issue 1292).
+	t.Setenv(cfg.RunnerChannel.FDEnv, "")
 	_, mu, received := startMockTelemetryHTTP(t, cfg)
 
 	sessDir := filepath.Join(t.TempDir(), "bwrap-sess")

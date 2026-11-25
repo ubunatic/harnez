@@ -223,6 +223,9 @@ func TestRunnerLaunchBindChildPIDEnforcesProcessTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// harnez exec exports its own broker socket; drop it so the child uses the broker
+	// this test starts (issue 1292).
+	t.Setenv(cfg.RunnerChannel.FDEnv, "")
 	hostSocket, err := cfg.Socket()
 	if err != nil {
 		t.Fatal(err)
