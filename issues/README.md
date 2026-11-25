@@ -59,4 +59,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1290 | [1290-restore-a-help-output-regression-test-removed-in-d85f092a.md](1290-restore-a-help-output-regression-test-removed-in-d85f092a.md) | Restore a help output regression test removed in d85f092a | Open |
 | 1291 | [1291-test-suite-too-slow-find-and-remove-hot-spots-split-fast-and-full-tiers-better.md](1291-test-suite-too-slow-find-and-remove-hot-spots-split-fast-and-full-tiers-better.md) | Test suite too slow: find and remove hot spots, split fast and full tiers better | Open |
 | 1296 | [1296-decide-skill-decide-everything-in-session-no-still-open-or-kept-for-your-choice-lists-consult-advisors-for-medium-and-high-decisions.md](1296-decide-skill-decide-everything-in-session-no-still-open-or-kept-for-your-choice-lists-consult-advisors-for-medium-and-high-decisions.md) | decide skill: decide everything in-session, no Still Open or Kept-for-your-choice lists, consult advisors for medium and high decisions | Open |
+| 1297 | [1297-add-direct-tests-for-debug-logging.md](1297-add-direct-tests-for-debug-logging.md) | Add direct tests for debug logging | Open |
 <!-- harnez:end issues-active-index -->
