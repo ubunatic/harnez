@@ -96,6 +96,7 @@ func TestTurnQuotaBaselineUsesBeforeCaptureCompletion(t *testing.T) {
 
 func TestWarnQuota1Changes(t *testing.T) {
 	dir := t.TempDir()
+	writeQuota1Repo(t, dir, true, true)
 	state, _, err := quota1.ResolveStateFile(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +135,7 @@ func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
 	for _, mode := range []string{"start", "resume"} {
 		t.Run(mode, func(t *testing.T) {
 			repoDir := t.TempDir()
+			writeQuota1Repo(t, repoDir, true, true)
 			store, err := subagent.NewSessionStore(t.TempDir())
 			if err != nil {
 				t.Fatal(err)
@@ -379,5 +381,90 @@ func TestRunStartRecordsFullCostRecordForPricedAndUnpricedModels(t *testing.T) {
 	// Turn 2 share = 0.01 * 4_615_384 = 46_154; total share = 92_308 + 46_154 = 138_462.
 	if resumedSess.TotalSubscriptionShareMicros == nil || *resumedSess.TotalSubscriptionShareMicros != 138462 {
 		t.Fatalf("resumed TotalSubscriptionShareMicros = %v, want 138462", resumedSess.TotalSubscriptionShareMicros)
+	}
+}
+
+// writeQuota1Repo sets up a repo that has opted into Quota-1 in repo.yaml and
+// declares a test-q1 target in its Makefile, unless the flags turn either off.
+func writeQuota1Repo(t *testing.T, dir string, quotaOn, withTarget bool) {
+	t.Helper()
+	// Fixture files predate every Quota-1 run, so they are not "changed" files.
+	old := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	defer func() {
+		for _, p := range []string{filepath.Join(dir, "Makefile"), filepath.Join(dir, ".harnez", "repo.yaml")} {
+			if err := os.Chtimes(p, old, old); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}()
+	makefile := "build:\n\tgo build ./...\n"
+	if withTarget {
+		makefile += "test-q1: 🤖  # run tests under Quota-1 enforcement\n\tharnez exec --quota-1 -- $(MAKE) test\n"
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Makefile"), []byte(makefile), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".harnez"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	quota := "false"
+	if quotaOn {
+		quota = "true"
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".harnez", "repo.yaml"), []byte("version: 1\nissues:\n  tracker: none\n  merge_driver: false\n  active_cap: 30\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: "+quota+"\nmake:\n  scaffold: true\n  container_test: false\ngit:\n  mode: team\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// quota1Stale writes a Quota-1 state file older than a changed source file and
+// returns the run time.
+func quota1Stale(t *testing.T, dir string) time.Time {
+	t.Helper()
+	state, _, err := quota1.ResolveStateFile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runAt := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	if err := os.MkdirAll(filepath.Dir(state), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(state, []byte(runAt.Format(time.RFC3339Nano)+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(dir, "changed.go")
+	if err := os.WriteFile(source, []byte("package changed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	later := runAt.Add(time.Minute)
+	if err := os.Chtimes(source, later, later); err != nil {
+		t.Fatal(err)
+	}
+	return runAt
+}
+
+func TestWarnQuota1ChangesAdvisesOnlyWithTargetAndOptIn(t *testing.T) {
+	cases := []struct {
+		name                string
+		quotaOn, withTarget bool
+		want                bool
+	}{
+		{"opted in with test-q1", true, true, true},
+		{"no test-q1 target", true, false, false},
+		{"quota-1 not enabled", false, true, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeQuota1Repo(t, dir, tc.quotaOn, tc.withTarget)
+			runAt := quota1Stale(t, dir)
+			var errOut bytes.Buffer
+			cmd := &cobra.Command{}
+			cmd.SetErr(&errOut)
+			warnQuota1Changes(cmd, dir, runAt)
+			got := strings.Contains(errOut.String(), "file(s) changed after the last quota-1 run")
+			if got != tc.want {
+				t.Fatalf("advice printed = %v, want %v; stderr=%q", got, tc.want, errOut.String())
+			}
+		})
 	}
 }

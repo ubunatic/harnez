@@ -141,8 +141,8 @@ func detectRepoConfig(dir string, cfg *Config) *RepoConfig {
 	}
 	agentsPath := filepath.Join(dir, "AGENTS.md")
 	agents, _ := os.ReadFile(agentsPath)
-	r.Rules.Quota = markdown.ContainsSection(agentsPath, quota1SectionName) || strings.Contains(string(agents), "harnez:begin "+quota1SectionName) || makeTargetExists(dir, "test-q1")
-	r.Make.ContainerTest = makeTargetExists(dir, "container-test")
+	r.Rules.Quota = markdown.ContainsSection(agentsPath, quota1SectionName) || strings.Contains(string(agents), "harnez:begin "+quota1SectionName) || MakeTargetExists(dir, "test-q1")
+	r.Make.ContainerTest = MakeTargetExists(dir, "container-test")
 	return r
 }
 
@@ -151,7 +151,8 @@ func hasHarnezIssuesIndex(dir string) bool {
 	return err == nil && (strings.Contains(string(data), "managed by harnez index") || strings.Contains(string(data), "harnez:begin"))
 }
 
-func makeTargetExists(dir, name string) bool {
+// MakeTargetExists reports whether dir/Makefile declares a target called name.
+func MakeTargetExists(dir, name string) bool {
 	data, err := os.ReadFile(filepath.Join(dir, "Makefile"))
 	if err != nil {
 		return false

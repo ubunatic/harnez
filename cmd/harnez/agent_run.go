@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"ubunatic.com/harnez/internal/agent"
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/modelblock"
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
@@ -269,6 +270,12 @@ func turnQuotaBaseline(turnStarted time.Time, before usage.TurnQuotaReading) tim
 func warnQuota1Changes(cmd *cobra.Command, dir string, turnStarted time.Time) {
 	files, since, err := quota1.ChangesSinceLastRunAfter(dir, turnStarted)
 	if err != nil || len(files) == 0 {
+		return
+	}
+	// The advice names the test-q1 target, so print it only where the repo has
+	// that target and has opted into Quota-1.
+	_, root, err := quota1.ResolveStateFile(dir)
+	if err != nil || !quota1Advised(root) {
 		return
 	}
 	const shown = 5
@@ -1895,4 +1902,11 @@ func printAgentPreview(cmd *cobra.Command, model subagent.Model, role, name, dir
 	acceptLine := agent.CostlyModelDryRunLine(model, acceptCost, availability, time.Now())
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "dry-run: %s\nrole: %s\nname: %s\ndir: %s\naccept-cost: %s\nargv: %s\n", model.Spec(), role, name, dir, acceptLine, strings.Join(quoted, " "))
 	return err
+}
+
+// quota1Advised reports whether the repo at root opted into Quota-1 in
+// .harnez/repo.yaml and declares a test-q1 make target.
+func quota1Advised(root string) bool {
+	cfg, err := claude.LoadRepoConfig(root)
+	return err == nil && cfg.Rules.Quota && claude.MakeTargetExists(root, "test-q1")
 }
