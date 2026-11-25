@@ -36,8 +36,17 @@ The branch has 14 commits; main gained 43. Main removed runner mode and the whol
 5. `make install`, `make lint`, one `HTO=0 make test-q1`. Fresh reviewer subagent (feature-sized), then an AGit PR and `harnez pr wait`.
 6. Delete the old branch and the stash only after the owner confirms.
 
-## 4. Owner decisions (open)
+## 4. Decision (owner, 2026-11-25)
 
-- Keep the spool-pointer feature now that main has `HARNEZ_STORE_DIR`? Its use case is a host listing and waiting on sessions that a sandbox wrote to its own store. Recommended: keep it.
-- a7d2c765 makes `rules.quota` default to false when the `rules` block is absent. Confirm that this default matches c4744476 and 92cfb7df on main.
-- Discard the unstaged probe-confinement WIP after the backup? Recommended: yes.
+- Keep the spool-pointer feature.
+- Discard the probe-confinement WIP. Backup: `git stash list` entry "1298 backup: probe-confinement WIP from fix/init-quota-off" (host clone only). Delete it after this ticket closes.
+- Developer: `haiku:high`. Host skips the Searcher because the findings above were checked against live code in this session (trial cherry-pick, build, vet). The developer's first turn is plan-only.
+- Sprint branch: `sprint/1298`, based on cda92593 (origin/main 7ab9a5fd plus this ticket). Old branch `fix/init-quota-off` stays as the cherry-pick source, read-only.
+- Open fact for M2's plan turn: does main default `rules.quota` to off when the `rules` block is absent (c4744476, 92cfb7df)? Keep main's behaviour. Port the a7d2c765 default only if main has none, and say so in the plan.
+
+## 5. Milestones
+
+- **M1 (spool transplant):** cherry-pick 4a777882 (drop the deleted `internal/subagent/runner_registry_test.go`; move its spool-write assertions into `internal/subagent/spool_test.go` or a new file), then e465a670, 8eda0fe4, ec07b59f, 52b3951e. Use `git cherry-pick -x`. Do not cherry-pick any other branch commit.
+- **M2 (quota-off init remainder):** port the parts of a7d2c765/ad261e05 that c4744476 does not cover: `internal/claude/quota_text.go` and its wiring, `internal/claude/quota_off_init_test.go` (scan every managed doc and rule file for `test-q1`), the repo schema changes if still needed, and the Spec wording in `docs/other/Spec.md` and its root copy `docs/Spec.md`. Then `make install`, `harnez init -d .`, `git checkout --` unrelated rewrites, and commit the source and the copy together.
+- **M3 (spool docs):** document `HARNEZ_SPOOL_DIR`, its default `~/.harnez/spool`, and the `agent list` SOURCE values and `agent wait` rules in `docs/CLIDesign.md` or the session-isolation doc that main has. If the default path should be configurable, follow `docs/Spec.md`.
+- **Verify:** `make install`, `make lint`, then one `HTO=0 make test-q1` after M3. Record its final summary line here.
