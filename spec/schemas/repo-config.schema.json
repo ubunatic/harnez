@@ -17,7 +17,8 @@
     "defaults": {
       "type": "object",
       "properties": {
-        "make.scaffold": { "type": "boolean" }
+        "make.scaffold": { "type": "boolean" },
+        "rules.quota": { "type": "boolean" }
       },
       "additionalProperties": false
     }

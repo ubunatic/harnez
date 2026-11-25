@@ -99,6 +99,13 @@ func runIsolatedTests(m *testing.M) int {
 			panic(err)
 		}
 	}
+	// The session store and spool override HOME. A confined shell exports them,
+	// and inherited values would send test sessions to the real store and spool.
+	for _, name := range []string{"HARNEZ_STORE_DIR", "HARNEZ_SPOOL_DIR"} {
+		if err := os.Unsetenv(name); err != nil {
+			panic(err)
+		}
+	}
 	// Forge writes fall back to these variables (issue 1247); a developer's real token
 	// must never reach a test, which could then write to the real forge.
 	for _, name := range []string{"CODEBERG_TOKEN", "FORGEJO_TOKEN", "GITHUB_TOKEN"} {
@@ -204,6 +211,16 @@ func installTestCommandGuards(home string) error {
 		path += string(os.PathListSeparator) + inherited
 	}
 	return os.Setenv("PATH", path)
+}
+
+// isolateSpool gives the calling test its own spool. Go has no per-test setup
+// hook, and TestMain runs once for the package, so the package default is the
+// TestMain temp HOME's spool. A test that sets its own HOME already has its own
+// spool. A test that lists agents or reads spool state calls this, because the
+// package default is shared: every registry write leaves a pointer in it.
+func isolateSpool(t *testing.T) {
+	t.Helper()
+	t.Setenv("HARNEZ_SPOOL_DIR", t.TempDir())
 }
 
 func TestHostCommandGuardsAndXDGIsolation(t *testing.T) {

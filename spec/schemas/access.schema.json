@@ -4,17 +4,12 @@
   "type": "object",
   "required": [
     "version",
-    "mode_probe",
     "entries"
   ],
   "additionalProperties": false,
   "properties": {
     "version": {
       "const": 1
-    },
-    "mode_probe": {
-      "type": "string",
-      "pattern": "^[a-z][a-z0-9_]*$"
     },
     "entries": {
       "type": "array",
@@ -27,7 +22,6 @@
           "root",
           "path",
           "access",
-          "modes",
           "purpose"
         ],
         "additionalProperties": false,
@@ -56,17 +50,6 @@
               "read",
               "readwrite"
             ]
-          },
-          "modes": {
-            "type": "array",
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": {
-              "enum": [
-                "host",
-                "confined"
-              ]
-            }
           },
           "purpose": {
             "type": "string",

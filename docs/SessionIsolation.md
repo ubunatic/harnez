@@ -36,6 +36,37 @@ live in `<store>/models/access.yaml` with `access.yaml.lock` beside it, via
 - A test that sets the override and makes the default state dir read-only must see the start
   write nothing outside the store and print no access warning (`agent_access_test.go`).
 
+## Spool pointers
+
+Each registry write (create, save, delete) also writes a best-effort pointer, so a session the
+host registry no longer holds stays visible to the host. The spool is separate from the store
+precedence above and is not a fallback store.
+
+- **Location.** `HARNEZ_SPOOL_DIR` when non-blank after trimming, else `~/.harnez/spool` (`subagent.SpoolDir`,
+  `internal/subagent/spool.go`). The directory is created `0700`, files are `0600`. A pointer holds
+  the store path, the session id, the update time and a copy of the entry.
+- **Writes are best effort.** A spool failure is ignored and never fails a registry write. Delete
+  removes the pointer. An id that could name a path outside the spool directory is refused
+  (`safeSpoolID`).
+- **Reads never write.** A pointer is trusted only after the registry at its store confirms the same
+  session id (`VerifiedSpoolStore`). A registry entry always wins over a pointer.
+- **Reads after verification.** A store opened from a verified entry is read-only and reads through
+  a bounded reader: a symlink or FIFO is refused, an entry over 1 MiB is refused, and each read
+  checks that the entry still names the requested session, so a file swapped in after the check is
+  refused rather than read.
+- **Known limits.** Only the last path component of a store is checked for symlinks; a symlinked
+  parent directory is followed. Pointers are keyed by session id, so two stores that reuse an id
+  share one pointer. Neither is fixed by ticket 1298.
+- **States.** `harnez agent list` shows them in the SOURCE column as `spool-verified`,
+  `spool-stale` or `spool-unverified`. Verified: the store holds the same id. Stale: the store or the
+  entry is gone; the copied metadata is shown. Unverified: an unknown pointer version, or the registry
+  disagrees (a forged pointer is one case). Host stop and delete never act on a spool row.
+- **Wait.** `harnez agent wait <id>` uses the host registry first. It goes through a store only when
+  the registry lacks the id and the spool verifies it, and then it reads only. Stale and unverified
+  entries are never waited on.
+- **Tests.** `internal/subagent/spool_test.go`, `spool_read_test.go` and `spool_dir_test.go` cover the
+  write, the read rules and the default path; `cmd/harnez/spool_list_test.go` covers the list row.
+
 ## Staged installation
 
 - `harnez install --stage <dir>` copies the running binary and writes its man pages into a new

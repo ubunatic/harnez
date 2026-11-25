@@ -18,6 +18,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `revert --managed` | Global | Remove managed keys / strip MD sections |
 | `clean [procs] [q1]` | Runtime / Repository | Inspect or remove stale process groups and release verified incomplete quota-1 state |
 | `status`| Global | Config summary + applied-state checks |
+| `config` | Repo | Get, set or unset `.harnez/repo.yaml` keys; `--access` prints the directories harnez needs, the session store and spool, and whether this process can reach them (no mode is picked; it only reports) |
 | `usage` | Multi-Agent (local/remote) | Zero-cost token counters, live quota tracking, project attribution (`--project`), procs (`-p`), remote host (`--host`) |
 | `server` | Local / User Service | Run local services; install, inspect, and remove the systemd user collector service |
 | `install [host \| <name>]` | Self / User toolchain | Install or update `harnez` locally or over ssh via `goself` (wiring shell PATH, completions, `⚙` symlink, and man pages), or install an optional tool from `spec/dependencies.yaml` (`--dry-run` previews) |

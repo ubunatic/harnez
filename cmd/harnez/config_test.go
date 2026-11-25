@@ -201,11 +201,16 @@ func TestConfigAccessPrintsManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config --access: %v", err)
 	}
-	if !strings.HasPrefix(out, "mode\thost\t") && !strings.HasPrefix(out, "mode\tconfined\t") {
-		t.Fatalf("config --access lacks a mode line:\n%s", out)
-	}
-	if !strings.Contains(out, "id\taccess\tstatus\tpath\tpurpose\n") {
+	if !strings.HasPrefix(out, "id\taccess\tstatus\tpath\tpurpose\n") {
 		t.Fatalf("config --access lacks the header:\n%s", out)
+	}
+	for _, id := range []string{"\nstore\t", "\nspool\t"} {
+		if !strings.Contains(out, id) {
+			t.Fatalf("config --access lacks the %q row:\n%s", strings.Trim(id, "\n\t"), out)
+		}
+	}
+	if strings.Contains(out, "mode\t") {
+		t.Fatalf("config --access still prints a mode:\n%s", out)
 	}
 }
 

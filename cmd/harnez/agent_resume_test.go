@@ -58,6 +58,7 @@ func TestAgentResumeFailureRecordedAndCleared(t *testing.T) {
 }
 
 func TestAgentListResumeColumnStates(t *testing.T) {
+	isolateSpool(t)
 	old := agentDriver
 	agentDriver = func(m subagent.Model, _ string) subagent.Driver {
 		d := &resumeOutcomeDriver{}

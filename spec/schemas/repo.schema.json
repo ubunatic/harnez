@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez per-repository config",
   "type": "object",
-  "required": ["version", "issues", "docs", "rules", "make"],
+  "required": ["version", "issues", "docs", "make"],
   "properties": {
     "version": {"type": "integer", "const": 1},
     "issues": {
@@ -26,7 +26,6 @@
     },
     "rules": {
       "type": "object",
-      "required": ["quota"],
       "properties": {"quota": {"type": "boolean"}},
       "additionalProperties": false
     },

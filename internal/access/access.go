@@ -1,6 +1,8 @@
-// Package access reports the directories harnez needs in each mode and whether
-// the current process can reach them. It probes with access(2) and writes
-// nothing, so the caller's sandbox (Landlock, bwrap, taia) decides the result.
+// Package access reports the directories harnez needs and whether the current
+// process can reach them. It probes with access(2) and writes nothing, so the
+// caller's sandbox decides the result. It picks no mode and never reads TAIA_*
+// variables: the session store and the spool are reported by the caller through
+// PathRow, from the same resolution the verbs use.
 package access
 
 import (
@@ -21,30 +23,22 @@ import (
 	"ubunatic.com/harnez/internal/xdgpath"
 )
 
-// Mode names used in the manifest and in Detect results.
-const (
-	ModeHost     = "host"
-	ModeConfined = "confined"
-)
-
 // Entry is one directory the caller must make readable or writable.
 type Entry struct {
-	ID      string   `yaml:"id" json:"id"`
-	Root    string   `yaml:"root" json:"root"`
-	Path    string   `yaml:"path" json:"path"`
-	Access  string   `yaml:"access" json:"access"`
-	Modes   []string `yaml:"modes" json:"modes"`
-	Purpose string   `yaml:"purpose" json:"purpose"`
+	ID      string `yaml:"id" json:"id"`
+	Root    string `yaml:"root" json:"root"`
+	Path    string `yaml:"path" json:"path"`
+	Access  string `yaml:"access" json:"access"`
+	Purpose string `yaml:"purpose" json:"purpose"`
 }
 
 // Spec is the embedded spec/access.yaml manifest.
 type Spec struct {
-	Version   int     `yaml:"version" json:"version"`
-	ModeProbe string  `yaml:"mode_probe" json:"mode_probe"`
-	Entries   []Entry `yaml:"entries" json:"entries"`
+	Version int     `yaml:"version" json:"version"`
+	Entries []Entry `yaml:"entries" json:"entries"`
 }
 
-// Row is one checked entry for the current mode.
+// Row is one checked path.
 type Row struct {
 	ID      string
 	Access  string
@@ -76,8 +70,7 @@ func decode(data []byte) (Spec, error) {
 	return s, s.Validate()
 }
 
-// Validate checks the schema and the cross-field rules: unique ids and a mode
-// probe that names an existing entry.
+// Validate checks the schema and the cross-field rule: unique ids.
 func (s Spec) Validate() error {
 	data, err := harnez.DefaultFS.ReadFile("spec/schemas/access.schema.json")
 	if err != nil {
@@ -109,19 +102,7 @@ func (s Spec) Validate() error {
 		}
 		seen[e.ID] = true
 	}
-	if _, ok := s.entry(s.ModeProbe); !ok {
-		return fmt.Errorf("mode_probe %q names no access entry", s.ModeProbe)
-	}
 	return nil
-}
-
-func (s Spec) entry(id string) (Entry, bool) {
-	for _, e := range s.Entries {
-		if e.ID == id {
-			return e, true
-		}
-	}
-	return Entry{}, false
 }
 
 // base returns the directory an entry's root refers to, and false when the root
@@ -148,28 +129,10 @@ func base(root, repo string) (string, bool) {
 	return "", false
 }
 
-// Detect returns the mode for this process and a one-line reason. The mode is
-// host when the probe entry is writable, otherwise confined.
-func (s Spec) Detect(repo string) (mode, reason string) {
-	probe, _ := s.entry(s.ModeProbe)
-	dir, ok := base(probe.Root, repo)
-	if !ok {
-		return ModeConfined, fmt.Sprintf("%s root unset", probe.Root)
-	}
-	p := filepath.Join(dir, probe.Path)
-	if allowed(nearest(p), unix.W_OK) {
-		return ModeHost, p + " writable"
-	}
-	return ModeConfined, p + " not writable"
-}
-
-// Rows checks every entry listed for mode against the current process.
-func (s Spec) Rows(mode, repo string) []Row {
-	var rows []Row
+// Rows checks every manifest entry against the current process.
+func (s Spec) Rows(repo string) []Row {
+	rows := make([]Row, 0, len(s.Entries))
 	for _, e := range s.Entries {
-		if !contains(e.Modes, mode) {
-			continue
-		}
 		row := Row{ID: e.ID, Access: e.Access, Purpose: e.Purpose, Path: "-", Status: "unset"}
 		if dir, ok := base(e.Root, repo); ok {
 			row.Path = filepath.Join(dir, e.Path)
@@ -180,11 +143,14 @@ func (s Spec) Rows(mode, repo string) []Row {
 	return rows
 }
 
-// Render prints the mode and the rows as tab-separated lines, with a header.
-func Render(w io.Writer, mode, reason string, rows []Row) error {
-	if _, err := fmt.Fprintf(w, "mode\t%s\t%s\n", mode, reason); err != nil {
-		return err
-	}
+// PathRow checks one absolute path the caller resolved, such as the session
+// store or the spool.
+func PathRow(id, access, path, purpose string) Row {
+	return Row{ID: id, Access: access, Path: path, Status: statusOf(path, access), Purpose: purpose}
+}
+
+// Render prints the rows as tab-separated lines, with a header.
+func Render(w io.Writer, rows []Row) error {
 	if _, err := fmt.Fprintln(w, "id\taccess\tstatus\tpath\tpurpose"); err != nil {
 		return err
 	}
@@ -240,13 +206,4 @@ func nearest(p string) string {
 
 func allowed(p string, want uint32) bool {
 	return unix.Access(p, want) == nil
-}
-
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }

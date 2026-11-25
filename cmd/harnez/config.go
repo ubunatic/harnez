@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/access"
 	"ubunatic.com/harnez/internal/repocfg"
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 func newConfigCmd() *cobra.Command {
@@ -23,8 +24,9 @@ without hand-editing YAML.
   harnez config git.mode team             set a key
   harnez config --unset git.mode          remove a key
   harnez config --list                    print every effective key=value
-  harnez config --access                  print the directories this mode needs,
-                                          and whether this process can reach them
+  harnez config --access                  print the directories harnez needs, the
+                                          session store and spool, and whether this
+                                          process can reach them
 
 Keys are dotted paths (git.mode, issues.tracker, docs.copies, ...). The key
 list, value types and allowed values come from the repo.yaml schema. Values
@@ -42,7 +44,8 @@ Comments, key order and unrelated keys survive the edit.
 After a set or unset of a key that changes rendered output (AGENTS.md, rules,
 Makefile), config prints "run: harnez init -d <repo>"; it does not run init.
 get and --list also work without a repo.yaml; set and unset need one.
---access takes no key and prints the access manifest for the current mode.`,
+--access takes no key and prints the access manifest, then the session store and
+spool as resolved for this process (HARNEZ_STORE_DIR, HARNEZ_SPOOL_DIR).`,
 		SilenceUsage: true,
 		Args: func(cmd *cobra.Command, args []string) error {
 			switch {
@@ -69,11 +72,13 @@ get and --list also work without a repo.yaml; set and unset need one.
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing .harnez/repo.yaml")
 	cmd.Flags().BoolVar(&unset, "unset", false, "remove the key")
 	cmd.Flags().BoolVar(&list, "list", false, "print every effective key=value, spec defaults marked (default)")
-	cmd.Flags().BoolVar(&showAccess, "access", false, "print the directories this mode needs and whether they are reachable")
+	cmd.Flags().BoolVar(&showAccess, "access", false, "print the directories harnez needs, the store and spool, and whether they are reachable")
 	return cmd
 }
 
-// runAccessCmd prints the access manifest rows for the detected mode.
+// runAccessCmd prints the manifest rows, then the session store and the spool as
+// resolved for this process: HARNEZ_STORE_DIR or the host registry, and
+// HARNEZ_SPOOL_DIR or ~/.harnez/spool. Nothing here picks a mode.
 func runAccessCmd(cmd *cobra.Command, dir string) error {
 	repo, err := filepath.Abs(dir)
 	if err != nil {
@@ -83,8 +88,12 @@ func runAccessCmd(cmd *cobra.Command, dir string) error {
 	if err != nil {
 		return err
 	}
-	mode, reason := spec.Detect(repo)
-	return access.Render(cmd.OutOrStdout(), mode, reason, spec.Rows(mode, repo))
+	rows := spec.Rows(repo)
+	rows = append(rows,
+		access.PathRow("store", "readwrite", subagent.DefaultStoreDir(), "session registry; --store-dir or HARNEZ_STORE_DIR overrides"),
+		access.PathRow("spool", "readwrite", subagent.SpoolDir(), "host-visible pointers; HARNEZ_SPOOL_DIR overrides"),
+	)
+	return access.Render(cmd.OutOrStdout(), rows)
 }
 
 func runConfigCmd(cmd *cobra.Command, dir string, args []string, unset, list bool) error {
