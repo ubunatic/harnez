@@ -59,5 +59,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1289 | [1289-retire-the-runner-ownership-contract-and-runner-named-code-after-runner-mode-removal.md](1289-retire-the-runner-ownership-contract-and-runner-named-code-after-runner-mode-removal.md) | Retire the runner ownership contract and runner-named code after runner-mode removal | Open |
 | 1290 | [1290-restore-a-help-output-regression-test-removed-in-d85f092a.md](1290-restore-a-help-output-regression-test-removed-in-d85f092a.md) | Restore a help output regression test removed in d85f092a | Open |
 | 1291 | [1291-test-suite-too-slow-find-and-remove-hot-spots-split-fast-and-full-tiers-better.md](1291-test-suite-too-slow-find-and-remove-hot-spots-split-fast-and-full-tiers-better.md) | Test suite too slow: find and remove hot spots, split fast and full tiers better | Open |
-| 1293 | [1293-harnez-land-description-in-config-yaml-still-names-the-old-push-order.md](1293-harnez-land-description-in-config-yaml-still-names-the-old-push-order.md) | harnez-land description in config.yaml still names the old push order | Open |
 <!-- harnez:end issues-active-index -->

@@ -1,6 +1,6 @@
 # 1293 — harnez-land description in config.yaml still names the old push order
 
-**Status**: Open
+**Status**: Closed — fixed in eff024c0 (config.yaml harnez-land description)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
