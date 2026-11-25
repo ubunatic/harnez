@@ -44,6 +44,13 @@ The branch has 14 commits; main gained 43. Main removed runner mode and the whol
 - Sprint branch: `sprint/1298`, based on cda92593 (origin/main 7ab9a5fd plus this ticket). Old branch `fix/init-quota-off` stays as the cherry-pick source, read-only.
 - Open fact for M2's plan turn: does main default `rules.quota` to off when the `rules` block is absent (c4744476, 92cfb7df)? Keep main's behaviour. Port the a7d2c765 default only if main has none, and say so in the plan.
 
+- Plan turn (dev-1298, 2026-11-25) answered the open fact: main has no `rules.quota` default; a repo.yaml without `rules` fails schema validation (`spec/schemas/repo.schema.json:5,29`, `internal/claude/repo_config.go:68`). Host decision: port a7d2c765's default (`rules` optional, `quota: false`), proven by `TestParseRepoConfig_RulesOptional`.
+- The M1 hunk of `runner_registry_test.go` holds the store-error assertion, not spool-write ones. Port the 571b0b69 error wording (`--store-dir`, `HARNEZ_STORE_DIR`) into `NewSessionStore` and its test into `store_dir_test.go`.
+- `quota_text.go` keeps `managedTextFor`, `quotaTestCommand` and `plainTestCommand`. Drop its `rulesHeaderFor` and `quotaReadItem`, which duplicate `init.go:499`.
+- The spool default `~/.harnez/spool` stays a Go default, matching main's `DefaultStoreDir`. Moving both paths to `spec/` is out of scope here.
+- M3 doc: `docs/SessionIsolation.md` (root, not copyable), plus `docs/CLIDesign.md` and `docs/README.md` if needed.
+- Picked commits keep their subject with the `-x` trailer. Hand-written commits carry `(issue 1298 M<n>)`.
+
 ## 5. Milestones
 
 - **M1 (spool transplant):** cherry-pick 4a777882 (drop the deleted `internal/subagent/runner_registry_test.go`; move its spool-write assertions into `internal/subagent/spool_test.go` or a new file), then e465a670, 8eda0fe4, ec07b59f, 52b3951e. Use `git cherry-pick -x`. Do not cherry-pick any other branch commit.
