@@ -491,6 +491,18 @@ func initialAgentsMD(cfg *Config) string {
 	return "Adhere to the following conventions.\n"
 }
 
+// quotaRuleReadPath is the Quota.md entry in the configured rules header.
+const quotaRuleReadPath = " .harnez/rules/Quota.md"
+
+// rulesHeaderFor returns the rules header for a repo. The configured header lists
+// Quota.md; a repo without rules.quota has no such file, so the entry is dropped.
+func rulesHeaderFor(header string, quota bool) string {
+	if quota {
+		return header
+	}
+	return strings.Replace(header, quotaRuleReadPath, "", 1)
+}
+
 func backfillRulesHeader(path, header string) (bool, error) {
 	if header == "" {
 		return false, nil
@@ -1208,7 +1220,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 		withSummary = true
 	}
 	ir := &initReport{}
-	agentBlocksSafe, err := initAgentFile(ir, dir, cfg, replace)
+	agentBlocksSafe, err := initAgentFile(ir, dir, cfg, replace, quota1Active)
 	if err != nil {
 		return err
 	}
@@ -1288,7 +1300,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 	}
 	ir.changes += migrated
 	if cfg != nil {
-		if normalized, err := normalizeRulesHeaderGap(agentsPath, cfg.AgentsMD.Rules.Header); err != nil {
+		if normalized, err := normalizeRulesHeaderGap(agentsPath, rulesHeaderFor(cfg.AgentsMD.Rules.Header, quota1Active)); err != nil {
 			return fmt.Errorf("normalize rules header spacing %s: %w", agentsPath, err)
 		} else if normalized {
 			fmt.Printf("  normalized rules header spacing %s\n", agentsPath)

@@ -60,13 +60,14 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 	}
 }
 
-// The three publication routes are tried in this order; the order is structure, not wording.
+// The publication routes are tried in this order; the order is structure, not wording.
 func assertIssueRouteOrder(t *testing.T, path, content string) {
 	t.Helper()
 	routes := []string{
 		"1. **Direct push to `main`**",
 		"2. **AGit PR to `main`**",
-		"3. **Stop**",
+		"3. **Topic branch PR**",
+		"4. **Stop**",
 	}
 	last := -1
 	for _, route := range routes {

@@ -15,7 +15,7 @@ func TestInitAgentFileMigratesLegacyAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := &initReport{}
-	if safe, err := initAgentFile(r, dir, nil, false); err != nil || !safe || r.changes != 2 {
+	if safe, err := initAgentFile(r, dir, nil, false, true); err != nil || !safe || r.changes != 2 {
 		t.Fatalf("migration: safe=%v changes=%d err=%v", safe, r.changes, err)
 	}
 	if target, err := os.Readlink(legacy); err != nil || target != "AGENTS.md" {
@@ -25,7 +25,7 @@ func TestInitAgentFileMigratesLegacyAndIsIdempotent(t *testing.T) {
 		t.Fatalf("migrated content=%q err=%v", data, err)
 	}
 	again := &initReport{}
-	if safe, err := initAgentFile(again, dir, nil, false); err != nil || !safe || again.changes != 0 {
+	if safe, err := initAgentFile(again, dir, nil, false, true); err != nil || !safe || again.changes != 0 {
 		t.Fatalf("repeat: safe=%v changes=%d err=%v", safe, again.changes, err)
 	}
 }

@@ -10,7 +10,8 @@ import (
 
 // initAgentFile creates or migrates AGENTS.md and reconciles the CLAUDE.md link.
 // The result gates later section edits when existing managed blocks are malformed.
-func initAgentFile(ir *initReport, dir string, cfg *Config, replace bool) (bool, error) {
+// quota reports rules.quota: the rules header lists Quota.md only when it is on.
+func initAgentFile(ir *initReport, dir string, cfg *Config, replace, quota bool) (bool, error) {
 	agentsPath := filepath.Join(dir, "AGENTS.md")
 	claudePath := filepath.Join(dir, "CLAUDE.md")
 	if replace {
@@ -44,7 +45,7 @@ func initAgentFile(ir *initReport, dir string, cfg *Config, replace bool) (bool,
 		}
 	}
 	if cfg != nil {
-		if backfilled, err := backfillRulesHeader(agentsPath, cfg.AgentsMD.Rules.Header); err != nil {
+		if backfilled, err := backfillRulesHeader(agentsPath, rulesHeaderFor(cfg.AgentsMD.Rules.Header, quota)); err != nil {
 			return false, fmt.Errorf("backfill rules header %s: %w", agentsPath, err)
 		} else if backfilled {
 			fmt.Printf("  updated rules header %s\n", agentsPath)

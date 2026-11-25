@@ -30,12 +30,15 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(agents), cfg.AgentsMD.Rules.Header+"\n\n") {
+	// This repo has no test-q1 target, so rules.quota is off and the header omits Quota.md.
+	header := claude.RulesHeaderFor(cfg.AgentsMD.Rules.Header, false)
+	if !strings.HasPrefix(string(agents), header+"\n\n") {
 		t.Fatalf("AGENTS.md missing rules header:\n%s", agents)
 	}
 	wantRead := "harnez read .harnez/rules/Tools.md .harnez/rules/Issues.md .harnez/rules/Quota.md .harnez/rules/Subagents.md .harnez/rules/Output.md .harnez/rules/Local.md"
-	if !strings.Contains(cfg.AgentsMD.Rules.Header, wantRead) || !strings.Contains(string(agents), wantRead) {
-		t.Fatalf("generated instruction must read Index-listed rules then Local.md in one call; got header %q", cfg.AgentsMD.Rules.Header)
+	wantReadOff := "harnez read .harnez/rules/Tools.md .harnez/rules/Issues.md .harnez/rules/Subagents.md .harnez/rules/Output.md .harnez/rules/Local.md"
+	if !strings.Contains(cfg.AgentsMD.Rules.Header, wantRead) || !strings.Contains(string(agents), wantReadOff) || strings.Contains(string(agents), "Quota.md") {
+		t.Fatalf("quota-off instruction must read Index-listed rules then Local.md in one call without Quota.md; got header %q", cfg.AgentsMD.Rules.Header)
 	}
 	// Resumed agent turns must not re-read the rules every prompt (issue 791).
 	if !strings.Contains(strings.ToLower(string(agents)), "once per session") {
@@ -150,8 +153,9 @@ func TestRunInit_MigratesLocalOverlaysWithSingleHeaderGap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantPrefix := cfg.AgentsMD.Rules.Header + "\n\n"
-	if !strings.HasPrefix(string(first), wantPrefix) || strings.HasPrefix(string(first), cfg.AgentsMD.Rules.Header+"\n\n\n") {
+	header := claude.RulesHeaderFor(cfg.AgentsMD.Rules.Header, false)
+	wantPrefix := header + "\n\n"
+	if !strings.HasPrefix(string(first), wantPrefix) || strings.HasPrefix(string(first), header+"\n\n\n") {
 		t.Fatalf("expected exactly one blank line after rules header; got:\n%s", first)
 	}
 	run()
@@ -193,7 +197,7 @@ func testReplacesOutdatedRulesHeader(t *testing.T, old string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(got), cfg.AgentsMD.Rules.Header+"\n\nAdhere to the following conventions.\n") {
+	if !strings.HasPrefix(string(got), claude.RulesHeaderFor(cfg.AgentsMD.Rules.Header, false)+"\n\nAdhere to the following conventions.\n") {
 		t.Fatalf("outdated rules header not replaced; got:\n%s", got)
 	}
 	if strings.Contains(string(got), old) {
@@ -220,7 +224,7 @@ func TestRunInit_KeepsUserBoldFirstLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(got), cfg.AgentsMD.Rules.Header+"\n\n"+user+"\n") {
+	if !strings.HasPrefix(string(got), claude.RulesHeaderFor(cfg.AgentsMD.Rules.Header, false)+"\n\n"+user+"\n") {
 		t.Fatalf("user's first line must stay below the rules header; got:\n%s", got)
 	}
 }
