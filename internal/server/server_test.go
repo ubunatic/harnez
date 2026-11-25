@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 type waitingService struct{ started chan struct{} }
@@ -22,7 +24,7 @@ func (waitingService) Ready() bool                     { return true }
 
 func testConfig(t *testing.T) Config {
 	t.Helper()
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", socktest.Dir(t))
 	return Config{SocketPath: "server.sock", ReadHeaderTimeout: time.Second, ShutdownTimeout: time.Second, HTTPClientTimeout: time.Second, TakeoverTimeout: time.Second}
 }
 
@@ -52,7 +54,7 @@ func TestStatusEndpointReportsReasonWhileNotReady(t *testing.T) {
 }
 
 func TestPostUpdateDropsWhenServerDoesNotAnswer(t *testing.T) {
-	if got := PostUpdate(context.Background(), filepath.Join(t.TempDir(), "server.sock"), "/usage/passive", []byte(`{"windows":[]}`), time.Second); got != UpdateDropped {
+	if got := PostUpdate(context.Background(), socktest.Path(t, "server.sock"), "/usage/passive", []byte(`{"windows":[]}`), time.Second); got != UpdateDropped {
 		t.Fatalf("result = %q, want dropped", got)
 	}
 }
@@ -207,7 +209,7 @@ func TestOlderBuildReturnsAlreadyRunning(t *testing.T) {
 func TestStaleSocketIsReplacedAndForeignListenerErrors(t *testing.T) {
 	cfg := testConfig(t)
 	socket, _ := cfg.Socket()
-	stale, err := net.Listen("unix", socket)
+	stale, err := socktest.Listen(t, socket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +228,7 @@ func TestStaleSocketIsReplacedAndForeignListenerErrors(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	listener, err := net.Listen("unix", socket)
+	listener, err := socktest.Listen(t, socket)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -364,6 +364,9 @@ func listenControl(path string) (net.Listener, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, fmt.Errorf("create control socket directory: %w", err)
 	}
+	if len(path) > maxUnixSocketPath {
+		return nil, fmt.Errorf("Unix socket path exceeds %d bytes: %s", maxUnixSocketPath, path)
+	}
 	_ = os.Remove(path)
 	listener, err := net.Listen("unix", path)
 	if err != nil {
@@ -532,3 +535,6 @@ func deliverInbox(ctx context.Context, inbox *Inbox, state *TurnState, terminal 
 }
 
 var _ InteractiveRunner = CLIInteractiveRunner{}
+
+// maxUnixSocketPath is the sun_path limit, matching the check in internal/server.
+const maxUnixSocketPath = 107

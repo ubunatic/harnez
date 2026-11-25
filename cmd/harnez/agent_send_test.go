@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/channel"
 	"ubunatic.com/harnez/internal/subagent"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestChannelNameResolution(t *testing.T) {
@@ -298,9 +298,9 @@ func TestAgyAgentSendTargetResolution(t *testing.T) {
 }
 
 func TestSendAgyMessageQueuesControlRequest(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "agy.sock")
+	path := socktest.Path(t, "agy.sock")
 	sessionID := "agy-session-id"
-	listener, err := net.Listen("unix", path)
+	listener, err := socktest.Listen(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,8 +352,8 @@ func TestAgentSendAgyWaitAndUnsupervisedErrors(t *testing.T) {
 			}
 			session := &subagent.Session{ID: "agy-test-id", Name: "agy-test", Provider: "agy", WorkingDir: "."}
 			if tc.live {
-				socket := filepath.Join(t.TempDir(), "agy.sock")
-				listener, err := net.Listen("unix", socket)
+				socket := socktest.Path(t, "agy.sock")
+				listener, err := socktest.Listen(t, socket)
 				if err != nil {
 					t.Fatal(err)
 				}

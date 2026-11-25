@@ -4,19 +4,18 @@ package main
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestLocalServerPIDReadsPeerCredentialsFromRealSocket(t *testing.T) {
-	socketPath := filepath.Join(t.TempDir(), "server.sock")
-	listener, err := net.Listen("unix", socketPath)
+	socketPath := socktest.Path(t, "server.sock")
+	listener, err := socktest.Listen(t, socketPath)
 	if err != nil {
 		t.Fatal(err)
 	}

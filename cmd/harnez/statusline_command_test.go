@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 	"ubunatic.com/harnez/internal/usage"
 )
 
@@ -208,7 +208,7 @@ func TestAGYStatuslineLockedStoreStillPrintsWithinBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	started := make(chan struct{})
-	listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "server.sock"))
+	listener, err := socktest.Listen(t, socktest.Path(t, "server.sock"))
 	if err != nil {
 		t.Fatal(err)
 	}

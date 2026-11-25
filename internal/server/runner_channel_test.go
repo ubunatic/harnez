@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/sessioncontract"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func setupPrivateRunnerRoot(t *testing.T, cfg Config) string {
@@ -27,7 +28,7 @@ func setupPrivateRunnerRoot(t *testing.T, cfg Config) string {
 		t.Fatal(err)
 	}
 	t.Setenv("XDG_STATE_HOME", filepath.Join(t.TempDir(), "shared-state"))
-	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(t.TempDir(), "shared-runtime"))
+	t.Setenv("XDG_RUNTIME_DIR", socktest.Dir(t))
 	return root
 }
 
@@ -399,7 +400,7 @@ func TestDispatchTelemetryUsesBrokerFDWithoutRunnerDirAndSkipsHostSpool(t *testi
 	}
 	cfg.UpdateTimeout = 200 * time.Millisecond
 	stateHome := t.TempDir()
-	runtimeDir := t.TempDir()
+	runtimeDir := socktest.Dir(t)
 	t.Setenv("XDG_STATE_HOME", stateHome)
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 

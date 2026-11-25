@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestRunAgyToolHook_AllowOutput(t *testing.T) {
@@ -80,7 +80,7 @@ func TestAgyHooksSendTurnEventsWithoutChangingOutput(t *testing.T) {
 	if err := store.Create(session); err != nil {
 		t.Fatal(err)
 	}
-	listener, err := net.Listen("unix", socket)
+	listener, err := socktest.Listen(t, socket)
 	if err != nil {
 		t.Fatal(err)
 	}

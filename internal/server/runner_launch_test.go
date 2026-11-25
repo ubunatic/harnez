@@ -3,13 +3,14 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func startMockTelemetryHTTP(t *testing.T, cfg Config) (string, *sync.Mutex, *[]string) {
@@ -20,7 +21,7 @@ func startMockTelemetryHTTP(t *testing.T, cfg Config) (string, *sync.Mutex, *[]s
 	}
 	var mu sync.Mutex
 	var received []string
-	ln, err := net.Listen("unix", hostSocket)
+	ln, err := socktest.Listen(t, hostSocket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +84,7 @@ func TestRunnerLaunchBwrapSurvivesExtraFiles(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, "run"))
+	t.Setenv("XDG_RUNTIME_DIR", socktest.Dir(t))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
 	cfg, err := LoadConfig()
 	if err != nil {

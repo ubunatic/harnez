@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/subagent"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 type recordingInteractiveRunner struct {
@@ -68,7 +68,7 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
 	socket := filepath.Join(storeDir, "active.sock")
-	listener, err := net.Listen("unix", socket)
+	listener, err := socktest.Listen(t, socket)
 	if err != nil {
 		t.Fatal(err)
 	}

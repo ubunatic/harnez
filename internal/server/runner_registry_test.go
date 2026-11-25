@@ -4,23 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
 	"ubunatic.com/harnez/internal/procs"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestRunnerRegistryLaunchBindingAndRejections(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, "run"))
+	t.Setenv("XDG_RUNTIME_DIR", socktest.Dir(t))
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -41,7 +40,7 @@ func TestRunnerRegistryLaunchBindingAndRejections(t *testing.T) {
 
 	var mu sync.Mutex
 	stored := map[string]map[string]any{}
-	ln, err := net.Listen("unix", hostSocket)
+	ln, err := socktest.Listen(t, hostSocket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +217,7 @@ func TestRunnerLaunchBindChildPIDEnforcesProcessTree(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, "run"))
+	t.Setenv("XDG_RUNTIME_DIR", socktest.Dir(t))
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -228,7 +227,7 @@ func TestRunnerLaunchBindChildPIDEnforcesProcessTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ln, err := net.Listen("unix", hostSocket)
+	ln, err := socktest.Listen(t, hostSocket)
 	if err != nil {
 		t.Fatal(err)
 	}

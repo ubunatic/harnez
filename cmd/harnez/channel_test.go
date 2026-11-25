@@ -6,15 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/channel"
 	"ubunatic.com/harnez/internal/subagent"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestChannelSetupPrintsManualConfiguration(t *testing.T) {
@@ -336,8 +335,8 @@ func TestChannelListShowsActiveProcessSessionsByDefault(t *testing.T) {
 }
 
 func TestChannelListShowsSupervisedAgyInAllViews(t *testing.T) {
-	socket := filepath.Join(t.TempDir(), "agy.sock")
-	listener, err := net.Listen("unix", socket)
+	socket := socktest.Path(t, "agy.sock")
+	listener, err := socktest.Listen(t, socket)
 	if err != nil {
 		t.Fatal(err)
 	}

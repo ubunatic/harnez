@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
+
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestRunnerUsageQueryRelayValidationAndFailClosed(t *testing.T) {
@@ -28,13 +29,13 @@ func TestRunnerUsageQueryRelayValidationAndFailClosed(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("XDG_RUNTIME_DIR", home+"/run")
+	t.Setenv("XDG_RUNTIME_DIR", socktest.Dir(t))
 	hostSocket, err := cfg.Socket()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ln, err := net.Listen("unix", hostSocket)
+	ln, err := socktest.Listen(t, hostSocket)
 	if err != nil {
 		t.Fatal(err)
 	}

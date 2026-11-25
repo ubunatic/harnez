@@ -2,15 +2,14 @@ package usage
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestStatuslineNoQuotaCountsReachServerAcrossProcesses(t *testing.T) {
@@ -21,7 +20,7 @@ func TestStatuslineNoQuotaCountsReachServerAcrossProcesses(t *testing.T) {
 	requests := make(chan PassiveRequest, 1)
 	mux := http.NewServeMux()
 	(PassiveUpdateServer{Path: "/passive", NoQuota: drops, Requests: requests, Timeout: time.Second, MaxBodyBytes: 4096}).RegisterRoutes(mux)
-	listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "server.sock"))
+	listener, err := socktest.Listen(t, socktest.Path(t, "server.sock"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,16 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestPrintServerSystemdStatusShowsOwnerAndHandoff(t *testing.T) {
@@ -58,8 +57,8 @@ func TestStopLocalServerForegroundAndNotRunning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	socket := filepath.Join(t.TempDir(), "server.sock")
-	listener, err := net.Listen("unix", socket)
+	socket := socktest.Path(t, "server.sock")
+	listener, err := socktest.Listen(t, socket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,8 +96,8 @@ func TestStopLocalServerReportsWaitTimeout(t *testing.T) {
 	}
 	cfg.ShutdownTimeout = 2 * time.Millisecond
 	cfg.StartupPoll = time.Millisecond
-	socket := filepath.Join(t.TempDir(), "server.sock")
-	listener, err := net.Listen("unix", socket)
+	socket := socktest.Path(t, "server.sock")
+	listener, err := socktest.Listen(t, socket)
 	if err != nil {
 		t.Fatal(err)
 	}

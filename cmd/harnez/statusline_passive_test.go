@@ -5,15 +5,14 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"net"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 	"ubunatic.com/harnez/internal/usage"
 )
 
@@ -23,7 +22,7 @@ func TestAGYRenderedQuotaReachesPassiveCollector(t *testing.T) {
 	requests := make(chan usage.PassiveRequest)
 	mux := http.NewServeMux()
 	(usage.PassiveUpdateServer{NoQuota: tracker, Path: "/passive", Requests: requests, Timeout: time.Second, MaxBodyBytes: 8192}).RegisterRoutes(mux)
-	listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "server.sock"))
+	listener, err := socktest.Listen(t, socktest.Path(t, "server.sock"))
 	if err != nil {
 		t.Fatal(err)
 	}

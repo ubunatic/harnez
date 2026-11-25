@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"math"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +14,7 @@ import (
 
 	_ "modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/server"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
@@ -132,7 +132,7 @@ func TestStatuslineSendsWindowsWithoutOpeningLockedStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	posted := make(chan struct{}, 1)
-	listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "server.sock"))
+	listener, err := socktest.Listen(t, socktest.Path(t, "server.sock"))
 	if err != nil {
 		t.Fatal(err)
 	}

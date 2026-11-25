@@ -20,6 +20,7 @@ import (
 	"github.com/creack/pty"
 	"golang.org/x/term"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestInteractiveCommand(t *testing.T) {
@@ -194,7 +195,7 @@ func TestInteractiveAgyUsesMeterEnvironmentThroughPTY(t *testing.T) {
 		Stdin:         bytes.NewBuffer(nil),
 		Stdout:        &stdout,
 		Stderr:        &bytes.Buffer{},
-		ControlSocket: filepath.Join(home, "control.sock"),
+		ControlSocket: socktest.Path(t, "control.sock"),
 	}
 	if err := runInteractiveCommand(context.Background(), "agy", nil, opts); err != nil {
 		t.Fatalf("run interactive agy: %v", err)
@@ -207,7 +208,7 @@ func TestInteractiveAgyUsesMeterEnvironmentThroughPTY(t *testing.T) {
 }
 
 func TestControlBrokerPromptCompactAndStop(t *testing.T) {
-	path := t.TempDir() + "/control.sock"
+	path := socktest.Path(t, "control.sock")
 	listener, err := listenControl(path)
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +254,7 @@ func TestControlPromptWritesToPTYAndSplitsMultilineInput(t *testing.T) {
 	}
 	defer master.Close()
 	defer slave.Close()
-	path := filepath.Join(t.TempDir(), "control.sock")
+	path := socktest.Path(t, "control.sock")
 	listener, err := listenControl(path)
 	if err != nil {
 		t.Fatal(err)
@@ -286,7 +287,7 @@ func TestControlPromptDoesNotUseBracketedPasteFraming(t *testing.T) {
 	}
 	defer master.Close()
 	defer slave.Close()
-	path := filepath.Join(t.TempDir(), "control.sock")
+	path := socktest.Path(t, "control.sock")
 	listener, err := listenControl(path)
 	if err != nil {
 		t.Fatal(err)
@@ -310,7 +311,7 @@ func TestControlPromptDoesNotUseBracketedPasteFraming(t *testing.T) {
 }
 
 func TestSendControlRejectsUnknownAction(t *testing.T) {
-	path := t.TempDir() + "/control.sock"
+	path := socktest.Path(t, "control.sock")
 	listener, err := listenControl(path)
 	if err != nil {
 		t.Fatal(err)
@@ -323,7 +324,7 @@ func TestSendControlRejectsUnknownAction(t *testing.T) {
 }
 
 func TestControlBrokerInboxAndTurnActions(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "control.sock")
+	path := socktest.Path(t, "control.sock")
 	listener, err := listenControl(path)
 	if err != nil {
 		t.Fatal(err)

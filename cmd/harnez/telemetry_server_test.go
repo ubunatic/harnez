@@ -15,6 +15,7 @@ import (
 
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestTelemetryRouteStoresAndServerDrainsSpool(t *testing.T) {
@@ -453,7 +454,7 @@ func TestWriteCappedTailJSONBinarySearchAndOversizeItem(t *testing.T) {
 
 func TestSendTelemetryRecordDroppedSilentByDefaultAndDebugGated(t *testing.T) {
 	t.Setenv("HARNEZ_BROKER_FD", "")
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", socktest.Dir(t))
 	// Point XDG_STATE_HOME at a regular file so host spool creation fails cleanly.
 	notADir := filepath.Join(t.TempDir(), "not-a-dir")
 	if err := os.WriteFile(notADir, []byte("x"), 0o600); err != nil {

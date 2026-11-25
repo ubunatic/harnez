@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestRevertManagedRemovesManagedSettings(t *testing.T) {
@@ -42,7 +44,7 @@ func TestRevertManagedRemovesManagedSettings(t *testing.T) {
 }
 
 func TestCleanCommandAvailableForProcessAndQuotaTargets(t *testing.T) {
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", socktest.Dir(t))
 	cmd := newRootCmd()
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)

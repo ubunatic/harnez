@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 	"ubunatic.com/harnez/internal/usage"
 	"ubunatic.com/harnez/internal/usagestore"
 )
@@ -236,7 +237,7 @@ func startUsageTestServer(t *testing.T, runtimeDir, mode string) (net.Listener, 
 	if err := os.MkdirAll(filepath.Dir(usageTestSocketPath(runtimeDir)), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	listener, err := net.Listen("unix", usageTestSocketPath(runtimeDir))
+	listener, err := socktest.Listen(t, usageTestSocketPath(runtimeDir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,11 +375,7 @@ func usageTestProcessRunning(pid int) bool {
 func usageTestDirs(t *testing.T) (string, string) {
 	t.Helper()
 	home := filepath.Join(t.TempDir(), "home")
-	runtimeDir, err := os.MkdirTemp("", "h873-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) }) // best-effort test cleanup
+	runtimeDir := socktest.Dir(t)
 	for _, dir := range []string{home, runtimeDir, filepath.Join(runtimeDir, "harnez")} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			t.Fatal(err)

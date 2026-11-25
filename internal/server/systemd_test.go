@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func TestSystemdInstallUsesTempUnitDirAndStartsConfiguredUnit(t *testing.T) {
-	runtimeDir := t.TempDir()
+	runtimeDir := socktest.Dir(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))

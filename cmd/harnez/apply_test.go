@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,6 +17,7 @@ import (
 	_ "modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
+	"ubunatic.com/harnez/internal/testutil/socktest"
 )
 
 func captureApplyStdout(t *testing.T, fn func()) string {
@@ -58,7 +58,7 @@ func TestCaptureApplyStdoutLargeOutput(t *testing.T) {
 func TestEnsureTelemetrySchemaNoOpBeforeApply(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, "runtime"))
+	t.Setenv("XDG_RUNTIME_DIR", socktest.Dir(t))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
 
 	path := filepath.Join(home, ".local", "share", "harnez", "telemetry.sqlite")
@@ -190,7 +190,7 @@ func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	listener, err := net.Listen("unix", serverSocket)
+	listener, err := socktest.Listen(t, serverSocket)
 	if err != nil {
 		t.Fatal(err)
 	}
