@@ -1,6 +1,6 @@
 # 1259 — cmd/harnez and selfinstall tests fail inside taia: long socket paths and staged root permission
 
-**Status**: Open
+**Status**: Closed — Resolved: the named tests were removed with runner mode (859d787b), and the socket-path failures are fixed by the socktest helper (82e25c0a) that keeps every unix socket under 107 bytes; no harnez-side workaround was added
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Infrastructure

@@ -1,6 +1,6 @@
 # 1246 — exec: Quota-1 treats compile-only go test -c as a test execution, blocking verifier runs
 
-**Status**: Open
+**Status**: Closed — Obsolete: Quota-1 no longer blocks runs (859d787b); a repeat run prints an advisory note and runs anyway, so compile-only go test -c cannot block a verifier
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
