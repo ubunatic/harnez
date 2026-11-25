@@ -83,3 +83,5 @@ Review (rev-1298, opus): no HIGH findings. Removed code does not come back, and 
 7. Docs: `docs/SessionIsolation.md` says only the last path part is checked for symlinks. Record the known limit: pointers are keyed by session id, so two stores that reuse an id share one pointer. Not fixed here.
 8. Accepted, no change: the `rules.quota: false` spec default is read by `config get`, while `ParseRepoConfig` uses Go's zero value. The result is the same.
 9. Verify: rerun the touched packages through the quota wrapper. The host runs the final full suite.
+
+**M5 delivered** (88ef5fee..4141e7f8): spool-backed stores read through `readBounded` (no symlink, no FIFO, 1 MiB cap) and recheck the id on every `Get`. `Find` no longer falls back to a list. Pointer reads open, then Fstat. Tests cover `agent wait` on verified and refused entries. `HARNEZ_SPOOL_DIR` is trimmed. The known limits are in the doc. The host's final full q1 run after `make install`: 80 packages ok, and the only failure is `TestRunLocalSelfInstallSymlinksGoBinToLocalBin`, which is #1299.
