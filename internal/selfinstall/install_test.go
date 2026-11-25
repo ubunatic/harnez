@@ -11,6 +11,7 @@ import (
 
 	"ubunatic.com/goself"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/fsutil"
 )
 
 func TestReleaseArchiveMatchesGoReleaser(t *testing.T) {
@@ -130,6 +131,9 @@ func TestRunUnknownStrategyErrors(t *testing.T) {
 
 func TestShadowWarningNamesTheHarnezThatPATHFindsFirst(t *testing.T) {
 	root := t.TempDir()
+	// The warning shortens paths under $HOME to ~. Point HOME at the fixture root
+	// so the expected text is the same whatever TMPDIR is.
+	t.Setenv("HOME", root)
 	installDir := filepath.Join(root, "local", "bin")
 	otherDir := filepath.Join(root, "go", "bin")
 	linkDir := filepath.Join(root, "link")
@@ -168,7 +172,7 @@ func TestShadowWarningNamesTheHarnezThatPATHFindsFirst(t *testing.T) {
 				}
 				return
 			}
-			for _, want := range []string{"warning:", filepath.Join(otherDir, "harnez"), binPath, installDir + " first"} {
+			for _, want := range []string{"warning:", fsutil.ContractHome(filepath.Join(otherDir, "harnez")), fsutil.ContractHome(binPath), fsutil.ContractHome(installDir) + " first"} {
 				if !strings.Contains(got, want) {
 					t.Errorf("shadowWarning = %q, missing %q", got, want)
 				}
