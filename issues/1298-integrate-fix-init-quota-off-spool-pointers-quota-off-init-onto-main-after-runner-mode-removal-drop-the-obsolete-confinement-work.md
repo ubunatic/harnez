@@ -68,3 +68,18 @@ The branch has 14 commits; main gained 43. Main removed runner mode and the whol
    - (a) Test isolation: cmd/harnez tests share one default spool, so registry writes from other tests leak in as `spool-stale` rows. Give each test its own `HARNEZ_SPOOL_DIR`, either in the shared env helper (`cmd/harnez/main_env_test.go`) or in `TestMain`. Do not weaken the list assertion.
    - (b) Product bug: the `--dead` list shows spool rows whose STATUS is `running` (`w00`-`w07`). Spool rows bypass the status filters. Run them through the same default, `--dead` and `--archived` filters as registry rows, and add a test with spool rows of each status for each filter.
 3. Then rerun only the touched packages through the quota wrapper (`harnez exec --quota-1 -- go test ./cmd/harnez/ ./internal/claude/ ./internal/subagent/`), quote the summary line, and report that the full run is owed to the host.
+
+**M4 delivered** (b459c9e7, adc24cdb, 3332cc87): the Makefile seed, the per-test spool in two list tests, and a filter-matrix guard test. My diagnosis in pre-work 2b was wrong: `--dead` means "include non-active" (`cmd/harnez/agent_manage_cmds.go:152`), so the spool rows already went through the filters correctly. The host's full q1 run (`.git/harnez/quota-1-logs/test-20261125T230840.259407721Z.log`): 80 packages ok, and the only failure is `TestRunLocalSelfInstallSymlinksGoBinToLocalBin`, which is #1299.
+
+Review (rev-1298, opus): no HIGH findings. Removed code does not come back, and `agent wait` opens a spool store read-only and never saves.
+
+**M5 (review fixes), pre-work:**
+1. MED: `cmd/harnez/agent_async.go:510`. After the single trust check, `store.Find`/`Get` (`internal/subagent/session.go:463`) use plain `os.ReadFile`, so a confined writer can swap `<store>/<id>.json` for a symlink or a huge file. For a store opened from a spool entry, read entries without following symlinks and with the same 1 MiB cap as pointers. Re-verify the entry's session id on each poll.
+2. LOW, fixed with 1: `internal/subagent/spool_read.go:164,205,226`. Lstat-then-Open races, and a FIFO hangs `agent list`. Open with `O_NOFOLLOW|O_NONBLOCK`, then `Fstat` and require a regular file.
+3. MED tests: `spool_read_test.go:176` must assert that the returned store is read-only. Add forged and mismatched-id cases. Add one cmd-level test of `agent wait` on a verified spool entry and one that refuses a stale or unverified entry.
+4. LOW: make spool isolation the default. In `cmd/harnez/main_env_test.go`, set `HARNEZ_SPOOL_DIR` per test through the shared env helper rather than opt-in `isolateSpool`, so tests like `agent_delete_test.go:172` and `agent_resume_test.go:84` cannot depend on order. If a per-test default is not possible with the current helper, use a package-level temp dir set in `TestMain` and keep `isolateSpool` for the list tests. Say which you did.
+5. LOW: `internal/subagent/spool.go:30`. Trim `HARNEZ_SPOOL_DIR` as `DefaultStoreDir` does (`session.go:325`), and test a blank value.
+6. LOW tests: `quota_off_init_test.go:37` also asserts that AGENTS.md has no `test-q1`. The quota-on test (`:87`) asserts that `make test-q1` survives in the managed text.
+7. Docs: `docs/SessionIsolation.md` says only the last path part is checked for symlinks. Record the known limit: pointers are keyed by session id, so two stores that reuse an id share one pointer. Not fixed here.
+8. Accepted, no change: the `rules.quota: false` spec default is read by `config get`, while `ParseRepoConfig` uses Go's zero value. The result is the same.
+9. Verify: rerun the touched packages through the quota wrapper. The host runs the final full suite.
