@@ -568,7 +568,7 @@ func writeRules(dir string, rules RulesConfig, quota bool, repoConfig *RepoConfi
 	files = append([]RuleFile{{Name: "Index.md", Content: index}}, files...)
 	changes := 0
 	for _, file := range files {
-		content := strings.TrimSpace(file.Content) + "\n"
+		content := managedTextFor(strings.TrimSpace(file.Content), quota) + "\n"
 		path := filepath.Join(rulesDir, file.Name)
 		existing, err := os.ReadFile(path)
 		if err == nil && file.Quota {
@@ -1259,7 +1259,7 @@ func RunInitWithVariant(dir string, cfg *Config, opts InitOptions) error {
 			return err
 		}
 
-		if err := initCopyDocs(ir, assumeYes, cfg, dir, docs, docVariants, repoConfig.Make.Scaffold, scaffoldVersionSpec(dir, assumeYes, opts.Docs)); err != nil {
+		if err := initCopyDocs(ir, assumeYes, cfg, dir, docs, docVariants, repoConfig.Make.Scaffold, scaffoldVersionSpec(dir, assumeYes, opts.Docs), quota1Active); err != nil {
 			return err
 		}
 		if repoConfig.Make.ContainerTest {

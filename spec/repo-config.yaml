@@ -28,3 +28,4 @@ plain_keys:
 # live in spec/git.yaml and issues.active_cap in spec/issues.yaml.
 defaults:
   make.scaffold: true
+  rules.quota: false
