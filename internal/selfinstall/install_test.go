@@ -64,6 +64,8 @@ func TestRunLocalSelfWarnsWhenGoBinIsNewer(t *testing.T) {
 	if err := os.MkdirAll(goBin, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// goself does not receive Options.GoBinDir, so pin GOBIN to make its shadow check read this fixture dir.
+	t.Setenv("GOBIN", goBin)
 	newerGoBin := filepath.Join(goBin, "harnez")
 	if err := os.WriteFile(newerGoBin, []byte("#!/bin/sh\necho newer\n"), 0o755); err != nil {
 		t.Fatal(err)
@@ -228,6 +230,8 @@ func TestRunLocalSelfInstallSymlinksGoBinToLocalBin(t *testing.T) {
 	if err := os.MkdirAll(goBin, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// goself does not receive Options.GoBinDir, so pin GOBIN to make its shadow check read this fixture dir.
+	t.Setenv("GOBIN", goBin)
 	staleGoBin := filepath.Join(goBin, "harnez")
 	if err := os.WriteFile(staleGoBin, []byte("#!/bin/sh\necho stale\n"), 0o755); err != nil {
 		t.Fatal(err)
