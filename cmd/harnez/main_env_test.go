@@ -213,9 +213,11 @@ func installTestCommandGuards(home string) error {
 	return os.Setenv("PATH", path)
 }
 
-// isolateSpool gives the calling test its own spool. TestMain runs once for the
-// package, and every registry write leaves a spool pointer in the shared
-// default spool, so a list test without this sees other tests' sessions.
+// isolateSpool gives the calling test its own spool. Go has no per-test setup
+// hook, and TestMain runs once for the package, so the package default is the
+// TestMain temp HOME's spool. A test that sets its own HOME already has its own
+// spool. A test that lists agents or reads spool state calls this, because the
+// package default is shared: every registry write leaves a pointer in it.
 func isolateSpool(t *testing.T) {
 	t.Helper()
 	t.Setenv("HARNEZ_SPOOL_DIR", t.TempDir())

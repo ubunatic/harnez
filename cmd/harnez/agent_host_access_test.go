@@ -77,6 +77,7 @@ func TestWorkerStillRefusedOutsideLineage(t *testing.T) {
 
 func listWithHost(t *testing.T, host string, extra ...string) (string, string) {
 	t.Helper()
+	isolateSpool(t)
 	for _, k := range []string{"AGY_CONVERSATION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "ANTIGRAVITY_CONVERSATION_ID", "ANTIGRAVITY_SESSION_ID", "CODEX_SESSION_ID", "CODEX_THREAD_ID"} {
 		t.Setenv(k, "")
 	}

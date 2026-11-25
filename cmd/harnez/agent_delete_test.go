@@ -125,6 +125,7 @@ func TestAgentDeleteAllCompletedRefusesUnratedSessionWithRateHint(t *testing.T) 
 }
 
 func TestAgentDeleteAllRepeatSafeAndRetryFailed(t *testing.T) {
+	isolateSpool(t)
 	storeDir := t.TempDir()
 	oldSessionID := os.Getenv("HARNEZ_SESSION_ID")
 	if err := os.Setenv("HARNEZ_SESSION_ID", "caller"); err != nil {
