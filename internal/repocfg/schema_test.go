@@ -18,8 +18,8 @@ func TestKeysComeFromSchema(t *testing.T) {
 		paths = append(paths, k.Path)
 	}
 	want := []string{
-		"docs.copies", "docs.studies", "git.default_branch", "git.mode", "git.protected_main",
-		"issues.active_cap", "issues.merge_driver", "issues.tracker", "make.container_test",
+		"docs.copies", "docs.studies", "git.agit_topic", "git.default_branch", "git.mode", "git.protected_main",
+		"git.push_route", "issues.active_cap", "issues.merge_driver", "issues.tracker", "make.container_test",
 		"make.scaffold", "rules.quota", "version",
 	}
 	if !slices.Equal(paths, want) {

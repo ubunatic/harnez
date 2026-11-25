@@ -76,7 +76,7 @@ agent"; "harness" means "harnez".
 
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
-- Team repo. Push in this order; a refused push falls through to the next step:
+- Team repo. Push to main if possible; use AGit if main is protected and the forge supports it; otherwise use branches and PRs. Push in this order; a refused push falls through to the next step:
   1. `git push origin main` (fast-forward only) when the repo does not set `protected_main` and the forge or hook accepts it.
   2. AGit where the forge supports it: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
   3. A topic branch (`issue/<n>-<slug>`, `sprint/<n>`) and a PR.

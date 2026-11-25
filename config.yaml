@@ -1201,13 +1201,31 @@ agents_md:
         - main is protected; harnez refuses commits on it, except `harnez release`, which the repository admin or an agent asked to release may run there. Otherwise do not commit to or push the default branch unless the repository admin explicitly authorizes it in the current session. Never force-push.
     team:
       name: "Team"
-      rule: "Git workflow: team (push main when allowed, else AGit, else a topic branch and PR)."
+      rule: "Git workflow: team (push main if possible, else AGit if main is protected, else branches and PRs)."
       content: |
         ## Repo Setup
-        - Team repo. Push in this order; a refused push falls through to the next step:
+        - Team repo. Push to main if possible; use AGit if main is protected and the forge supports it; otherwise use branches and PRs. Push in this order; a refused push falls through to the next step:
           1. `git push origin main` (fast-forward only) when the repo does not set `protected_main` and the forge or hook accepts it.
           2. AGit where the forge supports it: `git push origin HEAD:refs/for/<default-branch>/<topic>`.
           3. A topic branch (`issue/<n>-<slug>`, `sprint/<n>`) and a PR.
+        - Never force-push.
+        - Update/rebase your branch before merging; follow this repo's CI and review requirements.
+    team_agit_only:
+      name: "Team / AGit only"
+      rule: "Git workflow: team, AGit only (never push main directly; AGit where the forge supports it, else a topic branch and PR)."
+      content: |
+        ## Repo Setup
+        - Team repo; push route `agit-only`. Never push the default branch directly. Push in this order; a refused push falls through to the next step:
+          1. AGit where the forge supports it: `git push origin HEAD:refs/for/<default-branch>/<topic>`. The topic is `git.agit_topic` in `.harnez/repo.yaml` when set, else the forge username.
+          2. A topic branch (`issue/<n>-<slug>`, `sprint/<n>`) and a PR.
+        - Never force-push.
+        - Update/rebase your branch before merging; follow this repo's CI and review requirements.
+    team_branch_only:
+      name: "Team / branch only"
+      rule: "Git workflow: team, topic branches and PRs only (no direct push and no AGit to main)."
+      content: |
+        ## Repo Setup
+        - Team repo; push route `branch-only`. Never push the default branch directly and never use AGit. Work on a topic branch (`issue/<n>-<slug>`, `sprint/<n>`), push it, and deliver it by a PR.
         - Never force-push.
         - Update/rebase your branch before merging; follow this repo's CI and review requirements.
     team_protected:

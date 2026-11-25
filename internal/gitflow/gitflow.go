@@ -38,11 +38,24 @@ type Config struct {
 	Mode          Mode   `yaml:"mode"`
 	ProtectedMain bool   `yaml:"protected_main"`
 	DefaultBranch string `yaml:"default_branch,omitempty"`
+	// PushRoute is the team push order: "main-first", "agit-only" or "branch-only".
+	// It only changes the rendered guidance; the pre-push guard still follows ProtectedMain.
+	PushRoute string `yaml:"push_route,omitempty"`
+	// AgitTopic is the AGit topic for refs/for pushes; empty means the forge username.
+	AgitTopic string `yaml:"agit_topic,omitempty"`
 }
+
+// Team push routes (git.push_route). main-first is the default.
+const (
+	PushRouteMainFirst  = "main-first"
+	PushRouteAgitOnly   = "agit-only"
+	PushRouteBranchOnly = "branch-only"
+)
 
 type specDefaults struct {
 	Mode             Mode     `yaml:"mode"`
 	ProtectedMain    bool     `yaml:"protected_main"`
+	PushRoute        string   `yaml:"push_route"`
 	FallbackBranches []string `yaml:"fallback_branches"`
 }
 
@@ -77,7 +90,7 @@ var loadSpec = sync.OnceValues(func() (specDefaults, error) {
 	return spec, nil
 })
 
-var gitKeys = []string{"mode", "protected_main", "default_branch"}
+var gitKeys = []string{"mode", "protected_main", "default_branch", "push_route", "agit_topic"}
 
 // Load reads only the `git` key of dir/.harnez/repo.yaml. A missing file or
 // key yields the spec defaults. Unknown keys, an unknown mode and
@@ -91,7 +104,7 @@ func Load(dir string) (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
-		return Config{Mode: spec.Mode, ProtectedMain: spec.ProtectedMain}, nil
+		return Config{Mode: spec.Mode, ProtectedMain: spec.ProtectedMain, PushRoute: spec.PushRoute}, nil
 	}
 	if err != nil {
 		return Config{}, err
@@ -107,7 +120,7 @@ func LoadBytes(path string, data []byte) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	cfg := Config{Mode: spec.Mode, ProtectedMain: spec.ProtectedMain}
+	cfg := Config{Mode: spec.Mode, ProtectedMain: spec.ProtectedMain, PushRoute: spec.PushRoute}
 	var doc struct {
 		Git map[string]any `yaml:"git"`
 	}
@@ -142,8 +155,27 @@ func LoadBytes(path string, data []byte) (Config, error) {
 		}
 		cfg.DefaultBranch = s
 	}
+	if v, ok := doc.Git["push_route"]; ok {
+		s, _ := v.(string)
+		switch s {
+		case PushRouteMainFirst, PushRouteAgitOnly, PushRouteBranchOnly:
+			cfg.PushRoute = s
+		default:
+			return Config{}, fmt.Errorf("%s: git.push_route %v is not one of %s, %s, %s", path, v, PushRouteMainFirst, PushRouteAgitOnly, PushRouteBranchOnly)
+		}
+	}
+	if v, ok := doc.Git["agit_topic"]; ok {
+		s, _ := v.(string)
+		if s == "" {
+			return Config{}, fmt.Errorf("%s: git.agit_topic must be a non-empty topic name, got %v", path, v)
+		}
+		cfg.AgitTopic = s
+	}
 	if cfg.Mode == ModeSolo && cfg.ProtectedMain {
 		return Config{}, fmt.Errorf("%s: git.protected_main requires git.mode team or fork, not solo", path)
+	}
+	if cfg.Mode != ModeTeam && cfg.PushRoute != "" && cfg.PushRoute != PushRouteMainFirst {
+		return Config{}, fmt.Errorf("%s: git.push_route %s requires git.mode team, not %s", path, cfg.PushRoute, cfg.Mode)
 	}
 	return cfg, nil
 }

@@ -3,5 +3,8 @@
 # these values instead of carrying its own copies.
 mode: solo
 protected_main: false
+# Team push route: main-first (direct push to main when allowed, else AGit, else a branch and PR),
+# agit-only (AGit, else a branch and PR), branch-only (a topic branch and PR).
+push_route: main-first
 # Branches treated as protected when the default branch cannot be detected.
 fallback_branches: [main, master]

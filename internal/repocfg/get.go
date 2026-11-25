@@ -112,13 +112,16 @@ func formatValue(v any) string {
 // spec/repo-config.yaml.
 func specDefault(dir, path string) (value string, ok bool, err error) {
 	switch path {
-	case "git.mode", "git.protected_main":
+	case "git.mode", "git.protected_main", "git.push_route":
 		cfg, err := gitflow.Load(dir)
 		if err != nil {
 			return "", false, err
 		}
-		if path == "git.mode" {
+		switch path {
+		case "git.mode":
 			return string(cfg.Mode), true, nil
+		case "git.push_route":
+			return cfg.PushRoute, true, nil
 		}
 		return strconv.FormatBool(cfg.ProtectedMain), true, nil
 	case "issues.active_cap":

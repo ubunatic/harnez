@@ -180,3 +180,64 @@ func TestInitSoloGoldenUnchanged(t *testing.T) {
 		}
 	}
 }
+
+func TestInitPushRouteRendersVariant(t *testing.T) {
+	cases := map[string]struct{ route, want string }{
+		"agit-only":   {"agit-only", "push route `agit-only`"},
+		"branch-only": {"branch-only", "push route `branch-only`"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := runInitCmd(t, dir, "--repo-mode", "team"); err != nil {
+				t.Fatal(err)
+			}
+			repoYAML := filepath.Join(dir, ".harnez", "repo.yaml")
+			data := strings.Replace(readFile(t, repoYAML), "git:\n", "git:\n    push_route: "+tc.route+"\n    agit_topic: my-topic\n", 1)
+			if err := os.WriteFile(repoYAML, []byte(data), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := runInitCmd(t, dir); err != nil {
+				t.Fatal(err)
+			}
+			agents := readFile(t, filepath.Join(dir, "AGENTS.md"))
+			if !strings.Contains(agents, tc.want) {
+				t.Errorf("AGENTS.md lacks %q:\n%s", tc.want, agents)
+			}
+			if strings.Contains(agents, "`git push origin main` (fast-forward only)") {
+				t.Errorf("AGENTS.md still offers a direct push to main:\n%s", agents)
+			}
+		})
+	}
+}
+
+func TestInitTeamPushWordingPrefersMain(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInitCmd(t, dir, "--repo-mode", "team"); err != nil {
+		t.Fatal(err)
+	}
+	agents := readFile(t, filepath.Join(dir, "AGENTS.md"))
+	want := "Push to main if possible; use AGit if main is protected and the forge supports it; otherwise use branches and PRs."
+	if !strings.Contains(agents, want) {
+		t.Errorf("AGENTS.md lacks the generic push wording %q:\n%s", want, agents)
+	}
+}
+
+func TestInitRepoModeSoloDropsPushRoute(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInitCmd(t, dir, "--repo-mode", "team"); err != nil {
+		t.Fatal(err)
+	}
+	repoYAML := filepath.Join(dir, ".harnez", "repo.yaml")
+	data := strings.Replace(readFile(t, repoYAML), "git:\n", "git:\n    push_route: branch-only\n", 1)
+	if err := os.WriteFile(repoYAML, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runInitCmd(t, dir, "--repo-mode", "solo"); err != nil {
+		t.Fatalf("switching to solo: %v", err)
+	}
+	cfg, err := claude.LoadRepoConfig(dir)
+	if err != nil || cfg.Git.Mode != "solo" || cfg.Git.PushRoute != "" {
+		t.Fatalf("after --repo-mode solo: cfg=%+v err=%v", cfg.Git, err)
+	}
+}

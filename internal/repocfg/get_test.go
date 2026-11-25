@@ -28,6 +28,7 @@ func TestGetFileValueAndDefaults(t *testing.T) {
 		{"issues.active_cap", strconv.Itoa(cap), true, true, "issues.active_cap=" + strconv.Itoa(cap) + " (default)"},
 		{"make.scaffold", "true", true, true, "make.scaffold=true (default)"},
 		{"git.default_branch", "", false, false, ""},
+		{"git.push_route", "main-first", true, true, "git.push_route=main-first (default)"},
 	}
 	for _, tc := range cases {
 		e, err := Get(dir, mustKey(t, tc.key))
@@ -79,6 +80,7 @@ func TestListShowsEffectiveValuesWithDefaultsMarked(t *testing.T) {
 		"docs.studies=true",
 		"git.mode=team",
 		"git.protected_main=true",
+		"git.push_route=main-first (default)",
 		"issues.active_cap=" + strconv.Itoa(cap) + " (default)",
 		"issues.merge_driver=true",
 		"issues.tracker=harnez",

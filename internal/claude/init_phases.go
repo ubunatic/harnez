@@ -41,11 +41,19 @@ func applyGitFlags(repoConfig *RepoConfig, opts InitOptions) (key string, change
 	if g.ProtectedMain && (g.Mode == "" || g.Mode == gitflow.ModeSolo) {
 		return "", false, fmt.Errorf("--protected-main needs --repo-mode team or fork, but git.mode is solo")
 	}
+	if g.Mode != gitflow.ModeTeam {
+		g.PushRoute = "" // the push route only applies to team repos
+	}
 	if g.Mode == "" {
 		return "", changed, nil
 	}
 	key = string(g.Mode)
-	if g.ProtectedMain {
+	switch {
+	case g.Mode == gitflow.ModeTeam && g.PushRoute == gitflow.PushRouteAgitOnly:
+		key = "team_agit_only"
+	case g.Mode == gitflow.ModeTeam && g.PushRoute == gitflow.PushRouteBranchOnly:
+		key = "team_branch_only"
+	case g.ProtectedMain:
 		key += "_protected"
 	}
 	return key, changed, nil

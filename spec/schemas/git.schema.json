@@ -6,6 +6,7 @@
   "properties": {
     "mode": { "type": "string", "enum": ["solo", "fork", "team"] },
     "protected_main": { "type": "boolean" },
+    "push_route": { "type": "string", "enum": ["main-first", "agit-only", "branch-only"] },
     "fallback_branches": {
       "type": "array",
       "minItems": 1,

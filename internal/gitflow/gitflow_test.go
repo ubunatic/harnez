@@ -100,6 +100,10 @@ func TestLoadRejectsInvalidGitKey(t *testing.T) {
 		"unknown mode":      {"git:\n  mode: trunk\n", "git.mode"},
 		"protected on solo": {"git:\n  mode: solo\n  protected_main: true\n", "git.protected_main"},
 		"unknown key":       {"git:\n  mode: team\n  foo: 1\n", "git.foo"},
+		"unknown route":     {"git:\n  mode: team\n  push_route: anywhere\n", "git.push_route"},
+		"route on solo":     {"git:\n  mode: solo\n  push_route: agit-only\n", "git.push_route"},
+		"route on fork":     {"git:\n  mode: fork\n  push_route: branch-only\n", "git.push_route"},
+		"empty agit topic":  {"git:\n  mode: team\n  agit_topic: \"\"\n", "git.agit_topic"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -113,6 +117,21 @@ func TestLoadRejectsInvalidGitKey(t *testing.T) {
 				t.Fatalf("Load error = %v, want it to name repo.yaml", err)
 			}
 		})
+	}
+}
+
+func TestLoadPushRoute(t *testing.T) {
+	cfg, err := LoadBytes("/nowhere/repo.yaml", []byte("version: 1\ngit:\n  mode: team\n"))
+	if err != nil || cfg.PushRoute != PushRouteMainFirst {
+		t.Fatalf("LoadBytes default route = %+v, %v; want %s", cfg, err, PushRouteMainFirst)
+	}
+	cfg, err = LoadBytes("/nowhere/repo.yaml", []byte("version: 1\ngit:\n  mode: team\n  push_route: agit-only\n  agit_topic: my-topic\n"))
+	if err != nil || cfg.PushRoute != PushRouteAgitOnly || cfg.AgitTopic != "my-topic" {
+		t.Fatalf("LoadBytes = %+v, %v; want agit-only with topic my-topic", cfg, err)
+	}
+	cfg, err = LoadBytes("/nowhere/repo.yaml", []byte("version: 1\ngit:\n  mode: team\n  push_route: branch-only\n"))
+	if err != nil || cfg.PushRoute != PushRouteBranchOnly {
+		t.Fatalf("LoadBytes = %+v, %v; want branch-only", cfg, err)
 	}
 }
 

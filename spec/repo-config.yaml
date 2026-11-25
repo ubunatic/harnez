@@ -13,6 +13,7 @@ render_keys:
   - rules.quota
   - git.mode
   - git.protected_main
+  - git.push_route
   - make.scaffold
   - make.container_test
 
@@ -21,6 +22,7 @@ plain_keys:
   - version
   - issues.active_cap
   - git.default_branch
+  - git.agit_topic
 
 # Effective values of optional keys that are not in the file. git.* defaults
 # live in spec/git.yaml and issues.active_cap in spec/issues.yaml.

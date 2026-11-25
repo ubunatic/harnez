@@ -35,7 +35,9 @@
       "properties": {
         "mode": {"type": "string", "enum": ["solo", "fork", "team"]},
         "protected_main": {"type": "boolean"},
-        "default_branch": {"type": "string", "minLength": 1}
+        "default_branch": {"type": "string", "minLength": 1},
+        "push_route": {"type": "string", "enum": ["main-first", "agit-only", "branch-only"]},
+        "agit_topic": {"type": "string", "minLength": 1}
       },
       "if": {"properties": {"mode": {"const": "solo"}}, "required": ["mode"]},
       "then": {"properties": {"protected_main": {"const": false}}},
