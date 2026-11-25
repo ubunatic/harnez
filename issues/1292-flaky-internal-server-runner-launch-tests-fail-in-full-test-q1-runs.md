@@ -24,5 +24,7 @@ Both tests failed in every full `make test-q1` run on 2026-11-25 and passed when
 - Fix commit: b86c6aab (refs 1292).
 - Verified: `harnez exec --quota-1 -- go test ./internal/server/` passes; full `HTO=0 make test-q1` exits 0.
 
-## 4. Open question (separate ticket if pursued)
-Whether `harnez exec` should hand its broker socket to arbitrary child processes. It is a design question, not part of this fix.
+## 4. Decided: keep forwarding the broker to children
+Question: should `harnez exec` keep handing its broker socket (`HARNEZ_BROKER_FD`) to every child process?
+Decision (decide mode, smart advisor, 2026-11-25): keep it, no product change. `harnez exec` cannot tell a harnez runner from `make` or `go test` that later calls `harnez` deeper in its tree. Dropping the broker for plain children would silently remove telemetry from those nested calls (ticket 1250). Forwarding adds no privilege: `init()` marks the inherited FD close-on-exec, so it is passed only on purpose, and the relay binds to the child's process tree.
+Follow-up (optional, not started): a `TestMain` in `internal/server` that unsets the variable, replacing the per-test clears. Tests that host their own broker need that clear regardless.
