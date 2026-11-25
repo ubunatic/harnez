@@ -118,6 +118,9 @@ func TestModeCmd_FlagsAndDefaults(t *testing.T) {
 	if err := os.MkdirAll(gitDir, 0755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// 1. Default `mode std` writes to Local.md and adds to git exclude
 	cmd := newModeCmd()
