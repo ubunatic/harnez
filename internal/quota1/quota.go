@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -157,52 +156,19 @@ func ReadRunRecord(path string) (RunRecord, error) {
 	return record, nil
 }
 
-// ChangesSinceLastRun returns eligible source files modified after the last
-// Quota-1 run, along with that run's recorded time. Missing state is not an
-// error and returns no changes.
-func ChangesSinceLastRun(dir string) ([]string, time.Time, error) {
-	return ChangesSinceLastRunAfter(dir, time.Time{})
-}
-
-// ChangesSinceLastRunAfter returns code files changed since the last quota run
-// and modified after turnStarted. It excludes ignored, markdown and issue files.
-func ChangesSinceLastRunAfter(dir string, turnStarted time.Time) ([]string, time.Time, error) {
-	stateFile, root, err := ResolveStateFile(dir)
-	if err != nil {
-		return nil, time.Time{}, err
-	}
+// EditedDuringRun returns the eligible source files whose content differs from
+// the snapshot taken when the run started. Call it after the run finishes: the
+// start snapshot is the one the run is covered by, so these are the files it
+// did not test. A missing state file returns no files.
+func EditedDuringRun(stateFile, root string) ([]string, error) {
 	record, err := ReadRunRecord(stateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, time.Time{}, nil
+			return nil, nil
 		}
-		return nil, time.Time{}, fmt.Errorf("read quota-1 state: %w", err)
+		return nil, fmt.Errorf("read quota-1 state: %w", err)
 	}
-	files, err := changesSinceRecord(root, stateFile, record)
-	if err != nil {
-		return nil, time.Time{}, err
-	}
-	filtered := files[:0]
-	for _, path := range files {
-		info, err := os.Stat(path)
-		if err == nil && !turnStarted.IsZero() && !info.ModTime().After(turnStarted) {
-			continue
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil || strings.EqualFold(filepath.Ext(path), ".md") || strings.HasPrefix(filepath.ToSlash(rel), "issues/") {
-			continue
-		}
-		tracked := exec.Command("git", "-C", root, "ls-files", "--error-unmatch", "--", rel)
-		if err := tracked.Run(); err == nil {
-			filtered = append(filtered, path)
-			continue
-		}
-		unignored := exec.Command("git", "-C", root, "check-ignore", "-q", "--", rel)
-		if err := unignored.Run(); err != nil {
-			filtered = append(filtered, path)
-		}
-	}
-	return filtered, record.Started, nil
+	return changesSinceRecord(root, stateFile, record)
 }
 
 // writeState writes the timestamp to the state file.

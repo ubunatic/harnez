@@ -94,44 +94,7 @@ func TestTurnQuotaBaselineUsesBeforeCaptureCompletion(t *testing.T) {
 	}
 }
 
-func TestWarnQuota1Changes(t *testing.T) {
-	dir := t.TempDir()
-	writeQuota1Repo(t, dir, true, true)
-	state, _, err := quota1.ResolveStateFile(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	runAt := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
-	if err := os.MkdirAll(filepath.Dir(state), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(state, []byte(runAt.Format(time.RFC3339Nano)+"\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 7; i++ {
-		path := filepath.Join(dir, fmt.Sprintf("file-%d.go", i))
-		if err := os.WriteFile(path, []byte("package test\n"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Chtimes(path, runAt.Add(time.Minute), runAt.Add(time.Minute)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	cmd := &cobra.Command{}
-	var out, errOut bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&errOut)
-	warnQuota1Changes(cmd, dir, runAt)
-	got := errOut.String()
-	if !strings.Contains(got, "7 file(s) changed after the last quota-1 run at "+runAt.Format(time.RFC3339)+":") || !strings.Contains(got, "— code is untested, run make test-q1") {
-		t.Fatalf("warning = %q", got)
-	}
-	if strings.Count(got, "file-") != 5 || out.Len() != 0 {
-		t.Fatalf("warning should list 5 files once on stderr; stderr=%q stdout=%q", got, out.String())
-	}
-}
-
-func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
+func TestAgentTurnsDoNotWarnAboutQuota1Changes(t *testing.T) {
 	for _, mode := range []string{"start", "resume"} {
 		t.Run(mode, func(t *testing.T) {
 			repoDir := t.TempDir()
@@ -191,8 +154,8 @@ func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(stderr.String(), "1 file(s) changed after the last quota-1 run at "+runAt.Format(time.RFC3339)+": changed.go — code is untested, run make test-q1") {
-				t.Fatalf("stderr warning = %q", stderr.String())
+			if strings.Contains(stderr.String(), "quota-1") {
+				t.Fatalf("agent turn must not print quota-1 advice; stderr = %q", stderr.String())
 			}
 			if !strings.HasPrefix(stdout.String(), "{") {
 				t.Fatalf("stdout should remain JSON, got %q", stdout.String())
@@ -413,58 +376,5 @@ func writeQuota1Repo(t *testing.T, dir string, quotaOn, withTarget bool) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, ".harnez", "repo.yaml"), []byte("version: 1\nissues:\n  tracker: none\n  merge_driver: false\n  active_cap: 30\ndocs:\n  studies: false\n  copies: []\nrules:\n  quota: "+quota+"\nmake:\n  scaffold: true\n  container_test: false\ngit:\n  mode: team\n"), 0644); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// quota1Stale writes a Quota-1 state file older than a changed source file and
-// returns the run time.
-func quota1Stale(t *testing.T, dir string) time.Time {
-	t.Helper()
-	state, _, err := quota1.ResolveStateFile(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	runAt := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
-	if err := os.MkdirAll(filepath.Dir(state), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(state, []byte(runAt.Format(time.RFC3339Nano)+"\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	source := filepath.Join(dir, "changed.go")
-	if err := os.WriteFile(source, []byte("package changed\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	later := runAt.Add(time.Minute)
-	if err := os.Chtimes(source, later, later); err != nil {
-		t.Fatal(err)
-	}
-	return runAt
-}
-
-func TestWarnQuota1ChangesAdvisesOnlyWithTargetAndOptIn(t *testing.T) {
-	cases := []struct {
-		name                string
-		quotaOn, withTarget bool
-		want                bool
-	}{
-		{"opted in with test-q1", true, true, true},
-		{"no test-q1 target", true, false, false},
-		{"quota-1 not enabled", false, true, false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			writeQuota1Repo(t, dir, tc.quotaOn, tc.withTarget)
-			runAt := quota1Stale(t, dir)
-			var errOut bytes.Buffer
-			cmd := &cobra.Command{}
-			cmd.SetErr(&errOut)
-			warnQuota1Changes(cmd, dir, runAt)
-			got := strings.Contains(errOut.String(), "file(s) changed after the last quota-1 run")
-			if got != tc.want {
-				t.Fatalf("advice printed = %v, want %v; stderr=%q", got, tc.want, errOut.String())
-			}
-		})
 	}
 }

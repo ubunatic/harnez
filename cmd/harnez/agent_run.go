@@ -17,10 +17,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"ubunatic.com/harnez/internal/agent"
-	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/modelblock"
 	"ubunatic.com/harnez/internal/procs"
-	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
@@ -267,28 +265,6 @@ func turnQuotaBaseline(turnStarted time.Time, before usage.TurnQuotaReading) tim
 	return turnStarted.Add(-time.Duration(before.CacheAgeMS) * time.Millisecond)
 }
 
-func warnQuota1Changes(cmd *cobra.Command, dir string, turnStarted time.Time) {
-	files, since, err := quota1.ChangesSinceLastRunAfter(dir, turnStarted)
-	if err != nil || len(files) == 0 {
-		return
-	}
-	// The advice names the test-q1 target, so print it only where the repo has
-	// that target and has opted into Quota-1.
-	_, root, err := quota1.ResolveStateFile(dir)
-	if err != nil || !quota1Advised(root) {
-		return
-	}
-	const shown = 5
-	names := files
-	if len(names) > shown {
-		names = names[:shown]
-	}
-	for i := range names {
-		names[i], _ = filepath.Rel(dir, names[i])
-	}
-	fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %d file(s) changed after the last quota-1 run at %s: %s — code is untested, run make test-q1\n", len(files), since.Format(time.RFC3339), strings.Join(names, ", "))
-}
-
 // startRequest describes one new agent turn. Prompt is sent to the agent;
 // StoredPrompt is what the session records (files as "path (N bytes)").
 type startRequest struct {
@@ -531,7 +507,6 @@ func findResumeSelector(sessions []*subagent.Session, selector string) (*subagen
 // runStart runs one start turn under ctx. ctx is passed explicitly rather than
 // stored on cmd so goroutines started here never race a cmd.SetContext.
 func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startRequest) error {
-	quotaTurnStarted := time.Now().Add(-time.Hour)
 	spec := req.ModelSpec
 	if err := checkStreamMode(req.StreamMode); err != nil {
 		return err
@@ -909,7 +884,6 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	if streaming {
 		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
 		ts.finish(r)
-		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)
 	}
 	if !req.JSON && req.StreamMode == streamStats && !req.PlanFirst {
@@ -917,24 +891,20 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		ts.began = turnStarted
 		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
 		ts.finish(r)
-		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)
 	}
 	tl.finishTurn(r, id, out.ReconnectCmd)
 	if req.JSON {
 		err := json.NewEncoder(cmd.OutOrStdout()).Encode(out)
-		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, err)
 	}
 	err = printAgentMessages(cmd, r.Messages, r.Response)
-	warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 	return stillRunningExit(cmd, r, err)
 }
 
 // runResume runs one more turn on an existing session.
 // runResume runs one resume turn under ctx; see runStart for why ctx is explicit.
 func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeRequest) error {
-	quotaTurnStarted := time.Now().Add(-time.Hour)
 
 	sessionName := req.Name
 	var resolved string
@@ -1406,7 +1376,6 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	if streaming {
 		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
 		ts.finish(r)
-		warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)
 	}
 	if !req.JSON && req.StreamMode == streamStats && !req.PlanFirst {
@@ -1414,7 +1383,6 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		ts.began = turnStarted
 		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
 		ts.finish(r)
-		warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
 		return stillRunningExit(cmd, r, nil)
 	}
 	if compacted {
@@ -1436,7 +1404,6 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		out.Resumed, out.PreviousSessionID, out.Note = &resumed, previousID, freshNote
 	}
 	err = writeAgentOutput(cmd, req.JSON, out)
-	warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
 	return stillRunningExit(cmd, r, err)
 }
 
@@ -1902,11 +1869,4 @@ func printAgentPreview(cmd *cobra.Command, model subagent.Model, role, name, dir
 	acceptLine := agent.CostlyModelDryRunLine(model, acceptCost, availability, time.Now())
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "dry-run: %s\nrole: %s\nname: %s\ndir: %s\naccept-cost: %s\nargv: %s\n", model.Spec(), role, name, dir, acceptLine, strings.Join(quoted, " "))
 	return err
-}
-
-// quota1Advised reports whether the repo at root opted into Quota-1 in
-// .harnez/repo.yaml and declares a test-q1 make target.
-func quota1Advised(root string) bool {
-	cfg, err := claude.LoadRepoConfig(root)
-	return err == nil && cfg.Rules.Quota && claude.MakeTargetExists(root, "test-q1")
 }

@@ -296,60 +296,60 @@ func TestCheckAndRecord_Bypass(t *testing.T) {
 	}
 }
 
-func TestChangesSinceLastRun(t *testing.T) {
+func TestEditedDuringRun(t *testing.T) {
+	clearBypassEnv(t)
 	repoDir := t.TempDir()
-	if err := exec.Command("git", "-C", repoDir, "init", "-q").Run(); err != nil {
-		t.Fatal(err)
+	git := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", repoDir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
 	}
+	git("init", "-q")
+	git("config", "user.email", "test@example.invalid")
+	git("config", "user.name", "test")
 	source := filepath.Join(repoDir, "changed.go")
 	if err := os.WriteFile(source, []byte("package changed\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := exec.Command("git", "-C", repoDir, "add", "changed.go").Run(); err != nil {
+	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte("ignored.go\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	runAt := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
-	state, _, err := ResolveStateFile(repoDir)
-	if err != nil {
+	git("add", ".")
+	git("commit", "-q", "-m", "base")
+
+	res, err := CheckAndRecord(CheckOptions{Dir: repoDir})
+	if err != nil || !res.Allowed {
+		t.Fatalf("start run: %+v, %v", res, err)
+	}
+	if files, err := EditedDuringRun(res.StateFile, repoDir); err != nil || len(files) != 0 {
+		t.Fatalf("before any edit: files=%v err=%v", files, err)
+	}
+
+	// Edits made while the command runs: code, plus files the snapshot ignores.
+	if err := os.WriteFile(source, []byte("package changed\n// edited mid-run\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeState(state, runAt); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chtimes(source, runAt.Add(time.Minute), runAt.Add(time.Minute)); err != nil {
-		t.Fatal(err)
-	}
-	files, gotAt, err := ChangesSinceLastRun(repoDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(files) != 1 || files[0] != source || !gotAt.Equal(runAt) {
-		t.Fatalf("ChangesSinceLastRun() = %v, %v; want [%s], %v", files, gotAt, source, runAt)
-	}
-	ignored := filepath.Join(repoDir, "ignored.go")
-	markdown := filepath.Join(repoDir, "docs.md")
-	issue := filepath.Join(repoDir, "issues", "525.md")
-	for _, path := range []string{ignored, markdown, issue} {
+	for _, path := range []string{filepath.Join(repoDir, "ignored.go"), filepath.Join(repoDir, "docs.md"), filepath.Join(repoDir, "issues", "525.md")} {
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(path, []byte("changed\n"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Chtimes(path, runAt.Add(2*time.Minute), runAt.Add(2*time.Minute)); err != nil {
-			t.Fatal(err)
-		}
 	}
-	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte("ignored.go\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	turnStart := runAt.Add(90 * time.Second)
-	files, _, err = ChangesSinceLastRunAfter(repoDir, turnStart)
+	files, err := EditedDuringRun(res.StateFile, repoDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 0 {
-		t.Fatalf("filtered changes = %v, want none", files)
+	if len(files) != 1 || files[0] != source {
+		t.Fatalf("EditedDuringRun() = %v; want [%s]", files, source)
+	}
+	if err := os.WriteFile(source, []byte("package changed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if files, err := EditedDuringRun(res.StateFile, repoDir); err != nil || len(files) != 0 {
+		t.Fatalf("after revert: files=%v err=%v", files, err)
 	}
 }
 
@@ -495,7 +495,11 @@ func TestSnapshotBranchSwitchAndDirtyFiles(t *testing.T) {
 	}
 	check := func(want string) {
 		t.Helper()
-		files, _, err := ChangesSinceLastRunAfter(dir, time.Time{})
+		quotaState, _, err := ResolveStateFile(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files, err := EditedDuringRun(quotaState, dir)
 		if err != nil {
 			t.Fatal(err)
 		}

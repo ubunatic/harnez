@@ -12,10 +12,10 @@ issue 1181 is closed; its history is in that issue and in git.
 - **Quota-1 is advisory.** `harnez exec --quota-1` (and `make test-q1`) records each run and
   reports a repeat run without source changes, then runs it anyway. Quota-1 does not wrap commands
   in bwrap or Landlock and never blocks. The rule is in `.harnez/rules/Quota.md`.
-- **Quota-1 advice is gated.** The line "N file(s) changed after the last quota-1 run ... run
-  make test-q1" prints only when the repo Makefile has a `test-q1` target and `rules.quota` is
-  true in `.harnez/repo.yaml` (`quota1Advised` in `cmd/harnez/agent_run.go`; issue 1287 covers the
-  init side).
+- **Quota-1 stays out of agent turns.** `harnez agent` prints nothing about quota-1 (issue 1295).
+  Agents report untested edits in their reply, as `.harnez/rules/Quota.md` says. The host sees one
+  line when a quota-1 run ends and files changed while it ran (`internal/exec`, `EditedDuringRun`
+  in `internal/quota1`).
 
 ## Agent store override
 

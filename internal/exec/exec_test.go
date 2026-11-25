@@ -2214,3 +2214,47 @@ func TestRunExecWrapper_Quota1TierUpgradeAndBlock(t *testing.T) {
 		}
 	}
 }
+
+func TestRunExecWrapper_Quota1ReportsEditsDuringRun(t *testing.T) {
+	repoDir := t.TempDir()
+	srcFile := filepath.Join(repoDir, "app.go")
+	if err := os.WriteFile(srcFile, []byte("package app\n"), 0644); err != nil {
+		t.Fatalf("write app.go: %v", err)
+	}
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "test@example.invalid"},
+		{"config", "user.name", "test"},
+		{"add", "app.go"},
+		{"commit", "-q", "-m", "base"},
+	} {
+		if out, err := exec.Command("git", append([]string{"-C", repoDir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	opts := testExecOptions(t)
+	opts.Quota1 = true
+	opts.Quota1Dir = repoDir
+
+	// The command edits app.go while it runs: that edit is not covered by this run.
+	var out, errOut bytes.Buffer
+	code, err := runExecWrapper([]string{"sh", "-c", "printf '// edited\\n' >> " + srcFile}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 0 {
+		t.Fatalf("run = %d, %v; stderr=%q", code, err, errOut.String())
+	}
+	want := "quota-1: 1 file(s) (app.go) changed while this run was in progress; this run does not cover them"
+	if !strings.Contains(errOut.String(), want) {
+		t.Fatalf("stderr = %q, want %q", errOut.String(), want)
+	}
+
+	// A run that leaves the tree alone reports nothing.
+	var quietOut, quietErr bytes.Buffer
+	code, err = runExecWrapper([]string{"sh", "-c", "true"}, opts, strings.NewReader(""), &quietOut, &quietErr)
+	if err != nil || code != 0 {
+		t.Fatalf("quiet run = %d, %v; stderr=%q", code, err, quietErr.String())
+	}
+	if strings.Contains(quietErr.String(), "changed while this run") {
+		t.Fatalf("quiet run reported edits: %q", quietErr.String())
+	}
+}

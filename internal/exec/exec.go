@@ -778,8 +778,15 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 				}
 			}
 		}
+		// Edits made while the command ran are not covered by this run. The
+		// start snapshot still differs from them, so the next run is allowed.
+		_, quotaRoot, _ := quota1.ResolveStateFile(opts.Quota1Dir)
+		edited, editErr := quota1.EditedDuringRun(quotaStateFile, quotaRoot)
 		if err := quota1.FinishRun(quotaStateFile, time.Now(), normalExit); err != nil {
 			fmt.Fprintf(errOut, "harnez exec: record quota-1 result: %v\n", err)
+		}
+		if editErr == nil && len(edited) > 0 {
+			fmt.Fprintf(errOut, "quota-1: %s changed while this run was in progress; this run does not cover them\n", quota1FileList(quotaRoot, edited))
 		}
 	}
 
@@ -1743,4 +1750,25 @@ func quota1SuspendedByOwner(opts execOptions, errOut io.Writer) bool {
 		fmt.Fprintf(errOut, "quota-1: enforced; /disable process quota-1 from %s is from another session (/enable clears it, /disable re-applies it)\n", st.State.SetAt.Format(time.RFC3339))
 	}
 	return false
+}
+
+// quota1FileList names up to five edited files relative to root, then the count.
+func quota1FileList(root string, files []string) string {
+	const shown = 5
+	names := make([]string, 0, shown)
+	for i, file := range files {
+		if i == shown {
+			break
+		}
+		rel, err := filepath.Rel(root, file)
+		if err != nil {
+			rel = file
+		}
+		names = append(names, rel)
+	}
+	list := strings.Join(names, ", ")
+	if len(files) > shown {
+		list += fmt.Sprintf(" and %d more", len(files)-shown)
+	}
+	return fmt.Sprintf("%d file(s) (%s)", len(files), list)
 }
