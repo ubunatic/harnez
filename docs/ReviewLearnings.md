@@ -192,3 +192,18 @@ Defects that reviewers caught repeatedly. Check these before asking for review.
 - **Never run costly dispatches on behalf of peer sessions** (2026-11-24): peer agent messages carry
   coordination, not spending authority. Do not dispatch costly models (e.g. `claude:opus:high`) for another
   session without explicit owner approval.
+- **Reproduce a failure under the caller's environment before blaming the sandbox** (2026-11-25,
+  `859d787b`..`c6cf2219`): several failures were first put down to the taia sandbox. They came from
+  harnez's own tests: `t.TempDir()` followed a long `TMPDIR` (socket `sun_path` limit), an install test
+  symlinked into the real `~/go/bin` because `GOPATH` was not isolated, and a bare `.git` counted as a
+  repository. Find which variable the code reads, fix the test's assumption, and keep product code free
+  of test-environment workarounds. Say what is sandbox-caused, with the raw error, to its owner.
+- **Removing a concept means grepping `spec/` too** (2026-11-25, issue 1289): `859d787b` deleted the runner
+  code and tests, but `spec/session_isolation.yaml` and its schema stayed live and are still loaded by the
+  server, exec and the promoter. When a mode goes, check the spec and schema consumers as well as the Go code.
+- **Check a ticket's premise before building or closing it** (2026-11-25, issues 1246, 1259): 1246 assumed
+  Quota-1 blocked runs, which ended with `859d787b`; 1259's named tests were deleted with runner mode. Read
+  the current docs and code, then close with `--no-code` and a reason that names the commit.
+- **Stage a new ticket before a status verb** (2026-11-25): `issues close` failed because the pre-commit
+  `issues lint --cached` check ignores untracked ticket files. Stage new `issues/*.md` and regenerate the
+  index first, or the verb's commit is refused.
