@@ -20,9 +20,6 @@ import (
 // ImportUsageCompatibility backfills the existing quota snapshots/history
 // once so consumers can read them through the shared store API.
 func ImportUsageCompatibility(ctx context.Context, homeDir, dbPath string) error {
-	if inRunnerMode() && (dbPath == "" || filepath.Clean(dbPath) == filepath.Clean(UsageStorePath())) {
-		return fmt.Errorf("import usage compatibility: host-only operation in runner mode")
-	}
 	if dbPath == "" {
 		var err error
 		dbPath, err = telemetry.DefaultDBPath()
@@ -112,9 +109,6 @@ func importUsageArchiveIntoStore(ctx context.Context, dbPath string, store *usag
 // QuotaHistoryFromStore returns the store's historical window view in the
 // legacy report shape used by host-session fitted attribution.
 func QuotaHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]QuotaHistoryEntry, error) {
-	if inRunnerMode() && (dbPath == "" || filepath.Clean(dbPath) == filepath.Clean(UsageStorePath())) {
-		return nil, fmt.Errorf("quota history store: host-only operation in runner mode")
-	}
 	if err := ImportUsageCompatibility(ctx, homeDir, dbPath); err != nil {
 		return nil, err
 	}
@@ -136,9 +130,6 @@ func QuotaHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]Quota
 // UsageHistoryFromStore returns complete compatibility snapshots through the
 // telemetry store after importing any retained legacy JSONL files.
 func UsageHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]HistoryEntry, error) {
-	if inRunnerMode() && (dbPath == "" || filepath.Clean(dbPath) == filepath.Clean(UsageStorePath())) {
-		return nil, fmt.Errorf("usage history store: host-only operation in runner mode")
-	}
 	if err := ImportUsageCompatibility(ctx, homeDir, dbPath); err != nil {
 		return nil, err
 	}
@@ -432,9 +423,6 @@ func writeProviderSnapshotMirror(path string, fetchedAt time.Time, provider stri
 }
 
 func appendUsageSummaryToStore(dir string, summary UsageSummary) error {
-	if inRunnerMode() {
-		return fmt.Errorf("append canonical usage history: host-only operation in runner mode")
-	}
 	dbPath, err := telemetry.DefaultDBPath()
 	if err != nil {
 		return err

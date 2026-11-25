@@ -14,39 +14,34 @@ func TestDiagnoseBwrapErrorClassifiesPrerequisites(t *testing.T) {
 		want     []string
 	}{
 		{
-			name:     "mount slave host",
-			output:   "bwrap: Failed to make / slave: Operation not permitted",
-			confined: false,
-			want:     []string{"Failed to make / slave", "host kernel/AppArmor"},
+			name:   "mount slave host",
+			output: "bwrap: Failed to make / slave: Operation not permitted",
+			want:   []string{"Failed to make / slave", "host kernel/AppArmor"},
 		},
 		{
-			name:     "uid map taia missing allow-bwrap",
-			output:   "bwrap: setting up uid map: Permission denied",
-			confined: true,
-			want:     []string{"setting up uid map", "--allow-bwrap"},
+			name:   "uid map taia missing allow-bwrap",
+			output: "bwrap: setting up uid map: Permission denied",
+			want:   []string{"setting up uid map"},
 		},
 		{
-			name:     "namespace creation",
-			output:   "bwrap: Creating new namespace failed: Operation not permitted",
-			confined: true,
-			want:     []string{"namespace creation failed", "--allow-bwrap"},
+			name:   "namespace creation",
+			output: "bwrap: Creating new namespace failed: Operation not permitted",
+			want:   []string{"namespace creation failed", "host kernel/AppArmor"},
 		},
 		{
-			name:     "unrelated exit",
-			output:   "FAIL: TestSomething",
-			confined: false,
-			want:     nil,
+			name:   "unrelated exit",
+			output: "FAIL: TestSomething",
+			want:   nil,
 		},
 		{
-			name:     "unrelated mid-line mention",
-			output:   "FAIL: assertion mentioned bwrap: without startup prefix",
-			confined: true,
-			want:     nil,
+			name:   "unrelated mid-line mention",
+			output: "FAIL: assertion mentioned bwrap: without startup prefix",
+			want:   nil,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := DiagnoseBwrapError(tc.output, tc.confined)
+			got := DiagnoseBwrapError(tc.output)
 			if len(tc.want) == 0 && got != "" {
 				t.Fatalf("DiagnoseBwrapError = %q, want empty", got)
 			}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/procs"
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -60,9 +59,6 @@ func stopSession(cmd *cobra.Command, store *subagent.FileSessionStore, x *subage
 }
 
 func stopSessionWithReader(cmd *cobra.Command, store *subagent.FileSessionStore, x *subagent.Session, reader procs.ProcReader) error {
-	if runstate.InRunnerMode() {
-		return fmt.Errorf("agent stop is a host-only operation in runner mode; run via taia background_task (mcp__taia__background_task)")
-	}
 	grace, killWait, poll, err := subagent.StopBounds()
 	if err != nil {
 		return err

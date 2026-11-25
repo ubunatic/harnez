@@ -31,8 +31,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 const host = "daily-cloudcode-pa.googleapis.com"
@@ -184,10 +182,7 @@ func NewWithTransport(home string, transport http.RoundTripper, observer Observe
 }
 
 func newMeter(home, sessionID, promptID string) (*Meter, error) {
-	dir, err := runstate.AGYMeterDir(filepath.Join(home, ".harnez", "agymeter"))
-	if err != nil {
-		return nil, err
-	}
+	dir := filepath.Join(home, ".harnez", "agymeter")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}

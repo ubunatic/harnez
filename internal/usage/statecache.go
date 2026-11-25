@@ -3,7 +3,6 @@ package usage
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,8 +10,6 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/modelblock"
-	"ubunatic.com/harnez/internal/runstate"
-	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usagestore"
 	"ubunatic.com/harnez/internal/xdgpath"
@@ -80,9 +77,6 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 // from one provider-store lookup.
 func CachedProviderQuotaAvailabilities(provider string, models []string, now time.Time) map[string]ProviderQuotaAvailability {
 	states := unknownProviderQuotaAvailabilities(models)
-	if inRunnerMode() {
-		return cachedRunnerProviderQuotaAvailabilities(provider, models, now, states)
-	}
 	if dbPath, err := telemetry.DefaultDBPath(); err == nil {
 		states = ProviderQuotaAvailabilitiesFromStore(context.Background(), dbPath, provider, models, now)
 	}
@@ -93,25 +87,9 @@ func CachedProviderQuotaAvailabilities(provider string, models []string, now tim
 // creating or migrating telemetry storage, for side-effect-free previews.
 func CachedProviderQuotaAvailabilityReadOnly(provider, model string, now time.Time) ProviderQuotaAvailability {
 	models := []string{model}
-	if inRunnerMode() {
-		return cachedRunnerProviderQuotaAvailabilities(provider, models, now, unknownProviderQuotaAvailabilities(models))[model]
-	}
 	path := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
 	states := providerQuotaAvailabilitiesFromStore(context.Background(), path, provider, models, now, true)
 	return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)[model]
-}
-
-func cachedRunnerProviderQuotaAvailabilities(provider string, models []string, now time.Time, fallback map[string]ProviderQuotaAvailability) map[string]ProviderQuotaAvailability {
-	states := fallback
-	queried, err := queryRunnerProviderQuota(context.Background(), provider, models)
-	if err != nil {
-		if !errors.Is(err, server.ErrInvalidRunnerChannel) {
-			fmt.Fprintf(os.Stderr, "harnez: query runner quota availability: %v\n", err)
-		}
-	} else if len(queried) > 0 {
-		states = queried
-	}
-	return applyModelBlocks(states, provider, modelblock.Active(modelblock.Path(), now), now)
 }
 
 // applyModelBlocks marks every model with an active local block as exhausted
@@ -292,7 +270,7 @@ func StateDir(homeDir string) string {
 
 // ResolvedStateDir resolves the usage state directory and fails closed for invalid runner roots.
 func ResolvedStateDir(homeDir string) (string, error) {
-	return runstate.UsageStateDir(StateDir(homeDir))
+	return StateDir(homeDir), nil
 }
 
 // snapshotPath returns the path of one agent's snapshot file within stateDir.
@@ -308,7 +286,7 @@ func snapshotPath(stateDir, agentID string) string {
 // the sole writer for these files, so there is no cross-process write race
 // to close.
 func WriteAgentSnapshot(stateDir, agentID string, usage AgentUsage) error {
-	if !runstate.InRunnerMode() && filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
+	if filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
 		return writeAgentSnapshotToStore(stateDir, agentID, usage)
 	}
 	return writeAgentSnapshotFile(stateDir, agentID, usage)
@@ -382,7 +360,7 @@ func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
 }
 
 func readAgentSnapshotContext(ctx context.Context, stateDir, agentID string) (*AgentSnapshot, error) {
-	if !runstate.InRunnerMode() && filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
+	if filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
 		snapshot, err := readAgentSnapshotFromStore(ctx, "", agentID)
 		if err != nil || snapshot != nil {
 			return snapshot, err

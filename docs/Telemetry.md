@@ -330,7 +330,7 @@ snapshots.
 - **Broker-FD routing without host spool disk writes (#1181, #1250)**:
   `server.DispatchTelemetry` (`internal/server/runner_channel.go`) routes
   telemetry over an inherited `HARNEZ_BROKER_FD` (`SOCK_SEQPACKET` +
-  `SCM_RIGHTS`) whenever present—even without `TAIA_SESSION_DIR`—and never writes
+  `SCM_RIGHTS`) whenever present—even without a runner session—and never writes
   to host spool paths on disk. If neither broker nor socket accepts a CLI
   invocation record, `sendTelemetryRecord` stays silent by default and logs the
   drop only when `HARNEZ_DEBUG` or `HARNEZ_TELEMETRY_DEBUG` is set.

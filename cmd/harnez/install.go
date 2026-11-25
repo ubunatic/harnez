@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"ubunatic.com/harnez/internal/dependency"
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/selfinstall"
 )
 
@@ -23,7 +22,7 @@ func newInstallCmd() *cobra.Command {
 		Short: "Install harnez locally or over ssh, or install an optional dependency",
 		Long: "Install or update harnez locally (into --dir, configuring shell PATH, completions,\n" +
 			"the ⚙ symlink, and man pages), stage this binary and its man pages into a new\n" +
-			"private directory (--stage <dir>, allowed in runner mode), promote such a staged\n" +
+			"private directory (--stage <dir>), promote such a staged\n" +
 			"build into trusted host roots (--staged <dir>), or install onto a remote host\n" +
 			"over ssh. When the argument names a package in spec/dependencies.yaml (such as\n" +
 			"neus), it runs that dependency's installer instead.",
@@ -37,11 +36,6 @@ func newInstallCmd() *cobra.Command {
 				for _, name := range []string{"staged", "sha256", "strategy", "dir", "version", "allow-dirty", "direct", "no-shell", "no-man", "dry-run"} {
 					if cmd.Flags().Changed(name) {
 						return fmt.Errorf("flag --%s cannot be combined with --stage", name)
-					}
-				}
-				if sessDir := runstate.RunnerDir(); sessDir != "" {
-					if err := validateInRunnerSession(sessDir, stageDir, "install --stage destination"); err != nil {
-						return err
 					}
 				}
 				return selfinstall.Stage(selfinstall.StageOptions{
@@ -75,9 +69,6 @@ func newInstallCmd() *cobra.Command {
 				return fmt.Errorf("--sha256 requires --staged")
 			}
 			if len(args) == 1 && dependency.HasPackage(args[0]) {
-				if runstate.InRunnerMode() && !opts.DryRun {
-					return fmt.Errorf("harnez install %s: host-only operation in runner mode", args[0])
-				}
 				for _, name := range []string{"strategy", "dir", "version", "allow-dirty", "direct", "no-shell", "no-man"} {
 					if cmd.Flags().Changed(name) {
 						return fmt.Errorf("flag --%s cannot be used when installing dependency %q", name, args[0])

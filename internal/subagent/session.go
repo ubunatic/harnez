@@ -11,8 +11,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // ErrSessionNameInUse indicates that a registry name or ID is already reserved.
@@ -295,21 +293,14 @@ func (s *FileSessionStore) requireWritable() error {
 }
 
 // NewSessionStore creates a new file-based session store at the given directory.
-// When confined under $TAIA_SESSION_DIR, the shared host store (~/.harnez/agents)
-// is host-owned and rejected cleanly.
 func NewSessionStore(dir string) (*FileSessionStore, error) {
-	if err := guardHostSessionStoreAccess(dir); err != nil {
-		return nil, err
-	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create session store directory: %w", err)
 	}
 	return &FileSessionStore{dir: dir}, nil
 }
 
-// NewHostSessionStoreDirect opens dir directly on the host without checking
-// TAIA_SESSION_DIR, used by the trusted host collector handler so single-process
-// tests sharing one process with TAIA_SESSION_DIR do not self-block.
+// NewHostSessionStoreDirect opens dir directly, without extra checks.
 func NewHostSessionStoreDirect(dir string) (*FileSessionStore, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create session store directory: %w", err)
@@ -323,27 +314,17 @@ func OpenSessionStore(dir string) (*FileSessionStore, error) {
 	return &FileSessionStore{dir: dir, readOnly: true}, nil
 }
 
-func guardHostSessionStoreAccess(dir string) error {
-	if !runstate.InRunnerMode() {
-		return nil
-	}
-	def := DefaultStoreDir()
-	cleanDir := filepath.Clean(dir)
-	cleanDef := filepath.Clean(def)
-	if strings.TrimSpace(dir) == "" || cleanDir == cleanDef {
-		return fmt.Errorf("host session registry %s is host-owned in runner mode; dispatch via taia background_task (mcp__taia__background_task) or use launch-bound broker RPC for own session", def)
-	}
-	if resolvedDir, err := filepath.EvalSymlinks(cleanDir); err == nil {
-		resolvedDef, defErr := filepath.EvalSymlinks(cleanDef)
-		if (defErr == nil && resolvedDir == resolvedDef) || resolvedDir == cleanDef {
-			return fmt.Errorf("host session registry %s is host-owned in runner mode; dispatch via taia background_task (mcp__taia__background_task) or use launch-bound broker RPC for own session", def)
-		}
-	}
-	return nil
-}
+// StoreDirEnv names the environment variable that overrides the default
+// session store directory. Sandboxed callers set it to a writable path; the
+// --store-dir flag still takes precedence over it.
+const StoreDirEnv = "HARNEZ_STORE_DIR"
 
-// DefaultStoreDir returns the default session store directory.
+// DefaultStoreDir returns the default session store directory: HARNEZ_STORE_DIR
+// when set, else ~/.harnez/agents.
 func DefaultStoreDir() string {
+	if v := strings.TrimSpace(os.Getenv(StoreDirEnv)); v != "" {
+		return v
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "~/.harnez/agents"

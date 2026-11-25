@@ -13,7 +13,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
@@ -101,10 +100,6 @@ type agentModelTotals struct {
 }
 
 func runAgentStats(w io.Writer, opts agentStatsOptions) error {
-	isDefaultStore := opts.StoreDir == "" || filepath.Clean(opts.StoreDir) == filepath.Clean(subagent.DefaultStoreDir())
-	if runstate.InRunnerMode() && (isDefaultStore || opts.DBPath == "") {
-		return fmt.Errorf("stats --agents is a host-only operation in runner mode")
-	}
 	if opts.Days <= 0 {
 		return fmt.Errorf("stats --agents: --days must be positive")
 	}
@@ -112,7 +107,7 @@ func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 		opts.HomeDir, _ = os.UserHomeDir()
 	}
 	if opts.StoreDir == "" {
-		opts.StoreDir = filepath.Join(opts.HomeDir, ".harnez", "agents")
+		opts.StoreDir = subagent.DefaultStoreDir()
 	}
 	if opts.DBPath == "" {
 		var err error

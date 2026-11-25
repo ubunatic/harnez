@@ -144,7 +144,7 @@ func historySummaryStatsContext(ctx context.Context, dir string) (HistorySummary
 	var data HistorySummaryData
 
 	isCanonical := dir == "" || filepath.Clean(dir) == filepath.Clean(HistoryDir(""))
-	if !inRunnerMode() || !isCanonical {
+	if !isCanonical {
 		matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
 		if err != nil || len(matches) == 0 {
 			return data, nil
@@ -331,9 +331,6 @@ func unlockHistoryFile(f *os.File) {
 // file under dir (see HistoryDir), tagging it with the local hostname.
 func AppendHistory(dir string, summary UsageSummary) error {
 	if dir == "" || filepath.Clean(dir) == filepath.Clean(HistoryDir("")) {
-		if inRunnerMode() {
-			return fmt.Errorf("append canonical usage history: host-only operation in runner mode")
-		}
 		return appendUsageSummaryToStore(dir, summary)
 	}
 	return appendHistoryFile(dir, summary)
@@ -384,9 +381,6 @@ func ReadHistory(dir string) ([]HistoryEntry, error) {
 
 func readHistoryContext(ctx context.Context, dir string) ([]HistoryEntry, error) {
 	if dir == "" || filepath.Clean(dir) == filepath.Clean(HistoryDir("")) {
-		if inRunnerMode() {
-			return queryRunnerHistoryEntries(ctx)
-		}
 		return UsageHistoryFromStore(ctx, "", "")
 	}
 	return readHistoryFiles(dir)

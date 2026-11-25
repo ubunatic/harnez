@@ -122,38 +122,3 @@ func TestTelemetrySpoolQuarantinesInvalidRecord(t *testing.T) {
 		t.Fatalf("quarantine count = %d, want 1", len(quarantineEntries))
 	}
 }
-
-func TestConfigTelemetrySpoolDirRunnerScope(t *testing.T) {
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stateHome := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", stateHome)
-	t.Setenv("TAIA_SESSION_DIR", "")
-	hostDir, err := cfg.TelemetrySpoolDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := filepath.Join(stateHome, "harnez", cfg.TelemetrySpoolPath); hostDir != want {
-		t.Fatalf("host dir = %q, want %q", hostDir, want)
-	}
-	runnerRoot := filepath.Join(t.TempDir(), "session")
-	if err := os.Mkdir(runnerRoot, 0700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TAIA_SESSION_DIR", runnerRoot)
-	runnerDir, err := cfg.TelemetrySpoolDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := filepath.Join(runnerRoot, "state", "telemetry-spool"); runnerDir != want {
-		t.Fatalf("runner dir = %q, want %q", runnerDir, want)
-	}
-	if err := os.Chmod(runnerRoot, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := cfg.TelemetrySpoolDir(); err == nil {
-		t.Fatal("expected loose runner dir permissions to fail")
-	}
-}

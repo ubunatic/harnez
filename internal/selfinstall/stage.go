@@ -22,7 +22,7 @@ type StageOptions struct {
 
 // Stage copies the harnez binary to Dir/bin/harnez and writes its man pages
 // to Dir/share/man/man1, the layout PromoteStaged expects. It touches no
-// shared root, so it is allowed in runner mode; on any failure it removes Dir.
+// shared root; on any failure it removes Dir.
 // It replaces scripts/stage-install.sh (issue 1254).
 func Stage(opts StageOptions, out io.Writer) (err error) {
 	if err := validateStageDir(opts.Dir); err != nil {

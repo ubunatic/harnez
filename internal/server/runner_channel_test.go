@@ -13,12 +13,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/sessioncontract"
 )
 
@@ -28,7 +26,6 @@ func setupPrivateRunnerRoot(t *testing.T, cfg Config) string {
 	if err := os.Mkdir(root, 0700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TAIA_SESSION_DIR", root)
 	t.Setenv("XDG_STATE_HOME", filepath.Join(t.TempDir(), "shared-state"))
 	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(t.TempDir(), "shared-runtime"))
 	return root
@@ -53,59 +50,6 @@ func startRunnerPairBroker(t *testing.T, cfg Config, ingest func(context.Context
 		}
 	})
 	return runnerEnd
-}
-
-func TestRunnerChannelFailsClosedWithoutValidFD(t *testing.T) {
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	setupPrivateRunnerRoot(t, cfg)
-	if _, err := cfg.Socket(); err == nil {
-		t.Fatal("expected Config.Socket() to fail closed in runner mode")
-	}
-
-	regFile, err := os.CreateTemp(t.TempDir(), "not-a-socket")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer regFile.Close()
-
-	// Connected TCP socket must also be rejected (requires AF_UNIX SOCK_SEQPACKET).
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-	go func() {
-		if c, err := ln.Accept(); err == nil {
-			_ = c.Close()
-		}
-	}()
-	tcpConn, err := net.Dial("tcp", ln.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tcpConn.Close()
-	tcpFile, err := tcpConn.(*net.TCPConn).File()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tcpFile.Close()
-
-	rec, err := NewTelemetryRecord("tool_call", json.RawMessage(`{"tool_name":"read"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, value := range []string{"", "not-an-int", "0", "1", "2", strconv.Itoa(int(regFile.Fd())), strconv.Itoa(int(tcpFile.Fd())), "999999"} {
-		t.Setenv(cfg.RunnerChannel.FDEnv, value)
-		if _, err := SendRunnerRequest(context.Background(), cfg, RunnerRequest{Op: RunnerOpTelemetryIngest}); !errors.Is(err, ErrInvalidRunnerChannel) {
-			t.Fatalf("FD=%q error = %v, want ErrInvalidRunnerChannel", value, err)
-		}
-		if got := SendRunnerTelemetry(context.Background(), cfg, rec); got != UpdateDropped {
-			t.Fatalf("FD=%q SendRunnerTelemetry = %q, want dropped", value, got)
-		}
-	}
 }
 
 func TestRunnerChannelRejectsAdminOpsUnknownFieldsAndOversize(t *testing.T) {
@@ -271,159 +215,6 @@ func TestRunnerChannelConcurrentChildProcessesOnInheritedFD(t *testing.T) {
 	defer mu.Unlock()
 	if len(seen) != workers {
 		t.Fatalf("concurrent runner deliveries = %v, want %d unique records", seen, workers)
-	}
-}
-
-func TestRunnerChannelSpoolReplayCapsMixedQuarantineAndSiblingIsolation(t *testing.T) {
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg.RunnerChannel.ReplayMaxRecords = 3
-	cfg.RunnerChannel.ReplayMaxBytes = 2048
-	runnerRoot := setupPrivateRunnerRoot(t, cfg)
-
-	siblingSpool := filepath.Join(t.TempDir(), "sibling", "state", "telemetry-spool")
-	if err := os.MkdirAll(siblingSpool, 0700); err != nil {
-		t.Fatal(err)
-	}
-	siblingSentinel := filepath.Join(siblingSpool, "0001-sibling.json")
-	if err := os.WriteFile(siblingSentinel, []byte(`{"record_id":"sib-1","kind":"tool_call","payload":{"tool_name":"sib"}}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	var mu sync.Mutex
-	collectorUp := false
-	var ingested []string
-	startRunnerPairBroker(t, cfg, func(_ context.Context, rec TelemetryRecord) error {
-		mu.Lock()
-		defer mu.Unlock()
-		if !collectorUp {
-			return ErrRunnerUnavailable
-		}
-		if rec.RecordID == "poison-1" {
-			return errors.Join(errors.New("bad row"), ErrQuarantine)
-		}
-		ingested = append(ingested, rec.RecordID)
-		return nil
-	})
-
-	for _, id := range []string{"good-1", "poison-1", "good-2", "good-3"} {
-		rec := TelemetryRecord{RecordID: id, Kind: "tool_call", Payload: json.RawMessage(`{"tool_name":"spooled"}`)}
-		if id != "good-3" {
-			if got := SendRunnerTelemetry(context.Background(), cfg, rec); got != UpdateSpooled {
-				t.Fatalf("record %s = %q, want spooled", id, got)
-			}
-			continue
-		}
-		raw, _ := json.Marshal(rec)
-		spoolDir, _ := cfg.TelemetrySpoolDir()
-		if err := AppendTelemetrySpool(spoolDir, raw, cfg.RunnerChannel.SpoolMaxBytes); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	runnerSpool := filepath.Join(runnerRoot, "state", "telemetry-spool")
-	mu.Lock()
-	collectorUp = true
-	mu.Unlock()
-
-	// Batch 1 (limit 3): delivers good-1 + good-2, quarantines ONLY poison-1, leaves good-3.
-	if err := ReplayRunnerSpool(context.Background(), cfg); err != nil {
-		t.Fatal(err)
-	}
-	if n := countJSONFiles(t, runnerSpool); n != 1 {
-		t.Fatalf("remaining after batch 1 = %d, want 1", n)
-	}
-	if q := countJSONFiles(t, filepath.Join(runnerSpool, "quarantine")); q != 1 {
-		t.Fatalf("quarantined count = %d, want 1", q)
-	}
-
-	// Batch 2: drains good-3 without error.
-	if err := ReplayRunnerSpool(context.Background(), cfg); err != nil {
-		t.Fatal(err)
-	}
-	if n := countJSONFiles(t, runnerSpool); n != 0 {
-		t.Fatalf("remaining after batch 2 = %d, want 0", n)
-	}
-	mu.Lock()
-	gotCount := len(ingested)
-	mu.Unlock()
-	if gotCount != 3 {
-		t.Fatalf("ingested = %v, want 3 valid records", ingested)
-	}
-	if _, err := os.Stat(siblingSentinel); err != nil {
-		t.Fatalf("sibling spool touched: %v", err)
-	}
-}
-
-func countJSONFiles(t *testing.T, dir string) int {
-	t.Helper()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	n := 0
-	for _, e := range entries {
-		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
-			n++
-		}
-	}
-	return n
-}
-
-func TestRunnerChannelReplayWireByteLimitAnd413NoQuarantine(t *testing.T) {
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	runnerRoot := setupPrivateRunnerRoot(t, cfg)
-	// First record fits wire batch; second pushes wrapped JSON over cap so client splits cleanly.
-	r1 := TelemetryRecord{RecordID: "byte-1", Kind: "tool_call", Payload: json.RawMessage(`{"tool_name":"a"}`)}
-	r2 := TelemetryRecord{RecordID: "byte-2", Kind: "tool_call", Payload: json.RawMessage(`{"tool_name":"b"}`)}
-	oneBatch, _ := json.Marshal(RunnerReplayBatch{Records: []TelemetryRecord{r1}})
-	twoBatch, _ := json.Marshal(RunnerReplayBatch{Records: []TelemetryRecord{r1, r2}})
-	cfg.RunnerChannel.ReplayMaxBytes = int64(len(twoBatch) - 1)
-	if int64(len(oneBatch)) > cfg.RunnerChannel.ReplayMaxBytes {
-		t.Fatalf("unexpected fixture size")
-	}
-
-	spoolDir, err := cfg.TelemetrySpoolDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, rec := range []TelemetryRecord{r1, r2} {
-		raw, _ := json.Marshal(rec)
-		if err := AppendTelemetrySpool(spoolDir, raw, cfg.RunnerChannel.SpoolMaxBytes); err != nil {
-			t.Fatal(err)
-		}
-	}
-	var count atomic.Int32
-	startRunnerPairBroker(t, cfg, func(_ context.Context, _ TelemetryRecord) error { count.Add(1); return nil })
-	if err := ReplayRunnerSpool(context.Background(), cfg); err != nil {
-		t.Fatal(err)
-	}
-	if n := countJSONFiles(t, filepath.Join(runnerRoot, "state", "telemetry-spool")); n != 1 || count.Load() != 1 {
-		t.Fatalf("split batch remaining=%d count=%d, want 1 and 1", n, count.Load())
-	}
-	// If broker itself rejects 413, existing keep file stays spooled and is NOT quarantined.
-	if err := os.MkdirAll(filepath.Join(spoolDir, "quarantine"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	keepPath := filepath.Join(spoolDir, "keep.json")
-	if err := os.WriteFile(keepPath, []byte(`{}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	cfg.RunnerChannel.ReplayMaxBytes = int64(len(twoBatch) * 2)
-	err = applyRunnerReplayResponse(spoolDir, []string{keepPath}, RunnerResponse{Status: http.StatusRequestEntityTooLarge})
-	if !errors.Is(err, ErrRunnerUnavailable) {
-		t.Fatalf("413 error = %v, want ErrRunnerUnavailable", err)
-	}
-	if _, statErr := os.Stat(keepPath); statErr != nil {
-		t.Fatalf("413 removed or moved keep file: %v", statErr)
-	}
-	if q := countJSONFiles(t, filepath.Join(spoolDir, "quarantine")); q != 0 {
-		t.Fatalf("413 unexpectedly quarantined %d files", q)
 	}
 }
 
@@ -607,7 +398,6 @@ func TestDispatchTelemetryUsesBrokerFDWithoutRunnerDirAndSkipsHostSpool(t *testi
 		t.Fatal(err)
 	}
 	cfg.UpdateTimeout = 200 * time.Millisecond
-	t.Setenv(runstate.RunnerDirEnv(), "")
 	stateHome := t.TempDir()
 	runtimeDir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateHome)
@@ -639,7 +429,9 @@ func TestDispatchTelemetryUsesBrokerFDWithoutRunnerDirAndSkipsHostSpool(t *testi
 	t.Cleanup(func() {
 		cancel()
 		_ = hostEnd.Close()
-		<-done
+		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("broker stopped with error: %v", err)
+		}
 	})
 
 	rec, err := NewTelemetryRecord("cli_invocation", json.RawMessage(`{"command":"read"}`))

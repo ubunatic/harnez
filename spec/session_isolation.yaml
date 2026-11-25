@@ -1,6 +1,5 @@
 # yaml-language-server: $schema=schemas/session_isolation.schema.json
 version: 1
-session_dir_env: TAIA_SESSION_DIR
 ownership:
   - {resource: session_locks_history, class: runner}
   - {resource: exec_process_records, class: runner}
@@ -27,20 +26,7 @@ promoter:
   alias_target: harnez
   man_manifest: exact_generated_manifest
   promotion: pinned_nofollow_atomic_per_file
-runner_paths:
-  session_state: [state, sessions]
-  process_records: [runtime, procs]
-  usage_state: [state, usage]
-  telemetry_spool: [state, telemetry-spool]
-  agymeter: [state, agymeter]
-  logs: [state, logs]
-  feedback: [state, feedback]
-  bench: [state, bench]
-  policy: [state, policy]
 bwrap:
-  confined_failure_prefix: "bwrap prerequisite failure under Taia confinement"
-  confined_failure_guidance: "re-launch taia with --allow-bwrap (or a profile including it such as --allow develop)"
   host_failure_prefix: "bwrap prerequisite failure on host"
   host_failure_guidance: "host kernel/AppArmor userns configuration does not permit unprivileged bubblewrap"
-  missing_confined_error: "bwrap prerequisite missing from PATH under Taia confinement (re-launch taia with --allow-bwrap after installing bwrap)"
   missing_host_error: "bwrap prerequisite missing from PATH (bubblewrap is required for Quota-1 sandboxing)"

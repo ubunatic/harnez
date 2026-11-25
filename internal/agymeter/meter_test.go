@@ -102,38 +102,6 @@ func TestNewCAAndBundle(t *testing.T) {
 	}
 }
 
-func TestRunnerMeterUsesPrivateDirectory(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
-	if err := os.Chmod(root, 0700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TAIA_SESSION_DIR", root)
-	m, err := New(home)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer m.Close()
-	if want := filepath.Join(root, "state", "agymeter", "usage.jsonl"); m.logPath != want {
-		t.Fatalf("log path = %q, want %q", m.logPath, want)
-	}
-	bundle, err := m.Bundle()
-	if err != nil || filepath.Dir(bundle) != filepath.Dir(m.logPath) {
-		t.Fatalf("bundle = %q, error = %v", bundle, err)
-	}
-	if _, err := os.Stat(filepath.Join(home, ".harnez")); !os.IsNotExist(err) {
-		t.Fatalf("shared state exists or stat failed: %v", err)
-	}
-}
-
-func TestRunnerMeterRejectsInvalidRoot(t *testing.T) {
-	t.Setenv("TAIA_SESSION_DIR", "relative")
-	if m, err := New(t.TempDir()); err == nil {
-		m.Close()
-		t.Fatal("invalid runner root accepted")
-	}
-}
-
 func TestResponseObserverPassesSSEThroughAndKeepsLastUsage(t *testing.T) {
 	m, err := newMeter(t.TempDir(), "session-x", "prompt-x")
 	if err != nil {
@@ -440,34 +408,4 @@ func readRecords(t *testing.T, path string) []Record {
 		t.Fatal(err)
 	}
 	return records
-}
-
-func TestRunnerRejectsMalformedRoots(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("DEBUG", "1")
-	for _, kind := range []string{"missing", "permissive", "symlink"} {
-		t.Run(kind, func(t *testing.T) {
-			root := t.TempDir()
-			switch kind {
-			case "missing":
-				root = filepath.Join(root, "missing")
-			case "permissive":
-				if err := os.Chmod(root, 0755); err != nil {
-					t.Fatal(err)
-				}
-			case "symlink":
-				link := filepath.Join(t.TempDir(), "link")
-				if err := os.Symlink(root, link); err != nil {
-					t.Fatal(err)
-				}
-				root = link
-			}
-			t.Setenv("TAIA_SESSION_DIR", root)
-			if m, err := New(home); err == nil {
-				m.Close()
-				t.Fatal("accepted invalid root")
-			}
-		})
-	}
 }

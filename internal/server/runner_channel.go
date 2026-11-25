@@ -6,12 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,7 +17,6 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/sessioncontract"
 )
 
@@ -188,9 +185,6 @@ func RunnerChannelStatus(cfg Config) error {
 // in runner mode (or whenever a valid broker FD is inherited), or via the host
 // Unix socket and host spool otherwise.
 func DispatchTelemetry(ctx context.Context, cfg Config, record TelemetryRecord) UpdateResult {
-	if runstate.InRunnerMode() {
-		return SendRunnerTelemetry(ctx, cfg, record)
-	}
 	if RunnerChannelStatus(cfg) == nil {
 		if result := SendRunnerTelemetry(ctx, cfg, record); result == UpdateDelivered {
 			return result
@@ -238,9 +232,6 @@ func SendRunnerTelemetry(ctx context.Context, cfg Config, record TelemetryRecord
 	}
 	resp, err := SendRunnerRequest(ctx, cfg, RunnerRequest{Op: RunnerOpTelemetryIngest, Payload: payload})
 	if err == nil && resp.Status >= 200 && resp.Status < 300 {
-		if runstate.InRunnerMode() {
-			_ = ReplayRunnerSpool(ctx, cfg)
-		}
 		return UpdateDelivered
 	}
 	if errors.Is(err, ErrInvalidRunnerChannel) || errors.Is(err, ErrRunnerPayloadTooLarge) {
@@ -249,158 +240,7 @@ func SendRunnerTelemetry(ctx context.Context, cfg Config, record TelemetryRecord
 	if err == nil && resp.Status < 500 {
 		return UpdateDropped
 	}
-	if !runstate.InRunnerMode() {
-		return UpdateDropped
-	}
-	spoolDir, err := cfg.TelemetrySpoolDir()
-	if err != nil {
-		return UpdateDropped
-	}
-	raw, err := json.Marshal(record)
-	if err != nil {
-		return UpdateDropped
-	}
-	if err := AppendTelemetrySpool(spoolDir, raw, cfg.RunnerChannel.SpoolMaxBytes); err != nil {
-		return UpdateDropped
-	}
-	return UpdateSpooled
-}
-
-// ReplayRunnerSpool sends a bounded batch of records from the current runner's
-// own spool directory over the inherited broker channel.
-func ReplayRunnerSpool(ctx context.Context, cfg Config) error {
-	if _, err := parseAndValidateRunnerFD(cfg); err != nil {
-		return err
-	}
-	dir, err := cfg.TelemetrySpoolDir()
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
-		return nil
-	} else if err != nil {
-		return err
-	}
-	lock, err := acquireDirLock(dir)
-	if err != nil {
-		return err
-	}
-	defer releaseDirLock(lock)
-
-	batch, paths, err := collectRunnerReplayBatch(cfg, dir)
-	if err != nil || len(batch.Records) == 0 {
-		return err
-	}
-	rawBatch, err := json.Marshal(batch)
-	if err != nil {
-		return err
-	}
-	resp, err := SendRunnerRequest(ctx, cfg, RunnerRequest{Op: RunnerOpTelemetryReplay, Payload: rawBatch})
-	if err != nil {
-		return err
-	}
-	return applyRunnerReplayResponse(dir, paths, resp)
-}
-
-func applyRunnerReplayResponse(dir string, paths []string, resp RunnerResponse) error {
-	if resp.Status == http.StatusRequestEntityTooLarge || resp.Status >= 500 {
-		return fmt.Errorf("%w: status %d (%s)", ErrRunnerUnavailable, resp.Status, resp.Error)
-	}
-	if resp.Status < 200 || resp.Status >= 300 {
-		for _, p := range paths {
-			quarantineSpoolFile(dir, p)
-		}
-		return fmt.Errorf("runner replay rejected (%d): %s", resp.Status, resp.Error)
-	}
-	if len(resp.Result) == 0 {
-		return removeReplayedPaths(paths)
-	}
-	var perRecord RunnerReplayResult
-	if err := decodeStrictJSON(resp.Result, &perRecord); err != nil || len(perRecord.Results) != len(paths) {
-		return fmt.Errorf("invalid replay result metadata")
-	}
-	var failures []error
-	for i, outcome := range perRecord.Results {
-		switch {
-		case outcome.Status >= 200 && outcome.Status < 300:
-			if err := os.Remove(paths[i]); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				failures = append(failures, err)
-			}
-		case outcome.Status >= 400 && outcome.Status < 500 && outcome.Status != http.StatusRequestEntityTooLarge:
-			quarantineSpoolFile(dir, paths[i])
-		default:
-			failures = append(failures, fmt.Errorf("%w: record %d status %d (%s)", ErrRunnerUnavailable, i, outcome.Status, outcome.Error))
-		}
-	}
-	return errors.Join(failures...)
-}
-
-func removeReplayedPaths(paths []string) error {
-	for _, p := range paths {
-		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-	}
-	return nil
-}
-
-func collectRunnerReplayBatch(cfg Config, dir string) (RunnerReplayBatch, []string, error) {
-	entries, err := os.ReadDir(dir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return RunnerReplayBatch{}, nil, nil
-	}
-	if err != nil {
-		return RunnerReplayBatch{}, nil, err
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	var batch RunnerReplayBatch
-	var paths []string
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-		if len(batch.Records) >= cfg.RunnerChannel.ReplayMaxRecords {
-			break
-		}
-		path := filepath.Join(dir, entry.Name())
-		rec, ok := readAndValidateSpoolRecord(cfg, dir, path)
-		if !ok {
-			continue
-		}
-		if !fitsReplayWireCap(cfg, batch.Records, rec) {
-			if len(batch.Records) == 0 {
-				quarantineSpoolFile(dir, path)
-				continue
-			}
-			break
-		}
-		batch.Records = append(batch.Records, rec)
-		paths = append(paths, path)
-	}
-	return batch, paths, nil
-}
-
-func readAndValidateSpoolRecord(cfg Config, dir, path string) (TelemetryRecord, bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		quarantineSpoolFile(dir, path)
-		return TelemetryRecord{}, false
-	}
-	var rec TelemetryRecord
-	if err := decodeStrictJSON(data, &rec); err != nil || validateRunnerTelemetryRecord(cfg, rec) != nil {
-		quarantineSpoolFile(dir, path)
-		return TelemetryRecord{}, false
-	}
-	return rec, true
-}
-
-func fitsReplayWireCap(cfg Config, current []TelemetryRecord, next TelemetryRecord) bool {
-	probe := RunnerReplayBatch{Records: append(append([]TelemetryRecord(nil), current...), next)}
-	encoded, err := json.Marshal(probe)
-	if err != nil {
-		return false
-	}
-	return int64(len(encoded)) <= cfg.RunnerChannel.ReplayMaxBytes
+	return UpdateDropped
 }
 
 // RunnerBrokerHandlers supplies host-side callbacks for allowlisted runner RPCs.

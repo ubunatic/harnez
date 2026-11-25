@@ -9,8 +9,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // Block is one local, expiring "out of quota" record for a provider model.
@@ -27,7 +25,6 @@ func (b Block) Active(now time.Time) bool { return b.Until.After(now) }
 
 // GlobalPath returns the shared host model-block file:
 // $XDG_STATE_HOME/harnez/model-blocks.json, or ~/.local/state/harnez/model-blocks.json.
-// This file is read-only to confined runners (TAIA_SESSION_DIR set).
 func GlobalPath() string {
 	base := os.Getenv("XDG_STATE_HOME")
 	if base == "" {
@@ -37,21 +34,12 @@ func GlobalPath() string {
 	return filepath.Join(base, "harnez", "model-blocks.json")
 }
 
-// ResolvedPath returns the writable block file path: GlobalPath on the host, or
-// the validated runner overlay under $TAIA_SESSION_DIR when running confined.
+// ResolvedPath returns the writable block file path, which is GlobalPath.
 func ResolvedPath() (string, error) {
-	global := GlobalPath()
-	if !runstate.InRunnerMode() {
-		return global, nil
-	}
-	dir, err := runstate.PolicyDir("")
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "model-blocks.json"), nil
+	return GlobalPath(), nil
 }
 
-// Path returns the writable block file path, or "" if TAIA_SESSION_DIR is invalid.
+// Path returns the writable block file path.
 func Path() string {
 	p, err := ResolvedPath()
 	if err != nil {
@@ -114,9 +102,6 @@ func locked(path string, fn func() error) error {
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("model-blocks: invalid runner policy path")
 	}
-	if runstate.InRunnerMode() && filepath.Clean(path) == filepath.Clean(GlobalPath()) {
-		return fmt.Errorf("model-blocks: global blocks are read-only in runner mode")
-	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
@@ -174,30 +159,14 @@ func Remove(path, provider, model string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !found && isRunnerOverlayPath(path) {
-		for _, gb := range readActiveFile(GlobalPath(), time.Now()) {
-			if key(gb.Provider, gb.Model) == key(provider, model) {
-				return false, fmt.Errorf("cannot unblock %s:%s: global model block is read-only in runner mode", provider, model)
-			}
-		}
-	}
 	return found, nil
 }
 
 // Active returns the blocks still in force at now, soonest expiry first.
-// A missing or unreadable file means no blocks. When running confined under
-// $TAIA_SESSION_DIR against the runner overlay, global host blocks (read-only)
-// are merged beneath runner overlay blocks.
+// A missing or unreadable file means no blocks.
 func Active(path string, now time.Time) []Block {
-	var global []Block
-	if runstate.InRunnerMode() && (strings.TrimSpace(path) == "" || isRunnerOverlayPath(path)) {
-		global = readActiveFile(GlobalPath(), now)
-	}
 	local := readActiveFile(path, now)
-	merged := make(map[string]Block, len(global)+len(local))
-	for _, b := range global {
-		merged[key(b.Provider, b.Model)] = b
-	}
+	merged := make(map[string]Block, len(local))
 	for _, b := range local {
 		merged[key(b.Provider, b.Model)] = b
 	}
@@ -207,14 +176,6 @@ func Active(path string, now time.Time) []Block {
 	}
 	sort.Slice(active, func(i, j int) bool { return active[i].Until.Before(active[j].Until) })
 	return active
-}
-
-func isRunnerOverlayPath(path string) bool {
-	if !runstate.InRunnerMode() || strings.TrimSpace(path) == "" {
-		return false
-	}
-	overlay, err := ResolvedPath()
-	return err == nil && filepath.Clean(path) == filepath.Clean(overlay)
 }
 
 func readActiveFile(path string, now time.Time) []Block {

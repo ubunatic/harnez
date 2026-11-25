@@ -24,18 +24,14 @@ func UsageStorePath() string {
 }
 
 // ReadStoredSummary reads the latest collector snapshot without permitting
-// schema setup, migrations, or writes. In runner mode (TAIA_SESSION_DIR set),
-// canonical store reads route through the launch-bound host broker FD.
+// schema setup, migrations, or writes.
 func ReadStoredSummary(ctx context.Context, dbPath string) (UsageSummary, error) {
-	if inRunnerMode() && (dbPath == "" || filepath.Clean(dbPath) == filepath.Clean(UsageStorePath())) {
-		return queryRunnerLatestSummary(ctx)
-	}
 	return ReadStoredSummaryDirect(ctx, dbPath)
 }
 
 // ReadStoredSummaryDirect reads the latest collector snapshot directly from
 // dbPath without runner broker indirection. Host collector handlers call this
-// directly so tests sharing one process with TAIA_SESSION_DIR do not re-enter.
+// directly.
 func ReadStoredSummaryDirect(ctx context.Context, dbPath string) (UsageSummary, error) {
 	if dbPath == "" {
 		dbPath = UsageStorePath()

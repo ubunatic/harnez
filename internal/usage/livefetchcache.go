@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/xdgpath"
 )
 
@@ -73,14 +72,6 @@ func liveFetchCachePath(agentDir string) string {
 			provider = "agy"
 		}
 		if provider != "" {
-			if runstate.InRunnerMode() {
-				dir, err := runstate.UsageStateDir("")
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "harnez: resolve live quota cache: %v\n", err)
-					return ""
-				}
-				return filepath.Join(dir, "quota-cache-"+provider+".json")
-			}
 			legacy := filepath.Join(agentDir, liveFetchCacheFilename)
 			target := filepath.Join(xdgpath.CacheHome(), "harnez", "quota-cache-"+provider+".json")
 			if _, err := os.Stat(target); os.IsNotExist(err) {

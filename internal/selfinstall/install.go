@@ -15,7 +15,6 @@ import (
 	"ubunatic.com/goself"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/fsutil"
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
 )
 
@@ -47,9 +46,6 @@ type Options struct {
 // local installs, updates shell PATH, completions, gear symlink, man pages, and
 // any active collector service, and warns when PATH finds another harnez first.
 func Run(ctx context.Context, opts Options, out io.Writer) error {
-	if runstate.InRunnerMode() && !opts.DryRun {
-		return fmt.Errorf("harnez install: shared installation via goself is host-only in runner mode; stage with harnez install --stage <dir> and promote on host via harnez install --staged <dir>")
-	}
 	strategy, err := goself.ParseStrategy(opts.Strategy)
 	if err != nil {
 		return err

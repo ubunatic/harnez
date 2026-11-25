@@ -96,9 +96,6 @@ func (r *Registry) CollectLoad(ctx context.Context, id string, diagnostics ...fu
 }
 
 func writeLoadObservation(ctx context.Context, provider string, observedAt time.Time, snapshot *LoadSnapshot) error {
-	if inRunnerMode() {
-		return fmt.Errorf("usage store requires host broker in runner mode")
-	}
 	dbPath, err := telemetry.DefaultDBPath()
 	if err != nil {
 		return err
@@ -483,9 +480,6 @@ func CollectRegisteredCatchup(ctx context.Context, homeDir string, client *http.
 }
 
 func publishAgentObservations(ctx context.Context, agents []AgentUsage) error {
-	if inRunnerMode() {
-		return fmt.Errorf("usage store requires host broker in runner mode")
-	}
 	dbPath, err := telemetry.DefaultDBPath()
 	if err != nil {
 		return err

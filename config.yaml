@@ -827,8 +827,8 @@ agents_md:
             completion notification: no polling, no `sleep`.
           - Never shell `&` or `nohup`. Never `pkill -f`/`pgrep -f` with a pattern that can match your
             own command line; match argv via `ps -eo pid,args` or kill recorded PIDs.
-          - Under taia (`TAIA_SESSION_DIR` set) run every background job through taia's
-            `background_task` tools, never the host's own background. Keep foreground Bash calls
+          - When the taia `background_task` tools are available, run every background job through them,
+            never the host's own background. Keep foreground Bash calls
             within the Bash timeout (split long test runs by package): Claude Code may move an
             overrunning call into its own background, where taia cannot see or cancel it.
           - Unsure about this host's background tools: run `harnez agent selftest --step hello` once and

@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"ubunatic.com/harnez/internal/agymeter"
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -191,10 +190,7 @@ func readAgyUsage(sessionID string) ([]agymeter.Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir, err := runstate.AGYMeterDir(filepath.Join(home, ".harnez", "agymeter"))
-	if err != nil {
-		return nil, err
-	}
+	dir := filepath.Join(home, ".harnez", "agymeter")
 	path := filepath.Join(dir, "usage.jsonl")
 	return agymeter.ReadUsageRecords(path, sessionID)
 }

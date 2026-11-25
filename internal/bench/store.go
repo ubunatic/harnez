@@ -11,7 +11,6 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // DefaultDir is ~/.harnez/bench, holding bench.sqlite and the setup marker.
@@ -20,7 +19,7 @@ func DefaultDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("bench: resolve home dir: %w", err)
 	}
-	return runstate.BenchDir(filepath.Join(home, ".harnez", "bench"))
+	return filepath.Join(home, ".harnez", "bench"), nil
 }
 
 const schema = `

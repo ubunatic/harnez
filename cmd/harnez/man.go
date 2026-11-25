@@ -5,12 +5,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"ubunatic.com/harnez"
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 func newManCmd(rootCmd *cobra.Command) *cobra.Command {
@@ -55,14 +53,6 @@ func defaultManDir() string {
 }
 
 func installManPages(rootCmd *cobra.Command, targetDir string, out io.Writer) error {
-	if sessDir := runstate.RunnerDir(); sessDir != "" {
-		if targetDir == "" {
-			return fmt.Errorf("man --install to shared man directory is host-only in runner mode; pass --dir inside %s", sessDir)
-		}
-		if err := validateManDirInRunnerSession(sessDir, targetDir); err != nil {
-			return err
-		}
-	}
 	if targetDir == "" {
 		targetDir = defaultManDir()
 	}
@@ -74,52 +64,4 @@ func installManPages(rootCmd *cobra.Command, targetDir string, out io.Writer) er
 	}
 	fmt.Fprintf(out, "Installed man pages to %s\n", targetDir)
 	return nil
-}
-
-func validateManDirInRunnerSession(sessDir, targetDir string) error {
-	return validateInRunnerSession(sessDir, targetDir, "man --install target")
-}
-
-// validateInRunnerSession refuses a target outside the runner session dir,
-// resolving symlinks in its existing prefix; what names the target in errors.
-func validateInRunnerSession(sessDir, targetDir, what string) error {
-	envName := runstate.RunnerDirEnv()
-	if !filepath.IsAbs(sessDir) || !filepath.IsAbs(targetDir) {
-		return fmt.Errorf("%s %s and $%s must be absolute in runner mode", what, targetDir, envName)
-	}
-	realSess, err := filepath.EvalSymlinks(filepath.Clean(sessDir))
-	if err != nil {
-		return fmt.Errorf("resolve $%s: %w", envName, err)
-	}
-	realTarget, err := resolveExistingPrefix(filepath.Clean(targetDir))
-	if err != nil {
-		return fmt.Errorf("resolve %s %s: %w", what, targetDir, err)
-	}
-	if realTarget != realSess && !strings.HasPrefix(realTarget, realSess+string(filepath.Separator)) {
-		return fmt.Errorf("%s %s escapes $%s in runner mode", what, targetDir, envName)
-	}
-	return nil
-}
-
-func resolveExistingPrefix(absPath string) (string, error) {
-	cur := absPath
-	var tail []string
-	for {
-		if _, err := os.Lstat(cur); err == nil {
-			resolved, err := filepath.EvalSymlinks(cur)
-			if err != nil {
-				return "", err
-			}
-			for i := len(tail) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, tail[i])
-			}
-			return resolved, nil
-		}
-		parent := filepath.Dir(cur)
-		if parent == cur {
-			return "", fmt.Errorf("no existing root for %s", absPath)
-		}
-		tail = append(tail, filepath.Base(cur))
-		cur = parent
-	}
 }

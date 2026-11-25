@@ -138,9 +138,6 @@ func AgentUsageToQuotaHistoryEntries(u AgentUsage, now time.Time) []QuotaHistory
 // ReadQuotaHistory loads all recorded entries from quota-history.jsonl in historyDir.
 func ReadQuotaHistory(historyDir string) ([]QuotaHistoryEntry, error) {
 	if historyDir == "" || filepath.Clean(historyDir) == filepath.Clean(HistoryDir("")) {
-		if inRunnerMode() {
-			return queryRunnerQuotaHistory(context.Background())
-		}
 		return QuotaHistoryFromStore(context.Background(), "", "")
 	}
 	return readQuotaHistoryFile(historyDir)

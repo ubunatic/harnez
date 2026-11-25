@@ -130,9 +130,6 @@ func PromoteStaged(ctx context.Context, opts PromoteOptions, out io.Writer) (Pro
 	if err != nil {
 		return PromoteResult{}, fmt.Errorf("load session isolation contract: %w", err)
 	}
-	if os.Getenv(contract.SessionDirEnv) != "" {
-		return PromoteResult{}, fmt.Errorf("promote staged artifacts: host-only operation in runner mode")
-	}
 	expectedMan, err := validateExpectedManManifest(opts.ExpectedManFiles)
 	if err != nil {
 		return PromoteResult{}, err

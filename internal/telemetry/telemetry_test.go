@@ -122,27 +122,6 @@ func TestDefaultDBPathUsesXDGAndBacksUpLegacyDB(t *testing.T) {
 	}
 }
 
-func TestDefaultDBPathRunnerLeavesLegacyUntouched(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_DATA_HOME", home)
-	t.Setenv("TAIA_SESSION_DIR", "invalid-relative-root")
-	legacy := filepath.Join(home, ".harnez", "tool_catalog.sqlite")
-	if err := os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(legacy, []byte("sentinel"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if path, err := DefaultDBPath(); err == nil || path != "" {
-		t.Fatalf("DefaultDBPath() = %q, %v", path, err)
-	}
-	data, err := os.ReadFile(legacy)
-	if err != nil || string(data) != "sentinel" {
-		t.Fatalf("legacy changed: %q, %v", data, err)
-	}
-}
-
 func TestDefaultDBPathRemovesOnlyEmptyLegacyDecoy(t *testing.T) {
 	home, data := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)

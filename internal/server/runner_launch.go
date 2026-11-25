@@ -9,7 +9,6 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // RunnerBrokerHandle manages a child process's inherited broker FD and any
@@ -67,10 +66,8 @@ func (h *RunnerBrokerHandle) Close() error {
 }
 
 // PrepareCmdRunnerBroker binds a launch-scoped runner broker FD to cmd.
-// On the host (TAIA_SESSION_DIR unset), it starts a host RelayRunnerBroker tied
-// to ctx for the child's lifetime. Inside a runner (TAIA_SESSION_DIR set), it
-// forwards a validated inherited FD when available and otherwise strips stale FD
-// environment entries so the child fails closed without contacting Config.Socket.
+// A valid inherited broker FD is forwarded to the child. Otherwise it starts a
+// RelayRunnerBroker tied to ctx for the child's lifetime.
 func PrepareCmdRunnerBroker(ctx context.Context, cmd *exec.Cmd) (*RunnerBrokerHandle, error) {
 	if cmd == nil {
 		return nil, nil
@@ -83,7 +80,7 @@ func PrepareCmdRunnerBroker(ctx context.Context, cmd *exec.Cmd) (*RunnerBrokerHa
 	if baseEnv == nil {
 		baseEnv = os.Environ()
 	}
-	if runstate.InRunnerMode() {
+	if RunnerChannelStatus(cfg) == nil {
 		return prepareForwardedRunnerBroker(cfg, cmd, baseEnv)
 	}
 	hostSocket, err := cfg.Socket()

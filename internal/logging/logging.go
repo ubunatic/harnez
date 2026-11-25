@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // Debugf appends a timestamped line to ~/.harnez/debug.log when DEBUG is set.
@@ -21,10 +19,7 @@ func Debugf(format string, args ...any) {
 	if err != nil {
 		return
 	}
-	dir, err := runstate.LogDir(filepath.Join(home, ".harnez"))
-	if err != nil {
-		return
-	}
+	dir := filepath.Join(home, ".harnez")
 	f, err := os.OpenFile(filepath.Join(dir, "debug.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return

@@ -1,5 +1,10 @@
 # Session Local Staging
 
+> Harnez has no runner mode. It does not read `TAIA_SESSION_DIR` or any other
+> caller variable, and it never branches on who invokes it. Everything below that
+> mentions runner mode or `TAIA_SESSION_DIR` describes the removed split and is
+> kept only as history until this file is rewritten.
+
 `make build && ./harnez install --stage /absolute/private/path` copies the running
 binary and writes its man pages under a new destination (`internal/selfinstall/stage.go`;
 it replaced `scripts/stage-install.sh` in issue 1254). It runs no shell and needs no

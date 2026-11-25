@@ -3,14 +3,10 @@ package exec
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/sessioncontract"
 )
 
@@ -25,7 +21,7 @@ func hasBwrapDiagLine(lower string) bool {
 
 // DiagnoseBwrapError translates bubblewrap namespace and mount-propagation
 // errors into actionable host or Taia-profile prerequisite diagnostics.
-func DiagnoseBwrapError(output string, taiaConfined bool) string {
+func DiagnoseBwrapError(output string) string {
 	lower := strings.ToLower(output)
 	if !hasBwrapDiagLine(lower) &&
 		!strings.Contains(lower, "setting up uid map") &&
@@ -52,9 +48,6 @@ func DiagnoseBwrapError(output string, taiaConfined bool) string {
 	if err != nil {
 		return detail
 	}
-	if taiaConfined {
-		return fmt.Sprintf("%s: %s; %s", contract.Bwrap.ConfinedFailurePrefix, detail, contract.Bwrap.ConfinedFailureGuidance)
-	}
 	return fmt.Sprintf("%s: %s; %s", contract.Bwrap.HostFailurePrefix, detail, contract.Bwrap.HostFailureGuidance)
 }
 
@@ -69,15 +62,10 @@ func ProbeBwrapSupport(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("bwrap prerequisite missing from PATH: %w", err)
 	}
-	if sessDir := runstate.RunnerDir(); sessDir != "" {
-		if _, err := validateBwrapSessionBind(sessDir); err != nil {
-			return err
-		}
-	}
 	cmd := exec.CommandContext(ctx, bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--", "true")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if diag := DiagnoseBwrapError(string(out), runstate.InRunnerMode()); diag != "" {
+		if diag := DiagnoseBwrapError(string(out)); diag != "" {
 			return fmt.Errorf("%s: %w", diag, err)
 		}
 		trimmed := strings.TrimSpace(string(out))
@@ -87,28 +75,4 @@ func ProbeBwrapSupport(ctx context.Context) error {
 		return fmt.Errorf("bwrap prerequisite probe failed: %w", err)
 	}
 	return nil
-}
-
-func validateBwrapSessionBind(sessDir string) (string, error) {
-	envName := runstate.RunnerDirEnv()
-	if !filepath.IsAbs(sessDir) || filepath.Clean(sessDir) != sessDir {
-		return "", fmt.Errorf("%s must be a clean absolute path before entering bwrap", envName)
-	}
-	info, err := os.Lstat(sessDir)
-	if err != nil {
-		return "", fmt.Errorf("inspect %s before entering bwrap: %w", envName, err)
-	}
-	if !info.IsDir() || info.Mode().Perm() != 0o700 {
-		return "", fmt.Errorf("%s must be a real directory with mode 0700 before entering bwrap", envName)
-	}
-	// bwrap --bind takes a path rather than a dirfd, so validate uid/mode and
-	// symlink-free resolution immediately before spawn to bound swap risk.
-	if stat, ok := info.Sys().(*syscall.Stat_t); !ok || int(stat.Uid) != os.Geteuid() {
-		return "", fmt.Errorf("%s must be owned by current user before entering bwrap", envName)
-	}
-	resolved, err := filepath.EvalSymlinks(sessDir)
-	if err != nil || resolved != sessDir {
-		return "", fmt.Errorf("%s must not traverse symlinks before entering bwrap", envName)
-	}
-	return sessDir, nil
 }

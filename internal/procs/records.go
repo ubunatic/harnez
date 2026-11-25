@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // Record describes a process group started by harnez exec.
@@ -25,9 +23,6 @@ type Record struct {
 
 // RecordDir returns the runtime process-record directory.
 func RecordDir() (string, error) {
-	if runstate.InRunnerMode() {
-		return runstate.ProcessRecordDir("")
-	}
 	return legacyRecordDir()
 }
 

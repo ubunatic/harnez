@@ -93,9 +93,6 @@ type collectorDeps struct {
 }
 
 func runCollectorWithDeps(ctx context.Context, homeDir, dbPath string, interval time.Duration, out io.Writer, offline bool, fetch func(context.Context) (UsageSummary, error), ready func(), requests <-chan PassiveRequest, tracker *ClientTracker, deps collectorDeps) error {
-	if inRunnerMode() {
-		return fmt.Errorf("usage collector requires host broker in runner mode")
-	}
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}

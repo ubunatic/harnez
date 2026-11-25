@@ -21,13 +21,12 @@ func TestRunnerRegistryLaunchBindingAndRejections(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, "run"))
-	t.Setenv("TAIA_SESSION_DIR", "")
 
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := setupPrivateRunnerRoot(t, cfg)
+	setupPrivateRunnerRoot(t, cfg)
 
 	// Missing FD fails closed.
 	t.Setenv(cfg.RunnerChannel.FDEnv, "")
@@ -35,12 +34,10 @@ func TestRunnerRegistryLaunchBindingAndRejections(t *testing.T) {
 		t.Fatalf("missing FD err = %v, want ErrInvalidRunnerChannel", err)
 	}
 
-	t.Setenv("TAIA_SESSION_DIR", "")
 	hostSocket, err := cfg.Socket()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TAIA_SESSION_DIR", root)
 
 	var mu sync.Mutex
 	stored := map[string]map[string]any{}
@@ -222,7 +219,6 @@ func TestRunnerLaunchBindChildPIDEnforcesProcessTree(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(home, "run"))
-	t.Setenv("TAIA_SESSION_DIR", "")
 
 	cfg, err := LoadConfig()
 	if err != nil {

@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // TierOverrides holds temporary model overrides for agent effort tiers.
@@ -44,7 +42,6 @@ func tierOverridesNow() time.Time {
 }
 
 // GlobalTierOverridesPath returns the shared host tier overrides path.
-// It is read-only when running confined under $TAIA_SESSION_DIR.
 func GlobalTierOverridesPath() string {
 	if tierOverridesStateDirForTest != "" {
 		return filepath.Join(tierOverridesStateDirForTest, "tier_overrides.json")
@@ -57,22 +54,12 @@ func GlobalTierOverridesPath() string {
 	return filepath.Join(stateHome, "harnez", "models", "tier_overrides.json")
 }
 
-// ResolvedTierOverridesPath returns the writable tier overrides path: the
-// global path on the host (or test dir), or a validated runner overlay under
-// $TAIA_SESSION_DIR when running confined.
+// ResolvedTierOverridesPath returns the writable tier overrides path, the global file.
 func ResolvedTierOverridesPath() (string, error) {
-	if tierOverridesStateDirForTest != "" || !runstate.InRunnerMode() {
-		return GlobalTierOverridesPath(), nil
-	}
-	dir, err := runstate.PolicyDir("")
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "tier_overrides.json"), nil
+	return GlobalTierOverridesPath(), nil
 }
 
-// TierOverridesPath returns the writable tier overrides path, or "" if
-// TAIA_SESSION_DIR is invalid.
+// TierOverridesPath returns the writable tier overrides path.
 func TierOverridesPath() string {
 	path, err := ResolvedTierOverridesPath()
 	if err != nil {
@@ -100,9 +87,7 @@ func loadTierOverridesFile(path string) (*TierOverrides, error) {
 	return &ov, nil
 }
 
-// LoadWritableTierOverrides reads unexpired tier overrides solely from the
-// writable path (the runner overlay when confined, or the global file on the
-// host), without merging read-only global entries.
+// LoadWritableTierOverrides reads unexpired tier overrides from the global file.
 func LoadWritableTierOverrides() (*TierOverrides, error) {
 	path, err := ResolvedTierOverridesPath()
 	if err != nil {
@@ -111,49 +96,13 @@ func LoadWritableTierOverrides() (*TierOverrides, error) {
 	return loadTierOverridesFile(path)
 }
 
-// LoadTierOverrides reads unexpired tier overrides from disk. If missing or expired,
-// it returns nil, nil. In runner mode ($TAIA_SESSION_DIR set without test dir
-// override), read-only global overrides are merged beneath runner overlay entries,
-// preserving the earliest non-zero expiry.
+// LoadTierOverrides reads unexpired tier overrides from the global file. If
+// missing or expired, it returns nil, nil.
 func LoadTierOverrides() (*TierOverrides, error) {
-	overlayPath, err := ResolvedTierOverridesPath()
-	if err != nil {
-		return nil, err
-	}
-	if tierOverridesStateDirForTest != "" || !runstate.InRunnerMode() {
-		return loadTierOverridesFile(overlayPath)
-	}
-	global, err := loadTierOverridesFile(GlobalTierOverridesPath())
-	if err != nil {
-		return nil, err
-	}
-	overlay, err := loadTierOverridesFile(overlayPath)
-	if err != nil {
-		return nil, err
-	}
-	if global == nil && overlay == nil {
-		return nil, nil
-	}
-	merged := &TierOverrides{Tiers: make(map[string]string)}
-	if global != nil {
-		merged.ExpiresAt = global.ExpiresAt
-		for k, v := range global.Tiers {
-			merged.Tiers[k] = v
-		}
-	}
-	if overlay != nil {
-		if merged.ExpiresAt.IsZero() || (!overlay.ExpiresAt.IsZero() && overlay.ExpiresAt.Before(merged.ExpiresAt)) {
-			merged.ExpiresAt = overlay.ExpiresAt
-		}
-		for k, v := range overlay.Tiers {
-			merged.Tiers[k] = v
-		}
-	}
-	return merged, nil
+	return loadTierOverridesFile(GlobalTierOverridesPath())
 }
 
-// SaveTierOverrides writes the given overrides to the writable tier overrides
-// path atomically (the runner overlay when confined, never the global file).
+// SaveTierOverrides writes the given overrides to the global tier overrides file atomically.
 func SaveTierOverrides(ov TierOverrides) error {
 	path, err := ResolvedTierOverridesPath()
 	if err != nil {
@@ -188,7 +137,7 @@ func SaveTierOverrides(ov TierOverrides) error {
 }
 
 // ClearTierOverrides removes the writable overrides file if present (runner
-// overlay only in runner mode, leaving global overrides intact).
+// writable file, leaving the shared global file intact).
 func ClearTierOverrides() error {
 	path, err := ResolvedTierOverridesPath()
 	if err != nil {

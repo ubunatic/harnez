@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/server"
 	"ubunatic.com/harnez/internal/usage"
 	"ubunatic.com/harnez/internal/usagecli"
@@ -388,9 +387,6 @@ func newCollectorCmd() *cobra.Command {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 			if collectorOnce {
-				if runstate.InRunnerMode() {
-					return fmt.Errorf("usage collector requires host broker in runner mode")
-				}
 				summary := usage.CollectAllLive(cmd.Context(), "", client)
 				if err := usage.InitializeUsageStore(cmd.Context(), "", ""); err != nil {
 					return fmt.Errorf("initialize usage store: %w", err)

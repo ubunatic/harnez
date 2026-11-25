@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/agentpolicy"
-	"ubunatic.com/harnez/internal/runstate"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -261,9 +260,6 @@ func (ac *agentCLI) compactCmd() *cobra.Command {
 
 func (ac *agentCLI) stopCmd() *cobra.Command {
 	stop := &cobra.Command{Use: "stop", Short: "Stop an agent session", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
-		if runstate.InRunnerMode() {
-			return fmt.Errorf("agent stop is a host-only operation in runner mode; run via taia background_task (mcp__taia__background_task)")
-		}
 		s, e := ac.store()
 		if e != nil {
 			return e
@@ -322,9 +318,6 @@ func (ac *agentCLI) deleteCmd() *cobra.Command {
 		return !sessionLatestTurnRated(x)
 	}
 	remove := &cobra.Command{Use: "delete", Short: "Delete an agent session", Aliases: []string{"rm"}, Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
-		if runstate.InRunnerMode() {
-			return fmt.Errorf("agent delete is a host-only operation in runner mode; run via taia background_task (mcp__taia__background_task)")
-		}
 		s, e := ac.store()
 		if e != nil {
 			return e

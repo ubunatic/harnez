@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"ubunatic.com/harnez/internal/agymeter"
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // AGYOauthToken models ~/.gemini/antigravity-cli/antigravity-oauth-token
@@ -148,11 +147,7 @@ type agyAuthBackoff struct {
 }
 
 func agyAuthBackoffPath(geminiDir string) string {
-	dir, err := runstate.AGYMeterDir(geminiDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "harnez: resolve AGY backoff: %v\n", err)
-		return ""
-	}
+	dir := geminiDir
 	return filepath.Join(dir, agyAuthBackoffFilename)
 }
 
@@ -309,10 +304,6 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
-	}
-	if _, err := runstate.AGYMeterDir(filepath.Join(homeDir, ".harnez", "agymeter")); err != nil {
-		usage.QuotaFetchError = fmt.Sprintf("agy meter directory: %v", err)
-		return usage
 	}
 	if geminiDir == "" {
 		geminiDir = filepath.Join(homeDir, ".gemini", "antigravity-cli")
@@ -592,11 +583,7 @@ func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, include
 	if err != nil {
 		return usage, false
 	}
-	dir, err := runstate.AGYMeterDir(filepath.Join(homeDir, ".harnez", "agymeter"))
-	if err != nil {
-		usage.QuotaFetchError = fmt.Sprintf("agy meter directory: %v", err)
-		return usage, false
-	}
+	dir := filepath.Join(homeDir, ".harnez", "agymeter")
 	path := filepath.Join(dir, "usage.jsonl")
 	rows, err := agymeter.ReadQuotaRecords(path)
 	if err != nil {
@@ -676,9 +663,6 @@ func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, include
 	usage.QuotaFetchError = ""
 	usage.LastRefreshed = latestSnapshot
 	meterSource := "~/.harnez/agymeter/usage.jsonl"
-	if runstate.InRunnerMode() {
-		meterSource = path
-	}
 	hasMeterSource := false
 	for _, source := range usage.Sources {
 		if source == meterSource {

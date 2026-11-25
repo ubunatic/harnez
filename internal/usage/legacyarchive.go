@@ -67,9 +67,6 @@ func DefaultLegacyUsageArchivePaths() LegacyUsageArchivePaths {
 // ArchiveLegacyUsageData copies known legacy usage stores and writes a
 // checksummed manifest last. Existing source files remain in place.
 func ArchiveLegacyUsageData(paths LegacyUsageArchivePaths) (LegacyUsageArchiveResult, error) {
-	if inRunnerMode() {
-		return LegacyUsageArchiveResult{}, errors.New("usage archive: host-only operation")
-	}
 	if paths.Home == "" || paths.DataHome == "" || paths.CacheHome == "" || paths.StateHome == "" || paths.ArchiveBase == "" {
 		return LegacyUsageArchiveResult{}, errors.New("usage archive: all source and destination roots are required")
 	}
@@ -178,9 +175,6 @@ func ArchiveLegacyUsageData(paths LegacyUsageArchivePaths) (LegacyUsageArchiveRe
 // archive exists yet. Once one does, the sources are mirrors regenerated from
 // the telemetry store, so copying them again on every write only fills the disk.
 func ensureLegacyUsageArchive(paths LegacyUsageArchivePaths) error {
-	if inRunnerMode() {
-		return errors.New("usage archive: host-only operation")
-	}
 	manifests, err := filepath.Glob(filepath.Join(paths.ArchiveBase, "*", legacyUsageArchiveManifest))
 	if err != nil {
 		return err
@@ -216,9 +210,6 @@ func copyAndHash(source, destination string) error {
 // ImportLegacyUsageArchive validates every archived file before importing its
 // usage records. The manifest remains available as the copy's recovery map.
 func ImportLegacyUsageArchive(ctx context.Context, dbPath, root string) (LegacyUsageArchiveResult, error) {
-	if inRunnerMode() {
-		return LegacyUsageArchiveResult{}, errors.New("usage archive: host-only operation")
-	}
 	if dbPath == "" {
 		return LegacyUsageArchiveResult{}, errors.New("usage archive: telemetry database path is required")
 	}

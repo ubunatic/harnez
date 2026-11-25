@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // fetchDurationsFilename is the on-disk cache of learned fetch-duration
@@ -56,13 +54,6 @@ func fetchDurationKindForHost(host string) string {
 // file, using the same XDG Base Directory resolution StateDir uses, one
 // directory above its agents/usage subtree.
 func fetchDurationsPath(homeDir string) (string, error) {
-	if runstate.InRunnerMode() {
-		dir, err := runstate.UsageStateDir("")
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(dir, fetchDurationsFilename), nil
-	}
 	if xdg := os.Getenv(stateCacheDirEnv); xdg != "" {
 		return filepath.Join(xdg, stateAppDir, fetchDurationsFilename), nil
 	}

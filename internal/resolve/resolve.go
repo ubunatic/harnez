@@ -12,8 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"ubunatic.com/harnez/internal/runstate"
 )
 
 // SessionInactivityWindow is the sliding-window inactivity threshold used
@@ -85,11 +83,7 @@ func Session(opts SessionOptions) (string, error) {
 	}
 	lockDir := opts.LockDir
 	if lockDir == "" {
-		var err error
-		lockDir, err = runstate.SessionStateDir(legacyStateDir())
-		if err != nil {
-			return "", fmt.Errorf("resolve: runner session state: %w", err)
-		}
+		lockDir = legacyStateDir()
 	}
 	now := opts.Now
 	if now == nil {
@@ -171,11 +165,7 @@ type TicketOptions struct {
 func Ticket(opts TicketOptions) (string, error) {
 	stateDir := opts.StateDir
 	if stateDir == "" {
-		var err error
-		stateDir, err = runstate.SessionStateDir(legacyStateDir())
-		if err != nil {
-			return "", fmt.Errorf("resolve: runner session state: %w", err)
-		}
+		stateDir = legacyStateDir()
 	}
 
 	if opts.Explicit != "" {
@@ -200,14 +190,14 @@ func Ticket(opts TicketOptions) (string, error) {
 // otherwise ~/.harnez/sessions. Session and ticket resolution validate the
 // Taia path before using it.
 func DefaultStateDir() string {
-	return runstate.DefaultSessionStateDir(legacyStateDir())
+	return legacyStateDir()
 }
 
 // StateDir returns the default session-state directory after validating and
 // initializing the Taia runner path when present. Writers should use this
 // instead of DefaultStateDir.
 func StateDir() (string, error) {
-	return runstate.SessionStateDir(legacyStateDir())
+	return legacyStateDir(), nil
 }
 
 func legacyStateDir() string {

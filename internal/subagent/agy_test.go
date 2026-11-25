@@ -119,38 +119,6 @@ printf '%s\n' '{"status":"SUCCESS","response":"ok"}'
 	}
 }
 
-func TestAgyRunnerDoesNotModifySharedShim(t *testing.T) {
-	home, root := t.TempDir(), t.TempDir()
-	bin := filepath.Join(home, "bin")
-	shim := filepath.Join(home, ".harnez", "shims", "bash")
-	if err := os.MkdirAll(filepath.Dir(shim), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(bin, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(shim, []byte("existing shim"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(bin, "agy"), []byte("#!/bin/sh\nprintf '%s\\n' '{\"status\":\"SUCCESS\",\"response\":\"ok\"}'\n"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("HOME", home)
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
-	t.Setenv("TAIA_SESSION_DIR", root)
-	if _, err := (AgyDriver{Dir: t.TempDir()}).Run(context.Background(), RunOptions{Prompt: "ping"}); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(shim)
-	if err != nil || string(data) != "existing shim" {
-		t.Fatalf("shim = %q, %v", data, err)
-	}
-	info, err := os.Stat(shim)
-	if err != nil || info.Mode().Perm() != 0700 {
-		t.Fatalf("shim mode: %v %v", info, err)
-	}
-}
-
 func TestAgyLaunchEnvironmentDoesNotDuplicateShimPrefix(t *testing.T) {
 	home := t.TempDir()
 	shimDir := filepath.Join(home, ".harnez", "shims")
