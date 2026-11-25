@@ -237,8 +237,14 @@ func marshalStoredSession(s *Session) ([]byte, error) {
 
 // Find resolves a session by registry ID or short name.
 func (s *FileSessionStore) Find(identifier string) (*Session, error) {
-	if sess, err := s.Get(identifier); err == nil {
+	sess, err := s.Get(identifier)
+	if err == nil {
 		return sess, nil
+	}
+	if s.spoolBacked {
+		// A spool-backed store holds only the entry it was verified for. Listing it
+		// could match another session by name or prefix.
+		return nil, err
 	}
 	sessions, err := s.List("", true)
 	if err != nil {
@@ -278,6 +284,10 @@ type SessionStore interface {
 type FileSessionStore struct {
 	dir      string
 	readOnly bool
+	// spoolBacked marks a store opened from a verified spool entry. Its files may
+	// be written by a confined agent, so reads go through readBounded and each
+	// entry must still name the session it was asked for.
+	spoolBacked bool
 }
 
 // IsReadOnly reports whether the store was opened via OpenSessionStore.
@@ -460,7 +470,7 @@ func (s *FileSessionStore) Create(sess *Session) error {
 // Get retrieves a session by ID.
 func (s *FileSessionStore) Get(id string) (*Session, error) {
 	path := filepath.Join(s.dir, id+".json")
-	data, err := os.ReadFile(path)
+	data, err := s.readEntry(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("%w: %q", ErrSessionNotFound, id)
@@ -471,7 +481,19 @@ func (s *FileSessionStore) Get(id string) (*Session, error) {
 	if err := json.Unmarshal(data, &sess); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal session: %w", err)
 	}
+	if s.spoolBacked && sess.ID != id {
+		return nil, fmt.Errorf("session file for %q holds session %q", id, sess.ID)
+	}
 	return &sess, nil
+}
+
+// readEntry reads one session file. A store opened from a spool entry reads
+// through readBounded: no symlink, no FIFO, and the pointer size cap.
+func (s *FileSessionStore) readEntry(path string) ([]byte, error) {
+	if s.spoolBacked {
+		return readBounded(path)
+	}
+	return os.ReadFile(path)
 }
 
 // List returns all sessions, optionally filtered by parentID.
@@ -496,7 +518,7 @@ func (s *FileSessionStore) listFrom(dir, parentID string, allSessions bool) ([]*
 	for _, entry := range entries {
 		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
 			id := entry.Name()[:len(entry.Name())-5]
-			data, err := os.ReadFile(filepath.Join(dir, id+".json"))
+			data, err := s.readEntry(filepath.Join(dir, id+".json"))
 			if err != nil {
 				continue
 			}

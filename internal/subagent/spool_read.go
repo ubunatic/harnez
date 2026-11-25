@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // Spool entry states. A pointer is shown as verified only when the registry at
@@ -110,19 +111,11 @@ func readRegistryEntry(store, id string) (sess *Session, found, ok bool) {
 	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
 		return nil, false, false
 	}
-	path := filepath.Join(store, id+".json")
-	finfo, err := os.Lstat(path)
+	raw, err := readBounded(filepath.Join(store, id+".json"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, true
 		}
-		return nil, false, false
-	}
-	if !finfo.Mode().IsRegular() {
-		return nil, false, false
-	}
-	raw, err := readBounded(path)
-	if err != nil {
 		return nil, false, false
 	}
 	var s Session
@@ -145,9 +138,30 @@ func copiedSession(raw json.RawMessage) *Session {
 	return &s
 }
 
-// readBounded reads at most maxSpoolPointerBytes and fails when the file is larger.
+// openRegularNoFollow opens path without following a final symlink and without
+// blocking on a FIFO, then requires a regular file. The check runs on the open
+// descriptor, so nothing can swap the file between the check and the read.
+func openRegularNoFollow(path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		_ = f.Close()
+		return nil, fs.ErrInvalid
+	}
+	return f, nil
+}
+
+// readBounded reads at most maxSpoolPointerBytes from a regular file that is not a
+// symlink. It fails when the file is larger.
 func readBounded(path string) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := openRegularNoFollow(path)
 	if err != nil {
 		return nil, err
 	}
@@ -172,12 +186,14 @@ func VerifiedSpoolStore(id string) (store *FileSessionStore, ok bool, err error)
 	}
 	for _, e := range entries {
 		if e.ID == id && e.State == SpoolVerified {
-			st, err := OpenSessionStore(e.Store)
-			if err != nil {
-				return nil, false, err
-			}
-			return st, true, nil
+			return openSpoolBackedStore(e.Store), true, nil
 		}
 	}
 	return nil, false, nil
+}
+
+// openSpoolBackedStore returns a read-only store whose reads stay bounded and
+// refuse links, FIFOs and entries that name another session.
+func openSpoolBackedStore(dir string) *FileSessionStore {
+	return &FileSessionStore{dir: dir, readOnly: true, spoolBacked: true}
 }
