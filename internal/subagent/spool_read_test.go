@@ -188,6 +188,13 @@ func TestVerifiedSpoolStoreOnlyForConfirmedEntries(t *testing.T) {
 	if err != nil || !ok || got == nil {
 		t.Fatalf("verified entry: ok=%v err=%v", ok, err)
 	}
+	// Wait reads through this store, so it must never write to the registry.
+	if !got.IsReadOnly() {
+		t.Fatal("store from a verified spool entry is writable")
+	}
+	if err := got.Save(&Session{ID: "wv1", Name: "wv", Status: "completed"}); err == nil {
+		t.Fatal("Save through a store from a verified spool entry succeeded")
+	}
 	if _, found, _ := VerifiedSpoolStore("nope"); found {
 		t.Fatal("unknown id reported as verified")
 	}
