@@ -97,7 +97,7 @@ func TestRunnerLaunchBwrapSurvivesExtraFiles(t *testing.T) {
 	}
 	exeDir := filepath.Dir(os.Args[0])
 	cmd := exec.Command(bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--bind", exeDir, exeDir, "--bind", sessDir, sessDir, "--", os.Args[0], "-test.run=^TestRunnerLaunchBwrapSurvivesExtraFiles$")
-	cmd.Env = append(os.Environ(), "TAIA_SESSION_DIR="+sessDir, "HARNEZ_TEST_BWRAP_CHILD=1")
+	cmd.Env = append(os.Environ(), "HARNEZ_TEST_BWRAP_CHILD=1")
 	runBrokerChildCmd(t, cmd)
 
 	mu.Lock()

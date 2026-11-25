@@ -449,7 +449,7 @@ func TestDispatchTelemetryUsesBrokerFDWithoutRunnerDirAndSkipsHostSpool(t *testi
 		t.Fatalf("broker delivered %d records, want 1", gotDelivered)
 	}
 
-	// On broker outage without TAIA_SESSION_DIR, DispatchTelemetry must not write to host spool on disk.
+	// On broker outage, DispatchTelemetry must not write to host spool on disk.
 	rec2, err := NewTelemetryRecord("cli_invocation", json.RawMessage(`{"command":"find"}`))
 	if err != nil {
 		t.Fatal(err)
