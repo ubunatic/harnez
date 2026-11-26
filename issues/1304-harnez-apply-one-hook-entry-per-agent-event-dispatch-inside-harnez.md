@@ -55,3 +55,15 @@ Why one entry per event:
 - **M3.** Do the same for Codex (`internal/codex/hooks.go`).
 - **Verify** with a live Claude session: Bash rewrite, a read marker, a compact (telemetry plus reset) and a skill event. Then `make smoke`.
 - **Reload note:** after `harnez apply`, every open Claude and Codex session must reload to use the new hook entries. Tell the owner.
+
+## Decision (decide mode, 2026-11-26)
+
+- **Order.** Runs before #1303, after #1302 is merged. Branch `sprint/1304` from main. Sequential in this checkout, with no worktree.
+- **Developer: `claude:haiku:high`, plan-only first turn.** Reason: merging handler replies under per-event hook output contracts, plus migrating existing settings entries in `apply`, has non-obvious failure modes. A wrong merge blocks or rewrites tool calls in every session.
+- **Review.** A one-shot `agy:neon:med` reviewer after M1 (dispatcher) and after M2 (apply migration). M3 (Codex) is smaller, and the host reviews it alone unless its diff exceeds about 300 lines.
+- **Before M2 lands:** `make smoke` and a scratch-HOME apply → re-apply → drift-repair run. After merge, the owner reloads every open session; tell them.
+
+General rule for haiku:high over haiku:med (owner asked, decide mode):
+- **Use high** when the milestone changes an external contract: hook replies, settings/config migration, a concurrency or lock path. Also when an unspecified design choice must be made inside the code, or when med needed two rounds on the same defect class.
+- **Use med** for work with complete pre-work: report or query logic, fixtures, docs, wiring.
+- Cost: high fills context faster. The Haiku compaction threshold on this machine is 200k, and the >100k tier costs 5x, so use high only where it pays off.

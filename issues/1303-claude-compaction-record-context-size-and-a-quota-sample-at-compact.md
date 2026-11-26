@@ -47,3 +47,10 @@ Today a Claude compaction records almost nothing:
   - the quota sample is stored with its cache age;
   - the hook's run time stays within the spec bound.
 - **Reload note:** hook command changes reach other Claude sessions only after `harnez apply` and a session reload. Tell the owner when that point comes.
+
+## Decision (decide mode, 2026-11-26)
+
+- **Order.** Runs after #1304, so the compaction work goes into the single hook dispatcher, not into a new settings entry.
+- **Developer.** `claude:haiku:med`, starting with a plan-only first turn. M1 is a canary and M2 fills rows from data harnez already parses (`internal/subagent/claude.go:202`).
+- **Escalate to `claude:haiku:high`** for M3 (the quota sample), if the plan shows the fetch path needs lock or timeout work.
+- **Review.** A one-shot `agy:neon:med` reviewer after M3, covering the whole range.

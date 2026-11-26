@@ -160,3 +160,9 @@ M2 was delivered in two commits: the Claude-only fix (acfa193e) and the hourly f
    - Quote the totals line, the window line and the hour table.
 7. **Docs.** Add the report's columns and the meaning of attribution, pending, "not explained locally" and the factor bases to `docs/Telemetry.md`, next to the M1 text.
 8. **Then gates.** Run `HTO=0 make test-q1` to `scratchpad/q1-1302.log` and quote the final summary line. Do not close the ticket; the host closes it after the long Haiku session check.
+
+## Decision (decide mode, 2026-11-26)
+
+- **Review.** After M3 (attribution fix) is delivered, a one-shot `agy:neon:med` reviewer covers the whole #1302 range 6e0406e3..HEAD, about 1.7k lines. This follows the owner's rule: neon:med as one-shot reviewer for bigger code chunks. neon:med is on the separate agy plan and needs no `--accept-cost` (dry-run checked). Its findings become M4 pre-work. If it finds nothing at MED or above, the host closes.
+- **Long Haiku session.** dev-1302 is the long Haiku session. At close, record its turns, peak input, the first turn over 100k and the cost per tier.
+- **Dev model.** dev-1302 stays on `claude:haiku:med`. The work is well-specified report logic, and med has delivered red-first tests every round.
