@@ -13,7 +13,7 @@ Reference Practice: `@docs/AgenticLoop.md`
 | **Host Orchestrator** | Main session (Antigravity / Host) | Continuous | Pure delegation; never performs exploratory repo digging; enforces test budget and Quota-1, reviews milestone commit diffs, runs repo build/install verification, commits milestones. |
 | **Searcher** | `--role advisor --model cheap` (Haiku med effort) | Resumable (`search-<ticket>`) | Codebase discovery; searches with `neus ask "<question>"` first before ripgrep/file reads when `neus` is available. Resumed across milestones to maximize prompt caching. |
 | **Architect** | `--role advisor --model smart` (Argon low effort) | Single-turn advisory (`arch-<ticket>`) | High-leverage decision maker. Evaluates API shapes, data schemas, edge-case algorithms, and locked table/unit tests. Strategy: feed aggregated info in one rich prompt and get a fast, decisive single-turn reply (<2m, ~150k–280k tokens). |
-| **Mechanical Developer** | `--role developer --model cheap` (Haiku med effort) | Fresh per milestone (`dev-<ticket>-m<N>`) | Pure translator of explicit specs into code and tests in the repository's target language. Never invents algorithms or resolves ambiguous architecture. Reset to clean context each milestone to stay under the 120k Haiku compaction point and prevent instruction rot. |
+| **Mechanical Developer** | `--role developer --model cheap` (Haiku med effort) | Fresh per milestone (`dev-<ticket>-m<N>`) | Pure translator of explicit specs into code and tests in the repository's target language. Never invents algorithms or resolves ambiguous architecture. Reset to clean context each milestone to stay under the 100k Haiku compaction point and prevent instruction rot. |
 
 ---
 

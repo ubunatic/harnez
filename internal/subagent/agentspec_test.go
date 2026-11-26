@@ -112,7 +112,7 @@ func TestModelGuidanceAndLeanSprintDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, phrase := range []string{"`--role dev --model lean` for standard work", "`--role dev --model std` for moderate work", "`--role dev --model smart` for complex work", "`--role dev --model fast` for easy work", "`--role dev --model cheap` for low-cost work", "above 100k tokens costs 5x", "harnez compacts Haiku at 120k by default (so a turn between 100k and 120k is billed at 5x); override via `agent.compact_thresholds`"} {
+	for _, phrase := range []string{"`--role dev --model lean` for standard work", "`--role dev --model std` for moderate work", "`--role dev --model smart` for complex work", "`--role dev --model fast` for easy work", "`--role dev --model cheap` for low-cost work", "exceeds 100k tokens costs 5x on every rate", "harnez compacts Haiku at 100k by default; override via `agent.compact_thresholds`"} {
 		if !strings.Contains(string(skill), phrase) {
 			t.Errorf("lean-sprint skill missing %q", phrase)
 		}

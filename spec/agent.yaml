@@ -40,10 +40,10 @@ compact_thresholds:
   codex:gpt-6.1-terra: 200000
   codex:gpt-6.2-sol: 200000
   codex:gpt-6-luna: 100000
-  claude:haiku:low: 120000
-  claude:haiku:med: 120000
-  claude:haiku:high: 120000
-  claude:haiku:xhigh: 120000
+  claude:haiku:low: 100000
+  claude:haiku:med: 100000
+  claude:haiku:high: 100000
+  claude:haiku:xhigh: 100000
   strata-coder:qwen3.8-flash-next-coder-iq1_m: 80000
   strata:qwen3.8-flash-next-iq2_xs: 80000
   strata:qwen3.8-flash-next-iq3_xxs: 80000
@@ -233,7 +233,7 @@ models:
     extra_tiers: [xhigh]
     eff: "+"
     skills: Go~ TUI~ SQL~
-    use: Owner guidance — haiku:low for very cheap, fast, simple work; haiku:high as a capable developer; skip haiku:med. haiku:xhigh is the next step for standard work; it matches opus:low at about a quarter of its API cost. Haiku's subscription subsidy is said to be lower than for larger models, so opus:high may pay off sooner. A weak host session; it needs more guidance than opus. Haiku 5.5 input above 100k tokens costs 5x; harnez compacts Haiku at 120k by default (so a turn between 100k and 120k is billed at 5x); override via agent.compact_thresholds (issue 969, docs/AutoCompaction.md). High thinking effort fills that budget quickly; see guidance_source_url.
+    use: Owner guidance — haiku:low for very cheap, fast, simple work; haiku:high as a capable developer; skip haiku:med. haiku:xhigh is the next step for standard work; it matches opus:low at about a quarter of its API cost. Haiku's subscription subsidy is said to be lower than for larger models, so opus:high may pay off sooner. A weak host session; it needs more guidance than opus. A Haiku 5.5 request whose prompt exceeds 100k tokens costs 5x on every rate (input, output, cache); harnez compacts Haiku at 100k by default; override via agent.compact_thresholds (issue 969, docs/AutoCompaction.md). High thinking effort fills that budget quickly; see guidance_source_url.
     guidance_source_url: https://code.claude.com/docs/en/model-config#haiku-55-context-window-and-pricing
   claude:sonnet:
     aliases: [sonnet, sonnet:med]

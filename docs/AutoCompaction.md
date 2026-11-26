@@ -10,7 +10,7 @@ Each fact is marked **measured** (owner or canary run, with version), **docs** (
 
 ## Two triggers
 
-- **harnez:** `compact_threshold_tokens` in `spec/agent.yaml` defaults to 200000; spec `compact_thresholds` defaults Haiku to 120000. User `agent.compact_thresholds` overrides model-specific defaults, which take precedence over the user global threshold (`internal/subagent/compact.go`). Before each prompt,
+- **harnez:** `compact_threshold_tokens` in `spec/agent.yaml` defaults to 200000; spec `compact_thresholds` defaults Haiku to 100000. User `agent.compact_thresholds` overrides model-specific defaults, which take precedence over the user global threshold (`internal/subagent/compact.go`). Before each prompt,
   `harnez agent` compares the last turn's input tokens with it and sends `/compact` (591); the stream watchdog stops
   a turn that grows past it (592). Absolute tokens only, no percent yet (969).
 - `auto_compact` in `spec/agent.yaml` selects manual, native, or disabled routing by provider: Claude uses manual,
@@ -91,12 +91,12 @@ Do not lower `CLAUDE_CODE_MAX_OUTPUT_TOKENS` to compact later: it also shrinks t
 
 | Model | Step | Source |
 | --- | --- | --- |
-| Claude Haiku 5.5 | input above 100k tokens per request costs 5x | https://platform.claude.com/docs/en/models/haiku-5-5/overview |
+| Claude Haiku 5.5 | a request whose prompt (cache reads and writes included) exceeds 100k tokens pays 5x on every rate: input, output, cache | https://platform.claude.com/docs/en/models/haiku-5-5/overview |
 | Claude Sonnet/Opus/Fable 5.5 | none found | https://platform.claude.com/docs/en/about-claude/pricing |
 | GPT-5.6 Sol | input above 272k costs 2x | https://developers.openai.com/api/docs/models/gpt-5.6 |
 | Gemini Flash 3.8, Gemini 4 Argon | none on the Gemini API page | https://ai.google.dev/gemini-api/docs/pricing |
 
-Targets are owner decisions, not derived limits: 200k by default, 120k for Haiku (owner 2026-11-27: 80k was often tight; was 80k from 2026-10-27), 100k for Codex terra/sol/luna
+Targets are owner decisions, not derived limits: 200k by default, 100k for Haiku (owner 2026-11-27: 80k was often tight, and a prompt over 100k pays 5x on every rate; was 80k from 2026-10-27), 100k for Codex terra/sol/luna
 (2026-10-27, `spec/agent.yaml` `compact_thresholds`, user override `agent.compact_thresholds`). Codex 100k rationale
 (987): one compaction cost about $0.019 and paid back in about 0.64 turns at 10 tool calls per turn, because every
 later call re-reads less cached context.
