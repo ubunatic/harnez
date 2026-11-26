@@ -243,3 +243,48 @@ Fill the Claude PostCompact row in the collector, after the hook returns: a defe
    - a restart, then the next session event, fills it.
 4. Diagnostic: the note records `precompact_at` and `boundary_at` for every outcome, plus `filled_after` (the retry index, or `event`).
 5. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m1e.log`. Commit as `fix(compact): … (issue 1303 M1e)`. Never amend. `make install`, then stop for the host's live check.
+
+## M1e review (host): live fill works
+
+M1e delivered (deferred fill in the collector, `fill_retry` in spec): fbe30687. q1: 83 ok, 0 FAIL.
+
+Live run, `harnez agent compact --name dev-1303b`, which reported "150777 -> 12495 tokens":
+- **Hook:** PostCompact took 111 ms (no in-hook wait).
+- **Notes:** at ingest `stale_boundary` (it saw the previous boundary, 15:10:20Z). Then `applied` at 15:17:13.6Z with `filled_after: retry:1`, `precompact_at` 15:16:28.9Z and `boundary_at` 15:17:11.1Z.
+- **Rows:** PostCompact row 836 has `input_tokens`/`total_tokens` 12495 and model `claude-haiku-5-5`. The snapshots are precompact 150777 and postcompact 12495, which match the compact output.
+- **Economics row 382:** model `claude-haiku-5-5`, `compaction_cost_micros` 15078, `post_compaction_cost_micros` 1250, status `insufficient_data` ("missing no-compaction baseline", which is expected for Claude).
+
+Implausible value:
+- 15078 = 150777 × the base rate 100000 µ$/M.
+- `spec/pricing.yaml:14-15` says a call above `tiers[].over_input_tokens` (100k for Haiku 5.5) uses that tier's rates, which is 5x.
+- So the compaction cost is under-priced 5x for any Claude compaction above 100k. Every Haiku auto-compaction is one.
+
+Accepted developer choices:
+- A note is written for every fill attempt.
+- A pending fill is dropped after the 72 s schedule.
+
+Not accepted: the fill's row update, snapshots and reconcile run in separate writes, so a crash can leave a half-filled row.
+
+## M2 pre-work (M1 follow-ups, then the quota sample)
+
+M1 follow-ups:
+1. Run the deferred fill's row update, snapshots and reconcile in one transaction. Add a test with a failure injected after the row update: no partial state remains, and the next attempt fills it.
+2. Make the economics pricing apply the input tiers from `spec/pricing.yaml`, the same rule the #1302 report uses. Test: a 150777-token Haiku precompact is priced at the tier rate, and a 90k one at the base rate. Use the near-miss values 100000 and 100001.
+
+M2 proper (quota sample per compaction), per "Decision (decide mode, plan review)":
+
+3. On a Claude compaction, the collector stores one quota sample in `turn_quota_boundaries` (`internal/usagestore/store.go:680`), boundary `compact`, with `captured_at`, `cache_age_ms`, `has_cache` and `error`.
+   - Use the cache first. Do a live fetch only when the cache is older than the spec age.
+   - The fetch runs under a cross-process, non-blocking file lock. If the lock is held, record the cached sample with its age and do not fetch.
+   - It runs in the collector, never in the hook, so it never delays Claude.
+4. Move `TurnQuotaTimeout` (`internal/usage/turnquota.go:31`) and the new cache age into `spec/usage.yaml` with schema entries. No Go defaults.
+5. Tests use the `turnQuotaHTTPClientFactory` seam and a fake clock, with no sleeps:
+   - a fresh cache, so no fetch;
+   - a stale cache with the lock free, so one fetch;
+   - a stale cache with the lock held, so the cached sample is stored and there is no fetch;
+   - a fetch timeout, so the error is recorded and the compaction rows are unaffected;
+   - two compactions, so two samples.
+
+   Tests never reach the live collector or the real usage endpoint.
+6. Name the #1302 consumer in `docs/Telemetry.md`: how the report pairs the API cost between two compaction samples with the quota rise. The report change itself is out of scope unless trivial.
+7. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m2.log`. One or two commits, `fix(compact): …`/`feat(compact): … (issue 1303 M2)`. Never amend. `make install`, then stop for the host's live check.
