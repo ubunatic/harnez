@@ -64,6 +64,8 @@ type Options struct {
 	WeeklyPlanMicros        *int64
 	VATRate                 float64
 	UnexplainedTolerancePct float64
+	// Location is the zone for the hour of day; nil means the local zone.
+	Location *time.Location
 }
 
 // Report is the range result. Sessions is never nil.
@@ -76,6 +78,30 @@ type Report struct {
 	UnexplainedPct float64      `json:"not_explained_locally_pct"`
 	Unexplained    bool         `json:"not_explained_locally"`
 	Intervals      []Interval   `json:"intervals"`
+	// Hours always has 24 rows, one per local hour of day (M2).
+	Hours []HourRow `json:"hours"`
+	// Series has one point per attributed weekly rise, in time order (M2).
+	Series []SeriesPoint `json:"series"`
+}
+
+// HourRow is one local hour of day. Nil means n/a: no attributed cost in the
+// hour, or no quota rise, or no plan price for the factor.
+type HourRow struct {
+	Hour          int      `json:"hour"`
+	Samples       int      `json:"samples"`
+	APICostMicros *int64   `json:"api_cost_micros_usd,omitempty"`
+	QuotaPct      *float64 `json:"quota_pct,omitempty"`
+	Factor        *float64 `json:"subsidy_factor,omitempty"`
+}
+
+// SeriesPoint is one attributed weekly rise: its API cost, its quota points and
+// the subsidy factor (nil without a plan price).
+type SeriesPoint struct {
+	Start         time.Time `json:"start"`
+	End           time.Time `json:"end"`
+	APICostMicros int64     `json:"api_cost_micros_usd"`
+	QuotaPct      float64   `json:"quota_pct"`
+	Factor        *float64  `json:"subsidy_factor,omitempty"`
 }
 
 // Build computes the report from calls and quota-history samples. Calls outside
@@ -103,6 +129,7 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		}
 	}
 	rep.Unexplained = rep.UnexplainedPct > opts.UnexplainedTolerancePct
+	rep.Series, rep.Hours = hourlyView(rep.Intervals, inRange, opts)
 
 	rows := map[string]*SessionRow{}
 	costs := map[string]int64{}
@@ -167,6 +194,71 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 	}
 	finishPlan(&rep.Totals, opts)
 	return rep
+}
+
+// hourlyView splits each attributed rise across its priced calls by cost, as
+// attribute does, and credits each call's share to the local hour of that call.
+// It returns one series point per attributed rise and the 24 hour rows. An
+// hour's factor is its API cost over its quota share times the weekly plan.
+func hourlyView(intervals []Interval, calls []Call, opts Options) ([]SeriesPoint, []HourRow) {
+	loc := opts.Location
+	if loc == nil {
+		loc = time.Local
+	}
+	var hourCost [24]int64
+	var hourPct [24]float64
+	var hourSeen [24]bool
+	var hourSamples [24]int
+	var series []SeriesPoint
+	for _, iv := range intervals {
+		if !iv.Attributed {
+			continue
+		}
+		var total int64
+		for _, c := range iv.CostMicros {
+			total += c
+		}
+		series = append(series, SeriesPoint{
+			Start: iv.Start, End: iv.End, APICostMicros: total, QuotaPct: iv.DeltaPct,
+			Factor: factorOf(total, iv.DeltaPct, opts.WeeklyPlanMicros),
+		})
+		var touched [24]bool
+		for _, c := range calls {
+			if c.CostMicros == nil || !c.At.After(iv.Start) || c.At.After(iv.End) {
+				continue
+			}
+			h := c.At.In(loc).Hour()
+			hourCost[h] += *c.CostMicros
+			hourPct[h] += iv.DeltaPct * float64(*c.CostMicros) / float64(total)
+			hourSeen[h] = true
+			if !touched[h] {
+				touched[h] = true
+				hourSamples[h]++
+			}
+		}
+	}
+	hours := make([]HourRow, 24)
+	for h := range hours {
+		row := HourRow{Hour: h, Samples: hourSamples[h]}
+		if hourSeen[h] {
+			cost, pct := hourCost[h], hourPct[h]
+			row.APICostMicros = &cost
+			row.QuotaPct = &pct
+			row.Factor = factorOf(cost, pct, opts.WeeklyPlanMicros)
+		}
+		hours[h] = row
+	}
+	return series, hours
+}
+
+// factorOf is API cost over the plan cost of pct quota points (weekly plan
+// price, net). It is nil without a plan price or without quota points.
+func factorOf(cost int64, pct float64, weekly *int64) *float64 {
+	if weekly == nil || pct <= 0 {
+		return nil
+	}
+	f := float64(cost) / (pct / 100 * float64(*weekly))
+	return &f
 }
 
 func addTokens(row *SessionRow, c Call) {

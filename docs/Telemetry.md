@@ -261,13 +261,21 @@ claiming a saving. Schema version 12 (issue 1215) extends
 Read-only. Tokens come from the Claude transcripts under `~/.claude/projects`
 (main sessions and nested `<session>/subagents/*.jsonl`), one call per message
 id, the final streamed usage kept. Each call is priced by its own model
-(`telemetry.ClaudeCallPricing`). The quota share comes from the weekly rises
-in `quota-history.jsonl`, grouped into windows by `reset_at` within
-`turn_quota_pairing.reset_tolerance`. A rise is split across the sessions with
-priced calls in its interval, by API cost. A rise with no priced call is "not
-explained locally" when it exceeds `usage_report.unexplained_tolerance_pct`.
-Plan cost is the share times the weekly plan price (net); gross adds
-`plan_vat_rate`. Unpriced or unknown values print `n/a`, never 0.
+(`telemetry.ClaudeCallPricing`). The quota share comes only from Claude's weekly
+window in `quota-history.jsonl` (agent `claude`, no group, window
+`usage.ClaudeWeeklyWindowName`), grouped into windows by `reset_at` within
+`turn_quota_pairing.reset_tolerance`. A rise is measured from the highest value
+seen in its window, so a dip and recovery is not counted twice. A rise is split
+across the sessions with priced calls in its interval, by API cost. A rise with
+no priced call is "not explained locally" when it exceeds
+`usage_report.unexplained_tolerance_pct`. Plan cost is the share times the
+weekly plan price (net); gross adds `plan_vat_rate`. Unpriced or unknown values
+print `n/a`, never 0.
+
+The text report adds a factor by local hour (24 rows: samples, API $, quota %,
+factor). Each call's share goes to the local hour of the call, so an hour's
+factor is its API cost over its quota share times the weekly plan. A sparkline
+shows the factor of each attributed rise. `--json` carries `hours` and `series`.
 
 ## Per-Turn API Cost & Subscription Share (issue 1215)
 
