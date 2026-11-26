@@ -206,6 +206,7 @@ func quotaHistoryFromOpenStore(ctx context.Context, store *usagestore.Store) ([]
 	if err != nil {
 		return nil, err
 	}
+	windows = dedupeQuotaHistoryWindows(windows)
 	out := make([]QuotaHistoryEntry, 0, len(windows))
 	for _, window := range windows {
 		used := int(math.Round(window.UsedFraction * 100))
@@ -213,6 +214,25 @@ func quotaHistoryFromOpenStore(ctx context.Context, store *usagestore.Store) ([]
 		out = append(out, QuotaHistoryEntry{Timestamp: window.ObservedAt, Agent: window.Provider, Group: window.Pool, Window: window.Name, UsedPercent: used, RemainingPercent: remaining, ResetAt: window.ResetAt})
 	}
 	return out, nil
+}
+
+// dedupeQuotaHistoryWindows keeps one window per provider, pool, window key
+// and observation time. Two sources can store the same reading (for example
+// the registry and a collector), and the legacy history has no source column,
+// so keeping both would write identical lines. The first row in store order
+// wins, which keeps the output deterministic.
+func dedupeQuotaHistoryWindows(windows []usagestore.Window) []usagestore.Window {
+	seen := make(map[string]bool, len(windows))
+	out := make([]usagestore.Window, 0, len(windows))
+	for _, window := range windows {
+		id := window.Provider + "\x00" + window.Pool + "\x00" + window.Key + "\x00" + window.ObservedAt.UTC().Format(time.RFC3339Nano)
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, window)
+	}
+	return out
 }
 
 // ProviderSnapshotFromStore projects the best current quota windows for a

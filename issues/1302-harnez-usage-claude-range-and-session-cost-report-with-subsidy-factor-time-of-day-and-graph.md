@@ -49,3 +49,9 @@
 - The harnez threshold (80k for Haiku, from spec `compact_thresholds`) compacts between turns and fires first.
 - For a session over 100k: raise the harnez threshold for Haiku above about 170k. The native 200k window then sets the ceiling, so the session can pass 100k and stay below about 167k.
 - `docs/AutoCompaction.md:58` says there is "also a Sonnet block", but there is none any more; fix that doc line.
+
+## Note (1301 M2, 2026-11-26): coverage of per-turn rows
+
+- Per-turn token and cost rows exist only for `harnez agent` turns (`cmd/harnez/agent_run.go`). A host Claude Code session (for example bd2185a4) writes no turn rows by design; the report must show it as "n/a", never as zero.
+- Per-call Claude pricing (1301 M1) prices only calls with the per-call cache split. Older turns without the split stay unknown (nil cost).
+- Open: the cumulative `turn_token_usage` row still counts cache writes in `cached_input_tokens`.

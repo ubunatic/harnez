@@ -383,9 +383,8 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		// first (bounded retry, never blocks indefinitely) so that only one
 		// process at a time writes the refreshed reading to disk; if the
 		// lock can't be acquired quickly, still perform the fetch and use
-		// its result in-memory for this call, just skip persisting it (a
-		// sibling process is presumably writing its own fresh reading right
-		// now anyway).
+		// its result in-memory for this call and still store it in SQLite,
+		// but skip the JSON mirror and the legacy history append.
 		lockFile, locked := lockLiveFetchCache(cachePath)
 		if locked {
 			defer unlockLiveFetchCache(lockFile)
@@ -438,10 +437,12 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		}
 
 		if usage.QuotaFetchError == "" {
-			// SQLite is authoritative; keep the JSON snapshot as a compatibility mirror.
+			// SQLite is authoritative and is written even when the lock is busy:
+			// a skipped write leaves the baseline reading stale. The lock only
+			// guards the JSON compatibility mirror and the legacy history append.
+			now := time.Now()
+			_ = storeProviderSnapshot(ctx, "claude", now, usage)
 			if locked {
-				now := time.Now()
-				_ = storeProviderSnapshot(ctx, "claude", now, usage)
 				_ = writeProviderSnapshotMirror(cachePath, now, "claude", usage)
 				_ = AppendQuotaHistoryForAgent(resolveQuotaHistoryDir(claudeDir), usage, now)
 			}
