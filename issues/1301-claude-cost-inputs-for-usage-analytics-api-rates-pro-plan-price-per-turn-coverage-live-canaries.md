@@ -137,3 +137,33 @@ Prompt: "Reply with exactly OK…", about 20k prompt tokens, all in the lower ti
 3. **Fix the cumulative cache-write count.** The cumulative `turn_token_usage` row still counts cache writes in `cached_input_tokens` (your open item). Fix it so cumulative and delta rows agree.
 4. **Leave the agy price alone.** Its USD price stays as it is: out of scope.
 5. **Tests:** run only the touched packages (`go test ./internal/subagent ./internal/telemetry ./internal/usage ./cmd/harnez`). The full run before merge is owed by the host.
+
+## M3 delivered (b8fb16c3)
+
+- Each Claude call is priced by its own `message.model`; exact catalog ids only, a dated id falls back to its base id; an unknown or missing call model makes the turn nil.
+- New table `turn_quota_pair_outcomes` with `paired`, `unchanged_snapshot`, `fetch_error`, `no_pair`.
+- The cumulative `turn_token_usage` row now excludes cache writes and stores `cache_write_tokens`.
+- Touched-package tests are green (`m3-1301.log`, 0 `--- FAIL`).
+
+Host canary on the M3 build (haiku:low, session 4fb63079):
+
+| Row | Model | In | Cache read | Cache write | Out | Cost (µUSD) |
+|---|---|---|---|---|---|---|
+| delta | claude-haiku-5-5 | 2 | 11422 | 8750 | 4 | 1866 |
+| cumulative | claude-haiku-5-5 | 2 | 11422 | 8750 | 4 | 1866 |
+
+The cost matches the hand calculation (0.2 + 114.22 + 1750 (1h write) + 2 = 1866.4), and the cumulative and delta rows agree. The quota outcome, though, was `no_pair`, which is wrong; see M4 pre-work items 1 and 2.
+
+## M4 pre-work (from the M3 canary)
+
+1. **Reset-time jitter blocks every pairing.** The before and after observations of the canary hold the same windows, but `reset_at` differs by under a second: five-hour `12:10:00.065` vs `12:09:59.889`, weekly `11:00:00.065` vs `10:59:59.889`. `PairTurnQuotaDeltas` compares `reset_at` exactly, so it never pairs. This, not only the cached snapshot, is why no canary in M2 got a delta row.
+   - Treat two resets as the same window when they differ by a small tolerance, for example 60 s. Put the tolerance in `spec/` with a schema; it is a configurable value.
+   - Test it with these live values. A real reset change, such as a weekly window that rolled over, must still not pair.
+2. **`unchanged_snapshot` never fires live.** Every boundary writes its own `usage_observations` row stamped with the capture time (ids 198248 and 198252), so "after has no own observation" is never true. The test fixture does not match the live write path.
+   - Live signal: the snapshot time is `captured_at − cache_age_ms`. Before: 10:52:44.323 − 546.096 s = 10:43:38.23. After: 10:52:47.277 − 549.050 s = 10:43:38.23. Equal within 1 s means the same snapshot.
+   - Classify on that, and rebuild the test fixture from the live write path (`PersistTurnQuotaBoundary` with a cache age, as the turn capture writes it).
+   - Side note: both boundaries say `freshness=fresh` at a cache age of about 9 minutes. Check what "fresh" means there. Fix the label if it is wrong, or leave a comment if it is by design.
+3. **Alias models still stored as aliases.** The haiku row shows `claude-haiku-5-5`, but the M2 sonnet and opus canaries stored `sonnet` and `opus`, and M3 did not change the row `model` (still `session.Model` in `persistAgentTurnTokens`). When the calls report a model, store the main-chain call's `message.model` in the row. Keep `session.Model` only as a fallback. Test with a session `Model: "opus"` whose calls report `claude-opus-5-5`.
+4. **Concurrency caveat (host note, no code).** The owner has other Claude sessions running in parallel (../splitty, ../taia) on the same plan. A per-turn quota delta therefore includes their usage and is not attributable to one turn. #1302 must analyse quota per dollar in aggregate over time windows, not per turn. Leave the per-turn delta as is.
+5. **Known limit, document only.** A session resumed from before M3 keeps `cache_write_tokens_known=false`, and its cumulative row keeps the old semantics. Say so in a code comment; no migration.
+6. **Tests:** touched packages only, as in M3.
