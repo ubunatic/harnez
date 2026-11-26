@@ -2,12 +2,11 @@
 // assessing whether a /compact (context summarization) likely dropped
 // information that mattered — see issue 180.
 //
-// This is deliberately a manual/opt-in comparator, not automatic watching:
-// Claude Code exposes a PreCompact hook (fires before compaction, with
-// access to the pre-compact transcript) but no PostCompact hook, so there
-// is no host-native signal harnez can hook to observe the post-compact
-// summary automatically (Claude Code does have a PostCompact hook; it only
-// records token counts, issue 1303, and does not read the summary). See issue 180's Research Findings section for the
+// This is deliberately a manual/opt-in comparator, not automatic watching.
+// Claude Code has a PostCompact hook: harnez records only token counts and
+// model from the transcript boundary there (issue 1303), and never reads or
+// stores the summary, so this comparator stays manual.
+// See issue 180's Research Findings section for the
 // full writeup. `harnez compact-check <before> <after>` lets a user or
 // agent run the same comparison manually against two saved snapshots
 // whenever they suspect a bad compaction.
