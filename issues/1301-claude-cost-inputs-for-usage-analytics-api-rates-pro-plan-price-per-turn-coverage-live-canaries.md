@@ -56,3 +56,14 @@ Re-check all of this against live code and data first.
 
 - The Pro monthly price, and whether it includes VAT or the price is in EUR.
 - Whether to reject other machines' quota movement during canaries. Esprimo's last plan use is unknown.
+
+## Decision
+
+- 2026-11-26 (owner): the plan is **Claude Pro, priced in EUR**. Host default until the owner gives an invoice figure: **€18/month net**, without VAT, so it compares with net API prices. Two sources support it:
+  - Anthropic's EU launch price, "€18 + VAT" (May 2024);
+  - a third-party page from 2026-09-16 that gives €18 net and €21.42 with 19% German VAT ([SSD Nodes](https://www.ssdnodes.com/learn/lang/de/claude-pro-and-max-in-germany-what-you-pay)).
+
+  The current price on claude.com is unverified. The owner overrides it with `agent.plan_prices` in `~/.harnez/config.yaml`.
+- API rates are in USD. The spec must hold the plan currency and a USD→EUR rate with its source and date, so costs can be compared in one currency. The developer proposes the schema; keep existing `monthly_usd_micros` users working, or migrate them in the same commit.
+- Sprint roles: developer `claude:haiku:med`. The host reviews; there is no reviewer agent, and opus is consulted only if really needed. The M3 canaries are run by the host, because the developer is a leaf worker and cannot call `harnez agent`. The developer supplies the canary prompts and the hand-check query.
+- No long-context override in this sprint: that measurement belongs to #1302.
