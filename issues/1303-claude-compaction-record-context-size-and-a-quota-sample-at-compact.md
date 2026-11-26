@@ -203,3 +203,43 @@ The real payload keys are confirmed: `compact_summary, cwd, hook_event_name, pro
 2. Add `boundary_at` and `precompact_at` to the diagnostic note: timestamps only, no content.
 3. Fix it. The live note must then say `applied`, and the PostCompact row must carry `input_tokens`/`total_tokens` = postTokens and the model.
 4. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m1d.log`. Commit as `fix(compact): … (issue 1303 M1d)`. Never amend. `make install`, then stop; the host runs the live check.
+
+## M1d review (host): Claude writes the boundary after PostCompact returns
+
+M1d delivered (only this compaction's boundary is accepted): ce7279ff. q1: 83 ok, 0 FAIL.
+
+Live run, session `eeaf12bb-…`:
+- **Rows:** PreCompact row 822 at 15:03:19.417Z; PostCompact row 823 at 15:03:44.815Z. Still empty.
+- **Hook:** PostCompact took **3.683 s** (the full `boundary_wait`). The note says `stale_boundary` on the hook side; `precompact_at` and `boundary_at` are null.
+- **Transcript:** the boundary line carries `timestamp` 15:03:44.488Z (pre 160680). The file's **mtime is 15:03:49.081Z**, after the hook finished at about 15:03:48.48Z.
+
+Conclusion (verified by timing on one run, consistent with the three earlier runs):
+- Claude Code stamps the boundary before PostCompact but appends it to the transcript only after the PostCompact hook returns.
+- Polling inside the hook can never see it; it only delays Claude by `boundary_wait`.
+- The earlier 68 ms run saw the previous compaction's boundary.
+
+## Decision (decide mode, M1d review)
+
+Fill the Claude PostCompact row in the collector, after the hook returns: a deferred fill.
+- The collector is long-running. When a Claude postcompact arrives without a fresh boundary, it schedules re-reads of `transcript_path`, with the delays in spec.
+- When the boundary that follows the PreCompact row appears, it updates that PostCompact row and its token snapshots and reruns reconcile.
+- Remove the in-hook wait, so PostCompact returns fast again.
+- Reason: this is the only placement that can see the boundary, and it is reversible.
+- A collector restart loses pending re-reads, so the next hook event of that session also triggers a pending fill: the ingest-time retry.
+
+## M1e pre-work (deferred fill)
+
+1. Remove `boundary_wait`/`boundary_poll` from the hook path and the spec. Keep a single read in the hook. Replace with collector retry delays in `spec/hooks.yaml` `claude_compact`, for example `fill_retry: [2s, 10s, 60s]`, with a schema entry. No Go defaults.
+2. Collector: on a Claude postcompact row without an applied boundary, retry on that schedule.
+   - Apply only a boundary whose timestamp is ≥ that compaction's PreCompact row's `created_at`.
+   - Update the existing row, without inserting a duplicate. Write the snapshots and rerun reconcile once.
+   - Make it idempotent: a later retry or hook event must not apply it twice.
+   - Also attempt pending fills for the session on its next telemetry event.
+3. Tests, using the fake clock or scheduler seam with no real sleeps:
+   - the boundary appears after the first retry, which fills the row;
+   - it never appears, so the row stays empty and exactly N retries run;
+   - only an older boundary exists, which is not applied;
+   - a duplicate retry does not double-write;
+   - a restart, then the next session event, fills it.
+4. Diagnostic: the note records `precompact_at` and `boundary_at` for every outcome, plus `filled_after` (the retry index, or `event`).
+5. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m1e.log`. Commit as `fix(compact): … (issue 1303 M1e)`. Never amend. `make install`, then stop for the host's live check.
