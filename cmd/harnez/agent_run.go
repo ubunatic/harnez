@@ -225,7 +225,12 @@ func populateTurnCostRecord(dbPath string, sess *subagent.Session, turn int, r *
 		return nil
 	}
 	rec := &sess.TurnRecords[len(sess.TurnRecords)-1]
+	// The record names the main-chain model the calls reported; the session
+	// alias is the fallback (ticket 1302 M1, as persistAgentTurnTokens does).
 	rec.Model = sess.Model
+	if r != nil && r.Model != "" {
+		rec.Model = r.Model
+	}
 	rec.Effort = sess.Tier
 	if r != nil && !r.TurnTokensUnknown {
 		if costMicros, revision, ok := turnAPICost(sess, r); ok {
@@ -234,7 +239,12 @@ func populateTurnCostRecord(dbPath string, sess *subagent.Session, turn int, r *
 		}
 	}
 	monthlyPrice, _ := subagent.PlanPriceFor(sess.Provider)
-	share, window, beforePct, afterPct := usage.ComputeTurnQuotaShare(before, after, monthlyPrice)
+	// A broken spec leaves the share unknown (nil), never a guessed tolerance.
+	resetTolerance, tolErr := usage.TurnQuotaResetTolerance()
+	share, window, beforePct, afterPct := usage.ComputeTurnQuotaShare(before, after, monthlyPrice, resetTolerance)
+	if tolErr != nil {
+		share = nil
+	}
 	rec.QuotaWindow = window
 	rec.QuotaBeforeUsedPercent = beforePct
 	rec.QuotaAfterUsedPercent = afterPct

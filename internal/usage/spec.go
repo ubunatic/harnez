@@ -57,6 +57,14 @@ type quotaPairSpec struct {
 	SnapshotTolerance string `yaml:"snapshot_tolerance"`
 }
 
+// TurnQuotaResetTolerance returns turn_quota_pairing.reset_tolerance from
+// spec/usage.yaml (ticket 1302 M1), the jitter allowed between two reset_at
+// values of one window.
+func TurnQuotaResetTolerance() (time.Duration, error) {
+	tol, err := turnQuotaPairTolerance()
+	return tol.Reset, err
+}
+
 // turnQuotaPairTolerance loads the turn quota pairing tolerances from
 // spec/usage.yaml (ticket 1301 M4). Nothing here defaults them: a missing or
 // invalid value is an error.

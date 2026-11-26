@@ -162,14 +162,21 @@ func extractQuotaSamples(r TurnQuotaReading) []quotaWindowSample {
 	return out
 }
 
-func sameResetMarker(a, b *time.Time) bool {
+// sameResetMarker reports whether two reset_at values name the same window:
+// they may differ by the reset jitter (turn_quota_pairing.reset_tolerance,
+// ticket 1302 M1), never by more.
+func sameResetMarker(a, b *time.Time, tolerance time.Duration) bool {
 	if a == nil && b == nil {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Equal(*b)
+	d := a.Sub(*b)
+	if d < 0 {
+		d = -d
+	}
+	return d <= tolerance
 }
 
 func isWeeklyQuotaKey(key string) bool {
@@ -180,8 +187,9 @@ func isWeeklyQuotaKey(key string) bool {
 // returns the matched window name, before/after usage percentages, and the
 // prorated weekly subscription share in micro-USD when a weekly window moved
 // monotonically without reset and monthlyUSDMicros is known (> 0).
-// Unknown or uncomparable inputs keep share as nil (never 0).
-func ComputeTurnQuotaShare(before, after TurnQuotaReading, monthlyUSDMicros *int64) (share *int64, window string, beforePct, afterPct *float64) {
+// Unknown or uncomparable inputs keep share as nil (never 0). resetTolerance is
+// turn_quota_pairing.reset_tolerance from spec/usage.yaml.
+func ComputeTurnQuotaShare(before, after TurnQuotaReading, monthlyUSDMicros *int64, resetTolerance time.Duration) (share *int64, window string, beforePct, afterPct *float64) {
 	if before.Error != "" || after.Error != "" || before.CapturedAt.IsZero() || !after.CapturedAt.After(before.CapturedAt) {
 		return nil, "", nil, nil
 	}
@@ -219,7 +227,7 @@ func ComputeTurnQuotaShare(before, after TurnQuotaReading, monthlyUSDMicros *int
 	if chosen.before.pool != "" {
 		windowName = chosen.before.pool + ":" + chosen.before.key
 	}
-	if !isWeeklyQuotaKey(chosen.before.key) || !sameResetMarker(chosen.before.resetAt, chosen.after.resetAt) || chosen.after.used < chosen.before.used {
+	if !isWeeklyQuotaKey(chosen.before.key) || !sameResetMarker(chosen.before.resetAt, chosen.after.resetAt, resetTolerance) || chosen.after.used < chosen.before.used {
 		return nil, windowName, &bPct, &aPct
 	}
 	if monthlyUSDMicros == nil || *monthlyUSDMicros <= 0 {
