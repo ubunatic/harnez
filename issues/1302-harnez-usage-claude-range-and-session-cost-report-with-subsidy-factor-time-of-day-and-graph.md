@@ -166,3 +166,49 @@ M2 was delivered in two commits: the Claude-only fix (acfa193e) and the hourly f
 - **Review.** After M3 (attribution fix) is delivered, a one-shot `agy:neon:med` reviewer covers the whole #1302 range 6e0406e3..HEAD, about 1.7k lines. This follows the owner's rule: neon:med as one-shot reviewer for bigger code chunks. neon:med is on the separate agy plan and needs no `--accept-cost` (dry-run checked). Its findings become M4 pre-work. If it finds nothing at MED or above, the host closes.
 - **Long Haiku session.** dev-1302 is the long Haiku session. At close, record its turns, peak input, the first turn over 100k and the cost per tier.
 - **Dev model.** dev-1302 stays on `claude:haiku:med`. The work is well-specified report logic, and med has delivered red-first tests every round.
+
+## M3 review (host and agy:neon:med reviewer)
+
+M3 was delivered in 77318286 (attribution) and c2c75eaa (docs). q1 is green: 82 packages ok, no `--- FAIL`.
+
+**Real data, current weekly window**
+- 25 pp are attributed, with $37.80 attributed and $0.34 pending: factor 39.95x.
+- The window line is 35 pp for $38.14: 28.79x.
+- 10 pp are not explained.
+- The parts add up.
+
+**Host finding: a quiet rise gets pinned on one tiny call.** Session f8441a87 has one 1 pp rise from 2026-11-24 19:30 to 11-25 09:36 against $0.003 of local cost, a factor of 0.08x. Session 25bf9316 is similar at 0.05x. The rise almost surely came from another machine or the web.
+
+**Reviewer findings (one-shot `agy:neon:med`), checked by the host against the code**
+- HIGH, confirmed: the first interval of a window starts at `reset_at - 7d` (`windowStart`, `report.go:464`), even when the first sample is a mid-window baseline such as 37%. Calls made before the baseline sample are swept into the first rise, which measures only the change from the baseline.
+- HIGH → MED: a nil `reset_at` on Claude weekly rows merges windows across resets, or splits one window into overlapping groups (`report.go:427`). The live file has no Claude weekly row with a nil `reset_at`, so this is a guard for later, not a live bug.
+- MED: a session that mixes priced and unpriced calls gets nil API and pending cost, but a factor computed from the priced subset (`report.go:166`, `:204`).
+- MED: calls exactly at `iv.Start == Since`, and calls after an older window's last rise under `--since`, land in no interval and are mislabelled "pending (after the last quota rise)" (`report.go:134`, `:208`, `:361`).
+- MED: `ScanCalls` reads every `.jsonl` file whole, with no `since` filter (`scan.go:44`). `ParseClaudeTranscriptCalls` never checks `sc.Err()`, so a line over 16 MiB silently drops the rest of the file (`transcript.go:41`).
+- MED, test gaps:
+  - the `RisePct > 100` check right after `== 11` is vacuous and sums over windows (`quota_shape_test.go:91`);
+  - no test covers the `cache_creation` TTL split in a JSONL fixture;
+  - no test runs `ScanCalls` → `Build` end to end;
+  - no test covers the CLI flags or wiring;
+  - no test covers the new spec loaders.
+- LOW: `usage.IsWeeklyQuotaWindow` has no callers. `ClaudeTranscriptCall.Model` duplicates `Usage.Model`.
+- LOW: the docs (`Telemetry.md:270`) and comment (`report.go:128`) say intervals are clamped to `Since`, but they are not. Under `--session`, `Hours`, `Series` and `Window` stay unfiltered.
+- LOW: `sessionFactor` prints `n/a (< 1 pp)` when the plan price is unknown (`render.go:139`).
+
+## M4 pre-work (review fixes, then close-out)
+
+1. **Baseline.** A window's first interval starts at its first sample, not at `reset_at - 7d`. Exception: the first sample reads 0%, so nothing was used before it. Calls between the window start and the first sample go to a "before first quota sample" bucket: API cost shown, no share, not in the factor. Test both cases.
+2. **Nil `reset_at`.** Skip Claude weekly rows with a nil `reset_at`, and count them in a "skipped samples" note. Test that they never merge or split windows.
+3. **Every in-range call lands in exactly one bucket:** an interval, pending (after the newest window's last rise), "before first quota sample", or "after the window's last rise" (older windows under `--since`). Use the half-open `[Start, End)` consistently and clamp the interval start to `Since`. Invariant test: the bucket costs sum to the total API cost, including at the boundaries.
+4. **Mixed pricing.** A session with any unpriced call shows its factor as n/a, consistent with its nil API cost. The unpriced call count goes in a note.
+5. **Quiet rises.** For each rise, compute local cost ÷ (rise × weekly plan). When that is below `usage_report.min_local_factor` in `spec/usage.yaml` (with a schema entry), count the rise as "not explained locally" and give it no share.
+   - The default value must come from data. Print the per-rise factor distribution from the real run (aggregates only: min, p10, median), set the default well below p10, and say why in the commit message.
+   - Test it on the f8441a87 shape: 1 pp, $0.003, a 14-hour gap.
+6. **Scan.** Skip a transcript file whose mtime is before `Since` (it cannot hold newer calls), check `sc.Err()`, and return or report an error for over-long lines. Test the mtime skip.
+7. **Tests.** Fix the vacuous check: assert ≤ 100 per window. Add:
+   - a JSONL fixture with the `cache_creation` 5m/1h split;
+   - a `ScanCalls` → `Build` end-to-end test on a temp dir;
+   - a CLI test for `--since`, `--window weekly`, `--session` and `--json`;
+   - tests for the new spec loaders.
+8. **LOW items.** Remove `IsWeeklyQuotaWindow` and the duplicate `Model` field. Make the docs and comments match the code. Under `--session`, either filter `Hours`/`Series` or say in the output that they are for all sessions. Print a plain `n/a` when the plan price is unknown.
+9. **Gates.** `make install`. Re-run the real report (aggregates only) and check that the bucket sums add up. Then `HTO=0 make test-q1 > scratchpad/q1-1302-m4.log 2>&1`, grep for `--- FAIL` and give the ok count.
