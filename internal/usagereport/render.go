@@ -25,15 +25,31 @@ func RenderText(w io.Writer, rep Report, unexplainedTolerancePct float64) error 
 		fmt.Fprintln(w, "no Claude calls in range")
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', tabwriter.AlignRight)
-	fmt.Fprintln(tw, "SESSION\tCALLS\tIN\tOUT\tCACHE-READ\tCACHE-WRITE\tAPI $\tQUOTA %\tPLAN NET $\tPLAN GROSS $\tFACTOR\t")
-	for _, r := range append(append([]SessionRow{}, rep.Sessions...), rep.Totals) {
-		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t\n",
+	fmt.Fprintln(tw, "SESSION\tCALLS\tIN\tOUT\tCACHE-READ\tCACHE-WRITE\tAPI $\tATTRIB $\tPENDING $\tQUOTA %\tPLAN NET $\tPLAN GROSS $\tFACTOR\t")
+	for _, r := range rep.Sessions {
+		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
 			r.Session, r.Calls, r.Input, r.Output, r.CacheRead, r.CacheWrite,
-			money(r.APICostMicros), percent(r.QuotaPct), money(r.PlanNetMicros), money(r.PlanGrossMicros), factor(r.Factor))
+			money(r.APICostMicros), money(r.AttributedCostMicros), money(r.PendingCostMicros),
+			percent(r.QuotaPct), money(r.PlanNetMicros), money(r.PlanGrossMicros),
+			sessionFactor(r, rep.MinSessionQuotaPct))
 	}
+	t := rep.Totals
+	fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
+		t.Session, t.Calls, t.Input, t.Output, t.CacheRead, t.CacheWrite,
+		money(t.APICostMicros), money(t.AttributedCostMicros), money(t.PendingCostMicros),
+		percent(t.QuotaPct), money(t.PlanNetMicros), money(t.PlanGrossMicros), factor(t.Factor))
 	if err := tw.Flush(); err != nil {
 		return err
 	}
+	if rep.Window != nil {
+		fmt.Fprintf(w, "window (all local calls / weekly rise %.2f pp): API $%s, factor %s; an upper bound on local quota, other machines add to the rise\n",
+			rep.Window.RisePct, money(&rep.Window.APICostMicros), factor(rep.Window.Factor))
+	}
+	if t.PendingCostMicros != nil && *t.PendingCostMicros > 0 {
+		fmt.Fprintf(w, "pending: API $%s after the last quota rise (no quota step yet); no share, not in the factor\n",
+			money(t.PendingCostMicros))
+	}
+	fmt.Fprintln(w, "legend: ATTRIB $ = API cost of calls in a quota rise (the factor's base); FACTOR = ATTRIB $ / plan net for the same quota %")
 	if len(rep.Intervals) == 0 {
 		fmt.Fprintln(w, "quota: no weekly history in range; quota, plan and factor are n/a")
 	}
@@ -115,6 +131,15 @@ func percent(v *float64) string {
 		return "n/a"
 	}
 	return fmt.Sprintf("%.2f", *v)
+}
+
+// sessionFactor prints a session's factor, or "n/a (< N pp)" when the session's
+// attributed quota is below the threshold (usage_report.min_session_quota_pct).
+func sessionFactor(r SessionRow, minPct float64) string {
+	if r.Factor == nil && r.QuotaPct != nil && *r.QuotaPct < minPct {
+		return fmt.Sprintf("n/a (< %g pp)", minPct)
+	}
+	return factor(r.Factor)
 }
 
 func factor(v *float64) string {

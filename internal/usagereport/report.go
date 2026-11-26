@@ -41,17 +41,21 @@ type Interval struct {
 
 // SessionRow is one session's (or the totals') numbers. Nil means n/a.
 type SessionRow struct {
-	Session         string   `json:"session"`
-	Calls           int      `json:"calls"`
-	Input           int64    `json:"input_tokens"`
-	Output          int64    `json:"output_tokens"`
-	CacheRead       int64    `json:"cache_read_tokens"`
-	CacheWrite      int64    `json:"cache_write_tokens"`
-	APICostMicros   *int64   `json:"api_cost_micros_usd,omitempty"`
-	QuotaPct        *float64 `json:"quota_pct,omitempty"`
-	PlanNetMicros   *int64   `json:"plan_net_micros_usd,omitempty"`
-	PlanGrossMicros *int64   `json:"plan_gross_micros_usd,omitempty"`
-	Factor          *float64 `json:"subsidy_factor,omitempty"`
+	Session       string `json:"session"`
+	Calls         int    `json:"calls"`
+	Input         int64  `json:"input_tokens"`
+	Output        int64  `json:"output_tokens"`
+	CacheRead     int64  `json:"cache_read_tokens"`
+	CacheWrite    int64  `json:"cache_write_tokens"`
+	APICostMicros *int64 `json:"api_cost_micros_usd,omitempty"`
+	// AttributedCostMicros is the API cost of calls inside a rise; the factor
+	// uses this base. PendingCostMicros is the rest: calls with no quota step yet.
+	AttributedCostMicros *int64   `json:"attributed_api_cost_micros_usd,omitempty"`
+	PendingCostMicros    *int64   `json:"pending_api_cost_micros_usd,omitempty"`
+	QuotaPct             *float64 `json:"quota_pct,omitempty"`
+	PlanNetMicros        *int64   `json:"plan_net_micros_usd,omitempty"`
+	PlanGrossMicros      *int64   `json:"plan_gross_micros_usd,omitempty"`
+	Factor               *float64 `json:"subsidy_factor,omitempty"`
 }
 
 // Options selects the range and the prices. WeeklyPlanMicros nil means the
@@ -64,8 +68,19 @@ type Options struct {
 	WeeklyPlanMicros        *int64
 	VATRate                 float64
 	UnexplainedTolerancePct float64
+	// MinSessionQuotaPct is usage_report.min_session_quota_pct: a session with
+	// less attributed quota has no factor (M3).
+	MinSessionQuotaPct float64
 	// Location is the zone for the hour of day; nil means the local zone.
 	Location *time.Location
+}
+
+// WindowLine is all local calls in range over the whole weekly rise. Other
+// machines add to the rise, so this is an upper bound on the local quota share.
+type WindowLine struct {
+	APICostMicros int64    `json:"api_cost_micros_usd"`
+	RisePct       float64  `json:"weekly_rise_pct"`
+	Factor        *float64 `json:"subsidy_factor,omitempty"`
 }
 
 // Report is the range result. Sessions is never nil.
@@ -78,6 +93,11 @@ type Report struct {
 	UnexplainedPct float64      `json:"not_explained_locally_pct"`
 	Unexplained    bool         `json:"not_explained_locally"`
 	Intervals      []Interval   `json:"intervals"`
+	// Window is the all-calls line; nil when there is no weekly history or a
+	// call is unpriced.
+	Window *WindowLine `json:"window,omitempty"`
+	// MinSessionQuotaPct is the threshold under which a session has no factor.
+	MinSessionQuotaPct float64 `json:"min_session_quota_pct"`
 	// Hours always has 24 rows, one per local hour of day (M2).
 	Hours []HourRow `json:"hours"`
 	// Series has one point per attributed weekly rise, in time order (M2).
@@ -118,7 +138,7 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		inRange = append(inRange, c)
 	}
 	for _, iv := range weeklyIntervals(samples, opts.ResetTolerance) {
-		if iv.Start.Before(opts.Since) || iv.End.After(opts.Until) {
+		if iv.End.Before(opts.Since) || iv.End.After(opts.Until) {
 			continue
 		}
 		attribute(&iv, inRange)
@@ -150,14 +170,19 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		}
 	}
 	pct := map[string]float64{}
+	attributed := map[string]int64{}
 	for _, iv := range rep.Intervals {
 		for s, share := range iv.Share {
 			pct[s] += share
 		}
+		for s, c := range iv.CostMicros {
+			attributed[s] += c
+		}
 	}
+	hasHistory := len(rep.Intervals) > 0
 	sort.Strings(order)
 	rep.Totals = SessionRow{Session: "total"}
-	var totalCost int64
+	var totalCost, totalAttr int64
 	var totalPct float64
 	totalUnpriced, anyAttributed := false, false
 	for _, s := range order {
@@ -176,7 +201,15 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 			totalPct += p
 			anyAttributed = true
 		}
-		finishPlan(row, opts)
+		if hasHistory {
+			a := attributed[s]
+			row.AttributedCostMicros = &a
+			if !unpriced[s] {
+				pend := costs[s] - a
+				row.PendingCostMicros = &pend
+			}
+		}
+		finishPlan(row, opts, true)
 		rep.Sessions = append(rep.Sessions, *row)
 		rep.Totals.Calls += row.Calls
 		rep.Totals.Input += row.Input
@@ -185,14 +218,25 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		rep.Totals.CacheWrite += row.CacheWrite
 		totalUnpriced = totalUnpriced || unpriced[s]
 		totalCost += costs[s]
+		totalAttr += attributed[s]
 	}
 	if !totalUnpriced {
 		rep.Totals.APICostMicros = &totalCost
 	}
+	if hasHistory {
+		a := totalAttr
+		rep.Totals.AttributedCostMicros = &a
+		if !totalUnpriced {
+			p := totalCost - totalAttr
+			rep.Totals.PendingCostMicros = &p
+		}
+	}
 	if anyAttributed {
 		rep.Totals.QuotaPct = &totalPct
 	}
-	finishPlan(&rep.Totals, opts)
+	finishPlan(&rep.Totals, opts, false)
+	rep.Window = windowLine(rep.RisePct, inRange, hasHistory, opts)
+	rep.MinSessionQuotaPct = opts.MinSessionQuotaPct
 	return rep
 }
 
@@ -271,7 +315,10 @@ func addTokens(row *SessionRow, c Call) {
 
 // finishPlan fills the plan net and gross and the subsidy factor. Each needs
 // its inputs known; otherwise the field stays nil (n/a).
-func finishPlan(row *SessionRow, opts Options) {
+//
+// The factor is attributed API cost over the plan cost of the attributed pp (one
+// base, M3). A session under MinSessionQuotaPct has no factor (perSession only).
+func finishPlan(row *SessionRow, opts Options, perSession bool) {
 	if row.QuotaPct == nil || opts.WeeklyPlanMicros == nil {
 		return
 	}
@@ -279,10 +326,30 @@ func finishPlan(row *SessionRow, opts Options) {
 	gross := int64(math.Round(float64(net) * (1 + opts.VATRate)))
 	row.PlanNetMicros = &net
 	row.PlanGrossMicros = &gross
-	if row.APICostMicros != nil && net > 0 {
-		f := float64(*row.APICostMicros) / float64(net)
-		row.Factor = &f
+	if row.AttributedCostMicros == nil || net <= 0 {
+		return
 	}
+	if perSession && *row.QuotaPct < opts.MinSessionQuotaPct {
+		return
+	}
+	f := float64(*row.AttributedCostMicros) / float64(net)
+	row.Factor = &f
+}
+
+// windowLine sums every local call in range (all sessions, priced) against the
+// whole weekly rise. It is nil without weekly history or with an unpriced call.
+func windowLine(risePct float64, calls []Call, hasHistory bool, opts Options) *WindowLine {
+	if !hasHistory {
+		return nil
+	}
+	var cost int64
+	for _, c := range calls {
+		if c.CostMicros == nil {
+			return nil
+		}
+		cost += *c.CostMicros
+	}
+	return &WindowLine{APICostMicros: cost, RisePct: risePct, Factor: factorOf(cost, risePct, opts.WeeklyPlanMicros)}
 }
 
 // attribute splits the interval's rise across sessions by their priced API cost
@@ -371,19 +438,37 @@ func weeklyGroups(samples []usage.QuotaHistoryEntry, tol time.Duration) [][]usag
 // value seen so far in that window: a dip and recovery (70, 69, 71) is one
 // 1 pp rise, not a 2 pp rise from the dip. A reset is a new window, so no
 // interval crosses it.
+//
+// An interval runs from the previous rise (or the window start for the first
+// rise) to the sample that rises, so the calls made during a flat stretch fall
+// into the rise that ends it (M3). The first sample is the baseline: quota used
+// before it is not measured.
 func weeklyIntervals(samples []usage.QuotaHistoryEntry, tol time.Duration) []Interval {
 	var out []Interval
 	for _, g := range weeklyGroups(samples, tol) {
 		peak := g[0]
+		start := windowStart(g)
 		for _, b := range g[1:] {
 			if !b.Timestamp.After(peak.Timestamp) || b.UsedPercent <= peak.UsedPercent {
 				continue
 			}
-			out = append(out, Interval{Start: peak.Timestamp, End: b.Timestamp, DeltaPct: float64(b.UsedPercent - peak.UsedPercent)})
-			peak = b
+			out = append(out, Interval{Start: start, End: b.Timestamp, DeltaPct: float64(b.UsedPercent - peak.UsedPercent)})
+			peak, start = b, b.Timestamp
 		}
 	}
 	return out
+}
+
+// windowStart is a window's first instant: its reset_at minus seven days, or
+// its first sample when reset_at is unknown. It is never after the first sample.
+func windowStart(g []usage.QuotaHistoryEntry) time.Time {
+	first := g[0]
+	if first.ResetAt != nil {
+		if s := first.ResetAt.Add(-weeklyWindowLength); s.Before(first.Timestamp) {
+			return s
+		}
+	}
+	return first.Timestamp
 }
 
 // WeeklyWindowStart returns the start of the newest weekly window: its reset_at

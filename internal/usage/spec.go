@@ -60,6 +60,25 @@ type quotaPairSpec struct {
 
 type usageReportSpec struct {
 	UnexplainedTolerancePct *float64 `yaml:"unexplained_tolerance_pct"`
+	MinSessionQuotaPct      *float64 `yaml:"min_session_quota_pct"`
+}
+
+// ReportMinSessionQuotaPct returns usage_report.min_session_quota_pct from
+// spec/usage.yaml (ticket 1302 M3): a session with less attributed quota gets
+// no factor. A missing value is an error.
+func ReportMinSessionQuotaPct() (float64, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
+	if err != nil {
+		return 0, err
+	}
+	var spec usageSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return 0, err
+	}
+	if spec.UsageReport.MinSessionQuotaPct == nil {
+		return 0, fmt.Errorf("usage_report.min_session_quota_pct is missing")
+	}
+	return *spec.UsageReport.MinSessionQuotaPct, nil
 }
 
 // ReportUnexplainedTolerancePct returns usage_report.unexplained_tolerance_pct
