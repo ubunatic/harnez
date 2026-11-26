@@ -95,7 +95,7 @@ never the turn total: a turn with many tool steps sums every call and can report
 several times the real context (issue 673, Claude 441k stored vs 45k real; 644 agy,
 594 Codex). Claude reads it from `--output-format stream-json --verbose` (last
 main-thread assistant event with non-zero usage, or `compact_boundary.post_tokens`);
-when no per-call figure exists the size is unknown (negative) and compaction is skipped. Automatic compaction uses user `agent.compact_thresholds` model overrides, then spec model defaults (80000 for Haiku), then user `agent.compact_threshold_tokens`, then the spec global default (200000). Model keys match provider, `provider:model`, or `provider:model:tier`. Harnez waits for compaction
+when no per-call figure exists the size is unknown (negative) and compaction is skipped. Automatic compaction uses user `agent.compact_thresholds` model overrides, then spec model defaults (120000 for Haiku), then user `agent.compact_threshold_tokens`, then the spec global default (200000). Model keys match provider, `provider:model`, or `provider:model:tier`. Harnez waits for compaction
 completion and requires an acknowledgement and a lower reported input-token
 count before sending a resume prompt. Provider CLIs can report a failed compaction
 as success (Claude returns `result` subtype `success` with text `Error during
