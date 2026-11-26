@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -9,10 +10,21 @@ import (
 )
 
 // PlanPriceSpec defines a monthly subscription price for one provider (ticket 1215).
-// A nil MonthlyUSDMicros marks the subscription price as unknown.
+// The price is given in USD (monthly_usd_micros) or in EUR (monthly_eur_micros,
+// converted once at load with plan_fx, ticket 1301). USD wins when both are set.
+// A nil MonthlyUSDMicros after resolution marks the price as unknown.
 type PlanPriceSpec struct {
 	Plan             string `yaml:"plan"`
+	Currency         string `yaml:"currency"`
 	MonthlyUSDMicros *int64 `yaml:"monthly_usd_micros"`
+	MonthlyEURMicros *int64 `yaml:"monthly_eur_micros"`
+}
+
+// PlanFXSpec is the spec's USD-per-EUR rate with its source and date.
+type PlanFXSpec struct {
+	UsdPerEUR float64 `yaml:"usd_per_eur"`
+	Source    string  `yaml:"source"`
+	Date      string  `yaml:"date"`
 }
 
 type planPricesConfig struct {
@@ -21,9 +33,37 @@ type planPricesConfig struct {
 	} `yaml:"agent"`
 }
 
+// usdMicrosFromEUR converts a EUR plan price to micro-USD. A missing amount or a
+// missing or zero FX rate gives nil: the price is unknown, never 0.
+func usdMicrosFromEUR(eur *int64, usdPerEUR float64) *int64 {
+	if eur == nil || *eur <= 0 || usdPerEUR <= 0 {
+		return nil
+	}
+	v := int64(math.Round(float64(*eur) * usdPerEUR))
+	return &v
+}
+
+// resolvePlanUSD returns the entry's price in micro-USD, or nil when unknown.
+func resolvePlanUSD(entry *PlanPriceSpec, fx *PlanFXSpec) *int64 {
+	if entry == nil {
+		return nil
+	}
+	if entry.MonthlyUSDMicros != nil {
+		return entry.MonthlyUSDMicros
+	}
+	if entry.MonthlyEURMicros != nil {
+		rate := 0.0
+		if fx != nil {
+			rate = fx.UsdPerEUR
+		}
+		return usdMicrosFromEUR(entry.MonthlyEURMicros, rate)
+	}
+	return nil
+}
+
 // EffectivePlanPrices returns spec/agent.yaml plan_prices overlaid with any
 // agent.plan_prices entries from ~/.harnez/config.yaml. Setting an entry or
-// its monthly_usd_micros to null clears the price to unknown (nil).
+// its price to null clears the price to unknown (nil). Results are in USD.
 func EffectivePlanPrices() (map[string]PlanPriceSpec, error) {
 	spec, err := agentSpecOnce()
 	if err != nil {
@@ -31,14 +71,12 @@ func EffectivePlanPrices() (map[string]PlanPriceSpec, error) {
 	}
 	out := make(map[string]PlanPriceSpec, len(spec.PlanPrices))
 	for provider, entry := range spec.PlanPrices {
-		if entry == nil || entry.MonthlyUSDMicros == nil {
+		usd := resolvePlanUSD(entry, spec.PlanFX)
+		if usd == nil || *usd <= 0 {
 			continue
 		}
-		v := *entry.MonthlyUSDMicros
-		if v <= 0 {
-			continue
-		}
-		out[provider] = PlanPriceSpec{Plan: entry.Plan, MonthlyUSDMicros: &v}
+		v := *usd
+		out[provider] = PlanPriceSpec{Plan: entry.Plan, Currency: "USD", MonthlyUSDMicros: &v}
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -56,25 +94,22 @@ func EffectivePlanPrices() (map[string]PlanPriceSpec, error) {
 		return nil, fmt.Errorf("parse agent plan_prices config: %w", err)
 	}
 	for provider, override := range cfg.Agent.PlanPrices {
-		if override == nil || override.MonthlyUSDMicros == nil {
-			delete(out, provider)
-			continue
-		}
-		if *override.MonthlyUSDMicros < 0 {
+		if override != nil && override.MonthlyUSDMicros != nil && *override.MonthlyUSDMicros < 0 {
 			return nil, fmt.Errorf("agent.plan_prices.%s.monthly_usd_micros must be >= 0", provider)
 		}
-		if *override.MonthlyUSDMicros == 0 {
+		usd := resolvePlanUSD(override, spec.PlanFX)
+		if usd == nil || *usd == 0 {
 			delete(out, provider)
 			continue
 		}
-		v := *override.MonthlyUSDMicros
+		v := *usd
 		plan := override.Plan
 		if plan == "" {
 			if existing, ok := out[provider]; ok {
 				plan = existing.Plan
 			}
 		}
-		out[provider] = PlanPriceSpec{Plan: plan, MonthlyUSDMicros: &v}
+		out[provider] = PlanPriceSpec{Plan: plan, Currency: "USD", MonthlyUSDMicros: &v}
 	}
 	return out, nil
 }

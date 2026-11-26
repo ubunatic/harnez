@@ -1,21 +1,43 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
+  "definitions": {
+    "rates": {
+      "type": "object",
+      "properties": {
+        "cached_input_micros_per_million": { "type": "integer", "minimum": 0 },
+        "uncached_input_micros_per_million": { "type": "integer", "minimum": 0 },
+        "output_micros_per_million": { "type": "integer", "minimum": 0 },
+        "reasoning_micros_per_million": { "type": "integer", "minimum": 0 },
+        "cache_write_5m_micros_per_million": { "type": "integer", "minimum": 0 },
+        "cache_write_1h_micros_per_million": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
   "additionalProperties": {
     "type": "object",
     "required": ["model", "revision", "rates"],
     "properties": {
       "model": { "type": "string" },
       "revision": { "type": "string" },
-      "rates": {
-        "type": "object",
-        "properties": {
-          "cached_input_micros_per_million": { "type": "integer" },
-          "uncached_input_micros_per_million": { "type": "integer" },
-          "output_micros_per_million": { "type": "integer" },
-          "reasoning_micros_per_million": { "type": "integer" }
-        },
-        "additionalProperties": false
+      "provider": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+      "aliases": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+      "source": { "type": "string", "description": "URL of the published price list" },
+      "fetched": { "type": "string", "format": "date" },
+      "rates": { "$ref": "#/definitions/rates" },
+      "tiers": {
+        "type": "array",
+        "description": "Higher-rate tiers chosen per API call by total prompt tokens, ascending by threshold.",
+        "items": {
+          "type": "object",
+          "required": ["over_input_tokens", "rates"],
+          "properties": {
+            "over_input_tokens": { "type": "integer", "minimum": 0 },
+            "rates": { "$ref": "#/definitions/rates" }
+          },
+          "additionalProperties": false
+        }
       }
     },
     "additionalProperties": false

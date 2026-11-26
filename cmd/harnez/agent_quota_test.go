@@ -292,9 +292,10 @@ func TestRunStartRecordsFullCostRecordForPricedAndUnpricedModels(t *testing.T) {
 	if claudeSess.TurnRecords[0].CacheWriteTokens == nil || *claudeSess.TurnRecords[0].CacheWriteTokens != 5269 {
 		t.Fatalf("claude CacheWriteTokens = %v, want 5269", claudeSess.TurnRecords[0].CacheWriteTokens)
 	}
-	// Share = 0.01 * ((100_000_000 * 12) / 52) = 230_769 micros.
-	if claudeSess.TurnRecords[0].SubscriptionPriceShareMicros == nil || *claudeSess.TurnRecords[0].SubscriptionPriceShareMicros != 230769 {
-		t.Fatalf("claude share = %v, want 230769", claudeSess.TurnRecords[0].SubscriptionPriceShareMicros)
+	// Claude Pro is EUR 18/mo, converted once at 1.0935 USD/EUR = 19_683_000 micros.
+	// Share = 0.01 * ((19_683_000 * 12) / 52) = 0.01 * 4_542_230 = 45_422 micros.
+	if claudeSess.TurnRecords[0].SubscriptionPriceShareMicros == nil || *claudeSess.TurnRecords[0].SubscriptionPriceShareMicros != 45422 {
+		t.Fatalf("claude share = %v, want 45422", claudeSess.TurnRecords[0].SubscriptionPriceShareMicros)
 	}
 
 	usageStore, err := usagestore.Open(dbPath)
@@ -311,7 +312,7 @@ func TestRunStartRecordsFullCostRecordForPricedAndUnpricedModels(t *testing.T) {
 		t.Fatalf("claude DB token rows = %+v, err=%v", claudeRows, err)
 	}
 	claudeDeltas, err := usageStore.TurnQuotaDeltasForSession(context.Background(), "claude-1")
-	if err != nil || len(claudeDeltas) != 1 || claudeDeltas[0].SubscriptionPriceShareMicros == nil || *claudeDeltas[0].SubscriptionPriceShareMicros != 230769 {
+	if err != nil || len(claudeDeltas) != 1 || claudeDeltas[0].SubscriptionPriceShareMicros == nil || *claudeDeltas[0].SubscriptionPriceShareMicros != 45422 {
 		t.Fatalf("claude DB quota deltas = %+v, err=%v", claudeDeltas, err)
 	}
 

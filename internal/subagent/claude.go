@@ -148,10 +148,26 @@ func (d ClaudeDriver) Delete(ctx context.Context, id string) error {
 
 // claudeUsage is the token usage block of a Claude message or result.
 type claudeUsage struct {
-	Input       int `json:"input_tokens"`
-	Output      int `json:"output_tokens"`
-	CacheRead   int `json:"cache_read_input_tokens"`
-	CacheCreate int `json:"cache_creation_input_tokens"`
+	Input         int `json:"input_tokens"`
+	Output        int `json:"output_tokens"`
+	CacheRead     int `json:"cache_read_input_tokens"`
+	CacheCreate   int `json:"cache_creation_input_tokens"`
+	CacheCreation *struct {
+		Ephemeral5m int `json:"ephemeral_5m_input_tokens"`
+		Ephemeral1h int `json:"ephemeral_1h_input_tokens"`
+	} `json:"cache_creation"`
+}
+
+// requestUsage converts one API call's usage. The TTL split is known only when
+// the provider reports it and it adds up to the total cache writes.
+func (u claudeUsage) requestUsage() RequestUsage {
+	req := RequestUsage{Input: u.Input, CacheRead: u.CacheRead, Output: u.Output, CacheWriteTotal: u.CacheCreate, CacheWriteSplitKnown: u.CacheCreate == 0}
+	if u.CacheCreation != nil && u.CacheCreation.Ephemeral5m+u.CacheCreation.Ephemeral1h == u.CacheCreate {
+		req.CacheWrite5m = u.CacheCreation.Ephemeral5m
+		req.CacheWrite1h = u.CacheCreation.Ephemeral1h
+		req.CacheWriteSplitKnown = true
+	}
+	return req
 }
 
 // claudeEvent is one stream-json line, or the single object of --output-format json.
@@ -164,6 +180,7 @@ type claudeEvent struct {
 	Usage     claudeUsage `json:"usage"`
 	Parent    *string     `json:"parent_tool_use_id"`
 	Message   struct {
+		ID      string          `json:"id"`
 		Usage   *claudeUsage    `json:"usage"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
@@ -184,7 +201,11 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	postCompact := -1
 	preCompact := 0
 	var localOut []string
-	for _, line := range strings.Split(string(data), "\n") {
+	// One API call streams as several assistant events that repeat its usage;
+	// the last event of each message id is its final usage (ticket 1301).
+	var calls []RequestUsage
+	callIndex := map[string]int{}
+	for lineNo, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -197,9 +218,23 @@ func parseClaude(data []byte) (*TurnResult, error) {
 			continue
 		}
 		switch {
-		case e.Type == "assistant" && e.Message.Usage != nil && e.Parent == nil:
+		case e.Type == "assistant" && e.Message.Usage != nil:
+			u := e.Message.Usage
+			if u.Input+u.CacheRead+u.CacheCreate+u.Output > 0 {
+				key := e.Message.ID
+				if key == "" {
+					key = fmt.Sprintf("line:%d", lineNo)
+				}
+				req := u.requestUsage()
+				if idx, seen := callIndex[key]; seen {
+					calls[idx] = req
+				} else {
+					callIndex[key] = len(calls)
+					calls = append(calls, req)
+				}
+			}
 			// Synthetic events after /compact carry all-zero usage; skip them.
-			if u := e.Message.Usage; u.Input+u.CacheRead+u.CacheCreate > 0 {
+			if e.Parent == nil && u.Input+u.CacheRead+u.CacheCreate > 0 {
 				last = u
 			}
 		case e.Type == "system" && e.Subtype == "compact_boundary" && e.Compact.PostTokens > 0:
@@ -231,6 +266,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	}
 	v := res.Usage
 	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate, CacheWriteTokens: v.CacheCreate, CacheWriteTokensKnown: true}
+	r.RequestUsage = calls
 	r.CompactionObserved = postCompact > 0
 	r.ContextTokensBeforeCompact = preCompact
 	r.Messages = append(r.Messages, localOut...)

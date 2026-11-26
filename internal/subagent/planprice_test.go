@@ -15,8 +15,8 @@ func TestPlanPriceDefaultsAndOverrides(t *testing.T) {
 		t.Fatalf("codex plan price = %v, err=%v; want 20000000", gotCodex, err)
 	}
 	gotClaude, err := PlanPriceFor("claude")
-	if err != nil || gotClaude == nil || *gotClaude != 100_000_000 {
-		t.Fatalf("claude plan price = %v, err=%v; want 100000000", gotClaude, err)
+	if err != nil || gotClaude == nil || *gotClaude != 19_683_000 {
+		t.Fatalf("claude plan price = %v, err=%v; want 19683000 (EUR 18 Pro)", gotClaude, err)
 	}
 	gotAgy, err := PlanPriceFor("agy")
 	if err != nil || gotAgy == nil || *gotAgy != 20_000_000 {

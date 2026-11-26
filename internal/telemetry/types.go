@@ -128,12 +128,29 @@ type PricingRates struct {
 	UncachedInputMicrosPerMillion *int64 `json:"uncached_input_micros_per_million" yaml:"uncached_input_micros_per_million"`
 	OutputMicrosPerMillion        *int64 `json:"output_micros_per_million" yaml:"output_micros_per_million"`
 	ReasoningMicrosPerMillion     *int64 `json:"reasoning_micros_per_million" yaml:"reasoning_micros_per_million"`
+	CacheWrite5mMicrosPerMillion  *int64 `json:"cache_write_5m_micros_per_million,omitempty" yaml:"cache_write_5m_micros_per_million,omitempty"`
+	CacheWrite1hMicrosPerMillion  *int64 `json:"cache_write_1h_micros_per_million,omitempty" yaml:"cache_write_1h_micros_per_million,omitempty"`
 }
 
+// PricingTier overrides the base rates for requests whose total prompt
+// (uncached input + cache read + cache write) is over OverInputTokens.
+type PricingTier struct {
+	OverInputTokens int64        `json:"over_input_tokens" yaml:"over_input_tokens"`
+	Rates           PricingRates `json:"rates" yaml:"rates"`
+}
+
+// ModelPricing is one sourced catalog entry. Provider scopes the entry so
+// that a model name shared with another provider is never priced with these
+// rates; an empty Provider matches any provider.
 type ModelPricing struct {
-	Model    string
-	Revision string
-	Rates    PricingRates
+	Model    string        `json:"model" yaml:"model"`
+	Revision string        `json:"revision" yaml:"revision"`
+	Provider string        `json:"provider,omitempty" yaml:"provider,omitempty"`
+	Aliases  []string      `json:"aliases,omitempty" yaml:"aliases,omitempty"`
+	Source   string        `json:"source,omitempty" yaml:"source,omitempty"`
+	Fetched  string        `json:"fetched,omitempty" yaml:"fetched,omitempty"`
+	Rates    PricingRates  `json:"rates" yaml:"rates"`
+	Tiers    []PricingTier `json:"tiers,omitempty" yaml:"tiers,omitempty"`
 }
 
 type PricingCatalog map[string]ModelPricing

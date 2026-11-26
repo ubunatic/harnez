@@ -73,10 +73,23 @@
         "type": ["object", "null"],
         "properties": {
           "plan": { "type": "string" },
-          "monthly_usd_micros": { "type": ["integer", "null"], "minimum": 0 }
+          "currency": { "type": ["string", "null"], "enum": ["USD", "EUR", null] },
+          "monthly_usd_micros": { "type": ["integer", "null"], "minimum": 0 },
+          "monthly_eur_micros": { "type": ["integer", "null"], "minimum": 0 }
         },
         "additionalProperties": false
       }
+    },
+    "plan_fx": {
+      "type": "object",
+      "description": "USD per EUR used to convert EUR plan prices (ticket 1301). Missing or zero leaves EUR prices unknown.",
+      "required": ["usd_per_eur", "source", "date"],
+      "properties": {
+        "usd_per_eur": { "type": "number", "exclusiveMinimum": 0 },
+        "source": { "type": "string" },
+        "date": { "type": "string", "format": "date" }
+      },
+      "additionalProperties": false
     },
     "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
     "compact_thresholds": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": "Model-specific default compaction thresholds." },

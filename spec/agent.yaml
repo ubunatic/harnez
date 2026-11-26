@@ -3,19 +3,27 @@
 default_model: claude:haiku:high
 role_classify_timeout_ms: 1500
 reply_history_limit: 20
-# Default monthly subscription plan prices in micro-USD per provider (ticket 1215).
-# Weekly value for quota share = monthly_usd_micros * 12 / 52.
+# Default monthly subscription plan prices per provider (ticket 1215, 1301).
+# An entry gives monthly_usd_micros, or monthly_eur_micros converted at plan_fx.
+# Weekly value for quota share = monthly USD * 12 / 52. Shares are stored in USD.
 # Users can override or null out entries via ~/.harnez/config.yaml under agent.plan_prices.
 plan_prices:
   codex:
     plan: "Plus"
     monthly_usd_micros: 20000000
   claude:
-    plan: "Max 5x"
-    monthly_usd_micros: 100000000
+    # Owner's plan (ticket 1301): Pro at EUR 18 net of VAT, host default until an invoice figure.
+    plan: "Pro"
+    currency: "EUR"
+    monthly_eur_micros: 18000000
   agy:
     plan: "Pro"
     monthly_usd_micros: 20000000
+# USD per EUR for converting EUR plan prices. Source: ECB euro reference rates.
+plan_fx:
+  usd_per_eur: 1.0935
+  source: "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/eurofxref-graph-usd.en.html"
+  date: "2026-11-25"
 # Context tokens (last call's full input) above which harnez agent compacts a
 # session before the next prompt; model-specific values take precedence over global values,
 # and user configuration takes precedence over the spec at the same specificity.

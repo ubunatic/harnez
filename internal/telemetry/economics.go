@@ -15,15 +15,89 @@ func (c PricingCatalog) PricingFor(model string) ModelPricing {
 	return ModelPricing{Model: model, Revision: "unknown"}
 }
 
-// Lookup returns an exact catalog entry and true when present.
+// Lookup returns the entry whose key or alias equals model. An exact key wins
+// over an alias, so a bare alias such as "opus" maps to its sourced entry.
 func (c PricingCatalog) Lookup(model string) (ModelPricing, bool) {
-	pricing, ok := c[model]
-	return pricing, ok
+	if pricing, ok := c[model]; ok {
+		return pricing, true
+	}
+	for _, pricing := range c {
+		for _, alias := range pricing.Aliases {
+			if alias == model {
+				return pricing, true
+			}
+		}
+	}
+	return ModelPricing{}, false
+}
+
+// RequestTokens is one provider API call's token counts. Cache writes are
+// split by TTL because the two TTLs have different rates.
+type RequestTokens struct {
+	Uncached     int64
+	CacheRead    int64
+	CacheWrite5m int64
+	CacheWrite1h int64
+	Output       int64
+}
+
+// PromptTokens is the prompt size that selects a pricing tier.
+func (r RequestTokens) PromptTokens() int64 {
+	return r.Uncached + r.CacheRead + r.CacheWrite5m + r.CacheWrite1h
+}
+
+// RequestCostMicros prices one API call in micro-USD. The tier is chosen per
+// call from its total prompt, the highest tier whose threshold is exceeded.
+// It returns (nil, false) when any non-zero count has no rate: unknown is
+// never reported as 0.
+func RequestCostMicros(pricing ModelPricing, req RequestTokens) (*int64, bool) {
+	rates := pricing.Rates
+	prompt := req.PromptTokens()
+	var threshold int64 = -1
+	for _, tier := range pricing.Tiers {
+		if prompt > tier.OverInputTokens && tier.OverInputTokens > threshold {
+			rates = tier.Rates
+			threshold = tier.OverInputTokens
+		}
+	}
+	parts := []struct {
+		tokens int64
+		rate   *int64
+	}{
+		{req.Uncached, rates.UncachedInputMicrosPerMillion},
+		{req.CacheRead, rates.CachedInputMicrosPerMillion},
+		{req.CacheWrite5m, rates.CacheWrite5mMicrosPerMillion},
+		{req.CacheWrite1h, rates.CacheWrite1hMicrosPerMillion},
+		{req.Output, rates.OutputMicrosPerMillion},
+	}
+	var total int64
+	for _, part := range parts {
+		if part.tokens == 0 {
+			continue
+		}
+		if part.rate == nil {
+			return nil, false
+		}
+		total += roundedMicros(part.tokens, *part.rate)
+	}
+	return &total, true
 }
 
 // CalculateTurnCost estimates one turn's API cost in micro-USD using pricing rates.
-// Returns (nil, false) when no priced components can be computed.
+// Returns (nil, false) unless every reported component has a rate.
 func CalculateTurnCost(rates PricingRates, usage TokenUsage) (*int64, bool) {
+	for _, part := range []struct {
+		tokens, rate *int64
+	}{
+		{usage.CachedInputTokens, rates.CachedInputMicrosPerMillion},
+		{usage.UncachedInputTokens, rates.UncachedInputMicrosPerMillion},
+		{usage.OutputTokens, rates.OutputMicrosPerMillion},
+		{usage.ReasoningTokens, rates.ReasoningMicrosPerMillion},
+	} {
+		if part.tokens != nil && *part.tokens > 0 && part.rate == nil {
+			return nil, false
+		}
+	}
 	cost, _ := estimateCost(usage, rates)
 	if cost == nil {
 		return nil, false

@@ -314,6 +314,18 @@ func ValidateEffortTier(m Model, requested string) error {
 }
 
 // TurnResult is the normalized result of a provider turn.
+// RequestUsage is one provider API call's counters. CacheWriteSplitKnown is
+// false when the provider gave no TTL split, so its cache writes cannot be priced.
+type RequestUsage struct {
+	Input                int  `json:"input_tokens"`
+	CacheRead            int  `json:"cache_read_tokens"`
+	CacheWrite5m         int  `json:"cache_write_5m_tokens"`
+	CacheWrite1h         int  `json:"cache_write_1h_tokens"`
+	Output               int  `json:"output_tokens"`
+	CacheWriteTotal      int  `json:"cache_write_total_tokens"`
+	CacheWriteSplitKnown bool `json:"cache_write_split_known"`
+}
+
 type TurnResult struct {
 	SessionID string `json:"session_id,omitempty"`
 	Response  string `json:"response"`
@@ -326,7 +338,10 @@ type TurnResult struct {
 	CachedTokens          int      `json:"cached_tokens"`
 	CacheWriteTokens      int      `json:"cache_write_tokens,omitempty"`
 	CacheWriteTokensKnown bool     `json:"cache_write_tokens_known,omitempty"`
-	ReasoningTokens       int      `json:"reasoning_tokens,omitempty"`
+	// RequestUsage holds one entry per provider API call when the provider
+	// reports them (Claude), so each call is priced on its own prompt size.
+	RequestUsage    []RequestUsage `json:"-"`
+	ReasoningTokens int            `json:"reasoning_tokens,omitempty"`
 	ReasoningTokensKnown  bool     `json:"reasoning_tokens_known,omitempty"`
 	// TurnTokensUnknown reports that per-turn deltas are unavailable (e.g. a
 	// provider omitted usage or cumulative counters dropped after compaction).

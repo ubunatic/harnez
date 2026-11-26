@@ -113,6 +113,67 @@ func storeTurnQuota(dbPath, sessionID, provider string, turn int, boundary strin
 	}
 }
 
+// turnAPICost prices one turn in micro-USD. Claude is priced per API call on
+// each call's own prompt (ticket 1301); any call without a rate or a TTL split
+// makes the turn unknown. Other providers use the flat catalog entry.
+func turnAPICost(sess *subagent.Session, r *subagent.TurnResult) (*int64, string, bool) {
+	catalog, err := telemetry.LoadPricingCatalog("")
+	if err != nil {
+		return nil, "", false
+	}
+	pricing, ok := catalog.Lookup(sess.Model)
+	if !ok || (pricing.Provider != "" && pricing.Provider != sess.Provider) {
+		return nil, "", false
+	}
+	if sess.Provider == "claude" {
+		return claudeTurnCost(pricing, r)
+	}
+	uncached := int64(r.InputTokens)
+	cached := int64(r.CachedTokens)
+	if r.CacheWriteTokensKnown && cached >= int64(r.CacheWriteTokens) {
+		cached -= int64(r.CacheWriteTokens)
+	}
+	output := int64(r.OutputTokens)
+	usageVec := telemetry.TokenUsage{
+		UncachedInputTokens: &uncached,
+		CachedInputTokens:   &cached,
+		OutputTokens:        &output,
+	}
+	if r.ReasoningTokensKnown {
+		reasoning := int64(r.ReasoningTokens)
+		usageVec.ReasoningTokens = &reasoning
+	}
+	costMicros, costOK := telemetry.CalculateTurnCost(pricing.Rates, usageVec)
+	if !costOK {
+		return nil, "", false
+	}
+	return costMicros, pricing.Revision, true
+}
+
+func claudeTurnCost(pricing telemetry.ModelPricing, r *subagent.TurnResult) (*int64, string, bool) {
+	if len(r.RequestUsage) == 0 {
+		return nil, "", false
+	}
+	var total int64
+	for _, q := range r.RequestUsage {
+		if !q.CacheWriteSplitKnown {
+			return nil, "", false
+		}
+		cost, ok := telemetry.RequestCostMicros(pricing, telemetry.RequestTokens{
+			Uncached:     int64(q.Input),
+			CacheRead:    int64(q.CacheRead),
+			CacheWrite5m: int64(q.CacheWrite5m),
+			CacheWrite1h: int64(q.CacheWrite1h),
+			Output:       int64(q.Output),
+		})
+		if !ok {
+			return nil, "", false
+		}
+		total += *cost
+	}
+	return &total, pricing.Revision, true
+}
+
 func populateTurnCostRecord(dbPath string, sess *subagent.Session, turn int, r *subagent.TurnResult, before, after usage.TurnQuotaReading) *subagent.TurnRecord {
 	if sess == nil || len(sess.TurnRecords) == 0 {
 		return nil
@@ -121,28 +182,9 @@ func populateTurnCostRecord(dbPath string, sess *subagent.Session, turn int, r *
 	rec.Model = sess.Model
 	rec.Effort = sess.Tier
 	if r != nil && !r.TurnTokensUnknown {
-		if catalog, err := telemetry.LoadPricingCatalog(""); err == nil {
-			if pricing, ok := catalog.Lookup(sess.Model); ok {
-				uncached := int64(r.InputTokens)
-				cached := int64(r.CachedTokens)
-				if r.CacheWriteTokensKnown && cached >= int64(r.CacheWriteTokens) {
-					cached -= int64(r.CacheWriteTokens)
-				}
-				output := int64(r.OutputTokens)
-				usageVec := telemetry.TokenUsage{
-					UncachedInputTokens: &uncached,
-					CachedInputTokens:   &cached,
-					OutputTokens:        &output,
-				}
-				if r.ReasoningTokensKnown {
-					reasoning := int64(r.ReasoningTokens)
-					usageVec.ReasoningTokens = &reasoning
-				}
-				if costMicros, costOK := telemetry.CalculateTurnCost(pricing.Rates, usageVec); costOK {
-					rec.CostMicros = costMicros
-					rec.PricingRevision = pricing.Revision
-				}
-			}
+		if costMicros, revision, ok := turnAPICost(sess, r); ok {
+			rec.CostMicros = costMicros
+			rec.PricingRevision = revision
 		}
 	}
 	monthlyPrice, _ := subagent.PlanPriceFor(sess.Provider)
@@ -168,6 +210,10 @@ func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *su
 	}
 	if !result.TurnTokensUnknown {
 		input, cached, output := int64(result.InputTokens), int64(result.CachedTokens), int64(result.OutputTokens)
+		// CachedTokens includes cache writes for Claude; the row stores cache reads only.
+		if result.CacheWriteTokensKnown && cached >= int64(result.CacheWriteTokens) {
+			cached -= int64(result.CacheWriteTokens)
+		}
 		token := usagestore.TurnTokenUsage{
 			SessionID: session.ID, Turn: session.Turn, Provider: session.Provider, CounterKind: "delta",
 			Model: session.Model, Effort: session.Tier,

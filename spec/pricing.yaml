@@ -7,3 +7,56 @@ gpt-5:
     uncached_input_micros_per_million: 1250000
     output_micros_per_million: 10000000
     reasoning_micros_per_million: 10000000
+
+# Claude API rates in micro-USD per million tokens (USD per MTok times 1e6).
+# Source: Anthropic pricing page, fetched by the host on 2026-11-26. Cache
+# writes are priced per TTL: Claude Code writes the 1h TTL by default. Each
+# API call is priced on its own total prompt (uncached + cache read + cache
+# write): a call over tiers[].over_input_tokens uses that tier's rates.
+claude-haiku-5-5:
+  model: "claude-haiku-5-5"
+  revision: "harnez-2026-11-26"
+  provider: "claude"
+  aliases: ["haiku"]
+  source: "https://platform.claude.com/docs/en/about-claude/pricing"
+  fetched: "2026-11-26"
+  rates:
+    uncached_input_micros_per_million: 100000
+    cache_write_5m_micros_per_million: 125000
+    cache_write_1h_micros_per_million: 200000
+    cached_input_micros_per_million: 10000
+    output_micros_per_million: 500000
+  tiers:
+    - over_input_tokens: 100000
+      rates:
+        uncached_input_micros_per_million: 500000
+        cache_write_5m_micros_per_million: 625000
+        cache_write_1h_micros_per_million: 1000000
+        cached_input_micros_per_million: 50000
+        output_micros_per_million: 2500000
+claude-sonnet-5-5:
+  model: "claude-sonnet-5-5"
+  revision: "harnez-2026-11-26"
+  provider: "claude"
+  aliases: ["sonnet"]
+  source: "https://platform.claude.com/docs/en/about-claude/pricing"
+  fetched: "2026-11-26"
+  rates:
+    uncached_input_micros_per_million: 2000000
+    cache_write_5m_micros_per_million: 2500000
+    cache_write_1h_micros_per_million: 4000000
+    cached_input_micros_per_million: 100000
+    output_micros_per_million: 10000000
+claude-opus-5-5:
+  model: "claude-opus-5-5"
+  revision: "harnez-2026-11-26"
+  provider: "claude"
+  aliases: ["opus"]
+  source: "https://platform.claude.com/docs/en/about-claude/pricing"
+  fetched: "2026-11-26"
+  rates:
+    uncached_input_micros_per_million: 4000000
+    cache_write_5m_micros_per_million: 5000000
+    cache_write_1h_micros_per_million: 8000000
+    cached_input_micros_per_million: 200000
+    output_micros_per_million: 20000000
