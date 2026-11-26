@@ -746,7 +746,56 @@ func (s *Store) PairTurnQuotaDeltas(ctx context.Context, sessionID string, turn 
 		JOIN usage_observations oa ON oa.id=qa.observation_id
 		WHERE b.session_id=? AND b.turn=? AND b.provider=? AND b.boundary='before' AND b.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=b.session_id AND turn=b.turn AND provider=b.provider AND boundary='before') AND a.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=a.session_id AND turn=a.turn AND provider=a.provider AND boundary='after') AND b.captured_at<a.captured_at AND COALESCE(qb.reset_at,'')=COALESCE(qa.reset_at,'') AND qa.used_fraction>=qb.used_fraction
 		ON CONFLICT(session_id,turn,provider,pool,window_key) DO UPDATE SET before_boundary_id=excluded.before_boundary_id,after_boundary_id=excluded.after_boundary_id,before_observation_id=excluded.before_observation_id,after_observation_id=excluded.after_observation_id,before_used_fraction=excluded.before_used_fraction,after_used_fraction=excluded.after_used_fraction,delta_used_fraction=excluded.delta_used_fraction,before_source=excluded.before_source,after_source=excluded.after_source,before_observed_at=excluded.before_observed_at,after_observed_at=excluded.after_observed_at,before_reset_at=excluded.before_reset_at,after_reset_at=excluded.after_reset_at,before_cache_age_ms=excluded.before_cache_age_ms,after_cache_age_ms=excluded.after_cache_age_ms,before_has_cache=excluded.before_has_cache,after_has_cache=excluded.after_has_cache,before_error=excluded.before_error,after_error=excluded.after_error`, sessionID, turn, provider)
+	if err != nil {
+		return err
+	}
+	return s.recordPairOutcome(ctx, sessionID, turn, provider)
+}
+
+// recordPairOutcome stores why the latest after reading of a turn did or did
+// not produce delta rows, so a missing delta is never silent (ticket 1301 M3):
+// fetch_error when the after reading failed, paired when deltas exist,
+// unchanged_snapshot when the after reading reused a cached observation, and
+// no_pair otherwise (no shared window, or usage decreased or reset).
+func (s *Store) recordPairOutcome(ctx context.Context, sessionID string, turn int, provider string) error {
+	var beforeID, afterID int64
+	var afterErr string
+	var afterOwnObservations int
+	err := s.db.QueryRowContext(ctx, `SELECT b.id,a.id,a.error,(SELECT COUNT(*) FROM usage_observations WHERE turn_boundary_id=a.id) FROM turn_quota_boundaries b JOIN turn_quota_boundaries a ON a.session_id=b.session_id AND a.turn=b.turn AND a.provider=b.provider AND a.boundary='after' WHERE b.session_id=? AND b.turn=? AND b.provider=? AND b.boundary='before' AND b.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=b.session_id AND turn=b.turn AND provider=b.provider AND boundary='before') AND a.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=a.session_id AND turn=a.turn AND provider=a.provider AND boundary='after')`, sessionID, turn, provider).Scan(&beforeID, &afterID, &afterErr, &afterOwnObservations)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var deltas int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM turn_quota_deltas WHERE session_id=? AND turn=? AND provider=?`, sessionID, turn, provider).Scan(&deltas); err != nil {
+		return err
+	}
+	outcome, detail := "no_pair", "no window present in both readings, or usage decreased or the reset changed"
+	switch {
+	case afterErr != "":
+		outcome, detail = "fetch_error", afterErr
+	case deltas > 0:
+		outcome, detail = "paired", fmt.Sprintf("%d window(s)", deltas)
+	case afterOwnObservations == 0:
+		outcome, detail = "unchanged_snapshot", "after reading reused the cached observation"
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO turn_quota_pair_outcomes(session_id,turn,provider,before_boundary_id,after_boundary_id,outcome,detail) VALUES(?,?,?,?,?,?,?) ON CONFLICT(session_id,turn,provider) DO UPDATE SET before_boundary_id=excluded.before_boundary_id,after_boundary_id=excluded.after_boundary_id,outcome=excluded.outcome,detail=excluded.detail`, sessionID, turn, provider, beforeID, afterID, outcome, detail)
 	return err
+}
+
+// TurnQuotaPairOutcome returns the recorded pairing outcome of a turn's latest
+// after reading. ok is false when no outcome was recorded.
+func (s *Store) TurnQuotaPairOutcome(ctx context.Context, sessionID string, turn int, provider string) (outcome, detail string, ok bool, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT outcome,detail FROM turn_quota_pair_outcomes WHERE session_id=? AND turn=? AND provider=?`, sessionID, turn, provider).Scan(&outcome, &detail)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return outcome, detail, true, nil
 }
 
 // WriteTurnTokenUsage upserts one cumulative or per-turn counter snapshot.
@@ -1201,6 +1250,7 @@ func EnsureSchema(ctx context.Context, exec func(context.Context, string) error)
 		`CREATE INDEX IF NOT EXISTS idx_turn_quota_boundaries_session_turn ON turn_quota_boundaries(session_id,turn,boundary)`,
 		`CREATE TABLE IF NOT EXISTS turn_quota_deltas (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, turn INTEGER NOT NULL, provider TEXT NOT NULL, pool TEXT NOT NULL DEFAULT '', window_key TEXT NOT NULL, before_boundary_id INTEGER NOT NULL REFERENCES turn_quota_boundaries(id), after_boundary_id INTEGER NOT NULL REFERENCES turn_quota_boundaries(id), before_observation_id INTEGER NOT NULL REFERENCES usage_observations(id), after_observation_id INTEGER NOT NULL REFERENCES usage_observations(id), before_used_fraction REAL NOT NULL, after_used_fraction REAL NOT NULL, delta_used_fraction REAL NOT NULL, subscription_price_share_micros INTEGER, before_source TEXT NOT NULL, after_source TEXT NOT NULL, before_observed_at TEXT NOT NULL, after_observed_at TEXT NOT NULL, before_reset_at TEXT, after_reset_at TEXT, before_cache_age_ms INTEGER NOT NULL DEFAULT 0, after_cache_age_ms INTEGER NOT NULL DEFAULT 0, before_has_cache INTEGER NOT NULL DEFAULT 0, after_has_cache INTEGER NOT NULL DEFAULT 0, before_error TEXT NOT NULL DEFAULT '', after_error TEXT NOT NULL DEFAULT '', UNIQUE(session_id,turn,provider,pool,window_key))`,
 		`CREATE INDEX IF NOT EXISTS idx_turn_quota_deltas_session_turn ON turn_quota_deltas(session_id,turn)`,
+		`CREATE TABLE IF NOT EXISTS turn_quota_pair_outcomes (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, turn INTEGER NOT NULL, provider TEXT NOT NULL, before_boundary_id INTEGER NOT NULL REFERENCES turn_quota_boundaries(id), after_boundary_id INTEGER NOT NULL REFERENCES turn_quota_boundaries(id), outcome TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', UNIQUE(session_id,turn,provider))`,
 		`CREATE TABLE IF NOT EXISTS turn_token_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, turn INTEGER NOT NULL, provider TEXT NOT NULL, counter_kind TEXT NOT NULL, model TEXT NOT NULL DEFAULT '', effort TEXT NOT NULL DEFAULT '', input_tokens INTEGER, cached_input_tokens INTEGER, cache_write_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, cost_micros INTEGER, pricing_revision TEXT NOT NULL DEFAULT '', input_quality TEXT NOT NULL DEFAULT 'unknown', cached_input_quality TEXT NOT NULL DEFAULT 'unknown', output_quality TEXT NOT NULL DEFAULT 'unknown', reasoning_quality TEXT NOT NULL DEFAULT 'unknown', observed_at TEXT NOT NULL, UNIQUE(session_id,turn,counter_kind))`,
 		`CREATE INDEX IF NOT EXISTS idx_turn_token_usage_session_turn ON turn_token_usage(session_id,turn)`,
 		`CREATE INDEX IF NOT EXISTS idx_usage_observations_provider_time ON usage_observations(provider,observed_at)`,

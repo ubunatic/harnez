@@ -12,7 +12,7 @@ import (
 func TestTurnAPICostPricesClaudePerCall(t *testing.T) {
 	claude := &subagent.Session{Provider: "claude", Model: "haiku"}
 	// One call with a 100,001-token prompt: 1 uncached (tier 0.50) + 100,000 cache read (tier 0.05).
-	ok := &subagent.TurnResult{RequestUsage: []subagent.RequestUsage{{Input: 1, CacheRead: 100_000, CacheWriteSplitKnown: true}}}
+	ok := &subagent.TurnResult{RequestUsage: []subagent.RequestUsage{{Model: "claude-haiku-5-5", Input: 1, CacheRead: 100_000, CacheWriteSplitKnown: true}}}
 	if cost, rev, found := turnAPICost(claude, ok); !found || cost == nil || *cost != 5_001 || rev == "" {
 		t.Fatalf("turnAPICost = %v, %q, %v; want 5001 micros with a revision", cost, rev, found)
 	}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -121,12 +122,12 @@ func turnAPICost(sess *subagent.Session, r *subagent.TurnResult) (*int64, string
 	if err != nil {
 		return nil, "", false
 	}
+	if sess.Provider == "claude" {
+		return claudeTurnCost(catalog, r)
+	}
 	pricing, ok := catalog.Lookup(sess.Model)
 	if !ok || (pricing.Provider != "" && pricing.Provider != sess.Provider) {
 		return nil, "", false
-	}
-	if sess.Provider == "claude" {
-		return claudeTurnCost(pricing, r)
 	}
 	uncached := int64(r.InputTokens)
 	cached := int64(r.CachedTokens)
@@ -150,13 +151,22 @@ func turnAPICost(sess *subagent.Session, r *subagent.TurnResult) (*int64, string
 	return costMicros, pricing.Revision, true
 }
 
-func claudeTurnCost(pricing telemetry.ModelPricing, r *subagent.TurnResult) (*int64, string, bool) {
+// claudeTurnCost prices each API call by the model in its own message, so a
+// sub-agent on Haiku under an Opus session is priced as Haiku. The revision is
+// the sorted set of revisions used. Any call without a split, a model, or a
+// rate makes the turn unknown.
+func claudeTurnCost(catalog telemetry.PricingCatalog, r *subagent.TurnResult) (*int64, string, bool) {
 	if len(r.RequestUsage) == 0 {
 		return nil, "", false
 	}
 	var total int64
+	revisions := map[string]bool{}
 	for _, q := range r.RequestUsage {
 		if !q.CacheWriteSplitKnown {
+			return nil, "", false
+		}
+		pricing, ok := claudeCallPricing(catalog, q.Model)
+		if !ok {
 			return nil, "", false
 		}
 		cost, ok := telemetry.RequestCostMicros(pricing, telemetry.RequestTokens{
@@ -170,8 +180,44 @@ func claudeTurnCost(pricing telemetry.ModelPricing, r *subagent.TurnResult) (*in
 			return nil, "", false
 		}
 		total += *cost
+		revisions[pricing.Revision] = true
 	}
-	return &total, pricing.Revision, true
+	keys := make([]string, 0, len(revisions))
+	for rev := range revisions {
+		keys = append(keys, rev)
+	}
+	sort.Strings(keys)
+	return &total, strings.Join(keys, ","), true
+}
+
+// claudeCallPricing returns the catalog entry whose key is exactly the call's
+// model id. Aliases such as "opus" never match, so a newer Opus cannot be
+// priced with old rates by accident. A dated stream id (claude-haiku-5-5-20261101)
+// falls back to the id without its date suffix.
+func claudeCallPricing(catalog telemetry.PricingCatalog, model string) (telemetry.ModelPricing, bool) {
+	if model == "" {
+		return telemetry.ModelPricing{}, false
+	}
+	for _, id := range []string{model, stripDateSuffix(model)} {
+		if p, ok := catalog.Lookup(id); ok && p.Model == id && p.Provider == "claude" {
+			return p, true
+		}
+	}
+	return telemetry.ModelPricing{}, false
+}
+
+// stripDateSuffix removes a trailing "-YYYYMMDD" from a model id.
+func stripDateSuffix(model string) string {
+	i := strings.LastIndex(model, "-")
+	if i < 0 || len(model)-i-1 != 8 {
+		return model
+	}
+	for _, c := range model[i+1:] {
+		if c < '0' || c > '9' {
+			return model
+		}
+	}
+	return model[:i]
 }
 
 func populateTurnCostRecord(dbPath string, sess *subagent.Session, turn int, r *subagent.TurnResult, before, after usage.TurnQuotaReading) *subagent.TurnRecord {
@@ -246,6 +292,13 @@ func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *su
 		ObservedAt: observedAt,
 	}
 	cumulativeInput, cumulativeCached, cumulativeOutput := int64(session.InputTokensTotal), int64(session.CachedTokensTotal), int64(session.OutputTokensTotal)
+	// Like the delta row, the cumulative cached count excludes cache writes
+	// when the write total is known (ticket 1301 M3).
+	if session.CacheWriteTokensKnown && cumulativeCached >= int64(session.CacheWriteTokensTotal) {
+		cumulativeCached -= int64(session.CacheWriteTokensTotal)
+		cw := int64(session.CacheWriteTokensTotal)
+		cumulative.CacheWriteTokens = &cw
+	}
 	cumulative.InputTokens, cumulative.CachedInputTokens, cumulative.OutputTokens = &cumulativeInput, &cumulativeCached, &cumulativeOutput
 	if session.ReasoningTokensKnown {
 		reasoning := int64(session.ReasoningTokensTotal)
@@ -890,7 +943,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	storeTurnQuota(d.dbPath, id, m.Provider, turn, "before", before)
 	after := recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 	now := time.Now()
-	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: !r.TurnTokensUnknown || r.CumulativeTotalsKnown, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, FreshStartContextTokens: max(r.ContextTokens, 0), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{subagent.NewTurnRecord(turn, r)}}
+	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, CacheWriteTokensTotal: r.CacheWriteTokens, CacheWriteTokensKnown: r.CacheWriteTokensKnown, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: !r.TurnTokensUnknown || r.CumulativeTotalsKnown, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, FreshStartContextTokens: max(r.ContextTokens, 0), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{subagent.NewTurnRecord(turn, r)}}
 	sess.ContextWindowSize = r.ContextWindowSize
 	populateTurnCostRecord(d.dbPath, sess, turn, r, before, after)
 	persistAgentTurnTokens(d.dbPath, sess, r, now)
@@ -1385,6 +1438,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		sess.TokensCumulative = r.CumulativeInputTokens + r.CumulativeOutputTokens
 		sess.InputTokensTotal = r.CumulativeInputTokens
 		sess.CachedTokensTotal = r.CumulativeCachedTokens
+		sess.CacheWriteTokensKnown = false
 		sess.OutputTokensTotal = r.CumulativeOutputTokens
 		sess.ReasoningTokensTotal = r.CumulativeReasoningTokens
 		sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
@@ -1396,6 +1450,8 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
 		sess.InputTokensTotal += r.InputTokens
 		sess.CachedTokensTotal += r.CachedTokens
+		sess.CacheWriteTokensTotal += r.CacheWriteTokens
+		sess.CacheWriteTokensKnown = sess.CacheWriteTokensKnown && r.CacheWriteTokensKnown
 		sess.OutputTokensTotal += r.OutputTokens
 		sess.TokenTotalsKnown = true
 	}

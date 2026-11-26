@@ -160,8 +160,8 @@ type claudeUsage struct {
 
 // requestUsage converts one API call's usage. The TTL split is known only when
 // the provider reports it and it adds up to the total cache writes.
-func (u claudeUsage) requestUsage() RequestUsage {
-	req := RequestUsage{Input: u.Input, CacheRead: u.CacheRead, Output: u.Output, CacheWriteTotal: u.CacheCreate, CacheWriteSplitKnown: u.CacheCreate == 0}
+func (u claudeUsage) requestUsage(model string) RequestUsage {
+	req := RequestUsage{Model: model, Input: u.Input, CacheRead: u.CacheRead, Output: u.Output, CacheWriteTotal: u.CacheCreate, CacheWriteSplitKnown: u.CacheCreate == 0}
 	if u.CacheCreation != nil && u.CacheCreation.Ephemeral5m+u.CacheCreation.Ephemeral1h == u.CacheCreate {
 		req.CacheWrite5m = u.CacheCreation.Ephemeral5m
 		req.CacheWrite1h = u.CacheCreation.Ephemeral1h
@@ -181,6 +181,7 @@ type claudeEvent struct {
 	Parent    *string     `json:"parent_tool_use_id"`
 	Message   struct {
 		ID      string          `json:"id"`
+		Model   string          `json:"model"`
 		Usage   *claudeUsage    `json:"usage"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
@@ -225,7 +226,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 				if key == "" {
 					key = fmt.Sprintf("line:%d", lineNo)
 				}
-				req := u.requestUsage()
+				req := u.requestUsage(e.Message.Model)
 				if idx, seen := callIndex[key]; seen {
 					calls[idx] = req
 				} else {

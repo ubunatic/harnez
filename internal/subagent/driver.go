@@ -317,13 +317,16 @@ func ValidateEffortTier(m Model, requested string) error {
 // RequestUsage is one provider API call's counters. CacheWriteSplitKnown is
 // false when the provider gave no TTL split, so its cache writes cannot be priced.
 type RequestUsage struct {
-	Input                int  `json:"input_tokens"`
-	CacheRead            int  `json:"cache_read_tokens"`
-	CacheWrite5m         int  `json:"cache_write_5m_tokens"`
-	CacheWrite1h         int  `json:"cache_write_1h_tokens"`
-	Output               int  `json:"output_tokens"`
-	CacheWriteTotal      int  `json:"cache_write_total_tokens"`
-	CacheWriteSplitKnown bool `json:"cache_write_split_known"`
+	// Model is the provider model id from the call's own message (for example
+	// claude-haiku-5-5), so each call is priced by its own model.
+	Model                string `json:"model,omitempty"`
+	Input                int    `json:"input_tokens"`
+	CacheRead            int    `json:"cache_read_tokens"`
+	CacheWrite5m         int    `json:"cache_write_5m_tokens"`
+	CacheWrite1h         int    `json:"cache_write_1h_tokens"`
+	Output               int    `json:"output_tokens"`
+	CacheWriteTotal      int    `json:"cache_write_total_tokens"`
+	CacheWriteSplitKnown bool   `json:"cache_write_split_known"`
 }
 
 type TurnResult struct {

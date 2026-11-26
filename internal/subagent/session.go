@@ -44,16 +44,20 @@ type Session struct {
 	// WorkerPID/WorkerStarttime identify the last detached worker process.
 	// Unlike ProcessPID, the worker never clears them: it records its terminal
 	// status before it exits, so wait must keep watching this identity.
-	WorkerPID                    int    `json:"worker_pid,omitempty"`
-	WorkerStarttime              uint64 `json:"worker_starttime,omitempty"`
-	ControlSocket                string `json:"control_socket,omitempty"`
-	HarnessType                  string `json:"harness_type"`
-	Status                       string `json:"status"`
-	TokensCumulative             int    `json:"tokens_cumulative"`
-	SessionUsedTokens            int    `json:"session_used_tokens,omitempty"`
-	SessionUsedKnown             bool   `json:"session_used_known,omitempty"`
-	InputTokensTotal             int    `json:"input_tokens_total,omitempty"`
-	CachedTokensTotal            int    `json:"cached_tokens_total,omitempty"`
+	WorkerPID         int    `json:"worker_pid,omitempty"`
+	WorkerStarttime   uint64 `json:"worker_starttime,omitempty"`
+	ControlSocket     string `json:"control_socket,omitempty"`
+	HarnessType       string `json:"harness_type"`
+	Status            string `json:"status"`
+	TokensCumulative  int    `json:"tokens_cumulative"`
+	SessionUsedTokens int    `json:"session_used_tokens,omitempty"`
+	SessionUsedKnown  bool   `json:"session_used_known,omitempty"`
+	InputTokensTotal  int    `json:"input_tokens_total,omitempty"`
+	CachedTokensTotal int    `json:"cached_tokens_total,omitempty"`
+	// CacheWriteTokensTotal sums the cache-write tokens inside CachedTokensTotal;
+	// it is valid only while CacheWriteTokensKnown holds (ticket 1301 M3).
+	CacheWriteTokensTotal        int    `json:"cache_write_tokens_total,omitempty"`
+	CacheWriteTokensKnown        bool   `json:"cache_write_tokens_known,omitempty"`
 	OutputTokensTotal            int    `json:"output_tokens_total,omitempty"`
 	ReasoningTokensTotal         int    `json:"reasoning_tokens_total,omitempty"`
 	ReasoningTokensKnown         bool   `json:"reasoning_tokens_known,omitempty"`
