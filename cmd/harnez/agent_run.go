@@ -165,7 +165,7 @@ func claudeTurnCost(catalog telemetry.PricingCatalog, r *subagent.TurnResult) (*
 		if !q.CacheWriteSplitKnown {
 			return nil, "", false
 		}
-		pricing, ok := claudeCallPricing(catalog, q.Model)
+		pricing, ok := telemetry.ClaudeCallPricing(catalog, q.Model)
 		if !ok {
 			return nil, "", false
 		}
@@ -188,36 +188,6 @@ func claudeTurnCost(catalog telemetry.PricingCatalog, r *subagent.TurnResult) (*
 	}
 	sort.Strings(keys)
 	return &total, strings.Join(keys, ","), true
-}
-
-// claudeCallPricing returns the catalog entry whose key is exactly the call's
-// model id. Aliases such as "opus" never match, so a newer Opus cannot be
-// priced with old rates by accident. A dated stream id (claude-haiku-5-5-20261101)
-// falls back to the id without its date suffix.
-func claudeCallPricing(catalog telemetry.PricingCatalog, model string) (telemetry.ModelPricing, bool) {
-	if model == "" {
-		return telemetry.ModelPricing{}, false
-	}
-	for _, id := range []string{model, stripDateSuffix(model)} {
-		if p, ok := catalog.Lookup(id); ok && p.Model == id && p.Provider == "claude" {
-			return p, true
-		}
-	}
-	return telemetry.ModelPricing{}, false
-}
-
-// stripDateSuffix removes a trailing "-YYYYMMDD" from a model id.
-func stripDateSuffix(model string) string {
-	i := strings.LastIndex(model, "-")
-	if i < 0 || len(model)-i-1 != 8 {
-		return model
-	}
-	for _, c := range model[i+1:] {
-		if c < '0' || c > '9' {
-			return model
-		}
-	}
-	return model[:i]
 }
 
 func populateTurnCostRecord(dbPath string, sess *subagent.Session, turn int, r *subagent.TurnResult, before, after usage.TurnQuotaReading) *subagent.TurnRecord {

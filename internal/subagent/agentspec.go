@@ -33,6 +33,7 @@ type agentSpec struct {
 	Roles                 map[string]RoleSpec            `yaml:"roles"`
 	PlanPrices            map[string]*PlanPriceSpec      `yaml:"plan_prices"`
 	PlanFX                *PlanFXSpec                    `yaml:"plan_fx"`
+	PlanVATRate           *float64                       `yaml:"plan_vat_rate"`
 	Stop                  StopSpec                       `yaml:"stop"`
 	Selftest              SelftestSpec                   `yaml:"selftest"`
 	ExternalSessions      map[string]ExternalSessionSpec `yaml:"external_sessions"`

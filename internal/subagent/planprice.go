@@ -61,6 +61,20 @@ func resolvePlanUSD(entry *PlanPriceSpec, fx *PlanFXSpec) *int64 {
 	return nil
 }
 
+// PlanVATRate returns plan_vat_rate from spec/agent.yaml, the VAT fraction for
+// the gross line of the usage report (ticket 1302 M1). A missing value is an
+// error: nothing here defaults it.
+func PlanVATRate() (float64, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return 0, err
+	}
+	if spec.PlanVATRate == nil {
+		return 0, fmt.Errorf("plan_vat_rate is missing from spec/agent.yaml")
+	}
+	return *spec.PlanVATRate, nil
+}
+
 // EffectivePlanPrices returns spec/agent.yaml plan_prices overlaid with any
 // agent.plan_prices entries from ~/.harnez/config.yaml. Setting an entry or
 // its price to null clears the price to unknown (nil). Results are in USD.

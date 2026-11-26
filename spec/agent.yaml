@@ -20,6 +20,9 @@ plan_prices:
   agy:
     plan: "Pro"
     monthly_usd_micros: 20000000
+# VAT rate on the owner's Pro invoice (EUR 180 net + 19% = EUR 214.20, owner,
+# 2026-11-26). Used only for the gross line of the usage report; plan prices stay net.
+plan_vat_rate: 0.19
 # USD per EUR for converting EUR plan prices. Source: ECB euro reference rates.
 plan_fx:
   usd_per_eur: 1.0935

@@ -29,6 +29,11 @@ agent_quota_max_reading_age: 2m
 turn_quota_pairing:
   reset_tolerance: 60s
   snapshot_tolerance: 1s
+# Usage report (ticket 1302 M1). A weekly quota rise in an interval with no local
+# API call is "not explained locally"; the report line shows only above this many
+# percentage points (quota history moves in 1% steps).
+usage_report:
+  unexplained_tolerance_pct: 1
 collector_timeout: 2m
 passive_dedupe_interval: 30s
 passive_update_path: /usage/passive

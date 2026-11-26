@@ -27,6 +27,7 @@ type usageSpec struct {
 	AgentQuotaWarnPercent    float64            `yaml:"agent_quota_warn_percent"`
 	AgentQuotaMaxReadingAge  string             `yaml:"agent_quota_max_reading_age"`
 	TurnQuotaPairing         quotaPairSpec      `yaml:"turn_quota_pairing"`
+	UsageReport              usageReportSpec    `yaml:"usage_report"`
 	CollectorTimeout         string             `yaml:"collector_timeout"`
 	PassiveDedupeInterval    string             `yaml:"passive_dedupe_interval"`
 	PassiveUpdatePath        string             `yaml:"passive_update_path"`
@@ -55,6 +56,28 @@ type usageSpec struct {
 type quotaPairSpec struct {
 	ResetTolerance    string `yaml:"reset_tolerance"`
 	SnapshotTolerance string `yaml:"snapshot_tolerance"`
+}
+
+type usageReportSpec struct {
+	UnexplainedTolerancePct *float64 `yaml:"unexplained_tolerance_pct"`
+}
+
+// ReportUnexplainedTolerancePct returns usage_report.unexplained_tolerance_pct
+// from spec/usage.yaml (ticket 1302 M1). Nothing here defaults it: a missing
+// value is an error.
+func ReportUnexplainedTolerancePct() (float64, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
+	if err != nil {
+		return 0, err
+	}
+	var spec usageSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return 0, err
+	}
+	if spec.UsageReport.UnexplainedTolerancePct == nil {
+		return 0, fmt.Errorf("usage_report.unexplained_tolerance_pct is missing")
+	}
+	return *spec.UsageReport.UnexplainedTolerancePct, nil
 }
 
 // TurnQuotaResetTolerance returns turn_quota_pairing.reset_tolerance from

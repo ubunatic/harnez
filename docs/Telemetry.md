@@ -256,6 +256,19 @@ claiming a saving. Schema version 12 (issue 1215) extends
 (`cached_input_tokens`, `uncached_input_tokens`, `output_tokens`,
 `reasoning_tokens`).
 
+## Claude Range Report (`harnez usage history report`, issue 1302)
+
+Read-only. Tokens come from the Claude transcripts under `~/.claude/projects`
+(main sessions and nested `<session>/subagents/*.jsonl`), one call per message
+id, the final streamed usage kept. Each call is priced by its own model
+(`telemetry.ClaudeCallPricing`). The quota share comes from the weekly rises
+in `quota-history.jsonl`, grouped into windows by `reset_at` within
+`turn_quota_pairing.reset_tolerance`. A rise is split across the sessions with
+priced calls in its interval, by API cost. A rise with no priced call is "not
+explained locally" when it exceeds `usage_report.unexplained_tolerance_pct`.
+Plan cost is the share times the weekly plan price (net); gross adds
+`plan_vat_rate`. Unpriced or unknown values print `n/a`, never 0.
+
 ## Per-Turn API Cost & Subscription Share (issue 1215)
 
 Each completed harnez agent turn records its API list-price estimate and

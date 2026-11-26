@@ -23,6 +23,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `server` | Local / User Service | Run local services; install, inspect, and remove the systemd user collector service |
 | `install [host \| <name>]` | Self / User toolchain | Install or update `harnez` locally or over ssh via `goself` (wiring shell PATH, completions, `⚙` symlink, and man pages), or install an optional tool from `spec/dependencies.yaml` (`--dry-run` previews) |
 | `usage history` | Analytical / Logs | Timeline, remote fetch, stats & sparklines across `~/.claude/harnez/usage-history/` |
+| `usage history report` | Analytical / Read-only | Claude API cost, weekly quota share, plan cost (net and gross) and subsidy factor for `--since` or `--window weekly`; `--session`, `--json` (ticket 1302) |
 | `assess`| Local / Repo | Fast code/doc metrics, token estimation, glossary check (`--glossary`), and feasibility report (`--json`) |
 | `dochistory` / `repo-history` | Local / Repo | Multi-track Git artifact evolution, Braille sparklines (`--tracks`), and diff breakdown (`--diff`) |
 | `mode`  | Local / Repo | Switch ConciseMode terseness level in `.harnez/rules/Local.md` (migrating legacy `AGENTS.local.md` once) |

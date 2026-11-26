@@ -183,6 +183,19 @@ func isWeeklyQuotaKey(key string) bool {
 	return key == "weekly" || key == "seven_day"
 }
 
+// SameResetMarker reports whether two reset_at values name one window within
+// tolerance (turn_quota_pairing.reset_tolerance).
+func SameResetMarker(a, b *time.Time, tolerance time.Duration) bool {
+	return sameResetMarker(a, b, tolerance)
+}
+
+// IsWeeklyQuotaWindow reports whether a quota window key is the weekly window.
+func IsWeeklyQuotaWindow(key string) bool { return isWeeklyQuotaKey(key) }
+
+// WeeklyPlanMicros prorates a monthly plan price to one week: monthly * 12 / 52
+// (ticket 1215), the value turn quota shares are computed from.
+func WeeklyPlanMicros(monthlyUSDMicros int64) int64 { return (monthlyUSDMicros * 12) / 52 }
+
 // ComputeTurnQuotaShare compares non-error before/after turn quota readings and
 // returns the matched window name, before/after usage percentages, and the
 // prorated weekly subscription share in micro-USD when a weekly window moved
@@ -233,7 +246,7 @@ func ComputeTurnQuotaShare(before, after TurnQuotaReading, monthlyUSDMicros *int
 	if monthlyUSDMicros == nil || *monthlyUSDMicros <= 0 {
 		return nil, windowName, &bPct, &aPct
 	}
-	weeklyMicros := (*monthlyUSDMicros * 12) / 52
+	weeklyMicros := WeeklyPlanMicros(*monthlyUSDMicros)
 	delta := chosen.after.used - chosen.before.used
 	val := int64(math.Round(delta * float64(weeklyMicros)))
 	return &val, windowName, &bPct, &aPct

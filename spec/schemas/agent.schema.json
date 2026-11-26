@@ -65,6 +65,7 @@
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
+    "plan_vat_rate": { "type": "number", "minimum": 0, "maximum": 1, "description": "VAT fraction on plan prices for the gross line of the usage report (ticket 1302 M1)." },
     "plan_prices": {
       "type": "object",
       "description": "Default monthly subscription plan prices in micro-USD per provider (ticket 1215). Weekly share = monthly_usd_micros * 12 / 52.",

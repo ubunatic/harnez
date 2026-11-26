@@ -351,7 +351,7 @@ func newUsageHistoryCmd(offline, shared *bool) *cobra.Command {
 		},
 	}
 
-	historyCmd.AddCommand(historyTimelineCmd, historyFetchCmd, historyRecordCmd, historyStatsCmd)
+	historyCmd.AddCommand(historyTimelineCmd, historyFetchCmd, historyRecordCmd, historyStatsCmd, newUsageHistoryReportCmd())
 	return historyCmd
 }
 
