@@ -103,3 +103,41 @@ The host checked the plan's open facts against primary sources instead of runnin
 5. Codex rows must stay byte-identical; prove it with the existing Codex tests unchanged.
 6. Fix the stale "no PostCompact hook" comments at `internal/compactcheck/compactcheck.go:6-7` and `cmd/harnez/compactcheck.go:3-4,28`.
 7. Gates: run `HTO=0 make test-q1` once, logging to a file. Commit as `feat(compact): … (issue 1303 M1)`. Never amend.
+
+## M1 review (host)
+
+M1 delivered (Claude rows from the transcript boundary): ed6c0b44. q1: 83 ok and 0 FAIL, but on the third run; the budget is one run per milestone. The two failed logs are `q1-1303-m1-run{1,2}-fail.log` in the host scratchpad.
+
+Host diff review: the reader keeps only trigger, token counts and model, and drops `<synthetic>` models. Read errors count as no boundary. The PostCompact row is filled only if the boundary is not older than the session's newest PreCompact row. These are fine.
+
+The live check fails: the rows stay empty on a real Claude compaction.
+- The host ran `harnez agent compact --name dev-1303` twice; the second run came after restarting the collector service on the M1 binary.
+- Session `e3521bad-8c46-463a-a838-d48ba049f618`, rows 794/795:
+
+  | Row | Time (UTC) | Tokens and model |
+  |---|---|---|
+  | precompact 794 | 14:24:50.678 | empty |
+  | postcompact 795 | 14:25:12.400 | empty |
+
+- The transcript's boundary is at 14:25:12.311Z with `compactMetadata.preTokens` 12948. That is after the PreCompact row and before PostCompact ran, so `applyClaudeCompact` should have applied it.
+- The binaries match: `~/go/bin/harnez` links to `~/.local/bin/harnez` (built 15:21), and the systemd unit runs the same file.
+- Cause unknown. The fixture tests do not run the real path: Claude → `harnez hook PostCompact` → dispatcher `codex-telemetry` handler → collector service → `ProcessCodexTelemetryTx`.
+
+Side finding:
+- A scratch `HOME` does not isolate hook telemetry. `HOME=<tmp> harnez hook PreCompact/PostCompact` wrote to the real `~/.local/share/harnez/telemetry.sqlite` through the running collector socket.
+- Polluted rows: 789-791, session `s-canary`, from a host check. Deleting them waits for the owner.
+- The search for the `compact_summary` sentinel in the DB found nothing.
+
+## M1b pre-work (make the live path work)
+
+1. Reproduce the live failure with a test that runs the real chain end to end:
+   - It sends a Claude PostCompact payload through `harnez hook PostCompact` (dispatcher → codex-telemetry handler → the same IPC/server or direct write the hook uses in production).
+   - It uses a fixture transcript whose boundary follows a PreCompact row.
+   - It fails on ed6c0b44. Find the cause, using the session above and the verified boundary shape. Candidates:
+     - the hook client vs server split around `PrepareCodexTelemetry`/`harnez_context`;
+     - JSON field names in `codexEvidence.Compact`;
+     - time comparison or parsing.
+2. Fix it. The test must then pass, with no assertion weakened.
+3. The hook path must honour an isolated HOME/data dir, or document why it does not. A test proves that the M1b tests never write to the real data dir. Simplest is an env override that tests set.
+4. Live check, run by the host after the commit. Leave the session in a state where `harnez agent compact` can run.
+5. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m1b.log`, one run only. If that run fails, fix it, rerun only the touched packages, and report that the full run is owed. Commit as `fix(compact): … (issue 1303 M1b)`. Never amend.
