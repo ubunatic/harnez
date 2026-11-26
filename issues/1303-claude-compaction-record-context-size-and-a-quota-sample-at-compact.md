@@ -1,6 +1,6 @@
 # 1303 — Claude compaction: record context size and a quota sample at compact
 
-**Status**: Open
+**Status**: Closed — Live compaction 102474->14061 on a Haiku worker: PostCompact row 863 filled with tokens and model at retry:1 by the collector's deferred fill (Claude writes the boundary after PostCompact returns), economics 51237 µ$ at the >100k tier rate, quota sample 2537 (compact-fetch, fresh), hook 109ms; summary text redacted before post/spool; q1 83 ok 0 FAIL. Open LOW: timer armed after StopClaudeFills, 8MiB read bound unmeasured, #1302 report does not yet consume compact samples.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
