@@ -97,3 +97,34 @@ The developer's plan is accepted with the following decisions and changes.
 10. **Commit split.** Commit M1 as two commits, so the review can take them separately:
     - first the prerequisites (`fix(usage): ... (issue 1302 M1)`);
     - then the report (`feat(usage): ... (issue 1302 M1)`).
+
+## M1 review (host)
+
+M1 was delivered in two commits: the prerequisites (6e0406e3) and the range report (62653884).
+
+**What is right**
+- The prerequisites are correct. The jitter and fallback-model tests assert real behaviour.
+- Pricing matches on real data. Session 2e83cba8 is 2 in, 11422 read, 8764 write and 4 out, which is $0.0019. That equals the hand-checked #1301 M4 canary of 1869 µUSD.
+- Nested subagent transcripts are included, and the message-id dedupe works. A 7-day run over 730 MB of transcripts takes 2 s.
+
+**What is wrong (real run, `harnez usage history report --since 7d`)**
+- The quota side uses no Claude data at all. The totals are impossible: weekly rise 1213 pp, attributed 808 pp, and a single session showing 79% for $0.48.
+- Cause 1: `weeklyGroups` does not filter on `QuotaHistoryEntry.Agent` or `Group`. It reads agy (Antigravity) weekly windows instead, mixing "Claude and GPT models" (12%) with "Gemini Models" (0%). Their `reset_at` is null on both, so they fall into one group, and the series alternates 0↔12.
+- Cause 2: Claude's history window name is `"Weekly (7-day)"` (`internal/usage/claude.go:174`, `:240`). `IsWeeklyQuotaWindow` matches only `weekly` / `seven_day`, so no Claude sample is ever used.
+- The tests stayed green because their fixtures do not have the real history shape.
+
+## M2 pre-work (do first, before the hourly factor)
+
+1. **Claude only, one series at a time.** Select samples with `agent == "claude"`. Build each series from (agent, group, window) and never mix series. Recognise the Claude weekly window by the name the writer uses: reference the same constant or helper behind `claude.go:174`/`:240`, and never copy the string.
+2. **Fixtures in the real shape.** Copy the field shapes from the live file, never its content:
+   - `agent`, `group: null`, `window: "Weekly (7-day)"`;
+   - `reset_at` drifting between `10:59:59.698` and `11:00:00` across samples;
+   - interleaved `Session (5-hour)` and `tokens` rows;
+   - interleaved agy rows with null `reset_at` and two groups.
+   The test must fail on 62653884.
+3. **Invariant tests on Build.** For every window, the sum of session shares plus not-explained equals the rise. A rise is ≤ 100 pp per window. No session's quota % exceeds the window's rise.
+4. **A fall that is not a reset** (e.g. 70 → 69 → 71) must not create a 2 pp rise out of 1. Measure from the highest value seen so far in the window, and add a test.
+5. **Plausibility check before commit.** Run the installed report on real data, `--since 7d` and `--window weekly`. Quote the totals line and the weekly rise. The rise must be close to the Claude weekly `used_percent` change over the range: the live file reads about 66–71% on 2026-11-26.
+6. Then M2 as planned (ticket "Plan turn review" item 2): the per-local-hour factor with its sample count, "n/a" for hours without data, a sparkline, and `series` in `--json`.
+
+Owner decision 2026-11-26: the `~/.harnez/config.yaml` Haiku 200k override **stays** after the sprint.
