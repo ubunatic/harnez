@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // line is one transcript assistant line with usage (fixture, no real data).
@@ -36,7 +37,7 @@ func TestScanCallsDedupesNestedFiles(t *testing.T) {
 		line("m2", "claude-opus-5-5", "2026-11-13T10:02:00Z", 7))
 	writeFile(t, nested, line("m1", "claude-haiku-5-5", "2026-11-13T10:01:02Z", 12)+
 		line("m3", "claude-haiku-5-5", "2026-11-13T10:03:00Z", 1))
-	calls, err := ScanCalls(projects)
+	calls, err := ScanCalls(projects, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func TestScanCallsSkipsNonCalls(t *testing.T) {
 	noID := `{"type":"assistant","timestamp":"2026-11-13T10:00:00Z","message":{"model":"claude-haiku-5-5","usage":{"input_tokens":9,"output_tokens":9}}}` + "\n"
 	user := `{"type":"user","timestamp":"2026-11-13T10:00:00Z","message":{"id":"u","content":"hi"}}` + "\n"
 	writeFile(t, filepath.Join(projects, "-w", "s2.jsonl"), zero+noID+user+"not json\n")
-	calls, err := ScanCalls(projects)
+	calls, err := ScanCalls(projects, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestScanCallsSkipsNonCalls(t *testing.T) {
 
 // No projects directory means no calls, not an error.
 func TestScanCallsMissingDirectoryIsEmpty(t *testing.T) {
-	calls, err := ScanCalls(filepath.Join(t.TempDir(), "absent"))
+	calls, err := ScanCalls(filepath.Join(t.TempDir(), "absent"), time.Time{})
 	if err != nil || len(calls) != 0 {
 		t.Fatalf("missing dir: calls=%d err=%v, want empty and nil", len(calls), err)
 	}

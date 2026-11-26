@@ -88,8 +88,18 @@ func TestBuildInvariantsPerWindow(t *testing.T) {
 	if rep.RisePct != 11 || rep.UnexplainedPct != 0 {
 		t.Fatalf("rise=%v unexplained=%v, want 11 and 0", rep.RisePct, rep.UnexplainedPct)
 	}
-	if rep.RisePct > 100 {
-		t.Fatalf("rise %v exceeds 100 pp", rep.RisePct)
+	// Each window's rises stay within 100 pp: the first window (before r2) sums
+	// to 6 pp, the second to 5 pp, and neither may exceed 100.
+	var w1, w2 float64
+	for _, iv := range rep.Intervals {
+		if iv.End.Before(t0.Add(time.Hour)) {
+			w1 += iv.DeltaPct
+		} else {
+			w2 += iv.DeltaPct
+		}
+	}
+	if w1 != 6 || w2 != 5 || w1 > 100 || w2 > 100 {
+		t.Fatalf("per-window rises = %v and %v, want 6 and 5, each at most 100 pp", w1, w2)
 	}
 	total := rep.UnexplainedPct
 	for _, r := range rep.Sessions {

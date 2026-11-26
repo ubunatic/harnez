@@ -53,9 +53,12 @@ type SessionRow struct {
 	AttributedCostMicros *int64   `json:"attributed_api_cost_micros_usd,omitempty"`
 	PendingCostMicros    *int64   `json:"pending_api_cost_micros_usd,omitempty"`
 	QuotaPct             *float64 `json:"quota_pct,omitempty"`
-	PlanNetMicros        *int64   `json:"plan_net_micros_usd,omitempty"`
-	PlanGrossMicros      *int64   `json:"plan_gross_micros_usd,omitempty"`
-	Factor               *float64 `json:"subsidy_factor,omitempty"`
+	// UnpricedCalls counts the session's calls without a price (M4): a session
+	// with any has no API, attributed or pending cost and no factor.
+	UnpricedCalls   int      `json:"unpriced_calls,omitempty"`
+	PlanNetMicros   *int64   `json:"plan_net_micros_usd,omitempty"`
+	PlanGrossMicros *int64   `json:"plan_gross_micros_usd,omitempty"`
+	Factor          *float64 `json:"subsidy_factor,omitempty"`
 }
 
 // Options selects the range and the prices. WeeklyPlanMicros nil means the
@@ -71,8 +74,26 @@ type Options struct {
 	// MinSessionQuotaPct is usage_report.min_session_quota_pct: a session with
 	// less attributed quota has no factor (M3).
 	MinSessionQuotaPct float64
+	// MinLocalFactor is usage_report.min_local_factor: a rise whose local cost
+	// over its plan cost is below this is quiet, not explained locally (M4).
+	// Zero turns the check off.
+	MinLocalFactor float64
 	// Location is the zone for the hour of day; nil means the local zone.
 	Location *time.Location
+}
+
+// Buckets is where each priced in-range call's cost lands (M4). Every call is
+// in exactly one bucket, so the five sum to the total priced API cost. Attributed
+// is inside a rise that got a share. Quiet is inside a rise below
+// min_local_factor. BeforeFirst is before a window's first quota sample.
+// AfterOlder is after the last rise of an older window. Pending is after the
+// newest window's last rise (or outside every window).
+type Buckets struct {
+	Attributed  int64 `json:"attributed_api_cost_micros_usd"`
+	Quiet       int64 `json:"quiet_rise_api_cost_micros_usd"`
+	BeforeFirst int64 `json:"before_first_sample_api_cost_micros_usd"`
+	AfterOlder  int64 `json:"after_older_window_api_cost_micros_usd"`
+	Pending     int64 `json:"pending_api_cost_micros_usd"`
 }
 
 // WindowLine is all local calls in range over the whole weekly rise. Other
@@ -102,6 +123,18 @@ type Report struct {
 	Hours []HourRow `json:"hours"`
 	// Series has one point per attributed weekly rise, in time order (M2).
 	Series []SeriesPoint `json:"series"`
+	// Session is the --session filter ("" for all). Hours, Series and Window
+	// always cover all sessions (M4).
+	Session string `json:"session,omitempty"`
+	// PlanPriced is false when the weekly plan price is unknown: no factor.
+	PlanPriced bool `json:"plan_priced"`
+	// SkippedSamples counts Claude weekly rows with no reset_at (M4); they never
+	// join or split a window.
+	SkippedSamples int `json:"skipped_samples_no_reset,omitempty"`
+	// UnpricedCalls counts in-range calls without a price, over all sessions.
+	UnpricedCalls int `json:"unpriced_calls,omitempty"`
+	// Buckets splits the priced in-range API cost (M4), over all sessions.
+	Buckets Buckets `json:"buckets"`
 }
 
 // HourRow is one local hour of day. Nil means n/a: no attributed cost in the

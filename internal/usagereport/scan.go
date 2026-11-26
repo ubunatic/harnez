@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"ubunatic.com/harnez/internal/subagent"
 )
@@ -16,7 +17,7 @@ import (
 // session is the UUID directory or file name, so nested sidechains belong to
 // their parent session. Only file names and the usage fields are used. A
 // missing directory means no calls.
-func ScanCalls(projectsDir string) ([]Call, error) {
+func ScanCalls(projectsDir string, since time.Time) ([]Call, error) {
 	if _, err := os.Stat(projectsDir); os.IsNotExist(err) {
 		return nil, nil
 	}

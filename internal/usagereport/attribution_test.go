@@ -38,8 +38,9 @@ func TestBuildFlatStretchCallsGetTheRise(t *testing.T) {
 		t.Fatalf("intervals = %d, want 1", len(rep.Intervals))
 	}
 	iv := rep.Intervals[0]
-	if !iv.Start.Equal(t0) || !iv.End.Equal(t0.Add(3*time.Hour)) {
-		t.Fatalf("interval %v..%v, want window start %v to the rise at 3h", iv.Start, iv.End, t0)
+	// The first sample (10% at 11:00) is the baseline, so the interval starts there.
+	if !iv.Start.Equal(t0.Add(time.Hour)) || !iv.End.Equal(t0.Add(3*time.Hour)) {
+		t.Fatalf("interval %v..%v, want first sample %v to the rise at 3h", iv.Start, iv.End, t0.Add(time.Hour))
 	}
 	if got := iv.CostMicros["A"]; got != 2_000_000 {
 		t.Fatalf("attributed cost = %d micro-USD, want both flat-stretch calls (2000000)", got)

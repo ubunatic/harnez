@@ -123,7 +123,7 @@ func runUsageReport(w io.Writer, f usageReportFlags) error {
 	if err != nil {
 		return err
 	}
-	calls, err := usagereport.ScanCalls(projectsDir)
+	calls, err := usagereport.ScanCalls(projectsDir, since)
 	if err != nil {
 		return fmt.Errorf("read claude transcripts: %w", err)
 	}
