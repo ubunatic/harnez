@@ -288,3 +288,44 @@ M2 proper (quota sample per compaction), per "Decision (decide mode, plan review
    Tests never reach the live collector or the real usage endpoint.
 6. Name the #1302 consumer in `docs/Telemetry.md`: how the report pairs the API cost between two compaction samples with the quota rise. The report change itself is out of scope unless trivial.
 7. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m2.log`. One or two commits, `fix(compact): …`/`feat(compact): … (issue 1303 M2)`. Never amend. `make install`, then stop for the host's live check.
+
+## M2 review (host): tiers, atomic fill, quota sample work live
+
+M2 delivered: 6345ca28 (input tiers in economics, atomic fill) and f833d576 (one quota sample per Claude compaction). The spec keys are `turn_quota.timeout` 1800ms and `turn_quota.compact_cache_max_age` 5m. q1: 83 ok, 0 FAIL. The changed assertions are equivalent and use the spec value; none is weakened.
+
+Live run, "118926 -> 11802 tokens":
+- **Rows:** PostCompact row 851 has 11802 tokens and model `claude-haiku-5-5`. The fill note says `applied`, `retry:1`.
+- **Economics:** `compaction_cost_micros` 59463 = 118926 × 500000 µ$/M, which is the tier rate (5x base) above 100k. It was 15078 before the fix.
+- **Quota sample:** `turn_quota_boundaries` 2533, boundary `compact`, source `compact-fetch`, fresh, `import_key compact-record:…`. The linked observation 202709 has 5h at 0.10 and weekly at 0.79, which matches `harnez usage`.
+
+Accepted caveats:
+- The sample goroutine is lost if the collector exits mid-sample.
+- The 401 fallback to `claude -p /usage` is the shared fetch's existing behaviour.
+- AGY's timeout is still a constant, which is out of scope.
+
+## M1 one-shot review (neon:med, 3m10s): findings
+
+A neon:med reviewer covered `bc074577..fbe30687`. Host check:
+- **HIGH privacy, confirmed in code** (`codex_telemetry.go:52`): PostCompact payloads keep `compact_summary`/`custom_instructions`. They are sent to the collector and, if it is unreachable, spooled to disk by `PostTelemetry` (`client.go:43`).
+  - The live spool files checked are command-run records, not compaction payloads; their key names were checked, not their values.
+- **HIGH:** fill timers are not stopped on collector shutdown.
+- **MED:**
+  - A sidechain or other-session boundary can be applied (`claude_compact.go:88`).
+  - The transcript read is unbounded.
+  - Fire and on-event fills are not serialized; a corrupt pending file is never removed; orphaned pending files are never removed.
+  - `TestClaudeFillWritesOnceAcrossRepeatedRetries` does not reach the `total_tokens IS NULL` guard.
+- **LOW:** hook tests lack `isolateHookEnv`; ns vs ms timestamp comparison.
+
+## M3 pre-work (review fixes)
+
+1. Drop `compact_summary` and `custom_instructions` from the payload before `json.Marshal` in `PrepareCodexTelemetry`, so they are never posted or spooled. Test: the prepared bytes contain neither key, but evidence still records `Claude=true`.
+2. Fill lifecycle:
+   - Keep the timers in the server and stop them in shutdown, with a test.
+   - A second PostCompact for a session replaces (stops) the earlier timers.
+   - One mutex serializes fire and on-event.
+   - Remove a corrupt pending file, writing a diagnostic note.
+   - On collector start, drop pending files older than the schedule.
+3. `scanClaudeCompact`: skip sidechain boundaries and boundaries whose `sessionId` is not the hook's session. Tests: near-miss boundaries for sidechain, foreign session and older session.
+4. Bound the transcript read with a spec key, for example a `claude_compact.max_transcript_bytes` that reads only the tail, with a schema entry. Compare timestamps at ms precision, truncating the PreCompact time to ms. Test the equal-ms case.
+5. The repeat-retry test must reach the `total_tokens IS NULL` guard: restore the pending file, then refire, and assert one write. Add `isolateHookEnv` to `cmd/harnez/claude_compact_hook_test.go`.
+6. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m3.log`. Commit as `fix(compact): … (issue 1303 M3)`. Never amend. `make install`, then stop.
