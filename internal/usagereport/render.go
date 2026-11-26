@@ -31,7 +31,7 @@ func RenderText(w io.Writer, rep Report, unexplainedTolerancePct float64) error 
 			r.Session, r.Calls, r.Input, r.Output, r.CacheRead, r.CacheWrite,
 			money(r.APICostMicros), money(r.AttributedCostMicros), money(r.PendingCostMicros),
 			percent(r.QuotaPct), money(r.PlanNetMicros), money(r.PlanGrossMicros),
-			sessionFactor(r, rep.MinSessionQuotaPct))
+			sessionFactor(r, rep))
 	}
 	t := rep.Totals
 	fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
@@ -45,9 +45,18 @@ func RenderText(w io.Writer, rep Report, unexplainedTolerancePct float64) error 
 		fmt.Fprintf(w, "window (all local calls / weekly rise %.2f pp): API $%s, factor %s; an upper bound on local quota, other machines add to the rise\n",
 			rep.Window.RisePct, money(&rep.Window.APICostMicros), factor(rep.Window.Factor))
 	}
-	if t.PendingCostMicros != nil && *t.PendingCostMicros > 0 {
-		fmt.Fprintf(w, "pending: API $%s after the last quota rise (no quota step yet); no share, not in the factor\n",
-			money(t.PendingCostMicros))
+	if b := rep.Buckets; b.BeforeFirst+b.AfterOlder+b.Pending+b.Quiet > 0 {
+		fmt.Fprintf(w, "not in a quota rise: before first quota sample $%s, after an older window $%s, pending (no quota step yet) $%s, quiet rises (below min_local_factor) $%s; no share, not in the factor\n",
+			money(&b.BeforeFirst), money(&b.AfterOlder), money(&b.Pending), money(&b.Quiet))
+	}
+	if rep.Session != "" {
+		fmt.Fprintf(w, "--session %s: the window, hours and series cover all sessions\n", rep.Session)
+	}
+	if rep.SkippedSamples > 0 {
+		fmt.Fprintf(w, "skipped samples: %d Claude weekly rows without reset_at (they never join or split a window)\n", rep.SkippedSamples)
+	}
+	if rep.UnpricedCalls > 0 {
+		fmt.Fprintf(w, "unpriced calls: %d (no price); their sessions show n/a for API $, ATTRIB $, PENDING $ and FACTOR\n", rep.UnpricedCalls)
 	}
 	fmt.Fprintln(w, "legend: ATTRIB $ = API cost of calls in a quota rise (the factor's base); FACTOR = ATTRIB $ / plan net for the same quota %")
 	if len(rep.Intervals) == 0 {
@@ -133,11 +142,12 @@ func percent(v *float64) string {
 	return fmt.Sprintf("%.2f", *v)
 }
 
-// sessionFactor prints a session's factor, or "n/a (< N pp)" when the session's
-// attributed quota is below the threshold (usage_report.min_session_quota_pct).
-func sessionFactor(r SessionRow, minPct float64) string {
-	if r.Factor == nil && r.QuotaPct != nil && *r.QuotaPct < minPct {
-		return fmt.Sprintf("n/a (< %g pp)", minPct)
+// sessionFactor prints a session's factor. Without a plan price it is a plain
+// "n/a". With a plan price, "n/a (< N pp)" marks a session whose attributed quota
+// is below the threshold (usage_report.min_session_quota_pct).
+func sessionFactor(r SessionRow, rep Report) string {
+	if r.Factor == nil && rep.PlanPriced && r.QuotaPct != nil && *r.QuotaPct < rep.MinSessionQuotaPct {
+		return fmt.Sprintf("n/a (< %g pp)", rep.MinSessionQuotaPct)
 	}
 	return factor(r.Factor)
 }

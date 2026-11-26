@@ -8,12 +8,11 @@ import (
 )
 
 // ClaudeTranscriptCall is one Claude API call read from a session transcript
-// (~/.claude/projects/<dir>/<id>.jsonl). Model is the call's own message.model,
-// so the call is priced by the model that served it (ticket 1302 M1).
+// (~/.claude/projects/<dir>/<id>.jsonl). Usage.Model is the call's own
+// message.model, so the call is priced by the model that served it (ticket 1302 M1).
 type ClaudeTranscriptCall struct {
 	MessageID string
 	At        time.Time
-	Model     string
 	Usage     RequestUsage
 }
 
@@ -33,8 +32,9 @@ type claudeTranscriptLine struct {
 // one carries the final counts; output tokens only grow while streaming, so the
 // line with the most output wins (the same final usage parseClaude keeps).
 // Lines without usage, all-zero usage, or without a message id are skipped;
-// a call with no timestamp keeps a zero At and is never attributed.
-func ParseClaudeTranscriptCalls(data []byte) []ClaudeTranscriptCall {
+// a call with no timestamp keeps a zero At and is never attributed. A line over
+// 16 MiB is an error: the calls after it would be silently lost.
+func ParseClaudeTranscriptCalls(data []byte) ([]ClaudeTranscriptCall, error) {
 	var calls []ClaudeTranscriptCall
 	index := map[string]int{}
 	sc := bufio.NewScanner(bytes.NewReader(data))
@@ -53,7 +53,7 @@ func ParseClaudeTranscriptCalls(data []byte) []ClaudeTranscriptCall {
 			continue
 		}
 		at, _ := time.Parse(time.RFC3339Nano, e.Timestamp)
-		call := ClaudeTranscriptCall{MessageID: e.Message.ID, At: at, Model: e.Message.Model, Usage: u.requestUsage(e.Message.Model)}
+		call := ClaudeTranscriptCall{MessageID: e.Message.ID, At: at, Usage: u.requestUsage(e.Message.Model)}
 		if i, seen := index[call.MessageID]; seen {
 			if call.Usage.Output >= calls[i].Usage.Output {
 				calls[i] = call
@@ -63,5 +63,8 @@ func ParseClaudeTranscriptCalls(data []byte) []ClaudeTranscriptCall {
 		index[call.MessageID] = len(calls)
 		calls = append(calls, call)
 	}
-	return calls
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	return calls, nil
 }

@@ -27,9 +27,11 @@ type Call struct {
 }
 
 // Interval is one rise of the weekly quota between two quota-history samples
-// of the same window. Share is each session's percentage points of the rise,
-// split by its API cost in the interval; an interval with no priced call is
-// not attributed and counts as "not explained locally".
+// of the same window. Start runs from the previous rise, or the window's first
+// sample (the window start when that sample is 0%); it is clamped to --since
+// for display. Share is each session's percentage points of the rise, split by
+// its API cost in the rise; a rise with no priced call, or a quiet one (below
+// min_local_factor), is not attributed and counts as "not explained locally".
 type Interval struct {
 	Start      time.Time          `json:"start"`
 	End        time.Time          `json:"end"`
@@ -87,7 +89,8 @@ type Options struct {
 // is inside a rise that got a share. Quiet is inside a rise below
 // min_local_factor. BeforeFirst is before a window's first quota sample.
 // AfterOlder is after the last rise of an older window. Pending is after the
-// newest window's last rise (or outside every window).
+// newest window's last rise, outside every window, or inside a rise that ends
+// after --until (that rise is outside the range).
 type Buckets struct {
 	Attributed  int64 `json:"attributed_api_cost_micros_usd"`
 	Quiet       int64 `json:"quiet_rise_api_cost_micros_usd"`
@@ -157,36 +160,83 @@ type SeriesPoint struct {
 	Factor        *float64  `json:"subsidy_factor,omitempty"`
 }
 
+// inRise is a rise inside the range with the priced calls assigned to it.
+type inRise struct {
+	iv    Interval
+	calls []Call
+}
+
 // Build computes the report from calls and quota-history samples. Calls outside
-// [Since, Until] are ignored, and so are intervals that are not fully inside it.
-// Attribution uses every session's calls; Session only narrows the rows.
+// [Since, Until] are ignored. A rise is kept when it ends inside the range;
+// attribution uses every session's calls, and Session only narrows the rows.
 func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report {
-	rep := Report{Since: opts.Since, Until: opts.Until, Sessions: []SessionRow{}}
+	rep := Report{Since: opts.Since, Until: opts.Until, Sessions: []SessionRow{}, Session: opts.Session, PlanPriced: opts.WeeklyPlanMicros != nil}
 	var inRange []Call
 	for _, c := range calls {
 		if c.At.IsZero() || c.At.Before(opts.Since) || c.At.After(opts.Until) {
 			continue
 		}
 		c.CostMicros = priceCall(opts.Catalog, c)
+		if c.CostMicros == nil {
+			rep.UnpricedCalls++
+		}
 		inRange = append(inRange, c)
 	}
-	for _, iv := range weeklyIntervals(samples, opts.ResetTolerance) {
-		if iv.End.Before(opts.Since) || iv.End.After(opts.Until) {
+	tl := buildTimeline(samples, opts.ResetTolerance)
+	rep.SkippedSamples = tl.skipped
+	keep := func(iv Interval) bool { return !iv.End.Before(opts.Since) && !iv.End.After(opts.Until) }
+
+	// Every priced call lands in exactly one bucket (M4 item 3): a kept rise's
+	// calls are attributed below, the rest are binned by the span that holds them.
+	riseCalls := make([][]Call, len(tl.rises))
+	for _, c := range inRange {
+		if c.CostMicros == nil {
 			continue
 		}
-		attribute(&iv, inRange)
+		cost := *c.CostMicros
+		sp, ok := tl.spanAt(c.At)
+		switch {
+		case ok && sp.kind == spanRise && keep(tl.rises[sp.rise]):
+			riseCalls[sp.rise] = append(riseCalls[sp.rise], c)
+		case ok && sp.kind == spanBeforeFirst:
+			rep.Buckets.BeforeFirst += cost
+		case ok && sp.kind == spanAfterOlder:
+			rep.Buckets.AfterOlder += cost
+		default:
+			rep.Buckets.Pending += cost
+		}
+	}
+	var rises []inRise
+	for r, iv := range tl.rises {
+		if !keep(iv) {
+			continue
+		}
+		if iv.Start.Before(opts.Since) {
+			iv.Start = opts.Since
+		}
+		calls := riseCalls[r]
+		attribute(&iv, calls, opts)
+		var total int64
+		for _, c := range calls {
+			total += *c.CostMicros
+		}
+		if iv.Attributed {
+			rep.Buckets.Attributed += total
+		} else {
+			rep.Buckets.Quiet += total
+		}
 		rep.Intervals = append(rep.Intervals, iv)
+		rises = append(rises, inRise{iv: iv, calls: calls})
 		rep.RisePct += iv.DeltaPct
 		if !iv.Attributed {
 			rep.UnexplainedPct += iv.DeltaPct
 		}
 	}
 	rep.Unexplained = rep.UnexplainedPct > opts.UnexplainedTolerancePct
-	rep.Series, rep.Hours = hourlyView(rep.Intervals, inRange, opts)
+	rep.Series, rep.Hours = hourlyView(rises, opts)
 
 	rows := map[string]*SessionRow{}
 	costs := map[string]int64{}
-	unpriced := map[string]bool{}
 	var order []string
 	for _, c := range inRange {
 		row, ok := rows[c.Session]
@@ -197,18 +247,18 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		}
 		addTokens(row, c)
 		if c.CostMicros == nil {
-			unpriced[c.Session] = true
+			row.UnpricedCalls++
 		} else {
 			costs[c.Session] += *c.CostMicros
 		}
 	}
 	pct := map[string]float64{}
 	attributed := map[string]int64{}
-	for _, iv := range rep.Intervals {
-		for s, share := range iv.Share {
+	for _, r := range rises {
+		for s, share := range r.iv.Share {
 			pct[s] += share
 		}
-		for s, c := range iv.CostMicros {
+		for s, c := range r.iv.CostMicros {
 			attributed[s] += c
 		}
 	}
@@ -223,9 +273,8 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 			continue
 		}
 		row := rows[s]
-		if unpriced[s] {
-			row.APICostMicros = nil
-		} else {
+		priced := row.UnpricedCalls == 0
+		if priced {
 			cost := costs[s]
 			row.APICostMicros = &cost
 		}
@@ -234,13 +283,11 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 			totalPct += p
 			anyAttributed = true
 		}
-		if hasHistory {
+		if hasHistory && priced {
 			a := attributed[s]
+			pend := costs[s] - a
 			row.AttributedCostMicros = &a
-			if !unpriced[s] {
-				pend := costs[s] - a
-				row.PendingCostMicros = &pend
-			}
+			row.PendingCostMicros = &pend
 		}
 		finishPlan(row, opts, true)
 		rep.Sessions = append(rep.Sessions, *row)
@@ -249,7 +296,7 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		rep.Totals.Output += row.Output
 		rep.Totals.CacheRead += row.CacheRead
 		rep.Totals.CacheWrite += row.CacheWrite
-		totalUnpriced = totalUnpriced || unpriced[s]
+		totalUnpriced = totalUnpriced || !priced
 		totalCost += costs[s]
 		totalAttr += attributed[s]
 	}
@@ -273,11 +320,11 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 	return rep
 }
 
-// hourlyView splits each attributed rise across its priced calls by cost, as
-// attribute does, and credits each call's share to the local hour of that call.
-// It returns one series point per attributed rise and the 24 hour rows. An
-// hour's factor is its API cost over its quota share times the weekly plan.
-func hourlyView(intervals []Interval, calls []Call, opts Options) ([]SeriesPoint, []HourRow) {
+// hourlyView credits each attributed rise's priced calls to their local hour,
+// split by cost as attribute does. It returns one series point per attributed
+// rise and the 24 hour rows. An hour's factor is its API cost over its quota
+// share times the weekly plan.
+func hourlyView(rises []inRise, opts Options) ([]SeriesPoint, []HourRow) {
 	loc := opts.Location
 	if loc == nil {
 		loc = time.Local
@@ -287,7 +334,8 @@ func hourlyView(intervals []Interval, calls []Call, opts Options) ([]SeriesPoint
 	var hourSeen [24]bool
 	var hourSamples [24]int
 	var series []SeriesPoint
-	for _, iv := range intervals {
+	for _, r := range rises {
+		iv := r.iv
 		if !iv.Attributed {
 			continue
 		}
@@ -300,10 +348,7 @@ func hourlyView(intervals []Interval, calls []Call, opts Options) ([]SeriesPoint
 			Factor: factorOf(total, iv.DeltaPct, opts.WeeklyPlanMicros),
 		})
 		var touched [24]bool
-		for _, c := range calls {
-			if c.CostMicros == nil || !c.At.After(iv.Start) || c.At.After(iv.End) {
-				continue
-			}
+		for _, c := range r.calls {
 			h := c.At.In(loc).Hour()
 			hourCost[h] += *c.CostMicros
 			hourPct[h] += iv.DeltaPct * float64(*c.CostMicros) / float64(total)
@@ -385,19 +430,21 @@ func windowLine(risePct float64, calls []Call, hasHistory bool, opts Options) *W
 	return &WindowLine{APICostMicros: cost, RisePct: risePct, Factor: factorOf(cost, risePct, opts.WeeklyPlanMicros)}
 }
 
-// attribute splits the interval's rise across sessions by their priced API cost
-// inside (Start, End].
-func attribute(iv *Interval, calls []Call) {
+// attribute splits a rise across sessions by the priced API cost of the calls
+// assigned to it. A rise with no priced call is not attributed. A quiet rise
+// (local cost below min_local_factor of its plan cost, M4 item 5) is not
+// attributed either: it gets no share and the caller counts its cost as quiet.
+func attribute(iv *Interval, calls []Call, opts Options) {
 	var total int64
 	costs := map[string]int64{}
 	for _, c := range calls {
-		if c.CostMicros == nil || !c.At.After(iv.Start) || c.At.After(iv.End) {
-			continue
-		}
 		costs[c.Session] += *c.CostMicros
 		total += *c.CostMicros
 	}
 	if total == 0 {
+		return
+	}
+	if f := factorOf(total, iv.DeltaPct, opts.WeeklyPlanMicros); f != nil && *f < opts.MinLocalFactor {
 		return
 	}
 	iv.Attributed = true
@@ -440,13 +487,20 @@ func isClaudeWeekly(s usage.QuotaHistoryEntry) bool {
 
 // weeklyGroups orders the weekly samples and groups them into windows: a
 // sample joins the previous one's window when their reset_at agree within the
-// tolerance. An exact duplicate row is dropped.
-func weeklyGroups(samples []usage.QuotaHistoryEntry, tol time.Duration) [][]usage.QuotaHistoryEntry {
+// tolerance. An exact duplicate row is dropped. A row without reset_at is not
+// a window member: it is counted and skipped (M4 item 2).
+func weeklyGroups(samples []usage.QuotaHistoryEntry, tol time.Duration) ([][]usage.QuotaHistoryEntry, int) {
 	var weekly []usage.QuotaHistoryEntry
+	skipped := 0
 	for _, s := range samples {
-		if isClaudeWeekly(s) {
-			weekly = append(weekly, s)
+		if !isClaudeWeekly(s) {
+			continue
 		}
+		if s.ResetAt == nil {
+			skipped++
+			continue
+		}
+		weekly = append(weekly, s)
 	}
 	sort.SliceStable(weekly, func(i, j int) bool { return weekly[i].Timestamp.Before(weekly[j].Timestamp) })
 	var groups [][]usage.QuotaHistoryEntry
@@ -464,32 +518,87 @@ func weeklyGroups(samples []usage.QuotaHistoryEntry, tol time.Duration) [][]usag
 		}
 		groups = append(groups, []usage.QuotaHistoryEntry{s})
 	}
-	return groups
+	return groups, skipped
 }
 
-// weeklyIntervals returns the rises of each window, measured from the highest
-// value seen so far in that window: a dip and recovery (70, 69, 71) is one
-// 1 pp rise, not a 2 pp rise from the dip. A reset is a new window, so no
-// interval crosses it.
-//
-// An interval runs from the previous rise (or the window start for the first
-// rise) to the sample that rises, so the calls made during a flat stretch fall
-// into the rise that ends it (M3). The first sample is the baseline: quota used
-// before it is not measured.
-func weeklyIntervals(samples []usage.QuotaHistoryEntry, tol time.Duration) []Interval {
-	var out []Interval
-	for _, g := range weeklyGroups(samples, tol) {
+// spanKind names what a stretch of a window's timeline means for the calls in it.
+type spanKind int
+
+const (
+	spanBeforeFirst spanKind = iota // before a window's first sample (non-zero baseline)
+	spanRise                        // from the previous rise (or the baseline) to a rise
+	spanAfterOlder                  // after an older window's last rise, up to the next window
+	spanPending                     // after the newest window's last rise: the open tail
+)
+
+// span is the half-open stretch [from, to) of the timeline; an open span runs on
+// with no end. rise indexes timeline.rises for spanRise and is -1 otherwise.
+type span struct {
+	from, to time.Time
+	open     bool
+	kind     spanKind
+	rise     int
+}
+
+// timeline is every window's rises and spans before any range filter. skipped
+// counts Claude weekly rows without reset_at.
+type timeline struct {
+	rises   []Interval
+	spans   []span // sorted by from
+	skipped int
+}
+
+// buildTimeline measures each window's rises from its running peak (a dip and
+// recovery is one rise, not two) and tiles each window's extent with spans: the
+// stretch before a non-zero first sample, one stretch per rise, and the tail
+// after the last rise, which ends at the next window's start (the newest window's
+// tail is open). A reset is a new window, so no span crosses it.
+func buildTimeline(samples []usage.QuotaHistoryEntry, tol time.Duration) timeline {
+	groups, skipped := weeklyGroups(samples, tol)
+	tl := timeline{skipped: skipped}
+	for gi, g := range groups {
+		ws := windowStart(g)
+		// The first sample is the baseline: quota used before it is not measured,
+		// unless it is 0%, when the window started with nothing used.
+		cur := g[0].Timestamp
+		if g[0].UsedPercent == 0 {
+			cur = ws
+		} else if ws.Before(cur) {
+			tl.spans = append(tl.spans, span{from: ws, to: cur, kind: spanBeforeFirst, rise: -1})
+		}
 		peak := g[0]
-		start := windowStart(g)
 		for _, b := range g[1:] {
 			if !b.Timestamp.After(peak.Timestamp) || b.UsedPercent <= peak.UsedPercent {
 				continue
 			}
-			out = append(out, Interval{Start: start, End: b.Timestamp, DeltaPct: float64(b.UsedPercent - peak.UsedPercent)})
-			peak, start = b, b.Timestamp
+			tl.rises = append(tl.rises, Interval{Start: cur, End: b.Timestamp, DeltaPct: float64(b.UsedPercent - peak.UsedPercent)})
+			tl.spans = append(tl.spans, span{from: cur, to: b.Timestamp, kind: spanRise, rise: len(tl.rises) - 1})
+			peak, cur = b, b.Timestamp
+		}
+		if gi+1 < len(groups) {
+			if next := windowStart(groups[gi+1]); next.After(cur) {
+				tl.spans = append(tl.spans, span{from: cur, to: next, kind: spanAfterOlder, rise: -1})
+			}
+		} else {
+			tl.spans = append(tl.spans, span{from: cur, open: true, kind: spanPending, rise: -1})
 		}
 	}
-	return out
+	sort.SliceStable(tl.spans, func(i, j int) bool { return tl.spans[i].from.Before(tl.spans[j].from) })
+	return tl
+}
+
+// spanAt returns the span that holds t: the last span starting at or before t,
+// when t is before its end. The second result is false when no span covers t.
+func (tl timeline) spanAt(t time.Time) (span, bool) {
+	i := sort.Search(len(tl.spans), func(i int) bool { return tl.spans[i].from.After(t) }) - 1
+	if i < 0 {
+		return span{}, false
+	}
+	sp := tl.spans[i]
+	if sp.open || t.Before(sp.to) {
+		return sp, true
+	}
+	return span{}, false
 }
 
 // windowStart is a window's first instant: its reset_at minus seven days, or
@@ -507,7 +616,7 @@ func windowStart(g []usage.QuotaHistoryEntry) time.Time {
 // WeeklyWindowStart returns the start of the newest weekly window: its reset_at
 // minus seven days. It reports false when there is no weekly history.
 func WeeklyWindowStart(samples []usage.QuotaHistoryEntry, tol time.Duration) (time.Time, bool) {
-	groups := weeklyGroups(samples, tol)
+	groups, _ := weeklyGroups(samples, tol)
 	if len(groups) == 0 {
 		return time.Time{}, false
 	}

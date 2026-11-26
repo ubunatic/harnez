@@ -189,9 +189,6 @@ func SameResetMarker(a, b *time.Time, tolerance time.Duration) bool {
 	return sameResetMarker(a, b, tolerance)
 }
 
-// IsWeeklyQuotaWindow reports whether a quota window key is the weekly window.
-func IsWeeklyQuotaWindow(key string) bool { return isWeeklyQuotaKey(key) }
-
 // WeeklyPlanMicros prorates a monthly plan price to one week: monthly * 12 / 52
 // (ticket 1215), the value turn quota shares are computed from.
 func WeeklyPlanMicros(monthlyUSDMicros int64) int64 { return (monthlyUSDMicros * 12) / 52 }
