@@ -1,6 +1,6 @@
 # 1304 — harnez apply: one hook entry per agent event, dispatch inside harnez
 
-**Status**: Open
+**Status**: Closed — Delivered: apply writes 8 Claude (harnez hook <Event>) and 7 Codex (harnez hook codex <Event>) entries from spec/hooks.yaml; q1 83 ok/0 FAIL; host make smoke on real HOME passed with non-hook settings unchanged; Codex PreToolUse byte-identical to old codex-hook
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor

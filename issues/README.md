@@ -61,5 +61,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1296 | [1296-decide-skill-decide-everything-in-session-no-still-open-or-kept-for-your-choice-lists-consult-advisors-for-medium-and-high-decisions.md](1296-decide-skill-decide-everything-in-session-no-still-open-or-kept-for-your-choice-lists-consult-advisors-for-medium-and-high-decisions.md) | decide skill: decide everything in-session, no Still Open or Kept-for-your-choice lists, consult advisors for medium and high decisions | Open |
 | 1297 | [1297-add-direct-tests-for-debug-logging.md](1297-add-direct-tests-for-debug-logging.md) | Add direct tests for debug logging | Open |
 | 1303 | [1303-claude-compaction-record-context-size-and-a-quota-sample-at-compact.md](1303-claude-compaction-record-context-size-and-a-quota-sample-at-compact.md) | Claude compaction: record context size and a quota sample at compact | Open |
-| 1304 | [1304-harnez-apply-one-hook-entry-per-agent-event-dispatch-inside-harnez.md](1304-harnez-apply-one-hook-entry-per-agent-event-dispatch-inside-harnez.md) | harnez apply: one hook entry per agent event, dispatch inside harnez | Open |
 <!-- harnez:end issues-active-index -->
