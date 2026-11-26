@@ -265,17 +265,35 @@ id, the final streamed usage kept. Each call is priced by its own model
 window in `quota-history.jsonl` (agent `claude`, no group, window
 `usage.ClaudeWeeklyWindowName`), grouped into windows by `reset_at` within
 `turn_quota_pairing.reset_tolerance`. A rise is measured from the highest value
-seen in its window, so a dip and recovery is not counted twice. A rise is split
-across the sessions with priced calls in its interval, by API cost. A rise with
-no priced call is "not explained locally" when it exceeds
-`usage_report.unexplained_tolerance_pct`. Plan cost is the share times the
-weekly plan price (net); gross adds `plan_vat_rate`. Unpriced or unknown values
-print `n/a`, never 0.
+seen in its window, so a dip and recovery is not counted twice. Each rise is
+attributed over its interval: from the previous rise (or the window start, or
+the range start for the first) up to the rising sample, so calls in flat
+stretches count. The rise is split across the sessions with priced calls in
+that interval, by API cost. A rise with no priced call is "not explained
+locally" when the unexplained total exceeds `usage_report.unexplained_tolerance_pct`.
+Plan cost is the share times the weekly plan price (net); gross adds
+`plan_vat_rate`. Unpriced or unknown values print `n/a`, never 0.
+
+Text columns: `API $` is all priced calls of the session; `ATTRIB $` is the API
+cost of calls inside a rise; `PENDING $` is the API cost of calls after the last
+rise (no quota step yet). Pending calls get no share and are not in any factor,
+so `ATTRIB $ + PENDING $ = API $`. `QUOTA %` is the attributed pp. A session
+with less attributed quota than `usage_report.min_session_quota_pct` prints
+`n/a (< N pp)` as its factor; its plan cost still prints.
+
+Factor bases (one base throughout): a factor is `ATTRIB $` over the plan net of
+the same quota pp (`pp / 100 x weekly plan`). The totals row uses the totals'
+attributed cost over the total attributed pp. The `window` line is all local
+calls in range over the whole weekly rise (`API $` of all calls / rise pp times
+plan). It is an upper bound on local quota, because other machines add to the
+same rise. Not explained is the weekly rise minus attributed pp; the sum of
+attributed pp and not explained equals the rise.
 
 The text report adds a factor by local hour (24 rows: samples, API $, quota %,
 factor). Each call's share goes to the local hour of the call, so an hour's
-factor is its API cost over its quota share times the weekly plan. A sparkline
-shows the factor of each attributed rise. `--json` carries `hours` and `series`.
+factor is its API cost over its quota share times the weekly plan. `SAMPLES`
+counts attributed rises with a share in that hour. A sparkline shows the factor
+of each attributed rise. `--json` carries `hours`, `series` and `window`.
 
 ## Per-Turn API Cost & Subscription Share (issue 1215)
 
