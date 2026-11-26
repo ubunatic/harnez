@@ -243,6 +243,7 @@ statements:
   compaction_events_has_source: "SELECT count(*) FROM pragma_table_info('compaction_events') WHERE name = 'source'"
   compaction_pair_events: "SELECT event_type, turn_id, trigger, source, created_at FROM compaction_events WHERE session_id = ? AND event_type IN ('precompact', 'postcompact') ORDER BY id"
   compaction_pair_events_legacy: "SELECT event_type, turn_id, trigger, 'hook', created_at FROM compaction_events WHERE session_id = ? AND event_type IN ('precompact', 'postcompact') ORDER BY id"
+  latest_compaction_event_time: "SELECT created_at FROM compaction_events WHERE session_id = ? AND event_type = ? ORDER BY id DESC LIMIT 1"
   compaction_events_add_source: "ALTER TABLE compaction_events ADD COLUMN source TEXT NOT NULL DEFAULT 'hook'"
   insert_compaction_event: "INSERT INTO compaction_events (created_at, session_id, event_type, turn_id, trigger, reason, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, model, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   insert_session_boundary: "INSERT INTO session_boundaries (created_at, session_id, boundary_type, compaction_event_id) VALUES (?, ?, ?, ?)"

@@ -1,7 +1,10 @@
 package telemetry
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
+	"time"
 )
 
 // CompactionPair describes the most recent observed compaction attempt.
@@ -66,4 +69,22 @@ func (d *DB) LatestCompactionPair(sessionID string) (*CompactionPair, error) {
 		return nil, err
 	}
 	return latest, nil
+}
+
+// LatestCompactionEventTime returns the created_at of the newest compaction
+// event of eventType for the session. ok is false when there is none.
+func (d *DB) LatestCompactionEventTime(sessionID, eventType string) (time.Time, bool, error) {
+	var created string
+	err := d.executor().QueryRow(mustTelemetrySQL().Statements["latest_compaction_event_time"], sessionID, eventType).Scan(&created)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("telemetry: latest compaction time: %w", err)
+	}
+	at, err := time.Parse(time.RFC3339Nano, created)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("telemetry: parse compaction time: %w", err)
+	}
+	return at, true, nil
 }

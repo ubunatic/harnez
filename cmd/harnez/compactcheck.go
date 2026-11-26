@@ -1,7 +1,7 @@
 // compactcheck implements `harnez compact-check`, a manual/opt-in comparator
 // for assessing whether a /compact likely dropped information that
-// mattered. See issue 180: Claude Code exposes a PreCompact hook but no
-// PostCompact hook, so there is no host-native signal to watch compaction
+// mattered. See issue 180: the compaction hooks do not hand over the
+// summary, so there is no host-native signal to watch compaction
 // automatically — this command lets a user or agent run the same cheap
 // heuristic manually against two saved transcript/summary snapshots.
 package main
@@ -25,8 +25,9 @@ after — a cheap, no-LLM-call signal that something load-bearing may have
 been lost.
 
 This is a manual command, not automatic watching: Claude Code has a
-PreCompact hook but no PostCompact hook, so harnez has no host-native
-signal to observe the post-compact result on its own. Save the transcript
+PreCompact and PostCompact hooks, which record token counts but not the
+summary, so harnez has no host-native signal to observe the post-compact
+result on its own. Save the transcript
 before compacting (or point --before at a saved copy) and the summary
 after, then run:
 

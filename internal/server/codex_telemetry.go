@@ -36,6 +36,11 @@ func PrepareCodexTelemetry(raw []byte) ([]byte, error) {
 	if hook.TranscriptPath != "" {
 		evidence.Transcript = latestCodexTranscriptTokens(hook.TranscriptPath, e.SessionID)
 	}
+	if e.Kind == "postcompact" && hook.TranscriptPath != "" {
+		// Claude writes its compact boundary to the transcript after PreCompact;
+		// the PostCompact hook reads its token counts (issue 1303 M1).
+		evidence.Compact = readClaudeCompact(hook.TranscriptPath)
+	}
 	payload["harnez_context"], _ = json.Marshal(evidence)
 	return json.Marshal(payload)
 }
@@ -45,6 +50,34 @@ type codexEvidence struct {
 	TicketID   string
 	CreatedAt  time.Time
 	Transcript codex.Event
+	Compact    *claudeCompact
+}
+
+// applyClaudeCompact fills a Claude PostCompact row from the transcript's compact
+// boundary when that boundary follows the session's PreCompact row (issue 1303 M1).
+// The PreCompact snapshot is written here, because ReconcileCompactionEconomics
+// reads token_snapshots. Claude gives no cache split, so the whole context is
+// stored as uncached input: an upper bound, reported as partial pricing.
+// It reports whether a boundary was applied.
+func applyClaudeCompact(db *telemetry.DB, e *codex.Event, compact *claudeCompact) (bool, error) {
+	if compact == nil {
+		return false, nil
+	}
+	preAt, ok, err := db.LatestCompactionEventTime(e.SessionID, "precompact")
+	if err != nil || !ok || compact.Timestamp.Before(preAt) {
+		return false, err
+	}
+	if err := insertClaudeSnapshot(db, e.SessionID, "precompact", nil, compact.PreTokens); err != nil {
+		return false, err
+	}
+	post := compact.PostTokens
+	e.InputTokens, e.TotalTokens = &post, &post
+	e.Model = compact.Model
+	return true, nil
+}
+
+func insertClaudeSnapshot(db *telemetry.DB, sessionID, source string, boundaryID *int64, tokens int64) error {
+	return db.InsertTokenSnapshot(telemetry.TokenSnapshot{CreatedAt: time.Now().UTC(), SessionID: sessionID, Source: source, BoundaryID: boundaryID, InputTokens: &tokens, UncachedInputTokens: &tokens, TotalTokens: &tokens})
 }
 
 func ProcessCodexTelemetry(dbPath string, raw []byte) error {
@@ -75,6 +108,14 @@ func ProcessCodexTelemetryTx(db *telemetry.DB, raw []byte) error {
 	}
 	transcriptUsage := hook.Context.Transcript
 	if e.Kind == "precompact" || e.Kind == "postcompact" {
+		claudeApplied := false
+		if e.Kind == "postcompact" {
+			applied, err := applyClaudeCompact(db, &e, hook.Context.Compact)
+			if err != nil {
+				return err
+			}
+			claudeApplied = applied
+		}
 		id, err := db.InsertCompactionEvent(telemetry.CompactionEvent{CreatedAt: createdAt, SessionID: e.SessionID, EventType: e.Kind, TurnID: e.TurnID, Trigger: e.CompactionTrigger, Reason: e.CompactionReason, InputTokens: e.InputTokens, CachedInputTokens: e.CachedInputTokens, OutputTokens: e.OutputTokens, ReasoningTokens: e.ReasoningTokens, TotalTokens: e.TotalTokens, Model: e.Model})
 		if err != nil {
 			return err
@@ -83,7 +124,11 @@ func ProcessCodexTelemetryTx(db *telemetry.DB, raw []byte) error {
 		if err != nil {
 			return err
 		}
-		if err := insertCodexTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage); err != nil {
+		if claudeApplied {
+			if err := insertClaudeSnapshot(db, e.SessionID, e.Kind, &boundaryID, *e.TotalTokens); err != nil {
+				return err
+			}
+		} else if err := insertCodexTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage); err != nil {
 			return err
 		}
 		if e.Kind == "postcompact" {
