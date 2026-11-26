@@ -13,7 +13,7 @@
     },
     "claude_compact": {
       "type": "object",
-      "required": ["fill_retry"],
+      "required": ["fill_retry", "max_transcript_bytes"],
       "additionalProperties": false,
       "properties": {
         "fill_retry": {
@@ -21,6 +21,11 @@
           "minItems": 1,
           "items": {"type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$"},
           "description": "Pauses after the PostCompact ingest before each re-read of the transcript for Claude's compact boundary, as Go durations"
+        },
+        "max_transcript_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Bytes from the end of the transcript that one compact-boundary read scans; a larger file is read from its tail only"
         }
       }
     },

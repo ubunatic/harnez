@@ -59,6 +59,9 @@ func openRawCompactDB(t *testing.T, dbPath string) *sql.DB {
 }
 
 func TestClaudeCompactFillsRowsModelAndEconomics(t *testing.T) {
+	// Issue 1303 M3: a PreCompact with no boundary arms a fill, so the state dir and
+	// the runtime socket must be the scratch ones.
+	isolateHookEnv(t)
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "telemetry.sqlite")
 	transcript := filepath.Join(dir, "session.jsonl")
@@ -109,6 +112,8 @@ func TestClaudeCompactFillsRowsModelAndEconomics(t *testing.T) {
 }
 
 func TestClaudeCompactNegativeCasesWriteEmptyRows(t *testing.T) {
+	// Issue 1303 M3: the no-boundary cases arm fills; keep them off the real state dir.
+	isolateHookEnv(t)
 	cases := []struct {
 		name       string
 		setup      func(t *testing.T, transcript string)
@@ -166,6 +171,7 @@ func TestClaudeCompactNegativeCasesWriteEmptyRows(t *testing.T) {
 }
 
 func TestClaudeCompactPayloadSecretsNeverPersist(t *testing.T) {
+	isolateHookEnv(t)
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "telemetry.sqlite")
 	transcript := filepath.Join(dir, "session.jsonl")

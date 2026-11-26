@@ -18,8 +18,13 @@ handler_timeout: 40s
 # Claude writes the boundary after PostCompact returns, so the hook never waits for it.
 # fill_retry: the pause after the PostCompact ingest before each re-read of the transcript,
 # in order. When the boundary is still missing after the last pause, the row stays empty.
+# max_transcript_bytes: each read takes only the transcript's last this many bytes, so a
+# long session is not read whole (issue 1303 M3). Unverified: sized from the fill window,
+# not measured. If a real boundary is in the file and the row stays empty with
+# no_boundary, raise it; compact-diagnostics.jsonl shows the reason.
 claude_compact:
   fill_retry: [2s, 10s, 60s]
+  max_transcript_bytes: 8388608
 agents:
   claude:
     command: harnez hook

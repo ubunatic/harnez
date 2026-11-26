@@ -337,6 +337,22 @@ Unverified: the pairing needs the same reuse check as `turn_quota_pairing`
 reading and must not pair), and it is not measured how often two compactions
 fall inside one weekly window with a usable rise.
 
+## Compaction Boundary Fill Lifecycle (issue 1303 M3)
+
+The hook drops `compact_summary` and `custom_instructions` before the payload
+leaves the process, so no compaction text is posted or spooled; only their key
+names reach the diagnostic note. Claude's boundary is read from the transcript's
+last `claude_compact.max_transcript_bytes` bytes (`spec/hooks.yaml`, unverified
+size). The read takes only the session's own non-sidechain boundary.
+
+The fill timers belong to the collector. Each session has at most one timer: a
+second PostCompact stops the first. `StopClaudeFills` stops them all on shutdown,
+and pending records stay on disk. At start, `PruneClaudeFillPending` removes
+records older than the `fill_retry` total and any record that does not decode,
+noting each corrupt one as `pending_corrupt` in `compact-diagnostics.jsonl`. A
+timer's attempt and an event's attempt never run together: the event gives up
+its attempt if a timer holds the lock.
+
 ## Per-Turn API Cost & Subscription Share (issue 1215)
 
 Each completed harnez agent turn records its API list-price estimate and

@@ -26,31 +26,45 @@ const (
 	fillSession                = "claude-fill"
 )
 
-// fakeFill is one armed fill timer: its delay and the callback it would run.
+// fakeFill is one armed fill timer: its id, delay and the callback it would run.
 type fakeFill struct {
+	id    int
 	delay time.Duration
 	fn    func()
 }
 
-// fakeFills replaces claudeFillAfter. Armed timers wait in pending until a test
-// fires them. armed lists every delay in arm order; history keeps every callback.
+// fakeFills replaces claudeFillAfter and the timer registry. Armed timers wait in
+// pending until a test fires them; a stop removes one from pending and counts as a
+// stop. armed lists every delay in arm order; history keeps every callback.
 type fakeFills struct {
 	pending []fakeFill
 	history []fakeFill
 	armed   []time.Duration
 	fires   int
+	stops   int
+	nextID  int
 }
 
 func installFakeFills(t *testing.T) *fakeFills {
 	t.Helper()
 	f := &fakeFills{}
-	prev := claudeFillAfter
-	claudeFillAfter = func(d time.Duration, fn func()) {
+	prev, prevTimers := claudeFillAfter, claudeFills
+	claudeFills = &claudeFillTimers{armed: map[string]armedFill{}}
+	claudeFillAfter = func(d time.Duration, fn func()) func() {
+		f.nextID++
+		id := f.nextID
 		f.armed = append(f.armed, d)
-		f.pending = append(f.pending, fakeFill{d, fn})
-		f.history = append(f.history, fakeFill{d, fn})
+		f.pending = append(f.pending, fakeFill{id, d, fn})
+		f.history = append(f.history, fakeFill{id, d, fn})
+		return func() {
+			n := len(f.pending)
+			f.pending = slices.DeleteFunc(f.pending, func(p fakeFill) bool { return p.id == id })
+			if len(f.pending) != n {
+				f.stops++
+			}
+		}
 	}
-	t.Cleanup(func() { claudeFillAfter = prev })
+	t.Cleanup(func() { claudeFillAfter, claudeFills = prev, prevTimers })
 	return f
 }
 
@@ -289,8 +303,17 @@ func TestClaudeFillWritesOnceAcrossRepeatedRetries(t *testing.T) {
 	processPrepared(t, db, fillRaw("PreCompact", transcript))
 	processPrepared(t, db, fillRaw("PostCompact", transcript))
 	appendTranscriptLine(t, transcript, fmt.Sprintf(claudeBoundaryLineFmt, time.Now().UTC().Format(time.RFC3339Nano), m1dPreTokens, m1dPostTokens))
+	pending, ok := readClaudeFillPending(fillSession)
+	if !ok {
+		t.Fatal("no pending fill before the first retry")
+	}
 	if !fills.fireNext() {
 		t.Fatal("no retry armed")
+	}
+	// Issue 1303 M3: restore the pending record, so the repeat reaches the row
+	// guard (total_tokens IS NULL) instead of returning at the missing record.
+	if err := writeClaudeFillPending(pending); err != nil {
+		t.Fatal(err)
 	}
 
 	fills.history[0].fn()
@@ -304,6 +327,9 @@ func TestClaudeFillWritesOnceAcrossRepeatedRetries(t *testing.T) {
 	}
 	if n := len(filledNotes(t, dbPath)); n != 1 {
 		t.Errorf("applied notes = %d, want 1", n)
+	}
+	if _, ok := readClaudeFillPending(fillSession); ok {
+		t.Error("the repeat left the pending record in place")
 	}
 }
 

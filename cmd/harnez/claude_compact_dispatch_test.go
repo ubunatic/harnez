@@ -38,6 +38,9 @@ func isolateHookEnv(t *testing.T) string {
 	if server.RunnerChannelStatus(cfg) == nil {
 		t.Fatalf("broker FD still valid after clearing %s", cfg.RunnerChannel.FDEnv)
 	}
+	// Issue 1303 M3: a fill armed by a test is stopped when the test ends, so no
+	// real timer fires into the next test's state.
+	t.Cleanup(server.StopClaudeFills)
 	return root
 }
 

@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"ubunatic.com/harnez/internal/hookdispatch"
@@ -20,8 +23,99 @@ import (
 // restarted collector finish the fill. Only a boundary at or after the session's
 // PreCompact time is applied, so an older boundary never fills the row.
 
-// claudeFillAfter arms one fill timer. Tests replace it, so no test sleeps.
-var claudeFillAfter = func(d time.Duration, fn func()) { time.AfterFunc(d, fn) }
+// claudeFillAfter arms one fill timer and returns its stop. Tests replace it, so no
+// test sleeps.
+var claudeFillAfter = func(d time.Duration, fn func()) func() {
+	t := time.AfterFunc(d, fn)
+	return func() { t.Stop() }
+}
+
+// claudeFillMu serializes fill attempts (issue 1303 M3). A timer's attempt takes it
+// with Lock. An event's attempt only TryLocks: it runs inside the event's write
+// transaction, so waiting here could deadlock with the timer's SQLite write.
+var claudeFillMu sync.Mutex
+
+// claudeFills is the collector's registry of armed fill timers, one per session.
+// StopClaudeFills stops them all on shutdown.
+var claudeFills = &claudeFillTimers{armed: map[string]armedFill{}}
+
+// armedFill is one armed timer. gen tells a fired timer whether it is still the
+// session's current one.
+type armedFill struct {
+	gen  uint64
+	stop func()
+}
+
+// claudeFillTimers holds at most one armed timer per session.
+type claudeFillTimers struct {
+	mu    sync.Mutex
+	gen   uint64
+	armed map[string]armedFill
+}
+
+// arm stops the session's previous timer and arms fn after d. Callers never hold mu
+// while they take claudeFillMu, so the lock order is claudeFillMu then mu.
+func (r *claudeFillTimers) arm(sessionID string, d time.Duration, fn func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if prev, ok := r.armed[sessionID]; ok {
+		prev.stop()
+		delete(r.armed, sessionID)
+	}
+	r.gen++
+	gen := r.gen
+	stop := claudeFillAfter(d, func() {
+		r.release(sessionID, gen)
+		fn()
+	})
+	r.armed[sessionID] = armedFill{gen: gen, stop: stop}
+}
+
+// release forgets a timer that has fired, unless the session has re-armed since.
+func (r *claudeFillTimers) release(sessionID string, gen uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if a, ok := r.armed[sessionID]; ok && a.gen == gen {
+		delete(r.armed, sessionID)
+	}
+}
+
+// stopAll stops every armed timer. Pending records stay on disk for the next start.
+func (r *claudeFillTimers) stopAll() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for sessionID, a := range r.armed {
+		a.stop()
+		delete(r.armed, sessionID)
+	}
+}
+
+// StopClaudeFills stops every armed fill timer. The collector calls it on shutdown
+// (issue 1303 M3). It does not clear the pending records: the next start finishes them.
+func StopClaudeFills() {
+	claudeFills.stopAll()
+}
+
+// claudeFillWindow is the total of the fill_retry schedule: a pending record older
+// than this is past every re-read.
+func claudeFillWindow() (time.Duration, error) {
+	schedule, err := hookdispatch.LoadClaudeCompactFillRetry()
+	if err != nil {
+		return 0, err
+	}
+	var window time.Duration
+	for _, d := range schedule {
+		window += d
+	}
+	return window, nil
+}
+
+// claudeFillExpired reports whether a record armed at armedAt is older than window at
+// now. Both times are compared at millisecond precision, the precision the record
+// keeps across a restart (issue 1303 M3).
+func claudeFillExpired(armedAt, now time.Time, window time.Duration) bool {
+	return now.Truncate(time.Millisecond).Sub(armedAt.Truncate(time.Millisecond)) > window
+}
 
 // claudeFillPending is a PostCompact row that still waits for its boundary. It holds
 // ids, times and the hook's key-name diagnostic only, never payload values.
@@ -38,12 +132,14 @@ type claudeFillPending struct {
 
 // claudeBoundaryReason says whether compact belongs to the compaction that started
 // at preAt: applied when it is not older, stale_boundary when it is, and
-// no_boundary when there is none (issue 1303 M1d, M1e).
+// no_boundary when there is none (issue 1303 M1d, M1e). The comparison is at
+// millisecond precision (issue 1303 M3): a boundary in the PreCompact's millisecond
+// is the same compaction.
 func claudeBoundaryReason(compact *claudeCompact, preAt time.Time) string {
 	switch {
 	case compact == nil:
 		return reasonNoBoundary
-	case compact.Timestamp.Before(preAt):
+	case compact.Timestamp.Truncate(time.Millisecond).Before(preAt.Truncate(time.Millisecond)):
 		return reasonStaleBoundary
 	default:
 		return reasonApplied
@@ -88,22 +184,58 @@ func writeClaudeFillPending(p claudeFillPending) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-// readClaudeFillPending returns the session's pending fill. ok is false when there
-// is none, or when the record cannot be read.
-func readClaudeFillPending(sessionID string) (claudeFillPending, bool) {
+// fillRecord is the state of a pending record on disk.
+type fillRecord int
+
+const (
+	fillRecordMissing fillRecord = iota
+	fillRecordOK
+	fillRecordCorrupt
+)
+
+// readClaudeFillRecord reads the session's pending record and reports its state.
+// A record that exists but does not decode is fillRecordCorrupt.
+func readClaudeFillRecord(sessionID string) (claudeFillPending, fillRecord) {
 	path, err := claudeFillPendingPath(sessionID)
 	if err != nil {
-		return claudeFillPending{}, false
+		return claudeFillPending{}, fillRecordMissing
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return claudeFillPending{}, false
+		return claudeFillPending{}, fillRecordMissing
 	}
 	var p claudeFillPending
 	if err := json.Unmarshal(data, &p); err != nil {
-		return claudeFillPending{}, false
+		return claudeFillPending{}, fillRecordCorrupt
 	}
-	return p, true
+	return p, fillRecordOK
+}
+
+// readClaudeFillPending returns the session's pending fill. ok is false when there
+// is none, or when the record cannot be read.
+func readClaudeFillPending(sessionID string) (claudeFillPending, bool) {
+	p, state := readClaudeFillRecord(sessionID)
+	return p, state == fillRecordOK
+}
+
+// loadClaudeFillPending is readClaudeFillPending for the collector. A corrupt record
+// is removed and noted as pending_corrupt beside the DB at dbPath, so it never
+// blocks a later attempt (issue 1303 M3).
+func loadClaudeFillPending(dbPath, sessionID string) (claudeFillPending, bool) {
+	p, state := readClaudeFillRecord(sessionID)
+	switch state {
+	case fillRecordOK:
+		return p, true
+	case fillRecordCorrupt:
+		removeClaudeFillPending(sessionID)
+		noteCorruptPending(dbPath, sessionID)
+	}
+	return claudeFillPending{}, false
+}
+
+// noteCorruptPending writes the pending_corrupt note for a session's record.
+func noteCorruptPending(dbPath, sessionID string) {
+	_ = writeCompactDiagnostic(dbPath, compactDiagNote{At: time.Now().UTC(), SessionID: sessionID, Kind: "pending", Reason: reasonPendingCorrupt, CollectorPID: os.Getpid()})
 }
 
 // removeClaudeFillPending drops the session's pending fill, if any.
@@ -130,15 +262,17 @@ func claudeFillNext(dbPath, sessionID string, index int) {
 	if err != nil || index >= len(schedule) {
 		return
 	}
-	claudeFillAfter(schedule[index], func() { claudeFillFire(dbPath, sessionID, index) })
+	claudeFills.arm(sessionID, schedule[index], func() { claudeFillFire(dbPath, sessionID, index) })
 }
 
 // claudeFillFire is one scheduled re-read. It opens the DB by path, because the timer
 // runs outside the event that armed it. A failed attempt arms the next re-read, and
 // the last one drops the record. An applied fill drops the record here, after its
-// own transaction has committed.
+// own transaction has committed. The attempt holds claudeFillMu (issue 1303 M3).
 func claudeFillFire(dbPath, sessionID string, index int) {
-	p, ok := readClaudeFillPending(sessionID)
+	claudeFillMu.Lock()
+	defer claudeFillMu.Unlock()
+	p, ok := loadClaudeFillPending(dbPath, sessionID)
 	if !ok {
 		return
 	}
@@ -164,24 +298,59 @@ func claudeFillFire(dbPath, sessionID string, index int) {
 // than the whole schedule is dropped, so a boundary that never comes is not re-read
 // on every event.
 func claudeFillOnEvent(db *telemetry.DB, sessionID string) error {
-	p, ok := readClaudeFillPending(sessionID)
+	if !claudeFillMu.TryLock() {
+		// A timer's attempt is running. It keeps the record and tries again itself.
+		return nil
+	}
+	defer claudeFillMu.Unlock()
+	p, ok := loadClaudeFillPending(db.Path(), sessionID)
 	if !ok {
 		return nil
 	}
-	schedule, err := hookdispatch.LoadClaudeCompactFillRetry()
+	window, err := claudeFillWindow()
 	if err != nil {
 		return err
 	}
-	var window time.Duration
-	for _, d := range schedule {
-		window += d
-	}
-	if time.Since(p.ArmedAt) > window {
+	if claudeFillExpired(p.ArmedAt, time.Now(), window) {
 		removeClaudeFillPending(sessionID)
 		return nil
 	}
 	_, err = claudeFillStep(db, p, "event")
 	return err
+}
+
+// PruneClaudeFillPending runs once at collector start, before any event. It removes
+// pending records older than the whole fill schedule and records that cannot be
+// decoded, noting each corrupt one beside the DB at dbPath (issue 1303 M3). A fresh
+// record is kept, so a restarted collector can still finish its fill.
+func PruneClaudeFillPending(dbPath string, now time.Time) error {
+	window, err := claudeFillWindow()
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(filepath.Join(xdgpath.StateHome(), "harnez", "claude-fill"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		sessionID := strings.TrimSuffix(name, ".json")
+		p, state := readClaudeFillRecord(sessionID)
+		switch {
+		case state == fillRecordCorrupt:
+			removeClaudeFillPending(sessionID)
+			noteCorruptPending(dbPath, sessionID)
+		case state == fillRecordOK && claudeFillExpired(p.ArmedAt, now, window):
+			removeClaudeFillPending(sessionID)
+		}
+	}
+	return nil
 }
 
 // claudeFillFault is a test seam (issue 1303 M2). It runs inside the fill's
@@ -196,7 +365,7 @@ var claudeFillFault func(stage string) error
 // a record left behind is dropped by the next attempt, which finds the row filled.
 // Every attempt writes one diagnostic note. It reports whether the row was filled.
 func claudeFillStep(db *telemetry.DB, p claudeFillPending, filledAfter string) (bool, error) {
-	compact, readErr := scanClaudeCompact(p.TranscriptPath)
+	compact, readErr := scanClaudeCompactSpec(p.TranscriptPath, p.SessionID)
 	preAt := p.PreCompactAt
 	out := compactOutcome{preAt: &preAt}
 	if readErr != nil {

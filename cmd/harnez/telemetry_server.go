@@ -154,6 +154,12 @@ func writeCappedTailJSON[T any](w http.ResponseWriter, items []T, maxBytes int64
 }
 
 func (s *telemetryCollectorService) Run(ctx context.Context) error {
+	// Shutdown stops every armed Claude compact fill timer (issue 1303 M3). Pending
+	// records stay on disk; start-up prunes the stale and corrupt ones first.
+	defer server.StopClaudeFills()
+	if err := server.PruneClaudeFillPending(s.path, time.Now()); err != nil {
+		fmt.Fprintf(os.Stderr, "harnez server: prune compact fills: %v\n", err)
+	}
 	if err := s.drainSpool(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "harnez server: drain telemetry spool: %v\n", err)
 	}

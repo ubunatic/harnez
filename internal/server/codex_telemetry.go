@@ -46,8 +46,13 @@ func PrepareCodexTelemetry(raw []byte) ([]byte, error) {
 		if hook.TranscriptPath == "" {
 			evidence.Diag.Reason = reasonNoTranscript
 		} else {
-			evidence.Compact, evidence.Diag.Reason = singleClaudeCompactRead(hook.TranscriptPath)
+			evidence.Compact, evidence.Diag.Reason = singleClaudeCompactRead(hook.TranscriptPath, e.SessionID)
 		}
+		// The compact summary and custom instructions are user text. They are dropped
+		// here, before the payload crosses the socket or is spooled (issue 1303 M3).
+		// Diag.Keys above still names them.
+		delete(payload, "compact_summary")
+		delete(payload, "custom_instructions")
 	}
 	payload["harnez_context"], _ = json.Marshal(evidence)
 	return json.Marshal(payload)

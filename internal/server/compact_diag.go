@@ -36,6 +36,9 @@ const (
 	reasonStaleBoundary = "stale_boundary"
 	reasonNoPrecompact  = "no_precompact"
 	reasonApplied       = "applied"
+	// reasonPendingCorrupt is a pending fill record the collector could not decode;
+	// the collector removes it and notes it (issue 1303 M3).
+	reasonPendingCorrupt = "pending_corrupt"
 )
 
 // compactDiag is what the hook process saw. It travels in harnez_context.

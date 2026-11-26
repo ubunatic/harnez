@@ -18,7 +18,35 @@ type Spec struct {
 }
 
 type claudeCompactRaw struct {
-	FillRetry []string `yaml:"fill_retry"`
+	FillRetry          []string `yaml:"fill_retry"`
+	MaxTranscriptBytes int64    `yaml:"max_transcript_bytes"`
+}
+
+// LoadClaudeCompactMaxTranscriptBytes returns how many bytes from the end of a Claude
+// transcript one compact-boundary read scans (issue 1303 M3). There is no Go default:
+// a missing or non-positive value is an error, so no read is unbounded.
+func LoadClaudeCompactMaxTranscriptBytes() (int64, error) {
+	raw, err := harnez.DefaultFS.ReadFile("spec/hooks.yaml")
+	if err != nil {
+		return 0, fmt.Errorf("load hooks spec: %w", err)
+	}
+	return parseClaudeCompactMaxTranscriptBytes(raw)
+}
+
+// parseClaudeCompactMaxTranscriptBytes validates raw against the hooks schema and
+// returns claude_compact.max_transcript_bytes, which must be positive.
+func parseClaudeCompactMaxTranscriptBytes(raw []byte) (int64, error) {
+	if err := validateSpec(raw); err != nil {
+		return 0, fmt.Errorf("hooks spec: %w", err)
+	}
+	var s Spec
+	if err := yaml.Unmarshal(raw, &s); err != nil {
+		return 0, fmt.Errorf("parse hooks spec: %w", err)
+	}
+	if s.ClaudeCompact.MaxTranscriptBytes <= 0 {
+		return 0, fmt.Errorf("hooks spec claude_compact.max_transcript_bytes must be positive, got %d", s.ClaudeCompact.MaxTranscriptBytes)
+	}
+	return s.ClaudeCompact.MaxTranscriptBytes, nil
 }
 
 // LoadClaudeCompactFillRetry returns the collector's fill schedule for Claude's
