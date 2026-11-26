@@ -141,3 +141,38 @@ Side finding:
 3. The hook path must honour an isolated HOME/data dir, or document why it does not. A test proves that the M1b tests never write to the real data dir. Simplest is an env override that tests set.
 4. Live check, run by the host after the commit. Leave the session in a state where `harnez agent compact` can run.
 5. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m1b.log`, one run only. If that run fails, fix it, rerun only the touched packages, and report that the full run is owed. Commit as `fix(compact): … (issue 1303 M1b)`. Never amend.
+
+## M1b review (host)
+
+M1b delivered (PostCompact waits for the boundary flush, bounds in `spec/hooks.yaml` `claude_compact`): 4b7a6815. q1: one run, 83 ok and 0 FAIL. Red check on ed6c0b44: 3 tests failed as intended.
+
+The live check still fails:
+- `harnez agent compact --name dev-1303b`, session `eeaf12bb-31b0-4828-929c-c4b575ac775e`.
+- The collector had just restarted on 4b7a6815; it had been up 1m46s.
+- Rows 806/807 are empty.
+
+The late-flush theory is falsified:
+- The transcript boundary is at 14:36:54.031Z with preTokens 80748 and postTokens 16136.
+- `harnez log` shows `hook PostCompact` exit 0 in **45 ms**. The PostCompact row was created at 14:36:54.375Z, after the boundary.
+- So the hook neither waited for the 3 s bound nor applied a boundary that was already on disk.
+- The developer's dispatch-chain test passes on ed6c0b44 too, so the test payload does not match the real one.
+
+The remaining candidates sit before `readClaudeCompact` is called:
+- the real payload lacks `transcript_path`, or has no `compact_summary`, so the wait gate is off;
+- `e.Kind` is not `postcompact` on the hook side;
+- the hook side never runs `PrepareCodexTelemetry` (broker FD path);
+- `applyClaudeCompact` returns false (`LatestCompactionEventTime` / timestamp).
+
+Second isolation incident: a test sent one `isolation-check` record to the live collector through `HARNEZ_BROKER_FD`. Deleting it waits for the owner.
+
+Lesson: skipping the M1 canary cost two rounds. The documented payload and the fixture shape did not prove what the live hook sees.
+
+## M1c pre-work (canary first, then fix)
+
+1. Add a permanent diagnostic to the Claude PostCompact path: one `harnez log`/stderr-free telemetry note per compact.
+   - It records the payload key names only (never values), whether `transcript_path` was set, the `e.Kind`, which process ran `PrepareCodexTelemetry`, and one outcome reason: `no_transcript`, `no_boundary`, `stale_boundary`, `no_precompact`, `applied` or `read_error`.
+   - The host must be able to read it with one command; name that command in the report.
+   - Test each reason. Never record `compact_summary` or `custom_instructions` values; extend the privacy test to cover the note.
+2. Commit the diagnostic first as `feat(compact): … (issue 1303 M1c)`, then stop and report. The host runs a live compact and reads the reason. No fix this turn unless a test with a real-shaped payload already proves the cause.
+3. The tests must not reach the live collector: clear `HARNEZ_BROKER_FD` and any socket env in every new test. Assert it.
+4. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m1c.log`. Never amend.
