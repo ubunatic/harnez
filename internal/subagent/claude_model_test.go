@@ -22,4 +22,8 @@ func TestParseClaudeRecordsEachCallsModel(t *testing.T) {
 	if got := r.RequestUsage[1].Model; got != "claude-opus-5-5-20261101" {
 		t.Fatalf("sub-agent call model = %q; want the id from its own message, unchanged", got)
 	}
+	// The turn's model is the main chain's, so a sub-agent cannot relabel the rows.
+	if r.Model != "claude-haiku-5-5" {
+		t.Fatalf("turn model = %q; want the main-chain call's claude-haiku-5-5", r.Model)
+	}
 }

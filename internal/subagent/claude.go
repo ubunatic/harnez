@@ -206,6 +206,8 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	// the last event of each message id is its final usage (ticket 1301).
 	var calls []RequestUsage
 	callIndex := map[string]int{}
+	// mainModel is the model id of the last main-chain call (ticket 1301 M4).
+	var mainModel string
 	for lineNo, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -237,6 +239,9 @@ func parseClaude(data []byte) (*TurnResult, error) {
 			// Synthetic events after /compact carry all-zero usage; skip them.
 			if e.Parent == nil && u.Input+u.CacheRead+u.CacheCreate > 0 {
 				last = u
+				if e.Message.Model != "" {
+					mainModel = e.Message.Model
+				}
 			}
 		case e.Type == "system" && e.Subtype == "compact_boundary" && e.Compact.PostTokens > 0:
 			postCompact = e.Compact.PostTokens
@@ -268,6 +273,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	v := res.Usage
 	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate, CacheWriteTokens: v.CacheCreate, CacheWriteTokensKnown: true}
 	r.RequestUsage = calls
+	r.Model = mainModel
 	r.CompactionObserved = postCompact > 0
 	r.ContextTokensBeforeCompact = preCompact
 	r.Messages = append(r.Messages, localOut...)

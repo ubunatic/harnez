@@ -341,6 +341,9 @@ type TurnResult struct {
 	CachedTokens          int      `json:"cached_tokens"`
 	CacheWriteTokens      int      `json:"cache_write_tokens,omitempty"`
 	CacheWriteTokensKnown bool     `json:"cache_write_tokens_known,omitempty"`
+	// Model is the provider model id the main-chain call reported (for example
+	// claude-opus-5-5); sub-agent calls never set it. Empty when unknown.
+	Model string `json:"-"`
 	// RequestUsage holds one entry per provider API call when the provider
 	// reports them (Claude), so each call is priced on its own prompt size.
 	RequestUsage         []RequestUsage `json:"-"`

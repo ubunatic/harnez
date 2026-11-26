@@ -493,7 +493,7 @@ func TestTurnQuotaBoundaryPairsOnlyOrderedNonResetWindows(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.PairTurnQuotaDeltas(ctx, "session-1", 1, "claude"); err != nil {
+	if err := s.PairTurnQuotaDeltas(ctx, "session-1", 1, "claude", testPairTolerance); err != nil {
 		t.Fatal(err)
 	}
 	deltas, err := s.TurnQuotaDeltas(ctx, "session-1", 1)
@@ -522,7 +522,7 @@ func TestTurnQuotaBoundaryPairsOnlyOrderedNonResetWindows(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.PairTurnQuotaDeltas(ctx, "session-1", 2, "claude"); err != nil {
+	if err := s.PairTurnQuotaDeltas(ctx, "session-1", 2, "claude", testPairTolerance); err != nil {
 		t.Fatal(err)
 	}
 	deltas, err = s.TurnQuotaDeltas(ctx, "session-1", 2)
@@ -728,7 +728,7 @@ func TestTurnTokenUsageAndQuotaSharePersistNullForUnknowns(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.PairTurnQuotaDeltas(ctx, "cost-1", 1, "claude"); err != nil {
+	if err := s.PairTurnQuotaDeltas(ctx, "cost-1", 1, "claude", testPairTolerance); err != nil {
 		t.Fatal(err)
 	}
 	share := int64(692308)

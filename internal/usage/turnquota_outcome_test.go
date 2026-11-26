@@ -10,15 +10,17 @@ import (
 	"ubunatic.com/harnez/internal/usagestore"
 )
 
-// quotaOutcomeFixture stores a before reading at t0 and returns the store path,
-// the reset time, and a weekly window observed at t0.
-func quotaOutcomeFixture(t *testing.T) (dbPath string, t0 time.Time, reset time.Time, before usagestore.TurnQuotaBoundary) {
+// quotaOutcomeFixture stores a before reading whose cached snapshot was taken at
+// t0 and whose capture happened cacheAge later, as the turn capture writes it.
+// It returns the store path, the reset time, and the before boundary.
+func quotaOutcomeFixture(t *testing.T, cacheAge time.Duration) (dbPath string, t0 time.Time, reset time.Time, before usagestore.TurnQuotaBoundary) {
 	t.Helper()
 	dbPath = filepath.Join(t.TempDir(), "telemetry.sqlite")
 	t0 = time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
 	reset = t0.Add(48 * time.Hour)
-	win := usagestore.Window{Provider: "claude", Name: "Weekly (7-day)", UsedFraction: 0.10, ResetAt: &reset, ObservedAt: t0, Source: "registry"}
-	before = usagestore.TurnQuotaBoundary{SessionID: "s-out", Turn: 1, Boundary: "before", Provider: "claude", CapturedAt: t0, Source: "registry", Freshness: "live", HasCache: true, Windows: []usagestore.Window{win}}
+	captured := t0.Add(cacheAge)
+	win := usagestore.Window{Provider: "claude", Name: "Weekly (7-day)", UsedFraction: 0.10, ResetAt: &reset, ObservedAt: captured, Source: "registry"}
+	before = usagestore.TurnQuotaBoundary{SessionID: "s-out", Turn: 1, Boundary: "before", Provider: "claude", CapturedAt: captured, CacheAgeMS: cacheAge.Milliseconds(), Source: "registry", Freshness: "live", HasCache: true, Windows: []usagestore.Window{win}}
 	if err := PersistTurnQuotaBoundary(context.Background(), dbPath, before); err != nil {
 		t.Fatal(err)
 	}
@@ -53,15 +55,14 @@ func deltaCountFor(t *testing.T, dbPath string) int {
 	return len(deltas)
 }
 
-// The after reading reuses the cached snapshot: same observation, so no new
-// window row. The outcome says so instead of silently writing nothing.
+// The after reading reuses the cached snapshot taken at t0. Its capture time
+// and cache age are the live ones (ticket 1301 M4), so both readings give the
+// same snapshot time and the outcome says so instead of writing a 0 delta.
 func TestTurnQuotaPairOutcomeUnchangedSnapshot(t *testing.T) {
-	dbPath, t0, reset, before := quotaOutcomeFixture(t)
-	after := before
-	after.Boundary = "after"
-	after.CapturedAt = t0.Add(30 * time.Second)
-	after.CacheAgeMS = 30000
-	after.Windows = []usagestore.Window{{Provider: "claude", Name: "Weekly (7-day)", UsedFraction: 0.10, ResetAt: &reset, ObservedAt: t0, Source: "registry"}}
+	dbPath, t0, reset, _ := quotaOutcomeFixture(t, 546096*time.Millisecond)
+	afterAt := t0.Add(549050 * time.Millisecond)
+	after := usagestore.TurnQuotaBoundary{SessionID: "s-out", Turn: 1, Boundary: "after", Provider: "claude", CapturedAt: afterAt, CacheAgeMS: 549050, Source: "registry", Freshness: "live", HasCache: true}
+	after.Windows = []usagestore.Window{{Provider: "claude", Name: "Weekly (7-day)", UsedFraction: 0.10, ResetAt: &reset, ObservedAt: afterAt, Source: "registry"}}
 	if err := PersistTurnQuotaBoundary(context.Background(), dbPath, after); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +76,7 @@ func TestTurnQuotaPairOutcomeUnchangedSnapshot(t *testing.T) {
 
 // A failed fetch (HTTP 429) is recorded with its error; it is not a 0 delta.
 func TestTurnQuotaPairOutcomeFetchErrorIsRecorded(t *testing.T) {
-	dbPath, t0, _, before := quotaOutcomeFixture(t)
+	dbPath, t0, _, before := quotaOutcomeFixture(t, 0)
 	after := before
 	after.Boundary = "after"
 	after.CapturedAt = t0.Add(30 * time.Second)
@@ -96,11 +97,10 @@ func TestTurnQuotaPairOutcomeFetchErrorIsRecorded(t *testing.T) {
 
 // A fresh after reading pairs with the before reading and writes one delta.
 func TestTurnQuotaPairOutcomePairedWritesDelta(t *testing.T) {
-	dbPath, t0, reset, before := quotaOutcomeFixture(t)
-	after := before
-	after.Boundary = "after"
-	after.CapturedAt = t0.Add(30 * time.Second)
-	after.Windows = []usagestore.Window{{Provider: "claude", Name: "Weekly (7-day)", UsedFraction: 0.12, ResetAt: &reset, ObservedAt: t0.Add(30 * time.Second), Source: "registry"}}
+	dbPath, t0, reset, _ := quotaOutcomeFixture(t, 0)
+	afterAt := t0.Add(30 * time.Second)
+	after := usagestore.TurnQuotaBoundary{SessionID: "s-out", Turn: 1, Boundary: "after", Provider: "claude", CapturedAt: afterAt, Source: "registry", Freshness: "live", HasCache: true}
+	after.Windows = []usagestore.Window{{Provider: "claude", Name: "Weekly (7-day)", UsedFraction: 0.12, ResetAt: &reset, ObservedAt: afterAt, Source: "registry"}}
 	if err := PersistTurnQuotaBoundary(context.Background(), dbPath, after); err != nil {
 		t.Fatal(err)
 	}

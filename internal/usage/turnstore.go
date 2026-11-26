@@ -69,7 +69,11 @@ func PersistTurnQuotaBoundary(ctx context.Context, dbPath string, boundary usage
 		return err
 	}
 	if boundary.Boundary == "after" {
-		return store.PairTurnQuotaDeltas(ctx, boundary.SessionID, boundary.Turn, boundary.Provider)
+		tol, err := turnQuotaPairTolerance()
+		if err != nil {
+			return err
+		}
+		return store.PairTurnQuotaDeltas(ctx, boundary.SessionID, boundary.Turn, boundary.Provider, tol)
 	}
 	return nil
 }
@@ -141,6 +145,10 @@ func ImportTurnQuotaJSONL(ctx context.Context, dbPath, path string) (TurnQuotaIm
 		return result, err
 	}
 	defer f.Close()
+	tol, err := turnQuotaPairTolerance()
+	if err != nil {
+		return result, err
+	}
 	store, err := openTurnUsageStore(ctx, dbPath)
 	if err != nil {
 		return result, err
@@ -179,7 +187,7 @@ func ImportTurnQuotaJSONL(ctx context.Context, dbPath, path string) (TurnQuotaIm
 			return result, fmt.Errorf("import turn quota line %d: %w", lineNumber, err)
 		}
 		if event.Boundary == "after" {
-			if err := store.PairTurnQuotaDeltas(ctx, event.SessionID, event.Turn, event.Provider); err != nil {
+			if err := store.PairTurnQuotaDeltas(ctx, event.SessionID, event.Turn, event.Provider, tol); err != nil {
 				return result, err
 			}
 		}
@@ -219,6 +227,10 @@ func legacyBoundary(event legacyTurnQuotaEvent, importKey string) usagestore.Tur
 	if source == "" {
 		source = "turn-capture"
 	}
+	// "fresh" means the cached reading is within the cache staleness budget
+	// (spec/usage.yaml, cache_staleness_multiplier times collector_cadence), not
+	// that it was fetched just now. A reading at 9 minutes is fresh by design.
+	// Compare captured_at and cache_age_ms to tell a new fetch from a reused one.
 	freshness := "fresh"
 	if reading.Error != "" || !reading.HasCache || reading.CacheAgeMS > int64(DefaultCacheStaleness()/time.Millisecond) {
 		freshness = "stale"

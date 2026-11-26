@@ -733,10 +733,19 @@ func (s *Store) WriteTurnQuotaBoundary(ctx context.Context, boundary TurnQuotaBo
 	return id, tx.Commit()
 }
 
+// PairTolerance bounds when two readings count as the same window reset (Reset)
+// or as one cached snapshot (Snapshot). Callers load both from spec/usage.yaml.
+type PairTolerance struct {
+	Reset    time.Duration
+	Snapshot time.Duration
+}
+
 // PairTurnQuotaDeltas records valid before/after pairs for matching windows.
-// Pairs with reversed timestamps, changed reset markers, or decreased usage
-// are omitted because they crossed or may have crossed a provider reset.
-func (s *Store) PairTurnQuotaDeltas(ctx context.Context, sessionID string, turn int, provider string) error {
+// Pairs with reversed timestamps, a reset that moved beyond tol.Reset, or
+// decreased usage are omitted because they crossed or may have crossed a
+// provider reset. A reused snapshot (same captured_at minus cache_age_ms within
+// tol.Snapshot) writes no delta; recordPairOutcome records it instead (ticket 1301 M4).
+func (s *Store) PairTurnQuotaDeltas(ctx context.Context, sessionID string, turn int, provider string, tol PairTolerance) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO turn_quota_deltas(session_id,turn,provider,pool,window_key,before_boundary_id,after_boundary_id,before_observation_id,after_observation_id,before_used_fraction,after_used_fraction,delta_used_fraction,before_source,after_source,before_observed_at,after_observed_at,before_reset_at,after_reset_at,before_cache_age_ms,after_cache_age_ms,before_has_cache,after_has_cache,before_error,after_error)
 		SELECT b.session_id,b.turn,b.provider,qb.pool,qb.window_key,b.id,a.id,ob.id,oa.id,qb.used_fraction,qa.used_fraction,qa.used_fraction-qb.used_fraction,ob.source,oa.source,ob.observed_at,oa.observed_at,qb.reset_at,qa.reset_at,b.cache_age_ms,a.cache_age_ms,b.has_cache,a.has_cache,b.error,a.error
 		FROM turn_quota_boundaries b JOIN turn_quota_boundaries a ON a.session_id=b.session_id AND a.turn=b.turn AND a.provider=b.provider AND a.boundary='after'
@@ -744,24 +753,25 @@ func (s *Store) PairTurnQuotaDeltas(ctx context.Context, sessionID string, turn 
 		JOIN usage_observations ob ON ob.id=qb.observation_id
 		JOIN quota_windows qa ON qa.provider=qb.provider AND qa.pool=qb.pool AND qa.window_key=qb.window_key AND qa.observation_id IN (SELECT id FROM usage_observations WHERE turn_boundary_id=a.id)
 		JOIN usage_observations oa ON oa.id=qa.observation_id
-		WHERE b.session_id=? AND b.turn=? AND b.provider=? AND b.boundary='before' AND b.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=b.session_id AND turn=b.turn AND provider=b.provider AND boundary='before') AND a.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=a.session_id AND turn=a.turn AND provider=a.provider AND boundary='after') AND b.captured_at<a.captured_at AND COALESCE(qb.reset_at,'')=COALESCE(qa.reset_at,'') AND qa.used_fraction>=qb.used_fraction
-		ON CONFLICT(session_id,turn,provider,pool,window_key) DO UPDATE SET before_boundary_id=excluded.before_boundary_id,after_boundary_id=excluded.after_boundary_id,before_observation_id=excluded.before_observation_id,after_observation_id=excluded.after_observation_id,before_used_fraction=excluded.before_used_fraction,after_used_fraction=excluded.after_used_fraction,delta_used_fraction=excluded.delta_used_fraction,before_source=excluded.before_source,after_source=excluded.after_source,before_observed_at=excluded.before_observed_at,after_observed_at=excluded.after_observed_at,before_reset_at=excluded.before_reset_at,after_reset_at=excluded.after_reset_at,before_cache_age_ms=excluded.before_cache_age_ms,after_cache_age_ms=excluded.after_cache_age_ms,before_has_cache=excluded.before_has_cache,after_has_cache=excluded.after_has_cache,before_error=excluded.before_error,after_error=excluded.after_error`, sessionID, turn, provider)
+		WHERE b.session_id=? AND b.turn=? AND b.provider=? AND b.boundary='before' AND b.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=b.session_id AND turn=b.turn AND provider=b.provider AND boundary='before') AND a.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=a.session_id AND turn=a.turn AND provider=a.provider AND boundary='after') AND b.captured_at<a.captured_at AND (qb.reset_at IS NULL AND qa.reset_at IS NULL OR qb.reset_at IS NOT NULL AND qa.reset_at IS NOT NULL AND ABS(julianday(qb.reset_at)-julianday(qa.reset_at))*86400.0 <= ?) AND NOT (ABS((julianday(b.captured_at)-b.cache_age_ms/86400000.0)-(julianday(a.captured_at)-a.cache_age_ms/86400000.0))*86400.0 <= ?) AND qa.used_fraction>=qb.used_fraction
+		ON CONFLICT(session_id,turn,provider,pool,window_key) DO UPDATE SET before_boundary_id=excluded.before_boundary_id,after_boundary_id=excluded.after_boundary_id,before_observation_id=excluded.before_observation_id,after_observation_id=excluded.after_observation_id,before_used_fraction=excluded.before_used_fraction,after_used_fraction=excluded.after_used_fraction,delta_used_fraction=excluded.delta_used_fraction,before_source=excluded.before_source,after_source=excluded.after_source,before_observed_at=excluded.before_observed_at,after_observed_at=excluded.after_observed_at,before_reset_at=excluded.before_reset_at,after_reset_at=excluded.after_reset_at,before_cache_age_ms=excluded.before_cache_age_ms,after_cache_age_ms=excluded.after_cache_age_ms,before_has_cache=excluded.before_has_cache,after_has_cache=excluded.after_has_cache,before_error=excluded.before_error,after_error=excluded.after_error`, sessionID, turn, provider, tol.Reset.Seconds(), tol.Snapshot.Seconds())
 	if err != nil {
 		return err
 	}
-	return s.recordPairOutcome(ctx, sessionID, turn, provider)
+	return s.recordPairOutcome(ctx, sessionID, turn, provider, tol)
 }
 
 // recordPairOutcome stores why the latest after reading of a turn did or did
 // not produce delta rows, so a missing delta is never silent (ticket 1301 M3):
-// fetch_error when the after reading failed, paired when deltas exist,
-// unchanged_snapshot when the after reading reused a cached observation, and
-// no_pair otherwise (no shared window, or usage decreased or reset).
-func (s *Store) recordPairOutcome(ctx context.Context, sessionID string, turn int, provider string) error {
+// fetch_error when the after reading failed, unchanged_snapshot when both
+// readings describe the same cached snapshot (ticket 1301 M4), paired when
+// deltas exist, and no_pair otherwise (no shared window, or usage decreased or
+// the reset moved).
+func (s *Store) recordPairOutcome(ctx context.Context, sessionID string, turn int, provider string, tol PairTolerance) error {
 	var beforeID, afterID int64
 	var afterErr string
-	var afterOwnObservations int
-	err := s.db.QueryRowContext(ctx, `SELECT b.id,a.id,a.error,(SELECT COUNT(*) FROM usage_observations WHERE turn_boundary_id=a.id) FROM turn_quota_boundaries b JOIN turn_quota_boundaries a ON a.session_id=b.session_id AND a.turn=b.turn AND a.provider=b.provider AND a.boundary='after' WHERE b.session_id=? AND b.turn=? AND b.provider=? AND b.boundary='before' AND b.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=b.session_id AND turn=b.turn AND provider=b.provider AND boundary='before') AND a.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=a.session_id AND turn=a.turn AND provider=a.provider AND boundary='after')`, sessionID, turn, provider).Scan(&beforeID, &afterID, &afterErr, &afterOwnObservations)
+	var sameSnapshot bool
+	err := s.db.QueryRowContext(ctx, `SELECT b.id,a.id,a.error,(ABS((julianday(b.captured_at)-b.cache_age_ms/86400000.0)-(julianday(a.captured_at)-a.cache_age_ms/86400000.0))*86400.0 <= ?) FROM turn_quota_boundaries b JOIN turn_quota_boundaries a ON a.session_id=b.session_id AND a.turn=b.turn AND a.provider=b.provider AND a.boundary='after' WHERE b.session_id=? AND b.turn=? AND b.provider=? AND b.boundary='before' AND b.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=b.session_id AND turn=b.turn AND provider=b.provider AND boundary='before') AND a.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=a.session_id AND turn=a.turn AND provider=a.provider AND boundary='after')`, tol.Snapshot.Seconds(), sessionID, turn, provider).Scan(&beforeID, &afterID, &afterErr, &sameSnapshot)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -776,10 +786,10 @@ func (s *Store) recordPairOutcome(ctx context.Context, sessionID string, turn in
 	switch {
 	case afterErr != "":
 		outcome, detail = "fetch_error", afterErr
+	case sameSnapshot:
+		outcome, detail = "unchanged_snapshot", "after reading reused the cached snapshot (same captured_at minus cache_age_ms)"
 	case deltas > 0:
 		outcome, detail = "paired", fmt.Sprintf("%d window(s)", deltas)
-	case afterOwnObservations == 0:
-		outcome, detail = "unchanged_snapshot", "after reading reused the cached observation"
 	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO turn_quota_pair_outcomes(session_id,turn,provider,before_boundary_id,after_boundary_id,outcome,detail) VALUES(?,?,?,?,?,?,?) ON CONFLICT(session_id,turn,provider) DO UPDATE SET before_boundary_id=excluded.before_boundary_id,after_boundary_id=excluded.after_boundary_id,outcome=excluded.outcome,detail=excluded.detail`, sessionID, turn, provider, beforeID, afterID, outcome, detail)
 	return err

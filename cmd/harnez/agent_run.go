@@ -254,6 +254,12 @@ func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *su
 	if n := len(session.TurnRecords); n > 0 && session.TurnRecords[n-1].Turn == session.Turn {
 		rec = &session.TurnRecords[n-1]
 	}
+	// The rows name the main-chain model the calls reported; the session's
+	// alias (for example "opus") is only the fallback (ticket 1301 M4).
+	model := session.Model
+	if result.Model != "" {
+		model = result.Model
+	}
 	if !result.TurnTokensUnknown {
 		input, cached, output := int64(result.InputTokens), int64(result.CachedTokens), int64(result.OutputTokens)
 		// CachedTokens includes cache writes for Claude; the row stores cache reads only.
@@ -262,7 +268,7 @@ func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *su
 		}
 		token := usagestore.TurnTokenUsage{
 			SessionID: session.ID, Turn: session.Turn, Provider: session.Provider, CounterKind: "delta",
-			Model: session.Model, Effort: session.Tier,
+			Model: model, Effort: session.Tier,
 			InputTokens: &input, CachedInputTokens: &cached, OutputTokens: &output,
 			InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
 			ObservedAt: observedAt,
@@ -287,13 +293,16 @@ func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *su
 	}
 	cumulative := usagestore.TurnTokenUsage{
 		SessionID: session.ID, Turn: session.Turn, Provider: session.Provider, CounterKind: "cumulative",
-		Model: session.Model, Effort: session.Tier,
+		Model: model, Effort: session.Tier,
 		InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
 		ObservedAt: observedAt,
 	}
 	cumulativeInput, cumulativeCached, cumulativeOutput := int64(session.InputTokensTotal), int64(session.CachedTokensTotal), int64(session.OutputTokensTotal)
 	// Like the delta row, the cumulative cached count excludes cache writes
-	// when the write total is known (ticket 1301 M3).
+	// when the write total is known (ticket 1301 M3). A session resumed from
+	// before M3 has CacheWriteTokensKnown false, so its cumulative cached count
+	// keeps the old meaning (cache writes included). This is a known limit with
+	// no migration (ticket 1301 M4).
 	if session.CacheWriteTokensKnown && cumulativeCached >= int64(session.CacheWriteTokensTotal) {
 		cumulativeCached -= int64(session.CacheWriteTokensTotal)
 		cw := int64(session.CacheWriteTokensTotal)

@@ -11,6 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 const usageSpecPath = "spec/usage.yaml"
@@ -25,6 +26,7 @@ type usageSpec struct {
 	DisplayStaleness         string             `yaml:"display_staleness"`
 	AgentQuotaWarnPercent    float64            `yaml:"agent_quota_warn_percent"`
 	AgentQuotaMaxReadingAge  string             `yaml:"agent_quota_max_reading_age"`
+	TurnQuotaPairing         quotaPairSpec      `yaml:"turn_quota_pairing"`
 	CollectorTimeout         string             `yaml:"collector_timeout"`
 	PassiveDedupeInterval    string             `yaml:"passive_dedupe_interval"`
 	PassiveUpdatePath        string             `yaml:"passive_update_path"`
@@ -48,6 +50,37 @@ type usageSpec struct {
 	StrataCacheTTL           string             `yaml:"strata_cache_ttl"`
 	UsageKillLog             usageKillLogSpec   `yaml:"usage_kill_log"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
+}
+
+type quotaPairSpec struct {
+	ResetTolerance    string `yaml:"reset_tolerance"`
+	SnapshotTolerance string `yaml:"snapshot_tolerance"`
+}
+
+// turnQuotaPairTolerance loads the turn quota pairing tolerances from
+// spec/usage.yaml (ticket 1301 M4). Nothing here defaults them: a missing or
+// invalid value is an error.
+func turnQuotaPairTolerance() (usagestore.PairTolerance, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
+	if err != nil {
+		return usagestore.PairTolerance{}, err
+	}
+	var spec usageSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return usagestore.PairTolerance{}, err
+	}
+	reset, err := time.ParseDuration(spec.TurnQuotaPairing.ResetTolerance)
+	if err != nil {
+		return usagestore.PairTolerance{}, fmt.Errorf("turn_quota_pairing.reset_tolerance: %w", err)
+	}
+	snapshot, err := time.ParseDuration(spec.TurnQuotaPairing.SnapshotTolerance)
+	if err != nil {
+		return usagestore.PairTolerance{}, fmt.Errorf("turn_quota_pairing.snapshot_tolerance: %w", err)
+	}
+	if reset <= 0 || snapshot <= 0 {
+		return usagestore.PairTolerance{}, fmt.Errorf("turn_quota_pairing tolerances must be positive")
+	}
+	return usagestore.PairTolerance{Reset: reset, Snapshot: snapshot}, nil
 }
 
 type usageKillLogSpec struct {
