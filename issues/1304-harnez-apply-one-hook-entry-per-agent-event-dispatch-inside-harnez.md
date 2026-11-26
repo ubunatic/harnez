@@ -67,3 +67,47 @@ General rule for haiku:high over haiku:med (owner asked, decide mode):
 - **Use high** when the milestone changes an external contract: hook replies, settings/config migration, a concurrency or lock path. Also when an unspecified design choice must be made inside the code, or when med needed two rounds on the same defect class.
 - **Use med** for work with complete pre-work: report or query logic, fixtures, docs, wiring.
 - Cost: high fills context faster. The Haiku compaction threshold on this machine is 200k, and the >100k tier costs 5x, so use high only where it pays off.
+
+## Plan turn review (host)
+
+The dev-1304 (haiku:high) plan turn mapped the wiring and handlers with file:line. Its key findings:
+- There are 14 Claude entries today: `config.yaml:326-366`, plus compaction in `spec/claude-compaction.yaml`.
+- `removeHarnezHooks` (`internal/claude/apply_settings.go:117-162`) already strips every `harnez …` command before re-adding, so migration mostly comes for free. Commands with an absolute-path `harnez` are not matched.
+- Today exactly one JSON-writing handler runs per tool, so a merge conflict cannot happen yet.
+- Start-up time, measured with `printf '{}' | harnez hook skill` over 20 runs: median 37.7 ms, p90 39.8 ms. This is a lower bound.
+
+Checked against https://code.claude.com/docs/en/hooks:
+- A matcher of only letters, digits, `_`, `-`, spaces, `,` and `|` is an exact list, so `Bash|View|Read|ReadMultipleFiles|Edit|Write` is valid.
+- Matching hooks run in parallel.
+- The default command timeout is 600 s, and each entry can set its own with `timeout`.
+- PreToolUse precedence is `deny` > `defer` > `ask` > `allow`. `updatedInput` replaces the whole input.
+- SessionStart plain-text stdout becomes context.
+- Not verified: JSON `additionalContext` on SessionStart, and dedup of identical entries within one file.
+
+## Decision (decide mode, plan review)
+
+- **Q1 matcher.** Use the union list, not `*`. Reason: `*` adds about 38 ms to every non-harnez tool call, and an exact list is a documented matcher form.
+- **Q2 order.** Handlers of one event run sequentially, in registry order (a slice). Reason: this removes today's undefined PreCompact order. Every handler is fast except `pre-edit`, which is the only one on Edit and Write.
+- **Q3 budget.** `spec/hooks.yaml` `handler_timeout: 40s`, with a schema. It guards against hangs and is not a latency target. It must exceed the largest existing inner budget, the jev 30 s in `spec/decide.yaml:16`. No settings-entry `timeout` is written; Claude's 600 s default stays.
+- **Merge.** For PreToolUse decisions, follow Claude's precedence `deny` > `defer` > `ask` > `allow`, and keep the reason of the winning handler.
+  - At most one `updatedInput`. A second rewrite is dropped and logged to stderr.
+  - `additionalContext` and `systemMessage` strings are joined with `\n` in registry order.
+  - SessionStart stays plain text. The registry rejects a JSON handler and a text handler on the same event, enforced by a test.
+- **Failure isolation.** Each handler runs under the budget with panic recovery. An error, timeout or panic drops only that handler's output, writes a stderr note, and the dispatcher still exits 0. The exception is a handler that today deliberately exits 2 to block: keep that behaviour, and if one exists, name it in the M1 report.
+- **Q4 Codex.** Decided at M3. `codex-hook` stays as the Codex PreToolUse handler for now.
+- **Q7.** Claude compaction rows are out of scope here; they belong to #1303.
+
+## M1 pre-work (dispatcher)
+
+1. Add `harnez hook <event>` with a registry: event → ordered handlers. Register every existing handler per the table in the plan. stdin is read once and passed as bytes. The old subcommands keep working as thin aliases until M2 switches `apply`.
+2. Implement the merge and isolation above. `handler_timeout` goes in `spec/hooks.yaml` plus a schema, with no Go default.
+3. Tests first, at least these:
+   - two PreToolUse handlers returning deny and allow → deny, with the deny reason;
+   - two `updatedInput` → the first is kept, the second dropped;
+   - additionalContext strings joined in order;
+   - one handler panics or times out → the other's output is still written, exit 0;
+   - handler order is stable;
+   - a JSON handler and a text handler on one event are rejected;
+   - per event, the dispatcher output for today's real payload shapes equals the old subcommand's output: the golden check that behaviour did not change.
+4. Docs: `docs/CLIDesign.md` (hook command surface) and `docs/HarnezComponents.md:28`.
+5. Gates: `HTO=0 make test-q1` once, with the log in a file. Commits `feat(hook): … (issue 1304 M1)`, at most 3. Never amend.
