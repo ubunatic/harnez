@@ -51,9 +51,10 @@ type specEvent struct {
 }
 
 type specHandler struct {
-	Name  string   `yaml:"name"`
-	Kind  string   `yaml:"kind"`
-	Tools []string `yaml:"tools"`
+	Name   string   `yaml:"name"`
+	Kind   string   `yaml:"kind"`
+	Tools  []string `yaml:"tools"`
+	Strict bool     `yaml:"strict"`
 }
 
 // LoadManifest returns the hook manifest for agent ("claude" or "codex") from
@@ -88,7 +89,10 @@ func ParseManifest(raw []byte, agent string) (Manifest, error) {
 			if err != nil {
 				return Manifest{}, fmt.Errorf("hooks spec %s %s/%s: %w", agent, name, sh.Name, err)
 			}
-			ev.Handlers = append(ev.Handlers, Handler{Name: sh.Name, Kind: kind, Tools: sh.Tools})
+			if se.Matcher != "" && len(sh.Tools) > 0 {
+				return Manifest{}, fmt.Errorf("hooks spec %s %s: matcher and handler %s tools; use one", agent, name, sh.Name)
+			}
+			ev.Handlers = append(ev.Handlers, Handler{Name: sh.Name, Kind: kind, Tools: sh.Tools, Strict: sh.Strict})
 		}
 		m.Events[name] = ev
 	}

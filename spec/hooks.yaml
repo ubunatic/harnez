@@ -11,7 +11,8 @@
 # or {}), silent (writes nothing), or text (plain text the host adds as context).
 # tools limits a handler to those tool names and derives the host matcher from
 # them. matcher sets an explicit host matcher for an event whose matcher is not a
-# tool list; it cannot be combined with tools.
+# tool list; it cannot be combined with tools. strict makes a failed run abort the
+# dispatch with the handler's error, so the host sees that failure and no reply.
 handler_timeout: 40s
 agents:
   claude:
@@ -48,8 +49,9 @@ agents:
     command: harnez hook codex
     events:
       PreToolUse:
+        matcher: Bash
         handlers:
-          - {name: codex-hook, kind: json, tools: [Bash]}
+          - {name: codex-hook, kind: json, strict: true}
       PostToolUse:
         matcher: "*"
         handlers:

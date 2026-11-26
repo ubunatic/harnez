@@ -18,6 +18,11 @@ func TestRunsHarnezTable(t *testing.T) {
 		"env A=1 B=2 /usr/bin/harnez hook Stop",
 		"HOME=/tmp harnez hook Stop",
 		"harnez hook codex PreToolUse",
+		// Quoted words with spaces are one word (issue 1304 M4 decision: POSIX quoting).
+		`"/my dir/harnez" hook Stop`,
+		`'/opt/bin/harnez' hook codex Stop`,
+		`env A=1 B="x y" harnez hook Stop`,
+		"harnez codex-telemetry",
 	}
 	no := []string{
 		"",
@@ -37,6 +42,16 @@ func TestRunsHarnezTable(t *testing.T) {
 		"HARNEZ=1",
 		// env options are not parsed, so `env -i harnez ...` stays foreign.
 		"env -i harnez hook Stop",
+		// A quoted value that contains the word harnez is not the command word.
+		`env MSG="hi harnez" /opt/user`,
+		`FOO="a harnez" /opt/user`,
+		`env harnez-foo hook`,
+		`sh -c "harnez hook Stop"`,
+		"/opt/harnez-wrap",
+		`"/opt/harnez-wrap" hook Stop`,
+		`'harnez-foo' hook`,
+		// An unterminated quote is not a command we can read, so it stays foreign.
+		`"harnez hook Stop`,
 	}
 	for _, c := range yes {
 		if !RunsHarnez(c) {

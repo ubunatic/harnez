@@ -154,3 +154,93 @@ func TestRemoveDropsLegacyAndCurrentHarnezCommands(t *testing.T) {
 		t.Fatalf("commands after Remove\n got %q\nwant %q", got, want)
 	}
 }
+
+// Remove on a legacy file that was never applied by this version drops every
+// harnez form and keeps the foreign commands (issue 1304 M4 item 4).
+func TestRemoveLegacyFixtureWithoutApply(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte(legacyConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := Remove(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("Remove reported no change on the legacy fixture")
+	}
+	want := []string{"/opt/lint.sh", "/opt/notify.sh", "/usr/local/bin/user-guard"}
+	if got := commandsIn(t, path); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands after Remove\n got %q\nwant %q", got, want)
+	}
+}
+
+// mixedGroupConfig has one Bash group that holds a foreign handler and a legacy
+// harnez handler. Ownership is per handler, so the foreign one must survive.
+const mixedGroupConfig = `[features]
+hooks = true
+
+[[hooks.PreToolUse]]
+matcher = "Bash"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "/opt/user-lint"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "harnez codex-hook"
+`
+
+// A mixed group keeps its foreign handler on Apply and on Remove, and Apply
+// adds the harnez PreToolUse group exactly once (issue 1304 M4 item 3).
+func TestMixedGroupKeepsForeignHandlerOnApplyAndRemove(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte(mixedGroupConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(path); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"/opt/user-lint",
+		"harnez hook codex PostCompact",
+		"harnez hook codex PostToolUse",
+		"harnez hook codex PreCompact",
+		"harnez hook codex PreToolUse",
+		"harnez hook codex SessionEnd",
+		"harnez hook codex SessionStart",
+		"harnez hook codex Stop",
+	}
+	if got := commandsIn(t, path); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands after Apply\n got %q\nwant %q", got, want)
+	}
+	if installed, _ := Status(path); !installed {
+		t.Fatal("Status false after Apply on a mixed group")
+	}
+	changed, err := Apply(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("second Apply duplicated the mixed group")
+	}
+
+	if _, err := Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := commandsIn(t, path), []string{"/opt/user-lint"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands after Remove\n got %q\nwant %q", got, want)
+	}
+	if installed, _ := Status(path); installed {
+		t.Fatal("Status true after Remove")
+	}
+	var doc map[string]any
+	if _, err := toml.DecodeFile(path, &doc); err != nil {
+		t.Fatal(err)
+	}
+	groups := tableArray(doc["hooks"].(map[string]any)["PreToolUse"])
+	if len(groups) != 1 || groups[0]["matcher"] != "Bash" {
+		t.Fatalf("PreToolUse groups after Remove = %v, want the user's Bash group", groups)
+	}
+}

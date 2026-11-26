@@ -43,6 +43,25 @@ func TestCodexDispatchMatchesSubcommandBehaviour(t *testing.T) {
 			payload: `{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":""},"session_id":"s1"}`,
 			old:     oldHook,
 		},
+		{
+			// The old entry had no tool filter beyond the host matcher, so a payload
+			// without tool_name is still rewritten.
+			name:    "codex PreToolUse without tool_name",
+			agent:   "codex",
+			event:   "PreToolUse",
+			payload: `{"hook_event_name":"PreToolUse","tool_input":{"command":"go test ./internal/x"},"session_id":"s1"}`,
+			old:     oldHook,
+			wantOut: `"permissionDecision":"allow"`,
+		},
+		{
+			// A malformed payload fails with the subcommand's error text, not a silent no-op.
+			name:    "codex PreToolUse malformed JSON",
+			agent:   "codex",
+			event:   "PreToolUse",
+			payload: `{"tool_name":`,
+			old:     oldHook,
+			wantErr: true,
+		},
 	}
 	for _, event := range []string{"PostToolUse", "PreCompact", "PostCompact", "SessionStart", "Stop", "SessionEnd"} {
 		cases = append(cases, goldenCase{
@@ -80,18 +99,29 @@ func TestCodexHookRegistryMatchesManifest(t *testing.T) {
 	if got := strings.Join(reg.Events(), ","); got != strings.Join(manifestEvents(t, "codex"), ",") {
 		t.Fatalf("registry events = %s", got)
 	}
-	if got := reg["PreToolUse"][0]; got.Name != "codex-hook" || got.Kind != hookdispatch.JSON {
+	got := reg["PreToolUse"][0]
+	if got.Name != "codex-hook" || got.Kind != hookdispatch.JSON {
 		t.Fatalf("PreToolUse handler = %+v, want codex-hook JSON", got)
+	}
+	// codex-hook replaces the subcommand, which ran on every payload, so it has
+	// no tool filter and a failing run aborts the dispatch as the subcommand did.
+	if len(got.Tools) != 0 || !got.Strict {
+		t.Fatalf("codex-hook Tools = %v, Strict = %v; want no tool filter and strict", got.Tools, got.Strict)
 	}
 }
 
-// The old codex-hook and codex-telemetry subcommands keep working for hooks
-// written before the switch.
+// The old codex-hook and codex-telemetry subcommands stay registered on the
+// real root command for hooks written before the switch.
 func TestLegacyCodexSubcommandsStillRegistered(t *testing.T) {
-	if got := newCodexHookCmd().Name(); got != "codex-hook" {
-		t.Errorf("legacy codex-hook command name = %s", got)
-	}
-	if got := newCodexTelemetryCmd().Name(); got != "codex-telemetry" {
-		t.Errorf("legacy codex-telemetry command name = %s", got)
+	root := newRootCmd()
+	for _, name := range []string{"codex-hook", "codex-telemetry"} {
+		c, _, err := root.Find([]string{name})
+		if err != nil || c == nil || c.Name() != name || c.Parent() != root {
+			got := ""
+			if c != nil {
+				got = c.Name()
+			}
+			t.Errorf("legacy %s resolved to %q, err %v", name, got, err)
+		}
 	}
 }

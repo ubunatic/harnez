@@ -141,6 +141,9 @@ type goldenCase struct {
 	wantSkills     int
 	wantTelemetry  int
 	wantMarkerGone bool
+	// wantErr marks a payload the old subcommand rejects with an error. The
+	// dispatcher must then fail with the same error text and write nothing.
+	wantErr bool
 }
 
 type goldenResult struct {
@@ -151,7 +154,7 @@ type goldenResult struct {
 
 // runGoldenSide runs one side of a case under its own temp HOME and state dir.
 // dispatch selects the hookdispatch path; otherwise the old behaviour runs.
-func runGoldenSide(t *testing.T, tc goldenCase, budget time.Duration, dispatch bool) goldenResult {
+func runGoldenSide(t *testing.T, tc goldenCase, budget time.Duration, dispatch bool) (goldenResult, error) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -174,24 +177,23 @@ func runGoldenSide(t *testing.T, tc goldenCase, budget time.Duration, dispatch b
 		fx:       &sideEffects{},
 	}
 	var out bytes.Buffer
+	var runErr error
 	if dispatch {
 		reg, err := registryFor(tc.agent, env.deps())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := hookdispatch.Dispatch(context.Background(), reg, tc.event, []byte(tc.payload), &out,
-			hookdispatch.Options{Budget: budget, Stderr: io.Discard}); err != nil {
-			t.Fatalf("dispatch: %v", err)
-		}
-	} else if err := tc.old(context.Background(), strings.NewReader(tc.payload), &out, env); err != nil {
-		t.Fatalf("old subcommand: %v", err)
+		runErr = hookdispatch.Dispatch(context.Background(), reg, tc.event, []byte(tc.payload), &out,
+			hookdispatch.Options{Budget: budget, Stderr: io.Discard})
+	} else {
+		runErr = tc.old(context.Background(), strings.NewReader(tc.payload), &out, env)
 	}
 	res := goldenResult{out: out.String(), fx: *env.fx}
 	if marker != "" {
 		_, err := os.Stat(marker)
 		res.markerGone = os.IsNotExist(err)
 	}
-	return res
+	return res, runErr
 }
 
 // Each event's dispatcher output and side effects must equal what the old
@@ -345,9 +347,21 @@ func runGoldenCases(t *testing.T, cases []goldenCase) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			want := runGoldenSide(t, tc, budget, false)
-			got := runGoldenSide(t, tc, budget, true)
+			want, wantErr := runGoldenSide(t, tc, budget, false)
+			got, gotErr := runGoldenSide(t, tc, budget, true)
 
+			if (wantErr != nil) != tc.wantErr {
+				t.Fatalf("old subcommand error = %v, want error %v", wantErr, tc.wantErr)
+			}
+			if fmt.Sprint(gotErr) != fmt.Sprint(wantErr) {
+				t.Fatalf("dispatch error = %v, old subcommand error = %v", gotErr, wantErr)
+			}
+			if wantErr != nil {
+				if got.out != want.out || got.out != "" {
+					t.Fatalf("output on error = %q, old %q; want nothing", got.out, want.out)
+				}
+				return
+			}
 			if got.out != want.out {
 				t.Fatalf("output changed\n got %q\nwant %q", got.out, want.out)
 			}

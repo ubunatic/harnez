@@ -38,7 +38,11 @@ type Handler struct {
 	Kind Kind
 	// Tools limits the handler to these tool_name values. Empty means every payload.
 	Tools []string
-	Run   Func
+	// Strict makes a failed run abort the dispatch: Dispatch returns the
+	// handler's error and writes nothing, so the host sees the same failure the
+	// old subcommand reported. Set in spec/hooks.yaml (issue 1304 M4).
+	Strict bool
+	Run    Func
 }
 
 // Registry maps each hook event name to its handlers, in run order.
@@ -93,8 +97,9 @@ func (r Registry) Events() []string {
 // Dispatch runs the handlers registered for event, one after another, each
 // under opts.Budget with panic recovery. A handler whose run fails, panics or
 // exceeds the budget loses only its own output; the others still count. The
-// merged reply goes to out. Dispatch returns an error only for a misconfigured
-// call (unknown event, invalid registry, no budget), never for a handler failure.
+// merged reply goes to out. Dispatch returns an error for a misconfigured call
+// (unknown event, invalid registry, no budget) and for the failure of a Strict
+// handler, which writes no reply. A failure of any other handler is never returned.
 //
 // A handler that exceeds the budget is abandoned, not stopped: its goroutine
 // keeps running until the process exits and may still write its own state
@@ -130,6 +135,9 @@ func Dispatch(ctx context.Context, reg Registry, event string, raw []byte, out i
 		}
 		data, err := runHandler(ctx, h, raw, opts.Budget)
 		if err != nil {
+			if h.Strict {
+				return err
+			}
 			fmt.Fprintf(opts.Stderr, "harnez hook %s: handler %s dropped: %v\n", event, h.Name, err)
 			continue
 		}

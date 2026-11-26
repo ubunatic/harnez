@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"reflect"
 	"strings"
@@ -224,6 +225,36 @@ func TestErrorDropsOutputOfThatHandler(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "fails") {
 		t.Fatalf("error not noted on stderr: %q", stderr)
+	}
+}
+
+// A strict handler replaces a subcommand that returned an error (codex-hook on a
+// malformed payload). Its error is returned unchanged and nothing is written, as
+// the subcommand did, so the host sees the same failure.
+func TestStrictHandlerErrorAbortsDispatch(t *testing.T) {
+	boom := errors.New("decode codex hook payload: bad")
+	reg := Registry{"PreToolUse": {
+		{Name: "a", Kind: JSON, Run: reply(`{"x":1}`)},
+		{Name: "strict", Kind: JSON, Strict: true, Run: func(context.Context, io.Reader, io.Writer) error { return boom }},
+	}}
+	var o, e bytes.Buffer
+	err := Dispatch(context.Background(), reg, "PreToolUse", []byte(`{}`), &o, Options{Budget: testBudget, Stderr: &e})
+	if err != boom {
+		t.Fatalf("Dispatch error = %v, want the strict handler's error unchanged", err)
+	}
+	if o.Len() != 0 {
+		t.Fatalf("output %q written after a strict failure", o.String())
+	}
+}
+
+// A non-strict failure is still only a dropped note: Dispatch returns nil.
+func TestNonStrictFailureStillDoesNotFailDispatch(t *testing.T) {
+	reg := Registry{"PreToolUse": {
+		{Name: "a", Kind: JSON, Run: func(context.Context, io.Reader, io.Writer) error { return errors.New("x") }},
+	}}
+	var o, e bytes.Buffer
+	if err := Dispatch(context.Background(), reg, "PreToolUse", []byte(`{}`), &o, Options{Budget: testBudget, Stderr: &e}); err != nil {
+		t.Fatalf("Dispatch error = %v, want nil", err)
 	}
 }
 

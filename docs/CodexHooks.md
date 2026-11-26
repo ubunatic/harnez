@@ -77,7 +77,11 @@ handler per Codex event, and `apply` writes one group per event with a single co
 `SessionStart`, `Stop`, `SessionEnd`). `PreToolUse` runs the rewrite handler (matcher `Bash`);
 the other events run the silent telemetry handler. The matchers are explicit in the spec:
 `PostToolUse` `*`, `SessionStart` `startup|resume|clear|compact`, `SessionEnd` `other`.
-Tool routing is not used for Codex because it would narrow those non-tool matchers.
+Codex events use an explicit event matcher and no handler tool filter: `codex-hook` runs on
+every payload the `Bash` matcher admits, so a payload without `tool_name` still reaches it, as
+the old entry did. A spec event cannot combine a matcher with handler `tools`; `ParseManifest` and
+the schema both reject it. `codex-hook` is `strict`: a failure aborts the dispatch with the
+handler's error, so the host sees the same failure the old subcommand gave, and writes no reply.
 The command form `harnez hook codex <Event>` keeps the Codex namespace apart from Claude's
 `harnez hook <Event>`, which already uses the same event names with different handler sets.
 Legacy subcommands `harnez codex-hook` and `harnez codex-telemetry` still run for old
@@ -91,19 +95,23 @@ Regression tests cover no-op output and real rewrites; installed-binary payload
 probes confirmed zero-byte no-ops and allow-plus-updatedInput rewrites. These probes
 verify the handler contract, not a separate end-to-end Codex session.
 
-**Ownership.** `~/.codex/config.toml` is shared with the user. A handler is harnez-owned
-when `hookdispatch.RunsHarnez` says so: after skipping a leading `env` and `VAR=value`
-tokens, the first word (quotes stripped) has base name `harnez`. That covers bare
-`harnez …`, absolute paths such as `/home/u/go/bin/harnez codex-hook`, and env-prefixed forms
+**Ownership.** `~/.codex/config.toml` is shared with the user. Ownership is per handler: a handler is
+harnez-owned when `hookdispatch.RunsHarnez` says so. The command is split into shell words with
+POSIX quoting (single quotes, double quotes, backslash); after any leading `env` and `VAR=value`
+words, the first word has base name `harnez`. That covers bare `harnez …`, quoted or absolute paths
+such as `"/my dir/harnez" hook Stop` and `/home/u/go/bin/harnez codex-hook`, and env-prefixed forms
 such as `env HARNEZ_TELEMETRY=1 harnez codex-telemetry`. Near misses stay foreign:
-`harnez-foo`, wrapper scripts like `/opt/lint.sh`, and `sh -c harnez`.
-`codex.Apply` strips harnez groups from every event (named `[hooks.<name>]` tables are kept),
+`harnez-foo`, wrapper scripts like `/opt/lint.sh`, `sh -c harnez`, `env MSG="hi harnez" /opt/user`
+(a quoted value is not the command word), and any command with an unterminated quote.
+`codex.Apply` removes harnez handlers from every event (named `[hooks.<name>]` tables are kept),
+keeps foreign handlers and their group's matcher, drops a group only when it held nothing else,
 then appends the current `harnez hook codex <Event>` groups, so legacy forms are replaced
-rather than duplicated. A user group on the same event survives.
-`codex.Remove` deletes harnez groups in every form (and the legacy `HookName` entry), drops
-`features.hooks` only when no hooks remain, and
-deletes the file only when it is empty; `codex.Status` compares a harnez-only
-projection, so user groups never count as drift. Before commit `02c9a0b`,
+rather than duplicated. A user group or a foreign handler in a mixed group survives.
+`codex.Remove` deletes harnez handlers in every form (and the legacy `HookName` entry), drops a
+group only once it is empty, drops `features.hooks` only when no hooks remain, and deletes the file
+only when it is empty. `codex.Status` compares a harnez-only projection, so user groups never count
+as drift; a group that mixes harnez and foreign handlers does count as drift, because Apply would
+split it. Before commit `02c9a0b`,
 Remove deleted whole event tables, including user hooks. The same ownership
 rule drives component removal (docs/HarnezComponents.md §8.4).
 

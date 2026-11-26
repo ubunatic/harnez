@@ -59,14 +59,34 @@ func TestCodexManifestEntries(t *testing.T) {
 // Each embedded agent has its own command prefix, so the two agents' entries
 // for the same event name never collide.
 func TestAgentsHaveDistinctCommands(t *testing.T) {
-	for _, agent := range []string{"claude", "codex"} {
+	wantCommand := map[string]string{"claude": "harnez hook", "codex": "harnez hook codex"}
+	commands := map[string]string{}
+	entryCommands := map[string]string{}
+	for agent, want := range wantCommand {
 		m, err := LoadManifest(agent)
 		if err != nil {
 			t.Fatal(err)
 		}
+		if m.Command != want {
+			t.Errorf("%s command = %q, want %q", agent, m.Command, want)
+		}
 		if len(m.EventNames()) == 0 {
 			t.Fatalf("%s manifest has no events", agent)
 		}
+		entries, err := m.Entries()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range entries {
+			if other, dup := entryCommands[e.Command]; dup {
+				t.Errorf("%s and %s both write entry %q", agent, other, e.Command)
+			}
+			entryCommands[e.Command] = agent
+		}
+		commands[agent] = m.Command
+	}
+	if commands["claude"] == commands["codex"] {
+		t.Fatalf("claude and codex share the command prefix %q", commands["claude"])
 	}
 	if _, err := LoadManifest("gemini"); err == nil {
 		t.Fatal("unknown agent accepted")
@@ -176,6 +196,32 @@ func TestParseManifestAcceptsMinimalSpec(t *testing.T) {
 	}
 }
 
+// strict is read from the spec: a failing strict handler aborts the dispatch.
+func TestParseManifestReadsStrictFlag(t *testing.T) {
+	doc := strings.Replace(minimalSpec, "{name: sound, kind: silent}", "{name: sound, kind: json, strict: true}", 1)
+	m, err := ParseManifest([]byte(doc), "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h := m.Events["Stop"].Handlers[0]; !h.Strict {
+		t.Fatalf("handler %s Strict = false, want true", h.Name)
+	}
+}
+
+// The schema alone rejects a matcher combined with handler tools, so the rule
+// does not depend on ParseManifest's Go check.
+func TestSchemaRejectsMatcherWithHandlerTools(t *testing.T) {
+	if err := validateSpec([]byte(minimalSpec)); err != nil {
+		t.Fatal(err)
+	}
+	doc := strings.Replace(strings.Replace(minimalSpec,
+		"      Stop:\n        handlers:", "      Stop:\n        matcher: Bash\n        handlers:", 1),
+		"kind: silent}", "kind: silent, tools: [Bash]}", 1)
+	if err := validateSpec([]byte(doc)); err == nil {
+		t.Fatal("schema accepted a matcher with handler tools")
+	}
+}
+
 // The schema rejects every malformed spec before a manifest is built, so a bad
 // edit to spec/hooks.yaml fails the test run instead of writing bad settings.
 func TestParseManifestRejectsBadSpec(t *testing.T) {
@@ -190,6 +236,10 @@ func TestParseManifestRejectsBadSpec(t *testing.T) {
 		"missing timeout":     strings.Replace(minimalSpec, "handler_timeout: 40s\n", "", 1),
 		"bad timeout":         strings.Replace(minimalSpec, "40s", "forty", 1),
 		"no agents":           "handler_timeout: 40s\n",
+		// An explicit matcher and handler tools are two sources for one matcher.
+		"matcher with handler tools": strings.Replace(strings.Replace(minimalSpec,
+			"      Stop:\n        handlers:", "      Stop:\n        matcher: Bash\n        handlers:", 1),
+			"kind: silent}", "kind: silent, tools: [Bash]}", 1),
 	}
 	for name, doc := range cases {
 		if _, err := ParseManifest([]byte(doc), "claude"); err == nil {

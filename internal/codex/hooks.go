@@ -23,10 +23,10 @@ import (
 
 // HookName is the legacy named hook entry ([hooks.harnez]) earlier harnez
 // versions wrote; Apply and Remove delete it. Current hooks live in the
-// per-event arrays ([[hooks.PreToolUse]] etc.), where harnez owns exactly
-// the groups whose handlers all run `harnez ...` (see isHarnezGroup). User
-// groups on the same events, other named hooks, and other top-level keys are
-// preserved.
+// per-event arrays ([[hooks.PreToolUse]] etc.), where harnez owns the handlers
+// that run `harnez ...` (see isHarnezHandler). A group that also holds foreign
+// handlers keeps them and its matcher. User groups on the same events, other
+// named hooks, and other top-level keys are preserved.
 const HookName = "harnez"
 
 // HooksPath returns the global Codex config.toml path (~/.codex/config.toml
@@ -103,10 +103,10 @@ func encodeTOML(doc map[string]any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// mergeHooksDoc replaces harnez-owned groups in each event array that
-// incoming defines and deletes the legacy HookName entry. User groups on
-// the same events, every other named hook, and every other top-level key in
-// existing stay intact. This is the TOML analog of internal/agy's
+// mergeHooksDoc removes harnez-owned handlers from every event array of
+// existing, appends the incoming groups, and deletes the legacy HookName
+// entry. Foreign handlers, including those in a group that also holds harnez
+// handlers, every other named hook, and every other top-level key stay intact. This is the TOML analog of internal/agy's
 // mergeHooksDoc — same preserve-everything-else contract, different
 // serialization.
 func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
@@ -116,7 +116,7 @@ func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
 	}
 	mergedHooks := map[string]any{}
 	if existingHooks, ok := out["hooks"].(map[string]any); ok {
-		// Strip harnez groups from every event, not only the events incoming
+		// Strip harnez handlers from every event, not only the events incoming
 		// defines, so a command harnez no longer writes cannot linger.
 		for k, v := range existingHooks {
 			if tableArray(v) == nil {
@@ -193,9 +193,13 @@ func Status(path string) (installed bool, drifted bool) {
 	if !featuresOK || features["hooks"] != true {
 		return false, true
 	}
-	owned := harnezHooks(hooks)
+	owned, mixed := harnezHooks(hooks)
 	if len(owned) == 0 {
 		return false, false
+	}
+	if mixed {
+		// A harnez handler shares a group with foreign handlers; Apply would split it.
+		return true, true
 	}
 
 	wantData, _ := json.Marshal(BuildHooksDoc()["hooks"])
@@ -218,10 +222,10 @@ func TrustStatus(path string) (trusted bool, untrusted int, total int) {
 		}
 		snake := codexHookEventKey(event)
 		for gi, group := range tableArray(v) {
-			if !isHarnezGroup(group) {
-				continue
-			}
-			for hi := range tableArray(group["hooks"]) {
+			for hi, h := range tableArray(group["hooks"]) {
+				if !isHarnezHandler(h) {
+					continue
+				}
 				total++
 				if !hasHookTrustHash(state, path, snake, gi, hi) {
 					untrusted++
@@ -321,14 +325,11 @@ func Remove(path string) (changed bool, err error) {
 	}
 	for event, v := range hooks {
 		all := tableArray(v)
-		if all == nil {
-			continue
-		}
-		kept := userGroups(v)
-		if len(kept) == len(all) {
+		if all == nil || ownedCount(all) == 0 {
 			continue
 		}
 		changed = true
+		kept := userGroups(v)
 		if len(kept) == 0 {
 			delete(hooks, event)
 		} else {
@@ -378,48 +379,87 @@ func tableArray(v any) []map[string]any {
 	return nil
 }
 
-// isHarnezGroup reports whether every handler in a hook group runs harnez, by
-// the rule shared with apply's Claude side (hookdispatch.RunsHarnez). That covers
-// the bare legacy `harnez codex-hook`, absolute-path and env-prefixed forms.
-func isHarnezGroup(group map[string]any) bool {
-	handlers := tableArray(group["hooks"])
-	if len(handlers) == 0 {
-		return false
-	}
-	for _, h := range handlers {
-		cmd, _ := h["command"].(string)
-		if !hookdispatch.RunsHarnez(cmd) {
-			return false
-		}
-	}
-	return true
+// isHarnezHandler reports whether one hook handler runs harnez, by the rule
+// shared with apply's Claude side (hookdispatch.RunsHarnez). That covers the
+// bare legacy `harnez codex-hook`, absolute-path and env-prefixed forms.
+func isHarnezHandler(h map[string]any) bool {
+	cmd, _ := h["command"].(string)
+	return hookdispatch.RunsHarnez(cmd)
 }
 
-// userGroups returns the groups of an event array that harnez does not own.
+// splitGroup separates a hook group's handlers into the harnez-owned ones and
+// the foreign ones, keeping their order.
+func splitGroup(group map[string]any) (owned, kept []map[string]any) {
+	for _, h := range tableArray(group["hooks"]) {
+		if isHarnezHandler(h) {
+			owned = append(owned, h)
+		} else {
+			kept = append(kept, h)
+		}
+	}
+	return owned, kept
+}
+
+// withHandlers returns a copy of group with its handlers replaced, so the
+// group's matcher and any other keys stay as they were.
+func withHandlers(group map[string]any, handlers []map[string]any) map[string]any {
+	out := make(map[string]any, len(group))
+	for k, v := range group {
+		out[k] = v
+	}
+	out["hooks"] = handlers
+	return out
+}
+
+// ownedCount counts the harnez-owned handlers across groups.
+func ownedCount(groups []map[string]any) int {
+	n := 0
+	for _, g := range groups {
+		owned, _ := splitGroup(g)
+		n += len(owned)
+	}
+	return n
+}
+
+// userGroups returns the groups of an event array without the harnez handlers.
+// A group that held only harnez handlers is dropped. A mixed group keeps its
+// foreign handlers and its matcher, so the user's handlers are never lost.
 func userGroups(v any) []map[string]any {
 	var out []map[string]any
 	for _, g := range tableArray(v) {
-		if !isHarnezGroup(g) {
+		owned, kept := splitGroup(g)
+		switch {
+		case len(owned) == 0:
 			out = append(out, g)
+		case len(kept) > 0:
+			out = append(out, withHandlers(g, kept))
 		}
 	}
 	return out
 }
 
-// harnezHooks projects a hooks table onto the harnez-owned groups, dropping
-// events without any, so it compares equal to BuildHooksDoc()["hooks"].
-func harnezHooks(hooks map[string]any) map[string]any {
-	out := map[string]any{}
+// harnezHooks projects a hooks table onto the harnez-owned handlers: per event,
+// each group that holds a harnez handler, reduced to those handlers and the
+// group's matcher. Events without any are dropped, so the projection compares
+// equal to BuildHooksDoc()["hooks"]. mixed reports a group that also holds
+// foreign handlers, which Apply would split.
+func harnezHooks(hooks map[string]any) (owned map[string]any, mixed bool) {
+	owned = map[string]any{}
 	for event, v := range hooks {
-		var owned []map[string]any
+		var groups []map[string]any
 		for _, g := range tableArray(v) {
-			if isHarnezGroup(g) {
-				owned = append(owned, g)
+			ownedHandlers, kept := splitGroup(g)
+			if len(ownedHandlers) == 0 {
+				continue
 			}
+			if len(kept) > 0 {
+				mixed = true
+			}
+			groups = append(groups, withHandlers(g, ownedHandlers))
 		}
-		if len(owned) > 0 {
-			out[event] = owned
+		if len(groups) > 0 {
+			owned[event] = groups
 		}
 	}
-	return out
+	return owned, mixed
 }
