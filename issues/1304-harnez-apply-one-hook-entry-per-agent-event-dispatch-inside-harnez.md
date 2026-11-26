@@ -160,3 +160,54 @@ M2 proper:
 11. Gates: `HTO=0 make test-q1` once, with the log in a file. Commits `feat(hook): … (issue 1304 M2)` / `fix(hook): …`, at most 3. Never amend.
 
 The host runs `make smoke` and a scratch-HOME apply → re-apply → drift-repair run before M2 counts as landed.
+
+## M2 review (host and agy:neon:med reviewer)
+
+M2 delivered (one entry per event): 967b120f fixes the M1 review findings; b0fbda46 makes `apply` write 8 Claude entries from `hookdispatch.ClaudeManifest`. Dev q1: 83 ok, 0 `--- FAIL`.
+
+Host check on the installed binary in a scratch HOME:
+- `apply` writes the 8 entries, and a re-apply prints `No changes.`
+- `harnez hook PreToolUse` gives the following:
+
+  | Payload | Output |
+  |---|---|
+  | Bash | the `⚙` rewrite |
+  | Read | `{}` |
+  | Grep (no handler) | nothing, exit 0 |
+
+- `harnez hook SessionStart` prints the instructions.
+- The real `~/.claude/settings.json` is untouched.
+
+Reviewer rev-1304-m2, checked by the host:
+1. **MED** `internal/claude/config.go:28,310`: a `-c` config with a `hooks:` key is silently ignored.
+2. **MED** `internal/hookdispatch/claude_manifest.go:13-29`: the event/handler/tool wiring moved from `config.yaml`/`spec/` into a Go var. This breaks `docs/Spec.md:15,178-181`.
+3. **LOW** `apply_settings.go:114-117`: legacy harnez entries with an `env X=1` prefix or a quoted path are not migrated.
+4. **LOW**: the Bash, Read and SessionStart goldens leave `wantOut` empty.
+5. **LOW**: stale docs:
+   - `docs/HookRewritePattern.md:89,173` and `docs/HarnezComponents.md:98,207,243,344,387` still name the `config.yaml` `hooks:` list or the old commands;
+   - `docs/UsageCollection.md:56` names `harnez codex-telemetry`.
+6. Dismissed: "the matcher is an unanchored regex, so anchor it". The hooks docs say a matcher made only of letters, digits, `_`, `-`, spaces, `,` and `|` is an exact list, which `Bash|View|Read|ReadMultipleFiles|Edit|Write` is. Anchoring with `^(…)$` would turn it into a regex, so keep it.
+
+## Decision (decide mode, M2 review)
+
+- Move the manifest to `spec/hooks.yaml`, with schema entries. It holds, per agent and event, the handlers in run order with name, kind and tools. Go keeps only the name → run-function binding.
+  - At load, every spec handler name must have a Go binding and every Go binding a spec entry; anything else is an error, checked by a test.
+  - Reason: this is the repo rule, and M3 adds Codex to the same file.
+- A `hooks:` key in a `-c` config is an error that names `spec/hooks.yaml`; it is not silently ignored. Reason: silent loss of a user setting is worse than a clear failure. Custom per-user hooks are not a feature today.
+
+## M3 pre-work (M2 follow-ups, then Codex)
+
+M2 follow-ups:
+1. Move `ClaudeManifest` into `spec/hooks.yaml` and its schema, with the binding check above. The entries `apply` writes must stay byte-identical: the M2 migration test and `TestApplyDiffRepairCycle` stay unchanged.
+2. `internal/claude/config.go`: make a `hooks:` key in a loaded config an error. Test it with `hooks: []` and with a custom entry.
+3. `isHarnezCommand`: also match an `env VAR=… harnez …` prefix and a quoted first word whose base name is `harnez`. Keep `harnez-foo` and wrapper scripts foreign. Use table tests for each case, including the near misses.
+4. Bash, Read and SessionStart goldens: set a non-empty `wantOut` or a field assertion. Bash: the `updatedInput.command` starts with `⚙`. Read: `{}` on a plain file. SessionStart: the output contains the instruction rule line.
+5. Fix the stale docs listed in finding 5.
+
+M3 proper (Codex, `internal/codex/hooks.go:59-96`):
+6. One Codex entry per event, `harnez hook codex <Event>` or the same `harnez hook <Event>` with an agent flag; the developer picks one and names the reason in the report.
+   - The manifest goes in `spec/hooks.yaml` under `codex`. `codex-hook` (PreToolUse Bash) and `codex-telemetry` become handlers.
+   - The Codex reply shape (`cmd/harnez/codexhooks.go:41-48`) must stay byte-identical; prove it with goldens per event against the old subcommands.
+7. Codex migration: `Apply` and `Remove` (`hooks.go:175,328`) replace old harnez entries and keep foreign ones. Test it like the Claude migration test. Old subcommands keep working.
+8. Docs: `docs/CodexHooks.md`.
+9. Gates: `HTO=0 make test-q1` once, with the log in a file. Commits `fix(hook): … (issue 1304 M3)` / `feat(hook): …`, at most 3. Never amend.
