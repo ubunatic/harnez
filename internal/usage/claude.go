@@ -107,6 +107,13 @@ const ClaudeFableWindowKey = "fable"
 // would map it to the all-models "weekly" key and the two windows would collide.
 const claudeFableWindowName = "Fable"
 
+// ClaudeAgentID is the quota-history agent of Claude's windows.
+const ClaudeAgentID = "claude"
+
+// ClaudeWeeklyWindowName is the quota-history window name of Claude's
+// all-models weekly window (quota-history rows copy the window name).
+const ClaudeWeeklyWindowName = "Weekly (7-day)"
+
 // applyClaudeFable stores the Fable window of a payload in usage.ExtraWindows.
 func applyClaudeFable(usage *AgentUsage, w *QuotaWindow) {
 	if w == nil {
@@ -171,7 +178,7 @@ func fetchClaudeQuota(ctx context.Context, client *http.Client, oauth ClaudeCred
 	}
 	if oauthUsage.SevenDay != nil {
 		qw := QuotaWindow{
-			Name:             "Weekly (7-day)",
+			Name:             ClaudeWeeklyWindowName,
 			UsedPercent:      oauthUsage.SevenDay.Utilization,
 			RemainingPercent: 100.0 - oauthUsage.SevenDay.Utilization,
 		}
@@ -237,7 +244,7 @@ func parseClaudeUsageOutput(out []byte) claudeQuotaPayload {
 			window.Name = "Session (5-hour)"
 			payload.Session = window
 		} else {
-			window.Name = "Weekly (7-day)"
+			window.Name = ClaudeWeeklyWindowName
 			payload.Weekly = window
 		}
 	}

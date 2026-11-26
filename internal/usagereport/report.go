@@ -239,13 +239,20 @@ func priceCall(catalog telemetry.PricingCatalog, c Call) *int64 {
 	return cost
 }
 
+// isClaudeWeekly selects the one series the report reads: Claude's all-models
+// weekly window, keyed by (agent, group, window) with an empty group. Other
+// series (agy groups, Claude session or Fable windows) never mix into it.
+func isClaudeWeekly(s usage.QuotaHistoryEntry) bool {
+	return s.Agent == usage.ClaudeAgentID && s.Group == "" && s.Window == usage.ClaudeWeeklyWindowName
+}
+
 // weeklyGroups orders the weekly samples and groups them into windows: a
 // sample joins the previous one's window when their reset_at agree within the
 // tolerance. An exact duplicate row is dropped.
 func weeklyGroups(samples []usage.QuotaHistoryEntry, tol time.Duration) [][]usage.QuotaHistoryEntry {
 	var weekly []usage.QuotaHistoryEntry
 	for _, s := range samples {
-		if usage.IsWeeklyQuotaWindow(s.Window) {
+		if isClaudeWeekly(s) {
 			weekly = append(weekly, s)
 		}
 	}
@@ -268,17 +275,20 @@ func weeklyGroups(samples []usage.QuotaHistoryEntry, tol time.Duration) [][]usag
 	return groups
 }
 
-// weeklyIntervals returns each rise between consecutive samples of one window.
-// A fall is not a rise; a reset is a new window, so no interval crosses it.
+// weeklyIntervals returns the rises of each window, measured from the highest
+// value seen so far in that window: a dip and recovery (70, 69, 71) is one
+// 1 pp rise, not a 2 pp rise from the dip. A reset is a new window, so no
+// interval crosses it.
 func weeklyIntervals(samples []usage.QuotaHistoryEntry, tol time.Duration) []Interval {
 	var out []Interval
 	for _, g := range weeklyGroups(samples, tol) {
-		for i := 1; i < len(g); i++ {
-			a, b := g[i-1], g[i]
-			if !b.Timestamp.After(a.Timestamp) || b.UsedPercent <= a.UsedPercent {
+		peak := g[0]
+		for _, b := range g[1:] {
+			if !b.Timestamp.After(peak.Timestamp) || b.UsedPercent <= peak.UsedPercent {
 				continue
 			}
-			out = append(out, Interval{Start: a.Timestamp, End: b.Timestamp, DeltaPct: float64(b.UsedPercent - a.UsedPercent)})
+			out = append(out, Interval{Start: peak.Timestamp, End: b.Timestamp, DeltaPct: float64(b.UsedPercent - peak.UsedPercent)})
+			peak = b
 		}
 	}
 	return out

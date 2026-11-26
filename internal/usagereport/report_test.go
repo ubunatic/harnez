@@ -47,7 +47,7 @@ const testTol = time.Minute
 func rp(t time.Time) *time.Time { return &t }
 
 func weekly(at time.Time, used int, resetAt *time.Time) usage.QuotaHistoryEntry {
-	return usage.QuotaHistoryEntry{Timestamp: at, Agent: "claude", Window: "weekly", UsedPercent: used, ResetAt: resetAt}
+	return usage.QuotaHistoryEntry{Timestamp: at, Agent: "claude", Window: "Weekly (7-day)", UsedPercent: used, ResetAt: resetAt}
 }
 
 // call builds a call of `input` uncached tokens on model at time at.
