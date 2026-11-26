@@ -1,6 +1,6 @@
 # 1302 — harnez usage: Claude range and session cost report with subsidy factor, time of day and graph
 
-**Status**: Open
+**Status**: Closed — harnez usage history report delivered (M1-M5). Real weekly window: API $40.51, 23 pp attributed at 45x, window line 29.7x upper bound, 13 pp not explained locally (other machines or web). Buckets sum exactly to the API total on weekly, 7d and 90d runs; prices match the 1301 canary (1869 µUSD). Live paired turn-quota rows now exist (6). Long haiku:med session: peak 166.7k, $1.53 of $1.73 in the >100k tier. q1 82 ok, 0 FAIL.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
