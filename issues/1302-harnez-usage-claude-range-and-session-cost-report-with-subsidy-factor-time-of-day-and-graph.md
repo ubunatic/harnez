@@ -54,3 +54,9 @@
 - Per-turn token and cost rows exist only for `harnez agent` turns (`cmd/harnez/agent_run.go`). A host Claude Code session (for example bd2185a4) writes no turn rows by design; the report must show it as "n/a", never as zero.
 - Per-call Claude pricing (1301 M1) prices only calls with the per-call cache split. Older turns without the split stay unknown (nil cost).
 - Open: the cumulative `turn_token_usage` row still counts cache writes in `cached_input_tokens`.
+
+## Carried over from #1301 (host, 2026-11-26)
+
+- **Live plan share not yet seen.** No canary turn has yet shown a live `paired` quota outcome with a filled `subscription_price_share_micros`. Every short canary reused one cached usage snapshot. Since M4 these are classified `unchanged_snapshot`, and before M4 they paired as 0 deltas with a null share. The long haiku:med session in this sprint must show at least one `paired` row with a nonzero delta and a share that matches a hand calculation: delta fraction × weekly plan share.
+- **Turn records keep the alias.** The session JSON `TurnRecord.Model` (`populateTurnCostRecord`) still stores the session alias (`opus`). The DB rows store the reported id since #1301 M4. Align the JSON when the report reads turn records.
+- **Concurrent sessions skew per-turn deltas.** Other Claude sessions on the same plan (for example ../splitty, ../taia) move the quota during a turn. Per-turn deltas are therefore an upper bound, and quota per dollar has to be analysed as totals over time windows.
