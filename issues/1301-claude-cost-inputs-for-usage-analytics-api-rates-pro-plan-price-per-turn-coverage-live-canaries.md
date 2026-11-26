@@ -131,7 +131,7 @@ Prompt: "Reply with exactly OK…", about 20k prompt tokens, all in the lower ti
    - Store the full model id (`claude-opus-5-5`), not the alias `opus`. A bare alias would silently get the wrong rates once a newer Opus ships.
    - Test: a mixed-model turn, and an unknown call model making the turn nil.
 2. **Make the quota-delta outcome explicit.**
-   - When the after reading is the same observation as the before reading, or the fetch failed (HTTP 429), write nothing silently? No: record why. Use whatever shape fits the existing tables, for example a delta row with an error or "unchanged-snapshot" source, or a documented skip reason.
+   - When the after reading is the same observation as the before reading, or the fetch failed (HTTP 429), record why rather than skipping silently. Use whatever shape fits the existing tables, for example a delta row with an error or "unchanged-snapshot" source, or a documented skip reason.
    - Do not add retries that hit the usage API harder: the 429 is real.
    - Test: same-snapshot gives the documented outcome; 429 gives an error recorded, not a 0 delta.
 3. **Fix the cumulative cache-write count.** The cumulative `turn_token_usage` row still counts cache writes in `cached_input_tokens` (your open item). Fix it so cumulative and delta rows agree.
