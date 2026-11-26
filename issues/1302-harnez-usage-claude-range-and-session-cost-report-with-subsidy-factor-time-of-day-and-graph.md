@@ -212,3 +212,27 @@ M3 was delivered in 77318286 (attribution) and c2c75eaa (docs). q1 is green: 82 
    - tests for the new spec loaders.
 8. **LOW items.** Remove `IsWeeklyQuotaWindow` and the duplicate `Model` field. Make the docs and comments match the code. Under `--session`, either filter `Hours`/`Series` or say in the output that they are for all sessions. Print a plain `n/a` when the plan price is unknown.
 9. **Gates.** `make install`. Re-run the real report (aggregates only) and check that the bucket sums add up. Then `HTO=0 make test-q1 > scratchpad/q1-1302-m4.log 2>&1`, grep for `--- FAIL` and give the ok count.
+
+## M4 review (host)
+
+M4 delivered (review fixes): 37914ef4 red tests, b74d02fc timeline spans and half-open buckets, 8e9180fc `usage_report.min_local_factor`. Dev q1: 82 ok, 0 `--- FAIL`.
+
+Host checks on the installed binary:
+- Buckets sum to the total API cost exactly: weekly window $40.0066 = 39.4009 attributed + 0.0051 quiet + 0.0399 before first + 0 after older + 0.5607 pending. The same holds for `--since 7d`.
+- 90 days: the bucket sum is 668.92 USD; totals are n/a because one session has unpriced calls (expected, M4 item 4).
+- Every changed assertion in the existing tests is the same or stronger. `TestBuildEveryCallInExactlyOneBucket` checks every bucket by value, and `TestBuildHalfOpenBoundaryGoesToNextBucket` checks the boundary.
+
+Findings:
+1. **The default `min_local_factor` 0.1 is a near miss.** The weekly report still attributes a 1 pp rise at 09:00 for $0.0038, factor 0.1004x, which is the series minimum. The 90-day series below 20x is: 0.10, 0.16, 0.19, 1.1, 3.29, 3.55, then 11.01 and up (plus 0.05 and 0.08, already quiet). The rises at 0.10 to 0.19x have the same shape as f8441a87.
+2. **LOW: two meanings of "pending".** The totals row `PENDING $` is API − ATTRIB ($0.6472 in the weekly window), but the "not in a quota rise" line calls only $0.6022 pending. The rest is the quiet and before-first buckets.
+
+## Decision (decide mode, M4 review)
+
+- `min_local_factor` default 1.0. Reason: below 1x, the local API cost is less than the plan cost of the same quota, which cannot drive a rise when the median is 61x. On the 90-day data it is the widest gap below 10x (0.19 → 1.1). It flags 5 rises and leaves 1.1x and up attributed.
+
+## M5 pre-work
+
+1. Set `usage_report.min_local_factor: 1` in `spec/usage.yaml`. Rewrite its comment with the measured series above (0.05, 0.08, 0.10, 0.16, 0.19 quiet; next 1.1). Update `TestReportMinLocalFactorFromSpec` and `docs/Telemetry.md`.
+2. Add a test: a rise at factor 0.1004 with default options is quiet. Use the real shape: 1 pp, $0.0038 local, weekly plan 3,785,192 µUSD. Also add a near-miss test: a rise at 1.1x stays attributed.
+3. Rename the totals column `PENDING $` to `UNATTRIB $` (API − ATTRIB). Also rename its JSON field, and keep the bucket line's "pending" for the open tail only. Update the legend and `docs/Telemetry.md`. The session rows use the same column.
+4. Gates: `make install`, the real weekly report (aggregates only), and `HTO=0 make test-q1`.
