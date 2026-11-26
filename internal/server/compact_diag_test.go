@@ -153,15 +153,20 @@ func TestCompactDiagClientReasons(t *testing.T) {
 // The collector writes one note per PostCompact. Its reason is the hook's reason
 // when the hook found none, and otherwise the DB-side outcome.
 func TestCompactDiagCollectorReasons(t *testing.T) {
+	// stale_boundary_collector drops the PreCompact mark (issue 1303 M1d), so the
+	// hook takes the boundary by its window and the collector's own check decides.
 	cases := []struct {
 		name       string
 		precompact bool
+		dropMark   bool
 		boundaryAt func(preAt time.Time) time.Time
+		hookReason string
 		reason     string
 	}{
-		{"no_precompact", false, nil, reasonNoPrecompact},
-		{"stale_boundary", true, func(pre time.Time) time.Time { return pre.Add(-time.Second) }, reasonStaleBoundary},
-		{"applied", true, func(pre time.Time) time.Time { return pre.Add(time.Second) }, reasonApplied},
+		{"no_precompact", false, false, nil, "", reasonNoPrecompact},
+		{"stale_boundary_hook", true, false, func(pre time.Time) time.Time { return pre.Add(-time.Second) }, reasonStaleBoundary, reasonStaleBoundary},
+		{"stale_boundary_collector", true, true, func(pre time.Time) time.Time { return pre.Add(-time.Second) }, "", reasonStaleBoundary},
+		{"applied", true, false, func(pre time.Time) time.Time { return pre.Add(time.Second) }, "", reasonApplied},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -179,6 +184,15 @@ func TestCompactDiagCollectorReasons(t *testing.T) {
 			boundaryAt := start
 			if tc.precompact {
 				processPrepared(t, db, claudePreCompactRaw(transcript))
+				if tc.dropMark {
+					markPath, err := claudeCompactMarkPath(diagSessionID)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := os.Remove(markPath); err != nil {
+						t.Fatalf("remove PreCompact mark: %v", err)
+					}
+				}
 				preAt, ok, err := db.LatestCompactionEventTime(diagSessionID, "precompact")
 				if err != nil || !ok {
 					t.Fatalf("precompact row: ok=%v err=%v", ok, err)
@@ -196,8 +210,8 @@ func TestCompactDiagCollectorReasons(t *testing.T) {
 			if last.Kind != "postcompact" || last.Reason != tc.reason {
 				t.Errorf("note kind %q reason %q, want postcompact %q", last.Kind, last.Reason, tc.reason)
 			}
-			if last.Hook == nil || last.Hook.Reason != "" {
-				t.Errorf("hook side = %+v, want the boundary read to pass with no hook reason", last.Hook)
+			if last.Hook == nil || last.Hook.Reason != tc.hookReason {
+				t.Errorf("hook reason = %+v, want %q", last.Hook, tc.hookReason)
 			}
 			if last.CollectorPID != os.Getpid() {
 				t.Errorf("collector_pid = %d, want %d", last.CollectorPID, os.Getpid())

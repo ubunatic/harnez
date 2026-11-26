@@ -24,12 +24,18 @@ var (
 // boundary_window old. Claude may append its boundary after the PostCompact hook
 // has started, so one read can miss it (issue 1303 M1b). The poll stops after
 // boundary_wait, which keeps the hook under handler_timeout. A boundary older
-// than the window belongs to an earlier compaction and is skipped.
+// than the cutoff belongs to an earlier compaction and is skipped.
 // The reason is the hook's outcome when no fresh boundary is returned: a read
-// error, no boundary at all, or only a boundary older than the window (issue
+// error, no boundary at all, or only a boundary older than the cutoff (issue
 // 1303 M1c).
-func waitClaudeCompact(path string, wait hookdispatch.ClaudeCompactWait) (*claudeCompact, string) {
+// The cutoff is the later of the window and since, this compaction's PreCompact
+// time (issue 1303 M1d). An older boundary inside the window is an earlier
+// compaction's and must not end the wait. A zero since keeps the window alone.
+func waitClaudeCompact(path string, wait hookdispatch.ClaudeCompactWait, since time.Time) (*claudeCompact, string) {
 	cutoff := claudeCompactNow().Add(-wait.Window)
+	if since.After(cutoff) {
+		cutoff = since
+	}
 	polls := int(wait.Wait / wait.Poll)
 	for slept := 0; ; slept++ {
 		c, err := scanClaudeCompact(path)
@@ -54,7 +60,7 @@ func waitClaudeCompact(path string, wait hookdispatch.ClaudeCompactWait) (*claud
 // hook's reason. Only Claude's payload (it carries compact_summary) waits for the
 // boundary; Codex reads once. An unreadable spec falls back to one read, which
 // the spec tests guard against at build time.
-func readClaudePostCompact(path string, claude bool) (*claudeCompact, string) {
+func readClaudePostCompact(path string, claude bool, since time.Time) (*claudeCompact, string) {
 	if !claude {
 		return singleClaudeCompactRead(path)
 	}
@@ -62,7 +68,7 @@ func readClaudePostCompact(path string, claude bool) (*claudeCompact, string) {
 	if err != nil {
 		return singleClaudeCompactRead(path)
 	}
-	return waitClaudeCompact(path, wait)
+	return waitClaudeCompact(path, wait, since)
 }
 
 // singleClaudeCompactRead is one read with no freshness check. The collector

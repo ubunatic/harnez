@@ -15,7 +15,7 @@
 # dispatch with the handler's error, so the host sees that failure and no reply.
 handler_timeout: 40s
 # claude_compact bounds the PostCompact read of Claude's compact boundary (issue 1303 M1b).
-# boundary_window: a boundary this old or newer counts as this compaction's.
+# boundary_window: a boundary this old or newer counts as this compaction's, and never one older than its PreCompact (issue 1303 M1d).
 # boundary_wait: the longest one PostCompact polls the transcript; it must stay under handler_timeout.
 # boundary_poll: the pause between two reads; boundary_wait must be at least boundary_poll.
 claude_compact:
