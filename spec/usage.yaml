@@ -36,10 +36,11 @@ usage_report:
   unexplained_tolerance_pct: 1
   min_session_quota_pct: 1
   # A rise whose local API cost over its plan cost is below this is quiet: not
-  # explained locally, no share (ticket 1302 M4). Measured on 293 attributed
-  # rises over 90 days: min 0.05x, p10 29x, median 61x; 0.1x sits ~290x below
-  # p10 and flags the two quiet rises (0.05x and 0.08x) only.
-  min_local_factor: 0.1
+  # explained locally, no share (ticket 1302 M4, M5). Measured on the 90-day
+  # series (factor per attributed rise): 0.05, 0.08, 0.10, 0.16, 0.19 are quiet;
+  # the next is 1.1, then 3.29 and up. Below 1x the local API cost is less than
+  # the plan cost of the same quota, which cannot drive a rise (median 61x).
+  min_local_factor: 1
 collector_timeout: 2m
 passive_dedupe_interval: 30s
 passive_update_path: /usage/passive

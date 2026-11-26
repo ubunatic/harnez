@@ -18,8 +18,8 @@ func TestReportMinLocalFactorFromSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v != 0.1 || v < 0 {
-		t.Fatalf("usage_report.min_local_factor = %v, want 0.1 from embedded spec", v)
+	if v != 1 || v < 0 {
+		t.Fatalf("usage_report.min_local_factor = %v, want 1 from embedded spec", v)
 	}
 	data, err := fs.ReadFile(harnez.DefaultFS, "spec/schemas/usage.schema.json")
 	if err != nil {

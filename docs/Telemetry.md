@@ -275,8 +275,8 @@ The rise is split across the sessions with priced calls in its interval, by API
 cost. A rise with no priced call is "not explained locally" when the unexplained
 total exceeds `usage_report.unexplained_tolerance_pct`. So is a quiet rise: its
 local API cost over its plan cost (`cost / (pp / 100 x weekly plan)`) is below
-`usage_report.min_local_factor` (default 0.1; a measured per-rise factor
-distribution in the spec comment). Plan cost is the share times the weekly plan
+`usage_report.min_local_factor` (default 1; the measured series is in the spec
+comment: rises at 0.05 to 0.19x are quiet, the next is 1.1x). Plan cost is the share times the weekly plan
 price (net); gross adds `plan_vat_rate`. Unpriced or unknown values print `n/a`,
 never 0; a session with any unpriced call has `n/a` for API, attributed, pending
 and factor, and the report counts those calls. Without a plan price the factor
