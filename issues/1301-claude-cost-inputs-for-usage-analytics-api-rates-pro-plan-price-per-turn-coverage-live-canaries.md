@@ -1,6 +1,6 @@
 # 1301 — Claude cost inputs for usage analytics: API rates, Pro plan price, per-turn coverage, live canaries
 
-**Status**: Open
+**Status**: Closed — Claude rates sourced in spec/pricing.yaml (15 rates incl. Haiku >100k tier); plan = Pro EUR 18 net via ECB FX; cost_micros filled and hand-matched on 8 live canaries (e.g. haiku 1869 uUSD; sonnet 40637; opus 83163); quota pairing fixed for reset jitter and reused snapshots (live unchanged_snapshot outcome); full q1 green, 81 packages. Shortfall: a live paired subscription_price_share_micros was not observable with short canaries (cached snapshot each time); parked in #1302 for its long session.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
