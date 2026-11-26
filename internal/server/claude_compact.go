@@ -9,7 +9,49 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/hookdispatch"
 )
+
+// claudeCompactNow and claudeCompactSleep are the wait clock. Tests replace them
+// so the boundary poll runs without real sleeps (issue 1303 M1b).
+var (
+	claudeCompactNow   = time.Now
+	claudeCompactSleep = time.Sleep
+)
+
+// waitClaudeCompact polls the transcript for a complete compact boundary at most
+// boundary_window old. Claude may append its boundary after the PostCompact hook
+// has started, so one read can miss it (issue 1303 M1b). The poll stops after
+// boundary_wait, which keeps the hook under handler_timeout. A boundary older
+// than the window belongs to an earlier compaction and is skipped.
+func waitClaudeCompact(path string, wait hookdispatch.ClaudeCompactWait) *claudeCompact {
+	cutoff := claudeCompactNow().Add(-wait.Window)
+	polls := int(wait.Wait / wait.Poll)
+	for slept := 0; ; slept++ {
+		if c := readClaudeCompact(path); c != nil && !c.Timestamp.Before(cutoff) {
+			return c
+		}
+		if slept >= polls {
+			return nil
+		}
+		claudeCompactSleep(wait.Poll)
+	}
+}
+
+// readClaudePostCompact is the PostCompact read. Only Claude's payload (it carries
+// compact_summary) waits for the boundary; Codex reads once. An unreadable spec
+// falls back to one read, which the spec tests guard against at build time.
+func readClaudePostCompact(path string, claude bool) *claudeCompact {
+	if !claude {
+		return readClaudeCompact(path)
+	}
+	wait, err := hookdispatch.LoadClaudeCompactWait()
+	if err != nil {
+		return readClaudeCompact(path)
+	}
+	return waitClaudeCompact(path, wait)
+}
 
 // claudeCompact is the newest complete compact boundary in a Claude transcript
 // (issue 1303 M1). Model is the last main-chain model seen before the boundary.

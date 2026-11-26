@@ -167,6 +167,10 @@ func TestEmbeddedManifestHandlerNames(t *testing.T) {
 // minimalSpec is a valid hooks spec with one claude event; the schema tests
 // mutate it.
 const minimalSpec = `handler_timeout: 40s
+claude_compact:
+  boundary_window: 10m
+  boundary_wait: 3s
+  boundary_poll: 100ms
 agents:
   claude:
     command: harnez hook
@@ -226,16 +230,17 @@ func TestSchemaRejectsMatcherWithHandlerTools(t *testing.T) {
 // edit to spec/hooks.yaml fails the test run instead of writing bad settings.
 func TestParseManifestRejectsBadSpec(t *testing.T) {
 	cases := map[string]string{
-		"unknown kind":        strings.Replace(minimalSpec, "kind: silent", "kind: bogus", 1),
-		"unknown key":         strings.Replace(minimalSpec, "    command: harnez hook\n", "    command: harnez hook\n    hooks: []\n", 1),
-		"top-level hooks key": minimalSpec + "hooks: []\n",
-		"bad handler name":    strings.Replace(minimalSpec, "name: sound", "name: Sound", 1),
-		"empty handlers":      strings.Replace(minimalSpec, "- {name: sound, kind: silent}", "[]", 1),
-		"no events":           strings.Replace(minimalSpec, "      Stop:\n        handlers:\n          - {name: sound, kind: silent}\n", "", 1),
-		"bad tool name":       strings.Replace(minimalSpec, "kind: silent}", "kind: silent, tools: [Bash|Read]}", 1),
-		"missing timeout":     strings.Replace(minimalSpec, "handler_timeout: 40s\n", "", 1),
-		"bad timeout":         strings.Replace(minimalSpec, "40s", "forty", 1),
-		"no agents":           "handler_timeout: 40s\n",
+		"unknown kind":           strings.Replace(minimalSpec, "kind: silent", "kind: bogus", 1),
+		"unknown key":            strings.Replace(minimalSpec, "    command: harnez hook\n", "    command: harnez hook\n    hooks: []\n", 1),
+		"top-level hooks key":    minimalSpec + "hooks: []\n",
+		"bad handler name":       strings.Replace(minimalSpec, "name: sound", "name: Sound", 1),
+		"empty handlers":         strings.Replace(minimalSpec, "- {name: sound, kind: silent}", "[]", 1),
+		"no events":              strings.Replace(minimalSpec, "      Stop:\n        handlers:\n          - {name: sound, kind: silent}\n", "", 1),
+		"bad tool name":          strings.Replace(minimalSpec, "kind: silent}", "kind: silent, tools: [Bash|Read]}", 1),
+		"missing timeout":        strings.Replace(minimalSpec, "handler_timeout: 40s\n", "", 1),
+		"bad timeout":            strings.Replace(minimalSpec, "40s", "forty", 1),
+		"no agents":              "handler_timeout: 40s\nclaude_compact:\n  boundary_window: 10m\n  boundary_wait: 3s\n  boundary_poll: 100ms\n",
+		"missing claude_compact": strings.Replace(minimalSpec, "claude_compact:", "claude_compact_removed:", 1),
 		// An explicit matcher and handler tools are two sources for one matcher.
 		"matcher with handler tools": strings.Replace(strings.Replace(minimalSpec,
 			"      Stop:\n        handlers:", "      Stop:\n        matcher: Bash\n        handlers:", 1),

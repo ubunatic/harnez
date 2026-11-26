@@ -3,13 +3,23 @@
   "title": "HookDispatchSpec",
   "description": "Budgets and per-agent hook tables for the `harnez hook` dispatcher (issue 1304)",
   "type": "object",
-  "required": ["handler_timeout", "agents"],
+  "required": ["handler_timeout", "claude_compact", "agents"],
   "additionalProperties": false,
   "properties": {
     "handler_timeout": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(ms|s|m)$",
       "description": "Time budget for one handler run, as a Go duration with an ms, s or m suffix"
+    },
+    "claude_compact": {
+      "type": "object",
+      "required": ["boundary_window", "boundary_wait", "boundary_poll"],
+      "additionalProperties": false,
+      "properties": {
+        "boundary_window": {"type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$", "description": "Age limit of a fresh compact boundary, as a Go duration"},
+        "boundary_wait": {"type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$", "description": "Longest PostCompact poll for a fresh compact boundary"},
+        "boundary_poll": {"type": "string", "pattern": "^[1-9][0-9]*(ms|s|m)$", "description": "Pause between two polls of the transcript"}
+      }
     },
     "agents": {
       "type": "object",

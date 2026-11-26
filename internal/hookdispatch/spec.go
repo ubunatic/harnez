@@ -13,7 +13,66 @@ import (
 
 // Spec mirrors spec/hooks.yaml.
 type Spec struct {
-	HandlerTimeout string `yaml:"handler_timeout"`
+	HandlerTimeout string           `yaml:"handler_timeout"`
+	ClaudeCompact  claudeCompactRaw `yaml:"claude_compact"`
+}
+
+type claudeCompactRaw struct {
+	BoundaryWindow string `yaml:"boundary_window"`
+	BoundaryWait   string `yaml:"boundary_wait"`
+	BoundaryPoll   string `yaml:"boundary_poll"`
+}
+
+// ClaudeCompactWait is the parsed claude_compact section of spec/hooks.yaml: how
+// long a PostCompact hook may look for Claude's compact boundary (issue 1303 M1b).
+type ClaudeCompactWait struct {
+	Window time.Duration
+	Wait   time.Duration
+	Poll   time.Duration
+}
+
+// LoadClaudeCompactWait returns the claude_compact bounds from the embedded spec.
+// There is no Go default: a missing or inconsistent value is an error.
+func LoadClaudeCompactWait() (ClaudeCompactWait, error) {
+	raw, err := harnez.DefaultFS.ReadFile("spec/hooks.yaml")
+	if err != nil {
+		return ClaudeCompactWait{}, fmt.Errorf("load hooks spec: %w", err)
+	}
+	return parseClaudeCompactWait(raw)
+}
+
+// parseClaudeCompactWait validates raw against the hooks schema and parses the
+// claude_compact durations. The wait must be at least one poll, or the loop never reads.
+func parseClaudeCompactWait(raw []byte) (ClaudeCompactWait, error) {
+	if err := validateSpec(raw); err != nil {
+		return ClaudeCompactWait{}, fmt.Errorf("hooks spec: %w", err)
+	}
+	var s Spec
+	if err := yaml.Unmarshal(raw, &s); err != nil {
+		return ClaudeCompactWait{}, fmt.Errorf("parse hooks spec: %w", err)
+	}
+	var out ClaudeCompactWait
+	for name, dst := range map[string]struct {
+		value string
+		out   *time.Duration
+	}{
+		"boundary_window": {s.ClaudeCompact.BoundaryWindow, &out.Window},
+		"boundary_wait":   {s.ClaudeCompact.BoundaryWait, &out.Wait},
+		"boundary_poll":   {s.ClaudeCompact.BoundaryPoll, &out.Poll},
+	} {
+		d, err := time.ParseDuration(dst.value)
+		if err != nil {
+			return ClaudeCompactWait{}, fmt.Errorf("hooks spec claude_compact.%s %q: %w", name, dst.value, err)
+		}
+		if d <= 0 {
+			return ClaudeCompactWait{}, fmt.Errorf("hooks spec claude_compact.%s must be positive, got %s", name, d)
+		}
+		*dst.out = d
+	}
+	if out.Wait < out.Poll {
+		return ClaudeCompactWait{}, fmt.Errorf("hooks spec claude_compact.boundary_wait %s is shorter than boundary_poll %s", out.Wait, out.Poll)
+	}
+	return out, nil
 }
 
 // LoadBudget returns the per-handler time budget from the embedded spec/hooks.yaml.

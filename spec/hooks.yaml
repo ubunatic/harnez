@@ -14,6 +14,14 @@
 # tool list; it cannot be combined with tools. strict makes a failed run abort the
 # dispatch with the handler's error, so the host sees that failure and no reply.
 handler_timeout: 40s
+# claude_compact bounds the PostCompact read of Claude's compact boundary (issue 1303 M1b).
+# boundary_window: a boundary this old or newer counts as this compaction's.
+# boundary_wait: the longest one PostCompact polls the transcript; it must stay under handler_timeout.
+# boundary_poll: the pause between two reads; boundary_wait must be at least boundary_poll.
+claude_compact:
+  boundary_window: 10m
+  boundary_wait: 3s
+  boundary_poll: 100ms
 agents:
   claude:
     command: harnez hook

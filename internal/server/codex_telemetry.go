@@ -38,8 +38,10 @@ func PrepareCodexTelemetry(raw []byte) ([]byte, error) {
 	}
 	if e.Kind == "postcompact" && hook.TranscriptPath != "" {
 		// Claude writes its compact boundary to the transcript after PreCompact;
-		// the PostCompact hook reads its token counts (issue 1303 M1).
-		evidence.Compact = readClaudeCompact(hook.TranscriptPath)
+		// the PostCompact hook reads its token counts (issue 1303 M1). The boundary
+		// can flush after the hook starts, so Claude's payload waits for it (M1b).
+		_, claude := payload["compact_summary"]
+		evidence.Compact = readClaudePostCompact(hook.TranscriptPath, claude)
 	}
 	payload["harnez_context"], _ = json.Marshal(evidence)
 	return json.Marshal(payload)
