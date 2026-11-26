@@ -111,3 +111,52 @@ Checked against https://code.claude.com/docs/en/hooks:
    - per event, the dispatcher output for today's real payload shapes equals the old subcommand's output: the golden check that behaviour did not change.
 4. Docs: `docs/CLIDesign.md` (hook command surface) and `docs/HarnezComponents.md:28`.
 5. Gates: `HTO=0 make test-q1` once, with the log in a file. Commits `feat(hook): … (issue 1304 M1)`, at most 3. Never amend.
+
+## M1 review (host and agy:neon:med reviewer)
+
+M1 delivered (dispatcher): 5f66da33 `internal/hookdispatch` with merge, budget and isolation; b9842066 `harnez hook <event>` registry and goldens. Dev q1: 83 ok, 0 `--- FAIL`.
+
+Clean, confirmed by the reviewer and the host:
+- No handler reads `os.Stdin`, writes `os.Stdout`, calls `os.Exit` or exits 2.
+- The tool filters match `config.yaml:326-366` and `spec/claude-compaction.yaml` exactly.
+- A single reply passes through byte for byte.
+- The sound player is detached (`Setsid`), so `cancel()` kills nothing.
+
+Findings (reviewer rev-1304-m1, checked by the host against the diff):
+1. **MED** `merge.go:77-88`: a merged reply keeps `updatedInput` next to a winning `deny`, and a JSON `null` `updatedInput` counts as a rewrite.
+2. **MED** `merge.go:12-23` and `hookdispatch.go:173-195`: a second handler's `{}` triggers the merge, and the merge drops top-level keys it does not model (`continue`, `stopReason`, `suppressOutput`).
+3. **MED** `hookdispatch.go:144-168`: a timed-out handler keeps running and can still write SQLite, telemetry or marker files until the process exits.
+4. **MED** `hook_dispatch_test.go:121-189`: some goldens are vacuous:
+   - Skill, UserPromptSubmit and PreCompact compare `"" == ""` and check no side effect.
+   - Edit compares `{}` with `{}`.
+   - PostToolUseFailure, PostCompact and Stop have no case.
+5. **LOW**: no test validates `spec/hooks.yaml` against its schema, and the pattern allows `0s`.
+6. **LOW** `hook.go:945-978`: `claudeCompactResetInstalled()` greps settings for `harnez hook compact-reset` and will return false after M2.
+
+## Decision (decide mode, M1 review)
+
+- Finding 3 is accepted and documented, not fixed. Reason: the process exits right after `Dispatch` returns, so the late write window is one handler's own state, and no two handlers share state (telemetry vs marker dir). Plumbing a context through six handlers is out of scope. Note it in the `Dispatch` doc comment and in `docs/CLIDesign.md`.
+
+## M2 pre-work (apply: one entry per event)
+
+M1 fixes first:
+1. Merge: a winning `deny` clears `updatedInput`. A `null` or empty `updatedInput` is not a rewrite. Add tests for both.
+2. Treat a reply that is exactly `{}` (after trimming) as no reply, so one real reply still passes byte for byte. On a real merge, keep top-level keys the merge does not model, first reply wins, with a stderr note on a conflict. Add a test with `continue: false` plus a second handler's reply.
+3. Goldens with teeth:
+   - Skill and UserPromptSubmit assert the DB row (use a temp DB the test owns).
+   - PreCompact asserts that the marker dir is removed and the telemetry call is made, via an injectable seam.
+   - Edit uses a stub backend that returns a deny, and the golden compares the deny JSON.
+   - Add PostToolUseFailure, PostCompact and Stop cases. Stop uses an injected `Play`.
+4. Validate `spec/hooks.yaml` against `spec/schemas/hooks.schema.json` in a test, the way other spec tests do. Make the pattern reject `0` durations.
+
+M2 proper:
+5. `apply` writes one Claude entry per event, each `harnez hook <Event>`. PreToolUse gets the matcher `Bash|View|Read|ReadMultipleFiles|Edit|Write`; PostToolUse and PostToolUseFailure get `Skill`. Derive both matchers from the registry's `Tools`, not from a second list. Events without a matcher get no matcher. That makes 8 entries.
+   - Sources: `config.yaml:326-366`, `spec/claude-compaction.yaml` and `internal/claude/config.go:330-342`.
+6. Migration: `removeHarnezHooks` (`internal/claude/apply_settings.go:117-162`) must also strip an absolute-path harnez command (`/…/harnez …`). Keep every non-harnez entry untouched. Test with a settings fixture that has today's 14 entries, a foreign hook on the same event and an absolute-path entry: it gives exactly 8 harnez entries and keeps the foreign one.
+7. Fix `claudeCompactResetInstalled()` (`hook.go:945-978`) for the new command. Check that `status.go:42` derives its expected count from the registry.
+8. Update tests: `TestCompactionHooksPreserveForeignAndAreIdempotent`, `TestApplyWithJevEnvironmentIsIdempotent`, `TestApplyDiffRepairCycle` and `status_test.go:120`.
+9. Keep the old subcommands working: sessions that have not reloaded still call them.
+10. Docs: `docs/CLIDesign.md`, plus `docs/UsageCollection.md:56` if it names the hook commands.
+11. Gates: `HTO=0 make test-q1` once, with the log in a file. Commits `feat(hook): … (issue 1304 M2)` / `fix(hook): …`, at most 3. Never amend.
+
+The host runs `make smoke` and a scratch-HOME apply → re-apply → drift-repair run before M2 counts as landed.
