@@ -54,3 +54,52 @@ Today a Claude compaction records almost nothing:
 - **Developer.** `claude:haiku:med`, starting with a plan-only first turn. M1 is a canary and M2 fills rows from data harnez already parses (`internal/subagent/claude.go:202`).
 - **Escalate to `claude:haiku:high`** for M3 (the quota sample), if the plan shows the fetch path needs lock or timeout work.
 - **Review.** A one-shot `agy:neon:med` reviewer after M3, covering the whole range.
+
+## Plan turn review (host)
+
+Developer plan (dev-1303, haiku:med, read-only):
+- The row write is at `internal/server/codex_telemetry.go:77`.
+- The Claude transcript parser is at `internal/subagent/claude.go:189-190,246-248`.
+- The quota path is `CaptureTurnQuotaSinceCache` (`internal/usage/turnquota.go:60-106`). Its Go constant `TurnQuotaTimeout = 1800ms` (`:31`) breaks the spec rule.
+- The live-fetch lock is in-process only (`internal/usage/claude.go:370`).
+- The planned storage is `turn_quota_boundaries` (`internal/usagestore/store.go:680`).
+
+The host checked the plan's open facts against primary sources instead of running a code canary:
+- **Hook payload** (https://code.claude.com/docs/en/hooks):
+  - PreCompact gets `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `trigger` and `custom_instructions`.
+  - PostCompact gets the same common fields plus `trigger` and `compact_summary`.
+  - No `turn_id`, `model` or token counts. Only SessionStart carries `model`.
+- **Transcript boundary:** the host session's own transcript, read as key names and numbers only, has `type: system`, `subtype: compact_boundary` and `compactMetadata` with `trigger`, `preTokens` (166948), `postTokens` (27143), `durationMs` and `cumulativeDroppedTokens`.
+- **Claude SessionEnd:** not in the Claude manifest (`spec/hooks.yaml`), so no Claude SessionEnd reaches `codex-telemetry`.
+
+## Decision (decide mode, plan review)
+
+- **Milestones:** drop the M1 code canary, since the shapes above are verified. The new plan:
+  - M1 fills the Claude rows (dev-1303, haiku:med).
+  - M2 stores the quota sample. It goes to a fresh developer on `claude:haiku:high`, per the ticket's escalation rule, because it needs lock and timeout work. A fresh session also avoids the context growth seen in #1304 M4.
+- **Tokens:** come from the transcript's `compact_boundary` `compactMetadata`, read at PostCompact.
+  - PostCompact fills the pre-compaction and post-compaction tokens for that compaction: the newest boundary whose timestamp is at or after the PreCompact row's time.
+  - PreCompact keeps writing its row; its tokens may stay empty.
+  - Model: the main-chain model before the boundary.
+- **Privacy:** never store, log or print `compact_summary` or `custom_instructions`. A test proves that neither reaches any DB column.
+- **No reload needed:** the hook commands do not change. A new binary (`make install`) takes effect on the next hook call in every session.
+- **Lock:** the compaction sample is cache-first.
+  - It does a live fetch only if the cache is older than a spec age.
+  - The fetch runs under a cross-process, non-blocking file lock. If the lock is held, it records the cached sample with its age and does not fetch.
+  - Reason: the 429 in #1301, and several Claude sessions can compact at once.
+
+## M1 pre-work (fill Claude compaction rows)
+
+1. Use fixture transcripts in the verified shape: assistant usage lines with `message.model` and `message.usage`, then a `system`/`compact_boundary` line with `compactMetadata.preTokens`/`postTokens`/`trigger`. Use a temp HOME; never read real transcripts.
+2. PostCompact: fill `compaction_events` tokens and model, and the `token_snapshots` precompact/postcompact rows `ReconcileCompactionEconomics` needs. A test asserts the economics row for a Claude compaction is filled (not skipped) with the fixture's numbers.
+3. Negative cases:
+   - no boundary yet;
+   - only an older boundary from an earlier compaction;
+   - missing `transcript_path`;
+   - an unreadable file.
+
+   Each one writes the row with its tokens empty, exits 0 and adds nothing to stdout.
+4. Privacy test: a payload with `compact_summary`/`custom_instructions` sentinels; no DB column or stdout holds them.
+5. Codex rows must stay byte-identical; prove it with the existing Codex tests unchanged.
+6. Fix the stale "no PostCompact hook" comments at `internal/compactcheck/compactcheck.go:6-7` and `cmd/harnez/compactcheck.go:3-4,28`.
+7. Gates: run `HTO=0 make test-q1` once, logging to a file. Commit as `feat(compact): … (issue 1303 M1)`. Never amend.
