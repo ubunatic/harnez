@@ -25,18 +25,18 @@ func RenderText(w io.Writer, rep Report, unexplainedTolerancePct float64) error 
 		fmt.Fprintln(w, "no Claude calls in range")
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', tabwriter.AlignRight)
-	fmt.Fprintln(tw, "SESSION\tCALLS\tIN\tOUT\tCACHE-READ\tCACHE-WRITE\tAPI $\tATTRIB $\tPENDING $\tQUOTA %\tPLAN NET $\tPLAN GROSS $\tFACTOR\t")
+	fmt.Fprintln(tw, "SESSION\tCALLS\tIN\tOUT\tCACHE-READ\tCACHE-WRITE\tAPI $\tATTRIB $\tUNATTRIB $\tQUOTA %\tPLAN NET $\tPLAN GROSS $\tFACTOR\t")
 	for _, r := range rep.Sessions {
 		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
 			r.Session, r.Calls, r.Input, r.Output, r.CacheRead, r.CacheWrite,
-			money(r.APICostMicros), money(r.AttributedCostMicros), money(r.PendingCostMicros),
+			money(r.APICostMicros), money(r.AttributedCostMicros), money(r.UnattributedCostMicros),
 			percent(r.QuotaPct), money(r.PlanNetMicros), money(r.PlanGrossMicros),
 			sessionFactor(r, rep))
 	}
 	t := rep.Totals
 	fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
 		t.Session, t.Calls, t.Input, t.Output, t.CacheRead, t.CacheWrite,
-		money(t.APICostMicros), money(t.AttributedCostMicros), money(t.PendingCostMicros),
+		money(t.APICostMicros), money(t.AttributedCostMicros), money(t.UnattributedCostMicros),
 		percent(t.QuotaPct), money(t.PlanNetMicros), money(t.PlanGrossMicros), factor(t.Factor))
 	if err := tw.Flush(); err != nil {
 		return err
@@ -56,9 +56,9 @@ func RenderText(w io.Writer, rep Report, unexplainedTolerancePct float64) error 
 		fmt.Fprintf(w, "skipped samples: %d Claude weekly rows without reset_at (they never join or split a window)\n", rep.SkippedSamples)
 	}
 	if rep.UnpricedCalls > 0 {
-		fmt.Fprintf(w, "unpriced calls: %d (no price); their sessions show n/a for API $, ATTRIB $, PENDING $ and FACTOR\n", rep.UnpricedCalls)
+		fmt.Fprintf(w, "unpriced calls: %d (no price); their sessions show n/a for API $, ATTRIB $, UNATTRIB $ and FACTOR\n", rep.UnpricedCalls)
 	}
-	fmt.Fprintln(w, "legend: ATTRIB $ = API cost of calls in a quota rise (the factor's base); FACTOR = ATTRIB $ / plan net for the same quota %")
+	fmt.Fprintln(w, "legend: ATTRIB $ = API cost of calls in a quota rise (the factor's base); UNATTRIB $ = API $ - ATTRIB $ (quiet, before first sample, after an older window, pending); FACTOR = ATTRIB $ / plan net for the same quota %")
 	if len(rep.Intervals) == 0 {
 		fmt.Fprintln(w, "quota: no weekly history in range; quota, plan and factor are n/a")
 	}

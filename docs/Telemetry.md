@@ -290,9 +290,11 @@ Every priced in-range call lands in exactly one bucket (`buckets` in `--json`):
 The five sum to the total priced API cost.
 
 Text columns: `API $` is all priced calls of the session; `ATTRIB $` is the API
-cost of calls inside a rise; `PENDING $` is the API cost of calls after the last
-rise (no quota step yet). Pending calls get no share and are not in any factor,
-so `ATTRIB $ + PENDING $ = API $`. `QUOTA %` is the attributed pp. A session
+cost of calls inside a rise; `UNATTRIB $` is the rest of the API cost (`API $ -
+ATTRIB $`: quiet rises, calls before the first sample, calls after an older
+window, and pending calls after the last rise). Unattributed calls get no share
+and are not in any factor, so `ATTRIB $ + UNATTRIB $ = API $`. The bucket line
+keeps "pending" for the open tail only. `QUOTA %` is the attributed pp. A session
 with less attributed quota than `usage_report.min_session_quota_pct` prints
 `n/a (< N pp)` as its factor; its plan cost still prints.
 

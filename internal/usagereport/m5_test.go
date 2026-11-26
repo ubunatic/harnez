@@ -1,7 +1,10 @@
 package usagereport
 
 import (
+	"bytes"
+	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,5 +64,40 @@ func TestBuildNearMissAt1p1StaysAttributed(t *testing.T) {
 	}
 	if rep.Buckets.Quiet != 0 || rep.Buckets.Attributed != 41_637 {
 		t.Fatalf("buckets = %+v, want 41637 attributed and nothing quiet", rep.Buckets)
+	}
+}
+
+// M5 item 3: the totals and session column is API − ATTRIB, named UNATTRIB, not
+// PENDING: pending is the open tail only (the bucket line keeps that word).
+func TestRenderUsesUnattributedColumn(t *testing.T) {
+	samples, calls := flatFixture()
+	rep := Build(calls, samples, baseOpts(t0, t0.Add(4*time.Hour)))
+	var text bytes.Buffer
+	if err := RenderText(&text, rep, 1); err != nil {
+		t.Fatal(err)
+	}
+	out := text.String()
+	header := strings.SplitN(out, "\n", 3)[1]
+	if !strings.Contains(header, "UNATTRIB $") || strings.Contains(header, "PENDING") {
+		t.Fatalf("header = %q, want UNATTRIB $ and no PENDING", header)
+	}
+	if strings.Contains(out, "PENDING $") {
+		t.Fatalf("report still names the column PENDING $:\n%s", out)
+	}
+	var js bytes.Buffer
+	if err := RenderJSON(&js, rep); err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Totals map[string]json.RawMessage `json:"totals"`
+	}
+	if err := json.Unmarshal(js.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if string(doc.Totals["unattributed_api_cost_micros_usd"]) != "1000000" {
+		t.Fatalf("totals unattributed_api_cost_micros_usd = %s, want 1000000", doc.Totals["unattributed_api_cost_micros_usd"])
+	}
+	if _, ok := doc.Totals["pending_api_cost_micros_usd"]; ok {
+		t.Fatalf("totals still carry pending_api_cost_micros_usd")
 	}
 }

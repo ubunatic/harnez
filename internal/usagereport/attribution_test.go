@@ -68,8 +68,8 @@ func TestBuildPendingCallsGetNoShare(t *testing.T) {
 	if a.AttributedCostMicros == nil || *a.AttributedCostMicros != 2_000_000 {
 		t.Fatalf("A attributed = %v, want 2000000", a.AttributedCostMicros)
 	}
-	if a.PendingCostMicros == nil || *a.PendingCostMicros != 1_000_000 {
-		t.Fatalf("A pending = %v, want 1000000", a.PendingCostMicros)
+	if a.UnattributedCostMicros == nil || *a.UnattributedCostMicros != 1_000_000 {
+		t.Fatalf("A unattributed = %v, want 1000000", a.UnattributedCostMicros)
 	}
 	if a.APICostMicros == nil || *a.APICostMicros != 3_000_000 {
 		t.Fatalf("A api cost = %v, want 3000000", a.APICostMicros)
@@ -78,8 +78,8 @@ func TestBuildPendingCallsGetNoShare(t *testing.T) {
 		t.Fatalf("A factor = %v, want attributed 2 USD over 1 pp of the plan", a.Factor)
 	}
 	tot := rep.Totals
-	if tot.AttributedCostMicros == nil || tot.PendingCostMicros == nil || tot.APICostMicros == nil ||
-		*tot.AttributedCostMicros+*tot.PendingCostMicros != *tot.APICostMicros {
+	if tot.AttributedCostMicros == nil || tot.UnattributedCostMicros == nil || tot.APICostMicros == nil ||
+		*tot.AttributedCostMicros+*tot.UnattributedCostMicros != *tot.APICostMicros {
 		t.Fatalf("totals attributed+pending != api cost: %+v", tot)
 	}
 }
@@ -103,8 +103,8 @@ func TestBuildTotalsUseOneBaseAndWindowLineAddsUp(t *testing.T) {
 	if rep.Window.Factor == nil || math.Abs(*rep.Window.Factor-3_000_000/(0.01*float64(baseWeeklyPlan))) > 1e-9 {
 		t.Fatalf("window factor = %v", rep.Window.Factor)
 	}
-	if *tot.AttributedCostMicros+*tot.PendingCostMicros != rep.Window.APICostMicros {
-		t.Fatalf("attributed + pending = %d, window api = %d", *tot.AttributedCostMicros+*tot.PendingCostMicros, rep.Window.APICostMicros)
+	if *tot.AttributedCostMicros+*tot.UnattributedCostMicros != rep.Window.APICostMicros {
+		t.Fatalf("attributed + unattributed = %d, window api = %d", *tot.AttributedCostMicros+*tot.UnattributedCostMicros, rep.Window.APICostMicros)
 	}
 	if math.Abs(rep.RisePct-(*tot.QuotaPct+rep.UnexplainedPct)) > 1e-9 {
 		t.Fatalf("attributed %v + not explained %v != rise %v", *tot.QuotaPct, rep.UnexplainedPct, rep.RisePct)

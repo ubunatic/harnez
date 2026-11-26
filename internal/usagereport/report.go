@@ -51,10 +51,11 @@ type SessionRow struct {
 	CacheWrite    int64  `json:"cache_write_tokens"`
 	APICostMicros *int64 `json:"api_cost_micros_usd,omitempty"`
 	// AttributedCostMicros is the API cost of calls inside a rise; the factor
-	// uses this base. PendingCostMicros is the rest: calls with no quota step yet.
-	AttributedCostMicros *int64   `json:"attributed_api_cost_micros_usd,omitempty"`
-	PendingCostMicros    *int64   `json:"pending_api_cost_micros_usd,omitempty"`
-	QuotaPct             *float64 `json:"quota_pct,omitempty"`
+	// uses this base. UnattributedCostMicros is the rest of API cost (API − ATTRIB):
+	// quiet, before-first, after-older and pending calls together.
+	AttributedCostMicros   *int64   `json:"attributed_api_cost_micros_usd,omitempty"`
+	UnattributedCostMicros *int64   `json:"unattributed_api_cost_micros_usd,omitempty"`
+	QuotaPct               *float64 `json:"quota_pct,omitempty"`
 	// UnpricedCalls counts the session's calls without a price (M4): a session
 	// with any has no API, attributed or pending cost and no factor.
 	UnpricedCalls   int      `json:"unpriced_calls,omitempty"`
@@ -285,9 +286,9 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		}
 		if hasHistory && priced {
 			a := attributed[s]
-			pend := costs[s] - a
+			unattr := costs[s] - a
 			row.AttributedCostMicros = &a
-			row.PendingCostMicros = &pend
+			row.UnattributedCostMicros = &unattr
 		}
 		finishPlan(row, opts, true)
 		rep.Sessions = append(rep.Sessions, *row)
@@ -307,8 +308,8 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		a := totalAttr
 		rep.Totals.AttributedCostMicros = &a
 		if !totalUnpriced {
-			p := totalCost - totalAttr
-			rep.Totals.PendingCostMicros = &p
+			unattr := totalCost - totalAttr
+			rep.Totals.UnattributedCostMicros = &unattr
 		}
 	}
 	if anyAttributed {
