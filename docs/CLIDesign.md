@@ -441,9 +441,12 @@ Scans the repository (or target file/directory) against the machine-readable glo
 `PostToolUseFailure`, `UserPromptSubmit`, `SessionStart`, `PreCompact`, `PostCompact`, `Stop`.
 It reads the payload from stdin once and runs every registered handler for that event, in
 registry order, under one time budget per handler (`spec/hooks.yaml`, `handler_timeout`).
-The registry lives in `cmd/harnez/hook_dispatch.go`; the generic dispatch and merge live in
-`internal/hookdispatch`. Handler failures never fail the hook: a failed, panicking or slow
-handler loses only its own output and leaves a note on stderr.
+The event and tool routing live in `internal/hookdispatch/claude_manifest.go` (`ClaudeManifest`);
+`cmd/harnez/hook_dispatch.go` binds one run function to each `Event/Name` handler. The generic
+dispatch and merge live in `internal/hookdispatch`. Handler failures never fail the hook: a
+failed, panicking or slow handler loses only its own output and leaves a note on stderr. A
+handler that times out may still write after its budget; its late output is discarded, but the
+write is not stopped (accepted in the issue 1304 M1 review).
 
 - Tool routing: a handler with `Tools` runs only for those `tool_name` values, as the old
   per-tool matchers did, so one event entry can serve several tools.
@@ -453,9 +456,13 @@ handler loses only its own output and leaves a note on stderr.
   newlines. SessionStart text replies are joined with newlines. An event cannot mix JSON and
   text handlers; the registry rejects it.
 
-The old subcommands (`exec hook`, `hook read`, `hook pre-edit`, `hook skill`, and so on) still run
-their handlers directly. Until `apply` writes one entry per event (issue 1304 M2), the installed
-settings keep calling them.
+`apply` writes one Claude settings entry per event, `harnez hook <Event>`, derived from the manifest.
+The `matcher` is the union of the handlers' tools in run order, joined with `|` (for example
+`PreToolUse`: `Bash|View|Read|ReadMultipleFiles|Edit|Write`); an event without tools has no matcher.
+`apply` removes any harnez entry whose command runs harnez, by bare name or absolute path, so
+entries from before issue 1304 M2 are replaced on the next apply. The old subcommands (`exec hook`,
+`hook read`, `hook pre-edit`, `hook skill`, and so on) still run their handlers directly, for
+compatibility. Running sessions pick up the new entries only after they reload their settings.
 
 ## Known gaps
 

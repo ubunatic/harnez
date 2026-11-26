@@ -25,18 +25,30 @@ func containsAll(s string, subs ...string) bool {
 func TestTelemetryHookConfigEntry(t *testing.T) {
 	cfg := loadTestConfig(t)
 
+	// Issue 1304 M2: one PreToolUse entry runs every PreToolUse handler, and
+	// its matcher lists the tools, Bash among them.
 	var found *Hook
 	for i := range cfg.Hooks {
 		h := &cfg.Hooks[i]
-		if h.Event == "PreToolUse" && h.Matcher == "Bash" && h.Command == "harnez exec hook" {
+		if h.Event == "PreToolUse" && h.Command == "harnez hook PreToolUse" && matcherHasTool(h.Matcher, "Bash") {
 			found = h
 			break
 		}
 	}
 	if found == nil {
-		t.Fatalf("expected a PreToolUse/Bash hook with command %q in embedded config.yaml, hooks: %+v",
-			"harnez exec hook", cfg.Hooks)
+		t.Fatalf("expected a PreToolUse hook with command %q and a Bash matcher in embedded config, hooks: %+v",
+			"harnez hook PreToolUse", cfg.Hooks)
 	}
+}
+
+// matcherHasTool reports whether a "|" separated Claude matcher names tool.
+func matcherHasTool(matcher, tool string) bool {
+	for _, name := range strings.Split(matcher, "|") {
+		if name == tool {
+			return true
+		}
+	}
+	return false
 }
 
 // TestApplyInstallsTelemetryHook exercises the same install → idempotent
@@ -66,7 +78,7 @@ func TestApplyInstallsTelemetryHook(t *testing.T) {
 	}
 
 	if !settingsHasTelemetryHook(t, settingsPath) {
-		t.Fatalf("expected settings.json to contain the telemetry hook (harnez exec hook) after apply")
+		t.Fatalf("expected settings.json to contain the PreToolUse Bash hook (harnez hook PreToolUse) after apply")
 	}
 
 	// Idempotency: a second apply must not duplicate the entry.
@@ -80,7 +92,8 @@ func TestApplyInstallsTelemetryHook(t *testing.T) {
 		n := 0
 		for _, entry := range pre {
 			em, ok := entry.(map[string]any)
-			if !ok || em["matcher"] != "Bash" {
+			matcher, _ := em["matcher"].(string)
+			if !ok || !matcherHasTool(matcher, "Bash") {
 				continue
 			}
 			hs, _ := em["hooks"].([]any)
@@ -133,13 +146,14 @@ func settingsHasTelemetryHook(t *testing.T, settingsPath string) bool {
 	}
 	for _, entry := range pre {
 		em, ok := entry.(map[string]any)
-		if !ok || em["matcher"] != "Bash" {
+		matcher, _ := em["matcher"].(string)
+		if !ok || !matcherHasTool(matcher, "Bash") {
 			continue
 		}
 		hs, _ := em["hooks"].([]any)
 		for _, h := range hs {
 			hm, ok := h.(map[string]any)
-			if ok && hm["command"] == "harnez exec hook" {
+			if ok && hm["command"] == "harnez hook PreToolUse" {
 				return true
 			}
 		}
@@ -153,19 +167,18 @@ func settingsHasTelemetryHook(t *testing.T, settingsPath string) bool {
 func TestReadHookConfigEntry(t *testing.T) {
 	cfg := loadTestConfig(t)
 
-	matchers := map[string]bool{"View": false, "ReadMultipleFiles": false}
-	for i := range cfg.Hooks {
-		h := &cfg.Hooks[i]
-		if h.Event == "PreToolUse" && h.Command == "harnez hook read" {
-			if _, ok := matchers[h.Matcher]; ok {
-				matchers[h.Matcher] = true
+	// Issue 1304 M2: the read tools share the single PreToolUse entry.
+	for _, tool := range []string{"View", "ReadMultipleFiles"} {
+		found := false
+		for i := range cfg.Hooks {
+			h := &cfg.Hooks[i]
+			if h.Event == "PreToolUse" && h.Command == "harnez hook PreToolUse" && matcherHasTool(h.Matcher, tool) {
+				found = true
 			}
 		}
-	}
-	for m, found := range matchers {
 		if !found {
-			t.Errorf("expected PreToolUse hook for matcher %q with command %q, hooks: %+v",
-				m, "harnez hook read", cfg.Hooks)
+			t.Errorf("expected PreToolUse hook covering tool %q with command %q, hooks: %+v",
+				tool, "harnez hook PreToolUse", cfg.Hooks)
 		}
 	}
 }
@@ -191,38 +204,49 @@ func TestApplyInstallsReadHooks(t *testing.T) {
 		t.Fatalf("first ApplyAll failed: %v", err)
 	}
 
-	if !settingsHasHook(t, settingsPath, "PreToolUse", "View", "harnez hook read") {
-		t.Errorf("expected settings.json to contain PreToolUse/View hook")
-	}
-	if !settingsHasHook(t, settingsPath, "PreToolUse", "ReadMultipleFiles", "harnez hook read") {
-		t.Errorf("expected settings.json to contain PreToolUse/ReadMultipleFiles hook")
-	}
-	if !settingsHasHook(t, settingsPath, "PreToolUse", "Edit", "harnez hook pre-edit") {
-		t.Errorf("expected settings.json to contain PreToolUse/Edit hook")
-	}
-	if !settingsHasHook(t, settingsPath, "PreToolUse", "Write", "harnez hook pre-edit") {
-		t.Errorf("expected settings.json to contain PreToolUse/Write hook")
+	// Issue 1304 M2: every PreToolUse tool is covered by the one "harnez hook PreToolUse" entry.
+	for _, tool := range []string{"View", "ReadMultipleFiles", "Edit", "Write"} {
+		if !settingsHasHook(t, settingsPath, "PreToolUse", tool, "harnez hook PreToolUse") {
+			t.Errorf("expected settings.json to contain PreToolUse hook covering %s", tool)
+		}
 	}
 
 	// Idempotency: second apply must preserve hooks without duplication
 	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
 		t.Fatalf("second ApplyAll failed: %v", err)
 	}
-	if !settingsHasHook(t, settingsPath, "PreToolUse", "View", "harnez hook read") {
-		t.Errorf("expected settings.json to retain PreToolUse/View hook after second apply")
+	for _, tool := range []string{"View", "ReadMultipleFiles", "Edit", "Write"} {
+		if !settingsHasHook(t, settingsPath, "PreToolUse", tool, "harnez hook PreToolUse") {
+			t.Errorf("expected settings.json to retain PreToolUse hook covering %s after second apply", tool)
+		}
 	}
-	if !settingsHasHook(t, settingsPath, "PreToolUse", "ReadMultipleFiles", "harnez hook read") {
-		t.Errorf("expected settings.json to retain PreToolUse/ReadMultipleFiles hook after second apply")
-	}
-	if !settingsHasHook(t, settingsPath, "PreToolUse", "Edit", "harnez hook pre-edit") {
-		t.Errorf("expected settings.json to retain PreToolUse/Edit hook after second apply")
-	}
-	if !settingsHasHook(t, settingsPath, "PreToolUse", "Write", "harnez hook pre-edit") {
-		t.Errorf("expected settings.json to retain PreToolUse/Write hook after second apply")
+	if n := countPreToolUseHarnezEntries(t, settingsPath); n != 1 {
+		t.Errorf("expected exactly one harnez PreToolUse entry after second apply, got %d", n)
 	}
 }
 
-func settingsHasHook(t *testing.T, settingsPath, event, matcher, command string) bool {
+// countPreToolUseHarnezEntries counts PreToolUse entries that run harnez.
+func countPreToolUseHarnezEntries(t *testing.T, settingsPath string) int {
+	t.Helper()
+	hooks, _ := jsonc.Read(settingsPath)["hooks"].(map[string]any)
+	entries, _ := hooks["PreToolUse"].([]any)
+	n := 0
+	for _, entry := range entries {
+		em, _ := entry.(map[string]any)
+		hs, _ := em["hooks"].([]any)
+		for _, h := range hs {
+			hm, _ := h.(map[string]any)
+			if command, _ := hm["command"].(string); strings.HasPrefix(command, "harnez ") {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// settingsHasHook reports whether a settings event has an entry whose matcher
+// names tool and that runs command.
+func settingsHasHook(t *testing.T, settingsPath, event, tool, command string) bool {
 	t.Helper()
 	m := jsonc.Read(settingsPath)
 	hooks, ok := m["hooks"].(map[string]any)
@@ -235,7 +259,8 @@ func settingsHasHook(t *testing.T, settingsPath, event, matcher, command string)
 	}
 	for _, entry := range entries {
 		em, ok := entry.(map[string]any)
-		if !ok || em["matcher"] != matcher {
+		matcher, _ := em["matcher"].(string)
+		if !ok || !matcherHasTool(matcher, tool) {
 			continue
 		}
 		hs, _ := em["hooks"].([]any)

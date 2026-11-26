@@ -198,7 +198,7 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 	mustApplyComponents(t, target, cfg, nil, "full")
 
 	hooks, statusLine := settingsCommands(t, target)
-	if !slices.Contains(hooks, "harnez exec hook") || statusLine != "harnez statusline" {
+	if !slices.Contains(hooks, "harnez hook PreToolUse") || statusLine != "harnez statusline" {
 		t.Fatalf("full: hooks=%v statusLine=%q", hooks, statusLine)
 	}
 	codexPath := filepath.Join(os.Getenv("HOME"), ".codex", "config.toml")
@@ -280,7 +280,7 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 	// Switching back reinstalls everything.
 	mustApplyComponents(t, target, cfg, nil, "full")
 	hooks, statusLine = settingsCommands(t, target)
-	if !slices.Contains(hooks, "harnez exec hook") || statusLine == "" {
+	if !slices.Contains(hooks, "harnez hook PreToolUse") || statusLine == "" {
 		t.Errorf("back to full: hooks=%v statusLine=%q", hooks, statusLine)
 	}
 	if _, err := os.Stat(rateSkill); err != nil {
@@ -296,7 +296,7 @@ func TestApply_TelemetryOnly(t *testing.T) {
 	}
 
 	hooks, statusLine := settingsCommands(t, target)
-	if !slices.Contains(hooks, "harnez exec hook") || !slices.Contains(hooks, "harnez hook read") {
+	if !slices.Contains(hooks, "harnez hook PreToolUse") || !slices.Contains(hooks, "harnez hook PostToolUse") {
 		t.Errorf("telemetry-only: hooks=%v", hooks)
 	}
 	if statusLine != "" {
@@ -311,7 +311,7 @@ func TestApply_PresetsComposeByUnion(t *testing.T) {
 	target, cfg := setupComponentsHome(t)
 	mustApplyComponents(t, target, cfg, nil, "docs-only,telemetry-only")
 	hooks, _ := settingsCommands(t, target)
-	if !slices.Contains(hooks, "harnez exec hook") {
+	if !slices.Contains(hooks, "harnez hook PreToolUse") {
 		t.Error("union: telemetry hooks missing")
 	}
 	if _, err := os.Stat(filepath.Join(cfg.ClaudeSkillsTarget, "tool-feedback-protocol", "SKILL.md")); err != nil {

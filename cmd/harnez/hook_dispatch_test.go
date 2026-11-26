@@ -10,15 +10,20 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"ubunatic.com/harnez/internal/decide"
 	"ubunatic.com/harnez/internal/hookdispatch"
+	"ubunatic.com/harnez/internal/telemetry"
 )
 
-// The dispatcher must register exactly the handlers that today's hook entries
-// run, per event, in a fixed order (issue 1304 plan table).
-func TestHookRegistryMatchesTodaysHookEntries(t *testing.T) {
-	reg := claudeHookRegistry(nil)
+// The registry must bind exactly the handlers the manifest names, per event, in
+// a fixed order (issue 1304 plan table).
+func TestHookRegistryMatchesManifestNames(t *testing.T) {
+	reg, err := claudeHookRegistry(hookDeps{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := reg.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +51,10 @@ func TestHookRegistryMatchesTodaysHookEntries(t *testing.T) {
 }
 
 func TestHookRegistryToolRoutingMatchesOldMatchers(t *testing.T) {
-	reg := claudeHookRegistry(nil)
+	reg, err := claudeHookRegistry(hookDeps{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	wantTools := map[string][]string{
 		"exec":     {"Bash"},
 		"read":     {"View", "Read", "ReadMultipleFiles"},
@@ -62,18 +70,132 @@ func TestHookRegistryToolRoutingMatchesOldMatchers(t *testing.T) {
 	}
 }
 
-// goldenMock is a decide backend that answers "no rule violated", so pre-edit
-// never reaches the hosted backend during tests.
-type goldenMock struct{}
-
-func (goldenMock) Decide(context.Context, *decide.Request) (*decide.Response, error) {
-	return nil, fmt.Errorf("golden test: no backend call expected")
+// Every manifest event is a hidden `harnez hook <Event>` command.
+func TestHookEventCommandsRegisteredForEveryManifestEvent(t *testing.T) {
+	root := newHookCmd()
+	for _, event := range hookdispatch.ClaudeManifest.Events() {
+		c, _, err := root.Find([]string{event})
+		if err != nil || c.Name() != event || !c.Hidden {
+			t.Errorf("hook %s: command %v, err %v", event, c, err)
+		}
+	}
 }
 
-// Each event's dispatcher output must equal what the old subcommand wrote for
-// the same payload. Each side runs under its own temp HOME, so read markers
-// and telemetry rows from one side cannot change the other side's output.
-func TestHookDispatchMatchesSubcommandOutput(t *testing.T) {
+// blockingBackend answers "rule violated" for every request, so pre-edit denies.
+func blockingBackend() decide.Backend {
+	noul := 0.95
+	return &testMockBackend{fn: func(context.Context, *decide.Request) (*decide.Response, error) {
+		return &decide.Response{
+			Model: "jev-test",
+			Answers: map[string]decide.Answer{
+				"rule_violation": {Type: decide.TypeNoul, Noul: &noul},
+				"violated_rule":  {Type: decide.TypeChoice, Choice: "Tools.md"},
+			},
+		}, nil
+	}}
+}
+
+// sideEffects records what a handler did besides writing its reply.
+type sideEffects struct {
+	skills    []telemetry.ToolCall
+	telemetry []string
+}
+
+// goldenEnv is what one side of a golden run may touch.
+type goldenEnv struct {
+	stateDir string
+	pre      preEditOptions
+	fx       *sideEffects
+}
+
+func (e goldenEnv) deps() hookDeps {
+	return hookDeps{
+		PreEdit:     e.pre,
+		SkillInsert: e.insertSkill,
+		Telemetry:   e.sendTelemetry,
+		PlaySound:   func(context.Context) error { return nil },
+		StateDir:    e.stateDir,
+	}
+}
+
+func (e goldenEnv) insertSkill(_ string, call telemetry.ToolCall) error {
+	e.fx.skills = append(e.fx.skills, call)
+	return nil
+}
+
+func (e goldenEnv) sendTelemetry(kind string, _ any) {
+	e.fx.telemetry = append(e.fx.telemetry, kind)
+}
+
+type goldenCase struct {
+	name, event, payload string
+	// session names a session whose read-marker dir exists before the run.
+	session string
+	// old is the subcommand behaviour the event replaced.
+	old func(ctx context.Context, in io.Reader, out io.Writer, e goldenEnv) error
+	// wantOut must appear in the output; wantSkills and wantTelemetry are the
+	// minimum side effects, so a comparison of two empty results cannot pass.
+	wantOut        string
+	wantSkills     int
+	wantTelemetry  int
+	wantMarkerGone bool
+}
+
+type goldenResult struct {
+	out        string
+	fx         sideEffects
+	markerGone bool
+}
+
+// runGoldenSide runs one side of a case under its own temp HOME and state dir.
+// dispatch selects the hookdispatch path; otherwise the old behaviour runs.
+func runGoldenSide(t *testing.T, tc goldenCase, budget time.Duration, dispatch bool) goldenResult {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeSkillFile(t, filepath.Join(home, ".claude", "skills", "issue", "SKILL.md"))
+	stateDir := t.TempDir()
+	marker := ""
+	if tc.session != "" {
+		marker = filepath.Join(stateDir, sessionMarkerDir(tc.session))
+		if err := os.MkdirAll(marker, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(marker, "read"), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	enforce := true
+	env := goldenEnv{
+		stateDir: stateDir,
+		pre:      preEditOptions{Backend: blockingBackend(), Enforce: &enforce},
+		fx:       &sideEffects{},
+	}
+	var out bytes.Buffer
+	if dispatch {
+		reg, err := claudeHookRegistry(env.deps())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := hookdispatch.Dispatch(context.Background(), reg, tc.event, []byte(tc.payload), &out,
+			hookdispatch.Options{Budget: budget, Stderr: io.Discard}); err != nil {
+			t.Fatalf("dispatch: %v", err)
+		}
+	} else if err := tc.old(context.Background(), strings.NewReader(tc.payload), &out, env); err != nil {
+		t.Fatalf("old subcommand: %v", err)
+	}
+	res := goldenResult{out: out.String(), fx: *env.fx}
+	if marker != "" {
+		_, err := os.Stat(marker)
+		res.markerGone = os.IsNotExist(err)
+	}
+	return res
+}
+
+// Each event's dispatcher output and side effects must equal what the old
+// subcommands did for the same payload. Every case also asserts a minimum
+// effect, so the comparison has teeth.
+func TestHookDispatchMatchesSubcommandBehaviour(t *testing.T) {
 	repo := t.TempDir()
 	big := filepath.Join(repo, "big.go")
 	var src strings.Builder
@@ -87,44 +209,61 @@ func TestHookDispatchMatchesSubcommandOutput(t *testing.T) {
 	if err := os.WriteFile(edit, []byte("package x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	codexPayload := `{"hook_event_name":"PreCompact","session_id":"s1","model":"gpt-5","token_usage":{"total_tokens":10}}`
 
-	oldSkill := func(in io.Reader, out io.Writer) error { runClaudeSkillHook(in, skillHookOptions{}); return nil }
-	cases := []struct {
-		name    string
-		event   string
-		payload string
-		old     func(in io.Reader, out io.Writer) error
-	}{
+	oldSkill := func(_ context.Context, in io.Reader, _ io.Writer, e goldenEnv) error {
+		runClaudeSkillHook(in, skillHookOptions{Insert: e.insertSkill})
+		return nil
+	}
+	cases := []goldenCase{
 		{
 			name:    "PreToolUse Bash rewrite",
 			event:   "PreToolUse",
 			payload: `{"tool_name":"Bash","tool_input":{"command":"go test ./internal/x"},"session_id":"s1","cwd":"` + repo + `"}`,
-			old:     func(in io.Reader, out io.Writer) error { return runExecHook(in, out) },
+			old: func(_ context.Context, in io.Reader, out io.Writer, _ goldenEnv) error {
+				return runExecHook(in, out)
+			},
 		},
 		{
 			name:    "PreToolUse Read large file",
 			event:   "PreToolUse",
 			payload: `{"tool_name":"Read","tool_input":{"file_path":"` + big + `"},"session_id":"s1","cwd":"` + repo + `"}`,
-			old: func(in io.Reader, out io.Writer) error {
+			old: func(_ context.Context, in io.Reader, out io.Writer, _ goldenEnv) error {
 				return runClaudeReadHook(in, out, readHookOptions{})
 			},
 		},
 		{
-			name:    "PreToolUse Edit",
+			name:    "PreToolUse Edit denied by the backend",
 			event:   "PreToolUse",
-			payload: `{"tool_name":"Edit","tool_input":{"file_path":"` + edit + `","new_string":"package x\n"},"session_id":"s1","cwd":"` + repo + `"}`,
-			old: func(in io.Reader, out io.Writer) error {
-				return runPreEditHook(context.Background(), in, out, "", "", preEditOptions{Backend: goldenMock{}})
+			payload: `{"hookEventName":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"` + edit + `","new_string":"package x\n"},"session_id":"s1","cwd":"` + repo + `"}`,
+			old: func(ctx context.Context, in io.Reader, out io.Writer, e goldenEnv) error {
+				return runPreEditHook(ctx, in, out, "", "", e.pre)
 			},
+			wantOut: `"permissionDecision":"deny"`,
 		},
 		{
-			name:    "PostToolUse Skill",
-			event:   "PostToolUse",
-			payload: `{"hook_event_name":"PostToolUse","tool_name":"Skill","tool_input":{"skill":"x"},"session_id":"s1","cwd":"` + repo + `"}`,
-			old:     oldSkill,
+			name:       "PostToolUse Skill",
+			event:      "PostToolUse",
+			payload:    `{"hook_event_name":"PostToolUse","tool_name":"Skill","tool_input":{"skill":"issue"},"session_id":"s1","cwd":"` + repo + `"}`,
+			old:        oldSkill,
+			wantSkills: 1,
 		},
 		{
-			name:    "UserPromptSubmit typed prompt",
+			name:       "PostToolUseFailure Skill",
+			event:      "PostToolUseFailure",
+			payload:    `{"hook_event_name":"PostToolUseFailure","tool_name":"Skill","tool_input":{"skill":"lean-sprint"},"session_id":"s1","cwd":"` + repo + `"}`,
+			old:        oldSkill,
+			wantSkills: 1,
+		},
+		{
+			name:       "UserPromptSubmit typed installed skill",
+			event:      "UserPromptSubmit",
+			payload:    `{"hook_event_name":"UserPromptSubmit","prompt":"/issue 12","session_id":"s1","cwd":"` + repo + `"}`,
+			old:        oldSkill,
+			wantSkills: 1,
+		},
+		{
+			name:    "UserPromptSubmit plain prompt",
 			event:   "UserPromptSubmit",
 			payload: `{"hook_event_name":"UserPromptSubmit","prompt":"hello","session_id":"s1","cwd":"` + repo + `"}`,
 			old:     oldSkill,
@@ -133,14 +272,32 @@ func TestHookDispatchMatchesSubcommandOutput(t *testing.T) {
 			name:    "SessionStart instructions",
 			event:   "SessionStart",
 			payload: `{"hook_event_name":"SessionStart"}`,
-			old:     func(_ io.Reader, out io.Writer) error { return runClaudeInstructionsHook(out) },
+			old: func(_ context.Context, _ io.Reader, out io.Writer, _ goldenEnv) error {
+				return runClaudeInstructionsHook(out)
+			},
 		},
 		{
-			name:    "PreCompact read-marker reset",
-			event:   "PreCompact",
-			payload: `{"session_id":"s1"}`,
-			old: func(in io.Reader, _ io.Writer) error {
-				return runCompactResetHook(in, defaultReadHookStateDir())
+			name:           "PreCompact resets markers and sends codex telemetry",
+			event:          "PreCompact",
+			payload:        codexPayload,
+			session:        "s1",
+			wantTelemetry:  1,
+			wantMarkerGone: true,
+			old: func(ctx context.Context, in io.Reader, _ io.Writer, e goldenEnv) error {
+				payload, _ := io.ReadAll(in)
+				if err := runCodexTelemetryWith(bytes.NewReader(payload), e.sendTelemetry); err != nil {
+					return err
+				}
+				return runCompactResetHook(bytes.NewReader(payload), e.stateDir)
+			},
+		},
+		{
+			name:          "PostCompact sends codex telemetry",
+			event:         "PostCompact",
+			payload:       codexPayload,
+			wantTelemetry: 1,
+			old: func(_ context.Context, in io.Reader, _ io.Writer, e goldenEnv) error {
+				return runCodexTelemetryWith(in, e.sendTelemetry)
 			},
 		},
 	}
@@ -151,27 +308,63 @@ func TestHookDispatchMatchesSubcommandOutput(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
-			var want bytes.Buffer
-			if err := tc.old(strings.NewReader(tc.payload), &want); err != nil {
-				t.Fatalf("old subcommand: %v", err)
-			}
+			want := runGoldenSide(t, tc, budget, false)
+			got := runGoldenSide(t, tc, budget, true)
 
-			t.Setenv("HOME", t.TempDir())
-			var got bytes.Buffer
-			reg := claudeHookRegistry(goldenMock{})
-			if err := hookdispatch.Dispatch(context.Background(), reg, tc.event, []byte(tc.payload), &got, hookdispatch.Options{Budget: budget, Stderr: io.Discard}); err != nil {
-				t.Fatalf("dispatch: %v", err)
+			if got.out != want.out {
+				t.Fatalf("output changed\n got %q\nwant %q", got.out, want.out)
 			}
-			if got.String() != want.String() {
-				t.Fatalf("dispatcher output changed\n got %q\nwant %q", got.String(), want.String())
+			if tc.wantOut != "" && !strings.Contains(got.out, tc.wantOut) {
+				t.Fatalf("output %q lacks %q", got.out, tc.wantOut)
+			}
+			if got.markerGone != want.markerGone || got.markerGone != tc.wantMarkerGone {
+				t.Fatalf("marker removed = %v, old %v, want %v", got.markerGone, want.markerGone, tc.wantMarkerGone)
+			}
+			if !reflect.DeepEqual(got.fx.telemetry, want.fx.telemetry) {
+				t.Fatalf("telemetry = %v, old %v", got.fx.telemetry, want.fx.telemetry)
+			}
+			if len(got.fx.telemetry) < tc.wantTelemetry {
+				t.Fatalf("telemetry sent %d, want at least %d", len(got.fx.telemetry), tc.wantTelemetry)
+			}
+			if len(got.fx.skills) != len(want.fx.skills) || len(got.fx.skills) < tc.wantSkills {
+				t.Fatalf("skill rows = %d, old %d, want at least %d", len(got.fx.skills), len(want.fx.skills), tc.wantSkills)
+			}
+			for i := range got.fx.skills {
+				g, w := got.fx.skills[i], want.fx.skills[i]
+				if g.ToolName != w.ToolName || g.SkillName != w.SkillName || g.CallType != w.CallType ||
+					g.SessionID != w.SessionID || g.WorkingDir != w.WorkingDir || g.AgentID != w.AgentID {
+					t.Fatalf("skill row %d = %+v, old %+v", i, g, w)
+				}
 			}
 		})
 	}
 }
 
-// The `harnez hook <event>` command reads stdin once and dispatches. A
-// UserPromptSubmit payload with no typed skill writes nothing and exits 0.
+// The Stop sound goes through the injected player, once per event, and never
+// writes to stdout.
+func TestStopEventPlaysSoundOnce(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	plays := 0
+	reg, err := claudeHookRegistry(hookDeps{PlaySound: func(context.Context) error { plays++; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	budget, err := hookdispatch.LoadBudget()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := hookdispatch.Dispatch(context.Background(), reg, "Stop", []byte(`{"hook_event_name":"Stop"}`), &out,
+		hookdispatch.Options{Budget: budget, Stderr: io.Discard}); err != nil {
+		t.Fatal(err)
+	}
+	if plays != 1 || out.Len() != 0 {
+		t.Fatalf("plays = %d, output %q; want 1 play and no output", plays, out.String())
+	}
+}
+
+// `harnez hook UserPromptSubmit` reads stdin once and dispatches. A plain prompt
+// writes nothing and exits 0.
 func TestHookEventCommandDispatches(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	cmd := newHookCmd()

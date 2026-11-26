@@ -322,48 +322,8 @@ permissions:
     - "Read(//usr/**)"
   deny: []
 
-hooks:
-  - event: SessionStart
-    command: "harnez hook claude-instructions"
-  - event: Stop
-    command: "harnez hook sound"
-  # telemetry (always-on) + distill autopipe (opt-in via
-  # HARNEZ_DISTILL_AUTOPIPE=true, see issue 069) in ONE PreToolUse/Bash
-  # hook: `harnez exec hook` composes distill's own rewrite internally
-  # before wrapping the result for tool_calls recording (issue 116/118).
-  # This is intentionally the ONLY PreToolUse/Bash hook apply installs —
-  # Claude Code does not compose two hooks' updatedInput rewrites on the
-  # same matcher (last one to finish wins, non-deterministically, per its
-  # hooks-guide "Limitations" section), so `harnez distill hook` is no
-  # longer separately wired in here even though the command still exists
-  # standalone. See docs/HookRewritePattern.md.
-  - event: PreToolUse
-    matcher: Bash
-    command: "harnez exec hook"
-  - event: PreToolUse
-    matcher: View
-    command: "harnez hook read"
-  - event: PreToolUse
-    matcher: Read
-    command: "harnez hook read"
-  - event: PreToolUse
-    matcher: ReadMultipleFiles
-    command: "harnez hook read"
-  - event: PreToolUse
-    matcher: Edit
-    command: "harnez hook pre-edit"
-  - event: PreToolUse
-    matcher: Write
-    command: "harnez hook pre-edit"
-  # skill telemetry (issue 735)
-  - event: PostToolUse
-    matcher: Skill
-    command: "harnez hook skill"
-  - event: PostToolUseFailure
-    matcher: Skill
-    command: "harnez hook skill"
-  - event: UserPromptSubmit
-    command: "harnez hook skill"
+# Claude hook entries are not listed here. internal/hookdispatch.ClaudeManifest
+# derives one `harnez hook <Event>` entry per event (issue 1304).
 
 # thinking verbs (get rid of annoying word creations)
 verbs:

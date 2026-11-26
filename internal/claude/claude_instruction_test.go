@@ -14,7 +14,7 @@ func TestClaudeInstructionsHookIsClaudeOnly(t *testing.T) {
 
 	found := false
 	for _, hook := range cfg.Hooks {
-		if hook.Event == "SessionStart" && hook.Command == "harnez hook claude-instructions" {
+		if hook.Event == "SessionStart" && hook.Command == "harnez hook SessionStart" {
 			found = true
 		}
 	}
@@ -23,7 +23,7 @@ func TestClaudeInstructionsHookIsClaudeOnly(t *testing.T) {
 	}
 
 	claudeSettings := fmt.Sprint(buildSettingsDoc(cfg, nil))
-	if !strings.Contains(claudeSettings, "harnez hook claude-instructions") {
+	if !strings.Contains(claudeSettings, "harnez hook SessionStart") {
 		t.Fatal("Claude settings do not contain the instruction hook")
 	}
 	for agent, output := range map[string]string{

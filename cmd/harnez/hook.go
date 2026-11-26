@@ -115,9 +115,7 @@ func newHookCmd() *cobra.Command {
 	})
 	cmd.AddCommand(newHookSoundCmd())
 	cmd.AddCommand(newSkillHookCmd())
-	for _, event := range claudeHookRegistry(nil).Events() {
-		cmd.AddCommand(newHookEventCmd(event))
-	}
+	addHookEventCmds(cmd)
 
 	return cmd
 }
@@ -917,9 +915,13 @@ func sessionMarkerDir(session string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(session)))
 }
 
-// compactResetCommand is the PreCompact hook that clears a session's read markers.
-// spec/claude-compaction.yaml installs it; claudeCompactResetInstalled checks for it.
-const compactResetCommand = "harnez hook compact-reset"
+// preCompactCommand is the PreCompact entry apply installs. Its handlers include
+// the read-marker reset (runCompactResetHook); claudeCompactResetInstalled checks for it.
+const preCompactCommand = "harnez hook PreCompact"
+
+// legacyCompactResetCommand is the standalone reset entry that settings written
+// before issue 1304 M2 carry. It still runs until apply replaces it.
+const legacyCompactResetCommand = "harnez hook compact-reset"
 
 // runCompactResetHook clears the native-read markers of the session named in a
 // PreCompact payload. The compaction drops the content those reads put in context,
@@ -969,7 +971,7 @@ func claudeCompactResetInstalled() bool {
 	}
 	for _, group := range doc.Hooks.PreCompact {
 		for _, h := range group.Hooks {
-			if h.Command == compactResetCommand {
+			if h.Command == preCompactCommand || h.Command == legacyCompactResetCommand {
 				return true
 			}
 		}

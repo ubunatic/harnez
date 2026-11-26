@@ -14,7 +14,9 @@ import (
 	"ubunatic.com/harnez/internal/jsonc"
 )
 
-func TestCompactionHooksPreserveForeignAndAreIdempotent(t *testing.T) {
+// Issue 1304 M2: PreCompact and PostCompact each carry one harnez entry
+// (`harnez hook <Event>`); a foreign PreCompact hook stays next to it.
+func TestHarnezHooksPreserveForeignAndAreIdempotent(t *testing.T) {
 	cfg, err := LoadConfigEmbedded()
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +29,7 @@ func TestCompactionHooksPreserveForeignAndAreIdempotent(t *testing.T) {
 		t.Fatal("second apply changed hooks")
 	}
 	hooks := first["hooks"].(map[string]any)
-	if len(hooks["PreCompact"].([]any)) != 3 || len(hooks["PostCompact"].([]any)) != 1 {
+	if len(hooks["PreCompact"].([]any)) != 2 || len(hooks["PostCompact"].([]any)) != 1 {
 		t.Fatalf("hooks = %#v", hooks)
 	}
 }
@@ -170,7 +172,7 @@ func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 	settingsPath := filepath.Join(target, "settings.json")
 	if err := os.WriteFile(settingsPath, []byte(`{
   "permissions": {"allow": ["user:permission"]},
-		"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": "harnez old hook"}, {"type": "command", "command": "user-hook"}]}], "Stop": [{"hooks": [{"type": "command", "command": "user-stop"}]}]},
+		"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": "/home/u/go/bin/harnez hook Stop"}, {"type": "command", "command": "user-hook"}]}], "Stop": [{"hooks": [{"type": "command", "command": "user-stop"}]}]},
 	  "statusLine": {"type": "command", "command": "starship"}
 }
 `), 0644); err != nil {
@@ -180,8 +182,8 @@ func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 		Model:       "sonnet",
 		Permissions: Permissions{Allow: []string{"harnez:permission", "mcp__harnez__*"}},
 		Hooks: []Hook{
-			{Event: "PreToolUse", Command: "harnez exec hook"},
-			{Event: "PostToolUse", Command: "harnez only hook"},
+			{Event: "PreToolUse", Matcher: "Bash|Edit", Command: "harnez hook PreToolUse"},
+			{Event: "PostToolUse", Command: "harnez hook PostToolUse"},
 		},
 		StatusLine: true,
 	}
@@ -209,7 +211,7 @@ func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 	if !strings.Contains(rendered, "user-hook") || !strings.Contains(rendered, "user-stop") {
 		t.Errorf("user hook commands missing: %v", hooks)
 	}
-	if strings.Contains(rendered, "harnez old hook") || strings.Contains(rendered, "harnez only hook") {
+	if strings.Contains(rendered, "harnez hook Stop") || strings.Contains(rendered, "harnez hook PreToolUse") || strings.Contains(rendered, "harnez hook PostToolUse") {
 		t.Errorf("Harnez hook commands survived: %v", hooks)
 	}
 	if got := doc["statusLine"].(map[string]any)["command"]; got != "starship" {

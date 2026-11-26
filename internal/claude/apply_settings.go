@@ -109,9 +109,11 @@ func isManagedSettingsKey(key string) bool {
 	return slices.Contains(managedSettingsKeys, key)
 }
 
+// isHarnezCommand reports whether a hook command runs harnez: the first word's
+// base name is "harnez", bare or by absolute path (for example a go/bin install).
 func isHarnezCommand(command string) bool {
-	command = strings.TrimSpace(command)
-	return command == "harnez" || strings.HasPrefix(command, "harnez ")
+	fields := strings.Fields(command)
+	return len(fields) > 0 && filepath.Base(fields[0]) == "harnez"
 }
 
 func removeHarnezHooks(value any) (map[string]any, bool) {

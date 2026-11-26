@@ -9,20 +9,23 @@ import (
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/agy"
+	"ubunatic.com/harnez/internal/hookdispatch"
 )
 
 type Config struct {
-	Dir                   string               `yaml:"-"`
-	FS                    fs.FS                `yaml:"-"`
-	TargetDir             string               `yaml:"target_dir"`
-	ComponentNames        []string             `yaml:"components,omitempty"`
-	Docs                  []string             `yaml:"docs"`
-	DocsProfiles          map[string][]string  `yaml:"docs_profiles"`
-	Model                 string               `yaml:"model"`
-	Effort                string               `yaml:"effort"`
-	Verbs                 []string             `yaml:"verbs"`
-	Permissions           Permissions          `yaml:"permissions"`
-	Hooks                 []Hook               `yaml:"hooks"`
+	Dir            string              `yaml:"-"`
+	FS             fs.FS               `yaml:"-"`
+	TargetDir      string              `yaml:"target_dir"`
+	ComponentNames []string            `yaml:"components,omitempty"`
+	Docs           []string            `yaml:"docs"`
+	DocsProfiles   map[string][]string `yaml:"docs_profiles"`
+	Model          string              `yaml:"model"`
+	Effort         string              `yaml:"effort"`
+	Verbs          []string            `yaml:"verbs"`
+	Permissions    Permissions         `yaml:"permissions"`
+	// Hooks are derived from hookdispatch.ClaudeManifest after load; config.yaml
+	// has no hooks key (issue 1304 M2).
+	Hooks                 []Hook               `yaml:"-"`
 	Env                   map[string]string    `yaml:"env"`
 	StatusLine            bool                 `yaml:"status_line"`
 	JevCompactionEnabled  bool                 `yaml:"jev_compaction_enabled"`
@@ -304,7 +307,7 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	cfg.Dir = filepath.Dir(path)
 	cfg.FS = os.DirFS(cfg.Dir)
-	if err := addCompactionHooks(&cfg); err != nil {
+	if err := addHarnezHooks(&cfg); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
@@ -321,24 +324,23 @@ func LoadConfigEmbedded() (*Config, error) {
 	}
 	cfg.Dir = "."
 	cfg.FS = harnez.DefaultFS
-	if err := addCompactionHooks(&cfg); err != nil {
+	if err := addHarnezHooks(&cfg); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
 }
 
-func addCompactionHooks(cfg *Config) error {
-	data, err := harnez.DefaultFS.ReadFile("spec/claude-compaction.yaml")
+// addHarnezHooks sets cfg.Hooks to one entry per Claude event, derived from
+// the dispatcher manifest so apply and the registry cannot drift (issue 1304 M2).
+func addHarnezHooks(cfg *Config) error {
+	entries, err := hookdispatch.ClaudeManifest.Entries()
 	if err != nil {
 		return err
 	}
-	var spec struct {
-		Hooks []Hook `yaml:"hooks"`
+	cfg.Hooks = make([]Hook, 0, len(entries))
+	for _, e := range entries {
+		cfg.Hooks = append(cfg.Hooks, Hook{Event: e.Event, Matcher: e.Matcher, Command: e.Command})
 	}
-	if err := yaml.Unmarshal(data, &spec); err != nil {
-		return err
-	}
-	cfg.Hooks = append(cfg.Hooks, spec.Hooks...)
 	return nil
 }
 

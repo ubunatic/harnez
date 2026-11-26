@@ -1213,11 +1213,24 @@ func TestClaudeCompactResetInstalledReadsSettings(t *testing.T) {
 	if claudeCompactResetInstalled() {
 		t.Fatal("reported installed without a settings file")
 	}
-	settings := `{"hooks":{"PreCompact":[{"hooks":[{"type":"command","command":"harnez codex-telemetry"}]},{"hooks":[{"type":"command","command":"` + compactResetCommand + `"}]}]}}`
-	if err := os.WriteFile(filepath.Join(config, "settings.json"), []byte(settings), 0o600); err != nil {
-		t.Fatal(err)
+	write := func(settings string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(config, "settings.json"), []byte(settings), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
+	// One `harnez hook PreCompact` entry runs the reset (issue 1304 M2).
+	write(`{"hooks":{"PreCompact":[{"hooks":[{"type":"command","command":"` + preCompactCommand + `"}]}]}}`)
 	if !claudeCompactResetInstalled() {
-		t.Fatal("hook present in settings not detected")
+		t.Fatal("harnez hook PreCompact entry not detected")
+	}
+	// Settings written before M2 still carry the legacy entry until apply runs.
+	write(`{"hooks":{"PreCompact":[{"hooks":[{"type":"command","command":"harnez codex-telemetry"}]},{"hooks":[{"type":"command","command":"` + legacyCompactResetCommand + `"}]}]}}`)
+	if !claudeCompactResetInstalled() {
+		t.Fatal("legacy compact-reset entry not detected")
+	}
+	write(`{"hooks":{"PreCompact":[{"hooks":[{"type":"command","command":"harnez codex-telemetry"}]}]}}`)
+	if claudeCompactResetInstalled() {
+		t.Fatal("reported installed with only the codex-telemetry entry")
 	}
 }

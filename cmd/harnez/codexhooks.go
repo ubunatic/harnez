@@ -93,13 +93,19 @@ func newCodexTelemetryCmd() *cobra.Command {
 }
 
 func runCodexTelemetry(in io.Reader) error {
+	return runCodexTelemetryWith(in, func(kind string, payload any) { sendTelemetryRecord(kind, payload) })
+}
+
+// runCodexTelemetryWith prepares a codex hook payload and hands the record to send.
+// It never fails the hook: a payload it cannot prepare is dropped.
+func runCodexTelemetryWith(in io.Reader, send func(kind string, payload any)) error {
 	raw, err := io.ReadAll(in)
 	if err != nil {
 		return nil
 	}
 	prepared, err := server.PrepareCodexTelemetry(raw)
 	if err == nil {
-		sendTelemetryRecord("codex", json.RawMessage(prepared))
+		send("codex", json.RawMessage(prepared))
 	}
 	return nil
 }
