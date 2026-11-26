@@ -36,12 +36,19 @@ func PrepareCodexTelemetry(raw []byte) ([]byte, error) {
 	if hook.TranscriptPath != "" {
 		evidence.Transcript = latestCodexTranscriptTokens(hook.TranscriptPath, e.SessionID)
 	}
-	if e.Kind == "postcompact" && hook.TranscriptPath != "" {
+	if e.Kind == "postcompact" {
 		// Claude writes its compact boundary to the transcript after PreCompact;
 		// the PostCompact hook reads its token counts (issue 1303 M1). The boundary
 		// can flush after the hook starts, so Claude's payload waits for it (M1b).
-		_, claude := payload["compact_summary"]
-		evidence.Compact = readClaudePostCompact(hook.TranscriptPath, claude)
+		// The diagnostic records what this read saw (issue 1303 M1c). Its keys are
+		// taken before harnez_context is added.
+		evidence.Diag = &compactDiag{Side: "hook", PID: os.Getpid(), TranscriptSet: hook.TranscriptPath != "", Keys: payloadKeys(payload)}
+		if hook.TranscriptPath == "" {
+			evidence.Diag.Reason = reasonNoTranscript
+		} else {
+			_, claude := payload["compact_summary"]
+			evidence.Compact, evidence.Diag.Reason = readClaudePostCompact(hook.TranscriptPath, claude)
+		}
 	}
 	payload["harnez_context"], _ = json.Marshal(evidence)
 	return json.Marshal(payload)
@@ -53,6 +60,9 @@ type codexEvidence struct {
 	CreatedAt  time.Time
 	Transcript codex.Event
 	Compact    *claudeCompact
+	// Diag is the hook's view of a PostCompact (issue 1303 M1c). Only the
+	// collector's note reads it; it is omitted for every other event.
+	Diag *compactDiag `json:",omitempty"`
 }
 
 // applyClaudeCompact fills a Claude PostCompact row from the transcript's compact
@@ -60,22 +70,39 @@ type codexEvidence struct {
 // The PreCompact snapshot is written here, because ReconcileCompactionEconomics
 // reads token_snapshots. Claude gives no cache split, so the whole context is
 // stored as uncached input: an upper bound, reported as partial pricing.
-// It reports whether a boundary was applied.
-func applyClaudeCompact(db *telemetry.DB, e *codex.Event, compact *claudeCompact) (bool, error) {
+// It returns the outcome reason: applied, no_boundary, no_precompact or
+// stale_boundary (issue 1303 M1c).
+func applyClaudeCompact(db *telemetry.DB, e *codex.Event, compact *claudeCompact) (string, error) {
 	if compact == nil {
-		return false, nil
+		return reasonNoBoundary, nil
 	}
 	preAt, ok, err := db.LatestCompactionEventTime(e.SessionID, "precompact")
-	if err != nil || !ok || compact.Timestamp.Before(preAt) {
-		return false, err
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return reasonNoPrecompact, nil
+	}
+	if compact.Timestamp.Before(preAt) {
+		return reasonStaleBoundary, nil
 	}
 	if err := insertClaudeSnapshot(db, e.SessionID, "precompact", nil, compact.PreTokens); err != nil {
-		return false, err
+		return "", err
 	}
 	post := compact.PostTokens
 	e.InputTokens, e.TotalTokens = &post, &post
 	e.Model = compact.Model
-	return true, nil
+	return reasonApplied, nil
+}
+
+// compactNote is the collector's note for one PostCompact. The hook's reason wins
+// when the hook found no boundary; otherwise the DB-side outcome is the reason.
+func compactNote(e codex.Event, outcome string, hook *compactDiag) compactDiagNote {
+	reason := outcome
+	if hook != nil && hook.Reason != "" {
+		reason = hook.Reason
+	}
+	return compactDiagNote{At: time.Now().UTC(), SessionID: e.SessionID, Kind: e.Kind, Reason: reason, Hook: hook, CollectorPID: os.Getpid()}
 }
 
 func insertClaudeSnapshot(db *telemetry.DB, sessionID, source string, boundaryID *int64, tokens int64) error {
@@ -111,12 +138,14 @@ func ProcessCodexTelemetryTx(db *telemetry.DB, raw []byte) error {
 	transcriptUsage := hook.Context.Transcript
 	if e.Kind == "precompact" || e.Kind == "postcompact" {
 		claudeApplied := false
+		outcome := ""
 		if e.Kind == "postcompact" {
-			applied, err := applyClaudeCompact(db, &e, hook.Context.Compact)
+			var err error
+			outcome, err = applyClaudeCompact(db, &e, hook.Context.Compact)
 			if err != nil {
 				return err
 			}
-			claudeApplied = applied
+			claudeApplied = outcome == reasonApplied
 		}
 		id, err := db.InsertCompactionEvent(telemetry.CompactionEvent{CreatedAt: createdAt, SessionID: e.SessionID, EventType: e.Kind, TurnID: e.TurnID, Trigger: e.CompactionTrigger, Reason: e.CompactionReason, InputTokens: e.InputTokens, CachedInputTokens: e.CachedInputTokens, OutputTokens: e.OutputTokens, ReasoningTokens: e.ReasoningTokens, TotalTokens: e.TotalTokens, Model: e.Model})
 		if err != nil {
@@ -138,7 +167,10 @@ func ProcessCodexTelemetryTx(db *telemetry.DB, raw []byte) error {
 			if err != nil {
 				return err
 			}
-			return db.ReconcileCompactionEconomics(e.SessionID, e.Model, catalog)
+			if err := db.ReconcileCompactionEconomics(e.SessionID, e.Model, catalog); err != nil {
+				return err
+			}
+			return writeCompactDiagnostic(db.Path(), compactNote(e, outcome, hook.Context.Diag))
 		}
 		return nil
 	}

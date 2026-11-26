@@ -114,7 +114,13 @@ type DB struct {
 	tx         *sql.Tx
 	sql        *sql.DB
 	migrations []string
+	// path is the database file, or "" for a handle not opened from a file.
+	path string
 }
+
+// Path returns the database file this handle was opened from, or "" when it was
+// not opened from a file. Collector-side notes sit beside it (issue 1303 M1c).
+func (d *DB) Path() string { return d.path }
 
 // executor returns the transaction when processing a collector record.
 func (d *DB) executor() sqlExecutor {
@@ -141,7 +147,7 @@ func (d *DB) WithReceipt(id string, apply func(*DB) error) error {
 	}
 	defer tx.Rollback()
 	if id == "" {
-		if err := apply(&DB{sql: d.sql, tx: tx}); err != nil {
+		if err := apply(&DB{sql: d.sql, tx: tx, path: d.path}); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -157,7 +163,7 @@ func (d *DB) WithReceipt(id string, apply func(*DB) error) error {
 	if n == 0 {
 		return tx.Commit()
 	}
-	if err := apply(&DB{sql: d.sql, tx: tx}); err != nil {
+	if err := apply(&DB{sql: d.sql, tx: tx, path: d.path}); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -216,7 +222,7 @@ func Open(path string) (*DB, error) {
 				}
 				_ = conn.Close() // best-effort cleanup; failure does not change the result
 				if stepErr == nil {
-					return &DB{sql: sqlDB, migrations: migrations}, nil
+					return &DB{sql: sqlDB, migrations: migrations, path: path}, nil
 				}
 				sqlDB.Close()
 				lastErr = fmt.Errorf("telemetry: initialize schema: %w", stepErr)
@@ -242,7 +248,7 @@ func OpenReadOnly(path string) (*DB, error) {
 		sqlDB.Close()
 		return nil, fmt.Errorf("telemetry: open read-only %s: %w", path, err)
 	}
-	db := &DB{sql: sqlDB}
+	db := &DB{sql: sqlDB, path: path}
 	for _, table := range []string{"tool_calls", "cli_invocations", "issue_status_snapshots", "compaction_events", "session_boundaries", "token_snapshots", "compaction_economics"} {
 		present, err := tableExists(sqlDB, table)
 		if err != nil {

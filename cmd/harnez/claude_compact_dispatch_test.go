@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +28,16 @@ func isolateHookEnv(t *testing.T) string {
 	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	// A broker FD inherited from an agent session wins over the socket (issue
+	// 1303 M1b). Clear it so no hook test can reach the live collector (M1c).
+	cfg, err := server.LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	t.Setenv(cfg.RunnerChannel.FDEnv, "")
+	if server.RunnerChannelStatus(cfg) == nil {
+		t.Fatalf("broker FD still valid after clearing %s", cfg.RunnerChannel.FDEnv)
+	}
 	return root
 }
 
@@ -50,12 +62,12 @@ func telemetrySinkTo(t *testing.T, db *telemetry.DB) func(kind string, payload a
 	}
 }
 
-// TestClaudeCompactDispatchChainFillsPostCompactRow runs the real Claude hook
-// registry through hookdispatch.Dispatch, with the boundary already on disk
-// when PostCompact fires. It documents that the dispatch, sink and writer chain
-// is not the cause of the empty live rows: the failure is in what PostCompact
-// sees when it reads the transcript.
-func TestClaudeCompactDispatchChainFillsPostCompactRow(t *testing.T) {
+// runClaudeCompactChain runs the real Claude hook registry through
+// hookdispatch.Dispatch: PreCompact, then PostCompact with the boundary already
+// on disk. It returns the telemetry DB path, already closed; the diagnostic note
+// sits beside it (issue 1303 M1c).
+func runClaudeCompactChain(t *testing.T) string {
+	t.Helper()
 	isolateHookEnv(t)
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "telemetry.sqlite")
@@ -88,6 +100,14 @@ func TestClaudeCompactDispatchChainFillsPostCompactRow(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatalf("db.Close: %v", err)
 	}
+	return dbPath
+}
+
+// TestClaudeCompactDispatchChainFillsPostCompactRow documents that the dispatch,
+// sink and writer chain is not the cause of the empty live rows: the failure is
+// in what PostCompact sees when it reads the transcript.
+func TestClaudeCompactDispatchChainFillsPostCompactRow(t *testing.T) {
+	dbPath := runClaudeCompactChain(t)
 
 	rawDB := openRawCompactDB(t, dbPath)
 	var input, total sql.NullInt64
@@ -129,5 +149,33 @@ func TestHookTelemetryStaysInIsolatedRuntimeDir(t *testing.T) {
 	result := sendTelemetryRecordTo(io.Discard, "codex", map[string]string{"session_id": "isolation-check"})
 	if result == server.UpdateDelivered {
 		t.Fatalf("record reached a collector inside a scratch environment")
+	}
+}
+
+// TestClaudeCompactDispatchChainWritesDiagnosticNote checks the note the collector
+// writes beside the telemetry DB for the same chain (issue 1303 M1c).
+func TestClaudeCompactDispatchChainWritesDiagnosticNote(t *testing.T) {
+	dbPath := runClaudeCompactChain(t)
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(dbPath), "compact-diagnostics.jsonl"))
+	if err != nil {
+		t.Fatalf("diagnostic note: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	var note struct {
+		Kind   string `json:"kind"`
+		Reason string `json:"reason"`
+		Hook   *struct {
+			Side string   `json:"side"`
+			Keys []string `json:"keys"`
+		} `json:"hook"`
+	}
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &note); err != nil {
+		t.Fatalf("decode note: %v", err)
+	}
+	if note.Kind != "postcompact" || note.Reason != "applied" {
+		t.Errorf("note kind %q reason %q, want postcompact applied", note.Kind, note.Reason)
+	}
+	if note.Hook == nil || note.Hook.Side != "hook" || !slices.Contains(note.Hook.Keys, "compact_summary") {
+		t.Errorf("note hook %+v, want the hook side with compact_summary among its keys", note.Hook)
 	}
 }

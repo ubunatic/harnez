@@ -25,32 +25,58 @@ var (
 // has started, so one read can miss it (issue 1303 M1b). The poll stops after
 // boundary_wait, which keeps the hook under handler_timeout. A boundary older
 // than the window belongs to an earlier compaction and is skipped.
-func waitClaudeCompact(path string, wait hookdispatch.ClaudeCompactWait) *claudeCompact {
+// The reason is the hook's outcome when no fresh boundary is returned: a read
+// error, no boundary at all, or only a boundary older than the window (issue
+// 1303 M1c).
+func waitClaudeCompact(path string, wait hookdispatch.ClaudeCompactWait) (*claudeCompact, string) {
 	cutoff := claudeCompactNow().Add(-wait.Window)
 	polls := int(wait.Wait / wait.Poll)
 	for slept := 0; ; slept++ {
-		if c := readClaudeCompact(path); c != nil && !c.Timestamp.Before(cutoff) {
-			return c
+		c, err := scanClaudeCompact(path)
+		reason := reasonNoBoundary
+		switch {
+		case err != nil:
+			reason = reasonReadError
+		case c == nil:
+		case c.Timestamp.Before(cutoff):
+			reason = reasonStaleBoundary
+		default:
+			return c, ""
 		}
 		if slept >= polls {
-			return nil
+			return nil, reason
 		}
 		claudeCompactSleep(wait.Poll)
 	}
 }
 
-// readClaudePostCompact is the PostCompact read. Only Claude's payload (it carries
-// compact_summary) waits for the boundary; Codex reads once. An unreadable spec
-// falls back to one read, which the spec tests guard against at build time.
-func readClaudePostCompact(path string, claude bool) *claudeCompact {
+// readClaudePostCompact is the PostCompact read and returns the boundary with the
+// hook's reason. Only Claude's payload (it carries compact_summary) waits for the
+// boundary; Codex reads once. An unreadable spec falls back to one read, which
+// the spec tests guard against at build time.
+func readClaudePostCompact(path string, claude bool) (*claudeCompact, string) {
 	if !claude {
-		return readClaudeCompact(path)
+		return singleClaudeCompactRead(path)
 	}
 	wait, err := hookdispatch.LoadClaudeCompactWait()
 	if err != nil {
-		return readClaudeCompact(path)
+		return singleClaudeCompactRead(path)
 	}
 	return waitClaudeCompact(path, wait)
+}
+
+// singleClaudeCompactRead is one read with no freshness check. The collector
+// decides whether the boundary follows the PreCompact row.
+func singleClaudeCompactRead(path string) (*claudeCompact, string) {
+	c, err := scanClaudeCompact(path)
+	switch {
+	case err != nil:
+		return nil, reasonReadError
+	case c == nil:
+		return nil, reasonNoBoundary
+	default:
+		return c, ""
+	}
 }
 
 // claudeCompact is the newest complete compact boundary in a Claude transcript
@@ -85,9 +111,17 @@ type claudeTranscriptLine struct {
 // counts, or nil when the file is missing, unreadable or has none. It never
 // fails the hook: a read error is the same as no boundary.
 func readClaudeCompact(path string) *claudeCompact {
+	c, _ := scanClaudeCompact(path)
+	return c
+}
+
+// scanClaudeCompact is readClaudeCompact with the read error kept. It returns an
+// error when the file cannot be opened or read to its end; the boundary is nil
+// when there is none (issue 1303 M1c).
+func scanClaudeCompact(path string) (*claudeCompact, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer file.Close()
 	reader := bufio.NewReader(file)
@@ -109,9 +143,9 @@ func readClaudeCompact(path string) *claudeCompact {
 		}
 		if readErr != nil {
 			if errors.Is(readErr, io.EOF) {
-				return latest
+				return latest, nil
 			}
-			return nil
+			return nil, readErr
 		}
 	}
 }
