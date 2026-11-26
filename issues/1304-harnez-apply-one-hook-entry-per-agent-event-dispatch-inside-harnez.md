@@ -273,3 +273,26 @@ Reviewer rev-1304-m3 findings:
    - `TestAgentsHaveDistinctCommands` compares the agents' commands.
    - The legacy-subcommand test resolves `codex-hook` and `codex-telemetry` through the root command (`Find`).
 6. Gates: run `HTO=0 make test-q1` once, logging to a file. One or two commits `fix(hook): … (issue 1304 M4)`. Never amend. Never run apply against the real HOME.
+
+## M4 review (host) and rollout
+
+M4 delivered (the M3 review fixes): 22911b09. q1: 83 ok, 0 FAIL. The diff is a targeted fix of the reviewed findings, each covered by a table test or golden, so the host reviewed it alone.
+
+The host reviewed the `RunsHarnez` tokenizer and every changed assertion.
+
+On the live binary, the Codex PreToolUse output and exit code match the old `harnez codex-hook`:
+
+| Payload | Stdout | Exit code |
+|---|---|---|
+| Bash | identical | 0 |
+| Malformed JSON | identical error | 1 |
+
+Accepted: a strict handler that exceeds the 40 s budget now fails dispatch; the old subcommand had no budget.
+
+Rollout: host `make smoke` against the real HOME passed.
+- Real settings were backed up first.
+- Settings outside `hooks` are unchanged (sorted `jq -S` diff).
+- Live entries: 8 Claude (`harnez hook <Event>`) and 7 Codex (`harnez hook codex <Event>`).
+- Sessions that have not reloaded keep working, because the old subcommands are still registered.
+
+Study: `docs/studies/2026-11-26-two-agent-lean-sprint-1304-one-hook-entry-per-event.md`.
