@@ -97,3 +97,43 @@ M2 go:
 - Coverage limit: only harnez agent turns write per-turn rows. Document it in the usage or telemetry docs as the source rule for #1302.
 - Zero deltas: prove or refute the "forced fetch does not refresh Claude" hypothesis with a unit test, then fix it.
 - Duplicates: find the root cause first, with a reproduction test, then dedupe.
+
+## M1 and M2 delivered (host review, 2026-11-26)
+
+- **M1 (rates and plan price), 5a73c918:** Claude rates per API call, priced on each call's own prompt, with the 5m and 1h cache-write TTLs priced separately. Aliases for `haiku`, `sonnet` and `opus`. A missing rate gives nil, never 0. The plan is Pro at €18, converted once at ECB 1.0935, giving 19,683,000 µUSD a month.
+- **M2 (quota readings and history file), 8cb01e20 and 028b5da8:** the Claude reading is stored in SQLite even when the cache lock is busy, and duplicate quota-history lines are removed. The full q1 run passed: 0 `--- FAIL`, 81 packages ok.
+- The host checked the spec rates against the verified table: all 15 values match.
+
+### M3 canaries (host, installed branch build, 2026-11-26 10:46–10:47 UTC)
+
+Prompt: "Reply with exactly OK…", about 20k prompt tokens, all in the lower tier. Costs in µUSD:
+
+| run | model in row | in | cache read | cache write | out | cost | hand calc |
+|---|---|---|---|---|---|---|---|
+| haiku h1 | claude-haiku-5-5 | 2 | 11462 | 8762 | 4 | 1869 | 0.2+114.6+1752.4 (1h)+2 = 1869 ✓ |
+| haiku h2 | claude-haiku-5-5 | 2 | 11422 | 8762 | 4 | 1868 | ✓ |
+| haiku h3 | claude-haiku-5-5 | 2 | 20184 | 0 | 4 | 204 | 0.2+201.8+2 = 204 ✓ |
+| sonnet | `sonnet` | 2 | 9449 | 9912 | 4 | 40637 | 4+945+39648 (1h)+40 = 40637 ✓ |
+| opus | `opus` | 2 | 9333 | 10151 | 4 | 83163 | 8+1867+81208 (1h)+80 = 83163 ✓ |
+
+- All cache writes in these runs used the 1h TTL.
+- **No quota-delta rows were written for any of the 5 canaries.**
+  - Their boundaries exist, but h1's before and after readings are the same cached snapshot (cache age 98.7 s, then 101.6 s).
+  - h3's after reading got **HTTP 429** from the usage API.
+  - The zero-delta and missing-row problem is therefore not fixed live.
+  - Short turns are below the 1% resolution anyway, so the sonnet-vs-opus quota-per-dollar comparison cannot be measured with canaries. It moves to #1302, which uses windowed quota-history over many sessions.
+
+## M3 pre-work (fixes from review)
+
+1. **Price each call by its own model.**
+   - The parser now also collects calls with a `Parent` (native subagents), but prices them at the session model's rates, so a Haiku subagent under an Opus session is priced as Opus.
+   - Use the call's `message.model`.
+   - Store the full model id (`claude-opus-5-5`), not the alias `opus`. A bare alias would silently get the wrong rates once a newer Opus ships.
+   - Test: a mixed-model turn, and an unknown call model making the turn nil.
+2. **Make the quota-delta outcome explicit.**
+   - When the after reading is the same observation as the before reading, or the fetch failed (HTTP 429), write nothing silently? No: record why. Use whatever shape fits the existing tables, for example a delta row with an error or "unchanged-snapshot" source, or a documented skip reason.
+   - Do not add retries that hit the usage API harder: the 429 is real.
+   - Test: same-snapshot gives the documented outcome; 429 gives an error recorded, not a 0 delta.
+3. **Fix the cumulative cache-write count.** The cumulative `turn_token_usage` row still counts cache writes in `cached_input_tokens` (your open item). Fix it so cumulative and delta rows agree.
+4. **Leave the agy price alone.** Its USD price stays as it is: out of scope.
+5. **Tests:** run only the touched packages (`go test ./internal/subagent ./internal/telemetry ./internal/usage ./cmd/harnez`). The full run before merge is owed by the host.
