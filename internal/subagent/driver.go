@@ -340,9 +340,9 @@ type TurnResult struct {
 	CacheWriteTokensKnown bool     `json:"cache_write_tokens_known,omitempty"`
 	// RequestUsage holds one entry per provider API call when the provider
 	// reports them (Claude), so each call is priced on its own prompt size.
-	RequestUsage    []RequestUsage `json:"-"`
-	ReasoningTokens int            `json:"reasoning_tokens,omitempty"`
-	ReasoningTokensKnown  bool     `json:"reasoning_tokens_known,omitempty"`
+	RequestUsage         []RequestUsage `json:"-"`
+	ReasoningTokens      int            `json:"reasoning_tokens,omitempty"`
+	ReasoningTokensKnown bool           `json:"reasoning_tokens_known,omitempty"`
 	// TurnTokensUnknown reports that per-turn deltas are unavailable (e.g. a
 	// provider omitted usage or cumulative counters dropped after compaction).
 	TurnTokensUnknown bool `json:"turn_tokens_unknown,omitempty"`
