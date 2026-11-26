@@ -66,3 +66,13 @@
 - **The share code has the same reset-jitter bug that #1301 M4 fixed in SQL.** `ComputeTurnQuotaShare` (`internal/usage/turnquota.go:222`) calls `sameResetMarker`, which uses exact `time.Equal` (`turnquota.go:165`). The canary resets differ by about 0.18 s, so the in-session share is nil even when the DB delta pairs.
   - Fix: use the `turn_quota_pairing.reset_tolerance` from `spec/usage.yaml`.
   - This is a prerequisite for the live plan-share check above.
+
+## Decision (host, sprint start 2026-11-26)
+
+- **Roles.** The developer is `claude:haiku:med`, session `dev-1302`. The host reviews every diff. There is no Searcher: the host refined this ticket against live code today and it cites file:line. The developer's first turn is a read-only plan turn instead.
+- **Compaction.** The machine-local `~/.harnez/config.yaml` sets the harnez compact threshold for every Haiku tier to 200000 (owner, 2026-11-26). Claude Code's own `autoCompactWindow` of 200000 is therefore the ceiling (estimated trigger near 167k). The owner said "for now", so the host asks before removing the override at teardown.
+- **Prerequisite in M1: share jitter.** `ComputeTurnQuotaShare` / `sameResetMarker` (`internal/usage/turnquota.go:165`, `:222`) must use `turn_quota_pairing.reset_tolerance`, so that the live paired check can produce a share.
+- **M1 also aligns the model in the JSON.** `TurnRecord.Model` in the session JSON uses the reported main-chain model when one exists, as the DB rows have done since #1301 M4.
+- **Resolved.** The 1301 M2 note "cumulative row still counts cache writes" was fixed in #1301 M3.
+- **Plan price.** €15/month net, as above. Label it net, and show gross €17.85 as a second line.
+- **Data sources.** Tests use fixture transcripts and quota history under `t.TempDir()`, never the real HOME. Only the host runs the installed binary on real data.
